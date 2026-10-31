@@ -391,7 +391,7 @@ def test_the_real_data_task_can_actually_reach_every_real_data_test() -> None:
 
     `risk-service:test-real-data` ran `tests/api tests/features tests/services`
     while three opt-in modules lived elsewhere:
-    `tests/adapters/market_data/manual_upload/test_api.py` and both
+    `tests/market_data/adapters/manual_upload/test_api.py` and both
     `tests/equivalence/` run-parity suites. Twenty-three tests — including the
     regulatory report and forecast parity checks — were unreachable even with
     `REAL_DATA_DATABASE_URL` set. They did not fail and did not skip; the task
@@ -595,10 +595,13 @@ def test_the_hermetic_run_still_proves_it_collected_every_module(tmp_path: Path)
     )
     _ = (tests / "test_db.py").write_text("raise RuntimeError('integration module imported')\n")
     catalogue = tmp_path / "suites.json"
+    contracts = tmp_path / "contracts.json"
+    _ = contracts.write_text(json.dumps({"contracts": []}))
     _ = (tmp_path / "probe_catalogue.py").write_text(
-        "from pathlib import Path\nfrom scripts import test_suites\n"
+        "from pathlib import Path\nfrom scripts import database_contracts, test_suites\n"
         + f"test_suites.CATALOGUE = Path({str(catalogue)!r})\n"
         + "test_suites.catalogue.cache_clear()\n"
+        + f"database_contracts.CATALOGUE = Path({str(contracts)!r})\n"
     )
     environment = {
         **os.environ,

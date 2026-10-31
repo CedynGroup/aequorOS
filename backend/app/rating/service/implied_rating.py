@@ -21,6 +21,8 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
+from app.capital.service import sdi_readiness
+from app.data_engine.public import CanonicalCounterpartyRating, CanonicalMarketIndex
 from app.db.base import utc_now
 from app.domain.capital.engine import CapitalRegisterRefused, assert_capital_register_usable
 from app.identity.public import Bank, InstitutionProfile
@@ -34,11 +36,7 @@ from app.live.public import (
     LiveModuleResult,
     RegulatoryRun,
 )
-from app.models import (
-    CanonicalCounterpartyRating,
-    CanonicalMarketIndex,
-    DeskMethodology,
-)
+from app.market_data.public import DeskMethodology
 from app.policy.public import Jurisdiction, institution_types
 from app.rating.domain.engine import (
     ComponentDefinition,
@@ -49,7 +47,6 @@ from app.rating.domain.engine import (
     ddep_stress,
 )
 from app.rating.models import ImpliedRatingRun
-from app.services import sdi_readiness
 from app.services.audit import record_event
 
 METHODOLOGY_CODE = "AEQ-GHS-BANK-PD"

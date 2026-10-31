@@ -15,7 +15,7 @@ from reportlab.lib.units import mm
 from reportlab.pdfgen import canvas as pdf_canvas
 from reportlab.platypus import KeepTogether, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
-from app.models import DeskMethodology
+from app.market_data.public import DeskMethodology
 
 _NAVY = colors.HexColor("#18324B")
 _BLUE = colors.HexColor("#2563EB")

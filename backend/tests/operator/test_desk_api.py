@@ -16,6 +16,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.market_data.service.market_desk import observations as observations_service
 from app.models import (
     Bank,
     CanonicalYieldCurve,
@@ -25,7 +26,6 @@ from app.models import (
     OperatorAuditLog,
     Organization,
 )
-from app.services.market_desk import observations as observations_service
 from tests.operator.conftest import operator_headers
 from tests.support.inmemory_storage import InMemoryStorageClient
 
@@ -526,9 +526,9 @@ def test_publish_fans_out_and_audits(
 ) -> None:
     client_storage = InMemoryStorageClient()
     monkeypatch.setattr(
-        "app.adapters.market_data.pull_runner.get_storage_client", lambda: client_storage
+        "app.market_data.adapters.pull_runner.get_storage_client", lambda: client_storage
     )
-    monkeypatch.setattr("app.adapters.market_data.cache.get_storage_client", lambda: client_storage)
+    monkeypatch.setattr("app.market_data.adapters.cache.get_storage_client", lambda: client_storage)
 
     organization = Organization(name="Desk Publish Tenant")
     operator_db.add(organization)

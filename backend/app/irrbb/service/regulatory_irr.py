@@ -1,7 +1,7 @@
 """Regulatory IRRBB runs: gap / duration / EVE / EaR orchestration and dashboard.
 
 Follows the immutable calculation-run lifecycle established by
-``app.services.regulatory_capital``: runs commit ``queued`` and ``running``
+``app.capital.service.regulatory_capital``: runs commit ``queued`` and ``running``
 before executing, persist the full canonical input snapshot with a SHA-256
 ``input_hash``, and record failures as data (named error codes) rather than
 HTTP 500s. The arithmetic itself lives in the pure engine at
@@ -42,6 +42,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
+from app.capital.service import sdi_capital
 from app.core.errors import ModuleDataUnavailable
 from app.domain.capital.engine import (
     CAPITAL_REGISTER_REFUSED_CATEGORY,
@@ -84,6 +85,12 @@ from app.irrbb.schemas.regulatory_irr import (
     IrrTrendPointRead,
     IrrValidationRead,
 )
+from app.liquidity.public import (
+    RegulatoryRunBatchRead,
+    RegulatoryRunCreate,
+    RegulatoryRunRead,
+    read_regulatory_run_execution_result,
+)
 from app.live.domain.reporting import period_windows
 from app.live.public import (
     BankFinancialFact,
@@ -101,6 +108,8 @@ from app.live.public import (
     load_current_facts,
     regulatory_dashboard_batching,
 )
+from app.market_data.public import CurveView
+from app.market_data.service import market_data_sources
 from app.policy.public import (
     ParamCapitalThreshold,
     ParamStressShock,
@@ -112,17 +121,7 @@ from app.policy.public import (
     regulatory_parameters,
 )
 from app.reporting.service import filing_reconciliation
-from app.schemas.regulatory_liquidity import (
-    RegulatoryRunBatchRead,
-    RegulatoryRunCreate,
-    RegulatoryRunRead,
-)
-from app.services import market_data_sources, sdi_capital
 from app.services.audit import record_event
-from app.services.market_data import CurveView
-from app.services.regulatory_liquidity import (  # noqa: PLC2701 - engine completion read
-    _read_regulatory_run_execution_result,
-)
 
 ENGINE_VERSION = "regulatory-irr-v1.0.0"
 INPUT_SCHEMA_VERSION = "bank-facts-v2"
@@ -393,7 +392,7 @@ def _create_and_execute(
             ),
         )
     db.expire_all()
-    return _read_regulatory_run_execution_result(db, ctx, bank, run_id)
+    return read_regulatory_run_execution_result(db, ctx, bank, run_id)
 
 
 def _run_analysis(  # noqa: PLR0913
@@ -1531,7 +1530,7 @@ def discount_curve_midpoints_pct(points: Sequence[tuple[int, Decimal]]) -> dict[
     """Published curve nodes → the nine-midpoint percent dict the engine uses.
 
     ``points`` are ``(tenor_months, zero rate as a decimal fraction)`` pairs as
-    served by :class:`app.services.market_data.CurveView`. Tenors convert to
+    served by :class:`app.market_data.service.market_data.CurveView`. Tenors convert to
     years (``months / 12``); zero rates interpolate LINEARLY between published
     nodes and extrapolate FLAT past both ends; fractions convert to percent and
     quantize deterministically to 6 dp (``ROUND_HALF_UP``), so a node sitting

@@ -57,6 +57,8 @@ from app.core.authorization import (
 )
 from app.core.config import get_settings
 from app.identity.service import authorization
+from app.liquidity.schemas.regulatory_liquidity import RegulatoryRunCreate
+from app.liquidity.service import regulatory_liquidity
 from app.models import (
     AttestationSignature,
     BankReportingPeriod,
@@ -75,8 +77,6 @@ from app.reporting.schemas.packages import (
 from app.reporting.service import generation, validation
 from app.reporting.service import workflow as reporting_workflow
 from app.reporting.service.filing_workflow import chain as filing_chain
-from app.schemas.regulatory_liquidity import RegulatoryRunCreate
-from app.services import regulatory_liquidity
 from tests.fixtures.canonical_bank_fixture import (
     DEMO_ORG_ID,
     DEMO_USER_ID,

@@ -16,6 +16,7 @@ from app.credit.domain.dpd_bands import dpd_band
 from app.credit.schemas.regulatory_credit import CreditLoansPageRead, CreditScenarioBatchCreate
 from app.credit.service import regulatory_credit
 from app.identity.service.authorization import ALL_INSTITUTION_DATA
+from app.liquidity.service.regulatory_liquidity import get_regulatory_run, list_regulatory_runs
 from app.live.service import fact_derivation, reporting_periods
 from app.models import (
     Bank,
@@ -30,7 +31,6 @@ from app.models import (
 )
 from app.reporting.schemas.packages import RegulatoryPackageCreate
 from app.reporting.service import generation as reporting_generation
-from app.services.regulatory_liquidity import get_regulatory_run, list_regulatory_runs
 from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID, materialize_canonical_test_book
 from tests.support.factories.canonical import FIXTURE_AS_OF, seed_canonical_fixture
 from tests.support.helpers import ORG_1, USER_1

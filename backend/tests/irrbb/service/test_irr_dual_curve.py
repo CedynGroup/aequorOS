@@ -43,6 +43,8 @@ from app.irrbb.schemas.regulatory_irr import IrrScenarioBatchCreate
 from app.irrbb.service import regulatory_irr
 from app.irrbb.service.regulatory_irr import discount_curve_midpoints_pct
 from app.live.service.fact_derivation import derive_facts
+from app.market_data.service import market_data_sources
+from app.market_data.service.market_data import get_discount_curve
 from app.models import (
     Bank,
     BankFinancialFact,
@@ -53,8 +55,6 @@ from app.models import (
     LineageRecord,
     ParamStressShock,
 )
-from app.services import market_data_sources
-from app.services.market_data import get_discount_curve
 from tests.fixtures.canonical_bank_fixture import (
     DEMO_ORG_ID,
     DEMO_USER_ID,

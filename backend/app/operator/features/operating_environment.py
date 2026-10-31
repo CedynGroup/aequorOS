@@ -19,16 +19,16 @@ from uuid import UUID
 from fastapi import APIRouter
 from pydantic import JsonValue
 
-from app.models import DeskOperatingEnvironmentAssessment
-from app.operator.deps import Operator, OperatorDb, record_operator_action
-from app.schemas.market_desk_operating_environment import (
+from app.market_data.public import (
+    DeskOperatingEnvironmentAssessment,
     DeskOperatingEnvironmentAssessmentListRead,
     DeskOperatingEnvironmentAssessmentRead,
     DeskOperatingEnvironmentComputeRequest,
     DeskOperatingEnvironmentPreview,
     DeskOperatingEnvironmentPublishResult,
 )
-from app.services.market_desk import operating_environment as oe
+from app.market_data.public import operating_environment as oe
+from app.operator.deps import Operator, OperatorDb, record_operator_action
 
 router = APIRouter(prefix="/operating-environment", tags=["operator-operating-environment"])
 

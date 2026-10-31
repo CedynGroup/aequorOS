@@ -26,18 +26,19 @@ from app.core.key_management.models import ObjectKeyEnvelope
 from app.core.key_management.schemas import BankKeyConnect, BankKeyRotate
 from app.core.key_management.types import KeyReference, KeyStatus
 from app.core.tenancy import TenantContext
+from app.data_engine.schemas.ingestion import InternalIngestionBatchCreate, MappingConfigCreate
+from app.data_engine.service import ingestion
 from app.db.session import get_engine
 from app.identity.models.institution_profile import RelatedParty
 from app.identity.schemas.bank_encryption import BankKeyScheduleConfirm
 from app.identity.service import bank_encryption
 from app.models import Bank, Job, OperatorAuditLog
-from app.schemas.ingestion import InternalIngestionBatchCreate, MappingConfigCreate
-from app.services import ingestion, job_queue
-from tests.adapters.excel_csv import fixtures as workbooks
-from tests.api.test_ingestion import FULL_MAPPING
+from app.services import job_queue
 from tests.case.factories import ServiceFactories
 from tests.conftest import FakeStorage
 from tests.core.test_bank_reencryption import EmptyStorage
+from tests.data_engine.adapters.excel_csv import fixtures as workbooks
+from tests.data_engine.api.test_ingestion import FULL_MAPPING
 from tests.db import test_postgres_migrations as migrations
 from tests.support.database import managed_engine
 from tests.support.helpers import ORG_1, ORG_2

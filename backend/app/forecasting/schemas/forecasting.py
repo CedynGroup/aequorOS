@@ -8,7 +8,7 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app.forecasting.schemas import ForecastAssumptionProvenanceRead
-from app.schemas.regulatory_liquidity import (
+from app.liquidity.public import (
     RegulatoryMetricResultRead,
     RegulatoryRunErrorRead,
     RegulatoryRunStatus,

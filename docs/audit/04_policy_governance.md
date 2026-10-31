@@ -282,7 +282,7 @@ OLEM as _"1 to 30 days in default"_, contradicting the 30-to-<90-day band used e
 
 ### 6.3 Eight LMTD floors are an exposure draft presented as a floor (`NEW-24`)
 
-`app/services/liquidity_thresholds.py:47` holds `BANK_MINIMUM_PCT` = exactly the Liquidity
+`app/liquidity/service/liquidity_thresholds.py:47` holds `BANK_MINIMUM_PCT` = exactly the Liquidity
 Monitoring Tools Directive's bank column (80/100/50/70/60/80/30/50), and the surrounding
 comment calls them _"LMTD Table 1 published minimums for BANKS"_. The **Liquidity Monitoring
 Tools Directive (February 2026) is an exposure draft that does not take effect until

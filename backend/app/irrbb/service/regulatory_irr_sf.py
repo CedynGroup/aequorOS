@@ -51,6 +51,13 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
+from app.data_engine.public import (
+    CanonicalCounterparty,
+    CanonicalPosition,
+    CanonicalPositionSnapshot,
+    CanonicalProduct,
+    CanonicalReferenceRow,
+)
 from app.identity.public import Bank
 from app.irrbb.domain import IrrRunError
 from app.irrbb.domain import standardised as sf
@@ -78,6 +85,7 @@ from app.irrbb.schemas.regulatory_irr_sf import (
     IrrbbSfTable8RowRead,
 )
 from app.irrbb.service.regulatory_irr import tier1_for_period
+from app.liquidity.public import RegulatoryRunRead, read_regulatory_run_execution_result
 from app.live.public import (
     BankReportingPeriod,
     RegulatoryLineItem,
@@ -85,21 +93,10 @@ from app.live.public import (
     RegulatoryRun,
     RegulatoryValidation,
 )
-from app.models import (
-    CanonicalCounterparty,
-    CanonicalPosition,
-    CanonicalPositionSnapshot,
-    CanonicalProduct,
-    CanonicalReferenceRow,
-)
+from app.market_data.public import market_data, market_data_sources
 from app.policy.public import jurisdictions, regulatory_parameters
 from app.reporting.service import filing_reconciliation
-from app.schemas.regulatory_liquidity import RegulatoryRunRead
-from app.services import market_data, market_data_sources
 from app.services.audit import record_event
-from app.services.regulatory_liquidity import (  # noqa: PLC2701 - engine completion read
-    _read_regulatory_run_execution_result,
-)
 
 ENGINE_VERSION = "regulatory-irr-sf-v1.0.0"
 INPUT_SCHEMA_VERSION = "irrbb-sf-inputs-v1"
@@ -716,7 +713,7 @@ def _create_and_execute(
             ),
         )
     db.expire_all()
-    return _read_regulatory_run_execution_result(db, ctx, bank, run_id)
+    return read_regulatory_run_execution_result(db, ctx, bank, run_id)
 
 
 def _execute_refusal(  # noqa: PLR0913 - the refused run is its full identity
@@ -750,7 +747,7 @@ def _execute_refusal(  # noqa: PLR0913 - the refused run is its full identity
     run_id = run.id
     _persist_failure(db, ctx, run_id, error)
     db.expire_all()
-    return _read_regulatory_run_execution_result(db, ctx, bank, run_id)
+    return read_regulatory_run_execution_result(db, ctx, bank, run_id)
 
 
 def _record_started(
@@ -2044,7 +2041,7 @@ def _read_model(
     run: RegulatoryRun,
 ) -> IrrbbSfRead:
     metrics = run.metrics or {}
-    run_read = _read_regulatory_run_execution_result(db, ctx, bank, run.id)
+    run_read = read_regulatory_run_execution_result(db, ctx, bank, run.id)
     params = _parameters_read(run)
     buckets = _buckets_read(run)
     bucket_labels = {bucket.key: bucket.label for bucket in buckets}

@@ -24,8 +24,13 @@ from app.live.service import pipeline
 from app.models import Bank, BankReportingPeriod, CurrentFinancialFact, Job, LiveMetric, User
 from app.policy.service import module_scope
 from app.services import job_queue
-from tests.adapters.excel_csv import fixtures
-from tests.api.test_ingestion import FULL_MAPPING, activate_mapping, seed_bank, start_batch
+from tests.data_engine.adapters.excel_csv import fixtures
+from tests.data_engine.api.test_ingestion import (
+    FULL_MAPPING,
+    activate_mapping,
+    seed_bank,
+    start_batch,
+)
 from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID, materialize_canonical_test_book
 from tests.support.factories.canonical import (
     FIXTURE_AS_OF,

@@ -24,13 +24,17 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from app import worker
 from app.api.deps import TenantContext
+from app.capital.service import regulatory_capital
 from app.core.config import get_settings
+from app.data_engine.domain.ingestion.contracts import EntityMapping, MappingConfig
+from app.data_engine.domain.ingestion.locations import StagedIngestionLocation
+from app.data_engine.schemas.ingestion import IngestionBatchCreate, MappingConfigCreate
+from app.data_engine.service import ingestion
 from app.db.base import utc_now
-from app.domain.ingestion.contracts import EntityMapping, MappingConfig
-from app.domain.ingestion.locations import StagedIngestionLocation
 from app.ftp import service as regulatory_ftp
 from app.fx import service as regulatory_fx
 from app.irrbb.service import regulatory_irr
+from app.liquidity.service import regulatory_liquidity
 from app.live.service import live_refresh_triggers, live_view, pipeline
 from app.live.service.fact_derivation import evaluate_balance_identity
 from app.models import (
@@ -48,8 +52,7 @@ from app.models import (
 )
 from app.reporting.schemas.packages import RegulatoryPackageCreate, RegulatoryPackageRead
 from app.reporting.service import generation
-from app.schemas.ingestion import IngestionBatchCreate, MappingConfigCreate
-from app.services import ingestion, job_queue, regulatory_capital, regulatory_liquidity
+from app.services import job_queue
 from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID, materialize_canonical_test_book
 from tests.support.factories.canonical import (
     FIXTURE_AS_OF,

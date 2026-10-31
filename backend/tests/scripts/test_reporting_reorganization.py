@@ -29,7 +29,7 @@ def _execute(program: str, *args: str) -> None:
 @pytest.mark.parametrize(
     "module",
     [
-        "app.services.sdi_views",
+        "app.capital.service.sdi_views",
         "app.reporting.service.generation",
         "app.reporting.service.hub",
         "app.reporting.service.dbk_generation",

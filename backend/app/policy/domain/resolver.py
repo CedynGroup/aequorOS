@@ -512,7 +512,7 @@ PARAMETER_DIRECTION: dict[str, str] = {
     # Data-integrity controls. Not a published regulatory number, but governed
     # all the same: ``balance_identity_tolerance_pct`` is the width of the
     # |assets - (liabilities + equity)| gap a book may carry and still produce a
-    # FILED figure (app/services/reconciliation.py). A larger tolerance admits a
+    # FILED figure (app/data_engine/service/reconciliation.py). A larger tolerance admits a
     # more broken book, so tightening means SMALLER — ceiling. It was seeded and
     # documented as tighten-only from the start but omitted from this map until
     # 2026-08-22 (audit NEW-39), which left the one control between a broken book

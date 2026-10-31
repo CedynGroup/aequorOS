@@ -23,8 +23,8 @@ from sqlalchemy.orm import Session
 
 from app.irrbb.domain.engine import IRR_BUCKETS, IrrPosition, compute_nii
 from app.irrbb.service import regulatory_irr
+from app.liquidity.schemas.regulatory_liquidity import RegulatoryRunCreate
 from app.models import BankFinancialFact, RegulatoryRun
-from app.schemas.regulatory_liquidity import RegulatoryRunCreate
 from app.stress.domain import orchestrator
 from app.stress.domain.appendix_ii import thousands
 from app.stress.schemas.enterprise_stress import EnterpriseStressRunCreate

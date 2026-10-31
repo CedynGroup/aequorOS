@@ -224,7 +224,7 @@ hash. Validated positions may appear in operator logs; the optional `OutcomeDeta
 remains bank-facing data and never enters operator logs.
 Unexpected bugs and infrastructure failures still raise.
 
-`app/domain/liquidity/engine.py::compute_liquidity` is the first migrated boundary:
+`app/liquidity/domain/engine.py::compute_liquidity` is the first migrated boundary:
 LCR and NSFR are evaluated independently, including missing threshold parameters.
 Existing single-ratio entry points keep their exception contracts. The service
 adapter preserves both outcomes for inline dashboard reads, trends, live metrics
@@ -527,16 +527,16 @@ official reads must be explicit.
 ## 3c. Market Data Adapter framework (docs/market_data_adapter.md)
 
 Layer-1 source adapters specialized for vendor market data, under
-`backend/app/adapters/market_data/`. Calculation modules never learn the vendor: they consume
-by `DataScope` + as-of + institution through `app/services/market_data.py`, and vendor concepts
+`backend/app/market_data/adapters/`. Calculation modules never learn the vendor: they consume
+by `DataScope` + as-of + institution through `app/market_data/service/market_data.py`, and vendor concepts
 (Bloomberg mnemonics, Refinitiv RICs, raw vendor errors) never cross the adapter boundary.
 
-- **Canonical entities** (`app/models/canonical.py`, full mandatory-metadata mixin + RLS +
+- **Canonical entities** (`app/data_engine/models/canonical.py`, full mandatory-metadata mixin + RLS +
   current-generation supersession): `canonical_yield_curves` (+`_points`), `canonical_fx_rates`,
   `canonical_market_indices`, `canonical_counterparty_ratings`. Rates are decimal fractions
   (0.158, never 15.8).
 - **`MarketDataAdapter(SourceAdapter)`** (`base.py`) with three shipped implementations, each
-  passing one shared contract suite (`tests/adapters/market_data/contract.py`, §4.3 categories +
+  passing one shared contract suite (`tests/market_data/adapters/contract.py`, §4.3 categories +
   a vendor-internal leak canary): `manual_upload` (production path — xlsx templates + parser +
   upload/template endpoints; the staged `temp://` handle is the "credential"; zero vendor quota),
   `refinitiv` (OAuth2 simulated, `ric_catalog.yaml`), `bloomberg` (enterprise-cert simulated,
@@ -578,7 +578,7 @@ by `DataScope` + as-of + institution through `app/services/market_data.py`, and 
 
 ### Market-data standing rules and the research desk
 
-- Market data flows only through `app/adapters/market_data/` (see §3c above and
+- Market data flows only through `app/market_data/adapters/` (see §3c above and
   docs/market_data_adapter.md). Every adapter pull delegates to `pull_runner.execute_pull` —
   the single writer of market-data canonical state; never persist market data elsewhere.
   Vendor catalogs carry only spec-documented identifiers (`supported: false` otherwise —
@@ -588,7 +588,7 @@ by `DataScope` + as-of + institution through `app/services/market_data.py`, and 
   LSEG Workspace; the platform APIs are the LSEG Data Platform, formerly RDP) — the
   internal vendor id stays `refinitiv` for wire/DB stability, user-facing labels read
   "LSEG (formerly Refinitiv)".
-- Calculation modules consume market data ONLY via `app/services/market_data.py`
+- Calculation modules consume market data ONLY via `app/market_data/service/market_data.py`
   (DataScope + as-of + institution, source attribution + staleness on every view);
   `fact_derivation` prefers canonical market-data entities and falls back to legacy
   `canonical_reference_rows`. Cross-source disagreement is resolved at read time
@@ -610,7 +610,7 @@ by `DataScope` + as-of + institution through `app/services/market_data.py`, and 
   additive_bps / assumption_note + rationale) enter `package_digest` and do not rewrite the
   methodology register. Split QA: `rates_qa_passed` gates approve/submit/publish of rates;
   `curves_qa_passed` is advisory for rates publish (curve scopes omitted when false). Quant
-  lib `app/domain/curves/` is pure. Nightly job behind `DESK_CAPTURE_ENABLED`.
+  lib `app/market_data/domain/curves/` is pure. Nightly job behind `DESK_CAPTURE_ENABLED`.
   **Entitlements (spec §10):** `market_data_entitlements` grants org × dataset (tiers
   core/standard/premium); default standard when no rows; publish + market-data reads filter
   AEQ curves / GHS indices accordingly. The credit curve `AEQ.GHS.CORP` is built from liquid

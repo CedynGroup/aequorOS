@@ -17,6 +17,7 @@ from app.core.key_management import registry
 from app.core.key_management.local import LocalKeyProvider
 from app.core.key_management.types import KeyReference, KeyStatus, KeyUnavailableError
 from app.credit.service import credit_exposure_book
+from app.data_engine.service import canonical_withdrawal
 from app.domain.authority.outcomes import NotComputable, OutcomeState
 from app.forecasting.domain.engine import ForecastFact
 from app.live.service.fact_derivation import (
@@ -32,7 +33,6 @@ from app.models import (
     CanonicalPositionSnapshot,
     RegulatoryRun,
 )
-from app.services import canonical_withdrawal
 from app.stress.domain.credit_bottom_up import compute_bottom_up_credit
 from app.stress.domain.projection import (
     EnterpriseProjection,
@@ -43,10 +43,10 @@ from app.stress.service import enterprise_stress
 from app.stress.service.enterprise_stress import (
     _build_credit_exposures,  # pyright: ignore[reportPrivateUsage]
 )
-from tests.api.test_ingestion import seed_bank
 from tests.credit.service.test_crd_credit_exposures import (
     _stress_row,  # pyright: ignore[reportPrivateUsage]
 )
+from tests.data_engine.api.test_ingestion import seed_bank
 from tests.domain.test_capital_engine import bog_capital_params
 from tests.fixtures.capital_structure import MAKER
 from tests.services.test_crd_review_repairs import (

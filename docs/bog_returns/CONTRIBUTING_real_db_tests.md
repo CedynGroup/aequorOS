@@ -5,7 +5,7 @@ seed. The retired `POST /banks/seed-demo` route is gone; ~21 test files still ca
 at setup with `405`. Each is converted to run against the ACTUAL primary via the `real_client`
 foundation — opt-in, transaction-isolated (rolled back on teardown; prod is never mutated).
 
-## The pattern (reference conversion: `backend/tests/api/test_regulatory_liquidity.py`)
+## The pattern (reference conversion: `backend/tests/liquidity/api/test_regulatory_liquidity.py`)
 
 - `from tests.real_data import REAL_BANK_ID, REAL_ORG_ID, REAL_USER_ID, real_headers,
 other_headers, requires_real_data`; module-level `pytestmark = requires_real_data`.

@@ -7,10 +7,21 @@ import os
 import subprocess
 import sys
 from pathlib import Path
+from typing import cast
 
 import pytest
 
 BACKEND = Path(__file__).parents[2]
+
+
+def _standalone_contracts(tmp_path: Path) -> str:
+    """Standalone ownership probes supply both of their catalogue inputs."""
+    path = tmp_path / "contracts.json"
+    _ = path.write_text(json.dumps({"contracts": []}))
+    return (
+        "from scripts import database_contracts\n"
+        f"database_contracts.CATALOGUE = Path({str(path)!r})\n"
+    )
 
 
 @pytest.mark.parametrize(
@@ -74,6 +85,7 @@ def test_suite_execution_boundary(
         "from pathlib import Path\nfrom scripts import test_suites\n"
         + f"test_suites.CATALOGUE = Path({str(catalogue)!r})\n"
         + "test_suites.catalogue.cache_clear()\n"
+        + _standalone_contracts(tmp_path)
     )
     if body == "__unclassified__":
         _ = catalogue.write_text(json.dumps({"cases": {}}))
@@ -196,16 +208,16 @@ def test_ci_partition_requires_exactly_one_suite_execution(
             cases = '<testcase classname="tests.test_unit" name="test_unit"/>'
         _ = (path / "report.xml").write_text(f"<testsuite>{cases}</testsuite>")
     if mutation == "none":
-        verify_partition(tmp_path)
+        verify_partition(tmp_path, protected={})
         _ = (tmp_path / "e2e-tests/report.xml").write_text(
             '<testsuite><testcase classname="tests.test_browser" name="test_browser">'
             "<skipped/></testcase></testsuite>"
         )
         with pytest.raises(ValueError, match="External service contract skipped"):
-            verify_partition(tmp_path)
+            verify_partition(tmp_path, protected={})
     else:
         with pytest.raises(ValueError):
-            verify_partition(tmp_path)
+            verify_partition(tmp_path, protected={})
 
 
 def test_affected_partition_omits_only_explicitly_unselected_suite_cases(
@@ -243,10 +255,10 @@ def test_affected_partition_omits_only_explicitly_unselected_suite_cases(
     _ = (tmp_path / "unit-tests" / "collection.json").write_text(
         json.dumps({unit_case: "unit", selected: "integration", omitted: "integration"})
     )
-    verify_partition(tmp_path)
+    verify_partition(tmp_path, protected={})
     (tmp_path / f"pg-suite-{index}" / "collection-main.json").unlink()
     with pytest.raises(ValueError, match="dropped or duplicated"):
-        verify_partition(tmp_path)
+        verify_partition(tmp_path, protected={})
 
 
 @pytest.mark.parametrize("caught", [False, True])
@@ -260,6 +272,7 @@ def test_caught_unit_attempt_is_a_failure_in_parallel_combined_runs(
         "from pathlib import Path\nfrom scripts import test_suites\n"
         + f"test_suites.CATALOGUE = Path({str(catalogue)!r})\n"
         + "test_suites.catalogue.cache_clear()\n"
+        + _standalone_contracts(tmp_path)
     )
     body = "pass"
     if caught:
@@ -326,3 +339,24 @@ def test_mixed_module_overrides_assign_one_suite_at_node_boundaries(
         test_suites.owner("tests/test_new.py::test_new")
     with pytest.raises(ValueError, match="Unclassified"):
         test_suites.owner("tests/test_mixed.py::test_db[new-parameter]")
+
+
+def test_every_catalogue_key_resolves_to_a_test_file() -> None:
+    """A catalogue key whose file no longer exists is stale: the codemod renames keys
+    on a move, so anything left over points at a path that should still be there."""
+    suites = cast(
+        "dict[str, object]",
+        json.loads((BACKEND / "scripts" / "test_suites.json").read_text(encoding="utf-8")),
+    )
+    durations_path = BACKEND / "scripts" / "ci_postgres_durations.json"
+    durations = cast(
+        "dict[str, object]",
+        json.loads(durations_path.read_text(encoding="utf-8")),
+    )
+    sections = cast(
+        "tuple[dict[str, str], dict[str, str], dict[str, str]]",
+        (suites["cases"], suites["services"], durations["durations"]),
+    )
+    paths = {node_id.split("::", 1)[0] for section in sections for node_id in section}
+    missing = sorted(path for path in paths if not (BACKEND / path).is_file())
+    assert missing == []

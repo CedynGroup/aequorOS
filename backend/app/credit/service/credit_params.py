@@ -18,6 +18,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
+from app.capital.domain.crm_haircuts import DEFAULT_CRM_HAIRCUTS
 from app.core.key_management.presentation import (
     LOCKED_TEXT,
     SESSION_STATE,
@@ -53,7 +54,6 @@ from app.policy.public import (
     get_active_params,
 )
 from app.services.audit import record_event
-from app.services.regulatory_capital import DEFAULT_CRM_HAIRCUTS
 
 _HUNDRED = Decimal("100")
 

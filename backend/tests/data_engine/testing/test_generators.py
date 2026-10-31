@@ -4,8 +4,8 @@ import pytest
 from hypothesis import given
 from hypothesis import strategies as st
 
-from app.domain.ingestion.contracts import CanonicalRecords
-from app.domain.ingestion.validation import (
+from app.data_engine.domain.ingestion.contracts import CanonicalRecords
+from app.data_engine.domain.ingestion.validation import (
     ValidationContext,
     default_validation_config,
     run_validation,

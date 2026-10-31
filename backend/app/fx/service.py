@@ -1,7 +1,7 @@
 """Regulatory FX runs: net-open-position / VaR / hedge orchestration and dashboard.
 
 Follows the immutable calculation-run lifecycle established by
-``app.services.regulatory_capital`` and mirrored by ``app.irrbb.service.regulatory_irr``:
+``app.capital.service.regulatory_capital`` and mirrored by ``app.irrbb.service.regulatory_irr``:
 runs commit ``queued`` and ``running`` before executing, persist the full
 canonical input snapshot with a SHA-256 ``input_hash``, and record failures as
 data (named error codes) rather than HTTP 500s. The arithmetic itself lives in
@@ -80,6 +80,11 @@ from app.fx.schemas import (
 )
 from app.identity import public as scoped_authorization
 from app.identity.public import Bank, BankRead, BankReportingPeriodRead
+from app.liquidity.public import (
+    RegulatoryRunBatchRead,
+    RegulatoryRunRead,
+    get_regulatory_run,
+)
 from app.live.domain.positions.fx import (
     fx_position_refusal as _unstatable_position,
 )
@@ -119,12 +124,7 @@ from app.policy.public import (
     prefetch_active_params,
 )
 from app.reporting.service import filing_reconciliation
-from app.schemas.regulatory_liquidity import (
-    RegulatoryRunBatchRead,
-    RegulatoryRunRead,
-)
 from app.services.audit import record_event
-from app.services.regulatory_liquidity import get_regulatory_run
 
 ENGINE_VERSION = "regulatory-fx-v1.2.0"
 INPUT_SCHEMA_VERSION = "bank-facts-v3"

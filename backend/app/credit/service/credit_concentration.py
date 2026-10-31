@@ -23,6 +23,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
+from app.capital.service import sdi_capital
 from app.core.errors import ModuleDataUnavailable
 from app.core.key_management.fields import blind_index
 from app.core.key_management.presentation import SESSION_STATE, SESSION_SUPPORT, PresentationState
@@ -34,23 +35,22 @@ from app.credit.domain.concentration_monitor import (
     monitor_concentration,
 )
 from app.credit.service.credit_exposure_book import canonical_group_key
-from app.data_engine.public import counterparty_group_labels
-from app.domain.capital.engine import CapitalFact, CapitalRegisterRefused, tier1_capital
-from app.identity.public import Bank
-from app.live.public import load_current_facts
-from app.models import (
+from app.data_engine.public import (
     CanonicalCounterparty,
     CanonicalPosition,
     CanonicalPositionSnapshot,
     CanonicalProduct,
+    counterparty_group_labels,
 )
+from app.domain.capital.engine import CapitalFact, CapitalRegisterRefused, tier1_capital
+from app.identity.public import Bank
+from app.live.public import load_current_facts
 from app.policy.public import (
     ParamConcentrationLimit,
     get_active_params,
     institution_types,
     jurisdictions,
 )
-from app.services import sdi_capital
 from app.stress.domain.concentration import DIM_SINGLE_NAME, ConcentrationExposure
 
 _INCLUDED_VALIDATION_STATUSES = ("accepted", "warning")

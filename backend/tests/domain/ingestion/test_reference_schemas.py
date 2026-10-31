@@ -12,7 +12,7 @@ what the schema REFUSES. Three rules carry the weight:
   verbatim and a mapping config cannot rename a column, so the alias has to be
   resolved on read — by exactly one function.
 
-The last test pins the dependency direction: ``app/domain/ingestion`` may not
+The last test pins the dependency direction: ``app/data_engine/domain/ingestion`` may not
 import ``app/bi/domain``, which is why the measure id is validated for shape
 rather than against the catalogue.
 """
@@ -25,16 +25,16 @@ from pathlib import Path
 
 import pytest
 
-from app.domain.ingestion.constants import REFERENCE_DATASET_KINDS
-from app.domain.ingestion.reference_schemas import gl_segment_balances, schema_for
-from app.domain.ingestion.reference_schemas.business_units import (
+from app.data_engine.domain.ingestion.constants import REFERENCE_DATASET_KINDS
+from app.data_engine.domain.ingestion.reference_schemas import gl_segment_balances, schema_for
+from app.data_engine.domain.ingestion.reference_schemas.business_units import (
     ALIASES,
     UNIT_FIELD_MAX_LENGTHS,
     normalise_row,
     validate_business_unit_row,
 )
-from app.domain.ingestion.reference_schemas.business_units import SCHEMA as UNITS
-from app.domain.ingestion.reference_schemas.performance_targets import (
+from app.data_engine.domain.ingestion.reference_schemas.business_units import SCHEMA as UNITS
+from app.data_engine.domain.ingestion.reference_schemas.performance_targets import (
     GRAINS,
     SCOPE_VALUE_MAX_LENGTH,
     TIME_BEHAVIOURS,
@@ -43,7 +43,7 @@ from app.domain.ingestion.reference_schemas.performance_targets import (
     target_key,
     validate_target_row,
 )
-from app.domain.ingestion.reference_schemas.performance_targets import SCHEMA as TARGETS
+from app.data_engine.domain.ingestion.reference_schemas.performance_targets import SCHEMA as TARGETS
 
 GOOD_TARGET = {
     "period": "2026-03-31",
@@ -325,7 +325,7 @@ def test_region_is_optional_because_it_is_declared_not_inferred() -> None:
 
 
 def test_the_reference_schemas_do_not_import_the_bi_catalogue() -> None:
-    """``app/domain/ingestion`` is upstream of ``app/bi/domain``.
+    """``app/data_engine/domain/ingestion`` is upstream of ``app/bi/domain``.
 
     The catalogue CONSUMES these datasets, so a schema that imported it would
     make the input depend on its own consumer — which is why ``measure_id``,

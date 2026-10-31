@@ -1558,7 +1558,7 @@ def require_icaap_capital_plan_propose(request: Request, db: DbSession, ctx: Ten
     EDIT for an existing draft. Without this an ICAAP editor could author a
     capital plan they are not entitled to author.
     """
-    from app.services import capital_plan  # noqa: PLC0415 - avoid deps/service cycle
+    from app.capital.service import capital_plan  # noqa: PLC0415 - avoid deps/service cycle
 
     access = _require_icaap_access(
         request, db, ctx, permission=Permission.EDIT, surface="icaap_capital_plan_propose"
@@ -1876,7 +1876,7 @@ def require_capital_plan_write(
     ctx: Tenant,
     bank: TenantBank,
 ) -> InstitutionPermissionAccess:
-    from app.services import capital_plan  # noqa: PLC0415 - avoid deps/service cycle
+    from app.capital.service import capital_plan  # noqa: PLC0415 - avoid deps/service cycle
 
     if bank is None:  # pragma: no cover - capital plan routes always carry bank_id
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Bank not found.")
@@ -1898,7 +1898,7 @@ def require_capital_plan_approve(
     ctx: Tenant,
     bank: TenantBank,
 ) -> InstitutionPermissionAccess:
-    from app.services import capital_plan  # noqa: PLC0415 - avoid deps/service cycle
+    from app.capital.service import capital_plan  # noqa: PLC0415 - avoid deps/service cycle
 
     if bank is None:  # pragma: no cover - capital plan routes always carry bank_id
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Bank not found.")

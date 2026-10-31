@@ -10,10 +10,12 @@ import pytest
 from sqlalchemy import delete, func, select, update
 from sqlalchemy.orm import Session
 
-from app.adapters.market_data.scope_taxonomy import DataScope
 from app.api.deps import TenantContext
 from app.bi.domain.catalogue import catalogue
 from app.domain.authority.results import Computed
+from app.liquidity.schemas.regulatory_liquidity import RegulatoryRunCreate
+from app.liquidity.service import regulatory_liquidity
+from app.market_data.adapters.scope_taxonomy import DataScope
 from app.models import (
     Bank,
     BankFinancialFact,
@@ -29,8 +31,6 @@ from app.models import (
 from app.policy.domain import PolicyUnresolvedError
 from app.policy.service import jurisdictions
 from app.policy.service.jurisdictions import base_currency
-from app.schemas.regulatory_liquidity import RegulatoryRunCreate
-from app.services import regulatory_liquidity
 from tests.fixtures.canonical_bank_fixture import (
     DEMO_ORG_ID,
     DEMO_USER_ID,

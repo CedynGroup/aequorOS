@@ -11,6 +11,7 @@ from fastapi import HTTPException
 from sqlalchemy import delete, select, update
 from sqlalchemy.orm import Session
 
+from app.capital.service import regulatory_capital
 from app.core.authorization import ModuleScope, SensitivityScope
 from app.core.errors import ModuleDataUnavailable
 from app.credit.service import credit_concentration, regulatory_credit
@@ -36,6 +37,10 @@ from app.irrbb.domain.standardised_params import REQUIRED_CODES
 from app.irrbb.schemas.regulatory_irr import IrrScenarioBatchCreate
 from app.irrbb.schemas.regulatory_irr_sf import IrrbbSfRunCreate
 from app.irrbb.service import regulatory_irr, regulatory_irr_sf
+from app.liquidity.schemas.regulatory_liquidity import (
+    RegulatoryRunCreate,
+    RegulatoryScenarioCode,
+)
 from app.live.service.fact_derivation import derive_current_facts, derive_facts
 from app.models import (
     Bank,
@@ -48,11 +53,6 @@ from app.models import (
 )
 from app.rating.service import sdi_rating
 from app.reporting.service.bog_forms.sources import ResolveContext, get_resolver
-from app.schemas.regulatory_liquidity import (
-    RegulatoryRunCreate,
-    RegulatoryScenarioCode,
-)
-from app.services import regulatory_capital
 from app.stress.models.stress import MacroScenario, MacroScenarioPath
 from app.stress.schemas.enterprise_stress import EnterpriseStressRunCreate
 from app.stress.schemas.reverse_stress import ReverseStressRunCreate

@@ -16,12 +16,13 @@ from app.core.key_management import maintenance, reencryption, registry
 from app.core.key_management.fields import SealedField, blind_index
 from app.core.key_management.local import LocalKeyProvider
 from app.core.tenancy import TenantContext
+from app.data_engine.models.canonical import CanonicalCounterparty
+from app.data_engine.service import canonical_withdrawal
+from app.data_engine.service.canonical_withdrawal import WithdrawalError
 from app.db.base import utc_now
 from app.identity.public import Bank
-from app.models.canonical import CanonicalCounterparty
 from app.models.job import Job
-from app.services import canonical_withdrawal, job_queue
-from app.services.canonical_withdrawal import WithdrawalError
+from app.services import job_queue
 from app.storage.client import (
     EncryptionCursor,
     EncryptionInventoryItem,

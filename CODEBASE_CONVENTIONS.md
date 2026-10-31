@@ -565,11 +565,20 @@ feature. New code goes in the target layout; existing code moves one feature per
   paths and generated Python in Python, JavaScript and TypeScript strings; generated
   `packages/` files and the codemod's own source and tests are excluded. Schema class and
   routed function docstrings are preserved because Pydantic and FastAPI publish them as OpenAPI
-  descriptions; a move must not churn the generated client. The boundary baseline
-  retains its historical names as described above.
+  descriptions; a move must not churn the generated client. The two test-catalogue JSON files
+  are rewritten too — `backend/scripts/test_suites.json` and
+  `backend/scripts/ci_postgres_durations.json`: node-id keys follow the moved test module's
+  file path, including module paths embedded in parametrized ids, with each file's own
+  formatting preserved. Other JSON keys keep their historical names (`app/db/flush_order.json`
+  pins pre-move modules; the boundary baseline and `feature_boundary_split_origins.json` are
+  described above).
   It validates a batch before changing files; overlapping moves run as separate commands.
-  It leaves no compatibility shim at the old path. After rebasing onto a move, in-flight
+  It leaves no compatibility shim at the old path. A feature's test package moves in the
+  same `move` batch as its app package — the codemod accepts `tests.*` dotted pairs — so
+  tests are never moved by bare `git mv`, which would force a back-filled ledger and a
+  second `rewrite` pass. After rebasing onto a move, in-flight
   branches run `uv run python scripts/feature_moves.py rewrite` from `backend/`;
+  the rewrite is idempotent and safe to rerun after every rebase;
   current and historical locations of each relative import must identify one canonical target
   or the rewrite refuses to proceed. Resolve ambiguous imports explicitly before retrying.
   Changed Python files get Ruff import sorting, plus Ruff formatting if they were formatted

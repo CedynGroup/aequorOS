@@ -167,7 +167,7 @@ These are correctness rules, not style preferences. The evidence is
   titles/messages, never `${regShort()} minimum` or "regulatory minimum".
   Historical dashboard, preview and run reads correct the disclosure without
   changing stored validations, calculations or input hashes; see
-  `backend/tests/services/test_liquidity_validation_disclosures.py`.
+  `backend/tests/liquidity/service/test_liquidity_validation_disclosures.py`.
   The [research dossier](../../docs/research/bog_returns_and_templates.md#12-gap-list--what-must-be-simulatedapproximated-clearly-labelled)
   owns the instruments' publication status and calibration gaps.
 - **CET1, Tier 1 and the leverage ratio** are Bank of Ghana CRD requirements —
@@ -678,6 +678,16 @@ the aggregate spine's initial empty source basis cannot authorize stress of a
 subsequently added position book. Other fact groups and historical periods
 retain the canonical spine's figures. Capital and stress expectations for the
 latest period therefore use the position book's net CRD credit basis.
+
+`playwright.config.ts` freezes `E2E_TODAY` once per run, defaulting to the local
+calendar date, and shares it with the bootstrap and journey workers. Set
+`E2E_TODAY=YYYY-MM-DD` to select the last month end on or before that date;
+the anchor remains calendar-derived. For example, `2026-10-30` selects
+September 30, while `2026-10-31` selects October 31. This keeps the bootstrap
+and journey expectations aligned when a run crosses midnight. The liquidity
+journey derives the weighted-average-liability-maturity early-warning value
+from that anchor and the fixture's fixed maturities, because day counts can
+change as the anchor advances.
 
 ```bash
 pnpm --filter @aequoros/dashboard e2e            # functional journeys

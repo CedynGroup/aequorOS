@@ -23,10 +23,10 @@ from app.core.key_management import fields, registry
 from app.core.key_management.local import LocalKeyProvider
 from app.core.key_management.models import ObjectKeyEnvelope
 from app.core.key_management.types import KeyReference
+from app.data_engine.models.canonical import CanonicalCounterparty
 from app.db.base import utc_now
 from app.identity.models.institution_profile import RelatedParty, RelatedPartyRole
 from app.identity.public import Bank, User
-from app.models.canonical import CanonicalCounterparty
 from app.models.organization import Organization
 from app.reporting.models.packages import RegulatoryPackage
 from tests.core.test_bank_field_encryption import (

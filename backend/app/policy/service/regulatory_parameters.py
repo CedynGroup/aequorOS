@@ -155,7 +155,7 @@ class ParamSpec(NamedTuple):
 
 
 # The 8 LMTD Table-1 prudential-ratio floors keep the register's existing code
-# vocabulary (backend/app/services/liquidity_thresholds.py BANK_MINIMUM_PCT keys)
+# vocabulary (backend/app/liquidity/service/liquidity_thresholds.py BANK_MINIMUM_PCT keys)
 # so Phase D resolves resolve(db, bank, code) directly. Bank column is byte-verified
 # against BANK_MINIMUM_PCT; SDI column per docs/sdi.md §4.1.
 _LMTD_FLOORS: tuple[tuple[str, str, str], ...] = (
@@ -1715,7 +1715,7 @@ SEED_PARAMETERS: tuple[ParamSpec, ...] = (
     # --- data-integrity controls (enterprise audit 2026-08-20 P0-10) -------
     # The balance-sheet identity tolerance: |assets − (liabilities + equity)| as
     # a percent of total assets, above which the book may not produce a FILED
-    # number (app/services/reconciliation.py). It is a supervisory-judgement
+    # number (app/data_engine/service/reconciliation.py). It is a supervisory-judgement
     # number, not a BoG-published one, so it ships 'pending' and is editable in
     # the operator console under four eyes. A tenant board override may only
     # TIGHTEN it (PARAMETER_DIRECTION: ceiling).
@@ -1745,7 +1745,7 @@ SEED_PARAMETERS: tuple[ParamSpec, ...] = (
 
 #: The HQLA parameter codes the LCR engine consumes, in the order the loaders
 #: resolve them. Exported so the loaders, the seed and the tests name the same
-#: set (``app/domain/liquidity/engine.py`` never names a rate).
+#: set (``app/liquidity/domain/engine.py`` never names a rate).
 HQLA_HAIRCUT_CODES: dict[str, str] = {
     "L1": "hqla_l1_haircut_pct",
     "L2A": "hqla_l2a_haircut_pct",

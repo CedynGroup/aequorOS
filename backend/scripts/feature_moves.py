@@ -19,6 +19,7 @@ import tokenize
 from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
+from typing import cast
 
 BACKEND = Path(__file__).resolve().parents[1]
 
@@ -40,6 +41,15 @@ _LINE_LENGTH = 100
 #: The frozen calculation-engine identifiers: the keys of this module's table.
 _ENGINE_TABLE = "app.domain.authority.engines"
 _ENGINE_TABLE_NAME = "ENGINE_LOCATIONS"
+#: Node-id catalogues whose keys follow a moved test module, and the sections that
+#: map node ids to suites. Every other JSON file keeps its keys: ``app/db/flush_order.json``
+#: pins pre-move modules (``tests/architecture/test_model_flush_order.py``), the boundary
+#: baseline is canonicalized by the move ledger, and
+#: ``feature_boundary_split_origins.json`` is documented as outside rewrite scope.
+_CATALOGUE_SECTIONS = {
+    "scripts/test_suites.json": ("cases", "services"),
+    "scripts/ci_postgres_durations.json": ("durations",),
+}
 
 
 @dataclass(frozen=True)
@@ -237,10 +247,14 @@ def _comments(segment: str) -> list[str]:
 
 
 def _import_line(module: str, names: Sequence[str], comments: Sequence[str], indent: str) -> str:
-    """``from module import names``, wrapped in parentheses when it is too long."""
+    """``from module import names``, wrapped in parentheses when it is too long.
+
+    The collected comment (a per-line ``# noqa`` among them) rides the statement's
+    first physical line: on a body line of the wrapped form Ruff no longer honors it.
+    """
     comment = f"  {' '.join(comments)}" if comments else ""
     flat = f"from {module} import {', '.join(names)}"
-    if len(indent) + len(flat) <= _LINE_LENGTH:
+    if len(indent) + len(flat) + len(comment) <= _LINE_LENGTH:
         return flat + comment
     body = "".join(f"{indent}    {name},\n" for name in names)
     return f"from {module} import ({comment}\n{body}{indent})"
@@ -663,6 +677,77 @@ def tracked_text_files(backend: Path) -> list[Path]:
     return files
 
 
+def _renamed_node_path(path: str, rename: Renamer) -> str:
+    """A node id's ``tests/.../test_x.py`` file-path prefix, renamed through the ledger."""
+    if not path.endswith(".py"):
+        return path
+    dotted = path.removesuffix(".py").replace("/", ".")
+    renamed = rename(dotted)
+    if renamed == dotted:
+        return path
+    return renamed.replace(".", "/") + ".py"
+
+
+def _renamed_node_id(node_id: str, rename: Renamer) -> str:
+    """The node id a move renames a catalogue key to, or the key itself.
+
+    The file-path prefix follows the moved test module; parametrized ids that embed
+    a moved module path inside their brackets (``[app.services.x]`` and the
+    ``[app.services.x-...]`` prefix form) follow it through ``rewrite_dotted``.
+    """
+    path, separator, tail = node_id.partition("::")
+    renamed_path = _renamed_node_path(path, rename)
+    renamed_tail = rewrite_dotted(tail, rename)
+    if renamed_path == path and renamed_tail == tail:
+        return node_id
+    return f"{renamed_path}{separator}{renamed_tail}"
+
+
+def _renamed_catalogue(text: str, renames: dict[str, str]) -> str:
+    """Rename catalogue keys in place, preserving the file's formatting exactly."""
+    decoder = json.JSONDecoder()
+    lines: list[str] = []
+    for line in text.splitlines(keepends=True):
+        stripped = line.lstrip()
+        if not stripped.startswith('"'):
+            lines.append(line)
+            continue
+        # Decode the key the way the file stores it: a parametrized id may embed
+        # quotation marks, which JSON escapes inside the key's source span.
+        key, end = cast("tuple[str, int]", decoder.raw_decode(stripped))
+        if key not in renames:
+            lines.append(line)
+            continue
+        quote = len(line) - len(stripped)
+        span = quote + end
+        lines.append(f"{line[:quote]}{json.dumps(renames[key])}{line[span:]}")
+    return "".join(lines)
+
+
+def plan_catalogue_rewrites(backend: Path, rename: Renamer) -> dict[Path, str]:
+    """The test-catalogue JSON files whose node-id keys a move renames."""
+    planned: dict[Path, str] = {}
+    for relative, sections in _CATALOGUE_SECTIONS.items():
+        path = backend / relative
+        if not path.is_file():
+            continue
+        text = path.read_text(encoding="utf-8")
+        data = cast("dict[str, object]", json.loads(text))
+        renames: dict[str, str] = {}
+        for section in sections:
+            nodes = cast("dict[str, object]", data.get(section, {}))
+            for node_id in nodes:
+                # A frozen file keeps its old names on purpose, so the node ids it
+                # generates (old module paths inside parametrized ids) never move.
+                if node_id.partition("::")[0] in _FROZEN_FILES:
+                    continue
+                if (new := _renamed_node_id(node_id, rename)) != node_id:
+                    renames[node_id] = new
+        if renames and (updated := _renamed_catalogue(text, renames)) != text:
+            planned[path] = updated
+    return planned
+
+
 def plan_rewrites(backend: Path, rename: Renamer) -> dict[Path, str]:
     """Every tracked text file the passes change, with its rewritten text."""
     planned: dict[Path, str] = {}
@@ -681,6 +766,7 @@ def plan_rewrites(backend: Path, rename: Renamer) -> dict[Path, str]:
         updated = rewrite_text(relative, original, rename, backend, frozen)
         if updated != original:
             planned[path] = updated
+    planned |= plan_catalogue_rewrites(backend, rename)
     return planned
 
 
@@ -689,6 +775,16 @@ def plan_rewrites(backend: Path, rename: Renamer) -> dict[Path, str]:
 # --------------------------------------------------------------------------
 
 _GUARD_LITERAL = re.compile(r"[\w*]+(?:/[\w*.]+)*")
+
+
+def _plausible_path(literal: str) -> bool:
+    """Whether a literal plausibly names a whole path, not one segment of a joined one.
+
+    ``_APP / "ai" / "domain"`` yields the bare segment ``"domain"``, which also
+    matches ``app/domain``; only a literal with a separator, a glob star or a
+    ``.py`` suffix is complete enough to report as a guard glob.
+    """
+    return "/" in literal or "*" in literal or literal.endswith(".py")
 
 
 def _guard_glob(backend: Path, literal: str) -> tuple[Path, str] | None:
@@ -705,7 +801,8 @@ def guard_coverage(backend: Path) -> dict[str, dict[str, int]]:
     """Per architecture guard: each path-like string literal -> the ``.py`` files it matches.
 
     Literals name files, globs or directories, relative to ``app/`` or written from
-    ``app/``. A guard whose literal matches fewer files after a move scans less.
+    ``app/``; only plausibly complete path literals are reported (``_plausible_path``).
+    A guard whose literal matches fewer files after a move scans less.
     """
     coverage: dict[str, dict[str, int]] = {}
     for guard in sorted((backend / _ARCHITECTURE_DIR).glob("*.py")):
@@ -713,7 +810,7 @@ def guard_coverage(backend: Path) -> dict[str, dict[str, int]]:
         for node in ast.walk(ast.parse(guard.read_text(encoding="utf-8"))):
             if not isinstance(node, ast.Constant) or not isinstance(node.value, str):
                 continue
-            if not _GUARD_LITERAL.fullmatch(node.value):
+            if not _GUARD_LITERAL.fullmatch(node.value) or not _plausible_path(node.value):
                 continue
             if (target := _guard_glob(backend, node.value)) is not None:
                 root, pattern = target
