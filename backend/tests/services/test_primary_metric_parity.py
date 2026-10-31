@@ -1,8 +1,8 @@
 """The headline metric per live module is declared in THREE places.
 
 ``window_analytics._PRIMARY_METRIC_KEY`` (the daily aggregates), the dashboard's
-``components/live/moduleDisplay.ts`` ``PRIMARY_METRIC`` (the pulse card, the
-live status card, the board pack) and ``features/home/components/WindowAnalysis.tsx``
+``features/live/components/moduleDisplay.ts`` ``PRIMARY_METRIC`` (the pulse card, the
+live status card, the board pack) and ``components/home/WindowAnalysis.tsx``
 ``METRIC_LABELS`` (how the daily aggregates are labelled). Until 2026-09-21 the
 IRR entry named ``eve_limit_pct`` — the LIMIT, a constant — in all three, so the
 pulse sparkline was flat and the window statistics summarised a parameter.
@@ -28,7 +28,7 @@ from app.liquidity.service.window_analytics import (
 from app.live.models.live import LIVE_MODULES
 
 _DASHBOARD = Path(__file__).resolve().parents[2] / "dashboard"
-_MODULE_DISPLAY = _DASHBOARD / "components" / "live" / "moduleDisplay.ts"
+_MODULE_DISPLAY = _DASHBOARD / "features" / "live" / "components" / "moduleDisplay.ts"
 _WINDOW_ANALYSIS = _DASHBOARD / "features" / "home" / "components" / "WindowAnalysis.tsx"
 
 #: ``  irr: { key: "worst_eve_change_pct_tier1", label: "ΔEVE / Tier 1" },``

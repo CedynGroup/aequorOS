@@ -68,7 +68,7 @@ _MAX_WINDOW_MONTHS = 36
 # window reports avg == the point value exactly.
 _QUANT = Decimal("0.000001")
 
-# Mirror of the dashboard's components/live/moduleDisplay.ts PRIMARY_METRIC —
+# Mirror of the dashboard's features/live/components/moduleDisplay.ts PRIMARY_METRIC —
 # the one headline metric per live module, in LIVE_MODULES order (``_daily_stats``
 # emits rows in this order). ``tests/services/test_primary_metric_parity.py``
 # reads both maps and fails when they drift.
@@ -86,7 +86,7 @@ _PRIMARY_METRIC_KEY: dict[str, str] = {
     # the rating ladder silently absent from every window a Treasurer opened
     # while the pulse card headlined the same figure. The window-analysis panel
     # marks it (and FTP, and forecast) advisory — ``ADVISORY_HEADLINE_MODULES``
-    # in ``components/live/moduleDisplay.ts``, pinned against this registry by
+    # in ``features/live/components/moduleDisplay.ts``, pinned against this registry by
     # ``tests/services/test_primary_metric_parity.py``.
     "rating": "pit_pd_upper_pct",
     "forecast": "year5_car_pct",
