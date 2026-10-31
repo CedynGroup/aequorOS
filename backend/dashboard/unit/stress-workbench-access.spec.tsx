@@ -230,7 +230,7 @@ it.each([
         );
         await waitFor(() => expect(detailRequested).toBe(true));
         expect(
-          screen.queryByRole("textbox", { name: "Name", exact: true }),
+          screen.queryByRole("textbox", { name: "Name" }),
         ).not.toBeInTheDocument();
         releaseDetail();
         expect(
@@ -238,33 +238,47 @@ it.each([
             name: `Edit scenario · ${draft.code}`,
           }),
         ).toBeVisible();
+        expect(screen.getByRole("textbox", { name: "Name" })).toHaveValue(
+          draft.name,
+        );
+        expect(screen.getByRole("combobox", { name: "Severity" })).toHaveValue(
+          "severe",
+        );
         expect(
-          screen.getByRole("textbox", { name: "Name", exact: true }),
-        ).toHaveValue(draft.name);
-        expect(
-          screen.getByRole("combobox", { name: "Severity", exact: true }),
-        ).toHaveValue("severe");
-        expect(
-          screen.getByRole("textbox", { name: "Description", exact: true }),
+          screen.getByRole("textbox", { name: "Description" }),
         ).toHaveValue(draft.description);
         expect(
-          screen.getByRole("textbox", { name: "Source attribution", exact: true }),
+          screen.getByRole("textbox", { name: "Source attribution" }),
         ).toHaveValue(draft.source);
-        expect(screen.getByLabelText("gdp_growth year 1 base")).toHaveValue("4");
-        expect(screen.getByLabelText("gdp_growth year 1 stress")).toHaveValue("-3");
-        expect(screen.getByLabelText("gdp_growth year 2 base")).toHaveValue("5");
-        expect(screen.getByLabelText("gdp_growth year 2 stress")).toHaveValue("-2");
-        expect(screen.getByLabelText("fx_usd_ghs year 1 base")).toHaveValue("12");
-        expect(screen.getByLabelText("fx_usd_ghs year 1 stress")).toHaveValue("17");
-        expect(screen.getByLabelText("fx_usd_ghs year 2 base")).toHaveValue("13");
-        expect(screen.getByLabelText("fx_usd_ghs year 2 stress")).toHaveValue("18");
+        expect(screen.getByLabelText("gdp_growth year 1 base")).toHaveValue(
+          "4",
+        );
+        expect(screen.getByLabelText("gdp_growth year 1 stress")).toHaveValue(
+          "-3",
+        );
+        expect(screen.getByLabelText("gdp_growth year 2 base")).toHaveValue(
+          "5",
+        );
+        expect(screen.getByLabelText("gdp_growth year 2 stress")).toHaveValue(
+          "-2",
+        );
+        expect(screen.getByLabelText("fx_usd_ghs year 1 base")).toHaveValue(
+          "12",
+        );
+        expect(screen.getByLabelText("fx_usd_ghs year 1 stress")).toHaveValue(
+          "17",
+        );
+        expect(screen.getByLabelText("fx_usd_ghs year 2 base")).toHaveValue(
+          "13",
+        );
+        expect(screen.getByLabelText("fx_usd_ghs year 2 stress")).toHaveValue(
+          "18",
+        );
         await user.click(screen.getByRole("button", { name: "New scenario" }));
         expect(
           await screen.findByRole("heading", { name: "New macro scenario" }),
         ).toBeVisible();
-        expect(
-          screen.getByRole("textbox", { name: "Name", exact: true }),
-        ).toHaveValue("");
+        expect(screen.getByRole("textbox", { name: "Name" })).toHaveValue("");
         expect(
           screen.queryByLabelText("gdp_growth year 1 base"),
         ).not.toBeInTheDocument();
