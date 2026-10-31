@@ -27,7 +27,7 @@
     "ag-grid-react": "36.2.0",
     "echarts": "^6.1.0",
     "lucide-react": "^1.49.0",
-    "next": "16.4.1",
+    "next": "16.4.3",
     "next-auth": "5.0.0-beta.32",
     "pdfjs-dist": "6.3.289",
     "react": "19.3.0",
@@ -59,8 +59,8 @@
     "react-test-renderer": "19.3.1",
     "tailwindcss": "^4.3.3",
     "typescript": "^5.6.2",
-    "typescript-eslint": "^8.71.2",
-    "vitest": "^5.0.3"
+    "typescript-eslint": "^8.72.1",
+    "vitest": "^5.0.5"
   },
   "license": "SEE LICENSE IN LICENSE"
 }

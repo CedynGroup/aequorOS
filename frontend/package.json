@@ -13,10 +13,10 @@
     "@fontsource-variable/fraunces": "5.3.0",
     "@fontsource-variable/inter": "5.3.0",
     "lucide-react": "^1.49.0",
-    "next": "16.4.1",
+    "next": "16.4.3",
     "react": "19.3.0",
     "react-dom": "19.3.0",
-    "resend": "^6.34.1"
+    "resend": "^6.35.0"
   },
   "devDependencies": {
     "@eslint/compat": "^2.1.1",
