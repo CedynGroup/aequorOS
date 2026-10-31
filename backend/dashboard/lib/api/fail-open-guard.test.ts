@@ -63,7 +63,7 @@ const ROOT = dashboardRoot();
  */
 const SCANNED_DIRS = [
   "components/stress",
-  "components/liquidity",
+  "features/liquidity",
   "components/basel",
   "components/credit",
   "components/irr",
@@ -299,7 +299,7 @@ const RULES: Rule[] = [
     // that reason, so the exception is recorded rather than assumed.
     id: "NEW-53 stored-run threshold used as the current floor",
     // Calls only — the lookbehind lets the helper's own definition (and its
-    // docstring, which names this trap) stay in `components/liquidity/runData.ts`.
+    // docstring, which names this trap) stay in `features/liquidity/components/runData.ts`.
     pattern: /(?<!function\s)\brunMetricThreshold\s*\(/,
     message:
       "A stored run's `threshold_min` is being read as a regulatory floor. It records what was applied WHEN THAT RUN RAN and is absent entirely before an institution's first official run — so it renders a live ratio as \"not assessed\" beside a KPI and a validation that both used the real, governed floor. Read the floor from the governed parameter set on the payload (`buffers.*MinPct`, the SDI s.29 summary, the run's §59(f) coupling) and compare with `assessAgainstFloor`.",

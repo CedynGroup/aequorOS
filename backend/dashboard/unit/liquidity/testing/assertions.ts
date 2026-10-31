@@ -1,5 +1,5 @@
 import { expect } from "vitest";
-import type { parseCurrencyGaps } from "../../../components/liquidity/ladderData";
+import type { parseCurrencyGaps } from "../../../features/liquidity/components/ladderData";
 
 /** engine.py MONEY 4dp; a single amount quantum covers Number accumulation error.
  * Status, currency identity and persisted ordering continue to compare exactly.

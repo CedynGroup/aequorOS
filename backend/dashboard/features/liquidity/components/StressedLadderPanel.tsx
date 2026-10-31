@@ -15,13 +15,13 @@ import EmptyState from '@/components/ui/EmptyState';
 import DataTable, { type Column } from '@/components/ui/DataTable';
 import StressedLadderChart, {
   type LadderPoint,
-} from '@/components/liquidity/charts/StressedLadderChart';
+} from '@/features/liquidity/components/charts/StressedLadderChart';
 import {
   LADDER_HORIZONS,
   parseCurrencyGaps,
   parseStressedLadder,
-} from '@/components/liquidity/ladderData';
-import { runComputedAt } from '@/components/liquidity/runData';
+} from '@/features/liquidity/components/ladderData';
+import { runComputedAt } from '@/features/liquidity/components/runData';
 import { currencyCode, fmtCurrency, fmtCurrencySigned } from '@/lib/format';
 
 type HorizonRow = {

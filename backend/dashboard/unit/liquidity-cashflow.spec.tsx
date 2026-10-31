@@ -14,7 +14,7 @@ import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { http, HttpResponse } from "msw";
 import { setupServer } from "msw/node";
-import CashflowWindowPanel from "../components/liquidity/CashflowWindowPanel";
+import CashflowWindowPanel from "../features/liquidity/components/CashflowWindowPanel";
 import { QueryAuthorityScopeProvider } from "../lib/api/useQueryScope";
 import { queryAuthorityScope } from "../lib/api/queryPolicy";
 import { apiBaseUrl } from "../lib/api/client";

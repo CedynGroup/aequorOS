@@ -12,7 +12,7 @@ import Sparkline from "@/components/ui/Sparkline";
 import ValidationList from "@/components/ui/ValidationList";
 import QueryBoundary from "@/components/ui/QueryBoundary";
 import DonutChart from "@/components/charts/DonutChart";
-import RatioTrendChart from "@/components/liquidity/charts/RatioTrendChart";
+import { RatioTrendChart, runComputedAt } from "@/features/liquidity/public";
 import CapitalWaterfallChart from "@/components/basel/charts/CapitalWaterfallChart";
 import SdiCapitalView from "@/components/basel/SdiCapitalView";
 import FloorNotAssessed from "@/components/basel/FloorNotAssessed";
@@ -20,7 +20,6 @@ import {
   LandingInsightStrip,
   useKpiExplain,
 } from "@/components/bi/InsightStrip";
-import { runComputedAt } from "@/components/liquidity/runData";
 import { useBankContext } from "@/components/shell/BankContext";
 import LiveEngineNote from "@/components/live/LiveEngineNote";
 import { useCapitalDashboard, useRegulatoryRun } from "@/lib/api/hooks";
