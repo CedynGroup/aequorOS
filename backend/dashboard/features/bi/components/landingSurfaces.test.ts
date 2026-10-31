@@ -65,6 +65,7 @@ const ROOT = dashboardRoot();
 const ROUTE_SOURCE: Record<string, string> = {
   fx: "features/fx/routes/exposure.tsx",
   liquidity: "features/liquidity/routes/overview.tsx",
+  risk: "features/risk/routes/overview.tsx",
 };
 
 /** A file's source with its comments removed. */
@@ -91,7 +92,7 @@ const LANDING_PAGES = [
   "features/fx/routes/exposure.tsx",
   "app/(app)/ftp/page.tsx",
   "app/(app)/markets/page.tsx",
-  "app/(app)/risk/page.tsx",
+  "features/risk/routes/overview.tsx",
 ];
 
 // --- 1. the strip is mounted, and mounted connected -------------------------
@@ -440,7 +441,7 @@ test("each page's BI surfaces speak about the page's own reporting date, never t
     );
   }
   for (const page of ["forecasting", "markets", "risk"]) {
-    const source = code(`app/(app)/${page}/page.tsx`);
+    const source = code(ROUTE_SOURCE[page] ?? `app/(app)/${page}/page.tsx`);
     assert.ok(
       /asOf=\{period\?\.periodEnd\}/.test(source),
       `${page}: asOf must be the selected reporting period's end`,

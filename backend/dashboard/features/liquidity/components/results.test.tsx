@@ -132,10 +132,10 @@ const Page = require("../../../app/(app)/liquidity/nsfr/page")
   .default as typeof import("../../../app/(app)/liquidity/nsfr/page").default;
 const Trend = require("./charts/RatioTrendChart").default;
 const Outflow = require("./charts/NetOutflowChart").default;
-const LimitWall = require("../../../components/risk/LimitWall")
-  .default as typeof import("../../../components/risk/LimitWall").default;
+const LimitWall = require("@/features/risk/public")
+  .LimitWall as typeof import("@/features/risk/public").LimitWall;
 const { liquidityLimits } =
-  require("../../../components/risk/limits") as typeof import("../../../components/risk/limits");
+  require("@/features/risk/public") as typeof import("@/features/risk/public");
 const { usePulseCards } =
   require("@/features/home/public") as typeof import("@/features/home/public");
 
