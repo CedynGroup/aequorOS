@@ -215,7 +215,9 @@ def _assert_deferred_thread_ownership(tmp_path: Path) -> None:
         cwd=root,
         env={
             **os.environ,
-            "PYTHONPATH": str(BACKEND),
+            "PYTHONPATH": os.pathsep.join([str(BACKEND / "scripts/ci_no_database"), str(BACKEND)]),
+            "CI_DATABASE_OBSERVATIONS": str(evidence),
+            "CI_DATABASE_CONTEXT": "{}",
             "PYTEST_ADDOPTS": "",
             "PYTEST_DISABLE_PLUGIN_AUTOLOAD": "1",
         },

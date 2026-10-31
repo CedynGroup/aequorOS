@@ -20,11 +20,11 @@ _inherited_context: ContextVar[dict[str, object] | None] = ContextVar(
 )
 
 
-def context() -> dict[str, object]:
+def context(fallback: str = "{}") -> dict[str, object]:
     inherited = _inherited_context.get()
     if inherited is not None:
         return inherited
-    return cast(dict[str, object], json.loads(os.getenv(CONTEXT_ENV, "{}")))
+    return cast(dict[str, object], json.loads(os.getenv(CONTEXT_ENV, fallback)))
 
 
 @contextmanager
