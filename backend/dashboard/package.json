@@ -9,6 +9,7 @@
     "lint": "eslint .",
     "typecheck": "tsc --noEmit && tsc -p e2e/tsconfig.json --noEmit",
     "test": "pnpm test:legacy && vitest run && rm -rf .test-out",
+    "guard:features": "node scripts/check_feature_boundaries.mjs",
     "e2e": "uv run --project .. python ../scripts/local_services.py run --storage -- node node_modules/@playwright/test/cli.js test",
     "e2e:visual": "uv run --project .. python ../scripts/local_services.py run --storage -- node node_modules/@playwright/test/cli.js test --config playwright.visual.config.ts",
     "test:legacy": "rm -rf .test-out && tsc -p tsconfig.test.json && node --test scripts/*.test.mjs && node scripts/run-unit-tests.mjs",
