@@ -1,17 +1,4 @@
 {
-  "tests/architecture/test_bi_compiler_injection.py": {
-    "sqlalchemy.create_engine": 1
-  },
-  "tests/bi/models/test_bi_models.py": {
-    "sqlalchemy.create_engine": 1,
-    "sqlalchemy.orm.sessionmaker": 1
-  },
-  "tests/bi/models/test_bi_notification_models.py": {
-    "sqlalchemy.create_engine": 1
-  },
-  "tests/bi/service/test_execution.py": {
-    "sqlalchemy.orm.sessionmaker": 1
-  },
   "tests/conftest.py": {
     "sqlalchemy.orm.sessionmaker": 1
   },

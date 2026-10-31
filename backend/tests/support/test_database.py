@@ -27,6 +27,7 @@ from app.core.key_management.registry import lock_bank_version
 from tests.support.database import (
     DatabaseContext,
     TestDatabaseConnections,
+    adopt_application_engine,
     database_connections,
     install_migration_engines,
     isolated_database,
@@ -326,6 +327,35 @@ def test_adoption_preserves_application_engine_identity(tmp_path: Path) -> None:
             pass
     finally:
         get_engine.cache_clear()
+
+
+def test_session_overrides_cannot_escape_owning_database(tmp_path: Path) -> None:
+    with (
+        isolated_database(f"sqlite:///{tmp_path / 'own.db'}") as own,
+        isolated_database(f"sqlite:///{tmp_path / 'foreign.db'}") as foreign,
+    ):
+        maker = own.session_factory()
+        foreign_engine = foreign.engine()
+        with pytest.raises(ValueError, match="must belong"):
+            _ = maker(bind=foreign_engine)
+        maker.configure(bind=foreign_engine)
+        with pytest.raises(ValueError, match="must belong"):
+            _ = maker()
+        maker.configure(bind=own.engine())
+        with maker() as session:
+            assert session.scalar(text("SELECT 42")) == 42
+        with pytest.raises(ValueError, match="Multiple session binds"):
+            _ = maker(binds={object(): foreign_engine})
+
+
+def test_adopting_managed_engine_preserves_original_fixture_lifetime(tmp_path: Path) -> None:
+    shorter = FixtureLifetime()
+    with isolated_database(f"sqlite:///{tmp_path / 'owned.db'}") as database:
+        engine = database.engine()
+        assert adopt_application_engine(shorter, engine) is engine
+        shorter.resources.close()
+        with engine.connect() as connection:
+            assert connection.scalar(text("SELECT 42")) == 42
 
 
 @postgres_only

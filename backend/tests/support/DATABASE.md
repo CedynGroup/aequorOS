@@ -23,7 +23,8 @@ with isolated_db.connection() as connection:
 ```
 
 Binds from another factory are rejected so a session cannot escape its owning
-schema. The shared application fixtures adopt the cached application engine
+schema, including per-call bind overrides and reconfigured session factories.
+Multiple-bind sessions are outside this API. The shared application fixtures adopt the cached application engine
 before its first checkout. They retain engine identity, the outer rollback
 transaction, savepoints and the separate resettable committing database.
 
@@ -71,10 +72,16 @@ It owns connection resources without creating or dropping the schema.
 
 `managed_session_factory` preserves SQLAlchemy's autoflush and expiry defaults;
 `TestDatabaseConnections.session_factory` defaults both to false for application
-sessions. Both accept explicit options, preserve explicit tenant info, and close
+sessions. Both accept explicit options (including a custom `Session` subclass via `class_`),
+preserve explicit tenant info, and close
 sessions at their owner's teardown. Factories require an engine created by this
 support layer, or explicitly adopted before its first checkout. An owner can
 `adopt_engine(engine)` when the application must construct the engine itself.
+For a cached application engine returned by a real production factory, use
+`adopt_application_engine(request, engine)` before its first checkout. Existing
+managed engines keep their original fixture lifetime; an unowned pool receives
+shared hooks and request-owned teardown. This preserves factory and cache behavior.
+
 Use `managed_session_factory(None, engine)` only within an explicit owner
 lifetime; pytest fixtures normally supply their request for earlier cleanup.
 The database owner weakly tracks connections and sessions. When supplied,

@@ -24,7 +24,7 @@ import sqlalchemy as sa
 from sqlalchemy import String, Table, event, inspect
 from sqlalchemy.dialects import sqlite
 from sqlalchemy.dialects.postgresql import JSONB
-from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.orm import Session
 from sqlalchemy.pool import QueuePool
 
 from app.bi.domain import extract
@@ -89,6 +89,11 @@ from app.live.domain.positions.families import (
 from app.live.models.live import LIVE_MODULES, LiveMetric
 from app.live.models.regulatory_run import RegulatoryRun
 from app.policy.models.institution_type import InstitutionType
+from tests.support.database import (
+    adopt_application_engine,
+    managed_engine,
+    managed_session_factory,
+)
 
 MODELS: tuple[type, ...] = (
     BiFactPositionDaily,
@@ -266,8 +271,10 @@ def test_an_unregistered_bi_table_is_caught_rather_than_silently_skipped() -> No
     assert "regulatory_runs" not in derived
 
 
-def test_create_all_on_sqlite_builds_every_bi_table_as_a_plain_table() -> None:
-    engine = sa.create_engine("sqlite://")
+def test_create_all_on_sqlite_builds_every_bi_table_as_a_plain_table(
+    request: pytest.FixtureRequest,
+) -> None:
+    engine = managed_engine(request, "sqlite://")
     Base.metadata.create_all(engine)
     present = set(inspect(engine).get_table_names())
     assert set(BI_TABLES) <= present
@@ -850,13 +857,17 @@ def test_bi_engine_is_a_small_named_pool_on_postgres() -> None:
         get_bi_engine.cache_clear()
 
 
-def test_bi_sessions_get_the_tenant_guc_listener_for_free(tmp_path) -> None:
+def test_bi_sessions_get_the_tenant_guc_listener_for_free(
+    tmp_path, request: pytest.FixtureRequest
+) -> None:
     """The ``after_begin`` listener is registered on :class:`Session` itself,
     so a session from the BI pool is scoped exactly like a request session."""
     assert event.contains(Session, "after_begin", set_tenant_rls_context)
-    engine = get_bi_engine(f"sqlite+pysqlite:///{tmp_path / 'bi.db'}")
+    engine = adopt_application_engine(
+        request, get_bi_engine(f"sqlite+pysqlite:///{tmp_path / 'bi.db'}")
+    )
     try:
-        with sessionmaker(bind=engine)() as session:
+        with managed_session_factory(request, engine)() as session:
             assert isinstance(session, Session)
             session.info["organization_id"] = "OR-DEM00001"
             session.execute(sa.text("SELECT 1"))  # begins a transaction; the hook runs
