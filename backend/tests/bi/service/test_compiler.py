@@ -56,7 +56,7 @@ from app.bi.service import alerts, compiler, mart_builder
 from app.bi.service.compiler import CompiledQuery, compile_query
 from app.bi.service.errors import BiQueryError, InvalidQuery, UnknownMember, is_member_id
 from app.bi.service.execution import execute
-from app.domain.capital import loan_classification
+from app.capital.domain import loan_classification
 from app.models import Bank
 from tests.support.helpers import ORG_1, ORG_2
 

@@ -98,7 +98,7 @@ Each rule is stated in full in the document the index names.
   with each engine migration. [CODEBASE_CONVENTIONS.md §1](CODEBASE_CONVENTIONS.md#data-truth-in-calculations)
   owns the contracts and migration gates.
 - **The bank's booked IFRS 9 allowance is the capital figure of record.** Modelled ECL
-  (`app/domain/capital/ecl.py`) is a what-if and stress estimate: never substitute it for
+  (`app/capital/domain/ecl.py`) is a what-if and stress estimate: never substitute it for
   booked general provisions in Tier 2; a stressed increase is a CET1 charge.
 - **Periodic reporting dates are the regulator's.** They come from the `ReturnDefinition`
   through `app/reporting/service/anchors.py`, never from

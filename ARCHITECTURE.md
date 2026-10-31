@@ -1379,7 +1379,7 @@ Supplied exposures with zero base RWA still produce losses and RWA deltas;
 bottom-up engine without exposures refuses as missing input; enterprise stress
 omits that overlay for a matching empty book.
 
-The IFRS 9 model (`backend/app/domain/capital/ecl.py`) runs only when staged
+The IFRS 9 model (`backend/app/capital/domain/ecl.py`) runs only when staged
 `ecl_exposure` facts and an effective `ecl-assumptions` register both exist. It
 is a what-if and stress estimate: Tier 2 always carries the bank's booked
 general provisions, the figure of record, in capital runs, forecasts and
@@ -1447,7 +1447,7 @@ Current calculation versions are owned by the
 [authority registry](backend/app/domain/authority/registry.py) and the engines'
 `ENGINE_VERSION` constants. New versions append runs; stored inputs, hashes and
 results of historical runs remain unchanged. Regression evidence lives in
-`backend/tests/services/test_ecl_and_crm.py` and
+`backend/tests/capital/service/test_ecl_and_crm.py` and
 `backend/tests/stress/domain/test_stress_orchestrator.py`.
 
 ### Governed forecast assumptions

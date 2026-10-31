@@ -14,15 +14,15 @@ from __future__ import annotations
 from collections.abc import Mapping
 
 ENGINE_LOCATIONS: Mapping[str, tuple[str, str]] = {
-    "app.domain.capital.ecl:compute_ecl": ("app.domain.capital.ecl", "compute_ecl"),
+    "app.domain.capital.ecl:compute_ecl": ("app.capital.domain.ecl", "compute_ecl"),
     "app.domain.capital.engine:compute_capital_ratios": (
-        "app.domain.capital.engine",
+        "app.capital.domain.engine",
         "compute_capital_ratios",
     ),
-    "app.domain.capital.engine:compute_rwa": ("app.domain.capital.engine", "compute_rwa"),
-    "app.domain.capital.engine:tier1_capital": ("app.domain.capital.engine", "tier1_capital"),
+    "app.domain.capital.engine:compute_rwa": ("app.capital.domain.engine", "compute_rwa"),
+    "app.domain.capital.engine:tier1_capital": ("app.capital.domain.engine", "tier1_capital"),
     "app.domain.capital.loan_classification:classify_book": (
-        "app.domain.capital.loan_classification",
+        "app.capital.domain.loan_classification",
         "classify_book",
     ),
     "app.domain.credit.pd:estimate_pd": ("app.credit.domain.pd", "estimate_pd"),

@@ -50,8 +50,8 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field, replace
 from decimal import ROUND_HALF_UP, Decimal
 
+from app.capital.domain.engine import CapitalFact, CapitalParams, credit_collateral_by_category
 from app.domain.authority.outcomes import NotComputable, OutcomeState, outcome
-from app.domain.capital.engine import CapitalFact, CapitalParams, credit_collateral_by_category
 from app.stress.domain.translation import (
     MacroPathPoint,
     ShockMapping,

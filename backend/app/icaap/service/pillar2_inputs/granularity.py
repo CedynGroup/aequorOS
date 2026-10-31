@@ -55,6 +55,7 @@ from typing import Any
 from sqlalchemy.orm import Session
 
 from app.api.deps import IcaapAccess
+from app.capital.domain.engine import ZERO_RISK_WEIGHT_CODE
 from app.credit.domain.granularity import (
     SEGMENT_CORPORATE,
     SEGMENT_EXCLUDED,
@@ -63,7 +64,6 @@ from app.credit.domain.granularity import (
     Segment,
 )
 from app.credit.public import credit_exposure_book
-from app.domain.capital.engine import ZERO_RISK_WEIGHT_CODE
 from app.icaap.domain.pillar2.granularity_method import (
     KEY_SCHEMA,
     PARAM_COUNTERPARTY_SEGMENT_MAP,

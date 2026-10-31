@@ -23,7 +23,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
-from app.domain.capital.engine import compute_capital_ratios, compute_rwa
+from app.capital.domain.engine import compute_capital_ratios, compute_rwa
 from app.forecasting.domain.engine import (
     _parse_facts,
     _state_facts,

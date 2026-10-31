@@ -132,6 +132,7 @@ CASE_PLANE_OWNERS: frozenset[str] = CASE_PLANE_MEMBERS
 #: proves the patterns actually resolve to the modules that matter.
 REGULATORY_PLANE_GLOBS: tuple[str, ...] = (
     "domain/**/*.py",
+    "capital/domain/**/*.py",
     "bi/domain/**/*.py",
     "icaap/domain/**/*.py",
     "reporting/domain/**/*.py",
@@ -216,7 +217,7 @@ BANK_PLANE_MODULES: frozenset[str] = frozenset(
         "app.irrbb.service.regulatory_irr",
         "app.ftp.service",
         "app.reporting.service",
-        "app.domain.capital",
+        "app.capital.domain",
         "app.liquidity.domain",
         "app.forecasting.domain",
         "app.irrbb.domain",
@@ -428,7 +429,7 @@ def test_the_regulatory_plane_scan_is_not_vacuous() -> None:
         "app.credit.domain.pd",
         "app.credit.service.regulatory_credit",
         "app.credit.api.run_regulatory_credit",
-        "app.domain.capital.engine",
+        "app.capital.domain.engine",
         "app.liquidity.domain.engine",
         "app.forecasting.domain.engine",
         "app.capital.service.regulatory_capital",

@@ -56,6 +56,7 @@ CASE_PLANE_MODULES: frozenset[str] = CASE_PLANE_MEMBERS
 #: Everything that produces or seals a filed regulatory number.
 REGULATORY_PLANE: tuple[str, ...] = (
     "domain",
+    "capital/domain",
     "bi/domain",
     "icaap/domain",
     "reporting/domain",
@@ -162,6 +163,7 @@ def test_the_pure_domain_layer_imports_no_application_state() -> None:
     impure: dict[str, set[str]] = {}
     for path in (
         _python_files("domain")
+        + _python_files("capital/domain")
         + _python_files("bi/domain")
         + _python_files("icaap/domain")
         + _python_files("reporting/domain")
@@ -206,6 +208,11 @@ def test_the_pure_domain_layer_imports_no_application_state() -> None:
                     "app.reporting.models",
                     "app.reporting.service",
                     "app.reporting.public",
+                    "app.capital.api",
+                    "app.capital.service",
+                    "app.capital.models",
+                    "app.capital.schemas",
+                    "app.capital.public",
                     "app.credit.api",
                     "app.credit.service",
                     "app.credit.schemas",

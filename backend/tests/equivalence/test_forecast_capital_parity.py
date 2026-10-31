@@ -38,14 +38,14 @@ from decimal import Decimal
 
 import pytest
 
-from app.capital.service.regulatory_capital import _CAPITAL_FACT_GROUPS
-from app.domain.capital.engine import (
+from app.capital.domain.engine import (
     CapitalFact,
     CapitalParams,
     RwaResult,
     compute_capital_ratios,
     compute_rwa,
 )
+from app.capital.service.regulatory_capital import _CAPITAL_FACT_GROUPS
 from app.forecasting.domain import engine as forecast_engine
 from app.forecasting.domain.engine import (
     ForecastFact,

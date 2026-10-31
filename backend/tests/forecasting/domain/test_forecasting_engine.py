@@ -15,8 +15,8 @@ from decimal import ROUND_HALF_UP, Decimal
 
 import pytest
 
-from app.domain.capital.engine import CapitalParams, classify_capital_ratio
-from app.domain.capital.engine import MissingParameterError as CapitalMissingParameterError
+from app.capital.domain.engine import CapitalParams, classify_capital_ratio
+from app.capital.domain.engine import MissingParameterError as CapitalMissingParameterError
 from app.forecasting.domain.engine import (
     WHATIF_SHOCK_CODES,
     ForecastAssumptions,

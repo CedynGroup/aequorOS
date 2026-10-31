@@ -53,6 +53,14 @@ from app.bi.models.marts import (
     BiQueryLog,
 )
 from app.bi.models.notifications import BI_NOTIFICATION_TABLES
+from app.capital.domain.loan_classification import (
+    BANK_GRADE_ORDER,
+    BASIS_DAYS_PAST_DUE,
+    BASIS_RESTRUCTURE_HOLD,
+    BASIS_STAGE_PROXY,
+    BASIS_UNCLASSIFIED,
+    SDI_GRADE_ORDER,
+)
 from app.core.config import get_settings
 from app.core.key_management.fields import ProtectedText
 from app.credit.domain.dpd_bands import DPD_BAND_CODES
@@ -69,14 +77,6 @@ from app.data_engine.models.canonical import (
 from app.db.base import Base
 from app.db.session import get_bi_engine, get_bi_sessionmaker, set_tenant_rls_context
 from app.domain.authority.registry import REGISTRY, AdvisoryDesignation, MetricFamily, Regime
-from app.domain.capital.loan_classification import (
-    BANK_GRADE_ORDER,
-    BASIS_DAYS_PAST_DUE,
-    BASIS_RESTRUCTURE_HOLD,
-    BASIS_STAGE_PROXY,
-    BASIS_UNCLASSIFIED,
-    SDI_GRADE_ORDER,
-)
 from app.identity.models.institution_profile import OUTLET_STATUSES, OUTLET_TYPES, Outlet
 from app.irrbb.domain.engine import IRR_BUCKETS
 from app.liquidity.domain.engine import HQLA_LEVEL_1, HQLA_LEVEL_2A, HQLA_LEVEL_2B

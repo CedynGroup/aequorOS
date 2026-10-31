@@ -269,6 +269,7 @@ from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
+from app.capital.domain.loan_classification import NPL_GRADES, normalise_bog_classification
 from app.data_engine.domain.ingestion.capital_tiers import (
     CAPITAL_REGISTER_REFUSED_CATEGORY,
     is_excluded_component,
@@ -288,7 +289,6 @@ from app.data_engine.public import (
 )
 from app.data_engine.service import reconciliation
 from app.domain.authority.outcomes import NotComputable, OutcomeDetail
-from app.domain.capital.loan_classification import NPL_GRADES, normalise_bog_classification
 from app.ftp.domain.engine import CurvePoint, CurveResult, build_curve
 from app.identity.public import Bank
 from app.irrbb.domain.buckets import REPRICING_BUCKETS as _IRR_BUCKETS

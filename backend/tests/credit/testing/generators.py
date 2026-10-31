@@ -5,7 +5,7 @@ from decimal import Decimal
 
 from hypothesis import strategies as st
 
-from app.domain.capital.loan_classification import (
+from app.capital.domain.loan_classification import (
     ClassificationGrid,
     LoanExposure,
     classify_book,

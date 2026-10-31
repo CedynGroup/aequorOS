@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import re
 
-#: The capital engine's tier codes (``app.domain.capital.engine`` reads them here).
+#: The capital engine's tier codes (``app.capital.domain.engine`` reads them here).
 TIER_CET1 = "CET1"
 TIER_AT1 = "AT1"
 TIER_T2 = "T2"
