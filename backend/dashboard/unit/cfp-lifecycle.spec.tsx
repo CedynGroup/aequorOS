@@ -24,7 +24,7 @@ import { cfpContentToWire } from "../lib/api/cfp";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { http, HttpResponse } from "msw";
 import { setupServer } from "msw/node";
-import CfpLifecycle from "../components/liquidity/CfpLifecycle";
+import CfpLifecycle from "../features/liquidity/components/CfpLifecycle";
 import ContingencyFundingPlan from "../app/(app)/liquidity/cfp/page";
 import { QueryAuthorityScopeProvider } from "../lib/api/useQueryScope";
 import { queryAuthorityScope } from "../lib/api/queryPolicy";
