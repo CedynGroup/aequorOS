@@ -75,7 +75,7 @@ def _get_signoff_or_404(
     if signoff is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Enterprise-stress sign-off not found.",
+            detail=scope_authorization.RESOURCE_NOT_FOUND_DETAIL,
         )
     scope_authorization.require_permission(db, ctx, signoff.bank_id, Permission.VIEW, opaque=True)
     return signoff

@@ -20,6 +20,8 @@ from app.core.authorization import (
 from app.core.tenancy import TenantContext
 from app.identity import public as authorization
 
+RESOURCE_NOT_FOUND_DETAIL = "Stress resource not found."
+
 
 def evaluate(  # noqa: PLR0913 - the resource and action are explicit
     db: Session,
@@ -112,7 +114,7 @@ def require_permission(  # noqa: PLR0913 - complete policy tuple plus refusal mo
     if decision is None or not decision.allowed:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND if opaque else status.HTTP_403_FORBIDDEN,
-            detail="Stress resource not found." if opaque else authorization.DEFAULT_DENIAL_DETAIL,
+            detail=RESOURCE_NOT_FOUND_DETAIL if opaque else authorization.DEFAULT_DENIAL_DETAIL,
         )
 
 

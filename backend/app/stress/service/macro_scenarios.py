@@ -90,7 +90,8 @@ def _get_scenario_or_404(db: Session, ctx: TenantContext, scenario_id: UUID) -> 
     )
     if scenario is None:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Macro scenario not found."
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=scope_authorization.RESOURCE_NOT_FOUND_DETAIL,
         )
     scope_authorization.require_permission(db, ctx, scenario.bank_id, Permission.VIEW, opaque=True)
     return scenario

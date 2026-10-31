@@ -4,18 +4,21 @@ from __future__ import annotations
 
 from datetime import timedelta
 from typing import Never
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import pytest
+from fastapi import HTTPException
 from fastapi.testclient import TestClient
 from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
 from app.core.authorization import ModuleScope, RoleBundle, SensitivityScope
+from app.core.tenancy import TenantContext
 from app.db.base import utc_now
 from app.identity.models.authorization import AuthorizationBinding
 from app.identity.models.bank import Bank
 from app.live.public import RegulatoryRun
+from app.models import BankReportingPeriod
 from app.models.audit_event import AuditEvent
 from app.stress.models.stress import (
     EnterpriseStressSignoff,
@@ -23,7 +26,11 @@ from app.stress.models.stress import (
     ManagementActionItem,
     ManagementActionPlan,
 )
+from app.stress.schemas.enterprise_stress_signoff import StressSignoffRead
+from app.stress.schemas.management_actions import ManagementActionPlanRead
 from app.stress.schemas.stress import MacroScenarioListRead, MacroScenarioRead
+from app.stress.service import macro_scenarios
+from app.stress.service.default_macro_scenarios import DEFAULT_MACRO_SCENARIOS
 from tests.data_engine.api.test_ingestion import seed_bank
 from tests.stress.authority import grant
 from tests.support.helpers import ORG_1, USER_1, headers
@@ -321,3 +328,164 @@ def test_viewer_cannot_start_other_stress_writes(
         db_session.scalar(select(func.count()).select_from(model)) for model in tracked_models
     )
     assert after == before
+
+
+def _prepare_hidden_resource(
+    client: TestClient, db_session: Session, resource: str, bank_id: str, bank_scoped: bool
+) -> tuple[str, UUID]:
+    scope_bank = bank_id if bank_scoped else None
+    if resource == "system":
+        object_id = DEFAULT_MACRO_SCENARIOS[0].id
+        collection = URL
+    elif resource == "scenario":
+        created = client.post(URL, headers=headers(), json=payload(scope_bank))
+        assert created.status_code == 201, created.text
+        object_id = MacroScenarioRead.model_validate(created.json()).id
+        collection = URL
+    elif resource == "plan":
+        collection = "/api/v1/management-action-plans"
+        created = client.post(
+            collection,
+            headers=headers(),
+            json={
+                "bank_id": scope_bank,
+                "code": "opaque_plan",
+                "name": "Opaque plan",
+                "actions": [
+                    {
+                        "action_id": "retain",
+                        "kind": "revise_dividend",
+                        "label": "Retain earnings",
+                        "trigger_kind": "on_breach",
+                        "dividend_reduction_pct": "100",
+                    }
+                ],
+                "reason": "Prepare an authorization regression fixture",
+            },
+        )
+        assert created.status_code == 201, created.text
+        object_id = ManagementActionPlanRead.model_validate(created.json()).id
+    else:
+        period = db_session.scalar(
+            select(BankReportingPeriod).where(
+                BankReportingPeriod.bank_id == bank_id,
+                BankReportingPeriod.organization_id == ORG_1,
+            )
+        )
+        assert period is not None
+        run = RegulatoryRun(
+            organization_id=ORG_1,
+            bank_id=bank_id,
+            reporting_period_id=period.id,
+            module="enterprise_stress",
+            scenario_code="opaque_scenario",
+            status="succeeded",
+            engine_version="test",
+            input_schema_version="test",
+            output_schema_version="test",
+            input_hash="a" * 64,
+            created_by=USER_1,
+            inputs={"scenario": {"code": "opaque_scenario"}},
+            metrics={},
+        )
+        db_session.add(run)
+        db_session.commit()
+        collection = f"/api/v1/banks/{bank_id}/enterprise-stress/signoffs"
+        created = client.post(
+            collection,
+            headers=headers(),
+            json={
+                "run_id": str(run.id),
+                "scenario_narrative": "Adverse conditions",
+                "assumptions_rationale": "Documented assumptions",
+                "reason": "Prepare an authorization regression fixture",
+            },
+        )
+        assert created.status_code == 201, created.text
+        object_id = StressSignoffRead.model_validate(created.json()).id
+    return collection, object_id
+
+
+@pytest.mark.parametrize(
+    ("resource", "bank_scoped"),
+    [
+        ("scenario", False),
+        ("scenario", True),
+        ("system", False),
+        ("plan", False),
+        ("plan", True),
+        ("signoff", True),
+    ],
+)
+def test_hidden_and_missing_stress_objects_have_identical_responses(
+    unbound: TestClient, db_session: Session, resource: str, bank_scoped: bool
+) -> None:
+    bank_id = seed_bank(unbound)
+    binding_id = grant(db_session)
+    collection, object_id = _prepare_hidden_resource(
+        unbound, db_session, resource, bank_id, bank_scoped
+    )
+    original = unbound.get(f"{collection}/{object_id}", headers=headers())
+    assert original.status_code == 200, original.text
+    db_session.execute(delete(AuthorizationBinding).where(AuthorizationBinding.id == binding_id))
+    db_session.commit()
+    tracked_models = (
+        AuditEvent,
+        MacroScenario,
+        ManagementActionPlan,
+        ManagementActionItem,
+        EnterpriseStressSignoff,
+        RegulatoryRun,
+    )
+    before = tuple(
+        db_session.scalar(select(func.count()).select_from(model)) for model in tracked_models
+    )
+    reason: dict[str, object] = {"reason": "Probe an opaque object boundary"}
+    operations: list[tuple[str, str, dict[str, object] | None]] = [
+        ("GET", "", None),
+        ("PATCH", "", reason),
+        ("POST", "/submit", reason),
+    ]
+    if resource == "signoff":
+        operations.extend(
+            [
+                ("POST", "/withdraw", reason),
+                ("POST", "/attest", reason | {"credibility_rationale": "Board review"}),
+            ]
+        )
+    else:
+        operations.extend([("POST", "/approve", reason), ("POST", "/archive", reason)])
+    if resource in {"scenario", "system"}:
+        operations.extend(
+            ("GET", f"/translation/{module}", None)
+            for module in ("liquidity", "capital", "irr", "fx", "ftp")
+        )
+        operations.append(("POST", "/clone", reason))
+    probe_headers = headers(roles=("admin", "approver", "analyst")) | {
+        "X-Request-ID": "opaque-stress-regression",
+    }
+    for method, suffix, body in operations:
+        hidden = unbound.request(
+            method, f"{collection}/{object_id}{suffix}", headers=probe_headers, json=body
+        )
+        missing = unbound.request(
+            method, f"{collection}/{uuid4()}{suffix}", headers=probe_headers, json=body
+        )
+        assert hidden.status_code == missing.status_code == 404, (suffix, hidden.text, missing.text)
+        assert hidden.json() == missing.json(), (suffix, hidden.text, missing.text)
+    if resource in {"scenario", "system"}:
+        ctx = TenantContext(organization_id=ORG_1, actor_user_id=USER_1, authorization_version=1)
+        with pytest.raises(HTTPException) as hidden_run:
+            macro_scenarios.resolve_for_official_run(db_session, ctx, object_id)
+        with pytest.raises(HTTPException) as missing_run:
+            macro_scenarios.resolve_for_official_run(db_session, ctx, uuid4())
+        assert hidden_run.value.status_code == missing_run.value.status_code == 404
+        assert hidden_run.value.detail == missing_run.value.detail
+    after = tuple(
+        db_session.scalar(select(func.count()).select_from(model)) for model in tracked_models
+    )
+    assert after == before
+    grant(db_session)
+    restored = unbound.get(f"{collection}/{object_id}", headers=headers())
+    assert restored.status_code == 200, restored.text
+    assert restored.json() == original.json()

@@ -75,7 +75,8 @@ def _get_plan_or_404(db: Session, ctx: TenantContext, plan_id: UUID) -> Manageme
     )
     if plan is None:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Management-action plan not found."
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=scope_authorization.RESOURCE_NOT_FOUND_DETAIL,
         )
     scope_authorization.require_permission(db, ctx, plan.bank_id, Permission.VIEW, opaque=True)
     return plan

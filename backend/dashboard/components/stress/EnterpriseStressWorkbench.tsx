@@ -101,10 +101,55 @@ export default function EnterpriseStressWorkbench(props: {
   moduleLens?: StressModuleLens;
 }) {
   const scope = useQueryAuthorityScope();
-  const { bank } = useBankContext();
+  const { bank, isLoading } = useBankContext();
+  const stressAuthority = useStressAuthority();
+  const bankId = bank?.id;
+
+  if (isLoading || stressAuthority.isLoading) {
+    return (
+      <div className="px-1 py-4">
+        <EmptyState
+          Icon={Activity}
+          title="Loading institution context"
+          description="Loading the active institution and its reporting periods."
+        />
+      </div>
+    );
+  }
+
+  if (!bankId) {
+    return (
+      <div className="px-1 py-4">
+        <EmptyState
+          Icon={Activity}
+          title="Institution context unavailable"
+          description="The stress workbench needs an active institution before it can load its scenario library and run registry."
+          action={
+            <Link
+              href="/data-engine"
+              className="btn-primary px-4 py-2 text-body font-medium"
+            >
+              Open Data Engine
+            </Link>
+          }
+        />
+      </div>
+    );
+  }
+
+  if (!stressAuthority.can("view", bankId)) {
+    return (
+      <EmptyState
+        Icon={Activity}
+        title="Stress access required"
+        description={stressPermissionReason("view")}
+      />
+    );
+  }
+
   return (
     <ScopedEnterpriseStressWorkbench
-      key={`${scope.tenantId}:${scope.authorityId}:${bank?.id}`}
+      key={`${scope.tenantId}:${scope.authorityId}:${bankId}`}
       {...props}
     />
   );
@@ -115,7 +160,7 @@ function ScopedEnterpriseStressWorkbench({
 }: {
   moduleLens?: StressModuleLens;
 }) {
-  const { bank, period, periods, moduleScope, isLoading } = useBankContext();
+  const { bank, period, periods, moduleScope } = useBankContext();
   const stressAuthority = useStressAuthority();
   const bankId = bank?.id;
   const periodId = period?.id;
@@ -179,12 +224,11 @@ function ScopedEnterpriseStressWorkbench({
   );
 
   useEffect(() => {
-    if (isLoading) return;
     if (isSdiTenant) {
       setCarTarget("10");
     }
     setIncludeFx(!isSdiTenant && !fxRunDeniedReason);
-  }, [fxRunDeniedReason, isLoading, isSdiTenant]);
+  }, [fxRunDeniedReason, isSdiTenant]);
 
   useEffect(() => {
     if (runScenarioId || approvedScenarios.length === 0) return;
@@ -255,48 +299,6 @@ function ScopedEnterpriseStressWorkbench({
       );
     }
   };
-
-  if (isLoading) {
-    return (
-      <div className="px-1 py-4">
-        <EmptyState
-          Icon={Activity}
-          title="Loading institution context"
-          description="Loading the active institution and its reporting periods."
-        />
-      </div>
-    );
-  }
-
-  if (!bankId) {
-    return (
-      <div className="px-1 py-4">
-        <EmptyState
-          Icon={Activity}
-          title="Institution context unavailable"
-          description="The stress workbench needs an active institution before it can load its scenario library and run registry."
-          action={
-            <Link
-              href="/data-engine"
-              className="btn-primary px-4 py-2 text-body font-medium"
-            >
-              Open Data Engine
-            </Link>
-          }
-        />
-      </div>
-    );
-  }
-
-  if (!stressAuthority.can("view", bankId)) {
-    return (
-      <EmptyState
-        Icon={Activity}
-        title="Stress access required"
-        description={stressPermissionReason("view")}
-      />
-    );
-  }
 
   if (!periodId) {
     return (
