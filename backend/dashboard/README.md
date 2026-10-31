@@ -679,6 +679,16 @@ subsequently added position book. Other fact groups and historical periods
 retain the canonical spine's figures. Capital and stress expectations for the
 latest period therefore use the position book's net CRD credit basis.
 
+`playwright.config.ts` freezes `E2E_TODAY` once per run, defaulting to the local
+calendar date, and shares it with the bootstrap and journey workers. Set
+`E2E_TODAY=YYYY-MM-DD` to select the last month end on or before that date;
+the anchor remains calendar-derived. For example, `2026-10-30` selects
+September 30, while `2026-10-31` selects October 31. This keeps the bootstrap
+and journey expectations aligned when a run crosses midnight. The liquidity
+journey derives the weighted-average-liability-maturity early-warning value
+from that anchor and the fixture's fixed maturities, because day counts can
+change as the anchor advances.
+
 ```bash
 pnpm --filter @aequoros/dashboard e2e            # functional journeys
 pnpm --filter @aequoros/dashboard e2e:contracts  # browser presentation and HTTP contracts

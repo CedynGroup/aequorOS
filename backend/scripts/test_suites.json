@@ -12096,12 +12096,6 @@
     "tests/icaap/service/test_p3_hooks_and_rules.py::TestTheExtraFrameworkDirectory::test_a_deployed_environment_refuses_to_load_an_unreviewed_framework": "unit",
     "tests/icaap/service/test_p3_hooks_and_rules.py::TestTheExtraFrameworkDirectory::test_an_unset_directory_is_no_directory_in_every_environment": "unit",
     "tests/icaap/service/test_p3_hooks_and_rules.py::TestValidationRules::test_a_complete_frozen_report_raises_no_error": "integration",
-    "tests/icaap/service/test_p3_hooks_and_rules.py::TestValidationRules::test_a_missing_freeze_document_is_an_error": "integration",
-    "tests/icaap/service/test_p3_hooks_and_rules.py::TestValidationRules::test_a_package_that_did_not_come_from_a_freeze_says_so": "integration",
-    "tests/icaap/service/test_p3_hooks_and_rules.py::TestValidationRules::test_a_pending_governed_figure_is_reported_but_does_not_block": "integration",
-    "tests/icaap/service/test_p3_hooks_and_rules.py::TestValidationRules::test_a_report_with_no_capital_figures_at_all_is_an_error[capital_position-icaap.as_of]": "integration",
-    "tests/icaap/service/test_p3_hooks_and_rules.py::TestValidationRules::test_a_report_with_no_capital_figures_at_all_is_an_error[capital_reconciliation-icaap.pillar2_reconciliation]": "integration",
-    "tests/icaap/service/test_p3_hooks_and_rules.py::TestValidationRules::test_an_unanswered_checklist_item_is_an_error": "integration",
     "tests/icaap/service/test_p3_hooks_and_rules.py::TestWorkflowTemplates::test_a_bank_chain_is_approved_by_four_eyes_and_then_governs": "integration",
     "tests/icaap/service/test_p3_hooks_and_rules.py::TestWorkflowTemplates::test_a_chain_the_platform_cannot_run_is_refused_with_its_reason": "integration",
     "tests/icaap/service/test_p3_stage_chain.py::TestMakerChecker::test_an_earlier_reviewer_cannot_also_take_the_approval": "integration",
@@ -18969,7 +18963,10 @@
     "tests/icaap/service/test_snapshot_validation_rules.py::test_duplicate_resolved_current_annexes_are_refused": "unit",
     "tests/icaap/service/test_snapshot_validation_rules.py::test_resolved_annex_inputs_are_copied_immutable_and_isolated": "unit",
     "tests/icaap/service/test_snapshot_validation_rules.py::test_the_complete_rules_check_current_annex_answers[absent]": "unit",
-    "tests/icaap/service/test_snapshot_validation_rules.py::test_the_complete_rules_check_current_annex_answers[different_digest]": "unit"
+    "tests/icaap/service/test_snapshot_validation_rules.py::test_the_complete_rules_check_current_annex_answers[different_digest]": "unit",
+    "tests/architecture/test_dashboard_journeys_gate.py::test_workflow_change_detector_selects_its_inputs[backend/tests/adapters/market_data/manual_upload/fixtures.py-true]": "unit",
+    "tests/scripts/test_e2e_bootstrap.py::test_anchor_today_defaults_to_the_wall_clock": "unit",
+    "tests/scripts/test_e2e_bootstrap.py::test_anchor_today_honours_the_e2e_today_override": "unit"
   },
   "services": {
     "tests/attestation/service/test_attestation_openbao.py::test_a_csr_that_does_not_prove_possession_is_never_submitted": "integration",
