@@ -28,7 +28,7 @@ export const fxPositions = fc.uniqueArray(
 );
 
 /** Deliberately independent signed fields prove the saved net is not derived.
- * Source: components/fx/params.ts FxPositionSplit reads stored figures directly.
+ * Source: features/fx/components/params.ts FxPositionSplit reads stored figures directly.
  */
 const signedCents = fc.integer({ min: -100_000_000, max: 100_000_000 });
 export const adversarialFxPositions = fc.uniqueArray(

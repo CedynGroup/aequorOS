@@ -10,6 +10,7 @@ export default defineConfig({
       include: [
         "app/**/*.{ts,tsx}",
         "components/**/*.{ts,tsx}",
+        "features/**/*.{ts,tsx}",
         "lib/**/*.{ts,tsx}",
       ],
       exclude: ["**/*.test.{ts,tsx}", "**/*.spec.{ts,tsx}", "**/*.d.ts"],
