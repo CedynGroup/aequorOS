@@ -5,11 +5,12 @@ from __future__ import annotations
 import json
 import os
 from collections.abc import Iterator
+from contextlib import closing
 from datetime import timedelta
 from pathlib import Path
 from threading import Lock
 from typing import cast
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import pytest
 from openpyxl import load_workbook
@@ -32,7 +33,7 @@ from app.db.session import get_engine
 from app.identity.models.institution_profile import RelatedParty
 from app.identity.schemas.bank_encryption import BankKeyScheduleConfirm
 from app.identity.service import bank_encryption
-from app.models import Bank, Job, OperatorAuditLog
+from app.models import Bank, Job, OperatorAuditLog, Organization
 from app.services import job_queue
 from tests.case.factories import ServiceFactories
 from tests.conftest import FakeStorage
@@ -138,6 +139,37 @@ def _schema_privilege_snapshot(connection: Connection) -> dict[str, object]:
     }
 
 
+def role_attribute_snapshot(connection: Connection) -> dict[str, dict[str, bool]]:
+    """Cluster-level role attributes, ratcheted like grants.
+
+    Grants alone cannot see a returned BYPASSRLS, a new superuser attribute or a
+    re-enabled login: those live in pg_roles, not in the ACLs, so the manifest
+    pins them per role and any drift fails the same matrix test."""
+    rows = cast(
+        list[tuple[str, bool, bool, bool, bool, bool, bool, bool]],
+        connection.execute(
+            text(
+                "SELECT rolname, rolcanlogin, rolsuper, rolcreatedb, rolcreaterole, "
+                "rolreplication, rolbypassrls, rolinherit FROM pg_roles "
+                "WHERE rolname=ANY(:roles) ORDER BY rolname"
+            ),
+            {"roles": [*ROLES, "aqs_owner", "aqs_migrator"]},
+        ).all(),
+    )
+    return {
+        name: {
+            "rolbypassrls": bypassrls,
+            "rolcanlogin": canlogin,
+            "rolcreatedb": createdb,
+            "rolcreaterole": createrole,
+            "rolinherit": inherit,
+            "rolreplication": replication,
+            "rolsuper": superuser,
+        }
+        for name, canlogin, superuser, createdb, createrole, replication, bypassrls, inherit in rows
+    }
+
+
 def privilege_snapshot(connection: Connection) -> dict[str, object]:
     """Include the isolated worker view namespace in the same grant ratchet."""
     result = _schema_privilege_snapshot(connection)
@@ -153,6 +185,7 @@ def privilege_snapshot(connection: Connection) -> dict[str, object]:
         connection.execute(
             text("SELECT set_config('search_path', :path, true)"), {"path": previous}
         )
+    result["role_attributes"] = role_attribute_snapshot(connection)
     return result
 
 
@@ -450,6 +483,49 @@ def test_matrix_normalizes_column_rights_already_granted_on_the_table(
         else:
             assert after == before
         connection.rollback()
+
+
+@pytest.mark.parametrize("role", ["aqs_operator", "aqs_worker"])
+def test_matrix_detects_a_returning_bypassrls_attribute(administrator: Engine, role: str) -> None:
+    with administrator.connect() as connection, connection.begin():
+        before = privilege_snapshot(connection)
+        connection.execute(text(f"ALTER ROLE {role} BYPASSRLS"))
+        after = privilege_snapshot(connection)
+        attributes = cast(dict[str, dict[str, bool]], after["role_attributes"])
+        assert after != before
+        assert after["tables"] == before["tables"]
+        assert attributes[role]["rolbypassrls"] is True
+        connection.rollback()
+
+
+#: Tenant financial, personal and operational tables the staff console must
+#: reach only through governed surfaces — never by direct ``aqs_operator`` SELECT.
+OPERATOR_FORBIDDEN_READS = (
+    "audit_events",
+    "banks",
+    "financial_balances",
+    "jobs",
+    "live_metrics",
+    "organizations",
+    "related_parties",
+    "regulatory_packages",
+    "users",
+)
+
+
+def test_operator_cannot_read_financial_or_personal_tables_directly(
+    role_engines: dict[str, Engine],
+) -> None:
+    """The operator credential holds no tenant-table grants at all: its future
+    cross-bank reach comes from the metadata-view stage, so a direct read is a
+    permission error, not an RLS-filtered empty result."""
+    for table in OPERATOR_FORBIDDEN_READS:
+        # One connection per read: a refused statement aborts its transaction,
+        # so reusing the connection would report 25P02 instead of the cause.
+        with role_engines["aqs_operator"].connect() as connection:
+            with pytest.raises(DBAPIError) as error:
+                connection.execute(text(f"SELECT * FROM {table} LIMIT 1"))
+            assert getattr(error.value.orig, "sqlstate", None) == "42501"
 
 
 def test_runtime_attributes_ownership_membership_and_grant_options(administrator: Engine) -> None:
@@ -990,3 +1066,124 @@ def test_api_role_can_connect_test_rotate_and_confirm_bank_key(
             )
             is not None
         )
+
+
+def test_pre_cutover_login_still_runs_the_application(
+    monkeypatch: pytest.MonkeyPatch,
+    request: pytest.FixtureRequest,
+) -> None:
+    """Upgrade a pre-foundation login without repairing its identity or function grants."""
+    name, password = f"legacy_probe_{uuid4().hex}", uuid4().hex
+    administrator = managed_engine(
+        request, migrations.postgres_administrator_url(), administrative=True
+    )
+    with administrator.begin() as connection:
+        connection.execute(
+            text(
+                f"CREATE ROLE {name} LOGIN PASSWORD '{password}' INHERIT "
+                "NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION BYPASSRLS"
+            )
+        )
+    try:
+        monkeypatch.setenv("APP_ENV", "test")
+        monkeypatch.setenv("TLS_ALLOW_PLAINTEXT", "1")
+        with closing(
+            migrations.migrate_isolated_postgres_schema(
+                monkeypatch, downgrade=False, revision="202610110097"
+            )
+        ) as schemas:
+            role_schema = next(schemas)
+            schema = role_schema.schema_name
+            with administrator.begin() as connection:
+                quote = connection.dialect.identifier_preparer.quote_identifier(schema)
+                connection.execute(text(f"GRANT USAGE ON SCHEMA {quote} TO {name}"))
+                connection.execute(text(f"GRANT ALL ON ALL TABLES IN SCHEMA {quote} TO {name}"))
+                connection.execute(text(f"GRANT ALL ON ALL SEQUENCES IN SCHEMA {quote} TO {name}"))
+            migrations.command.upgrade(migrations.alembic_config_for_app(), "head")
+            url = (
+                make_url(role_schema.app_engine.url)
+                .set(username=name, password=password)
+                .update_query_dict({"options": f"-csearch_path={schema}"})
+            )
+            engine = managed_engine(request, url)
+            try:
+                with engine.connect() as connection:
+                    assert connection.scalar(text("SELECT current_user")) == name
+                    assert tuple(
+                        connection.execute(
+                            text(
+                                "SELECT rolcanlogin, rolinherit, rolsuper, rolcreatedb, "
+                                "rolcreaterole, rolreplication, rolbypassrls FROM pg_roles "
+                                "WHERE rolname=current_user"
+                            )
+                        ).one()
+                    ) == (True, True, False, False, False, False, True)
+                    assert (
+                        connection.scalar(
+                            text(
+                                "SELECT count(*) FROM pg_auth_members m "
+                                "JOIN pg_roles l ON l.oid=m.member "
+                                "WHERE l.rolname=current_user"
+                            )
+                        )
+                        == 0
+                    )
+                with administrator.begin() as connection:
+                    connection.execute(text(f"GRANT ALL ON ALL TABLES IN SCHEMA {quote} TO {name}"))
+                    connection.execute(
+                        text(f"GRANT ALL ON ALL SEQUENCES IN SCHEMA {quote} TO {name}")
+                    )
+                    for org in (ORG_1, ORG_2):
+                        connection.execute(
+                            text(
+                                f"INSERT INTO {quote}.organizations "
+                                "(id,name,created_at,updated_at) "
+                                "VALUES (:org,'Privilege fixture',now(),now())"
+                            ),
+                            {"org": org},
+                        )
+                with Session(engine) as session:
+                    # Cross-bank visibility the pre-cutover operator path relies on.
+                    assert set(session.scalars(select(Organization.id))) == {ORG_1, ORG_2}
+                    # The API's tenant-scoped write path, unchanged.
+                    bank = Bank(
+                        organization_id=ORG_1,
+                        name="Legacy path",
+                        short_name="Legacy",
+                        currency="GHS",
+                        jurisdiction_code="GH",
+                        license_type="bank",
+                        institution_type="universal_bank",
+                    )
+                    session.add(bank)
+                    session.flush()
+                    job = Job(
+                        organization_id=ORG_1,
+                        bank_id=bank.id,
+                        job_type="scheduled_tick",
+                        status="queued",
+                        payload={},
+                    )
+                    session.add(job)
+                    session.commit()
+                    job_id = job.id
+                # The worker claim path still serves the legacy credential: the
+                # compatibility function is granted to the bypass roles.
+                with engine.begin() as connection:
+                    claimed = cast(
+                        UUID,
+                        connection.execute(
+                            text(
+                                "SELECT * FROM aqs_worker_claim_job("
+                                "now(), ARRAY[:job_type], 'probe')"
+                            ),
+                            {"job_type": "scheduled_tick"},
+                        ).scalar_one(),
+                    )
+                    assert claimed == job_id
+            finally:
+                engine.dispose()
+    finally:
+        with administrator.begin() as connection:
+            connection.execute(text(f"DROP ROLE {name}"))
+        administrator.dispose()
