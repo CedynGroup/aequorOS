@@ -679,17 +679,15 @@ subsequently added position book. Other fact groups and historical periods
 retain the canonical spine's figures. Capital and stress expectations for the
 latest period therefore use the position book's net CRD credit basis.
 
-The carry-forward anchor moves with the calendar, and so does any engine figure
-computed from day counts against it: the fixture's dated liabilities have fixed
-maturities, so the weighted-average-liability-maturity early-warning indicator
-changed value at every month-end crossing (a pinned `"31 days"` became `"20
-days"` on 2026-10-31 and the journeys gate went red). `playwright.config.ts`
-therefore freezes `E2E_TODAY` once per run and passes it to both the bootstrap
-process and the journey workers, and journeys that need a calendar-anchored
-expectation derive it from that variable the same way the server does
-(`scripts/e2e_bootstrap.py` `_anchor_today`; H-015 note in the same file).
-Export `E2E_TODAY=YYYY-MM-DD` yourself to pin an anchor and prove a journey is
-anchor-independent.
+`playwright.config.ts` freezes `E2E_TODAY` once per run, defaulting to the local
+calendar date, and shares it with the bootstrap and journey workers. Set
+`E2E_TODAY=YYYY-MM-DD` to select the last month end on or before that date;
+the anchor remains calendar-derived. For example, `2026-10-30` selects
+September 30, while `2026-10-31` selects October 31. This keeps the bootstrap
+and journey expectations aligned when a run crosses midnight. The liquidity
+journey derives the weighted-average-liability-maturity early-warning value
+from that anchor and the fixture's fixed maturities, because day counts can
+change as the anchor advances.
 
 ```bash
 pnpm --filter @aequoros/dashboard e2e            # functional journeys

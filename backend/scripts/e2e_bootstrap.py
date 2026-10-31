@@ -600,13 +600,8 @@ def _seed_canonical_positions(session: Session) -> None:
     passing the date explicitly is what makes the fixture behave that way. The
     hermetic suite keeps the default, so nothing there moves.
 
-    **The anchor moves with the calendar, and calendar-anchored engine figures
-    move with it.** The fixture's dated liabilities carry fixed maturities, so
-    the day-count early-warning indicator (weighted-average liability maturity)
-    changes value whenever the anchor crosses a month end. A journey cannot
-    pin such a figure as a constant; it derives it from the anchor, and the
-    Playwright config freezes ``E2E_TODAY`` once per run so the bootstrap and
-    the journeys always compute at the SAME anchor (``_anchor_today``).
+    Day-count expectations must use this same moving anchor. For the shared
+    ``E2E_TODAY`` override, see ``dashboard/README.md#end-to-end-playwright``.
     """
     as_of = latest_month_end_on_or_before()
     seed_canonical_fixture(
@@ -713,17 +708,7 @@ def _materialize_book(session: Session) -> None:
 
 
 def _anchor_today() -> date:
-    """The clock the bootstrap anchors the book at.
-
-    ``E2E_TODAY`` (ISO date) freezes that clock for one run: the Playwright
-    config sets it once per run, and both anchor call sites below read the
-    same value, so a run that crosses a month-end midnight cannot seed one
-    anchor and have the journeys derive another. Unset, the wall clock rules,
-    exactly as before the override existed. The journeys derive the
-    day-count-based early-warning expectation from the same variable
-    (``dashboard/e2e/liquidity-risk-workflows.spec.ts``), so the two processes
-    always agree.
-    """
+    """Read the shared run date; override usage is in ``dashboard/README.md``."""
     override = os.environ.get("E2E_TODAY")
     return date.fromisoformat(override) if override else date.today()
 

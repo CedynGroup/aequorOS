@@ -100,17 +100,20 @@ const RSF_M = total(RSF);
 const NSFR_PCT = (ASF_M / RSF_M) * 100;
 
 /**
- * The anchor the bootstrap seeded the book at (H-015): the last month end on
- * or before E2E_TODAY, which playwright.config.ts freezes once per run and
- * passes to both the bootstrap process and this one. Deriving it here (and
- * never from a fresh clock) is what keeps a run that straddles a month-end
- * midnight from seeding one anchor and asserting another.
+ * Match the bootstrap's anchor (H-015, scripts/e2e_bootstrap.py) using the
+ * shared run date. Override usage is in ../README.md#end-to-end-playwright.
  */
 const anchorToday = (): Date =>
-  process.env.E2E_TODAY ? new Date(`${process.env.E2E_TODAY}T00:00:00`) : new Date();
+  process.env.E2E_TODAY
+    ? new Date(`${process.env.E2E_TODAY}T00:00:00`)
+    : new Date();
 
 const latestMonthEndOnOrBefore = (today: Date): Date => {
-  const lastOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0).getDate();
+  const lastOfMonth = new Date(
+    today.getFullYear(),
+    today.getMonth() + 1,
+    0,
+  ).getDate();
   if (today.getDate() === lastOfMonth) {
     return new Date(today.getFullYear(), today.getMonth(), today.getDate());
   }
@@ -120,8 +123,8 @@ const latestMonthEndOnOrBefore = (today: Date): Date => {
 
 /** The fixture's dated liabilities (`tests/support/factories/canonical.py`):
  * every DEPOSIT or INTERBANK_BORROWING position carrying a contractual
- * maturity. Undated deposits are funding but not dated, so the engine skips
- * them in the weighted average (though their balances still count in it). */
+ * maturity. The engine excludes undated deposits from both the weighted
+ * day count and the balance denominator. */
 const DATED_LIABILITIES = [
   { amount: 10_000_000, maturity: "2026-09-30" }, // DEP/4, DEP.CORP.TRM
   { amount: 8_000_000, maturity: "2026-12-31" }, // DEP/5, DEP.RET.TRM
@@ -135,14 +138,15 @@ const DATED_LIABILITIES = [
  * `max((contractual_maturity - anchor).days, 0)` days (a matured instrument
  * contributes zero days, not a negative one), the amount-weighted mean is
  * quantized to six decimals, and the CFP page renders it with `toFixed(0)`.
- * Pinned constants cannot survive the anchor's month-end crossings
- * (2026-10-31: "31 days" became "20 days").
  */
 const weightedAverageLiabilityMaturity = (anchor: Date): string => {
   const total = DATED_LIABILITIES.reduce((sum, line) => sum + line.amount, 0);
   const dayCount = (maturity: string): number =>
     Math.max(
-      Math.round((new Date(`${maturity}T00:00:00`).getTime() - anchor.getTime()) / 86_400_000),
+      Math.round(
+        (new Date(`${maturity}T00:00:00`).getTime() - anchor.getTime()) /
+          86_400_000,
+      ),
       0,
     );
   const weighted = DATED_LIABILITIES.reduce(
@@ -372,6 +376,12 @@ test.describe("Liquidity coverage, funding and stress outcomes", () => {
       await expect(row.locator("td").nth(3)).toHaveText("Not set");
       await expect(row.locator("td").nth(4)).toHaveText("Not set");
       await expect(row.locator("td").nth(5)).toHaveText("Unconfigured");
+    }
+    if (evidenceDir) {
+      await page.screenshot({
+        path: path.join(evidenceDir, "liquidity-cfp.png"),
+        fullPage: true,
+      });
     }
   });
 
