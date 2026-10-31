@@ -1,18 +1,21 @@
 from __future__ import annotations
 
+from collections.abc import Callable, Generator
 from concurrent.futures import Future, ThreadPoolExecutor
+from inspect import unwrap
 from typing import cast
 
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import Engine, select, text
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, sessionmaker
 
 from app.core.key_management import registry
 from app.data_engine.api.ingest_data import get_ingestion_storage
 from app.db.session import get_sessionmaker
 from app.integrations.storage.s3 import get_object_storage
 from app.models import Bank, Organization, RiskCase
+from tests import conftest as root_fixtures
 from tests.conftest import (
     FakeStorage,
     _db_client_lifecycle,
@@ -120,6 +123,33 @@ def test_isolated_session_exposes_a_real_engine(
     db_session: Session,
 ) -> None:
     assert isinstance(db_session.get_bind(), Engine)
+
+
+def test_real_data_fixture_keeps_commits_inside_outer_rollback_on_synthetic_database(
+    _shared_test_database: _TestDatabase, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(root_fixtures, "REAL_DATA_DATABASE_URL", _shared_test_database.database_url)
+    fixture = cast(
+        Callable[[pytest.MonkeyPatch], Generator[sessionmaker[Session]]],
+        unwrap(root_fixtures._real_bound_sessionmaker),  # pyright: ignore[reportPrivateUsage]
+    )
+    lifecycle = fixture(monkeypatch)
+    maker = next(lifecycle)
+    try:
+        with maker() as session:
+            session.add(Organization(id="OR-RAWROLL1", name="Synthetic rollback fixture"))
+            session.commit()
+            assert (
+                session.scalar(text("SELECT count(*) FROM organizations WHERE id='OR-RAWROLL1'"))
+                == 1
+            )
+    finally:
+        lifecycle.close()
+    with _shared_test_database.engine.connect() as connection:
+        assert (
+            connection.scalar(text("SELECT count(*) FROM organizations WHERE id='OR-RAWROLL1'"))
+            == 0
+        )
 
 
 def test_bank_key_locks_are_isolated_between_test_schemas(

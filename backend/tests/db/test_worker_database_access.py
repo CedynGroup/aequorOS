@@ -73,7 +73,10 @@ role_banks = foundation.role_banks
 role_engines = foundation.role_engines
 role_schema = foundation.role_schema
 
-pytestmark = pytest.mark.skipif(not os.getenv("TEST_DATABASE_URL"), reason="PostgreSQL required")
+pytestmark = [
+    pytest.mark.skipif(not os.getenv("TEST_DATABASE_URL"), reason="PostgreSQL required"),
+    pytest.mark.usefixtures("managed_application_engines"),
+]
 NOW = datetime(2026, 10, 12, tzinfo=UTC)
 
 

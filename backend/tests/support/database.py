@@ -1,4 +1,4 @@
-"""Managed database connections for synthetic backend tests.
+"""Managed database connections for backend tests.
 
 Use ``isolated_db`` for a fresh per-test database, or
 ``isolated_database`` for an explicitly owned fixture lifetime. Engines returned
@@ -9,9 +9,10 @@ from __future__ import annotations
 
 import re
 import shlex
+import sqlite3
 from collections.abc import AsyncGenerator, Callable, Generator, Mapping
 from contextlib import ExitStack, asynccontextmanager, contextmanager
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Literal, Protocol, TypedDict, Unpack, cast
 from uuid import uuid4
 from weakref import WeakSet
@@ -23,7 +24,7 @@ from sqlalchemy import Engine, create_engine, event, text
 from sqlalchemy.engine import URL, Connection, make_url
 from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
 from sqlalchemy.orm import Session, sessionmaker
-from sqlalchemy.pool import Pool
+from sqlalchemy.pool import Pool, PoolProxiedConnection
 
 # Importing the application's listener makes session.info the authority for
 # transaction-local tenant context, just as it is for application sessions.
@@ -47,6 +48,7 @@ class PoolOptions(TypedDict, total=False):
     max_overflow: int
     pool_timeout: float
     pool_pre_ping: bool
+    pool_recycle: int
     isolation_level: str
     echo: bool
 
@@ -127,6 +129,8 @@ class TestDatabaseConnections:
         self._engines: set[Engine] = set()
         self._connections: WeakSet[Connection] = WeakSet()
         self._sessions: WeakSet[Session] = WeakSet()
+        self._raw_connections: WeakSet[PoolProxiedConnection] = WeakSet()
+        self._raw_engine: Engine | None = None
         self._closed: bool = False
         if self.url.drivername.startswith("postgresql") and context.schema is None:
             raise ValueError("Postgres tests require an explicit disposable schema")
@@ -280,19 +284,53 @@ class TestDatabaseConnections:
             yield connection
 
     @contextmanager
-    def raw_connection(self) -> Generator[psycopg.Connection[tuple[object, ...]]]:
+    def raw_connection(
+        self, *, autocommit: bool = False
+    ) -> Generator[psycopg.Connection[tuple[object, ...]]]:
         """A psycopg connection carrying the same checkout context as SQLAlchemy."""
         self._check_open()
         if self.url.drivername not in {"postgresql", "postgresql+psycopg"}:
             raise ValueError("Raw connections require the PostgreSQL psycopg driver")
-        raw = self._app_engine().raw_connection()
-        try:
-            yield cast(psycopg.Connection[tuple[object, ...]], raw.driver_connection)
-        finally:
+        if self._raw_engine is None:
+            if self.url.drivername == "postgresql":
+                owner = self._resources.enter_context(
+                    TestDatabaseConnections(
+                        self.url.set(drivername="postgresql+psycopg"),
+                        context=self.context,
+                        hooks=self._hooks,
+                    )
+                )
+                self._raw_engine = owner.engine()
+            else:
+                self._raw_engine = self._app_engine()
+        with self._borrow_raw(self._raw_engine) as raw:
+            connection = cast(psycopg.Connection[tuple[object, ...]], raw.driver_connection)
+            previous = connection.autocommit
+            connection.autocommit = autocommit
             try:
-                raw.rollback()
+                yield connection
             finally:
-                raw.close()
+                if raw.is_valid:
+                    connection.rollback()
+                    connection.autocommit = previous
+
+    @contextmanager
+    def _borrow_raw(self, engine: Engine) -> Generator[PoolProxiedConnection]:
+        raw = engine.raw_connection()
+        self._raw_connections.add(raw)
+        try:
+            yield raw
+        finally:
+            raw.close()
+
+    @contextmanager
+    def sqlite_connection(self) -> Generator[sqlite3.Connection]:
+        """Native SQLite SQL and errors, with the owner's hooks and cleanup."""
+        self._check_open()
+        if not self.url.drivername.startswith("sqlite"):
+            raise ValueError("Native SQLite connections require the SQLite driver")
+        with self._borrow_raw(self._app_engine()) as raw:
+            yield cast(sqlite3.Connection, raw.driver_connection)
 
     @asynccontextmanager
     async def async_engine(self, **options: Unpack[EngineOptions]) -> AsyncGenerator[AsyncEngine]:
@@ -328,22 +366,48 @@ class TestDatabaseConnections:
             database_url = configuration.get(prefix + "url")
             if not isinstance(database_url, (str, URL)):
                 raise ValueError("Migration configuration requires a database URL")
-            database = database_connections(
-                database_url, connect_args=options.get("connect_args"), hooks=self._hooks
-            )
-            source, target = self.url, database.url
-            if (source.host, source.port or 5432, source.database) != (
-                target.host,
-                target.port or 5432,
-                target.database,
-            ) or database.context.schema != self.context.schema:
-                raise ValueError(
-                    "Migration engines must stay in the owning test database and schema"
-                )
-            _ = self._resources.enter_context(database)
+            database = self._related_database(database_url, options.get("connect_args"))
             return database.migration_engine(**options)
 
         monkeypatch.setattr(sqlalchemy, "engine_from_config", configured_engine)
+
+    def _related_database(
+        self, database_url: str | URL, connect_args: Mapping[str, object] | None
+    ) -> TestDatabaseConnections:
+        self._check_open()
+        database = database_connections(database_url, connect_args=connect_args, hooks=self._hooks)
+        source, target = self.url, database.url
+        if (source.host, source.port or 5432, source.database) != (
+            target.host,
+            target.port or 5432,
+            target.database,
+        ) or database.context.schema != self.context.schema:
+            raise ValueError("Engines must stay in the owning test database and schema")
+        context = database.context
+        database.context = replace(
+            context,
+            organization_id=(
+                self.context.organization_id
+                if context.organization_id is None
+                else context.organization_id
+            ),
+            bank_id=self.context.bank_id if context.bank_id is None else context.bank_id,
+            role=(
+                self.context.role
+                if context.role is None and target.username == source.username
+                else context.role
+            ),
+        )
+        return self._resources.enter_context(database)
+
+    def install_application_engines(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Own real application factory pools before their internal first checkout."""
+
+        def application_engine(database_url: str | URL, **options: Unpack[EngineOptions]) -> Engine:
+            database = self._related_database(database_url, options.get("connect_args"))
+            return database.adopt_engine(create_engine(database_url, **options))
+
+        monkeypatch.setattr(_app_session, "create_engine", application_engine)
 
     def close(self) -> None:
         self._closed = True
@@ -352,6 +416,8 @@ class TestDatabaseConnections:
                 cleanup.callback(self._resources.close)
                 for connection in list(self._connections):
                     cleanup.callback(connection.close)
+                for raw in list(self._raw_connections):
+                    cleanup.callback(raw.close)
                 for session in list(self._sessions):
                     cleanup.callback(session.close)
         finally:
@@ -408,6 +474,31 @@ def isolated_database(
         yield database
 
 
+@contextmanager
+def isolated_postgres_database(database_url: str | URL) -> Generator[TestDatabaseConnections]:
+    """Own a whole disposable database for backup/restore tests on a test cluster.
+
+    The caller must supply an explicitly isolated cluster with CREATEDB authority.
+    Unlike ordinary schema fixtures, database-level tooling uses its own public
+    namespace. All borrowers and pools close before the generated database drops.
+    """
+    url = make_url(database_url)
+    if url.drivername not in {"postgresql", "postgresql+psycopg"}:
+        raise ValueError("Database-level fixtures require PostgreSQL psycopg")
+    url = url.set(drivername="postgresql+psycopg")
+    name = f"risk_service_test_{uuid4().hex}"
+    with database_connections(url.set(database="postgres"), administrative=True) as admin:
+        engine = admin.engine(isolation_level="AUTOCOMMIT")
+        with engine.connect() as connection:
+            _ = connection.execute(text(f"CREATE DATABASE {_identifier(name)}"))
+        try:
+            with database_connections(url.set(database=name), schema="public") as database:
+                yield database
+        finally:
+            with engine.connect() as connection:
+                _ = connection.execute(text(f"DROP DATABASE {_identifier(name)}"))
+
+
 def _startup_settings(url: URL, connect_args: Mapping[str, object]) -> dict[str, str]:
     options = connect_args.get("options")
     if not isinstance(options, str):
@@ -422,11 +513,12 @@ def _startup_settings(url: URL, connect_args: Mapping[str, object]) -> dict[str,
     return settings
 
 
-def database_connections(
+def database_connections(  # noqa: PLR0913 - explicit ownership and connection defaults
     database_url: str | URL,
     *,
     schema: str | None = None,
     administrative: bool = False,
+    default_schema: str | None = None,
     connect_args: Mapping[str, object] | None = None,
     hooks: tuple[EngineHook, ...] = (),
 ) -> TestDatabaseConnections:
@@ -440,7 +532,11 @@ def database_connections(
     url = make_url(database_url)
     settings = _startup_settings(url, connect_args or {})
     context = DatabaseContext(
-        schema=schema or settings.get("search_path") or ("pg_catalog" if administrative else None),
+        schema=(
+            schema
+            or settings.get("search_path")
+            or ("pg_catalog" if administrative else default_schema)
+        ),
         role=settings.get("role"),
         organization_id=settings.get("app.organization_id"),
         bank_id=settings.get("app.bank_id"),
@@ -467,7 +563,9 @@ def managed_engine(
     return database.engine(**options)
 
 
-def adopt_application_engine(request: FinalizerOwner, engine: Engine) -> Engine:
+def adopt_application_engine(
+    request: FinalizerOwner, engine: Engine, *, administrative: bool = False
+) -> Engine:
     """Own a real application factory's engine before its first checkout.
 
     Existing managed engines retain their original fixture lifetime. Callers
@@ -476,7 +574,7 @@ def adopt_application_engine(request: FinalizerOwner, engine: Engine) -> Engine:
     """
     if engine in _ENGINE_OWNERS:
         return engine
-    owner = database_connections(engine.url)
+    owner = database_connections(engine.url, administrative=administrative)
     _ = owner.adopt_engine(engine)
     request.addfinalizer(owner.close)
     return engine
@@ -505,3 +603,11 @@ def install_migration_engines(monkeypatch: pytest.MonkeyPatch, engine: Engine) -
     if owner is None:
         raise ValueError("Migrations require an engine from tests.support.database")
     owner.install_migration_engines(monkeypatch)
+
+
+def install_application_engines(monkeypatch: pytest.MonkeyPatch, engine: Engine) -> None:
+    """Keep real application factory behavior while owning its extra pools."""
+    owner = _ENGINE_OWNERS.get(engine)
+    if owner is None:
+        raise ValueError("Application engines require an engine from tests.support.database")
+    owner.install_application_engines(monkeypatch)

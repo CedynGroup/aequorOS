@@ -12,6 +12,7 @@ from sqlalchemy.sql.elements import ClauseElement
 
 from app.data_engine.models.canonical_withdrawal import WITHDRAWABLE_ENTITIES
 from app.db.base import Base
+from tests.support.database import isolated_database
 
 import_module("app.models")
 
@@ -37,7 +38,7 @@ def _partial_predicates() -> list[tuple[str, str, str]]:
 def test_partial_indexes_allow_replacement_of_retired_rows(
     index: str, dialect: str, predicate: str
 ) -> None:
-    with sqlite3.connect(":memory:") as db:
+    with isolated_database("sqlite://") as owner, owner.sqlite_connection() as db:
         db.execute(
             "CREATE TABLE versions (id INTEGER, business_key TEXT, "
             "superseded_by TEXT, withdrawn_at TEXT)"

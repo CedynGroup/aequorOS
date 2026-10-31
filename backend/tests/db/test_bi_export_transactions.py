@@ -38,7 +38,10 @@ from tests.db import test_database_roles as role_tests
 from tests.support.database import managed_engine
 from tests.support.helpers import ORG_1, USER_1
 
-pytestmark = pytest.mark.skipif(not os.getenv("TEST_DATABASE_URL"), reason="PostgreSQL required")
+pytestmark = [
+    pytest.mark.skipif(not os.getenv("TEST_DATABASE_URL"), reason="PostgreSQL required"),
+    pytest.mark.usefixtures("managed_application_engines"),
+]
 role_schema = role_tests.role_schema
 administrator = role_tests.administrator
 role_engines = role_tests.role_engines

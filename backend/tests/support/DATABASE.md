@@ -1,11 +1,9 @@
 # Test database connections
 
 `tests.support.database` owns test connection construction, including shared
-application and database/API fixtures.
-`tests/architecture/test_database_connection_allowlist.json` records remaining direct
-constructor calls. The architecture suite rejects new calls and stale entries.
-Remove entries as each test area moves to this API. Once the inventory is empty,
-remove the allowlist and make strict mode the default.
+application fixtures, area-specific tests and database tooling. The constructor
+allowlist is empty; the final stack layer removes it and makes strict enforcement
+the default.
 
 Use `isolated_db` for an **empty**, per-test PostgreSQL schema when
 `TEST_DATABASE_URL` is set, or a temporary SQLite file otherwise. It never seeds
@@ -39,7 +37,10 @@ The factory provides:
   from a factory.
 - `connection()` for SQLAlchemy SQL. It rolls back unfinished work on exit.
 - `raw_connection()` for psycopg SQL. It rolls back on exit and returns the
-  underlying connection to the managed pool.
+  underlying connection to the managed pool. `autocommit=True` is explicit and
+  restored on return. Plain `postgresql://` URLs use psycopg 3 for raw borrowing.
+- `sqlite_connection()` for native SQLite SQL and error types. It uses the same
+  managed pool and checkout hooks, and rolls back unfinished work on return.
 - `engine()` for an independent pool, including concurrent connections. These
   pools use the same database, schema and checkout hooks. Connections and pools
   are closed at teardown. Tests should still use context managers so resources
@@ -70,6 +71,12 @@ For an existing schema outside a pytest request's lifecycle, use
 `database_connections(database_url, schema=schema_name)` as a context manager.
 It owns connection resources without creating or dropping the schema.
 
+The legacy read-only and outer-rollback data fixtures use an explicit
+`default_schema="public"` fallback only when their URL does not name a schema.
+URL startup options take precedence, so synthetic callers keep their disposable
+schema. Their read-only and rollback safeguards still apply. Validate these paths
+with synthetic databases; do not run the opt-in primary-data suites for fixture changes.
+
 `managed_session_factory` preserves SQLAlchemy's autoflush and expiry defaults;
 `TestDatabaseConnections.session_factory` defaults both to false for application
 sessions. Both accept explicit options (including a custom `Session` subclass via `class_`),
@@ -84,9 +91,10 @@ shared hooks and request-owned teardown. This preserves factory and cache behavi
 
 Use `managed_session_factory(None, engine)` only within an explicit owner
 lifetime; pytest fixtures normally supply their request for earlier cleanup.
-The database owner weakly tracks connections and sessions. When supplied,
-the pytest request also retains each session's close method as a finalizer until
-that request's teardown. Still-live resources close before pool disposal.
+The database owner weakly tracks connections, sessions and raw pool borrowers.
+When supplied, the pytest request also retains each session's close method as a
+finalizer until that request's teardown. Still-live resources close before pool
+disposal, including raw contexts left active at owner teardown.
 
 Before calling Alembic in a schema fixture, install its engine factory:
 
@@ -100,6 +108,16 @@ resolves its real migration URL and driver settings, including migration role
 and timeout options. Every pool it opens receives the shared hooks and is owned
 by the supplied engine's factory. A different database or schema is refused
 before connecting.
+
+Tests that exercise real application factories can call
+`install_application_engines(monkeypatch, engine)` before invoking them. This
+routes the real factory's constructor through ownership before an internal first
+checkout, preserving its URL, driver options, timeout budgets and cache identity.
+It inherits the supplied engine's hooks and lifetime and refuses another database
+or schema. Role suites can use `managed_application_engines` with their
+`administrator` fixture. The shared committing application fixture installs this
+bridge automatically. Tests that only inspect a never-connected pool can adopt
+it explicitly with `administrative=True` without changing its original URL.
 
 Set explicit tenant and role defaults without leaving the test's schema:
 
@@ -131,6 +149,13 @@ schema and drops it after disposing all test engines. SQLite callers supply a
 path in pytest's temporary directory. PostgreSQL factories require an explicit
 disposable schema, except for the administrative probes described above. Never
 pass a production database URL.
+
+Backup/restore tests need database-level isolation. Use
+`isolated_postgres_database(explicit_test_cluster_url)` with an isolated cluster
+login that can create databases. It generates a unique database, owns its public
+namespace, closes all source pools and drops the database on exit. The drill test
+retains the tooling's protected-cluster check before provisioning. Its optional
+cluster URL must point at a disposable test cluster and all source rows are synthetic.
 
 `hooks=(install_hook, ...)` on `isolated_database`, `database_connections` or
 `TestDatabaseConnections` installs each engine hook before its first checkout,
