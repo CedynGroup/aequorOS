@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import json
 import os
-import sqlite3
 import subprocess
 import sys
 from pathlib import Path
@@ -13,6 +12,7 @@ from typing import cast
 import pytest
 
 from scripts.test_suite_census import check, classify, generate
+from tests.support.database import isolated_database
 
 BACKEND = Path(__file__).parents[2]
 
@@ -23,7 +23,10 @@ def test_census_attributes_shared_setup_teardown_and_fresh_environment_children(
     _ = (tmp_path / "pytest.ini").write_text("[pytest]\n")
     # Exercise the same SQLite entry point in the parent as well as in the
     # child so this observer regression is itself database-using evidence.
-    with sqlite3.connect(":memory:") as connection:
+    with (
+        isolated_database(f"sqlite:///{tmp_path / 'observer.db'}") as database,
+        database.sqlite_connection() as connection,
+    ):
         assert connection.execute("SELECT 1").fetchone() == (1,)
     (tmp_path / "conftest.py").write_text(
         "import pytest, sqlite3\n"
