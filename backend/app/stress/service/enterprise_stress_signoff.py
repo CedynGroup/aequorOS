@@ -33,6 +33,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
+from app.core.authorization import Permission
 from app.db.base import utc_now
 from app.identity.public import Bank
 from app.live.public import RegulatoryRun
@@ -47,6 +48,7 @@ from app.stress.schemas.enterprise_stress_signoff import (
     StressSignoffTransition,
     StressSignoffUpdate,
 )
+from app.stress.service import scope_authorization
 
 MODULE_ENTERPRISE_STRESS = "enterprise_stress"
 
@@ -73,8 +75,9 @@ def _get_signoff_or_404(
     if signoff is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Enterprise-stress sign-off not found.",
+            detail=scope_authorization.RESOURCE_NOT_FOUND_DETAIL,
         )
+    scope_authorization.require_permission(db, ctx, signoff.bank_id, Permission.VIEW, opaque=True)
     return signoff
 
 
@@ -169,6 +172,7 @@ def _summary(signoff: EnterpriseStressSignoff) -> StressSignoffSummary:
 def create_signoff(
     db: Session, ctx: TenantContext, bank_id: str, payload: StressSignoffCreate
 ) -> StressSignoffRead:
+    scope_authorization.require_permission(db, ctx, bank_id, Permission.CREATE)
     bank = _get_bank_or_404(db, ctx, bank_id)
     run = _resolve_enterprise_run_or_404(db, ctx, bank, payload.run_id)
     existing = db.scalar(
@@ -230,6 +234,7 @@ def list_signoffs(
     reporting_period_id: UUID | None = None,
     status_filter: str | None = None,
 ) -> StressSignoffListRead:
+    scope_authorization.require_permission(db, ctx, bank_id, Permission.VIEW)
     conditions: list[Any] = [
         EnterpriseStressSignoff.organization_id == ctx.organization_id,
         EnterpriseStressSignoff.bank_id == bank_id,
@@ -264,6 +269,7 @@ def update_signoff(
     payload: StressSignoffUpdate,
 ) -> StressSignoffRead:
     signoff = _get_signoff_or_404(db, ctx, bank_id, signoff_id)
+    scope_authorization.require_permission(db, ctx, signoff.bank_id, Permission.EDIT, opaque=True)
     if signoff.status != "draft":
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
@@ -298,6 +304,7 @@ def submit_signoff(
     payload: StressSignoffTransition,
 ) -> StressSignoffRead:
     signoff = _get_signoff_or_404(db, ctx, bank_id, signoff_id)
+    scope_authorization.require_permission(db, ctx, signoff.bank_id, Permission.EDIT, opaque=True)
     if signoff.status != "draft":
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
@@ -389,6 +396,7 @@ def withdraw_signoff(
     payload: StressSignoffTransition,
 ) -> StressSignoffRead:
     signoff = _get_signoff_or_404(db, ctx, bank_id, signoff_id)
+    scope_authorization.require_permission(db, ctx, signoff.bank_id, Permission.EDIT, opaque=True)
     if signoff.status == "withdrawn":
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,

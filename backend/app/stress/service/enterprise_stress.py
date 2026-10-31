@@ -1572,6 +1572,15 @@ def _run_enterprise_stress_test(  # noqa: PLR0912, PLR0915 - one linear orchestr
 ) -> EnterpriseStressRead:
     """Run one enterprise stress test and persist it as an immutable run."""
     bank = _get_bank_or_404(db, ctx, bank_id)
+    scoped_authorization.require_resolved_bank_permission(
+        db,
+        ctx,
+        bank,
+        permission=Permission.RUN,
+        module=Module.RISK,
+        sensitivity=Sensitivity.CONFIDENTIAL,
+        surface="enterprise_stress_run",
+    )
     if payload.include_fx:
         scoped_authorization.require_resolved_bank_permission(
             db,

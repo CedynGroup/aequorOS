@@ -25,6 +25,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
 from app.attestation.service import digests
+from app.core.authorization import RoleBundle
 from app.models import Bank, RegulatoryPackage, RegulatoryParameter, RegulatoryRun, User
 from app.reporting.service.exports import export_package
 from app.reporting.service.templates import (
@@ -51,16 +52,17 @@ from tests.icaap.service.test_icaap_stress_appendix2_report import (
     _seed_checker,
     storage,
 )
+from tests.stress.authority import grant
 from tests.support.inmemory_storage import InMemoryStorageClient
 
 __all__ = ["storage"]
 
-# The enterprise stress run this suite prepares requires scoped FX and IRRBB
-# calculation authority (an unconditional IRRBB check landed on the run
-# service), so it takes the same two fixtures as its sibling
-# ``test_icaap_stress_appendix2_report.py``.
+# Stress runs require scoped Risk, FX and IRRBB calculation authority.
 pytestmark = pytest.mark.usefixtures(
-    "return_generation_authority", "fx_run_authority", "irrbb_run_authority"
+    "return_generation_authority",
+    "fx_run_authority",
+    "irrbb_run_authority",
+    "stress_run_authority",
 )
 
 PILLAR2_FIELDS = (
@@ -83,7 +85,10 @@ UNASSESSED_COLUMNS = ("current", "base_y1", "base_y2", "base_y3")
 
 HOSTILE_ATTESTER_ID = UUID("eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee")
 HOSTILE_ATTESTER = TenantContext(
-    organization_id=DEMO_ORG_ID, actor_user_id=HOSTILE_ATTESTER_ID, roles=("approver",)
+    organization_id=DEMO_ORG_ID,
+    actor_user_id=HOSTILE_ATTESTER_ID,
+    roles=("approver",),
+    authorization_version=1,
 )
 LONG_WORD = "X" * 2500
 HOSTILE = {
@@ -168,19 +173,19 @@ def _prepare(
 
 
 def _seed_hostile_attester(db: Session) -> None:
-    if db.get(User, HOSTILE_ATTESTER_ID) is not None:
-        return
-    db.add(
-        User(
-            id=HOSTILE_ATTESTER_ID,
-            organization_id=DEMO_ORG_ID,
-            email="hostile-board@aequoros.example",
-            display_name='=HYPERLINK("http://evil.invalid","Chair")',
-            job_title="<b>Board</b> & Chair",
-            role="approver",
+    if db.get(User, HOSTILE_ATTESTER_ID) is None:
+        db.add(
+            User(
+                id=HOSTILE_ATTESTER_ID,
+                organization_id=DEMO_ORG_ID,
+                email="hostile-board@aequoros.example",
+                display_name='=HYPERLINK("http://evil.invalid","Chair")',
+                job_title="<b>Board</b> & Chair",
+                role="approver",
+            )
         )
-    )
-    db.commit()
+    db.flush()
+    grant(db, RoleBundle.VIEWER, user_id=HOSTILE_ATTESTER_ID)
 
 
 # --- P0-2: neutral headers + provenance -----------------------------------------------

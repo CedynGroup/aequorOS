@@ -16,12 +16,16 @@ from uuid import UUID, uuid4
 import pytest
 from fastapi.testclient import TestClient
 
+from app.core.authorization import RoleBundle
 from app.db.session import get_sessionmaker
 from app.models import User
 from tests.data_engine.api.test_ingestion import seed_bank
+from tests.stress.authority import grant
 from tests.support.helpers import ORG_1, ORG_2, USER_1, headers
 
-pytestmark = pytest.mark.usefixtures("fx_run_authority", "irrbb_run_authority")
+pytestmark = pytest.mark.usefixtures(
+    "fx_run_authority", "irrbb_run_authority", "stress_run_authority"
+)
 
 RUNS_URL = "/api/v1/banks/{bank_id}/enterprise-stress/runs"
 SCENARIO_URL = "/api/v1/macro-scenarios"
@@ -49,6 +53,7 @@ def _seed_checker() -> UUID:
             )
         )
         session.commit()
+        grant(session, RoleBundle.APPROVER, user_id=checker_id)
     finally:
         session.close()
     return checker_id
@@ -179,6 +184,8 @@ def test_management_action_plan_governance_lifecycle(db_client: TestClient) -> N
         json={"reason": "Ready."},
     )
     assert submit.status_code == 200, submit.text
+    with get_sessionmaker()() as session:
+        grant(session, RoleBundle.APPROVER)
     self_approve = db_client.post(
         f"{PLAN_URL}/{plan_id}/approve",
         headers=headers(user_id=USER_1, roles=("approver",)),

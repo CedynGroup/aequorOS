@@ -12,9 +12,11 @@ from uuid import UUID, uuid4
 
 from fastapi.testclient import TestClient
 
+from app.core.authorization import ModuleScope, RoleBundle
 from app.db.session import get_sessionmaker
 from app.models import User
 from tests.data_engine.api.test_ingestion import seed_bank
+from tests.stress.authority import grant
 from tests.support.helpers import ORG_1, ORG_2, USER_1, headers
 
 URL = "/api/v1/macro-scenarios"
@@ -48,6 +50,7 @@ def _seed_checker(client: TestClient) -> UUID:
             )
         )
         session.commit()
+        grant(session, RoleBundle.APPROVER, user_id=checker_id)
     finally:
         session.close()
     return checker_id
@@ -80,6 +83,8 @@ def _create_payload(code: str = "adverse_2027", bank_id: str | None = None) -> d
 
 
 def _create(client: TestClient, **kwargs) -> dict:
+    with get_sessionmaker()() as session:
+        grant(session)
     response = client.post(
         URL, headers=headers(user_id=MAKER, roles=("analyst",)), json=_create_payload(**kwargs)
     )
@@ -133,6 +138,8 @@ def test_full_lifecycle_maker_checker(db_client: TestClient) -> None:
     assert submit.status_code == 200, submit.text
     assert submit.json()["status"] == "pending_approval"
 
+    with get_sessionmaker()() as session:
+        grant(session, RoleBundle.APPROVER)
     # The maker cannot approve their own scenario (maker ≠ checker).
     self_approve = db_client.post(
         f"{URL}/{scenario_id}/approve",
@@ -227,6 +234,8 @@ def test_archive_hides_from_default_listing(db_client: TestClient) -> None:
 
 
 def test_translation_preview_endpoint(db_client: TestClient) -> None:
+    with get_sessionmaker()() as session:
+        grant(session, RoleBundle.VIEWER, module=ModuleScope.LIQUIDITY)
     created = _create(db_client)
     irr = db_client.get(f"{URL}/{created['id']}/translation/irr", headers=headers()).json()
     assert irr["module"] == "irr"

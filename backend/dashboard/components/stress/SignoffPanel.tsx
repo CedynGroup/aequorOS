@@ -17,6 +17,11 @@ import EmptyState from "@/components/ui/EmptyState";
 import QueryBoundary from "@/components/ui/QueryBoundary";
 import { fmtDateUTC } from "@/lib/api/values";
 import { ApiError } from "@/lib/api/client";
+import { PermissionButton } from "@/components/ui/PermissionButton";
+import {
+  useStressAuthority,
+  stressPermissionReason,
+} from "./useStressAuthority";
 import {
   useBankStressSignoffs,
   useStressSignoff,
@@ -102,11 +107,16 @@ function CreateForm({
   runId: string;
 }) {
   const create = useCreateStressSignoff(bankId);
+  const authority = useStressAuthority();
   const [narrative, setNarrative] = useState("");
   const [rationale, setRationale] = useState("");
   const [methodology, setMethodology] = useState("");
   const [reason, setReason] = useState("");
-  const canSubmit = narrative.trim() && rationale.trim() && reason.trim();
+  const canSubmit =
+    authority.can("create", bankId) &&
+    narrative.trim() &&
+    rationale.trim() &&
+    reason.trim();
   return (
     <div className="space-y-3 p-5">
       <p className="text-caption text-slate">
@@ -142,10 +152,15 @@ function CreateForm({
       {create.error ? (
         <p className="text-caption text-critical">{errText(create.error)}</p>
       ) : null}
-      <button
+      <PermissionButton
         type="button"
         className={btnCls}
         disabled={!canSubmit || create.isPending}
+        reason={
+          authority.can("create", bankId)
+            ? undefined
+            : stressPermissionReason("create")
+        }
         onClick={() =>
           create.mutate({
             run_id: runId,
@@ -157,7 +172,7 @@ function CreateForm({
         }
       >
         <PenLine size={14} /> Create sign-off (draft)
-      </button>
+      </PermissionButton>
     </div>
   );
 }
@@ -288,6 +303,8 @@ function SignoffBody({
   busy: boolean;
   actionError: string;
 }) {
+  const authority = useStressAuthority();
+  const canEdit = authority.can("edit", s.bank_id);
   const isDraft = s.status === "draft";
   const [narrative, setNarrative] = useState(s.scenario_narrative);
   const [rationale, setRationale] = useState(s.assumptions_rationale);
@@ -323,19 +340,19 @@ function SignoffBody({
         label="Scenario narrative"
         value={isDraft ? narrative : s.scenario_narrative}
         onChange={isDraft ? setNarrative : undefined}
-        readOnly={!isDraft}
+        readOnly={!isDraft || !canEdit}
       />
       <Field
         label="Assumptions rationale"
         value={isDraft ? rationale : s.assumptions_rationale}
         onChange={isDraft ? setRationale : undefined}
-        readOnly={!isDraft}
+        readOnly={!isDraft || !canEdit}
       />
       <Field
         label="Methodology summary"
         value={isDraft ? methodology : (s.methodology_summary ?? "—")}
         onChange={isDraft ? setMethodology : undefined}
-        readOnly={!isDraft}
+        readOnly={!isDraft || !canEdit}
         rows={2}
       />
 
@@ -373,10 +390,11 @@ function SignoffBody({
       <div className="flex flex-wrap gap-2">
         {isDraft ? (
           <>
-            <button
+            <PermissionButton
               type="button"
               className={btnGhost}
-              disabled={busy || !reason.trim()}
+              disabled={busy || !reason.trim() || !canEdit}
+              reason={canEdit ? undefined : stressPermissionReason("edit")}
               onClick={() =>
                 onSaveDraft({
                   scenario_narrative: narrative,
@@ -386,26 +404,28 @@ function SignoffBody({
               }
             >
               Save draft
-            </button>
-            <button
+            </PermissionButton>
+            <PermissionButton
               type="button"
               className={btnCls}
-              disabled={busy || !reason.trim()}
+              disabled={busy || !reason.trim() || !canEdit}
+              reason={canEdit ? undefined : stressPermissionReason("edit")}
               onClick={onSubmit}
             >
               <Send size={14} /> Submit for Board attestation
-            </button>
+            </PermissionButton>
           </>
         ) : null}
         {s.status === "pending_attestation" ? (
-          <button
+          <PermissionButton
             type="button"
             className={btnGhost}
-            disabled={busy || !reason.trim()}
+            disabled={busy || !reason.trim() || !canEdit}
+            reason={canEdit ? undefined : stressPermissionReason("edit")}
             onClick={onWithdraw}
           >
             Withdraw to draft
-          </button>
+          </PermissionButton>
         ) : null}
       </div>
 

@@ -41,9 +41,10 @@ from app.models import (
 from app.stress.service import default_macro_scenarios
 from tests.data_engine.api.test_ingestion import seed_bank
 from tests.fx.api.test_fx_authorization import _grant
+from tests.stress.authority import grant
 from tests.support.helpers import ORG_1, ORG_2, USER_1, headers
 
-pytestmark = pytest.mark.usefixtures("irrbb_run_authority")
+pytestmark = pytest.mark.usefixtures("irrbb_run_authority", "stress_run_authority")
 
 RUNS_URL = "/api/v1/banks/{bank_id}/enterprise-stress/runs"
 LATEST_URL = "/api/v1/banks/{bank_id}/enterprise-stress/latest"
@@ -97,6 +98,7 @@ def _seed_checker(client: TestClient) -> UUID:
             )
         )
         session.commit()
+        grant(session, RoleBundle.APPROVER, user_id=checker_id)
     finally:
         session.close()
     return checker_id

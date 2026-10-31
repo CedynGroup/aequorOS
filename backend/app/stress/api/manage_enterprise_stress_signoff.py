@@ -14,7 +14,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Query, status
 
-from app.api.deps import ApproverTenant, DbSession, MutationTenant, Tenant
+from app.api.deps import ApproverTenant, DbSession, ScopedMutationTenant, Tenant
 from app.stress.schemas.enterprise_stress_signoff import (
     StressSignoffAttestation,
     StressSignoffCreate,
@@ -41,7 +41,7 @@ def create_signoff(
     bank_id: str,
     payload: StressSignoffCreate,
     db: DbSession,
-    ctx: MutationTenant,
+    ctx: ScopedMutationTenant,
 ) -> StressSignoffRead:
     return enterprise_stress_signoff.create_signoff(db, ctx, bank_id, payload)
 
@@ -87,7 +87,7 @@ def update_signoff(
     signoff_id: UUID,
     payload: StressSignoffUpdate,
     db: DbSession,
-    ctx: MutationTenant,
+    ctx: ScopedMutationTenant,
 ) -> StressSignoffRead:
     return enterprise_stress_signoff.update_signoff(db, ctx, bank_id, signoff_id, payload)
 
@@ -102,7 +102,7 @@ def submit_signoff(
     signoff_id: UUID,
     payload: StressSignoffTransition,
     db: DbSession,
-    ctx: MutationTenant,
+    ctx: ScopedMutationTenant,
 ) -> StressSignoffRead:
     return enterprise_stress_signoff.submit_signoff(db, ctx, bank_id, signoff_id, payload)
 
@@ -132,6 +132,6 @@ def withdraw_signoff(
     signoff_id: UUID,
     payload: StressSignoffTransition,
     db: DbSession,
-    ctx: MutationTenant,
+    ctx: ScopedMutationTenant,
 ) -> StressSignoffRead:
     return enterprise_stress_signoff.withdraw_signoff(db, ctx, bank_id, signoff_id, payload)

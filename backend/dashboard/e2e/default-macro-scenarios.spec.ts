@@ -3,7 +3,8 @@ import { expect } from "@playwright/test";
 import { test } from "./support/story-identities";
 import { currentBankPeriod, expectBankStatus } from "./support/real-authority";
 import path from "path";
-import { E2E_TMP } from "../playwright.config";
+import { E2E_API_ORIGIN, E2E_BASE_URL, E2E_TMP } from "../playwright.config";
+import { E2E_USERS, mintBackendToken, writeStorageState } from "./support/mint";
 
 const evidenceDir = process.env.E2E_EVIDENCE_DIR;
 
@@ -78,8 +79,46 @@ test.describe("default macro scenarios", () => {
       },
     });
     test("read-only grants refuse execution and explain the missing authority in IRRBB, FTP and FX", async ({
-      page,
+      browser,
+      request,
     }) => {
+      // System definitions are organization resources; the bank grants above
+      // authorize only the selected institution's data and controls.
+      const grant = {
+        principal_user_id: E2E_USERS.viewer.id,
+        role_bundle: "viewer",
+        institution_scope: "organization",
+        institution_id: null,
+        module_scope: "risk",
+        sensitivity_scope: "confidential",
+        reason_category: "other",
+        reason_detail: "Read system defaults in the read-only stress journey",
+      };
+      const headers = {
+        Authorization: `Bearer ${await mintBackendToken("admin")}`,
+      };
+      const grantsUrl = `${E2E_API_ORIGIN}/api/v1/authorization/bindings`;
+      const grantPreview = await request.post(`${grantsUrl}/preview`, {
+        headers,
+        data: grant,
+      });
+      expect(grantPreview.status()).toBe(200);
+      const created = await request.post(grantsUrl, {
+        headers,
+        data: {
+          ...grant,
+          expected_authority_sentence: (await grantPreview.json())
+            .authority_sentence,
+        },
+      });
+      expect(created.status()).toBe(201);
+      const storageState = await writeStorageState(
+        "viewer",
+        E2E_BASE_URL,
+        E2E_TMP,
+      );
+      const context = await browser.newContext({ storageState });
+      const page = await context.newPage();
       await page.goto("/irr/enterprise-stress");
       const scenario = page.getByLabel("Approved scenario");
       await expect(scenario).not.toHaveValue("");
@@ -92,7 +131,7 @@ test.describe("default macro scenarios", () => {
         },
       });
       const cloneControls = page.getByRole("button", {
-        name: "Cloning requires the Analyst role or higher.",
+        name: "Requires Risk · Confidential · create. Ask your organization owner or admin for access.",
         exact: true,
       });
       await expect(cloneControls).toHaveCount(9);
@@ -110,7 +149,7 @@ test.describe("default macro scenarios", () => {
       await runTrigger.focus();
       await expect(runTrigger).toBeFocused();
       await expect(page.getByRole("tooltip")).toHaveText(
-        "Requires IRRBB · Confidential · Run. Ask your organization owner or admin to grant it.",
+        "Requires Risk · Confidential · run. Ask your organization owner or admin for access.",
       );
 
       await page.goto("/ftp/scenarios");

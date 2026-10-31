@@ -46,7 +46,9 @@ from tests.stress.api.test_enterprise_stress import (
 )
 from tests.support.helpers import ORG_1, headers
 
-pytestmark = pytest.mark.usefixtures("fx_run_authority", "irrbb_run_authority")
+pytestmark = pytest.mark.usefixtures(
+    "fx_run_authority", "irrbb_run_authority", "stress_run_authority"
+)
 
 _AS_OF = date(2026, 3, 31)
 

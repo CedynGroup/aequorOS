@@ -633,6 +633,7 @@ def test_forecast_variants_preserve_the_named_register_refusal(
     _assert_named_refusal(run.error.code, run.error.message)
 
 
+@pytest.mark.usefixtures("stress_run_authority")
 def test_enterprise_stress_refuses_the_register_before_projecting(
     db_session: Session, refused_book: tuple[Bank, BankReportingPeriod]
 ) -> None:

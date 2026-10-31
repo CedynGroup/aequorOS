@@ -13,7 +13,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Query, status
 
-from app.api.deps import ApproverTenant, DbSession, MutationTenant, Tenant
+from app.api.deps import DbSession, ScopedMutationTenant, Tenant
 from app.stress.schemas.stress import (
     MacroModule,
     MacroScenarioApproval,
@@ -41,7 +41,7 @@ router = APIRouter(tags=["macro-scenarios"])
 def create_macro_scenario(
     payload: MacroScenarioCreate,
     db: DbSession,
-    ctx: MutationTenant,
+    ctx: ScopedMutationTenant,
 ) -> MacroScenarioRead:
     return macro_scenarios.create_scenario(db, ctx, payload)
 
@@ -86,7 +86,7 @@ def update_macro_scenario(
     scenario_id: UUID,
     payload: MacroScenarioUpdate,
     db: DbSession,
-    ctx: MutationTenant,
+    ctx: ScopedMutationTenant,
 ) -> MacroScenarioRead:
     return macro_scenarios.update_scenario(db, ctx, scenario_id, payload)
 
@@ -100,7 +100,7 @@ def submit_macro_scenario(
     scenario_id: UUID,
     payload: MacroScenarioTransition,
     db: DbSession,
-    ctx: MutationTenant,
+    ctx: ScopedMutationTenant,
 ) -> MacroScenarioRead:
     return macro_scenarios.submit_scenario(db, ctx, scenario_id, payload)
 
@@ -114,7 +114,7 @@ def approve_macro_scenario(
     scenario_id: UUID,
     payload: MacroScenarioApproval,
     db: DbSession,
-    ctx: ApproverTenant,
+    ctx: ScopedMutationTenant,
 ) -> MacroScenarioRead:
     return macro_scenarios.approve_scenario(db, ctx, scenario_id, payload)
 
@@ -128,7 +128,7 @@ def archive_macro_scenario(
     scenario_id: UUID,
     payload: MacroScenarioTransition,
     db: DbSession,
-    ctx: MutationTenant,
+    ctx: ScopedMutationTenant,
 ) -> MacroScenarioRead:
     return macro_scenarios.archive_scenario(db, ctx, scenario_id, payload)
 
@@ -143,7 +143,7 @@ def clone_macro_scenario(
     scenario_id: UUID,
     payload: MacroScenarioClone,
     db: DbSession,
-    ctx: MutationTenant,
+    ctx: ScopedMutationTenant,
 ) -> MacroScenarioRead:
     return macro_scenarios.clone_system_scenario(db, ctx, scenario_id, payload)
 

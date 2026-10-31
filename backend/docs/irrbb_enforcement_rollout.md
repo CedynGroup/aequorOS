@@ -28,8 +28,8 @@ Shared live projections filter IRRBB before serialization, counts, limits, and
 aggregation. Mixed regulatory execution retains its existing gates and checks IRRBB only
 when planned. Enterprise stress separately requires IRRBB confidential run authority
 at `enterprise_stress.run_enterprise_stress_test` before period/scenario resolution
-or computation, in addition to its existing mutation gate and the conditional FX
-run gate in [the FX rollout contract](fx_enforcement_rollout.md).
+or computation. The remaining execution requirements follow the
+[Stress rollout contract](stress_enforcement_rollout.md#required-authority).
 This applies to both organization scenarios and code-defined defaults.
 Scheduled official-run actor selection and queue attribution follow
 the [FX queued-run contract](fx_enforcement_rollout.md#queued-and-scheduled-official-runs).
@@ -41,9 +41,9 @@ sensitivity grants IRRBB authority.
 
 The `/irr` dashboards require aggregated view. Run buttons and the sensitivity
 analysis horizon control consume the exact confidential run capability from effective authority.
-The separate enterprise workbench applies the IRRBB run gate; its backend also
-retains the conditional FX run gate described above. Workspace locations and
-scenario access are documented in
+The separate enterprise workbench follows the
+[Stress authority contract](stress_enforcement_rollout.md#required-authority).
+Workspace locations and scenario access are documented in
 [Treasury scenario workspaces](../dashboard/README.md#treasury-scenario-workspaces).
 The shared permission-only disabled-control policy is defined in
 [the RBAC guide](../../docs/rbac.md); native disabled controls expose their
