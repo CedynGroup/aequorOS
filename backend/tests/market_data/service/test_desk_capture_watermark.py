@@ -148,7 +148,7 @@ def _offline_site(monkeypatch: pytest.MonkeyPatch, site: _FakeBogFxTables) -> No
     wpDataTables protocol executes for real and only the socket is replaced.
     The pacer is zeroed because these tests measure request COUNT; the 2s
     minimum interval is pinned in
-    ``tests/services/market_desk_sources/test_fetch.py`` and is never relaxed
+    ``tests/market_data/service/market_desk_sources/test_fetch.py`` and is never relaxed
     in production — the incident was a count defect, not a rate defect.
     """
     monkeypatch.setattr(
