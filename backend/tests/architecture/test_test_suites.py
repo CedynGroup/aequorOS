@@ -348,9 +348,10 @@ def test_every_catalogue_key_resolves_to_a_test_file() -> None:
         "dict[str, object]",
         json.loads((BACKEND / "scripts" / "test_suites.json").read_text(encoding="utf-8")),
     )
+    durations_path = BACKEND / "scripts" / "ci_postgres_durations.json"
     durations = cast(
         "dict[str, object]",
-        json.loads((BACKEND / "scripts" / "ci_postgres_durations.json").read_text(encoding="utf-8")),
+        json.loads(durations_path.read_text(encoding="utf-8")),
     )
     sections = cast(
         "tuple[dict[str, str], dict[str, str], dict[str, str]]",
