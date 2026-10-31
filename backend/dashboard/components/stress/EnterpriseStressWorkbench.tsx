@@ -1,5 +1,11 @@
 "use client";
 
+import { useQueryAuthorityScope } from "@/lib/api/useQueryScope";
+import {
+  useStressAuthority,
+  stressPermissionReason,
+} from "./useStressAuthority";
+
 /**
  * Enterprise stress workbench (docs/stress.md §4) — the real workbench that
  * replaces the per-module shock table. One approved macro scenario drives every
@@ -91,20 +97,35 @@ const TABS: { key: Tab; label: string }[] = [
   { key: "run", label: "Scenarios & run" },
 ];
 
-export default function EnterpriseStressWorkbench({
+export default function EnterpriseStressWorkbench(props: {
+  moduleLens?: StressModuleLens;
+}) {
+  const scope = useQueryAuthorityScope();
+  const { bank } = useBankContext();
+  return (
+    <ScopedEnterpriseStressWorkbench
+      key={`${scope.tenantId}:${scope.authorityId}:${bank?.id}`}
+      {...props}
+    />
+  );
+}
+
+function ScopedEnterpriseStressWorkbench({
   moduleLens,
 }: {
   moduleLens?: StressModuleLens;
 }) {
   const { bank, period, periods, moduleScope, isLoading } = useBankContext();
+  const stressAuthority = useStressAuthority();
   const bankId = bank?.id;
   const periodId = period?.id;
   const isSdiTenant = moduleScope.institutionClass === "sdi";
   const fxRunDeniedReason = !moduleScope.fxRun
     ? "Requires FX run permission at confidential sensitivity. An organization owner can grant it."
     : null;
-  const enterpriseRunDeniedReason =
-    moduleLens === "ftp" && !moduleScope.ftpRun
+  const enterpriseRunDeniedReason = !stressAuthority.can("run", bankId)
+    ? stressPermissionReason("run")
+    : moduleLens === "ftp" && !moduleScope.ftpRun
       ? FTP_CONFIDENTIAL_RUN_REASON
       : moduleLens === "fx" && fxRunDeniedReason
         ? fxRunDeniedReason
@@ -267,6 +288,16 @@ export default function EnterpriseStressWorkbench({
     );
   }
 
+  if (!stressAuthority.can("view", bankId)) {
+    return (
+      <EmptyState
+        Icon={Activity}
+        title="Stress access required"
+        description={stressPermissionReason("view")}
+      />
+    );
+  }
+
   if (!periodId) {
     return (
       <div className="px-1 py-4">
@@ -340,6 +371,7 @@ export default function EnterpriseStressWorkbench({
         <div className="grid grid-cols-1 xl:grid-cols-5 gap-6 items-start">
           <div className="xl:col-span-2 space-y-6">
             <ScenarioLibrary
+              bankId={bankId}
               selectedIds={selectedIds}
               onToggleSelect={toggleSelect}
               onEdit={(id) => openBuilder(id)}
@@ -661,7 +693,9 @@ function ResultsView({
               ? "Not computed"
               : `${currencyCode()}'000 ${fmtInt(capitalGap)}`
           }
-          status={capitalGap === null ? undefined : capitalGap > 0 ? "warn" : "ok"}
+          status={
+            capitalGap === null ? undefined : capitalGap > 0 ? "warn" : "ok"
+          }
           hint={
             capitalGap === null
               ? "This run reported no capital gap figure."

@@ -77,7 +77,10 @@ from tests.stress.service.test_crd_credit_stress_repairs import (
 )
 from tests.support.helpers import USER_2, headers
 
-pytestmark = pytest.mark.requirement("BoG CRD (June 2018) ¶98, ¶123–124, ¶138–139")
+pytestmark = [
+    pytest.mark.requirement("BoG CRD (June 2018) ¶98, ¶123–124, ¶138–139"),
+    pytest.mark.usefixtures("stress_run_authority"),
+]
 
 
 @pytest.mark.parametrize("foreign", [False, True])

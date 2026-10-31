@@ -747,6 +747,10 @@ workbench entries, and deployment grants are owned by the
 projection, optimizer, what-if and reverse-stress routes, their rows in shared
 projections and the run registry, and the capital-plan projection they feed —
 is owned by the [Forecasting rollout contract](forecasting_enforcement_rollout.md).
+Stress scenario and management-action governance, sign-off preparation, and
+enterprise execution are owned by the
+[Stress rollout contract](stress_enforcement_rollout.md); final attestation
+remains with the dedicated Signer cutover.
 Behavioral model estimates, liquidity behavior, and retraining are owned by the
 [Behavioral rollout contract](behavioral_enforcement_rollout.md); model
 application stays with the governed model-application cutover. Markets views,
@@ -803,7 +807,8 @@ Generic regulatory-run lists/details also gate Capital, Credit and enterprise
 stress under their module authorities. Direct enterprise-stress history,
 latest and detail reads require RISK/aggregated (history) or RISK/confidential
 (detail and execution response), with whole-institution coverage. Execution
-retains its existing mutation gate as well. This closes the parallel read path
+also requires RISK/confidential RUN and retains engine-specific RUN checks.
+This closes the parallel read path
 that otherwise disclosed capital stress outcomes independently of the FX
 projection. This is a denial-only access change; no bindings are backfilled. Run
 `scripts/authorization_access_impact.py` for each enforcement deployment

@@ -24,11 +24,12 @@ from dataclasses import dataclass
 from uuid import UUID
 
 from fastapi import HTTPException, status
-from sqlalchemy import func, select
+from sqlalchemy import false, func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
+from app.core.authorization import ConditionCheck, ConditionKind, Module, Permission
 from app.db.base import utc_now
 from app.domain.authority.outcomes import NotComputable
 from app.identity.public import Bank
@@ -49,7 +50,7 @@ from app.stress.schemas.stress import (
     MacroScenarioUpdate,
     ScenarioTranslationRead,
 )
-from app.stress.service import default_macro_scenarios
+from app.stress.service import default_macro_scenarios, scope_authorization
 
 
 @dataclass(frozen=True)
@@ -91,6 +92,7 @@ def _get_scenario_or_404(db: Session, ctx: TenantContext, scenario_id: UUID) -> 
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Macro scenario not found."
         )
+    scope_authorization.require_permission(db, ctx, scenario.bank_id, Permission.VIEW, opaque=True)
     return scenario
 
 
@@ -212,10 +214,16 @@ def _system_summary(
     )
 
 
-def _reject_system_mutation(scenario_id: UUID, action: str) -> None:
+def _reject_system_mutation(
+    db: Session,
+    ctx: TenantContext,
+    scenario_id: UUID,
+    action: str,
+) -> None:
     scenario = _system_or_none(scenario_id)
     if scenario is None:
         return
+    scope_authorization.require_permission(db, ctx, None, Permission.VIEW, opaque=True)
     raise HTTPException(
         status_code=status.HTTP_409_CONFLICT,
         detail={
@@ -295,6 +303,7 @@ def _duplicate_code_exists(db: Session, ctx: TenantContext, bank_id: str | None,
 def create_scenario(
     db: Session, ctx: TenantContext, payload: MacroScenarioCreate
 ) -> MacroScenarioRead:
+    scope_authorization.require_permission(db, ctx, payload.bank_id, Permission.CREATE)
     if payload.bank_id is not None:
         _get_bank_or_404(db, ctx, payload.bank_id)
     if _duplicate_code_exists(db, ctx, payload.bank_id, payload.code):
@@ -371,7 +380,12 @@ def list_scenarios(  # noqa: PLR0913 - the filter surface of one read
     include_archived: bool = False,
 ) -> MacroScenarioListRead:
     bank = _get_bank_or_404(db, ctx, bank_id) if bank_id is not None else None
-    conditions = [MacroScenario.organization_id == ctx.organization_id]
+    organization_visible, bank_ids = scope_authorization.visible_scopes(db, ctx)
+    conditions = [
+        MacroScenario.organization_id == ctx.organization_id,
+        MacroScenario.bank_id.in_(bank_ids)
+        | (MacroScenario.bank_id.is_(None) if organization_visible else false()),
+    ]
     if bank_id is not None:
         conditions.append(MacroScenario.bank_id == bank_id)
     if scenario_type is not None:
@@ -414,7 +428,7 @@ def list_scenarios(  # noqa: PLR0913 - the filter surface of one read
         )
         for scenario in scenarios
     ]
-    include_system = status_filter in (None, "approved")
+    include_system = organization_visible and status_filter in (None, "approved")
     system_summaries = (
         [
             _system_summary(scenario)
@@ -432,6 +446,7 @@ def list_scenarios(  # noqa: PLR0913 - the filter surface of one read
 def get_scenario(db: Session, ctx: TenantContext, scenario_id: UUID) -> MacroScenarioRead:
     system = _system_or_none(scenario_id)
     if system is not None:
+        scope_authorization.require_permission(db, ctx, None, Permission.VIEW, opaque=True)
         return _system_read(ctx, system)
     scenario = _get_scenario_or_404(db, ctx, scenario_id)
     return _read(scenario, _load_paths(db, scenario.id))
@@ -440,8 +455,9 @@ def get_scenario(db: Session, ctx: TenantContext, scenario_id: UUID) -> MacroSce
 def update_scenario(
     db: Session, ctx: TenantContext, scenario_id: UUID, payload: MacroScenarioUpdate
 ) -> MacroScenarioRead:
-    _reject_system_mutation(scenario_id, "edited")
+    _reject_system_mutation(db, ctx, scenario_id, "edited")
     scenario = _get_scenario_or_404(db, ctx, scenario_id)
+    scope_authorization.require_permission(db, ctx, scenario.bank_id, Permission.EDIT, opaque=True)
     if scenario.status != "draft":
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
@@ -514,8 +530,9 @@ def update_scenario(
 def submit_scenario(
     db: Session, ctx: TenantContext, scenario_id: UUID, payload: MacroScenarioTransition
 ) -> MacroScenarioRead:
-    _reject_system_mutation(scenario_id, "submitted")
+    _reject_system_mutation(db, ctx, scenario_id, "submitted")
     scenario = _get_scenario_or_404(db, ctx, scenario_id)
+    scope_authorization.require_permission(db, ctx, scenario.bank_id, Permission.EDIT, opaque=True)
     if scenario.status != "draft":
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
@@ -543,8 +560,22 @@ def submit_scenario(
 def approve_scenario(
     db: Session, ctx: TenantContext, scenario_id: UUID, payload: MacroScenarioApproval
 ) -> MacroScenarioRead:
-    _reject_system_mutation(scenario_id, "approved again")
+    _reject_system_mutation(db, ctx, scenario_id, "approved again")
     scenario = _get_scenario_or_404(db, ctx, scenario_id)
+    scope_authorization.require_permission(
+        db,
+        ctx,
+        scenario.bank_id,
+        Permission.APPROVE,
+        opaque=True,
+        conditions=(
+            ConditionCheck(
+                ConditionKind.MAKER_CHECKER,
+                scenario.created_by is None or scenario.created_by != ctx.actor_user_id,
+                "The creator must differ from the approver.",
+            ),
+        ),
+    )
     if scenario.status != "pending_approval":
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
@@ -588,8 +619,9 @@ def approve_scenario(
 def archive_scenario(
     db: Session, ctx: TenantContext, scenario_id: UUID, payload: MacroScenarioTransition
 ) -> MacroScenarioRead:
-    _reject_system_mutation(scenario_id, "archived")
+    _reject_system_mutation(db, ctx, scenario_id, "archived")
     scenario = _get_scenario_or_404(db, ctx, scenario_id)
+    scope_authorization.require_permission(db, ctx, scenario.bank_id, Permission.EDIT, opaque=True)
     if scenario.status == "archived":
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
@@ -648,6 +680,8 @@ def clone_system_scenario(
     payload: MacroScenarioClone,
 ) -> MacroScenarioRead:
     """Copy a system definition's year-end points into an editable tenant draft."""
+    scope_authorization.require_permission(db, ctx, None, Permission.VIEW, opaque=True)
+    scope_authorization.require_permission(db, ctx, payload.bank_id, Permission.CREATE)
     scenario = _system_or_none(scenario_id)
     if scenario is None:
         raise HTTPException(
@@ -707,7 +741,21 @@ def translate_scenario(
     A read-only preview — it does NOT gate on approval. Consumption by an
     official run goes through ``resolve_for_official_run``.
     """
+    target_module = {
+        "liquidity": Module.LIQUIDITY,
+        "capital": Module.CAPITAL,
+        "irr": Module.IRRBB,
+        "fx": Module.FX,
+        "ftp": Module.FTP,
+    }[module]
     system = _system_or_none(scenario_id)
+    scenario_bank_id = (
+        None if system is not None else _get_scenario_or_404(db, ctx, scenario_id).bank_id
+    )
+    scope_authorization.require_permission(db, ctx, scenario_bank_id, Permission.VIEW, opaque=True)
+    scope_authorization.require_permission(
+        db, ctx, scenario_bank_id, Permission.VIEW, module=target_module, opaque=True
+    )
     if system is not None:
         if not system.runnable:
             raise HTTPException(
@@ -762,6 +810,7 @@ def resolve_for_official_run(
     """
     system = _system_or_none(scenario_id)
     if system is not None:
+        scope_authorization.require_permission(db, ctx, None, Permission.VIEW, opaque=True)
         if not system.runnable:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,

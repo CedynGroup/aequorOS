@@ -12,7 +12,7 @@ from uuid import UUID
 
 from fastapi import APIRouter
 
-from app.api.deps import DbSession, MutationTenant, Tenant
+from app.api.deps import DbSession, ScopedMutationTenant, Tenant
 from app.core.authorization import Module, Permission, Sensitivity
 from app.identity import public as scoped_authorization
 from app.stress.schemas.enterprise_stress import (
@@ -35,7 +35,7 @@ def run_enterprise_stress(
     bank_id: str,
     payload: EnterpriseStressRunCreate,
     db: DbSession,
-    ctx: MutationTenant,
+    ctx: ScopedMutationTenant,
 ) -> EnterpriseStressRead:
     # The execution response contains the same whole-book figures as a detail read.
     scoped_authorization.require_bank_permission(

@@ -174,7 +174,7 @@ def test_registry_issuer_name_preserves_the_role_in_capital_and_loss_outputs(
     assert {impact.exposure_class for impact in result.by_class} == {role}
 
 
-@pytest.mark.usefixtures("fx_run_authority", "irrbb_run_authority")
+@pytest.mark.usefixtures("fx_run_authority", "irrbb_run_authority", "stress_run_authority")
 @pytest.mark.parametrize("failure", ["foreign_pse", "stale_bucket"])
 def test_enterprise_expected_credit_refusals_return_409_without_creating_runs(
     db_client: TestClient, db_session: Session, failure: str

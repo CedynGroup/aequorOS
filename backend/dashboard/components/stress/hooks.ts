@@ -15,6 +15,9 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { getSession } from "next-auth/react";
+import { scopedQueryKey } from "@/lib/api/queryPolicy";
+import { useQueryAuthorityScope } from "@/lib/api/useQueryScope";
+import { useStressAuthority } from "./useStressAuthority";
 import { ApiError, apiBaseUrl } from "@/lib/api/client";
 import { getAccessToken, setAccessToken } from "@/lib/api/token";
 import type {
@@ -128,8 +131,11 @@ export type MacroScenarioFilters = {
 };
 
 export function useMacroScenarios(filters: MacroScenarioFilters = {}) {
+  const authority = useStressAuthority();
+  const scope = useQueryAuthorityScope();
   return useQuery({
-    queryKey: [SCENARIO_KEY, filters],
+    queryKey: scopedQueryKey(SCENARIO_KEY, scope, filters),
+    enabled: authority.canReadAny,
     queryFn: () =>
       authFetch<MacroScenarioList>("/macro-scenarios", {
         query: {
@@ -143,10 +149,12 @@ export function useMacroScenarios(filters: MacroScenarioFilters = {}) {
 }
 
 export function useMacroScenario(scenarioId: string | undefined) {
+  const authority = useStressAuthority();
+  const scope = useQueryAuthorityScope();
   return useQuery({
-    queryKey: [SCENARIO_KEY, "detail", scenarioId],
+    queryKey: scopedQueryKey(SCENARIO_KEY, scope, "detail", scenarioId),
     queryFn: () => authFetch<MacroScenario>(`/macro-scenarios/${scenarioId}`),
-    enabled: Boolean(scenarioId),
+    enabled: authority.canReadAny && Boolean(scenarioId),
   });
 }
 
@@ -229,8 +237,11 @@ export const useArchiveMacroScenario = scenarioTransition("archive");
 const PLAN_KEY = "stress-management-plans";
 
 export function useManagementActionPlans(bankId?: string) {
+  const authority = useStressAuthority();
+  const scope = useQueryAuthorityScope();
   return useQuery({
-    queryKey: [PLAN_KEY, bankId],
+    queryKey: scopedQueryKey(PLAN_KEY, scope, bankId),
+    enabled: authority.canReadAny,
     queryFn: () =>
       authFetch<ManagementActionPlanList>("/management-action-plans", {
         query: { bank_id: bankId },
@@ -239,11 +250,13 @@ export function useManagementActionPlans(bankId?: string) {
 }
 
 export function useManagementActionPlan(planId: string | undefined) {
+  const authority = useStressAuthority();
+  const scope = useQueryAuthorityScope();
   return useQuery({
-    queryKey: [PLAN_KEY, "detail", planId],
+    queryKey: scopedQueryKey(PLAN_KEY, scope, "detail", planId),
     queryFn: () =>
       authFetch<ManagementActionPlan>(`/management-action-plans/${planId}`),
-    enabled: Boolean(planId),
+    enabled: authority.canReadAny && Boolean(planId),
   });
 }
 
@@ -272,8 +285,10 @@ export function useLatestEnterpriseStress(
   periodId: string | undefined,
   scenarioId: string | undefined,
 ) {
+  const authority = useStressAuthority();
+  const scope = useQueryAuthorityScope();
   return useQuery({
-    queryKey: [RUN_KEY, bankId, periodId, scenarioId],
+    queryKey: scopedQueryKey(RUN_KEY, scope, bankId, periodId, scenarioId),
     queryFn: async () => {
       try {
         return await authFetch<EnterpriseStressRead>(
@@ -287,7 +302,9 @@ export function useLatestEnterpriseStress(
         throw error;
       }
     },
-    enabled: Boolean(bankId && periodId && scenarioId),
+    enabled:
+      Boolean(bankId && periodId && scenarioId) &&
+      authority.can("view", bankId),
   });
 }
 
@@ -304,8 +321,17 @@ export function useEnterpriseStressRegistry(
   scenarioIds: string[],
 ) {
   const sorted = [...scenarioIds].sort();
+  const authority = useStressAuthority();
+  const scope = useQueryAuthorityScope();
   return useQuery({
-    queryKey: [RUN_KEY, "registry", bankId, periodId, sorted],
+    queryKey: scopedQueryKey(
+      RUN_KEY,
+      scope,
+      "registry",
+      bankId,
+      periodId,
+      sorted,
+    ),
     queryFn: async () => {
       const results = await Promise.all(
         sorted.map(async (scenarioId) => {
@@ -327,7 +353,9 @@ export function useEnterpriseStressRegistry(
       );
       return results.filter((run): run is EnterpriseStressRead => run !== null);
     },
-    enabled: Boolean(bankId && periodId && sorted.length > 0),
+    enabled:
+      Boolean(bankId && periodId && sorted.length > 0) &&
+      authority.can("view", bankId),
   });
 }
 
@@ -342,8 +370,16 @@ export function useEnterpriseStressRunHistory(
   bankId: string | undefined,
   periodId?: string,
 ) {
+  const authority = useStressAuthority();
+  const scope = useQueryAuthorityScope();
   return useQuery({
-    queryKey: [RUN_KEY, "history", bankId, periodId ?? null],
+    queryKey: scopedQueryKey(
+      RUN_KEY,
+      scope,
+      "history",
+      bankId,
+      periodId ?? null,
+    ),
     queryFn: () =>
       authFetch<EnterpriseStressRunSummary[]>(
         `/banks/${bankId}/enterprise-stress/runs`,
@@ -351,7 +387,7 @@ export function useEnterpriseStressRunHistory(
           query: periodId ? { reporting_period_id: periodId } : undefined,
         },
       ),
-    enabled: Boolean(bankId),
+    enabled: Boolean(bankId) && authority.can("view", bankId),
   });
 }
 
@@ -366,31 +402,38 @@ export function useEnterpriseStressRunHistory(
  */
 export function useEnterpriseStressRun(
   bankId: string | undefined,
-  runId: string | null | undefined
+  runId: string | null | undefined,
 ) {
+  const authority = useStressAuthority();
+  const scope = useQueryAuthorityScope();
   return useQuery({
-    queryKey: [RUN_KEY, 'by-id', bankId, runId ?? null],
+    queryKey: scopedQueryKey(RUN_KEY, scope, "by-id", bankId, runId ?? null),
     queryFn: async () => {
       try {
         return await authFetch<EnterpriseStressRead>(
-          `/banks/${bankId}/enterprise-stress/runs/${runId}`
+          `/banks/${bankId}/enterprise-stress/runs/${runId}`,
         );
       } catch (error) {
         if (error instanceof ApiError && error.status === 404) return null;
         throw error;
       }
     },
-    enabled: Boolean(bankId && runId),
+    enabled: Boolean(bankId && runId) && authority.can("view", bankId),
   });
 }
 
 /** Re-open one immutable run by id → its full projection + Appendix II. */
 export function useReopenEnterpriseStressRun(bankId: string | undefined) {
+  const authority = useStressAuthority();
   return useMutation({
-    mutationFn: (runId: string) =>
-      authFetch<EnterpriseStressRead>(
+    mutationFn: (runId: string) => {
+      if (!bankId || !authority.can("view", bankId)) {
+        throw new Error("Risk confidential view permission is required.");
+      }
+      return authFetch<EnterpriseStressRead>(
         `/banks/${bankId}/enterprise-stress/runs/${runId}`,
-      ),
+      );
+    },
   });
 }
 
@@ -400,14 +443,16 @@ const SIGNOFF_KEY = "stress-signoffs";
 
 /** All sign-offs for a bank (newest first); filter by run_id in the panel. */
 export function useBankStressSignoffs(bankId: string | undefined) {
+  const authority = useStressAuthority();
+  const scope = useQueryAuthorityScope();
   return useQuery({
-    queryKey: [SIGNOFF_KEY, bankId],
+    queryKey: scopedQueryKey(SIGNOFF_KEY, scope, bankId),
     queryFn: () =>
       authFetch<StressSignoffListRead>(
         `/banks/${bankId}/enterprise-stress/signoffs`,
       ),
     select: (data): StressSignoffSummary[] => data.signoffs,
-    enabled: Boolean(bankId),
+    enabled: Boolean(bankId) && authority.can("view", bankId),
   });
 }
 
@@ -416,13 +461,15 @@ export function useStressSignoff(
   bankId: string | undefined,
   signoffId: string | undefined,
 ) {
+  const authority = useStressAuthority();
+  const scope = useQueryAuthorityScope();
   return useQuery({
-    queryKey: [SIGNOFF_KEY, bankId, signoffId],
+    queryKey: scopedQueryKey(SIGNOFF_KEY, scope, bankId, signoffId),
     queryFn: () =>
       authFetch<StressSignoffRead>(
         `/banks/${bankId}/enterprise-stress/signoffs/${signoffId}`,
       ),
-    enabled: Boolean(bankId && signoffId),
+    enabled: Boolean(bankId && signoffId) && authority.can("view", bankId),
   });
 }
 

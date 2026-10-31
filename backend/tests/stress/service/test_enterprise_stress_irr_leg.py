@@ -40,7 +40,7 @@ from tests.icaap.service.test_icaap_stress_appendix2_report import (
 )
 
 pytestmark = [
-    pytest.mark.usefixtures("fx_run_authority", "irrbb_run_authority"),
+    pytest.mark.usefixtures("fx_run_authority", "irrbb_run_authority", "stress_run_authority"),
     pytest.mark.usefixtures("return_generation_authority"),
 ]
 

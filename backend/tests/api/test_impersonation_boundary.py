@@ -628,9 +628,13 @@ def test_analyst_can_record_a_case_decision(db_client: TestClient) -> None:
 
 def test_approver_ladder_still_gates_an_approval_action(db_client: TestClient) -> None:
     """``ApproverTenant`` remains distinct from the analyst floor."""
-    # Capital approvals now use scoped bindings; macro approvals retain the ladder.
-    path = f"/api/v1/macro-scenarios/{uuid4()}/approve"
-    payload = {"reason": "Exercise the approval role boundary."}
+    # Final Stress attestation keeps this floor until the dedicated Signer cutover.
+    _materialize_sample_bank()
+    path = f"/api/v1/banks/{SAMPLE_BANK_ID}/enterprise-stress/signoffs/{uuid4()}/attest"
+    payload = {
+        "credibility_rationale": "Reviewed the stress results.",
+        "reason": "Exercise the approval role boundary.",
+    }
     refused = db_client.post(path, headers=headers(roles=("analyst",)), json=payload)
     assert refused.status_code == 403, refused.text
 

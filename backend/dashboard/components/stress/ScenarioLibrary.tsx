@@ -9,12 +9,15 @@
 
 import { type ReactNode, useMemo, useState } from "react";
 import { Archive, CheckCircle2, Copy, Pencil, Plus, Send } from "lucide-react";
-import { useUserProfile } from "@/components/profile/ProfileProvider";
-import { useImpersonation } from "@/components/impersonation/useImpersonation";
+import {
+  useStressAuthority,
+  stressPermissionReason,
+} from "./useStressAuthority";
 import SectionCard from "@/components/ui/SectionCard";
 import StatusPill, { type StatusTone } from "@/components/ui/StatusPill";
 import QueryBoundary from "@/components/ui/QueryBoundary";
 import { ApiError } from "@/lib/api/client";
+import { PermissionButton } from "@/components/ui/PermissionButton";
 import { fmtDateUTC } from "@/lib/api/values";
 import {
   useApproveMacroScenario,
@@ -44,21 +47,23 @@ const SEVERITY_TONE: Record<string, StatusTone> = {
 };
 
 export default function ScenarioLibrary({
+  bankId,
   selectedIds,
   onToggleSelect,
   onEdit,
   onNew,
 }: {
+  bankId?: string;
   selectedIds: string[];
   onToggleSelect: (scenario: MacroScenarioSummary) => void;
   onEdit: (scenarioId: string) => void;
   onNew: () => void;
 }) {
-  const { profile } = useUserProfile();
-  const inspection = useImpersonation();
-  const canClone =
-    !inspection.impersonating &&
-    ["admin", "approver", "analyst"].includes(profile?.role ?? "");
+  const authority = useStressAuthority();
+  const canCreate =
+    authority.can("create") ||
+    Boolean(bankId && authority.can("create", bankId));
+  const canClone = authority.can("view") && authority.can("create");
   const [statusFilter, setStatusFilter] = useState<ScenarioStatus | "">("");
   const [typeFilter, setTypeFilter] = useState("");
   const [actionError, setActionError] = useState<string | null>(null);
@@ -95,13 +100,15 @@ export default function ScenarioLibrary({
       subtitle="Governed, versioned macro scenarios. maker-checker status visible; select to run or compare"
       noPadding
       actions={
-        <button
+        <PermissionButton
           type="button"
+          disabled={!canCreate}
+          reason={canCreate ? undefined : stressPermissionReason("create")}
           onClick={onNew}
           className="inline-flex items-center gap-1.5 rounded-md border border-border-light px-3 py-1.5 text-caption font-medium text-navy hover:bg-surface"
         >
           <Plus size={13} /> New scenario
-        </button>
+        </PermissionButton>
       }
       footer={
         <div className="flex items-center gap-3 flex-wrap">
@@ -224,7 +231,7 @@ export default function ScenarioLibrary({
                         title={
                           canClone
                             ? "Clone to editable draft"
-                            : "Cloning requires the Analyst role or higher."
+                            : stressPermissionReason("create")
                         }
                         disabled={!canClone}
                         onClick={() =>
@@ -243,13 +250,23 @@ export default function ScenarioLibrary({
                     {s.status === "draft" && (
                       <>
                         <IconBtn
-                          title="Edit draft"
+                          title={
+                            authority.can("edit", s.bank_id)
+                              ? "Edit draft"
+                              : stressPermissionReason("edit")
+                          }
+                          disabled={!authority.can("edit", s.bank_id)}
                           onClick={() => onEdit(s.id)}
                         >
                           <Pencil size={14} />
                         </IconBtn>
                         <IconBtn
-                          title="Submit for approval"
+                          title={
+                            authority.can("edit", s.bank_id)
+                              ? "Submit for approval"
+                              : stressPermissionReason("edit")
+                          }
+                          disabled={!authority.can("edit", s.bank_id)}
                           onClick={() =>
                             void runTransition(() =>
                               submit.mutateAsync({
@@ -265,7 +282,12 @@ export default function ScenarioLibrary({
                     )}
                     {s.status === "pending_approval" && (
                       <IconBtn
-                        title="Approve"
+                        title={
+                          authority.can("approve", s.bank_id)
+                            ? "Approve"
+                            : stressPermissionReason("approve")
+                        }
+                        disabled={!authority.can("approve", s.bank_id)}
                         tone="success"
                         onClick={() =>
                           void runTransition(() =>
@@ -281,7 +303,12 @@ export default function ScenarioLibrary({
                     )}
                     {s.owner === "organization" && s.status !== "archived" && (
                       <IconBtn
-                        title="Archive"
+                        title={
+                          authority.can("edit", s.bank_id)
+                            ? "Archive"
+                            : stressPermissionReason("edit")
+                        }
+                        disabled={!authority.can("edit", s.bank_id)}
                         onClick={() =>
                           void runTransition(() =>
                             archive.mutateAsync({
@@ -319,8 +346,9 @@ function IconBtn({
   disabled?: boolean;
 }) {
   return (
-    <button
+    <PermissionButton
       type="button"
+      reason={disabled ? title : undefined}
       title={title}
       aria-label={title}
       onClick={onClick}
@@ -330,6 +358,6 @@ function IconBtn({
       }`}
     >
       {children}
-    </button>
+    </PermissionButton>
   );
 }
