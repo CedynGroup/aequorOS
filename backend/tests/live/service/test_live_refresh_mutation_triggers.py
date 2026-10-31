@@ -13,12 +13,13 @@ from app.credit.schemas.credit_params import (
     EclAssumptionUpdate,
 )
 from app.credit.service import credit_params
-from app.models import Bank, CurrentFinancialFact, Job
-from app.schemas.liquidity_thresholds import (
+from app.data_engine.service import reconciliation
+from app.liquidity.schemas.liquidity_thresholds import (
     LiquidityHaircutUpdate,
     LiquidityThresholdUpdate,
 )
-from app.services import liquidity_thresholds, reconciliation
+from app.liquidity.service import liquidity_thresholds
+from app.models import Bank, CurrentFinancialFact, Job
 from tests.fixtures.canonical_bank_fixture import (
     SAMPLE_BANK_ID,
     materialize_canonical_test_book,

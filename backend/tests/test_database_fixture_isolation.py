@@ -9,8 +9,8 @@ from sqlalchemy import Engine, select, text
 from sqlalchemy.orm import Session
 
 from app.core.key_management import registry
+from app.data_engine.api.ingest_data import get_ingestion_storage
 from app.db.session import get_sessionmaker
-from app.features.ingest_data import get_ingestion_storage
 from app.integrations.storage.s3 import get_object_storage
 from app.models import Bank, Organization, RiskCase
 from tests.conftest import (

@@ -102,8 +102,8 @@ ENGINE_METRIC_TIERS: tuple[str, ...] = ("live", "official")
 GL_BALANCE_BASES: tuple[str, ...] = ("ytd", "period")
 
 #: ``bi_fact_target`` vocabularies, mirroring
-#: ``app/domain/ingestion/reference_schemas/performance_targets.py`` without
-#: importing it (``app.models`` stays free of ``app.domain.ingestion``);
+#: ``app/data_engine/domain/ingestion/reference_schemas/performance_targets.py`` without
+#: importing it (``app.models`` stays free of ``app.data_engine.domain.ingestion``);
 #: ``tests/bi/models/test_bi_models.py`` asserts the parity in both
 #: directions, so a grain or version added to the register cannot be stored
 #: under a CHECK that does not know it.
@@ -522,7 +522,7 @@ class BiFactGlBranchMonthly(_BuilderStamp, Base):
     """The same monthly P&L figures as :class:`BiFactGlMonthly`, by BRANCH.
 
     Fed by the bank's own ``gl_segment_balances`` register
-    (``app/domain/ingestion/reference_schemas/gl_segment_balances.py``), which is
+    (``app/data_engine/domain/ingestion/reference_schemas/gl_segment_balances.py``), which is
     a dataset rather than a wider ``gl_account`` record because GL-by-branch is a
     different grain from the chart of accounts and
     ``uq_canonical_gl_accounts_current`` forbids the second key there.

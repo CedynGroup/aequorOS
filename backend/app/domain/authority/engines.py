@@ -45,13 +45,13 @@ ENGINE_LOCATIONS: Mapping[str, tuple[str, str]] = {
     "app.domain.irr.engine:run_irr_scenarios": ("app.irrbb.domain.engine", "run_irr_scenarios"),
     "app.domain.irr.standardised:run": ("app.irrbb.domain.standardised", "run"),
     "app.domain.liquidity.engine:compute_currency_gaps": (
-        "app.domain.liquidity.engine",
+        "app.liquidity.domain.engine",
         "compute_currency_gaps",
     ),
-    "app.domain.liquidity.engine:compute_lcr": ("app.domain.liquidity.engine", "compute_lcr"),
-    "app.domain.liquidity.engine:compute_nsfr": ("app.domain.liquidity.engine", "compute_nsfr"),
+    "app.domain.liquidity.engine:compute_lcr": ("app.liquidity.domain.engine", "compute_lcr"),
+    "app.domain.liquidity.engine:compute_nsfr": ("app.liquidity.domain.engine", "compute_nsfr"),
     "app.domain.liquidity.engine:compute_stressed_ladder": (
-        "app.domain.liquidity.engine",
+        "app.liquidity.domain.engine",
         "compute_stressed_ladder",
     ),
     "app.domain.rating.engine:compute_rating": ("app.rating.domain.engine", "compute_rating"),
@@ -61,11 +61,11 @@ ENGINE_LOCATIONS: Mapping[str, tuple[str, str]] = {
         "run_enterprise_stress",
     ),
     "app.services.regulatory_capital:capital_breach_multiplier": (
-        "app.services.regulatory_capital",
+        "app.capital.service.regulatory_capital",
         "capital_breach_multiplier",
     ),
     "app.services.regulatory_liquidity:liquidity_breach_multiplier": (
-        "app.services.regulatory_liquidity",
+        "app.liquidity.service.regulatory_liquidity",
         "liquidity_breach_multiplier",
     ),
     "app.services.regulatory_reporting.bog_forms.engine:compute_form": (
@@ -81,19 +81,19 @@ ENGINE_LOCATIONS: Mapping[str, tuple[str, str]] = {
         "_table1_inputs",
     ),
     "app.services.sdi_capital:compute_sdi_capital_summary": (
-        "app.services.sdi_capital",
+        "app.capital.service.sdi_capital",
         "compute_sdi_capital_summary",
     ),
     "app.services.sdi_capital_checks:check_paid_up_capital": (
-        "app.services.sdi_capital_checks",
+        "app.capital.service.sdi_capital_checks",
         "check_paid_up_capital",
     ),
     "app.services.sdi_capital_checks:check_statutory_reserve_fund": (
-        "app.services.sdi_capital_checks",
+        "app.capital.service.sdi_capital_checks",
         "check_statutory_reserve_fund",
     ),
     "app.services.sdi_views:get_sdi_liquidity_position": (
-        "app.services.sdi_views",
+        "app.capital.service.sdi_views",
         "get_sdi_liquidity_position",
     ),
 }

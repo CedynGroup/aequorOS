@@ -29,15 +29,6 @@ from app.capital.public import regulatory_capital
 from app.domain.capital.engine import (
     REQUIRED_STRESS_SHOCK_KEYS as CAPITAL_REQUIRED_KEYS,
 )
-from app.domain.liquidity.engine import (
-    SHOCK_ASF_PREFIX,
-    SHOCK_FX_DEPRECIATION,
-    SHOCK_HQLA_SECURITIES_HAIRCUT,
-    SHOCK_INFLOW_MULTIPLIER,
-    SHOCK_NMD_RUNOFF_PREFIX,
-    SHOCK_RSF_SECURITIES_OVERRIDE,
-    SHOCK_RUNOFF_PREFIX,
-)
 from app.ftp.public import (
     FTP_RUN_SCENARIO_CODES,
     SHOCK_CURVE_SHIFT_BP,
@@ -55,6 +46,15 @@ from app.irrbb.domain.engine import (
     SHOCK_SHORT_BP,
 )
 from app.irrbb.public import IRR_RUN_SCENARIO_CODES
+from app.liquidity.domain.engine import (
+    SHOCK_ASF_PREFIX,
+    SHOCK_FX_DEPRECIATION,
+    SHOCK_HQLA_SECURITIES_HAIRCUT,
+    SHOCK_INFLOW_MULTIPLIER,
+    SHOCK_NMD_RUNOFF_PREFIX,
+    SHOCK_RSF_SECURITIES_OVERRIDE,
+    SHOCK_RUNOFF_PREFIX,
+)
 from app.liquidity.public import regulatory_liquidity
 from app.policy.public import ParamStressShock, get_active_params
 

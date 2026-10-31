@@ -41,7 +41,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import TenantContext
 from app.domain.capital.engine import CAPITAL_REGISTER_REFUSED_CATEGORY, CapitalRegisterRefused
 from app.identity.public import Bank
-from app.models import DeskMethodology
+from app.market_data.public import DeskMethodology
 from app.rating.domain.engine import ComponentScore, grade_for_score, score_components
 from app.rating.domain.sdi_scorecard import (
     CANDIDATE_COMPONENTS,
@@ -411,7 +411,7 @@ def _asset_quality_evidence(
 def _liquidity_evidence(
     db: Session, ctx: TenantContext, bank: Bank, as_of: date
 ) -> list[RatioEvidence]:
-    from app.services import sdi_views  # noqa: PLC0415 - breaks an import cycle
+    from app.capital.service import sdi_views  # noqa: PLC0415 - breaks an import cycle
 
     try:
         position = sdi_views.get_sdi_liquidity_position(db, ctx, bank, as_of)
@@ -461,7 +461,7 @@ def _liquidity_evidence(
 def _concentration_evidence(
     db: Session, ctx: TenantContext, bank: Bank, as_of: date
 ) -> list[RatioEvidence]:
-    from app.services import sdi_views  # noqa: PLC0415 - breaks an import cycle
+    from app.capital.service import sdi_views  # noqa: PLC0415 - breaks an import cycle
 
     largest: Decimal | None = None
     top5: Decimal | None = None

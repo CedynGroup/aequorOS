@@ -490,14 +490,14 @@ _ENGINE_VERSION_MODULES = (
     "app.case.service.capital",
     "app.stress.service.enterprise_stress",
     "app.rating.service.implied_rating",
-    "app.services.regulatory_capital",
+    "app.capital.service.regulatory_capital",
     "app.credit.service.regulatory_credit",
     "app.forecasting.service.regulatory_forecasting",
     "app.ftp.service",
     "app.fx.service",
     "app.irrbb.service.regulatory_irr",
     "app.irrbb.service.regulatory_irr_sf",
-    "app.services.regulatory_liquidity",
+    "app.liquidity.service.regulatory_liquidity",
     "app.stress.service.reverse_stress",
 )
 

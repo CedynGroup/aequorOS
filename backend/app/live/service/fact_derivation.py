@@ -62,7 +62,7 @@ balance_sheet
     is read as a chart, not as a pile of rows: see ``_resolve_gl_chart`` for the
     retirement-versus-sparse-reporting rule. The balance-sheet identity is then
     a FAIL-CLOSED control
-    (``app/services/reconciliation.py``; enterprise audit 2026-08-20 P0-10):
+    (``app/data_engine/service/reconciliation.py``; enterprise audit 2026-08-20 P0-10):
     a gap within the GOVERNED tolerance (control-plane
     ``balance_identity_tolerance_pct``, effective-dated) is plugged into
     ``other_assets`` (assets short) or ``term_borrowings_gt_1y`` (funding
@@ -269,16 +269,26 @@ from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
-from app.domain.authority.outcomes import NotComputable, OutcomeDetail
-from app.domain.capital.loan_classification import NPL_GRADES, normalise_bog_classification
-from app.domain.ingestion.capital_tiers import (
+from app.data_engine.domain.ingestion.capital_tiers import (
     CAPITAL_REGISTER_REFUSED_CATEGORY,
     is_excluded_component,
     parse_capital_tier,
 )
-from app.domain.ingestion.reference_schemas.business_units import (
+from app.data_engine.domain.ingestion.reference_schemas.business_units import (
     normalise_row as _normalise_business_unit_row,
 )
+from app.data_engine.public import (
+    CanonicalCounterparty,
+    CanonicalGlAccount,
+    CanonicalPosition,
+    CanonicalPositionSnapshot,
+    CanonicalProduct,
+    CanonicalReferenceRow,
+    IngestionBatch,
+)
+from app.data_engine.service import reconciliation
+from app.domain.authority.outcomes import NotComputable, OutcomeDetail
+from app.domain.capital.loan_classification import NPL_GRADES, normalise_bog_classification
 from app.ftp.domain.engine import CurvePoint, CurveResult, build_curve
 from app.identity.public import Bank
 from app.irrbb.domain.buckets import REPRICING_BUCKETS as _IRR_BUCKETS
@@ -300,22 +310,13 @@ from app.live.domain.positions.fx import FX_ASSET_TYPES, FX_LIABILITY_TYPES
 from app.live.models.live import CurrentFinancialFact
 from app.live.models.regulatory import BankFinancialFact, BankReportingPeriod
 from app.live.service.reporting_periods import new_snapshot_period
-from app.models import (
-    CanonicalCounterparty,
-    CanonicalGlAccount,
-    CanonicalPosition,
-    CanonicalPositionSnapshot,
-    CanonicalProduct,
-    CanonicalReferenceRow,
-    IngestionBatch,
-)
-from app.policy.public import jurisdictions
-from app.services import market_data_sources, reconciliation
-from app.services.market_data import (
+from app.market_data.public import (
     CurveView,
     desk_projection_curve_name,
     list_fx_base_currencies,
+    market_data_sources,
 )
+from app.policy.public import jurisdictions
 
 MONEY = Decimal("0.0001")
 RATE = Decimal("0.0001")
@@ -682,7 +683,7 @@ class _Canonical:
     # (registry-driven, never a country literal) — the GL cash classifier's
     # central-bank test. See ``_CentralBankNames``.
     central_bank_names: _CentralBankNames = field(default_factory=_CentralBankNames)
-    # Canonical market data (vendor-blind, via app.services.market_data).
+    # Canonical market data (vendor-blind, via app.market_data.service.market_data).
     # When present it wins over the legacy reference-row datasets; the
     # reference rows remain the fallback so uploads without market data
     # connections keep deriving exactly as before.
@@ -2113,7 +2114,7 @@ def _is_public_debt_security(row: _PositionRow, sovereign_names: tuple[str, ...]
 
 
 #: The Basel HQLA levels this derivation may emit. Mirrors
-#: ``app.domain.liquidity.engine.HQLA_LEVELS``; a value outside it raises
+#: ``app.liquidity.domain.engine.HQLA_LEVELS``; a value outside it raises
 #: ``UnclassifiedHqlaError`` there rather than being counted at face value.
 _HQLA_LEVELS = ("L1", "L2A", "L2B")
 

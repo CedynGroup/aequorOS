@@ -46,8 +46,8 @@ from app.bi.schemas.query import (
     BiQuery,
 )
 from app.bi.service.compiler import _resolve
-from app.domain.ingestion.constants import REFERENCE_DATASET_KINDS
-from app.domain.ingestion.contracts import CanonicalRecords
+from app.data_engine.domain.ingestion.constants import REFERENCE_DATASET_KINDS
+from app.data_engine.domain.ingestion.contracts import CanonicalRecords
 
 #: The seven packs the spec's coverage table names, and the audience each is
 #: written for. Asserted rather than read off the directory.

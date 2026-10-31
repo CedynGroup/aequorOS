@@ -17,6 +17,7 @@ from pydantic import TypeAdapter
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.data_engine.service.ingestion import bank_slug
 from app.models import (
     Bank,
     RegulatoryArtifactVersion,
@@ -29,7 +30,6 @@ from app.reporting.service import workflow
 from app.reporting.service.channels import FiledArtifact, OrassSandboxChannel
 from app.reporting.service.exports import export_package
 from app.reporting.service.filing_retention import retain_filing
-from app.services.ingestion import bank_slug
 from app.storage.client import StorageLocation
 from app.storage.config import StorageEngineSettings, get_storage_settings
 from app.storage.encryption import ObjectEncryption

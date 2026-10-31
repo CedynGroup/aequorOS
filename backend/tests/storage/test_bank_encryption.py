@@ -40,8 +40,8 @@ from app.core.key_management.types import (
     ProtectedSupportAccessError,
 )
 from app.core.tenancy import TenantContext
+from app.data_engine.api.ingest_data import get_ingestion_storage
 from app.db.base import utc_now
-from app.features.ingest_data import get_ingestion_storage
 from app.identity.public import Bank
 from app.operator.services.bank_encryption import rotate_key
 from app.reporting.models.packages import RegulatoryPackage

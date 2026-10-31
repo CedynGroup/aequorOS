@@ -54,17 +54,17 @@ from app.domain.capital.engine import (
     tier1_capital,
 )
 from app.domain.capital.loan_classification import NPL_GRADES, normalise_bog_classification
-from app.domain.liquidity.engine import (
-    HQLA_LEVEL_1,
-    LiquidityFact,
-    LiquidityParams,
-    consumed_hqla_levels,
-)
 from app.forecasting.domain.engine import ForecastAssumptions, ForecastFact, ForecastParams
 from app.fx.domain.engine import FxPosition
 from app.identity import public as scoped_authorization
 from app.identity.public import Bank
 from app.irrbb.public import regulatory_irr
+from app.liquidity.domain.engine import (
+    HQLA_LEVEL_1,
+    LiquidityFact,
+    LiquidityParams,
+    consumed_hqla_levels,
+)
 from app.live.domain.positions.credit import capital_credit_class, specific_deductions
 from app.live.public import BankFinancialFact, BankReportingPeriod, FinancialFactRow, RegulatoryRun
 from app.models import ManagementActionPlan

@@ -43,6 +43,8 @@ from app.attestation.service import digests, register_state
 from app.core.authorization import RoleBundle
 from app.identity.schemas.institution_profile import OutletCreate, OutletUpdate
 from app.identity.service import institution_profile
+from app.liquidity.schemas.regulatory_liquidity import RegulatoryRunCreate
+from app.liquidity.service import regulatory_liquidity
 from app.models import (
     AttestationSignature,
     Bank,
@@ -70,8 +72,6 @@ from app.reporting.service.eligibility import (
 from app.reporting.service.exports import export_package
 from app.reporting.service.registry import REGISTRY
 from app.reporting.service.templates import CONSOLIDATED_BASIS
-from app.schemas.regulatory_liquidity import RegulatoryRunCreate
-from app.services import regulatory_liquidity
 from tests.fixtures.canonical_bank_fixture import (
     DEMO_ORG_ID,
     DEMO_USER_ID,

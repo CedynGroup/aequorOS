@@ -2,7 +2,7 @@
 
 The gap this closes
 -------------------
-``app/services/canonical_withdrawal.py`` retires a source system's book for a
+``app/data_engine/service/canonical_withdrawal.py`` retires a source system's book for a
 business date under maker-checker. It is the remedy the platform's own overlap
 detector instructs an operator to perform, and its refusal message states the
 stake in words: a withdrawal *"removes data from every filed number derived for
@@ -79,7 +79,7 @@ than a guess, and every unknown resolves toward "affected" (fail-closed).
 
 This module is pure: no SQLAlchemy, no FastAPI, no ``app.services`` import.
 Resolving the withdrawal register from the database is
-``app/services/withdrawal_impact.py``'s job; deciding what the register means is
+``app/data_engine/service/withdrawal_impact.py``'s job; deciding what the register means is
 this one's.
 """
 

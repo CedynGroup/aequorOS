@@ -20,18 +20,18 @@ from app.core.key_management import registry
 from app.core.key_management.local import LocalKeyProvider
 from app.core.key_management.models import ObjectKeyEnvelope
 from app.core.key_management.types import KeyReference, KeyStatus, KeyUnavailableError
-from app.domain.ingestion.contracts import EntityMapping, MappingConfig
-from app.features import ingest_data
+from app.data_engine.api import upload_seam
+from app.data_engine.domain.ingestion.contracts import EntityMapping, MappingConfig
+from app.data_engine.models.canonical import CanonicalCounterparty
+from app.data_engine.schemas.ingestion import InternalIngestionBatchCreate, MappingConfigCreate
+from app.data_engine.schemas.push import PushBatchOpen, PushRecordsPage
+from app.data_engine.service import ingestion, push_ingestion
 from app.identity.public import Bank
-from app.models.canonical import CanonicalCounterparty
 from app.reporting.api import manage_package_attachments, manage_regulatory_reporting
 from app.reporting.models.packages import RegulatoryPackage
 from app.reporting.service import attachments, exports
 from app.reporting.service.registry import get_definition
 from app.reporting.service.templates import get_template
-from app.schemas.ingestion import InternalIngestionBatchCreate, MappingConfigCreate
-from app.schemas.push import PushBatchOpen, PushRecordsPage
-from app.services import ingestion, push_ingestion
 from app.storage import encryption
 from app.storage.client import StorageError, StorageLocation
 from app.storage.config import StorageEngineSettings
@@ -528,7 +528,7 @@ def test_package_download_siblings_wait_for_rotation(
         return bank_storage.provider
 
     monkeypatch.setattr(registry, "provider_for", providers)
-    monkeypatch.setattr(ingest_data, "get_storage_client", lambda: bank_storage.storage)
+    monkeypatch.setattr(upload_seam, "get_storage_client", lambda: bank_storage.storage)
     monkeypatch.setattr(exports, "get_storage_client", lambda: bank_storage.storage)
     package_id, attachment_id = _download_package(db_session, bank_storage)
     loaded, rotating, release = Event(), Event(), Event()

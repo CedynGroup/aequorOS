@@ -44,6 +44,9 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
+from app.data_engine.service import canonical_withdrawal, system_of_record
+from app.data_engine.service.canonical_withdrawal import WithdrawalError
+from app.data_engine.service.system_of_record import SystemOfRecordError
 from app.live.service.fact_derivation import _load_canonical, diagnose_source_overlap
 from app.models import (
     AuditEvent,
@@ -55,9 +58,6 @@ from app.models import (
     LineageRecord,
     SystemOfRecordDeclaration,
 )
-from app.services import canonical_withdrawal, system_of_record
-from app.services.canonical_withdrawal import WithdrawalError
-from app.services.system_of_record import SystemOfRecordError
 from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID, materialize_canonical_test_book
 from tests.support.factories.canonical import FIXTURE_AS_OF, seed_canonical_fixture
 from tests.support.helpers import ORG_1, USER_1, USER_2

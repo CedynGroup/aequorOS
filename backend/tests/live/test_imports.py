@@ -16,8 +16,8 @@ import pytest
         "app.main",
         "app.worker",
         "app.operator.main",
-        "app.services.regulatory_capital",
-        "app.services.regulatory_liquidity",
+        "app.capital.service.regulatory_capital",
+        "app.liquidity.service.regulatory_liquidity",
         "app.bi.service.enqueue",
     ],
 )

@@ -11,14 +11,14 @@ from __future__ import annotations
 
 from fastapi import APIRouter, HTTPException, status
 
-from app.operator.deps import Operator, OperatorDb, record_operator_action
-from app.schemas.fx_forward import (
+from app.market_data.public import (
     FxForwardConstructRequest,
     FxForwardConstructResponse,
     FxForwardRowRead,
     FxLeg,
+    fx_forward,
 )
-from app.services.market_desk import fx_forward
+from app.operator.deps import Operator, OperatorDb, record_operator_action
 
 router = APIRouter(prefix="/fx-forward", tags=["operator-fx-forward"])
 

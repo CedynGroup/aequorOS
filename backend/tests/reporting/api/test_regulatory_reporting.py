@@ -37,6 +37,7 @@ from app.core.authorization import (
     SensitivityScope,
 )
 from app.core.config import get_settings
+from app.data_engine.service.ingestion import bank_slug
 from app.identity.service import authorization
 from app.models import (
     Bank,
@@ -53,7 +54,6 @@ from app.reporting.service.bog_forms.catalog import (
     all_form_codes,
 )
 from app.reporting.service.registry import REGISTRY
-from app.services.ingestion import bank_slug
 from app.storage.client import ObjectMetadata, StorageLocation
 from tests.real_data import (
     REAL_BANK_ID,

@@ -24,8 +24,8 @@ from app.core.logging import (
     set_request_id,
 )
 from app.core.observability import Condition
+from app.liquidity.service import regulatory_liquidity
 from app.models import Job
-from app.services import regulatory_liquidity
 from tests.liquidity.helpers import inputs
 
 _CUSTOMER_DATA = "Borrower Jane Private account 123456789012 balance 9876543.21 rate 13.75%"

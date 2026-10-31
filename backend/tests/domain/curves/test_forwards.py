@@ -8,9 +8,9 @@ from datetime import date
 
 import pytest
 
-from app.domain.curves.bootstrap import ZeroCurve
-from app.domain.curves.conventions import DayCount
-from app.domain.curves.forwards import QaError, forward_curve, qa_forwards
+from app.market_data.domain.curves.bootstrap import ZeroCurve
+from app.market_data.domain.curves.conventions import DayCount
+from app.market_data.domain.curves.forwards import QaError, forward_curve, qa_forwards
 
 VALUATION = date(2026, 8, 3)
 

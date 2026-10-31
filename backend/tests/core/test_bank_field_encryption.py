@@ -52,8 +52,18 @@ from app.core.key_management.types import (
 )
 from app.core.tenancy import TenantContext
 from app.credit.service import credit_concentration, credit_exposure_book
+from app.data_engine.domain.ingestion.contracts import EntityMapping, MappingConfig
+from app.data_engine.models.canonical import (
+    CanonicalCounterparty,
+    CanonicalPosition,
+    CanonicalPositionSnapshot,
+)
+from app.data_engine.models.canonical_withdrawal import CanonicalWithdrawal
+from app.data_engine.models.ingestion import IngestionBatch, LineageRecord, TranslationFailure
+from app.data_engine.schemas.ingestion import InternalIngestionBatchCreate, MappingConfigCreate
+from app.data_engine.service import canonical_withdrawal, ingestion
+from app.data_engine.service.canonical_withdrawal import WithdrawalError
 from app.db.base import Base, utc_now
-from app.domain.ingestion.contracts import EntityMapping, MappingConfig
 from app.identity.models.institution_profile import RelatedParty, RelatedPartyRole, Shareholding
 from app.identity.public import Bank, User
 from app.identity.schemas.institution_profile import (
@@ -63,18 +73,12 @@ from app.identity.schemas.institution_profile import (
     RelatedPartyUpdate,
 )
 from app.identity.service import banks, institution_profile
+from app.liquidity.service.behavioral_liquidity import get_behavioral_liquidity_report
 from app.live import position_book
 from app.live.service import fact_derivation
 from app.models import ParamConcentrationLimit
 from app.models.audit_event import AuditEvent
-from app.models.canonical import CanonicalCounterparty, CanonicalPosition, CanonicalPositionSnapshot
-from app.models.canonical_withdrawal import CanonicalWithdrawal
-from app.models.ingestion import IngestionBatch, LineageRecord, TranslationFailure
 from app.reporting.models.packages import RegulatoryPackage
-from app.schemas.ingestion import InternalIngestionBatchCreate, MappingConfigCreate
-from app.services import canonical_withdrawal, ingestion
-from app.services.behavioral_liquidity import get_behavioral_liquidity_report
-from app.services.canonical_withdrawal import WithdrawalError
 from tests.api import test_impersonation_auth as impersonation
 from tests.bi.fixtures import materialize_bi_plane
 from tests.support.helpers import ORG_1, ORG_2, USER_1, headers

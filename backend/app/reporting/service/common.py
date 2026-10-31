@@ -17,8 +17,8 @@ from app.core.key_management.presentation import (
     SESSION_SUPPORT,
     PresentationState,
 )
+from app.data_engine.domain.ingestion.constants import INCLUDED_VALIDATION_STATUSES
 from app.data_engine.public import CanonicalGlAccount, CanonicalPositionSnapshot
-from app.domain.ingestion.constants import INCLUDED_VALIDATION_STATUSES
 from app.identity.public import Bank
 from app.live.public import BankReportingPeriod
 from app.reporting.models.packages import RegulatoryPackage, RegulatoryPackageApproval

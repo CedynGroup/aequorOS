@@ -40,10 +40,10 @@ from sqlalchemy.orm import Session
 from app.api.deps import TenantContext
 from app.credit.domain.dpd_bands import DPD_BANDS as _DPD_BANDS
 from app.credit.domain.restructure import restructure_holds_npl
+from app.data_engine.domain.ingestion.constants import INCLUDED_VALIDATION_STATUSES
+from app.data_engine.public import CanonicalPosition, CanonicalPositionSnapshot
 from app.domain.capital import loan_classification as engine
-from app.domain.ingestion.constants import INCLUDED_VALIDATION_STATUSES
 from app.identity.public import Bank
-from app.models import CanonicalPosition, CanonicalPositionSnapshot
 from app.policy.public import institution_types, jurisdictions
 from app.policy.public import regulatory_parameters as rp
 

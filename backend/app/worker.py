@@ -42,6 +42,7 @@ from app.core.key_management import reencryption
 from app.core.logging import configure_logging, get_request_id, reset_request_id, set_request_id
 from app.core.observability import Condition, emit
 from app.core.tls import validate_service_transports
+from app.data_engine.service import database_direct_jobs, etl_dedup_jobs, ingestion, temenos_jobs
 from app.db.base import utc_now
 from app.db.session import (
     apply_worker_tenant_context,
@@ -53,6 +54,8 @@ from app.db.worker_access import DESK_SIGNATURE, has_worker_function
 from app.icaap.service import ai_jobs as icaap_ai_jobs
 from app.identity.public import run_session_purge
 from app.live.service import pipeline
+from app.market_data.service import market_data_jobs
+from app.market_data.service.market_desk import capture_job as desk_capture_job
 from app.models import (
     Bank,
     DeskCurveDefinition,
@@ -64,16 +67,7 @@ from app.models import (
     WorkerHeartbeat,
 )
 from app.notifications.service import notification_email_mirror, reporting_deadline_scan
-from app.services import (
-    database_direct_jobs,
-    etl_dedup_jobs,
-    ingestion,
-    job_queue,
-    market_data_jobs,
-    scheduler,
-    temenos_jobs,
-)
-from app.services.market_desk import capture_job as desk_capture_job
+from app.services import job_queue, scheduler
 
 logger = logging.getLogger(__name__)
 
@@ -83,7 +77,7 @@ Handler = Callable[[Session, Job], None]
 # JOB_TYPES entry with no handler here is enqueueable but never claimable, so
 # its jobs sit "queued" forever (how notification_email_mirror was orphaned
 # until 2026-08-09: enqueued by every tick, absent here). The parity test in
-# tests/services/test_desk_capture_job.py enforces the invariant.
+# tests/market_data/service/test_desk_capture_job.py enforces the invariant.
 HANDLERS: dict[str, Handler] = {
     "bank_reencrypt": reencryption.run,
     "session_purge": run_session_purge,

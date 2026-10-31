@@ -23,7 +23,7 @@ from fastapi.responses import StreamingResponse
 
 from app.api.deps import DbSession, PackageEdit, PackageView
 from app.core.config import get_settings
-from app.features.ingest_data import IngestionStorage
+from app.data_engine.public import IngestionStorage
 from app.icaap.api.manage_icaap_attachments import IcaapStorage
 from app.reporting.schemas.packages import (
     PackageAttachmentListRead,
@@ -163,7 +163,7 @@ def download_package_attachment(  # noqa: PLR0913 - path + session + access + st
 ) -> StreamingResponse:
     """Stream one filed document from the outputs tier."""
     _ = (bank_id, package_id)
-    from app.services.ingestion import bank_slug  # noqa: PLC0415 - avoid an import cycle
+    from app.data_engine.public import bank_slug  # noqa: PLC0415 - avoid an import cycle
 
     row = next(
         (

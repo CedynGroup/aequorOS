@@ -21,7 +21,11 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
+from app.capital.schemas.regulatory_capital import CapitalScenarioBatchCreate
+from app.capital.service import regulatory_capital
 from app.domain.authority.registry import EXTERNAL_REGULATORY_VERIFICATION_REQUIRED
+from app.liquidity.schemas.regulatory_liquidity import RegulatoryRunCreate
+from app.liquidity.service import regulatory_liquidity
 from app.models import (
     Bank,
     BankReportingPeriod,
@@ -33,9 +37,6 @@ from app.reporting.schemas.packages import RegulatoryPackageCreate
 from app.reporting.service import generation
 from app.reporting.service.exports import export_package
 from app.reporting.service.provenance import compliance_verdict_authority
-from app.schemas.regulatory_capital import CapitalScenarioBatchCreate
-from app.schemas.regulatory_liquidity import RegulatoryRunCreate
-from app.services import regulatory_capital, regulatory_liquidity
 from app.stress.schemas.reverse_stress import ReverseStressRunCreate
 from app.stress.service import reverse_stress
 from tests.fixtures.canonical_bank_fixture import (

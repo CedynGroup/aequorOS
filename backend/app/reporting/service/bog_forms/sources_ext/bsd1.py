@@ -41,13 +41,13 @@ from typing import Any
 
 from sqlalchemy import func, or_, select
 
+from app.data_engine.domain.ingestion.constants import INCLUDED_VALIDATION_STATUSES
 from app.data_engine.public import (
     CanonicalCounterparty,
     CanonicalPosition,
     CanonicalPositionSnapshot,
     CanonicalProduct,
 )
-from app.domain.ingestion.constants import INCLUDED_VALIDATION_STATUSES
 from app.market_data.public import market_data_sources
 
 from ..sources import ResolveContext, get_resolver, reporting_currency_value, resolver

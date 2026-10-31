@@ -6,7 +6,7 @@ assumptions, and rolls cash forward across the case's own forecast periods on
 book values.
 
 It is not the regulatory liquidity plane. Basel LCR and NSFR are computed by
-`app.domain.liquidity.engine` from `BankFinancialFact`, sealed into a
+`app.liquidity.domain.engine` from `BankFinancialFact`, sealed into a
 `RegulatoryRun`, and filed. Nothing here reads a bank fact, calls a regulatory
 engine, or reaches a return — see `app.case.service.case_plane` for the boundary
 rule and `tests/architecture/test_case_plane_boundary.py` for the guard.

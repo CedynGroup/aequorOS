@@ -124,7 +124,7 @@ fact rows and asserts the per-module baseline hash set is unchanged.
 nothing writes to it. There is no `run.inputs =` or `run.input_hash =`
 assignment outside the constructor anywhere in `app/`, and no PUT/PATCH/DELETE
 route exists on any run resource. Reruns mint a new row; identical inputs
-reproduce an identical hash (`tests/api/test_regulatory_liquidity.py:152`).
+reproduce an identical hash (`tests/liquidity/api/test_regulatory_liquidity.py:152`).
 
 **Baseline caveat.** At the reviewed revision, immutability relied on application
 code (see 1.5). Current database enforcement is governed by

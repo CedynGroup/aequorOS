@@ -51,8 +51,8 @@ from app.api import deps
 from app.api.deps import TenantContext
 from app.core.authorization import InstitutionScope, ModuleScope, RoleBundle, SensitivityScope
 from app.core.security import ROLES
+from app.data_engine.api.ingest_data import get_ingestion_storage
 from app.db.base import Base
-from app.features.ingest_data import get_ingestion_storage
 from app.integrations.storage.s3 import get_object_storage
 from app.main import create_app
 from app.models import AuthorizationBinding, Organization, RegulatoryPackage, User

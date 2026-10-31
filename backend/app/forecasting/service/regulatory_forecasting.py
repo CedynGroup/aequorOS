@@ -1,7 +1,7 @@
 """Balance-sheet forecasting runs: 5-year projection, strategic optimizer, what-if.
 
 Follows the immutable calculation-run lifecycle established by
-``app.services.regulatory_liquidity``: runs commit ``queued`` and ``running``
+``app.liquidity.service.regulatory_liquidity``: runs commit ``queued`` and ``running``
 before executing, persist the full canonical input snapshot with a SHA-256
 ``input_hash``, and record failures as data (named error codes) rather than
 HTTP 500s. The arithmetic itself lives in the pure engine at
@@ -30,6 +30,7 @@ from sqlalchemy import ColumnElement, func, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
+from app.capital.domain.crm_haircuts import DEFAULT_CRM_HAIRCUTS
 from app.core.authorization import Module, Permission, Sensitivity
 from app.domain.capital.engine import (
     CapitalComputationError,
@@ -41,17 +42,6 @@ from app.domain.capital.engine import (
 )
 from app.domain.capital.engine import (
     MissingParameterError as CapitalMissingParameterError,
-)
-from app.domain.liquidity.engine import (
-    FACT_GROUP_SECURITIES,
-    HQLA_LEVEL_1,
-    HQLA_LEVELS,
-    LiquidityComputationError,
-    LiquidityParams,
-    classify_ratio,
-)
-from app.domain.liquidity.engine import (
-    MissingParameterError as LiquidityMissingParameterError,
 )
 from app.forecasting import service as assumption_register
 from app.forecasting.domain.assumptions import ASSUMPTION_KEYS, PRESET_CODES
@@ -104,6 +94,22 @@ from app.forecasting.schemas.forecasting import (
 )
 from app.identity import public as scoped_authorization
 from app.identity.public import Bank
+from app.liquidity.domain.engine import (
+    FACT_GROUP_SECURITIES,
+    HQLA_LEVEL_1,
+    HQLA_LEVELS,
+    LiquidityComputationError,
+    LiquidityParams,
+    classify_ratio,
+)
+from app.liquidity.domain.engine import (
+    MissingParameterError as LiquidityMissingParameterError,
+)
+from app.liquidity.public import (
+    RegulatoryMetricResultRead,
+    RegulatoryRunErrorRead,
+    RegulatoryValidationRead,
+)
 from app.live.public import (
     BankFinancialFact,
     BankReportingPeriod,
@@ -127,13 +133,7 @@ from app.policy.public import (
     regulatory_parameters,
     sdi_regime,
 )
-from app.schemas.regulatory_liquidity import (
-    RegulatoryMetricResultRead,
-    RegulatoryRunErrorRead,
-    RegulatoryValidationRead,
-)
 from app.services.audit import record_event
-from app.services.regulatory_capital import DEFAULT_CRM_HAIRCUTS
 
 ENGINE_VERSION = "regulatory-forecasting-v4.0.0"
 INPUT_SCHEMA_VERSION = "bank-facts-v2"
