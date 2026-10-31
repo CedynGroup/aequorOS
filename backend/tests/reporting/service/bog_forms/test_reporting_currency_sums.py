@@ -22,6 +22,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
 from app.domain.authority.outcomes import NotComputable, OutcomeState, outcome
+from app.market_data.service.market_data import FxRateView, SourceAttribution
 from app.models import (
     Bank,
     BankReportingPeriod,
@@ -44,7 +45,6 @@ from app.reporting.service.bog_forms.sources import (
     reporting_currency_value,
 )
 from app.reporting.service.bog_forms.sources_ext.bsd8 import load_loans
-from app.services.market_data import FxRateView, SourceAttribution
 from app.services.sdi_views import get_liquidity_monitoring
 from tests.fixtures.canonical_bank_fixture import (
     DEMO_ORG_ID,

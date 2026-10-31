@@ -19,15 +19,15 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
-from app.adapters.market_data.credential_manager import (
+from app.core.config import get_settings
+from app.data_engine.adapters.database_direct.drivers.base import DbCredentials
+from app.market_data.public import (
     CredentialVaultError,
     credential_fingerprint,
     decrypt_credential_envelope,
     derive_master_key,
     encrypt_credential_envelope,
 )
-from app.core.config import get_settings
-from app.data_engine.adapters.database_direct.drivers.base import DbCredentials
 
 if TYPE_CHECKING:
     pass

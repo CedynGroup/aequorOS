@@ -6,8 +6,8 @@ from datetime import date
 
 import pytest
 
-from app.domain.curves.conventions import DayCount
-from app.domain.curves.objects import (
+from app.market_data.domain.curves.conventions import DayCount
+from app.market_data.domain.curves.objects import (
     SUPPORTED_CURVE_CODES,
     CurveBuildResult,
     CurveDefinition,
@@ -81,14 +81,10 @@ class TestCurveNodes:
         with pytest.raises(CurveObjectError):
             CurveNodes(tenor_years=(2.0, 1.0), values=(0.1, 0.2))
         with pytest.raises(CurveObjectError):
-            CurveNodes(
-                tenor_years=(1.0, 2.0), values=(0.1, 0.2), dates=(date(2027, 8, 3),)
-            )
+            CurveNodes(tenor_years=(1.0, 2.0), values=(0.1, 0.2), dates=(date(2027, 8, 3),))
 
     def test_payload_includes_dates_when_present(self) -> None:
-        nodes = CurveNodes(
-            tenor_years=(1.0,), values=(0.12,), dates=(date(2027, 8, 3),)
-        )
+        nodes = CurveNodes(tenor_years=(1.0,), values=(0.12,), dates=(date(2027, 8, 3),))
         assert nodes.as_payload()["dates"] == ["2027-08-03"]
 
 

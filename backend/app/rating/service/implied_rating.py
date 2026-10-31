@@ -35,7 +35,7 @@ from app.live.public import (
     LiveModuleResult,
     RegulatoryRun,
 )
-from app.models import DeskMethodology
+from app.market_data.public import DeskMethodology
 from app.policy.public import Jurisdiction, institution_types
 from app.rating.domain.engine import (
     ComponentDefinition,

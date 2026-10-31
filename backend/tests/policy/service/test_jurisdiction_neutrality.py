@@ -10,12 +10,12 @@ import pytest
 from sqlalchemy import delete, func, select, update
 from sqlalchemy.orm import Session
 
-from app.adapters.market_data.scope_taxonomy import DataScope
 from app.api.deps import TenantContext
 from app.bi.domain.catalogue import catalogue
 from app.domain.authority.results import Computed
 from app.liquidity.schemas.regulatory_liquidity import RegulatoryRunCreate
 from app.liquidity.service import regulatory_liquidity
+from app.market_data.adapters.scope_taxonomy import DataScope
 from app.models import (
     Bank,
     BankFinancialFact,

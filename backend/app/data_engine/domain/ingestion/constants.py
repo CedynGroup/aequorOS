@@ -281,7 +281,7 @@ MappingConfigStatus = Literal["draft", "active", "retired"]
 # internal vendor (AequorOS_Market_Data_and_Curve_Platform.md §2): a valid
 # vendor for canonical provenance and the connection-table CHECK, but NOT
 # bank-onboardable — the bank-facing connection API's vendor Literal
-# (app/schemas/market_data_connections.py) deliberately excludes it, because
+# (app/market_data/schemas/market_data_connections.py) deliberately excludes it, because
 # desk data is pushed centrally at publication; there is nothing for a bank
 # to configure and no credential to hold.
 MARKET_DATA_VENDORS: tuple[str, ...] = ("bloomberg", "refinitiv", "manual_upload", "aequor_desk")

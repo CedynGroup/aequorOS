@@ -391,7 +391,7 @@ def test_the_real_data_task_can_actually_reach_every_real_data_test() -> None:
 
     `risk-service:test-real-data` ran `tests/api tests/features tests/services`
     while three opt-in modules lived elsewhere:
-    `tests/adapters/market_data/manual_upload/test_api.py` and both
+    `tests/market_data/adapters/manual_upload/test_api.py` and both
     `tests/equivalence/` run-parity suites. Twenty-three tests — including the
     regulatory report and forecast parity checks — were unreachable even with
     `REAL_DATA_DATABASE_URL` set. They did not fail and did not skip; the task

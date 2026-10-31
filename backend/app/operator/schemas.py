@@ -14,8 +14,8 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field, StringConstraints, model_validator
 
 from app.core.key_management.schemas import BankKeyConnect
+from app.market_data.public import DeskEntitlementRead
 from app.schemas.common import JsonObject
-from app.schemas.market_desk import DeskEntitlementRead
 
 
 class ClosedModel(BaseModel):

@@ -129,21 +129,8 @@ FEATURE_RULES: tuple[tuple[str, str], ...] = (
     (r"^schemas/(common|text|health|jobs)$", KERNEL),
     (r"^features/track_jobs$", KERNEL),
     (r"^domain/(risk_constants|authority/.*|workflow/.*)$", KERNEL),
-    # ---- data engine (the shared adapters namespace still holds market_data)
+    # ---- data engine (the shared adapters namespace is data-engine-owned)
     (r"^adapters/__init__$", "data_engine"),
-    # ---- market data
-    (r"^adapters/market_data(/|$)", "market_data"),
-    (r"^domain/curves/", "market_data"),
-    (r"^services/(market_data.*|market_desk(/.*)?)$", "market_data"),
-    (
-        r"^models/(market_data.*|market_desk.*|desk_operating_environment|entitlements)$",
-        "market_data",
-    ),
-    (r"^schemas/(market_data.*|market_desk.*|fx_forward)$", "market_data"),
-    (
-        r"^features/(manage_market_data_.*|market_data_sources|read_market_data_views)$",
-        "market_data",
-    ),
     # ---- regulatory engines
     (
         r"^(services/(regulatory_capital|sdi_capital.*|sdi_views|sdi_readiness|capital_plan)"

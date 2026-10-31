@@ -7,7 +7,7 @@ differ from the proposer) — which supersedes the prior open generation. The
 resolver (``app.policy.service.regulatory_parameters``) only ever reads APPROVED rows,
 so a draft never affects a live calculation.
 
-Mirrors the desk methodology register (``app/services/market_desk/register.py``)
+Mirrors the desk methodology register (``app/market_data/service/market_desk/register.py``)
 and the tenant-param supersession discipline (``inspector_fix._supersede_liquidity``):
 close the open row's ``effective_to`` before the successor goes live. Every
 mutation is recorded by the caller through ``record_operator_action``.

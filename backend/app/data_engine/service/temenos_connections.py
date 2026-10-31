@@ -28,7 +28,6 @@ from fastapi import HTTPException, status
 from sqlalchemy import select
 
 import app.data_engine.adapters.temenos_t24  # noqa: F401 - registers the T24 adapter
-from app.adapters.market_data.credential_manager import derive_status
 from app.core.outbound import OutboundTargetBlocked, check_url
 from app.data_engine.adapters.temenos_t24.auth import (
     SimulatedSessionProvider,
@@ -71,6 +70,7 @@ from app.data_engine.schemas.temenos_connections import (
 from app.data_engine.service.ingestion import create_mapping_config
 from app.db.base import utc_now
 from app.identity.public import Bank
+from app.market_data.public import derive_status
 from app.models import MappingConfigRecord
 from app.services import job_queue
 from app.services.audit import record_event
