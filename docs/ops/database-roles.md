@@ -8,6 +8,13 @@ droplet deployment; Eric's scope is the separate AWS Coolify instance
 (`deploy/`), which applies the same role foundation and runbook steps when it
 hosts workloads.
 
+The captain explicitly authorized this bounded stage: privilege-drift coverage,
+operator refusal proofs and this deployment runbook. It does not complete
+[issue #520](https://github.com/CedynGroup/aequorOS/issues/520). The operator
+metadata-view conversion is the next stage tracked there; until it lands, the
+operator runtime retains its existing bypass-capable connection. The API
+credential switch also remains blocked on its later pre-authentication follow-up.
+
 ## Target matrix
 
 | Role                 | Connection purpose       | Allowed access                                                                                                                                            | Forbidden access                                                                                  |
@@ -17,10 +24,10 @@ hosts workloads.
 | `aqs_api`            | Tenant API               | Tenant SELECT/INSERT/UPDATE/DELETE under forced RLS, audit append, filing lifecycle columns, enqueue/coalesce jobs and parse/assessment lifecycle updates | Schema DDL, ownership, audit or immutable evidence changes, job DELETE or worker-only job columns |
 | `aqs_worker`         | Background jobs          | API tenant rights, job-scoped organization/bank context, heartbeat metadata, and classified platform functions/views                                      | BYPASSRLS, unrestricted cross-bank reads, audit or filed-content changes                          |
 | `aqs_bi`             | Interactive BI           | SELECT on BI marts/dimensions and public jurisdiction/parameter reference tables under RLS; 10-second statement timeout                                   | Writes, operational queue or identity-table access                                                |
-| `aqs_operator`       | Staff operations         | Dedicated cross-bank metadata views (planned metadata-view stage, captain-reviewed)                                                                       | Direct tenant-table access; financial inspection outside the governed #351 flow                   |
+| `aqs_operator`       | Staff operations (dormant) | Dedicated cross-bank metadata views (next captain-reviewed stage of #520)                                                                                 | Direct tenant-table access; financial inspection outside the governed #351 flow                   |
 | `aqs_audit_verifier` | Independent audit checks | SELECT audit sources, chain entries and heads, including cross-bank verification                                                                          | Other tenant tables, writes or chain ownership                                                    |
 
-No application role owns objects or holds SUPERUSER, CREATEDB, CREATEROLE,
+No `aqs_*` application role owns objects or holds SUPERUSER, CREATEDB, CREATEROLE,
 REPLICATION or BYPASSRLS. There is no standing break-glass role. The historical
 `aequoros_audit_owner` remains NOLOGIN and retains audit-chain custody; deployment
 ownership has explicit membership in it. Its existing inheritance setting is
@@ -47,8 +54,9 @@ schema; migrations grant execution explicitly.
 The foundation provisions dormant roles; it does not authorize switching worker
 or operator credentials. The [captain-reviewed worker compatibility migration](#worker-compatibility-migration)
 supports the worker switch. The operator credential switch stays blocked until
-the operator metadata-view conversion ships as its own captain-reviewed stage;
-the operator console still requires its existing cross-tenant credential. Bank-held encryption migrations
+the operator metadata-view conversion ships as the next captain-reviewed stage
+of #520; the operator console still requires its existing bypass-capable
+credential. Bank-held encryption migrations
 `202610220101` and `202610230103` grant runtime bank-key registry access for
 field/storage operations and administrator key setup. The exact privileges are
 owned by the executable [grant manifest](../../backend/tests/db/database_role_grants.json);
@@ -144,7 +152,9 @@ concurrency and role-timeout coverage is linked from the backend API guide above
    `aqs_owner` in Alembic, so newly created objects belong to the NOLOGIN owner.
 4. Validate grants and real-login refusal tests before changing any credentials.
 5. Deploy the worker and operator compatibility changes before their respective
-   credential switches. They support both existing and least-privilege roles.
+   credential switches. Worker compatibility is available; operator compatibility
+   is the next captain-reviewed stage of #520. Keep the existing bypass-capable
+   operator connection until that stage ships.
 6. Deploy the captain-reviewed API pre-authentication follow-up after the
    operator metadata-view stage. **The API credential switch is blocked until
    that PR is live.**
@@ -206,8 +216,8 @@ serializes each daily key across tenants and retains completed-job cadence. Only
 the existing global enqueue path.
 
 This captain-reviewed PR retains the existing broad API and operator access during
-this worker-only stage. Authentication uses the API `DATABASE_URL` sessionmaker
-and its `aequoros-api` pool. Operator sessions and the first-account provisioning
+this authorized bounded stage. Authentication uses the API `DATABASE_URL`
+sessionmaker and its `aequoros-api` pool. Operator sessions and the first-account provisioning
 CLI resolve `OPERATOR_DATABASE_URL`, then `DATABASE_URL`; neither falls back to
 `WORKER_DATABASE_URL`. The operator session boundary refuses restricted PostgreSQL
 credentials with a configuration error. Its pool identifies as `aequoros-operator`.
@@ -235,7 +245,8 @@ Keep `DATABASE_URL` and any configured `OPERATOR_DATABASE_URL` unchanged. If rol
 back the code too, restore the legacy worker secret first so older code's worker
 fallback retains identity/operator visibility.
 
-Operator metadata views remain the separate next stage. The captain-reviewed
+Operator metadata views remain the separate next stage tracked in #520, as
+explicitly authorized by the captain. The captain-reviewed
 bounded API lookup follow-up remains later; the API credential switch to `aqs_api`
 is still blocked because pre-tenant authentication, integration-key and bank-key
 lookup support is not supplied here. This PR is non-breaking and supports both
@@ -339,8 +350,10 @@ in the secrets manager; supply passwords to PostgreSQL through the deployment's
 secure administrator tooling, without shell history or PR logs. The owner role
 has no credential. Only the deploy job receives the migrator secret. Map API,
 worker, BI, operator and audit verifier secrets to their own connections; never
-share an API password with another process. If the managed database supports IAM
-DB authentication, use separate workload identities and narrowly scoped connect
+share an API password with another process. Activate these target credentials
+only after their compatibility prerequisites pass; the operator retains its
+existing bypass-capable connection until the next #520 stage ships. If the
+managed database supports IAM DB authentication, use separate workload identities and narrowly scoped connect
 permissions for each DB username, TLS verification and fresh tokens on new
 connections. IAM configuration and token renewal belong to deployment tooling.
 
@@ -366,9 +379,9 @@ WHERE rolname IN ('aqs_worker', 'aqs_operator');
 After the new worker connections are healthy and old pools drained, the
 deployment operator removes BYPASSRLS from the retired worker role or retires
 its credentials. **Do not switch the operator credential yet:** the operator
-console still requires its existing cross-tenant credential, and
+console still requires its existing bypass-capable credential, and
 `aqs_operator` holds no tenant-table grants until the operator metadata-view
-conversion ships as its own captain-reviewed stage (dedicated cross-bank
+conversion ships as the next captain-reviewed stage of #520 (dedicated cross-bank
 metadata views, then the credential switch, then BYPASSRLS removal from the
 retired operator role). **Do not switch the API credential either:** its switch
 remains subject to the [API pre-authentication prerequisite](#target-matrix).
@@ -406,13 +419,23 @@ before downgrading so their grants are not accidentally removed.
 
 ## Next stage: the operator metadata-view conversion
 
-The operator credential switch is the remaining #520 stage and is deliberately
-out of scope here. It is new design surface: the console's cross-bank reads
+The captain explicitly authorized the operator metadata-view conversion and
+credential switch as a separate next stage tracked in
+[issue #520](https://github.com/CedynGroup/aequorOS/issues/520), which remains open.
+The current runtime path in
+[`get_operator_sessionmaker`](../../backend/app/operator/deps.py) calls
+[`get_cross_tenant_engine`](../../backend/app/db/session.py), which refuses
+PostgreSQL credentials without RLS bypass. It retains a bypass-capable connection
+through `OPERATOR_DATABASE_URL`, falling back to `DATABASE_URL`, until that
+follow-up lands.
+
+The conversion is new design surface: the console's cross-bank reads
 (today disciplined by explicit per-query organization scoping on a BYPASSRLS
 session) move onto dedicated, captain-reviewed metadata views, and the governed
 provisioning and #351 inspector write paths get their own delegated mechanism.
 The project docs reserve that exposure set for product-owner review, so the
 conversion ships as a separate PR that the captain personally reviews before
-any operator credential changes. Until then the drift ratchet on this page
-pins `aqs_operator` to zero tenant-table grants, so the operator credential
-cannot silently widen.
+any operator credential changes. The privilege-drift ratchet and real-login
+operator refusal proofs remain in place: they pin the dormant `aqs_operator`
+role to zero tenant-table grants and no BYPASSRLS. They do not constrain the
+legacy bypass-capable credential still used by the operator runtime.
