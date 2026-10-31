@@ -42,6 +42,16 @@ def _worker(config: pytest.Config) -> str:
     return cast(str, worker["workerid"]) if worker is not None else "main"
 
 
+def _dump_census_diagnostics(config: pytest.Config, payload: dict[str, list[str]]) -> None:
+    # A worker that fails a census guard dies before the controller explains
+    # why; land the evidence in the uploaded report directory instead.
+    directory = config.stash.get(_DIRECTORY, None)
+    if directory is None:
+        return
+    path = directory / f"census-debug-{_worker(config)}.json"
+    _ = path.write_text(json.dumps(payload, indent=2))
+
+
 def pytest_report_header(config: pytest.Config) -> str | None:
     if config.getoption("markexpr") != "unit":
         return None
@@ -220,7 +230,10 @@ def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item
         return
     nodeids = [item.nodeid for item in items]
     if len(set(nodeids)) != len(nodeids):
-        raise pytest.UsageError("Duplicate test collection")
+        counts = Counter(nodeids)
+        duplicates = sorted(nodeid for nodeid, count in counts.items() if count > 1)
+        _dump_census_diagnostics(config, {"duplicate_nodeids": duplicates[:25]})
+        raise pytest.UsageError("Duplicate test collection: " + ", ".join(duplicates[:10]))
     classified: dict[str, str] = {}
     for item in items:
         try:
@@ -254,10 +267,34 @@ def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item
             set(selected_modules(suite)) if config.getoption("suite_only") else set(modules)
         )
         if expected_modules != actual_modules:
+            _dump_census_diagnostics(
+                config,
+                {
+                    "census_modules_missing_from_collection": sorted(
+                        expected_modules - actual_modules
+                    )[:25],
+                    "collected_modules_missing_from_census": sorted(
+                        actual_modules - expected_modules
+                    )[:25],
+                },
+            )
             raise pytest.UsageError("CI must collect every module containing its selected suite")
-        if {nodeid for nodeid, assigned in overrides.items() if assigned == suite} != {
+        expected_nodeids = {nodeid for nodeid, assigned in overrides.items() if assigned == suite}
+        classified_nodeids = {
             nodeid for nodeid, assigned in classified.items() if assigned == suite
-        }:
+        }
+        if expected_nodeids != classified_nodeids:
+            _dump_census_diagnostics(
+                config,
+                {
+                    "census_nodeids_not_collected": sorted(expected_nodeids - classified_nodeids)[
+                        :25
+                    ],
+                    "collected_nodeids_not_in_census": sorted(
+                        classified_nodeids - expected_nodeids
+                    )[:25],
+                },
+            )
             raise pytest.UsageError("Stale or incomplete generated test suite catalogue")
         paths = cast(list[str], config.getini("testpaths")) or ["."]
         try:
