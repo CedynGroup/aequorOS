@@ -12,6 +12,12 @@ to login and failed external compliance filters.
 
 ---
 
+## Code layout
+
+Feature code moves into `features/<feature>/` one feature per change, with a
+boundary ratchet and a move codemod shared with the backend program: see
+[FEATURE_LAYOUT.md](FEATURE_LAYOUT.md).
+
 ## Scope
 
 App Router pages cover the authenticated shell, login, the inspector,
