@@ -19056,7 +19056,14 @@
     "tests/scripts/test_reconcile_storage_versions.py::test_loader_refuses_duplicate_json_fields": "unit",
     "tests/scripts/test_reconcile_storage_versions.py::test_loader_accepts_unversioned_entries_in_full_report": "unit",
     "tests/db/test_storage_version_recovery.py::test_runtime_governed_update_succeeds_without_recovery_authority[aqs_api]": "integration",
-    "tests/db/test_storage_version_recovery.py::test_runtime_governed_update_succeeds_without_recovery_authority[aqs_worker]": "integration"
+    "tests/db/test_storage_version_recovery.py::test_runtime_governed_update_succeeds_without_recovery_authority[aqs_worker]": "integration",
+    "tests/db/test_storage_version_recovery.py::test_restore_preparation_refuses_incomplete_or_unexpected_ownership[missing-aqs_storage_recovery_permit]": "integration",
+    "tests/db/test_storage_version_recovery.py::test_restore_preparation_refuses_incomplete_or_unexpected_ownership[missing-aqs_storage_recovery_change(name, text, jsonb, jsonb)]": "integration",
+    "tests/db/test_storage_version_recovery.py::test_restore_preparation_refuses_incomplete_or_unexpected_ownership[missing-aqs_reconcile_storage_versions(jsonb, text, text, text, text)]": "integration",
+    "tests/db/test_storage_version_recovery.py::test_restore_preparation_refuses_incomplete_or_unexpected_ownership[unexpected-owner-aqs_storage_recovery_permit]": "integration",
+    "tests/db/test_storage_version_recovery.py::test_restore_preparation_refuses_incomplete_or_unexpected_ownership[unexpected-owner-aqs_storage_recovery_change(name, text, jsonb, jsonb)]": "integration",
+    "tests/db/test_storage_version_recovery.py::test_restore_preparation_refuses_incomplete_or_unexpected_ownership[unexpected-owner-aqs_reconcile_storage_versions(jsonb, text, text, text, text)]": "integration",
+    "tests/db/test_storage_version_recovery.py::test_standard_database_restore_preparation_makes_reconciliation_usable": "integration"
   },
   "services": {
     "tests/attestation/service/test_attestation_openbao.py::test_a_csr_that_does_not_prove_possession_is_never_submitted": "integration",
