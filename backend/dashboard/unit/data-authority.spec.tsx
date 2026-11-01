@@ -406,10 +406,56 @@ it.each(["rejected", "accepted"] as const)(
       screen.queryByText(/Every extracted row translated/),
     ).not.toBeInTheDocument();
     expect(failures).not.toHaveBeenCalled();
+    expect(screen.queryByText("Stored artifacts")).not.toBeInTheDocument();
     if (status === "rejected")
       expect(screen.getByText(/Batch rejected — nothing/)).toBeInTheDocument();
   },
 );
+
+it("holds the batch route while DATA authority is still loading", async () => {
+  state.loading = true;
+  state.capabilities = [capability("view", "confidential")];
+  const detail = vi.spyOn(ingestionApi, "getIngestionBatch");
+  const failures = vi.spyOn(ingestionApi, "listTranslationFailures");
+  const params = Promise.resolve({ batchId: "batch-fixture" });
+
+  await act(async () => {
+    render(
+      <Wrapper>
+        <Suspense fallback={<span>Loading batch route</span>}>
+          <BatchDetailPage params={params} />
+        </Suspense>
+      </Wrapper>,
+    );
+  });
+
+  expect(screen.getAllByLabelText("Loading").length).toBeGreaterThan(0);
+  expect(
+    screen.queryByText(/DATA · Confidential · View/),
+  ).not.toBeInTheDocument();
+  expect(detail).not.toHaveBeenCalled();
+  expect(failures).not.toHaveBeenCalled();
+});
+
+it("shows stored artifacts only to a restricted diagnostics reader", async () => {
+  state.capabilities = [capability("view", "confidential"), capability("view")];
+  const detail = batch("accepted");
+  detail.rawArtifactPath = "institutions/BK-SAMP0001/raw/source.csv";
+  detail.reportArtifactPath = "institutions/BK-SAMP0001/reports/report.json";
+  detail.contentHash = "sha256-fixture";
+  vi.spyOn(ingestionApi, "getIngestionBatch").mockResolvedValue(detail);
+  vi.spyOn(ingestionApi, "listTranslationFailures").mockResolvedValue({
+    batchId: "batch-fixture",
+    failures: [],
+  });
+
+  await renderBatchDetail();
+
+  expect(screen.getByText("Stored artifacts")).toBeInTheDocument();
+  expect(screen.getByText(detail.rawArtifactPath)).toBeInTheDocument();
+  expect(screen.getByText(detail.reportArtifactPath)).toBeInTheDocument();
+  expect(screen.getByText("sha256-fixture")).toBeInTheDocument();
+});
 
 it("waits for translation diagnostics before claiming that all rows translated", async () => {
   state.capabilities = [capability("view", "confidential"), capability("view")];

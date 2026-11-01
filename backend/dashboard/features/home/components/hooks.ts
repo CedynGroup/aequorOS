@@ -138,7 +138,10 @@ export function useEffectivePeriod(): EffectivePeriodResult {
   if (selectedFacts.isError) return { ...base, error: selectedFacts.error };
   if (selectedFacts.isPending) return { ...base, isResolving: true };
   if (!selectedEmpty) return base;
-  if (fallback.isPending) return { ...base, isResolving: true };
+  // The selected period has no facts and the fallback probe is still running.
+  // Keep the effective period null so the page holds its skeleton instead of
+  // rendering panels against a period it already knows is empty.
+  if (fallback.isPending) return { ...base, period: null, isResolving: true };
   if (fallback.isError) return { ...base, error: fallback.error };
 
   const fallbackPeriod = fallback.data

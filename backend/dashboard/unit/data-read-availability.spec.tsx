@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import "@testing-library/jest-dom/vitest";
 import { afterAll, afterEach, beforeAll, expect, it, vi } from "vitest";
-import { act, cleanup, render, screen } from "@testing-library/react";
+import { act, cleanup, render, screen, waitFor } from "@testing-library/react";
 import type { ReactNode } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { SessionProvider } from "next-auth/react";
@@ -569,6 +569,64 @@ it.each(["fallback", "empty", "failed"] as const)(
     }
   },
 );
+
+it("holds the Command Center skeleton while the fallback facts probe is pending", async () => {
+  fixture(["confidential", "restricted"]);
+  vi.stubGlobal(
+    "IntersectionObserver",
+    class {
+      observe() {}
+      disconnect() {}
+    },
+  );
+  const older = {
+    ...periodWire,
+    id: "august",
+    label: "August 2026",
+    period_end: "2026-08-31",
+  };
+  let release!: () => void;
+  const pending = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  const probed: string[] = [];
+  server.use(
+    http.get(`${base}/reporting-periods`, () =>
+      HttpResponse.json({ periods: [periodWire, older] }),
+    ),
+    http.get(
+      `${base}/reporting-periods/:periodId/facts`,
+      async ({ params }) => {
+        probed.push(String(params.periodId));
+        if (params.periodId === "august") await pending;
+        return HttpResponse.json({
+          ...facts(params.periodId === "august"),
+          period: params.periodId === "august" ? older : periodWire,
+        });
+      },
+    ),
+  );
+  view(<CommandCenterPage />);
+  await waitFor(() => expect(probed).toContain("august"));
+  expect(screen.getAllByLabelText("Loading").length).toBeGreaterThan(0);
+  expect(screen.queryByText("Balance sheet")).not.toBeInTheDocument();
+  await act(async () => release());
+  expect(await screen.findByText(/latest computed period/)).toBeInTheDocument();
+  expect(await screen.findByText("Total assets")).toBeInTheDocument();
+});
+
+it("shows the empty Command Center state, not a period denial, when the organisation has no bank", async () => {
+  const reads = fixture([]);
+  server.use(
+    http.get(`${apiBaseUrl}/banks`, () => HttpResponse.json({ banks: [] })),
+  );
+  view(<CommandCenterPage />);
+  expect(await screen.findByText("No computed data yet")).toBeInTheDocument();
+  expect(
+    screen.queryByText(/Confidential · View for reporting periods/),
+  ).not.toBeInTheDocument();
+  expect(reads.periods).toBe(0);
+});
 
 it.each([
   { name: "stress workbench", content: <EnterpriseStressWorkbench /> },

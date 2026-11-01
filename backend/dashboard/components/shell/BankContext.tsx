@@ -178,13 +178,15 @@ export default function BankProvider({ children }: { children: ReactNode }) {
     banksQuery.isLoading ||
     periodsQuery.access === "loading"
       ? "loading"
-      : periodsQuery.access === "denied"
-        ? "denied"
-        : periodsQuery.isError
-          ? "error"
-          : periodsQuery.isPending
-            ? "loading"
-            : "ready";
+      : !bank
+        ? "ready"
+        : periodsQuery.access === "denied"
+          ? "denied"
+          : periodsQuery.isError
+            ? "error"
+            : periodsQuery.isPending
+              ? "loading"
+              : "ready";
   const periods = useMemo(
     () =>
       [

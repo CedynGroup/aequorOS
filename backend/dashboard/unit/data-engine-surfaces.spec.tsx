@@ -388,6 +388,14 @@ it.each([false, true])(
       else expect(test).toBeDisabled();
       await user.click(test);
     }
+    if (!allowed)
+      expect(
+        screen.getAllByText(/Requires DATA · Restricted · Validate/).length,
+      ).toBeGreaterThan(0);
+    else
+      expect(
+        screen.queryByText(/Requires DATA · Restricted · Validate/),
+      ).not.toBeInTheDocument();
     if (allowed) {
       await screen.findByText("Reachable · 12 ms");
       await screen.findByText("Test pull succeeded.");

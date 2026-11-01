@@ -278,11 +278,6 @@ export default function ConnectionHealthPanel() {
                       disabled={
                         testing || (row.source !== "market-data" && !validate)
                       }
-                      title={
-                        row.source !== "market-data" && !validate
-                          ? "Requires DATA · Restricted · Validate"
-                          : undefined
-                      }
                       className="shrink-0 inline-flex items-center gap-1 px-2 py-1 text-caption font-medium text-slate border border-border rounded-md hover:bg-surface disabled:opacity-50 disabled:pointer-events-none"
                     >
                       {testing && (
@@ -295,6 +290,12 @@ export default function ConnectionHealthPanel() {
                       Test
                     </button>
                   </div>
+                  {row.source !== "market-data" && !validate && (
+                    <p className="mt-2 ml-7 text-caption text-warning leading-relaxed">
+                      Requires DATA · Restricted · Validate to test this
+                      connection.
+                    </p>
+                  )}
                   {test && test.state !== "running" && (
                     <p
                       className={`mt-2 ml-7 text-caption leading-relaxed ${

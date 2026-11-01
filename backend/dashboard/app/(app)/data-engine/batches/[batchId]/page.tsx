@@ -32,7 +32,10 @@ import {
   warningRuleHint,
 } from "@/components/data-engine/content";
 import { use } from "react";
-import { useDataPermission } from "@/lib/api/dataAccess";
+import {
+  useDataPermission,
+  useDataPermissionState,
+} from "@/lib/api/dataAccess";
 import DataAccessNotice from "@/components/ui/DataAccessNotice";
 
 type ReportFailure = {
@@ -58,10 +61,17 @@ export default function BatchDetailPage(props: {
   const { bank } = useBankContext();
   const batchQuery = useIngestionBatch(bank?.id, params.batchId);
   const failuresQuery = useTranslationFailures(bank?.id, params.batchId);
-  const metadata = useDataPermission(bank?.id, "view", "confidential");
+  const metadata = useDataPermissionState(bank?.id, "view", "confidential");
   const diagnostics = useDataPermission(bank?.id, "view", "restricted");
 
-  if (!metadata)
+  if (metadata === "loading") {
+    return (
+      <PageContainer className="py-6">
+        <PageSkeleton contained />
+      </PageContainer>
+    );
+  }
+  if (metadata === "denied")
     return <DataAccessNotice requirement="DATA · Confidential · View" />;
   if (batchQuery.isPending) {
     return (
@@ -219,21 +229,23 @@ export default function BatchDetailPage(props: {
           </div>
         )}
 
-        <div className="card p-5 space-y-2">
-          <h2 className="text-h3 text-navy">Stored artifacts</h2>
-          <p className="text-caption text-slate">
-            Immutable, versioned, and encrypted in the institution&apos;s
-            dedicated storage buckets.
-          </p>
-          <ArtifactPath label="Raw source" path={batch.rawArtifactPath} />
-          <ArtifactPath
-            label="Validation report"
-            path={batch.reportArtifactPath}
-          />
-          {batch.contentHash && (
-            <ArtifactPath label="Content SHA-256" path={batch.contentHash} />
-          )}
-        </div>
+        {diagnostics && (
+          <div className="card p-5 space-y-2">
+            <h2 className="text-h3 text-navy">Stored artifacts</h2>
+            <p className="text-caption text-slate">
+              Immutable, versioned, and encrypted in the institution&apos;s
+              dedicated storage buckets.
+            </p>
+            <ArtifactPath label="Raw source" path={batch.rawArtifactPath} />
+            <ArtifactPath
+              label="Validation report"
+              path={batch.reportArtifactPath}
+            />
+            {batch.contentHash && (
+              <ArtifactPath label="Content SHA-256" path={batch.contentHash} />
+            )}
+          </div>
+        )}
 
         <section className="space-y-3">
           <h2 className="text-h2 text-navy">Validation findings</h2>
