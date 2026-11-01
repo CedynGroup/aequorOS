@@ -83,7 +83,7 @@ function code(relativePath: string): string {
  * add it when it is mounted.
  */
 const LANDING_PAGES = [
-  "app/(app)/page.tsx",
+  "features/home/routes/command-center.tsx",
   "app/(app)/basel/page.tsx",
   "features/liquidity/routes/overview.tsx",
   "app/(app)/credit/page.tsx",
@@ -153,14 +153,23 @@ test("the connected strip is absent when BI is off, unknown or not served, and r
 });
 
 test("the Command Center reaches BI only through the strip, with no second deferred entry", () => {
-  const home = code("app/(app)/page.tsx");
+  const home = code("features/home/routes/command-center.tsx");
+  // The route body lives in features/home and reaches BI through its public
+  // interface; the strip must remain the ONLY BI surface the bundle pulls.
   const biImports = [
-    ...home.matchAll(/from\s+["']@\/features\/bi\/components\/([^"']+)["']/g),
-  ].map((match) => match[1]);
+    ...home.matchAll(
+      /from\s+["']@\/features\/bi\/(?:public|components\/([^"']+))["']/g,
+    ),
+  ].map((match) => match[1] ?? "public");
   assert.deepEqual(
     biImports,
-    ["InsightStrip"],
+    ["public"],
     "scripts/assert-home-route-bundle.mjs protects this route's bundle; every BI import here must be justified against it",
+  );
+  assert.equal(
+    /\bEChart\b/.test(home),
+    false,
+    "the Command Center must not pull the charting runtime; the strip draws with the SVG Sparkline",
   );
   const strip = code("features/bi/components/InsightStrip.tsx");
   assert.equal(
@@ -438,7 +447,7 @@ test("each page's BI surfaces speak about the page's own reporting date, never t
     );
   }
   assert.ok(
-    /asOf=\{effective\.period\.periodEnd\}/.test(code("app/(app)/page.tsx")),
+    /asOf=\{effective\.period\.periodEnd\}/.test(code("features/home/routes/command-center.tsx")),
     "the Command Center speaks about the EFFECTIVE period — the one every panel on it reads",
   );
   for (const page of LANDING_PAGES) {

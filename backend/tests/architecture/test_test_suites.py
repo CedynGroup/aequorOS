@@ -341,9 +341,11 @@ def test_mixed_module_overrides_assign_one_suite_at_node_boundaries(
         test_suites.owner("tests/test_mixed.py::test_db[new-parameter]")
 
 
-def test_every_catalogue_key_resolves_to_a_test_file() -> None:
+def test_every_catalogue_key_resolves_to_a_test_file(tmp_path: Path) -> None:
     """A catalogue key whose file no longer exists is stale: the codemod renames keys
     on a move, so anything left over points at a path that should still be there."""
+    from scripts import database_contracts  # noqa: PLC0415
+
     suites = cast(
         "dict[str, object]",
         json.loads((BACKEND / "scripts" / "test_suites.json").read_text(encoding="utf-8")),
@@ -357,6 +359,59 @@ def test_every_catalogue_key_resolves_to_a_test_file() -> None:
         "tuple[dict[str, str], dict[str, str], dict[str, str]]",
         (suites["cases"], suites["services"], durations["durations"]),
     )
+    database_contracts.check_classification(sections[0])
     paths = {node_id.split("::", 1)[0] for section in sections for node_id in section}
     missing = sorted(path for path in paths if not (BACKEND / path).is_file())
     assert missing == []
+    _assert_calendar_stable_query_log_collection(tmp_path, sections[0])
+
+
+def _assert_calendar_stable_query_log_collection(tmp_path: Path, cases: dict[str, str]) -> None:
+    module = "tests/db/test_bi_query_log_postgres.py"
+    expected = sorted(node for node in cases if node.startswith(module + "::"))
+    # Preserve current-month database coverage while crossing a month and year
+    # boundary: neither collection identity nor exact suite ownership may drift.
+    for day in ("2026-10-31", "2026-11-01", "2027-01-01"):
+        collection = tmp_path / f"query-log-{day}.json"
+        program = (
+            "import datetime as dt, importlib, json, sys\n"
+            "from pathlib import Path\n"
+            "from unittest.mock import patch\n"
+            "import pytest\n"
+            + f"sys.path.insert(0, {str(BACKEND / 'tests/db')!r})\n"
+            + "probe = importlib.import_module('test_bi_query_log_postgres')\n"
+            + f"fixed = dt.datetime.fromisoformat({day!r}).replace(tzinfo=dt.UTC)\n"
+            + "class Clock(dt.datetime):\n"
+            + "    @classmethod\n"
+            + "    def now(cls, tz=None):\n"
+            + "        return fixed if tz is not None else fixed.replace(tzinfo=None)\n"
+            + "with patch.object(dt, 'datetime', Clock):\n"
+            + "    importlib.reload(probe)\n"
+            + "assert probe.MONTH == fixed.date().replace(day=1)\n"
+            + "class Collection:\n"
+            + "    def pytest_collection_finish(self, session):\n"
+            + "        nodes = [item.nodeid for item in session.items]\n"
+            + f"        Path({str(collection)!r}).write_text(json.dumps(nodes))\n"
+            + f"arguments = ['--collect-only', '-q', {module!r}]\n"
+            + "sys.exit(pytest.main(arguments, plugins=[Collection()]))\n"
+        )
+        environment = {
+            **os.environ,
+            "PYTHONPATH": str(BACKEND),
+            "PYTEST_ADDOPTS": "",
+            "PYTEST_DISABLE_PLUGIN_AUTOLOAD": "1",
+        }
+        for name in ("CI_UNIT_REPORT_DIR", "CI_DATABASE_CENSUS", "TEST_DATABASE_URL"):
+            _ = environment.pop(name, None)
+        result = subprocess.run(
+            [sys.executable, "-c", program],
+            cwd=BACKEND,
+            env=environment,
+            capture_output=True,
+            text=True,
+            timeout=60,
+            check=False,
+        )
+        assert result.returncode == 0, f"{day}: {result.stdout}{result.stderr}"
+        collected = cast(list[str], json.loads(collection.read_text()))
+        assert sorted(collected) == expected, day
