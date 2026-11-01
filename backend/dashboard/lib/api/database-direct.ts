@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 /**
  * Data Engine — Database (Direct) API layer: the generated DatabaseDirectApi
@@ -14,33 +14,35 @@
  * not contend with the regulatory modules' files.
  */
 
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useDataPermission } from "./dataAccess";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   DatabaseDirectApi,
   type DatabaseConnectionCreate,
   type DatabaseConnectionSyncRequest,
   type DatabaseConnectionUpdate,
-} from '@aequoros/risk-service-api';
-import { apiCall, configuration } from './client';
-import { invalidateScopedPrefixes } from './queryPolicy';
-import { useQueryAuthorityScope } from './useQueryScope';
+} from "@aequoros/risk-service-api";
+import { apiCall, configuration } from "./client";
+import { invalidateScopedPrefixes, scopedQueryKey } from "./queryPolicy";
+import { useQueryAuthorityScope } from "./useQueryScope";
 
 // Reuse the shared, token-bearing Configuration so direct-connection calls
 // authenticate with the same backend JWT as every other module.
 export const databaseDirectApi = new DatabaseDirectApi(configuration);
 
-
 /** Query keys touched by every connection mutation, invalidated on success. */
-const invalidatePrefixes = ['db-direct-connections'];
+const invalidatePrefixes = ["db-direct-connections"];
 
 export function useDatabaseConnections(bankId: string | undefined) {
+  const allowed = useDataPermission(bankId, "view", "restricted");
+  const scope = useQueryAuthorityScope();
   return useQuery({
-    queryKey: ['db-direct-connections', bankId],
+    queryKey: scopedQueryKey("db-direct-connections", scope, bankId),
     queryFn: () =>
       apiCall(() =>
         databaseDirectApi.listDatabaseDirectConnections({ bankId: bankId! }),
       ),
-    enabled: Boolean(bankId),
+    enabled: allowed && Boolean(bankId),
   });
 }
 
@@ -48,8 +50,15 @@ export function useDatabaseConnection(
   bankId: string | undefined,
   connectionId: string | undefined,
 ) {
+  const allowed = useDataPermission(bankId, "view", "restricted");
+  const scope = useQueryAuthorityScope();
   return useQuery({
-    queryKey: ['db-direct-connection', bankId, connectionId],
+    queryKey: scopedQueryKey(
+      "db-direct-connection",
+      scope,
+      bankId,
+      connectionId,
+    ),
     queryFn: () =>
       apiCall(() =>
         databaseDirectApi.getDatabaseDirectConnection({
@@ -57,7 +66,7 @@ export function useDatabaseConnection(
           connectionId: connectionId!,
         }),
       ),
-    enabled: Boolean(bankId && connectionId),
+    enabled: allowed && Boolean(bankId && connectionId),
   });
 }
 
@@ -102,7 +111,9 @@ export function useUpdateDatabaseConnection(bankId: string | undefined) {
         }),
       ),
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ['db-direct-connections'] });
+      void queryClient.invalidateQueries({
+        queryKey: ["db-direct-connections"],
+      });
     },
   });
 }
@@ -165,15 +176,22 @@ export function useSyncDatabaseConnection(bankId: string | undefined) {
       );
     },
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ['db-direct-connections'] });
+      void queryClient.invalidateQueries({
+        queryKey: ["db-direct-connections"],
+      });
       // A sync mints a DB_DIRECT batch and may add canonical positions.
       void invalidateScopedPrefixes(
         queryClient,
-        ['de-batches', 'de-summary'],
+        [
+          "de-batches",
+          "de-summary",
+          "de-positions",
+          "positions-page",
+          "positions-facets",
+        ],
         scope,
         bankId,
       );
-      void queryClient.invalidateQueries({ queryKey: ['de-positions', bankId] });
     },
   });
 }
@@ -189,7 +207,9 @@ export function useDisableDatabaseConnection(bankId: string | undefined) {
         }),
       ),
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ['db-direct-connections'] });
+      void queryClient.invalidateQueries({
+        queryKey: ["db-direct-connections"],
+      });
     },
   });
 }
@@ -205,7 +225,9 @@ export function useEnableDatabaseConnection(bankId: string | undefined) {
         }),
       ),
     onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ['db-direct-connections'] });
+      void queryClient.invalidateQueries({
+        queryKey: ["db-direct-connections"],
+      });
     },
   });
 }

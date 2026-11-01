@@ -37,8 +37,9 @@ of those call sites disappears.
 
 **The escape valve is governed too.** ``ReconciliationException`` rows carry
 reason, requester, approver, approval timestamp, an effective/expiry window and
-a ceiling on the breach they cover; :func:`grant_exception` refuses self-
-approval and writes an audit event; every *use* of an exception writes one too.
+a ceiling on the breach they cover. A persisted proposal becomes effective only
+after a different authenticated officer approves it. Each transition and every
+use of an exception writes an audit event.
 
 **A retained plug is visible.** Below tolerance the derivation still balances
 the book, but the plug is recorded in the fact's provenance and in the
@@ -78,6 +79,8 @@ from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
+from app.core.authorization import Permission, Sensitivity
+from app.data_engine.service.access import require_data_access
 from app.db.base import utc_now
 from app.domain.authority.outcomes import (
     BLOCKING_STATES,
@@ -140,6 +143,7 @@ _MONEY_Q = Decimal("0.01")
 BALANCE_IDENTITY_BLOCK_CODE = "balance_sheet_identity_unreconciled"
 
 RECONCILIATION_GRANTED_EVENT = "reconciliation_exception.granted"
+RECONCILIATION_PROPOSED_EVENT = "reconciliation_exception.proposed"
 RECONCILIATION_REVOKED_EVENT = "reconciliation_exception.revoked"
 RECONCILIATION_APPLIED_EVENT = "reconciliation_exception.applied"
 RECONCILIATION_CHECK_EVENT = "reconciliation.balance_sheet_identity"
@@ -830,6 +834,8 @@ def active_exception(
             ReconciliationException.organization_id == organization_id,
             ReconciliationException.bank_id == bank_id,
             ReconciliationException.control == control,
+            ReconciliationException.status == "approved",
+            ReconciliationException.approval_timestamp.is_not(None),
             ReconciliationException.revoked_at.is_(None),
             ReconciliationException.effective_from <= as_of,
             or_(
@@ -842,6 +848,8 @@ def active_exception(
     if not rows:
         return None
     row = rows[0]
+    if row.approved_by is None or row.approval_timestamp is None:
+        return None
     return ExceptionGrant(
         exception_id=str(row.id),
         reason=row.reason,
@@ -866,26 +874,19 @@ def load_policy(db: Session, organization_id: str, bank: Bank, as_of: date) -> R
 # ---------------------------------------------------------------------------
 
 
-def grant_exception(  # noqa: PLR0913 - governance needs every field named
+def propose_exception(  # noqa: PLR0913 - governance needs every field named
     db: Session,
     ctx: TenantContext,
     bank: Bank,
     *,
     reason: str,
-    approved_by: str,
     max_gap_fraction: Decimal,
     effective_from: date,
     effective_to: date | None = None,
     control: str = CONTROL_BALANCE_SHEET_IDENTITY,
-    approved_by_user_id: UUID | None = None,
-    requested_by: UUID | None = None,
 ) -> ReconciliationException:
-    """Record an approved exception to a fail-closed reconciliation control.
-
-    Refuses a blank reason, a non-positive or absent ceiling, an inverted
-    window, and self-approval (the requester may not be the approver — the same
-    maker-checker rule the filing path uses). Writes an audit event.
-    """
+    """Persist a proposal without granting an exception or refreshing financial data."""
+    require_data_access(db, ctx, bank.id, Permission.CREATE, Sensitivity.CONFIDENTIAL)
     if not reason or not reason.strip():
         msg = "A reconciliation exception requires a non-empty reason."
         raise ReconciliationExceptionError(msg)
@@ -895,21 +896,6 @@ def grant_exception(  # noqa: PLR0913 - governance needs every field named
     if effective_to is not None and effective_to < effective_from:
         msg = "A reconciliation exception's effective_to precedes its effective_from."
         raise ReconciliationExceptionError(msg)
-    if not approved_by or not approved_by.strip():
-        msg = "A reconciliation exception requires a named approver."
-        raise ReconciliationExceptionError(msg)
-    maker = requested_by if requested_by is not None else ctx.actor_user_id
-    if (
-        maker is not None
-        and approved_by_user_id is not None
-        and str(maker) == str(approved_by_user_id)
-    ):
-        msg = (
-            "A reconciliation exception cannot be approved by the officer who requested "
-            "it — a second approver is required."
-        )
-        raise ReconciliationExceptionError(msg)
-
     now = utc_now()
     row = ReconciliationException(
         organization_id=ctx.organization_id,
@@ -919,18 +905,16 @@ def grant_exception(  # noqa: PLR0913 - governance needs every field named
         effective_from=effective_from,
         effective_to=effective_to,
         reason=reason.strip(),
-        requested_by=maker,
+        requested_by=ctx.actor_user_id,
         requested_at=now,
-        approved_by=approved_by.strip(),
-        approved_by_user_id=approved_by_user_id,
-        approval_timestamp=now,
+        status="pending",
     )
     db.add(row)
     db.flush()
     record_event(
         db,
         ctx,
-        event_type=RECONCILIATION_GRANTED_EVENT,
+        event_type=RECONCILIATION_PROPOSED_EVENT,
         entity_type="bank",
         entity_id=bank.id,
         details={
@@ -940,7 +924,75 @@ def grant_exception(  # noqa: PLR0913 - governance needs every field named
             "max_gap_fraction": str(max_gap_fraction),
             "effective_from": effective_from.isoformat(),
             "effective_to": effective_to.isoformat() if effective_to else None,
-            "requested_by": str(maker) if maker else None,
+            "requested_by": str(ctx.actor_user_id),
+        },
+    )
+    return row
+
+
+def approve_exception(
+    db: Session,
+    ctx: TenantContext,
+    bank: Bank,
+    exception_id: UUID,
+    *,
+    approved_by: str,
+) -> ReconciliationException:
+    """Approve the stored proposal as a different authenticated officer."""
+    row = db.scalar(
+        select(ReconciliationException)
+        .where(
+            ReconciliationException.id == exception_id,
+            ReconciliationException.organization_id == ctx.organization_id,
+            ReconciliationException.bank_id == bank.id,
+        )
+        .with_for_update()
+    )
+    if row is None:
+        raise HTTPException(status_code=404, detail="Reconciliation exception not found.")
+    require_data_access(
+        db,
+        ctx,
+        bank.id,
+        Permission.APPROVE,
+        Sensitivity.CONFIDENTIAL,
+        opaque=True,
+        maker_user_id=row.requested_by,
+    )
+    if row.status != "pending" or row.revoked_at is not None:
+        raise ReconciliationExceptionError("Only a pending, unrevoked proposal can be approved.")
+    if (
+        ctx.actor_user_id is None
+        or row.requested_by is None
+        or ctx.actor_user_id == row.requested_by
+    ):
+        raise ReconciliationExceptionError(
+            "A reconciliation exception requires a different authenticated officer; "
+            "a second approver is required."
+        )
+    if not approved_by.strip():
+        raise ReconciliationExceptionError("A reconciliation exception requires a named approver.")
+    row.status = "approved"
+    row.approved_by = approved_by.strip()
+    row.approved_by_user_id = ctx.actor_user_id
+    now = utc_now()
+    row.approval_timestamp = now
+    db.flush()
+    record_event(
+        db,
+        ctx,
+        event_type=RECONCILIATION_GRANTED_EVENT,
+        entity_type="bank",
+        entity_id=bank.id,
+        details={
+            "exception_id": str(row.id),
+            "control": row.control,
+            "reason": row.reason,
+            "max_gap_fraction": str(row.max_gap_fraction),
+            "effective_from": row.effective_from.isoformat(),
+            "effective_to": row.effective_to.isoformat() if row.effective_to else None,
+            "requested_by": str(row.requested_by),
+            "approved_by_user_id": str(ctx.actor_user_id),
             "approved_by": row.approved_by,
             "approval_timestamp": now.isoformat(),
         },
@@ -979,8 +1031,17 @@ def revoke_exception(  # noqa: PLR0913 - governed revocation evidence is explici
         )
     )
     if row is None:
-        msg = f"Reconciliation exception {exception_id} does not exist for bank {bank.id}."
-        raise ReconciliationExceptionError(msg)
+        raise HTTPException(status_code=404, detail="Reconciliation exception not found.")
+    require_data_access(
+        db,
+        ctx,
+        bank.id,
+        Permission.APPROVE,
+        Sensitivity.CONFIDENTIAL,
+        opaque=True,
+        maker_user_id=row.requested_by,
+        historical_maker=True,
+    )
     if row.revoked_at is not None:
         return row
     row.revoked_at = utc_now()

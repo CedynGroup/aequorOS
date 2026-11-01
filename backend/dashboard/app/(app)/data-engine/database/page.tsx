@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 /**
  * Database (Direct) tab of the Data Engine console. The read-only core-database
@@ -8,26 +8,33 @@
  * deployed service.
  */
 
-import PageContainer from '@/components/ui/PageContainer';
-import { useState } from 'react';
-import Link from 'next/link';
-import { ArrowRight, Database, Loader2, Plus } from 'lucide-react';
-import PageHeader from '@/components/ui/PageHeader';
-import EmptyState from '@/components/ui/EmptyState';
-import { useBankContext } from '@/components/shell/BankContext';
-import { ErrorPanel } from '@/components/ui/QueryBoundary';
-import { useDatabaseConnections } from '@/lib/api/database-direct';
-import AddConnectionPanel from '@/components/database/AddConnectionPanel';
-import ConnectionCard from '@/components/database/ConnectionCard';
+import PageContainer from "@/components/ui/PageContainer";
+import { useState } from "react";
+import Link from "next/link";
+import { ArrowRight, Database, Loader2, Plus } from "lucide-react";
+import PageHeader from "@/components/ui/PageHeader";
+import EmptyState from "@/components/ui/EmptyState";
+import { useBankContext } from "@/components/shell/BankContext";
+import { ErrorPanel } from "@/components/ui/QueryBoundary";
+import { useDatabaseConnections } from "@/lib/api/database-direct";
+import AddConnectionPanel from "@/components/database/AddConnectionPanel";
+import ConnectionCard from "@/components/database/ConnectionCard";
+import { useDataPermission } from "@/lib/api/dataAccess";
+import DataAccessNotice from "@/components/data-engine/DataAccessNotice";
 
 export default function DatabaseDirectPage() {
   const { bank } = useBankContext();
   const connections = useDatabaseConnections(bank?.id);
   const [adding, setAdding] = useState(false);
+  const canRead = useDataPermission(bank?.id, "view", "restricted");
 
   const rows = connections.data?.connections ?? [];
-  const activeCount = rows.filter((row) => row.status === 'ACTIVE').length;
+  const activeCount = rows.filter((row) => row.status === "ACTIVE").length;
 
+  if (!canRead)
+    return (
+      <DataAccessNotice requirement="DATA · Restricted · View for connection details" />
+    );
   return (
     <>
       <PageHeader
@@ -97,7 +104,7 @@ export default function DatabaseDirectPage() {
               {rows.map((connection) => (
                 <ConnectionCard
                   key={connection.id}
-                  bankId={bank?.id ?? ''}
+                  bankId={bank?.id ?? ""}
                   connection={connection}
                 />
               ))}
@@ -113,24 +120,27 @@ export default function DatabaseDirectPage() {
           )}
 
           <div className="card p-5 border-l-4 border-l-action">
-            <h3 className="text-h3 text-navy">Use an available ingestion path</h3>
+            <h3 className="text-h3 text-navy">
+              Use an available ingestion path
+            </h3>
             <p className="mt-2 text-body text-slate leading-relaxed">
-              Cores are never blocked: export the close-of-business files and ingest via{' '}
+              Cores are never blocked: export the close-of-business files and
+              ingest via{" "}
               <Link
                 href="/data-engine/excel-csv"
                 className="font-medium text-action hover:text-action-hover"
               >
                 Excel &amp; CSV
-              </Link>{' '}
-              or push from middleware through the{' '}
+              </Link>{" "}
+              or push from middleware through the{" "}
               <Link
                 href="/data-engine/api"
                 className="font-medium text-action hover:text-action-hover"
               >
                 Push API
               </Link>
-              . The canonical model is identical; the direct adapter only removes the
-              export step.
+              . The canonical model is identical; the direct adapter only
+              removes the export step.
             </p>
             <Link
               href="/data-engine/excel-csv"

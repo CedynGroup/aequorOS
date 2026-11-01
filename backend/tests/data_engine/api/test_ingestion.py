@@ -19,6 +19,7 @@ from sqlalchemy import text as sql_text
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
+from app.core.authorization import ModuleScope, RoleBundle, SensitivityScope
 from app.data_engine.domain.ingestion.contracts import (
     EntityMapping,
     MappingConfig,
@@ -40,7 +41,8 @@ from app.models import Bank, CanonicalPosition, CanonicalPositionSnapshot, Canon
 from app.storage.client import StorageLocation
 from tests.data_engine.adapters.excel_csv import fixtures
 from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID, materialize_canonical_test_book
-from tests.support.helpers import ORG_1, ORG_2, headers
+from tests.support.factories.authorization import grant_institution_authority
+from tests.support.helpers import ORG_1, ORG_2, USER_1, USER_2, headers
 from tests.support.inmemory_storage import InMemoryStorageClient
 
 AS_OF = str(fixtures.AS_OF)
@@ -126,6 +128,15 @@ def seed_bank(client: TestClient) -> str:
     session = get_sessionmaker()()
     try:
         materialize_canonical_test_book(session)
+        grant_institution_authority(
+            session,
+            organization_id=ORG_1,
+            bank_id=SAMPLE_BANK_ID,
+            user_id=USER_1,
+            bundle=RoleBundle.ANALYST,
+            module=ModuleScope.DATA,
+            sensitivity=SensitivityScope.ALL,
+        )
         session.commit()
     finally:
         session.close()
@@ -1078,6 +1089,16 @@ class TestUploadFlow:
                 institution_type=bank.institution_type,
             )
             db.add(source_bank)
+            db.flush()
+            grant_institution_authority(
+                db,
+                organization_id=source_organization,
+                bank_id=source_bank.id,
+                user_id=USER_1 if source_organization == ORG_1 else USER_2,
+                bundle=RoleBundle.ANALYST,
+                module=ModuleScope.DATA,
+                sensitivity=SensitivityScope.RESTRICTED,
+            )
             db.commit()
             source_bank_id = source_bank.id
         source = fixtures.build_well_formed(tmp_path / "foreign.xlsx")

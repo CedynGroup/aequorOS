@@ -10,6 +10,7 @@
  * the related bank-local reads.
  */
 
+import { useDataPermission } from "./dataAccess";
 import { useCallback, useEffect, useRef } from "react";
 import {
   keepPreviousData,
@@ -178,11 +179,12 @@ export function useBank(bankId: string | undefined) {
 
 export function useReportingPeriods(bankId: string | undefined) {
   const scope = useQueryAuthorityScope();
+  const allowed = useDataPermission(bankId, "view", "confidential");
   return useQuery({
     queryKey: scopedQueryKey("periods", scope, bankId ?? null),
     queryFn: () =>
       apiCall(() => banksApi.listBankReportingPeriods({ bankId: bankId! })),
-    enabled: Boolean(bankId),
+    enabled: allowed && Boolean(bankId),
   });
 }
 
@@ -191,6 +193,7 @@ export function useBankPeriodFacts(
   periodId: string | undefined,
 ) {
   const scope = useQueryAuthorityScope();
+  const allowed = useDataPermission(bankId, "view", "restricted");
   return useQuery({
     queryKey: scopedQueryKey("facts", scope, bankId ?? null, periodId ?? null),
     queryFn: () =>
@@ -200,7 +203,7 @@ export function useBankPeriodFacts(
           periodId: periodId!,
         }),
       ),
-    enabled: Boolean(bankId && periodId),
+    enabled: allowed && Boolean(bankId && periodId),
   });
 }
 
@@ -2166,9 +2169,12 @@ export function useCanonicalPositionsPage(
     q,
   }: CanonicalPositionsPageParams,
 ) {
+  const allowed = useDataPermission(bankId, "view", "restricted");
+  const scope = useQueryAuthorityScope();
   return useQuery({
-    queryKey: [
+    queryKey: scopedQueryKey(
       "positions-page",
+      scope,
       bankId,
       limit,
       offset,
@@ -2176,7 +2182,7 @@ export function useCanonicalPositionsPage(
       currency ?? null,
       asOf ?? null,
       q ?? null,
-    ],
+    ),
     queryFn: () =>
       apiCall(() =>
         ingestionApi.listCanonicalPositions({
@@ -2189,7 +2195,7 @@ export function useCanonicalPositionsPage(
           q: q || undefined,
         }),
       ),
-    enabled: Boolean(bankId),
+    enabled: allowed && Boolean(bankId),
     placeholderData: keepPreviousData,
     staleTime: 60_000,
   });
@@ -2200,13 +2206,15 @@ export function useCanonicalPositionsPage(
  * feeds the blotter's filter dropdowns and KPIs without paging the book.
  */
 export function useCanonicalPositionFacets(bankId: string | undefined) {
+  const allowed = useDataPermission(bankId, "view", "restricted");
+  const scope = useQueryAuthorityScope();
   return useQuery({
-    queryKey: ["positions-facets", bankId],
+    queryKey: scopedQueryKey("positions-facets", scope, bankId),
     queryFn: () =>
       apiCall(() =>
         ingestionApi.listCanonicalPositionFacets({ bankId: bankId! }),
       ),
-    enabled: Boolean(bankId),
+    enabled: allowed && Boolean(bankId),
     staleTime: 5 * 60_000,
   });
 }
@@ -2246,22 +2254,26 @@ export function useUploadMarketData(bankId: string | undefined) {
 const temenosInvalidatePrefixes = ["t24-connections"];
 
 export function useTemenosConnections(bankId: string | undefined) {
+  const allowed = useDataPermission(bankId, "view", "restricted");
+  const scope = useQueryAuthorityScope();
   return useQuery({
-    queryKey: ["t24-connections", bankId],
+    queryKey: scopedQueryKey("t24-connections", scope, bankId),
     queryFn: () =>
       apiCall(() => temenosApi.listTemenosConnections({ bankId: bankId! })),
-    enabled: Boolean(bankId),
+    enabled: allowed && Boolean(bankId),
   });
 }
 
 /** The core-banking domain catalog for a connection mode: category, canonical
  * entity type, default cadence, and whether the mode catalog supports it. */
 export function useTemenosDomains(bankId: string | undefined, mode: string) {
+  const allowed = useDataPermission(bankId, "view", "restricted");
+  const scope = useQueryAuthorityScope();
   return useQuery({
-    queryKey: ["t24-domains", bankId, mode],
+    queryKey: scopedQueryKey("t24-domains", scope, bankId, mode),
     queryFn: () =>
       apiCall(() => temenosApi.listTemenosDomains({ bankId: bankId!, mode })),
-    enabled: Boolean(bankId),
+    enabled: allowed && Boolean(bankId),
     staleTime: 10 * 60_000,
   });
 }

@@ -24,9 +24,11 @@ from uuid import UUID
 
 from sqlalchemy.orm import Session
 
-from app.api.deps import TenantContext
-from app.data_engine.service import reconciliation
-from app.models import Bank
+from app.core.tenancy import TenantContext
+from app.data_engine.service.reconciliation import RECONCILIATION_GRANTED_EVENT
+from app.db.base import utc_now
+from app.models import Bank, ReconciliationException
+from app.services.audit import record_event
 
 #: The fixture's gap is 10.41% of assets; the ceiling sits just above it so the
 #: exception covers the known defect and nothing wider.
@@ -53,14 +55,31 @@ def allow_fixture_balance_gap(  # noqa: PLR0913 - a governed exception names eve
     """Register the fixture's approved balance-sheet identity exception."""
     bank = session.get(Bank, bank_id)
     assert bank is not None, "seed the bank before its reconciliation exception"
-    reconciliation.grant_exception(
-        session,
-        TenantContext(organization_id=organization_id, actor_user_id=actor_user_id),
-        bank,
+    row = ReconciliationException(
+        organization_id=organization_id,
+        bank_id=bank.id,
         reason=FIXTURE_EXCEPTION_REASON,
         approved_by=FIXTURE_APPROVER,
         max_gap_fraction=max_gap_fraction,
         effective_from=effective_from,
         effective_to=effective_to,
+        control="balance_sheet_identity",
+        requested_by=actor_user_id,
+        requested_at=utc_now(),
+        approval_timestamp=utc_now(),
+        status="approved",
     )
+    session.add(row)
     session.flush()
+    record_event(
+        session,
+        TenantContext(organization_id=organization_id, actor_user_id=actor_user_id),
+        event_type=RECONCILIATION_GRANTED_EVENT,
+        entity_type="bank",
+        entity_id=bank.id,
+        details={
+            "exception_id": str(row.id),
+            "approved_by": FIXTURE_APPROVER,
+            "reason": FIXTURE_EXCEPTION_REASON,
+        },
+    )

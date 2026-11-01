@@ -21,6 +21,7 @@ from pydantic import ValidationError
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
+from app.core.authorization import ModuleScope, RoleBundle, SensitivityScope
 from app.core.config import get_settings
 from app.core.outbound import OutboundTargetBlocked, check_host
 from app.data_engine.adapters.database_direct.config import ConnectionConfig
@@ -37,6 +38,7 @@ from app.data_engine.service import database_connections
 # Importing the model registers its table on Base.metadata so db_session's
 # create_all provisions it (the model is not wired into models/__init__ yet).
 from app.models import Bank, MappingConfigRecord
+from tests.support.factories.authorization import grant_institution_authority
 from tests.support.factories.outbound import PUBLIC_IP, stub_dns, stub_public_dns
 from tests.support.helpers import ORG_1, USER_1
 from tests.support.inmemory_storage import InMemoryStorageClient
@@ -61,7 +63,7 @@ def _resolvable_core(monkeypatch: pytest.MonkeyPatch) -> None:
 
 @pytest.fixture
 def ctx() -> TenantContext:
-    return TenantContext(organization_id=ORG_1, actor_user_id=USER_1)
+    return TenantContext(organization_id=ORG_1, actor_user_id=USER_1, authorization_version=1)
 
 
 def _bank(db: Session) -> Bank:
@@ -76,6 +78,15 @@ def _bank(db: Session) -> Bank:
     )
     db.add(bank)
     db.flush()
+    grant_institution_authority(
+        db,
+        organization_id=ORG_1,
+        bank_id=bank.id,
+        user_id=USER_1,
+        bundle=RoleBundle.ANALYST,
+        module=ModuleScope.DATA,
+        sensitivity=SensitivityScope.RESTRICTED,
+    )
     return bank
 
 

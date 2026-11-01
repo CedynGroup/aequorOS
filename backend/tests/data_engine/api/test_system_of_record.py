@@ -17,6 +17,7 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import select
 
+from app.core.authorization import ModuleScope, RoleBundle, SensitivityScope
 from app.core.config import get_settings
 from app.db.session import get_sessionmaker
 from app.models import (
@@ -29,6 +30,7 @@ from app.models import (
     User,
 )
 from tests.data_engine.api.test_ingestion import seed_bank
+from tests.support.factories.authorization import grant_institution_authority
 from tests.support.factories.canonical import FIXTURE_AS_OF, seed_canonical_fixture
 from tests.support.helpers import ORG_1, USER_1, headers
 
@@ -68,6 +70,15 @@ def _seed(client: TestClient, *, duplicate: bool) -> str:
                 )
             )
             session.flush()
+        grant_institution_authority(
+            session,
+            organization_id=ORG_1,
+            bank_id=bank_id,
+            user_id=APPROVER_USER,
+            bundle=RoleBundle.APPROVER,
+            module=ModuleScope.DATA,
+            sensitivity=SensitivityScope.CONFIDENTIAL,
+        )
         if duplicate:
             batch = IngestionBatch(
                 organization_id=ORG_1,
@@ -175,20 +186,31 @@ def test_the_full_governed_path_from_declaration_to_withdrawal(  # noqa: PLR0915
     declaration_id = proposed.json()["id"]
     assert proposed.json()["status"] == "draft"
 
-    # An analyst cannot approve; nor can the proposer, whatever role they hold.
+    # Analyst binding lacks APPROVE. Even an explicit APPROVE binding cannot
+    # let the proposer approve their own declaration.
     forbidden = db_client.post(
         f"{REGISTER_URL.format(bank_id=bank_id)}/{declaration_id}/approve",
         headers=headers(user_id=USER_1, roles=("analyst",)),
         json={"approved_by": "cro@bank.test"},
     )
-    assert forbidden.status_code == 403, forbidden.text
+    assert forbidden.status_code == 404, forbidden.text
+    with get_sessionmaker()() as db:
+        grant_institution_authority(
+            db,
+            organization_id=ORG_1,
+            bank_id=bank_id,
+            user_id=USER_1,
+            bundle=RoleBundle.APPROVER,
+            module=ModuleScope.DATA,
+            sensitivity=SensitivityScope.CONFIDENTIAL,
+        )
+        db.commit()
     self_approved = db_client.post(
         f"{REGISTER_URL.format(bank_id=bank_id)}/{declaration_id}/approve",
         headers=headers(user_id=USER_1, roles=("approver",)),
         json={"approved_by": "cro@bank.test"},
     )
-    assert self_approved.status_code == 422, self_approved.text
-    assert "second approver" in _message(self_approved)
+    assert self_approved.status_code == 404, self_approved.text
 
     approved = db_client.post(
         f"{REGISTER_URL.format(bank_id=bank_id)}/{declaration_id}/approve",
@@ -256,14 +278,14 @@ def test_the_full_governed_path_from_declaration_to_withdrawal(  # noqa: PLR0915
 
     analyst_approve = db_client.post(
         f"{WITHDRAWALS_URL.format(bank_id=bank_id)}/{withdrawal_id}/approve",
-        headers=headers(user_id=APPROVER_USER, roles=("analyst",)),
+        headers=headers(user_id=USER_1, roles=("analyst",)),
         json={"approved_by": "cro@bank.test"},
     )
-    assert analyst_approve.status_code == 403, analyst_approve.text
+    assert analyst_approve.status_code == 404, analyst_approve.text
 
     applied = db_client.post(
         f"{WITHDRAWALS_URL.format(bank_id=bank_id)}/{withdrawal_id}/approve",
-        headers=headers(user_id=APPROVER_USER, roles=("approver",)),
+        headers=headers(user_id=APPROVER_USER, roles=("viewer",)),
         json={"approved_by": "cro@bank.test"},
     )
     assert applied.status_code == 200, applied.text

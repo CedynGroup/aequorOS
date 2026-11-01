@@ -67,6 +67,16 @@ class ReconciliationException(UuidV7PrimaryKeyMixin, TimestampMixin, Base):
             "length(trim(reason)) > 0",
             name="ck_reconciliation_exceptions_reason_present",
         ),
+        CheckConstraint(
+            "status IN ('pending', 'approved')",
+            name="ck_reconciliation_exceptions_status",
+        ),
+        CheckConstraint(
+            "(status = 'pending' AND requested_by IS NOT NULL AND approved_by IS NULL "
+            "AND approved_by_user_id IS NULL AND approval_timestamp IS NULL) OR "
+            "(status = 'approved' AND approved_by IS NOT NULL AND approval_timestamp IS NOT NULL)",
+            name="ck_reconciliation_exceptions_approval",
+        ),
         ForeignKeyConstraint(
             ["bank_id", "organization_id"],
             ["banks.id", "banks.organization_id"],
@@ -93,10 +103,15 @@ class ReconciliationException(UuidV7PrimaryKeyMixin, TimestampMixin, Base):
     reason: Mapped[str] = mapped_column(Text, nullable=False)
     requested_by: Mapped[UUID | None] = mapped_column(Uuid(as_uuid=True), nullable=True)
     requested_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    status: Mapped[str] = mapped_column(
+        String(16), nullable=False, default="approved", server_default="approved"
+    )
     #: Free text, not a FK: the approver may be an operator (control plane) or a
     #: tenant officer, and the identity string is what the audit trail shows.
-    approved_by: Mapped[str] = mapped_column(String(120), nullable=False)
+    approved_by: Mapped[str | None] = mapped_column(String(120), nullable=True)
     approved_by_user_id: Mapped[UUID | None] = mapped_column(Uuid(as_uuid=True), nullable=True)
-    approval_timestamp: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    approval_timestamp: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     revoked_by: Mapped[str | None] = mapped_column(String(120), nullable=True)

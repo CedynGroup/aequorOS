@@ -50680,28 +50680,27 @@
         ],
         "type": "string"
       },
-      "ReconciliationExceptionCreate": {
+      "ReconciliationExceptionApprove": {
         "additionalProperties": false,
-        "description": "Record an approved exception to a fail-closed reconciliation control.\n\nFour-eyes is enforced in the service (``grant_exception``): the officer who\nrequested the exception may not be the approver. ``approved_by_user_id`` is\nwhat makes that check possible, so supplying it is how a caller proves the\nsecond pair of eyes exists rather than asserting it.",
+        "description": "An audit label, never authority. The checker identity comes from authentication.",
         "properties": {
           "approved_by": {
             "maxLength": 120,
             "minLength": 1,
             "title": "Approved By",
             "type": "string"
-          },
-          "approved_by_user_id": {
-            "anyOf": [
-              {
-                "format": "uuid",
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Approved By User Id"
-          },
+          }
+        },
+        "required": [
+          "approved_by"
+        ],
+        "title": "ReconciliationExceptionApprove",
+        "type": "object"
+      },
+      "ReconciliationExceptionCreate": {
+        "additionalProperties": false,
+        "description": "Propose a bounded exception. The server records the authenticated maker.",
+        "properties": {
           "effective_from": {
             "format": "date",
             "title": "Effective From",
@@ -50742,7 +50741,6 @@
         },
         "required": [
           "reason",
-          "approved_by",
           "max_gap_fraction",
           "effective_from"
         ],
@@ -50799,13 +50797,27 @@
         "additionalProperties": false,
         "properties": {
           "approval_timestamp": {
-            "format": "date-time",
-            "title": "Approval Timestamp",
-            "type": "string"
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Approval Timestamp"
           },
           "approved_by": {
-            "title": "Approved By",
-            "type": "string"
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Approved By"
           },
           "approved_by_user_id": {
             "anyOf": [
@@ -50897,6 +50909,10 @@
               }
             ],
             "title": "Revoked By"
+          },
+          "status": {
+            "title": "Status",
+            "type": "string"
           }
         },
         "required": [
@@ -50909,6 +50925,7 @@
           "reason",
           "requested_by",
           "requested_at",
+          "status",
           "approved_by",
           "approved_by_user_id",
           "approval_timestamp",
@@ -101865,7 +101882,7 @@
         ]
       },
       "post": {
-        "operationId": "grantReconciliationException",
+        "operationId": "proposeReconciliationException",
         "parameters": [
           {
             "in": "path",
@@ -101964,7 +101981,124 @@
             "HTTPBearer": []
           }
         ],
-        "summary": "Grant Reconciliation Exception",
+        "summary": "Propose Reconciliation Exception",
+        "tags": [
+          "reconciliation"
+        ]
+      }
+    },
+    "/api/v1/banks/{bank_id}/reconciliation/exceptions/{exception_id}/approve": {
+      "post": {
+        "operationId": "approveReconciliationException",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bank_id",
+            "required": true,
+            "schema": {
+              "title": "Bank Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "exception_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Exception Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReconciliationExceptionApprove"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReconciliationExceptionRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Approve Reconciliation Exception",
         "tags": [
           "reconciliation"
         ]

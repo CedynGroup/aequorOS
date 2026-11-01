@@ -2,11 +2,13 @@ from __future__ import annotations
 
 from datetime import date
 from decimal import Decimal
+from uuid import UUID
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
+from app.core.authorization import ModuleScope, RoleBundle, SensitivityScope
 from app.credit.schemas.credit_params import (
     CrmHaircutUpdate,
     EclAssumptionEntry,
@@ -19,17 +21,40 @@ from app.liquidity.schemas.liquidity_thresholds import (
     LiquidityThresholdUpdate,
 )
 from app.liquidity.service import liquidity_thresholds
-from app.models import Bank, CurrentFinancialFact, Job
+from app.models import Bank, CurrentFinancialFact, Job, User
 from tests.fixtures.canonical_bank_fixture import (
     SAMPLE_BANK_ID,
     materialize_canonical_test_book,
 )
+from tests.support.factories.authorization import grant_institution_authority
 from tests.support.factories.canonical import FIXTURE_AS_OF
 from tests.support.helpers import ORG_1, USER_1
+
+CHECKER = UUID("cccccccc-cccc-4ccc-8ccc-cccccccccccc")
 
 
 def _seed_live_input(db: Session) -> TenantContext:
     materialize_canonical_test_book(db)
+    db.add(
+        User(
+            id=CHECKER,
+            organization_id=ORG_1,
+            email="checker@bank.test",
+            display_name="Fixture checker",
+            is_active=True,
+        )
+    )
+    db.flush()
+    for user, bundle in ((USER_1, RoleBundle.ANALYST), (CHECKER, RoleBundle.APPROVER)):
+        grant_institution_authority(
+            db,
+            organization_id=ORG_1,
+            bank_id=SAMPLE_BANK_ID,
+            user_id=user,
+            bundle=bundle,
+            module=ModuleScope.DATA,
+            sensitivity=SensitivityScope.CONFIDENTIAL,
+        )
     db.add(
         CurrentFinancialFact(
             organization_id=ORG_1,
@@ -43,7 +68,7 @@ def _seed_live_input(db: Session) -> TenantContext:
         )
     )
     db.commit()
-    return TenantContext(organization_id=ORG_1, actor_user_id=USER_1)
+    return TenantContext(organization_id=ORG_1, actor_user_id=USER_1, authorization_version=1)
 
 
 def _refresh(db: Session) -> Job:
@@ -123,14 +148,23 @@ def test_live_consumed_governed_mutations_refresh_the_affected_bank(
 
     bank = db_session.get(Bank, SAMPLE_BANK_ID)
     assert bank is not None
-    exception = reconciliation.grant_exception(
+    previous_job = _refresh(db_session).id
+    exception = reconciliation.propose_exception(
         db_session,
         ctx,
         bank,
         reason="Approved temporary difference",
-        approved_by="Risk committee",
         max_gap_fraction=Decimal("0.2"),
         effective_from=date(2026, 1, 1),
+    )
+    assert _refresh(db_session).id == previous_job
+    checker = TenantContext(organization_id=ORG_1, actor_user_id=CHECKER, authorization_version=1)
+    reconciliation.approve_exception(
+        db_session,
+        checker,
+        bank,
+        exception.id,
+        approved_by="Risk committee",
     )
     assert _refresh(db_session).payload["reason"] == (
         f"reconciliation exception granted:{exception.id}"
@@ -138,7 +172,7 @@ def test_live_consumed_governed_mutations_refresh_the_affected_bank(
 
     reconciliation.revoke_exception(
         db_session,
-        ctx,
+        checker,
         bank,
         exception.id,
         revoked_by="Risk committee",

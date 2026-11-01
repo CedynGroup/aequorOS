@@ -66,8 +66,12 @@ it("selects a historical period, runs and reloads its stored results without rep
           institution_capabilities: [
             {
               institution_id: bankId,
-              capabilities: ["view", "run"].map((permission) => ({
-                module: "liq",
+              capabilities: [
+                { module: "liq", permission: "view" },
+                { module: "liq", permission: "run" },
+                { module: "data", permission: "view" },
+              ].map(({ module, permission }) => ({
+                module,
                 sensitivity: "confidential",
                 permission,
                 requires_contextual_authorization: false,

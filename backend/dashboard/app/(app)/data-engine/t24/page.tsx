@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 /**
  * Temenos T24 tab of the Data Engine console. The native core-banking
@@ -8,34 +8,41 @@
  * deployment, so pull jobs are safely blocked.
  */
 
-import PageContainer from '@/components/ui/PageContainer';
-import { useState } from 'react';
-import Link from 'next/link';
-import { ArrowRight, Database, Loader2, Plus } from 'lucide-react';
-import PageHeader from '@/components/ui/PageHeader';
-import EmptyState from '@/components/ui/EmptyState';
-import { useBankContext } from '@/components/shell/BankContext';
-import { useTemenosConnections } from '@/lib/api/hooks';
-import AddConnectionPanel from '@/components/t24/AddConnectionPanel';
-import ConnectionCard from '@/components/t24/ConnectionCard';
-import DomainCoverage from '@/components/t24/DomainCoverage';
-import TransportModes from '@/components/t24/TransportModes';
+import PageContainer from "@/components/ui/PageContainer";
+import { useState } from "react";
+import Link from "next/link";
+import { ArrowRight, Database, Loader2, Plus } from "lucide-react";
+import PageHeader from "@/components/ui/PageHeader";
+import EmptyState from "@/components/ui/EmptyState";
+import { useBankContext } from "@/components/shell/BankContext";
+import { useTemenosConnections } from "@/lib/api/hooks";
+import AddConnectionPanel from "@/components/t24/AddConnectionPanel";
+import ConnectionCard from "@/components/t24/ConnectionCard";
+import DomainCoverage from "@/components/t24/DomainCoverage";
+import TransportModes from "@/components/t24/TransportModes";
+import { useDataPermission } from "@/lib/api/dataAccess";
+import DataAccessNotice from "@/components/data-engine/DataAccessNotice";
 
-type Section = 'connections' | 'domains' | 'modes';
+type Section = "connections" | "domains" | "modes";
 
 const SECTIONS: { key: Section; label: string }[] = [
-  { key: 'connections', label: 'Connections' },
-  { key: 'domains', label: 'Domain coverage' },
-  { key: 'modes', label: 'Transport modes' },
+  { key: "connections", label: "Connections" },
+  { key: "domains", label: "Domain coverage" },
+  { key: "modes", label: "Transport modes" },
 ];
 
 export default function T24Page() {
   const { bank } = useBankContext();
   const connections = useTemenosConnections(bank?.id);
-  const [section, setSection] = useState<Section>('connections');
+  const [section, setSection] = useState<Section>("connections");
   const [adding, setAdding] = useState(false);
+  const canRead = useDataPermission(bank?.id, "view", "restricted");
 
   const rows = connections.data?.connections ?? [];
+  if (!canRead)
+    return (
+      <DataAccessNotice requirement="DATA · Restricted · View for connection details" />
+    );
   return (
     <>
       <PageHeader
@@ -62,12 +69,12 @@ export default function T24Page() {
                 onClick={() => setSection(item.key)}
                 className={`px-4 py-2.5 text-body font-medium border-b-2 whitespace-nowrap transition-colors ${
                   active
-                    ? 'border-action text-navy'
-                    : 'border-transparent text-slate hover:text-navy hover:border-border'
+                    ? "border-action text-navy"
+                    : "border-transparent text-slate hover:text-navy hover:border-border"
                 }`}
               >
                 {item.label}
-                {item.key === 'connections' && rows.length > 0 && (
+                {item.key === "connections" && rows.length > 0 && (
                   <span className="ml-1.5 text-caption font-mono text-slate">
                     {rows.length}
                   </span>
@@ -79,14 +86,15 @@ export default function T24Page() {
       </div>
 
       <PageContainer className="py-6 space-y-8">
-        {section === 'connections' && (
+        {section === "connections" && (
           <section className="space-y-4">
             <div className="flex items-center justify-between">
               <div>
                 <h2 className="text-h3 text-navy">Configured cores</h2>
                 {rows.length > 0 && (
                   <p className="text-caption text-slate mt-0.5">
-                    {rows.length} saved configuration{rows.length === 1 ? '' : 's'}
+                    {rows.length} saved configuration
+                    {rows.length === 1 ? "" : "s"}
                   </p>
                 )}
               </div>
@@ -128,7 +136,7 @@ export default function T24Page() {
                 {rows.map((connection) => (
                   <ConnectionCard
                     key={connection.id}
-                    bankId={bank?.id ?? ''}
+                    bankId={bank?.id ?? ""}
                     connection={connection}
                   />
                 ))}
@@ -144,24 +152,26 @@ export default function T24Page() {
             )}
 
             <div className="card p-5 border-l-4 border-l-action">
-              <h3 className="text-h3 text-navy">Use an available ingestion path</h3>
+              <h3 className="text-h3 text-navy">
+                Use an available ingestion path
+              </h3>
               <p className="mt-2 text-body text-slate leading-relaxed">
-                Export the close-of-business files and ingest via{' '}
+                Export the close-of-business files and ingest via{" "}
                 <Link
                   href="/data-engine/excel-csv"
                   className="font-medium text-action hover:text-action-hover"
                 >
                   Excel &amp; CSV
-                </Link>{' '}
-                or push from middleware through the{' '}
+                </Link>{" "}
+                or push from middleware through the{" "}
                 <Link
                   href="/data-engine/api"
                   className="font-medium text-action hover:text-action-hover"
                 >
                   Push API
                 </Link>
-                . Both paths write the same canonical model while live T24 transport remains
-                unavailable.
+                . Both paths write the same canonical model while live T24
+                transport remains unavailable.
               </p>
               <Link
                 href="/data-engine/excel-csv"
@@ -173,19 +183,20 @@ export default function T24Page() {
           </section>
         )}
 
-        {section === 'domains' && (
+        {section === "domains" && (
           <section className="space-y-4">
             <div>
               <h2 className="text-h3 text-navy">Domain coverage</h2>
               <p className="text-caption text-slate mt-0.5">
-                What each transport mode pulls from the core, mapped to the canonical model.
+                What each transport mode pulls from the core, mapped to the
+                canonical model.
               </p>
             </div>
             <DomainCoverage bankId={bank?.id} />
           </section>
         )}
 
-        {section === 'modes' && (
+        {section === "modes" && (
           <section className="space-y-4">
             <div>
               <h2 className="text-h3 text-navy">Transport modes</h2>

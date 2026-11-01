@@ -11,6 +11,20 @@
  */
 
 import { mapValues } from "../runtime";
+import type { ApprovalTimestamp } from "./ApprovalTimestamp";
+import {
+  ApprovalTimestampFromJSON,
+  ApprovalTimestampFromJSONTyped,
+  ApprovalTimestampToJSON,
+  ApprovalTimestampToJSONTyped,
+} from "./ApprovalTimestamp";
+import type { ApprovedBy } from "./ApprovedBy";
+import {
+  ApprovedByFromJSON,
+  ApprovedByFromJSONTyped,
+  ApprovedByToJSON,
+  ApprovedByToJSONTyped,
+} from "./ApprovedBy";
 import type { ApprovedByUserId } from "./ApprovedByUserId";
 import {
   ApprovedByUserIdFromJSON,
@@ -55,16 +69,16 @@ import {
 export interface ReconciliationExceptionRead {
   /**
    *
-   * @type {Date}
+   * @type {ApprovalTimestamp}
    * @memberof ReconciliationExceptionRead
    */
-  approvalTimestamp: Date;
+  approvalTimestamp: ApprovalTimestamp;
   /**
    *
-   * @type {string}
+   * @type {ApprovedBy}
    * @memberof ReconciliationExceptionRead
    */
-  approvedBy: string;
+  approvedBy: ApprovedBy;
   /**
    *
    * @type {ApprovedByUserId}
@@ -137,6 +151,12 @@ export interface ReconciliationExceptionRead {
    * @memberof ReconciliationExceptionRead
    */
   revokedBy: RevokedBy;
+  /**
+   *
+   * @type {string}
+   * @memberof ReconciliationExceptionRead
+   */
+  status: string;
 }
 
 /**
@@ -170,6 +190,7 @@ export function instanceOfReconciliationExceptionRead(
     return false;
   if (!("revokedAt" in value) || value["revokedAt"] === undefined) return false;
   if (!("revokedBy" in value) || value["revokedBy"] === undefined) return false;
+  if (!("status" in value) || value["status"] === undefined) return false;
   return true;
 }
 
@@ -188,8 +209,8 @@ export function ReconciliationExceptionReadFromJSONTyped(
   }
   return {
     ...json,
-    approvalTimestamp: new Date(json["approval_timestamp"]),
-    approvedBy: json["approved_by"],
+    approvalTimestamp: ApprovalTimestampFromJSON(json["approval_timestamp"]),
+    approvedBy: ApprovedByFromJSON(json["approved_by"]),
     approvedByUserId: ApprovedByUserIdFromJSON(json["approved_by_user_id"]),
     bankId: json["bank_id"],
     control: json["control"],
@@ -202,6 +223,7 @@ export function ReconciliationExceptionReadFromJSONTyped(
     requestedBy: RequestedByFromJSON(json["requested_by"]),
     revokedAt: RevokedAtFromJSON(json["revoked_at"]),
     revokedBy: RevokedByFromJSON(json["revoked_by"]),
+    status: json["status"],
   };
 }
 
@@ -220,8 +242,8 @@ export function ReconciliationExceptionReadToJSONTyped(
   }
 
   return {
-    approval_timestamp: value["approvalTimestamp"].toISOString(),
-    approved_by: value["approvedBy"],
+    approval_timestamp: ApprovalTimestampToJSON(value["approvalTimestamp"]),
+    approved_by: ApprovedByToJSON(value["approvedBy"]),
     approved_by_user_id: ApprovedByUserIdToJSON(value["approvedByUserId"]),
     bank_id: value["bankId"],
     control: value["control"],
@@ -234,5 +256,6 @@ export function ReconciliationExceptionReadToJSONTyped(
     requested_by: RequestedByToJSON(value["requestedBy"]),
     revoked_at: RevokedAtToJSON(value["revokedAt"]),
     revoked_by: RevokedByToJSON(value["revokedBy"]),
+    status: value["status"],
   };
 }
