@@ -6,7 +6,7 @@ Revises: 202610240103
 
 from __future__ import annotations
 
-from collections.abc import Iterator
+from collections.abc import Generator
 from contextlib import contextmanager
 from typing import cast
 
@@ -35,7 +35,7 @@ EXCEPTION = """
 
 
 @contextmanager
-def _as_owner(owner: str) -> Iterator[None]:
+def _as_owner(owner: str) -> Generator[None]:
     connection = op.get_bind()
     previous = cast(str, connection.exec_driver_sql("SELECT current_user").scalar_one())
     quote = connection.dialect.identifier_preparer.quote_identifier
@@ -95,9 +95,11 @@ def upgrade() -> None:  # noqa: PLR0915 - one atomic privilege and function inst
                 END IF;
             END $$;
         """)
-    if not op.get_bind().exec_driver_sql(
-        f"SELECT pg_has_role(current_user, '{OWNER}', 'MEMBER')"
-    ).scalar_one():
+    if (
+        not op.get_bind()
+        .exec_driver_sql(f"SELECT pg_has_role(current_user, '{OWNER}', 'MEMBER')")
+        .scalar_one()
+    ):
         raise RuntimeError("Prepare recovery owner membership using the administrator runbook")
     op.execute(f"GRANT USAGE, CREATE ON SCHEMA {quoted} TO {OWNER}, aequoros_audit_owner")
     op.execute(f"GRANT USAGE ON SCHEMA {quoted} TO {CAPABILITY}")
