@@ -588,11 +588,19 @@ def test_a_filed_document_can_never_be_rewritten(connection: Connection) -> None
     package_id, attachment_id = uuid4(), uuid4()
     _insert_package(connection, package_id)
     _insert_attachment(connection, package_id, attachment_id)
-    _refused(
-        connection,
-        "UPDATE regulatory_package_attachments SET sha256 = :other WHERE id = :id",
-        {"id": str(attachment_id), "other": _OTHER_DIGEST},
-        _UNALTERABLE,
+    statement = "UPDATE regulatory_package_attachments SET sha256 = :other WHERE id = :id"
+    params = {"id": str(attachment_id), "other": _OTHER_DIGEST}
+    if _bypasses_rls(connection):
+        _refused(connection, statement, params, _UNALTERABLE)
+    else:
+        # The recovery-only UPDATE policy hides the row from ordinary invokers.
+        assert connection.execute(text(statement), params).rowcount == 0
+    assert (
+        connection.scalar(
+            text("SELECT sha256 FROM regulatory_package_attachments WHERE id = :id"),
+            {"id": str(attachment_id)},
+        )
+        == _DIGEST
     )
 
 

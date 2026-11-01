@@ -227,6 +227,7 @@
       "aqs_worker": ["DELETE", "INSERT", "SELECT", "UPDATE"]
     },
     "alembic_version": {},
+    "aqs_storage_recovery_permit": {},
     "attestation_signatures": {
       "aqs_api": ["INSERT", "SELECT"],
       "aqs_worker": ["INSERT", "SELECT"]
