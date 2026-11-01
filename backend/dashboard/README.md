@@ -53,6 +53,13 @@ documented in [FX dashboard access](../docs/fx_enforcement_rollout.md#dashboard-
 Bank key administration follows [the setup guide](../docs/bank_key_setup.md#bank-administrator-self-service).
 Locked fields and editor recovery follow [the protected presentation contract](../docs/bank_field_encryption.md#protected-presentation-reads).
 
+On **Data Engine → Overview**, use **Reconciliation exceptions** to enter a
+reason, maximum gap fraction and effective dates, then **Record proposal**.
+A checker signs in separately, enters an approval label and chooses
+**Approve proposal**. To revoke a request or approval, enter a revocation label
+and reason, then **Revoke exception**. Exact grants, checker independence and
+the effect of each decision follow [Human Data Engine authority](../docs/authorization_foundation.md#human-data-engine-authority).
+
 ### Unavailable liquidity figures
 
 When LCR or NSFR cannot be computed, its figure and dependent totals show an

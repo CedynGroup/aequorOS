@@ -523,6 +523,13 @@ and filing-chain migrations. The inventory distinguishes history from live state
 | Regulatory parameter control plane and system-of-record declarations                                                     | Existing governed-row seals; approved rows cannot be deleted; all TRUNCATE refused; draft, effective-date and revocation lifecycles preserved                |
 | Reconciliation exceptions and canonical withdrawals                                                                      | Existing governed-row seals; all exceptions and applied/reversed withdrawals cannot be deleted; all TRUNCATE refused; pending withdrawal lifecycle preserved |
 
+Migration `202611010001` keeps proposal values sealed from insert and permits
+only the pending-to-approved reconciliation transition to fill checker evidence;
+approved or revoked rows cannot rewrite that evidence. Downgrade refuses while
+pending proposals exist, preserving
+requests the previous schema cannot represent. The migrated lifecycle is pinned
+by `tests/db/test_governance_append_only.py`.
+
 No application-set reset flag bypasses the new deletion guards. Destructive test
 setup must use fresh disposable schemas or privileged fixture restoration, never
 a production mutation capability. Every authority mutation continues to use the

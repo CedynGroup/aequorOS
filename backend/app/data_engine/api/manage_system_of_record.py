@@ -5,8 +5,8 @@ position type, and the assessment resolves it against the duplicated-book
 diagnosis. The withdrawal endpoints are the remedy the platform has been
 prescribing without being able to perform.
 
-Role split mirrors the rest of the submission pipeline: an analyst PROPOSES a
-declaration and REQUESTS a withdrawal; an approver approves, revokes or reverses.
+Exact DATA permissions and authenticated maker/checker rules are owned by
+``backend/docs/authorization_foundation.md`` under "Human Data Engine authority".
 No endpoint applies anything on its own, and none is reachable by a job.
 """
 

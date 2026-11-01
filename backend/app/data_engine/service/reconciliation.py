@@ -874,7 +874,7 @@ def load_policy(db: Session, organization_id: str, bank: Bank, as_of: date) -> R
 
 
 # ---------------------------------------------------------------------------
-# Governance: grant / revoke
+# Governance: propose / approve / revoke
 # ---------------------------------------------------------------------------
 
 
