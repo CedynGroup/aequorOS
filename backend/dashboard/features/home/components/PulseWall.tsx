@@ -23,7 +23,7 @@ import {
   LIVE_MODULE_HREFS,
   LIVE_MODULE_LABELS,
   liveMetricChangeText,
-} from "@/components/live/moduleDisplay";
+} from "@/features/live/public";
 import { useModuleScope } from "@/components/shell/BankContext";
 import { isHrefVisible } from "@/lib/modules";
 import type { ModuleOrder } from "./RoleLens";

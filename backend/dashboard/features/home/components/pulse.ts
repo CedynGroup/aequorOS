@@ -21,7 +21,7 @@ import {
   livePrimaryMetricChange,
   livePrimaryMetricKey,
   type LiveMetricChange,
-} from "@/components/live/moduleDisplay";
+} from "@/features/live/public";
 import {
   useCapitalDashboard,
   useLiveSnapshots,

@@ -160,7 +160,7 @@ async function main(): Promise<void> {
         shortId: (value: string) => value,
       };
     }
-    if (request === "@/components/live/moduleDisplay") {
+    if (request === "@/features/live/components/moduleDisplay") {
       return { LIVE_MODULE_LABELS: { capital: "Capital" } };
     }
     return originalLoad(request, parent, isMain);

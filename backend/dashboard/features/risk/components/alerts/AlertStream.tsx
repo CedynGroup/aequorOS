@@ -13,7 +13,7 @@ import { ArrowUpRight } from "lucide-react";
 import type { AlertItemRead } from "@aequoros/risk-service-api";
 import StatusPill from "@/components/ui/StatusPill";
 import SectionCard from "@/components/ui/SectionCard";
-import { LIVE_MODULE_HREFS } from "@/components/live/moduleDisplay";
+import { LIVE_MODULE_HREFS } from "@/features/live/public";
 import { fmtRelative, labelize } from "@/lib/api/values";
 
 export type AlertGroupBy = "module" | "severity";

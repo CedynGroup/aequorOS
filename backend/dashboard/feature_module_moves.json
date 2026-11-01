@@ -26,5 +26,9 @@
   [
     "components/alerts",
     "features/risk/components"
+  ],
+  [
+    "components/live",
+    "features/live/components"
   ]
 ]

@@ -21,7 +21,7 @@ import {
   useKpiExplain,
 } from "@/features/bi/components/InsightStrip";
 import { useBankContext } from "@/components/shell/BankContext";
-import LiveEngineNote from "@/components/live/LiveEngineNote";
+import LiveEngineNote from "@/features/live/components/LiveEngineNote";
 import { useCapitalDashboard, useRegulatoryRun } from "@/lib/api/hooks";
 import {
   assessAgainstFloor,

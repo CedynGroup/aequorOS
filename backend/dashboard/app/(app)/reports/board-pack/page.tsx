@@ -16,7 +16,7 @@ import {
   LIVE_MODULE_HREFS,
   LIVE_MODULE_LABELS,
   livePrimaryMetricIsAdvisory,
-} from "@/components/live/moduleDisplay";
+} from "@/features/live/components/moduleDisplay";
 import { BoardPage, ModuleBrief } from "@/components/reports/BoardPackSections";
 import {
   boardTimestamp,
