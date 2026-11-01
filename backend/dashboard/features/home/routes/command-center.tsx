@@ -20,6 +20,7 @@ import Link from "next/link";
 import { Database, Info } from "lucide-react";
 import PageHeader from "@/components/ui/PageHeader";
 import EmptyState from "@/components/ui/EmptyState";
+import DataAccessNotice from "@/components/data-engine/DataAccessNotice";
 import { ErrorPanel } from "@/components/ui/QueryBoundary";
 import {
   SkeletonCard,
@@ -60,7 +61,7 @@ export default function CommandCenterPage() {
         action={<RoleLensTabs role={role} onChange={setRole} />}
       />
 
-      {effective.isResolving ? (
+      {effective.isResolving && !effective.period ? (
         <CommandCenterSkeleton />
       ) : effective.isEmpty ? (
         <PageContainer className="py-6 space-y-6">
@@ -72,14 +73,6 @@ export default function CommandCenterPage() {
             hasData={false}
           />
           <div className="py-4 max-w-2xl mx-auto">
-            {effective.error ? (
-              <div className="mb-6">
-                <ErrorPanel
-                  error={effective.error}
-                  title="Could not resolve a computed reporting period"
-                />
-              </div>
-            ) : null}
             <EmptyState
               Icon={Database}
               title="No computed data yet"
@@ -95,34 +88,47 @@ export default function CommandCenterPage() {
             />
           </div>
         </PageContainer>
-      ) : effective.period ? (
+      ) : (
         <PageContainer className="py-6 space-y-6">
-          {effective.isFallback && effective.selectedPeriod && (
-            <div className="card border-l-4 border-l-action bg-action-light/30 px-5 py-3 flex items-start gap-3">
-              <Info
-                size={15}
-                className="text-action shrink-0 mt-0.5"
-                aria-hidden
-              />
-              <p className="text-body text-navy/85 leading-relaxed">
-                Showing{" "}
-                <span className="font-medium text-navy">
-                  {fmtDateUTC(effective.period.periodEnd)}
-                </span>{" "}
-                — latest computed period. The selected period (
-                {effective.selectedPeriod.label}) has no activated data yet.
-              </p>
-            </div>
+          {effective.periodsUnavailable && (
+            <DataAccessNotice requirement="DATA · Confidential · View for reporting periods" />
           )}
+          {effective.error ? (
+            <ErrorPanel
+              error={effective.error}
+              title="Could not resolve a computed reporting period"
+            />
+          ) : null}
+          {effective.isFallback &&
+            effective.period &&
+            effective.selectedPeriod && (
+              <div className="card border-l-4 border-l-action bg-action-light/30 px-5 py-3 flex items-start gap-3">
+                <Info
+                  size={15}
+                  className="text-action shrink-0 mt-0.5"
+                  aria-hidden
+                />
+                <p className="text-body text-navy/85 leading-relaxed">
+                  Showing{" "}
+                  <span className="font-medium text-navy">
+                    {fmtDateUTC(effective.period.periodEnd)}
+                  </span>{" "}
+                  — latest computed period. The selected period (
+                  {effective.selectedPeriod.label}) has no activated data yet.
+                </p>
+              </div>
+            )}
 
           {/* Under the header (docs/bi.md §Insights layer). Every statement
               carries its own reconciliation badge, so it needs no banner above
               it; the strip is absent when BI is off and says so in words when
               nothing has been computed for the date. */}
-          <LandingInsightStrip
-            bankId={bankId}
-            asOf={effective.period.periodEnd}
-          />
+          {effective.period && (
+            <LandingInsightStrip
+              bankId={bankId}
+              asOf={effective.period.periodEnd}
+            />
+          )}
 
           {/* Above the breach banner on purpose: a limit breach computed on a
               book that does not balance is not a trustworthy breach. */}
@@ -146,22 +152,24 @@ export default function CommandCenterPage() {
               case "window":
                 return <WindowAnalysis key="window" bankId={bankId} />;
               case "balance":
-                return (
+                return effective.period ? (
                   <BalanceSheetStrip
                     key="balance"
                     bankId={bankId}
-                    period={effective.period!}
+                    period={effective.period}
                   />
-                );
+                ) : null;
               case "band":
                 return (
                   <div key="band" className="space-y-6">
                     <div className="grid grid-cols-1 xl:grid-cols-5 gap-6">
                       <div className="xl:col-span-3 min-w-0">
-                        <DeferredRatioTrendChart
-                          bankId={bankId}
-                          periodId={effective.period!.id}
-                        />
+                        {effective.period && (
+                          <DeferredRatioTrendChart
+                            bankId={bankId}
+                            periodId={effective.period.id}
+                          />
+                        )}
                       </div>
                       <div className="xl:col-span-2 min-w-0">
                         <OperationalFeed bankId={bankId} />
@@ -174,7 +182,7 @@ export default function CommandCenterPage() {
             }
           })}
         </PageContainer>
-      ) : null}
+      )}
     </>
   );
 }

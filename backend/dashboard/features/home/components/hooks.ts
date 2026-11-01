@@ -25,7 +25,6 @@ import { useBankPeriodFacts } from '@/lib/api/hooks';
 import { scopedQueryKey } from '@/lib/api/queryPolicy';
 import { useQueryAuthorityScope } from '@/lib/api/useQueryScope';
 
-
 /** How many older periods the fallback probe will inspect before giving up. */
 const FALLBACK_PROBE_LIMIT = 12;
 
@@ -57,6 +56,7 @@ export type EffectivePeriodResult = {
   isEmpty: boolean;
   /** Error from the facts check, if any (surfaced by the page boundary). */
   error: unknown;
+  periodsUnavailable: boolean;
 };
 
 /**
@@ -68,18 +68,15 @@ export type EffectivePeriodResult = {
  *    the latest one that actually has facts, warming the facts cache for it.
  */
 export function useEffectivePeriod(): EffectivePeriodResult {
-  const { bank, period, periods } = useBankContext();
+  const { bank, period, periods, periodsStatus, periodsError, isLoading } =
+    useBankContext();
   const bankId = bank?.id;
   const queryClient = useQueryClient();
   const scope = useQueryAuthorityScope();
 
   const selectedFacts = useBankPeriodFacts(bankId, period?.id);
-  // undefined → still loading; true/false → known.
-  const selectedEmpty: boolean | undefined = selectedFacts.isError
-    ? true
-    : selectedFacts.data
-      ? !hasAnyFacts(selectedFacts.data)
-      : undefined;
+  const selectedEmpty =
+    selectedFacts.isSuccess && !hasAnyFacts(selectedFacts.data);
 
   const fallback = useQuery({
     queryKey: scopedQueryKey(
@@ -89,7 +86,10 @@ export function useEffectivePeriod(): EffectivePeriodResult {
       period?.id ?? null,
       periods.map((p) => p.id).join(','),
     ),
-    enabled: Boolean(bankId && period) && selectedEmpty === true,
+    enabled:
+      selectedFacts.access === 'allowed' &&
+      Boolean(bankId && period) &&
+      selectedEmpty,
     staleTime: 60_000,
     queryFn: async () => {
       // `periods` is sorted period-end descending by BankContext.
@@ -101,7 +101,7 @@ export function useEffectivePeriod(): EffectivePeriodResult {
           banksApi.getBankPeriodFacts({
             bankId: bankId!,
             periodId: candidate.id,
-          })
+          }),
         );
         if (hasAnyFacts(facts)) {
           // Warm the shared facts cache so downstream panels reuse it.
@@ -116,72 +116,36 @@ export function useEffectivePeriod(): EffectivePeriodResult {
     },
   });
 
-  if (!bank) {
-    return {
-      period: null,
-      selectedPeriod: null,
-      isFallback: false,
-      isResolving: true,
-      isEmpty: false,
-      error: null,
-    };
-  }
+  const base = {
+    period,
+    selectedPeriod: period,
+    isFallback: false,
+    isResolving: false,
+    isEmpty: false,
+    error: null,
+    periodsUnavailable: false,
+  } satisfies EffectivePeriodResult;
 
-  if (!period) {
-    return {
-      period: null,
-      selectedPeriod: null,
-      isFallback: false,
-      isResolving: false,
-      isEmpty: true,
-      error: null,
-    };
-  }
-
-  if (selectedEmpty === undefined) {
-    return {
-      period: null,
-      selectedPeriod: period,
-      isFallback: false,
-      isResolving: true,
-      isEmpty: false,
-      error: null,
-    };
-  }
-
-  if (selectedEmpty === false) {
-    return {
-      period,
-      selectedPeriod: period,
-      isFallback: false,
-      isResolving: false,
-      isEmpty: false,
-      error: null,
-    };
-  }
-
-  // Selected period is empty — fall back to the newest computed period.
-  if (fallback.isLoading) {
-    return {
-      period: null,
-      selectedPeriod: period,
-      isFallback: false,
-      isResolving: true,
-      isEmpty: false,
-      error: null,
-    };
-  }
+  if (isLoading || periodsStatus === 'loading')
+    return { ...base, isResolving: true };
+  if (periodsStatus === 'denied') return { ...base, periodsUnavailable: true };
+  if (periodsStatus === 'error') return { ...base, error: periodsError };
+  if (!period) return { ...base, isEmpty: true };
+  if (selectedFacts.access === 'loading') return { ...base, isResolving: true };
+  if (selectedFacts.access === 'denied') return base;
+  if (selectedFacts.isError) return { ...base, error: selectedFacts.error };
+  if (selectedFacts.isPending) return { ...base, isResolving: true };
+  if (!selectedEmpty) return base;
+  if (fallback.isPending) return { ...base, isResolving: true };
+  if (fallback.isError) return { ...base, error: fallback.error };
 
   const fallbackPeriod = fallback.data
     ? (periods.find((p) => p.id === fallback.data) ?? null)
     : null;
-
   return {
+    ...base,
     period: fallbackPeriod,
-    selectedPeriod: period,
     isFallback: Boolean(fallbackPeriod),
-    isResolving: false,
     isEmpty: !fallbackPeriod,
-    error: fallback.error ?? null,
   };
 }

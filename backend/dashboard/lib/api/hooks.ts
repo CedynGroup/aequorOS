@@ -10,7 +10,7 @@
  * the related bank-local reads.
  */
 
-import { useDataPermission } from "./dataAccess";
+import { useDataPermission, useDataPermissionState } from "./dataAccess";
 import { useCallback, useEffect, useRef } from "react";
 import {
   keepPreviousData,
@@ -179,13 +179,14 @@ export function useBank(bankId: string | undefined) {
 
 export function useReportingPeriods(bankId: string | undefined) {
   const scope = useQueryAuthorityScope();
-  const allowed = useDataPermission(bankId, "view", "confidential");
-  return useQuery({
+  const access = useDataPermissionState(bankId, "view", "confidential");
+  const query = useQuery({
     queryKey: scopedQueryKey("periods", scope, bankId ?? null),
     queryFn: () =>
       apiCall(() => banksApi.listBankReportingPeriods({ bankId: bankId! })),
-    enabled: allowed && Boolean(bankId),
+    enabled: access === "allowed" && Boolean(bankId),
   });
+  return { ...query, access };
 }
 
 export function useBankPeriodFacts(
@@ -193,8 +194,8 @@ export function useBankPeriodFacts(
   periodId: string | undefined,
 ) {
   const scope = useQueryAuthorityScope();
-  const allowed = useDataPermission(bankId, "view", "restricted");
-  return useQuery({
+  const access = useDataPermissionState(bankId, "view", "restricted");
+  const query = useQuery({
     queryKey: scopedQueryKey("facts", scope, bankId ?? null, periodId ?? null),
     queryFn: () =>
       apiCall(() =>
@@ -203,8 +204,9 @@ export function useBankPeriodFacts(
           periodId: periodId!,
         }),
       ),
-    enabled: allowed && Boolean(bankId && periodId),
+    enabled: access === "allowed" && Boolean(bankId && periodId),
   });
+  return { ...query, access };
 }
 
 export function useLiquidityDashboard(

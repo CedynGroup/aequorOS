@@ -10,6 +10,7 @@ import type {
 import { useQueryClient } from "@tanstack/react-query";
 import { wholeInstitutionCapabilities } from "@/lib/api/dataScope";
 import { useBankContext } from "@/components/shell/BankContext";
+import ReportingPeriodNotice from "@/components/shell/ReportingPeriodNotice";
 import { DisabledWithReason } from "@/components/ui/DisabledWithReason";
 import { hasEffectiveCapability } from "@/lib/modules";
 import { fmtDateUTC, labelize } from "@/lib/api/values";
@@ -36,6 +37,7 @@ export default function RunModuleScenarios({ module }: { module: Module }) {
     bank,
     period,
     periods,
+    periodsStatus,
     setPeriodId,
     institutionCapabilities,
     authorityPending,
@@ -131,7 +133,13 @@ export default function RunModuleScenarios({ module }: { module: Module }) {
             disabled={busy || !bank || periods.length === 0}
           >
             {!period && (
-              <option value="">No reporting periods available</option>
+              <option value="">
+                {periodsStatus === "loading"
+                  ? "Loading reporting periods…"
+                  : periodsStatus === "ready"
+                    ? "No reporting periods available"
+                    : "Reporting periods unavailable"}
+              </option>
             )}
             {periods.map((entry) => (
               <option key={entry.id} value={entry.id}>
@@ -149,6 +157,7 @@ export default function RunModuleScenarios({ module }: { module: Module }) {
           Creates stored regulatory runs; current live results remain separate.
         </span>
       </div>
+      {periodsStatus !== "ready" && <ReportingPeriodNotice />}
       {reason && <p className="text-caption text-slate">{reason}</p>}
       <p className="text-caption text-slate">
         Scenario data date:{" "}
