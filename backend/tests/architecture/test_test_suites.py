@@ -344,6 +344,8 @@ def test_mixed_module_overrides_assign_one_suite_at_node_boundaries(
 def test_every_catalogue_key_resolves_to_a_test_file(tmp_path: Path) -> None:
     """A catalogue key whose file no longer exists is stale: the codemod renames keys
     on a move, so anything left over points at a path that should still be there."""
+    from scripts import database_contracts  # noqa: PLC0415
+
     suites = cast(
         "dict[str, object]",
         json.loads((BACKEND / "scripts" / "test_suites.json").read_text(encoding="utf-8")),
@@ -357,6 +359,7 @@ def test_every_catalogue_key_resolves_to_a_test_file(tmp_path: Path) -> None:
         "tuple[dict[str, str], dict[str, str], dict[str, str]]",
         (suites["cases"], suites["services"], durations["durations"]),
     )
+    database_contracts.check_classification(sections[0])
     paths = {node_id.split("::", 1)[0] for section in sections for node_id in section}
     missing = sorted(path for path in paths if not (BACKEND / path).is_file())
     assert missing == []
