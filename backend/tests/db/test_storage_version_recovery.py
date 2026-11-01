@@ -101,18 +101,64 @@ def production_governance_schema(
         for table in ("banks", "regulatory_packages", *TABLES):
             connection.execute(text(f"ALTER TABLE {table} OWNER TO aqs_owner"))
         connection.execute(text("ALTER FUNCTION aequoros_governed_row_guard() OWNER TO aqs_owner"))
+        memberships: list[tuple[str, bool]] = []
+        if (connection.dialect.server_version_info or (0,))[0] >= 16:
+            memberships = cast(
+                list[tuple[str, bool]],
+                connection.execute(
+                    text(
+                        "SELECT parent.rolname, m.inherit_option FROM pg_auth_members m "
+                        "JOIN pg_roles parent ON parent.oid = m.roleid "
+                        "JOIN pg_roles member ON member.oid = m.member "
+                        "WHERE member.rolname = 'aqs_owner' AND parent.rolname IN "
+                        "('aequoros_audit_owner', 'aqs_storage_recovery_owner')"
+                    )
+                ).all(),
+            )
+            assert len(memberships) == 2
+            for owner, _ in memberships:
+                connection.execute(text(f"GRANT {owner} TO aqs_owner WITH INHERIT FALSE"))
         with Operations.context(MigrationContext.configure(connection)):
             cast(Callable[[], None], recovery_migration.downgrade)()
             connection.execute(text("SET SESSION AUTHORIZATION aqs_migrator"))
             connection.execute(text("SET LOCAL ROLE aqs_owner"))
             assert connection.scalar(text("SELECT session_user")) == "aqs_migrator"
             assert connection.scalar(text("SELECT current_user")) == "aqs_owner"
-            assert connection.scalar(
-                text("SELECT rolcreaterole FROM pg_roles WHERE rolname = current_user")
-            ) is False
-            cast(Callable[[], None], recovery_migration.upgrade)()
+            for identity in ("aqs_owner", "aqs_migrator"):
+                assert connection.scalar(
+                    text(
+                        "SELECT rolsuper OR rolcreaterole OR rolbypassrls OR rolinherit "
+                        "FROM pg_roles WHERE rolname = :role"
+                    ),
+                    {"role": identity},
+                ) is False
+            for owner in ("aequoros_audit_owner", "aqs_storage_recovery_owner"):
+                assert connection.scalar(
+                    text("SELECT pg_has_role(current_user, :owner, 'USAGE')"),
+                    {"owner": owner},
+                ) is False
+            savepoint = connection.begin_nested()
+            with pytest.raises(DatabaseError, match="must be owner"):
+                connection.execute(text("ALTER TABLE audit_events ADD COLUMN owner_probe boolean"))
+            savepoint.rollback()
+            for migrate in (
+                cast(Callable[[], None], recovery_migration.upgrade),
+                cast(Callable[[], None], recovery_migration.downgrade),
+                cast(Callable[[], None], recovery_migration.upgrade),
+            ):
+                migrate()
+                assert connection.scalar(text("SELECT current_user")) == "aqs_owner"
+                assert connection.scalar(text("SELECT session_user")) == "aqs_migrator"
+                for owner in ("aequoros_audit_owner", "aqs_storage_recovery_owner"):
+                    assert connection.scalar(
+                        text("SELECT has_schema_privilege(:owner, current_schema(), 'CREATE')"),
+                        {"owner": owner},
+                    ) is False
             connection.execute(text("RESET ROLE"))
             connection.execute(text("RESET SESSION AUTHORIZATION"))
+        for owner, inherited in memberships:
+            option = "TRUE" if inherited else "FALSE"
+            connection.execute(text(f"GRANT {owner} TO aqs_owner WITH INHERIT {option}"))
     return governance_schema
 
 
