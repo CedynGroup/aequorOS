@@ -28,7 +28,7 @@ import PageHeader from "@/components/ui/PageHeader";
 import SectionCard from "@/components/ui/SectionCard";
 import QueryBoundary, { ErrorPanel } from "@/components/ui/QueryBoundary";
 import EmptyState from "@/components/ui/EmptyState";
-import DataAccessNotice from "@/components/data-engine/DataAccessNotice";
+import DataAccessNotice from "@/components/ui/DataAccessNotice";
 import { SkeletonCard } from "@/components/ui/Skeleton";
 import { SemanticDelta } from "@/components/ui/DeltaBadge";
 import { useBankContext } from "@/components/shell/BankContext";

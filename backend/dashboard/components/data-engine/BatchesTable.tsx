@@ -20,7 +20,7 @@ import {
 } from "@/lib/api/ingestion";
 import { BatchStatusPill, formatDate, formatDateTime } from "./shared";
 import { useDataPermission } from "@/lib/api/dataAccess";
-import DataAccessNotice from "./DataAccessNotice";
+import DataAccessNotice from "@/components/ui/DataAccessNotice";
 
 const columns: Column<IngestionBatchRead>[] = [
   {

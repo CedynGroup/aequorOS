@@ -837,6 +837,8 @@
     "tests/api/test_authorization_object_reference_coverage.py::test_foreign_object_reference_is_refused[POST:/api/v1/banks/{bank_id}/market-data/overlays/{overlay_id}/end:sibling_bank:all]": "integration",
     "tests/api/test_authorization_object_reference_coverage.py::test_foreign_object_reference_is_refused[POST:/api/v1/banks/{bank_id}/position-snapshots/{snapshot_id}/override:cross_organization:all]": "integration",
     "tests/api/test_authorization_object_reference_coverage.py::test_foreign_object_reference_is_refused[POST:/api/v1/banks/{bank_id}/position-snapshots/{snapshot_id}/override:sibling_bank:all]": "integration",
+    "tests/api/test_authorization_object_reference_coverage.py::test_foreign_object_reference_is_refused[POST:/api/v1/banks/{bank_id}/reconciliation/exceptions/{exception_id}/approve:cross_organization:all]": "integration",
+    "tests/api/test_authorization_object_reference_coverage.py::test_foreign_object_reference_is_refused[POST:/api/v1/banks/{bank_id}/reconciliation/exceptions/{exception_id}/approve:sibling_bank:all]": "integration",
     "tests/api/test_authorization_object_reference_coverage.py::test_foreign_object_reference_is_refused[POST:/api/v1/banks/{bank_id}/reconciliation/exceptions/{exception_id}/revoke:cross_organization:all]": "integration",
     "tests/api/test_authorization_object_reference_coverage.py::test_foreign_object_reference_is_refused[POST:/api/v1/banks/{bank_id}/reconciliation/exceptions/{exception_id}/revoke:sibling_bank:all]": "integration",
     "tests/api/test_authorization_object_reference_coverage.py::test_foreign_object_reference_is_refused[POST:/api/v1/banks/{bank_id}/regulatory-packages/{package_id}/attachments/{attachment_id}/withdraw:cross_organization:all]": "integration",

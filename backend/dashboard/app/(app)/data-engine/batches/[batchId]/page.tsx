@@ -33,7 +33,7 @@ import {
 } from "@/components/data-engine/content";
 import { use } from "react";
 import { useDataPermission } from "@/lib/api/dataAccess";
-import DataAccessNotice from "@/components/data-engine/DataAccessNotice";
+import DataAccessNotice from "@/components/ui/DataAccessNotice";
 
 type ReportFailure = {
   rule: string;

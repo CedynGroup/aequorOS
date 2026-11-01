@@ -330,6 +330,58 @@ async function renderBatchDetail() {
   await screen.findByRole("heading", { name: "Validation findings" });
 }
 
+it("withholds DATA reads during staff inspection despite broad examiner projections", async () => {
+  state.capabilities = [
+    capability("view", "aggregated"),
+    capability("view", "confidential"),
+    capability("view", "restricted"),
+  ];
+  state.impersonating = true;
+  const list = vi
+    .spyOn(ingestionApi, "listIngestionBatches")
+    .mockResolvedValue({
+      bankId: state.bank,
+      batches: [],
+    });
+  const detail = vi
+    .spyOn(ingestionApi, "getIngestionBatch")
+    .mockResolvedValue(batch());
+  const failures = vi
+    .spyOn(ingestionApi, "listTranslationFailures")
+    .mockResolvedValue({
+      batchId: "batch-fixture",
+      failures: [],
+    });
+  const { result } = renderHook(
+    () => {
+      useIngestionBatches(state.bank);
+      return [
+        useDataPermission(state.bank, "view", "aggregated"),
+        useDataPermission(state.bank, "view", "confidential"),
+        useDataPermission(state.bank, "view", "restricted"),
+      ];
+    },
+    { wrapper: Wrapper },
+  );
+  expect(result.current).toEqual([false, false, false]);
+  const params = Promise.resolve({ batchId: "batch-fixture" });
+  await act(async () => {
+    render(
+      <Wrapper>
+        <Suspense fallback={<span>Loading batch route</span>}>
+          <BatchDetailPage params={params} />
+        </Suspense>
+      </Wrapper>,
+    );
+  });
+  expect(await screen.findByRole("status")).toHaveTextContent(
+    "DATA · Confidential · View",
+  );
+  expect(list).not.toHaveBeenCalled();
+  expect(detail).not.toHaveBeenCalled();
+  expect(failures).not.toHaveBeenCalled();
+});
+
 it.each(["rejected", "accepted"] as const)(
   "discloses withheld diagnostics for a confidential-only reader of a %s batch",
   async (status) => {

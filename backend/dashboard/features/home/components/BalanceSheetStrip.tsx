@@ -17,7 +17,7 @@ import {
   totalLoans,
 } from "@/lib/api/facts";
 import { fmtCurrency } from "@/lib/format";
-import DataAccessNotice from "@/components/data-engine/DataAccessNotice";
+import DataAccessNotice from "@/components/ui/DataAccessNotice";
 import EmptyState from "@/components/ui/EmptyState";
 import { ErrorPanel } from "@/components/ui/QueryBoundary";
 import { hasAnyFacts } from "./hooks";

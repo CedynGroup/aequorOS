@@ -11,7 +11,7 @@
 import type { IngestionBatchRead } from "@aequoros/risk-service-api";
 import { fmtLocale } from "@/lib/format";
 import { useDataPermission } from "@/lib/api/dataAccess";
-import DataAccessNotice from "@/components/data-engine/DataAccessNotice";
+import DataAccessNotice from "@/components/ui/DataAccessNotice";
 
 type ReportFinding = {
   rule?: string;

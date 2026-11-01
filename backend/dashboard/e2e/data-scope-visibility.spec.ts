@@ -125,6 +125,7 @@ test.describe("a reader whose grant covers some branches", () => {
     storyConfig: {
       roles: ["viewer", "analyst"],
       bindings: [
+        { bundle: "viewer", module: "data", sensitivity: "confidential" },
         {
           bundle: "viewer",
           module: "credit",

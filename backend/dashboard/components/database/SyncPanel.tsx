@@ -18,7 +18,7 @@ import BatchReport from "./BatchReport";
 import { SyncStatusPill } from "./shared";
 import { fmtLocale } from "@/lib/format";
 import { useDataPermission } from "@/lib/api/dataAccess";
-import DataAccessNotice from "@/components/data-engine/DataAccessNotice";
+import DataAccessNotice from "@/components/ui/DataAccessNotice";
 
 function errorMessage(error: unknown): string {
   if (isApiError(error)) return error.message;

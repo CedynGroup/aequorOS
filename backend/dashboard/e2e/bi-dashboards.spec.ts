@@ -449,9 +449,9 @@ test.describe("a dashboard the reader saves for themselves", () => {
     objects,
   }) => {
     const dashboardPath = await prepareDashboard(request, objects, true);
-    // A SECOND REAL IDENTITY, not a mocked one: the Liquidity-only reader holds
-    // an exact LIQUIDITY binding and nothing else, so the deposit view is theirs
-    // and the loan view is not. The document is the same document.
+    // A SECOND REAL IDENTITY: the reader holds LIQUIDITY plus DATA/confidential
+    // for reporting periods. The deposit view is theirs and the CREDIT loan
+    // view is not. The document is the same document.
     const context = await browser.newContext({
       storageState: path.join(E2E_TMP, "liquidity_viewer.json"),
       baseURL: E2E_BASE_URL,
