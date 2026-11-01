@@ -120,6 +120,16 @@ with status 2 if any restored object has no version ID, including these temp
 objects. Inspect the warning and report: every selected pin still requires a
 usable old-to-new version mapping before reconciliation can succeed.
 
+On refusal, the reconciler exits with status 1 and writes the fixed precondition
+reason or PostgreSQL's primary diagnostic to stderr. For example, a missing or
+ambiguous pinned mapping requires checking the replay report and selected scope;
+an unproved session requires checking the incident login's authority. Driver
+details, hints, context, SQL and parameters are omitted. Invalid input (`ValueError`),
+file access failures (`OSError`) and database errors without a PostgreSQL primary
+diagnostic receive only the generic refusal. Protected-target refusals omit the
+host, port and database name. Keep writers stopped and investigate the refusal
+before retrying; a failed transaction does not commit reference or audit changes.
+
 Only `regulatory_artifact_versions.storage_version_id`,
 `regulatory_package_attachments.storage_version_id`,
 `icaap_attachments.storage_version_id`, and
