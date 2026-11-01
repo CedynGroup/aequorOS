@@ -9,7 +9,8 @@ from uuid import UUID
 
 import pytest
 from fastapi.testclient import TestClient
-from hypothesis import given, strategies as st
+from hypothesis import given
+from hypothesis import strategies as st
 from pydantic import ValidationError
 from sqlalchemy import func, select
 

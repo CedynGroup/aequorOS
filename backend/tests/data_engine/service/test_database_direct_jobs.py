@@ -258,6 +258,7 @@ def test_human_probes_without_authority_are_effect_free(
     connection = _connection(db_session, ctx, _bank(db_session))
     before = connection.last_validated_at
     audit_count = db_session.scalar(select(func.count()).select_from(AuditEvent))
+
     def refuse_effect(*_args: object, **_kwargs: object) -> Never:
         raise AssertionError("Unauthorized human probe reached credentials or network")
 
