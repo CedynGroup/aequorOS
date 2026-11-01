@@ -27,7 +27,7 @@ Transport requirements are governed by [the transport contract](transport_securi
 Download credentials and encrypted transfer rules are governed by
 [the download contract](bank_encryption.md#downloads). Keep capability links private.
 
-From `backend/`, download current objects into a distinct directory for each
+From `backend/`, download every retained object revision into a distinct directory for each
 backup generation:
 
 ```bash
@@ -40,14 +40,78 @@ Using recovery endpoint credentials, restore those objects into the recovery obj
 uv run python -m scripts.backup_storage --out-dir <backup-directory> --restore-manifest <manifest-path>
 ```
 
-Use the `storage-inventory-<timestamp>.json` manifest reported by the download. Missing
-buckets are recreated using the provisioning rules for dialect, versioning, temp
-expiry and configured default SSE. Restore the matching database envelopes to read
-current objects without a version pin. Inventory-only or older manifests are not
-sufficient for encrypted-object recovery.
+Use the format-3 `storage-inventory-<timestamp>.json` manifest reported by the
+download. Versioned buckets retain superseded revisions; inventory-only or older
+manifests cannot recover pinned documents. Missing buckets are recreated using the
+provisioning rules for dialect, versioning, temp expiry and configured default SSE.
+Keep the matching database envelopes and all recorded bank keys available.
 
-Backup catalogue requirements and the current-object-only recovery limitation are
-owned by [rotation, backups and recovery](bank_encryption.md#rotation-backups-and-recovery).
+### Reconcile pinned versions after replay
+
+Restore replay emits `storage-restore-<timestamp>.json`, mapping each original
+`(bucket, key, version ID)` to the new version ID minted by the recovery store.
+Apply migration `202611010104` to the recovered database, keep application writers
+stopped, and retain the mapping with the incident evidence. This is an offline
+maintenance operation for a dedicated restore target, not an application endpoint.
+
+The DBA must issue an incident-only login with cross-tenant authority (SUPERUSER
+or BYPASSRLS) and explicitly grant `aqs_storage_recovery` to that login for the
+recovery window. Neither NOLOGIN role installed by the migration has BYPASSRLS.
+Never grant this capability or the internal `aqs_storage_recovery_owner` identity
+to an application, worker, or operator runtime login. The internal owner is for
+migration-owned functions; the incident login receives only the public recovery
+capability. Revoke the incident membership and retire its credentials afterwards.
+The operation requires direct membership recorded in `pg_auth_members`, even for
+a superuser, and checks the actual connection identity (`session_user`) before
+reading or changing any pinned reference. `SET ROLE` and caller-controlled settings
+cannot establish a recovery session.
+
+Set `RESTORE_DATABASE_URL` through a protected environment or `--env-file`, keeping
+credentials off command lines and out of shell history. Keep the primary
+`DATABASE_URL`, `WORKER_DATABASE_URL`, and `OPERATOR_DATABASE_URL` populated so the
+CLI can refuse a target that addresses one of those databases.
+
+```bash
+uv run python -m scripts.reconcile_storage_versions \
+  --mapping <backup-directory>/storage-restore-<timestamp>.json \
+  --storage-env <restored-bucket-environment> \
+  --reason <incident-or-change-reference>
+```
+
+Use the environment embedded in the restored bucket names; replay preserves
+those names even when the recovery endpoint differs from the original.
+
+Optional `--organization-id OR-…` and `--bank-id BK-…` narrow the recovery scope.
+Every non-null pinned reference in that scope must have exactly one mapping by
+bucket, key and old version. Missing or duplicate identities, collapsed restored
+versions, malformed IDs/checksums and a zero-match scope refuse the entire
+transaction. An already-applied mapping also refuses rather than guessing that a
+missing old ID means success. For a retry, retain the original restored database
+snapshot or explicitly inventory the current pins and investigate the previous
+committed run first; do not edit the replay report to force a match.
+
+Only `regulatory_artifact_versions.storage_version_id`,
+`regulatory_package_attachments.storage_version_id`,
+`icaap_attachments.storage_version_id`, and
+`bank_supervisory_addons.letter_storage_version_id` can move. The existing guards
+require the function identity and a private transaction-bound, exact-row permit;
+ordinary UPDATE, DELETE, TRUNCATE and all other sealed fields retain their guards.
+Reference updates and `audit_events(event_type='storage.version_reconciled')`
+commit together in the existing hash chain. Each event records the connection
+identity, incident reason, run ID, bank, table, row, bucket/key, before/after IDs,
+replay ciphertext checksum, and SHA-256 of the report's PostgreSQL JSONB text.
+No document, signature, content digest, timestamp, envelope or bank key is rewritten.
+
+After committing, exercise version-pinned downloads through the application and
+verify the archived bytes and signature bindings. Reconciliation does not unwrap
+keys and cannot override revoked or unavailable bank keys. The synthetic migrated
+PostgreSQL regression in `tests/db/test_storage_version_recovery.py` covers three
+banks in two organizations, historical revisions, encrypted-store loss and replay,
+old-key reads, key refusals, bank/tenant isolation, audit-chain integrity and
+unauthorized writes. Whole-service orchestration and backup cadence remain separate.
+
+Backup catalogue and retained-key requirements are owned by
+[rotation, backups and recovery](bank_encryption.md#rotation-backups-and-recovery).
 
 ## Connect, rotate and retire
 
