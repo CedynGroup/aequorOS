@@ -2,6 +2,7 @@
 import "@testing-library/jest-dom/vitest";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import {
+  act,
   cleanup,
   render,
   renderHook,
@@ -10,11 +11,12 @@ import {
 } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import type { ReactNode } from "react";
+import { Suspense, type ReactNode } from "react";
 import fc from "fast-check";
 import {
   ReconciliationApi,
   type EffectiveCapabilityRead,
+  type IngestionBatchRead,
   type ReconciliationExceptionRead,
 } from "@aequoros/risk-service-api";
 import { hasDataCapability } from "../lib/modules";
@@ -23,6 +25,9 @@ import { ingestionApi, useIngestionBatches } from "../lib/api/ingestion";
 import { queryAuthorityScope } from "../lib/api/queryPolicy";
 import ReconciliationPanel from "../components/data-engine/ReconciliationPanel";
 import UploadPanel from "../components/data-engine/UploadPanel";
+import BatchDetailPage from "../app/(app)/data-engine/batches/[batchId]/page";
+import SyncPanel from "../components/database/SyncPanel";
+import { databaseDirectApi } from "../lib/api/database-direct";
 
 const state = vi.hoisted(() => ({
   capabilities: [] as EffectiveCapabilityRead[],
@@ -60,6 +65,7 @@ vi.mock("@/lib/api/client", () => ({
   configuration: undefined,
   apiCall: (call: () => Promise<unknown>) => call(),
   isApiError: () => false,
+  isModuleUnavailable: () => false,
 }));
 
 function capability(
@@ -278,3 +284,205 @@ it("offers a pending proposal only to a different signed-in checker, never a dis
     }),
   );
 });
+
+function batch(
+  status: IngestionBatchRead["status"] = "rejected",
+): IngestionBatchRead {
+  return {
+    id: "batch-fixture",
+    bankId: state.bank,
+    adapterVersion: "fixture",
+    asOfDate: new Date("2026-06-30"),
+    createdAt: new Date("2026-07-01"),
+    startedAt: null,
+    completedAt: null,
+    sourceSystem: "DB_DIRECT",
+    extractionMode: "full",
+    status,
+    mappingConfigId: null,
+    contentHash: null,
+    errorCode: null,
+    errorMessage: null,
+    rawArtifactPath: null,
+    reportArtifactPath: null,
+    recordsExtracted: 2,
+    recordsTranslated: status === "accepted" ? 2 : 1,
+    recordsAccepted: status === "accepted" ? 2 : 0,
+    recordsBlocked: status === "accepted" ? 0 : 1,
+    recordsError: status === "accepted" ? 0 : 1,
+    recordsWarning: 0,
+    validationReport: {},
+    etlReport: null,
+  };
+}
+
+async function renderBatchDetail() {
+  const params = Promise.resolve({ batchId: "batch-fixture" });
+  await act(async () => {
+    render(
+      <Wrapper>
+        <Suspense fallback={<p>Loading page…</p>}>
+          <BatchDetailPage params={params} />
+        </Suspense>
+      </Wrapper>,
+    );
+  });
+  await screen.findByRole("heading", { name: "Validation findings" });
+}
+
+it.each(["rejected", "accepted"] as const)(
+  "discloses withheld diagnostics for a confidential-only reader of a %s batch",
+  async (status) => {
+    state.capabilities = [capability("view", "confidential")];
+    vi.spyOn(ingestionApi, "getIngestionBatch").mockResolvedValue(
+      batch(status),
+    );
+    const failures = vi
+      .spyOn(ingestionApi, "listTranslationFailures")
+      .mockResolvedValue({ batchId: "batch-fixture", failures: [] });
+
+    await renderBatchDetail();
+
+    expect(
+      screen.getByText(/Restricted · View for validation findings/),
+    ).toHaveAttribute("role", "status");
+    expect(
+      screen.getByText(/Restricted · View for untranslatable rows/),
+    ).toHaveAttribute("role", "status");
+    expect(screen.queryByText(/Every record.*passed/)).not.toBeInTheDocument();
+    expect(
+      screen.queryByText(/Every extracted row translated/),
+    ).not.toBeInTheDocument();
+    expect(failures).not.toHaveBeenCalled();
+    if (status === "rejected")
+      expect(screen.getByText(/Batch rejected — nothing/)).toBeInTheDocument();
+  },
+);
+
+it("waits for translation diagnostics before claiming that all rows translated", async () => {
+  state.capabilities = [capability("view", "confidential"), capability("view")];
+  vi.spyOn(ingestionApi, "getIngestionBatch").mockResolvedValue(
+    batch("accepted"),
+  );
+  let finish!: (value: { batchId: string; failures: [] }) => void;
+  vi.spyOn(ingestionApi, "listTranslationFailures").mockReturnValue(
+    new Promise((resolve) => {
+      finish = resolve;
+    }),
+  );
+
+  await renderBatchDetail();
+
+  expect(screen.getByText("Loading untranslatable rows…")).toHaveAttribute(
+    "role",
+    "status",
+  );
+  expect(
+    screen.queryByText(/Every extracted row translated/),
+  ).not.toBeInTheDocument();
+  await act(async () => {
+    finish({ batchId: "batch-fixture", failures: [] });
+  });
+  expect(
+    await screen.findByText(/Every extracted row translated/),
+  ).toBeInTheDocument();
+});
+
+it("discloses failed translation reads instead of reporting successful translation", async () => {
+  state.capabilities = [capability("view", "confidential"), capability("view")];
+  vi.spyOn(ingestionApi, "getIngestionBatch").mockResolvedValue(batch());
+  vi.spyOn(ingestionApi, "listTranslationFailures").mockRejectedValue(
+    new Error("Diagnostics unavailable"),
+  );
+
+  await renderBatchDetail();
+
+  expect(
+    await screen.findByText("Untranslatable rows unavailable"),
+  ).toBeInTheDocument();
+  expect(
+    screen.queryByText(/Every extracted row translated/),
+  ).not.toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Retry" })).toBeEnabled();
+});
+
+it.each([
+  { confidential: false, restricted: true },
+  { confidential: true, restricted: false },
+  { confidential: true, restricted: true },
+])(
+  "shows sync results with confidential=$confidential and restricted=$restricted report access",
+  async ({ confidential, restricted }) => {
+    state.capabilities = [
+      capability("run"),
+      ...(confidential ? [capability("view", "confidential")] : []),
+      ...(restricted ? [capability("view")] : []),
+    ];
+    vi.spyOn(
+      databaseDirectApi,
+      "syncDatabaseDirectConnection",
+    ).mockResolvedValue({
+      batchId: "batch-fixture",
+      status: "rejected",
+      recordsExtracted: 2,
+      recordsAccepted: 0,
+      reused: false,
+      asOfDate: new Date("2026-06-30"),
+    });
+    const readBatch = batch();
+    if (restricted) {
+      readBatch.validationReport = {
+        failures: [
+          {
+            severity: "ERROR",
+            rule: "fixture",
+            detail: "Fixture validation failure",
+          },
+        ],
+      };
+    }
+    const getBatch = vi
+      .spyOn(ingestionApi, "getIngestionBatch")
+      .mockResolvedValue(readBatch);
+    render(
+      <Wrapper>
+        <SyncPanel bankId={state.bank} connectionId="connection-fixture" />
+      </Wrapper>,
+    );
+
+    await userEvent
+      .setup()
+      .click(screen.getByRole("button", { name: "Sync today" }));
+    expect(await screen.findByText("Records extracted")).toBeInTheDocument();
+    expect(screen.getByText("rejected")).toBeInTheDocument();
+    if (!confidential) {
+      expect(
+        screen.getByText(/Confidential · View for batch reports/),
+      ).toHaveAttribute("role", "status");
+      expect(getBatch).not.toHaveBeenCalled();
+      expect(
+        screen.queryByRole("link", { name: /Full batch detail/ }),
+      ).not.toBeInTheDocument();
+    } else if (!restricted) {
+      expect(
+        await screen.findByText(
+          /Restricted · View for ETL and validation reports/,
+        ),
+      ).toHaveAttribute("role", "status");
+      expect(screen.queryByText(/every record passed/)).not.toBeInTheDocument();
+      expect(
+        screen.queryByText(/No ETL preprocess report/),
+      ).not.toBeInTheDocument();
+    } else {
+      expect(
+        await screen.findByText("Fixture validation failure"),
+      ).toBeInTheDocument();
+      expect(
+        screen.getByRole("link", { name: /Full batch detail/ }),
+      ).toHaveAttribute("href", "/data-engine/batches/batch-fixture");
+    }
+    expect(
+      screen.queryByText("Loading the batch reports…"),
+    ).not.toBeInTheDocument();
+  },
+);

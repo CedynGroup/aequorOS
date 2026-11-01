@@ -17779,6 +17779,8 @@
     "tests/data_engine/service/test_database_direct_jobs.py::test_enqueue_due_probe_coalesces_daily": "integration",
     "tests/data_engine/service/test_database_direct_jobs.py::test_enqueue_is_inert_when_disabled": "integration",
     "tests/data_engine/service/test_database_direct_jobs.py::test_enqueue_skips_recently_validated_and_non_probeable": "integration",
+    "tests/data_engine/service/test_database_direct_jobs.py::test_human_probes_without_authority_are_effect_free[discover]": "integration",
+    "tests/data_engine/service/test_database_direct_jobs.py::test_human_probes_without_authority_are_effect_free[test]": "integration",
     "tests/data_engine/service/test_database_direct_jobs.py::test_run_probe_marks_connection_validated": "integration",
     "tests/data_engine/service/test_database_direct_jobs.py::test_run_probe_records_transient_failure_without_retry": "integration",
     "tests/data_engine/service/test_database_direct_jobs.py::test_run_probe_skips_non_probeable_connection": "integration",
