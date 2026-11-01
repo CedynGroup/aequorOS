@@ -6,6 +6,8 @@ Revises: 202610240103
 
 from __future__ import annotations
 
+from collections.abc import Iterator
+from contextlib import contextmanager
 from typing import cast
 
 from alembic import op
@@ -32,6 +34,16 @@ EXCEPTION = """
 """
 
 
+@contextmanager
+def _as_owner(owner: str) -> Iterator[None]:
+    connection = op.get_bind()
+    previous = cast(str, connection.exec_driver_sql("SELECT current_user").scalar_one())
+    quote = connection.dialect.identifier_preparer.quote_identifier
+    op.execute(f"SET LOCAL ROLE {quote(owner)}")
+    yield
+    op.execute(f"SET LOCAL ROLE {quote(previous)}")
+
+
 def _extend_guards(quoted_schema: str, *, remove: bool = False) -> None:
     exception = EXCEPTION.replace(
         "aqs_storage_recovery_change", quoted_schema + ".aqs_storage_recovery_change"
@@ -52,7 +64,17 @@ def _extend_guards(quoted_schema: str, *, remove: bool = False) -> None:
                 raise RuntimeError("Recovery guard cannot be installed on this definition.")
             # Keep the complete existing guard, including all lifecycle rules.
             definition = definition.replace("BEGIN", "BEGIN" + exception, 1)
-        op.execute(definition)
+        owner = cast(
+            str,
+            op.get_bind()
+            .exec_driver_sql(
+                "SELECT pg_get_userbyid(proowner) FROM pg_proc "
+                f"WHERE oid = '{function}()'::regprocedure"
+            )
+            .scalar_one(),
+        )
+        with _as_owner(owner):
+            op.execute(definition)
 
 
 def upgrade() -> None:  # noqa: PLR0915 - one atomic privilege and function installation
@@ -79,53 +101,50 @@ def upgrade() -> None:  # noqa: PLR0915 - one atomic privilege and function inst
         raise RuntimeError("Prepare recovery owner membership using the administrator runbook")
     op.execute(f"GRANT USAGE, CREATE ON SCHEMA {quoted} TO {OWNER}, aequoros_audit_owner")
     op.execute(f"GRANT USAGE ON SCHEMA {quoted} TO {CAPABILITY}")
-    op.execute(f"""
-        CREATE TABLE aqs_storage_recovery_permit (
-            backend integer NOT NULL, transaction_id bigint NOT NULL,
-            table_name text NOT NULL, record_id uuid NOT NULL,
-            before_version text NOT NULL, after_version text NOT NULL,
-            PRIMARY KEY (backend, transaction_id)
-        );
-        ALTER TABLE aqs_storage_recovery_permit OWNER TO aequoros_audit_owner;
-        REVOKE ALL ON aqs_storage_recovery_permit FROM PUBLIC;
-        DO $$ DECLARE r record; BEGIN
-            FOR r IN SELECT rolname FROM pg_roles
-                     WHERE rolname NOT LIKE 'pg\\_%' AND NOT rolsuper
-                       AND rolname <> 'aequoros_audit_owner' LOOP
-                EXECUTE format('REVOKE ALL ON aqs_storage_recovery_permit FROM %I', r.rolname);
-            END LOOP;
-        END $$;
-        GRANT SELECT, INSERT, DELETE ON aqs_storage_recovery_permit TO {OWNER};
-        CREATE FUNCTION aqs_storage_recovery_change(
-            caller name, t text, old_row jsonb, new_row jsonb)
-        RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER
-        SET search_path = pg_catalog, {quoted}, pg_temp AS $$
-            SELECT caller = '{OWNER}'
-               AND EXISTS (SELECT 1 FROM {quoted}.aqs_storage_recovery_permit p
-                   WHERE p.backend = pg_backend_pid() AND p.transaction_id = txid_current()
-                     AND p.table_name = t AND p.record_id = (old_row->>'id')::uuid
-                     AND p.before_version = old_row->>(CASE WHEN t = 'bank_supervisory_addons'
-                         THEN 'letter_storage_version_id' ELSE 'storage_version_id' END)
-                     AND p.after_version = new_row->>(CASE WHEN t = 'bank_supervisory_addons'
-                         THEN 'letter_storage_version_id' ELSE 'storage_version_id' END))
-               AND CASE t
-                 WHEN 'regulatory_artifact_versions' THEN
-                     old_row - 'storage_version_id' = new_row - 'storage_version_id'
-                 WHEN 'regulatory_package_attachments' THEN
-                     old_row - 'storage_version_id' = new_row - 'storage_version_id'
-                 WHEN 'icaap_attachments' THEN
-                     old_row - 'storage_version_id' = new_row - 'storage_version_id'
-                 WHEN 'bank_supervisory_addons' THEN
-                     old_row - 'letter_storage_version_id' = new_row - 'letter_storage_version_id'
-                 ELSE false END
-        $$;
-        GRANT EXECUTE ON FUNCTION aqs_storage_recovery_change(name, text, jsonb, jsonb)
-            TO PUBLIC;
-    """)
-    op.execute(
-        "ALTER FUNCTION aqs_storage_recovery_change(name, text, jsonb, jsonb) "
-        "OWNER TO aequoros_audit_owner"
-    )
+    with _as_owner("aequoros_audit_owner"):
+        op.execute(f"""
+            CREATE TABLE aqs_storage_recovery_permit (
+                backend integer NOT NULL, transaction_id bigint NOT NULL,
+                table_name text NOT NULL, record_id uuid NOT NULL,
+                before_version text NOT NULL, after_version text NOT NULL,
+                PRIMARY KEY (backend, transaction_id)
+            );
+            REVOKE ALL ON aqs_storage_recovery_permit FROM PUBLIC;
+            DO $$ DECLARE r record; BEGIN
+                FOR r IN SELECT rolname FROM pg_roles
+                         WHERE rolname NOT LIKE 'pg\\_%' AND NOT rolsuper
+                           AND rolname <> 'aequoros_audit_owner' LOOP
+                    EXECUTE format('REVOKE ALL ON aqs_storage_recovery_permit FROM %I', r.rolname);
+                END LOOP;
+            END $$;
+            GRANT SELECT, INSERT, DELETE ON aqs_storage_recovery_permit TO {OWNER};
+            CREATE FUNCTION aqs_storage_recovery_change(
+                caller name, t text, old_row jsonb, new_row jsonb)
+            RETURNS boolean LANGUAGE sql STABLE SECURITY DEFINER
+            SET search_path = pg_catalog, {quoted}, pg_temp AS $$
+                SELECT caller = '{OWNER}'
+                   AND EXISTS (SELECT 1 FROM {quoted}.aqs_storage_recovery_permit p
+                       WHERE p.backend = pg_backend_pid() AND p.transaction_id = txid_current()
+                         AND p.table_name = t AND p.record_id = (old_row->>'id')::uuid
+                         AND p.before_version = old_row->>(CASE WHEN t = 'bank_supervisory_addons'
+                             THEN 'letter_storage_version_id' ELSE 'storage_version_id' END)
+                         AND p.after_version = new_row->>(CASE WHEN t = 'bank_supervisory_addons'
+                             THEN 'letter_storage_version_id' ELSE 'storage_version_id' END))
+                   AND CASE t
+                     WHEN 'regulatory_artifact_versions' THEN
+                         old_row - 'storage_version_id' = new_row - 'storage_version_id'
+                     WHEN 'regulatory_package_attachments' THEN
+                         old_row - 'storage_version_id' = new_row - 'storage_version_id'
+                     WHEN 'icaap_attachments' THEN
+                         old_row - 'storage_version_id' = new_row - 'storage_version_id'
+                     WHEN 'bank_supervisory_addons' THEN
+                         old_row - 'letter_storage_version_id'
+                             = new_row - 'letter_storage_version_id'
+                     ELSE false END
+            $$;
+            GRANT EXECUTE ON FUNCTION aqs_storage_recovery_change(name, text, jsonb, jsonb)
+                TO PUBLIC;
+        """)
     # The guards require the definer identity AND its private one-row permit.
     # Neither SET ROLE nor a caller-set GUC can authorize an ordinary UPDATE.
     _extend_guards(quoted)
@@ -147,11 +166,12 @@ def upgrade() -> None:  # noqa: PLR0915 - one atomic privilege and function inst
                 f"USING (current_user = '{OWNER}') "
                 f"WITH CHECK (current_user = '{OWNER}')"
             )
-    op.execute(f"GRANT INSERT ON audit_events TO {OWNER}")
-    op.execute(
-        f"CREATE POLICY audit_events_storage_recovery_insert ON audit_events "
-        f"FOR INSERT TO {OWNER} WITH CHECK (true)"
-    )
+    with _as_owner("aequoros_audit_owner"):
+        op.execute(f"GRANT INSERT ON audit_events TO {OWNER}")
+        op.execute(
+            f"CREATE POLICY audit_events_storage_recovery_insert ON audit_events "
+            f"FOR INSERT TO {OWNER} WITH CHECK (true)"
+        )
     # Schema-qualified definer writes run only in the proved recovery session;
     # installing their definitions performs no tenant-data migration.
     op.execute(f"""
@@ -304,16 +324,18 @@ def upgrade() -> None:  # noqa: PLR0915 - one atomic privilege and function inst
             TO {CAPABILITY};
         ALTER FUNCTION aqs_reconcile_storage_versions(jsonb, text, text, text, text)
             OWNER TO {OWNER};
-        REVOKE CREATE ON SCHEMA {quoted} FROM {OWNER}, aequoros_audit_owner;
     """)
+    op.execute(f"REVOKE CREATE ON SCHEMA {quoted} FROM {OWNER}, aequoros_audit_owner")
 
 
 def downgrade() -> None:
     if op.get_bind().dialect.name != "postgresql":
         return
-    op.execute("DROP FUNCTION aqs_reconcile_storage_versions(jsonb, text, text, text, text)")
     schema = cast(str, op.get_bind().exec_driver_sql("SELECT current_schema()").scalar_one())
     quoted = op.get_bind().dialect.identifier_preparer.quote_identifier(schema)
+    with _as_owner(OWNER):
+        op.execute("DROP FUNCTION aqs_reconcile_storage_versions(jsonb, text, text, text, text)")
+    op.execute(f"GRANT CREATE ON SCHEMA {quoted} TO aequoros_audit_owner")
     _extend_guards(quoted, remove=True)
     for table in TARGETS:
         if table != "bank_supervisory_addons":
@@ -325,9 +347,11 @@ def downgrade() -> None:
     for table in ("banks", "regulatory_packages", *TARGETS):
         op.execute(f"DROP POLICY {table}_storage_recovery_read ON {table}")
         op.execute(f"REVOKE SELECT ON {table} FROM {OWNER}")
-    op.execute("DROP POLICY audit_events_storage_recovery_insert ON audit_events")
-    op.execute(f"REVOKE INSERT ON audit_events FROM {OWNER}")
-    op.execute("DROP FUNCTION aqs_storage_recovery_change(name, text, jsonb, jsonb)")
-    op.execute("DROP TABLE aqs_storage_recovery_permit")
+    with _as_owner("aequoros_audit_owner"):
+        op.execute("DROP POLICY audit_events_storage_recovery_insert ON audit_events")
+        op.execute(f"REVOKE INSERT ON audit_events FROM {OWNER}")
+        op.execute("DROP FUNCTION aqs_storage_recovery_change(name, text, jsonb, jsonb)")
+        op.execute("DROP TABLE aqs_storage_recovery_permit")
+    op.execute(f"REVOKE CREATE ON SCHEMA {quoted} FROM aequoros_audit_owner")
     # Cluster roles may be used by another schema; revoke this schema only.
     op.execute(f"REVOKE USAGE ON SCHEMA {quoted} FROM {OWNER}, {CAPABILITY}")
