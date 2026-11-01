@@ -111,9 +111,9 @@ export default function ReconciliationPanel() {
                 id={`${id}-ceiling`}
                 required
                 type="number"
-                min="0.00000001"
+                min="0.000001"
                 max="1"
-                step="any"
+                step="0.000001"
                 value={ceiling}
                 onChange={(e) => setCeiling(e.target.value)}
                 className={fieldClass}

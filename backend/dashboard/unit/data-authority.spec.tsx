@@ -486,3 +486,78 @@ it.each([
     ).not.toBeInTheDocument();
   },
 );
+
+it.each([
+  { ceiling: "0.0000001", valid: false },
+  { ceiling: "0.0500006", valid: false },
+  { ceiling: "0.000001", valid: true },
+  { ceiling: "0.0500000", valid: true },
+  { ceiling: "0.999999", valid: true },
+  { ceiling: "1.0000000", valid: true },
+])(
+  "accepts ceiling $ceiling only when storage can preserve it",
+  async ({ ceiling, valid }) => {
+    state.capabilities = [capability("create", "confidential")];
+    const propose = vi
+      .spyOn(ReconciliationApi.prototype, "proposeReconciliationException")
+      .mockResolvedValue({
+        id: "precision-proposal",
+        bankId: state.bank,
+        control: "balance_sheet_identity",
+        reason: "Known feed gap",
+        maxGapFraction: ceiling,
+        effectiveFrom: new Date("2026-06-01"),
+        effectiveTo: null,
+        requestedBy: "maker",
+        requestedAt: new Date("2026-06-01"),
+        status: "pending",
+        approvedBy: null,
+        approvedByUserId: null,
+        approvalTimestamp: null,
+        revokedAt: null,
+        revokedBy: null,
+      });
+    render(
+      <Wrapper>
+        <ReconciliationPanel />
+      </Wrapper>,
+    );
+    const user = userEvent.setup();
+    await user.type(screen.getByLabelText("Reason"), "Known feed gap");
+    await user.type(
+      screen.getByLabelText("Maximum gap fraction (0–1)"),
+      ceiling,
+    );
+    await user.type(screen.getByLabelText("Effective from"), "2026-06-01");
+    const input = screen.getByRole("spinbutton", {
+      name: "Maximum gap fraction (0–1)",
+    });
+    if (valid) expect(input).toBeValid();
+    else expect(input).toBeInvalid();
+    await user.click(screen.getByRole("button", { name: "Record proposal" }));
+    if (valid) {
+      expect(
+        await screen.findByText(
+          "Proposal recorded. A different officer must approve it.",
+        ),
+      ).toBeInTheDocument();
+      expect(propose).toHaveBeenCalledWith({
+        bankId: state.bank,
+        reconciliationExceptionCreate: {
+          reason: "Known feed gap",
+          maxGapFraction: expect.any(String),
+          effectiveFrom: new Date("2026-06-01"),
+          effectiveTo: undefined,
+        },
+      });
+      expect(
+        Number(
+          propose.mock.calls[0][0].reconciliationExceptionCreate.maxGapFraction,
+        ),
+      ).toBe(Number(ceiling));
+    } else {
+      expect(propose).not.toHaveBeenCalled();
+      expect(screen.queryByText(/Proposal recorded/)).not.toBeInTheDocument();
+    }
+  },
+);
