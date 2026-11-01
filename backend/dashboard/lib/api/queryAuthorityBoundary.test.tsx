@@ -98,6 +98,29 @@ async function main(): Promise<void> {
   ].join(".");
   moduleWithLoader._load = (request, parent, isMain) => {
     if (request === "@aequoros/risk-service-api") return generatedApi;
+    if (request.endsWith("/profile/ProfileProvider")) {
+      return {
+        useUserProfile: () => ({
+          isLoading: false,
+          effectiveAuthority: {
+            institutionCapabilities: [
+              {
+                institutionId: BANK_ID,
+                capabilities: ["aggregated", "confidential", "restricted"].map(
+                  (sensitivity) => ({
+                    module: "data",
+                    permission: "view",
+                    sensitivity,
+                    dataScope: { kind: "all", branches: [], regions: [] },
+                    requiresContextualAuthorization: false,
+                  }),
+                ),
+              },
+            ],
+          },
+        }),
+      };
+    }
     if (request === "next/server") {
       return {
         NextResponse: {

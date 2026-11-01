@@ -18,6 +18,7 @@ import StatusPill, { type StatusTone } from "@/components/ui/StatusPill";
 import { SkeletonLine } from "@/components/ui/Skeleton";
 import { useBankContext } from "@/components/shell/BankContext";
 import { isApiError } from "@/lib/api/client";
+import { useDataPermission } from "@/lib/api/dataAccess";
 import {
   useDatabaseConnections,
   useTestDatabaseConnection,
@@ -98,6 +99,7 @@ function remediation(row: HealthRow): string | null {
 
 export default function ConnectionHealthPanel() {
   const { bank, moduleScope } = useBankContext();
+  const validate = useDataPermission(bank?.id, "validate", "restricted");
   const dbDirect = useDatabaseConnections(bank?.id);
   const temenos = useTemenosConnections(bank?.id);
   // Market-data connection metadata is Markets/restricted: without that exact
@@ -113,6 +115,7 @@ export default function ConnectionHealthPanel() {
   const [tests, setTests] = useState<Record<string, TestOutcome>>({});
 
   const runTest = async (row: HealthRow) => {
+    if (row.source !== "market-data" && !validate) return;
     const key = `${row.source}-${row.id}`;
     setTests((prev) => ({ ...prev, [key]: { state: "running" } }));
     try {
@@ -272,7 +275,14 @@ export default function ConnectionHealthPanel() {
                     <button
                       type="button"
                       onClick={() => void runTest(row)}
-                      disabled={testing}
+                      disabled={
+                        testing || (row.source !== "market-data" && !validate)
+                      }
+                      title={
+                        row.source !== "market-data" && !validate
+                          ? "Requires DATA · Restricted · Validate"
+                          : undefined
+                      }
                       className="shrink-0 inline-flex items-center gap-1 px-2 py-1 text-caption font-medium text-slate border border-border rounded-md hover:bg-surface disabled:opacity-50 disabled:pointer-events-none"
                     >
                       {testing && (

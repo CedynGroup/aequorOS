@@ -39,7 +39,9 @@ from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
+from app.core.authorization import Permission, Sensitivity
 from app.data_engine.service import reconciliation
+from app.data_engine.service.access import require_data_access
 from app.db.base import utc_now
 from app.domain.authority.outcomes import OutcomeDetail, OutcomeState
 from app.domain.authority.outcomes import outcome as build_outcome
@@ -381,6 +383,7 @@ def propose(  # noqa: PLR0913 - a governed declaration names every field explici
     confirmation_status: str = "pending",
 ) -> SystemOfRecordDeclaration:
     """Maker step: record a ``draft`` declaration. Invisible to :func:`resolve`."""
+    require_data_access(db, ctx, bank.id, Permission.CREATE, Sensitivity.CONFIDENTIAL)
     if not source_citation.strip():
         raise SystemOfRecordError(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
@@ -464,6 +467,15 @@ def approve(
 ) -> SystemOfRecordDeclaration:
     """Checker step: approve a draft (approver ≠ proposer) and close the prior row."""
     row = get_declaration(db, ctx.organization_id, bank.id, declaration_id)
+    require_data_access(
+        db,
+        ctx,
+        bank.id,
+        Permission.APPROVE,
+        Sensitivity.CONFIDENTIAL,
+        opaque=True,
+        maker_user_id=row.proposed_by_user_id,
+    )
     if row.status != "draft":
         raise SystemOfRecordError(
             status_code=status.HTTP_409_CONFLICT,
@@ -474,10 +486,11 @@ def approve(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="A system-of-record declaration requires a named approver.",
         )
-    if approved_by.strip().lower() == row.proposed_by.strip().lower() or (
-        ctx.actor_user_id is not None
-        and row.proposed_by_user_id is not None
-        and ctx.actor_user_id == row.proposed_by_user_id
+    if (
+        ctx.actor_user_id is None
+        or row.proposed_by_user_id is None
+        or (approved_by.strip().lower() == row.proposed_by.strip().lower())
+        or ctx.actor_user_id == row.proposed_by_user_id
     ):
         raise SystemOfRecordError(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
@@ -544,6 +557,16 @@ def revoke(  # noqa: PLR0913 - governed revocation evidence is explicit
 ) -> SystemOfRecordDeclaration:
     """Close a declaration without deleting it (a wrong answer stays visible)."""
     row = get_declaration(db, ctx.organization_id, bank.id, declaration_id)
+    require_data_access(
+        db,
+        ctx,
+        bank.id,
+        Permission.APPROVE,
+        Sensitivity.CONFIDENTIAL,
+        opaque=True,
+        maker_user_id=row.proposed_by_user_id,
+        historical_maker=True,
+    )
     if row.revoked_at is not None:
         raise SystemOfRecordError(
             status_code=status.HTTP_409_CONFLICT,

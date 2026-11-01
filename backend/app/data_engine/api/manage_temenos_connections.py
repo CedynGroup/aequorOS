@@ -11,7 +11,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, status
 
-from app.api.deps import DbSession, MutationTenant, Tenant
+from app.api.deps import DbSession, MutationTenant, ScopedMutationTenant, Tenant
 from app.data_engine.schemas.temenos_connections import (
     TemenosBackfillRequest,
     TemenosConnectionCreate,
@@ -75,7 +75,7 @@ def test_temenos_connection(
     bank_id: str,
     connection_id: UUID,
     db: DbSession,
-    ctx: MutationTenant,
+    ctx: ScopedMutationTenant,
 ) -> TemenosTestPullRead:
     return temenos_connections.test_connection(db, ctx, bank_id, connection_id)
 
@@ -148,7 +148,7 @@ def trigger_temenos_pull(
     connection_id: UUID,
     payload: TemenosPullTriggerRequest,
     db: DbSession,
-    ctx: MutationTenant,
+    ctx: ScopedMutationTenant,
 ) -> TemenosPullTriggerRead:
     return temenos_connections.trigger_pull(db, ctx, bank_id, connection_id, payload)
 
@@ -164,7 +164,7 @@ def trigger_temenos_backfill(
     connection_id: UUID,
     payload: TemenosBackfillRequest,
     db: DbSession,
-    ctx: MutationTenant,
+    ctx: ScopedMutationTenant,
 ) -> TemenosPullTriggerRead:
     return temenos_connections.trigger_backfill(db, ctx, bank_id, connection_id, payload)
 

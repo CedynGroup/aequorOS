@@ -52,11 +52,13 @@ from sqlalchemy.orm import Session, aliased, undefer_group
 
 from app.api.deps import TenantContext
 from app.bi.service.enqueue import enqueue_mart_refresh
+from app.core.authorization import Permission, Sensitivity
 from app.core.ids import new_uuid7
 from app.core.key_management import registry
 from app.data_engine.models.canonical import CanonicalMetadataMixin, is_current_generation
 from app.data_engine.models.canonical_withdrawal import WITHDRAWABLE_ENTITIES
 from app.data_engine.service import system_of_record
+from app.data_engine.service.access import require_data_access
 from app.data_engine.service.withdrawal_impact import invalidate_register
 from app.db.base import utc_now
 from app.identity.public import Bank
@@ -204,6 +206,7 @@ def request_withdrawal(  # noqa: PLR0913 - a governed act names every field
     declaration_id: UUID | None = None,
 ) -> CanonicalWithdrawal:
     """Record a PENDING withdrawal. Stamps nothing; retires nothing."""
+    require_data_access(db, ctx, bank.id, Permission.CREATE, Sensitivity.CONFIDENTIAL)
     if not reason or not reason.strip():
         raise WithdrawalError(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
@@ -296,6 +299,15 @@ def approve_withdrawal(
 ) -> CanonicalWithdrawal:
     """Approve and apply a pending withdrawal. Approver must not be the requester."""
     row = get_withdrawal(db, ctx.organization_id, bank.id, withdrawal_id)
+    require_data_access(
+        db,
+        ctx,
+        bank.id,
+        Permission.APPROVE,
+        Sensitivity.CONFIDENTIAL,
+        opaque=True,
+        maker_user_id=row.requested_by_user_id,
+    )
     if row.status != "pending":
         raise WithdrawalError(
             status_code=status.HTTP_409_CONFLICT,
@@ -306,10 +318,11 @@ def approve_withdrawal(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="A withdrawal requires a named approver.",
         )
-    if approved_by.strip().lower() == row.requested_by.strip().lower() or (
-        ctx.actor_user_id is not None
-        and row.requested_by_user_id is not None
-        and ctx.actor_user_id == row.requested_by_user_id
+    if (
+        ctx.actor_user_id is None
+        or row.requested_by_user_id is None
+        or (approved_by.strip().lower() == row.requested_by.strip().lower())
+        or ctx.actor_user_id == row.requested_by_user_id
     ):
         raise WithdrawalError(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
@@ -519,6 +532,16 @@ def reverse_withdrawal(  # noqa: PLR0913 - governed reversal evidence is explici
 ) -> CanonicalWithdrawal:
     """Restore a withdrawn book, recording who reversed it and why."""
     row = get_withdrawal(db, ctx.organization_id, bank.id, withdrawal_id)
+    require_data_access(
+        db,
+        ctx,
+        bank.id,
+        Permission.APPROVE,
+        Sensitivity.CONFIDENTIAL,
+        opaque=True,
+        maker_user_id=row.requested_by_user_id,
+        historical_maker=True,
+    )
     if row.status != "applied":
         raise WithdrawalError(
             status_code=status.HTTP_409_CONFLICT,

@@ -54,6 +54,7 @@ from app.data_engine.service.document_uploads import (
 # instead of a partially initialized module.
 from app.data_engine.service.ingestion import (  # noqa: E402 - deliberate order
     bank_slug,
+    stage_source,
     upload_source,
 )
 
@@ -94,6 +95,7 @@ __all__ = [
     "is_current_generation",
     "reconciliation",
     "sniff_media_type",
+    "stage_source",
     "upload_source",
     "withdrawal_impact",
 ]

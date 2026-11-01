@@ -14,6 +14,8 @@ import type { IngestionBatchRead } from "@aequoros/risk-service-api";
 import { useBankContext } from "@/components/shell/BankContext";
 import { isApiError } from "@/lib/api/client";
 import { useUploadAndIngest } from "@/lib/api/ingestion";
+import { useDataPermission } from "@/lib/api/dataAccess";
+import DataAccessNotice from "./DataAccessNotice";
 import {
   BatchStatusPill,
   CountStrip,
@@ -43,9 +45,11 @@ export default function UploadPanel() {
   const [outcomes, setOutcomes] = useState<FileOutcome[]>([]);
   const [running, setRunning] = useState(false);
   const uploadAndIngest = useUploadAndIngest(bank?.id);
+  const create = useDataPermission(bank?.id, "create", "restricted");
+  const run = useDataPermission(bank?.id, "run", "restricted");
 
   const runQueue = async () => {
-    if (!files.length || running) return;
+    if (!create || !run || !files.length || running) return;
     setRunning(true);
     setOutcomes(
       files.map((file) => ({ filename: file.name, state: "queued" as const })),
@@ -96,6 +100,11 @@ export default function UploadPanel() {
     setRunning(false);
   };
 
+  if (!create || !run) {
+    return (
+      <DataAccessNotice requirement="DATA · Restricted · Create and Run to upload and ingest files" />
+    );
+  }
   return (
     <section className="card p-5 space-y-4">
       <div>

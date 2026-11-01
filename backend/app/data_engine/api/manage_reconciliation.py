@@ -1,18 +1,8 @@
-"""The reconciliation escape valve, reachable through the product.
+"""Reconciliation proposals, separate authenticated approvals and retained revocations.
 
-Audit 2026-08-22 D-20: ``reconciliation.grant_exception`` was built complete —
-non-empty reason, positive ceiling, ordered window, four-eyes refusal of
-self-approval, append-only audit event — and had no endpoint, no schema and no
-caller outside a test factory. The balance-sheet identity control is
-fail-closed, so a tenant whose canonical book carries a known, bounded defect
-was barred from every filing act with no way to record the approved exception
-except a manual database write. A control with no escape valve is not a
-control; it is an outage.
-
-These three routes ARE the valve. They record a governance decision, so both
-mutations are approver-gated and the service writes the audit event; the read
-exists because an examiner asking "on whose authority was this filed?" must be
-able to see the live exception, its ceiling and its window without a query.
+DATA CREATE persists a pending request. DATA APPROVE belongs to a different
+signed-in officer; a display label never establishes their authority. Metadata
+reads require confidential VIEW and pending requests never affect filing gates.
 """
 
 from __future__ import annotations
@@ -24,28 +14,22 @@ from uuid import UUID
 from fastapi import APIRouter, HTTPException, Query, status
 from sqlalchemy import select
 
-from app.api.deps import ApproverTenant, DbSession, Tenant, TenantContext
+from app.api.deps import DbSession, ScopedMutationTenant, Tenant
+from app.core.authorization import Module, Permission, Sensitivity
 from app.data_engine.schemas.reconciliation import (
+    ReconciliationExceptionApprove,
     ReconciliationExceptionCreate,
     ReconciliationExceptionListRead,
     ReconciliationExceptionRead,
     ReconciliationExceptionRevoke,
 )
 from app.data_engine.service import reconciliation
+from app.data_engine.service.access import require_data_access
 from app.data_engine.service.reconciliation import ReconciliationExceptionError
-from app.identity.public import Bank
+from app.identity.public import resolve_bank
 from app.models import ReconciliationException
 
 router = APIRouter(tags=["reconciliation"])
-
-
-def _bank_or_404(db: DbSession, ctx: TenantContext, bank_id: str) -> Bank:
-    bank = db.scalar(
-        select(Bank).where(Bank.id == bank_id, Bank.organization_id == ctx.organization_id)
-    )
-    if bank is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Bank not found.")
-    return bank
 
 
 def _conflict(exc: ReconciliationExceptionError) -> HTTPException:
@@ -72,7 +56,7 @@ def list_reconciliation_exceptions(
     as_of: Annotated[date | None, Query()] = None,
     control: Annotated[str, Query()] = reconciliation.CONTROL_BALANCE_SHEET_IDENTITY,
 ) -> ReconciliationExceptionListRead:
-    bank = _bank_or_404(db, ctx, bank_id)
+    bank = require_data_access(db, ctx, bank_id, Permission.VIEW, Sensitivity.CONFIDENTIAL)
     resolved_as_of = as_of or date.today()  # noqa: DTZ011 - date-only business resolution
     rows = list(
         db.scalars(
@@ -107,26 +91,48 @@ def list_reconciliation_exceptions(
     "/banks/{bank_id}/reconciliation/exceptions",
     response_model=ReconciliationExceptionRead,
     status_code=status.HTTP_201_CREATED,
-    operation_id="grantReconciliationException",
+    operation_id="proposeReconciliationException",
 )
-def grant_reconciliation_exception(
+def propose_reconciliation_exception(
     bank_id: str,
     payload: ReconciliationExceptionCreate,
     db: DbSession,
-    ctx: ApproverTenant,
+    ctx: ScopedMutationTenant,
 ) -> ReconciliationExceptionRead:
-    bank = _bank_or_404(db, ctx, bank_id)
+    bank = require_data_access(db, ctx, bank_id, Permission.CREATE, Sensitivity.CONFIDENTIAL)
     try:
-        row = reconciliation.grant_exception(
+        row = reconciliation.propose_exception(
             db,
             ctx,
             bank,
             reason=payload.reason,
-            approved_by=payload.approved_by,
-            approved_by_user_id=payload.approved_by_user_id,
             max_gap_fraction=payload.max_gap_fraction,
             effective_from=payload.effective_from,
             effective_to=payload.effective_to,
+        )
+    except ReconciliationExceptionError as exc:
+        raise _conflict(exc) from exc
+    db.commit()
+    db.refresh(row)
+    return ReconciliationExceptionRead.model_validate(row)
+
+
+@router.post(
+    "/banks/{bank_id}/reconciliation/exceptions/{exception_id}/approve",
+    response_model=ReconciliationExceptionRead,
+    operation_id="approveReconciliationException",
+)
+def approve_reconciliation_exception(
+    bank_id: str,
+    exception_id: UUID,
+    payload: ReconciliationExceptionApprove,
+    db: DbSession,
+    ctx: ScopedMutationTenant,
+) -> ReconciliationExceptionRead:
+    bank = resolve_bank(db, ctx, bank_id, module=Module.DATA)
+    try:
+        row = reconciliation.approve_exception(
+            db, ctx, bank, exception_id, approved_by=payload.approved_by
         )
     except ReconciliationExceptionError as exc:
         raise _conflict(exc) from exc
@@ -145,9 +151,9 @@ def revoke_reconciliation_exception(
     exception_id: UUID,
     payload: ReconciliationExceptionRevoke,
     db: DbSession,
-    ctx: ApproverTenant,
+    ctx: ScopedMutationTenant,
 ) -> ReconciliationExceptionRead:
-    bank = _bank_or_404(db, ctx, bank_id)
+    bank = resolve_bank(db, ctx, bank_id, module=Module.DATA)
     try:
         row = reconciliation.revoke_exception(
             db,
