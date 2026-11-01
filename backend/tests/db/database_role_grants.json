@@ -177,6 +177,15 @@
     ["aequoros_signed_package_guard", "", "aqs_bi"],
     ["aequoros_signed_package_guard", "", "aqs_operator"],
     ["aequoros_signed_package_guard", "", "aqs_worker"],
+    ["aqs_storage_recovery_change", "name, text, jsonb, jsonb", "aqs_api"],
+    [
+      "aqs_storage_recovery_change",
+      "name, text, jsonb, jsonb",
+      "aqs_audit_verifier"
+    ],
+    ["aqs_storage_recovery_change", "name, text, jsonb, jsonb", "aqs_bi"],
+    ["aqs_storage_recovery_change", "name, text, jsonb, jsonb", "aqs_operator"],
+    ["aqs_storage_recovery_change", "name, text, jsonb, jsonb", "aqs_worker"],
     ["aqs_worker_audit_check", "timestamp with time zone", "aqs_worker"],
     ["aqs_worker_bank_key", "text", "aqs_worker"],
     [
@@ -218,6 +227,7 @@
       "aqs_worker": ["DELETE", "INSERT", "SELECT", "UPDATE"]
     },
     "alembic_version": {},
+    "aqs_storage_recovery_permit": {},
     "attestation_signatures": {
       "aqs_api": ["INSERT", "SELECT"],
       "aqs_worker": ["INSERT", "SELECT"]

@@ -77,8 +77,8 @@ def refuse_protected_target(target_url: str, protected: Iterable[str | None]) ->
     for candidate in protected:
         if candidate and candidate.strip() and same_database(target_url, candidate):
             msg = (
-                f"Refusing to operate on {describe(target_url)}: it is a protected "
-                "production database. Point at a dedicated restore target."
+                "Refusing to operate on a protected production database. "
+                "Point at a dedicated restore target."
             )
             raise DisasterRecoveryError(msg)
 
