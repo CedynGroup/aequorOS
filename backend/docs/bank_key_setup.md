@@ -50,13 +50,16 @@ Keep the matching database envelopes and all recorded bank keys available.
 
 Restore replay emits `storage-restore-<timestamp>.json`, mapping each original
 `(bucket, key, version ID)` to the new version ID minted by the recovery store.
-Apply migration `202611010104` to the recovered database, keep application writers
+Have the administrator rerun `scripts/database_roles_202610120096.sql` to prepare
+the two unprivileged NOLOGIN recovery roles and the deployment owner's internal
+owner membership before applying migration `202611010104` as `aqs_migrator` using
+`SET ROLE aqs_owner`. Keep application writers
 stopped, and retain the mapping with the incident evidence. This is an offline
 maintenance operation for a dedicated restore target, not an application endpoint.
 
 The DBA must issue an incident-only login with cross-tenant authority (SUPERUSER
 or BYPASSRLS) and explicitly grant `aqs_storage_recovery` to that login for the
-recovery window. Neither NOLOGIN role installed by the migration has BYPASSRLS.
+recovery window. Neither NOLOGIN recovery role has BYPASSRLS.
 Never grant this capability or the internal `aqs_storage_recovery_owner` identity
 to an application, worker, or operator runtime login. The internal owner is for
 migration-owned functions; the incident login receives only the public recovery
@@ -89,6 +92,9 @@ transaction. An already-applied mapping also refuses rather than guessing that a
 missing old ID means success. For a retry, retain the original restored database
 snapshot or explicitly inventory the current pins and investigate the previous
 committed run first; do not edit the replay report to force a match.
+Unrelated unversioned objects, including upload temp objects, may have empty
+version IDs in the full replay report; every selected pin still requires a usable
+old-to-new version mapping.
 
 Only `regulatory_artifact_versions.storage_version_id`,
 `regulatory_package_attachments.storage_version_id`,
