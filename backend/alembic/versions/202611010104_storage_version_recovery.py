@@ -64,8 +64,7 @@ def upgrade() -> None:  # noqa: PLR0915 - one atomic privilege and function inst
         op.execute(f"""
             DO $$ BEGIN
                 IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = '{role}') THEN
-                    CREATE ROLE {role} NOLOGIN NOSUPERUSER NOBYPASSRLS
-                        NOCREATEDB NOCREATEROLE NOREPLICATION NOINHERIT;
+                    RAISE EXCEPTION 'Prepare {role} using the administrator runbook';
                 END IF;
                 IF EXISTS (SELECT 1 FROM pg_roles WHERE rolname = '{role}'
                            AND (rolcanlogin OR rolsuper OR rolbypassrls OR rolcreatedb
@@ -74,7 +73,10 @@ def upgrade() -> None:  # noqa: PLR0915 - one atomic privilege and function inst
                 END IF;
             END $$;
         """)
-    op.execute(f"GRANT {OWNER} TO CURRENT_USER")
+    if not op.get_bind().exec_driver_sql(
+        f"SELECT pg_has_role(current_user, '{OWNER}', 'MEMBER')"
+    ).scalar_one():
+        raise RuntimeError("Prepare recovery owner membership using the administrator runbook")
     op.execute(f"GRANT USAGE, CREATE ON SCHEMA {quoted} TO {OWNER}, aequoros_audit_owner")
     op.execute(f"GRANT USAGE ON SCHEMA {quoted} TO {CAPABILITY}")
     op.execute(f"""
@@ -117,6 +119,8 @@ def upgrade() -> None:  # noqa: PLR0915 - one atomic privilege and function inst
                      old_row - 'letter_storage_version_id' = new_row - 'letter_storage_version_id'
                  ELSE false END
         $$;
+        GRANT EXECUTE ON FUNCTION aqs_storage_recovery_change(name, text, jsonb, jsonb)
+            TO PUBLIC;
     """)
     op.execute(
         "ALTER FUNCTION aqs_storage_recovery_change(name, text, jsonb, jsonb) "
@@ -186,7 +190,8 @@ def upgrade() -> None:  # noqa: PLR0915 - one atomic privilege and function inst
                     SELECT 1 FROM unnest(ARRAY['bucket', 'key', 'backed_up_version_id',
                                               'restored_version_id', 'sha256']) k
                     WHERE jsonb_typeof(v->k) IS DISTINCT FROM 'string'
-                       OR length(btrim(v->>k)) = 0)
+                       OR (length(btrim(v->>k)) = 0 AND (v->>k <> ''
+                           OR k NOT IN ('backed_up_version_id', 'restored_version_id'))))
                 OR length(v->>'restored_version_id') > 255
                 OR (v->>'sha256') !~ '^[a-f0-9]{{64}}$') THEN
                 RAISE EXCEPTION 'Incomplete restore version mapping';
@@ -256,6 +261,11 @@ def upgrade() -> None:  # noqa: PLR0915 - one atomic privilege and function inst
                     RAISE EXCEPTION 'Missing restore mapping for %.%', item.table_name, item.id;
                 END IF;
                 new_version := mapped->>'restored_version_id';
+                IF length(btrim(item.old_version)) = 0
+                   OR length(btrim(new_version)) = 0 THEN
+                    RAISE EXCEPTION 'Incomplete restore version mapping for %.%',
+                        item.table_name, item.id;
+                END IF;
                 INSERT INTO {quoted}.aqs_storage_recovery_permit VALUES
                     (pg_backend_pid(), txid_current(), item.table_name, item.id,
                      item.old_version, new_version);

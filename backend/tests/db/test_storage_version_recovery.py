@@ -11,6 +11,7 @@ from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 from datetime import UTC, date, datetime
 from pathlib import Path
+from types import ModuleType
 from typing import BinaryIO, Protocol, cast
 from uuid import UUID, uuid4
 
@@ -72,6 +73,49 @@ BANKS = ((ORG_1, "BK-REST0001"), (ORG_1, "BK-REST0002"), (ORG_2, "BK-REST0003"))
 NOW = datetime(2026, 11, 1, tzinfo=UTC)
 
 
+@pytest.fixture(scope="module")
+def recovery_migration() -> ModuleType:
+    path = Path(__file__).parents[2] / "alembic/versions/202611010104_storage_version_recovery.py"
+    spec = importlib.util.spec_from_file_location("storage_recovery_migration", path)
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+@pytest.fixture(scope="module")
+def production_governance_schema(
+    request: pytest.FixtureRequest,
+    governance_schema: MigratedPostgresSchema,
+    recovery_migration: ModuleType,
+) -> MigratedPostgresSchema:
+    engine = managed_engine(
+        request,
+        postgres_schema_url(postgres_administrator_url(), governance_schema.schema_name),
+        administrative=True,
+    )
+    with engine.begin() as connection:
+        connection.execute(
+            text(f'ALTER SCHEMA "{governance_schema.schema_name}" OWNER TO aqs_owner')
+        )
+        for table in ("banks", "regulatory_packages", *TABLES):
+            connection.execute(text(f"ALTER TABLE {table} OWNER TO aqs_owner"))
+        connection.execute(text("ALTER FUNCTION aequoros_governed_row_guard() OWNER TO aqs_owner"))
+        with Operations.context(MigrationContext.configure(connection)):
+            cast(Callable[[], None], recovery_migration.downgrade)()
+            connection.execute(text("SET SESSION AUTHORIZATION aqs_migrator"))
+            connection.execute(text("SET LOCAL ROLE aqs_owner"))
+            assert connection.scalar(text("SELECT session_user")) == "aqs_migrator"
+            assert connection.scalar(text("SELECT current_user")) == "aqs_owner"
+            assert connection.scalar(
+                text("SELECT rolcreaterole FROM pg_roles WHERE rolname = current_user")
+            ) is False
+            cast(Callable[[], None], recovery_migration.upgrade)()
+            connection.execute(text("RESET ROLE"))
+            connection.execute(text("RESET SESSION AUTHORIZATION"))
+    return governance_schema
+
+
 @dataclass(frozen=True)
 class Pinned:
     table: str
@@ -89,13 +133,13 @@ class Pinned:
 
 @pytest.fixture
 def recovery_connection(
-    request: pytest.FixtureRequest, governance_schema: MigratedPostgresSchema
+    request: pytest.FixtureRequest, production_governance_schema: MigratedPostgresSchema
 ) -> Iterator[Connection]:
     # The normal migration credential deliberately cannot bypass RLS. Use the
     # disposable cluster's administrator only for this incident-role contract.
     engine = managed_engine(
         request,
-        postgres_schema_url(postgres_administrator_url(), governance_schema.schema_name),
+        postgres_schema_url(postgres_administrator_url(), production_governance_schema.schema_name),
         administrative=True,
     )
     with engine.connect() as connection, connection.begin():
@@ -248,7 +292,7 @@ def _report(records: list[Pinned]) -> RestoreReport:
     return RestoreReport(
         "synthetic",
         "synthetic",
-        objects=len(records),
+        objects=len(records) + 1,
         versions=[
             RestoredVersion(
                 r.location.bucket_name("dev"),
@@ -258,7 +302,8 @@ def _report(records: list[Pinned]) -> RestoreReport:
                 hashlib.sha256(r.payload).hexdigest(),
             )
             for r in records
-        ],
+        ]
+        + [RestoredVersion("aequoros-dev-unrelated-temp", "upload", "", "", "a" * 64)],
     )
 
 
@@ -407,6 +452,38 @@ def test_scope_reconciles_one_bank_without_touching_its_sibling(
         )
 
 
+@pytest.mark.parametrize("role", ["aqs_api", "aqs_worker"])
+def test_runtime_governed_update_succeeds_without_recovery_authority(
+    recovery_connection: Connection, role: str
+) -> None:
+    record = next(r for r in _records(recovery_connection) if r.table == TABLES[3])
+    recovery_connection.execute(
+        text("SELECT set_config('app.organization_id', :org, true)"),
+        {"org": record.organization},
+    )
+    for recovery_role in ("aqs_storage_recovery", "aqs_storage_recovery_owner"):
+        assert recovery_connection.scalar(
+            text("SELECT pg_has_role(:runtime, :recovery, 'MEMBER')"),
+            {"runtime": role, "recovery": recovery_role},
+        ) is False
+        assert recovery_connection.scalar(
+            text("SELECT rolcanlogin OR rolbypassrls FROM pg_roles WHERE rolname = :role"),
+            {"role": recovery_role},
+        ) is False
+    recovery_connection.execute(text(f'SET LOCAL ROLE "{role}"'))
+    result = cast(
+        datetime,
+        recovery_connection.execute(
+            text(
+                "UPDATE bank_supervisory_addons SET updated_at = updated_at + interval '1 second' "
+                "WHERE id = :id RETURNING updated_at"
+            ),
+            {"id": record.id},
+        ).scalar_one(),
+    )
+    assert result == NOW.replace(second=1)
+
+
 def test_operation_requires_explicit_recovery_authority(
     recovery_connection: Connection,
     governance_schema: MigratedPostgresSchema,
@@ -553,13 +630,27 @@ def test_encrypted_backup_loss_restore_reconcile_downloads_original_signed_revis
             return descriptor.version_id
 
         records = _records(recovery_connection, write)
+        for _, bank in BANKS:
+            location = StorageLocation(bank.lower(), "temp", "upload")
+            payload = b"synthetic pending upload"
+            descriptor = storage.write(
+                location, io.BytesIO(payload), metadata_for(bank.lower(), "temp", payload)
+            )
+            assert not descriptor.version_id
         for record in records:
             if record.table == TABLES[0]:
                 _signature(recovery_connection, record, signing_key)
         before = _snapshot(recovery_connection)
-        buckets = sorted({r.location.bucket_name("dev") for r in records})
+        buckets = sorted(
+            {r.location.bucket_name("dev") for r in records}
+            | {StorageLocation(bank.lower(), "temp", "upload").bucket_name("dev") for _, bank in BANKS}
+        )
         inventory = [backup_storage.inventory_bucket(s3, b, out_dir=tmp_path) for b in buckets]
-        assert all(b.recoverable and b.objects == 8 for b in inventory)
+        assert all(
+            b.ok and b.objects == (1 if b.bucket.endswith("-temp") else 8) for b in inventory
+        )
+        assert all(b.recoverable for b in inventory if b.bucket.endswith("-outputs"))
+        assert all(not b.recoverable for b in inventory if b.bucket.endswith("-temp"))
         manifest = tmp_path / "manifest.json"
         StorageBackupReport(
             "synthetic",
@@ -594,6 +685,9 @@ def test_encrypted_backup_loss_restore_reconcile_downloads_original_signed_revis
                 db, TenantContext(artifact.organization), artifact.bank, artifact.id, storage
             )
         restored = backup_storage.restore_storage_backup(s3, manifest, out_dir=tmp_path)
+        temp_versions = [v for v in restored.versions if v.bucket.endswith("-temp")]
+        assert len(temp_versions) == len(BANKS)
+        assert all(not v.restored_version_id for v in temp_versions)
         mapping = tmp_path / "restore.json"
         restored.write(mapping)
         assert reconcile_storage_versions(
@@ -733,25 +827,33 @@ def test_even_an_exact_recovery_permit_cannot_change_sealed_content(
 
 def test_recovery_migration_round_trip_restores_the_original_guards(
     recovery_connection: Connection,
+    recovery_migration: ModuleType,
 ) -> None:
-    path = Path(__file__).parents[2] / "alembic/versions/202611010104_storage_version_recovery.py"
-    spec = importlib.util.spec_from_file_location("storage_recovery_migration", path)
-    assert spec is not None and spec.loader is not None
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    with Operations.context(MigrationContext.configure(recovery_connection)):
-        cast(Callable[[], None], module.downgrade)()
-        for guard in ("aequoros_append_only_guard", "aequoros_governed_row_guard"):
-            definition = cast(
-                str,
-                recovery_connection.scalar(
-                    text("SELECT pg_get_functiondef(CAST(:function AS regprocedure))"),
-                    {"function": guard + "()"},
-                ),
-            )
-            assert "aqs_storage_recovery_change" not in definition
-        cast(Callable[[], None], module.upgrade)()
     records = _records(recovery_connection)
+    before = _snapshot(recovery_connection)
+    with Operations.context(MigrationContext.configure(recovery_connection)):
+        cast(Callable[[], None], recovery_migration.downgrade)()
+        for table in TABLES:
+            record = next(r for r in records if r.table == table)
+            checksum = (
+                "letter_sha256"
+                if table == TABLES[3]
+                else "checksum_sha256"
+                if table == TABLES[0]
+                else "sha256"
+            )
+            for column, value in ((record.column, "forged"), (checksum, "f" * 64)):
+                savepoint = recovery_connection.begin_nested()
+                with pytest.raises(DatabaseError, match="append-only|sealed"):
+                    recovery_connection.execute(
+                        text(f"UPDATE {table} SET {column} = :value WHERE id = :id"),
+                        {"value": value, "id": record.id},
+                    )
+                savepoint.rollback()
+        assert _snapshot(recovery_connection) == before
+        recovery_connection.execute(text("SET LOCAL ROLE aqs_owner"))
+        cast(Callable[[], None], recovery_migration.upgrade)()
+        recovery_connection.execute(text("RESET ROLE"))
     assert reconcile_storage_versions(
         recovery_connection,
         _report(records),

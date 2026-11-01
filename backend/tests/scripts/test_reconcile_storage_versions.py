@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
+from typing import cast
 
 import pytest
 
@@ -30,14 +32,21 @@ def test_mapping_identity_includes_bucket_and_key(tmp_path: Path) -> None:
     assert load_mapping(path) == report
 
 
+def test_loader_accepts_unversioned_entries_in_full_report(tmp_path: Path) -> None:
+    report = _report()
+    report.versions.append(RestoredVersion("temp-bucket", "upload", "", "", "c" * 64))
+    report.objects += 1
+    path = tmp_path / "restore.json"
+    report.write(path)
+    assert load_mapping(path) == report
+
+
 @pytest.mark.parametrize(
     "failure", ["missing-id", "blank-id", "duplicate", "collapsed", "count", "checksum"]
 )
 def test_loader_refuses_unusable_or_ambiguous_mapping(tmp_path: Path, failure: str) -> None:
     report = _report()
-    if failure == "missing-id":
-        report.versions[0].restored_version_id = ""
-    elif failure == "blank-id":
+    if failure == "blank-id":
         report.versions[0].restored_version_id = " "
     elif failure == "duplicate":
         report.versions.append(report.versions[0])
@@ -48,11 +57,15 @@ def test_loader_refuses_unusable_or_ambiguous_mapping(tmp_path: Path, failure: s
         report.versions[1].restored_version_id = report.versions[0].restored_version_id
     elif failure == "count":
         report.objects += 1
-    else:
+    elif failure == "checksum":
         report.versions[0].sha256 = "z" * 64
     path = tmp_path / "restore.json"
     report.write(path)
-    with pytest.raises(DisasterRecoveryError):
+    if failure == "missing-id":
+        raw = cast(dict[str, list[dict[str, object]]], json.loads(path.read_text()))
+        del raw["versions"][0]["restored_version_id"]
+        path.write_text(json.dumps(raw))
+    with pytest.raises((DisasterRecoveryError, ValueError)):
         load_mapping(path)
 
 

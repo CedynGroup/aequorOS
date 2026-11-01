@@ -50,7 +50,8 @@ def load_mapping(path: Path) -> RestoreReport:
         before = (version.bucket, version.key, version.backed_up_version_id)
         after = (version.bucket, version.key, version.restored_version_id)
         if (
-            not all(value.strip() for value in (*before, *after))
+            not all(value.strip() for value in (version.bucket, version.key))
+            or any(value and not value.strip() for value in (before[2], after[2]))
             or len(version.restored_version_id) > 255
             or re.fullmatch(r"[a-f0-9]{64}", version.sha256) is None
         ):

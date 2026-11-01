@@ -180,6 +180,11 @@
     ["aqs_bound_letter_guard", "", "aqs_api"],
     ["aqs_document_binding_validate", "", "aqs_api"],
     ["aqs_sealed_object_validate", "", "aqs_api"],
+    ["aqs_storage_recovery_change", "name, text, jsonb, jsonb", "aqs_api"],
+    ["aqs_storage_recovery_change", "name, text, jsonb, jsonb", "aqs_audit_verifier"],
+    ["aqs_storage_recovery_change", "name, text, jsonb, jsonb", "aqs_bi"],
+    ["aqs_storage_recovery_change", "name, text, jsonb, jsonb", "aqs_operator"],
+    ["aqs_storage_recovery_change", "name, text, jsonb, jsonb", "aqs_worker"],
     ["aqs_worker_audit_check", "timestamp with time zone", "aqs_worker"],
     ["aqs_worker_bank_key", "text", "aqs_worker"],
     [
