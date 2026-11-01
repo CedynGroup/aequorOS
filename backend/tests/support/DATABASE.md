@@ -2,8 +2,8 @@
 
 `tests.support.database` owns test connection construction, including shared
 application fixtures, area-specific tests and database tooling. The constructor
-allowlist is empty; the final stack layer removes it and makes strict enforcement
-the default.
+allowlist is empty, so the architecture guard rejects direct SQLAlchemy and
+psycopg construction elsewhere in tests.
 
 Use `isolated_db` for an **empty**, per-test PostgreSQL schema when
 `TEST_DATABASE_URL` is set, or a temporary SQLite file otherwise. It never seeds
@@ -177,12 +177,12 @@ probes that must retain the original lock identity. Other advisory-lock SQL is
 unchanged.
 
 Run the constructor guard with `uv run python scripts/test_database_guard.py`.
-`--strict` rejects all legacy constructors. The temporary allowlist matches
-counts by path and resolved constructor name, so unrelated line movements do
-not change it. Only `tests/support/database.py` is exempt, including in strict
-mode; other support files are checked. It covers imported and assigned aliases
-with lexical scoping and reassignment, SQLAlchemy sync/async factories and
-psycopg sync/async connections. It does not attempt to interpret runtime-generated
+`--strict` rejects all legacy constructors. The allowlist records counts by path
+and resolved constructor name, so unrelated line movements do not change it.
+Only `tests/support/database.py` is exempt, including in strict mode; other support
+files are checked. The guard resolves imported and assigned aliases with lexical
+scoping and reassignment. It covers SQLAlchemy sync/async factories and psycopg
+sync/async connections. It does not attempt to interpret runtime-generated
 imports or reflective calls.
 
 ## Prepared canonical books
