@@ -15,10 +15,11 @@ import sys
 from pathlib import Path
 from typing import cast
 
+from psycopg import Error as PostgresError
 from pydantic import TypeAdapter
 from sqlalchemy import create_engine, text
 from sqlalchemy.engine import Connection, make_url
-from sqlalchemy.exc import SQLAlchemyError
+from sqlalchemy.exc import DBAPIError, SQLAlchemyError
 
 from app.db.session import role_bypasses_rls
 from scripts.backup_storage import RestoreReport
@@ -121,7 +122,10 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: list[str] | None = None) -> int:
     args = build_parser().parse_args(argv, namespace=Arguments())
     if args.env_file:
-        load_env_file(args.env_file)
+        try:
+            load_env_file(args.env_file)
+        except DisasterRecoveryError:
+            raise DisasterRecoveryError("Environment file not found.") from None
     target = os.environ.get("RESTORE_DATABASE_URL", "").strip()
     if not target:
         raise DisasterRecoveryError("RESTORE_DATABASE_URL must name a dedicated recovery target.")
@@ -149,10 +153,20 @@ def main(argv: list[str] | None = None) -> int:
     return 0
 
 
-if __name__ == "__main__":
+def cli(argv: list[str] | None = None) -> int:
+    """Render only fixed refusals and the PostgreSQL primary diagnostic."""
     try:
-        raise SystemExit(main())
-    except (DisasterRecoveryError, SQLAlchemyError, ValueError, OSError):
-        # Driver errors may include credentials or object identifiers.
-        print("[reconcile] FAILED: recovery refused; transaction rolled back.", file=sys.stderr)
-        raise SystemExit(1) from None
+        return main(argv)
+    except (DisasterRecoveryError, SQLAlchemyError, ValueError, OSError) as exc:
+        reason = ""
+        if isinstance(exc, DisasterRecoveryError):
+            reason = str(exc)
+        elif isinstance(exc, DBAPIError) and isinstance(exc.orig, PostgresError):
+            reason = exc.orig.diag.message_primary or ""
+        message = "[reconcile] FAILED: recovery refused; transaction rolled back."
+        print(f"{message} {reason}" if reason else message, file=sys.stderr)
+        return 1
+
+
+if __name__ == "__main__":
+    raise SystemExit(cli())
