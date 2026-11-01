@@ -36,7 +36,7 @@ import {
 } from "@/lib/api/hooks";
 import { utcDay } from "@/lib/api/biKeys";
 import { useDataPermission } from "@/lib/api/dataAccess";
-import DataAccessNotice from "@/components/data-engine/DataAccessNotice";
+import DataAccessNotice from "@/components/ui/DataAccessNotice";
 import { fmtDateUTC, labelize } from "@/lib/api/values";
 import { fmtInt } from "@/lib/format";
 import PositionDrawer, {

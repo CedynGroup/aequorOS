@@ -292,9 +292,7 @@ test.describe("Bank-held encryption: rotation and support", () => {
           "AequorOS staff is inspecting this account — read-only.",
         ),
       ).toBeVisible();
-      // Institution authority is absent during staff inspection. The profile
-      // API refuses access, while the allowed Data Engine batch view keeps
-      // proving field-level protection.
+      // Staff inspection has no scoped DATA authority; batch reads stay suppressed.
       const profile = await support.request.get(
         `${E2E_API_ORIGIN}/api/v1/banks/${storyIdentity("rotation").bank}/institution-profile`,
         { headers: { Authorization: `Bearer ${token}` } },
@@ -306,18 +304,19 @@ test.describe("Bank-held encryption: rotation and support", () => {
         "Synthetic New Key Director",
       );
       expect(before.batch_id).toBeTruthy();
+      const batchReads: string[] = [];
+      staff.on("request", (request) => {
+        if (request.url().includes(`/ingestion-batches/${before.batch_id}`)) {
+          batchReads.push(request.url());
+        }
+      });
       await staff.goto(`/data-engine/batches/${before.batch_id}`);
       await expect(
-        staff
-          .getByRole("status")
-          .filter({
-            hasText: "Protected data is hidden during staff support access.",
-          })
-          .first(),
+        staff.getByRole("status").filter({
+          hasText: "DATA · Confidential · View",
+        }),
       ).toBeVisible();
-      await expect(
-        staff.getByText("Protected data locked", { exact: true }),
-      ).toBeVisible();
+      expect(batchReads).toEqual([]);
       await expect(staff.getByText(NAME, { exact: true })).toHaveCount(0);
       await encryptionEvidence(staff, "staff-placeholders");
     } finally {

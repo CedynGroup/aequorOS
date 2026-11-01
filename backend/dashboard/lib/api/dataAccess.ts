@@ -7,7 +7,7 @@ import { hasDataCapability } from "../modules";
 
 export type DataPermissionState = "loading" | "denied" | "allowed";
 
-/** Exact projected eligibility. The server rechecks the binding and object state. */
+/** Human DATA eligibility. The server rechecks the binding and object state. */
 export function useDataPermissionState(
   bankId: string | undefined,
   permission: EffectiveCapabilityRead["permission"],
@@ -21,7 +21,7 @@ export function useDataPermissionState(
     )?.capabilities ?? [];
   if (profile.isLoading) return "loading";
   return Boolean(bankId) &&
-    (permission === "view" || !inspection.impersonating) &&
+    !inspection.impersonating &&
     hasDataCapability(capabilities, sensitivity, permission)
     ? "allowed"
     : "denied";

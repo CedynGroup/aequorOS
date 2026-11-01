@@ -15,7 +15,7 @@ import { useBankContext } from "@/components/shell/BankContext";
 import { isApiError } from "@/lib/api/client";
 import { useUploadAndIngest } from "@/lib/api/ingestion";
 import { useDataPermission } from "@/lib/api/dataAccess";
-import DataAccessNotice from "./DataAccessNotice";
+import DataAccessNotice from "@/components/ui/DataAccessNotice";
 import {
   BatchStatusPill,
   CountStrip,

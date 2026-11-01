@@ -20,7 +20,7 @@ import Link from "next/link";
 import { Database, Info } from "lucide-react";
 import PageHeader from "@/components/ui/PageHeader";
 import EmptyState from "@/components/ui/EmptyState";
-import DataAccessNotice from "@/components/data-engine/DataAccessNotice";
+import DataAccessNotice from "@/components/ui/DataAccessNotice";
 import { ErrorPanel } from "@/components/ui/QueryBoundary";
 import {
   SkeletonCard,

@@ -398,7 +398,6 @@ def start_uploaded_ingestion(
     storage: StorageClient,
 ) -> IngestionBatchStartRead:
     """Tenant entry point: accept only a handle in the bank's temp object store."""
-    require_data_access(db, ctx, bank_id, Permission.RUN, Sensitivity.RESTRICTED)
     try:
         payload = IngestionBatchCreate.model_validate(payload)
     except ValidationError as exc:
@@ -406,6 +405,7 @@ def start_uploaded_ingestion(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="location must be a temp:// handle returned by an ingestion upload.",
         ) from exc
+    require_data_access(db, ctx, bank_id, Permission.RUN, Sensitivity.RESTRICTED)
     return start_ingestion(db, ctx, bank_id, payload, storage)
 
 

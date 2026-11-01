@@ -9,7 +9,7 @@
 import Link from "next/link";
 import { ArrowRight, DatabaseZap } from "lucide-react";
 import SectionCard from "@/components/ui/SectionCard";
-import DataAccessNotice from "@/components/data-engine/DataAccessNotice";
+import DataAccessNotice from "@/components/ui/DataAccessNotice";
 import { ErrorPanel } from "@/components/ui/QueryBoundary";
 import { useDataActivations, useIngestionBatches } from "@/lib/api/ingestion";
 import { fmtRelative, labelize } from "@/lib/api/values";

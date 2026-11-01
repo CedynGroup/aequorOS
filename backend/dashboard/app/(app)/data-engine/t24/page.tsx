@@ -21,7 +21,7 @@ import ConnectionCard from "@/components/t24/ConnectionCard";
 import DomainCoverage from "@/components/t24/DomainCoverage";
 import TransportModes from "@/components/t24/TransportModes";
 import { useDataPermission } from "@/lib/api/dataAccess";
-import DataAccessNotice from "@/components/data-engine/DataAccessNotice";
+import DataAccessNotice from "@/components/ui/DataAccessNotice";
 
 type Section = "connections" | "domains" | "modes";
 

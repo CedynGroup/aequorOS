@@ -13,7 +13,7 @@ import { useBankContext } from "@/components/shell/BankContext";
 import { ErrorPanel } from "@/components/ui/QueryBoundary";
 import { isApiError } from "@/lib/api/client";
 import { useDataPermission } from "@/lib/api/dataAccess";
-import DataAccessNotice from "./DataAccessNotice";
+import DataAccessNotice from "@/components/ui/DataAccessNotice";
 import {
   STARTER_TEMPLATES,
   useActivateTemplate,

@@ -20,7 +20,7 @@ import LiveStatusCard from "@/features/live/components/LiveStatusCard";
 import UnreconciledBookBanner from "@/features/live/components/UnreconciledBookBanner";
 import { useBankContext } from "@/components/shell/BankContext";
 import { useDataPermission } from "@/lib/api/dataAccess";
-import DataAccessNotice from "@/components/data-engine/DataAccessNotice";
+import DataAccessNotice from "@/components/ui/DataAccessNotice";
 import ReconciliationPanel from "@/components/data-engine/ReconciliationPanel";
 
 export default function DataEngineOverviewPage() {

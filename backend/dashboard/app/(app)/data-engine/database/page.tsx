@@ -20,7 +20,7 @@ import { useDatabaseConnections } from "@/lib/api/database-direct";
 import AddConnectionPanel from "@/components/database/AddConnectionPanel";
 import ConnectionCard from "@/components/database/ConnectionCard";
 import { useDataPermission } from "@/lib/api/dataAccess";
-import DataAccessNotice from "@/components/data-engine/DataAccessNotice";
+import DataAccessNotice from "@/components/ui/DataAccessNotice";
 
 export default function DatabaseDirectPage() {
   const { bank } = useBankContext();

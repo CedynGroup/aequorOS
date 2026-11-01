@@ -1,6 +1,6 @@
 "use client";
 
-import DataAccessNotice from "@/components/data-engine/DataAccessNotice";
+import DataAccessNotice from "@/components/ui/DataAccessNotice";
 import { ErrorPanel } from "@/components/ui/QueryBoundary";
 import { useBankContext } from "./BankContext";
 

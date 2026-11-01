@@ -18,7 +18,7 @@ import { useCanonicalPositions, useLineageWalk } from "@/lib/api/ingestion";
 import { formatDate, formatDateTime } from "@/components/data-engine/shared";
 import { fmtInt, fmtLocale } from "@/lib/format";
 import { useDataPermission } from "@/lib/api/dataAccess";
-import DataAccessNotice from "@/components/data-engine/DataAccessNotice";
+import DataAccessNotice from "@/components/ui/DataAccessNotice";
 
 function formatAmount(value: string | null): string {
   if (value === null || value === undefined) return "—";

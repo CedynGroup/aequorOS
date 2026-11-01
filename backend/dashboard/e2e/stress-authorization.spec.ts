@@ -19,6 +19,12 @@ test.use({
       {
         role: "macro_viewer",
         bundle: "viewer",
+        module: "data",
+        sensitivity: "confidential",
+      },
+      {
+        role: "macro_viewer",
+        bundle: "viewer",
         module: "irrbb",
         sensitivity: "confidential",
       },
