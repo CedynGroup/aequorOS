@@ -7,6 +7,7 @@ import hashlib
 import importlib.util
 import io
 import os
+import shutil
 from collections.abc import Callable, Iterator
 from dataclasses import dataclass
 from datetime import UTC, date, datetime
@@ -17,6 +18,7 @@ from uuid import UUID, uuid4
 
 import boto3
 import pytest
+from alembic import command
 from alembic.migration import MigrationContext
 from alembic.operations import Operations
 from botocore.client import BaseClient
@@ -42,20 +44,28 @@ from app.storage.encryption import ObjectEncryption
 from app.storage.provisioning import ProvisioningClient
 from app.storage.s3_compatible import S3CompatibleStorageClient
 from scripts import backup_storage
+from scripts.backup_database import BackupOptions, run_backup
 from scripts.backup_storage import RestoredVersion, RestoreReport, StorageBackupReport
 from scripts.dr_common import DisasterRecoveryError
+from scripts.local_services import postgres_bin
 from scripts.reconcile_storage_versions import load_mapping, reconcile_storage_versions
+from scripts.restore_database import RestoreOptions, run_restore
 from tests.db.test_governance_append_only import (
     governance_schema as governance_schema,  # noqa: PLC0414 - shared fixture
 )
 from tests.db.test_postgres_migrations import (
     MigratedPostgresSchema,
+    alembic_config_for_app,
     postgres_administrator_url,
     postgres_schema_url,
 )
 from tests.storage.contract import metadata_for
 from tests.storage.test_bank_encryption import KEY, NEXT_KEY
-from tests.support.database import managed_engine
+from tests.support.database import (
+    install_migration_engines,
+    isolated_postgres_database,
+    managed_engine,
+)
 from tests.support.helpers import ORG_1, ORG_2
 
 pytestmark = [
@@ -71,6 +81,7 @@ TABLES = (
 )
 BANKS = ((ORG_1, "BK-REST0001"), (ORG_1, "BK-REST0002"), (ORG_2, "BK-REST0003"))
 NOW = datetime(2026, 11, 1, tzinfo=UTC)
+PREPARATION = Path(__file__).parents[2] / "scripts/prepare_storage_recovery.sql"
 
 
 @pytest.fixture(scope="module")
@@ -906,3 +917,156 @@ def test_recovery_migration_round_trip_restores_the_original_guards(
         storage_env="dev",
         reason="synthetic migration round trip",
     ) == len(records)
+
+
+@pytest.mark.parametrize(
+    "object_name",
+    [
+        "aqs_storage_recovery_permit",
+        "aqs_storage_recovery_change(name, text, jsonb, jsonb)",
+        "aqs_reconcile_storage_versions(jsonb, text, text, text, text)",
+    ],
+)
+@pytest.mark.parametrize("failure", ["missing", "unexpected-owner"])
+def test_restore_preparation_refuses_incomplete_or_unexpected_ownership(
+    recovery_connection: Connection,
+    object_name: str,
+    failure: str,
+) -> None:
+    kind = "FUNCTION" if "(" in object_name else "TABLE"
+    if failure == "missing":
+        recovery_connection.execute(text(f"DROP {kind} {object_name}"))
+    else:
+        recovery_connection.execute(text(f"ALTER {kind} {object_name} OWNER TO aqs_owner"))
+    savepoint = recovery_connection.begin_nested()
+    with pytest.raises(DatabaseError, match="Missing recovery object|Unexpected owner"):
+        recovery_connection.execute(text(PREPARATION.read_text()))
+    savepoint.rollback()
+    assert (
+        recovery_connection.scalar(
+            text("SELECT has_schema_privilege('aequoros_audit_owner', current_schema(), 'CREATE')")
+        )
+        is False
+    )
+
+
+@pytest.fixture
+def restored_recovery_database(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> Iterator[tuple[Connection, list[Pinned], dict[str, list[object]]]]:
+    if not os.getenv("PG_BIN_DIR"):
+        executable = shutil.which("pg_dump")
+        monkeypatch.setenv(
+            "PG_BIN_DIR", str(Path(executable).parent if executable else postgres_bin())
+        )
+    administrator_url = postgres_administrator_url()
+    with (
+        isolated_postgres_database(administrator_url) as source,
+        isolated_postgres_database(administrator_url) as target,
+    ):
+        monkeypatch.setenv("DATABASE_URL", source.database_url)
+        source_engine = source.engine()
+        install_migration_engines(monkeypatch, source_engine)
+        command.upgrade(alembic_config_for_app(), "head")
+        with source_engine.begin() as connection:
+            connection.execute(
+                text(
+                    "INSERT INTO organizations (id, name, created_at, updated_at) "
+                    "VALUES (:org, 'Synthetic source tenant', now(), now())"
+                ),
+                {"org": ORG_1},
+            )
+            records = _records(connection)
+            signing_key = ec.generate_private_key(ec.SECP256R1())
+            for record in records:
+                if record.table == TABLES[0]:
+                    _signature(connection, record, signing_key)
+            original = _snapshot(connection)
+        manifest = run_backup(
+            source.database_url,
+            BackupOptions(out_dir=tmp_path, schemas=("public",)),
+        )
+        restored = run_restore(
+            target.database_url,
+            RestoreOptions(archive=tmp_path / manifest.archive_name, work_dir=tmp_path),
+        )
+        assert restored.clean
+        with target.engine().connect() as connection, connection.begin() as transaction:
+            assert (
+                connection.scalar(text("SELECT version_num FROM alembic_version")) == "202611010104"
+            )
+            assert _snapshot(connection) == original
+            connection.execute(text("GRANT aqs_storage_recovery TO CURRENT_USER"))
+            yield connection, records, original
+            transaction.rollback()
+
+
+def test_standard_database_restore_preparation_makes_reconciliation_usable(
+    restored_recovery_database: tuple[Connection, list[Pinned], dict[str, list[object]]],
+) -> None:
+    connection, records, original = restored_recovery_database
+    savepoint = connection.begin_nested()
+    with pytest.raises(DatabaseError, match="append-only|sealed"):
+        reconcile_storage_versions(
+            connection,
+            _report(records),
+            storage_env="dev",
+            reason="before preparation",
+        )
+    savepoint.rollback()
+    unrelated_objects = text("""
+        SELECT 'table:' || c.relname, c.relowner::text, c.relacl::text
+        FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+        WHERE n.nspname = current_schema() AND c.relkind = 'r'
+          AND c.relname <> ALL(:grant_tables)
+        UNION ALL
+        SELECT 'function:' || p.oid::regprocedure::text, p.proowner::text, p.proacl::text
+        FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+        WHERE n.nspname = current_schema()
+          AND p.proname NOT IN ('aqs_reconcile_storage_versions',
+                                'aqs_storage_recovery_change')
+        ORDER BY 1
+    """)
+    parameters = {
+        "grant_tables": [
+            "aqs_storage_recovery_permit",
+            "banks",
+            "regulatory_packages",
+            "audit_events",
+            *TABLES,
+        ],
+    }
+    unrelated_before = connection.execute(unrelated_objects, parameters).all()
+    for _ in range(2):
+        connection.execute(text(PREPARATION.read_text()))
+        assert connection.scalar(text("SELECT current_user = session_user")) is True
+        assert _snapshot(connection) == original
+        assert connection.execute(unrelated_objects, parameters).all() == unrelated_before
+    assert reconcile_storage_versions(
+        connection,
+        _report(records),
+        storage_env="dev",
+        reason="restored database",
+    ) == len(records)
+    after = _snapshot(connection)
+    for table in ("regulatory_packages", "attestation_signatures"):
+        assert after[table] == original[table]
+    for table in TABLES:
+        record = next(r for r in records if r.table == table)
+        for old, new in zip(original[table], after[table], strict=True):
+            old_row, new_row = cast(dict[str, object], old), cast(dict[str, object], new)
+            assert new_row[record.column] == "restored-" + str(old_row[record.column])
+            assert {k: v for k, v in old_row.items() if k != record.column} == {
+                k: v for k, v in new_row.items() if k != record.column
+            }
+        for column, value in ((record.column, "forged"), ("created_at", "2025-01-01")):
+            savepoint = connection.begin_nested()
+            with pytest.raises(DatabaseError, match="append-only|sealed"):
+                connection.execute(
+                    text(f"UPDATE {table} SET {column} = :value WHERE id = :id"),
+                    {"value": value, "id": record.id},
+                )
+            savepoint.rollback()
+    with Session(connection) as session:
+        assert all(chain.valid for chain in verify_chains(session))

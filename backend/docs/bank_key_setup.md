@@ -57,6 +57,28 @@ owner membership before applying migration `202611010104` as `aqs_migrator` usin
 stopped, and retain the mapping with the incident evidence. This is an offline
 maintenance operation for a dedicated restore target, not an application endpoint.
 
+If the database backup already contains migration `202611010104`, applying it
+again does nothing. The standard database backup/restore excludes owners and ACLs,
+so after restoring the database, run this additional preparation once as the same
+administrator identity that performed the restore. Connect to the dedicated
+restore database using protected `PGHOST`, `PGPORT`, `PGDATABASE`, `PGUSER` and
+`PGPASSWORD` environment variables, with the restored application schema first in
+the connection's search path:
+
+```bash
+psql --no-psqlrc --set ON_ERROR_STOP=1 --file scripts/prepare_storage_recovery.sql
+```
+
+The administrator must already be able to assume the preprovisioned audit and
+recovery owner roles. This atomic, repeatable step restores ownership and ACLs of
+only the recovery permit, guard helper and reconciler, plus the schema access and
+table grants installed by migration `202611010104`. It refuses missing objects,
+unsafe role attributes and objects owned by anyone other than that administrator
+or their intended owner. It does not transfer ownership of other tables or
+functions, change policies or guards, create roles, or grant role memberships,
+SUPERUSER or BYPASSRLS. Retain the preparation result with the incident evidence
+before running reconciliation.
+
 The DBA must issue an incident-only login with cross-tenant authority (SUPERUSER
 or BYPASSRLS) and explicitly grant `aqs_storage_recovery` to that login for the
 recovery window. Neither NOLOGIN recovery role has BYPASSRLS.
