@@ -11,8 +11,6 @@
     "features/bi/routes/explore.tsx -> components/access/CoverageNotice",
     "features/bi/routes/insights.tsx -> components/access/CoverageNotice",
     "features/fx/components/FxModuleFrame.tsx -> components/live/LiveEngineNote",
-    "features/fx/components/FxModuleFrame.tsx -> components/workbench/RunModuleScenarios",
-    "features/fx/routes/scenarios.tsx -> components/workbench/ScenarioWorkbench",
     "features/home/components/BreachBanner.tsx -> components/live/moduleDisplay",
     "features/home/components/PulseWall.tsx -> components/live/moduleDisplay",
     "features/home/components/RoleLens.test.ts -> components/live/moduleDisplay",
@@ -28,7 +26,6 @@
     "features/liquidity/components/results.test.tsx -> components/risk/limits",
     "features/liquidity/components/results.test.tsx -> features/bi/components/echartsTheme",
     "features/liquidity/routes/overview.tsx -> components/live/LiveEngineNote",
-    "features/liquidity/routes/overview.tsx -> components/workbench/RunModuleScenarios",
-    "features/liquidity/routes/stress.tsx -> components/workbench/ScenarioWorkbench"
+    "features/workbench/components/ScenarioWorkbench.tsx -> components/ftp/FtpWhatIf"
   ]
 }

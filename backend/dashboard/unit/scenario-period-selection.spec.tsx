@@ -11,7 +11,7 @@ import { setupServer } from "msw/node";
 import ProfileProvider from "../components/profile/ProfileProvider";
 import BankProvider from "../components/shell/BankContext";
 import HistoricalPeriodRibbon from "../components/shell/HistoricalPeriodRibbon";
-import ScenarioWorkbench from "../components/workbench/ScenarioWorkbench";
+import ScenarioWorkbench from "../features/workbench/components/ScenarioWorkbench";
 import { apiBaseUrl } from "../lib/api/client";
 import { setAccessToken } from "../lib/api/token";
 import { queryAuthorityScope, scopedQueryKey } from "../lib/api/queryPolicy";

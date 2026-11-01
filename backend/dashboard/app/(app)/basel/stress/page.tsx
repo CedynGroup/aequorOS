@@ -1,7 +1,7 @@
 "use client";
 import PageContainer from "@/components/ui/PageContainer";
 import PageHeader from "@/components/ui/PageHeader";
-import ScenarioWorkbench from "@/components/workbench/ScenarioWorkbench";
+import ScenarioWorkbench from "@/features/workbench/components/ScenarioWorkbench";
 export default function ModuleScenariosPage() {
   return (
     <>

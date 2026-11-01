@@ -71,7 +71,7 @@ const SCANNED_DIRS = [
   "components/ftp",
   "components/forecasting",
   "components/sdi",
-  "components/workbench",
+  "features/workbench",
   "components/risk",
   "components/reports",
   "components/alerts",

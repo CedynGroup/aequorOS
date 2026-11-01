@@ -14,5 +14,9 @@
   [
     "components/home",
     "features/home/components"
+  ],
+  [
+    "components/workbench",
+    "features/workbench/components"
   ]
 ]

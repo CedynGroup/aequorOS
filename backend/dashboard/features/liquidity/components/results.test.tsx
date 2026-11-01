@@ -108,6 +108,15 @@ loader._load = (request, parent, isMain) => {
       useChartTokens: theme.useChartTokens,
     };
   }
+  // The feature interface aggregates workbench modules; the workbench is a
+  // UI orchestrator over runs, not part of what this test asserts.
+  if (request === "@/features/workbench/public")
+    return {
+      __esModule: true,
+      RunModuleScenarios: () => null,
+      ScenarioMetrics: () => null,
+      ScenarioWorkbench: () => null,
+    };
   if (request.startsWith("@/"))
     return originalLoad(
       // Compiled to .test-out/features/liquidity/components: three levels up
