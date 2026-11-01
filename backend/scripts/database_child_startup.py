@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 import subprocess
 import sys
@@ -22,6 +23,7 @@ from scripts.database_events import (
     CONTEXT_ENV,
     DIRECTORY_ENV,
     RUN_ENV,
+    context,
     emit,
     service_command,
     service_connection,
@@ -81,7 +83,11 @@ def _install_children(inherited: dict[str, str]) -> None:
         supplied = kwargs.get("env")
         environment = dict(os.environ if supplied is None else cast(Mapping[str, str], supplied))
         for name, previous in inherited.items():
-            environment[name] = os.getenv(name) or previous
+            environment[name] = (
+                json.dumps(context(previous))
+                if name == CONTEXT_ENV
+                else os.getenv(name) or previous
+            )
         environment["PYTHONPATH"] = python_path(environment.get("PYTHONPATH", ""))
         kwargs["env"] = environment
         command = args[1] if len(args) > 1 else kwargs.get("args")

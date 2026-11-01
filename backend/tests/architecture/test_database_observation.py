@@ -100,8 +100,7 @@ def test_census_attributes_shared_setup_teardown_and_fresh_environment_children(
     catalogue.write_text(json.dumps(raw))
     with pytest.raises(ValueError, match="ownership drift"):
         check(evidence, catalogue)
-    raw["cases"]["test_probe.py::test_pure[1]"] = "unit"
-    raw["cases"]["test_probe.py::test_a"] = "unit"
+    raw["cases"].update({"test_probe.py::test_pure[1]": "unit", "test_probe.py::test_a": "unit"})
     catalogue.write_text(json.dumps(raw))
     with pytest.raises(ValueError, match="ownership drift"):
         check(evidence, catalogue)
@@ -131,6 +130,7 @@ def test_census_attributes_shared_setup_teardown_and_fresh_environment_children(
     _assert_managed_service_scope(tmp_path)
     _assert_combined_fixture_ownership(tmp_path)
     _assert_failed_fixture_consumers(tmp_path)
+    _assert_deferred_thread_ownership(tmp_path)
     jobs = tmp_path / "jobs"
     for job, database in (("unit", False), ("integration", True)):
         job_dir = jobs / job
@@ -172,6 +172,71 @@ def test_census_attributes_shared_setup_teardown_and_fresh_environment_children(
     )
     generate(evidence, catalogue, supplement)
     assert json.loads(catalogue.read_text())["cases"][node] == "unit"
+
+
+def _assert_deferred_thread_ownership(tmp_path: Path) -> None:
+    # One worker runs during the next test, the other after pytest clears its
+    # context. Both must retain their origin, including their Python children.
+    root = tmp_path / "deferred-threads"
+    root.mkdir()
+    _ = (root / "pytest.ini").write_text("[pytest]\n")
+    _ = (root / "test_probe.py").write_text(
+        "import sqlite3, subprocess, sys\n"
+        "from threading import Event, Thread\n"
+        "class Deferred(Thread):\n"
+        "    def __init__(self):\n"
+        "        super().__init__(); self.release = Event(); self.complete = Event()\n"
+        "    def run(self):\n"
+        "        assert self.release.wait(30)\n"
+        "        sqlite3.connect(':memory:').close()\n"
+        "        subprocess.run([sys.executable, '-c',\n"
+        "            \"import sqlite3; sqlite3.connect(':memory:').close()\"],\n"
+        "            env={}, check=True)\n"
+        "        self.complete.set()\n"
+        "workers = [Deferred(), Deferred()]\n"
+        "def test_origin():\n"
+        "    for worker in workers: worker.start()\n"
+        "def test_unrelated():\n"
+        "    workers[0].release.set()\n"
+        "    workers[0].join(20)\n"
+        "    assert workers[0].complete.is_set()\n"
+    )
+    evidence = root / "evidence"
+    program = (
+        "import os,sys; "
+        + f"os.environ['CI_DATABASE_OBSERVATIONS']={str(evidence)!r}; "
+        + "os.environ['CI_DATABASE_CONTEXT']='{}'; "
+        + "os.environ.pop('CI_UNIT_REPORT_DIR',None); "
+        + "os.environ.pop('CI_DATABASE_CENSUS',None); "
+        + "import pytest; result=pytest.main(['--rootdir=.', '-p', "
+        + "'scripts.database_observation_plugin', 'test_probe.py']); "
+        + "import test_probe; worker=test_probe.workers[1]; worker.release.set(); "
+        + "worker.join(20); assert worker.complete.is_set(); sys.exit(result)"
+    )
+    result = subprocess.run(
+        [sys.executable, "-c", program],
+        cwd=root,
+        env={
+            **os.environ,
+            "PYTHONPATH": os.pathsep.join([str(BACKEND / "scripts/ci_no_database"), str(BACKEND)]),
+            "CI_DATABASE_OBSERVATIONS": str(evidence),
+            "CI_DATABASE_CONTEXT": "{}",
+            "PYTEST_ADDOPTS": "",
+            "PYTEST_DISABLE_PLUGIN_AUTOLOAD": "1",
+        },
+        capture_output=True,
+        text=True,
+        timeout=60,
+        check=False,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert classify(evidence) == (
+        {
+            "test_probe.py::test_origin": "integration",
+            "test_probe.py::test_unrelated": "unit",
+        },
+        {},
+    )
 
 
 def _assert_failed_fixture_consumers(tmp_path: Path) -> None:

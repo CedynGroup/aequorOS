@@ -8,6 +8,7 @@ the unit refusal guard must not replace the driver's failure behavior.
 from __future__ import annotations
 
 import importlib
+import json
 import os
 import socket
 import sqlite3
@@ -17,6 +18,7 @@ import uuid
 from collections.abc import Callable, Mapping
 from functools import wraps
 from pathlib import Path
+from threading import Thread
 from typing import cast
 
 import psycopg
@@ -33,6 +35,7 @@ from scripts.database_events import (
     RUN_ENV,
     context,
     emit,
+    inherited_context,
     service_connection,
 )
 from scripts.database_events import service_command as _command_service
@@ -50,6 +53,24 @@ def _observe_services() -> None:
         original(connection, cast(tuple[str, int], address))
 
     socket.socket.connect = service_connect
+
+
+def _observe_threads() -> None:
+    original = Thread.start
+
+    def start(thread: Thread) -> None:
+        origin = context()
+        run = thread.run
+
+        def observed_run() -> None:
+            with inherited_context(origin):
+                run()
+
+        thread.run = observed_run
+        original(thread)
+
+    patch: Callable[[object, str, object], None] = setattr
+    patch(Thread, "start", start)
 
 
 def install() -> None:
@@ -94,7 +115,12 @@ def install() -> None:
                 instrument(driver, attribute)
 
     _observe_services()
+    _observe_threads()
+    _observe_python_children()
+    emit("instrumented")
 
+
+def _observe_python_children() -> None:
     original_popen = cast(Callable[..., None], subprocess.Popen.__init__)
 
     def observed_popen(*args: object, **kwargs: object) -> None:
@@ -102,7 +128,7 @@ def install() -> None:
         environment = dict(os.environ if supplied is None else cast(Mapping[str, str], supplied))
         _ = environment.pop("CI_DATABASE_CENSUS", None)
         environment[DIRECTORY_ENV] = os.environ[DIRECTORY_ENV]
-        environment[CONTEXT_ENV] = os.getenv(CONTEXT_ENV, "{}")
+        environment[CONTEXT_ENV] = json.dumps(context())
         environment[RUN_ENV] = os.environ[RUN_ENV]
         environment["PYTHONPATH"] = python_path(environment.get("PYTHONPATH", ""))
         kwargs["env"] = environment
@@ -131,4 +157,3 @@ def install() -> None:
 
     patch: Callable[[object, str, object], None] = setattr
     patch(subprocess.Popen, "__init__", observed_popen)
-    emit("instrumented")

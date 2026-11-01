@@ -41,7 +41,7 @@
     "components/ui/KpiStat.tsx",
     "features/liquidity/components/charts/RatioTrendChart.tsx",
     "features/liquidity/components/charts/NetOutflowChart.tsx",
-    "components/risk/limits.ts",
+    "features/risk/components/limits.ts",
     "features/home/components/pulse.ts",
     "features/liquidity/routes/nsfr.tsx",
     "lib/api/integrationKeys.ts",
