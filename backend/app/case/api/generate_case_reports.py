@@ -6,7 +6,8 @@ from uuid import UUID
 from fastapi import APIRouter, Header, status
 from fastapi.responses import HTMLResponse
 
-from app.api.deps import DbSession, Tenant
+from app.api.deps import DbSession
+from app.case.api.authorization import CaseExport
 from app.case.service import reports as reports_service
 
 router = APIRouter(prefix="/cases", tags=["cases"])
@@ -59,7 +60,7 @@ def parse_accept_part(part: str) -> tuple[str, float]:
 def case_report(
     case_id: UUID,
     db: DbSession,
-    ctx: Tenant,
+    ctx: CaseExport,
     accept: Annotated[str | None, Header(alias="Accept")] = None,
 ) -> reports_service.RiskReportPayload | HTMLResponse:
     payload = reports_service.report_payload(db, ctx, case_id)

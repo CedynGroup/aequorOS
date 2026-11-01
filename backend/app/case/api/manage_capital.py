@@ -16,7 +16,8 @@ from uuid import UUID
 
 from fastapi import APIRouter, Query, status
 
-from app.api.deps import DbSession, MutationTenant, Tenant
+from app.api.deps import DbSession
+from app.case.api.authorization import CaseRestrictedRun, CaseRestrictedView, CaseView
 from app.case.schemas.capital import (
     CapitalComparisonRead,
     CapitalProjectionCreate,
@@ -36,7 +37,7 @@ router = APIRouter(tags=["capital"])
 def list_capital_projections(
     case_id: UUID,
     db: DbSession,
-    ctx: Tenant,
+    ctx: CaseView,
     limit: Annotated[int, Query(ge=1, le=100)] = 25,
     offset: Annotated[int, Query(ge=0)] = 0,
 ) -> CapitalProjectionListRead:
@@ -49,7 +50,7 @@ def list_capital_projections(
     status_code=status.HTTP_201_CREATED,
 )
 def create_capital_projection(
-    case_id: UUID, payload: CapitalProjectionCreate, db: DbSession, ctx: MutationTenant
+    case_id: UUID, payload: CapitalProjectionCreate, db: DbSession, ctx: CaseRestrictedRun
 ) -> CapitalProjectionRead:
     return capital.create_projection(db, ctx, case_id, payload)
 
@@ -59,7 +60,7 @@ def create_capital_projection(
     response_model=CapitalProjectionRead,
 )
 def get_capital_projection(
-    case_id: UUID, projection_id: UUID, db: DbSession, ctx: Tenant
+    case_id: UUID, projection_id: UUID, db: DbSession, ctx: CaseRestrictedView
 ) -> CapitalProjectionRead:
     return capital.get_projection(db, ctx, case_id, projection_id)
 
@@ -68,12 +69,14 @@ def get_capital_projection(
 def get_capital_summary(
     case_id: UUID,
     db: DbSession,
-    ctx: Tenant,
+    ctx: CaseRestrictedView,
     scenario_id: Annotated[UUID | None, Query()] = None,
 ) -> CapitalSummaryRead:
     return capital.get_summary(db, ctx, case_id, scenario_id)
 
 
 @router.get("/cases/{case_id}/capital-comparison", response_model=CapitalComparisonRead)
-def get_capital_comparison(case_id: UUID, db: DbSession, ctx: Tenant) -> CapitalComparisonRead:
+def get_capital_comparison(
+    case_id: UUID, db: DbSession, ctx: CaseRestrictedView
+) -> CapitalComparisonRead:
     return capital.get_comparison(db, ctx, case_id)

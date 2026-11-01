@@ -14,7 +14,8 @@ from uuid import UUID
 
 from fastapi import APIRouter
 
-from app.api.deps import DbSession, MutationTenant, Tenant
+from app.api.deps import DbSession
+from app.case.api.authorization import CaseCreate, CaseRestrictedView, CaseReview, CaseView
 from app.case.schemas.findings import (
     EvidenceRead,
     FindingCreate,
@@ -30,7 +31,7 @@ router = APIRouter(tags=["findings"])
 @router.get("/findings", response_model=list[FindingRead])
 def list_findings(  # noqa: PLR0913
     db: DbSession,
-    ctx: Tenant,
+    ctx: CaseView,
     case_id: UUID | None = None,
     assessment_id: UUID | None = None,
     status: str | None = None,
@@ -51,24 +52,26 @@ def list_findings(  # noqa: PLR0913
 
 
 @router.get("/findings/{finding_id}", response_model=FindingRead)
-def get_finding(finding_id: UUID, db: DbSession, ctx: Tenant) -> RiskFinding:
+def get_finding(finding_id: UUID, db: DbSession, ctx: CaseView) -> RiskFinding:
     return findings_service.get_finding_or_404(db, ctx.organization_id, finding_id)
 
 
 @router.get("/cases/{case_id}/findings", response_model=list[FindingRead])
-def list_case_findings(case_id: UUID, db: DbSession, ctx: Tenant) -> list[RiskFinding]:
+def list_case_findings(case_id: UUID, db: DbSession, ctx: CaseView) -> list[RiskFinding]:
     return findings_service.list_case_findings(db, ctx, case_id)
 
 
 @router.post("/cases/{case_id}/findings", response_model=FindingRead, status_code=201)
 def create_case_finding(
-    case_id: UUID, payload: FindingCreate, db: DbSession, ctx: MutationTenant
+    case_id: UUID, payload: FindingCreate, db: DbSession, ctx: CaseCreate
 ) -> RiskFinding:
     return findings_service.create_case_finding(db, ctx, case_id, payload.to_command())
 
 
 @router.get("/assessments/{assessment_id}/findings", response_model=list[FindingRead])
-def list_assessment_findings(assessment_id: UUID, db: DbSession, ctx: Tenant) -> list[RiskFinding]:
+def list_assessment_findings(
+    assessment_id: UUID, db: DbSession, ctx: CaseView
+) -> list[RiskFinding]:
     return findings_service.list_findings(
         db,
         ctx,
@@ -78,13 +81,15 @@ def list_assessment_findings(assessment_id: UUID, db: DbSession, ctx: Tenant) ->
 
 @router.patch("/findings/{finding_id}", response_model=FindingRead)
 def update_finding(
-    finding_id: UUID, payload: FindingUpdate, db: DbSession, ctx: MutationTenant
+    finding_id: UUID, payload: FindingUpdate, db: DbSession, ctx: CaseReview
 ) -> RiskFinding:
     return findings_service.update_finding(db, ctx, finding_id, payload.to_command())
 
 
 @router.get("/findings/{finding_id}/evidence", response_model=list[EvidenceRead])
-def get_finding_evidence(finding_id: UUID, db: DbSession, ctx: Tenant) -> list[EvidenceRead]:
+def get_finding_evidence(
+    finding_id: UUID, db: DbSession, ctx: CaseRestrictedView
+) -> list[EvidenceRead]:
     return [
         EvidenceRead(**evidence.__dict__)
         for evidence in findings_service.list_finding_evidence(db, ctx, finding_id)

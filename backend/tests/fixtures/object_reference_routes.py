@@ -627,7 +627,8 @@ _FULL_AUTHORITY_BUNDLES: Final = (
 
 def full_authority_bindings(tenant: TenantSeed, *, owner: bool) -> list[AuthorizationBinding]:
     """Every operational bundle on exactly one bank, the organisation-wide Audit
-    grant that records an ICAAP independent review, plus Org Owner when ``owner``."""
+    grant that records an ICAAP independent review, explicit case-plane RISK
+    preparation/review grants, plus Org Owner when ``owner``."""
     bindings: list[AuthorizationBinding] = [
         binding(
             tenant=tenant,
@@ -638,6 +639,17 @@ def full_authority_bindings(tenant: TenantSeed, *, owner: bool) -> list[Authoriz
             institution_scope=InstitutionScope.ORGANIZATION,
         )
     ]
+    for role in (RoleBundle.ANALYST, RoleBundle.APPROVER):
+        bindings.append(
+            binding(
+                tenant=tenant,
+                user_id=tenant.actor_id,
+                role=role,
+                module_scope=ModuleScope.RISK,
+                sensitivity_scope=SensitivityScope.ALL,
+                institution_scope=InstitutionScope.ORGANIZATION,
+            )
+        )
     if owner:
         bindings.append(
             binding(

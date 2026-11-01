@@ -5,7 +5,9 @@ from uuid import UUID
 
 from fastapi import APIRouter, Query, status
 
-from app.api.deps import DbSession, MutationTenant, Tenant
+from app.api.deps import DbSession
+from app.case.api.authorization import CaseCreate as CaseCreator
+from app.case.api.authorization import CaseEdit, CaseView
 from app.case.schemas.cases import (
     CaseAssign,
     CaseCreate,
@@ -28,14 +30,14 @@ router = APIRouter(prefix="/cases", tags=["cases"])
 
 
 @router.post("", response_model=CaseRead, status_code=status.HTTP_201_CREATED)
-def create_case(payload: CaseCreate, db: DbSession, ctx: MutationTenant) -> RiskCase:
+def create_case(payload: CaseCreate, db: DbSession, ctx: CaseCreator) -> RiskCase:
     return cases_service.create_case(db, ctx, payload.to_command())
 
 
 @router.get("", response_model=CaseListRead)
 def list_cases(  # noqa: PLR0913
     db: DbSession,
-    ctx: Tenant,
+    ctx: CaseView,
     include_archived: Annotated[
         bool,
         Query(description="Include archived cases in the queue response."),
@@ -89,30 +91,30 @@ def list_cases(  # noqa: PLR0913
 
 
 @router.get("/summary", response_model=CaseSummaryRead)
-def case_summary(db: DbSession, ctx: Tenant) -> CaseSummaryRead:
+def case_summary(db: DbSession, ctx: CaseView) -> CaseSummaryRead:
     return CaseSummaryRead(**cases_service.case_summary(db, ctx).__dict__)
 
 
 @router.get("/{case_id}", response_model=CaseRead)
-def get_case(case_id: UUID, db: DbSession, ctx: Tenant) -> RiskCase:
+def get_case(case_id: UUID, db: DbSession, ctx: CaseView) -> RiskCase:
     return cases_service.get_case_or_404(db, ctx.organization_id, case_id)
 
 
 @router.patch("/{case_id}", response_model=CaseRead)
-def update_case(case_id: UUID, payload: CaseUpdate, db: DbSession, ctx: MutationTenant) -> RiskCase:
+def update_case(case_id: UUID, payload: CaseUpdate, db: DbSession, ctx: CaseEdit) -> RiskCase:
     return cases_service.update_case(db, ctx, case_id, payload.to_command())
 
 
 @router.post("/{case_id}/assign", response_model=CaseRead)
-def assign_case(case_id: UUID, payload: CaseAssign, db: DbSession, ctx: MutationTenant) -> RiskCase:
+def assign_case(case_id: UUID, payload: CaseAssign, db: DbSession, ctx: CaseEdit) -> RiskCase:
     return cases_service.assign_case(db, ctx, case_id, payload.assigned_to_user_id)
 
 
 @router.get("/{case_id}/scores", response_model=list[ScoreRead])
-def list_case_scores(case_id: UUID, db: DbSession, ctx: Tenant) -> list[RiskScore]:
+def list_case_scores(case_id: UUID, db: DbSession, ctx: CaseView) -> list[RiskScore]:
     return cases_service.list_case_scores(db, ctx, case_id)
 
 
 @router.post("/{case_id}/archive", response_model=CaseRead)
-def archive_case(case_id: UUID, db: DbSession, ctx: MutationTenant) -> RiskCase:
+def archive_case(case_id: UUID, db: DbSession, ctx: CaseEdit) -> RiskCase:
     return cases_service.archive_case(db, ctx, case_id)
