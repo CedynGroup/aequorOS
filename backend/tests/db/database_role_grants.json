@@ -230,6 +230,7 @@
       "aqs_worker": ["DELETE", "INSERT", "SELECT", "UPDATE"]
     },
     "alembic_version": {},
+    "aqs_storage_recovery_permit": {},
     "artifact_document_bindings": {
       "aqs_api": ["INSERT", "SELECT"]
     },
