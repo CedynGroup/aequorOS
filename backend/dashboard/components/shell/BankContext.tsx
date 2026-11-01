@@ -64,6 +64,8 @@ type BankContextValue = {
   moduleScope: ModuleScope;
   period: BankReportingPeriodRead | null;
   periods: BankReportingPeriodRead[];
+  periodsStatus: "loading" | "denied" | "error" | "ready";
+  periodsError: unknown;
   setPeriodId: (periodId: string) => void;
   isLoading: boolean;
   isEmpty: boolean;
@@ -171,12 +173,26 @@ export default function BankProvider({ children }: { children: ReactNode }) {
   }, [bank]);
 
   const periodsQuery = useReportingPeriods(bank?.id);
+  const periodsStatus =
+    profileQuery.isLoading ||
+    banksQuery.isLoading ||
+    periodsQuery.access === "loading"
+      ? "loading"
+      : periodsQuery.access === "denied"
+        ? "denied"
+        : periodsQuery.isError
+          ? "error"
+          : periodsQuery.isPending
+            ? "loading"
+            : "ready";
   const periods = useMemo(
     () =>
-      [...(periodsQuery.data?.periods ?? [])].sort(
-        (a, b) => b.periodEnd.getTime() - a.periodEnd.getTime(),
-      ),
-    [periodsQuery.data],
+      [
+        ...(periodsStatus === "ready"
+          ? (periodsQuery.data?.periods ?? [])
+          : []),
+      ].sort((a, b) => b.periodEnd.getTime() - a.periodEnd.getTime()),
+    [periodsQuery.data, periodsStatus],
   );
 
   // The active tenant's institution-type discriminator, resolved from the bank
@@ -478,6 +494,8 @@ export default function BankProvider({ children }: { children: ReactNode }) {
       moduleScope,
       period,
       periods,
+      periodsStatus,
+      periodsError: periodsQuery.error,
       setPeriodId: setSelectedPeriodId,
       isLoading,
       isEmpty,
@@ -494,6 +512,8 @@ export default function BankProvider({ children }: { children: ReactNode }) {
       moduleScope,
       period,
       periods,
+      periodsStatus,
+      periodsQuery.error,
       profileQuery.isLoading,
     ],
   );

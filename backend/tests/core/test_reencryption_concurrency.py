@@ -15,7 +15,6 @@ from app import worker
 from app.core.key_management import maintenance, reencryption, registry
 from app.core.key_management.fields import SealedField, blind_index
 from app.core.key_management.local import LocalKeyProvider
-from app.core.tenancy import TenantContext
 from app.data_engine.models.canonical import CanonicalCounterparty
 from app.data_engine.service import canonical_withdrawal
 from app.data_engine.service.canonical_withdrawal import WithdrawalError
@@ -35,6 +34,7 @@ from tests.core.test_bank_field_encryption import (
     BANK_B,
     CTX,
     IDENTIFIER,
+    MAKER_CTX,
     NEXT,
     connect,
     counterparty,
@@ -389,7 +389,7 @@ def test_reversal_refuses_import_committed_after_its_conflict_snapshot(
     assert bank is not None
     request = canonical_withdrawal.request_withdrawal(
         db_session,
-        TenantContext(organization_id=ORG_1, actor_user_id=None, roles=("admin",)),
+        MAKER_CTX,
         bank,
         entity="counterparty",
         source_system=cp.source_system,

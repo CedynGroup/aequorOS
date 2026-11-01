@@ -32,6 +32,8 @@ import {
   warningRuleHint,
 } from "@/components/data-engine/content";
 import { use } from "react";
+import { useDataPermission } from "@/lib/api/dataAccess";
+import DataAccessNotice from "@/components/ui/DataAccessNotice";
 
 type ReportFailure = {
   rule: string;
@@ -56,7 +58,11 @@ export default function BatchDetailPage(props: {
   const { bank } = useBankContext();
   const batchQuery = useIngestionBatch(bank?.id, params.batchId);
   const failuresQuery = useTranslationFailures(bank?.id, params.batchId);
+  const metadata = useDataPermission(bank?.id, "view", "confidential");
+  const diagnostics = useDataPermission(bank?.id, "view", "restricted");
 
+  if (!metadata)
+    return <DataAccessNotice requirement="DATA · Confidential · View" />;
   if (batchQuery.isPending) {
     return (
       <PageContainer className="py-6">
@@ -77,7 +83,7 @@ export default function BatchDetailPage(props: {
   }
 
   const batch = batchQuery.data;
-  const report = batch.validationReport as {
+  const report = (batch.validationReport ?? {}) as {
     summary?: Record<string, unknown>;
     failures?: ReportFailure[];
     reconciliation?: Record<string, unknown>;
@@ -128,6 +134,9 @@ export default function BatchDetailPage(props: {
         subtitle={`${batch.sourceSystem} · as of ${formatDate(batch.asOfDate)} · started ${formatDateTime(batch.startedAt ?? batch.createdAt)}`}
       />
       <PageContainer className="py-6 space-y-6">
+        {!diagnostics && (
+          <DataAccessNotice requirement="DATA · Restricted · View for raw diagnostics and artifacts" />
+        )}
         <div className="space-y-2">
           <CountStrip batch={batch} />
           <p className="text-caption text-slate">{WARNING_COUNTS_LEGEND}</p>
@@ -237,7 +246,9 @@ export default function BatchDetailPage(props: {
               are counted in the totals above but not listed individually.
             </p>
           )}
-          {protectedPayloadReason(batch.validationReport) ? (
+          {!diagnostics ? (
+            <DataAccessNotice requirement="DATA · Restricted · View for validation findings" />
+          ) : protectedPayloadReason(batch.validationReport) ? (
             <ProtectedDataPlaceholder value={batch.validationReport} />
           ) : findings.length === 0 ? (
             <EmptyState
@@ -273,7 +284,19 @@ export default function BatchDetailPage(props: {
 
         <section className="space-y-3">
           <h2 className="text-h2 text-navy">Untranslatable rows</h2>
-          {translationFailures.length === 0 ? (
+          {!diagnostics ? (
+            <DataAccessNotice requirement="DATA · Restricted · View for untranslatable rows" />
+          ) : failuresQuery.isPending ? (
+            <p role="status" className="text-body text-slate">
+              Loading untranslatable rows…
+            </p>
+          ) : failuresQuery.isError ? (
+            <ErrorPanel
+              error={failuresQuery.error}
+              onRetry={() => void failuresQuery.refetch()}
+              title="Untranslatable rows unavailable"
+            />
+          ) : translationFailures.length === 0 ? (
             <p className="text-body text-slate">
               Every extracted row translated into the canonical model.
             </p>

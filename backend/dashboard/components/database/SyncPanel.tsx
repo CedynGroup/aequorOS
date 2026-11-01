@@ -17,6 +17,8 @@ import { useSyncDatabaseConnection } from "@/lib/api/database-direct";
 import BatchReport from "./BatchReport";
 import { SyncStatusPill } from "./shared";
 import { fmtLocale } from "@/lib/format";
+import { useDataPermission } from "@/lib/api/dataAccess";
+import DataAccessNotice from "@/components/ui/DataAccessNotice";
 
 function errorMessage(error: unknown): string {
   if (isApiError(error)) return error.message;
@@ -43,8 +45,11 @@ export default function SyncPanel({
   // Once a sync returns a batch id, load the immutable batch to surface its
   // ETL preprocess + validation reports.
   const batchQuery = useIngestionBatch(bankId, result?.batchId);
+  const canRun = useDataPermission(bankId, "run", "restricted");
+  const canReadBatch = useDataPermission(bankId, "view", "confidential");
 
   const runSync = async () => {
+    if (!canRun) return;
     setError(null);
     setResult(null);
     try {
@@ -59,6 +64,8 @@ export default function SyncPanel({
     }
   };
 
+  if (!canRun)
+    return <DataAccessNotice requirement="DATA · Restricted · Run to sync" />;
   return (
     <div className="rounded-sm border border-border p-4 space-y-4 bg-surface-alt">
       <div className="flex flex-wrap items-end gap-3">
@@ -115,12 +122,14 @@ export default function SyncPanel({
                 reused an existing batch for this date
               </span>
             )}
-            <Link
-              href={`/data-engine/batches/${result.batchId}`}
-              className="ml-auto inline-flex items-center gap-1 text-caption font-medium text-action hover:text-action-hover"
-            >
-              Full batch detail <ArrowRight size={12} aria-hidden />
-            </Link>
+            {canReadBatch && (
+              <Link
+                href={`/data-engine/batches/${result.batchId}`}
+                className="ml-auto inline-flex items-center gap-1 text-caption font-medium text-action hover:text-action-hover"
+              >
+                Full batch detail <ArrowRight size={12} aria-hidden />
+              </Link>
+            )}
           </div>
 
           {result.asOfNote && (
@@ -149,7 +158,9 @@ export default function SyncPanel({
             </div>
           </dl>
 
-          {batchQuery.isPending ? (
+          {!canReadBatch ? (
+            <DataAccessNotice requirement="DATA · Confidential · View for batch reports" />
+          ) : batchQuery.isPending ? (
             <p className="inline-flex items-center gap-2 text-caption text-slate">
               <Loader2 size={13} className="animate-spin" aria-hidden />
               Loading the batch reports…

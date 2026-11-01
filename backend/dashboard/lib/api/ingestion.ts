@@ -9,6 +9,7 @@
  * not contend with the regulatory modules' files.
  */
 
+import { useDataPermission, useDataPermissionState } from "./dataAccess";
 import {
   keepPreviousData,
   useMutation,
@@ -359,11 +360,13 @@ export const STARTER_TEMPLATES: StarterTemplate[] = [
 // ---------------------------------------------------------------------------
 
 export function useMappingConfigs(bankId: string | undefined) {
+  const allowed = useDataPermission(bankId, "view", "confidential");
+  const scope = useQueryAuthorityScope();
   return useQuery({
-    queryKey: ["de-mapping-configs", bankId],
+    queryKey: scopedQueryKey("de-mapping-configs", scope, bankId),
     queryFn: () =>
       apiCall(() => ingestionApi.listMappingConfigs({ bankId: bankId! })),
-    enabled: Boolean(bankId),
+    enabled: allowed && Boolean(bankId),
   });
 }
 
@@ -372,7 +375,8 @@ export function useIngestionBatches(
   sourceSystem?: IngestionSourceSystem,
 ) {
   const scope = useQueryAuthorityScope();
-  return useQuery({
+  const access = useDataPermissionState(bankId, "view", "confidential");
+  const query = useQuery({
     queryKey: scopedQueryKey(
       "de-batches",
       scope,
@@ -383,18 +387,20 @@ export function useIngestionBatches(
       apiCall(() =>
         ingestionApi.listIngestionBatches({ bankId: bankId!, sourceSystem }),
       ),
-    enabled: Boolean(bankId),
+    enabled: access === "allowed" && Boolean(bankId),
   });
+  return { ...query, access };
 }
 
 /** Per-source ingestion rollup + canonical model counts + activation history. */
 export function useIngestionSummary(bankId: string | undefined) {
   const scope = useQueryAuthorityScope();
+  const allowed = useDataPermission(bankId, "view", "aggregated");
   return useQuery({
     queryKey: scopedQueryKey("de-summary", scope, bankId ?? null),
     queryFn: () =>
       apiCall(() => ingestionApi.getIngestionSummary({ bankId: bankId! })),
-    enabled: Boolean(bankId),
+    enabled: allowed && Boolean(bankId),
   });
 }
 
@@ -402,13 +408,15 @@ export function useIngestionBatch(
   bankId: string | undefined,
   batchId: string | undefined,
 ) {
+  const allowed = useDataPermission(bankId, "view", "confidential");
+  const scope = useQueryAuthorityScope();
   return useQuery({
-    queryKey: ["de-batch", bankId, batchId],
+    queryKey: scopedQueryKey("de-batch", scope, bankId, batchId),
     queryFn: () =>
       apiCall(() =>
         ingestionApi.getIngestionBatch({ bankId: bankId!, batchId: batchId! }),
       ),
-    enabled: Boolean(bankId && batchId),
+    enabled: allowed && Boolean(bankId && batchId),
   });
 }
 
@@ -416,8 +424,10 @@ export function useTranslationFailures(
   bankId: string | undefined,
   batchId: string | undefined,
 ) {
+  const allowed = useDataPermission(bankId, "view", "restricted");
+  const scope = useQueryAuthorityScope();
   return useQuery({
-    queryKey: ["de-failures", bankId, batchId],
+    queryKey: scopedQueryKey("de-failures", scope, bankId, batchId),
     queryFn: () =>
       apiCall(() =>
         ingestionApi.listTranslationFailures({
@@ -425,7 +435,7 @@ export function useTranslationFailures(
           batchId: batchId!,
         }),
       ),
-    enabled: Boolean(bankId && batchId),
+    enabled: allowed && Boolean(bankId && batchId),
   });
 }
 
@@ -434,13 +444,15 @@ export function useTranslationFailures(
  * The response carries `total`/`limit`/`offset` so callers can page.
  */
 export function useCanonicalPositions(bankId: string | undefined, offset = 0) {
+  const allowed = useDataPermission(bankId, "view", "restricted");
+  const scope = useQueryAuthorityScope();
   return useQuery({
-    queryKey: ["de-positions", bankId, offset],
+    queryKey: scopedQueryKey("de-positions", scope, bankId, offset),
     queryFn: () =>
       apiCall(() =>
         ingestionApi.listCanonicalPositions({ bankId: bankId!, offset }),
       ),
-    enabled: Boolean(bankId),
+    enabled: allowed && Boolean(bankId),
     placeholderData: keepPreviousData,
   });
 }
@@ -449,16 +461,19 @@ export function useLineageWalk(
   bankId: string | undefined,
   lineageId: string | undefined,
 ) {
+  const allowed = useDataPermission(bankId, "view", "restricted");
+  const scope = useQueryAuthorityScope();
   return useQuery({
-    queryKey: ["de-lineage", bankId, lineageId],
+    queryKey: scopedQueryKey("de-lineage", scope, bankId, lineageId),
     queryFn: () =>
       apiCall(() => ingestionApi.walkLineage({ lineageId: lineageId! })),
-    enabled: Boolean(bankId && lineageId),
+    enabled: allowed && Boolean(bankId && lineageId),
   });
 }
 
 export function useActivateTemplate(bankId: string | undefined) {
   const queryClient = useQueryClient();
+  const scope = useQueryAuthorityScope();
   return useMutation({
     mutationFn: (template: StarterTemplate) =>
       apiCall(() =>
@@ -475,7 +490,7 @@ export function useActivateTemplate(bankId: string | undefined) {
       ),
     onSuccess: () => {
       void queryClient.invalidateQueries({
-        queryKey: ["de-mapping-configs", bankId],
+        queryKey: scopedBankPrefix("de-mapping-configs", scope, bankId),
       });
     },
   });
@@ -548,12 +563,14 @@ export function useActivateBankData(bankId: string | undefined) {
 
 export function useDataActivations(bankId: string | undefined) {
   const scope = useQueryAuthorityScope();
-  return useQuery({
+  const access = useDataPermissionState(bankId, "view", "aggregated");
+  const query = useQuery({
     queryKey: scopedQueryKey("de-activations", scope, bankId ?? null),
     queryFn: () =>
       apiCall(() => ingestionApi.listBankDataActivations({ bankId: bankId! })),
-    enabled: Boolean(bankId),
+    enabled: access === "allowed" && Boolean(bankId),
   });
+  return { ...query, access };
 }
 
 export function useUploadAndIngest(bankId: string | undefined) {
@@ -589,7 +606,7 @@ export function useUploadAndIngest(bankId: string | undefined) {
         queryKey: scopedBankPrefix("de-batches", scope, bankId),
       });
       void queryClient.invalidateQueries({
-        queryKey: ["de-positions", bankId],
+        queryKey: scopedBankPrefix("de-positions", scope, bankId),
       });
       void queryClient.invalidateQueries({
         queryKey: scopedBankPrefix("de-summary", scope, bankId),

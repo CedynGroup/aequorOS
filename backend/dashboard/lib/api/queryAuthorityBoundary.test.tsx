@@ -98,6 +98,29 @@ async function main(): Promise<void> {
   ].join(".");
   moduleWithLoader._load = (request, parent, isMain) => {
     if (request === "@aequoros/risk-service-api") return generatedApi;
+    if (request.endsWith("/profile/ProfileProvider")) {
+      return {
+        useUserProfile: () => ({
+          isLoading: false,
+          effectiveAuthority: {
+            institutionCapabilities: [
+              {
+                institutionId: BANK_ID,
+                capabilities: ["aggregated", "confidential", "restricted"].map(
+                  (sensitivity) => ({
+                    module: "data",
+                    permission: "view",
+                    sensitivity,
+                    dataScope: { kind: "all", branches: [], regions: [] },
+                    requiresContextualAuthorization: false,
+                  }),
+                ),
+              },
+            ],
+          },
+        }),
+      };
+    }
     if (request === "next/server") {
       return {
         NextResponse: {
@@ -504,7 +527,7 @@ async function main(): Promise<void> {
   await waitFor(
     () =>
       [...counts.entries()].filter(([name]) => name !== "liq-mutation")
-        .length === 22,
+        .length === 18,
     "Command Center resources did not settle",
   );
   const initialCounts = new Map(counts);
@@ -519,13 +542,24 @@ async function main(): Promise<void> {
   });
   assert.equal(initialCounts.get("liq-dashboard"), 1);
   assert.equal(initialCounts.get("cap-dashboard"), 1);
-  assert.equal(initialCounts.get("facts"), 1);
+  for (const deniedRead of [
+    "periods",
+    "facts",
+    "de-batches",
+    "de-activations",
+  ]) {
+    assert.equal(
+      initialCounts.get(deniedRead),
+      undefined,
+      "inspection must suppress human DATA reads",
+    );
+  }
   assert.equal(initialCounts.get("live-summary"), 1);
   assert.equal(
     [...initialCounts.entries()]
       .filter(([name]) => name !== "liq-mutation")
       .reduce((total, [, count]) => total + count, 0),
-    22,
+    18,
     "real duplicate consumers must collapse without cross-period summary polling",
   );
 

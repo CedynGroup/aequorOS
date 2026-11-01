@@ -264,10 +264,12 @@ concrete operation must evaluate its maker/checker, step-up, digest, recipient,
 limit, and other workflow context before any side effect.
 
 `GET /banks` returns only institutions with at least one projected capability.
-Bank detail, reporting-period, and fact routes apply the same coverage decision
-and return `404` for an uncovered institution. This is an addressability and
-discovery boundary only: each product route must still enforce its own data
-authorization as described in the [rollout boundary](#product-rollout-boundary).
+Bank detail applies the same coverage decision and returns `404` for an
+uncovered institution. Reporting-period and fact reads enforce the exact DATA
+requirements in [Human Data Engine authority](#human-data-engine-authority).
+Institution coverage is an addressability and discovery boundary only: each
+product route must still enforce its own data authorization as described in the
+[rollout boundary](#product-rollout-boundary).
 Projection failures return `503` and emit denial/error telemetry rather than
 falling back to legacy authority.
 
@@ -766,13 +768,79 @@ of the shared live summary / alerts / window / snapshot surfaces, the direct
 branch/region `data_scope` to the rows AND to every count — is
 owned by the [credit rollout contract](credit_enforcement_rollout.md). Institution
 register surfaces are owned by the
-[Institution rollout contract](institution_enforcement_rollout.md). The bank
-audit-route cutover is owned by [the bank audit contract](tamper_evident_records.md#bank-audit-read-api). Existing
+[Institution rollout contract](institution_enforcement_rollout.md). Human ingestion
+and bank-data operations follow [Human Data Engine authority](#human-data-engine-authority).
+The bank audit-route cutover is owned by [the bank audit contract](tamper_evident_records.md#bank-audit-read-api). Existing
 operational routes outside these cutovers keep their current checks, while
 grant administration itself requires the owner binding. Explanation endpoints,
 further product-route cutovers,
 invite/lifecycle actions, scheduled grants, and owner designation/transfer
 remain separate work.
+
+## Human Data Engine authority
+
+Human ingestion and bank-data operations require one complete, active DATA
+binding for the authenticated principal, tenant and institution (or explicit
+organization target). Scalar roles, a binding for another module or bank, and
+several incomplete bindings confer no access. DATA requires whole-institution
+coverage; Credit branch and region grants do not qualify.
+
+The sensitivity values match exactly, not hierarchically:
+
+| Surface                                                                                                                       | DATA sensitivity and permission                            |
+| ----------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------- |
+| Ingestion overview summaries and activation history                                                                           | aggregated VIEW                                            |
+| Batches, mapping metadata, reporting-period lists, source-of-record, withdrawal and reconciliation registers                  | confidential VIEW                                          |
+| Canonical positions and facets, translation failures, lineage, full reporting facts, DB Direct and Temenos connection details | restricted VIEW                                            |
+| Human upload                                                                                                                  | restricted CREATE                                          |
+| Human batch start, data activation, DB sync, Temenos pull/backfill                                                            | restricted RUN                                             |
+| Position override                                                                                                             | restricted EDIT                                            |
+| DB live test/schema discovery and Temenos live test                                                                           | restricted VALIDATE                                        |
+| Declaration, withdrawal and reconciliation proposals                                                                          | confidential CREATE                                        |
+| Approval, revocation and reversal                                                                                             | confidential APPROVE plus the stored maker/checker context |
+
+An owner must explicitly grant the required operator rows before deployment.
+Analyst and Approver bundles retain their existing permission sets; no new role
+bundle, grant backfill, production reseed or activation accompanies this cutover.
+Run the read-only access-impact report before any enforcement deployment and
+retain the dated output outside the repository. A scalar-only operator is
+expected to be refused, not silently upgraded.
+
+Authorization precedes storage, outbound connections, job enqueueing and
+financial effects. Lists and facets authorize before aggregation, counts or
+pagination. Inaccessible opaque identifiers return 404. Confidential batch
+metadata omits raw reports, diagnostic messages and artifact paths unless the
+reader independently holds restricted VIEW.
+
+Reconciliation CREATE stores a pending proposal with the server-recorded
+requester. Only a different authenticated officer with APPROVE can approve it;
+client-supplied principal or status fields are rejected. Pending requests never
+affect derivation or enqueue a refresh. Approval locks the tenant-and-bank-scoped
+proposal, records immutable checker evidence, and enqueues the existing refresh
+when the bank has current financial facts.
+Revocation remains append-only and idempotent. Historical approved rows retain
+their evidence; migration neither fabricates missing identities nor grants
+authority. New approvals cannot use missing historical requester evidence.
+
+VALIDATE permits invoking a check. RUN is a distinct permission even where a
+bundle contains both. Activation still requires the existing engine authority
+and successful-validation/state prerequisites, but gains no EDIT or VALIDATE
+grant prerequisite. Mapping configuration creation, connector credential
+lifecycle (including Temenos stored-credential-shape validation), and machine
+API push retain their existing controls.
+
+Scheduled DB health jobs use the trusted internal probe operation; they do not
+invoke the human VALIDATE entry point. A missing authorization version never
+exempts a human caller from the binding check.
+
+The dashboard uses exact projected capabilities to avoid unauthorized requests
+and unavailable actions, including mixed-sensitivity overview panels. Query
+keys include tenant and authority generation. These projections are eligibility
+hints only; the service rechecks the binding, authenticated checker and object
+state on every mutation.
+Permission-unavailable diagnostics, batch progress, reporting periods and facts
+remain distinct from loading, request failure and successful empty results.
+Independently authorized home panels and operational-feed results remain visible.
 
 ## Whole-institution figures and Credit-only narrowing
 

@@ -24,6 +24,7 @@ import type {
   TemenosTestPullRead,
 } from "@aequoros/risk-service-api";
 import { isApiError } from "@/lib/api/client";
+import { useDataPermission } from "@/lib/api/dataAccess";
 import {
   useDisableTemenosConnection,
   useEnableTemenosConnection,
@@ -85,6 +86,7 @@ export default function ConnectionCard({
 }) {
   const validate = useValidateTemenosConnection(bankId);
   const test = useTestTemenosConnection(bankId);
+  const canValidate = useDataPermission(bankId, "validate", "restricted");
   const update = useUpdateTemenosConnection(bankId);
   const disable = useDisableTemenosConnection(bankId);
   const enable = useEnableTemenosConnection(bankId);
@@ -225,7 +227,7 @@ export default function ConnectionCard({
                 setTestResult(await test.mutateAsync(connection.id));
               })
             }
-            disabled={busy || isDisabled}
+            disabled={!canValidate || busy || isDisabled}
             icon={
               test.isPending ? (
                 <Loader2 size={13} className="animate-spin" aria-hidden />
@@ -238,12 +240,15 @@ export default function ConnectionCard({
           </ActionButton>
           <ActionButton
             onClick={() =>
-              run(() => validate.mutateAsync(connection.id), "Credential health check completed.")
+              run(
+                () => validate.mutateAsync(connection.id),
+                "Credential health check completed.",
+              )
             }
             disabled={busy || isDisabled}
             icon={<CheckCircle2 size={13} aria-hidden />}
           >
-            Validate
+            Validate stored credentials
           </ActionButton>
           <ActionButton
             onClick={() => {
@@ -259,7 +264,10 @@ export default function ConnectionCard({
           {isDisabled ? (
             <ActionButton
               onClick={() =>
-                run(() => enable.mutateAsync(connection.id), "Connection re-validated and enabled.")
+                run(
+                  () => enable.mutateAsync(connection.id),
+                  "Connection re-validated and enabled.",
+                )
               }
               disabled={busy}
               icon={<PlayCircle size={13} aria-hidden />}

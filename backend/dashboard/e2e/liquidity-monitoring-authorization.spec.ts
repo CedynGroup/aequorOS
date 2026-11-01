@@ -88,6 +88,7 @@ test.describe("exactly bound Liquidity user", () => {
         roles: ["viewer"],
         bindings: [
           { bundle: "viewer", module: "liq", sensitivity: "confidential" },
+          { bundle: "viewer", module: "data", sensitivity: "confidential" },
         ],
       },
     });

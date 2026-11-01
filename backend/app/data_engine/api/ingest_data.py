@@ -4,9 +4,10 @@ from datetime import date
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, HTTPException, Query, UploadFile, status
+from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, status
 
-from app.api.deps import DbSession, MutationTenant, Tenant
+from app.api.deps import DbSession, MutationTenant, ScopedMutationTenant, Tenant
+from app.core.authorization import Permission, Sensitivity
 from app.data_engine.api.upload_seam import (
     MAX_UPLOAD_BYTES,
     IngestionStorage,
@@ -38,9 +39,18 @@ from app.data_engine.schemas.ingestion import (
     TranslationFailureListRead,
 )
 from app.data_engine.service import ingestion
+from app.data_engine.service.access import require_data_access
 from app.live.service import data_activation
 
 router = APIRouter(tags=["ingestion"])
+
+
+def require_upload_access(bank_id: str, db: DbSession, ctx: ScopedMutationTenant) -> None:
+    require_data_access(db, ctx, bank_id, Permission.CREATE, Sensitivity.RESTRICTED)
+
+
+def require_batch_run_access(bank_id: str, db: DbSession, ctx: ScopedMutationTenant) -> None:
+    require_data_access(db, ctx, bank_id, Permission.RUN, Sensitivity.RESTRICTED)
 
 
 @router.post(
@@ -68,11 +78,12 @@ def list_mapping_configs(bank_id: str, db: DbSession, ctx: Tenant) -> MappingCon
     response_model=IngestionUploadRead,
     status_code=201,
     operation_id="uploadIngestionSource",
+    dependencies=[Depends(require_upload_access)],
 )
 async def upload_ingestion_source(
     bank_id: str,
     db: DbSession,
-    ctx: MutationTenant,
+    ctx: ScopedMutationTenant,
     storage: IngestionStorage,
     file: UploadFile,
 ) -> IngestionUploadRead:
@@ -95,12 +106,13 @@ async def upload_ingestion_source(
     response_model=IngestionBatchStartRead,
     status_code=201,
     operation_id="startIngestionBatch",
+    dependencies=[Depends(require_batch_run_access)],
 )
 def start_ingestion_batch(
     bank_id: str,
     payload: IngestionBatchCreate,
     db: DbSession,
-    ctx: MutationTenant,
+    ctx: ScopedMutationTenant,
     storage: IngestionStorage,
 ) -> IngestionBatchStartRead:
     return ingestion.start_uploaded_ingestion(db, ctx, bank_id, payload, storage)
@@ -204,7 +216,7 @@ def override_position_snapshot(
     snapshot_id: UUID,
     payload: PositionSnapshotOverrideCreate,
     db: DbSession,
-    ctx: MutationTenant,
+    ctx: ScopedMutationTenant,
 ) -> PositionSnapshotRead:
     return ingestion.override_position_snapshot(db, ctx, bank_id, snapshot_id, payload)
 
@@ -228,7 +240,7 @@ def activate_bank_data(
     bank_id: str,
     payload: DataActivationCreate,
     db: DbSession,
-    ctx: MutationTenant,
+    ctx: ScopedMutationTenant,
 ) -> DataActivationRead:
     """Derive module facts from canonical data and recompute every module."""
     return data_activation.activate_bank_data(db, ctx, bank_id, payload)

@@ -37,13 +37,16 @@ from __future__ import annotations
 
 from datetime import date, timedelta
 from decimal import Decimal
+from uuid import UUID
 
 import pytest
+from fastapi import HTTPException
 from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
+from app.core.authorization import ModuleScope, RoleBundle, SensitivityScope
 from app.data_engine.service import canonical_withdrawal, system_of_record
 from app.data_engine.service.canonical_withdrawal import WithdrawalError
 from app.data_engine.service.system_of_record import SystemOfRecordError
@@ -57,17 +60,21 @@ from app.models import (
     IngestionBatch,
     LineageRecord,
     SystemOfRecordDeclaration,
+    User,
 )
 from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID, materialize_canonical_test_book
+from tests.support.factories.authorization import grant_institution_authority
 from tests.support.factories.canonical import FIXTURE_AS_OF, seed_canonical_fixture
-from tests.support.helpers import ORG_1, USER_1, USER_2
+from tests.support.helpers import ORG_1, USER_1
+
+CHECKER = UUID("cccccccc-cccc-4ccc-8ccc-cccccccccccc")
 
 SECOND_SOURCE = "API_PUSH"
 FIXTURE_SOURCE = "EXCEL_CSV"
 
 
 def _ctx(user=USER_1) -> TenantContext:  # noqa: ANN001 - UUID | None
-    return TenantContext(organization_id=ORG_1, actor_user_id=user)
+    return TenantContext(organization_id=ORG_1, actor_user_id=user, authorization_version=1)
 
 
 def _bank(db_session: Session) -> Bank:
@@ -80,6 +87,27 @@ def _seed_book(db_session: Session) -> None:
     materialize_canonical_test_book(db_session)
     db_session.flush()
     seed_canonical_fixture(db_session, organization_id=ORG_1, bank_id=SAMPLE_BANK_ID)
+    db_session.add(
+        User(
+            id=CHECKER,
+            organization_id=ORG_1,
+            email="checker@bank.test",
+            display_name="Fixture checker",
+            is_active=True,
+        )
+    )
+    db_session.flush()
+    for user in (USER_1, CHECKER):
+        for bundle in (RoleBundle.ANALYST, RoleBundle.APPROVER):
+            grant_institution_authority(
+                db_session,
+                organization_id=ORG_1,
+                bank_id=SAMPLE_BANK_ID,
+                user_id=user,
+                bundle=bundle,
+                module=ModuleScope.DATA,
+                sensitivity=SensitivityScope.CONFIDENTIAL,
+            )
     db_session.flush()
 
 
@@ -215,7 +243,7 @@ def _declare(
         proposed_by="analyst@bank.test",
     )
     return system_of_record.approve(
-        db_session, _ctx(USER_2), _bank(db_session), row.id, approved_by="cro@bank.test"
+        db_session, _ctx(CHECKER), _bank(db_session), row.id, approved_by="cro@bank.test"
     )
 
 
@@ -325,18 +353,18 @@ def test_a_draft_declaration_does_not_resolve_and_cannot_be_self_approved(
 
     with pytest.raises(SystemOfRecordError) as same_name:
         system_of_record.approve(
-            db_session, _ctx(USER_2), bank, row.id, approved_by="analyst@bank.test"
+            db_session, _ctx(CHECKER), bank, row.id, approved_by="analyst@bank.test"
         )
     assert "second approver" in same_name.value.detail
 
-    with pytest.raises(SystemOfRecordError) as same_user:
+    with pytest.raises(HTTPException) as same_user:
         system_of_record.approve(
             db_session, _ctx(USER_1), bank, row.id, approved_by="cro@bank.test"
         )
-    assert "second approver" in same_user.value.detail
+    assert same_user.value.status_code == 404
 
     approved = system_of_record.approve(
-        db_session, _ctx(USER_2), bank, row.id, approved_by="cro@bank.test"
+        db_session, _ctx(CHECKER), bank, row.id, approved_by="cro@bank.test"
     )
     assert approved.status == "approved"
     assert (
@@ -421,7 +449,7 @@ def test_revoking_a_declaration_removes_it_from_resolution_without_deleting_it(
 
     system_of_record.revoke(
         db_session,
-        _ctx(USER_2),
+        _ctx(CHECKER),
         _bank(db_session),
         declaration.id,
         revoked_by="cro@bank.test",
@@ -433,7 +461,7 @@ def test_revoking_a_declaration_removes_it_from_resolution_without_deleting_it(
     with pytest.raises(SystemOfRecordError):
         system_of_record.revoke(
             db_session,
-            _ctx(USER_2),
+            _ctx(CHECKER),
             _bank(db_session),
             declaration.id,
             revoked_by="x",
@@ -460,7 +488,7 @@ def _request_and_approve(db_session: Session, **overrides) -> CanonicalWithdrawa
         db_session, _ctx(USER_1), _bank(db_session), **payload
     )
     return canonical_withdrawal.approve_withdrawal(
-        db_session, _ctx(USER_2), _bank(db_session), row.id, approved_by="cro@bank.test"
+        db_session, _ctx(CHECKER), _bank(db_session), row.id, approved_by="cro@bank.test"
     )
 
 
@@ -559,18 +587,18 @@ def test_a_withdrawal_cannot_happen_without_a_reason_and_an_approver(
     # 2. No approver, and no SELF-approval — by name or by user id.
     with pytest.raises(WithdrawalError):
         canonical_withdrawal.approve_withdrawal(
-            db_session, _ctx(USER_2), bank, row.id, approved_by="  "
+            db_session, _ctx(CHECKER), bank, row.id, approved_by="  "
         )
     with pytest.raises(WithdrawalError) as same_name:
         canonical_withdrawal.approve_withdrawal(
-            db_session, _ctx(USER_2), bank, row.id, approved_by="analyst@bank.test"
+            db_session, _ctx(CHECKER), bank, row.id, approved_by="analyst@bank.test"
         )
     assert "second approver" in same_name.value.detail
-    with pytest.raises(WithdrawalError) as same_user:
+    with pytest.raises(HTTPException) as same_user:
         canonical_withdrawal.approve_withdrawal(
             db_session, _ctx(USER_1), bank, row.id, approved_by="cro@bank.test"
         )
-    assert "second approver" in same_user.value.detail
+    assert same_user.value.status_code == 404
     pending = db_session.get(CanonicalWithdrawal, row.id)
     assert pending is not None
     assert pending.status == "pending"
@@ -673,7 +701,7 @@ def test_withdrawal_is_reversible_and_append_only(db_session: Session) -> None:
 
     reversed_row = canonical_withdrawal.reverse_withdrawal(
         db_session,
-        _ctx(USER_2),
+        _ctx(CHECKER),
         _bank(db_session),
         withdrawal.id,
         reversed_by="cro@bank.test",
@@ -700,7 +728,7 @@ def test_withdrawal_is_reversible_and_append_only(db_session: Session) -> None:
     with pytest.raises(WithdrawalError):
         canonical_withdrawal.reverse_withdrawal(
             db_session,
-            _ctx(USER_2),
+            _ctx(CHECKER),
             _bank(db_session),
             withdrawal.id,
             reversed_by="cro@bank.test",
@@ -722,7 +750,7 @@ def test_reversal_is_refused_when_it_would_resurrect_a_duplicate(db_session: Ses
     with pytest.raises(WithdrawalError) as exc:
         canonical_withdrawal.reverse_withdrawal(
             db_session,
-            _ctx(USER_2),
+            _ctx(CHECKER),
             _bank(db_session),
             withdrawal.id,
             reversed_by="cro@bank.test",

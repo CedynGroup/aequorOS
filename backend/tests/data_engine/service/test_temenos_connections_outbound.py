@@ -17,6 +17,7 @@ from pydantic import ValidationError
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
+from app.core.authorization import ModuleScope, RoleBundle, SensitivityScope
 from app.core.config import get_settings
 from app.core.outbound import OutboundTargetBlocked
 from app.data_engine.adapters.temenos_t24.credential_vault import TemenosCredentialVault
@@ -27,6 +28,7 @@ from app.data_engine.schemas.temenos_connections import (
 )
 from app.data_engine.service import temenos_connections
 from app.models import Bank
+from tests.support.factories.authorization import grant_institution_authority
 from tests.support.factories.outbound import stub_dns, stub_public_dns
 from tests.support.helpers import ORG_1, USER_1
 
@@ -52,7 +54,7 @@ BLOCKED_ENDPOINTS = [
 
 @pytest.fixture
 def ctx() -> TenantContext:
-    return TenantContext(organization_id=ORG_1, actor_user_id=USER_1)
+    return TenantContext(organization_id=ORG_1, actor_user_id=USER_1, authorization_version=1)
 
 
 def _bank(db: Session) -> Bank:
@@ -67,6 +69,15 @@ def _bank(db: Session) -> Bank:
     )
     db.add(bank)
     db.flush()
+    grant_institution_authority(
+        db,
+        organization_id=ORG_1,
+        bank_id=bank.id,
+        user_id=USER_1,
+        bundle=RoleBundle.ANALYST,
+        module=ModuleScope.DATA,
+        sensitivity=SensitivityScope.RESTRICTED,
+    )
     return bank
 
 

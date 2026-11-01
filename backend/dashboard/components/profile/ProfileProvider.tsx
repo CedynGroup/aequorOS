@@ -16,8 +16,8 @@ import type {
   ProfileUpdateRequest,
 } from "@aequoros/risk-service-api";
 
-import { useImpersonation } from "@/components/impersonation/useImpersonation";
-import { apiCall, authApi } from "@/lib/api/client";
+import { useImpersonation } from "../impersonation/useImpersonation";
+import { apiCall, authApi } from "../../lib/api/client";
 
 type ProfileContextValue = {
   profile: MeResponse | undefined;

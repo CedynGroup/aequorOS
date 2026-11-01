@@ -22,7 +22,7 @@ the offline fixture driver stands in for.
 **Egress (SSRF) guard.** ``host``, ``read_replicas``, and the backend option
 blocks name a destination the tenant chooses, so every path that can open a
 socket — the live ``/test``, ``/schema`` discovery, ``/sync``, and the scheduled
-health probe (which runs ``test_connection``) — funnels through
+health probe (which runs ``probe_connection_internal``) — funnels through
 :func:`_build_connection_config`, which resolves and validates EVERY resulting
 destination via :mod:`app.core.outbound` before the driver is handed the config.
 That is the authoritative check; the schema-level screen on the create/update
@@ -42,6 +42,7 @@ from uuid import UUID
 from fastapi import HTTPException, status
 from sqlalchemy import select
 
+from app.core.authorization import Permission, Sensitivity
 from app.core.outbound import OutboundTargetBlocked, check_host_port
 from app.data_engine.adapters.database_direct.adapter import DatabaseDirectAdapter
 from app.data_engine.adapters.database_direct.config import (
@@ -82,6 +83,7 @@ from app.data_engine.schemas.database_connection import (
     DiscoveredColumn,
     DiscoveredTable,
 )
+from app.data_engine.service.access import require_data_access
 from app.db.base import utc_now
 from app.identity.public import Bank
 from app.market_data.public import derive_status
@@ -113,6 +115,7 @@ _adapter = DatabaseDirectAdapter()
 
 
 def list_connections(db: Session, ctx: TenantContext, bank_id: str) -> DatabaseConnectionListRead:
+    require_data_access(db, ctx, bank_id, Permission.VIEW, Sensitivity.RESTRICTED)
     _get_bank_or_404(db, ctx, bank_id)
     rows = db.scalars(
         select(DatabaseDirectConnection)
@@ -130,6 +133,7 @@ def list_connections(db: Session, ctx: TenantContext, bank_id: str) -> DatabaseC
 def get_connection(
     db: Session, ctx: TenantContext, bank_id: str, connection_id: UUID
 ) -> DatabaseConnectionRead:
+    require_data_access(db, ctx, bank_id, Permission.VIEW, Sensitivity.RESTRICTED, opaque=True)
     _get_bank_or_404(db, ctx, bank_id)
     return _read_model(_get_connection_or_404(db, ctx, bank_id, connection_id))
 
@@ -363,6 +367,18 @@ def test_connection(
     exception); a credential/config-class failure also moves the stored status
     into the matching lifecycle state.
     """
+    require_data_access(db, ctx, bank_id, Permission.VALIDATE, Sensitivity.RESTRICTED, opaque=True)
+    return probe_connection_internal(db, ctx, bank_id, connection_id, driver=driver)
+
+
+def probe_connection_internal(
+    db: Session,
+    ctx: TenantContext,
+    bank_id: str,
+    connection_id: UUID,
+    *,
+    driver: DatabaseDriver | None = None,
+) -> DatabaseConnectionTestResult:
     _get_bank_or_404(db, ctx, bank_id)
     connection = _get_connection_or_404(db, ctx, bank_id, connection_id)
     _ensure_not_revoked(connection)
@@ -409,6 +425,7 @@ def discover_schema(
     driver: DatabaseDriver | None = None,
 ) -> DatabaseConnectionDiscoverResult:
     """Stage a read-only pull and report its tables/columns for mapping."""
+    require_data_access(db, ctx, bank_id, Permission.VALIDATE, Sensitivity.RESTRICTED, opaque=True)
     _get_bank_or_404(db, ctx, bank_id)
     connection = _get_connection_or_404(db, ctx, bank_id, connection_id)
     _ensure_not_revoked(connection)
@@ -422,6 +439,18 @@ def discover_schema(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
     return DatabaseConnectionDiscoverResult(tables=tables)
+
+
+def require_sync_connection(
+    db: Session, ctx: TenantContext, bank_id: str, connection_id: UUID
+) -> DatabaseDirectConnection:
+    """Resolve RUN authority and the scoped object before provisioning storage."""
+    require_data_access(db, ctx, bank_id, Permission.RUN, Sensitivity.RESTRICTED, opaque=True)
+    _get_bank_or_404(db, ctx, bank_id)
+    connection = _get_connection_or_404(db, ctx, bank_id, connection_id)
+    _ensure_not_revoked(connection)
+    _ensure_not_disabled(connection)
+    return connection
 
 
 def sync_now(  # noqa: PLR0913 - a sync binds bank, connection, storage, and request
@@ -443,12 +472,9 @@ def sync_now(  # noqa: PLR0913 - a sync binds bank, connection, storage, and req
     """
     # Imported lazily to keep this module import-light and mirror the T24 pull.
     from app.data_engine.schemas.ingestion import IngestionBatchCreate  # noqa: PLC0415
-    from app.data_engine.service.ingestion import start_ingestion, upload_source  # noqa: PLC0415
+    from app.data_engine.service.ingestion import stage_source, start_ingestion  # noqa: PLC0415
 
-    _get_bank_or_404(db, ctx, bank_id)
-    connection = _get_connection_or_404(db, ctx, bank_id, connection_id)
-    _ensure_not_revoked(connection)
-    _ensure_not_disabled(connection)
+    connection = require_sync_connection(db, ctx, bank_id, connection_id)
     if connection.credential_ciphertext is None:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
@@ -485,7 +511,7 @@ def sync_now(  # noqa: PLR0913 - a sync binds bank, connection, storage, and req
         bundle = bundle.model_copy(update={"as_of_date": as_of.isoformat()})
 
     filename = f"db-direct-{connection.backend}-{as_of.isoformat()}.json"
-    upload = upload_source(db, ctx, bank_id, storage, filename, bundle.to_json().encode("utf-8"))
+    upload = stage_source(db, ctx, bank_id, storage, filename, bundle.to_json().encode("utf-8"))
     batch_payload = IngestionBatchCreate(
         source_system="DB_DIRECT",
         # Each connection is its own data source: scope the mapping to this

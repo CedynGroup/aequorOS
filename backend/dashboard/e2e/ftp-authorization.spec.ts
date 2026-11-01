@@ -57,6 +57,7 @@ test.describe("FTP reader without run permission", () => {
       bindings: [
         { bundle: "viewer", module: "ftp", sensitivity: "aggregated" },
         { bundle: "viewer", module: "ftp", sensitivity: "confidential" },
+        { bundle: "viewer", module: "data", sensitivity: "confidential" },
       ],
     },
   });

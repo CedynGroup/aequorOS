@@ -28,6 +28,7 @@ import PageHeader from "@/components/ui/PageHeader";
 import SectionCard from "@/components/ui/SectionCard";
 import QueryBoundary, { ErrorPanel } from "@/components/ui/QueryBoundary";
 import EmptyState from "@/components/ui/EmptyState";
+import DataAccessNotice from "@/components/ui/DataAccessNotice";
 import { SkeletonCard } from "@/components/ui/Skeleton";
 import { SemanticDelta } from "@/components/ui/DeltaBadge";
 import { useBankContext } from "@/components/shell/BankContext";
@@ -493,7 +494,10 @@ export default function ComparePage() {
     Boolean(left && right),
   );
 
-  const selectorsLoading = periodsQuery.isLoading || runsQuery.isLoading;
+  const selectorsLoading =
+    periodsQuery.access === "loading" ||
+    (periodsQuery.access === "allowed" && periodsQuery.isPending) ||
+    runsQuery.isLoading;
   const selectorsError = periodsQuery.error ?? runsQuery.error;
 
   // Nothing to compare: no runs at all, or (mode-specific) fewer than two picks.
@@ -525,13 +529,16 @@ export default function ComparePage() {
       <PageContainer className="py-6 space-y-6">
         {mode === "return" ? (
           <ReturnVersionCompare bankId={bank?.id} />
+        ) : periodsQuery.access === "denied" ? (
+          <DataAccessNotice requirement="DATA · Confidential · View for comparison reporting periods" />
         ) : (
           <QueryBoundary
             contained
             isLoading={selectorsLoading}
             error={selectorsError}
             onRetry={() => {
-              void periodsQuery.refetch();
+              if (periodsQuery.access === "allowed")
+                void periodsQuery.refetch();
               void runsQuery.refetch();
             }}
           >

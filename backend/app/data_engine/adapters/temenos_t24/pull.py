@@ -122,7 +122,7 @@ def stage_extract(  # noqa: PLR0913 - a pull binds connection + transport + auth
     surface as classified :class:`~app.data_engine.adapters.temenos_t24.errors.TemenosError`.
     """
     from app.data_engine.service.ingestion import (  # noqa: PLC0415 - avoid import cycle
-        upload_source,
+        stage_source,
     )
 
     catalog = load_mode_catalog(mode)
@@ -144,7 +144,7 @@ def stage_extract(  # noqa: PLR0913 - a pull binds connection + transport + auth
     )
     content = json.dumps(bundle, ensure_ascii=False, sort_keys=True).encode("utf-8")
     filename = f"t24-{mode.lower()}-{as_of.isoformat()}.json"
-    upload: IngestionUploadRead = upload_source(db, ctx, bank_id, storage, filename, content)
+    upload: IngestionUploadRead = stage_source(db, ctx, bank_id, storage, filename, content)
     return StagedPull(
         location=StagedIngestionLocation(upload.location), bundle=bundle, responses=tuple(responses)
     )

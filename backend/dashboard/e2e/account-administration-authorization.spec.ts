@@ -88,7 +88,7 @@ test.describe("explicit Account administrator", () => {
       page.getByRole("heading", { name: "Access required" }),
     ).toBeVisible();
     await expect(
-      page.getByText("Data Engine · Restricted · View", { exact: true }),
+      page.getByText("Data Engine · Aggregated · View", { exact: true }),
     ).toBeVisible();
     await expect(
       page.getByRole("heading", { name: "Integration keys" }),

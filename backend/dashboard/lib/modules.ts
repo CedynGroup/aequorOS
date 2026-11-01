@@ -346,9 +346,9 @@ const CAPABILITY_MODULES = {
   ftp: ["ftp"],
   fcst: ["forecasting"],
   beh: ["behavioral"],
-  data: ["data_engine"],
+  data: ["data_engine", "positions"],
   reg: ["regulatory_reporting", "reports"],
-  risk: ["command_center", "risk", "alerts", "credit", "positions"],
+  risk: ["command_center", "risk", "alerts", "credit"],
   markets: ["markets"],
   institution: ["institution"],
   account: [],
@@ -475,6 +475,22 @@ export function hasStructuralCapability(
       capability.module === module &&
       capability.sensitivity === sensitivity &&
       capability.permission === permission,
+  );
+}
+
+/** DATA has exact sensitivities and currently requires a whole institution. */
+export function hasDataCapability(
+  capabilities: readonly EffectiveCapabilityRead[],
+  sensitivity: EffectiveCapabilityRead["sensitivity"],
+  permission: EffectiveCapabilityRead["permission"],
+): boolean {
+  return capabilities.some(
+    (capability) =>
+      capability.module === "data" &&
+      capability.sensitivity === sensitivity &&
+      capability.permission === permission &&
+      capability.dataScope?.kind === "all" &&
+      (permission === "approve" || !capability.requiresContextualAuthorization),
   );
 }
 
@@ -679,7 +695,7 @@ const MODULE_ENTRY_REQUIREMENTS: Readonly<
   risk: RISK_CONFIDENTIAL_VIEW,
   alerts: RISK_CONFIDENTIAL_VIEW,
   markets: MARKETS_PUBLISHED_VIEW,
-  positions: RISK_CONFIDENTIAL_VIEW,
+  positions: requirement("data", "Data Engine", "restricted", "Restricted"),
   irrbb: IRRBB_AGGREGATED_VIEW,
   liquidity: LIQUIDITY_AGGREGATED_VIEW,
   // The requirement names the grant that OPENS the module. Credit is admitted
@@ -692,7 +708,7 @@ const MODULE_ENTRY_REQUIREMENTS: Readonly<
   ftp: requirement("ftp", "Funds Transfer Pricing", "aggregated", "Aggregated"),
   forecasting: FORECASTING_AGGREGATED_VIEW,
   behavioral: BEHAVIORAL_AGGREGATED_VIEW,
-  data_engine: requirement("data", "Data Engine", "restricted", "Restricted"),
+  data_engine: requirement("data", "Data Engine", "aggregated", "Aggregated"),
   reports: REGULATORY_PUBLISHED_VIEW,
   institution: requirement(
     "institution",
@@ -1022,7 +1038,28 @@ function scopedModulePermissionReason(
   path: string,
   scope: ModuleScope,
 ): string | undefined {
-  return requirementsReason(scopedModuleRequirements(path, scope));
+  return requirementsReason([
+    ...dataRequirements(path, scope),
+    ...scopedModuleRequirements(path, scope),
+  ]);
+}
+
+function dataRequirements(
+  path: string,
+  scope: ModuleScope,
+): AccessRequirement[] {
+  // Opaque batch links retain object-level checks in their page and API.
+  if (
+    ![
+      "/positions",
+      "/data-engine/positions",
+      "/data-engine/t24",
+      "/data-engine/database",
+    ].includes(path) ||
+    hasDataCapability(scope.institutionCapabilities ?? [], "restricted", "view")
+  )
+    return [];
+  return [requirement("data", "Data Engine", "restricted", "Restricted")];
 }
 
 /**
@@ -1040,6 +1077,7 @@ function bindingRequirements(
     ...capitalRequirements(path, scope),
     ...creditRequirements(path, scope),
     ...scopedModuleRequirements(path, scope),
+    ...dataRequirements(path, scope),
   ];
 }
 

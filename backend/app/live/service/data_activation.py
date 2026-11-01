@@ -67,6 +67,15 @@ def activate_bank_data(
 ) -> DataActivationRead:
     _require_actor(ctx)
     bank = _get_bank_or_404(db, ctx, bank_id)
+    scoped_authorization.require_resolved_bank_permission(
+        db,
+        ctx,
+        bank,
+        permission=Permission.RUN,
+        module=Module.DATA,
+        sensitivity=Sensitivity.RESTRICTED,
+        surface="data_activation",
+    )
     for engine, module in (
         ("credit", Module.CREDIT),
         ("liquidity", Module.LIQUIDITY),
@@ -131,6 +140,15 @@ def list_bank_data_activations(
     db: Session, ctx: TenantContext, bank_id: str, *, limit: int = 10
 ) -> DataActivationListRead:
     bank = _get_bank_or_404(db, ctx, bank_id)
+    scoped_authorization.require_resolved_bank_permission(
+        db,
+        ctx,
+        bank,
+        permission=Permission.VIEW,
+        module=Module.DATA,
+        sensitivity=Sensitivity.AGGREGATED,
+        surface="data_activation",
+    )
     events = db.scalars(
         select(AuditEvent)
         .where(
@@ -432,7 +450,11 @@ def _get_bank_or_404(db: Session, ctx: TenantContext, bank_id: str) -> Bank:
 
 
 def _require_actor(ctx: TenantContext) -> None:
+    if ctx.integration_key_id is not None or ctx.impersonation_context is not None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail="Human activation required."
+        )
     if ctx.actor_user_id is None:
         raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED, detail="X-User-Id header is required."
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="An authenticated user is required."
         )

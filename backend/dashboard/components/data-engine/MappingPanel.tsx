@@ -12,6 +12,8 @@ import StatusPill from "@/components/ui/StatusPill";
 import { useBankContext } from "@/components/shell/BankContext";
 import { ErrorPanel } from "@/components/ui/QueryBoundary";
 import { isApiError } from "@/lib/api/client";
+import { useDataPermission } from "@/lib/api/dataAccess";
+import DataAccessNotice from "@/components/ui/DataAccessNotice";
 import {
   STARTER_TEMPLATES,
   useActivateTemplate,
@@ -22,6 +24,7 @@ export default function MappingPanel() {
   const { bank } = useBankContext();
   const configsQuery = useMappingConfigs(bank?.id);
   const activate = useActivateTemplate(bank?.id);
+  const canRead = useDataPermission(bank?.id, "view", "confidential");
 
   const configs = configsQuery.data?.configs ?? [];
   const activeConfig = configs.find(
@@ -47,7 +50,9 @@ export default function MappingPanel() {
           <p className="text-micro uppercase tracking-wider text-slate">
             Active mapping configuration
           </p>
-          {activeConfig ? (
+          {!canRead ? (
+            <DataAccessNotice requirement="DATA · Confidential · View for mapping metadata" />
+          ) : activeConfig ? (
             <p className="mt-1 text-body text-navy">
               {activeConfig.name}{" "}
               <span className="font-mono text-caption text-slate">

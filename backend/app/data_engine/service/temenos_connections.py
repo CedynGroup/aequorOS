@@ -28,6 +28,7 @@ from fastapi import HTTPException, status
 from sqlalchemy import select
 
 import app.data_engine.adapters.temenos_t24  # noqa: F401 - registers the T24 adapter
+from app.core.authorization import Permission, Sensitivity
 from app.core.outbound import OutboundTargetBlocked, check_url
 from app.data_engine.adapters.temenos_t24.auth import (
     SimulatedSessionProvider,
@@ -67,6 +68,7 @@ from app.data_engine.schemas.temenos_connections import (
     TemenosPullTriggerRequest,
     TemenosTestPullRead,
 )
+from app.data_engine.service.access import require_data_access
 from app.data_engine.service.ingestion import create_mapping_config
 from app.db.base import utc_now
 from app.identity.public import Bank
@@ -134,6 +136,7 @@ def _guard_endpoint_or_400(endpoint: str) -> None:
 
 
 def list_connections(db: Session, ctx: TenantContext, bank_id: str) -> TemenosConnectionListRead:
+    require_data_access(db, ctx, bank_id, Permission.VIEW, Sensitivity.RESTRICTED)
     _get_bank_or_404(db, ctx, bank_id)
     rows = db.scalars(
         select(TemenosConnection)
@@ -151,6 +154,7 @@ def list_connections(db: Session, ctx: TenantContext, bank_id: str) -> TemenosCo
 def list_domains(db: Session, ctx: TenantContext, bank_id: str, mode: str) -> TemenosDomainListRead:
     """The core-banking domain catalog for a connection mode: category, canonical
     entity type, default cadence, and whether the mode catalog supports it."""
+    require_data_access(db, ctx, bank_id, Permission.VIEW, Sensitivity.RESTRICTED)
     _get_bank_or_404(db, ctx, bank_id)
     try:
         catalog = load_mode_catalog(mode)
@@ -334,6 +338,7 @@ def test_connection(
     operations. Until a bank-approved transport exists, this endpoint must not
     imply that it reached a core or resolve a tenant-provided endpoint.
     """
+    require_data_access(db, ctx, bank_id, Permission.VALIDATE, Sensitivity.RESTRICTED, opaque=True)
     _get_bank_or_404(db, ctx, bank_id)
     connection = _get_connection_or_404(db, ctx, bank_id, connection_id)
     _ensure_not_revoked(connection)
@@ -490,6 +495,7 @@ def trigger_pull(
     payload: TemenosPullTriggerRequest,
 ) -> TemenosPullTriggerRead:
     """Enqueue an on-demand pull for one as-of date (coalesced per date)."""
+    require_data_access(db, ctx, bank_id, Permission.RUN, Sensitivity.RESTRICTED, opaque=True)
     connection = _get_connection_or_404(db, ctx, bank_id, connection_id)
     _ensure_not_revoked(connection)
     _ensure_not_disabled(connection)
@@ -520,6 +526,7 @@ def trigger_backfill(
         enqueue_backfill,
     )
 
+    require_data_access(db, ctx, bank_id, Permission.RUN, Sensitivity.RESTRICTED, opaque=True)
     connection = _get_connection_or_404(db, ctx, bank_id, connection_id)
     _ensure_not_revoked(connection)
     _ensure_not_disabled(connection)

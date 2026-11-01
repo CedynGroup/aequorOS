@@ -46,6 +46,7 @@ import {
 } from "@/lib/modules";
 import { currencyCode, fmtInt } from "@/lib/format";
 import { useBankContext } from "@/components/shell/BankContext";
+import ReportingPeriodNotice from "@/components/shell/ReportingPeriodNotice";
 import {
   type SdiLiquidityPosition,
   useSdiCapitalSummary,
@@ -161,7 +162,8 @@ function ScopedEnterpriseStressWorkbench({
 }: {
   moduleLens?: StressModuleLens;
 }) {
-  const { bank, period, periods, moduleScope } = useBankContext();
+  const { bank, period, periods, periodsStatus, moduleScope } =
+    useBankContext();
   const stressAuthority = useStressAuthority();
   const bankId = bank?.id;
   const periodId = period?.id;
@@ -302,6 +304,7 @@ function ScopedEnterpriseStressWorkbench({
   };
 
   if (!periodId) {
+    if (periodsStatus !== "ready") return <ReportingPeriodNotice />;
     return (
       <div className="px-1 py-4">
         <EmptyState

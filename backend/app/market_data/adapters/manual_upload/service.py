@@ -16,7 +16,7 @@ from uuid import UUID, uuid4
 from fastapi import HTTPException, status
 from sqlalchemy import select
 
-from app.data_engine.public import IngestionBatch
+from app.data_engine.public import IngestionBatch, stage_source
 from app.data_engine.service import ingestion
 from app.db.base import utc_now
 from app.identity.public import Bank
@@ -62,7 +62,7 @@ def upload_market_data(  # noqa: PLR0913 - one call carries the full upload cont
             detail += f" First problem: {first.sheet} row {first.row_number}: {first.message}."
         raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=detail)
 
-    staged = ingestion.upload_source(db, ctx, bank_id, storage, filename, content)
+    staged = stage_source(db, ctx, bank_id, storage, filename, content)
     adapter = ManualUploadAdapter(db, bank, slug, actor_user_id=ctx.actor_user_id, storage=storage)
     credentials = CredentialSet(
         institution_id=str(bank.id),

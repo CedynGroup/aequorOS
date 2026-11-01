@@ -19,6 +19,8 @@ import {
   type IngestionSourceSystem,
 } from "@/lib/api/ingestion";
 import { BatchStatusPill, formatDate, formatDateTime } from "./shared";
+import { useDataPermission } from "@/lib/api/dataAccess";
+import DataAccessNotice from "@/components/ui/DataAccessNotice";
 
 const columns: Column<IngestionBatchRead>[] = [
   {
@@ -123,7 +125,12 @@ export default function BatchesTable({
 }) {
   const { bank } = useBankContext();
   const batchesQuery = useIngestionBatches(bank?.id, sourceSystem);
+  const allowed = useDataPermission(bank?.id, "view", "confidential");
 
+  if (!allowed)
+    return (
+      <DataAccessNotice requirement="DATA · Confidential · View for ingestion history" />
+    );
   if (batchesQuery.isError) {
     return (
       <ErrorPanel

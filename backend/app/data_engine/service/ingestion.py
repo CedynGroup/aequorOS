@@ -33,6 +33,7 @@ from sqlalchemy.sql.elements import ColumnElement
 
 import app.adapters  # noqa: F401 - importing registers every shipped source adapter
 from app.api.deps import TenantContext
+from app.core.authorization import Module, Permission, Sensitivity
 from app.core.config import get_settings
 from app.core.ids import new_uuid7
 from app.data_engine.domain.ingestion.adapter import SourceAdapter, get_adapter_class
@@ -90,8 +91,9 @@ from app.data_engine.schemas.ingestion import (
     TranslationFailureListRead,
     TranslationFailureRead,
 )
+from app.data_engine.service.access import require_data_access
 from app.db.base import utc_now
-from app.identity.public import Bank
+from app.identity.public import Bank, evaluate_bank_permission
 from app.models import (
     AuditEvent,
     CanonicalCounterparty,
@@ -130,6 +132,19 @@ _FILENAME_UNSAFE = re.compile(r"[^A-Za-z0-9._-]+")
 
 
 def upload_source(  # noqa: PLR0913 - mirrors record_event's shape
+    db: Session,
+    ctx: TenantContext,
+    bank_id: str,
+    storage: StorageClient,
+    filename: str,
+    content: bytes,
+) -> IngestionUploadRead:
+    """Authorize a human upload before staging any source bytes."""
+    require_data_access(db, ctx, bank_id, Permission.CREATE, Sensitivity.RESTRICTED)
+    return stage_source(db, ctx, bank_id, storage, filename, content)
+
+
+def stage_source(  # noqa: PLR0913 - trusted connector staging context
     db: Session,
     ctx: TenantContext,
     bank_id: str,
@@ -274,6 +289,7 @@ def create_mapping_config(
 
 
 def list_mapping_configs(db: Session, ctx: TenantContext, bank_id: str) -> MappingConfigListRead:
+    require_data_access(db, ctx, bank_id, Permission.VIEW, Sensitivity.CONFIDENTIAL)
     bank = _get_bank_or_404(db, ctx, bank_id)
     records = db.scalars(
         select(MappingConfigRecord)
@@ -389,6 +405,7 @@ def start_uploaded_ingestion(
             status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
             detail="location must be a temp:// handle returned by an ingestion upload.",
         ) from exc
+    require_data_access(db, ctx, bank_id, Permission.RUN, Sensitivity.RESTRICTED)
     return start_ingestion(db, ctx, bank_id, payload, storage)
 
 
@@ -773,6 +790,7 @@ def list_batches(
     bank_id: str,
     source_system: SourceSystem | None = None,
 ) -> IngestionBatchListRead:
+    require_data_access(db, ctx, bank_id, Permission.VIEW, Sensitivity.CONFIDENTIAL)
     bank = _get_bank_or_404(db, ctx, bank_id)
     query = select(IngestionBatch).where(
         IngestionBatch.organization_id == ctx.organization_id,
@@ -780,12 +798,11 @@ def list_batches(
     )
     if source_system is not None:
         query = query.where(IngestionBatch.source_system == source_system)
+    restricted = _can_read_batch_diagnostics(db, ctx, bank)
     batches = db.scalars(query.order_by(IngestionBatch.id.desc()))
     return IngestionBatchListRead(
         bank_id=bank.id,
-        batches=[
-            IngestionBatchRead.model_validate(batch, from_attributes=True) for batch in batches
-        ],
+        batches=[_batch_read(batch, restricted=restricted) for batch in batches],
     )
 
 
@@ -797,6 +814,7 @@ def get_ingestion_summary(db: Session, ctx: TenantContext, bank_id: str) -> Inge
     is the most recent), current-generation canonical counts, and the
     activation history the data-activation listing reads.
     """
+    require_data_access(db, ctx, bank_id, Permission.VIEW, Sensitivity.AGGREGATED)
     bank = _get_bank_or_404(db, ctx, bank_id)
     org_id = ctx.organization_id
 
@@ -913,13 +931,42 @@ def get_ingestion_summary(db: Session, ctx: TenantContext, bank_id: str) -> Inge
 
 
 def get_batch(db: Session, ctx: TenantContext, bank_id: str, batch_id: UUID) -> IngestionBatchRead:
+    bank = require_data_access(
+        db, ctx, bank_id, Permission.VIEW, Sensitivity.CONFIDENTIAL, opaque=True
+    )
     batch = _get_batch_or_404(db, ctx, bank_id, batch_id)
-    return IngestionBatchRead.model_validate(batch, from_attributes=True)
+    return _batch_read(batch, restricted=_can_read_batch_diagnostics(db, ctx, bank))
+
+
+def _can_read_batch_diagnostics(db: Session, ctx: TenantContext, bank: Bank) -> bool:
+    decision = evaluate_bank_permission(
+        db,
+        ctx,
+        bank,
+        permission=Permission.VIEW,
+        module=Module.DATA,
+        sensitivity=Sensitivity.RESTRICTED,
+        surface="data_engine_batch_diagnostics",
+    )
+    return decision is not None and decision.allowed
+
+
+def _batch_read(batch: IngestionBatch, *, restricted: bool) -> IngestionBatchRead:
+    result = IngestionBatchRead.model_validate(batch, from_attributes=True)
+    if not restricted:
+        # Reports and driver/adapter diagnostics can contain raw source values.
+        result.validation_report = {}
+        result.etl_report = None
+        result.error_message = None
+        result.raw_artifact_path = None
+        result.report_artifact_path = None
+    return result
 
 
 def list_translation_failures(
     db: Session, ctx: TenantContext, bank_id: str, batch_id: UUID
 ) -> TranslationFailureListRead:
+    require_data_access(db, ctx, bank_id, Permission.VIEW, Sensitivity.RESTRICTED, opaque=True)
     batch = _get_batch_or_404(db, ctx, bank_id, batch_id)
     failures = db.scalars(
         select(TranslationFailure)
@@ -964,6 +1011,7 @@ def list_positions(  # noqa: PLR0913 - one keyword-only filter per blotter contr
     current snapshot carries that business date. Ordering is deterministic
     (``source_reference``, then id) so pages are stable and disjoint.
     """
+    require_data_access(db, ctx, bank_id, Permission.VIEW, Sensitivity.RESTRICTED)
     bank = _get_bank_or_404(db, ctx, bank_id)
     filters = [
         CanonicalPosition.organization_id == ctx.organization_id,
@@ -1097,6 +1145,7 @@ def list_position_facets(
     db: Session, ctx: TenantContext, bank_id: str
 ) -> CanonicalPositionFacetsRead:
     """Distinct position types and currencies with current-generation counts."""
+    require_data_access(db, ctx, bank_id, Permission.VIEW, Sensitivity.RESTRICTED)
     bank = _get_bank_or_404(db, ctx, bank_id)
     current = (
         CanonicalPosition.organization_id == ctx.organization_id,
@@ -1187,6 +1236,7 @@ def override_position_snapshot(
     and why, and the prior generation is superseded. Only the current
     generation can be overridden.
     """
+    require_data_access(db, ctx, bank_id, Permission.EDIT, Sensitivity.RESTRICTED, opaque=True)
     bank = _get_bank_or_404(db, ctx, bank_id)
     snapshot = db.scalar(
         select(CanonicalPositionSnapshot).where(
@@ -1307,24 +1357,51 @@ def walk_lineage(db: Session, ctx: TenantContext, lineage_id: UUID) -> LineageWa
     nodes: list[LineageNodeRead] = []
     seen: set[UUID] = set()
     frontier = [lineage_id]
-    while frontier and len(nodes) < _MAX_LINEAGE_DEPTH:
+    while frontier and len(seen) < _MAX_LINEAGE_DEPTH:
         node_id = frontier.pop(0)
         if node_id in seen:
             continue
         seen.add(node_id)
-        node = db.scalar(
-            select(LineageRecord).where(
-                LineageRecord.id == node_id,
-                LineageRecord.organization_id == ctx.organization_id,
+        reference = (
+            db.execute(
+                select(LineageRecord.id, IngestionBatch.bank_id)
+                .select_from(LineageRecord)
+                .outerjoin(
+                    IngestionBatch,
+                    (IngestionBatch.id == LineageRecord.ingestion_batch_id)
+                    & (IngestionBatch.organization_id == LineageRecord.organization_id)
+                    & (IngestionBatch.bank_id == LineageRecord.bank_id),
+                )
+                .where(
+                    LineageRecord.id == node_id,
+                    LineageRecord.organization_id == ctx.organization_id,
+                )
             )
+            .tuples()
+            .one_or_none()
         )
-        if node is None:
+        if reference is None:
             if not nodes:
                 raise HTTPException(
                     status_code=status.HTTP_404_NOT_FOUND, detail="Lineage record not found."
                 )
             continue
-        parents = [UUID(value) for value in node.input_lineage_ids]
+        # An outer join can return NULL for a non-nullable mapped column.
+        bank_id = cast(str | None, reference[1])
+        if bank_id is None:
+            raise HTTPException(status_code=404, detail="Lineage record not found.")
+        require_data_access(db, ctx, bank_id, Permission.VIEW, Sensitivity.RESTRICTED, opaque=True)
+        # Do not deserialize protected payloads until the locator is authorized.
+        node = db.scalar(
+            select(LineageRecord).where(
+                LineageRecord.id == node_id,
+                LineageRecord.organization_id == ctx.organization_id,
+                LineageRecord.bank_id == bank_id,
+            )
+        )
+        if node is None:
+            raise HTTPException(status_code=404, detail="Lineage record not found.")
+        parents = [UUID(value) for value in node.input_lineage_ids[:_MAX_LINEAGE_DEPTH]]
         nodes.append(
             LineageNodeRead(
                 id=node.id,
@@ -1336,7 +1413,14 @@ def walk_lineage(db: Session, ctx: TenantContext, lineage_id: UUID) -> LineageWa
                 occurred_at=node.occurred_at,
             )
         )
-        frontier.extend(parents)
+        remaining = max(0, _MAX_LINEAGE_DEPTH - len(seen) - len(frontier))
+        frontier.extend(parents[:remaining])
+    authorized_ids = {node.id for node in nodes}
+    for node in nodes:
+        # A bounded walk must not expose edges to parents it never authorized.
+        node.input_lineage_ids = [
+            parent for parent in node.input_lineage_ids if parent in authorized_ids
+        ]
     return LineageWalkRead(nodes=nodes)
 
 
