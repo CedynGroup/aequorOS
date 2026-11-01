@@ -22,7 +22,7 @@ the offline fixture driver stands in for.
 **Egress (SSRF) guard.** ``host``, ``read_replicas``, and the backend option
 blocks name a destination the tenant chooses, so every path that can open a
 socket — the live ``/test``, ``/schema`` discovery, ``/sync``, and the scheduled
-health probe (which runs ``test_connection``) — funnels through
+health probe (which runs ``probe_connection_internal``) — funnels through
 :func:`_build_connection_config`, which resolves and validates EVERY resulting
 destination via :mod:`app.core.outbound` before the driver is handed the config.
 That is the authoritative check; the schema-level screen on the create/update
@@ -368,6 +368,17 @@ def test_connection(
     into the matching lifecycle state.
     """
     require_data_access(db, ctx, bank_id, Permission.VALIDATE, Sensitivity.RESTRICTED, opaque=True)
+    return probe_connection_internal(db, ctx, bank_id, connection_id, driver=driver)
+
+
+def probe_connection_internal(
+    db: Session,
+    ctx: TenantContext,
+    bank_id: str,
+    connection_id: UUID,
+    *,
+    driver: DatabaseDriver | None = None,
+) -> DatabaseConnectionTestResult:
     _get_bank_or_404(db, ctx, bank_id)
     connection = _get_connection_or_404(db, ctx, bank_id, connection_id)
     _ensure_not_revoked(connection)

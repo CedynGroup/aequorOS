@@ -246,7 +246,9 @@ export default function BatchDetailPage(props: {
               are counted in the totals above but not listed individually.
             </p>
           )}
-          {protectedPayloadReason(batch.validationReport) ? (
+          {!diagnostics ? (
+            <DataAccessNotice requirement="DATA · Restricted · View for validation findings" />
+          ) : protectedPayloadReason(batch.validationReport) ? (
             <ProtectedDataPlaceholder value={batch.validationReport} />
           ) : findings.length === 0 ? (
             <EmptyState
@@ -282,7 +284,19 @@ export default function BatchDetailPage(props: {
 
         <section className="space-y-3">
           <h2 className="text-h2 text-navy">Untranslatable rows</h2>
-          {translationFailures.length === 0 ? (
+          {!diagnostics ? (
+            <DataAccessNotice requirement="DATA · Restricted · View for untranslatable rows" />
+          ) : failuresQuery.isPending ? (
+            <p role="status" className="text-body text-slate">
+              Loading untranslatable rows…
+            </p>
+          ) : failuresQuery.isError ? (
+            <ErrorPanel
+              error={failuresQuery.error}
+              onRetry={() => void failuresQuery.refetch()}
+              title="Untranslatable rows unavailable"
+            />
+          ) : translationFailures.length === 0 ? (
             <p className="text-body text-slate">
               Every extracted row translated into the canonical model.
             </p>

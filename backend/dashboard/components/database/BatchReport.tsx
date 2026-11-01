@@ -10,6 +10,8 @@
 
 import type { IngestionBatchRead } from "@aequoros/risk-service-api";
 import { fmtLocale } from "@/lib/format";
+import { useDataPermission } from "@/lib/api/dataAccess";
+import DataAccessNotice from "@/components/data-engine/DataAccessNotice";
 
 type ReportFinding = {
   rule?: string;
@@ -81,7 +83,11 @@ function ReportSection({ data }: { data: Record<string, unknown> }) {
           if (value.length === 0) {
             return <StatChip key={key} label={key} value={0} />;
           }
-          if (value.every((item) => typeof item === "string" || typeof item === "number")) {
+          if (
+            value.every(
+              (item) => typeof item === "string" || typeof item === "number",
+            )
+          ) {
             return (
               <div key={key}>
                 <p className="text-caption font-medium text-slate mb-1">
@@ -133,6 +139,15 @@ function ReportSection({ data }: { data: Record<string, unknown> }) {
 }
 
 export default function BatchReport({ batch }: { batch: IngestionBatchRead }) {
+  const canReadDiagnostics = useDataPermission(
+    batch.bankId,
+    "view",
+    "restricted",
+  );
+  if (!canReadDiagnostics)
+    return (
+      <DataAccessNotice requirement="DATA · Restricted · View for ETL and validation reports" />
+    );
   const report = (batch.validationReport ?? {}) as ValidationReportShape;
   // etl_report is a first-class column on the batch (ML-ETL preprocess + dedup summary),
   // returned typed on IngestionBatchRead — not nested under the validation report.

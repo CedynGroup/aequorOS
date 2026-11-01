@@ -4,7 +4,7 @@ Two halves, mirroring ``temenos_jobs`` / ``market_data_jobs``:
 
 - :func:`run_database_direct_health` is the ``database_direct_health`` worker
   handler: it loads the org-scoped connection and runs the existing live test
-  (:func:`app.data_engine.service.database_connections.test_connection` — connect,
+  (:func:`app.data_engine.service.database_connections.probe_connection_internal` — connect,
   authenticate, read the data dictionary), which stamps ``last_validated_at``,
   writes the audit event, and classifies any failure into a bank-safe error.
   Transient reachability failures complete the job with ``reachable: false``
@@ -83,7 +83,7 @@ def run_database_direct_health(session: Session, job: Job) -> None:
         organization_id=connection.organization_id, actor_user_id=connection.created_by
     )
     try:
-        result = database_connections.test_connection(
+        result = database_connections.probe_connection_internal(
             session,
             ctx,
             connection.bank_id,

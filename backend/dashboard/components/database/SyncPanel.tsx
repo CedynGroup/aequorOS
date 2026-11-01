@@ -46,6 +46,7 @@ export default function SyncPanel({
   // ETL preprocess + validation reports.
   const batchQuery = useIngestionBatch(bankId, result?.batchId);
   const canRun = useDataPermission(bankId, "run", "restricted");
+  const canReadBatch = useDataPermission(bankId, "view", "confidential");
 
   const runSync = async () => {
     if (!canRun) return;
@@ -121,12 +122,14 @@ export default function SyncPanel({
                 reused an existing batch for this date
               </span>
             )}
-            <Link
-              href={`/data-engine/batches/${result.batchId}`}
-              className="ml-auto inline-flex items-center gap-1 text-caption font-medium text-action hover:text-action-hover"
-            >
-              Full batch detail <ArrowRight size={12} aria-hidden />
-            </Link>
+            {canReadBatch && (
+              <Link
+                href={`/data-engine/batches/${result.batchId}`}
+                className="ml-auto inline-flex items-center gap-1 text-caption font-medium text-action hover:text-action-hover"
+              >
+                Full batch detail <ArrowRight size={12} aria-hidden />
+              </Link>
+            )}
           </div>
 
           {result.asOfNote && (
@@ -155,7 +158,9 @@ export default function SyncPanel({
             </div>
           </dl>
 
-          {batchQuery.isPending ? (
+          {!canReadBatch ? (
+            <DataAccessNotice requirement="DATA · Confidential · View for batch reports" />
+          ) : batchQuery.isPending ? (
             <p className="inline-flex items-center gap-2 text-caption text-slate">
               <Loader2 size={13} className="animate-spin" aria-hidden />
               Loading the batch reports…
