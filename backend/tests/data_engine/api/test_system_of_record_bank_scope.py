@@ -17,6 +17,7 @@ from uuid import UUID, uuid4
 from fastapi.testclient import TestClient
 from sqlalchemy import Table, func, select
 
+from app.core.authorization import ModuleScope, RoleBundle, SensitivityScope
 from app.db.base import Base, utc_now
 from app.db.session import get_sessionmaker
 from app.models import AuditEvent, Bank, CanonicalWithdrawal, Job, SystemOfRecordDeclaration
@@ -29,6 +30,7 @@ from tests.data_engine.api.test_system_of_record import (
     WITHDRAWALS_URL,
     _seed,
 )
+from tests.support.factories.authorization import grant_institution_authority
 from tests.support.factories.canonical import FIXTURE_AS_OF
 from tests.support.helpers import ORG_1, USER_1, headers
 
@@ -63,6 +65,16 @@ def _seed_banks(client: TestClient) -> str:
                 license_type="universal_bank",
                 institution_type=FALLBACK_TYPE_CODE,
             )
+        )
+        session.flush()
+        grant_institution_authority(
+            session,
+            organization_id=ORG_1,
+            bank_id=SIBLING_BANK_ID,
+            user_id=APPROVER_USER,
+            bundle=RoleBundle.APPROVER,
+            module=ModuleScope.DATA,
+            sensitivity=SensitivityScope.CONFIDENTIAL,
         )
         session.commit()
     finally:

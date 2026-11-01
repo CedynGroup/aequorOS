@@ -10,13 +10,19 @@ from sqlalchemy.orm import Session
 
 from app.core.key_management.fields import blind_index
 from app.core.key_management.local import LocalKeyProvider
-from app.core.tenancy import TenantContext
 from app.data_engine.models.canonical import CanonicalCounterparty
 from app.data_engine.service import canonical_withdrawal
 from app.data_engine.service.canonical_withdrawal import WithdrawalError
 from app.identity.models.institution_profile import RelatedParty
 from app.identity.public import Bank
-from tests.core.test_bank_field_encryption import BANK_A, CTX, IDENTIFIER, counterparty, provider
+from tests.core.test_bank_field_encryption import (
+    BANK_A,
+    CTX,
+    IDENTIFIER,
+    MAKER_CTX,
+    counterparty,
+    provider,
+)
 from tests.db.test_postgres_migrations import alembic_config_for_app
 from tests.support.helpers import ORG_1
 
@@ -35,7 +41,7 @@ def test_upgrade_indexes_all_existing_generations_before_using_them(
     assert bank is not None
     withdrawal = canonical_withdrawal.request_withdrawal(
         db_session,
-        TenantContext(organization_id=ORG_1, actor_user_id=None, roles=("admin",)),
+        MAKER_CTX,
         bank,
         entity="counterparty",
         source_system=cp.source_system,

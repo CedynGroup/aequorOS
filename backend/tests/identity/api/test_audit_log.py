@@ -843,8 +843,17 @@ class _PlanEnvelope(BaseModel):
 
 def test_real_position_override_exposes_change_and_indexed_ownership(db_client: TestClient) -> None:
     grant(RoleBundle.SECURITY_OFFICER)
-    ctx = TenantContext(ORG_1, actor_user_id=USER_1)
+    ctx = TenantContext(ORG_1, actor_user_id=USER_1, authorization_version=1)
     with _session() as db:
+        grant_institution_authority(
+            db,
+            organization_id=ORG_1,
+            bank_id=BANK,
+            user_id=USER_1,
+            bundle=RoleBundle.ANALYST,
+            module=ModuleScope.DATA,
+            sensitivity=SensitivityScope.RESTRICTED,
+        )
         batch, _, _ = _owned_subjects(db, BANK)
         lineage = LineageRecord(
             organization_id=ORG_1,

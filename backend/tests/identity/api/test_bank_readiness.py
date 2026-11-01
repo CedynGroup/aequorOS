@@ -48,6 +48,21 @@ def numeric_viewer(db_session: Session, provider: LocalKeyProvider) -> dict[str,
         grantor=authorization.GrantorRef(GrantorType.SYSTEM, "test-suite"),
         reason="Synthetic numeric-only recovery",
     )
+    authorization.create_role_binding(
+        db_session,
+        organization_id=ORG_1,
+        principal_user_id=user.id,
+        principal_type=PrincipalType.HUMAN,
+        role_bundle=RoleBundle.VIEWER,
+        scope=authorization.BindingScope(
+            InstitutionScope.INSTITUTION,
+            fields.BANK_A,
+            ModuleScope.DATA,
+            SensitivityScope.CONFIDENTIAL,
+        ),
+        grantor=authorization.GrantorRef(GrantorType.SYSTEM, "test-suite"),
+        reason="Synthetic reporting-period read without identity access",
+    )
     db_session.commit()
     return headers(
         user_id=user.id, roles=("viewer",), authorization_version=user.authorization_version
