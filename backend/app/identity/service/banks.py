@@ -220,10 +220,11 @@ def get_bank(db: Session, ctx: TenantContext, bank_reference: str) -> BankRead:
 def list_reporting_periods(
     db: Session, ctx: TenantContext, bank_reference: str
 ) -> BankReportingPeriodListRead:
-    bank = scoped_authorization.require_bank_permission(
+    bank, _ = _require_institution_coverage(db, ctx, bank_reference)
+    scoped_authorization.require_resolved_bank_permission(
         db,
         ctx,
-        resolve_bank_reference(db, ctx, bank_reference).id,
+        bank,
         permission=Permission.VIEW,
         module=Module.DATA,
         sensitivity=Sensitivity.CONFIDENTIAL,
@@ -252,10 +253,11 @@ def list_reporting_periods(
 def get_period_facts(
     db: Session, ctx: TenantContext, bank_reference: str, period_id: UUID
 ) -> BankFactsRead:
-    bank = scoped_authorization.require_bank_permission(
+    bank, _ = _require_institution_coverage(db, ctx, bank_reference)
+    scoped_authorization.require_resolved_bank_permission(
         db,
         ctx,
-        resolve_bank_reference(db, ctx, bank_reference).id,
+        bank,
         permission=Permission.VIEW,
         module=Module.DATA,
         sensitivity=Sensitivity.RESTRICTED,

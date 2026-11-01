@@ -25,6 +25,7 @@ from sqlalchemy.orm import Session
 from app import worker
 from app.api.deps import TenantContext
 from app.capital.service import regulatory_capital
+from app.core.authorization import ModuleScope, RoleBundle, SensitivityScope
 from app.core.config import get_settings
 from app.data_engine.domain.ingestion.contracts import EntityMapping, MappingConfig
 from app.data_engine.domain.ingestion.locations import StagedIngestionLocation
@@ -55,6 +56,7 @@ from app.reporting.service import generation
 from app.services import job_queue
 from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID, materialize_canonical_test_book
 from tests.support.database import managed_session_factory
+from tests.support.factories.authorization import grant_institution_authority
 from tests.support.factories.canonical import (
     FIXTURE_AS_OF,
     seed_canonical_fixture,
@@ -543,6 +545,16 @@ def _cash_correction_workbook(cash: int) -> bytes:
 
 def test_official_remint_reports_same_date_cash_correction_in_bsd2(db_session: Session) -> None:
     _seed(db_session)
+    grant_institution_authority(
+        db_session,
+        organization_id=ORG_1,
+        bank_id=SAMPLE_BANK_ID,
+        user_id=USER_1,
+        bundle=RoleBundle.ANALYST,
+        module=ModuleScope.DATA,
+        sensitivity=SensitivityScope.RESTRICTED,
+    )
+    db_session.commit()
     ctx = TenantContext(organization_id=ORG_1, actor_user_id=USER_1, authorization_version=1)
     storage = InMemoryStorageClient()
     mapping = ingestion.create_mapping_config(

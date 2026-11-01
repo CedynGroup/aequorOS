@@ -13,6 +13,7 @@ from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session, undefer_group
 
 from app.api.deps import TenantContext
+from app.core.authorization import ModuleScope, RoleBundle, SensitivityScope
 from app.core.key_management import registry
 from app.core.key_management.local import LocalKeyProvider
 from app.core.key_management.types import KeyReference, KeyStatus, KeyUnavailableError
@@ -32,6 +33,7 @@ from app.models import (
     CanonicalPosition,
     CanonicalPositionSnapshot,
     RegulatoryRun,
+    User,
 )
 from app.stress.domain.credit_bottom_up import compute_bottom_up_credit
 from app.stress.domain.projection import (
@@ -75,7 +77,8 @@ from tests.stress.domain.stress_fixtures import (
 from tests.stress.service.test_crd_credit_stress_repairs import (
     _capital_facts,  # pyright: ignore[reportPrivateUsage]
 )
-from tests.support.helpers import USER_2, headers
+from tests.support.factories.authorization import grant_institution_authority
+from tests.support.helpers import headers
 
 pytestmark = [
     pytest.mark.requirement("BoG CRD (June 2018) ¶98, ¶123–124, ¶138–139"),
@@ -468,10 +471,30 @@ def _change_credit_source(db_session: Session, bank_id: str, change: str) -> Non
             reason="Retire the final accepted loan.",
             requested_by="maker@bank.test",
         )
+        checker_id = uuid4()
+        db_session.add(
+            User(
+                id=checker_id,
+                organization_id=MAKER.organization_id,
+                email="withdrawal-checker@bank.test",
+            )
+        )
+        db_session.flush()
+        grant_institution_authority(
+            db_session,
+            organization_id=MAKER.organization_id,
+            bank_id=bank.id,
+            user_id=checker_id,
+            bundle=RoleBundle.APPROVER,
+            module=ModuleScope.DATA,
+            sensitivity=SensitivityScope.CONFIDENTIAL,
+        )
         approved = canonical_withdrawal.approve_withdrawal(
             db_session,
             TenantContext(
-                organization_id=MAKER.organization_id, actor_user_id=USER_2, authorization_version=1
+                organization_id=MAKER.organization_id,
+                actor_user_id=checker_id,
+                authorization_version=1,
             ),
             bank,
             withdrawal.id,

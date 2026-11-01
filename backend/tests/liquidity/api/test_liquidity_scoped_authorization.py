@@ -595,6 +595,9 @@ def test_activation_reaches_derivation_with_required_authority(
             module=ModuleScope.FORECASTING,
             sensitivity=SensitivityScope.CONFIDENTIAL,
         )
+    version = _grant(
+        RoleBundle.ANALYST, module=ModuleScope.DATA, sensitivity=SensitivityScope.RESTRICTED
+    )
     response = db_client.post(
         f"{BASE}/data-activations",
         headers=_auth(version, "analyst"),
@@ -649,6 +652,7 @@ def test_sdi_mixed_operations_do_not_require_liquidity_run_binding(
     operation: str,
 ) -> None:
     _seed_book()
+    _grant(RoleBundle.ANALYST, module=ModuleScope.DATA, sensitivity=SensitivityScope.RESTRICTED)
     _grant(RoleBundle.ANALYST, module=ModuleScope.CREDIT, sensitivity=SensitivityScope.CONFIDENTIAL)
     version = _grant(
         RoleBundle.ANALYST, module=ModuleScope.IRRBB, sensitivity=SensitivityScope.CONFIDENTIAL

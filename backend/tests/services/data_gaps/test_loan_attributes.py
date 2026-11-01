@@ -32,12 +32,14 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import select
 
+from app.core.authorization import ModuleScope, RoleBundle, SensitivityScope
 from app.data_engine.domain.ingestion.attributes import attribute_key, attributes_from_columns
 from app.data_engine.domain.ingestion.contracts import EntityMapping, MappingConfig
 from app.db.session import get_sessionmaker
 from app.models import CanonicalPosition, CanonicalPositionSnapshot
 from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID, materialize_canonical_test_book
-from tests.support.helpers import ORG_1, headers, integration_key_headers
+from tests.support.factories.authorization import grant_institution_authority
+from tests.support.helpers import ORG_1, USER_1, headers, integration_key_headers
 
 TEMPLATE = Path(__file__).resolve().parents[3] / "onboarding" / "sample_bank" / "loans_template.csv"
 
@@ -485,6 +487,17 @@ def test_uploaded_loans_csv_in_template_shape_lands_attributes(
     db_client: TestClient, tmp_path: Path
 ) -> None:
     as_of = _materialize(db_client)
+    with get_sessionmaker()() as db:
+        grant_institution_authority(
+            db,
+            organization_id=ORG_1,
+            bank_id=SAMPLE_BANK_ID,
+            user_id=USER_1,
+            bundle=RoleBundle.ANALYST,
+            module=ModuleScope.DATA,
+            sensitivity=SensitivityScope.RESTRICTED,
+        )
+        db.commit()
     _push(
         db_client,
         "entities-for-upload",
