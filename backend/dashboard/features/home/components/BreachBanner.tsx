@@ -34,7 +34,7 @@ import { fmtRelative, moduleComplianceVerdict } from '@/lib/api/values';
 import {
   LIVE_MODULE_HREFS,
   LIVE_MODULE_LABELS,
-} from '@/features/live/components/moduleDisplay';
+} from '@/features/live/public';
 import { useModuleScope } from '@/components/shell/BankContext';
 import { isHrefVisible } from '@/lib/modules';
 import { DEFAULT_MODULE_ORDER, usePulseCards } from './pulse';
