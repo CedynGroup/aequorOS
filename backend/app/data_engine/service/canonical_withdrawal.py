@@ -10,7 +10,7 @@ database at the time this was built).
 
 Shape of the act
 ----------------
-1. **Request** — an analyst names the scope ``(source_system, as_of_date, entity
+1. **Request** — an authorized requester names the scope ``(source_system, as_of_date, entity
    [, position_type])`` and a reason. Nothing is stamped. A request whose scope
    matches no current row is refused, so "withdrawn" never means "found nothing".
 2. **Approve** — a DIFFERENT officer approves. Approval mints a real

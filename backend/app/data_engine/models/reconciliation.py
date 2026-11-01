@@ -12,12 +12,11 @@ exception is:
 * **scoped** — one control, one bank, and a ceiling on how large a breach it
   covers (never a blank cheque);
 * **effective-dated** — ``effective_from`` / ``effective_to``, so it expires;
-* **four-eyed** — ``requested_by`` records who asked and why; ``approved_by`` /
-  ``approval_timestamp`` record who allowed it. The service layer refuses an
-  approval by the requester;
-* **revocable** — ``revoked_at`` closes it without deleting the record;
-* **audited** — every grant, use and revocation writes an ``audit_events`` row
-  (which is append-only by DB trigger).
+* **revocable** — ``revoked_at`` closes it without deleting the record.
+
+Proposal, approval and revocation authority and audit provenance are defined in
+``backend/docs/authorization_foundation.md`` under "Human Data Engine authority".
+Database lifecycle seals are owned by ``backend/docs/tamper_evident_records.md``.
 
 Tenant-scoped and RLS-forced like every other table carrying a bank's data.
 """
@@ -106,8 +105,7 @@ class ReconciliationException(UuidV7PrimaryKeyMixin, TimestampMixin, Base):
     status: Mapped[str] = mapped_column(
         String(16), nullable=False, default="approved", server_default="approved"
     )
-    #: Free text, not a FK: the approver may be an operator (control plane) or a
-    #: tenant officer, and the identity string is what the audit trail shows.
+    #: Audit display label only; authenticated checker evidence is stored separately.
     approved_by: Mapped[str | None] = mapped_column(String(120), nullable=True)
     approved_by_user_id: Mapped[UUID | None] = mapped_column(Uuid(as_uuid=True), nullable=True)
     approval_timestamp: Mapped[datetime | None] = mapped_column(

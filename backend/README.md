@@ -165,7 +165,8 @@ Authorization: Bearer <app-access-token>
 
 ### Data Engine file ingestion
 
-With an authorized app session, first upload the source file as multipart field
+With an app session holding the required [human DATA authority](docs/authorization_foundation.md#human-data-engine-authority),
+first upload the source file as multipart field
 `file` to `POST /api/v1/banks/{bank_id}/ingestion-uploads`. Pass the returned
 `location` unchanged to `POST /api/v1/banks/{bank_id}/ingestion-batches`, together
 with the source system, reporting date and reason required by the API schema.
@@ -188,9 +189,9 @@ See [native transaction/role regressions](tests/db/test_bi_export_transactions.p
 
 Document deletion and upload-completion boundaries are documented under
 [the legacy case vertical](#legacy-case-vertical). Remaining transaction-held waits include
-`services/ingestion.py:upload_source` (institution setup and object write),
+`app/data_engine/service/ingestion.py:stage_source` (institution setup and object write),
 `start_ingestion` (source download and raw-artifact write), and
-`services/database_connections.py:test_connection`, `discover_schema` and
+`app/data_engine/service/database_connections.py:probe_connection_internal`, `discover_schema` and
 `sync_now` (remote database inspection or extraction). These require their own
 transaction-boundary work before lowering the API idle budget; the
 [session timeout contract](../docs/ops/database-roles.md#session-timeout-budgets)

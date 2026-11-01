@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 /**
  * Big-4 balance-sheet strip: total assets, deposits, loans, and capital base
@@ -6,21 +6,21 @@
  * no client-side regulatory math), formatted as compact base currency.
  */
 
-import type { BankReportingPeriodRead } from '@aequoros/risk-service-api';
-import KpiStat from '@/components/ui/KpiStat';
-import { SkeletonCard } from '@/components/ui/Skeleton';
-import { useBankPeriodFacts } from '@/lib/api/hooks';
+import type { BankReportingPeriodRead } from "@aequoros/risk-service-api";
+import KpiStat from "@/components/ui/KpiStat";
+import { SkeletonCard } from "@/components/ui/Skeleton";
+import { useBankPeriodFacts } from "@/lib/api/hooks";
 import {
   totalAssets,
   totalCapital,
   totalDeposits,
   totalLoans,
-} from '@/lib/api/facts';
-import { fmtCurrency } from '@/lib/format';
-import DataAccessNotice from '@/components/data-engine/DataAccessNotice';
-import EmptyState from '@/components/ui/EmptyState';
-import { ErrorPanel } from '@/components/ui/QueryBoundary';
-import { hasAnyFacts } from './hooks';
+} from "@/lib/api/facts";
+import { fmtCurrency } from "@/lib/format";
+import DataAccessNotice from "@/components/data-engine/DataAccessNotice";
+import EmptyState from "@/components/ui/EmptyState";
+import { ErrorPanel } from "@/components/ui/QueryBoundary";
+import { hasAnyFacts } from "./hooks";
 
 export default function BalanceSheetStrip({
   bankId,
@@ -39,8 +39,8 @@ export default function BalanceSheetStrip({
           Canonical positions · live edge
         </p>
       </div>
-      {facts.access === 'loading' ||
-      (facts.access === 'allowed' && facts.isPending) ? (
+      {facts.access === "loading" ||
+      (facts.access === "allowed" && facts.isPending) ? (
         <div
           className="grid grid-cols-2 xl:grid-cols-4 gap-4"
           role="status"
@@ -51,7 +51,7 @@ export default function BalanceSheetStrip({
             <SkeletonCard key={i} />
           ))}
         </div>
-      ) : facts.access === 'denied' ? (
+      ) : facts.access === "denied" ? (
         <DataAccessNotice requirement="DATA · Restricted · View for balance-sheet facts" />
       ) : facts.isError ? (
         <ErrorPanel

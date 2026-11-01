@@ -264,10 +264,12 @@ concrete operation must evaluate its maker/checker, step-up, digest, recipient,
 limit, and other workflow context before any side effect.
 
 `GET /banks` returns only institutions with at least one projected capability.
-Bank detail, reporting-period, and fact routes apply the same coverage decision
-and return `404` for an uncovered institution. This is an addressability and
-discovery boundary only: each product route must still enforce its own data
-authorization as described in the [rollout boundary](#product-rollout-boundary).
+Bank detail applies the same coverage decision and returns `404` for an
+uncovered institution. Reporting-period and fact reads enforce the exact DATA
+requirements in [Human Data Engine authority](#human-data-engine-authority).
+Institution coverage is an addressability and discovery boundary only: each
+product route must still enforce its own data authorization as described in the
+[rollout boundary](#product-rollout-boundary).
 Projection failures return `503` and emit denial/error telemetry rather than
 falling back to legacy authority.
 
@@ -766,8 +768,9 @@ of the shared live summary / alerts / window / snapshot surfaces, the direct
 branch/region `data_scope` to the rows AND to every count — is
 owned by the [credit rollout contract](credit_enforcement_rollout.md). Institution
 register surfaces are owned by the
-[Institution rollout contract](institution_enforcement_rollout.md). The bank
-audit-route cutover is owned by [the bank audit contract](tamper_evident_records.md#bank-audit-read-api). Existing
+[Institution rollout contract](institution_enforcement_rollout.md). Human ingestion
+and bank-data operations follow [Human Data Engine authority](#human-data-engine-authority).
+The bank audit-route cutover is owned by [the bank audit contract](tamper_evident_records.md#bank-audit-read-api). Existing
 operational routes outside these cutovers keep their current checks, while
 grant administration itself requires the owner binding. Explanation endpoints,
 further product-route cutovers,
@@ -826,11 +829,18 @@ grant prerequisite. Mapping configuration creation, connector credential
 lifecycle (including Temenos stored-credential-shape validation), and machine
 API push retain their existing controls.
 
+Scheduled DB health jobs use the trusted internal probe operation; they do not
+invoke the human VALIDATE entry point. A missing authorization version never
+exempts a human caller from the binding check.
+
 The dashboard uses exact projected capabilities to avoid unauthorized requests
 and unavailable actions, including mixed-sensitivity overview panels. Query
 keys include tenant and authority generation. These projections are eligibility
 hints only; the service rechecks the binding, authenticated checker and object
 state on every mutation.
+Permission-unavailable diagnostics, batch progress, reporting periods and facts
+remain distinct from loading, request failure and successful empty results.
+Independently authorized home panels and operational-feed results remain visible.
 
 ## Whole-institution figures and Credit-only narrowing
 
