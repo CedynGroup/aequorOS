@@ -9,7 +9,8 @@
 import Link from "next/link";
 import { ArrowRight, DatabaseZap } from "lucide-react";
 import SectionCard from "@/components/ui/SectionCard";
-import { SkeletonLine } from "@/components/ui/Skeleton";
+import DataAccessNotice from "@/components/data-engine/DataAccessNotice";
+import { ErrorPanel } from "@/components/ui/QueryBoundary";
 import { useDataActivations, useIngestionBatches } from "@/lib/api/ingestion";
 import { fmtRelative, labelize } from "@/lib/api/values";
 
@@ -45,10 +46,11 @@ export default function OperationalFeed({
   const batches = useIngestionBatches(bankId);
   const activations = useDataActivations(bankId);
 
-  const isLoading = batches.isLoading || activations.isLoading;
-
   const events: FeedEvent[] = [
-    ...(batches.data?.batches ?? []).map((b): FeedEvent => {
+    ...(batches.access === "allowed" && batches.isSuccess
+      ? batches.data.batches
+      : []
+    ).map((b): FeedEvent => {
       const counts = [
         `${b.recordsAccepted} accepted`,
         b.recordsWarning > 0 ? `${b.recordsWarning} warnings` : null,
@@ -64,7 +66,10 @@ export default function OperationalFeed({
         meta: counts,
       };
     }),
-    ...(activations.data?.activations ?? []).map((a, idx): FeedEvent => {
+    ...(activations.access === "allowed" && activations.isSuccess
+      ? activations.data.activations
+      : []
+    ).map((a, idx): FeedEvent => {
       const parts = [
         a.periodLabel ? `period ${a.periodLabel}` : null,
         typeof a.factsCreated === "number" ? `${a.factsCreated} facts` : null,
@@ -110,23 +115,52 @@ export default function OperationalFeed({
       noPadding
       footer={
         <span>
-          {batches.data?.batches.length ?? 0} batches ·{" "}
-          {activations.data?.activations.length ?? 0} activations on record
+          {batches.access === "allowed" &&
+            batches.isSuccess &&
+            `${batches.data.batches.length} batches on record. `}
+          {activations.access === "allowed" &&
+            activations.isSuccess &&
+            `${activations.data.activations.length} activations on record.`}
         </span>
       }
     >
-      {isLoading ? (
-        <div className="px-5 py-4 space-y-3" aria-busy="true">
-          {[0, 1, 2, 3].map((i) => (
-            <SkeletonLine key={i} width={`${85 - i * 10}%`} height={12} />
-          ))}
-        </div>
-      ) : events.length === 0 ? (
-        <p className="px-5 py-5 text-body text-slate leading-relaxed">
-          No ingestion activity yet — upload source files or push records via
-          the API to start the pipeline.
+      {batches.access === "loading" ||
+      (batches.access === "allowed" && batches.isPending) ? (
+        <p role="status" className="px-5 py-4 text-body text-slate">
+          Loading ingestion batches…
         </p>
-      ) : (
+      ) : batches.access === "denied" ? (
+        <DataAccessNotice requirement="DATA · Confidential · View for ingestion batches" />
+      ) : batches.isError ? (
+        <ErrorPanel
+          error={batches.error}
+          title="Ingestion batches unavailable"
+          onRetry={() => void batches.refetch()}
+        />
+      ) : batches.data?.batches.length === 0 ? (
+        <p className="px-5 py-4 text-body text-slate">
+          No ingestion batches on record.
+        </p>
+      ) : null}
+      {activations.access === "loading" ||
+      (activations.access === "allowed" && activations.isPending) ? (
+        <p role="status" className="px-5 py-4 text-body text-slate">
+          Loading data activations…
+        </p>
+      ) : activations.access === "denied" ? (
+        <DataAccessNotice requirement="DATA · Aggregated · View for data activations" />
+      ) : activations.isError ? (
+        <ErrorPanel
+          error={activations.error}
+          title="Data activations unavailable"
+          onRetry={() => void activations.refetch()}
+        />
+      ) : activations.data?.activations.length === 0 ? (
+        <p className="px-5 py-4 text-body text-slate">
+          No data activations on record.
+        </p>
+      ) : null}
+      {events.length > 0 && (
         <ul className="divide-y divide-border-light">
           {events.map((event) => (
             <li key={event.key} className="px-5 py-2.5 flex items-center gap-3">

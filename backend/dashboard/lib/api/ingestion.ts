@@ -9,7 +9,7 @@
  * not contend with the regulatory modules' files.
  */
 
-import { useDataPermission } from "./dataAccess";
+import { useDataPermission, useDataPermissionState } from "./dataAccess";
 import {
   keepPreviousData,
   useMutation,
@@ -375,8 +375,8 @@ export function useIngestionBatches(
   sourceSystem?: IngestionSourceSystem,
 ) {
   const scope = useQueryAuthorityScope();
-  const allowed = useDataPermission(bankId, "view", "confidential");
-  return useQuery({
+  const access = useDataPermissionState(bankId, "view", "confidential");
+  const query = useQuery({
     queryKey: scopedQueryKey(
       "de-batches",
       scope,
@@ -387,8 +387,9 @@ export function useIngestionBatches(
       apiCall(() =>
         ingestionApi.listIngestionBatches({ bankId: bankId!, sourceSystem }),
       ),
-    enabled: allowed && Boolean(bankId),
+    enabled: access === "allowed" && Boolean(bankId),
   });
+  return { ...query, access };
 }
 
 /** Per-source ingestion rollup + canonical model counts + activation history. */
@@ -562,13 +563,14 @@ export function useActivateBankData(bankId: string | undefined) {
 
 export function useDataActivations(bankId: string | undefined) {
   const scope = useQueryAuthorityScope();
-  const allowed = useDataPermission(bankId, "view", "aggregated");
-  return useQuery({
+  const access = useDataPermissionState(bankId, "view", "aggregated");
+  const query = useQuery({
     queryKey: scopedQueryKey("de-activations", scope, bankId ?? null),
     queryFn: () =>
       apiCall(() => ingestionApi.listBankDataActivations({ bankId: bankId! })),
-    enabled: allowed && Boolean(bankId),
+    enabled: access === "allowed" && Boolean(bankId),
   });
+  return { ...query, access };
 }
 
 export function useUploadAndIngest(bankId: string | undefined) {

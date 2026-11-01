@@ -17,6 +17,10 @@ import {
   totalLoans,
 } from '@/lib/api/facts';
 import { fmtCurrency } from '@/lib/format';
+import DataAccessNotice from '@/components/data-engine/DataAccessNotice';
+import EmptyState from '@/components/ui/EmptyState';
+import { ErrorPanel } from '@/components/ui/QueryBoundary';
+import { hasAnyFacts } from './hooks';
 
 export default function BalanceSheetStrip({
   bankId,
@@ -35,12 +39,28 @@ export default function BalanceSheetStrip({
           Canonical positions · live edge
         </p>
       </div>
-      {facts.isLoading || !facts.data ? (
-        <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
+      {facts.access === 'loading' ||
+      (facts.access === 'allowed' && facts.isPending) ? (
+        <div
+          className="grid grid-cols-2 xl:grid-cols-4 gap-4"
+          role="status"
+          aria-label="Loading balance-sheet facts"
+          aria-busy="true"
+        >
           {[0, 1, 2, 3].map((i) => (
             <SkeletonCard key={i} />
           ))}
         </div>
+      ) : facts.access === 'denied' ? (
+        <DataAccessNotice requirement="DATA · Restricted · View for balance-sheet facts" />
+      ) : facts.isError ? (
+        <ErrorPanel
+          error={facts.error}
+          title="Balance-sheet facts unavailable"
+          onRetry={() => void facts.refetch()}
+        />
+      ) : !facts.data || !hasAnyFacts(facts.data) ? (
+        <EmptyState title="No balance-sheet facts for this period" />
       ) : (
         <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
           <KpiStat

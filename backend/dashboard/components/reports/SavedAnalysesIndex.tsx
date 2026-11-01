@@ -19,6 +19,7 @@ import DataTable, { type Column } from "@/components/ui/DataTable";
 import { PermissionLink } from "@/components/ui/DisabledWithReason";
 import { PageSkeleton } from "@/components/ui/QueryBoundary";
 import { useBankContext } from "@/components/shell/BankContext";
+import ReportingPeriodNotice from "@/components/shell/ReportingPeriodNotice";
 import { useSavedAnalyses } from "@/lib/api/hooks";
 import { hrefAccess } from "@/lib/modules";
 import { fmtTimestamp } from "@/lib/api/values";
@@ -43,7 +44,7 @@ const WORKBENCH_HREFS: Record<WorkbenchModule, string> = {
 type AnalysisRow = SavedAnalysisSummaryRead & { periodLabel: string | null };
 
 export default function SavedAnalysesIndex() {
-  const { bank, periods, moduleScope } = useBankContext();
+  const { bank, periods, periodsStatus, moduleScope } = useBankContext();
   const bankId = bank?.id;
 
   const liquidity = useSavedAnalyses(
@@ -175,6 +176,7 @@ export default function SavedAnalysesIndex() {
         )
       }
     >
+      {periodsStatus !== "ready" && <ReportingPeriodNotice />}
       {rows.length === 0 ? (
         <div className="p-5">
           <EmptyState
