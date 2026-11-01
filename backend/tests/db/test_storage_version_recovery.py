@@ -18,7 +18,6 @@ from uuid import UUID, uuid4
 
 import boto3
 import pytest
-from alembic import command
 from alembic.migration import MigrationContext
 from alembic.operations import Operations
 from botocore.client import BaseClient
@@ -31,6 +30,7 @@ from sqlalchemy.engine import Connection
 from sqlalchemy.exc import DatabaseError
 from sqlalchemy.orm import Session
 
+from alembic import command
 from app.core.audit_integrity import verify_chains
 from app.core.key_management import registry
 from app.core.key_management.local import LocalKeyProvider
@@ -136,18 +136,24 @@ def production_governance_schema(
             assert connection.scalar(text("SELECT session_user")) == "aqs_migrator"
             assert connection.scalar(text("SELECT current_user")) == "aqs_owner"
             for identity in ("aqs_owner", "aqs_migrator"):
-                assert connection.scalar(
-                    text(
-                        "SELECT rolsuper OR rolcreaterole OR rolbypassrls OR rolinherit "
-                        "FROM pg_roles WHERE rolname = :role"
-                    ),
-                    {"role": identity},
-                ) is False
+                assert (
+                    connection.scalar(
+                        text(
+                            "SELECT rolsuper OR rolcreaterole OR rolbypassrls OR rolinherit "
+                            "FROM pg_roles WHERE rolname = :role"
+                        ),
+                        {"role": identity},
+                    )
+                    is False
+                )
             for owner in ("aequoros_audit_owner", "aqs_storage_recovery_owner"):
-                assert connection.scalar(
-                    text("SELECT pg_has_role(current_user, :owner, 'USAGE')"),
-                    {"owner": owner},
-                ) is False
+                assert (
+                    connection.scalar(
+                        text("SELECT pg_has_role(current_user, :owner, 'USAGE')"),
+                        {"owner": owner},
+                    )
+                    is False
+                )
             savepoint = connection.begin_nested()
             with pytest.raises(DatabaseError, match="must be owner"):
                 connection.execute(text("ALTER TABLE audit_events ADD COLUMN owner_probe boolean"))
@@ -161,10 +167,13 @@ def production_governance_schema(
                 assert connection.scalar(text("SELECT current_user")) == "aqs_owner"
                 assert connection.scalar(text("SELECT session_user")) == "aqs_migrator"
                 for owner in ("aequoros_audit_owner", "aqs_storage_recovery_owner"):
-                    assert connection.scalar(
-                        text("SELECT has_schema_privilege(:owner, current_schema(), 'CREATE')"),
-                        {"owner": owner},
-                    ) is False
+                    assert (
+                        connection.scalar(
+                            text("SELECT has_schema_privilege(:owner, current_schema(), 'CREATE')"),
+                            {"owner": owner},
+                        )
+                        is False
+                    )
             connection.execute(text("RESET ROLE"))
             connection.execute(text("RESET SESSION AUTHORIZATION"))
         for owner, inherited in memberships:
@@ -519,14 +528,20 @@ def test_runtime_governed_update_succeeds_without_recovery_authority(
         {"org": record.organization},
     )
     for recovery_role in ("aqs_storage_recovery", "aqs_storage_recovery_owner"):
-        assert recovery_connection.scalar(
-            text("SELECT pg_has_role(:runtime, :recovery, 'MEMBER')"),
-            {"runtime": role, "recovery": recovery_role},
-        ) is False
-        assert recovery_connection.scalar(
-            text("SELECT rolcanlogin OR rolbypassrls FROM pg_roles WHERE rolname = :role"),
-            {"role": recovery_role},
-        ) is False
+        assert (
+            recovery_connection.scalar(
+                text("SELECT pg_has_role(:runtime, :recovery, 'MEMBER')"),
+                {"runtime": role, "recovery": recovery_role},
+            )
+            is False
+        )
+        assert (
+            recovery_connection.scalar(
+                text("SELECT rolcanlogin OR rolbypassrls FROM pg_roles WHERE rolname = :role"),
+                {"role": recovery_role},
+            )
+            is False
+        )
     recovery_connection.execute(text(f'SET LOCAL ROLE "{role}"'))
     result = cast(
         datetime,
@@ -700,7 +715,10 @@ def test_encrypted_backup_loss_restore_reconcile_downloads_original_signed_revis
         before = _snapshot(recovery_connection)
         buckets = sorted(
             {r.location.bucket_name("dev") for r in records}
-            | {StorageLocation(bank.lower(), "temp", "upload").bucket_name("dev") for _, bank in BANKS}
+            | {
+                StorageLocation(bank.lower(), "temp", "upload").bucket_name("dev")
+                for _, bank in BANKS
+            }
         )
         inventory = [backup_storage.inventory_bucket(s3, b, out_dir=tmp_path) for b in buckets]
         assert all(

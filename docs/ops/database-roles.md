@@ -41,6 +41,10 @@ functions remains unchanged.
 Existing integrity triggers and restrictive policies remain authoritative for
 completed runs, sealed registers and filed-content immutability (#511).
 
+The separate NOLOGIN storage recovery roles prepared by the administrator SQL
+are governed by [the offline recovery procedure](../../backend/docs/bank_key_setup.md#reconcile-pinned-versions-after-replay),
+including its incident membership and post-restore preparation requirements.
+
 The API has column-scoped job UPDATE on `bank_id`, `payload`, `run_after`,
 `status`, `started_at`, `completed_at`, `progress` and `error`: upload coalescing
 and synchronous document parsing/assessment runs write these today. It cannot

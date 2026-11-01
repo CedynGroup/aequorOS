@@ -115,8 +115,10 @@ missing old ID means success. For a retry, retain the original restored database
 snapshot or explicitly inventory the current pins and investigate the previous
 committed run first; do not edit the replay report to force a match.
 Unrelated unversioned objects, including upload temp objects, may have empty
-version IDs in the full replay report; every selected pin still requires a usable
-old-to-new version mapping.
+version IDs in the full replay report. The replay CLI writes that report but exits
+with status 2 if any restored object has no version ID, including these temp
+objects. Inspect the warning and report: every selected pin still requires a
+usable old-to-new version mapping before reconciliation can succeed.
 
 Only `regulatory_artifact_versions.storage_version_id`,
 `regulatory_package_attachments.storage_version_id`,
