@@ -4,15 +4,24 @@ from __future__ import annotations
 
 from datetime import date
 from decimal import Decimal
+from typing import cast
 from uuid import UUID
 
 import pytest
 from fastapi.testclient import TestClient
+from hypothesis import given, strategies as st
+from pydantic import ValidationError
 from sqlalchemy import func, select
 
+from app.api.deps import TenantContext
 from app.core.authorization import ModuleScope, RoleBundle, SensitivityScope
+from app.data_engine.schemas.reconciliation import (
+    ReconciliationExceptionCreate,
+    ReconciliationExceptionRead,
+)
+from app.data_engine.service import reconciliation
 from app.db.session import get_sessionmaker
-from app.models import AuditEvent, CurrentFinancialFact, Job, ReconciliationException, User
+from app.models import AuditEvent, Bank, CurrentFinancialFact, Job, ReconciliationException, User
 from tests.data_engine.api.test_ingestion import seed_bank
 from tests.support.factories.authorization import grant_institution_authority
 from tests.support.helpers import ORG_1, ORG_2, USER_1, headers
@@ -205,3 +214,94 @@ def test_another_tenant_cannot_see_propose_or_approve(db_client: TestClient) -> 
         == 404
     )
     assert _counts() == before
+
+
+@pytest.mark.parametrize("entry_point", ["api", "service"])
+@pytest.mark.parametrize("ceiling", ["0.0000001", "0.0500006", "0.050000000000000000000000000001"])
+def test_unrepresentable_proposal_has_no_effects(
+    db_client: TestClient, entry_point: str, ceiling: str
+) -> None:
+    url = _setup(db_client)
+    before = _counts()
+    if entry_point == "api":
+        result = db_client.post(
+            url, headers=headers(), json={**PROPOSAL, "max_gap_fraction": ceiling}
+        )
+        assert result.status_code == 422, result.text
+    else:
+        with get_sessionmaker()() as db:
+            bank = db.get(Bank, url.split("/")[4])
+            assert bank is not None
+            with pytest.raises(reconciliation.ReconciliationExceptionError):
+                reconciliation.propose_exception(
+                    db,
+                    TenantContext(
+                        organization_id=ORG_1, actor_user_id=USER_1, authorization_version=1
+                    ),
+                    bank,
+                    reason=PROPOSAL["reason"],
+                    max_gap_fraction=Decimal(ceiling),
+                    effective_from=date(2026, 6, 1),
+                )
+            db.commit()
+    assert _counts() == before
+
+
+@pytest.mark.parametrize("entry_point", ["api", "service"])
+@pytest.mark.parametrize("ceiling", ["0.000001", "0.050000", "0.0500000", "0.999999", "1.0000000"])
+def test_representable_ceiling_matches_storage_and_audit(
+    db_client: TestClient, entry_point: str, ceiling: str
+) -> None:
+    url = _setup(db_client)
+    before = _counts()
+    if entry_point == "api":
+        result = db_client.post(
+            url, headers=headers(), json={**PROPOSAL, "max_gap_fraction": ceiling}
+        )
+        assert result.status_code == 201, result.text
+        parsed = ReconciliationExceptionRead.model_validate_json(result.content)
+        row_id = parsed.id
+        assert parsed.max_gap_fraction == Decimal(ceiling)
+    else:
+        with get_sessionmaker()() as db:
+            bank = db.get(Bank, url.split("/")[4])
+            assert bank is not None
+            row = reconciliation.propose_exception(
+                db,
+                TenantContext(organization_id=ORG_1, actor_user_id=USER_1, authorization_version=1),
+                bank,
+                reason=PROPOSAL["reason"],
+                max_gap_fraction=Decimal(ceiling),
+                effective_from=date(2026, 6, 1),
+            )
+            row_id = row.id
+            db.commit()
+    assert _counts() == (before[0] + 1, before[1] + 1, before[2])
+    with get_sessionmaker()() as db:
+        stored = db.get(ReconciliationException, row_id)
+        assert stored is not None
+        assert stored.max_gap_fraction == Decimal(ceiling)
+        audit = db.scalar(
+            select(AuditEvent).where(
+                AuditEvent.event_type == reconciliation.RECONCILIATION_PROPOSED_EVENT
+            )
+        )
+        assert audit is not None
+        recorded_ceiling = cast("object", audit.details["max_gap_fraction"])
+        assert isinstance(recorded_ceiling, str)
+        assert Decimal(recorded_ceiling) == stored.max_gap_fraction
+        assert stored.status == "pending"
+
+
+@given(micros=st.integers(min_value=1, max_value=1_000_000), zeros=st.integers(0, 40))
+def test_proposal_ceiling_precision_preserves_equivalent_decimals(micros: int, zeros: int) -> None:
+    ceiling = Decimal(micros).scaleb(-6)
+    equivalent = f"{ceiling:.6f}" + "0" * zeros
+    parsed = ReconciliationExceptionCreate.model_validate(
+        {**PROPOSAL, "max_gap_fraction": equivalent}
+    )
+    assert parsed.max_gap_fraction == ceiling
+    with pytest.raises(ValidationError):
+        ReconciliationExceptionCreate.model_validate(
+            {**PROPOSAL, "max_gap_fraction": f"{ceiling:.6f}" + "0" * zeros + "1"}
+        )

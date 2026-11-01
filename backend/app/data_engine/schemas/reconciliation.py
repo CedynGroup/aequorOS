@@ -8,9 +8,22 @@ from __future__ import annotations
 
 from datetime import date, datetime
 from decimal import Decimal
+from typing import Annotated
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import AfterValidator, BaseModel, ConfigDict, Field, model_validator
+
+
+def _require_exact_ceiling(value: Decimal) -> Decimal:
+    _, digits, exponent = value.as_tuple()
+    if not isinstance(exponent, int) or (exponent < -6 and any(digits[exponent + 6 :])):
+        raise ValueError("max_gap_fraction must be exactly representable with six decimal places.")
+    return value
+
+
+ReconciliationCeiling = Annotated[
+    Decimal, Field(gt=0, le=1, decimal_places=6), AfterValidator(_require_exact_ceiling)
+]
 
 
 class ClosedModel(BaseModel):
@@ -25,7 +38,7 @@ class ReconciliationExceptionCreate(ClosedModel):
     #: The LARGEST breach this exception covers, as a fraction of the control's
     #: denominator. An exception acknowledges a bounded defect; it never
     #: disables the control, so a gap beyond the ceiling still blocks.
-    max_gap_fraction: Decimal = Field(gt=0, le=1)
+    max_gap_fraction: ReconciliationCeiling
     effective_from: date
     effective_to: date | None = None
 

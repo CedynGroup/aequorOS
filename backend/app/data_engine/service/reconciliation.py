@@ -75,11 +75,13 @@ from typing import Any
 from uuid import UUID
 
 from fastapi import HTTPException, status
+from pydantic import TypeAdapter, ValidationError
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
 from app.core.authorization import Permission, Sensitivity
+from app.data_engine.schemas.reconciliation import ReconciliationCeiling
 from app.data_engine.service.access import require_data_access
 from app.db.base import utc_now
 from app.domain.authority.outcomes import (
@@ -147,6 +149,8 @@ RECONCILIATION_PROPOSED_EVENT = "reconciliation_exception.proposed"
 RECONCILIATION_REVOKED_EVENT = "reconciliation_exception.revoked"
 RECONCILIATION_APPLIED_EVENT = "reconciliation_exception.applied"
 RECONCILIATION_CHECK_EVENT = "reconciliation.balance_sheet_identity"
+
+_CEILING_ADAPTER = TypeAdapter[Decimal](ReconciliationCeiling)
 
 
 class ReconciliationExceptionError(ValueError):
@@ -890,9 +894,14 @@ def propose_exception(  # noqa: PLR0913 - governance needs every field named
     if not reason or not reason.strip():
         msg = "A reconciliation exception requires a non-empty reason."
         raise ReconciliationExceptionError(msg)
-    if max_gap_fraction is None or max_gap_fraction <= _ZERO:
-        msg = "A reconciliation exception requires a positive max_gap_fraction ceiling."
-        raise ReconciliationExceptionError(msg)
+    try:
+        max_gap_fraction = _CEILING_ADAPTER.validate_python(max_gap_fraction)
+    except ValidationError as exc:
+        msg = (
+            "A reconciliation exception requires a positive max_gap_fraction ceiling "
+            "at most 1, exactly representable with six decimal places."
+        )
+        raise ReconciliationExceptionError(msg) from exc
     if effective_to is not None and effective_to < effective_from:
         msg = "A reconciliation exception's effective_to precedes its effective_from."
         raise ReconciliationExceptionError(msg)
