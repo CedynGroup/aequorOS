@@ -102,6 +102,9 @@ from `PGHOST`, `PGPORT` and `PGDATABASE`; empty explicit ports use libpq's compi
 default. Implicit socket/database defaults, service-file routing and `hostaddr`
 routing are refused because their destinations cannot be compared safely. Supply
 explicit host/database routing for both the target and protected primary URLs.
+IPv4-mapped IPv6 addresses compare as IPv4. All loopback addresses and Unix
+socket paths share one local identity; different local interfaces or socket
+directories do not prove that databases are separate.
 Hostnames are resolved before connecting; any overlapping address is refused, as
 is failed name resolution. Supply explicit numeric addresses when recovery DNS
 is unavailable. This endpoint guard does not require connecting to a lost primary.

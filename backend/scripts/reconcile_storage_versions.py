@@ -13,7 +13,7 @@ import os
 import re
 import socket
 import sys
-from ipaddress import ip_address
+from ipaddress import IPv6Address, ip_address
 from pathlib import Path
 from typing import cast
 
@@ -35,15 +35,21 @@ from scripts.dr_common import (
 )
 
 _ROUTING_REFUSAL = "Explicit, comparable PostgreSQL routing is required."
+_LOCAL_ROUTE = "<local>"
+
+
+def _address_identity(value: str) -> str:
+    address = ip_address(value)
+    if isinstance(address, IPv6Address) and address.ipv4_mapped is not None:
+        address = address.ipv4_mapped
+    return _LOCAL_ROUTE if address.is_loopback else str(address)
 
 
 def _host_addresses(host: str) -> frozenset[str]:
-    if host.startswith("/"):
-        return frozenset((str(Path(host).resolve()),))
-    if host.startswith("@"):
-        return frozenset((host,))
+    if host.startswith(("/", "@")):
+        return frozenset((_LOCAL_ROUTE,))
     try:
-        return frozenset((str(ip_address(host)),))
+        return frozenset((_address_identity(host),))
     except ValueError:
         hostname = host.lower().rstrip(".")
     try:
@@ -65,7 +71,7 @@ def _host_addresses(host: str) -> frozenset[str]:
         raise DisasterRecoveryError(_ROUTING_REFUSAL)
     # Keep the name as well: round-robin DNS answers must not make the same
     # configured hostname appear distinct across two successive lookups.
-    return frozenset((hostname, *(str(ip_address(record[4][0])) for record in records)))
+    return frozenset((hostname, *(_address_identity(record[4][0]) for record in records)))
 
 
 def _database_targets(url: URL) -> frozenset[tuple[str, int, str]]:

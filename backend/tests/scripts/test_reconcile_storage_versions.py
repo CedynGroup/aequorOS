@@ -37,6 +37,7 @@ def synthetic_primary_configuration(monkeypatch: pytest.MonkeyPatch) -> None:
         "restore.example": ("198.51.100.1",),
         "primary": ("192.0.2.1",),
         "primary-alias": ("192.0.2.1",),
+        "mapped-primary": ("::ffff:192.0.2.1",),
         "replica": ("192.0.2.2",),
         "restore": ("198.51.100.1",),
         "backup": ("198.51.100.2",),
@@ -374,6 +375,42 @@ def _database_cli(
             id="loopback-alias",
         ),
         pytest.param(
+            ("postgresql://192.0.2.1/risk", "postgresql://[::ffff:192.0.2.1]/risk", False),
+            id="mapped-ipv4",
+        ),
+        pytest.param(
+            ("postgresql://192.0.2.1/risk", "postgresql://mapped-primary/risk", False),
+            id="mapped-ipv4-dns",
+        ),
+        pytest.param(
+            ("postgresql://127.0.0.1/risk", "postgresql://[::ffff:127.0.0.1]/risk", False),
+            id="mapped-loopback",
+        ),
+        pytest.param(
+            ("postgresql://127.0.0.1/risk", "postgresql://[::1]/risk", False),
+            id="loopback-address-families",
+        ),
+        pytest.param(
+            ("postgresql://127.0.0.1/risk", "postgresql://127.12.34.56/risk", False),
+            id="loopback-range",
+        ),
+        pytest.param(
+            ("postgresql://127.0.0.1/risk", "postgresql:///risk?host=/tmp/Primary", False),
+            id="tcp-socket",
+        ),
+        pytest.param(
+            ("postgresql://[::1]/risk", "postgresql:///risk?host=@Primary", False),
+            id="tcp-abstract-socket",
+        ),
+        pytest.param(
+            (
+                "postgresql://127.0.0.1/risk",
+                "postgresql:///risk?host=restore&host=/tmp/Primary",
+                False,
+            ),
+            id="fallback-socket",
+        ),
+        pytest.param(
             ("postgresql://primary/risk", "postgresql://primary-alias/risk", False), id="dns-alias"
         ),
         pytest.param(
@@ -481,13 +518,15 @@ def _database_cli(
             id="distinct-paired-ports",
         ),
         pytest.param(
-            ("postgresql:///risk?host=/tmp/Primary", "postgresql:///risk?host=/tmp/primary", True),
-            id="case-sensitive-sockets",
+            ("postgresql:///risk?host=/tmp/Primary", "postgresql:///risk?host=/tmp/primary", False),
+            id="distinct-socket-directories",
         ),
     ],
 )
+@pytest.mark.parametrize("reverse", [False, True], ids=["forward", "reverse"])
 def test_cli_compares_effective_postgres_targets(
     routing: tuple[str, str, bool],
+    reverse: bool,
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
@@ -497,6 +536,8 @@ def test_cli_compares_effective_postgres_targets(
     factory = Mock(wraps=reconciler.create_engine)
     monkeypatch.setattr(reconciler, "create_engine", factory)
     primary, target, allowed = routing
+    if reverse:
+        primary, target = target, primary
     monkeypatch.setenv("DATABASE_URL", primary)
     monkeypatch.setenv("RESTORE_DATABASE_URL", target)
 
