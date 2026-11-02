@@ -12,7 +12,6 @@ from sqlalchemy import delete, event, func, select
 
 from app.core import authorization as authorization_policy
 from app.core import outbound, security
-from app.core.config import get_settings
 from app.core.authorization import (
     BindingStatus,
     DataScope,
@@ -24,6 +23,7 @@ from app.core.authorization import (
     RoleBundle,
     SensitivityScope,
 )
+from app.core.config import get_settings
 from app.data_engine.api import database_connections as connection_api
 from app.data_engine.schemas.ingestion import LineageWalkRead
 from app.db.base import utc_now
