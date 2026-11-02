@@ -155,8 +155,8 @@ def _cover(rendered: RenderedReturn) -> list[Any]:
     rows = [
         [
             Paragraph(f"<b>{label}</b>", _CELL),
-            # Snapshot metadata, so escaped: "Institution" is a name an
-            # administrator of the tenant can change.
+            # The citation is code-owned template text, like the title and
+            # notes. Escape snapshot metadata without changing its glyphs.
             Paragraph(
                 pairs.get(label, "")
                 if label == "Directive citation"
