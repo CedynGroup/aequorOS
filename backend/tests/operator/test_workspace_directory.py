@@ -15,7 +15,7 @@ from pydantic import JsonValue
 
 from app.core.config import OperatorSettings
 from app.operator.services import workforce
-from app.operator.services.workforce import GoogleDirectory, DirectoryUnavailable
+from app.operator.services.workforce import DirectoryUnavailable, GoogleDirectory
 
 
 def response(status: int, body: dict[str, JsonValue]) -> requests.Response:
