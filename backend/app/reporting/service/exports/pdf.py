@@ -238,11 +238,23 @@ def _signing_block() -> Table:
 _RECORD_COLUMN_WIDTHS: tuple[float, ...] = (128 + 79, 128 + 79, 79.2)
 
 #: Floor for the value row, and the clearance a wrapped value keeps above the
-#: rule beneath it. A value that wraps — or a display name carrying a line
-#: break, which ``escape_text`` prints as ``<br/>`` — is taller than the floor,
+#: rule beneath it. A value that wraps in its column is taller than the floor,
 #: so the row grows to its own height instead of running into its labels.
 _RECORD_MIN_ROW_HEIGHT = 16
 _RECORD_ROW_CLEARANCE = 2
+
+
+def _single_line(value: str) -> str:
+    """``value`` with its line breaks collapsed, for a one-line ruled field.
+
+    A display name may hold line breaks, and every one of them would add a line
+    to a row that cannot be taller than the page: 255 characters spent on single
+    characters and newlines makes ``_record_row_height`` exceed the frame, and
+    reportlab then refuses the document outright rather than printing it. The
+    field is one ruled line — name, designation, date — so a break reads as the
+    space it is, and no value can grow the row past a normally wrapped name.
+    """
+    return " ".join(value.replace("\r\n", "\n").replace("\r", "\n").split("\n")).strip()
 
 
 def _record_row_height(values: Sequence[str]) -> float:
@@ -260,14 +272,18 @@ def _record_block(officer: AttestedOfficer) -> Table:
     Not a different layout — the SAME block with the Signature column removed
     and the three remaining ones filled in. An installation that does not
     collect signatures still files a return that says who prepared, reviewed
-    and released it, in the shape BoG's form asks for.
+    and released it, in the shape BoG's form asks for. Each field is ONE ruled
+    line: a stored line break is collapsed rather than drawn as a new line, and
+    the row grows only as far as the text wraps (``_single_line``).
     """
     labels = ("Name", "Designation", "Date")
     # Escaped, not interpolated: the name is whichever user set their own
     # display name, and reportlab's Paragraph reads XML-like markup — including
     # an <img src=…> it fetches server-side while building the document of
     # record.
-    values = (officer.name, officer.title or "—", officer.at)
+    values = tuple(
+        _single_line(value) for value in (officer.name, officer.title or "—", officer.at)
+    )
     body = [
         [Paragraph(escape_text(value), _BODY) for value in values],
         [Paragraph(label, _FIELD_LABEL) for label in labels],
