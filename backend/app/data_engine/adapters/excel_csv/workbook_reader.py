@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import csv
 import zipfile
+from collections.abc import Iterator
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, cast
@@ -67,11 +68,9 @@ def _read_xlsx(path: Path) -> list[SheetGrid]:
     except SpreadsheetTooLarge as exc:
         raise WorkbookReadError(f"Workbook {path.name}: {exc}") from exc
     try:
-        # read_only: a tenant workbook is streamed a row at a time instead of
-        # becoming a full openpyxl document in memory, which is the difference
-        # between a bomb costing the worker its process and costing it a
-        # refused upload (#702). It gives up the ``merged_cells`` accessor, so
-        # the merge declarations are read from the archive separately.
+        # Stream worksheet cells instead of retaining openpyxl's cell objects.
+        # Read-only mode omits ``merged_cells``, so recover merge declarations
+        # separately before collecting the bounded grids.
         workbook = openpyxl.load_workbook(path, data_only=True, read_only=True)
     except Exception as exc:
         message = str(exc)
@@ -159,7 +158,9 @@ def _sheet_parts(archive: zipfile.ZipFile) -> dict[str, str]:
     return parts
 
 
-def _merge_ranges(archive: zipfile.ZipFile, part: str, *, cells_used: list[int]) -> list[MergedRange]:
+def _merge_ranges(
+    archive: zipfile.ZipFile, part: str, *, cells_used: list[int]
+) -> list[MergedRange]:
     """``(min_row, min_col, max_row, max_col)`` for every merge in ``part``."""
     ranges: list[MergedRange] = []
     parents: list[ElementTree.Element] = []
@@ -167,7 +168,11 @@ def _merge_ranges(archive: zipfile.ZipFile, part: str, *, cells_used: list[int])
     rows = max_row = max_col = cells = 0
     row_col = 0
     with archive.open(part) as handle:
-        for event, element in ElementTree.iterparse(handle, events=("start", "end")):
+        events = cast(
+            "Iterator[tuple[str, ElementTree.Element]]",
+            ElementTree.iterparse(handle, events=("start", "end")),
+        )
+        for event, element in events:
             if event == "start":
                 parents.append(element)
                 if element.tag == f"{_MAIN_NS}row":

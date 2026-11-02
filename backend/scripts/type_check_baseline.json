@@ -184,9 +184,6 @@
  "app.adapters.excel_csv.sheet_analyzer": {
   "reportAny": 7
  },
- "app.adapters.excel_csv.workbook_reader": {
-  "reportAny": 6
- },
  "app.adapters.market_data.aequor_desk.adapter": {
   "reportAny": 34,
   "reportUnknownArgumentType": 1,

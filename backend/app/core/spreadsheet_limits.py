@@ -7,18 +7,16 @@ crafted workbook can exhaust the process that parses it (issue #702). openpyxl
 has no bomb guard on either of the reader paths, so the platform imposes one
 before and while it reads:
 
-* :func:`inspect_archive` refuses a workbook whose zip entries declare more
-  uncompressed bytes than a bank template ever needs, or an expansion ratio
-  that only a bomb produces. It reads the central directory only, so the
-  refusal costs nothing and happens before any decompression;
-* :func:`bounded_rows` counts rows and cells as they stream out of a worksheet
-  and stops the parse the moment the workbook passes its caps.
+* :func:`inspect_archive` checks declared total uncompressed size and expansion
+  ratio from the central directory before decompressing any entry;
+* :func:`bounded_rows` limits the rectangular grids yielded by the worksheet
+  iterator, rather than trusting declared worksheet dimensions.
 
-Both layers matter. The header check is cheap and catches the ordinary bomb; a
-zip can also under-declare its sizes, and the streaming count is what holds
-when it does. Neither layer decides what the workbook MEANS — a workbook that
-is merely large is still the bank's problem to submit within the documented
-limits, and the refusal says which cap it passed.
+These checks are not a bound on all parser allocations: workbook metadata is
+loaded before row iteration, and each row is constructed before it is counted
+here. The Data Engine also scans raw worksheet XML during merge extraction.
+Neither layer decides what the workbook MEANS. Submission limits are documented
+in ``backend/README.md`` under "Upload and workbook limits".
 
 The caps are generous against every template the platform ships: the shipped
 BoG layouts and the §8.2 market data templates are hundreds of rows, and a
@@ -48,9 +46,8 @@ MAX_CELLS_PER_WORKBOOK = 2_000_000
 #: magnitude, and this leaves generous room over that.
 MAX_UNCOMPRESSED_BYTES = 128 * 1024 * 1024
 
-#: Uncompressed bytes per compressed byte. Measured against the workbooks the
-#: platform actually reads, an ``.xlsx`` expands about 8:1 to 10:1 — the format
-#: is verbose, not repetitive — so a ratio past this is a decompression bomb.
+#: Declared uncompressed bytes per compressed byte. Highly repetitive legitimate
+#: files can also exceed this policy limit.
 MAX_EXPANSION_RATIO = 100
 
 #: Below this uncompressed size only the absolute cap applies. A few hundred
@@ -75,8 +72,8 @@ class SpreadsheetTooLarge(ValueError):
 def inspect_archive(source: Path | IO[bytes]) -> None:
     """Refuse ``source`` if its zip entries expand past the caps.
 
-    Reads the central directory only: no entry is decompressed, so refusing a
-    bomb costs a few kilobytes of reads. A source that is not a zip at all is
+    Reads the central directory only: no entry is decompressed, though directory
+    memory and read costs depend on the entry count. A source that is not a zip is
     left for the caller's own "not a valid .xlsx" path, which has better
     wording for that case.
     """

@@ -15,7 +15,7 @@ from app.storage.client import StorageClient, StorageValidationError
 from app.storage.config import StorageRetiredError
 from app.storage.factory import get_storage_client
 
-#: Compressed request bytes accepted for one upload.
+#: File-content bytes accepted for one upload, compressed for an .xlsx file.
 MAX_UPLOAD_BYTES = 50_000_000
 
 #: How much of an upload is read between cap checks. Small enough that a body
@@ -32,13 +32,10 @@ async def read_upload_within_cap(file: UploadFile) -> bytes:
     authenticated caller posting multi-gigabyte bodies drove the shared API
     process to exhaustion before a single byte was rejected (issue #701).
 
-    Reading in chunks bounds what the handler holds while it decides, and an
-    over-size body is refused after the cap plus one chunk rather than
-    after all of it. The transport still buffers the request itself — that is
-    the proxy's and the server's business, and this repository's deployment
-    changes are owned elsewhere — so what this guarantees is that the
-    application never holds more than the cap plus one chunk, and never does
-    the copy work for a body it is going to refuse.
+    An oversized file is refused after reading at most the cap plus one chunk.
+    Accepted chunks remain in memory until the final join, which allocates a
+    second copy of the accepted content. This bounds handler reads and copies,
+    not proxy or multipart buffering before the handler runs.
 
     An empty upload is refused here too: every caller of this seam rejects it,
     and one place keeps the wording and the status identical.
