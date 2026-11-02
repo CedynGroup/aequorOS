@@ -875,18 +875,18 @@ changes affect Google OIDC access; deactivate the staff row to revoke both paths
 Password rejection remains a later, separate rollout after every teammate's
 Google sign-in is confirmed. This is not yet an SSO-only staff plane.
 
-| Setting                                 | Default        | Behavior                                                                                                                                                                         |
-| --------------------------------------- | -------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `OPERATOR_OIDC_ISSUER`                  | unset          | Google is `https://accounts.google.com`; existing generic issuers remain supported.                                                                                              |
-| `OPERATOR_OIDC_CLIENT_ID`               | unset          | Same web OAuth client ID on console and operator API.                                                                                                                            |
-| `OPERATOR_OIDC_CLIENT_SECRET`           | unset          | Console server only; never browser JavaScript.                                                                                                                                   |
-| `OPERATOR_OIDC_ALLOWED_DOMAIN`          | `aequoros.com` | Verified email domain and mandatory signed Google `hd`; set explicitly on both services.                                                                                         |
-| `OPERATOR_OIDC_ALLOWED_GROUPS`          | `[]`           | JSON array of allowed group emails. Nonempty requires live unsuspended account status and membership in any allowed group. Empty disables the group gate.                        |
-| `OPERATOR_GOOGLE_CREDENTIALS_FILE`      | unset          | API-only protected service-account JSON file outside the repository.                                                                                                             |
-| `OPERATOR_GOOGLE_DELEGATED_ADMIN`       | unset          | Workspace administrator impersonated for read-only user and group checks.                                                                                                        |
-| `OPERATOR_GOOGLE_REQUIRE_2SV`           | `false`        | Require both Directory `isEnrolledIn2Sv=true` and `isEnforcedIn2Sv=true`, even with no groups configured. Also checks suspension.                                                |
-| `OPERATOR_OIDC_SESSION_MAX_AGE_SECONDS` | `0` (disabled) | Google OIDC lifetime from signed `iat`, at most 43,200 seconds. Set e.g. `1800` on both services. API and cookie independently enforce it without extending token expiry.        |
-| `OPERATOR_OIDC_GOOGLE_POLICY_TEST_MODE` | `false`        | Apply the Google domain, Directory and session-cap policy to a stand-in issuer. Local/test only; refused in deployed environments. Set on both services only for isolated tests. |
+| Setting                                 | Default        | Behavior                                                                                                                                                                                                                 |
+| --------------------------------------- | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `OPERATOR_OIDC_ISSUER`                  | unset          | Google is `https://accounts.google.com`; existing generic issuers remain supported.                                                                                                                                      |
+| `OPERATOR_OIDC_CLIENT_ID`               | unset          | Same web OAuth client ID on console and operator API.                                                                                                                                                                    |
+| `OPERATOR_OIDC_CLIENT_SECRET`           | unset          | Console server only; never browser JavaScript.                                                                                                                                                                           |
+| `OPERATOR_OIDC_ALLOWED_DOMAIN`          | `aequoros.com` | Verified email domain and mandatory signed Google `hd`; set explicitly on both services.                                                                                                                                 |
+| `OPERATOR_OIDC_ALLOWED_GROUPS`          | `[]`           | Google issuer or test mode only; ignored for generic OIDC. JSON array of allowed group emails; nonempty requires live unsuspended status and membership in any allowed group. Empty disables this gate.                  |
+| `OPERATOR_GOOGLE_CREDENTIALS_FILE`      | unset          | API-only protected service-account JSON file outside the repository.                                                                                                                                                     |
+| `OPERATOR_GOOGLE_DELEGATED_ADMIN`       | unset          | Workspace administrator impersonated for read-only user and group checks.                                                                                                                                                |
+| `OPERATOR_GOOGLE_REQUIRE_2SV`           | `false`        | Google issuer or test mode only; ignored for generic OIDC. Require both Directory `isEnrolledIn2Sv=true` and `isEnforcedIn2Sv=true`, even without groups. Also checks suspension.                                        |
+| `OPERATOR_OIDC_SESSION_MAX_AGE_SECONDS` | `0` (disabled) | Google issuer or test mode only; ignored for generic OIDC. Lifetime from signed `iat`, at most 43,200 seconds. Set e.g. `1800` on both services. API and cookie independently enforce it without extending token expiry. |
+| `OPERATOR_OIDC_GOOGLE_POLICY_TEST_MODE` | `false`        | Apply the Google domain, Directory and session-cap policy to a stand-in issuer. Local/test only; refused in deployed environments. Set on both services only for isolated tests.                                         |
 
 The Directory 2SV gate deliberately requires **enrollment and enforcement**.
 Enrollment alone means a user has configured 2SV; requiring enforcement as well
@@ -977,9 +977,11 @@ For an isolated stand-in provider, set `APP_ENV=local` or `test` and
 `OPERATOR_OIDC_GOOGLE_POLICY_TEST_MODE=true` on both services, with the same mock
 issuer/client ID. The backend uses the existing undeployed environment allow-list;
 the console also requires an explicit local/test environment. Staging, production
-and unknown environments refuse this override. Existing loopback OIDC/TLS test
-switches are separately required for plain HTTP; the override does not weaken
-signature verification, transport guards or audience checks. Never enable it in
+and unknown environments refuse this override. The existing backend OIDC guard
+permits loopback HTTP only in local/test;
+the console additionally requires `NODE_ENV=development` or `test` and
+`TLS_ALLOW_PLAINTEXT=1` for HTTP. The override does not weaken signature
+verification, transport guards or audience checks. Never enable it in
 a deployment. The checked-in console route test needs no container; a full browser
 journey would additionally need a console Playwright harness and disposable staff
 API/provider services, which this console currently lacks.
