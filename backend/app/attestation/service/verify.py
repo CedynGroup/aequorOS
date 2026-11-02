@@ -1338,7 +1338,7 @@ def _check_artifact_binding(artifacts: Sequence[_ArtifactEvidence]) -> CheckResu
     return _passed(
         CHECK_ARTIFACT_BINDING,
         f"All {len(artifacts)} pinned artifact version(s) still hash to the checksum recorded "
-        "at signing, resolved at the exact object-store version.",
+        "at signing, resolved through the pinned artifact revision.",
         artifacts=findings,
     )
 
