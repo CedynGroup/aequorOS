@@ -376,13 +376,10 @@ def _archive(  # noqa: PLR0913 - a write needs its full destination
     revision: int,
 ) -> RegulatoryArtifactVersion:
     """Store the signed revision and append the row that pins it."""
-    # One path per revision rather than one path with two object versions: on a
-    # backend that cannot version (storage_version_id NULL), the approver's
-    # write would otherwise overwrite the exact bytes the preparer's signature
-    # pins, and the artifact-binding check would start failing on a document
-    # nobody had touched. The attestation cycle is in the path for the same
-    # reason: a void restarts the revision count, and a withdrawn attestation
-    # has to stay legible — including the document it was made on (L15).
+    # Preserve revision-specific archive names, including the attestation cycle:
+    # a void restarts the revision count, and a withdrawn attestation has to stay
+    # distinguishable — including the document it was made on (L15). Physical
+    # byte isolation is enforced by sealed publication's immutable object key.
     object_path = (
         f"bog_returns/{package.reporting_date.isoformat()}/{package.id}/"
         f"{package.return_code}.signed-c{package.attestation_cycle}-{revision}-{role}.pdf"

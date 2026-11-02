@@ -86,7 +86,7 @@ class _S3CreateClient(Protocol):
     """The create-only object operations, typed so a sealed write carries no ``Any``.
 
     boto3's own signatures are only partially known to the type checker, so the
-    sealed path names the six calls it makes and reads their responses as
+    sealed path names the five calls it makes and reads their responses as
     mappings. The runtime client is the same object.
     """
 

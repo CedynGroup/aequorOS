@@ -226,8 +226,11 @@ existing platform-only objects during optional rollout as well as bank-encrypted
 objects; it does not unwrap either. Format-3 backups copy every retained revision,
 including superseded documents, and record delete markers. Restore replays those
 revisions and emits their exact old-to-new version mapping. The audited recovery
-operation in `scripts/reconcile_storage_versions.py` applies that mapping to the
-four pinned document-version columns without changing sealed evidence or keys.
+operation in `scripts/reconcile_storage_versions.py` applies that mapping to legacy
+references in the four pinned document-version columns without changing sealed
+evidence or keys.
+Recovery of bound documents follows the
+[stable sealed-document contract](#publication-and-its-callers).
 Use the incident-only identity and dedicated restore target described in
 [the recovery procedure](bank_key_setup.md#reconcile-pinned-versions-after-replay).
 Missing or ambiguous mappings and scopes matching no pinned references fail closed.
@@ -396,8 +399,11 @@ dependency the catalogue records. Writers and readers are exercised in
 
 Follow-up slices must inventory/backfill legacy revisions by verified
 context-preserving copy, teach maintenance/key-retirement inventories about stable
-objects, and capture this catalogue with envelopes in coordinated backups;
-restore reconciliation, retention drills and replication remain follow-up work.
+objects, and capture this catalogue and its bindings with envelopes in coordinated
+backups. The existing version reconciler matches legacy logical paths and provider
+pins; it does not reconcile bound documents at their catalogue physical keys.
+Stable-document restore reconciliation, retention drills and replication remain
+follow-up work.
 Keep the audited reconciler as the
 legacy/exceptional-restore fallback. No retention policy, backup format, signature,
 digest or historical audit entry changes in this slice.
