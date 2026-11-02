@@ -121,9 +121,10 @@ def test_finalized_upload_survives_replay_and_has_independent_metadata() -> None
         second_key = storage.finalize_upload(bucket=_BUCKET, object_key=source_key)
         assert second_key is not None
         assert second_key != finalized_key
-        assert storage.read_object_digest(
-            bucket=_BUCKET, object_key=second_key, max_bytes=32
-        ) == (16, hashlib.sha256(b"replacement body").hexdigest())
+        assert storage.read_object_digest(bucket=_BUCKET, object_key=second_key, max_bytes=32) == (
+            16,
+            hashlib.sha256(b"replacement body").hexdigest(),
+        )
 
         download = storage.create_presigned_download_url(
             bucket=_BUCKET, object_key=finalized_key, expires_seconds=60
