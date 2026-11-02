@@ -46,6 +46,7 @@ from app.reporting.service.exports.pdf_parts import (
 from app.reporting.service.exports.pdf_parts import (
     invariant_canvas as _invariant_canvas,
 )
+from app.reporting.service.exports.text import xml_safe
 from app.reporting.service.templates import (
     ColumnSpec,
     RenderedCell,
@@ -248,13 +249,18 @@ def _single_line(value: str) -> str:
     """``value`` with its line breaks collapsed, for a one-line ruled field.
 
     A display name may hold line breaks, and every one of them would add a line
-    to a row that cannot be taller than the page: 255 characters spent on single
+    to a row that cannot be taller than the page: 200 characters spent on single
     characters and newlines makes ``_record_row_height`` exceed the frame, and
     reportlab then refuses the document outright rather than printing it. The
     field is one ruled line — name, designation, date — so a break reads as the
     space it is, and no value can grow the row past a normally wrapped name.
+
+    ``xml_safe`` runs first because reportlab's paragraph markup — and therefore
+    ``escape_text``, which measures the row — counts the vertical tab and form
+    feed of a pasted document as line breaks too.
     """
-    return " ".join(value.replace("\r\n", "\n").replace("\r", "\n").split("\n")).strip()
+    normalized = xml_safe(value).replace("\r\n", "\n").replace("\r", "\n")
+    return " ".join(normalized.split("\n")).strip()
 
 
 def _record_row_height(values: Sequence[str]) -> float:

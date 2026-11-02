@@ -24,6 +24,7 @@ from __future__ import annotations
 import io
 
 import pdfplumber
+import pytest
 
 from app.reporting.service.exports.pdf import AttestedOfficer, render_pdf
 from app.reporting.service.templates import TEMPLATES, RenderedReturn
@@ -94,16 +95,27 @@ def test_a_line_break_in_a_display_name_prints_as_one_line() -> None:
     _assert_above_the_labels(words, "Ada Lovelace")
 
 
-def test_a_maximal_line_broken_name_still_exports() -> None:
-    """255 characters spent on line breaks must not block the filing export.
+@pytest.mark.parametrize(
+    "separator",
+    [
+        pytest.param("\n", id="newline"),
+        pytest.param("\x0b", id="vertical-tab"),
+        pytest.param("\x0c", id="form-feed"),
+    ],
+)
+def test_a_maximal_line_broken_name_still_exports(separator: str) -> None:
+    """200 characters spent on line breaks must not block the filing export.
 
-    Sized purely to its content the row would be taller than the page frame, and
-    reportlab refuses a flowable it cannot fit (``LayoutError``): an officer
-    could stop an unsigned return from being filed by editing their own name.
+    ``decided_by_name`` holds at most 200 characters, and reportlab counts the
+    vertical tab and form feed of a pasted document as line breaks alongside the
+    newline. Sized purely to its content the row would then be taller than the
+    page frame, and reportlab refuses a flowable it cannot fit (``LayoutError``):
+    an officer could stop an unsigned return from being filed by editing their
+    own name.
     """
-    lines = [f"{index:03d}" for index in range(64)]
-    name = "\n".join(lines)
-    assert len(name) == 255
+    lines = [f"{index:02d}" for index in range(66)]
+    name = separator.join(lines)
+    assert len(name) == 197
 
     with pdfplumber.open(io.BytesIO(_record_payload(name))) as document:
         text = " ".join(" ".join(page.extract_text() or "" for page in document.pages).split())
