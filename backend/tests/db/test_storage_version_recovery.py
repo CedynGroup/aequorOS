@@ -988,9 +988,10 @@ def restored_recovery_database(
         install_migration_engines(monkeypatch, source_engine)
         command.upgrade(alembic_config_for_app(), "head")
         with source_engine.begin() as connection:
-            source_revision = connection.execute(
-                text("SELECT version_num FROM alembic_version")
-            ).scalar_one()
+            source_revision = cast(
+                str,
+                connection.execute(text("SELECT version_num FROM alembic_version")).scalar_one(),
+            )
             connection.execute(
                 text(
                     "INSERT INTO organizations (id, name, created_at, updated_at) "
