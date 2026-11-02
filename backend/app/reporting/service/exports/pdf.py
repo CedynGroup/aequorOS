@@ -17,6 +17,7 @@ import io
 from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Any
+from xml.sax.saxutils import escape
 
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4, landscape
@@ -134,7 +135,7 @@ def _cover(rendered: RenderedReturn) -> list[Any]:
     pairs = dict(rendered.metadata_pairs)
     story: list[Any] = [
         Spacer(0, 30 * mm),
-        Paragraph(escape_text(pairs.get("Return", rendered.template.title)), _TITLE),
+        Paragraph(pairs.get("Return", rendered.template.title), _TITLE),
         Spacer(0, 6 * mm),
     ]
     cover_fields = (
@@ -154,9 +155,14 @@ def _cover(rendered: RenderedReturn) -> list[Any]:
     rows = [
         [
             Paragraph(f"<b>{label}</b>", _CELL),
-            # Snapshot metadata, so escaped: "Institution" is a name an
-            # administrator of the tenant can change.
-            Paragraph(escape_text(pairs.get(label, "")), _CELL),
+            # The citation is code-owned template text, like the title and
+            # notes. Escape snapshot metadata without changing its glyphs.
+            Paragraph(
+                pairs.get(label, "")
+                if label == "Directive citation"
+                else escape(pairs.get(label, "")),
+                _CELL,
+            ),
         ]
         for label in cover_fields
     ]
@@ -173,7 +179,7 @@ def _cover(rendered: RenderedReturn) -> list[Any]:
     if rendered.template.notes:
         story.append(Spacer(0, 6 * mm))
         for note in rendered.template.notes:
-            story.append(Paragraph(f"Note: {escape_text(note)}", _SMALL))
+            story.append(Paragraph(f"Note: {note}", _SMALL))
     if rendered.report_notes:
         # Package-specific statements from the snapshot — the governed minima
         # applied and what this package omits. Snapshot text, so escaped.
