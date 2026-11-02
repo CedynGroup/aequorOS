@@ -302,7 +302,12 @@ declared at request time. A presigned PUT accepts any body, so the declaration i
 provenance only once completion has compared it: storage must report a size, that
 size must equal the declared `byte_size`, and when a `sha256` was declared the
 stored bytes are re-read and hashed under a read bound of that same size, refusing
-on mismatch. Nothing is recorded unverified — an uncomparable or unparseable
+on mismatch. Before verification, completion copies the staged object to a unique
+server-only key. Metadata and digest reads use that snapshot, and the committed
+object locator, downloads, and deletion all use the same key. Replaying the
+upload URL cannot change completed bytes. Failed completion removes its snapshot;
+document cleanup deletes both the snapshot and its staged upload key.
+Nothing is recorded unverified — an uncomparable or unparseable
 declaration is refused, not accepted. A declaration that is not 64 hexadecimal
 characters is refused at the request schema, where it is shaped. The store-facing
 half of the check is covered at the adapter boundary in

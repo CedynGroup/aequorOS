@@ -9,6 +9,8 @@ class MutableObjectStorage(ObjectStorage, Protocol):
     head: StoredObjectHead | None
     body: bytes
     digest_reads: list[tuple[str, str]]
+    finalized_objects: dict[tuple[str, str], tuple[StoredObjectHead, bytes]]
+    downloads: list[tuple[str, str]]
 
     def create_presigned_upload_url(
         self,

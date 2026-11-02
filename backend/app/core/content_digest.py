@@ -29,17 +29,10 @@ class ContentReadOverrun(ValueError):
 
 
 def normalize_sha256(value: str) -> str:
-    """Return ``value`` as lowercase hex, or raise when it is not a SHA-256.
-
-    Surrounding whitespace is tolerated because a trailing newline is a
-    transport artefact, not a different digest; anything else must be exactly
-    64 hexadecimal characters. Accepting a shorter or non-hex value would let a
-    client record provenance that nothing can ever match.
-    """
-    candidate = value.strip()
-    if not _HEX_SHA256.match(candidate):
+    """Return exactly 64 hexadecimal characters as lowercase hex."""
+    if not _HEX_SHA256.match(value):
         raise DeclaredDigestError("sha256 must be 64 hexadecimal characters.")
-    return candidate.lower()
+    return value.lower()
 
 
 def digest_matches(declared: str, observed: str) -> bool:

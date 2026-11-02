@@ -64,6 +64,7 @@ def timeout_role_engines(
 
 class BlockingHeadStorage(FakeStorage):
     def __init__(self) -> None:
+        super().__init__()
         self.entered_head = Event()
         self.resume_head = Event()
         self.head: StoredObjectHead | None = StoredObjectHead(
@@ -210,7 +211,8 @@ def assert_upload_deletion_outcome(scenario: UploadDeletionRace) -> None:
                 storage_client=scenario.storage,
             )
         assert unavailable.value.status_code == 409
-    assert scenario.storage.deleted == [scenario.locator]
+    assert scenario.storage.deleted.count(scenario.locator) == 1
+    assert not scenario.storage.finalized_objects
 
 
 @pytest.mark.parametrize("cleanup_during_head", [False, True])

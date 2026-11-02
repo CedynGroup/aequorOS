@@ -190,87 +190,107 @@ def complete_upload(
     stored_object = get_stored_object_or_404(db, ctx.organization_id, document.stored_object_id)
     _require_pending_upload(document, stored_object)
     bucket, object_key = stored_object.bucket, stored_object.object_key
-    # Declarations are written once by request_upload and never updated, so the
-    # unlocked copy is enough to decide what to observe. Both storage calls
-    # happen before the row locks are taken: a verification read can touch tens
-    # of megabytes and must not hold a document row while it does.
     declared_size, declared_digest = stored_object.byte_size, stored_object.sha256
     db.commit()
-    head = storage_client.head_object(bucket=bucket, object_key=object_key)
-    observed_digest: tuple[int, str] | None = None
-    # Only read what could still be accepted. The reported size is refused
-    # against the cap a few lines down, so reading an object that is already
-    # too large would spend the whole read before saying no — the cap exists to
-    # bound exactly this work.
-    if (
-        head is not None
-        and declared_digest is not None
-        and head.byte_size is not None
-        and head.byte_size <= settings.risk_max_upload_bytes
-    ):
-        try:
-            observed_digest = storage_client.read_object_digest(
-                bucket=bucket, object_key=object_key, max_bytes=head.byte_size
+    finalized_key: str | None = None
+    completed = False
+    try:
+        head = storage_client.head_object(bucket=bucket, object_key=object_key)
+        if (
+            head is not None
+            and head.byte_size is not None
+            and head.byte_size <= settings.risk_max_upload_bytes
+        ):
+            finalized_key = storage_client.finalize_upload(bucket=bucket, object_key=object_key)
+            head = (
+                storage_client.head_object(bucket=bucket, object_key=finalized_key)
+                if finalized_key is not None
+                else None
             )
-        except ContentReadOverrun as exc:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Uploaded object is larger than the size storage reported.",
-            ) from exc
-    document = get_document_or_404(db, ctx.organization_id, document_id, for_update=True)
-    stored_object = get_stored_object_or_404(
-        db, ctx.organization_id, document.stored_object_id, for_update=True
-    )
-    _require_pending_upload(document, stored_object)
-    if head is None:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail="Uploaded object was not found."
+        observed_digest: tuple[int, str] | None = None
+        # Only read what could still be accepted. The reported size is refused
+        # against the cap a few lines down, so reading an object that is already
+        # too large would spend the whole read before saying no — the cap exists to
+        # bound exactly this work.
+        if (
+            head is not None
+            and finalized_key is not None
+            and declared_digest is not None
+            and head.byte_size is not None
+            and head.byte_size <= settings.risk_max_upload_bytes
+        ):
+            try:
+                observed_digest = storage_client.read_object_digest(
+                    bucket=bucket, object_key=finalized_key, max_bytes=head.byte_size
+                )
+            except ContentReadOverrun as exc:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Uploaded object is larger than the size storage reported.",
+                ) from exc
+        document = get_document_or_404(db, ctx.organization_id, document_id, for_update=True)
+        stored_object = get_stored_object_or_404(
+            db, ctx.organization_id, document.stored_object_id, for_update=True
         )
-    if head.byte_size is None:
-        # Without an observed size there is nothing to check the declaration
-        # against, and recording the declaration unverified is the defect this
-        # guard exists to prevent.
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Storage did not report the uploaded object's size.",
-        )
-    if head.byte_size > settings.risk_max_upload_bytes:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Uploaded object exceeds maximum size.",
-        )
-    if declared_size is not None and head.byte_size != declared_size:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Uploaded object does not match the declared size.",
-        )
-    if declared_digest is not None:
-        if observed_digest is None:
+        _require_pending_upload(document, stored_object)
+        if head is None:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST, detail="Uploaded object was not found."
             )
-        observed_size, observed_sha256 = observed_digest
-        if observed_size != head.byte_size or not _digest_matches(declared_digest, observed_sha256):
+        if head.byte_size is None:
+            # Without an observed size there is nothing to check the declaration
+            # against, and recording the declaration unverified is the defect this
+            # guard exists to prevent.
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Uploaded object does not match the declared checksum.",
+                detail="Storage did not report the uploaded object's size.",
             )
-    stored_object.status = "available"
-    stored_object.etag = head.etag
-    stored_object.byte_size = head.byte_size
-    stored_object.content_type = head.content_type or stored_object.content_type
-    stored_object.version_id = head.version_id
-    document.status = "uploaded"
-    document.uploaded_at = datetime.now(UTC)
-    record_event(
-        db,
-        ctx,
-        event_type="document.upload_completed",
-        entity_type="document",
-        entity_id=str(document.id),
-    )
-    db.commit()
-    return document
+        if head.byte_size > settings.risk_max_upload_bytes:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Uploaded object exceeds maximum size.",
+            )
+        if declared_size is not None and head.byte_size != declared_size:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Uploaded object does not match the declared size.",
+            )
+        if declared_digest is not None:
+            if observed_digest is None:
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST, detail="Uploaded object was not found."
+                )
+            observed_size, observed_sha256 = observed_digest
+            if observed_size != head.byte_size or not _digest_matches(
+                declared_digest, observed_sha256
+            ):
+                raise HTTPException(
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                    detail="Uploaded object does not match the declared checksum.",
+                )
+        assert finalized_key is not None
+        stored_object.object_key = finalized_key
+        stored_object.status = "available"
+        stored_object.etag = head.etag
+        stored_object.byte_size = head.byte_size
+        stored_object.content_type = head.content_type or stored_object.content_type
+        stored_object.version_id = head.version_id
+        document.status = "uploaded"
+        document.uploaded_at = datetime.now(UTC)
+        record_event(
+            db,
+            ctx,
+            event_type="document.upload_completed",
+            entity_type="document",
+            entity_id=str(document.id),
+        )
+        db.commit()
+        completed = True
+        return document
+    finally:
+        if finalized_key is not None and not completed:
+            db.rollback()
+            storage_client.delete_object(bucket=bucket, object_key=finalized_key)
 
 
 def list_case_documents(db: Session, ctx: TenantContext, case_id: UUID) -> list[Document]:
@@ -455,7 +475,11 @@ def run_document_delete(session: Session, job: Job) -> None:
     if target is None:
         return
     object_id, bucket, object_key = target
-    get_object_storage().delete_object(bucket=bucket, object_key=object_key)
+    storage_client = get_object_storage()
+    storage_client.delete_object(bucket=bucket, object_key=object_key)
+    staging_key, finalized, _ = object_key.partition("/finalized/")
+    if finalized:
+        storage_client.delete_object(bucket=bucket, object_key=staging_key)
     session.execute(
         update(StoredObject)
         .where(

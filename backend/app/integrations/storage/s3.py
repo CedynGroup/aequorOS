@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections.abc import Iterator
 from functools import lru_cache
 from typing import Any, Protocol, cast
+from uuid import uuid4
 
 import boto3
 from botocore.client import Config
@@ -36,6 +37,10 @@ class _ObjectClient(Protocol):
     def head_object(self, *, Bucket: str, Key: str) -> dict[str, Any]: ...
 
     def get_object(self, *, Bucket: str, Key: str) -> dict[str, Any]: ...
+
+    def copy_object(
+        self, *, Bucket: str, Key: str, CopySource: dict[str, str]
+    ) -> dict[str, Any]: ...
 
     def delete_object(self, *, Bucket: str, Key: str) -> dict[str, Any]: ...
 
@@ -136,6 +141,20 @@ class S3ObjectStorage:
             etag=cast(str | None, response.get("ETag")),
             version_id=cast(str | None, response.get("VersionId")),
         )
+
+    def finalize_upload(self, *, bucket: str, object_key: str) -> str | None:
+        finalized_key = f"{object_key}/finalized/{uuid4()}"
+        try:
+            _ = self._client.copy_object(
+                Bucket=bucket,
+                Key=finalized_key,
+                CopySource={"Bucket": bucket, "Key": object_key},
+            )
+        except ClientError as exc:
+            if _http_status(exc) == 404:
+                return None
+            raise
+        return finalized_key
 
     def read_object_digest(
         self, *, bucket: str, object_key: str, max_bytes: int

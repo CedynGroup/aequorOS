@@ -22,8 +22,10 @@ def test_normalize_accepts_a_hex_digest_in_any_case() -> None:
     assert normalize_sha256(_DIGEST.upper()) == _DIGEST
 
 
-def test_normalize_tolerates_transport_whitespace() -> None:
-    assert normalize_sha256(f"  {_DIGEST}\n") == _DIGEST
+def test_normalize_refuses_transport_whitespace() -> None:
+    for value in (f" {_DIGEST}", f"{_DIGEST} ", f"{_DIGEST}\n", f"\t{_DIGEST}"):
+        with pytest.raises(DeclaredDigestError):
+            normalize_sha256(value)
 
 
 @pytest.mark.parametrize(

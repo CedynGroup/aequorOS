@@ -101,6 +101,46 @@ def test_read_object_digest_reports_a_missing_object() -> None:
         )
 
 
+def test_finalized_upload_survives_replay_and_has_independent_metadata() -> None:
+    with mock_aws():
+        storage = _storage()
+        source_key = "orgs/synthetic/original.pdf"
+        body = b"verified body"
+        _put(source_key, body)
+        finalized_key = storage.finalize_upload(bucket=_BUCKET, object_key=source_key)
+        assert finalized_key is not None
+        assert finalized_key != source_key
+        head = storage.head_object(bucket=_BUCKET, object_key=finalized_key)
+
+        _ = _seed_client().put_object(Bucket=_BUCKET, Key=source_key, Body=b"replacement body")
+
+        assert storage.head_object(bucket=_BUCKET, object_key=finalized_key) == head
+        assert storage.read_object_digest(
+            bucket=_BUCKET, object_key=finalized_key, max_bytes=len(body)
+        ) == (len(body), hashlib.sha256(body).hexdigest())
+        second_key = storage.finalize_upload(bucket=_BUCKET, object_key=source_key)
+        assert second_key is not None
+        assert second_key != finalized_key
+        assert storage.read_object_digest(
+            bucket=_BUCKET, object_key=second_key, max_bytes=32
+        ) == (16, hashlib.sha256(b"replacement body").hexdigest())
+
+        download = storage.create_presigned_download_url(
+            bucket=_BUCKET, object_key=finalized_key, expires_seconds=60
+        )
+        assert urlsplit(download).path.endswith("/" + finalized_key)
+        storage.delete_object(bucket=_BUCKET, object_key=finalized_key)
+        assert storage.head_object(bucket=_BUCKET, object_key=finalized_key) is None
+        assert storage.head_object(bucket=_BUCKET, object_key=second_key) is not None
+
+
+def test_finalize_upload_refuses_a_missing_source() -> None:
+    with mock_aws():
+        storage = _storage()
+        _put("orgs/synthetic/keep.pdf", b"keep")
+        assert storage.finalize_upload(bucket=_BUCKET, object_key="absent") is None
+
+
 def test_read_object_digest_stops_before_reading_a_body_past_its_bound() -> None:
     with mock_aws():
         storage = _storage()

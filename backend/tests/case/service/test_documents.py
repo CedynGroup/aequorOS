@@ -84,6 +84,126 @@ def test_complete_upload_persists_storage_metadata(
     assert document.status == "uploaded"
     assert stored_object.status == "available"
     assert stored_object.etag == '"etag"'
+    assert "/finalized/" in stored_object.object_key
+
+
+def test_complete_upload_binds_downloads_to_the_verified_snapshot(
+    db_session: Session,
+    service_factories: ServiceFactories,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    factories = service_factories
+    body = b"verified bytes"
+    document_id, _ = _staged_upload(
+        factories, declared=body, declared_sha256=hashlib.sha256(body).hexdigest()
+    )
+    digest_read = factories.storage.read_object_digest
+
+    def replay_after_read(
+        *, bucket: str, object_key: str, max_bytes: int
+    ) -> tuple[int, str] | None:
+        observed = digest_read(bucket=bucket, object_key=object_key, max_bytes=max_bytes)
+        factories.storage.body = b"replayed bytes"
+        factories.storage.head = StoredObjectHead(
+            byte_size=14, etag='"replayed"', version_id="replayed"
+        )
+        return observed
+
+    monkeypatch.setattr(factories.storage, "read_object_digest", replay_after_read)
+    document = documents.complete_upload(
+        db_session,
+        factories.ctx,
+        document_id,
+        settings=factories.settings,
+        storage_client=factories.storage,
+    )
+    stored = db_session.get(StoredObject, document.stored_object_id)
+    assert stored is not None
+    locator = (stored.bucket, stored.object_key)
+    assert factories.storage.finalized_objects[locator][1] == body
+    assert factories.storage.digest_reads == [locator]
+    assert stored.etag == '"etag"'
+    assert stored.version_id is None
+    assert stored.sha256 == hashlib.sha256(body).hexdigest()
+
+    documents.create_download_url(
+        db_session,
+        factories.ctx,
+        document_id,
+        settings=factories.settings,
+        storage_client=factories.storage,
+    )
+    assert factories.storage.downloads == [locator]
+
+
+def test_complete_upload_checks_snapshot_metadata_after_a_staged_overwrite(
+    db_session: Session,
+    service_factories: ServiceFactories,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    factories = service_factories
+    document_id, _ = _staged_upload(factories, declared=b"declared")
+    finalize = factories.storage.finalize_upload
+
+    def overwrite_before_copy(*, bucket: str, object_key: str) -> str | None:
+        factories.storage.body = b"larger replacement"
+        factories.storage.head = StoredObjectHead(byte_size=18, etag='"replacement"')
+        return finalize(bucket=bucket, object_key=object_key)
+
+    monkeypatch.setattr(factories.storage, "finalize_upload", overwrite_before_copy)
+    refused = _complete(factories, db_session, document_id)
+
+    assert refused.status_code == 400
+    assert "declared size" in str(refused.detail)
+    assert not factories.storage.finalized_objects
+    _assert_still_pending(db_session, document_id)
+
+
+@pytest.mark.parametrize("concurrent_action", ["complete", "delete"])
+def test_complete_upload_discards_its_snapshot_when_the_pending_state_changes(
+    db_session: Session,
+    service_factories: ServiceFactories,
+    monkeypatch: pytest.MonkeyPatch,
+    concurrent_action: str,
+) -> None:
+    factories = service_factories
+    body = b"verified body"
+    document_id, _ = _staged_upload(
+        factories, declared=body, declared_sha256=hashlib.sha256(body).hexdigest()
+    )
+    digest_read = factories.storage.read_object_digest
+
+    def change_pending_state(
+        *, bucket: str, object_key: str, max_bytes: int
+    ) -> tuple[int, str] | None:
+        observed = digest_read(bucket=bucket, object_key=object_key, max_bytes=max_bytes)
+        monkeypatch.setattr(factories.storage, "read_object_digest", digest_read)
+        if concurrent_action == "delete":
+            documents.delete_document(db_session, factories.ctx, document_id)
+        else:
+            documents.complete_upload(
+                db_session,
+                factories.ctx,
+                document_id,
+                settings=factories.settings,
+                storage_client=factories.storage,
+            )
+        return observed
+
+    monkeypatch.setattr(factories.storage, "read_object_digest", change_pending_state)
+    refused = _complete(factories, db_session, document_id)
+
+    assert refused.status_code == 409
+    document = db_session.get(Document, document_id)
+    assert document is not None
+    stored = db_session.get(StoredObject, document.stored_object_id)
+    assert stored is not None
+    if concurrent_action == "delete":
+        assert document.status == "deleted"
+        assert not factories.storage.finalized_objects
+    else:
+        assert document.status == "uploaded"
+        assert list(factories.storage.finalized_objects) == [(stored.bucket, stored.object_key)]
 
 
 def _staged_upload(
@@ -207,6 +327,7 @@ def test_complete_upload_refuses_content_that_differs_from_the_declared_digest(
     assert refused.status_code == 400
     assert "checksum" in str(refused.detail)
     _assert_still_pending(db_session, document_id)
+    assert not factories.storage.finalized_objects
 
 
 def test_complete_upload_refuses_a_size_that_differs_from_the_declaration(
@@ -281,6 +402,12 @@ def test_complete_upload_reads_the_object_only_when_a_digest_was_declared(
     )
 
     assert factories.storage.digest_reads == []
+
+    document = db_session.get(Document, undeclared_id)
+    assert document is not None
+    stored = db_session.get(StoredObject, document.stored_object_id)
+    assert stored is not None
+    assert (stored.bucket, stored.object_key) in factories.storage.finalized_objects
 
     declared_id, _ = _staged_upload(
         factories, declared=payload, declared_sha256=hashlib.sha256(payload).hexdigest()

@@ -335,6 +335,8 @@ class FakeStorage:
         self.body = b""
         self.digest_reads: list[tuple[str, str]] = []
         self.deleted: list[tuple[str, str]] = []
+        self.finalized_objects: dict[tuple[str, str], tuple[StoredObjectHead, bytes]] = {}
+        self.downloads: list[tuple[str, str]] = []
 
     def create_presigned_upload_url(
         self,
@@ -358,19 +360,31 @@ class FakeStorage:
         object_key: str,
         expires_seconds: int,
     ) -> str:
+        self.downloads.append((bucket, object_key))
         return self.download_url
 
     def head_object(self, *, bucket: str, object_key: str) -> StoredObjectHead | None:
-        return self.head
+        snapshot = self.finalized_objects.get((bucket, object_key))
+        return snapshot[0] if snapshot is not None else self.head
+
+    def finalize_upload(self, *, bucket: str, object_key: str) -> str | None:
+        if self.head is None:
+            return None
+        finalized_key = f"{object_key}/finalized/{uuid4()}"
+        self.finalized_objects[bucket, finalized_key] = (self.head, self.body)
+        return finalized_key
 
     def read_object_digest(
         self, *, bucket: str, object_key: str, max_bytes: int
     ) -> tuple[int, str] | None:
         self.digest_reads.append((bucket, object_key))
-        return sha256_of_chunks([self.body], max_bytes=max_bytes)
+        snapshot = self.finalized_objects.get((bucket, object_key))
+        body = snapshot[1] if snapshot is not None else self.body
+        return sha256_of_chunks([body], max_bytes=max_bytes)
 
     def delete_object(self, *, bucket: str, object_key: str) -> None:
         self.deleted.append((bucket, object_key))
+        self.finalized_objects.pop((bucket, object_key), None)
 
 
 def _postgres_schema_url(database_url: str, schema_name: str) -> str:

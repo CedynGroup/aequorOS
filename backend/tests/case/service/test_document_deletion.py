@@ -132,6 +132,10 @@ def test_storage_success_with_lost_acknowledgement_is_safe_to_repeat(
 ) -> None:
     factories = service_factories
     document = factories.documents.create_uploaded()
+    stored_object = db_session.get(StoredObject, document.stored_object_id)
+    assert stored_object is not None
+    finalized_locator = (stored_object.bucket, stored_object.object_key)
+    staged_locator = (stored_object.bucket, stored_object.object_key.partition("/finalized/")[0])
     documents.delete_document(db_session, factories.ctx, document.id)
     job = job_queue.claim_next(db_session, utc_now(), ("document_delete",))
     assert job is not None
@@ -151,7 +155,7 @@ def test_storage_success_with_lost_acknowledgement_is_safe_to_repeat(
     documents.run_document_delete(db_session, job)
     job_queue.complete(db_session, job)
     assert stored.status == "deleted" and job.status == "succeeded"
-    assert len(deleted_keys) == 1
+    assert deleted_keys == {finalized_locator, staged_locator}
     documents.run_document_delete(db_session, job)
     job_queue.complete(db_session, job)
     assert stored.status == "deleted"

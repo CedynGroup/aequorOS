@@ -45,5 +45,11 @@ def test_a_digest_declaration_is_recorded_as_lowercase_hex() -> None:
     assert _request(sha256=_DIGEST.upper()).sha256 == _DIGEST
 
 
+def test_a_digest_declaration_with_whitespace_is_refused() -> None:
+    for value in (f" {_DIGEST}", f"{_DIGEST} ", f"{_DIGEST}\n", f"\t{_DIGEST}"):
+        with pytest.raises(ValidationError):
+            _ = _request(sha256=value)
+
+
 def test_a_declaration_without_a_digest_keeps_it_absent() -> None:
     assert _request().sha256 is None
