@@ -873,11 +873,11 @@ not yet an SSO-only or universally MFA-enforced staff plane.
 | `OPERATOR_OIDC_CLIENT_ID`               | unset          | Same web OAuth client ID on console and operator API.                                                                                                                                                                |
 | `OPERATOR_OIDC_CLIENT_SECRET`           | unset          | Console server only; never exposed to browser JavaScript.                                                                                                                                                            |
 | `OPERATOR_OIDC_ALLOWED_DOMAIN`          | `aequoros.com` | Required verified email domain; set explicitly on both services. Console sends it as Google's `hd` hint.                                                                                                             |
-| `OPERATOR_OIDC_REQUIRE_HOSTED_DOMAIN`   | `false`        | Additionally require the signed `hd` claim to exactly match the allowed domain. Enable for Workspace; generic issuers retain their existing sign-in behavior. A hint alone never authorizes access.                              |
-| `OPERATOR_OIDC_ALLOWED_GROUPS`          | `[]`           | JSON array of allowed group emails, e.g. `["staff@aequoros.com"]`. Nonempty enables live account-status and membership checks; any matching group admits an unsuspended user with the provisioned app role.                                                         |
+| `OPERATOR_OIDC_REQUIRE_HOSTED_DOMAIN`   | `false`        | Additionally require the signed `hd` claim to exactly match the allowed domain. Enable for Workspace; generic issuers retain their existing sign-in behavior. A hint alone never authorizes access.                  |
+| `OPERATOR_OIDC_ALLOWED_GROUPS`          | `[]`           | JSON array of allowed group emails, e.g. `["staff@aequoros.com"]`. Nonempty enables live account-status and membership checks; any matching group admits an unsuspended user with the provisioned app role.          |
 | `OPERATOR_GOOGLE_CREDENTIALS_FILE`      | unset          | Operator API only: protected service-account JSON credential file, outside the repository.                                                                                                                           |
-| `OPERATOR_GOOGLE_DELEGATED_ADMIN`       | unset          | Operator API only: Workspace administrator to impersonate for read-only user-status and group checks.                                                                                                                                |
-| `OPERATOR_OIDC_REQUIRE_ASSURANCE`       | `false`        | Require a nonempty set of configured AMR values and an integral, nonnegative, nonfuture `auth_time`; missing evidence refuses with an explanation.                                                         |
+| `OPERATOR_GOOGLE_DELEGATED_ADMIN`       | unset          | Operator API only: Workspace administrator to impersonate for read-only user-status and group checks.                                                                                                                |
+| `OPERATOR_OIDC_REQUIRE_ASSURANCE`       | `false`        | Require a nonempty set of configured AMR values and an integral, nonnegative, nonfuture `auth_time`; missing evidence refuses with an explanation.                                                                   |
 | `OPERATOR_OIDC_REQUIRED_AMR`            | `["mfa"]`      | JSON array of issuer AMR values required when assurance enforcement is enabled.                                                                                                                                      |
 | `OPERATOR_OIDC_SESSION_MAX_AGE_SECONDS` | `0` (disabled) | OIDC session lifetime from signed `iat`; maximum 43,200 seconds. Set e.g. `1800` on both services. API enforces the cap independently of the cookie; callback caps cookie expiry too. Never extends ID-token expiry. |
 | `OPERATOR_OIDC_STEP_UP_MAX_AGE_SECONDS` | `0` (disabled) | Require recent `auth_time` on **all OIDC POST/PUT/PATCH/DELETE requests**; maximum 3,600 seconds, suggested initial value `300`. Reads retain normal session checks.                                                 |
@@ -888,19 +888,19 @@ boundary fetches Directory `users.get` before checking `members.hasMember` on
 tokens. A suspended account is refused on its next request once Directory reports
 the suspension, even when it still belongs to an allowed group. Status and
 membership decisions are never cached. Delegated OAuth access tokens alone are
-reused in process until shortly before their reported expiry; credential-file
-changes, unreadable files and provider token refusals invalidate reuse.
+reused in process until shortly before their reported expiry. A credential-file
+fingerprint prevents reuse after credential changes; unreadable files deny access
+before reuse, and Directory HTTP 401/403 responses evict the cached token.
 
 An unsuspended member of any configured group keeps the existing staff row's
-role. Groups neither remap roles nor change staff powers. No matching group denies
-access; missing users, unavailable credentials, API errors, timeouts, unknown
-groups or malformed status/membership responses deny access. There is no fallback
-to the staff row alone when the Directory gate is enabled. Empty groups disable
+role. Groups neither remap roles nor change staff powers. Access is denied without
+a matching group, for missing users or unavailable credentials, or on an encountered
+API error, timeout, unknown group or malformed status/membership response. There
+is no fallback to the staff row alone when the Directory gate is enabled. Empty groups disable
 both live checks for the defaults-off rollout. Same-domain nested membership and
 provider changes follow Directory semantics and Google's propagation timing.
 Workspace/Cloud outage planning must account for the live fail-closed dependency.
-During the password transition, deactivate the staff row to revoke both sign-in
-paths. [Directory membership API](https://developers.google.com/workspace/admin/directory/reference/rest/v1/members/hasMember),
+[Directory membership API](https://developers.google.com/workspace/admin/directory/reference/rest/v1/members/hasMember),
 [Directory user-status API](https://developers.google.com/workspace/admin/directory/reference/rest/v1/users/get).
 
 Operator audit entries include `detail.oidc_assurance` containing the verified
@@ -915,9 +915,11 @@ Workspace and Cloud setup (captain/deployment owner):
 
 1. In the staff Google Cloud project, configure the OAuth consent audience for
    the workforce and create a **Web application** OAuth client. Register the
-   console's exact HTTPS `/api/auth/callback` redirect URI. Set issuer/client ID
-   on both services and the client secret only on the console. Configure the
-   trusted `CONSOLE_BASE_URL` and `OPERATOR_API_URL` for the deployment.
+   console's exact HTTPS `/api/auth/callback` redirect URI (for example,
+   `https://console.aequoros.com/api/auth/callback`; register
+   `http://localhost:3002/api/auth/callback` separately for local testing). Set
+   issuer/client ID on both services and the client secret only on the console.
+   Configure the trusted `CONSOLE_BASE_URL` and `OPERATOR_API_URL` for the deployment.
 2. In Workspace Admin → Security → Authentication → 2-Step Verification, require
    enrollment/enforcement for every staff organizational unit or policy group.
    Confirm every teammate is enrolled before enforcement, including staff
