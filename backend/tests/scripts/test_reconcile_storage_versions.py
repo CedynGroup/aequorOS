@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import json
+import os
+import socket
 from pathlib import Path
 from types import SimpleNamespace
 from typing import cast
@@ -14,6 +16,7 @@ from sqlalchemy import Engine
 from sqlalchemy.engine import URL, Connection
 from sqlalchemy.exc import DBAPIError, SQLAlchemyError
 
+from scripts import reconcile_storage_versions as reconciler
 from scripts.backup_storage import RestoredVersion, RestoreReport
 from scripts.dr_common import DisasterRecoveryError
 from scripts.reconcile_storage_versions import cli, load_mapping
@@ -24,9 +27,31 @@ PRIMARY_URL_VARIABLES = ("DATABASE_URL", "WORKER_DATABASE_URL", "OPERATOR_DATABA
 
 @pytest.fixture(autouse=True)
 def synthetic_primary_configuration(monkeypatch: pytest.MonkeyPatch) -> None:
-    for name in PRIMARY_URL_VARIABLES:
+    for name in (*PRIMARY_URL_VARIABLES, *(key for key in os.environ if key.startswith("PG"))):
         monkeypatch.delenv(name, raising=False)
     monkeypatch.setenv("DATABASE_URL", "postgresql://app:synthetic@primary.example/risk")
+
+    addresses = {
+        "primary.example": ("192.0.2.1",),
+        "other-primary.example": ("192.0.2.2",),
+        "restore.example": ("198.51.100.1",),
+        "primary": ("192.0.2.1",),
+        "primary-alias": ("192.0.2.1",),
+        "replica": ("192.0.2.2",),
+        "restore": ("198.51.100.1",),
+        "backup": ("198.51.100.2",),
+        "localhost": ("127.0.0.1", "::1"),
+    }
+
+    def resolve(host: str, _port: object, **_kwargs: object) -> list[tuple[object, ...]]:
+        if host.lower().rstrip(".") not in addresses:
+            raise socket.gaierror("Synthetic unresolved endpoint")
+        return [
+            (socket.AF_INET, socket.SOCK_STREAM, 6, "", (address, 0))
+            for address in addresses[host.lower().rstrip(".")]
+        ]
+
+    monkeypatch.setattr(socket, "getaddrinfo", resolve)
 
 
 def _report() -> RestoreReport:
@@ -339,3 +364,264 @@ def _database_cli(
             "synthetic",
         ],
     )
+
+
+@pytest.mark.parametrize(
+    "routing",
+    [
+        pytest.param(
+            ("postgresql://localhost/risk", "postgresql://127.0.0.1/risk", False),
+            id="loopback-alias",
+        ),
+        pytest.param(
+            ("postgresql://primary/risk", "postgresql://primary-alias/risk", False), id="dns-alias"
+        ),
+        pytest.param(
+            ("postgresql://[::1]/risk", "postgresql:///risk?host=restore&host=localhost", False),
+            id="fallback-dns-alias",
+        ),
+        pytest.param(
+            ("postgresql://192.0.2.1/risk", "postgresql://198.51.100.1/risk", True),
+            id="distinct-addresses",
+        ),
+        pytest.param(
+            ("postgresql://primary/risk", "postgresql://restore/risk?host=primary", False),
+            id="target-query-host",
+        ),
+        pytest.param(
+            ("postgresql://restore/risk?host=primary", "postgresql://primary/risk", False),
+            id="primary-query-host",
+        ),
+        pytest.param(
+            ("postgresql://primary:5432/risk", "postgresql://primary:6543/risk?port=5432", False),
+            id="target-query-port",
+        ),
+        pytest.param(
+            ("postgresql://primary:6543/risk?port=5432", "postgresql://primary:5432/risk", False),
+            id="primary-query-port",
+        ),
+        pytest.param(
+            ("postgresql://primary/risk", "postgresql://primary/restore?dbname=risk", False),
+            id="target-query-database",
+        ),
+        pytest.param(
+            ("postgresql://primary/restore?dbname=risk", "postgresql://primary/risk", False),
+            id="primary-query-database",
+        ),
+        pytest.param(
+            ("postgresql://primary/risk", "postgresql:///risk?host=restore&host=primary", False),
+            id="target-fallback-host",
+        ),
+        pytest.param(
+            ("postgresql:///risk?host=restore&host=primary", "postgresql://primary/risk", False),
+            id="primary-fallback-host",
+        ),
+        pytest.param(
+            (
+                "postgresql://primary:6543/risk",
+                "postgresql:///risk?host=restore:5432&host=primary:6543",
+                False,
+            ),
+            id="paired-fallback-ports",
+        ),
+        pytest.param(
+            (
+                "postgresql://primary/risk",
+                "postgresql:///risk?host=restore:6543&host=primary",
+                False,
+            ),
+            id="default-fallback-port",
+        ),
+        pytest.param(
+            ("postgresql://PRIMARY./risk", "postgresql://primary/risk", False),
+            id="dns-canonicalization",
+        ),
+        pytest.param(
+            ("postgresql://[::1]/risk", "postgresql://[0:0:0:0:0:0:0:1]/risk", False),
+            id="ipv6-canonicalization",
+        ),
+        pytest.param(
+            ("postgresql:///risk?host=/tmp/Primary", "postgresql:///risk?host=/tmp/Primary", False),
+            id="same-socket",
+        ),
+        pytest.param(
+            ("postgresql:///risk?host=primary", "postgresql:///risk?host=restore", True),
+            id="distinct-query-hosts",
+        ),
+        pytest.param(
+            (
+                "postgresql://primary/risk?host=primary",
+                "postgresql://primary/risk?host=restore",
+                True,
+            ),
+            id="distinct-query-overrides",
+        ),
+        pytest.param(
+            ("postgresql://primary:5432/risk", "postgresql://primary:5432/risk?port=6543", True),
+            id="distinct-query-ports",
+        ),
+        pytest.param(
+            ("postgresql://primary/risk", "postgresql://primary/risk?dbname=restore", True),
+            id="distinct-query-databases",
+        ),
+        pytest.param(
+            (
+                "postgresql:///risk?host=primary&host=replica",
+                "postgresql:///risk?host=restore&host=backup",
+                True,
+            ),
+            id="disjoint-fallback-hosts",
+        ),
+        pytest.param(
+            (
+                "postgresql://primary:5432/risk",
+                "postgresql:///risk?host=primary:6543&host=restore:5432",
+                True,
+            ),
+            id="distinct-paired-ports",
+        ),
+        pytest.param(
+            ("postgresql:///risk?host=/tmp/Primary", "postgresql:///risk?host=/tmp/primary", True),
+            id="case-sensitive-sockets",
+        ),
+    ],
+)
+def test_cli_compares_effective_postgres_targets(
+    routing: tuple[str, str, bool],
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    scalar, exit_transaction, dispose, args = _database_cli(tmp_path, monkeypatch)
+    scalar.side_effect = [True, 4]
+    factory = Mock(wraps=reconciler.create_engine)
+    monkeypatch.setattr(reconciler, "create_engine", factory)
+    primary, target, allowed = routing
+    monkeypatch.setenv("DATABASE_URL", primary)
+    monkeypatch.setenv("RESTORE_DATABASE_URL", target)
+
+    assert cli(args) == (0 if allowed else 1)
+
+    output = capsys.readouterr()
+    if allowed:
+        assert output.err == ""
+        assert json.loads(output.out)["reconciled_references"] == 4
+        factory.assert_called_once()
+        exit_transaction.assert_called_once_with(None, None, None)
+        dispose.assert_called_once_with()
+    else:
+        assert output.out == ""
+        assert output.err == (
+            f"{FAILURE} Refusing to operate on a protected production database. "
+            "Point at a dedicated restore target.\n"
+        )
+        factory.assert_not_called()
+        scalar.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    "routing",
+    [
+        pytest.param(
+            ("DATABASE_URL", "postgresql://unresolved.invalid/risk"), id="unresolved-primary"
+        ),
+        pytest.param(
+            ("RESTORE_DATABASE_URL", "postgresql://unresolved.invalid/risk"), id="unresolved-target"
+        ),
+        pytest.param(("DATABASE_URL", "postgresql:///risk?service=private"), id="primary-service"),
+        pytest.param(
+            ("RESTORE_DATABASE_URL", "postgresql:///risk?service=private"), id="target-service"
+        ),
+        pytest.param(
+            ("RESTORE_DATABASE_URL", "postgresql://restore/risk?hostaddr=192.0.2.1"),
+            id="target-hostaddr",
+        ),
+        pytest.param(("PGSERVICE", "private"), id="environment-service"),
+        pytest.param(("PGHOSTADDR", "192.0.2.1"), id="environment-hostaddr"),
+        pytest.param(("RESTORE_DATABASE_URL", "postgresql:///risk"), id="implicit-socket"),
+        pytest.param(("RESTORE_DATABASE_URL", "postgresql://restore"), id="implicit-database"),
+    ],
+)
+def test_cli_refuses_unproved_postgres_routing(
+    routing: tuple[str, str],
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    scalar, _exit_transaction, _dispose, args = _database_cli(tmp_path, monkeypatch)
+    factory = Mock(side_effect=AssertionError("Unproved connection attempted"))
+    monkeypatch.setattr(reconciler, "create_engine", factory)
+    monkeypatch.setenv(*routing)
+
+    assert cli(args) == 1
+
+    output = capsys.readouterr()
+    assert output.out == ""
+    assert output.err == f"{FAILURE} Explicit, comparable PostgreSQL routing is required.\n"
+    factory.assert_not_called()
+    scalar.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    "routing",
+    [
+        pytest.param(("postgresql:///risk", {"PGHOST": "primary"}), id="environment-host"),
+        pytest.param(("postgresql://primary", {"PGDATABASE": "risk"}), id="environment-database"),
+        pytest.param(("postgresql://primary/risk", {"PGPORT": "6543"}), id="environment-port"),
+        pytest.param(
+            ("postgresql:///risk?host=restore&host=primary", {"PGPORT": "6543"}),
+            id="blank-port-uses-compiled-default",
+        ),
+    ],
+)
+def test_cli_protects_postgres_environment_defaults(
+    routing: tuple[str, dict[str, str]],
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    scalar, _exit_transaction, _dispose, args = _database_cli(tmp_path, monkeypatch)
+    factory = Mock(side_effect=AssertionError("Protected connection attempted"))
+    monkeypatch.setattr(reconciler, "create_engine", factory)
+    target, environment = routing
+    for name, value in environment.items():
+        monkeypatch.setenv(name, value)
+    primary_port = "6543" if environment == {"PGPORT": "6543"} and "?" not in target else "5432"
+    monkeypatch.setenv("DATABASE_URL", f"postgresql://primary:{primary_port}/risk")
+    monkeypatch.setenv("RESTORE_DATABASE_URL", target)
+
+    assert cli(args) == 1
+
+    output = capsys.readouterr()
+    assert output.out == ""
+    assert "Refusing to operate on a protected production database." in output.err
+    factory.assert_not_called()
+    scalar.assert_not_called()
+
+
+def test_cli_protects_same_host_with_changing_dns_answers(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    scalar, _exit_transaction, _dispose, args = _database_cli(tmp_path, monkeypatch)
+    factory = Mock(side_effect=AssertionError("Protected connection attempted"))
+    monkeypatch.setattr(reconciler, "create_engine", factory)
+    resolver = Mock(
+        side_effect=[
+            [(socket.AF_INET, socket.SOCK_STREAM, 6, "", ("192.0.2.1", 0))],
+            [(socket.AF_INET, socket.SOCK_STREAM, 6, "", ("192.0.2.2", 0))],
+        ]
+    )
+    monkeypatch.setattr(socket, "getaddrinfo", resolver)
+    monkeypatch.setenv("DATABASE_URL", "postgresql://primary/risk")
+    monkeypatch.setenv("RESTORE_DATABASE_URL", "postgresql://primary/risk")
+
+    assert cli(args) == 1
+
+    output = capsys.readouterr()
+    assert output.out == ""
+    assert "Refusing to operate on a protected production database." in output.err
+    assert resolver.call_count == 2
+    factory.assert_not_called()
+    scalar.assert_not_called()

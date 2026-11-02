@@ -96,6 +96,15 @@ credentials off command lines and out of shell history. Configure at least one
 primary URL through `DATABASE_URL`, `WORKER_DATABASE_URL`, or `OPERATOR_DATABASE_URL`.
 Reconciliation refuses to open a target connection when none is populated. Keep
 every applicable primary URL set so targets matching any of them are refused.
+Comparison uses the psycopg driver's effective host, port and database, including
+query overrides and every fallback host/port pair. Missing URL values may come
+from `PGHOST`, `PGPORT` and `PGDATABASE`; empty explicit ports use libpq's compiled
+default. Implicit socket/database defaults, service-file routing and `hostaddr`
+routing are refused because their destinations cannot be compared safely. Supply
+explicit host/database routing for both the target and protected primary URLs.
+Hostnames are resolved before connecting; any overlapping address is refused, as
+is failed name resolution. Supply explicit numeric addresses when recovery DNS
+is unavailable. This endpoint guard does not require connecting to a lost primary.
 
 ```bash
 uv run python -m scripts.reconcile_storage_versions \

@@ -11,24 +11,106 @@ import argparse
 import json
 import os
 import re
+import socket
 import sys
+from ipaddress import ip_address
 from pathlib import Path
 from typing import cast
 
 from psycopg import Error as PostgresError
+from psycopg import pq
 from pydantic import TypeAdapter
 from sqlalchemy import create_engine, text
-from sqlalchemy.engine import Connection, make_url
+from sqlalchemy.dialects.postgresql.psycopg import PGDialect_psycopg
+from sqlalchemy.engine import URL, Connection, Dialect, make_url
 from sqlalchemy.exc import DBAPIError, SQLAlchemyError
 
 from app.db.session import role_bypasses_rls
 from scripts.backup_storage import RestoreReport
 from scripts.dr_common import (
+    PROTECTED_TARGET_REFUSAL,
     DisasterRecoveryError,
     load_env_file,
     protected_urls_from_env,
-    refuse_protected_target,
 )
+
+_ROUTING_REFUSAL = "Explicit, comparable PostgreSQL routing is required."
+
+
+def _host_addresses(host: str) -> frozenset[str]:
+    if host.startswith("/"):
+        return frozenset((str(Path(host).resolve()),))
+    if host.startswith("@"):
+        return frozenset((host,))
+    try:
+        return frozenset((str(ip_address(host)),))
+    except ValueError:
+        hostname = host.lower().rstrip(".")
+    try:
+        records = cast(
+            list[
+                tuple[
+                    object,
+                    object,
+                    object,
+                    object,
+                    tuple[str, int] | tuple[str, int, int, int],
+                ]
+            ],
+            socket.getaddrinfo(hostname, None, type=socket.SOCK_STREAM),
+        )
+    except OSError:
+        raise DisasterRecoveryError(_ROUTING_REFUSAL) from None
+    if not records:
+        raise DisasterRecoveryError(_ROUTING_REFUSAL)
+    # Keep the name as well: round-robin DNS answers must not make the same
+    # configured hostname appear distinct across two successive lookups.
+    return frozenset((hostname, *(str(ip_address(record[4][0])) for record in records)))
+
+
+def _database_targets(url: URL) -> frozenset[tuple[str, int, str]]:
+    """Compare the actual psycopg routing, including every fallback candidate.
+
+    Service files, hostaddr and implicit socket/database defaults can hide the
+    destination. Require explicit comparable routing instead of guessing it.
+    """
+    if url.get_backend_name() != "postgresql":
+        raise DisasterRecoveryError(_ROUTING_REFUSAL)
+    dialect = cast(Dialect, PGDialect_psycopg())
+    positional, parameters = cast(
+        tuple[list[object], dict[str, object]],
+        dialect.create_connect_args(url.set(drivername="postgresql+psycopg")),
+    )
+    if any(positional) or any(
+        key in parameters or os.getenv(f"PG{key.upper()}") for key in ("service", "hostaddr")
+    ):
+        raise DisasterRecoveryError(_ROUTING_REFUSAL)
+    host = parameters.get("host", os.getenv("PGHOST"))
+    database = parameters.get("dbname", os.getenv("PGDATABASE"))
+    if not isinstance(host, str) or not host or not isinstance(database, str) or not database:
+        raise DisasterRecoveryError(_ROUTING_REFUSAL)
+    default_port = next(
+        option.compiled.decode("ascii")
+        for option in pq.Conninfo.get_defaults()
+        if option.keyword == b"port" and option.compiled is not None
+    )
+    raw_port = parameters.get("port", os.getenv("PGPORT") or default_port)
+    if not isinstance(raw_port, (int, str)):
+        raise DisasterRecoveryError(_ROUTING_REFUSAL)
+    hosts = host.split(",")
+    ports = str(raw_port).split(",")
+    if len(ports) == 1:
+        ports *= len(hosts)
+    if len(hosts) != len(ports) or not all(hosts):
+        raise DisasterRecoveryError(_ROUTING_REFUSAL)
+    targets: set[tuple[str, int, str]] = set()
+    for candidate, port in zip(hosts, ports, strict=True):
+        # An explicit empty port/list entry uses libpq's compiled default, not PGPORT.
+        number = int(port or default_port)
+        if not 0 < number < 65536:
+            raise DisasterRecoveryError(_ROUTING_REFUSAL)
+        targets.update((address, number, database) for address in _host_addresses(candidate))
+    return frozenset(targets)
 
 
 def _unique_fields(pairs: list[tuple[str, object]]) -> dict[str, object]:
@@ -134,9 +216,13 @@ def main(argv: list[str] | None = None) -> int:
         raise DisasterRecoveryError(
             "At least one protected primary database URL must be configured."
         )
-    refuse_protected_target(target, protected)
-    report = load_mapping(args.mapping)
     target_url = make_url(target)
+    if target_url.get_backend_name() == "postgresql":
+        targets = _database_targets(target_url)
+        for primary in protected:
+            if targets & _database_targets(make_url(primary)):
+                raise DisasterRecoveryError(PROTECTED_TARGET_REFUSAL)
+    report = load_mapping(args.mapping)
     if target_url.get_backend_name() != "postgresql":
         raise DisasterRecoveryError("Recovery requires a PostgreSQL target.")
     engine = create_engine(target_url.set(drivername="postgresql+psycopg"))

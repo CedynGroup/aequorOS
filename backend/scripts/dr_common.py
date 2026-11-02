@@ -37,6 +37,9 @@ from urllib.parse import urlsplit
 
 # Tenant policies read this GUC; the restore-time isolation probe sets it.
 TENANT_GUC = "app.organization_id"
+PROTECTED_TARGET_REFUSAL = (
+    "Refusing to operate on a protected production database. Point at a dedicated restore target."
+)
 
 _DRIVER_PREFIX = re.compile(r"^postgresql\+\w+://")
 # Homebrew (macOS) and Debian/Ubuntu (server) client layouts, newest first.
@@ -76,11 +79,7 @@ def refuse_protected_target(target_url: str, protected: Iterable[str | None]) ->
     """Raise if ``target_url`` addresses any protected (production) database."""
     for candidate in protected:
         if candidate and candidate.strip() and same_database(target_url, candidate):
-            msg = (
-                "Refusing to operate on a protected production database. "
-                "Point at a dedicated restore target."
-            )
-            raise DisasterRecoveryError(msg)
+            raise DisasterRecoveryError(PROTECTED_TARGET_REFUSAL)
 
 
 def same_cluster(left: str, right: str) -> bool:
