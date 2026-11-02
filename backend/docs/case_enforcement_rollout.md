@@ -48,8 +48,9 @@ A restricted viewer cannot download a document or export a report merely by
 holding `view`.
 
 Confidential responses project copies of stored records. Raw case structured
-metadata, score inputs/rule details, finding details and value-bearing narrative,
-assessment inputs/errors, and calculation diagnostics require an independently
+metadata, score inputs/rule details, finding details and value-bearing narrative
+(summary, rationale and disposition reason), assessment inputs/errors, and
+calculation diagnostics require an independently
 complete restricted `view` binding, including on confidential mutation returns.
 Summary identity, status, scores, categories and counts remain available.
 Assessment and document-parse job polling also requires restricted `view`, with
@@ -63,39 +64,39 @@ No DATA or dashboard fix is included here.
 
 All paths have `/api/v1` prepended. C = confidential; R = restricted.
 
-| Routes | Permission | Sensitivity |
-| --- | --- | --- |
-| GET `/cases`, `/cases/summary`, `/cases/{case_id}`, `/cases/{case_id}/scores` | view | C |
-| POST `/cases` and `/cases/{case_id}/decisions` | create | C |
-| GET `/cases/{case_id}/decisions` | view | C |
-| PATCH `/cases/{case_id}`; POST its `/assign`, `/archive`; POST `/cases/bulk-actions` | edit | C |
-| GET `/findings`, `/findings/{finding_id}`, `/cases/{case_id}/findings`, `/assessments/{assessment_id}/findings` | view | C |
-| POST `/cases/{case_id}/findings` | create | C |
-| PATCH `/findings/{finding_id}` (disposition/status review only) | review | C |
-| GET `/findings/{finding_id}/evidence` | view | R |
-| POST `/documents/upload-request` | create | R |
-| POST `/documents/{document_id}/complete-upload`; DELETE `/documents/{document_id}` | edit | R |
-| GET `/documents/{document_id}`, its `/parse-status`, `/cases/{case_id}/documents` | view | R |
-| POST `/documents/{document_id}/parse` | run | R |
-| GET `/documents/{document_id}/download-url` | export | R |
-| POST `/assessments` | create | R |
-| GET `/assessments`, `/assessments/{assessment_id}` (includes input snapshot) | view | R |
-| POST `/assessments/{assessment_id}/run` | run | R |
-| GET `/assessments/{assessment_id}/runs`, `/assessment-runs/{run_id}` | view | C |
-| GET `/cases/{case_id}/financial-workspace`, `/financial-data/validation-issues` | view | R |
-| POST `/cases/{case_id}/financial-workspace/map`, `/financial-data/validate` | run | R |
-| POST financial-workspace `cash-flows`, `institutions`, `accounts`, `reporting-periods`, `balances`, `obligations`, `covenants` | create | R |
-| PATCH the seven financial resources above by their record ID | edit | R |
-| GET `/cases/{case_id}/scenarios`, `/scenarios/{scenario_id}`, `/scenarios/{scenario_id}/validation` | view | R |
-| GET `/cases/{case_id}/scenarios/readiness` | view | C |
-| POST `/cases/{case_id}/scenarios`, `/scenarios/initialize`, `/scenarios/{scenario_id}/copy`, `/scenarios/{scenario_id}/assumptions` | create | R |
-| PATCH `/cases/{case_id}/scenarios/{scenario_id}`, its `/assumptions/{assumption_id}`; POST its `/archive` | edit | R |
-| POST `/cases/{case_id}/scenarios/{scenario_id}/assumptions/{assumption_id}/review` | review | R |
-| GET `/cases/{case_id}/calculation-runs`, `/capital-projections` (summaries only) | view | C |
-| POST `/cases/{case_id}/calculation-runs`, its `/{run_id}/rerun`, `/capital-projections` | run | R |
-| GET `/cases/{case_id}/calculation-runs/{run_id}`, `/capital-projections/{projection_id}`, `/capital-summary`, `/capital-comparison`, `/liquidity/summary` | view | R |
-| POST `/cases/{case_id}/liquidity/findings/{finding_id}/review` | review | R |
-| GET `/cases/{case_id}/report` (JSON and HTML) | export | R |
+| Routes                                                                                                                                                    | Permission | Sensitivity |
+| --------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------- | ----------- |
+| GET `/cases`, `/cases/summary`, `/cases/{case_id}`, `/cases/{case_id}/scores`                                                                             | view       | C           |
+| POST `/cases` and `/cases/{case_id}/decisions`                                                                                                            | create     | C           |
+| GET `/cases/{case_id}/decisions`                                                                                                                          | view       | C           |
+| PATCH `/cases/{case_id}`; POST its `/assign`, `/archive`; POST `/cases/bulk-actions`                                                                      | edit       | C           |
+| GET `/findings`, `/findings/{finding_id}`, `/cases/{case_id}/findings`, `/assessments/{assessment_id}/findings`                                           | view       | C           |
+| POST `/cases/{case_id}/findings`                                                                                                                          | create     | C           |
+| PATCH `/findings/{finding_id}` (disposition/status review only)                                                                                           | review     | C           |
+| GET `/findings/{finding_id}/evidence`                                                                                                                     | view       | R           |
+| POST `/documents/upload-request`                                                                                                                          | create     | R           |
+| POST `/documents/{document_id}/complete-upload`; DELETE `/documents/{document_id}`                                                                        | edit       | R           |
+| GET `/documents/{document_id}`, its `/parse-status`, `/cases/{case_id}/documents`                                                                         | view       | R           |
+| POST `/documents/{document_id}/parse`                                                                                                                     | run        | R           |
+| GET `/documents/{document_id}/download-url`                                                                                                               | export     | R           |
+| POST `/assessments`                                                                                                                                       | create     | R           |
+| GET `/assessments`, `/assessments/{assessment_id}` (includes input snapshot)                                                                              | view       | R           |
+| POST `/assessments/{assessment_id}/run`                                                                                                                   | run        | R           |
+| GET `/assessments/{assessment_id}/runs`, `/assessment-runs/{run_id}`                                                                                      | view       | C           |
+| GET `/cases/{case_id}/financial-workspace`, `/financial-data/validation-issues`                                                                           | view       | R           |
+| POST `/cases/{case_id}/financial-workspace/map`, `/financial-data/validate`                                                                               | run        | R           |
+| POST financial-workspace `cash-flows`, `institutions`, `accounts`, `reporting-periods`, `balances`, `obligations`, `covenants`                            | create     | R           |
+| PATCH the seven financial resources above by their record ID                                                                                              | edit       | R           |
+| GET `/cases/{case_id}/scenarios`, `/scenarios/{scenario_id}`, `/scenarios/{scenario_id}/validation`                                                       | view       | R           |
+| GET `/cases/{case_id}/scenarios/readiness`                                                                                                                | view       | C           |
+| POST `/cases/{case_id}/scenarios`, `/scenarios/initialize`, `/scenarios/{scenario_id}/copy`, `/scenarios/{scenario_id}/assumptions`                       | create     | R           |
+| PATCH `/cases/{case_id}/scenarios/{scenario_id}`, its `/assumptions/{assumption_id}`; POST its `/archive`                                                 | edit       | R           |
+| POST `/cases/{case_id}/scenarios/{scenario_id}/assumptions/{assumption_id}/review`                                                                        | review     | R           |
+| GET `/cases/{case_id}/calculation-runs`, `/capital-projections` (summaries only)                                                                          | view       | C           |
+| POST `/cases/{case_id}/calculation-runs`, its `/{run_id}/rerun`, `/capital-projections`                                                                   | run        | R           |
+| GET `/cases/{case_id}/calculation-runs/{run_id}`, `/capital-projections/{projection_id}`, `/capital-summary`, `/capital-comparison`, `/liquidity/summary` | view       | R           |
+| POST `/cases/{case_id}/liquidity/findings/{finding_id}/review`                                                                                            | review     | R           |
+| GET `/cases/{case_id}/report` (JSON and HTML)                                                                                                             | export     | R           |
 
 These are 74 supported method-routes plus the two public no-op catch-alls. The
 three static taxonomy endpoints are separate from this 76-route census.
@@ -130,14 +131,14 @@ this table. All rows carry that user's UUID, their exact organization ID,
 `principal_type=human`, `institution_scope=organization`, `institution_id=NULL`,
 `module_scope=risk`, `data_scope_kind=all`, active status and approved validity.
 
-| Confirmed duty | role_bundle | sensitivity_scope | Expected denials without another complete row |
-| --- | --- | --- | --- |
-| Case/queue reader | viewer | confidential | financial/documents/evidence, all mutations, exports |
-| Financial/document/evidence reader | viewer | restricted | confidential views, mutations, exports |
-| Case preparation and triage | analyst | confidential | restricted work and all review actions |
-| Financial preparation, parsing, calculation and exports | analyst | restricted | confidential work and all review actions |
-| Finding disposition reviewer | approver | confidential | preparation/run/export and restricted work |
-| Assumption/cash-flow finding reviewer | approver | restricted | preparation/run/export and confidential work |
+| Confirmed duty                                          | role_bundle | sensitivity_scope | Expected denials without another complete row        |
+| ------------------------------------------------------- | ----------- | ----------------- | ---------------------------------------------------- |
+| Case/queue reader                                       | viewer      | confidential      | financial/documents/evidence, all mutations, exports |
+| Financial/document/evidence reader                      | viewer      | restricted        | confidential views, mutations, exports               |
+| Case preparation and triage                             | analyst     | confidential      | restricted work and all review actions               |
+| Financial preparation, parsing, calculation and exports | analyst     | restricted        | confidential work and all review actions             |
+| Finding disposition reviewer                            | approver    | confidential      | preparation/run/export and restricted work           |
+| Assumption/cash-flow finding reviewer                   | approver    | restricted        | preparation/run/export and confidential work         |
 
 Confidential and restricted duties require separate rows unless broad `all`
 sensitivity is explicitly approved. Grant administration must enforce its existing
@@ -165,8 +166,8 @@ storage, parsing, financial edits, assumptions, calculations and state transitio
 The object-reference catalogue retains its routes and explicit organization RISK
 positive-control grants. The shared access-impact report now exposes case tuples.
 
-No dashboard component or report HTML template changes in this slice.
-no user-visible change - screenshots not applicable
+No dashboard component or report HTML template changes in this slice; browser
+screenshots are not applicable to this API-only cutover.
 
 Before runtime activation, retain the target demo inventory, approved exact rows,
 expected denials, new-session verification and deployment evidence. None of those

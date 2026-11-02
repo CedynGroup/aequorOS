@@ -276,6 +276,9 @@ provenance fields. The dashboard's current capabilities are documented in
 
 ### Legacy case vertical
 
+Required authority for case reads, mutations, documents, job polling and exports
+is defined by the [case workspace rollout contract](docs/case_enforcement_rollout.md).
+
 Document deletion commits the document tombstone, the stored object's
 `pending_deletion` status, the audit event and a `document_delete` job atomically.
 The existing deleted response means logical deletion: downloads, parsing and
@@ -297,10 +300,9 @@ See [`documents.py`](app/case/service/documents.py) and the
 Canonical financial data is read with
 `GET /api/v1/cases/{case_id}/financial-workspace`. Resource-specific `POST` and
 `PATCH` routes below that path support institutions, accounts, reporting
-periods, balances, cash flows, obligations, and covenants. These mutations
-require an authenticated mutation-capable bearer principal; each request body
-requires a non-empty `reason`. Successful responses contain the updated `record` and the case's
-refreshed `validation` state. The request and response schemas live in
+periods, balances, cash flows, obligations, and covenants. Each mutation request
+body requires a non-empty `reason`. Successful responses contain the updated
+`record` and the case's refreshed `validation` state. The request and response schemas live in
 [`app/case/schemas/financial_workspace.py`](app/case/schemas/financial_workspace.py);
 [`app/case/service/financial_canonical_edits.py`](app/case/service/financial_canonical_edits.py) owns
 correction-history behavior.
@@ -314,9 +316,9 @@ conventions are owned by [CODEBASE_CONVENTIONS.md](../CODEBASE_CONVENTIONS.md#ap
 Case scenarios are read from `GET /api/v1/cases/{case_id}/scenarios`. Initialize
 the baseline and downside defaults with `POST .../scenarios/initialize`, or use
 the resource-specific scenario, copy, archive, assumption, and review routes
-below that path. All mutations require an authenticated mutation-capable bearer
-principal and a non-empty `reason`. An active scenario is calculation-ready only when it has a non-null,
-reviewed assumption in each required category: growth, expenses, cash-flow
+below that path. All mutations require a non-empty `reason`. An active scenario
+is calculation-ready only when it has a non-null, reviewed assumption in each
+required category: growth, expenses, cash-flow
 timing, credit usage, and repayment behavior. Editing or copying an assumption
 resets its review state to `draft`. Mutation responses include the scenario's
 refreshed validation and the case's refreshed readiness state.
@@ -337,8 +339,7 @@ defaults to today.
 Rerunning creates a new run for the original scenario using current canonical
 financial data and reviewed assumptions. Its body may be `{}`; omitted fields
 reuse the original period count and default the as-of date to today, while
-provided fields override those values. Both mutations require an authenticated
-mutation-capable bearer principal.
+provided fields override those values.
 
 The first engine executes synchronously, but commits its `queued` and `running`
 states before calculation. A `201` response contains the final persisted run,
@@ -367,9 +368,9 @@ GET  /api/v1/cases/{case_id}/capital-summary
 GET  /api/v1/cases/{case_id}/capital-comparison
 ```
 
-Creating a projection requires `calculation_run_id` and an authenticated
-mutation-capable bearer principal. The run must be successful and belong to an active scenario in the
-same case and tenant. Each attempt is immutable and stores the run input hash,
+Creating a projection requires `calculation_run_id`. The run must be successful
+and belong to an active scenario in the same case and tenant. Each attempt is
+immutable and stores the run input hash,
 engine version, reporting currency, lifecycle state, period indicators, and any
 named failure diagnostic. The history route is newest-first and supports
 `limit` (1-100) and `offset`; the summary route returns the latest successful
@@ -414,8 +415,8 @@ POST /api/v1/cases/{case_id}/liquidity/findings/{finding_id}/review
 ```
 
 The body action is `acknowledge` or `dismiss`; dismissal requires a non-empty
-reason. Review requires an authenticated mutation-capable bearer principal, records audit events, and is
-rejected for terminal findings or findings belonging to archived scenarios.
+reason. Review records audit events and is rejected for terminal findings or
+findings belonging to archived scenarios.
 The generic findings update endpoint does not mutate liquidity workflow
 findings. A newer successful run supersedes open findings from the previous run
 for that scenario without altering acknowledged or dismissed history.
