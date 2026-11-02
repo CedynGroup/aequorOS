@@ -13,9 +13,15 @@ const evidenceDir = process.env.E2E_EVIDENCE_DIR;
 const apiEvidenceName =
   process.env.E2E_AUTHORITY_EVIDENCE_NAME ?? "data-authority-api.json";
 const transcript: unknown[] = [];
-async function api(role: string, route: string, method = "GET", data?: object) {
+async function api(
+  role: string,
+  route: string,
+  method = "GET",
+  data?: object,
+  bankId = "BK-SAMP0001",
+) {
   const response = await fetch(
-    `${E2E_API_ORIGIN}/api/v1/banks/BK-SAMP0001/${route}`,
+    `${E2E_API_ORIGIN}/api/v1/banks/${bankId}/${route}`,
     {
       method,
       headers: {
@@ -26,7 +32,14 @@ async function api(role: string, route: string, method = "GET", data?: object) {
     },
   );
   const body = await response.json();
-  transcript.push({ role, method, route, status: response.status, body });
+  transcript.push({
+    role,
+    bankId,
+    method,
+    route,
+    status: response.status,
+    body,
+  });
   if (evidenceDir)
     writeFileSync(
       path.join(evidenceDir, apiEvidenceName),
@@ -326,39 +339,6 @@ test.describe("exact human DATA grants", () => {
     expect((await api("invite_fresh", factRoute)).status).toBe(200);
   });
 
-  test("restricted RUN activates validated data while missing engine grants and missing data refuse without writes", async () => {
-    const periods = await api("grant_member", "reporting-periods");
-    const asOf = periods.body.periods[0].period_end;
-    const before = counts();
-    const missingEngine = await api(
-      "invite_fresh",
-      "data-activations",
-      "POST",
-      {
-        as_of_date: asOf,
-        reason: "Missing per-engine grants must fail before derivation",
-        run_calculations: true,
-      },
-    );
-    expect(missingEngine.status).toBe(403);
-    expect(counts()).toEqual(before);
-    const missingData = await api("invite_fresh", "data-activations", "POST", {
-      as_of_date: "2099-01-01",
-      reason: "Missing successful data must refuse",
-      run_calculations: false,
-    });
-    expect(missingData.status).toBe(409);
-    expect(counts()).toEqual(before);
-    const activated = await api("invite_fresh", "data-activations", "POST", {
-      as_of_date: asOf,
-      reason: "Activate only the disposable accepted book",
-      run_calculations: false,
-    });
-    expect(activated.status).toBe(201);
-    expect(activated.body.facts_created).toBeGreaterThan(0);
-    expect(activated.body.runs).toEqual([]);
-  });
-
   test("a confidential batch reader sees withheld diagnostics rather than false validation success", async ({
     browser,
   }) => {
@@ -459,6 +439,135 @@ test.describe("exact human DATA grants", () => {
     expect(requests).toEqual([]);
     await shot(page, "batch-confidential-diagnostics-unavailable");
     await reader.close();
+  });
+});
+
+test.describe("isolated DATA activation", () => {
+  test.use({
+    storyConfig: {
+      ownedTenant: true,
+      roles: ["admin", "analyst", "invite_fresh"],
+      bindings: [
+        {
+          role: "invite_fresh",
+          bundle: "analyst",
+          module: "data",
+          sensitivity: "restricted",
+        },
+      ],
+    },
+  });
+
+  test("restricted RUN activates validated data while missing engine grants and missing data refuse without writes", async ({
+    storyIdentity,
+  }) => {
+    const bankApi = (
+      role: string,
+      route: string,
+      method = "GET",
+      data?: object,
+    ) => api(role, route, method, data, storyIdentity.bankId);
+    const asOf = "2026-03-15";
+    // Activation replaces a period's facts. Own the book so the shared forecast
+    // and stress journeys keep their independently checked aggregate snapshot.
+    const mapping = await bankApi("analyst", "mapping-configs", "POST", {
+      source_system: "EXCEL_CSV",
+      name: "Isolated activation journey",
+      activate: true,
+      reason: "Prepare this story's accepted book",
+      config: {
+        field_mappings: {
+          position: {
+            source_table: "positions",
+            fields: {
+              source_reference: "source_reference",
+              position_type: "position_type",
+              currency: "currency",
+              balance: "balance",
+              interest_rate: "interest_rate",
+            },
+          },
+        },
+        product_mappings: {},
+      },
+    });
+    expect(mapping.status).toBe(200);
+    const form = new FormData();
+    form.set(
+      "file",
+      new Blob([
+        "source_reference,position_type,currency,balance,interest_rate\nACT-LOAN,LOAN,GHS,100,0.1\nACT-DEPOSIT,DEPOSIT,GHS,100,0.05\n",
+      ]),
+      "positions.csv",
+    );
+    const upload = await fetch(
+      `${E2E_API_ORIGIN}/api/v1/banks/${storyIdentity.bankId}/ingestion-uploads`,
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${await mintBackendToken("invite_fresh")}`,
+        },
+        body: form,
+      },
+    );
+    expect(upload.status).toBe(201);
+    const staged = await upload.json();
+    const ingested = await bankApi(
+      "invite_fresh",
+      "ingestion-batches",
+      "POST",
+      {
+        source_system: "EXCEL_CSV",
+        mapping_config_id: mapping.body.id,
+        location: staged.location,
+        as_of_date: asOf,
+        reason: "Validate this story's balanced book before activation",
+      },
+    );
+    expect(ingested.status).toBe(201);
+    expect(ingested.body.batch).toMatchObject({
+      status: "accepted",
+      records_accepted: 2,
+      records_error: 0,
+    });
+    const before = counts();
+    const missingEngine = await bankApi(
+      "invite_fresh",
+      "data-activations",
+      "POST",
+      {
+        as_of_date: asOf,
+        reason: "Missing per-engine grants must fail before derivation",
+        run_calculations: true,
+      },
+    );
+    expect(missingEngine.status).toBe(403);
+    expect(counts()).toEqual(before);
+    const missingData = await bankApi(
+      "invite_fresh",
+      "data-activations",
+      "POST",
+      {
+        as_of_date: "2099-01-01",
+        reason: "Missing successful data must refuse",
+        run_calculations: false,
+      },
+    );
+    expect(missingData.status).toBe(409);
+    expect(counts()).toEqual(before);
+    const activated = await bankApi(
+      "invite_fresh",
+      "data-activations",
+      "POST",
+      {
+        as_of_date: asOf,
+        reason: "Activate only the disposable accepted book",
+        run_calculations: false,
+      },
+    );
+    expect(activated.status).toBe(201);
+    expect(activated.body.facts_created).toBeGreaterThan(0);
+    expect(activated.body.runs).toEqual([]);
   });
 });
 
