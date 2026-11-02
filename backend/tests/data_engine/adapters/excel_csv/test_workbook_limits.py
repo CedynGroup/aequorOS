@@ -191,6 +191,19 @@ def _replace_sheet(path: Path, content: bytes) -> None:
             archive.writestr(name, body)
 
 
+def _replace_sheet_target(path: Path, target: str) -> None:
+    """Point the workbook's first sheet relationship at ``target``."""
+    with ZipFile(path) as archive:
+        parts = {name: archive.read(name) for name in archive.namelist()}
+    rels = ElementTree.fromstring(parts["xl/_rels/workbook.xml.rels"])
+    relationship = rels[0]
+    relationship.set("Target", target)
+    parts["xl/_rels/workbook.xml.rels"] = ElementTree.tostring(rels)
+    with ZipFile(path, "w", compression=ZIP_DEFLATED) as archive:
+        for name, body in parts.items():
+            archive.writestr(name, body)
+
+
 def _active_sheet(workbook: openpyxl.Workbook) -> Worksheet:
     sheet = workbook.active
     assert sheet is not None  # a fresh Workbook always has an active sheet
@@ -206,3 +219,35 @@ def _positions_workbook(path: Path, *, rows: int) -> Path:
         sheet.append([f"LN-{index:05d}", index])
     workbook.save(path)
     return path
+
+
+@pytest.mark.parametrize(
+    "target",
+    ["worksheets/sheet1.xml", "./worksheets/sheet1.xml", "/xl/worksheets/sheet1.xml"],
+    ids=["relative", "dot-relative", "package-absolute"],
+)
+def test_every_way_a_producer_names_a_sheet_part_resolves(tmp_path: Path, target: str) -> None:
+    """Three spellings of the same part; resolving only one dropped every merge.
+
+    A workbook written by a producer that uses ``./`` or a leading slash used to
+    resolve to ``xl/./worksheets/…``, fail the archive lookup, and be read with
+    no merges at all — so a title banner stopped spreading and the header row
+    under it was analysed as data.
+    """
+    path = excel_fixtures.build_merged_headers(tmp_path / "target.xlsx")
+    _replace_sheet_target(path, target)
+
+    (sheet,) = read_source(path)
+
+    assert sheet.merged_ranges == [(1, 1, 1, 5)]
+
+
+def test_an_unresolvable_sheet_part_is_refused_rather_than_read_without_merges(
+    tmp_path: Path,
+) -> None:
+    """Fail closed: a workbook that cannot be read with its shape is not read."""
+    path = excel_fixtures.build_merged_headers(tmp_path / "missing.xlsx")
+    _replace_sheet_target(path, "worksheets/absent.xml")
+
+    with pytest.raises(WorkbookReadError, match="sheet part"):
+        read_source(path)

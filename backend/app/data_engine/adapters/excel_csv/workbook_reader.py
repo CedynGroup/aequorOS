@@ -10,6 +10,7 @@ silently computed.
 from __future__ import annotations
 
 import csv
+import posixpath
 import zipfile
 from collections.abc import Iterator
 from dataclasses import dataclass
@@ -120,10 +121,13 @@ def _merged_ranges_by_sheet(path: Path) -> dict[str, list[MergedRange]]:
     covered cells either way, and :func:`fill_merged_cells` is what spreads the
     anchor across them.
 
-    Returns an empty mapping rather than raising when the archive is not shaped
-    the way the specification says — the caller has already opened the same
-    file through openpyxl, so a structure openpyxl accepted but this does not is
-    a merged-range detail, not a reason to refuse a workbook that reads fine.
+    Merges are part of the answer, not a nicety: without them
+    :func:`fill_merged_cells` cannot spread a title banner, and the header row
+    beneath it is misread as data. So a workbook whose sheet parts cannot be
+    resolved is REFUSED rather than silently read without its merges — a
+    workbook that reads with the wrong shape is worse than one that says it
+    cannot be read. Only an archive that is not a zip at all is left to
+    openpyxl's own "cannot open workbook" wording, which is better than ours.
     """
     try:
         with zipfile.ZipFile(path) as archive:
@@ -132,10 +136,13 @@ def _merged_ranges_by_sheet(path: Path) -> dict[str, list[MergedRange]]:
             return {
                 title: _merge_ranges(archive, part, cells_used=cells_used)
                 for title, part in parts.items()
-                if part
             }
-    except (zipfile.BadZipFile, KeyError, OSError):
+    except zipfile.BadZipFile:
         return {}
+    except (KeyError, OSError) as exc:
+        raise WorkbookReadError(
+            f"Workbook {path.name} declares a sheet part it does not contain: {exc}"
+        ) from exc
 
 
 def _sheet_parts(archive: zipfile.ZipFile) -> dict[str, str]:
@@ -144,18 +151,39 @@ def _sheet_parts(archive: zipfile.ZipFile) -> dict[str, str]:
     Titles live in ``xl/workbook.xml`` and point at parts through relationship
     ids resolved in ``xl/_rels/workbook.xml.rels``; neither is in document
     order, so this is the only reliable mapping.
+
+    Targets are canonicalized against the package root the way openpyxl does it,
+    because a producer may write ``worksheets/sheet1.xml``, ``./worksheets/…`` or
+    ``/xl/worksheets/…`` and all three name the same part. Resolving only the
+    first form silently lost every sheet's merges for the other two.
     """
     workbook = ElementTree.fromstring(archive.read("xl/workbook.xml"))
     relationships = ElementTree.fromstring(archive.read("xl/_rels/workbook.xml.rels"))
     targets = {element.get("Id", ""): element.get("Target", "") for element in relationships}
+    available = set(archive.namelist())
     parts: dict[str, str] = {}
     for sheet in workbook.iter(f"{_MAIN_NS}sheet"):
         title = sheet.get("name")
         target = targets.get(sheet.get(f"{_REL_NS}id", ""), "")
         if not title or not target:
             continue
-        parts[title] = target.lstrip("/") if target.startswith("/") else f"xl/{target}"
+        parts[title] = _part_name(target, available)
     return parts
+
+
+def _part_name(target: str, available: set[str]) -> str:
+    """The archive entry a relationship target names, or ``KeyError``.
+
+    A target is either package-absolute (``/xl/…``) or relative to the part that
+    declares it, which for ``xl/workbook.xml`` means relative to ``xl/``.
+    """
+    if target.startswith("/"):
+        candidate = posixpath.normpath(target.lstrip("/"))
+    else:
+        candidate = posixpath.normpath(posixpath.join("xl", target))
+    if candidate in available:
+        return candidate
+    raise KeyError(target)
 
 
 def _merge_ranges(

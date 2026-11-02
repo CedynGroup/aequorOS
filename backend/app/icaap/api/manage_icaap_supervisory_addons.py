@@ -17,6 +17,7 @@ from fastapi.responses import StreamingResponse
 
 from app.api.deps import DbSession, IcaapAddonApprove, IcaapCreate, IcaapView
 from app.core.config import get_settings
+from app.core.content_disposition import attachment_headers
 from app.icaap.schemas.risk_capital import (
     IcaapReason,
     IcaapSupervisoryAddonListRead,
@@ -194,5 +195,5 @@ def download_icaap_supervisory_addon_letter(
     return StreamingResponse(
         stream,
         media_type=row.letter_media_type,
-        headers={"Content-Disposition": f'attachment; filename="{row.letter_original_filename}"'},
+        headers=attachment_headers(row.letter_original_filename),
     )

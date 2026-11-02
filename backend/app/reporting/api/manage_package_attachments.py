@@ -23,6 +23,7 @@ from fastapi.responses import StreamingResponse
 
 from app.api.deps import DbSession, PackageEdit, PackageView
 from app.core.config import get_settings
+from app.core.content_disposition import attachment_headers
 from app.data_engine.public import IngestionStorage
 from app.icaap.api.manage_icaap_attachments import IcaapStorage
 from app.reporting.schemas.packages import (
@@ -191,7 +192,7 @@ def download_package_attachment(  # noqa: PLR0913 - path + session + access + st
     return StreamingResponse(
         stream,
         media_type=row.media_type,
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        headers=attachment_headers(filename),
     )
 
 
