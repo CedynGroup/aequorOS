@@ -24,6 +24,7 @@ from collections.abc import Sequence
 from datetime import date, datetime
 from decimal import Decimal
 from typing import Any
+from xml.sax.saxutils import escape
 
 from openpyxl.utils import get_column_letter
 from openpyxl.utils.cell import column_index_from_string, coordinate_from_string
@@ -42,6 +43,7 @@ from reportlab.platypus import (
 )
 
 from app.reporting.service.exports.pdf import AttestedOfficer
+from app.reporting.service.exports.pdf_parts import escape_text
 
 from .engine import FormResult, scale_for_export
 from .layout import SheetLayout
@@ -360,7 +362,14 @@ def _cover(  # noqa: PLR0913
         ("Package", package_line),
     ]
     rows = [
-        [Paragraph(f"<b>{label}</b>", _CELL), Paragraph(str(value), _CELL)]
+        [
+            Paragraph(f"<b>{label}</b>", _CELL),
+            # Escaped, not interpolated: the institution name is operator-set
+            # text stored on the bank, so `<img src=…>` here would be a fetch
+            # inside the filed document. Escaped rather than run through
+            # ``escape_text`` so a template's own glyphs are never substituted.
+            Paragraph(escape(str(value)), _CELL),
+        ]
         for label, value in pairs
     ]
     table = Table(rows, colWidths=[45 * mm, 115 * mm])
@@ -481,9 +490,9 @@ def _officers_of_record(officers: Sequence[AttestedOfficer]) -> list[Any]:
         )
         rows.append(
             [
-                Paragraph(officer.name, _CELL),
-                Paragraph(officer.title or "—", _CELL),
-                Paragraph(officer.at, _CELL),
+                Paragraph(escape_text(officer.name), _CELL),
+                Paragraph(escape_text(officer.title or "—"), _CELL),
+                Paragraph(escape_text(officer.at), _CELL),
             ]
         )
     if not rows:

@@ -17,6 +17,7 @@ import io
 from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Any
+from xml.sax.saxutils import escape
 
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4, landscape
@@ -45,6 +46,7 @@ from app.reporting.service.exports.pdf_parts import (
 from app.reporting.service.exports.pdf_parts import (
     invariant_canvas as _invariant_canvas,
 )
+from app.reporting.service.exports.text import xml_safe
 from app.reporting.service.templates import (
     ColumnSpec,
     RenderedCell,
@@ -152,7 +154,17 @@ def _cover(rendered: RenderedReturn) -> list[Any]:
         "Generated at",
     )
     rows = [
-        [Paragraph(f"<b>{label}</b>", _CELL), Paragraph(pairs.get(label, ""), _CELL)]
+        [
+            Paragraph(f"<b>{label}</b>", _CELL),
+            # The citation is code-owned template text, like the title and
+            # notes. Escape snapshot metadata without changing its glyphs.
+            Paragraph(
+                pairs.get(label, "")
+                if label == "Directive citation"
+                else escape(pairs.get(label, "")),
+                _CELL,
+            ),
+        ]
         for label in cover_fields
     ]
     table = Table(rows, colWidths=[42 * mm, 120 * mm])
@@ -225,7 +237,39 @@ def _signing_block() -> Table:
 #: recognisably the same document. The Signature width is redistributed rather
 #: than left as a gap.
 _RECORD_COLUMN_WIDTHS: tuple[float, ...] = (128 + 79, 128 + 79, 79.2)
-_RECORD_ROW_HEIGHT = 16
+
+#: Floor for the value row, and the clearance a wrapped value keeps above the
+#: rule beneath it. A value that wraps in its column is taller than the floor,
+#: so the row grows to its own height instead of running into its labels.
+_RECORD_MIN_ROW_HEIGHT = 16
+_RECORD_ROW_CLEARANCE = 2
+
+
+def _single_line(value: str) -> str:
+    """``value`` with its line breaks collapsed, for a one-line ruled field.
+
+    A display name may hold line breaks, and every one of them would add a line
+    to a row that cannot be taller than the page: 200 characters spent on single
+    characters and newlines makes ``_record_row_height`` exceed the frame, and
+    reportlab then refuses the document outright rather than printing it. The
+    field is one ruled line — name, designation, date — so a break reads as the
+    space it is, and no value can grow the row past a normally wrapped name.
+
+    ``xml_safe`` runs first because reportlab's paragraph markup — and therefore
+    ``escape_text``, which measures the row — counts the vertical tab and form
+    feed of a pasted document as line breaks too.
+    """
+    normalized = xml_safe(value).replace("\r\n", "\n").replace("\r", "\n")
+    return " ".join(normalized.split("\n")).strip()
+
+
+def _record_row_height(values: Sequence[str]) -> float:
+    """The value row's height: the floor, or the tallest value's own height."""
+    tallest = _RECORD_MIN_ROW_HEIGHT
+    for value, width in zip(values, _RECORD_COLUMN_WIDTHS, strict=True):
+        _, height = Paragraph(escape_text(value), _BODY).wrap(width - _SIGNING_COLUMN_GUTTER, 0)
+        tallest = max(tallest, height + _RECORD_ROW_CLEARANCE)
+    return tallest
 
 
 def _record_block(officer: AttestedOfficer) -> Table:
@@ -234,21 +278,26 @@ def _record_block(officer: AttestedOfficer) -> Table:
     Not a different layout — the SAME block with the Signature column removed
     and the three remaining ones filled in. An installation that does not
     collect signatures still files a return that says who prepared, reviewed
-    and released it, in the shape BoG's form asks for.
+    and released it, in the shape BoG's form asks for. Each field is ONE ruled
+    line: a stored line break is collapsed rather than drawn as a new line, and
+    the row grows only as far as the text wraps (``_single_line``).
     """
     labels = ("Name", "Designation", "Date")
+    # Escaped, not interpolated: the name is whichever user set their own
+    # display name, and reportlab's Paragraph reads XML-like markup — including
+    # an <img src=…> it fetches server-side while building the document of
+    # record.
+    values = tuple(
+        _single_line(value) for value in (officer.name, officer.title or "—", officer.at)
+    )
     body = [
-        [
-            Paragraph(officer.name, _BODY),
-            Paragraph(officer.title or "—", _BODY),
-            Paragraph(officer.at, _BODY),
-        ],
+        [Paragraph(escape_text(value), _BODY) for value in values],
         [Paragraph(label, _FIELD_LABEL) for label in labels],
     ]
     table = Table(
         body,
         colWidths=list(_RECORD_COLUMN_WIDTHS),
-        rowHeights=[_RECORD_ROW_HEIGHT, _SIGNING_LABEL_HEIGHT],
+        rowHeights=[_record_row_height(values), _SIGNING_LABEL_HEIGHT],
     )
     table.setStyle(
         TableStyle(
