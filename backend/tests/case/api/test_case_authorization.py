@@ -10,8 +10,9 @@ import pytest
 from fastapi import FastAPI
 from fastapi.routing import APIRoute
 from fastapi.testclient import TestClient
+from hypothesis import example, given
 from pydantic import TypeAdapter
-from sqlalchemy import delete, func, select
+from sqlalchemy import Connection, delete, func, select
 from sqlalchemy.orm import Session
 
 from app.case.schemas.assessments import AssessmentRead, AssessmentRunRead, RunResponse
@@ -35,6 +36,8 @@ from app.models import CalculationRun, Document, Job, RiskCase, RiskFinding
 from app.models.audit_event import AuditEvent
 from app.schemas.common import ErrorResponse, JsonObject
 from app.schemas.jobs import JobRead
+from tests.case.testing.authorization_matrix import CASE_OPERATIONS, permits
+from tests.case.testing.generators import CaseBinding, case_binding_sets
 from tests.conftest import FakeStorage
 from tests.support.api_factories import ApiFactories
 from tests.support.helpers import ORG_1, ORG_2, USER_1, headers
@@ -860,3 +863,96 @@ def test_case_job_polling_uses_current_restricted_authority(
     assert db_client.get(f"/api/v1/jobs/{document.id}", headers=headers()).status_code == 404
     grant(db_session, RoleBundle.VIEWER, SensitivityScope.RESTRICTED)
     assert db_client.get(f"/api/v1/jobs/{document.id}", headers=headers()).status_code == 200
+
+
+@pytest.mark.usefixtures("unbound")
+def test_generated_binding_sets_match_case_http_matrix(
+    db_client: TestClient, db_session: Session
+) -> None:
+    # Ratchet the executable route catalogue: a new route must receive an
+    # independent operation-matrix expectation, rather than silently going untested.
+    app = cast(FastAPI, db_client.app)
+    actual = {
+        (method, route.path.removeprefix("/api/v1"))
+        for route in app.routes
+        if isinstance(route, APIRoute)
+        and route.endpoint.__module__.startswith("app.case.api.")
+        and route.include_in_schema
+        and not route.endpoint.__module__.endswith(("list_taxonomy", "list_case_taxonomy"))
+        for method in route.methods
+    }
+    assert actual == {(row.method, row.path) for row in CASE_OPERATIONS}
+    fixture_bank = bank(db_session)
+    db_session.commit()
+    connection = db_session.get_bind()
+    assert isinstance(connection, Connection)
+
+    @given(bindings=case_binding_sets())
+    @example(bindings=[])
+    @example(bindings=[CaseBinding(RoleBundle.ANALYST)])
+    @example(bindings=[CaseBinding(RoleBundle.APPROVER)])
+    @example(
+        bindings=[
+            CaseBinding(RoleBundle.ANALYST, ModuleScope.CAPITAL),
+            CaseBinding(RoleBundle.VIEWER, sensitivity=SensitivityScope.CONFIDENTIAL),
+        ]
+    )
+    def check(bindings: list[CaseBinding]) -> None:
+        # Both the direct session and every HTTP request share this per-example
+        # savepoint. Request commits cannot leak grants, reads or audit rows into
+        # the next generated example (or a shrunk replay).
+        example_transaction = connection.begin_nested()
+        try:
+            with Session(bind=connection, join_transaction_mode="create_savepoint") as db:
+                db.info["organization_id"] = ORG_1
+                for binding in bindings:
+                    row = grant(
+                        db,
+                        binding.bundle,
+                        binding.sensitivity,
+                        module=binding.module,
+                        bank_id=fixture_bank
+                        if binding.institution is InstitutionScope.INSTITUTION
+                        else None,
+                    )
+                    if binding.lifecycle == "future":
+                        row.valid_from = utc_now() + timedelta(days=1)
+                    elif binding.lifecycle == "expired":
+                        row.valid_from = utc_now() - timedelta(days=2)
+                        row.valid_until = utc_now() - timedelta(days=1)
+                    elif binding.lifecycle in ("suspended", "revoked"):
+                        row.status = binding.lifecycle
+                        if binding.lifecycle == "revoked":
+                            row.revoked_at = utc_now()
+                            row.revoked_by_type = "system"
+                            row.revoked_by_id = "case-authorization-test"
+                            row.revoked_reason = "Generated lifecycle refusal"
+                    db.commit()
+                for operation in CASE_OPERATIONS:
+                    parameters = {
+                        part.split("}")[0]: "not-a-uuid" for part in operation.path.split("{")[1:]
+                    }
+                    path = operation.path.format(**parameters)
+                    response = db_client.request(
+                        operation.method, f"/api/v1{path}", headers=headers(), json={}
+                    )
+                    expected = (
+                        {200, 422}
+                        if permits(bindings, operation)
+                        else {404 if operation.opaque else 403}
+                    )
+                    assert response.status_code in expected, (
+                        operation,
+                        bindings,
+                        expected,
+                        response.status_code,
+                        response.text,
+                    )
+                for model in (RiskCase, Document, Job, CalculationRun, AuditEvent):
+                    assert db.scalar(select(func.count()).select_from(model)) == 0, model
+                db.commit()
+        finally:
+            example_transaction.rollback()
+            db_session.expire_all()
+
+    check()

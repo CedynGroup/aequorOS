@@ -12,6 +12,7 @@ function usePermissionState(
   permission: EffectiveCapabilityRead["permission"],
   sensitivity: EffectiveCapabilityRead["sensitivity"],
   examinerRead: boolean,
+  bankPending: boolean,
 ): DataPermissionState {
   const profile = useUserProfile();
   const inspection = useImpersonation();
@@ -19,7 +20,7 @@ function usePermissionState(
     profile.effectiveAuthority?.institutionCapabilities.find(
       (entry) => entry.institutionId === bankId,
     )?.capabilities ?? [];
-  if (profile.isLoading) return "loading";
+  if (profile.isLoading || bankPending) return "loading";
   return Boolean(bankId) &&
     (!inspection.impersonating ||
       (examinerRead &&
@@ -31,25 +32,38 @@ function usePermissionState(
     : "denied";
 }
 
+/** Caller supplies bank resolution; BankProvider itself also uses these hooks. */
 export function useDataPermissionState(
   bankId: string | undefined,
   permission: EffectiveCapabilityRead["permission"],
   sensitivity: EffectiveCapabilityRead["sensitivity"],
+  bankPending = false,
 ): DataPermissionState {
-  return usePermissionState(bankId, permission, sensitivity, false);
+  return usePermissionState(
+    bankId,
+    permission,
+    sensitivity,
+    false,
+    bankPending,
+  );
 }
 
 export function useReportingDataPermissionState(
   bankId: string | undefined,
   sensitivity: "confidential" | "restricted",
+  bankPending = false,
 ): DataPermissionState {
-  return usePermissionState(bankId, "view", sensitivity, true);
+  return usePermissionState(bankId, "view", sensitivity, true, bankPending);
 }
 
 export function useDataPermission(
   bankId: string | undefined,
   permission: EffectiveCapabilityRead["permission"],
   sensitivity: EffectiveCapabilityRead["sensitivity"],
+  bankPending = false,
 ): boolean {
-  return useDataPermissionState(bankId, permission, sensitivity) === "allowed";
+  return (
+    useDataPermissionState(bankId, permission, sensitivity, bankPending) ===
+    "allowed"
+  );
 }

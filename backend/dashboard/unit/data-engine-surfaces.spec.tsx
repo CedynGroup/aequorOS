@@ -31,6 +31,8 @@ import DatabasePage from "../app/(app)/data-engine/database/page";
 import T24Page from "../app/(app)/data-engine/t24/page";
 import PositionsPage from "../app/(app)/positions/page";
 import BatchesTable from "../components/data-engine/BatchesTable";
+import CanonicalPositionsPage from "../app/(app)/data-engine/positions/page";
+import UploadPanel from "../components/data-engine/UploadPanel";
 import MappingPanel from "../components/data-engine/MappingPanel";
 import ConnectionHealthPanel from "../components/data-engine/ConnectionHealthPanel";
 import ReconciliationPanel from "../components/data-engine/ReconciliationPanel";
@@ -42,6 +44,7 @@ const state = vi.hoisted(() => ({
   capabilities: [] as EffectiveCapabilityRead[],
   bank: "BK-SAMP0001",
   loading: false,
+  bankPending: false,
 }));
 vi.mock("@/components/profile/ProfileProvider", () => ({
   useUserProfile: () => ({
@@ -56,7 +59,8 @@ vi.mock("@/components/profile/ProfileProvider", () => ({
 }));
 vi.mock("@/components/shell/BankContext", () => ({
   useBankContext: () => ({
-    bank: { id: state.bank },
+    bank: state.bankPending ? null : { id: state.bank },
+    authorityPending: state.loading || state.bankPending,
     period: { periodEnd: new Date("2026-09-30") },
     moduleScope: { marketsRestrictedView: false },
   }),
@@ -142,7 +146,7 @@ beforeAll(() => server.listen({ onUnhandledRequest: "error" }));
 beforeEach(() => {
   setAccessToken("fixture-token");
   state.capabilities = [];
-  state.loading = false;
+  state.loading = state.bankPending = false;
   requests = [];
   client = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
@@ -1044,5 +1048,56 @@ it.each(["pending", "approved", "revoked"] as const)(
           screen.getByText(/Revoked by Risk officer · 2026-10-01/),
         ).toBeVisible();
     }
+  },
+);
+
+it.each([
+  ["database", DatabasePage],
+  ["Temenos", T24Page],
+  ["positions", PositionsPage],
+  ["canonical positions", CanonicalPositionsPage],
+  ["overview", Overview],
+  ["batch history", BatchesTable],
+  ["upload", UploadPanel],
+  ["mapping", MappingPanel],
+] as const)(
+  "holds %s while profile or bank authority is unresolved",
+  async (_name, Component) => {
+    state.capabilities = [
+      capability("view", "aggregated"),
+      capability("view", "confidential"),
+      capability("view"),
+      capability("create"),
+      capability("run"),
+    ];
+    state.loading = true;
+    const view = render(
+      <QueryClientProvider client={client}>
+        <Component />
+      </QueryClientProvider>,
+    );
+    expect(
+      screen.queryByText(/Ask your organization owner/),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryAllByText(/Loading/).length +
+        screen.queryAllByLabelText("Loading").length,
+    ).toBeGreaterThan(0);
+    expect(requests).toEqual([]);
+    state.loading = false;
+    state.bankPending = true;
+    view.rerender(
+      <QueryClientProvider client={client}>
+        <Component />
+      </QueryClientProvider>,
+    );
+    expect(
+      screen.queryByText(/Ask your organization owner/),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryAllByText(/Loading/).length +
+        screen.queryAllByLabelText("Loading").length,
+    ).toBeGreaterThan(0);
+    expect(requests).toEqual([]);
   },
 );

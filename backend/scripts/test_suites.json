@@ -1,5 +1,6 @@
 {
   "cases": {
+    "tests/case/api/test_case_authorization.py::test_generated_binding_sets_match_case_http_matrix": "integration",
     "tests/case/api/test_case_authorization.py::test_calculation_history_diagnostics_disclosure[False]": "integration",
     "tests/case/api/test_case_authorization.py::test_calculation_history_diagnostics_disclosure[True]": "integration",
     "tests/case/api/test_case_authorization.py::test_case_job_polling_uses_current_restricted_authority[delete]": "integration",

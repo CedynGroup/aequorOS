@@ -35,7 +35,8 @@ import {
   useCanonicalPositionsPage,
 } from "@/lib/api/hooks";
 import { utcDay } from "@/lib/api/biKeys";
-import { useDataPermission } from "@/lib/api/dataAccess";
+import { useDataPermissionState } from "@/lib/api/dataAccess";
+import { PageSkeleton } from "@/components/ui/QueryBoundary";
 import DataAccessNotice from "@/components/ui/DataAccessNotice";
 import { fmtDateUTC, labelize } from "@/lib/api/values";
 import { fmtInt } from "@/lib/format";
@@ -74,7 +75,7 @@ export default function PositionsBlotterPage() {
 }
 
 function PositionsBlotter() {
-  const { bank } = useBankContext();
+  const { bank, authorityPending } = useBankContext();
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -131,7 +132,12 @@ function PositionsBlotter() {
     asOf: asOf || undefined,
     q: reference,
   });
-  const allowed = useDataPermission(bank?.id, "view", "restricted");
+  const allowed = useDataPermissionState(
+    bank?.id,
+    "view",
+    "restricted",
+    authorityPending,
+  );
 
   const [selected, setSelected] = useState<CanonicalPositionRead | null>(null);
 
@@ -232,7 +238,8 @@ function PositionsBlotter() {
   const windowStart = total === 0 ? 0 : offset + 1;
   const windowEnd = Math.min(offset + positions.length, total);
 
-  if (!allowed)
+  if (allowed === "loading") return <PageSkeleton contained />;
+  if (allowed === "denied")
     return <DataAccessNotice requirement="DATA · Restricted · View" />;
   return (
     <>

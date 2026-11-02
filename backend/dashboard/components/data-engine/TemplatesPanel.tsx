@@ -40,9 +40,9 @@ const FORMATS: { key: TemplateFormat; label: string; blurb: string }[] = [
 ];
 
 export default function TemplatesPanel() {
-  const { bank } = useBankContext();
+  const { bank, authorityPending } = useBankContext();
   const [format, setFormat] = useState<TemplateFormat>("canonical");
-  const configsQuery = useMappingConfigs(bank?.id);
+  const configsQuery = useMappingConfigs(bank?.id, authorityPending);
   const activate = useActivateTemplate(bank?.id);
 
   const requiredName = REQUIRED_MAPPING[format];

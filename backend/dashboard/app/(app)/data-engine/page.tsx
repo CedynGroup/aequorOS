@@ -19,16 +19,27 @@ import ConnectionHealthPanel from "@/components/data-engine/ConnectionHealthPane
 import LiveStatusCard from "@/features/live/components/LiveStatusCard";
 import UnreconciledBookBanner from "@/features/live/components/UnreconciledBookBanner";
 import { useBankContext } from "@/components/shell/BankContext";
-import { useDataPermission } from "@/lib/api/dataAccess";
+import {
+  useDataPermission,
+  useDataPermissionState,
+} from "@/lib/api/dataAccess";
+import { PageSkeleton } from "@/components/ui/QueryBoundary";
 import DataAccessNotice from "@/components/ui/DataAccessNotice";
 import ReconciliationPanel from "@/components/data-engine/ReconciliationPanel";
 
 export default function DataEngineOverviewPage() {
-  const { bank } = useBankContext();
-  const aggregated = useDataPermission(bank?.id, "view", "aggregated");
+  const { bank, authorityPending } = useBankContext();
+  const aggregateAccess = useDataPermissionState(
+    bank?.id,
+    "view",
+    "aggregated",
+    authorityPending,
+  );
+  const aggregated = aggregateAccess === "allowed";
   const confidential = useDataPermission(bank?.id, "view", "confidential");
   const restricted = useDataPermission(bank?.id, "view", "restricted");
   const run = useDataPermission(bank?.id, "run", "restricted");
+  if (aggregateAccess === "loading") return <PageSkeleton contained />;
   return (
     <>
       <PageHeader eyebrow="Data Engine" title="Data Engine" />

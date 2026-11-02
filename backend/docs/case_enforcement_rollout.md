@@ -64,9 +64,11 @@ it does not classify individual text or add a sensitivity flag.
 Assessment and document-parse job polling also requires restricted `view`, with
 opaque denial; starting a job grants no polling authority.
 
-The inherited DATA Temenos polling observation (R2) and DATA dashboard loading
-observation (R4) remain parent/follow-up work for #173, outside this case child.
-No DATA or dashboard fix is included here.
+The inherited DATA Temenos polling observation (R2) remains parent/follow-up work
+for #173. The subsequent review follow-up also corrects the DATA dashboard loading
+observation (R4): pending profile or selected-bank authority renders loading
+feedback before a resolved grant decision. These UI changes do not alter grants
+or server permission semantics.
 
 ## Operation matrix
 
@@ -174,8 +176,15 @@ storage, parsing, financial edits, assumptions, calculations and state transitio
 The object-reference catalogue retains its routes and explicit organization RISK
 positive-control grants. The shared access-impact report now exposes case tuples.
 
-No dashboard component or report HTML template changes in this slice; browser
-screenshots are not applicable to this API-only cutover.
+The generated HTTP property covers all 74 supported method-routes using an
+independent operation-matrix oracle, with complete, partial, irrelevant and
+inactive human binding sets. Each generated example uses a rolled-back savepoint;
+permitted malformed requests reach input validation while denied requests retain
+opaque 404 or collection 403 responses without writes.
+
+The review follow-up includes DATA dashboard loading-state regressions. Browser
+checks used a disposable fixture account; no production grants or data were
+changed. The report HTML template is unchanged.
 
 Before runtime activation, retain the target demo inventory, approved exact rows,
 expected denials, new-session verification and deployment evidence. None of those
