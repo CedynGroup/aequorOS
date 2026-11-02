@@ -267,9 +267,11 @@ def test_migration_round_trip_and_restrictive_grants(sealed_schema: MigratedPost
     migration = cast(Migration, script.module)
     with sealed_schema.app_engine.connect() as conn, conn.begin() as transaction:
         for table in TABLES:
-            assert conn.scalar(
-                sa.text("SELECT has_table_privilege('aqs_api', :t, 'SELECT,INSERT')"), {"t": table}
-            )
+            for privilege in ("SELECT", "INSERT"):
+                assert conn.scalar(
+                    sa.text("SELECT has_table_privilege('aqs_api', :t, :p)"),
+                    {"t": table, "p": privilege},
+                )
             for role in ("aqs_api", "aqs_worker", "aqs_bi", "aqs_operator", "aqs_audit_verifier"):
                 for privilege in ("UPDATE", "DELETE", "TRUNCATE"):
                     assert not conn.scalar(
