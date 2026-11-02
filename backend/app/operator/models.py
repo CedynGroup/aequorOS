@@ -11,6 +11,7 @@ from __future__ import annotations
 
 from datetime import datetime
 from typing import Any
+from uuid import UUID
 
 from sqlalchemy import (
     JSON,
@@ -21,13 +22,14 @@ from sqlalchemy import (
     Index,
     Integer,
     String,
+    Uuid,
 )
 from sqlalchemy import text as sql_text
 from sqlalchemy.orm import Mapped, mapped_column
 
-from app.db.base import Base, TimestampMixin, UuidV4PrimaryKeyMixin, utc_now
+from app.db.base import Base, TableArgs, TimestampMixin, UuidV4PrimaryKeyMixin, utc_now
 
-OPERATOR_AUTH_MODES: tuple[str, ...] = ("dev", "oidc", "password")
+OPERATOR_AUTH_MODES: tuple[str, ...] = ("dev", "oidc", "password", "break_glass")
 #: Staff roles, least- to most-privileged: ``developer`` uses every read/desk
 #: surface; ``operator_admin`` additionally manages operator accounts (at or
 #: below its own rank); ``super_admin`` is the unrestricted founder tier —
@@ -69,7 +71,8 @@ class OperatorAuditLog(UuidV4PrimaryKeyMixin, Base):
     )
 
     operator_email: Mapped[str] = mapped_column(String(320), nullable=False)
-    auth_mode: Mapped[str] = mapped_column(String(8), nullable=False)
+    # Wide enough for "break_glass" (11) — the emergency-only auth mode.
+    auth_mode: Mapped[str] = mapped_column(String(16), nullable=False)
     action: Mapped[str] = mapped_column(String(64), nullable=False)
     # The tenant acted on (OR-XXXXXXXX); null for cross-tenant reads.
     target_org: Mapped[str | None] = mapped_column(String(16), nullable=True)
@@ -123,6 +126,52 @@ class OperatorUser(UuidV4PrimaryKeyMixin, TimestampMixin, Base):
     )
     locked_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     last_login_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+
+
+class OperatorBreakGlassCredential(UuidV4PrimaryKeyMixin, TimestampMixin, Base):
+    """One EMERGENCY-ONLY staff credential, explicitly bound to a staff row.
+
+    Deliberately separate from ``operator_users.password_hash`` and from
+    workforce OIDC: it is issued only when a staff member is designated, is
+    default-disabled until then, and never carries a role of its own — a
+    successful sign-in takes the bound row's role and nothing more.
+
+    ``code_hash`` is an Argon2id hash of a generated one-time-shown code. The
+    throttle columns are the durable per-credential lockout the tenant plane's
+    primitive (``app/identity/service/auth_throttle.py``) writes, separate
+    from the row's ordinary password throttle so a guessed emergency code
+    cannot lock ordinary sign-in (and vice versa).
+
+    GLOBAL table, deliberately NOT RLS-forced (the operator-control-plane
+    precedent): control-plane records owned by the operator role.
+    """
+
+    __tablename__ = "operator_break_glass_credentials"
+    __table_args__: TableArgs = (
+        CheckConstraint(
+            "(is_enabled = false AND code_hash IS NULL) OR "
+            "(is_enabled = true AND code_hash IS NOT NULL)",
+            name="ck_operator_break_glass_enabled_hash",
+        ),
+    )
+
+    # Unique => indexed; one emergency credential per designated staff row.
+    operator_user_id: Mapped[UUID] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("operator_users.id", ondelete="CASCADE"),
+        nullable=False,
+        unique=True,
+    )
+    code_hash: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    is_enabled: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default=sql_text("false"), nullable=False
+    )
+    failed_login_attempts: Mapped[int] = mapped_column(
+        Integer, default=0, server_default=sql_text("0"), nullable=False
+    )
+    locked_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    last_used_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    rotated_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
 class TenantStorage(UuidV4PrimaryKeyMixin, TimestampMixin, Base):

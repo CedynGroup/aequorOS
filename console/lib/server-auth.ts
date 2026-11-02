@@ -160,24 +160,26 @@ export interface OauthTxn {
 }
 
 /**
- * Established operator session, in either auth mode. The credential stays
- * HttpOnly-server-side in both:
+ * Established operator session, in any auth mode. The credential stays
+ * HttpOnly-server-side in every mode:
  * - password mode: `token` holds the operator session JWT minted by
  *   POST /operator/auth/login (`mode: 'password'`);
+ * - break-glass mode: `token` holds the short emergency session JWT minted by
+ *   POST /operator/auth/break-glass (`mode: 'break_glass'`);
  * - workforce SSO mode: `id_token` holds the OIDC id_token (`mode: 'oidc'`;
  *   also the shape of pre-password-era cookies, where `mode` is absent).
  * The /api/op proxy forwards whichever credential is present as the bearer;
- * the operator API is the verifying authority for both.
+ * the operator API is the verifying authority for all of them.
  */
 export interface OperatorSession {
-  /** Operator session JWT (password sign-in). */
+  /** Operator session JWT (password or break-glass sign-in). */
   token?: string;
   /** Workforce OIDC id_token (SSO sign-in). */
   id_token?: string;
   email: string;
   /** Unix seconds — mirrors the credential's exp; the API is the authority. */
   exp: number;
-  mode?: "password" | "oidc";
+  mode?: "password" | "oidc" | "break_glass";
 }
 
 /** The bearer the /api/op proxy forwards — operator JWT or OIDC id_token. */
@@ -186,7 +188,9 @@ export function sessionBearer(session: OperatorSession): string | null {
 }
 
 /** Which sign-in produced this session (legacy cookies predate `mode`). */
-export function sessionMode(session: OperatorSession): "password" | "oidc" {
+export function sessionMode(
+  session: OperatorSession,
+): "password" | "oidc" | "break_glass" {
   return session.mode ?? (session.token ? "password" : "oidc");
 }
 

@@ -35,6 +35,7 @@ from app.operator.features.activity import router as activity_router
 from app.operator.features.audit_log import router as audit_log_router
 from app.operator.features.auth import router as auth_router
 from app.operator.features.bi_backfill import router as bi_backfill_router
+from app.operator.features.break_glass import router as break_glass_router
 from app.operator.features.curves import router as curves_router
 from app.operator.features.data_engines import router as data_engines_router
 from app.operator.features.desk import router as desk_router
@@ -116,6 +117,7 @@ def create_operator_app() -> FastAPI:
     # Session issuance sits beside /operator/health, not under /v1: it is the
     # unauthenticated front door (email+password primary path), not a resource.
     app.include_router(auth_router)
+    app.include_router(break_glass_router)
 
     operator_router = APIRouter(prefix="/operator/v1")
     operator_router.include_router(overview_router)

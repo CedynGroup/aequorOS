@@ -33,6 +33,10 @@ def test_operator_app_serves_only_operator_routes() -> None:
     assert offenders == [], f"non-operator routes leaked onto the operator app: {offenders}"
     # The exact public surface of this phase — update deliberately.
     assert sorted(paths) == [
+        # Emergency-only, default-off, audited and alerted on every attempt;
+        # a separate credential bound to a designated staff row (docs/rbac.md
+        # §11.3). Beside login for the same reason: it issues a session.
+        "/operator/auth/break-glass",
         # Staff sign-in front door (email+password primary path) — beside
         # /operator/health, not under /v1: session issuance is not a resource.
         "/operator/auth/login",

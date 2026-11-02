@@ -2638,7 +2638,7 @@ export interface WorkforceSession {
   email: string | null;
   expires_at: string | null;
   /** Which sign-in produced the cookie session; null when unauthenticated. */
-  mode: "password" | "oidc" | null;
+  mode: "password" | "oidc" | "break_glass" | null;
 }
 
 async function consoleJson<T>(path: string, init?: RequestInit): Promise<T> {
@@ -2717,6 +2717,24 @@ export function passwordLogin(
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ email, password }),
+  });
+}
+
+/**
+ * Audited emergency (break-glass) sign-in. Exists for the case where the
+ * workforce IdP is down or an account was suspended in error; the code is
+ * issued by operations to an explicitly designated staff row. Every use is
+ * audited and alerted, and the resulting session lasts 15 minutes with no
+ * refresh. Absent/disabled deployments answer 404 from this route.
+ */
+export function breakGlassLogin(
+  email: string,
+  code: string,
+): Promise<PasswordLoginResult> {
+  return consoleJson<PasswordLoginResult>("/api/auth/break-glass", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ email, code }),
   });
 }
 

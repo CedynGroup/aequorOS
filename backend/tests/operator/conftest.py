@@ -21,6 +21,7 @@ from sqlalchemy.orm import Session, sessionmaker
 
 import app.operator.deps as operator_deps
 import app.operator.features.auth as operator_auth_feature
+import app.operator.features.break_glass as break_glass_feature
 from app.core.config import get_operator_settings
 from app.core.key_management import registry
 from app.core.key_management.local import LocalKeyProvider
@@ -28,7 +29,7 @@ from app.core.key_management.types import KeyReference
 from app.models import InstitutionType, Jurisdiction, RegulatoryParameter
 from app.operator.features.provision import get_provisioning_clients
 from app.operator.main import create_operator_app
-from app.operator.services import operator_auth
+from app.operator.services import break_glass, operator_auth
 from app.operator.services.tenant_provisioning import ProvisioningClients
 from app.policy.service.regulatory_parameters import seed_rows as _regparam_seed_rows
 from app.storage.config import StorageEngineSettings
@@ -194,6 +195,7 @@ def operator_env(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     monkeypatch.setenv("OPERATOR_CORS_ORIGINS", "")
     monkeypatch.setenv("OPERATOR_DATABASE_URL", "")
     monkeypatch.setenv("OPERATOR_JWT_SECRET", OPERATOR_JWT_SECRET)
+    monkeypatch.setenv("OPERATOR_BREAK_GLASS_ENABLED", "false")
     monkeypatch.setenv("OPERATOR_OIDC_ISSUER", "")
     monkeypatch.setenv("OPERATOR_OIDC_CLIENT_ID", "")
     monkeypatch.setenv("OPERATOR_OIDC_ALLOWED_DOMAIN", "aequoros.com")
@@ -208,8 +210,10 @@ def operator_env(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     # The login throttle is process-global by design — never let one test's
     # failures lock a later test out.
     operator_auth.reset_login_throttle()
+    break_glass.reset_login_throttle()
     yield
     operator_auth.reset_login_throttle()
+    break_glass.reset_login_throttle()
     get_operator_settings.cache_clear()
 
 
@@ -398,6 +402,7 @@ def _operator_bound_sessionmaker(
     with _rollback_sessionmaker_lifecycle(_operator_test_database, monkeypatch) as maker:
         monkeypatch.setattr(operator_deps, "get_operator_sessionmaker", lambda: maker)
         monkeypatch.setattr(operator_auth_feature, "get_operator_sessionmaker", lambda: maker)
+        monkeypatch.setattr(break_glass_feature, "get_operator_sessionmaker", lambda: maker)
         yield maker
 
 

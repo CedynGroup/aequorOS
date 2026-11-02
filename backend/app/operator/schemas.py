@@ -775,6 +775,13 @@ class OperatorLoginRead(ClosedModel):
     operator: OperatorIdentityRead
 
 
+class OperatorBreakGlassRequest(ClosedModel):
+    """Emergency sign-in: the designated row's email plus its one-off code."""
+
+    email: str = Field(min_length=3, max_length=320, pattern=_EMAIL_PATTERN)
+    code: str = Field(min_length=1, max_length=1024)
+
+
 class OperatorUserRead(ClosedModel):
     email: str
     display_name: str

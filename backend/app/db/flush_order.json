@@ -137,6 +137,7 @@
   "Notification": "app.models.notification.Notification",
   "ObjectKeyEnvelope": "app.core.key_management.models.ObjectKeyEnvelope",
   "OperatorAuditLog": "app.models.operator.OperatorAuditLog",
+  "OperatorBreakGlassCredential": "app.operator.models.OperatorBreakGlassCredential",
   "OperatorInspectorSession": "app.models.operator.OperatorInspectorSession",
   "OperatorUser": "app.models.operator.OperatorUser",
   "Organization": "app.models.organization.Organization",

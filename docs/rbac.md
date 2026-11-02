@@ -987,10 +987,125 @@ journey would additionally need a console Playwright harness and disposable staf
 API/provider services, which this console currently lacks.
 
 Follow-ups remain separate: captain-controlled password rejection after teammate
-verification; audited break-glass login with per-use alerting and recovery drills;
-and a separate application-held factor or provider-supported mechanism if recent
-user authentication is required for sensitive actions. No tenant SSO, SCIM or
-staff-power changes are included here.
+verification; and a separate application-held factor or provider-supported
+mechanism if recent user authentication is required for sensitive actions. No
+tenant SSO, SCIM or staff-power changes are included here.
+
+#### As built: break-glass emergency staff sign-in
+
+Break-glass is the audited escape hatch for one failure: the workforce IdP
+(Google Workspace) is down, or an account was suspended in error, and staff
+cannot reach the operator console. It is **not** a second staff password, and
+it is **not** part of customer SSO. Ordinary password and Google sign-in are
+unchanged while it exists.
+
+- **Separate credential, explicitly designated.** A
+  `operator_break_glass_credentials` row binds one Argon2id-hashed code to one
+  `operator_users` row. Rows are created only by
+  `backend/scripts/manage_break_glass.py` (an operator action run inside the
+  backend container, the same custody model as `create_operator.py`), and the
+  code is printed exactly once. There is no API that mints or returns one.
+- **Off until configured, twice.** `POST /operator/auth/break-glass` answers
+  404 unless `OPERATOR_BREAK_GLASS_ENABLED=true` on the operator API, and a
+  staff row without an enabled credential is refused even then. The console's
+  `/login` keeps the form collapsed under "Emergency access"; the browser
+  never sees the code or token (the HttpOnly `op_session` cookie carries it).
+- **Never more than the row's role.** The credential has no role column. A
+  successful sign-in takes the bound row's current role; the row is re-read on
+  every request, so promoting or demoting it takes effect immediately and a
+  token never carries authority the row does not have. Break-glass is not an
+  escalation path.
+- **Short, no refresh.** The session is a 15-minute HS256 JWT with its own
+  `typ=operator_break_glass` claim over `OPERATOR_JWT_SECRET`. It cannot be
+  refreshed or extended (the verifier rejects any lifetime above the fixed
+  cap), and an ordinary operator session cannot be substituted for it or vice
+  versa. Every request re-reads the credential and staff row, so revoking
+  either ends an already-minted session on its next call.
+- **Locked out like any credential.** Five consecutive failures against the
+  durable per-credential counter trip the tenant plane's progressive lockout
+  (5 minutes, doubling, capped at one hour) and answer 429 even for the right
+  code. The counter is separate from the staff row's password counter, so a
+  guessed emergency code cannot lock ordinary sign-in. A process-local
+  per-email guard keeps unknown addresses indistinguishable and throttled.
+- **Audited and alerted on every use, success or failure.** Each attempt that
+  reaches verification writes one append-only `operator_audit_log` row with
+  `auth_mode='break_glass'` and an `action` of `auth.break_glass.sign_in` or
+  `auth.break_glass.denied` (generic failure reasons only; never the code).
+  The same boundary emits the structured condition `auth.break_glass` with
+  `outcome`, `reason`, and account/credential ids. The API deliberately
+  distinguishes only `not_designated`, `invalid_code` and `credential_locked`
+  internally; the HTTP response stays a generic 401/429. A request refused by
+  the process-local pre-lookup throttle (5 failures per email per 5 minutes)
+  answers 429 without a new audit row or alert: it never reaches credential
+  verification, and one row per rejected byte would be a log-flooding lever.
+
+| Setting                          | Default | Behavior                                                                                                                       |
+| -------------------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| `OPERATOR_BREAK_GLASS_ENABLED`    | `false` | Master switch on the operator API. Off answers 404 from the sign-in route and from the console relay — the door does not exist. |
+
+**Setup (captain/deployment owner):**
+
+1. Enable it in the operator API environment (`OPERATOR_BREAK_GLASS_ENABLED=true`)
+   together with the existing `OPERATOR_JWT_SECRET`. Do not set it on the
+   console: the console relays the form and has no policy of its own.
+2. Designate the minimum number of staff rows needed for recovery — usually
+   one `super_admin` and one `operator_admin`, in different teams:
+
+   ```bash
+   uv run python scripts/manage_break_glass.py --email founder@aequoros.com
+   ```
+
+   The code is printed once. Deliver it out-of-band (password manager or
+   sealed envelope) — never email, chat, or the repository.
+3. Re-run the command to **rotate**: it replaces the stored hash, clears the
+   lockout and prints a new code. A previously issued code and every session
+   minted from it stop working immediately. Use `--status` to see whether a
+   row is designated without revealing the code, and `--disable` to revoke.
+4. Prove one complete sign-in with a designated row in a non-production
+   environment before relying on it: confirm the console accepts the code,
+   that `/operator/v1` calls work for 15 minutes, that a 16th-minute request
+   is refused, that a wrong code answers 401, and that the audit row and the
+   `auth.break_glass` alert both appear. Record the drill with the incident
+   evidence; repeat after every credential rotation and staff change.
+
+**Operations handoff (alerts).** The operator plane has no webhook or pager
+integration of its own. The alert is the structured `auth.break_glass` log
+line that `app/core/observability.py` writes to the operator API's stderr,
+which the deployment collects with the other service logs (CloudWatch in the
+current Coolify stack). Operations configures one metric filter and alarm:
+
+```
+{ $.condition = "auth.break_glass" && $.outcome = "success" }   → emergency access used
+{ $.condition = "auth.break_glass" && $.outcome = "failure" }   → emergency access refused
+```
+
+Page the security on-call on any success and on a sustained rate of failures;
+the authoritative evidence is the `operator_audit_log` row, and the log line
+is the operational signal. Nothing consumes this condition automatically yet
+— that deployment wiring is an explicit follow-up, reported by the change that
+added the hook.
+
+**Incident use:**
+
+1. Staff use the console's "Emergency access" form with their designated
+   email and code. The session lasts 15 minutes; there is no refresh, so keep
+   the immediate task narrow (restore the IdP path, reactivate the wrongly
+   suspended account, hand control back).
+2. Security on-call acknowledges the `auth.break_glass` alert and opens an
+   incident note: who, when, why, and which recovery action was taken. The
+   audit rows supply actor, outcome and session expiry.
+3. After recovery, rotate the used credential and, if the trigger was a
+   compromised account or code rather than an IdP outage, disable it and
+   re-designate a different row. Offboarding a staff member (`§11.5`)
+   deactivates the row, which revokes Google, password and break-glass access
+   together; also run `--disable` on their credential so the record shows the
+   emergency path was closed deliberately.
+
+Break-glass deliberately does not bypass the operator API's network
+allowlist/VPN, TLS enforcement, role gates or tenant-scoped authorization: it
+changes only *how* a designated staff member authenticates. Customer/tenant
+SSO, SCIM, password rejection and the Google Directory gates remain out of
+scope and unchanged.
 
 ### 11.4 JIT + SCIM + verified domains
 

@@ -10,9 +10,11 @@ token remains for local work. There is still NO overlap with tenant identity
 (staff_UI.md §1: workforce and customer identity are separate systems);
 ``operator_users`` is a staff table, not a tenant one.
 
-Bearer resolution order: dev token, operator JWT, OIDC id_token. A token that
-VERIFIES as an operator JWT but fails the row check (missing, deactivated,
-stale role claim) is rejected outright — it never falls through to OIDC.
+Bearer resolution order: dev token, operator JWT, break-glass JWT, OIDC
+id_token. A token that VERIFIES as an operator JWT but fails the row check
+(missing, deactivated, stale role claim) is rejected outright — it never falls
+through to another branch. The same holds for a break-glass token whose
+credential has been disabled or whose staff row has been deactivated.
 An OIDC identity likewise authenticates only when its verified, normalized
 email matches an active ``operator_users`` row; the workforce domain check is
 necessary identity evidence but grants no role by itself.
@@ -53,17 +55,23 @@ from app.core.config import (
 from app.core.key_management.presentation import SESSION_STATE, SESSION_SUPPORT, PresentationState
 from app.db.session import RlsBlindError, get_cross_tenant_engine
 from app.identity.public import Bank
-from app.models import OperatorAuditLog, OperatorInspectorSession, OperatorUser
+from app.models import (
+    OperatorAuditLog,
+    OperatorBreakGlassCredential,
+    OperatorInspectorSession,
+    OperatorUser,
+)
 from app.operator.models import OPERATOR_ROLE_RANK
-from app.operator.services import operator_auth, workforce
+from app.operator.services import break_glass, operator_auth, workforce
 from app.policy.public import InstitutionType
 
 _bearer_scheme = HTTPBearer(
     auto_error=False,
     description=(
         "Operator credential: operator session JWT (password sign-in), "
-        "workforce OIDC id_token for an active provisioned operator, or the "
-        "dev token outside production"
+        "break-glass session JWT (audited emergency sign-in), workforce OIDC "
+        "id_token for an active provisioned operator, or the dev token outside "
+        "production"
     ),
 )
 
@@ -81,7 +89,7 @@ class OperatorContext:
     """The authenticated staff identity for one operator request."""
 
     email: str
-    auth_mode: Literal["dev", "oidc", "password"]
+    auth_mode: Literal["dev", "oidc", "password", "break_glass"]
     #: Staff authorization role. Password/JWT sessions carry it as a claim
     #: verified against the ``operator_users`` row; OIDC sessions take the
     #: active provisioned row's role.
@@ -150,6 +158,48 @@ def _password_context(token: str, operator_settings: OperatorSettings) -> Operat
     return OperatorContext(email=email, auth_mode="password", role=cast("OperatorRole", user.role))
 
 
+def _break_glass_context(token: str, operator_settings: OperatorSettings) -> OperatorContext | None:
+    """Emergency break-glass session JWT (short-lived, no refresh).
+
+    Returns None when the bearer is not a break-glass token at all. Once it
+    verifies, the credential row and the staff row are re-read on EVERY
+    request: disabling the credential, rotating it away, or deactivating the
+    row revokes every already-minted token immediately. The role comes from
+    the row, never from the token — the emergency door cannot escalate.
+    """
+    if operator_settings.jwt_secret is None or not operator_settings.break_glass_enabled:
+        # Turning the master switch off revokes live emergency sessions too.
+        return None
+    try:
+        claims = break_glass.verify_token(token, secret=operator_settings.jwt_secret)
+    except security.TokenInvalidError:
+        return None
+    email = claims["sub"].lower()
+    credential_id = UUID(claims["credential_id"])
+    session = get_operator_sessionmaker()()
+    session.info[SESSION_SUPPORT] = True
+    session.info[SESSION_STATE] = PresentationState(support=True)
+    try:
+        user = session.scalar(select(OperatorUser).where(OperatorUser.email == email))
+        credential = session.get(OperatorBreakGlassCredential, credential_id)
+        if (
+            user is None
+            or not user.is_active
+            or credential is None
+            or not credential.is_enabled
+            or credential.operator_user_id != user.id
+        ):
+            raise _UNAUTHORIZED
+        return OperatorContext(
+            email=user.email,
+            auth_mode="break_glass",
+            role=cast("OperatorRole", user.role),
+            assurance={"credential_id": str(credential.id)},
+        )
+    finally:
+        session.close()
+
+
 def _oidc_context(token: str, operator_settings: OperatorSettings) -> OperatorContext:
     if operator_settings.oidc_issuer is None or operator_settings.oidc_client_id is None:
         # Fail closed with the house 401 envelope: an unconfigured workforce
@@ -215,6 +265,9 @@ def get_operator_context(
     password = _password_context(credentials.credentials, operator_settings)
     if password is not None:
         return password
+    emergency = _break_glass_context(credentials.credentials, operator_settings)
+    if emergency is not None:
+        return emergency
     return _oidc_context(credentials.credentials, operator_settings)
 
 

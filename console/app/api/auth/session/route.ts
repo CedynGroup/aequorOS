@@ -1,8 +1,8 @@
 /**
  * GET /api/auth/session — who is signed in via the op_session cookie, if
- * anyone, and through which mode ('password' | 'oidc'). Returns derived
- * facts only; the credential (operator JWT or id_token) never leaves the
- * HttpOnly cookie.
+ * anyone, and through which mode ('password' | 'oidc' | 'break_glass').
+ * Returns derived facts only; the credential (operator JWT or id_token)
+ * never leaves the HttpOnly cookie.
  */
 
 import { NextResponse, type NextRequest } from 'next/server';

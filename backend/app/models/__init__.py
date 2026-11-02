@@ -201,6 +201,7 @@ from app.models.organization import Organization
 from app.notifications.models import Notification
 from app.operator.models import (
     OperatorAuditLog,
+    OperatorBreakGlassCredential,
     OperatorInspectorSession,
     OperatorUser,
     TenantStorage,
@@ -393,6 +394,7 @@ __all__ = [
     "IntegrationKey",
     "ImpliedRatingRun",
     "OperatorAuditLog",
+    "OperatorBreakGlassCredential",
     "OperatorInspectorSession",
     "OperatorUser",
     "Organization",

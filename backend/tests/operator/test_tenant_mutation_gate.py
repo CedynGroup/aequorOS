@@ -245,6 +245,14 @@ def _mutating_routes() -> list[tuple[str, str, APIRoute]]:
     return [row for row in _operator_routes() if row[0] in _MUTATING_METHODS]
 
 
+#: Source markers that prove an endpoint writes ``operator_audit_log`` itself.
+#: ``record_operator_action`` needs an authenticated principal; the
+#: unauthenticated break-glass sign-in instead records every attempt through
+#: ``app.operator.services.break_glass.record_operator_attempt``, which writes
+#: the same append-only rows (including failures, which have no principal).
+_AUDIT_ENTRY_POINTS = ("record_operator_action(", "record_operator_attempt(")
+
+
 def test_every_operator_mutation_lands_in_the_audit_log() -> None:
     """No staff-plane write is invisible, whether or not it names a tenant."""
     mutations = _mutating_routes()
@@ -256,7 +264,7 @@ def test_every_operator_mutation_lands_in_the_audit_log() -> None:
         source = inspect.getsource(route.endpoint)
         if (method, path) in AUDITED_WITHOUT_A_TENANT_TO_INSPECT and _audits_via_a_service(route):
             continue
-        if "record_operator_action(" not in source:
+        if not any(entry_point in source for entry_point in _AUDIT_ENTRY_POINTS):
             offenders.append(f"{method} {path} ({route.endpoint.__qualname__})")
     assert offenders == [], (
         "operator routes mutate state without writing an operator_audit_log row — "

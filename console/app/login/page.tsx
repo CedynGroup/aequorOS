@@ -4,9 +4,10 @@ import { Suspense, useEffect, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Fraunces } from "next/font/google";
 import BrandLogo from "@/components/BrandLogo";
-import { ArrowRight, KeyRound, Loader2, ShieldCheck } from "lucide-react";
+import { ArrowRight, KeyRound, Loader2, ShieldAlert, ShieldCheck } from "lucide-react";
 import {
   ApiError,
+  breakGlassLogin,
   clearToken,
   getAuthConfig,
   getHealth,
@@ -64,6 +65,19 @@ function passwordErrorMessage(error: ApiError): string {
   );
 }
 
+function emergencyErrorMessage(error: ApiError): string {
+  if (error.status === 401) return "Invalid emergency access credentials.";
+  if (error.status === 404)
+    return "Emergency access is not enabled for this deployment.";
+  // 429 (lockout) and 503 (OPERATOR_JWT_SECRET unset while enabled) carry
+  // precise backend messages — surface them verbatim.
+  if (error.status === 429 || error.status === 503) return error.message;
+  return (
+    "Could not reach the operator service, so emergency access could not be " +
+    "checked. This is not a problem with your code — try again shortly."
+  );
+}
+
 function LoginForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -80,6 +94,14 @@ function LoginForm() {
   const [devToken, setDevToken] = useState("");
   const [devBusy, setDevBusy] = useState(false);
   const [devError, setDevError] = useState<ApiError | null>(null);
+
+  // Emergency (break-glass) access: a code issued by operations to a
+  // designated staff row. The operator API enforces enablement, lockout and
+  // the 15-minute session; this form only relays the credentials.
+  const [emergencyEmail, setEmergencyEmail] = useState("");
+  const [emergencyCode, setEmergencyCode] = useState("");
+  const [emergencyBusy, setEmergencyBusy] = useState(false);
+  const [emergencyError, setEmergencyError] = useState<string | null>(null);
 
   const ssoError = searchParams.get("error");
 
@@ -109,6 +131,20 @@ function LoginForm() {
     } catch (err) {
       setError(passwordErrorMessage(toApiError(err)));
       setPending(false);
+    }
+  }
+
+  async function onEmergencySubmit(event: React.FormEvent) {
+    event.preventDefault();
+    if (emergencyBusy) return;
+    setEmergencyBusy(true);
+    setEmergencyError(null);
+    try {
+      await breakGlassLogin(emergencyEmail, emergencyCode);
+      router.replace("/tenants");
+    } catch (err) {
+      setEmergencyError(emergencyErrorMessage(toApiError(err)));
+      setEmergencyBusy(false);
     }
   }
 
@@ -305,6 +341,66 @@ function LoginForm() {
               </>
             ) : null}
           </form>
+
+          <details className="mt-8 border-t border-border-light pt-5">
+            <summary className="cursor-pointer select-none text-caption font-medium text-slate transition-colors hover:text-navy">
+              Emergency access
+            </summary>
+            <p className="mt-3 text-micro leading-relaxed text-slate-light">
+              Only for when workforce sign-in is unavailable. Uses an emergency
+              access code issued to a designated operator. Every use is audited
+              and alerts the on-call engineer; the session expires after 15
+              minutes and cannot be extended.
+            </p>
+            <form onSubmit={onEmergencySubmit} className="mt-3 space-y-3">
+              <label className="block">
+                <span className="mb-1.5 block text-caption font-medium text-navy">
+                  Email
+                </span>
+                <input
+                  type="email"
+                  required
+                  autoComplete="email"
+                  value={emergencyEmail}
+                  onChange={(e) => setEmergencyEmail(e.target.value)}
+                  className="w-full rounded-md border border-border bg-surface-base px-3 py-2.5 text-body text-ink focus:border-focus focus:outline-hidden"
+                />
+              </label>
+              <label className="block">
+                <span className="mb-1.5 block text-caption font-medium text-navy">
+                  Emergency access code
+                </span>
+                <input
+                  type="password"
+                  required
+                  autoComplete="one-time-code"
+                  value={emergencyCode}
+                  onChange={(e) => setEmergencyCode(e.target.value)}
+                  className="w-full rounded-md border border-border bg-surface-base px-3 py-2.5 font-mono text-body text-ink focus:border-focus focus:outline-hidden"
+                />
+              </label>
+              {emergencyError ? (
+                <p
+                  role="alert"
+                  className="text-caption leading-relaxed text-critical"
+                >
+                  {emergencyError}
+                </p>
+              ) : null}
+              <button
+                type="submit"
+                disabled={emergencyBusy}
+                className="btn-secondary flex w-full items-center justify-center gap-2 px-4 py-2.5 text-body font-medium disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {emergencyBusy ? (
+                  <Loader2 size={14} className="animate-spin" aria-hidden />
+                ) : (
+                  <ShieldAlert size={14} aria-hidden />
+                )}
+                {emergencyBusy ? "Checking code…" : "Use emergency access"}
+              </button>
+            </form>
+          </details>
 
           {process.env.NODE_ENV === "development" && (
             <details className="mt-8">

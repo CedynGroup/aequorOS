@@ -101,6 +101,7 @@ class Condition(StrEnum):
     STORAGE_FAILED = "storage.failed"
     AUDIT_CHAIN_BROKEN = "audit.chain_broken"
     AUTH_ANOMALY = "auth.anomaly"
+    OPERATOR_BREAK_GLASS = "auth.break_glass"
     SSRF_BLOCKED = "egress.blocked"
     AUTHORIZATION_DENIED = "authz.denied"
     AUTHORIZATION_SHADOW_DECISION = "authz.shadow_decision"
@@ -164,6 +165,11 @@ CONDITION_SOURCES: Final[dict[Condition, str]] = {
         "failed_login_attempts / locked_until on the principal's table — 'users' for a "
         "bank user, 'operator_users' for a staff account (the emission carries "
         "plane='operator') — plus this log line on lockout (app/identity/service/auth_throttle.py)"
+    ),
+    Condition.OPERATOR_BREAK_GLASS: (
+        "operator_audit_log rows with auth_mode='break_glass' "
+        "(auth.break_glass.sign_in / auth.break_glass.denied) plus this log line on "
+        "every attempt, emitted from app/operator/services/break_glass.py"
     ),
     Condition.SSRF_BLOCKED: (
         "this log line only, emitted from OutboundTargetBlocked.__init__ so every block "
@@ -314,6 +320,25 @@ def auth_anomaly(*, reason: str, **fields: Any) -> None:
         "Authentication anomaly",
         severity="warning",
         reason=reason,
+        **fields,
+    )
+
+
+def operator_break_glass(*, success: bool, reason: str, **fields: object) -> None:
+    """An emergency staff sign-in attempt, successful or refused.
+
+    Break-glass exists for the case where the workforce IdP cannot be reached
+    or an account was suspended in error, so every use is a signal operations
+    must see — not a routine log line. Accounts are named by id, never by the
+    email address or the emergency code (``app/core/observability.py`` rule).
+    """
+    emit(
+        Condition.OPERATOR_BREAK_GLASS,
+        "Operator break-glass sign-in" if success else "Operator break-glass refused",
+        severity="warning",
+        outcome="success" if success else "failure",
+        reason=reason,
+        plane="operator",
         **fields,
     )
 
