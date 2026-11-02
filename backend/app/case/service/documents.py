@@ -198,7 +198,16 @@ def complete_upload(
     db.commit()
     head = storage_client.head_object(bucket=bucket, object_key=object_key)
     observed_digest: tuple[int, str] | None = None
-    if head is not None and declared_digest is not None and head.byte_size is not None:
+    # Only read what could still be accepted. The reported size is refused
+    # against the cap a few lines down, so reading an object that is already
+    # too large would spend the whole read before saying no — the cap exists to
+    # bound exactly this work.
+    if (
+        head is not None
+        and declared_digest is not None
+        and head.byte_size is not None
+        and head.byte_size <= settings.risk_max_upload_bytes
+    ):
         try:
             observed_digest = storage_client.read_object_digest(
                 bucket=bucket, object_key=object_key, max_bytes=head.byte_size

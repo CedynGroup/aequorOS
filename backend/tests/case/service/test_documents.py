@@ -239,6 +239,31 @@ def test_complete_upload_refuses_when_storage_reports_no_size(
     _assert_still_pending(db_session, upload.document_id)
 
 
+def test_complete_upload_does_not_read_an_object_that_is_already_over_the_cap(
+    db_session: Session,
+    service_factories: ServiceFactories,
+) -> None:
+    # The cap exists to bound work. Reading a body that is going to be refused
+    # for its size spends the whole read to reach a decision already available
+    # from the size alone.
+    factories = service_factories
+    payload = b"declared body"
+    document_id, _ = _staged_upload(
+        factories, declared=payload, declared_sha256=hashlib.sha256(payload).hexdigest()
+    )
+    assert factories.storage.head is not None
+    factories.storage.head = replace(
+        factories.storage.head, byte_size=factories.settings.risk_max_upload_bytes + 1
+    )
+
+    refused = _complete(factories, db_session, document_id)
+
+    assert refused.status_code == 400
+    assert "maximum size" in str(refused.detail)
+    assert factories.storage.digest_reads == []
+    _assert_still_pending(db_session, document_id)
+
+
 def test_complete_upload_reads_the_object_only_when_a_digest_was_declared(
     db_session: Session,
     service_factories: ServiceFactories,
