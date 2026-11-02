@@ -43,6 +43,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
+from app.core.authorization import ModuleScope, RoleBundle, SensitivityScope
 from app.data_engine.service import canonical_withdrawal, withdrawal_impact
 from app.data_engine.service.withdrawal_impact import WithdrawnEvidenceError
 from app.domain.authority.evidence import EvidenceStatus
@@ -57,12 +58,15 @@ from app.models import (
     LineageRecord,
     RegulatoryPackage,
     RegulatoryRun,
+    User,
 )
 from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID, materialize_canonical_test_book
+from tests.support.factories.authorization import grant_institution_authority
 from tests.support.factories.canonical import FIXTURE_AS_OF, seed_canonical_fixture
-from tests.support.helpers import ORG_1, USER_1, USER_2
+from tests.support.helpers import ORG_1, USER_1
 
 SECOND_SOURCE = "API_PUSH"
+CHECKER_ID = UUID("cccccccc-cccc-4ccc-8ccc-cccccccccccc")
 
 #: Ordered so the sealed run sits strictly between the duplicate book's
 #: ingestion and its withdrawal — the production shape.
@@ -84,7 +88,19 @@ def _seed_book(db_session: Session) -> None:
     materialize_canonical_test_book(db_session)
     db_session.flush()
     seed_canonical_fixture(db_session, organization_id=ORG_1, bank_id=SAMPLE_BANK_ID)
+    db_session.add(User(id=CHECKER_ID, organization_id=ORG_1, email="cro@bank.test"))
     db_session.flush()
+    for user_id, bundle in ((USER_1, RoleBundle.ANALYST), (CHECKER_ID, RoleBundle.APPROVER)):
+        grant_institution_authority(
+            db_session,
+            organization_id=ORG_1,
+            bank_id=SAMPLE_BANK_ID,
+            user_id=user_id,
+            bundle=bundle,
+            module=ModuleScope.DATA,
+            sensitivity=SensitivityScope.CONFIDENTIAL,
+        )
+    db_session.commit()
 
 
 def _seed_duplicate_second_source(db_session: Session, *, rows: int = 3) -> None:
@@ -211,7 +227,7 @@ def _withdraw(db_session: Session) -> CanonicalWithdrawal:
         requested_by="analyst@bank.test",
     )
     return canonical_withdrawal.approve_withdrawal(
-        db_session, _ctx(USER_2), _bank(db_session), row.id, approved_by="cro@bank.test"
+        db_session, _ctx(CHECKER_ID), _bank(db_session), row.id, approved_by="cro@bank.test"
     )
 
 
@@ -338,7 +354,7 @@ def test_the_session_memo_is_dropped_by_both_governed_acts(db_session: Session) 
 
     canonical_withdrawal.reverse_withdrawal(
         db_session,
-        _ctx(USER_2),
+        _ctx(CHECKER_ID),
         _bank(db_session),
         withdrawal.id,
         reversed_by="cro@bank.test",
@@ -369,7 +385,7 @@ def test_reversing_the_withdrawal_restores_the_run_with_no_write_to_it(
 
     canonical_withdrawal.reverse_withdrawal(
         db_session,
-        _ctx(USER_2),
+        _ctx(CHECKER_ID),
         _bank(db_session),
         withdrawal.id,
         reversed_by="cro@bank.test",

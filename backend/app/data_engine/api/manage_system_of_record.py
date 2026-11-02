@@ -5,8 +5,8 @@ position type, and the assessment resolves it against the duplicated-book
 diagnosis. The withdrawal endpoints are the remedy the platform has been
 prescribing without being able to perform.
 
-Role split mirrors the rest of the submission pipeline: an analyst PROPOSES a
-declaration and REQUESTS a withdrawal; an approver approves, revokes or reverses.
+Exact DATA permissions and authenticated maker/checker rules are owned by
+``backend/docs/authorization_foundation.md`` under "Human Data Engine authority".
 No endpoint applies anything on its own, and none is reachable by a job.
 """
 
@@ -18,7 +18,8 @@ from uuid import UUID
 
 from fastapi import APIRouter, Query
 
-from app.api.deps import ApproverTenant, DbSession, MutationTenant, Tenant
+from app.api.deps import DbSession, ScopedMutationTenant, Tenant
+from app.core.authorization import Module, Permission, Sensitivity
 from app.data_engine.domain.ingestion.constants import PositionType, SourceSystem
 from app.data_engine.schemas.system_of_record import (
     CanonicalWithdrawalApproveRequest,
@@ -37,7 +38,8 @@ from app.data_engine.schemas.system_of_record import (
     TypeFindingRead,
 )
 from app.data_engine.service import canonical_withdrawal, system_of_record
-from app.identity.public import get_bank_or_404 as _get_bank_or_404
+from app.data_engine.service.access import require_data_access
+from app.identity.public import resolve_bank
 from app.live.service import fact_derivation
 from app.models import CanonicalWithdrawal, SystemOfRecordDeclaration
 
@@ -68,7 +70,7 @@ def list_system_of_record_declarations(
     ctx: Tenant,
     position_type: Annotated[PositionType | None, Query()] = None,
 ) -> SystemOfRecordRegisterRead:
-    bank = _get_bank_or_404(db, ctx, bank_id)
+    bank = require_data_access(db, ctx, bank_id, Permission.VIEW, Sensitivity.CONFIDENTIAL)
     rows = system_of_record.list_declarations(
         db, ctx.organization_id, bank.id, position_type=position_type
     )
@@ -87,9 +89,9 @@ def propose_system_of_record_declaration(
     bank_id: str,
     payload: SystemOfRecordDeclarationCreate,
     db: DbSession,
-    ctx: MutationTenant,
+    ctx: ScopedMutationTenant,
 ) -> SystemOfRecordDeclarationRead:
-    bank = _get_bank_or_404(db, ctx, bank_id)
+    bank = require_data_access(db, ctx, bank_id, Permission.CREATE, Sensitivity.CONFIDENTIAL)
     row = system_of_record.propose(
         db,
         ctx,
@@ -117,9 +119,9 @@ def approve_system_of_record_declaration(
     declaration_id: UUID,
     payload: SystemOfRecordApproveRequest,
     db: DbSession,
-    ctx: ApproverTenant,
+    ctx: ScopedMutationTenant,
 ) -> SystemOfRecordDeclarationRead:
-    bank = _get_bank_or_404(db, ctx, bank_id)
+    bank = resolve_bank(db, ctx, bank_id, module=Module.DATA)
     row = system_of_record.approve(db, ctx, bank, declaration_id, approved_by=payload.approved_by)
     db.commit()
     db.refresh(row)
@@ -136,9 +138,9 @@ def revoke_system_of_record_declaration(
     declaration_id: UUID,
     payload: SystemOfRecordRevokeRequest,
     db: DbSession,
-    ctx: ApproverTenant,
+    ctx: ScopedMutationTenant,
 ) -> SystemOfRecordDeclarationRead:
-    bank = _get_bank_or_404(db, ctx, bank_id)
+    bank = resolve_bank(db, ctx, bank_id, module=Module.DATA)
     row = system_of_record.revoke(
         db, ctx, bank, declaration_id, revoked_by=payload.revoked_by, reason=payload.reason
     )
@@ -163,7 +165,7 @@ def get_system_of_record_assessment(
     Read-only and side-effect free. A single-source bank comes back ``clean``
     with no findings — it is never asked for a declaration.
     """
-    bank = _get_bank_or_404(db, ctx, bank_id)
+    bank = require_data_access(db, ctx, bank_id, Permission.VIEW, Sensitivity.CONFIDENTIAL)
     overlap = fact_derivation.diagnose_source_overlap(db, ctx, bank.id, as_of)
     assessment = system_of_record.assess(db, ctx, bank, as_of, overlap)
     return SystemOfRecordAssessmentRead(
@@ -210,7 +212,7 @@ def list_canonical_withdrawals(
     as_of: Annotated[date | None, Query()] = None,
     withdrawal_status: Annotated[str | None, Query()] = None,
 ) -> CanonicalWithdrawalListRead:
-    bank = _get_bank_or_404(db, ctx, bank_id)
+    bank = require_data_access(db, ctx, bank_id, Permission.VIEW, Sensitivity.CONFIDENTIAL)
     rows = canonical_withdrawal.list_withdrawals(
         db, ctx.organization_id, bank.id, as_of_date=as_of, withdrawal_status=withdrawal_status
     )
@@ -234,7 +236,7 @@ def get_canonical_withdrawal_scope(  # noqa: PLR0913 - the scope IS the query
     position_type: Annotated[PositionType | None, Query()] = None,
 ) -> CanonicalWithdrawalScopeRead:
     """How many current records a withdrawal would retire — before requesting it."""
-    bank = _get_bank_or_404(db, ctx, bank_id)
+    bank = require_data_access(db, ctx, bank_id, Permission.VIEW, Sensitivity.CONFIDENTIAL)
     rows_in_scope = canonical_withdrawal.count_in_scope(
         db,
         organization_id=ctx.organization_id,
@@ -264,10 +266,10 @@ def request_canonical_withdrawal(
     bank_id: str,
     payload: CanonicalWithdrawalCreate,
     db: DbSession,
-    ctx: MutationTenant,
+    ctx: ScopedMutationTenant,
 ) -> CanonicalWithdrawalRead:
     """Record a PENDING withdrawal request. Retires nothing."""
-    bank = _get_bank_or_404(db, ctx, bank_id)
+    bank = require_data_access(db, ctx, bank_id, Permission.CREATE, Sensitivity.CONFIDENTIAL)
     row = canonical_withdrawal.request_withdrawal(
         db,
         ctx,
@@ -295,10 +297,10 @@ def approve_canonical_withdrawal(
     withdrawal_id: UUID,
     payload: CanonicalWithdrawalApproveRequest,
     db: DbSession,
-    ctx: ApproverTenant,
+    ctx: ScopedMutationTenant,
 ) -> CanonicalWithdrawalRead:
     """Apply a pending withdrawal. The approver must not be the requester."""
-    bank = _get_bank_or_404(db, ctx, bank_id)
+    bank = resolve_bank(db, ctx, bank_id, module=Module.DATA)
     row = canonical_withdrawal.approve_withdrawal(
         db, ctx, bank, withdrawal_id, approved_by=payload.approved_by
     )
@@ -317,10 +319,10 @@ def reverse_canonical_withdrawal(
     withdrawal_id: UUID,
     payload: CanonicalWithdrawalReverseRequest,
     db: DbSession,
-    ctx: ApproverTenant,
+    ctx: ScopedMutationTenant,
 ) -> CanonicalWithdrawalRead:
     """Restore a withdrawn book, with its own reason and its own audit trail."""
-    bank = _get_bank_or_404(db, ctx, bank_id)
+    bank = resolve_bank(db, ctx, bank_id, module=Module.DATA)
     row = canonical_withdrawal.reverse_withdrawal(
         db, ctx, bank, withdrawal_id, reversed_by=payload.reversed_by, reason=payload.reason
     )

@@ -988,6 +988,10 @@ def restored_recovery_database(
         install_migration_engines(monkeypatch, source_engine)
         command.upgrade(alembic_config_for_app(), "head")
         with source_engine.begin() as connection:
+            source_revision = cast(
+                str,
+                connection.execute(text("SELECT version_num FROM alembic_version")).scalar_one(),
+            )
             connection.execute(
                 text(
                     "INSERT INTO organizations (id, name, created_at, updated_at) "
@@ -1012,7 +1016,8 @@ def restored_recovery_database(
         assert restored.clean
         with target.engine().connect() as connection, connection.begin() as transaction:
             assert (
-                connection.scalar(text("SELECT version_num FROM alembic_version")) == "202611010104"
+                connection.execute(text("SELECT version_num FROM alembic_version")).scalar_one()
+                == source_revision
             )
             assert _snapshot(connection) == original
             connection.execute(text("GRANT aqs_storage_recovery TO CURRENT_USER"))

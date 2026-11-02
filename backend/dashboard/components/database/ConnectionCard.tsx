@@ -8,7 +8,7 @@
  * identifies what is on file.
  */
 
-import { useState } from "react";
+import { useId, useState } from "react";
 import {
   CheckCircle2,
   Database,
@@ -44,6 +44,7 @@ import SchemaPanel from "./SchemaPanel";
 import SyncPanel from "./SyncPanel";
 import { ConnectionStatusPill, backendName, fmtWhen } from "./shared";
 import { fmtLocale } from "@/lib/format";
+import { useDataPermission } from "@/lib/api/dataAccess";
 
 function errorMessage(error: unknown): string {
   if (isApiError(error)) return error.message;
@@ -54,6 +55,7 @@ function errorMessage(error: unknown): string {
 function ActionButton({
   onClick,
   disabled,
+  descriptionId,
   active,
   icon,
   children,
@@ -61,6 +63,7 @@ function ActionButton({
 }: {
   onClick: () => void;
   disabled?: boolean;
+  descriptionId?: string;
   active?: boolean;
   icon: React.ReactNode;
   children: React.ReactNode;
@@ -71,6 +74,7 @@ function ActionButton({
       type="button"
       onClick={onClick}
       disabled={disabled}
+      aria-describedby={descriptionId}
       className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded border text-caption font-medium disabled:opacity-40 disabled:cursor-not-allowed ${
         tone === "danger"
           ? "border-critical/30 text-critical hover:bg-critical-light/40"
@@ -100,6 +104,9 @@ export default function ConnectionCard({
   const disable = useDisableDatabaseConnection(bankId);
   const enable = useEnableDatabaseConnection(bankId);
   const revoke = useRevokeDatabaseConnection(bankId);
+  const validationRequirementId = useId();
+  const canValidate = useDataPermission(bankId, "validate", "restricted");
+  const canRun = useDataPermission(bankId, "run", "restricted");
 
   const [panel, setPanel] = useState<OpenPanel>(null);
   const [testResult, setTestResult] =
@@ -275,6 +282,13 @@ export default function ConnectionCard({
         </div>
       )}
 
+      {!isRevoked && !canValidate && (
+        <p id={validationRequirementId} className="text-caption text-warning">
+          Requires DATA · Restricted · Validate to test this connection or
+          discover its schema.
+        </p>
+      )}
+
       {!isRevoked && (
         <div className="flex flex-wrap gap-2">
           <ActionButton
@@ -283,7 +297,8 @@ export default function ConnectionCard({
                 setTestResult(await test.mutateAsync(connection.id));
               })
             }
-            disabled={busy || isDisabled}
+            disabled={!canValidate || busy || isDisabled}
+            descriptionId={!canValidate ? validationRequirementId : undefined}
             icon={
               test.isPending ? (
                 <Loader2 size={13} className="animate-spin" aria-hidden />
@@ -302,7 +317,8 @@ export default function ConnectionCard({
                 void runDiscover();
               }
             }}
-            disabled={busy || isDisabled}
+            disabled={!canValidate || busy || isDisabled}
+            descriptionId={!canValidate ? validationRequirementId : undefined}
             active={panel === "schema"}
             icon={
               discover.isPending ? (
@@ -316,7 +332,7 @@ export default function ConnectionCard({
           </ActionButton>
           <ActionButton
             onClick={() => togglePanel("sync")}
-            disabled={busy || isDisabled}
+            disabled={!canRun || busy || isDisabled}
             active={panel === "sync"}
             icon={<Database size={13} aria-hidden />}
           >
@@ -376,6 +392,12 @@ export default function ConnectionCard({
             Revoke
           </ActionButton>
         </div>
+      )}
+      {(!canValidate || !canRun) && (
+        <p className="text-caption text-slate">
+          Tests and schema discovery require DATA · Restricted · Validate. Sync
+          requires DATA · Restricted · Run.
+        </p>
       )}
 
       {testResult && (

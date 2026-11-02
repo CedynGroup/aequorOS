@@ -73,6 +73,7 @@ test.describe("default macro scenarios", () => {
         bindings: [
           { bundle: "viewer", module: "irrbb", sensitivity: "all" },
           { bundle: "viewer", module: "risk", sensitivity: "confidential" },
+          { bundle: "viewer", module: "data", sensitivity: "confidential" },
           { bundle: "viewer", module: "ftp", sensitivity: "all" },
           { bundle: "viewer", module: "fx", sensitivity: "all" },
         ],

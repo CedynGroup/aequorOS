@@ -14,7 +14,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
 
-from app.api.deps import DbSession, MutationTenant, Tenant
+from app.api.deps import DbSession, MutationTenant, ScopedMutationTenant, Tenant
 from app.data_engine.schemas.database_connection import (
     DatabaseConnectionCreate,
     DatabaseConnectionDiscoverResult,
@@ -44,6 +44,13 @@ def get_database_direct_storage() -> StorageClient:
 
 
 DatabaseDirectStorage = Annotated[StorageClient, Depends(get_database_direct_storage)]
+
+
+def require_sync_access(
+    bank_id: str, connection_id: UUID, db: DbSession, ctx: ScopedMutationTenant
+) -> None:
+    database_connections.require_sync_connection(db, ctx, bank_id, connection_id)
+
 
 _BASE = "/banks/{bank_id}/database-direct/connections"
 
@@ -151,7 +158,7 @@ def test_database_connection(
     bank_id: str,
     connection_id: UUID,
     db: DbSession,
-    ctx: MutationTenant,
+    ctx: ScopedMutationTenant,
 ) -> DatabaseConnectionTestResult:
     return database_connections.test_connection(db, ctx, bank_id, connection_id)
 
@@ -165,7 +172,7 @@ def discover_database_schema(
     bank_id: str,
     connection_id: UUID,
     db: DbSession,
-    ctx: MutationTenant,
+    ctx: ScopedMutationTenant,
 ) -> DatabaseConnectionDiscoverResult:
     return database_connections.discover_schema(db, ctx, bank_id, connection_id)
 
@@ -175,13 +182,14 @@ def discover_database_schema(
     response_model=DatabaseConnectionSyncResult,
     status_code=status.HTTP_202_ACCEPTED,
     operation_id="syncDatabaseDirectConnection",
+    dependencies=[Depends(require_sync_access)],
 )
 def sync_database_connection(  # noqa: PLR0913 - FastAPI path params + deps + body
     bank_id: str,
     connection_id: UUID,
     payload: DatabaseConnectionSyncRequest,
     db: DbSession,
-    ctx: MutationTenant,
+    ctx: ScopedMutationTenant,
     storage: DatabaseDirectStorage,
 ) -> DatabaseConnectionSyncResult:
     return database_connections.sync_now(db, ctx, bank_id, connection_id, storage, payload)

@@ -14,12 +14,14 @@ from datetime import timedelta
 from typing import Never
 
 import pytest
+from fastapi import HTTPException
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
 from app.core.config import get_settings
 from app.data_engine.adapters.database_direct.config import ConnectionConfig
+from app.data_engine.adapters.database_direct.credential_vault import DatabaseDirectCredentialVault
 from app.data_engine.adapters.database_direct.drivers.base import (
     ColumnSchema,
     DbCredentials,
@@ -35,7 +37,7 @@ from app.data_engine.models.database_connection import DatabaseDirectConnection
 from app.data_engine.schemas.database_connection import DatabaseConnectionCreate
 from app.data_engine.service import database_connections, database_direct_jobs
 from app.db.base import utc_now
-from app.models import Bank, Job
+from app.models import AuditEvent, Bank, Job
 from app.services import job_queue, scheduler
 from tests.support.factories.outbound import stub_public_dns
 from tests.support.helpers import ORG_1, USER_1
@@ -234,6 +236,53 @@ def test_run_probe_marks_connection_validated(
     after = connection.last_validated_at
     assert after is not None
     assert after.replace(tzinfo=None) > before.replace(tzinfo=None)
+    audit = db_session.scalar(
+        select(AuditEvent).where(
+            AuditEvent.entity_id == str(connection.id),
+            AuditEvent.event_type == "database_direct_connection.tested",
+        )
+    )
+    assert audit is not None
+    assert audit.actor_user_id == connection.created_by
+    assert audit.details["reachable"] is True
+
+
+@pytest.mark.parametrize("operation", ["test", "discover"])
+def test_human_probes_without_authority_are_effect_free(
+    db_session: Session,
+    ctx: TenantContext,
+    vault_key: None,
+    monkeypatch: pytest.MonkeyPatch,
+    operation: str,
+) -> None:
+    connection = _connection(db_session, ctx, _bank(db_session))
+    before = connection.last_validated_at
+    audit_count = db_session.scalar(select(func.count()).select_from(AuditEvent))
+
+    def refuse_effect(*_args: object, **_kwargs: object) -> Never:
+        raise AssertionError("Unauthorized human probe reached credentials or network")
+
+    monkeypatch.setattr(DatabaseDirectCredentialVault, "open", refuse_effect)
+    driver = _offline_driver()
+    monkeypatch.setattr(driver, "connect", refuse_effect)
+    probe = (
+        database_connections.test_connection
+        if operation == "test"
+        else database_connections.discover_schema
+    )
+    for authorization_version in (None, 1):
+        denied_ctx = TenantContext(
+            organization_id=ORG_1,
+            actor_user_id=USER_1,
+            authorization_version=authorization_version,
+        )
+        with pytest.raises(HTTPException) as exc_info:
+            probe(db_session, denied_ctx, connection.bank_id, connection.id, driver=driver)
+
+        assert exc_info.value.status_code == 404
+        assert connection.last_validated_at == before
+        assert connection.status == "ACTIVE"
+        assert db_session.scalar(select(func.count()).select_from(AuditEvent)) == audit_count
 
 
 def test_run_probe_records_transient_failure_without_retry(

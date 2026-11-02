@@ -367,8 +367,10 @@ on one canonical store — the live tier for intraday awareness, the official ti
 - **Refresh authority and retries.** `GET /banks/{id}/live-summary` only reads persisted rows and
   computes its staleness signal; it never enqueues or commits. Accepted ingestion and market-data
   writes, approved methodology/regulatory-parameter changes, tenant assumption/threshold/haircut
-  changes, entitlement changes, reconciliation-exception changes, and the explicit refresh action
-  enqueue recomputation in their mutation transaction. A module that successfully returns
+  changes, entitlement changes, reconciliation-exception approvals/revocations, and the explicit
+  refresh action enqueue recomputation in their mutation transaction. Proposal semantics follow
+  [Human Data Engine authority](backend/docs/authorization_foundation.md#human-data-engine-authority).
+  A module that successfully returns
   `availability=unavailable`, or a reconciliation-blocked book, is stable until such an input
   changes. Only an exception raised by a module retries the same job after 10, 20, then 40 seconds
   (default three-attempt cap); `retry_classification`, `retry_attempt_count`, and `next_retry_at`

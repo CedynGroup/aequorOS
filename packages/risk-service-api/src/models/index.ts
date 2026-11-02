@@ -1693,6 +1693,7 @@ export * from "./RecipientStatus";
 export * from "./RecipientUserId";
 export * from "./RecognisedAmount";
 export * from "./RecognisedRegulatoryCapital";
+export * from "./ReconciliationExceptionApprove";
 export * from "./ReconciliationExceptionCreate";
 export * from "./ReconciliationExceptionListRead";
 export * from "./ReconciliationExceptionRead";

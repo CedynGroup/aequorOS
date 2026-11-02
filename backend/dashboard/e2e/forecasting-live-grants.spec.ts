@@ -20,6 +20,14 @@ test.use({
       "forecast_member",
       "forecast_summary_member",
     ],
+    bindings: [
+      {
+        role: "forecast_member",
+        bundle: "viewer",
+        module: "data",
+        sensitivity: "confidential",
+      },
+    ],
   },
 });
 

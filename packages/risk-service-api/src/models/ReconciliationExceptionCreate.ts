@@ -11,13 +11,6 @@
  */
 
 import { mapValues } from "../runtime";
-import type { ApprovedByUserId } from "./ApprovedByUserId";
-import {
-  ApprovedByUserIdFromJSON,
-  ApprovedByUserIdFromJSONTyped,
-  ApprovedByUserIdToJSON,
-  ApprovedByUserIdToJSONTyped,
-} from "./ApprovedByUserId";
 import type { EffectiveTo } from "./EffectiveTo";
 import {
   EffectiveToFromJSON,
@@ -34,28 +27,11 @@ import {
 } from "./MaxGapFraction";
 
 /**
- * Record an approved exception to a fail-closed reconciliation control.
- *
- * Four-eyes is enforced in the service (``grant_exception``): the officer who
- * requested the exception may not be the approver. ``approved_by_user_id`` is
- * what makes that check possible, so supplying it is how a caller proves the
- * second pair of eyes exists rather than asserting it.
+ * Propose a bounded exception. The server records the authenticated maker.
  * @export
  * @interface ReconciliationExceptionCreate
  */
 export interface ReconciliationExceptionCreate {
-  /**
-   *
-   * @type {string}
-   * @memberof ReconciliationExceptionCreate
-   */
-  approvedBy: string;
-  /**
-   *
-   * @type {ApprovedByUserId}
-   * @memberof ReconciliationExceptionCreate
-   */
-  approvedByUserId?: ApprovedByUserId;
   /**
    *
    * @type {Date}
@@ -88,8 +64,6 @@ export interface ReconciliationExceptionCreate {
 export function instanceOfReconciliationExceptionCreate(
   value: object,
 ): value is ReconciliationExceptionCreate {
-  if (!("approvedBy" in value) || value["approvedBy"] === undefined)
-    return false;
   if (!("effectiveFrom" in value) || value["effectiveFrom"] === undefined)
     return false;
   if (!("maxGapFraction" in value) || value["maxGapFraction"] === undefined)
@@ -113,11 +87,6 @@ export function ReconciliationExceptionCreateFromJSONTyped(
   }
   return {
     ...json,
-    approvedBy: json["approved_by"],
-    approvedByUserId:
-      json["approved_by_user_id"] == null
-        ? undefined
-        : ApprovedByUserIdFromJSON(json["approved_by_user_id"]),
     effectiveFrom: new Date(json["effective_from"]),
     effectiveTo:
       json["effective_to"] == null
@@ -143,8 +112,6 @@ export function ReconciliationExceptionCreateToJSONTyped(
   }
 
   return {
-    approved_by: value["approvedBy"],
-    approved_by_user_id: ApprovedByUserIdToJSON(value["approvedByUserId"]),
     effective_from: value["effectiveFrom"].toISOString().substring(0, 10),
     effective_to: EffectiveToToJSON(value["effectiveTo"]),
     max_gap_fraction: MaxGapFractionToJSON(value["maxGapFraction"]),

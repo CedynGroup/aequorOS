@@ -121,6 +121,7 @@ it.each([
                 institution_id: bankId,
                 capabilities: [
                   view("irrbb"),
+                  view("data"),
                   ...(activeRiskView ? [view("risk")] : []),
                 ],
               },

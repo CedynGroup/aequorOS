@@ -17,6 +17,8 @@ import { useBankContext } from "@/components/shell/BankContext";
 import { useCanonicalPositions, useLineageWalk } from "@/lib/api/ingestion";
 import { formatDate, formatDateTime } from "@/components/data-engine/shared";
 import { fmtInt, fmtLocale } from "@/lib/format";
+import { useDataPermission } from "@/lib/api/dataAccess";
+import DataAccessNotice from "@/components/ui/DataAccessNotice";
 
 function formatAmount(value: string | null): string {
   if (value === null || value === undefined) return "—";
@@ -67,7 +69,10 @@ export default function CanonicalPositionsPage() {
   const [offset, setOffset] = useState(0);
   const positionsQuery = useCanonicalPositions(bank?.id, offset);
   const [expanded, setExpanded] = useState<string | null>(null);
+  const allowed = useDataPermission(bank?.id, "view", "restricted");
 
+  if (!allowed)
+    return <DataAccessNotice requirement="DATA · Restricted · View" />;
   return (
     <>
       <PageHeader eyebrow="Data Engine" title="Canonical positions" />

@@ -617,6 +617,7 @@ def test_mixed_execution_requires_ftp_only_in_plan(
     ftp_authority: bool,
 ) -> None:
     _seed_book()
+    _grant(RoleBundle.ANALYST, module=ModuleScope.DATA, sensitivity=SensitivityScope.RESTRICTED)
     _grant(RoleBundle.ANALYST, module=ModuleScope.CREDIT, sensitivity=SensitivityScope.CONFIDENTIAL)
     _grant(
         RoleBundle.ANALYST,

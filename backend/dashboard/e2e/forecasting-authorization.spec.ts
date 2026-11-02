@@ -95,6 +95,7 @@ test.describe("Forecasting reader without run permission", () => {
       bindings: [
         { bundle: "viewer", module: "fcst", sensitivity: "aggregated" },
         { bundle: "viewer", module: "fcst", sensitivity: "confidential" },
+        { bundle: "viewer", module: "data", sensitivity: "confidential" },
       ],
     },
   });

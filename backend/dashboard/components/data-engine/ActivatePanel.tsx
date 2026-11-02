@@ -16,7 +16,7 @@
  * Both enqueue a job, poll it to completion, and report the outcome inline.
  */
 
-import { useMemo, useState } from "react";
+import { useId, useMemo, useState } from "react";
 import {
   CheckCircle2,
   ChevronDown,
@@ -26,6 +26,8 @@ import {
 } from "lucide-react";
 import type { JobRead } from "@aequoros/risk-service-api";
 import { useBankContext } from "@/components/shell/BankContext";
+import DataAccessNotice from "@/components/ui/DataAccessNotice";
+import { ErrorPanel } from "@/components/ui/QueryBoundary";
 import StatusPill from "@/components/ui/StatusPill";
 import { isApiError } from "@/lib/api/client";
 import {
@@ -45,6 +47,7 @@ function progressCount(job: JobRead | undefined, key: string): number | null {
 }
 
 export default function ActivatePanel() {
+  const dateId = useId();
   const { bank, period } = useBankContext();
   const batchesQuery = useIngestionBatches(bank?.id);
   const liveSummary = useLiveSummary(bank?.id);
@@ -54,15 +57,21 @@ export default function ActivatePanel() {
   const [advancedOpen, setAdvancedOpen] = useState(false);
 
   const latestBatchAsOf = useMemo(() => {
+    if (batchesQuery.access !== "allowed" || !batchesQuery.isSuccess)
+      return undefined;
     const dates = (batchesQuery.data?.batches ?? [])
       .filter((batch) => batch.status.startsWith("accepted"))
       .map((batch) => formatDate(batch.asOfDate));
     return dates.sort().at(-1);
-  }, [batchesQuery.data]);
+  }, [batchesQuery.access, batchesQuery.isSuccess, batchesQuery.data]);
 
   const periodAsOf = period ? formatDate(period.periodEnd) : undefined;
   const [asOfDate, setAsOfDate] = useState<string>("");
-  const effectiveAsOf = asOfDate || latestBatchAsOf || periodAsOf || "";
+  const effectiveAsOf =
+    asOfDate ||
+    (batchesQuery.access === "allowed" && batchesQuery.isSuccess
+      ? latestBatchAsOf || periodAsOf || ""
+      : "");
 
   const computedAt = liveSummary.data?.computedAt ?? null;
   const refreshDelayed = !computedAt;
@@ -127,19 +136,51 @@ export default function ActivatePanel() {
         {advancedOpen && (
           <div className="mt-4 space-y-4">
             <div>
-              <label className="block text-caption font-medium text-slate mb-1">
+              <label
+                htmlFor={dateId}
+                className="block text-caption font-medium text-slate mb-1"
+              >
                 As-of date
               </label>
               <input
+                id={dateId}
                 type="date"
                 value={effectiveAsOf}
                 onChange={(event) => setAsOfDate(event.target.value)}
                 className="px-3 py-1.5 rounded-sm border border-border text-body text-navy font-mono"
               />
-              <p className="mt-1 text-micro text-slate">
-                Defaults to the latest accepted upload. Both actions run for
-                this reporting date.
-              </p>
+              {batchesQuery.access === "loading" || batchesQuery.isLoading ? (
+                <p role="status" className="mt-1 text-caption text-slate">
+                  Loading upload dates. You can enter a date manually.
+                </p>
+              ) : batchesQuery.access === "denied" ? (
+                <>
+                  <DataAccessNotice requirement="DATA · Confidential · View to read upload dates" />
+                  <p className="mt-1 text-caption text-slate">
+                    Enter an as-of date manually. The latest accepted upload
+                    date is unavailable.
+                  </p>
+                </>
+              ) : batchesQuery.isError ? (
+                <>
+                  <ErrorPanel
+                    error={batchesQuery.error}
+                    onRetry={() => void batchesQuery.refetch()}
+                  />
+                  <p className="mt-1 text-caption text-slate">
+                    Upload dates are unavailable. Enter an as-of date manually.
+                  </p>
+                </>
+              ) : (
+                <p className="mt-1 text-micro text-slate">
+                  {latestBatchAsOf
+                    ? "Defaults to the latest accepted upload."
+                    : periodAsOf
+                      ? "No accepted uploads. Defaults to the selected reporting period."
+                      : "No accepted uploads or reporting period. Enter an as-of date."}{" "}
+                  Both actions run for this reporting date.
+                </p>
+              )}
             </div>
 
             <div className="grid gap-4 sm:grid-cols-2">

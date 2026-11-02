@@ -13,6 +13,7 @@
 import * as runtime from "../runtime";
 import type {
   ErrorResponse,
+  ReconciliationExceptionApprove,
   ReconciliationExceptionCreate,
   ReconciliationExceptionListRead,
   ReconciliationExceptionRead,
@@ -21,6 +22,8 @@ import type {
 import {
   ErrorResponseFromJSON,
   ErrorResponseToJSON,
+  ReconciliationExceptionApproveFromJSON,
+  ReconciliationExceptionApproveToJSON,
   ReconciliationExceptionCreateFromJSON,
   ReconciliationExceptionCreateToJSON,
   ReconciliationExceptionListReadFromJSON,
@@ -31,15 +34,21 @@ import {
   ReconciliationExceptionRevokeToJSON,
 } from "../models/index";
 
-export interface GrantReconciliationExceptionRequest {
+export interface ApproveReconciliationExceptionRequest {
   bankId: string;
-  reconciliationExceptionCreate: ReconciliationExceptionCreate;
+  exceptionId: string;
+  reconciliationExceptionApprove: ReconciliationExceptionApprove;
 }
 
 export interface ListReconciliationExceptionsRequest {
   bankId: string;
   asOf?: Date | null;
   control?: string;
+}
+
+export interface ProposeReconciliationExceptionRequest {
+  bankId: string;
+  reconciliationExceptionCreate: ReconciliationExceptionCreate;
 }
 
 export interface RevokeReconciliationExceptionRequest {
@@ -53,23 +62,30 @@ export interface RevokeReconciliationExceptionRequest {
  */
 export class ReconciliationApi extends runtime.BaseAPI {
   /**
-   * Grant Reconciliation Exception
+   * Approve Reconciliation Exception
    */
-  async grantReconciliationExceptionRaw(
-    requestParameters: GrantReconciliationExceptionRequest,
+  async approveReconciliationExceptionRaw(
+    requestParameters: ApproveReconciliationExceptionRequest,
     initOverrides?: RequestInit | runtime.InitOverrideFunction,
   ): Promise<runtime.ApiResponse<ReconciliationExceptionRead>> {
     if (requestParameters["bankId"] == null) {
       throw new runtime.RequiredError(
         "bankId",
-        'Required parameter "bankId" was null or undefined when calling grantReconciliationException().',
+        'Required parameter "bankId" was null or undefined when calling approveReconciliationException().',
       );
     }
 
-    if (requestParameters["reconciliationExceptionCreate"] == null) {
+    if (requestParameters["exceptionId"] == null) {
       throw new runtime.RequiredError(
-        "reconciliationExceptionCreate",
-        'Required parameter "reconciliationExceptionCreate" was null or undefined when calling grantReconciliationException().',
+        "exceptionId",
+        'Required parameter "exceptionId" was null or undefined when calling approveReconciliationException().',
+      );
+    }
+
+    if (requestParameters["reconciliationExceptionApprove"] == null) {
+      throw new runtime.RequiredError(
+        "reconciliationExceptionApprove",
+        'Required parameter "reconciliationExceptionApprove" was null or undefined when calling approveReconciliationException().',
       );
     }
 
@@ -89,15 +105,20 @@ export class ReconciliationApi extends runtime.BaseAPI {
     }
     const response = await this.request(
       {
-        path: `/api/v1/banks/{bank_id}/reconciliation/exceptions`.replace(
-          `{${"bank_id"}}`,
-          encodeURIComponent(String(requestParameters["bankId"])),
-        ),
+        path: `/api/v1/banks/{bank_id}/reconciliation/exceptions/{exception_id}/approve`
+          .replace(
+            `{${"bank_id"}}`,
+            encodeURIComponent(String(requestParameters["bankId"])),
+          )
+          .replace(
+            `{${"exception_id"}}`,
+            encodeURIComponent(String(requestParameters["exceptionId"])),
+          ),
         method: "POST",
         headers: headerParameters,
         query: queryParameters,
-        body: ReconciliationExceptionCreateToJSON(
-          requestParameters["reconciliationExceptionCreate"],
+        body: ReconciliationExceptionApproveToJSON(
+          requestParameters["reconciliationExceptionApprove"],
         ),
       },
       initOverrides,
@@ -109,13 +130,13 @@ export class ReconciliationApi extends runtime.BaseAPI {
   }
 
   /**
-   * Grant Reconciliation Exception
+   * Approve Reconciliation Exception
    */
-  async grantReconciliationException(
-    requestParameters: GrantReconciliationExceptionRequest,
+  async approveReconciliationException(
+    requestParameters: ApproveReconciliationExceptionRequest,
     initOverrides?: RequestInit | runtime.InitOverrideFunction,
   ): Promise<ReconciliationExceptionRead> {
-    const response = await this.grantReconciliationExceptionRaw(
+    const response = await this.approveReconciliationExceptionRaw(
       requestParameters,
       initOverrides,
     );
@@ -184,6 +205,76 @@ export class ReconciliationApi extends runtime.BaseAPI {
     initOverrides?: RequestInit | runtime.InitOverrideFunction,
   ): Promise<ReconciliationExceptionListRead> {
     const response = await this.listReconciliationExceptionsRaw(
+      requestParameters,
+      initOverrides,
+    );
+    return await response.value();
+  }
+
+  /**
+   * Propose Reconciliation Exception
+   */
+  async proposeReconciliationExceptionRaw(
+    requestParameters: ProposeReconciliationExceptionRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<runtime.ApiResponse<ReconciliationExceptionRead>> {
+    if (requestParameters["bankId"] == null) {
+      throw new runtime.RequiredError(
+        "bankId",
+        'Required parameter "bankId" was null or undefined when calling proposeReconciliationException().',
+      );
+    }
+
+    if (requestParameters["reconciliationExceptionCreate"] == null) {
+      throw new runtime.RequiredError(
+        "reconciliationExceptionCreate",
+        'Required parameter "reconciliationExceptionCreate" was null or undefined when calling proposeReconciliationException().',
+      );
+    }
+
+    const queryParameters: any = {};
+
+    const headerParameters: runtime.HTTPHeaders = {};
+
+    headerParameters["Content-Type"] = "application/json";
+
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
+
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
+    }
+    const response = await this.request(
+      {
+        path: `/api/v1/banks/{bank_id}/reconciliation/exceptions`.replace(
+          `{${"bank_id"}}`,
+          encodeURIComponent(String(requestParameters["bankId"])),
+        ),
+        method: "POST",
+        headers: headerParameters,
+        query: queryParameters,
+        body: ReconciliationExceptionCreateToJSON(
+          requestParameters["reconciliationExceptionCreate"],
+        ),
+      },
+      initOverrides,
+    );
+
+    return new runtime.JSONApiResponse(response, (jsonValue) =>
+      ReconciliationExceptionReadFromJSON(jsonValue),
+    );
+  }
+
+  /**
+   * Propose Reconciliation Exception
+   */
+  async proposeReconciliationException(
+    requestParameters: ProposeReconciliationExceptionRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<ReconciliationExceptionRead> {
+    const response = await this.proposeReconciliationExceptionRaw(
       requestParameters,
       initOverrides,
     );

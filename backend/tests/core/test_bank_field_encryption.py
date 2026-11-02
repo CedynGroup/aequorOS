@@ -31,7 +31,7 @@ from app.bi.service.compiler import compile_query
 from app.bi.service.errors import BiQueryError
 from app.bi.service.execution import execute
 from app.bi.service.identity_policy import IDENTITY_REASON
-from app.core.ids import new_uuid7
+from app.core.authorization import ModuleScope, RoleBundle, SensitivityScope
 from app.core.key_management import registry
 from app.core.key_management.concentration_identity import counterparty_group_key
 from app.core.key_management.fields import Normalization, blind_index, observe_bank_key
@@ -81,6 +81,7 @@ from app.models.audit_event import AuditEvent
 from app.reporting.models.packages import RegulatoryPackage
 from tests.api import test_impersonation_auth as impersonation
 from tests.bi.fixtures import materialize_bi_plane
+from tests.support.factories.authorization import grant_institution_authority
 from tests.support.helpers import ORG_1, ORG_2, USER_1, headers
 from tests.support.inmemory_storage import InMemoryStorageClient
 
@@ -93,7 +94,11 @@ NEXT = KeyReference("aws_kms", "synthetic-next-a", "us-east-1", "111122223333")
 NAME = "Synthetic Borrower Ñ"
 EXPANDING_NAME = "\ufb03" * 130
 IDENTIFIER = "SYNTHETIC-CARD-17"
-CTX = TenantContext(organization_id=ORG_1, actor_user_id=USER_1, roles=("admin",))
+CTX = TenantContext(
+    organization_id=ORG_1, actor_user_id=USER_1, roles=("admin",), authorization_version=1
+)
+MAKER_ID = UUID("cccccccc-cccc-4ccc-8ccc-cccccccccccc")
+MAKER_CTX = TenantContext(organization_id=ORG_1, actor_user_id=MAKER_ID, authorization_version=1)
 REGISTER_CTX = TenantContext(organization_id=ORG_1, actor_user_id=USER_1, authorization_version=1)
 
 
@@ -123,7 +128,24 @@ def provider(
                 storage_slug=bank_id.lower(),
             )
         )
+    db_session.add(User(id=MAKER_ID, organization_id=ORG_1, email="synthetic-maker@example.test"))
     db_session.flush()
+    for bank_id in (BANK_A, BANK_B):
+        for user_id, bundle, sensitivity in (
+            (USER_1, RoleBundle.ANALYST, SensitivityScope.ALL),
+            (USER_1, RoleBundle.APPROVER, SensitivityScope.CONFIDENTIAL),
+            (MAKER_ID, RoleBundle.ANALYST, SensitivityScope.CONFIDENTIAL),
+        ):
+            grant_institution_authority(
+                db_session,
+                organization_id=ORG_1,
+                bank_id=bank_id,
+                user_id=user_id,
+                bundle=bundle,
+                module=ModuleScope.DATA,
+                sensitivity=sensitivity,
+            )
+    db_session.commit()
     return provider
 
 
@@ -657,19 +679,11 @@ def test_failed_sensitive_write_rolls_back_without_a_platform_fallback(
 
 
 def withdraw_counterparties(db: Session, *, expected_rows: int = 1) -> CanonicalWithdrawal:
-    checker = User(
-        id=new_uuid7(),
-        organization_id=ORG_1,
-        email=f"synthetic-checker-{new_uuid7()}@example.test",
-        display_name="Synthetic checker",
-    )
-    db.add(checker)
-    db.flush()
     bank = db.get(Bank, BANK_A)
     assert bank is not None
     requested = canonical_withdrawal.request_withdrawal(
         db,
-        CTX,
+        MAKER_CTX,
         bank,
         entity="counterparty",
         source_system="EXCEL_CSV",
@@ -679,10 +693,10 @@ def withdraw_counterparties(db: Session, *, expected_rows: int = 1) -> Canonical
     )
     applied = canonical_withdrawal.approve_withdrawal(
         db,
-        TenantContext(organization_id=ORG_1, actor_user_id=checker.id),
+        CTX,
         bank,
         requested.id,
-        approved_by=checker.email,
+        approved_by="synthetic-checker@example.test",
     )
     assert applied.status == "applied" and applied.rows_withdrawn == expected_rows
     db.commit()

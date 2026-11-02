@@ -35,6 +35,8 @@ import {
   useCanonicalPositionsPage,
 } from "@/lib/api/hooks";
 import { utcDay } from "@/lib/api/biKeys";
+import { useDataPermission } from "@/lib/api/dataAccess";
+import DataAccessNotice from "@/components/ui/DataAccessNotice";
 import { fmtDateUTC, labelize } from "@/lib/api/values";
 import { fmtInt } from "@/lib/format";
 import PositionDrawer, {
@@ -129,6 +131,7 @@ function PositionsBlotter() {
     asOf: asOf || undefined,
     q: reference,
   });
+  const allowed = useDataPermission(bank?.id, "view", "restricted");
 
   const [selected, setSelected] = useState<CanonicalPositionRead | null>(null);
 
@@ -229,6 +232,8 @@ function PositionsBlotter() {
   const windowStart = total === 0 ? 0 : offset + 1;
   const windowEnd = Math.min(offset + positions.length, total);
 
+  if (!allowed)
+    return <DataAccessNotice requirement="DATA · Restricted · View" />;
   return (
     <>
       <PageHeader

@@ -407,7 +407,22 @@ def main() -> None:
                 GrantorType.SYSTEM,
                 "e2e-bootstrap",
             ),
-            reason="exercise exact Liquidity read authority without granting another module",
+            reason="exercise exact Liquidity read authority",
+        )
+        authorization.create_role_binding(
+            session,
+            organization_id=DEMO_ORG_ID,
+            principal_user_id=users["liquidity_viewer"].id,
+            principal_type=PrincipalType.HUMAN,
+            role_bundle=RoleBundle.VIEWER,
+            scope=authorization.BindingScope(
+                InstitutionScope.INSTITUTION,
+                SAMPLE_BANK_ID,
+                ModuleScope.DATA,
+                SensitivityScope.CONFIDENTIAL,
+            ),
+            grantor=authorization.GrantorRef(GrantorType.SYSTEM, "e2e-bootstrap"),
+            reason="Read reporting periods for the Liquidity reader's BI journeys",
         )
         authorization.create_role_binding(
             session,

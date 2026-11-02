@@ -34,6 +34,7 @@ from app.stress.schemas.stress import MacroScenarioListRead, MacroScenarioRead
 from app.stress.service import macro_scenarios
 from app.stress.service.default_macro_scenarios import DEFAULT_MACRO_SCENARIOS
 from tests.data_engine.api.test_ingestion import seed_bank
+from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID, materialize_canonical_test_book
 from tests.stress.authority import grant
 from tests.support.helpers import ORG_1, USER_1, headers
 
@@ -533,7 +534,9 @@ def test_risk_capabilities_reach_profiles_in_their_exact_scope(
     role: RoleBundle,
     permissions: set[Permission],
 ) -> None:
-    bank_id = seed_bank(unbound)
+    materialize_canonical_test_book(db_session)
+    db_session.commit()
+    bank_id = SAMPLE_BANK_ID
     grant(db_session, role, bank_id=bank_id if bank_scoped else None)
     response = unbound.get("/api/v1/auth/me", headers=headers(roles=("viewer",)))
     assert response.status_code == 200, response.text

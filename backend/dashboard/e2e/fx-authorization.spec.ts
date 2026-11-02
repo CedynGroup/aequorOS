@@ -24,6 +24,7 @@ const test = base.extend<{
       await provideFixture(async (sensitivities, role = "viewer") => {
         for (const [module, sensitivity] of [
           ["reg", "published"],
+          ["data", "confidential"],
           ...sensitivities.map((sensitivity) => ["fx", sensitivity]),
         ]) {
           const data = {

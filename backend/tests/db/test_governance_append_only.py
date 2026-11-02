@@ -410,6 +410,71 @@ def test_the_parameter_control_plane_still_approves_and_supersedes(
 
 
 @postgres_only
+def test_pending_exception_allows_only_one_separate_checker_transition(
+    connection: Connection,
+) -> None:
+    row_id, maker, checker = uuid4(), uuid4(), uuid4()
+    params = {
+        "id": str(row_id),
+        "org": ORG_1,
+        "bank": _BANK_ID,
+        "maker": str(maker),
+        "checker": str(checker),
+        "now": _NOW,
+    }
+    connection.execute(
+        text("""
+        INSERT INTO reconciliation_exceptions
+          (id, organization_id, bank_id, control, max_gap_fraction, effective_from,
+           reason, requested_by, requested_at, status, created_at, updated_at)
+        VALUES
+          (:id, :org, :bank, 'balance_sheet_identity', 0.01, DATE '2026-01-01',
+           'Bounded feed defect', :maker, :now, 'pending', :now, :now)
+    """),
+        params,
+    )
+    _refused(
+        connection,
+        "UPDATE reconciliation_exceptions SET requested_by = :checker WHERE id = :id",
+        params,
+        "governed and sealed",
+    )
+    _refused(
+        connection,
+        "UPDATE reconciliation_exceptions SET status = 'approved', approved_by = 'Maker', "
+        "approved_by_user_id = :maker, approval_timestamp = :now WHERE id = :id",
+        params,
+        "different authenticated checker",
+    )
+    connection.execute(
+        text("""
+        UPDATE reconciliation_exceptions SET status = 'approved', approved_by = 'Checker',
+        approved_by_user_id = :checker, approval_timestamp = :now WHERE id = :id
+    """),
+        params,
+    )
+    assert (
+        connection.scalar(
+            text("SELECT status FROM reconciliation_exceptions WHERE id = :id"), params
+        )
+        == "approved"
+    )
+    _refused(
+        connection,
+        "UPDATE reconciliation_exceptions SET approved_by_user_id = :maker WHERE id = :id",
+        params,
+        "approval evidence is immutable",
+    )
+    _refused(
+        connection,
+        "UPDATE reconciliation_exceptions SET status = 'pending', approved_by = NULL, "
+        "approved_by_user_id = NULL, approval_timestamp = NULL WHERE id = :id",
+        params,
+        "approval evidence is immutable",
+    )
+
+
+@postgres_only
 def test_a_granted_reconciliation_ceiling_cannot_be_widened_in_place(
     connection: Connection,
 ) -> None:

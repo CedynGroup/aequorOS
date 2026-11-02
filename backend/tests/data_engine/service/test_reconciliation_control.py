@@ -20,14 +20,17 @@ from __future__ import annotations
 
 from datetime import date, timedelta
 from decimal import Decimal
+from uuid import UUID
 
 import pytest
+from fastapi import HTTPException
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
 from app.capital.schemas.regulatory_capital import CapitalScenarioBatchCreate
 from app.capital.service import regulatory_capital
+from app.core.authorization import ModuleScope, RoleBundle, SensitivityScope
 from app.data_engine.domain.ingestion.constants import POSITION_TYPES, SOURCE_SYSTEMS
 from app.data_engine.service import reconciliation
 from app.domain.authority.outcomes import NotComputable, OutcomeState
@@ -58,7 +61,12 @@ from app.models import (
 from app.reporting.schemas.packages import RegulatoryPackageCreate
 from app.reporting.service import calendar, generation
 from app.services import job_queue
-from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID, materialize_canonical_test_book
+from tests.fixtures.canonical_bank_fixture import (
+    FORECAST_APPROVER_ID,
+    SAMPLE_BANK_ID,
+    materialize_canonical_test_book,
+)
+from tests.support.factories.authorization import grant_institution_authority
 from tests.support.factories.canonical import FIXTURE_AS_OF, seed_canonical_fixture
 from tests.support.factories.reconciliation import (
     FIXTURE_APPROVER,
@@ -85,8 +93,8 @@ FIXTURE_PLUG = Decimal("15280000.000000")
 FIXTURE_GAP_FRACTION = Decimal("0.10405175")
 
 
-def _ctx() -> TenantContext:
-    return TenantContext(organization_id=ORG_1, actor_user_id=USER_1, authorization_version=1)
+def _ctx(actor: UUID = USER_1) -> TenantContext:
+    return TenantContext(organization_id=ORG_1, actor_user_id=actor, authorization_version=1)
 
 
 def _bank(db_session: Session) -> Bank:
@@ -99,6 +107,25 @@ def _seed_book(db_session: Session) -> None:
     materialize_canonical_test_book(db_session)
     db_session.flush()
     seed_canonical_fixture(db_session, organization_id=ORG_1, bank_id=SAMPLE_BANK_ID)
+    for bundle in (RoleBundle.ANALYST, RoleBundle.APPROVER):
+        grant_institution_authority(
+            db_session,
+            organization_id=ORG_1,
+            bank_id=SAMPLE_BANK_ID,
+            user_id=USER_1,
+            bundle=bundle,
+            module=ModuleScope.DATA,
+            sensitivity=SensitivityScope.CONFIDENTIAL,
+        )
+    grant_institution_authority(
+        db_session,
+        organization_id=ORG_1,
+        bank_id=SAMPLE_BANK_ID,
+        user_id=FORECAST_APPROVER_ID,
+        bundle=RoleBundle.APPROVER,
+        module=ModuleScope.DATA,
+        sensitivity=SensitivityScope.CONFIDENTIAL,
+    )
 
 
 def _seed_duplicate_second_source(db_session: Session) -> None:
@@ -166,7 +193,7 @@ def _revoke_fixture_exception(db_session: Session) -> None:
     assert grant is not None, "the fixture must ship with its governed exception"
     reconciliation.revoke_exception(
         db_session,
-        _ctx(),
+        _ctx(FORECAST_APPROVER_ID),
         _bank(db_session),
         grant.exception_id,
         revoked_by="test_supervisor",
@@ -449,7 +476,6 @@ def test_revoked_exception_no_longer_admits_the_book(db_session: Session) -> Non
     [
         ({"reason": "   "}, "non-empty reason"),
         ({"max_gap_fraction": Decimal("0")}, "positive max_gap_fraction"),
-        ({"approved_by": ""}, "named approver"),
         (
             {"effective_to": date(2000, 1, 1), "effective_from": date(2026, 1, 1)},
             "effective_to precedes",
@@ -462,31 +488,35 @@ def test_exception_governance_rules_are_enforced(
     _seed_book(db_session)
     base: dict[str, object] = {
         "reason": "documented defect",
-        "approved_by": "supervisor",
         "max_gap_fraction": Decimal("0.2"),
         "effective_from": date(2026, 1, 1),
     }
     base.update(kwargs)
     with pytest.raises(reconciliation.ReconciliationExceptionError) as excinfo:
-        reconciliation.grant_exception(db_session, _ctx(), _bank(db_session), **base)  # type: ignore[arg-type]
+        reconciliation.propose_exception(db_session, _ctx(), _bank(db_session), **base)  # type: ignore[arg-type]
     assert fragment in str(excinfo.value)
 
 
 def test_exception_cannot_be_self_approved(db_session: Session) -> None:
     """Four eyes: the officer who asks for the exception may not grant it."""
     _seed_book(db_session)
-    with pytest.raises(reconciliation.ReconciliationExceptionError) as excinfo:
-        reconciliation.grant_exception(
+    row = reconciliation.propose_exception(
+        db_session,
+        _ctx(),
+        _bank(db_session),
+        reason="known defect",
+        max_gap_fraction=Decimal("0.2"),
+        effective_from=date(2026, 1, 1),
+    )
+    with pytest.raises(HTTPException) as excinfo:
+        reconciliation.approve_exception(
             db_session,
             _ctx(),
             _bank(db_session),
-            reason="known defect",
+            row.id,
             approved_by="the same officer",
-            approved_by_user_id=USER_1,
-            max_gap_fraction=Decimal("0.2"),
-            effective_from=date(2026, 1, 1),
         )
-    assert "second approver is required" in str(excinfo.value)
+    assert excinfo.value.status_code == 404
 
 
 # ---------------------------------------------------------------------------

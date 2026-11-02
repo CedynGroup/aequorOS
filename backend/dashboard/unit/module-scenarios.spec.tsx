@@ -45,6 +45,7 @@ vi.mock("@/components/shell/BankContext", () => ({
           },
         ]
       : [],
+    periodsStatus: "ready",
     setPeriodId: vi.fn(),
     period: context.hasPeriod
       ? { id: "period", label: "March", periodEnd: new Date("2026-03-31") }

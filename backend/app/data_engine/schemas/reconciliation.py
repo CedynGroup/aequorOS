@@ -1,24 +1,29 @@
-"""Reconciliation-control governance contracts (audit 2026-08-22 D-20).
+"""Persisted reconciliation proposal, approval and revocation contracts.
 
-``reconciliation.grant_exception`` / ``revoke_exception`` shipped complete,
-maker-checker-enforced and audited — and reachable only from a test factory.
-A tenant whose canonical book carries a known, bounded defect was therefore
-blocked from every filing act with no way to record the approved exception
-through the product; the only remedy was a database write.
-
-These are the request/response shapes for that governance act. They are
-deliberately verbose: an exception to a fail-closed control is a decision
-somebody has to answer for, so the reason, the named approver, the ceiling and
-the window are all required rather than defaulted.
+The server records both authenticated identities. Request payloads accept only
+proposal values or audit labels, never caller-selected authority identifiers.
 """
 
 from __future__ import annotations
 
 from datetime import date, datetime
 from decimal import Decimal
+from typing import Annotated
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import AfterValidator, BaseModel, ConfigDict, Field, model_validator
+
+
+def _require_exact_ceiling(value: Decimal) -> Decimal:
+    _, digits, exponent = value.as_tuple()
+    if not isinstance(exponent, int) or (exponent < -6 and any(digits[exponent + 6 :])):
+        raise ValueError("max_gap_fraction must be exactly representable with six decimal places.")
+    return value
+
+
+ReconciliationCeiling = Annotated[
+    Decimal, Field(gt=0, le=1, decimal_places=6), AfterValidator(_require_exact_ceiling)
+]
 
 
 class ClosedModel(BaseModel):
@@ -26,26 +31,14 @@ class ClosedModel(BaseModel):
 
 
 class ReconciliationExceptionCreate(ClosedModel):
-    """Record an approved exception to a fail-closed reconciliation control.
-
-    Four-eyes is enforced in the service (``grant_exception``): the officer who
-    requested the exception may not be the approver. ``approved_by_user_id`` is
-    what makes that check possible, so supplying it is how a caller proves the
-    second pair of eyes exists rather than asserting it.
-    """
+    """Propose a bounded exception. The server records the authenticated maker."""
 
     #: Why this breach is known, bounded and acceptable. Never blank.
     reason: str = Field(min_length=1, max_length=2000)
-    #: The named approver — an operator or a tenant officer. Free text because
-    #: the audit trail shows the identity string, not a foreign key.
-    approved_by: str = Field(min_length=1, max_length=120)
-    #: The approver's user id, when they are a tenant user. Required for the
-    #: self-approval refusal to be able to fire.
-    approved_by_user_id: UUID | None = None
     #: The LARGEST breach this exception covers, as a fraction of the control's
     #: denominator. An exception acknowledges a bounded defect; it never
     #: disables the control, so a gap beyond the ceiling still blocks.
-    max_gap_fraction: Decimal = Field(gt=0, le=1)
+    max_gap_fraction: ReconciliationCeiling
     effective_from: date
     effective_to: date | None = None
 
@@ -55,6 +48,12 @@ class ReconciliationExceptionCreate(ClosedModel):
             msg = "effective_to cannot precede effective_from."
             raise ValueError(msg)
         return self
+
+
+class ReconciliationExceptionApprove(ClosedModel):
+    """An audit label, never authority. The checker identity comes from authentication."""
+
+    approved_by: str = Field(min_length=1, max_length=120)
 
 
 class ReconciliationExceptionRevoke(ClosedModel):
@@ -76,9 +75,10 @@ class ReconciliationExceptionRead(ClosedModel):
     reason: str
     requested_by: UUID | None
     requested_at: datetime
-    approved_by: str
+    status: str
+    approved_by: str | None
     approved_by_user_id: UUID | None
-    approval_timestamp: datetime
+    approval_timestamp: datetime | None
     revoked_at: datetime | None
     revoked_by: str | None
 
