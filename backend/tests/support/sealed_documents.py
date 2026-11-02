@@ -31,6 +31,8 @@ def insert_source(  # noqa: PLR0913 - synthetic source evidence and ownership
     length: int,
     path: str,
     version: str | None = "original-provider-version",
+    *,
+    package_family: str = "bsd",
 ) -> UUID:
     identifier, actor = uuid4(), uuid4()
     row: dict[str, object] = {"id": identifier, "organization_id": organization}
@@ -43,7 +45,7 @@ def insert_source(  # noqa: PLR0913 - synthetic source evidence and ownership
                 id=package,
                 organization_id=organization,
                 bank_id=bank,
-                return_family="bsd",
+                return_family=package_family,
                 return_code=f"SYN-{identifier.hex[:12]}",
                 reporting_date=date(2026, 9, 30),
                 frequency="monthly",

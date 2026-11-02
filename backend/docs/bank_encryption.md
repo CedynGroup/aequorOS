@@ -288,7 +288,13 @@ it does not decrypt/re-encrypt old documents under a newer key.
 `app.storage.public.resolve_sealed_document` takes an explicit family/source
 binding and a fresh complete bank-scoped VIEW authorization decision supplied by
 the owning feature, with its normal whole-institution and presentation checks.
-Regulatory sources require the regulatory module; ICAAP sources require capital.
+Artifact versions and package attachments use their persisted owning package's
+return-family gate: ordinary returns require Regulatory Reporting/restricted,
+while frozen ICAAP packages require Capital/confidential. Direct ICAAP attachments
+and supervisory letters require Capital/confidential. Both module and sensitivity
+must match exactly. Reporting and storage share the classification in
+`app.core.return_family_access`; the storage kernel resolves package ownership
+through bank- and organization-scoped metadata queries without importing a feature.
 Queries constrain both organization and bank even with RLS. Missing bindings
 refuse and do not select a legacy path or try a recorded provider version.
 `StorageClient.read_sealed` fetches the immutable physical key, authenticates the
@@ -301,7 +307,8 @@ version read for later access/retention evidence. Unsupported backends refuse.
 This slice defines schema and resolution only: no existing writer or reader uses
 stable semantics yet. Existing consumers retain their current legacy behavior.
 No new HTTP route is added, so there is no new route IDOR census entry; resolver
-isolation is exercised directly in `tests/storage/test_sealed_documents.py` and
+isolation and exact family authority are exercised directly in
+`tests/storage/test_sealed_documents.py` and
 constraint/RLS/upgrade/downgrade behavior in
 `tests/db/test_sealed_document_objects.py`.
 

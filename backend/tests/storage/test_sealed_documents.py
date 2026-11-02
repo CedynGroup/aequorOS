@@ -21,6 +21,7 @@ from app.core.authorization import (
 )
 from app.core.key_management.types import KeyStatus, KeyUnavailableError
 from app.core.tenancy import TenantContext
+from app.reporting.service.family_access import gate_for
 from app.storage.client import (
     SealedEncryptionContext,
     StorageAccessError,
@@ -55,13 +56,17 @@ MODELS = {
 
 
 def decision(
-    family: DocumentFamily, ctx: TenantContext = CTX, bank: str = BANK
+    family: DocumentFamily,
+    ctx: TenantContext = CTX,
+    bank: str = BANK,
+    *,
+    package_family: str = "bsd",
 ) -> AuthorizationDecision:
     assert ctx.actor_user_id is not None
-    module = (
-        Module.REGULATORY
+    gate = gate_for(
+        package_family
         if family in (DocumentFamily.ARTIFACT, DocumentFamily.PACKAGE_ATTACHMENT)
-        else Module.CAPITAL
+        else "icaap"
     )
     return AuthorizationDecision(
         True,
@@ -72,8 +77,8 @@ def decision(
             ctx.organization_id,
             InstitutionScope.INSTITUTION,
             bank,
-            module,
-            Sensitivity.CONFIDENTIAL,
+            gate.module,
+            gate.sensitivity,
         ),
         (uuid4(),),
         (),
@@ -89,6 +94,7 @@ def catalogue(  # noqa: PLR0913 - synthetic catalogue descriptor
     envelope: UUID | None = None,
     length: int | None = None,
     sha256: str | None = None,
+    package_family: str = "bsd",
 ) -> tuple[DocumentBinding, SealedDocumentObject]:
     identifier = uuid4()
     metadata = metadata_for(SLUG, "outputs", payload)
@@ -96,7 +102,16 @@ def catalogue(  # noqa: PLR0913 - synthetic catalogue descriptor
         sha256 or metadata.checksum_sha256,
         length if length is not None else len(payload),
     )
-    source = insert_source(db.connection(), family, ORG_1, BANK, digest, size, "legacy/archive.pdf")
+    source = insert_source(
+        db.connection(),
+        family,
+        ORG_1,
+        BANK,
+        digest,
+        size,
+        "legacy/archive.pdf",
+        package_family=package_family,
+    )
     document = SealedDocumentObject(
         id=identifier,
         organization_id=ORG_1,
@@ -140,6 +155,58 @@ class RepresentationStorage(InMemoryStorageClient):
         descriptor, body = self.read(location)
         self.source = body
         return descriptor, body
+
+
+@pytest.mark.parametrize(
+    ("family", "package_family", "expected_module", "expected_sensitivity"),
+    [
+        (family, package_family, module, sensitivity)
+        for family in (DocumentFamily.ARTIFACT, DocumentFamily.PACKAGE_ATTACHMENT)
+        for package_family, module, sensitivity in (
+            ("bsd", Module.REGULATORY, Sensitivity.RESTRICTED),
+            ("icaap_stress", Module.REGULATORY, Sensitivity.RESTRICTED),
+            ("icaap", Module.CAPITAL, Sensitivity.CONFIDENTIAL),
+        )
+    ]
+    + [
+        (family, "bsd", Module.CAPITAL, Sensitivity.CONFIDENTIAL)
+        for family in (DocumentFamily.ICAAP_ATTACHMENT, DocumentFamily.SUPERVISORY_LETTER)
+    ],
+)
+@pytest.mark.parametrize("module", [Module.REGULATORY, Module.CAPITAL])
+@pytest.mark.parametrize("sensitivity", list(Sensitivity))
+def test_source_family_requires_exact_module_and_sensitivity(  # noqa: PLR0913
+    bank_storage: BankStorage,
+    db_session: Session,
+    family: DocumentFamily,
+    package_family: str,
+    expected_module: Module,
+    expected_sensitivity: Sensitivity,
+    module: Module,
+    sensitivity: Sensitivity,
+) -> None:
+    payload = b"synthetic family-gated document"
+    binding, document = catalogue(db_session, family, payload, package_family=package_family)
+    storage = RepresentationStorage()
+    location = StorageLocation(SLUG, "outputs", document.physical_key)
+    storage.write(location, io.BytesIO(payload), metadata_for(SLUG, "outputs", payload))
+    authority = decision(family, package_family=package_family)
+    authority = replace(
+        authority, resource=replace(authority.resource, module=module, sensitivity=sensitivity)
+    )
+    if module is expected_module and sensitivity is expected_sensitivity:
+        _, body = resolve_sealed_document(
+            db_session, CTX, BANK, binding, storage, authorization=authority
+        )
+        with body:
+            assert body.read() == payload
+        assert storage.calls == 1
+    else:
+        with pytest.raises(StorageAccessError):
+            resolve_sealed_document(
+                db_session, CTX, BANK, binding, storage, authorization=authority
+            )
+        assert storage.calls == 0
 
 
 @pytest.mark.parametrize("family", list(DocumentFamily))

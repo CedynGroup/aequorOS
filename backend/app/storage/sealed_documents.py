@@ -21,7 +21,9 @@ from app.core.authorization import (
     PrincipalType,
     Sensitivity,
 )
+from app.core.return_family_access import FamilyGate, gate_for
 from app.core.tenancy import TenantContext
+from app.db.base import Base
 from app.storage.client import (
     SealedEncryptionContext,
     StorageAccessError,
@@ -64,6 +66,40 @@ class DocumentBinding:
     source_id: UUID
 
 
+def _source_gate(
+    db: Session, ctx: TenantContext, bank_id: str, binding: DocumentBinding
+) -> FamilyGate:
+    if binding.family not in (DocumentFamily.ARTIFACT, DocumentFamily.PACKAGE_ATTACHMENT):
+        return FamilyGate(Module.CAPITAL, Sensitivity.CONFIDENTIAL)
+    source_name = (
+        "regulatory_artifact_versions"
+        if binding.family is DocumentFamily.ARTIFACT
+        else "regulatory_package_attachments"
+    )
+    source = Base.metadata.tables[source_name]
+    package = Base.metadata.tables["regulatory_packages"]
+    query = (
+        select(package.c.return_family)
+        .join(
+            source,
+            (source.c.package_id == package.c.id)
+            & (source.c.organization_id == package.c.organization_id),
+        )
+        .where(
+            source.c.id == binding.source_id,
+            source.c.organization_id == ctx.organization_id,
+            package.c.organization_id == ctx.organization_id,
+            package.c.bank_id == bank_id,
+        )
+    )
+    if binding.family is DocumentFamily.PACKAGE_ATTACHMENT:
+        query = query.where(source.c.bank_id == bank_id)
+    family = cast(str | None, db.scalar(query))
+    if family is None:
+        raise StorageNotFoundError("Sealed document source not found.")
+    return gate_for(family)
+
+
 def resolve_sealed_document(  # noqa: PLR0913 - explicit authorization and storage boundaries
     db: Session,
     ctx: TenantContext,
@@ -81,11 +117,6 @@ def resolve_sealed_document(  # noqa: PLR0913 - explicit authorization and stora
     token claim. A binding is mandatory: absence is an error, never a legacy-read
     or provider-version fallback. No consumer is converted by defining this API.
     """
-    module = (
-        Module.REGULATORY
-        if binding.family in (DocumentFamily.ARTIFACT, DocumentFamily.PACKAGE_ATTACHMENT)
-        else Module.CAPITAL
-    )
     resource = authorization.resource
     principal = authorization.principal
     if (
@@ -95,14 +126,15 @@ def resolve_sealed_document(  # noqa: PLR0913 - explicit authorization and stora
         or resource.organization_id != ctx.organization_id
         or resource.institution_scope is not InstitutionScope.INSTITUTION
         or resource.institution_id != bank_id
-        or resource.module is not module
-        or resource.sensitivity not in (Sensitivity.CONFIDENTIAL, Sensitivity.RESTRICTED)
         or principal.organization_id != ctx.organization_id
         or principal.principal_id != ctx.actor_user_id
         or principal.principal_type is not PrincipalType.HUMAN
         or ctx.impersonation_context is not None
         or ctx.authorization_version is None
     ):
+        raise StorageAccessError("Bank document authorization is required.")
+    gate = _source_gate(db, ctx, bank_id, binding)
+    if resource.module is not gate.module or resource.sensitivity is not gate.sensitivity:
         raise StorageAccessError("Bank document authorization is required.")
     model = _BINDINGS[binding.family]
     document = db.scalar(
