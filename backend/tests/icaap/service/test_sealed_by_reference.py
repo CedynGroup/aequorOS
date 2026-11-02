@@ -51,9 +51,7 @@ pytestmark = pytest.mark.canonical_book_baseline
 KIND = "senior_management_report"
 
 
-def _freeze(
-    db: Session, access: IcaapAccess, cycle_id: UUID
-) -> IcaapFreezeRead:
+def _freeze(db: Session, access: IcaapAccess, cycle_id: UUID) -> IcaapFreezeRead:
     """Freeze the cycle through the workflow's own digest, as the officer does."""
     digest = workflow.get_stages(db, access, cycle_id).review_digest
     return freeze.freeze_cycle(
@@ -97,9 +95,7 @@ def _filed(db: Session, cycle_id: UUID, package_id: UUID) -> None:
     db.commit()
 
 
-def _published_attachment(
-    db: Session, access: IcaapAccess, cycle_id: UUID
-) -> IcaapAttachment:
+def _published_attachment(db: Session, access: IcaapAccess, cycle_id: UUID) -> IcaapAttachment:
     """Attach the freeze-gate document through the real upload path."""
     storage = InMemoryStorageClient()
     attachments.upload_attachment(
@@ -122,9 +118,7 @@ def _published_attachment(
     return row
 
 
-def _cycle_attachment_identity(
-    db: Session, attachment_id: UUID
-) -> SealedDocumentObject | None:
+def _cycle_attachment_identity(db: Session, attachment_id: UUID) -> SealedDocumentObject | None:
     row = db.get(IcaapAttachment, attachment_id)
     assert row is not None
     return find_sealed_document(
@@ -135,9 +129,7 @@ def _cycle_attachment_identity(
     )
 
 
-def _package_attachment_identity(
-    db: Session, attachment_id: UUID
-) -> SealedDocumentObject | None:
+def _package_attachment_identity(db: Session, attachment_id: UUID) -> SealedDocumentObject | None:
     row = db.get(RegulatoryPackageAttachment, attachment_id)
     assert row is not None
     return find_sealed_document(

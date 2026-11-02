@@ -46,9 +46,7 @@ def sealed_document(db: Session, *, slug: str, context_path: str) -> SealedDocum
     return document
 
 
-def published_bytes(
-    db: Session, storage: StorageClient, *, slug: str, context_path: str
-) -> bytes:
+def published_bytes(db: Session, storage: StorageClient, *, slug: str, context_path: str) -> bytes:
     """The plaintext a sealed publication wrote, addressed by the path its row records."""
     document = sealed_document(db, slug=slug, context_path=context_path)
     assert document.context_format in ("aws-esdk-object-v1", "plaintext-v1")

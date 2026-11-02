@@ -58,7 +58,7 @@ from tests.storage.test_bank_encryption import NEXT_KEY, SLUG, BankStorage, bank
 from tests.storage.test_sealed_documents import BANK, MODELS, decision
 from tests.support.helpers import ORG_1, USER_1
 from tests.support.inmemory_storage import InMemoryStorageClient
-from tests.support.sealed_documents import insert_source
+from tests.support.sealed_documents import SOURCES, insert_source
 
 __all__ = ["bank_storage"]
 
@@ -559,7 +559,7 @@ def test_concurrent_binding_retries_preserve_the_winning_object(
         if (
             compiled is not None
             and isinstance(compiled.statement, Insert)
-            and compiled.statement.table.name == MODELS[family].__tablename__
+            and compiled.statement.table.name == SOURCES[family][1]
         ):
             ready.wait(timeout=10)
 
