@@ -455,6 +455,9 @@ or exact-version retention, including output buckets without Object Lock or with
 event; package status and financial content stay unchanged. Resolve
 the storage capability, permissions or archived-version problem before retrying.
 The submission event records each retained `storage_version_id`.
+Retention locators follow the
+[stable sealed-document reference contract](bank_encryption.md#publication-and-its-callers),
+including historical filings; manifest paths remain the feature's recorded paths.
 
 For historical filings, run the tenant- and bank-scoped inventory from `backend`:
 

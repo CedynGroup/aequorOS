@@ -280,9 +280,9 @@ def resolve_sealed_document(  # noqa: PLR0913 - explicit authorization and stora
 
     The owning feature must supply fresh whole-institution VIEW authority from
     scoped authorization or a verified examiner session, including its workflow
-    and presentation checks in this request/session. This kernel never infers authority from a scalar role or a
-    token claim. A binding is mandatory: absence is an error, never a legacy-read
-    or provider-version fallback.
+    and presentation checks in this request/session. This kernel never infers
+    authority from a scalar role or a token claim. A binding is mandatory:
+    absence is an error, never a legacy-read or provider-version fallback.
     """
     _authorize(db, ctx, bank_id, binding, authorization)
     document = _bound_document(db, ctx.organization_id, bank_id, binding)

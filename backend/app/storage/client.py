@@ -67,8 +67,8 @@ class StorageLocation:
 
 #: Every immutable sealed object lives under this prefix in the outputs tier,
 #: keyed by its catalogue UUID. The prefix is a storage contract: generic
-#: writes and deletes refuse it, so the only way to create or replace bytes
-#: there is the conditional sealed publication.
+#: writes and deletes refuse it; only conditional sealed publication can create
+#: bytes there, and replacement is forbidden.
 SEALED_KEY_PREFIX = "sealed/v1/"
 
 
@@ -92,10 +92,13 @@ def refuse_sealed_maintenance(location: StorageLocation, operation: str) -> None
 
 @dataclass(frozen=True)
 class SealedEncryptionContext:
-    """Trusted catalogue descriptor; never populate from request or object headers.
+    """Trusted descriptor of the original encryption context.
 
     The physical lookup key is separate from the original authenticated path and
     envelope. Catalogue locators are immutable; see backend/docs/bank_encryption.md.
+    Document reads take this descriptor from the catalogue, never request or object
+    headers. Create-only retries verify the existing object's recorded context
+    before cataloguing it.
     Plaintext is explicit and still refuses for a connected bank.
     """
 
@@ -280,17 +283,15 @@ class StorageClient(ABC):
         """Create one immutable sealed object, or refuse.
 
         ``location`` is the physical sealed key; ``authenticated_context`` is the
-        path the bank-key context binds (a newly published object normally uses
-        the same path for both). The payload is hashed and must equal
+        feature's recorded path that the bank-key context binds, separate from
+        the physical key. The payload is hashed and must equal
         ``metadata.checksum_sha256`` before it is encrypted.
 
         Implementations must create the key atomically and never overwrite:
         a create-only precondition, or the backend's equivalent. A retry with
         the same content returns the existing object; different content refuses.
         """
-        raise StorageBackendError(
-            "This storage backend cannot publish immutable sealed documents."
-        )
+        raise StorageBackendError("This storage backend cannot publish immutable sealed documents.")
 
     @abstractmethod
     def exists(self, location: StorageLocation) -> bool: ...

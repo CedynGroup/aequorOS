@@ -129,7 +129,6 @@ def _error_code(exc: ClientError) -> str:
     return "" if code is None else str(code)
 
 
-
 def _verified_payload(data: BinaryIO, checksum_sha256: str) -> BinaryIO:
     """Spool the payload and prove it is the content the catalogue will record.
 
@@ -376,9 +375,7 @@ class S3CompatibleStorageClient(StorageClient):
             # NOT the one those bytes were sealed under once the bank key has
             # rotated, so the identity comes from the object, never the attempt.
             self._log("write.sealed", location, result="exists")
-            return self._existing_sealed(
-                location, metadata.checksum_sha256, authenticated_context
-            )
+            return self._existing_sealed(location, metadata.checksum_sha256, authenticated_context)
         except BotoCoreError as exc:
             self._log("write.sealed", location, result="backend_error")
             raise StorageBackendError(str(exc)) from exc
@@ -509,9 +506,7 @@ class S3CompatibleStorageClient(StorageClient):
             raise StorageValidationError(
                 "Sealed publication refused: the existing object's encryption metadata is invalid."
             )
-        return SealedEncryptionContext(
-            "plaintext-v1", authenticated_context, expected_sha256, None
-        )
+        return SealedEncryptionContext("plaintext-v1", authenticated_context, expected_sha256, None)
 
     def reencrypt(self, item: EncryptionInventoryItem) -> bool:
         result = reencryption.reencrypt(
