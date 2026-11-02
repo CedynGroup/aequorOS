@@ -24,6 +24,7 @@
     "lib/workforce-oidc.ts",
     "lib/workforce-oidc.test.ts",
     "lib/auth-callback.test.ts",
-    "app/api/auth/callback/route.ts"
+    "app/api/auth/callback/route.ts",
+    "app/api/auth/login/route.ts"
   ]
 }

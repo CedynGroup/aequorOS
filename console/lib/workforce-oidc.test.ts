@@ -4,6 +4,7 @@ import {
   applyWorkforcePolicy,
   oidcSessionExpiry,
   oidcSessionMaxAge,
+  usesGooglePolicy,
 } from "./workforce-oidc";
 
 test("default policy preserves generic authorization parameters", () => {
@@ -11,7 +12,7 @@ test("default policy preserves generic authorization parameters", () => {
     "https://idp.example/authorize?state=txn&nonce=nonce&code_challenge=pkce",
   );
   const before = url.toString();
-  applyWorkforcePolicy(url, "https://idp.example", false, {});
+  applyWorkforcePolicy(url, "https://idp.example", {});
   assert.equal(url.toString(), before);
   assert.equal(oidcSessionMaxAge("https://accounts.google.com", {}), 0);
   assert.equal(oidcSessionExpiry(4000, undefined, 0, 1000), 4000);
@@ -19,7 +20,7 @@ test("default policy preserves generic authorization parameters", () => {
 
 test("Workspace domain hint accompanies the configured Google login", () => {
   const url = new URL("https://accounts.google.com/authorize?state=txn");
-  applyWorkforcePolicy(url, "https://accounts.google.com", false, {
+  applyWorkforcePolicy(url, "https://accounts.google.com", {
     OPERATOR_OIDC_ALLOWED_DOMAIN: "workforce.example",
   });
   assert.equal(url.searchParams.get("hd"), "workforce.example");
@@ -29,11 +30,9 @@ test("Workspace domain hint accompanies the configured Google login", () => {
 test("Google policy leaves generic providers unchanged even when enabled", () => {
   const url = new URL("https://idp.example/authorize?state=txn");
   const before = url.toString();
-  applyWorkforcePolicy(url, "https://idp.example", true, {
+  applyWorkforcePolicy(url, "https://idp.example", {
     OPERATOR_OIDC_ALLOWED_DOMAIN: "workforce.example",
-    OPERATOR_OIDC_REQUIRE_HOSTED_DOMAIN: "true",
-    OPERATOR_OIDC_REQUIRE_ASSURANCE: "true",
-    OPERATOR_OIDC_STEP_UP_MAX_AGE_SECONDS: "300",
+    OPERATOR_GOOGLE_REQUIRE_2SV: "true",
   });
   assert.equal(url.toString(), before);
   assert.equal(
@@ -44,28 +43,42 @@ test("Google policy leaves generic providers unchanged even when enabled", () =>
   );
 });
 
-test("assurance and step-up policy request issuer evidence", () => {
-  for (const env of [
-    { OPERATOR_OIDC_REQUIRE_ASSURANCE: "true" },
-    { OPERATOR_OIDC_STEP_UP_MAX_AGE_SECONDS: "300" },
-  ]) {
-    const url = new URL("https://accounts.google.com/authorize");
-    applyWorkforcePolicy(url, "https://accounts.google.com", false, env);
-    assert.deepEqual(JSON.parse(url.searchParams.get("claims")!), {
-      id_token: {
-        auth_time: { essential: true },
-        amr: { essential: true },
-      },
-    });
+test("Google login requests a hosted-domain hint without optional assurance claims", () => {
+  const google = new URL("https://accounts.google.com/authorize");
+  applyWorkforcePolicy(google, "https://accounts.google.com", {});
+  assert.equal(google.searchParams.get("hd"), "aequoros.com");
+  for (const parameter of ["claims", "max_age", "prompt"]) {
+    assert.equal(google.searchParams.has(parameter), false);
   }
 });
 
-test("Google reauth requests evidence without unsupported freshness parameters", () => {
-  const google = new URL("https://accounts.google.com/authorize");
-  applyWorkforcePolicy(google, "https://accounts.google.com", true, {});
-  assert.equal(google.searchParams.has("max_age"), false);
-  assert.equal(google.searchParams.has("prompt"), false);
-  assert.ok(google.searchParams.has("claims"));
+test("mock issuer uses Google policy only under the undeployed allow-list", () => {
+  for (const APP_ENV of ["local", "test"]) {
+    const env = {
+      APP_ENV,
+      OPERATOR_OIDC_GOOGLE_POLICY_TEST_MODE: "true",
+      OPERATOR_OIDC_ALLOWED_DOMAIN: "workforce.example",
+      OPERATOR_OIDC_SESSION_MAX_AGE_SECONDS: "900",
+    };
+    const mock = new URL("http://127.0.0.1:8199/authorize");
+    applyWorkforcePolicy(mock, mock.origin, env);
+    assert.equal(mock.searchParams.get("hd"), "workforce.example");
+    assert.equal(oidcSessionMaxAge(mock.origin, env), 900);
+  }
+  for (const APP_ENV of [
+    undefined,
+    "production",
+    "staging",
+    "preview",
+    "TEST",
+  ]) {
+    assert.throws(() =>
+      usesGooglePolicy("http://127.0.0.1:8199", {
+        APP_ENV,
+        OPERATOR_OIDC_GOOGLE_POLICY_TEST_MODE: "true",
+      }),
+    );
+  }
 });
 
 test("session cap uses original issue time and never extends token expiry", () => {

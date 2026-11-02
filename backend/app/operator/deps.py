@@ -35,7 +35,7 @@ from dataclasses import dataclass, field
 from typing import Annotated, Any, Literal, cast
 from uuid import UUID
 
-from fastapi import Depends, HTTPException, Request, status
+from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, JsonValue, TypeAdapter
 from sqlalchemy import JSON, String, bindparam, select, text
@@ -200,7 +200,6 @@ def _oidc_context(token: str, operator_settings: OperatorSettings) -> OperatorCo
 
 
 def get_operator_context(
-    request: Request,
     credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(_bearer_scheme)],
 ) -> OperatorContext:
     if credentials is None or credentials.scheme.lower() != "bearer":
@@ -216,19 +215,7 @@ def get_operator_context(
     password = _password_context(credentials.credentials, operator_settings)
     if password is not None:
         return password
-    oidc = _oidc_context(credentials.credentials, operator_settings)
-    if operator_settings.oidc_issuer == "https://accounts.google.com" and request.method not in {
-        "GET",
-        "HEAD",
-        "OPTIONS",
-    }:
-        try:
-            workforce.require_recent_authentication(
-                oidc.assurance, operator_settings.oidc_step_up_max_age_seconds
-            )
-        except workforce.WorkforceDenied as exc:
-            raise HTTPException(status_code=401, detail=str(exc)) from exc
-    return oidc
+    return _oidc_context(credentials.credentials, operator_settings)
 
 
 def require_operator_admin(

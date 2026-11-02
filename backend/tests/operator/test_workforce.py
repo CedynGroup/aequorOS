@@ -39,10 +39,12 @@ def oidc(monkeypatch: pytest.MonkeyPatch) -> dict[str, JsonValue]:
         assert audience == "console-client-id"
         return claims
 
-    def is_suspended(_self: workforce.GoogleDirectory, _subject: str) -> bool:
-        return False
+    def user_status(
+        _self: workforce.GoogleDirectory, _subject: str
+    ) -> workforce.WorkspaceUserStatus:
+        return workforce.WorkspaceUserStatus(suspended=False)
 
-    monkeypatch.setattr(workforce.GoogleDirectory, "is_suspended", is_suspended)
+    monkeypatch.setattr(workforce.GoogleDirectory, "user_status", user_status)
     monkeypatch.setattr(security, "verify_oidc_id_token", verify)
     get_operator_settings.cache_clear()
     return claims
@@ -63,11 +65,9 @@ def test_hosted_domain_required(
     operator_client: TestClient,
     operator_db: Session,
     oidc: dict[str, JsonValue],
-    monkeypatch: pytest.MonkeyPatch,
     hd: str | None,
 ) -> None:
     make_operator(operator_db, role="operator_admin")
-    configure(monkeypatch, OIDC_REQUIRE_HOSTED_DOMAIN="true")
     oidc["hd"] = hd
     assert read_staff(operator_client) == 401
     oidc["hd"] = "aequoros.com"
@@ -87,7 +87,7 @@ def test_domain_and_verified_email_remain_required(
     assert read_staff(operator_client) == 401
 
 
-def test_generic_oidc_and_defaults_accept_missing_hd_and_assurance(
+def test_generic_oidc_preserves_access_without_google_claims(
     operator_client: TestClient,
     operator_db: Session,
     oidc: dict[str, JsonValue],
@@ -95,7 +95,7 @@ def test_generic_oidc_and_defaults_accept_missing_hd_and_assurance(
 ) -> None:
     make_operator(operator_db, role="operator_admin")
     oidc.pop("hd")
-    assert read_staff(operator_client) == 200
+    assert read_staff(operator_client) == 401
     configure(monkeypatch, OIDC_ISSUER="https://workforce.example")
     oidc["iat"] = 0
     oidc["sub"] = "ama@aequoros.com"
@@ -103,10 +103,8 @@ def test_generic_oidc_and_defaults_accept_missing_hd_and_assurance(
     configure(monkeypatch, OIDC_ALLOWED_GROUPS='["staff@aequoros.com"]')
     configure(
         monkeypatch,
-        OIDC_REQUIRE_HOSTED_DOMAIN="true",
-        OIDC_REQUIRE_ASSURANCE="true",
+        GOOGLE_REQUIRE_2SV="true",
         OIDC_SESSION_MAX_AGE_SECONDS="1",
-        OIDC_STEP_UP_MAX_AGE_SECONDS="1",
     )
     assert read_staff(operator_client) == 200
     assert (
@@ -220,35 +218,30 @@ def test_group_membership_preserves_provisioned_staff_authority(
 
 
 @pytest.mark.parametrize("required", [False, True])
-def test_assurance_policy_is_opt_in(
+def test_directory_2sv_policy_is_opt_in(
     operator_client: TestClient,
     operator_db: Session,
     oidc: dict[str, JsonValue],
     monkeypatch: pytest.MonkeyPatch,
     required: bool,
 ) -> None:
+    _ = oidc
     make_operator(operator_db, role="operator_admin")
-    configure(monkeypatch, OIDC_REQUIRE_ASSURANCE=str(required))
+    configure(monkeypatch, GOOGLE_REQUIRE_2SV=str(required))
+    directory = FakeDirectory()
+
+    def lookup(_settings: OperatorSettings) -> workforce.DirectoryLookup:
+        return directory
+
+    monkeypatch.setattr(workforce, "GoogleDirectory", lookup)
+    directory.enrolled = False
+    directory.enforced = False
     assert read_staff(operator_client) == (401 if required else 200)
-    oidc.update({"amr": ["pwd", "mfa"], "acr": "workforce", "auth_time": int(time.time())})
+    directory.enrolled = True
+    assert read_staff(operator_client) == (401 if required else 200)
+    directory.enforced = True
     assert read_staff(operator_client) == 200
-    configure(monkeypatch, OIDC_REQUIRED_AMR="[]")
-    oidc.pop("amr")
-    assert read_staff(operator_client) == (401 if required else 200)
-
-
-@pytest.mark.parametrize("auth_time", [None, True, "123", -1, 999999999999])
-def test_unusable_assurance_time_refuses(
-    operator_client: TestClient,
-    operator_db: Session,
-    oidc: dict[str, JsonValue],
-    monkeypatch: pytest.MonkeyPatch,
-    auth_time: JsonValue,
-) -> None:
-    make_operator(operator_db, role="operator_admin")
-    configure(monkeypatch, OIDC_REQUIRE_ASSURANCE="true")
-    oidc.update({"amr": ["mfa"], "auth_time": auth_time})
-    assert read_staff(operator_client) == 401
+    assert len(directory.status_requests) == (3 if required else 0)
 
 
 @pytest.mark.parametrize("issued", [None, True, "123", -1, 999999999999, 0])
@@ -269,43 +262,26 @@ def test_short_session_refuses_missing_invalid_or_old_issue_time(
     assert read_staff(operator_client) == 401
 
 
-def test_sensitive_write_requires_recent_auth_and_audits_issuer_evidence(
+@pytest.mark.parametrize("evidence_present", [False, True])
+def test_writes_do_not_require_token_assurance_but_audit_supplied_evidence(
     operator_client: TestClient,
     operator_db: Session,
     oidc: dict[str, JsonValue],
-    monkeypatch: pytest.MonkeyPatch,
+    evidence_present: bool,
 ) -> None:
     make_operator(operator_db, role="operator_admin")
-    configure(monkeypatch, OIDC_STEP_UP_MAX_AGE_SECONDS="300")
-    path = "/operator/v1/operators/ama@aequoros.com/reset-password"
-
-    def mutate() -> int:
-        return operator_client.post(path, headers=operator_headers("oidc")).status_code
-
-    assert read_staff(operator_client) == 200
-    assert mutate() == 401
-    assert (
-        operator_db.scalar(
-            select(OperatorAuditLog).where(OperatorAuditLog.action == "operators.reset_password")
-        )
-        is None
+    evidence: dict[str, JsonValue] = {}
+    if evidence_present:
+        evidence = {"auth_time": 0, "amr": ["pwd"], "acr": "issuer-value"}
+        oidc.update(evidence)
+    result = operator_client.post(
+        "/operator/v1/operators/ama@aequoros.com/reset-password", headers=operator_headers("oidc")
     )
-    oidc["auth_time"] = int(time.time()) - 301
-    assert mutate() == 401
-    oidc["auth_time"] = int(time.time()) + 600
-    assert mutate() == 401
-    evidence: dict[str, JsonValue] = {
-        "auth_time": int(time.time()),
-        "amr": ["pwd", "mfa"],
-        "acr": "issuer-value",
-    }
-    oidc.update(evidence)
-    assert mutate() == 200
+    assert result.status_code == 200
     audit = operator_db.scalar(
         select(OperatorAuditLog).where(OperatorAuditLog.action == "operators.reset_password")
     )
-    assert audit is not None
-    assert audit.detail["oidc_assurance"] == evidence
+    assert audit is not None and audit.detail["oidc_assurance"] == evidence
 
 
 def test_all_oidc_controls_leave_password_login_and_actions_unchanged(
@@ -316,11 +292,9 @@ def test_all_oidc_controls_leave_password_login_and_actions_unchanged(
     make_operator(operator_db, role="operator_admin")
     configure(
         monkeypatch,
-        OIDC_REQUIRE_HOSTED_DOMAIN="true",
-        OIDC_REQUIRE_ASSURANCE="true",
+        GOOGLE_REQUIRE_2SV="true",
         OIDC_ALLOWED_GROUPS='["staff@aequoros.com"]',
         OIDC_SESSION_MAX_AGE_SECONDS="1",
-        OIDC_STEP_UP_MAX_AGE_SECONDS="1",
     )
     response = operator_client.post(
         "/operator/auth/login", json={"email": "ama@aequoros.com", "password": PASSWORD}
@@ -365,12 +339,18 @@ class FakeDirectory:
     def __init__(self) -> None:
         self.suspended: bool | Literal["unavailable"] = False
         self.status_requests: list[str] = []
+        self.enrolled: bool | None = True
+        self.enforced: bool | None = True
 
-    def is_suspended(self, subject: str) -> bool:
+    def user_status(self, subject: str) -> workforce.WorkspaceUserStatus:
         self.status_requests.append(subject)
         if self.suspended == "unavailable":
             raise workforce.DirectoryUnavailable("provider secret must not escape")
-        return self.suspended
+        return workforce.WorkspaceUserStatus(
+            suspended=self.suspended,
+            isEnrolledIn2Sv=self.enrolled,
+            isEnforcedIn2Sv=self.enforced,
+        )
 
     def has_member(self, group: str, subject: str) -> bool:
         return group == "staff@aequoros.com" and subject == "110169484474386276334"
@@ -428,11 +408,13 @@ def test_reassigned_email_cannot_replace_the_verified_directory_account(
     calls: list[tuple[str, str]] = []
     unavailable: str | None = None
 
-    def is_suspended(_self: workforce.GoogleDirectory, subject: str) -> bool:
+    def user_status(
+        _self: workforce.GoogleDirectory, subject: str
+    ) -> workforce.WorkspaceUserStatus:
         calls.append(("status", subject))
         if unavailable == "status":
             raise workforce.DirectoryUnavailable("provider secret must not escape")
-        return accounts[subject][0]
+        return workforce.WorkspaceUserStatus(suspended=accounts[subject][0])
 
     def has_member(_self: workforce.GoogleDirectory, group: str, subject: str) -> bool:
         assert group == "staff@aequoros.com"
@@ -441,7 +423,7 @@ def test_reassigned_email_cannot_replace_the_verified_directory_account(
             raise workforce.DirectoryUnavailable("provider secret must not escape")
         return accounts[subject][1]
 
-    monkeypatch.setattr(workforce.GoogleDirectory, "is_suspended", is_suspended)
+    monkeypatch.setattr(workforce.GoogleDirectory, "user_status", user_status)
     monkeypatch.setattr(workforce.GoogleDirectory, "has_member", has_member)
     path = (
         "/operator/v1/tenants"
@@ -523,8 +505,10 @@ def test_invalid_directory_subject_denies_without_email_fallback(
     else:
         oidc["sub"] = subject
 
-    def is_suspended(_self: workforce.GoogleDirectory, _subject: str) -> bool:
+    def user_status(
+        _self: workforce.GoogleDirectory, _subject: str
+    ) -> workforce.WorkspaceUserStatus:
         pytest.fail("Invalid subjects must be refused before any Directory lookup.")
 
-    monkeypatch.setattr(workforce.GoogleDirectory, "is_suspended", is_suspended)
+    monkeypatch.setattr(workforce.GoogleDirectory, "user_status", user_status)
     assert read_staff(operator_client) == 401

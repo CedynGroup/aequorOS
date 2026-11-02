@@ -1,8 +1,8 @@
 """Optional workforce sign-in controls, independent of tenant SSO and passwords.
 
 Google Directory is an online authorization boundary: no membership or status
-cache survives a failed lookup. Assurance is issuer evidence, never a local MFA
-assertion.
+cache survives a failed lookup. Directory 2SV flags describe account policy,
+not the authentication methods of an individual token or session.
 """
 
 from __future__ import annotations
@@ -21,7 +21,6 @@ from pydantic import BaseModel, ConfigDict, Field, JsonValue, ValidationError
 
 from app.core.config import OperatorSettings
 
-_GOOGLE_ISSUER = "https://accounts.google.com"
 _TOKEN_URL = "https://oauth2.googleapis.com/token"
 _DIRECTORY_SCOPES = (
     "https://www.googleapis.com/auth/admin.directory.group.member.readonly "
@@ -44,7 +43,16 @@ class DirectoryUnavailable(Exception):
 class DirectoryLookup(Protocol):
     def has_member(self, group: str, subject: str) -> bool: ...
 
-    def is_suspended(self, subject: str) -> bool: ...
+    def user_status(self, subject: str) -> WorkspaceUserStatus: ...
+
+
+class WorkspaceUserStatus(BaseModel):
+    """Strict Directory account evidence; absent 2SV flags never imply approval."""
+
+    model_config = ConfigDict(strict=True, frozen=True)
+    suspended: bool
+    enrolled_in_2sv: bool | None = Field(default=None, alias="isEnrolledIn2Sv")
+    enforced_in_2sv: bool | None = Field(default=None, alias="isEnforcedIn2Sv")
 
 
 class _ServiceAccount(BaseModel):
@@ -62,11 +70,6 @@ class _AccessToken(BaseModel):
 class _Membership(BaseModel):
     model_config = ConfigDict(strict=True)
     is_member: bool = Field(alias="isMember")
-
-
-class _UserStatus(BaseModel):
-    model_config = ConfigDict(strict=True)
-    suspended: bool
 
 
 class GoogleDirectory:
@@ -171,11 +174,11 @@ class GoogleDirectory:
         except ValidationError as exc:
             raise DirectoryUnavailable from exc
 
-    def is_suspended(self, subject: str) -> bool:
+    def user_status(self, subject: str) -> WorkspaceUserStatus:
         try:
-            return _UserStatus.model_validate_json(
+            return WorkspaceUserStatus.model_validate_json(
                 self._get(f"users/{quote(subject, safe='')}")
-            ).suspended
+            )
         except ValidationError as exc:
             raise DirectoryUnavailable from exc
 
@@ -185,7 +188,9 @@ def verify_directory_access(
     settings: OperatorSettings,
     lookup: DirectoryLookup,
 ) -> None:
-    if settings.oidc_issuer != _GOOGLE_ISSUER or not settings.oidc_allowed_groups:
+    if not settings.uses_google_policy or not (
+        settings.oidc_allowed_groups or settings.google_require_2sv
+    ):
         return
     if (
         not isinstance(subject, str)
@@ -198,9 +203,19 @@ def verify_directory_access(
     ):
         raise WorkforceDenied("A valid Google account subject is required for operator access.")
     try:
-        if lookup.is_suspended(subject):
+        account = lookup.user_status(subject)
+        if account.suspended:
             raise WorkforceDenied("Your Workspace account is suspended. Operator access denied.")
-        if not any(lookup.has_member(group, subject) for group in settings.oidc_allowed_groups):
+        if settings.google_require_2sv:
+            if account.enrolled_in_2sv is None or account.enforced_in_2sv is None:
+                raise DirectoryUnavailable
+            if not account.enrolled_in_2sv or not account.enforced_in_2sv:
+                raise WorkforceDenied(
+                    "Workspace 2-Step Verification enrollment and enforcement are required."
+                )
+        if settings.oidc_allowed_groups and not any(
+            lookup.has_member(group, subject) for group in settings.oidc_allowed_groups
+        ):
             raise WorkforceDenied("Workspace group membership is required for operator access.")
     except DirectoryUnavailable as exc:
         raise WorkforceDenied(
@@ -216,36 +231,14 @@ def numeric_date(value: JsonValue | None) -> int | None:
 
 
 def verify_claims(claims: dict[str, JsonValue], settings: OperatorSettings) -> None:
-    """Validate opt-in domain, assurance and session-age policy on verified claims."""
-    if settings.oidc_issuer != _GOOGLE_ISSUER:
+    """Require Workspace identity and apply the optional signed session-age cap."""
+    if not settings.uses_google_policy:
         return
-    if settings.oidc_require_hosted_domain and claims.get("hd") != settings.oidc_allowed_domain:
+    if claims.get("hd") != settings.oidc_allowed_domain:
         raise WorkforceDenied("The workforce hosted domain is missing or does not match.")
     now = int(time.time())
-    auth_time = numeric_date(claims.get("auth_time"))
-    if settings.oidc_require_assurance:
-        amr = claims.get("amr")
-        required = settings.oidc_required_amr
-        amr_matches = isinstance(amr, list) and all(method in amr for method in required)
-        if not required or not amr_matches or auth_time is None or auth_time > now:
-            raise WorkforceDenied(
-                "Workforce sign-in lacks the required assurance evidence. "
-                "Re-authenticate or contact your workforce identity administrator."
-            )
     limit = settings.oidc_session_max_age_seconds
     if limit:
         issued = numeric_date(claims.get("iat"))
         if issued is None or not 0 <= now - issued < limit:
             raise WorkforceDenied("Your workforce session has expired. Sign in again.")
-
-
-def require_recent_authentication(evidence: dict[str, JsonValue], max_age: int) -> None:
-    """Sensitive OIDC writes require fresh auth_time, following signing step-up."""
-    if not max_age:
-        return
-    authenticated = numeric_date(evidence.get("auth_time"))
-    if authenticated is None or not 0 <= int(time.time()) - authenticated <= max_age:
-        raise WorkforceDenied(
-            "This operator action requires re-authentication. "
-            "Open /api/auth/login?reauth=1 in the console, then retry."
-        )

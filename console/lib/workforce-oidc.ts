@@ -1,9 +1,25 @@
-/** Staged OIDC policy shared by the login and callback routes. */
+/** Google policy may be exercised with a stand-in issuer only on local/test. */
+export function usesGooglePolicy(
+  issuer: string,
+  env: Readonly<Record<string, string | undefined>> = process.env,
+): boolean {
+  const testMode = ["1", "true", "yes", "on"].includes(
+    env.OPERATOR_OIDC_GOOGLE_POLICY_TEST_MODE?.trim().toLowerCase() ?? "",
+  );
+  if (testMode && !["local", "test"].includes(env.APP_ENV ?? "")) {
+    throw new Error(
+      "OPERATOR_OIDC_GOOGLE_POLICY_TEST_MODE is limited to local/test.",
+    );
+  }
+  return issuer === "https://accounts.google.com" || testMode;
+}
+
+/** Optional Google session cap shared by the login and callback routes. */
 export function oidcSessionMaxAge(
   issuer: string,
   env: Readonly<Record<string, string | undefined>> = process.env,
 ): number {
-  if (issuer !== "https://accounts.google.com") return 0;
+  if (!usesGooglePolicy(issuer, env)) return 0;
   const raw = env.OPERATOR_OIDC_SESSION_MAX_AGE_SECONDS?.trim();
   if (!raw || raw === "0") return 0;
   const seconds = Number(raw);
@@ -13,36 +29,14 @@ export function oidcSessionMaxAge(
   return seconds;
 }
 
-function enabled(value: string | undefined): boolean {
-  return ["1", "true", "yes", "on"].includes(value?.trim().toLowerCase() ?? "");
-}
-
 export function applyWorkforcePolicy(
   url: URL,
   issuer: string,
-  reauthenticate: boolean,
   env: Readonly<Record<string, string | undefined>> = process.env,
 ): void {
-  if (issuer !== "https://accounts.google.com") return;
-  const domain = env.OPERATOR_OIDC_ALLOWED_DOMAIN?.trim();
-  if (domain) {
-    url.searchParams.set("hd", domain);
-  }
-  if (
-    reauthenticate ||
-    enabled(env.OPERATOR_OIDC_REQUIRE_ASSURANCE) ||
-    Number(env.OPERATOR_OIDC_STEP_UP_MAX_AGE_SECONDS ?? "0") > 0
-  ) {
-    url.searchParams.set(
-      "claims",
-      JSON.stringify({
-        id_token: {
-          auth_time: { essential: true },
-          amr: { essential: true },
-        },
-      }),
-    );
-  }
+  if (!usesGooglePolicy(issuer, env)) return;
+  const domain = env.OPERATOR_OIDC_ALLOWED_DOMAIN?.trim() || "aequoros.com";
+  url.searchParams.set("hd", domain);
 }
 
 /** Cookie expiry mirrors the API's cap on the signed token's original iat. */

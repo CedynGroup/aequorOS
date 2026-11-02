@@ -145,7 +145,7 @@ def test_directory_failures_never_supply_membership(
     with pytest.raises(DirectoryUnavailable):
         directory = GoogleDirectory(directory_settings)
         if phase == "status":
-            _ = directory.is_suspended("110169484474386276334")
+            _ = directory.user_status("110169484474386276334")
         else:
             _ = directory.has_member("staff@example.test", "110169484474386276334")
 
@@ -182,7 +182,7 @@ def test_network_timeouts_fail_closed(
     with pytest.raises(DirectoryUnavailable):
         directory = GoogleDirectory(directory_settings)
         if phase == "status":
-            _ = directory.is_suspended("110169484474386276334")
+            _ = directory.user_status("110169484474386276334")
         else:
             _ = directory.has_member("staff@example.test", "110169484474386276334")
 
@@ -274,7 +274,7 @@ def test_refused_cached_token_is_replaced_on_the_next_request(
     def check() -> bool:
         directory = GoogleDirectory(directory_settings)
         return (
-            not directory.is_suspended("110169484474386276334")
+            not directory.user_status("110169484474386276334").suspended
             if phase == "status"
             else directory.has_member("staff@example.test", "110169484474386276334")
         )
@@ -317,9 +317,15 @@ def test_account_status_is_fetched_live_with_cached_delegated_token(
 
     monkeypatch.setattr(requests, "post", post)
     monkeypatch.setattr(requests, "get", get)
-    assert GoogleDirectory(directory_settings).is_suspended("110169484474386276334") is current
+    assert (
+        GoogleDirectory(directory_settings).user_status("110169484474386276334").suspended
+        is current
+    )
     current = not current
-    assert GoogleDirectory(directory_settings).is_suspended("110169484474386276334") is current
+    assert (
+        GoogleDirectory(directory_settings).user_status("110169484474386276334").suspended
+        is current
+    )
     assert posts == 1 and gets == 2
 
 
@@ -346,4 +352,30 @@ def test_account_status_requires_an_explicit_boolean(
     monkeypatch.setattr(requests, "post", post)
     monkeypatch.setattr(requests, "get", get)
     with pytest.raises(DirectoryUnavailable):
-        _ = GoogleDirectory(directory_settings).is_suspended("110169484474386276334")
+        _ = GoogleDirectory(directory_settings).user_status("110169484474386276334")
+
+
+@pytest.mark.parametrize("field", ["isEnrolledIn2Sv", "isEnforcedIn2Sv"])
+@pytest.mark.parametrize("value", ["true", 1, []], ids=["string", "integer", "array"])
+def test_2sv_flags_require_explicit_booleans(
+    directory_settings: OperatorSettings,
+    monkeypatch: pytest.MonkeyPatch,
+    field: str,
+    value: JsonValue,
+) -> None:
+    def post(
+        _url: str, *, data: dict[str, str], timeout: int, allow_redirects: bool
+    ) -> requests.Response:
+        _ = data, timeout, allow_redirects
+        return response(200, {"access_token": "token", "expires_in": 3600})
+
+    def get(
+        _url: str, *, headers: dict[str, str], timeout: int, allow_redirects: bool
+    ) -> requests.Response:
+        _ = headers, timeout, allow_redirects
+        return response(200, {"suspended": False, field: value})
+
+    monkeypatch.setattr(requests, "post", post)
+    monkeypatch.setattr(requests, "get", get)
+    with pytest.raises(DirectoryUnavailable):
+        _ = GoogleDirectory(directory_settings).user_status("110169484474386276334")

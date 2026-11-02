@@ -53,11 +53,7 @@ export async function GET(req: NextRequest) {
   url.searchParams.set("code_challenge", await s256(verifier));
   url.searchParams.set("code_challenge_method", "S256");
 
-  applyWorkforcePolicy(
-    url,
-    env.issuer,
-    req.nextUrl.searchParams.get("reauth") === "1",
-  );
+  applyWorkforcePolicy(url, env.issuer);
 
   const res = NextResponse.redirect(url);
   res.cookies.set(

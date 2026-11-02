@@ -854,134 +854,141 @@ _who may sign in_; provisioning decides _who exists_.
 
 #### Staff sign-in: Google Workspace (operator plane only)
 
-The console uses its existing authorization-code flow with PKCE, state and nonce.
-The operator API verifies issuer, audience, signature and expiry on **every**
-request, requires `email_verified=true` and the configured email domain, then
-requires an **active, explicitly provisioned `operator_users` row**. No account is
-created or activated by sign-in. These controls do not change bank/customer SSO.
+The console retains authorization-code sign-in with PKCE, state and nonce. The
+operator API independently verifies the signed token's issuer, audience and
+expiry on every request, requires a verified workforce email and an active,
+explicitly provisioned `operator_users` row, and takes the role from that row.
+No sign-in provisions or activates an account; tenant/customer SSO is unchanged.
 
-All new enforcement settings default off and apply only to the Google issuer.
-**Staff password sign-in remains fully available, including its existing eight-hour sessions, roles and throttling.**
-Password rejection is a later, separate rollout after every teammate's Google
-sign-in is confirmed. Workspace suspension or group removal therefore removes
-OIDC access only; during this transition, deactivate the staff row to revoke both sign-in paths. This is
-not yet an SSO-only or universally MFA-enforced staff plane.
+**Google always requires the signed `hd` claim to exactly equal
+`OPERATOR_OIDC_ALLOWED_DOMAIN`, in addition to the verified email-domain check.**
+The console sends that domain as an authorization hint, which grants no access
+by itself. A consumer Google account can have a verified work-domain email;
+email alone does not establish Workspace membership. **Rollout consequence:**
+Google tokens without a matching `hd` now refuse access even when the optional
+Directory gates are disabled. Generic OIDC issuers retain their existing path.
+[Google hosted-domain guidance](https://developers.google.com/identity/openid-connect/openid-connect).
 
-| Setting                                 | Default        | Behavior when configured                                                                                                                                                                                             |
-| --------------------------------------- | -------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `OPERATOR_OIDC_ISSUER`                  | unset          | Workforce issuer; Google is `https://accounts.google.com`.                                                                                                                                                           |
-| `OPERATOR_OIDC_CLIENT_ID`               | unset          | Same web OAuth client ID on console and operator API.                                                                                                                                                                |
-| `OPERATOR_OIDC_CLIENT_SECRET`           | unset          | Console server only; never exposed to browser JavaScript.                                                                                                                                                            |
-| `OPERATOR_OIDC_ALLOWED_DOMAIN`          | `aequoros.com` | Required verified email domain; set explicitly on both services. Console sends it as Google's `hd` hint.                                                                                                             |
-| `OPERATOR_OIDC_REQUIRE_HOSTED_DOMAIN`   | `false`        | Additionally require the signed `hd` claim to exactly match the allowed domain. Enable for Workspace; generic issuers retain their existing sign-in behavior. A hint alone never authorizes access.                  |
-| `OPERATOR_OIDC_ALLOWED_GROUPS`          | `[]`           | JSON array of allowed group emails, e.g. `["staff@aequoros.com"]`. Nonempty enables live account-status and membership checks; any matching group admits an unsuspended user with the provisioned app role.          |
-| `OPERATOR_GOOGLE_CREDENTIALS_FILE`      | unset          | Operator API only: protected service-account JSON credential file, outside the repository.                                                                                                                           |
-| `OPERATOR_GOOGLE_DELEGATED_ADMIN`       | unset          | Operator API only: Workspace administrator to impersonate for read-only user-status and group checks.                                                                                                                |
-| `OPERATOR_OIDC_REQUIRE_ASSURANCE`       | `false`        | Require a nonempty set of configured AMR values and an integral, nonnegative, nonfuture `auth_time`; missing evidence refuses with an explanation.                                                                   |
-| `OPERATOR_OIDC_REQUIRED_AMR`            | `["mfa"]`      | JSON array of issuer AMR values required when assurance enforcement is enabled.                                                                                                                                      |
-| `OPERATOR_OIDC_SESSION_MAX_AGE_SECONDS` | `0` (disabled) | OIDC session lifetime from signed `iat`; maximum 43,200 seconds. Set e.g. `1800` on both services. API enforces the cap independently of the cookie; callback caps cookie expiry too. Never extends ID-token expiry. |
-| `OPERATOR_OIDC_STEP_UP_MAX_AGE_SECONDS` | `0` (disabled) | Require recent `auth_time` on **all OIDC POST/PUT/PATCH/DELETE requests**; maximum 3,600 seconds, suggested initial value `300`. Reads retain normal session checks.                                                 |
+**Staff password sign-in stays fully available, including its existing eight-hour
+sessions, roles and throttling.** Google suspension, group removal and 2SV policy
+changes affect Google OIDC access; deactivate the staff row to revoke both paths.
+Password rejection remains a later, separate rollout after every teammate's
+Google sign-in is confirmed. This is not yet an SSO-only staff plane.
 
-When `OPERATOR_OIDC_ALLOWED_GROUPS` is nonempty, the shared OIDC request
-boundary fetches Directory `users.get` before checking `members.hasMember` on
-**every** operator request, including reads and writes using already-issued ID
-tokens. Both queries use the verified token’s immutable Google `sub` as the unique
-user ID, never its email address. Missing or invalid subjects deny access without
-an email fallback, so renaming an account or reassigning its old address cannot
-redirect either check to another user. The active provisioned staff row still
-determines local access and role. A suspended account is refused on its next
-request once Directory reports the suspension, even when it still belongs to an allowed group. Status and
-membership decisions are never cached. Delegated OAuth access tokens alone are
-reused in process until shortly before their reported expiry. A credential-file
-fingerprint prevents reuse after credential changes; unreadable files deny access
-before reuse, and Directory HTTP 401/403 responses evict the cached token.
+| Setting                                 | Default        | Behavior                                                                                                                                                                         |
+| --------------------------------------- | -------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `OPERATOR_OIDC_ISSUER`                  | unset          | Google is `https://accounts.google.com`; existing generic issuers remain supported.                                                                                              |
+| `OPERATOR_OIDC_CLIENT_ID`               | unset          | Same web OAuth client ID on console and operator API.                                                                                                                            |
+| `OPERATOR_OIDC_CLIENT_SECRET`           | unset          | Console server only; never browser JavaScript.                                                                                                                                   |
+| `OPERATOR_OIDC_ALLOWED_DOMAIN`          | `aequoros.com` | Verified email domain and mandatory signed Google `hd`; set explicitly on both services.                                                                                         |
+| `OPERATOR_OIDC_ALLOWED_GROUPS`          | `[]`           | JSON array of allowed group emails. Nonempty requires live unsuspended account status and membership in any allowed group. Empty disables the group gate.                        |
+| `OPERATOR_GOOGLE_CREDENTIALS_FILE`      | unset          | API-only protected service-account JSON file outside the repository.                                                                                                             |
+| `OPERATOR_GOOGLE_DELEGATED_ADMIN`       | unset          | Workspace administrator impersonated for read-only user and group checks.                                                                                                        |
+| `OPERATOR_GOOGLE_REQUIRE_2SV`           | `false`        | Require both Directory `isEnrolledIn2Sv=true` and `isEnforcedIn2Sv=true`, even with no groups configured. Also checks suspension.                                                |
+| `OPERATOR_OIDC_SESSION_MAX_AGE_SECONDS` | `0` (disabled) | Google OIDC lifetime from signed `iat`, at most 43,200 seconds. Set e.g. `1800` on both services. API and cookie independently enforce it without extending token expiry.        |
+| `OPERATOR_OIDC_GOOGLE_POLICY_TEST_MODE` | `false`        | Apply the Google domain, Directory and session-cap policy to a stand-in issuer. Local/test only; refused in deployed environments. Set on both services only for isolated tests. |
 
-An unsuspended member of any configured group keeps the existing staff row's
-role. Groups neither remap roles nor change staff powers. Access is denied without
-a matching group, for missing users or unavailable credentials, or on an encountered
-API error, timeout, unknown group or malformed status/membership response. There
-is no fallback to the staff row alone when the Directory gate is enabled. Empty groups disable
-both live checks for the defaults-off rollout. Same-domain nested membership and
-provider changes follow Directory semantics and Google's propagation timing.
-Workspace/Cloud outage planning must account for the live fail-closed dependency.
-[Directory membership API](https://developers.google.com/workspace/admin/directory/reference/rest/v1/members/hasMember),
-[Directory user-status API](https://developers.google.com/workspace/admin/directory/reference/rest/v1/users/get).
+The Directory 2SV gate deliberately requires **enrollment and enforcement**.
+Enrollment alone means a user has configured 2SV; requiring enforcement as well
+prevents admission when Workspace policy does not require its continued use.
+Both flags are account-policy evidence, **not proof that a particular token or
+session completed MFA or authenticated recently**. The captain must configure
+Workspace 2-Step Verification policy independently of this default-off gate.
+[Directory user fields](https://developers.google.com/workspace/admin/directory/reference/rest/v1/users).
 
-Operator audit entries include `detail.oidc_assurance` containing the verified
-issuer's `amr`, `acr` and `auth_time` values **when supplied**, even with enforcement
-off. An empty object means no evidence was supplied. No ID/access token or group
-credential is recorded. These are issuer assertions, **not a claim that Google
-tokens prove MFA**, nor proof of Workspace 2-Step Verification policy compliance.
-The captain must enforce 2-Step Verification in Workspace, independently of the
-application's optional assurance gate.
+When either Directory gate is enabled, the shared request boundary fetches
+`users.get` exactly once by the verified immutable Google `sub`, checks
+suspension and any required 2SV flags, then checks `members.hasMember` if groups
+are configured. Both lookups use the immutable subject, never the email address,
+so renaming an account or reassigning its old address cannot redirect the checks.
+Reads and writes using already-issued tokens pass through the same live boundary.
+The next request refuses a suspended account or removed membership once Directory
+reports that change. Missing/invalid subjects, missing required 2SV flags,
+malformed responses, absent users/credentials, timeouts and encountered API errors
+deny access; there is no fallback to the staff row alone. Group membership
+preserves the app-assigned role and never changes staff powers.
+
+User status, 2SV flags and membership are **never cached**. Only delegated OAuth
+access tokens are reused in process until shortly before their reported expiry;
+credential fingerprints and provider refusals invalidate reuse. With both gates
+off, no Directory request is made. With either enabled, plan for the live
+fail-closed dependency and Google's propagation timing, including nested groups.
+[User lookup](https://developers.google.com/workspace/admin/directory/reference/rest/v1/users/get),
+[membership lookup](https://developers.google.com/workspace/admin/directory/reference/rest/v1/members/hasMember).
+
+The application does **not request or require `amr`, `acr` or `auth_time` from
+Google**. Google's public discovery document does not advertise those claims;
+optional token evidence is not the basis for these admission controls.
+`detail.oidc_assurance` on operator audit entries records those raw verified claims
+only when present, otherwise `{}`; tokens and Directory credentials are never
+logged. The old `OPERATOR_OIDC_REQUIRE_HOSTED_DOMAIN`,
+`OPERATOR_OIDC_REQUIRE_ASSURANCE`, `OPERATOR_OIDC_REQUIRED_AMR` and
+`OPERATOR_OIDC_STEP_UP_MAX_AGE_SECONDS` settings were removed; remove them from
+existing deployment configuration. There is no Google `auth_time` write gate or
+essential-claims request. Shorter sessions still use signed `iat`, which is token
+issuance time and must not be treated as recent user authentication.
+[Google discovery](https://accounts.google.com/.well-known/openid-configuration).
 
 Workspace and Cloud setup (captain/deployment owner):
 
-1. In the staff Google Cloud project, configure the OAuth consent audience for
-   the workforce and create a **Web application** OAuth client. Register the
-   console's exact HTTPS `/api/auth/callback` redirect URI (for example,
-   `https://console.aequoros.com/api/auth/callback`; register
-   `http://localhost:3002/api/auth/callback` separately for local testing). Set
-   issuer/client ID on both services and the client secret only on the console.
-   Configure the trusted `CONSOLE_BASE_URL` and `OPERATOR_API_URL` for the deployment.
-2. In Workspace Admin → Security → Authentication → 2-Step Verification, require
-   enrollment/enforcement for every staff organizational unit or policy group.
-   Confirm every teammate is enrolled before enforcement, including staff
-   administrators. Review recovery and protected emergency administrator access
-   with the captain; this change creates no emergency-access bypass or accounts.
+1. Configure the workforce OAuth audience and a **Web application** client in
+   Google Cloud. Register the exact HTTPS console `/api/auth/callback` URI,
+   e.g. `https://console.aequoros.com/api/auth/callback`. Register the local URI
+   separately if needed. Set issuer/client ID on both services, client secret
+   only on the console, and trusted `CONSOLE_BASE_URL` / `OPERATOR_API_URL`.
+2. Require enrollment and enforcement under Workspace Admin → Security →
+   Authentication → 2-Step Verification for all staff organizational units or
+   policy groups. Confirm each teammate's enrollment before rollout. Review
+   recovery and protected emergency administrator access separately.
    [Workspace 2-Step Verification rollout](https://knowledge.workspace.google.com/admin/security/deploy-2-step-verification).
-3. Provision active staff rows with the intended roles through existing
-   operator administration. Create the allowed Workspace groups, restrict who may
-   manage membership, and add the intended staff identities. Set the explicit
-   domain on both services and enable `OPERATOR_OIDC_REQUIRE_HOSTED_DOMAIN` on the
-   operator API.
-4. Enable **Admin SDK API** in Cloud. Create a dedicated service account with
-   domain-wide delegation. In Workspace Admin → Security → Access and data
-   control → API controls → Manage Domain Wide Delegation, authorize its numeric
-   client ID for **only**
+3. Provision active staff rows with intended app roles. Create the allowed
+   Workspace groups, restrict membership administration, and add staff. Confirm
+   real Google tokens contain the expected signed `hd` before rollout; there is
+   no hosted-domain bypass switch.
+4. Enable **Admin SDK API**. Create a dedicated service account with domain-wide
+   delegation. In Workspace Admin → Security → Access and data control → API
+   controls → Manage Domain Wide Delegation, authorize its numeric client ID for
    `https://www.googleapis.com/auth/admin.directory.group.member.readonly` and
-   `https://www.googleapis.com/auth/admin.directory.user.readonly`.
-   Choose a delegated admin with both group-read and user-read privileges required
-   by Directory, including access to the user suspension field.
-   Store the service-account JSON using deployment secret management, mount it
-   read-only outside the repository, and set the operator API credential-file
-   and delegated-admin settings. No browser/console credential is needed for
-   Directory. Rotate this credential under the existing operational process.
-   [Delegation setup](https://developers.google.com/identity/protocols/oauth2/service-account),
-   [Workspace delegation controls](https://knowledge.workspace.google.com/admin/apps/control-api-access-with-domain-wide-delegation).
-5. Configure `OPERATOR_OIDC_ALLOWED_GROUPS`, then verify an active member, a
-   nonmember, a suspended Google account, a deactivated staff row and a deliberately
-   unavailable Directory connection. With an existing OIDC session, suspend its
-   Google user and confirm the next request is refused. Confirm group removal
-   revokes OIDC access and membership preserves the provisioned role.
-6. If available for the OAuth app, enable Google's additional security claims
-   (`auth_time` and `amr`) in its security-bundle setup. With assurance/step-up
-   configured, the console requests these claims. Observe actual audit evidence
-   before selecting required AMR values and enabling assurance enforcement;
-   unavailable claims cause refusal, never an inferred MFA pass.
-7. Roll out shorter OIDC sessions and recent-authentication checks separately,
-   testing sensitive actions with actual staff accounts before enabling them
-   company-wide. `/api/auth/login?reauth=1` starts a new PKCE/state/nonce flow.
-   **Google does not support forcing Google Account re-authentication**: a console redirect or new
-   ID token does not establish fresh `auth_time`. Staff must authenticate afresh
-   to Google (for example after signing out of Google or in a new browser
-   session), then sign into the console again. Stale/missing/future timestamps
-   still refuse writes. Verify the provider's behavior before enabling this
-   gate; never substitute token `iat` for authentication freshness.
-   [Google security claims and limitations](https://developers.google.com/identity/siwg/security-bundle),
-   [Google OIDC and hosted-domain validation](https://developers.google.com/identity/openid-connect/openid-connect).
+   `https://www.googleapis.com/auth/admin.directory.user.readonly`. Choose a
+   delegated admin whose privileges expose suspension and both 2SV flags in the
+   administrator view of `users.get`. Missing/redacted flags deny when 2SV is
+   required; do not infer success. Mount the credential read-only using deployment
+   secret management and set the API-only credential/admin settings. Rotate it
+   under the operational process; no console Directory credential is needed.
+   [Delegation setup](https://developers.google.com/identity/protocols/oauth2/service-account).
+5. Enable groups and `OPERATOR_GOOGLE_REQUIRE_2SV` separately. Verify an active
+   enrolled/enforced member, a nonmember, a suspended user, a user missing either
+   2SV flag, an inactive staff row and an unavailable Directory connection.
+   Reuse an existing token while changing status/membership and confirm the next
+   request refuses access. Confirm the provisioned app role remains unchanged.
+6. Roll out the optional signed-`iat` session cap on both services. Verify normal
+   sign-in, expiry and password sessions before enabling it company-wide.
 
-Known verification limit: live verification covered seven of eight scenarios.
-A real teammate completing enforced Workspace MFA and using delegated Directory
-authorization remains untested; completing that check requires a second real
-Google identity. This residual was accepted for this change.
+Automated coverage uses local RSA keys/JWKS and Google-shaped signed tokens at
+the real backend verifier, an in-memory Directory with live refusal cases, and
+console login/callback routes against an in-process HTTP OIDC provider. The
+console test verifies state, nonce, PKCE exchange, domain hint, cookie cleanup and
+session cap without optional assurance claims or a new CI service. It does not
+run a full browser or Google itself. Actual Workspace OAuth consent, delegation,
+admin field visibility and provider propagation still need an authorized second
+Google identity and Workspace setup before rollout.
+
+For an isolated stand-in provider, set `APP_ENV=local` or `test` and
+`OPERATOR_OIDC_GOOGLE_POLICY_TEST_MODE=true` on both services, with the same mock
+issuer/client ID. The backend uses the existing undeployed environment allow-list;
+the console also requires an explicit local/test environment. Staging, production
+and unknown environments refuse this override. Existing loopback OIDC/TLS test
+switches are separately required for plain HTTP; the override does not weaken
+signature verification, transport guards or audience checks. Never enable it in
+a deployment. The checked-in console route test needs no container; a full browser
+journey would additionally need a console Playwright harness and disposable staff
+API/provider services, which this console currently lacks.
 
 Follow-ups remain separate: captain-controlled password rejection after teammate
-verification; an audited break-glass emergency login with alerting on every use
-and recovery drills (explicitly deferred by captain decision to a separate backlog
-item); and, if transparent in-console step-up is needed with Google, a separate application-held factor or
-provider-supported re-authentication mechanism. No tenant SSO, SCIM or staff
-power changes are included here.
+verification; audited break-glass login with per-use alerting and recovery drills;
+and a separate application-held factor or provider-supported mechanism if recent
+user authentication is required for sensitive actions. No tenant SSO, SCIM or
+staff-power changes are included here.
 
 ### 11.4 JIT + SCIM + verified domains
 
