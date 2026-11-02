@@ -221,7 +221,9 @@ def complete_upload(
         ):
             try:
                 observed_digest = storage_client.read_object_digest(
-                    bucket=bucket, object_key=finalized_key, max_bytes=head.byte_size
+                    bucket=bucket,
+                    object_key=finalized_key,
+                    max_bytes=head.byte_size,
                 )
             except ContentReadOverrun as exc:
                 raise HTTPException(
