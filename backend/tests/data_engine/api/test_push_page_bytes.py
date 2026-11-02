@@ -68,8 +68,12 @@ def test_the_measurement_is_the_staged_bytes(tenant_ctx: TenantContext, section:
     )
     db, storage, push_id = _open_batch(tenant_ctx)
 
-    result = push_ingestion.stage_push_records(db, tenant_ctx, "BK-SYNTH001", push_id, page, storage)
-    _, stream = storage.read(StorageLocation("synthetic", "temp", f"push/{push_id}/pages/00001.json"))
+    result = push_ingestion.stage_push_records(
+        db, tenant_ctx, "BK-SYNTH001", push_id, page, storage
+    )
+    _, stream = storage.read(
+        StorageLocation("synthetic", "temp", f"push/{push_id}/pages/00001.json")
+    )
     content = stream.read()
 
     assert result.pages_staged == 1
@@ -110,9 +114,12 @@ def test_the_boundary_is_measured_in_bytes(tenant_ctx: TenantContext, size: int)
             push_ingestion.stage_push_records(db, tenant_ctx, "BK-SYNTH001", push_id, page, storage)
         assert refusal.value.status_code == 413
         assert not storage.exists(location)
-        assert push_ingestion.get_push_batch(
-            db, tenant_ctx, "BK-SYNTH001", push_id, storage
-        ).pages_staged == 0
+        assert (
+            push_ingestion.get_push_batch(
+                db, tenant_ctx, "BK-SYNTH001", push_id, storage
+            ).pages_staged
+            == 0
+        )
     else:
         push_ingestion.stage_push_records(db, tenant_ctx, "BK-SYNTH001", push_id, page, storage)
         _, stream = storage.read(location)

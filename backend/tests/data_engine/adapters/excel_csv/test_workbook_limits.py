@@ -159,9 +159,7 @@ def test_merge_extraction_refuses_excess_xml_before_reading_the_tail(
     xml = (
         '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
         '<dimension ref="A1"/><sheetData>'
-        f"{rows}</sheetData>"
-        + " " * 32_768
-        + "<malformed"
+        f"{rows}</sheetData>" + " " * 32_768 + "<malformed"
     )
     _replace_sheet(path, xml.encode())
 
@@ -176,7 +174,8 @@ def test_merge_extraction_counts_cells_across_sheets(
     path = tmp_path / "split.xlsx"
     workbook = openpyxl.Workbook()
     _active_sheet(workbook).append([1, 2])
-    workbook.create_sheet("Second").append([3, 4])
+    second = cast(Worksheet, workbook.create_sheet("Second"))
+    second.append([3, 4])
     workbook.save(path)
 
     with pytest.raises(WorkbookReadError, match="cells"):
