@@ -10,10 +10,11 @@ The captain resumed this stack on 2026-11-02 (Firstmate inbox014):
 "Stack 1 RBAC: PR 759 (#173 data engine) base; #179 cutover stacks on 759" and
 "the next PR in a stack starts while the base PR is still awaiting merge; do not
 hold stacked dependents for base merges, only for their semantic dependency being
-available on the base branch." The parent is #759 at
-`4707d4c2bc20d68d87898d007fd0dc97de11c0a2`; it merges first. This later human
-decision resumes #179 above it without requiring the parent merge before child
-publication.
+available on the base branch." The stack initially used #759 at
+`4707d4c2bc20d68d87898d007fd0dc97de11c0a2`. This later human decision resumed
+#179 without requiring the parent merge before child publication. The DATA parent
+has since merged into `main` at `32cf063451f24f98691f46337628430aed8bbe0c`;
+the case-only child now targets `main` and preserves the merged DATA implementation.
 
 ## Authority contract
 
@@ -71,39 +72,39 @@ No DATA or dashboard fix is included here.
 
 All paths have `/api/v1` prepended. C = confidential; R = restricted.
 
-| Routes                                                                                                                                                    | Permission | Sensitivity |
-| --------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------- | ----------- |
-| GET `/cases`, `/cases/summary`, `/cases/{case_id}`, `/cases/{case_id}/scores`                                                                             | view       | C           |
-| POST `/cases` and `/cases/{case_id}/decisions`                                                                                                            | create     | C           |
-| GET `/cases/{case_id}/decisions`                                                                                                                          | view       | C           |
-| PATCH `/cases/{case_id}`; POST its `/assign`, `/archive`; POST `/cases/bulk-actions`                                                                      | edit       | C           |
-| GET `/findings`, `/findings/{finding_id}`, `/cases/{case_id}/findings`, `/assessments/{assessment_id}/findings`                                           | view       | C           |
-| POST `/cases/{case_id}/findings`                                                                                                                          | create     | C           |
-| PATCH `/findings/{finding_id}` (disposition/status review only)                                                                                           | review     | C           |
-| GET `/findings/{finding_id}/evidence`                                                                                                                     | view       | R           |
-| POST `/documents/upload-request`                                                                                                                          | create     | R           |
-| POST `/documents/{document_id}/complete-upload`; DELETE `/documents/{document_id}`                                                                        | edit       | R           |
-| GET `/documents/{document_id}`, its `/parse-status`, `/cases/{case_id}/documents`                                                                         | view       | R           |
-| POST `/documents/{document_id}/parse`                                                                                                                     | run        | R           |
-| GET `/documents/{document_id}/download-url`                                                                                                               | export     | R           |
-| POST `/assessments`                                                                                                                                       | create     | R           |
-| GET `/assessments`, `/assessments/{assessment_id}` (includes input snapshot)                                                                              | view       | R           |
-| POST `/assessments/{assessment_id}/run`                                                                                                                   | run        | R           |
-| GET `/assessments/{assessment_id}/runs`, `/assessment-runs/{run_id}`                                                                                      | view       | C           |
-| GET `/cases/{case_id}/financial-workspace`, `/financial-data/validation-issues`                                                                           | view       | R           |
-| POST `/cases/{case_id}/financial-workspace/map`, `/financial-data/validate`                                                                               | run        | R           |
-| POST financial-workspace `cash-flows`, `institutions`, `accounts`, `reporting-periods`, `balances`, `obligations`, `covenants`                            | create     | R           |
-| PATCH the seven financial resources above by their record ID                                                                                              | edit       | R           |
-| GET `/cases/{case_id}/scenarios`, `/scenarios/{scenario_id}`, `/scenarios/{scenario_id}/validation`                                                       | view       | R           |
-| GET `/cases/{case_id}/scenarios/readiness`                                                                                                                | view       | C           |
-| POST `/cases/{case_id}/scenarios`, `/scenarios/initialize`, `/scenarios/{scenario_id}/copy`, `/scenarios/{scenario_id}/assumptions`                       | create     | R           |
-| PATCH `/cases/{case_id}/scenarios/{scenario_id}`, its `/assumptions/{assumption_id}`; POST its `/archive`                                                 | edit       | R           |
-| POST `/cases/{case_id}/scenarios/{scenario_id}/assumptions/{assumption_id}/review`                                                                        | review     | R           |
-| GET `/cases/{case_id}/calculation-runs`, `/capital-projections` (summaries only)                                                                          | view       | C           |
-| POST `/cases/{case_id}/calculation-runs`, its `/{run_id}/rerun`, `/capital-projections`                                                                   | run        | R           |
-| GET `/cases/{case_id}/calculation-runs/{run_id}`, `/capital-projections/{projection_id}`, `/capital-summary`, `/capital-comparison`, `/liquidity/summary` | view       | R           |
-| POST `/cases/{case_id}/liquidity/findings/{finding_id}/review`                                                                                            | review     | R           |
-| GET `/cases/{case_id}/report` (JSON and HTML)                                                                                                             | export     | R           |
+| Routes                                                                                                                                                                                                                    | Permission | Sensitivity |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------- | ----------- |
+| GET `/cases`, `/cases/summary`, `/cases/{case_id}`, `/cases/{case_id}/scores`                                                                                                                                             | view       | C           |
+| POST `/cases` and `/cases/{case_id}/decisions`                                                                                                                                                                            | create     | C           |
+| GET `/cases/{case_id}/decisions`                                                                                                                                                                                          | view       | C           |
+| PATCH `/cases/{case_id}`; POST `/cases/{case_id}/assign`, `/cases/{case_id}/archive`; POST `/cases/bulk-actions`                                                                                                          | edit       | C           |
+| GET `/findings`, `/findings/{finding_id}`, `/cases/{case_id}/findings`, `/assessments/{assessment_id}/findings`                                                                                                           | view       | C           |
+| POST `/cases/{case_id}/findings`                                                                                                                                                                                          | create     | C           |
+| PATCH `/findings/{finding_id}` (disposition/status review only)                                                                                                                                                           | review     | C           |
+| GET `/findings/{finding_id}/evidence`                                                                                                                                                                                     | view       | R           |
+| POST `/documents/upload-request`                                                                                                                                                                                          | create     | R           |
+| POST `/documents/{document_id}/complete-upload`; DELETE `/documents/{document_id}`                                                                                                                                        | edit       | R           |
+| GET `/documents/{document_id}`, `/documents/{document_id}/parse-status`, `/cases/{case_id}/documents`                                                                                                                     | view       | R           |
+| POST `/documents/{document_id}/parse`                                                                                                                                                                                     | run        | R           |
+| GET `/documents/{document_id}/download-url`                                                                                                                                                                               | export     | R           |
+| POST `/assessments`                                                                                                                                                                                                       | create     | R           |
+| GET `/assessments`, `/assessments/{assessment_id}` (includes input snapshot)                                                                                                                                              | view       | R           |
+| POST `/assessments/{assessment_id}/run`                                                                                                                                                                                   | run        | R           |
+| GET `/assessments/{assessment_id}/runs`, `/assessment-runs/{run_id}`                                                                                                                                                      | view       | C           |
+| GET `/cases/{case_id}/financial-workspace`, `/cases/{case_id}/financial-data/validation-issues`                                                                                                                           | view       | R           |
+| POST `/cases/{case_id}/financial-workspace/map`, `/cases/{case_id}/financial-data/validate`                                                                                                                               | run        | R           |
+| POST financial-workspace `cash-flows`, `institutions`, `accounts`, `reporting-periods`, `balances`, `obligations`, `covenants`                                                                                            | create     | R           |
+| PATCH the seven financial resources above by their record ID                                                                                                                                                              | edit       | R           |
+| GET `/cases/{case_id}/scenarios`, `/cases/{case_id}/scenarios/{scenario_id}`, `/cases/{case_id}/scenarios/{scenario_id}/validation`                                                                                       | view       | R           |
+| GET `/cases/{case_id}/scenarios/readiness`                                                                                                                                                                                | view       | C           |
+| POST `/cases/{case_id}/scenarios`, `/cases/{case_id}/scenarios/initialize`, `/cases/{case_id}/scenarios/{scenario_id}/copy`, `/cases/{case_id}/scenarios/{scenario_id}/assumptions`                                       | create     | R           |
+| PATCH `/cases/{case_id}/scenarios/{scenario_id}`, `/cases/{case_id}/scenarios/{scenario_id}/assumptions/{assumption_id}`; POST `/cases/{case_id}/scenarios/{scenario_id}/archive`                                         | edit       | R           |
+| POST `/cases/{case_id}/scenarios/{scenario_id}/assumptions/{assumption_id}/review`                                                                                                                                        | review     | R           |
+| GET `/cases/{case_id}/calculation-runs`, `/cases/{case_id}/capital-projections` (summaries only)                                                                                                                          | view       | C           |
+| POST `/cases/{case_id}/calculation-runs`, `/cases/{case_id}/calculation-runs/{run_id}/rerun`, `/cases/{case_id}/capital-projections`                                                                                      | run        | R           |
+| GET `/cases/{case_id}/calculation-runs/{run_id}`, `/cases/{case_id}/capital-projections/{projection_id}`, `/cases/{case_id}/capital-summary`, `/cases/{case_id}/capital-comparison`, `/cases/{case_id}/liquidity/summary` | view       | R           |
+| POST `/cases/{case_id}/liquidity/findings/{finding_id}/review`                                                                                                                                                            | review     | R           |
+| GET `/cases/{case_id}/report` (JSON and HTML)                                                                                                                                                                             | export     | R           |
 
 These are 74 supported method-routes plus the two public no-op catch-alls. The
 three static taxonomy endpoints are separate from this 76-route census.
