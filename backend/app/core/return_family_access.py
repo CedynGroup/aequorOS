@@ -1,5 +1,7 @@
 """Shared return-family classification for authorization and sealed storage."""
 
+from __future__ import annotations
+
 from dataclasses import dataclass
 from typing import Final
 

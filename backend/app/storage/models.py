@@ -113,21 +113,27 @@ def _binding_constraints(source: str, prefix: str) -> TableArgs:
 
 class ArtifactDocumentBinding(_DocumentBinding, Base):
     __tablename__ = "artifact_document_bindings"
-    __table_args__ = _binding_constraints("regulatory_artifact_versions", "artifact_binding")
+    __table_args__: TableArgs = _binding_constraints(
+        "regulatory_artifact_versions", "artifact_binding"
+    )
 
 
 class PackageAttachmentDocumentBinding(_DocumentBinding, Base):
     __tablename__ = "package_attachment_document_bindings"
-    __table_args__ = _binding_constraints(
+    __table_args__: TableArgs = _binding_constraints(
         "regulatory_package_attachments", "package_attachment_binding"
     )
 
 
 class IcaapAttachmentDocumentBinding(_DocumentBinding, Base):
     __tablename__ = "icaap_attachment_document_bindings"
-    __table_args__ = _binding_constraints("icaap_attachments", "icaap_attachment_binding")
+    __table_args__: TableArgs = _binding_constraints(
+        "icaap_attachments", "icaap_attachment_binding"
+    )
 
 
 class SupervisoryLetterDocumentBinding(_DocumentBinding, Base):
     __tablename__ = "supervisory_letter_document_bindings"
-    __table_args__ = _binding_constraints("bank_supervisory_addons", "supervisory_letter_binding")
+    __table_args__: TableArgs = _binding_constraints(
+        "bank_supervisory_addons", "supervisory_letter_binding"
+    )

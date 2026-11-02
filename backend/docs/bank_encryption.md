@@ -254,11 +254,14 @@ revocation.
 
 ## Stable sealed document reference contract
 
-`sealed_document_objects` is an additive, immutable catalogue. Each UUID owns one
-physical `sealed/v1/<uuid>` key in its bank's outputs tier, with an expected
-plaintext SHA-256 and byte length. Object UUIDs are unique identities, without
-cross-bank or global content deduplication. The original provider version is
-write-time provenance; stable reads do not send it as a GET version token.
+`sealed_document_objects` is an additive, immutable catalogue. Each UUID records
+one physical `sealed/v1/<uuid>` key in its bank's outputs tier, with an expected
+plaintext SHA-256 and byte length. The catalogue identity and recorded locator are
+immutable; enforcing create-only writes and preventing physical overwrite or
+deletion are prerequisites for enabling stable writers in a later slice. Object
+UUIDs are unique identities, without cross-bank or global content deduplication.
+The original provider version is write-time provenance; stable reads do not send
+it as a GET version token.
 
 Four append-only association tables bind existing regulatory artifact versions,
 package attachments, ICAAP attachments and supervisory letters to the catalogue.
@@ -297,9 +300,10 @@ must match exactly. Reporting and storage share the classification in
 through bank- and organization-scoped metadata queries without importing a feature.
 Queries constrain both organization and bank even with RLS. Missing bindings
 refuse and do not select a legacy path or try a recorded provider version.
-`StorageClient.read_sealed` fetches the immutable physical key, authenticates the
-original context and decrypts normally. The resolver checks every plaintext byte
-against the catalogue SHA-256 and length before returning a rewound file, using
+`StorageClient.read_sealed` fetches the catalogue-selected physical key,
+authenticates the original context and decrypts normally. The resolver checks
+every plaintext byte against the catalogue SHA-256 and length before returning a
+rewound file, using
 an 8 MiB memory spool and bounded 1 MiB reads. Errors close both streams; callers
 must close a successful file. The returned descriptor records the actual provider
 version read for later access/retention evidence. Unsupported backends refuse.
