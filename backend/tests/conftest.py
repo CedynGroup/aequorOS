@@ -37,6 +37,7 @@ from app.core.authorization import (
     SensitivityScope,
 )
 from app.core.config import Settings, get_settings
+from app.core.content_digest import sha256_of_chunks
 from app.core.key_management.settings import get_key_settings
 from app.db.base import Base
 from app.db.session import get_engine, get_sessionmaker
@@ -326,8 +327,14 @@ def _create_app() -> FastAPI:
 
 class FakeStorage:
     head: StoredObjectHead | None = None
+    body: bytes = b""
     download_url = "https://storage.local/download"
-    deleted: list[tuple[str, str]] = []
+
+    def __init__(self) -> None:
+        self.head = None
+        self.body = b""
+        self.digest_reads: list[tuple[str, str]] = []
+        self.deleted: list[tuple[str, str]] = []
 
     def create_presigned_upload_url(
         self,
@@ -355,6 +362,12 @@ class FakeStorage:
 
     def head_object(self, *, bucket: str, object_key: str) -> StoredObjectHead | None:
         return self.head
+
+    def read_object_digest(
+        self, *, bucket: str, object_key: str, max_bytes: int
+    ) -> tuple[int, str] | None:
+        self.digest_reads.append((bucket, object_key))
+        return sha256_of_chunks([self.body], max_bytes=max_bytes)
 
     def delete_object(self, *, bucket: str, object_key: str) -> None:
         self.deleted.append((bucket, object_key))

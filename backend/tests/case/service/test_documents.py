@@ -1,12 +1,17 @@
 from __future__ import annotations
 
+import hashlib
+from dataclasses import replace
+from uuid import UUID
+
 import pytest
 from fastapi import HTTPException
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.case.service import documents
-from app.models import AuditEvent, DocumentChunk, StoredObject
+from app.integrations.storage.base import StoredObjectHead
+from app.models import AuditEvent, Document, DocumentChunk, StoredObject
 from tests.case.factories import ServiceFactories, upload_payload
 
 
@@ -79,6 +84,221 @@ def test_complete_upload_persists_storage_metadata(
     assert document.status == "uploaded"
     assert stored_object.status == "available"
     assert stored_object.etag == '"etag"'
+
+
+def _staged_upload(
+    factories: ServiceFactories,
+    *,
+    declared: bytes,
+    stored: bytes | None = None,
+    declared_sha256: str | None = None,
+) -> tuple[UUID, str | None]:
+    """Request an upload for ``declared`` bytes and land ``stored`` instead.
+
+    The gap between the two is the whole point: a presigned PUT accepts any
+    body, so completing with different content than was declared must be
+    refused rather than recorded.
+    """
+    case = factories.cases.create()
+    upload = factories.documents.request_upload(
+        case.id,
+        byte_size=len(declared),
+        sha256=declared_sha256,
+    )
+    landed = declared if stored is None else stored
+    factories.storage.head = StoredObjectHead(
+        content_type="application/pdf",
+        byte_size=len(landed),
+        etag='"etag"',
+    )
+    factories.storage.body = landed
+    return upload.document_id, declared_sha256
+
+
+def _complete(factories: ServiceFactories, db: Session, document_id: UUID) -> HTTPException:
+    with pytest.raises(HTTPException) as refused:
+        documents.complete_upload(
+            db,
+            factories.ctx,
+            document_id,
+            settings=factories.settings,
+            storage_client=factories.storage,
+        )
+    return refused.value
+
+
+def test_complete_upload_refuses_a_stored_digest_that_is_not_a_sha256(
+    db_session: Session,
+    service_factories: ServiceFactories,
+) -> None:
+    # A row written before the request schema checked declarations can hold
+    # anything; it cannot be shown to match, so it is refused rather than
+    # surfaced as a server fault.
+    factories = service_factories
+    payload = b"legacy row body"
+    document_id, _ = _staged_upload(
+        factories,
+        declared=payload,
+        declared_sha256=hashlib.sha256(payload).hexdigest(),
+    )
+    stored_object = db_session.get(StoredObject, _stored_object_id(db_session, document_id))
+    assert stored_object is not None
+    stored_object.sha256 = "legacy-not-a-digest"
+    db_session.flush()
+
+    refused = _complete(factories, db_session, document_id)
+
+    assert refused.status_code == 400
+    assert "checksum" in str(refused.detail)
+
+
+def _stored_object_id(db_session: Session, document_id: UUID) -> UUID:
+    document = db_session.get(Document, document_id)
+    assert document is not None
+    return document.stored_object_id
+
+
+def test_complete_upload_accepts_content_matching_the_declared_digest(
+    db_session: Session,
+    service_factories: ServiceFactories,
+) -> None:
+    factories = service_factories
+    payload = b"%PDF-1.7 declared body"
+    document_id, _ = _staged_upload(
+        factories,
+        declared=payload,
+        declared_sha256=hashlib.sha256(payload).hexdigest().upper(),
+    )
+
+    document = documents.complete_upload(
+        db_session,
+        factories.ctx,
+        document_id,
+        settings=factories.settings,
+        storage_client=factories.storage,
+    )
+
+    stored_object = db_session.get(StoredObject, document.stored_object_id)
+    assert document.status == "uploaded"
+    assert stored_object is not None
+    # The request schema is what normalises a declaration's spelling; the
+    # service compares case-insensitively either way, so an upper-case
+    # declaration that matches the content is still accepted.
+    assert stored_object.sha256 is not None
+    assert stored_object.sha256.lower() == hashlib.sha256(payload).hexdigest()
+
+
+def test_complete_upload_refuses_content_that_differs_from_the_declared_digest(
+    db_session: Session,
+    service_factories: ServiceFactories,
+) -> None:
+    factories = service_factories
+    declared = b"%PDF-1.7 declared body"
+    # Same length, different content: the size check alone cannot catch this.
+    document_id, _ = _staged_upload(
+        factories,
+        declared=declared,
+        stored=b"%PDF-1.7 ATTACKER body",
+        declared_sha256=hashlib.sha256(declared).hexdigest(),
+    )
+
+    refused = _complete(factories, db_session, document_id)
+
+    assert refused.status_code == 400
+    assert "checksum" in str(refused.detail)
+    _assert_still_pending(db_session, document_id)
+
+
+def test_complete_upload_refuses_a_size_that_differs_from_the_declaration(
+    db_session: Session,
+    service_factories: ServiceFactories,
+) -> None:
+    factories = service_factories
+    document_id, _ = _staged_upload(factories, declared=b"x" * 32, stored=b"x" * 64)
+
+    refused = _complete(factories, db_session, document_id)
+
+    assert refused.status_code == 400
+    assert "declared size" in str(refused.detail)
+    _assert_still_pending(db_session, document_id)
+
+
+def test_complete_upload_refuses_when_storage_reports_no_size(
+    db_session: Session,
+    service_factories: ServiceFactories,
+) -> None:
+    factories = service_factories
+    case = factories.cases.create()
+    upload = factories.documents.request_upload(case.id, byte_size=16)
+    factories.storage.head = StoredObjectHead(content_type="application/pdf", etag='"etag"')
+
+    refused = _complete(factories, db_session, upload.document_id)
+
+    assert refused.status_code == 400
+    assert "size" in str(refused.detail)
+    _assert_still_pending(db_session, upload.document_id)
+
+
+def test_complete_upload_reads_the_object_only_when_a_digest_was_declared(
+    db_session: Session,
+    service_factories: ServiceFactories,
+) -> None:
+    factories = service_factories
+    payload = b"no digest declared here"
+    undeclared_id, _ = _staged_upload(factories, declared=payload)
+
+    documents.complete_upload(
+        db_session,
+        factories.ctx,
+        undeclared_id,
+        settings=factories.settings,
+        storage_client=factories.storage,
+    )
+
+    assert factories.storage.digest_reads == []
+
+    declared_id, _ = _staged_upload(
+        factories, declared=payload, declared_sha256=hashlib.sha256(payload).hexdigest()
+    )
+    documents.complete_upload(
+        db_session,
+        factories.ctx,
+        declared_id,
+        settings=factories.settings,
+        storage_client=factories.storage,
+    )
+
+    assert len(factories.storage.digest_reads) == 1
+
+
+def test_complete_upload_refuses_a_body_that_outgrows_the_reported_size(
+    db_session: Session,
+    service_factories: ServiceFactories,
+) -> None:
+    factories = service_factories
+    payload = b"declared"
+    document_id, _ = _staged_upload(
+        factories, declared=payload, declared_sha256=hashlib.sha256(payload).hexdigest()
+    )
+    # Storage under-reports the size it observed, so the verification read must
+    # stop at the report rather than hash an unbounded stream.
+    assert factories.storage.head is not None
+    factories.storage.head = replace(factories.storage.head, byte_size=4)
+
+    refused = _complete(factories, db_session, document_id)
+
+    assert refused.status_code in {400}
+    _assert_still_pending(db_session, document_id)
+
+
+def _assert_still_pending(db_session: Session, document_id: UUID) -> None:
+    db_session.rollback()
+    document = db_session.get(Document, document_id)
+    assert document is not None
+    assert document.status == "upload_requested"
+    stored_object = db_session.get(StoredObject, document.stored_object_id)
+    assert stored_object is not None
+    assert stored_object.status == "pending_upload"
 
 
 def test_parse_rejects_unuploaded_and_deleted_documents(

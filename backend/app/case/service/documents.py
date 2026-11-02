@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import TenantContext
 from app.case.service.cases import get_case_or_404
 from app.core.config import Settings
+from app.core.content_digest import ContentReadOverrun, DeclaredDigestError, digest_matches
 from app.db.base import utc_now
 from app.domain.risk_constants import ALLOWED_UPLOAD_CONTENT_TYPES
 from app.integrations.storage.base import ObjectStorage
@@ -163,6 +164,20 @@ def _require_pending_upload(document: Document, stored_object: StoredObject) -> 
         )
 
 
+def _digest_matches(declared: str, observed: str) -> bool:
+    """Compare digests, refusing a stored declaration that is not one.
+
+    A row written before the request schema validated declarations can hold
+    anything. Treating an unparseable value as a match would accept it, and
+    treating it as an error would surface as a server fault, so it is a
+    mismatch: the object cannot be shown to be what was declared.
+    """
+    try:
+        return digest_matches(declared, observed)
+    except DeclaredDigestError:
+        return False
+
+
 def complete_upload(
     db: Session,
     ctx: TenantContext,
@@ -175,8 +190,24 @@ def complete_upload(
     stored_object = get_stored_object_or_404(db, ctx.organization_id, document.stored_object_id)
     _require_pending_upload(document, stored_object)
     bucket, object_key = stored_object.bucket, stored_object.object_key
+    # Declarations are written once by request_upload and never updated, so the
+    # unlocked copy is enough to decide what to observe. Both storage calls
+    # happen before the row locks are taken: a verification read can touch tens
+    # of megabytes and must not hold a document row while it does.
+    declared_size, declared_digest = stored_object.byte_size, stored_object.sha256
     db.commit()
     head = storage_client.head_object(bucket=bucket, object_key=object_key)
+    observed_digest: tuple[int, str] | None = None
+    if head is not None and declared_digest is not None and head.byte_size is not None:
+        try:
+            observed_digest = storage_client.read_object_digest(
+                bucket=bucket, object_key=object_key, max_bytes=head.byte_size
+            )
+        except ContentReadOverrun as exc:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Uploaded object is larger than the size storage reported.",
+            ) from exc
     document = get_document_or_404(db, ctx.organization_id, document_id, for_update=True)
     stored_object = get_stored_object_or_404(
         db, ctx.organization_id, document.stored_object_id, for_update=True
@@ -186,14 +217,38 @@ def complete_upload(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail="Uploaded object was not found."
         )
-    if head.byte_size is not None and head.byte_size > settings.risk_max_upload_bytes:
+    if head.byte_size is None:
+        # Without an observed size there is nothing to check the declaration
+        # against, and recording the declaration unverified is the defect this
+        # guard exists to prevent.
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Storage did not report the uploaded object's size.",
+        )
+    if head.byte_size > settings.risk_max_upload_bytes:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Uploaded object exceeds maximum size.",
         )
+    if declared_size is not None and head.byte_size != declared_size:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Uploaded object does not match the declared size.",
+        )
+    if declared_digest is not None:
+        if observed_digest is None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST, detail="Uploaded object was not found."
+            )
+        observed_size, observed_sha256 = observed_digest
+        if observed_size != head.byte_size or not _digest_matches(declared_digest, observed_sha256):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Uploaded object does not match the declared checksum.",
+            )
     stored_object.status = "available"
     stored_object.etag = head.etag
-    stored_object.byte_size = head.byte_size or stored_object.byte_size
+    stored_object.byte_size = head.byte_size
     stored_object.content_type = head.content_type or stored_object.content_type
     stored_object.version_id = head.version_id
     document.status = "uploaded"
