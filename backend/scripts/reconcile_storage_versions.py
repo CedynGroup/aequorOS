@@ -129,7 +129,12 @@ def main(argv: list[str] | None = None) -> int:
     target = os.environ.get("RESTORE_DATABASE_URL", "").strip()
     if not target:
         raise DisasterRecoveryError("RESTORE_DATABASE_URL must name a dedicated recovery target.")
-    refuse_protected_target(target, protected_urls_from_env())
+    protected = protected_urls_from_env()
+    if not protected:
+        raise DisasterRecoveryError(
+            "At least one protected primary database URL must be configured."
+        )
+    refuse_protected_target(target, protected)
     report = load_mapping(args.mapping)
     target_url = make_url(target)
     if target_url.get_backend_name() != "postgresql":

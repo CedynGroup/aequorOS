@@ -19178,7 +19178,12 @@
     "tests/scripts/test_reconcile_storage_versions.py::test_cli_preflight_diagnostics[missing-file-]": "unit",
     "tests/scripts/test_reconcile_storage_versions.py::test_cli_preflight_diagnostics[missing-target-RESTORE_DATABASE_URL must name a dedicated recovery target.]": "unit",
     "tests/scripts/test_reconcile_storage_versions.py::test_cli_reports_unproved_session": "unit",
-    "tests/scripts/test_reconcile_storage_versions.py::test_cli_success_preserves_json_output": "unit"
+    "tests/scripts/test_reconcile_storage_versions.py::test_cli_success_preserves_json_output": "unit",
+    "tests/scripts/test_reconcile_storage_versions.py::test_cli_refuses_primary_from_runtime_configuration[OPERATOR_DATABASE_URL]": "unit",
+    "tests/scripts/test_reconcile_storage_versions.py::test_cli_refuses_primary_from_runtime_configuration[WORKER_DATABASE_URL]": "unit",
+    "tests/scripts/test_reconcile_storage_versions.py::test_cli_refuses_without_primary_protection[empty]": "unit",
+    "tests/scripts/test_reconcile_storage_versions.py::test_cli_refuses_without_primary_protection[unset]": "unit",
+    "tests/scripts/test_reconcile_storage_versions.py::test_cli_refuses_without_primary_protection[whitespace]": "unit"
   },
   "services": {
     "tests/attestation/service/test_attestation_openbao.py::test_a_csr_that_does_not_prove_possession_is_never_submitted": "integration",

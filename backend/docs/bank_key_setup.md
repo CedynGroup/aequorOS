@@ -92,9 +92,10 @@ reading or changing any pinned reference. `SET ROLE` and caller-controlled setti
 cannot establish a recovery session.
 
 Set `RESTORE_DATABASE_URL` through a protected environment or `--env-file`, keeping
-credentials off command lines and out of shell history. Keep the primary
-`DATABASE_URL`, `WORKER_DATABASE_URL`, and `OPERATOR_DATABASE_URL` populated so the
-CLI can refuse a target that addresses one of those databases.
+credentials off command lines and out of shell history. Configure at least one
+primary URL through `DATABASE_URL`, `WORKER_DATABASE_URL`, or `OPERATOR_DATABASE_URL`.
+Reconciliation refuses to open a target connection when none is populated. Keep
+every applicable primary URL set so targets matching any of them are refused.
 
 ```bash
 uv run python -m scripts.reconcile_storage_versions \

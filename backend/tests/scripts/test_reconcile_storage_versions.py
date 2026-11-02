@@ -19,6 +19,14 @@ from scripts.dr_common import DisasterRecoveryError
 from scripts.reconcile_storage_versions import cli, load_mapping
 
 FAILURE = "[reconcile] FAILED: recovery refused; transaction rolled back."
+PRIMARY_URL_VARIABLES = ("DATABASE_URL", "WORKER_DATABASE_URL", "OPERATOR_DATABASE_URL")
+
+
+@pytest.fixture(autouse=True)
+def synthetic_primary_configuration(monkeypatch: pytest.MonkeyPatch) -> None:
+    for name in PRIMARY_URL_VARIABLES:
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.setenv("DATABASE_URL", "postgresql://app:synthetic@primary.example/risk")
 
 
 def _report() -> RestoreReport:
@@ -114,6 +122,61 @@ def test_cli_refuses_non_postgres_target(
     output = capsys.readouterr()
     assert output.out == ""
     assert output.err == f"{FAILURE} Recovery requires a PostgreSQL target.\n"
+
+
+@pytest.mark.parametrize("value", [None, "", " \t"], ids=["unset", "empty", "whitespace"])
+def test_cli_refuses_without_primary_protection(
+    value: str | None,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    path = tmp_path / "restore.json"
+    _report().write(path)
+    for name in PRIMARY_URL_VARIABLES:
+        if value is None:
+            monkeypatch.delenv(name, raising=False)
+        else:
+            monkeypatch.setenv(name, value)
+    monkeypatch.setenv("RESTORE_DATABASE_URL", "postgresql://incident:synthetic@restore.example/db")
+    create_engine = Mock(side_effect=AssertionError("Unprotected target connection attempted"))
+    monkeypatch.setattr("scripts.reconcile_storage_versions.create_engine", create_engine)
+
+    assert cli(["--mapping", str(path), "--storage-env", "dev", "--reason", "synthetic"]) == 1
+
+    output = capsys.readouterr()
+    assert output.out == ""
+    assert output.err == (
+        f"{FAILURE} At least one protected primary database URL must be configured.\n"
+    )
+    create_engine.assert_not_called()
+
+
+@pytest.mark.parametrize("name", ["WORKER_DATABASE_URL", "OPERATOR_DATABASE_URL"])
+def test_cli_refuses_primary_from_runtime_configuration(
+    name: str,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    path = tmp_path / "restore.json"
+    _report().write(path)
+    monkeypatch.setenv(name, "postgresql://app:synthetic@other-primary.example/risk")
+    monkeypatch.setenv(
+        "RESTORE_DATABASE_URL", "postgresql+psycopg://incident:synthetic@other-primary.example/risk"
+    )
+    create_engine = Mock(side_effect=AssertionError("Protected target connection attempted"))
+    monkeypatch.setattr("scripts.reconcile_storage_versions.create_engine", create_engine)
+
+    assert cli(["--mapping", str(path), "--storage-env", "dev", "--reason", "synthetic"]) == 1
+
+    output = capsys.readouterr()
+    assert output.out == ""
+    assert output.err == (
+        f"{FAILURE} Refusing to operate on a protected production database. "
+        "Point at a dedicated restore target.\n"
+    )
+    create_engine.assert_not_called()
 
 
 def test_loader_refuses_duplicate_json_fields(tmp_path: Path) -> None:
