@@ -575,7 +575,7 @@ def _collect_artifacts(  # noqa: PLR0913 - one lookup with five distinct inputs
         else None
     )
     collected: list[_ArtifactEvidence] = []
-    cache: dict[tuple[str, str | None], tuple[bytes | None, str | None]] = {}
+    cache: dict[UUID, tuple[bytes | None, str | None]] = {}
     for signature in pinned:
         pinned_id = signature.artifact_version_id
         version = rows.get(pinned_id) if pinned_id is not None else None
@@ -595,7 +595,7 @@ def _collect_artifacts(  # noqa: PLR0913 - one lookup with five distinct inputs
 
 
 def _read_once(  # noqa: PLR0913 - a pinned read needs the whole identity and its authority
-    cache: dict[tuple[str, str | None], tuple[bytes | None, str | None]],
+    cache: dict[UUID, tuple[bytes | None, str | None]],
     client: StorageClient | None,
     slug: str | None,
     version: RegulatoryArtifactVersion,
@@ -604,7 +604,7 @@ def _read_once(  # noqa: PLR0913 - a pinned read needs the whole identity and it
     package: RegulatoryPackage,
     decision: AuthorizationDecision | ExaminerDocumentAuthority | None,
 ) -> tuple[bytes | None, str | None]:
-    """Read one pinned revision once per (path, recorded pin) pair.
+    """Read one pinned revision once per artifact version identity.
 
     The read is the storage kernel's verified resolution rather than a raw
     provider fetch, so the bytes are proven against the checksum the revision
@@ -612,8 +612,14 @@ def _read_once(  # noqa: PLR0913 - a pinned read needs the whole identity and it
     with its own reason instead of surfacing later as a confusing binding
     mismatch, and a revision published before stable references still resolves
     through the pin it carries rather than through whatever is current.
+
+    The cache is keyed by the version row's own identity, because that is the
+    identity the resolver binds: two exports can share an ``object_path`` and a
+    backend that cannot version reports the same (absent) provider pin for both,
+    so keying by path and pin would hand one revision's bytes to the other and
+    convict a sound record of replacing its artifact.
     """
-    key = (version.object_path, version.storage_version_id)
+    key = version.id
     if key in cache:
         return cache[key]
     if client is None:

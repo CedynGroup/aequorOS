@@ -16,10 +16,11 @@ import hashlib
 import io
 from concurrent.futures import ThreadPoolExecutor
 from threading import Barrier, Lock
-from typing import BinaryIO
+from typing import BinaryIO, cast
 from uuid import UUID, uuid4
 
 import pytest
+from botocore.exceptions import ClientError  # pyright: ignore[reportMissingTypeStubs]
 from sqlalchemy import Engine, event, func, select
 from sqlalchemy.engine import Connection, ExecutionContext
 from sqlalchemy.orm import Session
@@ -31,11 +32,13 @@ from app.core.key_management.presentation import SESSION_SUPPORT
 from app.core.key_management.types import ProtectedSupportAccessError
 from app.core.tenancy import TenantContext
 from app.identity.public import document_view_decision
+from app.storage import reencryption
 from app.storage.client import (
     ObjectMetadata,
     SealedEncryptionContext,
     SealedPublication,
     StorageAccessError,
+    StorageBackendError,
     StorageError,
     StorageLocation,
     StorageValidationError,
@@ -219,6 +222,73 @@ def test_the_store_refuses_a_conditional_write_the_key_already_holds(
             metadata_for(SLUG, "outputs", OTHER),
             StorageLocation(SLUG, "outputs", CONTEXT_PATH),
         )
+
+
+def test_a_conditional_conflict_is_retried_instead_of_failing_the_publication(
+    bank_storage: BankStorage, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A 409 ConditionalRequestConflict is S3's retryable in-flight collision.
+
+    The store reports it while a competing conditional write to the same key is
+    still in flight, which is not the same answer as "the key already exists".
+    Handing it to the caller as a backend failure would fail a publication whose
+    bytes are already the ones it wanted. The retry meets the same precondition
+    (412) and adopts the object that won, so the attempt count and the single
+    stored version are the assertion.
+    """
+    location = StorageLocation(SLUG, "outputs", sealed_object_key(uuid4()))
+    first = bank_storage.storage.write_sealed(
+        location,
+        io.BytesIO(PAYLOAD),
+        metadata_for(SLUG, "outputs", PAYLOAD),
+        StorageLocation(SLUG, "outputs", CONTEXT_PATH),
+    )
+    client = cast(reencryption.S3MaintenanceClient, cast(object, bank_storage.s3))
+    put_object = client.put_object
+    attempts: list[int] = []
+
+    def conflicting_put(**kwargs: object) -> dict[str, object]:
+        attempts.append(1)
+        if len(attempts) == 1:
+            raise ClientError({"Error": {"Code": "ConditionalRequestConflict"}}, "PutObject")
+        return put_object(**kwargs)
+
+    monkeypatch.setattr(client, "put_object", conflicting_put)
+    retried = bank_storage.storage.write_sealed(
+        location,
+        io.BytesIO(PAYLOAD),
+        metadata_for(SLUG, "outputs", PAYLOAD),
+        StorageLocation(SLUG, "outputs", CONTEXT_PATH),
+    )
+
+    assert len(attempts) == 2
+    assert retried.descriptor.version_id == first.descriptor.version_id
+    assert retried.envelope_id == first.envelope_id
+    assert len(list(bank_storage.storage.list_versions(location))) == 1
+
+
+def test_a_conditional_conflict_that_never_clears_still_fails_the_publication(
+    bank_storage: BankStorage, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The retry is bounded: a store that keeps refusing is an outage, not a race."""
+    location = StorageLocation(SLUG, "outputs", sealed_object_key(uuid4()))
+    client = cast(reencryption.S3MaintenanceClient, cast(object, bank_storage.s3))
+    attempts: list[int] = []
+
+    def forever_conflicting(**kwargs: object) -> dict[str, object]:
+        attempts.append(1)
+        raise ClientError({"Error": {"Code": "ConditionalRequestConflict"}}, "PutObject")
+
+    monkeypatch.setattr(client, "put_object", forever_conflicting)
+    with pytest.raises(StorageBackendError):
+        bank_storage.storage.write_sealed(
+            location,
+            io.BytesIO(PAYLOAD),
+            metadata_for(SLUG, "outputs", PAYLOAD),
+            StorageLocation(SLUG, "outputs", CONTEXT_PATH),
+        )
+    assert 1 < len(attempts) <= 4
+    assert not list(bank_storage.storage.list_versions(location))
 
 
 def test_a_lost_create_race_returns_the_object_that_won_it(

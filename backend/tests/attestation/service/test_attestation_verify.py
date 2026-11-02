@@ -1307,6 +1307,42 @@ def test_a_page_added_after_signing_fails_the_tamper_check(
     assert report["overall_passed"] is False
 
 
+def test_two_pinned_revisions_at_one_path_are_each_read_as_their_own_bytes(
+    db_session: Session, storage: InMemoryStorageClient, pki: _Pki
+) -> None:
+    """One verification run must not hand one revision's bytes to another.
+
+    Both signed revisions are published under one context path, and a backend
+    that cannot version reports no provider pin for either. A read cache keyed by
+    (path, pin) therefore collapses them into one entry: the second revision
+    returns the first's bytes, and the artifact-binding check convicts a record
+    that is intact. The cache is keyed by the version identity the resolver is
+    bound to, so each revision's evidence stays its own.
+    """
+    signed = _build_signed_pdf_package(db_session, storage, pki)
+    versions = [signed.preparer_version, signed.approver_version]
+    assert versions[0].object_path == versions[1].object_path
+    assert versions[0].checksum_sha256 != versions[1].checksum_sha256
+    for version in versions:
+        version.storage_version_id = None
+    db_session.commit()
+
+    report = _report(db_session, signed.package, storage_client=storage, pki=pki)
+    verified = VerificationReportRead.model_validate(report)
+    binding = next(
+        entry for entry in verified.checks if entry.check == verify.CHECK_ARTIFACT_BINDING
+    )
+    # The failure this pins names the offending version, so a green check is the
+    # assertion: each revision was re-hashed against its own pin.
+    assert binding.passed is True, binding.detail
+    # Both pinned revisions were examined as separate evidence, not collapsed.
+    examined = json.dumps(report, default=str)
+    for version in versions:
+        assert str(version.id) in examined
+    # And the two distinct signed revisions still pass the tamper analysis.
+    assert _status(report, verify.CHECK_INTER_SIGNATURE_TAMPER) == "passed"
+
+
 def test_replaced_artifact_bytes_fail_the_artifact_binding_check(
     db_session: Session, storage: InMemoryStorageClient, pki: _Pki
 ) -> None:

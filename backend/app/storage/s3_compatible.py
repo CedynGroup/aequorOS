@@ -104,6 +104,10 @@ class _S3CreateClient(Protocol):
 _ACCESS_DENIED_CODES = {"AccessDenied", "InvalidAccessKeyId", "SignatureDoesNotMatch", "403"}
 _NOT_FOUND_CODES = {"NoSuchKey", "NoSuchBucket", "NoSuchVersion", "404", "NotFound"}
 _PRECONDITION_FAILED_CODES = {"PreconditionFailed", "412"}
+# A conditional write that collides with a competing write in flight. S3
+# documents this as retryable; it is NOT the "the key already exists" answer.
+_CONDITIONAL_CONFLICT_CODES = {"ConditionalRequestConflict", "409"}
+_SEALED_CREATE_ATTEMPTS = 4
 
 
 def _recorded_metadata(stat: Mapping[str, object]) -> dict[str, str]:
@@ -364,7 +368,7 @@ class S3CompatibleStorageClient(StorageClient):
             ENCRYPTION_FORMAT if envelope_id is not None else "plaintext-v1"
         )
         try:
-            version_id = self._create_only(bucket, location.object_path, encrypted, arguments)
+            version_id = self._create_absorbing_conflicts(bucket, location, encrypted, arguments)
         except ClientError as exc:
             if _error_code(exc) not in _PRECONDITION_FAILED_CODES:
                 self._log("write.sealed", location, result="error")
@@ -401,6 +405,36 @@ class S3CompatibleStorageClient(StorageClient):
             version_id=cast(str | None, published),
         )
         return SealedPublication(descriptor, context_format, envelope_id)
+
+    def _create_absorbing_conflicts(
+        self,
+        bucket: str,
+        location: StorageLocation,
+        body: BinaryIO,
+        arguments: dict[str, object],
+    ) -> str | None:
+        """Create the sealed key, absorbing S3's retryable conditional conflict.
+
+        ``If-None-Match: *`` answers ``409 ConditionalRequestConflict`` when a
+        competing conditional write to the same key is still in flight. S3
+        documents that as a retry, not as "the key already exists", so treating
+        it as a backend failure would fail a publication that a moment later
+        resolves cleanly. Retrying keeps the create atomic: the winner is still
+        discovered by the same precondition (412), which is the path that
+        compares content and adopts the object that exists. Every attempt
+        rewinds the body and, above the multipart threshold, creates and on
+        failure aborts its own upload, so a retry never resumes a stale one.
+        """
+        attempts = _SEALED_CREATE_ATTEMPTS
+        while True:
+            try:
+                return self._create_only(bucket, location.object_path, body, arguments)
+            except ClientError as exc:
+                if _error_code(exc) not in _CONDITIONAL_CONFLICT_CODES or attempts == 1:
+                    raise
+                attempts -= 1
+                self._log("write.sealed", location, result="conditional-conflict")
+                _ = body.seek(0)
 
     def _create_only(
         self,

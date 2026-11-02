@@ -334,7 +334,10 @@ primitive:
 2. writes the bytes with an `IfNoneMatch: *` conditional (PUT, and the multipart
    completion when the stored body is at least 16 MiB), so a
    provider that already holds the key returns `412 PreconditionFailed` instead of
-   replacing it,
+   replacing it. A `409 ConditionalRequestConflict` — S3's answer while a competing
+   conditional write to that key is still in flight — is retried a bounded number of
+   times, rewinding the body and recreating the upload on each attempt: it is a race
+   to resolve, not an outage. Only `412` means the key exists,
 3. inserts the catalogue row with the plaintext hash, byte length, tier, context
    path, context format and original envelope, and
 4. binds the caller's business row when a `binding` is given. The optional
