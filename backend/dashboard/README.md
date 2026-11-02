@@ -56,9 +56,12 @@ Locked fields and editor recovery follow [the protected presentation contract](.
 On **Data Engine → Overview**, use **Reconciliation exceptions** to enter a
 reason, maximum gap fraction and effective dates, then **Record proposal**.
 A checker signs in separately, enters an approval label and chooses
-**Approve proposal**. To revoke a request or approval, enter a revocation label
-and reason, then **Revoke exception**. Exact grants, checker independence and
-the effect of each decision follow [Human Data Engine authority](../docs/authorization_foundation.md#human-data-engine-authority).
+**Approve exception**, or enters a rejection reason as well and chooses
+**Reject**. Each card retains its state, ceiling, effective dates and reason;
+approved and revoked cards retain their provenance without action controls.
+The maker sees a self-approval explanation; other readers without approval
+authority see **Request access**. Exact grants, checker independence and the
+effect of each decision follow [Human Data Engine authority](../docs/authorization_foundation.md#human-data-engine-authority).
 
 ### Unavailable liquidity figures
 

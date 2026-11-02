@@ -265,8 +265,8 @@ limit, and other workflow context before any side effect.
 
 `GET /banks` returns only institutions with at least one projected capability.
 Bank detail applies the same coverage decision and returns `404` for an
-uncovered institution. Reporting-period and fact reads enforce the exact DATA
-requirements in [Human Data Engine authority](#human-data-engine-authority).
+uncovered institution. Tenant reporting-period and fact reads enforce the exact
+DATA requirements in [Human Data Engine authority](#human-data-engine-authority).
 Institution coverage is an addressability and discovery boundary only: each
 product route must still enforce its own data authorization as described in the
 [rollout boundary](#product-rollout-boundary).
@@ -828,6 +828,8 @@ and successful-validation/state prerequisites, but gains no EDIT or VALIDATE
 grant prerequisite. Mapping configuration creation, connector credential
 lifecycle (including Temenos stored-credential-shape validation), and machine
 API push retain their existing controls.
+Saving connector credentials without VALIDATE remains successful; the dashboard
+omits the optional post-save live test and explains the missing authority.
 
 Scheduled DB health jobs use the trusted internal probe operation; they do not
 invoke the human VALIDATE entry point. A missing authorization version never
