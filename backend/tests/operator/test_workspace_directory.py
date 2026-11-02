@@ -86,7 +86,7 @@ def test_delegated_assertion_and_strict_membership_response(
     ) -> requests.Response:
         nonlocal gets
         gets += 1
-        assert url.endswith("/staff%40example.test/hasMember/person%2Bstaff%40example.test")
+        assert url.endswith("/staff%40example.test/hasMember/110169484474386276334")
         assert headers == {"Authorization": "Bearer directory-token"}
         assert timeout == 5 and allow_redirects is False
         return response(200, {"isMember": member})
@@ -96,7 +96,7 @@ def test_delegated_assertion_and_strict_membership_response(
     for _ in range(2):
         assert (
             GoogleDirectory(directory_settings).has_member(
-                "staff@example.test", "person+staff@example.test"
+                "staff@example.test", "110169484474386276334"
             )
             is member
         )
@@ -145,9 +145,9 @@ def test_directory_failures_never_supply_membership(
     with pytest.raises(DirectoryUnavailable):
         directory = GoogleDirectory(directory_settings)
         if phase == "status":
-            _ = directory.is_suspended("p@example.test")
+            _ = directory.is_suspended("110169484474386276334")
         else:
-            _ = directory.has_member("staff@example.test", "p@example.test")
+            _ = directory.has_member("staff@example.test", "110169484474386276334")
 
 
 def test_unreadable_credentials_fail_closed(tmp_path: Path) -> None:
@@ -156,7 +156,7 @@ def test_unreadable_credentials_fail_closed(tmp_path: Path) -> None:
         OPERATOR_GOOGLE_DELEGATED_ADMIN="admin@example.test",
     )
     with pytest.raises(DirectoryUnavailable):
-        _ = GoogleDirectory(settings).has_member("staff@example.test", "p@example.test")
+        _ = GoogleDirectory(settings).has_member("staff@example.test", "110169484474386276334")
 
 
 @pytest.mark.parametrize("phase", ["token", "membership", "status"])
@@ -182,9 +182,9 @@ def test_network_timeouts_fail_closed(
     with pytest.raises(DirectoryUnavailable):
         directory = GoogleDirectory(directory_settings)
         if phase == "status":
-            _ = directory.is_suspended("p@example.test")
+            _ = directory.is_suspended("110169484474386276334")
         else:
-            _ = directory.has_member("staff@example.test", "p@example.test")
+            _ = directory.has_member("staff@example.test", "110169484474386276334")
 
 
 def test_cached_token_expires_and_tracks_credentials_while_membership_stays_live(
@@ -218,7 +218,7 @@ def test_cached_token_expires_and_tracks_credentials_while_membership_stays_live
 
     def check() -> bool:
         return GoogleDirectory(directory_settings).has_member(
-            "staff@example.test", "p@example.test"
+            "staff@example.test", "110169484474386276334"
         )
 
     assert check() is True
@@ -274,9 +274,9 @@ def test_refused_cached_token_is_replaced_on_the_next_request(
     def check() -> bool:
         directory = GoogleDirectory(directory_settings)
         return (
-            not directory.is_suspended("p@example.test")
+            not directory.is_suspended("110169484474386276334")
             if phase == "status"
-            else directory.has_member("staff@example.test", "p@example.test")
+            else directory.has_member("staff@example.test", "110169484474386276334")
         )
 
     with pytest.raises(DirectoryUnavailable):
@@ -309,7 +309,7 @@ def test_account_status_is_fetched_live_with_cached_delegated_token(
         nonlocal gets
         gets += 1
         assert url == (
-            "https://admin.googleapis.com/admin/directory/v1/users/person%2Bstaff%40example.test"
+            "https://admin.googleapis.com/admin/directory/v1/users/110169484474386276334"
         )
         assert headers == {"Authorization": "Bearer token"}
         assert timeout == 5 and allow_redirects is False
@@ -317,9 +317,9 @@ def test_account_status_is_fetched_live_with_cached_delegated_token(
 
     monkeypatch.setattr(requests, "post", post)
     monkeypatch.setattr(requests, "get", get)
-    assert GoogleDirectory(directory_settings).is_suspended("person+staff@example.test") is current
+    assert GoogleDirectory(directory_settings).is_suspended("110169484474386276334") is current
     current = not current
-    assert GoogleDirectory(directory_settings).is_suspended("person+staff@example.test") is current
+    assert GoogleDirectory(directory_settings).is_suspended("110169484474386276334") is current
     assert posts == 1 and gets == 2
 
 
@@ -346,4 +346,4 @@ def test_account_status_requires_an_explicit_boolean(
     monkeypatch.setattr(requests, "post", post)
     monkeypatch.setattr(requests, "get", get)
     with pytest.raises(DirectoryUnavailable):
-        _ = GoogleDirectory(directory_settings).is_suspended("person@example.test")
+        _ = GoogleDirectory(directory_settings).is_suspended("110169484474386276334")

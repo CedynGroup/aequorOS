@@ -19330,7 +19330,22 @@
     "tests/operator/test_workspace_directory.py::test_account_status_requires_an_explicit_boolean[missing]": "unit",
     "tests/operator/test_workspace_directory.py::test_account_status_requires_an_explicit_boolean[string]": "unit",
     "tests/operator/test_workspace_directory.py::test_account_status_requires_an_explicit_boolean[integer]": "unit",
-    "tests/operator/test_workspace_directory.py::test_account_status_requires_an_explicit_boolean[array]": "unit"
+    "tests/operator/test_workspace_directory.py::test_account_status_requires_an_explicit_boolean[array]": "unit",
+    "tests/operator/test_workforce.py::test_reassigned_email_cannot_replace_the_verified_directory_account[GET]": "integration",
+    "tests/operator/test_workforce.py::test_reassigned_email_cannot_replace_the_verified_directory_account[POST]": "integration",
+    "tests/operator/test_workforce.py::test_invalid_directory_subject_denies_without_email_fallback[missing]": "integration",
+    "tests/operator/test_workforce.py::test_invalid_directory_subject_denies_without_email_fallback[boolean]": "integration",
+    "tests/operator/test_workforce.py::test_invalid_directory_subject_denies_without_email_fallback[number]": "integration",
+    "tests/operator/test_workforce.py::test_invalid_directory_subject_denies_without_email_fallback[array]": "integration",
+    "tests/operator/test_workforce.py::test_invalid_directory_subject_denies_without_email_fallback[object]": "integration",
+    "tests/operator/test_workforce.py::test_invalid_directory_subject_denies_without_email_fallback[empty]": "integration",
+    "tests/operator/test_workforce.py::test_invalid_directory_subject_denies_without_email_fallback[blank]": "integration",
+    "tests/operator/test_workforce.py::test_invalid_directory_subject_denies_without_email_fallback[padded]": "integration",
+    "tests/operator/test_workforce.py::test_invalid_directory_subject_denies_without_email_fallback[space]": "integration",
+    "tests/operator/test_workforce.py::test_invalid_directory_subject_denies_without_email_fallback[control]": "integration",
+    "tests/operator/test_workforce.py::test_invalid_directory_subject_denies_without_email_fallback[unicode]": "integration",
+    "tests/operator/test_workforce.py::test_invalid_directory_subject_denies_without_email_fallback[long]": "integration",
+    "tests/operator/test_workforce.py::test_invalid_directory_subject_denies_without_email_fallback[email]": "integration"
   },
   "services": {
     "tests/attestation/service/test_attestation_openbao.py::test_a_csr_that_does_not_prove_possession_is_never_submitted": "integration",

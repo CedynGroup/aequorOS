@@ -182,7 +182,9 @@ def _oidc_context(token: str, operator_settings: OperatorSettings) -> OperatorCo
     try:
         workforce.verify_claims(verified_claims, operator_settings)
         workforce.verify_directory_access(
-            normalized, operator_settings, workforce.GoogleDirectory(operator_settings)
+            verified_claims.get("sub"),
+            operator_settings,
+            workforce.GoogleDirectory(operator_settings),
         )
     except workforce.WorkforceDenied as exc:
         raise HTTPException(status_code=401, detail=str(exc)) from exc

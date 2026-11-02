@@ -885,8 +885,12 @@ not yet an SSO-only or universally MFA-enforced staff plane.
 When `OPERATOR_OIDC_ALLOWED_GROUPS` is nonempty, the shared OIDC request
 boundary fetches Directory `users.get` before checking `members.hasMember` on
 **every** operator request, including reads and writes using already-issued ID
-tokens. A suspended account is refused on its next request once Directory reports
-the suspension, even when it still belongs to an allowed group. Status and
+tokens. Both queries use the verified token’s immutable Google `sub` as the unique
+user ID, never its email address. Missing or invalid subjects deny access without
+an email fallback, so renaming an account or reassigning its old address cannot
+redirect either check to another user. The active provisioned staff row still
+determines local access and role. A suspended account is refused on its next
+request once Directory reports the suspension, even when it still belongs to an allowed group. Status and
 membership decisions are never cached. Delegated OAuth access tokens alone are
 reused in process until shortly before their reported expiry. A credential-file
 fingerprint prevents reuse after credential changes; unreadable files deny access

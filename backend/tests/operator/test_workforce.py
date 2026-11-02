@@ -29,7 +29,7 @@ def oidc(monkeypatch: pytest.MonkeyPatch) -> dict[str, JsonValue]:
     claims: dict[str, JsonValue] = {
         "email": "ama@aequoros.com",
         "email_verified": True,
-        "sub": "workspace-subject",
+        "sub": "110169484474386276334",
         "hd": "aequoros.com",
         "iat": int(time.time()),
     }
@@ -39,7 +39,7 @@ def oidc(monkeypatch: pytest.MonkeyPatch) -> dict[str, JsonValue]:
         assert audience == "console-client-id"
         return claims
 
-    def is_suspended(_self: workforce.GoogleDirectory, _email: str) -> bool:
+    def is_suspended(_self: workforce.GoogleDirectory, _subject: str) -> bool:
         return False
 
     monkeypatch.setattr(workforce.GoogleDirectory, "is_suspended", is_suspended)
@@ -98,6 +98,7 @@ def test_generic_oidc_and_defaults_accept_missing_hd_and_assurance(
     assert read_staff(operator_client) == 200
     configure(monkeypatch, OIDC_ISSUER="https://workforce.example")
     oidc["iat"] = 0
+    oidc["sub"] = "ama@aequoros.com"
     assert read_staff(operator_client) == 200
     configure(monkeypatch, OIDC_ALLOWED_GROUPS='["staff@aequoros.com"]')
     configure(
@@ -130,7 +131,7 @@ def test_group_membership_never_provisions_or_activates_staff(
         make_operator(operator_db, role="operator_admin", active=active)
     configure(monkeypatch, OIDC_ALLOWED_GROUPS='["staff@aequoros.com"]')
 
-    def has_member(_self: workforce.GoogleDirectory, _group: str, _email: str) -> bool:
+    def has_member(_self: workforce.GoogleDirectory, _group: str, _subject: str) -> bool:
         return True
 
     monkeypatch.setattr(workforce.GoogleDirectory, "has_member", has_member)
@@ -155,8 +156,8 @@ def test_group_grant_removal_and_failure(
     make_operator(operator_db, role="operator_admin")
     configure(monkeypatch, OIDC_ALLOWED_GROUPS='["staff@aequoros.com"]')
 
-    def has_member(_self: workforce.GoogleDirectory, group: str, email: str) -> bool:
-        assert group == "staff@aequoros.com" and email == "ama@aequoros.com"
+    def has_member(_self: workforce.GoogleDirectory, group: str, subject: str) -> bool:
+        assert group == "staff@aequoros.com" and subject == "110169484474386276334"
         if membership == "unavailable":
             raise workforce.DirectoryUnavailable("provider secret must not escape")
         return membership
@@ -180,7 +181,7 @@ def test_membership_rechecked_and_role_determined_by_row(
     configure(monkeypatch, OIDC_ALLOWED_GROUPS='["staff@aequoros.com"]')
     member = True
 
-    def has_member(_self: workforce.GoogleDirectory, _group: str, _email: str) -> bool:
+    def has_member(_self: workforce.GoogleDirectory, _group: str, _subject: str) -> bool:
         return member
 
     monkeypatch.setattr(workforce.GoogleDirectory, "has_member", has_member)
@@ -207,7 +208,7 @@ def test_group_membership_preserves_provisioned_staff_authority(
     make_operator(operator_db, role=role)
     configure(monkeypatch, OIDC_ALLOWED_GROUPS='["other@aequoros.com", "staff@aequoros.com"]')
 
-    def has_member(_self: workforce.GoogleDirectory, group: str, _email: str) -> bool:
+    def has_member(_self: workforce.GoogleDirectory, group: str, _subject: str) -> bool:
         return group == "staff@aequoros.com"
 
     monkeypatch.setattr(workforce.GoogleDirectory, "has_member", has_member)
@@ -365,14 +366,14 @@ class FakeDirectory:
         self.suspended: bool | Literal["unavailable"] = False
         self.status_requests: list[str] = []
 
-    def is_suspended(self, email: str) -> bool:
-        self.status_requests.append(email)
+    def is_suspended(self, subject: str) -> bool:
+        self.status_requests.append(subject)
         if self.suspended == "unavailable":
             raise workforce.DirectoryUnavailable("provider secret must not escape")
         return self.suspended
 
-    def has_member(self, group: str, email: str) -> bool:
-        return group == "staff@aequoros.com" and email == "ama@aequoros.com"
+    def has_member(self, group: str, subject: str) -> bool:
+        return group == "staff@aequoros.com" and subject == "110169484474386276334"
 
 
 @pytest.mark.parametrize("method", ["GET", "POST"])
@@ -407,4 +408,123 @@ def test_live_suspension_and_status_failure_revoke_existing_oidc_access(
             assert "suspended" in result.text
         elif state == "unavailable":
             assert "directory data is unavailable" in result.text
-    assert directory.status_requests == ["ama@aequoros.com"] * 4
+    assert directory.status_requests == ["110169484474386276334"] * 4
+
+
+@pytest.mark.parametrize("method", ["GET", "POST"])
+def test_reassigned_email_cannot_replace_the_verified_directory_account(
+    operator_client: TestClient,
+    operator_db: Session,
+    oidc: dict[str, JsonValue],
+    monkeypatch: pytest.MonkeyPatch,
+    method: str,
+) -> None:
+    make_operator(operator_db, role="operator_admin")
+    configure(monkeypatch, OIDC_ALLOWED_GROUPS='["staff@aequoros.com"]')
+    accounts: dict[str, tuple[bool, bool]] = {
+        "110169484474386276334": (False, True),
+        "ama@aequoros.com": (False, True),
+    }
+    calls: list[tuple[str, str]] = []
+    unavailable: str | None = None
+
+    def is_suspended(_self: workforce.GoogleDirectory, subject: str) -> bool:
+        calls.append(("status", subject))
+        if unavailable == "status":
+            raise workforce.DirectoryUnavailable("provider secret must not escape")
+        return accounts[subject][0]
+
+    def has_member(_self: workforce.GoogleDirectory, group: str, subject: str) -> bool:
+        assert group == "staff@aequoros.com"
+        calls.append(("membership", subject))
+        if unavailable == "membership":
+            raise workforce.DirectoryUnavailable("provider secret must not escape")
+        return accounts[subject][1]
+
+    monkeypatch.setattr(workforce.GoogleDirectory, "is_suspended", is_suspended)
+    monkeypatch.setattr(workforce.GoogleDirectory, "has_member", has_member)
+    path = (
+        "/operator/v1/tenants"
+        if method == "GET"
+        else "/operator/v1/operators/ama@aequoros.com/reset-password"
+    )
+
+    def request_status() -> int:
+        result = operator_client.request(method, path, headers=operator_headers("oidc"))
+        assert "provider secret" not in result.text
+        return result.status_code
+
+    assert request_status() == 200
+    original = accounts.pop("ama@aequoros.com")
+    accounts["renamed@aequoros.com"] = (True, original[1])
+    accounts["110169484474386276334"] = accounts["renamed@aequoros.com"]
+    accounts["ama@aequoros.com"] = (False, True)
+    assert request_status() == 401
+    accounts["110169484474386276334"] = (False, False)
+    assert request_status() == 401
+    accounts["110169484474386276334"] = (False, True)
+    for phase in ("status", "membership"):
+        unavailable = phase
+        assert request_status() == 401
+    unavailable = None
+    assert request_status() == 200
+    assert {subject for _, subject in calls} == {"110169484474386276334"}
+    assert {phase for phase, _ in calls} == {"status", "membership"}
+    assert oidc["email"] == "ama@aequoros.com"
+    operator_db.expire_all()
+    user = operator_db.scalar(select(OperatorUser).where(OperatorUser.email == "ama@aequoros.com"))
+    assert user is not None and user.is_active and user.role == "operator_admin"
+
+
+@pytest.mark.parametrize(
+    "subject",
+    [
+        None,
+        True,
+        123,
+        [],
+        {},
+        "",
+        " ",
+        " subject ",
+        "with space",
+        "bad\x00subject",
+        "é",
+        "x" * 256,
+        "ama@aequoros.com",
+    ],
+    ids=[
+        "missing",
+        "boolean",
+        "number",
+        "array",
+        "object",
+        "empty",
+        "blank",
+        "padded",
+        "space",
+        "control",
+        "unicode",
+        "long",
+        "email",
+    ],
+)
+def test_invalid_directory_subject_denies_without_email_fallback(
+    operator_client: TestClient,
+    operator_db: Session,
+    oidc: dict[str, JsonValue],
+    monkeypatch: pytest.MonkeyPatch,
+    subject: JsonValue,
+) -> None:
+    make_operator(operator_db, role="operator_admin")
+    configure(monkeypatch, OIDC_ALLOWED_GROUPS='["staff@aequoros.com"]')
+    if subject is None:
+        oidc.pop("sub")
+    else:
+        oidc["sub"] = subject
+
+    def is_suspended(_self: workforce.GoogleDirectory, _subject: str) -> bool:
+        pytest.fail("Invalid subjects must be refused before any Directory lookup.")
+
+    monkeypatch.setattr(workforce.GoogleDirectory, "is_suspended", is_suspended)
+    assert read_staff(operator_client) == 401

@@ -42,9 +42,9 @@ class DirectoryUnavailable(Exception):
 
 
 class DirectoryLookup(Protocol):
-    def has_member(self, group: str, email: str) -> bool: ...
+    def has_member(self, group: str, subject: str) -> bool: ...
 
-    def is_suspended(self, email: str) -> bool: ...
+    def is_suspended(self, subject: str) -> bool: ...
 
 
 class _ServiceAccount(BaseModel):
@@ -163,34 +163,44 @@ class GoogleDirectory:
         except requests.RequestException as exc:
             raise DirectoryUnavailable from exc
 
-    def has_member(self, group: str, email: str) -> bool:
+    def has_member(self, group: str, subject: str) -> bool:
         try:
             return _Membership.model_validate_json(
-                self._get(f"groups/{quote(group, safe='')}/hasMember/{quote(email, safe='')}")
+                self._get(f"groups/{quote(group, safe='')}/hasMember/{quote(subject, safe='')}")
             ).is_member
         except ValidationError as exc:
             raise DirectoryUnavailable from exc
 
-    def is_suspended(self, email: str) -> bool:
+    def is_suspended(self, subject: str) -> bool:
         try:
             return _UserStatus.model_validate_json(
-                self._get(f"users/{quote(email, safe='')}")
+                self._get(f"users/{quote(subject, safe='')}")
             ).suspended
         except ValidationError as exc:
             raise DirectoryUnavailable from exc
 
 
 def verify_directory_access(
-    email: str,
+    subject: JsonValue | None,
     settings: OperatorSettings,
     lookup: DirectoryLookup,
 ) -> None:
     if settings.oidc_issuer != _GOOGLE_ISSUER or not settings.oidc_allowed_groups:
         return
+    if (
+        not isinstance(subject, str)
+        or not subject
+        or len(subject) > 255
+        or not subject.isascii()
+        or not subject.isprintable()
+        or any(character.isspace() for character in subject)
+        or "@" in subject
+    ):
+        raise WorkforceDenied("A valid Google account subject is required for operator access.")
     try:
-        if lookup.is_suspended(email):
+        if lookup.is_suspended(subject):
             raise WorkforceDenied("Your Workspace account is suspended. Operator access denied.")
-        if not any(lookup.has_member(group, email) for group in settings.oidc_allowed_groups):
+        if not any(lookup.has_member(group, subject) for group in settings.oidc_allowed_groups):
             raise WorkforceDenied("Workspace group membership is required for operator access.")
     except DirectoryUnavailable as exc:
         raise WorkforceDenied(
