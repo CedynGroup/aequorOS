@@ -22,6 +22,7 @@ from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from typing import Any
 
+from app.core.spreadsheet_limits import SpreadsheetTooLarge, bounded_rows, inspect_archive
 from app.market_data.adapters.manual_upload.templates import (
     COMMENT_PREFIX,
     TEMPLATE_HEADERS,
@@ -122,15 +123,21 @@ def _read_xlsx(content: bytes, filename: str) -> list[tuple[str, list[list[Any]]
     import openpyxl  # noqa: PLC0415
 
     try:
+        inspect_archive(io.BytesIO(content))
         workbook = openpyxl.load_workbook(io.BytesIO(content), data_only=True, read_only=True)
+    except SpreadsheetTooLarge as exc:
+        raise ManualUploadParseError(str(exc)) from exc
     except Exception as exc:
         msg = f"Cannot open workbook {filename!r}: not a valid .xlsx file."
         raise ManualUploadParseError(msg) from exc
+    cells_used = [0]
     try:
         return [
-            (worksheet.title, [list(row) for row in worksheet.iter_rows(values_only=True)])
+            (worksheet.title, [list(row) for row in bounded_rows(worksheet, cells_used=cells_used)])
             for worksheet in workbook.worksheets
         ]
+    except SpreadsheetTooLarge as exc:
+        raise ManualUploadParseError(str(exc)) from exc
     finally:
         workbook.close()
 

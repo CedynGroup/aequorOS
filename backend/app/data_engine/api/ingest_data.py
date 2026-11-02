@@ -4,12 +4,12 @@ from datetime import date
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, HTTPException, Query, UploadFile, status
+from fastapi import APIRouter, Query, UploadFile
 
 from app.api.deps import DbSession, MutationTenant, Tenant
 from app.data_engine.api.upload_seam import (
-    MAX_UPLOAD_BYTES,
     IngestionStorage,
+    read_upload_within_cap,
 )
 from app.data_engine.api.upload_seam import (
     get_ingestion_storage as get_ingestion_storage,  # noqa: F401, PLC0414 - stable override import site
@@ -76,17 +76,7 @@ async def upload_ingestion_source(
     storage: IngestionStorage,
     file: UploadFile,
 ) -> IngestionUploadRead:
-    content = await file.read()
-    if len(content) > MAX_UPLOAD_BYTES:
-        raise HTTPException(
-            status_code=status.HTTP_413_CONTENT_TOO_LARGE,
-            detail=f"Upload exceeds the {MAX_UPLOAD_BYTES // 1_000_000} MB limit.",
-        )
-    if not content:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-            detail="Uploaded file is empty.",
-        )
+    content = await read_upload_within_cap(file)
     return ingestion.upload_source(db, ctx, bank_id, storage, file.filename or "upload", content)
 
 

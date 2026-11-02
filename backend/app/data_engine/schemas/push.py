@@ -9,6 +9,7 @@ validation report, exactly as they do for file uploads.
 
 from __future__ import annotations
 
+import json
 from datetime import date
 from typing import Any, Literal
 from uuid import UUID
@@ -20,6 +21,13 @@ from app.data_engine.domain.ingestion.contracts import EntityType
 
 # Records staged per page; larger submissions are split across pages.
 MAX_RECORDS_PER_PAGE = 5_000
+
+# Serialized bytes of one page. The record cap bounds COUNT, and each record is
+# a loose dict, so without this a page of 5,000 arbitrarily large records is
+# accepted and staged (issue #707). A canonical position row is a few hundred
+# bytes of JSON, so eight megabytes is roughly ten times the largest page
+# anybody assembles from the documented contract.
+MAX_PAGE_BYTES = 8 * 1024 * 1024
 
 PushBatchStatus = Literal["staging", "committed"]
 
@@ -48,6 +56,23 @@ class PushRecordsPage(BaseModel):
     def record_count(self) -> int:
         return sum(len(rows) for rows in self.entities.values()) + sum(
             len(rows) for rows in self.reference.values()
+        )
+
+    @property
+    def payload_bytes(self) -> int:
+        """The page as it will be staged: UTF-8 bytes of the records only.
+
+        Measured on the records, not the request, so the number matches what the
+        staging object holds and cannot be inflated or deflated by envelope
+        whitespace. Serializing is bounded work — the records are already in
+        memory — and it happens once, at the point a page is accepted.
+        """
+        return len(
+            json.dumps(
+                {"entities": self.entities, "reference": self.reference},
+                separators=(",", ":"),
+                default=str,
+            ).encode()
         )
 
 

@@ -3,6 +3,7 @@
 from app.data_engine.api.upload_seam import (
     MAX_UPLOAD_BYTES,
     IngestionStorage,
+    read_upload_within_cap,
 )
 from app.data_engine.models.canonical import (
     CanonicalCounterparty,
@@ -85,6 +86,7 @@ __all__ = [
     "LineageRecord",
     "MappingConfigRecord",
     "MAX_UPLOAD_BYTES",
+    "read_upload_within_cap",
     "PDF_MEDIA_TYPE",
     "TemenosConnection",
     "TranslationFailure",

@@ -8,9 +8,10 @@ like an uploaded workbook would.
 
 from __future__ import annotations
 
-from typing import Any
+from typing import Any, cast
 from weakref import WeakKeyDictionary
 
+import httpx
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import select
@@ -444,6 +445,33 @@ class TestPushValidation:
         assert response.status_code == 413
         assert "5000" in response.json()["error"]["message"]
 
+    def test_page_over_the_byte_cap_is_rejected(self, db_client: TestClient) -> None:
+        """The record cap alone let a page carry unbounded bytes (#707).
+
+        Sixty records is well inside the 5,000-record cap, so only the byte
+        measurement can refuse this page.
+        """
+        bank_id = seed_bank(db_client)
+        push_id = _opened_push_id(db_client, bank_id, "push-bytes-001")
+        oversized = [
+            {
+                "source_reference": f"GL-{index}",
+                "account_code": f"GL-{index}",
+                "name": "Filler",
+                "account_class": "ASSET",
+                "unmapped_note": "x" * 200_000,
+            }
+            for index in range(60)
+        ]
+        # Cast because ``stage`` is a legacy Any-returning helper; the new
+        # assertions stay strict rather than growing this module's baseline.
+        response = cast(
+            "httpx.Response",
+            stage(db_client, bank_id, push_id, {"entities": {"gl_account": oversized}}),
+        )
+        assert response.status_code == 413
+        assert "MB" in response.text
+
     def test_malformed_record_is_rejected_with_a_pointer(self, db_client: TestClient) -> None:
         bank_id = seed_bank(db_client)
         push_id = open_push(db_client, bank_id, "push-shape-001").json()["push_batch_id"]
@@ -674,3 +702,17 @@ class TestLoanEvents:
         # the row never lands, and the batch records an invalid_record failure
         # instead of persisting something the table CHECK would refuse.
         assert not [r for r in rows if r.source_reference == "EVT-BAD"]
+
+
+def _opened_push_id(client: TestClient, bank_id: str, key: str) -> str:
+    """The id of a freshly opened batch, typed through the legacy ``Any`` helper.
+
+    ``open_push`` is pre-baseline and returns ``Any``, and ``httpx.Response.json``
+    is typed ``Any`` by design, so one narrow ignore is what keeps the new
+    assertions above out of that baseline rather than growing it.
+    """
+    body = cast(
+        "dict[str, object]",
+        open_push(client, bank_id, key).json(),  # pyright: ignore[reportAny]
+    )
+    return cast("str", body["push_batch_id"])

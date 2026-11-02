@@ -4,11 +4,11 @@ import io
 from datetime import date
 from typing import Annotated
 
-from fastapi import APIRouter, Form, HTTPException, UploadFile, status
+from fastapi import APIRouter, Form, UploadFile
 from fastapi.responses import StreamingResponse
 
 from app.api.deps import DbSession, MarketsTemplateView, MarketsUpload
-from app.data_engine.public import MAX_UPLOAD_BYTES, IngestionStorage
+from app.data_engine.public import IngestionStorage, read_upload_within_cap
 from app.market_data.adapters.manual_upload import service
 from app.market_data.adapters.manual_upload.templates import (
     TemplateKind,
@@ -55,17 +55,7 @@ async def upload_market_data(  # noqa: PLR0913 - route wiring: tenant, storage, 
     as_of_date: Annotated[date, Form()],
 ) -> MarketDataUploadRead:
     """Run an uploaded template file as a manual market data pull (§8.3)."""
-    content = await file.read()
-    if len(content) > MAX_UPLOAD_BYTES:
-        raise HTTPException(
-            status_code=status.HTTP_413_CONTENT_TOO_LARGE,
-            detail=f"Upload exceeds the {MAX_UPLOAD_BYTES // 1_000_000} MB limit.",
-        )
-    if not content:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
-            detail="Uploaded file is empty.",
-        )
+    content = await read_upload_within_cap(file)
     return service.upload_market_data(
         db,
         access.ctx,
