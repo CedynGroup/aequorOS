@@ -14,7 +14,6 @@ export function usesGooglePolicy(
   return issuer === "https://accounts.google.com" || testMode;
 }
 
-/** Optional Google session cap shared by the login and callback routes. */
 export function oidcSessionMaxAge(
   issuer: string,
   env: Readonly<Record<string, string | undefined>> = process.env,

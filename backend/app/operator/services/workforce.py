@@ -1,4 +1,4 @@
-"""Optional workforce sign-in controls, independent of tenant SSO and passwords.
+"""Google workforce sign-in policy, independent of tenant SSO and passwords.
 
 Google Directory is an online authorization boundary: no membership or status
 cache survives a failed lookup. Directory 2SV flags describe account policy,
