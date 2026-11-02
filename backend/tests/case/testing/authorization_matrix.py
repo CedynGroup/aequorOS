@@ -5,6 +5,8 @@ requests at input validation. This distinguishes an authorization success (422)
 from an opaque denial (404) without starting workflows or external effects.
 """
 
+from __future__ import annotations
+
 from dataclasses import dataclass
 
 from app.core.authorization import InstitutionScope, ModuleScope, RoleBundle, SensitivityScope

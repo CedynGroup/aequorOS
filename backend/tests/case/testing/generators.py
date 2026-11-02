@@ -5,6 +5,8 @@ bundles are exercised separately with machine credentials; they are invalid on a
 human identity. Membership and audit-officer scopes retain their grant invariants.
 """
 
+from __future__ import annotations
+
 from dataclasses import dataclass
 from typing import Literal
 
