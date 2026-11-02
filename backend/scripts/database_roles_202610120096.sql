@@ -5,19 +5,22 @@ BEGIN
     PERFORM pg_advisory_xact_lock(520096);
     FOREACH role_name IN ARRAY ARRAY[
         'aqs_owner', 'aqs_migrator', 'aqs_api', 'aqs_worker', 'aqs_bi',
-        'aqs_operator', 'aqs_audit_verifier', 'aequoros_audit_owner'
+        'aqs_operator', 'aqs_audit_verifier', 'aequoros_audit_owner',
+        'aqs_storage_recovery_owner', 'aqs_storage_recovery'
     ] LOOP
         IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = role_name) THEN
             EXECUTE format(
                 'CREATE ROLE %I %s NOSUPERUSER NOCREATEDB NOCREATEROLE '
                 'NOINHERIT NOREPLICATION NOBYPASSRLS', role_name,
-                CASE WHEN role_name IN ('aqs_owner', 'aequoros_audit_owner')
+                CASE WHEN role_name IN ('aqs_owner', 'aequoros_audit_owner',
+                                        'aqs_storage_recovery_owner', 'aqs_storage_recovery')
                      THEN 'NOLOGIN' ELSE 'LOGIN' END);
         END IF;
         IF EXISTS (
             SELECT 1 FROM pg_roles WHERE rolname = role_name
             AND ((rolinherit AND role_name <> 'aequoros_audit_owner') OR rolsuper OR rolcreatedb OR rolcreaterole OR rolreplication OR rolbypassrls
-                 OR rolcanlogin <> (role_name NOT IN ('aqs_owner', 'aequoros_audit_owner')))
+                 OR rolcanlogin <> (role_name NOT IN ('aqs_owner', 'aequoros_audit_owner',
+                                     'aqs_storage_recovery_owner', 'aqs_storage_recovery')))
         ) THEN
             RAISE EXCEPTION 'Unsafe attributes on database role %; administrator preparation required', role_name;
         END IF;
@@ -50,6 +53,13 @@ BEGIN
             EXECUTE 'GRANT aequoros_audit_owner TO aqs_owner WITH ADMIN TRUE, INHERIT TRUE, SET TRUE';
         ELSE
             EXECUTE 'GRANT aequoros_audit_owner TO aqs_owner WITH ADMIN OPTION';
+        END IF;
+    END IF;
+    IF NOT pg_has_role('aqs_owner', 'aqs_storage_recovery_owner', 'MEMBER') THEN
+        IF current_setting('server_version_num')::int >= 160000 THEN
+            EXECUTE 'GRANT aqs_storage_recovery_owner TO aqs_owner WITH INHERIT TRUE, SET TRUE';
+        ELSE
+            EXECUTE 'GRANT aqs_storage_recovery_owner TO aqs_owner';
         END IF;
     END IF;
 END $$;

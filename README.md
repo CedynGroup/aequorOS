@@ -179,10 +179,11 @@ figure has been filed with, or accepted by, a regulator.
 A database restore drill **has** been executed end to end against a throwaway
 target (134 tables / 12,001,905 rows verified by row count and content digest,
 tenant isolation confirmed on the restored copy, measured RTO floor ~123 s for
-the database step alone). What is still unproven: **no backup schedule is
-configured, so the effective RPO is unbounded**; object storage is inventoried
-but has never been restored, so filed-artifact recoverability is untested; there
-is no point-in-time recovery, and the timings come from a local cluster rather
-than production hardware. The full disclosure register lives in
+the database step alone). **No backup schedule is configured, so the effective
+RPO is unbounded**; there is no point-in-time recovery, and the timings come from
+a local cluster rather than production hardware. Current object-storage recovery
+capabilities and executable evidence are governed by
+[the recovery contract](backend/docs/bank_encryption.md#rotation-backups-and-recovery).
+The full disclosure register lives in
 `docs/audit/15_known_limitations.md`, which is **not tracked in this repository**
 (`.gitignore:42`) — ask for it directly.
