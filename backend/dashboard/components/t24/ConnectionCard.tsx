@@ -8,7 +8,7 @@
  * are never displayed; only the fingerprint identifies what is on file.
  */
 
-import { useState } from "react";
+import { useId, useState } from "react";
 import {
   CheckCircle2,
   KeyRound,
@@ -50,12 +50,14 @@ function errorMessage(error: unknown): string {
 function ActionButton({
   onClick,
   disabled,
+  descriptionId,
   icon,
   children,
   tone = "default",
 }: {
   onClick: () => void;
   disabled?: boolean;
+  descriptionId?: string;
   icon: React.ReactNode;
   children: React.ReactNode;
   tone?: "default" | "danger";
@@ -65,6 +67,7 @@ function ActionButton({
       type="button"
       onClick={onClick}
       disabled={disabled}
+      aria-describedby={descriptionId}
       className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded border text-caption font-medium disabled:opacity-40 disabled:cursor-not-allowed ${
         tone === "danger"
           ? "border-critical/30 text-critical hover:bg-critical-light/40"
@@ -86,6 +89,7 @@ export default function ConnectionCard({
 }) {
   const validate = useValidateTemenosConnection(bankId);
   const test = useTestTemenosConnection(bankId);
+  const validationRequirementId = useId();
   const canValidate = useDataPermission(bankId, "validate", "restricted");
   const update = useUpdateTemenosConnection(bankId);
   const disable = useDisableTemenosConnection(bankId);
@@ -219,6 +223,12 @@ export default function ConnectionCard({
         </p>
       </div>
 
+      {!isRevoked && !canValidate && (
+        <p id={validationRequirementId} className="text-caption text-warning">
+          Requires DATA · Restricted · Validate to check availability.
+        </p>
+      )}
+
       {!isRevoked && (
         <div className="flex flex-wrap gap-2">
           <ActionButton
@@ -228,6 +238,7 @@ export default function ConnectionCard({
               })
             }
             disabled={!canValidate || busy || isDisabled}
+            descriptionId={!canValidate ? validationRequirementId : undefined}
             icon={
               test.isPending ? (
                 <Loader2 size={13} className="animate-spin" aria-hidden />

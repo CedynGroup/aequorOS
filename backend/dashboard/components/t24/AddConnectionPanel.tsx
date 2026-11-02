@@ -22,6 +22,7 @@ import type {
   TemenosDomainInfoRead,
   TemenosTestPullRead,
 } from "@aequoros/risk-service-api";
+import { useDataPermission } from "@/lib/api/dataAccess";
 import { isApiError } from "@/lib/api/client";
 import {
   useCreateTemenosConnection,
@@ -76,6 +77,7 @@ export default function AddConnectionPanel({
   const [error, setError] = useState<string | null>(null);
   const [running, setRunning] = useState(false);
 
+  const canValidate = useDataPermission(bankId, "validate", "restricted");
   const create = useCreateTemenosConnection(bankId);
   const test = useTestTemenosConnection(bankId);
   const domainsQuery = useTemenosDomains(bankId, mode ?? "OFS");
@@ -111,7 +113,9 @@ export default function AddConnectionPanel({
       setDisplayName(`Core ${modeName(key)}`);
     }
     if (!endpoint) {
-      setEndpoint(MODES.find((option) => option.key === key)?.endpointHint ?? "");
+      setEndpoint(
+        MODES.find((option) => option.key === key)?.endpointHint ?? "",
+      );
     }
   };
 
@@ -151,7 +155,7 @@ export default function AddConnectionPanel({
         credentialExpiresAt: expiresAt ? `${expiresAt}T00:00:00Z` : undefined,
       });
       setCreated(connection);
-      if (!connection.validationError) {
+      if (canValidate && !connection.validationError) {
         setTestResult(await test.mutateAsync(connection.id));
       }
     } catch (caught) {
@@ -476,6 +480,12 @@ export default function AddConnectionPanel({
                     {created.validationError}
                   </p>
                 </div>
+              )}
+              {!canValidate && !created.validationError && (
+                <p role="status" className="text-caption text-slate">
+                  Configuration saved. Live test omitted: requires DATA ·
+                  Restricted · Validate.
+                </p>
               )}
               {testResult && (
                 <div

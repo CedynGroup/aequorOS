@@ -10,7 +10,10 @@
  * the related bank-local reads.
  */
 
-import { useDataPermission, useDataPermissionState } from "./dataAccess";
+import {
+  useDataPermission,
+  useReportingDataPermissionState,
+} from "./dataAccess";
 import { useCallback, useEffect, useRef } from "react";
 import {
   keepPreviousData,
@@ -179,7 +182,7 @@ export function useBank(bankId: string | undefined) {
 
 export function useReportingPeriods(bankId: string | undefined) {
   const scope = useQueryAuthorityScope();
-  const access = useDataPermissionState(bankId, "view", "confidential");
+  const access = useReportingDataPermissionState(bankId, "confidential");
   const query = useQuery({
     queryKey: scopedQueryKey("periods", scope, bankId ?? null),
     queryFn: () =>
@@ -194,7 +197,7 @@ export function useBankPeriodFacts(
   periodId: string | undefined,
 ) {
   const scope = useQueryAuthorityScope();
-  const access = useDataPermissionState(bankId, "view", "restricted");
+  const access = useReportingDataPermissionState(bankId, "restricted");
   const query = useQuery({
     queryKey: scopedQueryKey("facts", scope, bankId ?? null, periodId ?? null),
     queryFn: () =>

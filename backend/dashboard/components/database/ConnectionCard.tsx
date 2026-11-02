@@ -8,7 +8,7 @@
  * identifies what is on file.
  */
 
-import { useState } from "react";
+import { useId, useState } from "react";
 import {
   CheckCircle2,
   Database,
@@ -55,6 +55,7 @@ function errorMessage(error: unknown): string {
 function ActionButton({
   onClick,
   disabled,
+  descriptionId,
   active,
   icon,
   children,
@@ -62,6 +63,7 @@ function ActionButton({
 }: {
   onClick: () => void;
   disabled?: boolean;
+  descriptionId?: string;
   active?: boolean;
   icon: React.ReactNode;
   children: React.ReactNode;
@@ -72,6 +74,7 @@ function ActionButton({
       type="button"
       onClick={onClick}
       disabled={disabled}
+      aria-describedby={descriptionId}
       className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded border text-caption font-medium disabled:opacity-40 disabled:cursor-not-allowed ${
         tone === "danger"
           ? "border-critical/30 text-critical hover:bg-critical-light/40"
@@ -101,6 +104,7 @@ export default function ConnectionCard({
   const disable = useDisableDatabaseConnection(bankId);
   const enable = useEnableDatabaseConnection(bankId);
   const revoke = useRevokeDatabaseConnection(bankId);
+  const validationRequirementId = useId();
   const canValidate = useDataPermission(bankId, "validate", "restricted");
   const canRun = useDataPermission(bankId, "run", "restricted");
 
@@ -278,6 +282,13 @@ export default function ConnectionCard({
         </div>
       )}
 
+      {!isRevoked && !canValidate && (
+        <p id={validationRequirementId} className="text-caption text-warning">
+          Requires DATA · Restricted · Validate to test this connection or
+          discover its schema.
+        </p>
+      )}
+
       {!isRevoked && (
         <div className="flex flex-wrap gap-2">
           <ActionButton
@@ -287,6 +298,7 @@ export default function ConnectionCard({
               })
             }
             disabled={!canValidate || busy || isDisabled}
+            descriptionId={!canValidate ? validationRequirementId : undefined}
             icon={
               test.isPending ? (
                 <Loader2 size={13} className="animate-spin" aria-hidden />
@@ -306,6 +318,7 @@ export default function ConnectionCard({
               }
             }}
             disabled={!canValidate || busy || isDisabled}
+            descriptionId={!canValidate ? validationRequirementId : undefined}
             active={panel === "schema"}
             icon={
               discover.isPending ? (

@@ -8,6 +8,8 @@
 
 import { useState } from "react";
 import { Download, FileDown } from "lucide-react";
+import DataAccessNotice from "@/components/ui/DataAccessNotice";
+import { ErrorPanel } from "@/components/ui/QueryBoundary";
 import { useBankContext } from "@/components/shell/BankContext";
 import {
   STARTER_TEMPLATES,
@@ -49,7 +51,9 @@ export default function TemplatesPanel() {
       config.status === "active" && config.sourceSystem === "EXCEL_CSV",
   );
   const mappingReady = activeConfig?.name === requiredName;
-  const starter = STARTER_TEMPLATES.find((template) => template.name === requiredName);
+  const starter = STARTER_TEMPLATES.find(
+    (template) => template.name === requiredName,
+  );
   const activeFormat = FORMATS.find((entry) => entry.key === format)!;
 
   return (
@@ -89,7 +93,16 @@ export default function TemplatesPanel() {
               : "border-warning/30 bg-warning-light/40"
           }`}
         >
-          {mappingReady ? (
+          {configsQuery.access === "loading" || configsQuery.isLoading ? (
+            <p role="status">Loading mapping status…</p>
+          ) : configsQuery.access === "denied" ? (
+            <DataAccessNotice requirement="DATA · Confidential · View to read mapping status" />
+          ) : configsQuery.isError ? (
+            <ErrorPanel
+              error={configsQuery.error}
+              onRetry={() => void configsQuery.refetch()}
+            />
+          ) : mappingReady ? (
             <span className="text-success">
               Active mapping <span className="font-medium">{requiredName}</span>{" "}
               — these files ingest as-is.

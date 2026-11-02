@@ -22,6 +22,10 @@ import type { ComponentType } from "react";
 import type { EffectiveCapabilityRead } from "@aequoros/risk-service-api";
 import { http, HttpResponse } from "msw";
 import { setupServer } from "msw/node";
+import TemplatesPanel from "../components/data-engine/TemplatesPanel";
+import ActivatePanel from "../components/data-engine/ActivatePanel";
+import AddDatabaseConnection from "../components/database/AddConnectionPanel";
+import AddTemenosConnection from "../components/t24/AddConnectionPanel";
 import Overview from "../app/(app)/data-engine/page";
 import DatabasePage from "../app/(app)/data-engine/database/page";
 import T24Page from "../app/(app)/data-engine/t24/page";
@@ -37,11 +41,12 @@ import { queryAuthorityScope } from "../lib/api/queryPolicy";
 const state = vi.hoisted(() => ({
   capabilities: [] as EffectiveCapabilityRead[],
   bank: "BK-SAMP0001",
+  loading: false,
 }));
 vi.mock("@/components/profile/ProfileProvider", () => ({
   useUserProfile: () => ({
     profile: { userId: "checker" },
-    isLoading: false,
+    isLoading: state.loading,
     effectiveAuthority: {
       institutionCapabilities: [
         { institutionId: state.bank, capabilities: state.capabilities },
@@ -52,6 +57,7 @@ vi.mock("@/components/profile/ProfileProvider", () => ({
 vi.mock("@/components/shell/BankContext", () => ({
   useBankContext: () => ({
     bank: { id: state.bank },
+    period: { periodEnd: new Date("2026-09-30") },
     moduleScope: { marketsRestrictedView: false },
   }),
 }));
@@ -136,6 +142,7 @@ beforeAll(() => server.listen({ onUnhandledRequest: "error" }));
 beforeEach(() => {
   setAccessToken("fixture-token");
   state.capabilities = [];
+  state.loading = false;
   requests = [];
   client = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
@@ -297,6 +304,17 @@ it.each(["run", "validate"] as const)(
     if (permission === "run") {
       expect(test).toBeDisabled();
       expect(discover).toBeDisabled();
+      expect(test).toHaveAccessibleDescription(
+        /Requires DATA · Restricted · Validate/,
+      );
+      expect(discover).toHaveAccessibleDescription(
+        /Requires DATA · Restricted · Validate/,
+      );
+      expect(
+        screen.getByText(
+          /Requires DATA · Restricted · Validate to test this connection or discover its schema/,
+        ),
+      ).toBeVisible();
       expect(sync).toBeEnabled();
       await user.click(test);
       await user.click(discover);
@@ -346,7 +364,17 @@ it.each([false, true])(
     const user = userEvent.setup();
     const test = screen.getByRole("button", { name: "Check availability" });
     if (allowed) expect(test).toBeEnabled();
-    else expect(test).toBeDisabled();
+    else {
+      expect(test).toBeDisabled();
+      expect(
+        screen.getByText(
+          /Requires DATA · Restricted · Validate to check availability/,
+        ),
+      ).toBeVisible();
+      expect(test).toHaveAccessibleDescription(
+        /Requires DATA · Restricted · Validate/,
+      );
+    }
     await user.click(test);
     if (allowed) await screen.findByText("Configuration check complete");
     await user.click(
@@ -404,7 +432,7 @@ it.each([false, true])(
   },
 );
 
-it("records a separate checker's revocation and reloads the immutable register", async () => {
+it("records a separate checker's rejection and reloads the immutable register", async () => {
   state.capabilities = [
     capability("view", "confidential"),
     capability("approve", "confidential"),
@@ -412,7 +440,7 @@ it("records a separate checker's revocation and reloads the immutable register",
   const proposal = {
     id: "proposal",
     bank_id: state.bank,
-    status: "approved",
+    status: "pending",
     control: "balance_sheet_identity",
     requested_by: "maker",
     requested_at: "2026-01-01T00:00:00Z",
@@ -420,9 +448,9 @@ it("records a separate checker's revocation and reloads the immutable register",
     max_gap_fraction: "0.05",
     effective_from: "2026-01-01",
     effective_to: "2026-12-31",
-    approved_by: "CRO",
-    approved_by_user_id: "checker",
-    approval_timestamp: "2026-01-02T00:00:00Z",
+    approved_by: null,
+    approved_by_user_id: null,
+    approval_timestamp: null,
     revoked_at: null as string | null,
     revoked_by: null as string | null,
   };
@@ -444,15 +472,15 @@ it("records a separate checker's revocation and reloads the immutable register",
   mount(ReconciliationPanel);
   await screen.findByText("Known feed gap");
   const user = userEvent.setup();
-  const revoke = screen.getByRole("button", { name: "Revoke exception" });
+  const revoke = screen.getByRole("button", { name: "Reject" });
   expect(revoke).toBeDisabled();
   await user.type(
-    screen.getByLabelText("Your approval or revocation label"),
+    screen.getByLabelText("Your approval or rejection label"),
     "CRO",
   );
   expect(revoke).toBeDisabled();
   await user.type(
-    screen.getByLabelText("Reason for revocation"),
+    screen.getByLabelText("Reason for rejection"),
     "Feed repaired",
   );
   await user.click(revoke);
@@ -462,7 +490,7 @@ it("records a separate checker's revocation and reloads the immutable register",
   expect(await within(register).findByText("Revoked")).toBeVisible();
   expect(body).toEqual({ revoked_by: "CRO", reason: "Feed repaired" });
   expect(
-    within(register).queryByRole("button", { name: "Revoke exception" }),
+    within(register).queryByRole("button", { name: "Reject" }),
   ).not.toBeInTheDocument();
 });
 
@@ -515,3 +543,340 @@ it("retries an unavailable register and submits both dates of a bounded proposal
     effective_to: "2026-10-31",
   });
 });
+
+it("keeps template downloads while confidential mapping status is unavailable", async () => {
+  state.capabilities = [capability("view"), capability("run")];
+  mount(TemplatesPanel);
+  expect(screen.getByRole("status")).toHaveTextContent(
+    "DATA · Confidential · View",
+  );
+  expect(
+    screen.queryByRole("button", { name: "Activate it" }),
+  ).not.toBeInTheDocument();
+  expect(
+    screen.getAllByRole("button", { name: "Download CSV" }).length,
+  ).toBeGreaterThan(0);
+  expect(requests).not.toContain("mapping-configs");
+});
+
+it.each(["loading", "failed", "empty", "active"] as const)(
+  "distinguishes %s mapping metadata before offering replacement",
+  async (status) => {
+    state.capabilities = [capability("view", "confidential")];
+    state.loading = status === "loading";
+    server.use(
+      http.get(`${base}/mapping-configs`, () => {
+        requests.push("mapping-configs");
+        return status === "failed"
+          ? HttpResponse.json({}, { status: 503 })
+          : HttpResponse.json({
+              configs:
+                status === "active"
+                  ? [
+                      {
+                        id: "mapping",
+                        name: "Canonical passthrough (API field names)",
+                        status: "active",
+                        source_system: "EXCEL_CSV",
+                        version: 1,
+                        config: {},
+                        created_at: "2026-01-01T00:00:00Z",
+                      },
+                    ]
+                  : [],
+            });
+      }),
+    );
+    mount(TemplatesPanel);
+    if (status === "loading") {
+      expect(screen.getByRole("status")).toHaveTextContent(
+        "Loading mapping status",
+      );
+      expect(requests).not.toContain("mapping-configs");
+    } else if (status === "failed")
+      await screen.findByText("Could not load data");
+    else if (status === "empty")
+      expect(
+        await screen.findByRole("button", { name: "Activate it" }),
+      ).toBeEnabled();
+    else await screen.findByText(/these files ingest as-is/);
+    if (status !== "empty")
+      expect(
+        screen.queryByRole("button", { name: "Activate it" }),
+      ).not.toBeInTheDocument();
+  },
+);
+
+it("requires an explicit date when upload metadata is denied without blocking manual recompute", async () => {
+  state.capabilities = [capability("view"), capability("run")];
+  let body: unknown;
+  server.use(
+    http.post(`${base}/refresh`, async ({ request }) => {
+      body = await request.json();
+      return HttpResponse.json({ job_id: "job" });
+    }),
+    http.get(`${apiBaseUrl}/jobs/job`, () =>
+      HttpResponse.json({ id: "job", status: "succeeded", progress: {} }),
+    ),
+  );
+  mount(ActivatePanel);
+  const user = userEvent.setup();
+  await user.click(screen.getByRole("button", { name: "Advanced actions" }));
+  expect(screen.getByRole("status")).toHaveTextContent(
+    "DATA · Confidential · View",
+  );
+  const date = screen.getByLabelText("As-of date");
+  expect(date).toHaveValue("");
+  expect(
+    screen.queryByText(/Defaults to the latest accepted upload/),
+  ).not.toBeInTheDocument();
+  expect(screen.getByRole("button", { name: "Recompute now" })).toBeDisabled();
+  await user.type(date, "2026-10-01");
+  await user.click(screen.getByRole("button", { name: "Recompute now" }));
+  await waitFor(() =>
+    expect(body).toEqual({
+      as_of_date: "2026-10-01",
+      reason: "Recompute now from the Data Engine console.",
+    }),
+  );
+  expect(requests).not.toContain("ingestion-batches");
+});
+
+it.each(["loading", "failed", "empty", "accepted"] as const)(
+  "distinguishes %s upload dates in activation defaults",
+  async (status) => {
+    state.capabilities = [
+      capability("view", "confidential"),
+      capability("run"),
+    ];
+    state.loading = status === "loading";
+    server.use(
+      http.get(`${base}/ingestion-batches`, () => {
+        requests.push("ingestion-batches");
+        return status === "failed"
+          ? HttpResponse.json({}, { status: 503 })
+          : HttpResponse.json({
+              batches:
+                status === "accepted"
+                  ? [
+                      {
+                        id: "batch",
+                        status: "accepted",
+                        as_of_date: "2026-10-01",
+                        created_at: "2026-10-01T12:00:00Z",
+                        source_system: "DB_DIRECT",
+                      },
+                    ]
+                  : [],
+            });
+      }),
+    );
+    mount(ActivatePanel);
+    await userEvent
+      .setup()
+      .click(screen.getByRole("button", { name: "Advanced actions" }));
+    if (status === "loading")
+      expect(screen.getByRole("status")).toHaveTextContent(
+        "Loading upload dates",
+      );
+    else if (status === "failed")
+      await screen.findByText("Could not load data");
+    else if (status === "empty")
+      await screen.findByText(
+        /No accepted uploads. Defaults to the selected reporting period/,
+      );
+    else await screen.findByText(/Defaults to the latest accepted upload/);
+    expect(screen.getByLabelText("As-of date")).toHaveValue(
+      status === "accepted"
+        ? "2026-10-01"
+        : status === "empty"
+          ? "2026-09-30"
+          : "",
+    );
+    if (status === "loading")
+      expect(requests).not.toContain("ingestion-batches");
+  },
+);
+
+it.each([false, true])(
+  "saves database credentials independently of VALIDATE=%s",
+  async (allowed) => {
+    state.capabilities = [
+      capability("view"),
+      ...(allowed ? [capability("validate")] : []),
+    ];
+    let saves = 0;
+    let probes = 0;
+    server.use(
+      http.post(`${base}/database-direct/connections`, () => {
+        saves++;
+        return HttpResponse.json(database);
+      }),
+      http.post(`${base}/database-direct/connections/connection/test`, () => {
+        probes++;
+        return HttpResponse.json({ reachable: true, latency_ms: 12 });
+      }),
+    );
+    mount(() => (
+      <AddDatabaseConnection
+        bankId={state.bank}
+        existingNames={[]}
+        onDone={() => {}}
+      />
+    ));
+    const user = userEvent.setup();
+    await user.type(screen.getByLabelText("Display name"), "Reporting replica");
+    await user.type(screen.getByLabelText("Service user"), "reader");
+    await user.type(screen.getByLabelText("Password"), "fixture-secret");
+    await user.click(
+      screen.getByRole("button", {
+        name: allowed
+          ? "Create, validate & test connection"
+          : "Create connection",
+      }),
+    );
+    await screen.findByText("Reporting replica created.");
+    if (allowed) await screen.findByText("Reachable");
+    else
+      expect(screen.getByRole("status")).toHaveTextContent(
+        "Live test omitted: requires DATA · Restricted · Validate",
+      );
+    expect(saves).toBe(1);
+    expect(probes).toBe(Number(allowed));
+  },
+);
+
+it.each([false, true])(
+  "saves Temenos credentials independently of VALIDATE=%s",
+  async (allowed) => {
+    state.capabilities = [
+      capability("view"),
+      ...(allowed ? [capability("validate")] : []),
+    ];
+    let saves = 0;
+    let probes = 0;
+    server.use(
+      read("temenos/domains", { domains: [] }),
+      http.post(`${base}/temenos/connections`, () => {
+        saves++;
+        return HttpResponse.json({ ...temenos, connection_mode: "OFS" });
+      }),
+      http.post(`${base}/temenos/connections/connection/test`, () => {
+        probes++;
+        return HttpResponse.json({ success: true, sample_values: {} });
+      }),
+    );
+    mount(() => (
+      <AddTemenosConnection
+        bankId={state.bank}
+        existingNames={[]}
+        onDone={() => {}}
+      />
+    ));
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("button", { name: /^OFS / }));
+    await user.click(screen.getByRole("button", { name: "Continue" }));
+    await user.click(screen.getByRole("button", { name: "Continue" }));
+    await user.type(screen.getByLabelText("Service user"), "reader");
+    await user.type(
+      screen.getByLabelText("Service user password"),
+      "fixture-secret",
+    );
+    await user.click(screen.getByRole("button", { name: "Continue" }));
+    await user.click(screen.getByRole("button", { name: "Continue" }));
+    await user.click(
+      screen.getByRole("button", { name: "Save configuration" }),
+    );
+    await screen.findByText(
+      /configuration saved. Live transport remains unavailable/,
+    );
+    if (allowed) await screen.findByText("Configuration check complete.");
+    else
+      expect(screen.getByRole("status")).toHaveTextContent(
+        "Live test omitted: requires DATA · Restricted · Validate",
+      );
+    expect(saves).toBe(1);
+    expect(probes).toBe(Number(allowed));
+  },
+);
+
+it.each(["pending", "approved", "revoked"] as const)(
+  "shows the reader's %s exception state and provenance without actions",
+  async (status) => {
+    state.capabilities = [
+      capability("view", "confidential"),
+      ...(status === "pending"
+        ? [capability("validate")]
+        : [capability("approve", "confidential")]),
+    ];
+    server.use(
+      read("reconciliation/exceptions", {
+        exceptions: [
+          {
+            id: "proposal",
+            bank_id: state.bank,
+            status: status === "pending" ? "pending" : "approved",
+            control: "balance_sheet_identity",
+            requested_by: "maker",
+            requested_at: "2026-01-01T00:00:00Z",
+            reason: "Known feed gap",
+            max_gap_fraction: "0.05",
+            effective_from: "2026-01-01",
+            effective_to: "2026-12-31",
+            approved_by: status === "pending" ? null : "CRO",
+            approved_by_user_id: status === "pending" ? null : "checker",
+            approval_timestamp:
+              status === "pending" ? null : "2026-01-02T00:00:00Z",
+            revoked_at: status === "revoked" ? "2026-10-01T00:00:00Z" : null,
+            revoked_by: status === "revoked" ? "Risk officer" : null,
+          },
+        ],
+      }),
+    );
+    mount(ReconciliationPanel);
+    await screen.findByText("Known feed gap");
+    expect(
+      screen.getByText(
+        status === "pending"
+          ? "Pending"
+          : status === "approved"
+            ? "Approved"
+            : "Revoked",
+      ),
+    ).toBeVisible();
+    expect(
+      screen.getByText(/Ceiling 0.05 · 2026-01-01 to 2026-12-31/),
+    ).toBeVisible();
+    expect(
+      screen.queryByRole("button", { name: "Approve exception" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Reject" }),
+    ).not.toBeInTheDocument();
+    if (status === "pending") {
+      expect(
+        screen.getByText(
+          "Awaiting approval by a different officer with Confidential · Approve.",
+        ),
+      ).toBeVisible();
+      expect(
+        screen.getByRole("link", { name: "Request access" }),
+      ).toHaveAttribute("href", "/access");
+    } else {
+      expect(screen.getByText("Approved by CRO")).toBeVisible();
+      expect(
+        screen.queryByRole("link", { name: "Request access" }),
+      ).not.toBeInTheDocument();
+      expect(
+        screen.queryByText(/Awaiting approval by/),
+      ).not.toBeInTheDocument();
+      expect(
+        screen.queryByLabelText("Your approval or rejection label"),
+      ).not.toBeInTheDocument();
+      if (status === "revoked")
+        expect(
+          screen.getByText(/Revoked by Risk officer · 2026-10-01/),
+        ).toBeVisible();
+    }
+  },
+);

@@ -256,13 +256,16 @@ it("offers a pending proposal only to a different signed-in checker, never a dis
   );
   await screen.findByText("Fixture feed gap");
   const user = userEvent.setup();
-  await user.type(
-    screen.getByLabelText("Your approval or revocation label"),
-    "CRO",
-  );
+  expect(screen.getByText("Awaiting separate approval")).toBeVisible();
   expect(
-    screen.getByRole("button", { name: "Approve proposal" }),
-  ).toBeDisabled();
+    screen.getByText("You cannot approve your own proposal."),
+  ).toBeVisible();
+  expect(
+    screen.queryByRole("link", { name: "Request access" }),
+  ).not.toBeInTheDocument();
+  expect(
+    screen.queryByRole("button", { name: "Approve exception" }),
+  ).not.toBeInTheDocument();
   expect(approve).not.toHaveBeenCalled();
   state.actor = "checker";
   rerender(
@@ -270,12 +273,19 @@ it("offers a pending proposal only to a different signed-in checker, never a dis
       <ReconciliationPanel />
     </Wrapper>,
   );
-  await waitFor(() =>
-    expect(
-      screen.getByRole("button", { name: "Approve proposal" }),
-    ).toBeEnabled(),
+  await screen.findByLabelText("Your approval or rejection label");
+  expect(
+    screen.getByRole("button", { name: "Approve exception" }),
+  ).toBeDisabled();
+  expect(screen.getByRole("button", { name: "Reject" })).toBeDisabled();
+  await user.type(
+    screen.getByLabelText("Your approval or rejection label"),
+    "CRO",
   );
-  await user.click(screen.getByRole("button", { name: "Approve proposal" }));
+  expect(
+    screen.getByRole("button", { name: "Approve exception" }),
+  ).toBeEnabled();
+  await user.click(screen.getByRole("button", { name: "Approve exception" }));
   await waitFor(() =>
     expect(approve).toHaveBeenCalledWith({
       bankId: state.bank,

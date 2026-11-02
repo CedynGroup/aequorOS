@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useId, useState } from "react";
 import { useBankContext } from "@/components/shell/BankContext";
 import { useUserProfile } from "@/components/profile/ProfileProvider";
@@ -30,6 +31,16 @@ export default function ReconciliationPanel() {
   const [notice, setNotice] = useState("");
   const fieldClass =
     "block w-full mt-1 px-3 py-2 border border-border rounded-sm text-body text-navy";
+
+  const actionable =
+    approve &&
+    Boolean(profile?.userId) &&
+    (register.data?.exceptions ?? []).some(
+      (row) =>
+        row.status === "pending" &&
+        !row.revokedAt &&
+        row.requestedBy !== profile?.userId,
+    );
 
   const error = decision.error
     ? isApiError(decision.error)
@@ -151,10 +162,10 @@ export default function ReconciliationPanel() {
           </button>
         </form>
       )}
-      {approve && (
+      {actionable && (
         <div className="grid gap-3 sm:grid-cols-2 border-t border-border-light pt-4">
           <label htmlFor={`${id}-label`} className="text-caption text-slate">
-            Your approval or revocation label
+            Your approval or rejection label
             <input
               id={`${id}-label`}
               maxLength={120}
@@ -164,7 +175,7 @@ export default function ReconciliationPanel() {
             />
           </label>
           <label htmlFor={`${id}-revoke`} className="text-caption text-slate">
-            Reason for revocation
+            Reason for rejection
             <input
               id={`${id}-revoke`}
               maxLength={2000}
@@ -175,12 +186,15 @@ export default function ReconciliationPanel() {
           </label>
         </div>
       )}
-      <ul className="divide-y divide-border-light">
+      <ul className="space-y-3">
         {(register.data?.exceptions ?? []).map((row) => {
-          const self = !profile?.userId || row.requestedBy === profile.userId;
+          const self = row.requestedBy === profile?.userId;
           const closed = row.revokedAt != null;
           return (
-            <li key={row.id} className="py-3 space-y-2">
+            <li
+              key={row.id}
+              className="rounded-md border border-border bg-surface p-4 space-y-3"
+            >
               <div className="flex flex-wrap gap-2 items-center">
                 <StatusPill
                   tone={
@@ -194,7 +208,9 @@ export default function ReconciliationPanel() {
                   {closed
                     ? "Revoked"
                     : row.status === "pending"
-                      ? "Awaiting separate approval"
+                      ? self
+                        ? "Awaiting separate approval"
+                        : "Pending"
                       : "Approved"}
                 </StatusPill>
                 <span className="text-caption font-mono text-slate">
@@ -210,50 +226,69 @@ export default function ReconciliationPanel() {
                   Approved by {row.approvedBy}
                 </p>
               )}
-              {approve && !closed && row.status === "pending" && (
-                <div>
-                  <button
-                    type="button"
-                    disabled={self || !label.trim() || decision.isPending}
-                    className="btn-primary px-3 py-2 text-caption disabled:opacity-40"
-                    onClick={() =>
-                      decision.mutate({
-                        action: "approve",
-                        exceptionId: row.id,
-                        label,
-                      })
-                    }
-                  >
-                    Approve proposal
-                  </button>
-                  {self && (
-                    <p className="mt-1 text-caption text-slate">
+              {row.revokedAt && (
+                <p className="text-caption text-slate">
+                  Revoked{row.revokedBy ? ` by ${row.revokedBy}` : ""} ·{" "}
+                  {formatDate(row.revokedAt)}
+                </p>
+              )}
+              {!closed && row.status === "pending" && (
+                <div className="border-t border-border-light pt-3">
+                  {self ? (
+                    <p className="text-caption text-slate">
                       You cannot approve your own proposal.
                     </p>
+                  ) : approve && profile?.userId ? (
+                    <div className="flex flex-wrap gap-3">
+                      <button
+                        type="button"
+                        disabled={!label.trim() || decision.isPending}
+                        className="btn-primary px-3 py-2 text-caption disabled:opacity-40"
+                        onClick={() =>
+                          decision.mutate({
+                            action: "approve",
+                            exceptionId: row.id,
+                            label,
+                          })
+                        }
+                      >
+                        Approve exception
+                      </button>
+                      <button
+                        type="button"
+                        className="rounded-sm border border-critical/40 px-3 py-2 text-caption text-critical disabled:opacity-40"
+                        disabled={
+                          !label.trim() ||
+                          !revokeReason.trim() ||
+                          decision.isPending
+                        }
+                        onClick={() =>
+                          decision.mutate({
+                            action: "revoke",
+                            exceptionId: row.id,
+                            label,
+                            reason: revokeReason,
+                          })
+                        }
+                      >
+                        Reject
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <p className="text-caption text-slate">
+                        Awaiting approval by a different officer with
+                        Confidential · Approve.
+                      </p>
+                      <Link
+                        href="/access"
+                        className="text-caption font-medium text-action hover:underline"
+                      >
+                        Request access
+                      </Link>
+                    </div>
                   )}
                 </div>
-              )}
-              {approve && !closed && (
-                <button
-                  type="button"
-                  className="text-caption text-critical disabled:opacity-40"
-                  disabled={
-                    self ||
-                    !label.trim() ||
-                    !revokeReason.trim() ||
-                    decision.isPending
-                  }
-                  onClick={() =>
-                    decision.mutate({
-                      action: "revoke",
-                      exceptionId: row.id,
-                      label,
-                      reason: revokeReason,
-                    })
-                  }
-                >
-                  Revoke exception
-                </button>
               )}
             </li>
           );

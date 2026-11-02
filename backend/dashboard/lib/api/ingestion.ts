@@ -360,14 +360,15 @@ export const STARTER_TEMPLATES: StarterTemplate[] = [
 // ---------------------------------------------------------------------------
 
 export function useMappingConfigs(bankId: string | undefined) {
-  const allowed = useDataPermission(bankId, "view", "confidential");
+  const access = useDataPermissionState(bankId, "view", "confidential");
   const scope = useQueryAuthorityScope();
-  return useQuery({
+  const query = useQuery({
     queryKey: scopedQueryKey("de-mapping-configs", scope, bankId),
     queryFn: () =>
       apiCall(() => ingestionApi.listMappingConfigs({ bankId: bankId! })),
-    enabled: allowed && Boolean(bankId),
+    enabled: access === "allowed" && Boolean(bankId),
   });
+  return { ...query, access };
 }
 
 export function useIngestionBatches(

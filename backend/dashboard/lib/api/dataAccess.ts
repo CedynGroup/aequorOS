@@ -7,11 +7,11 @@ import { hasDataCapability } from "../modules";
 
 export type DataPermissionState = "loading" | "denied" | "allowed";
 
-/** Human DATA eligibility. The server rechecks the binding and object state. */
-export function useDataPermissionState(
+function usePermissionState(
   bankId: string | undefined,
   permission: EffectiveCapabilityRead["permission"],
   sensitivity: EffectiveCapabilityRead["sensitivity"],
+  examinerRead: boolean,
 ): DataPermissionState {
   const profile = useUserProfile();
   const inspection = useImpersonation();
@@ -21,10 +21,29 @@ export function useDataPermissionState(
     )?.capabilities ?? [];
   if (profile.isLoading) return "loading";
   return Boolean(bankId) &&
-    !inspection.impersonating &&
+    (!inspection.impersonating ||
+      (examinerRead &&
+        !inspection.expired &&
+        Boolean(inspection.token) &&
+        Boolean(inspection.operator))) &&
     hasDataCapability(capabilities, sensitivity, permission)
     ? "allowed"
     : "denied";
+}
+
+export function useDataPermissionState(
+  bankId: string | undefined,
+  permission: EffectiveCapabilityRead["permission"],
+  sensitivity: EffectiveCapabilityRead["sensitivity"],
+): DataPermissionState {
+  return usePermissionState(bankId, permission, sensitivity, false);
+}
+
+export function useReportingDataPermissionState(
+  bankId: string | undefined,
+  sensitivity: "confidential" | "restricted",
+): DataPermissionState {
+  return usePermissionState(bankId, "view", sensitivity, true);
 }
 
 export function useDataPermission(

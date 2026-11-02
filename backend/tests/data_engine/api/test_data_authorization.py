@@ -11,7 +11,8 @@ from fastapi.testclient import TestClient
 from sqlalchemy import delete, event, func, select
 
 from app.core import authorization as authorization_policy
-from app.core import outbound
+from app.core import outbound, security
+from app.core.config import get_settings
 from app.core.authorization import (
     BindingStatus,
     DataScope,
@@ -27,11 +28,13 @@ from app.data_engine.api import database_connections as connection_api
 from app.data_engine.schemas.ingestion import LineageWalkRead
 from app.db.base import utc_now
 from app.db.session import get_sessionmaker
+from app.identity.schemas.banks import BankFactsRead, BankReportingPeriodListRead
 from app.identity.service import authorization
 from app.models import (
     AuditEvent,
     AuthorizationBinding,
     Bank,
+    BankReportingPeriod,
     CanonicalPositionSnapshot,
     DatabaseDirectConnection,
     IngestionBatch,
@@ -42,7 +45,7 @@ from app.models import (
 )
 from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID, materialize_canonical_test_book
 from tests.support.factories.canonical import FIXTURE_AS_OF, seed_canonical_fixture
-from tests.support.helpers import ORG_1, USER_1, headers
+from tests.support.helpers import ORG_1, ORG_2, USER_1, headers
 from tests.support.inmemory_storage import InMemoryStorageClient
 
 BASE = f"/api/v1/banks/{SAMPLE_BANK_ID}"
@@ -421,3 +424,78 @@ def test_connector_denials_do_not_call_network_or_change_state(
             assert row is not None
             assert row.status == "ACTIVE"
             assert row.last_validated_at is None
+
+
+def test_examiner_period_and_fact_reads_preserve_verified_tenant_coverage(
+    db_client: TestClient,
+) -> None:
+    secret = get_settings().auth.impersonation_jwt_secret
+    assert secret is not None
+    now = utc_now()
+
+    def examiner(organization_id: str, *, expired: bool = False) -> dict[str, str]:
+        return {
+            "Authorization": "Bearer "
+            + security.mint_impersonation_token(
+                organization_id=organization_id,
+                act_operator="examiner@example.test",
+                session_id=str(uuid4()),
+                secret=secret,
+                issued_at=now - timedelta(minutes=20),
+                expires_at=now + timedelta(minutes=-1 if expired else 15),
+            )
+        }
+
+    auth = examiner(ORG_1)
+    periods = db_client.get(f"{BASE}/reporting-periods", headers=auth)
+    assert periods.status_code == 200, periods.text
+    period_id = BankReportingPeriodListRead.model_validate_json(periods.text).periods[0].id
+    path = f"{BASE}/reporting-periods/{period_id}/facts"
+    facts = db_client.get(path, headers=auth)
+    assert facts.status_code == 200, facts.text
+    read = BankFactsRead.model_validate_json(facts.text)
+    assert read.period.id == period_id
+    assert read.balance_sheet
+    for resource in (f"{BASE}/reporting-periods", path):
+        assert db_client.get(resource, headers=examiner(ORG_2)).status_code == 404
+        assert db_client.get(resource, headers=examiner(ORG_1, expired=True)).status_code == 401
+        assert (
+            db_client.get(resource, headers={"Authorization": "Bearer invalid"}).status_code == 401
+        )
+    assert (
+        db_client.get(
+            f"/api/v1/banks/{SIBLING}/reporting-periods/{period_id}/facts", headers=auth
+        ).status_code
+        == 404
+    )
+    assert db_client.get(f"{BASE}/ingestion-batches", headers=auth).status_code == 403
+    assert (
+        db_client.post(f"{BASE}/reconciliation/exceptions", headers=auth, json={}).status_code
+        == 403
+    )
+
+
+def test_reporting_reads_still_require_exact_human_data_authority(db_client: TestClient) -> None:
+    _grant(module=ModuleScope.CREDIT)
+    with get_sessionmaker()() as db:
+        period = db.scalar(
+            select(BankReportingPeriod).where(BankReportingPeriod.bank_id == SAMPLE_BANK_ID)
+        )
+        assert period is not None
+        period_id = period.id
+    assert db_client.get(f"{BASE}/reporting-periods", headers=_auth()).status_code == 403
+    assert (
+        db_client.get(f"{BASE}/reporting-periods/{period_id}/facts", headers=_auth()).status_code
+        == 404
+    )
+    _grant(SensitivityScope.CONFIDENTIAL)
+    assert db_client.get(f"{BASE}/reporting-periods", headers=_auth()).status_code == 200
+    assert (
+        db_client.get(f"{BASE}/reporting-periods/{period_id}/facts", headers=_auth()).status_code
+        == 404
+    )
+    _grant(SensitivityScope.RESTRICTED)
+    assert (
+        db_client.get(f"{BASE}/reporting-periods/{period_id}/facts", headers=_auth()).status_code
+        == 200
+    )
