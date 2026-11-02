@@ -269,7 +269,9 @@ plaintext hash/length, tier, original path and provider provenance. Artifact ban
 scope is derived through its package. Published objects and bindings refuse
 UPDATE, DELETE and TRUNCATE, including binding replacement. Binding a draft
 supervisory letter also freezes its hash, length, path, tier and ownership; the
-insert/update guards serialize that transition. Tenant FORCE RLS is
+insert/update guards serialize that transition. A narrow definer guard preserves
+existing worker updates without giving the worker catalogue access, and still
+uses FORCE RLS. Tenant FORCE RLS is
 mandatory; the API role has SELECT/INSERT only and other service roles have no
 catalogue rights. No new authorization vocabulary or enforcement cutover occurs.
 

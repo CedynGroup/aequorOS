@@ -189,9 +189,12 @@ def upgrade() -> None:
     """)
     # Draft supervisory rows are editable. Once their letter is bound, its
     # recorded evidence must stay fixed as well. Serialize with binding inserts.
+    # The worker retains existing source-row updates without catalogue SELECT;
+    # this narrow definer checks the binding under tenant FORCE RLS on its behalf.
     op.execute(f"""
         CREATE FUNCTION {schema}.aqs_bound_letter_guard() RETURNS trigger
-        LANGUAGE plpgsql SET search_path = pg_catalog, {schema}, pg_temp AS $fn$
+        LANGUAGE plpgsql SECURITY DEFINER SET row_security = on
+        SET search_path = pg_catalog, {schema}, pg_temp AS $fn$
         BEGIN
             PERFORM pg_advisory_xact_lock(hashtextextended('sealed-letter:' || OLD.id::text, 0));
             IF ROW(NEW.id, NEW.organization_id, NEW.bank_id, NEW.letter_object_path,

@@ -155,6 +155,34 @@ def test_bindings_preserve_sources_and_refuse_scope_or_evidence_substitution(
     ):
         refuse(connection, statement)
     if family is DocumentFamily.SUPERVISORY_LETTER:
+        with connection.begin_nested() as worker_scope:
+            runtime = f"sealed_letter_worker_{uuid4().hex}"
+            schema = connection.dialect.identifier_preparer.quote_identifier(
+                str(connection.scalar(sa.text("SELECT current_schema()")))
+            )
+            connection.execute(sa.text(f'CREATE ROLE "{runtime}" NOLOGIN'))
+            connection.execute(sa.text(f'GRANT "{runtime}" TO CURRENT_USER'))
+            connection.execute(sa.text(f'GRANT USAGE ON SCHEMA {schema} TO "{runtime}"'))
+            connection.execute(
+                sa.text(f'GRANT SELECT, UPDATE ON bank_supervisory_addons TO "{runtime}"')
+            )
+            connection.execute(sa.text(f'SET LOCAL ROLE "{runtime}"'))
+            assert not connection.scalar(
+                sa.text(
+                    "SELECT has_table_privilege(current_user, "
+                    "'supervisory_letter_document_bindings', 'SELECT')"
+                )
+            )
+            connection.execute(
+                table.update()
+                .where(table.c.id == source)
+                .values(letter_reference="Updated draft reference")
+            )
+            refuse(
+                connection,
+                table.update().where(table.c.id == source).values(letter_sha256="b" * 64),
+            )
+            worker_scope.rollback()
         for column, value in (
             ("letter_sha256", "b" * 64),
             ("letter_byte_size", 127),
