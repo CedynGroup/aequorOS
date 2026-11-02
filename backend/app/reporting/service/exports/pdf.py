@@ -134,7 +134,7 @@ def _cover(rendered: RenderedReturn) -> list[Any]:
     pairs = dict(rendered.metadata_pairs)
     story: list[Any] = [
         Spacer(0, 30 * mm),
-        Paragraph(pairs.get("Return", rendered.template.title), _TITLE),
+        Paragraph(escape_text(pairs.get("Return", rendered.template.title)), _TITLE),
         Spacer(0, 6 * mm),
     ]
     cover_fields = (
@@ -152,7 +152,12 @@ def _cover(rendered: RenderedReturn) -> list[Any]:
         "Generated at",
     )
     rows = [
-        [Paragraph(f"<b>{label}</b>", _CELL), Paragraph(pairs.get(label, ""), _CELL)]
+        [
+            Paragraph(f"<b>{label}</b>", _CELL),
+            # Snapshot metadata, so escaped: "Institution" is a name an
+            # administrator of the tenant can change.
+            Paragraph(escape_text(pairs.get(label, "")), _CELL),
+        ]
         for label in cover_fields
     ]
     table = Table(rows, colWidths=[42 * mm, 120 * mm])
@@ -168,7 +173,7 @@ def _cover(rendered: RenderedReturn) -> list[Any]:
     if rendered.template.notes:
         story.append(Spacer(0, 6 * mm))
         for note in rendered.template.notes:
-            story.append(Paragraph(f"Note: {note}", _SMALL))
+            story.append(Paragraph(f"Note: {escape_text(note)}", _SMALL))
     if rendered.report_notes:
         # Package-specific statements from the snapshot — the governed minima
         # applied and what this package omits. Snapshot text, so escaped.
@@ -239,9 +244,13 @@ def _record_block(officer: AttestedOfficer) -> Table:
     labels = ("Name", "Designation", "Date")
     body = [
         [
-            Paragraph(officer.name, _BODY),
-            Paragraph(officer.title or "—", _BODY),
-            Paragraph(officer.at, _BODY),
+            # Escaped, not interpolated: the name is whichever user set their
+            # own display name, and reportlab's Paragraph reads XML-like markup
+            # — including an <img src=…> it fetches server-side while building
+            # the document of record.
+            Paragraph(escape_text(officer.name), _BODY),
+            Paragraph(escape_text(officer.title or "—"), _BODY),
+            Paragraph(escape_text(officer.at), _BODY),
         ],
         [Paragraph(label, _FIELD_LABEL) for label in labels],
     ]
