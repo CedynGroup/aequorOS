@@ -6,7 +6,7 @@
  * browser never sees any of the values it could be tricked into replaying.
  */
 
-import { NextResponse, type NextRequest } from 'next/server';
+import { NextResponse, type NextRequest } from "next/server";
 import {
   OAUTH_TXN_COOKIE,
   consoleBaseUrl,
@@ -15,21 +15,27 @@ import {
   oidcEnv,
   randomUrlSafe,
   s256,
-} from '@/lib/server-auth';
+} from "@/lib/server-auth";
 
-export const dynamic = 'force-dynamic';
+import { applyWorkforcePolicy } from "@/lib/workforce-oidc";
+
+export const dynamic = "force-dynamic";
 
 export async function GET(req: NextRequest) {
   const env = oidcEnv();
   if (!env) {
-    return NextResponse.redirect(new URL('/login?error=oidc_not_configured', req.url));
+    return NextResponse.redirect(
+      new URL("/login?error=oidc_not_configured", req.url),
+    );
   }
 
   let authorizationEndpoint: string;
   try {
     authorizationEndpoint = (await discover(env.issuer)).authorization_endpoint;
   } catch {
-    return NextResponse.redirect(new URL('/login?error=idp_unreachable', req.url));
+    return NextResponse.redirect(
+      new URL("/login?error=idp_unreachable", req.url),
+    );
   }
 
   const state = randomUrlSafe(32);
@@ -38,14 +44,16 @@ export async function GET(req: NextRequest) {
   const redirectUri = `${consoleBaseUrl(req)}/api/auth/callback`;
 
   const url = new URL(authorizationEndpoint);
-  url.searchParams.set('response_type', 'code');
-  url.searchParams.set('client_id', env.clientId);
-  url.searchParams.set('redirect_uri', redirectUri);
-  url.searchParams.set('scope', 'openid email profile');
-  url.searchParams.set('state', state);
-  url.searchParams.set('nonce', nonce);
-  url.searchParams.set('code_challenge', await s256(verifier));
-  url.searchParams.set('code_challenge_method', 'S256');
+  url.searchParams.set("response_type", "code");
+  url.searchParams.set("client_id", env.clientId);
+  url.searchParams.set("redirect_uri", redirectUri);
+  url.searchParams.set("scope", "openid email profile");
+  url.searchParams.set("state", state);
+  url.searchParams.set("nonce", nonce);
+  url.searchParams.set("code_challenge", await s256(verifier));
+  url.searchParams.set("code_challenge_method", "S256");
+
+  applyWorkforcePolicy(url, env.issuer);
 
   const res = NextResponse.redirect(url);
   res.cookies.set(
@@ -53,9 +61,9 @@ export async function GET(req: NextRequest) {
     encodeCookie({ state, nonce, verifier, redirect_uri: redirectUri }),
     {
       httpOnly: true,
-      sameSite: 'lax',
-      secure: req.nextUrl.protocol === 'https:',
-      path: '/api/auth',
+      sameSite: "lax",
+      secure: req.nextUrl.protocol === "https:",
+      path: "/api/auth",
       maxAge: 600,
     },
   );

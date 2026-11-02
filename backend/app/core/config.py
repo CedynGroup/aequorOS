@@ -1360,11 +1360,38 @@ class OperatorSettings(BaseSettings):
     oidc_issuer: str | None = Field(default=None, alias="OPERATOR_OIDC_ISSUER")
     oidc_client_id: str | None = Field(default=None, alias="OPERATOR_OIDC_CLIENT_ID")
     oidc_allowed_domain: str = Field(default="aequoros.com", alias="OPERATOR_OIDC_ALLOWED_DOMAIN")
+    # Google always requires signed hd. Directory gates remain staged and optional.
+    oidc_allowed_groups: tuple[str, ...] = Field(default=(), alias="OPERATOR_OIDC_ALLOWED_GROUPS")
+    google_credentials_file: str | None = Field(
+        default=None, alias="OPERATOR_GOOGLE_CREDENTIALS_FILE"
+    )
+    google_delegated_admin: str | None = Field(
+        default=None, alias="OPERATOR_GOOGLE_DELEGATED_ADMIN"
+    )
+    google_require_2sv: bool = Field(default=False, alias="OPERATOR_GOOGLE_REQUIRE_2SV")
+    oidc_google_policy_test_mode: bool = Field(
+        default=False, alias="OPERATOR_OIDC_GOOGLE_POLICY_TEST_MODE"
+    )
+    oidc_session_max_age_seconds: int = Field(
+        default=0, ge=0, le=43200, alias="OPERATOR_OIDC_SESSION_MAX_AGE_SECONDS"
+    )
     #: Origin of the authenticated bank product (bank.aequoros.com). Returned as
     #: ``dashboard_url`` by the act-as-examiner mint endpoint so the console knows
     #: where to hand the operator off with the impersonation token. Never a
     #: secret — just where the read-only examiner view is rendered.
     bank_app_base_url: str = Field(default=DEFAULT_BANK_APP_BASE_URL, alias="BANK_APP_BASE_URL")
+
+    @model_validator(mode="after")
+    def guard_google_policy_test_mode(self) -> OperatorSettings:
+        if self.oidc_google_policy_test_mode and not is_undeployed_environment():
+            raise ValueError("OPERATOR_OIDC_GOOGLE_POLICY_TEST_MODE is limited to local/test.")
+        return self
+
+    @property
+    def uses_google_policy(self) -> bool:
+        return (
+            self.oidc_issuer == "https://accounts.google.com" or self.oidc_google_policy_test_mode
+        )
 
     @field_validator(
         "operator_database_url",
@@ -1372,6 +1399,8 @@ class OperatorSettings(BaseSettings):
         "jwt_secret",
         "oidc_issuer",
         "oidc_client_id",
+        "google_credentials_file",
+        "google_delegated_admin",
         mode="before",
     )
     @classmethod

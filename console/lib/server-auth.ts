@@ -28,6 +28,7 @@
  */
 
 import type { NextRequest } from "next/server";
+import { usesGooglePolicy } from "./workforce-oidc";
 
 export interface OidcEnv {
   issuer: string;
@@ -39,6 +40,11 @@ export function oidcEnv(): OidcEnv | null {
   const issuer = process.env.OPERATOR_OIDC_ISSUER?.trim();
   const clientId = process.env.OPERATOR_OIDC_CLIENT_ID?.trim();
   if (!issuer || !clientId) return null;
+  try {
+    usesGooglePolicy(issuer);
+  } catch {
+    return null;
+  }
   return {
     issuer: issuer.replace(/\/+$/, ""),
     clientId,
