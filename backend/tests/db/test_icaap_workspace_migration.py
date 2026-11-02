@@ -460,11 +460,19 @@ def test_an_uploaded_document_can_never_be_rewritten(connection: Connection) -> 
     cycle_id, attachment_id = uuid4(), uuid4()
     _insert_cycle(connection, cycle_id)
     _insert_attachment(connection, cycle_id, attachment_id)
-    _refused(
-        connection,
-        "UPDATE icaap_attachments SET sha256 = :digest WHERE id = :id",
-        {"id": str(attachment_id), "digest": "b" * 64},
-        "(append-only|restrict|policy|permission denied)",
+    statement = "UPDATE icaap_attachments SET sha256 = :digest WHERE id = :id"
+    params = {"id": str(attachment_id), "digest": "b" * 64}
+    if _bypasses_rls(connection):
+        _refused(connection, statement, params, "append-only|restrict|policy|permission denied")
+    else:
+        # The recovery-only UPDATE policy hides the row from ordinary invokers.
+        assert connection.execute(text(statement), params).rowcount == 0
+    assert (
+        connection.scalar(
+            text("SELECT sha256 FROM icaap_attachments WHERE id = :id"),
+            {"id": str(attachment_id)},
+        )
+        == _DIGEST
     )
 
 

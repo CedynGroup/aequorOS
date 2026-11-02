@@ -223,14 +223,17 @@ it never uses the application's decrypted read path. Its manifest records the
 original user metadata and content type, including `key-envelope-id`, the
 encryption format, and plaintext and ciphertext checksums. The backup preserves
 existing platform-only objects during optional rollout as well as bank-encrypted
-objects; it does not unwrap either. Format 3 inventories and downloads every
-retained revision and delete marker. Replay verifies ciphertext checksums, restores
-metadata and content type, and emits the old-to-new provider version mapping.
-Ordinary PUT replay assigns new version IDs. Legacy sealed references therefore
-still require the incident-authorized, audited version reconciler where deployed;
-replay alone does not repair their database pins. The format does not capture or
-replay per-version Object Lock deadlines or legal holds: recovery must separately
-restore and verify those controls before resuming filing.
+objects; it does not unwrap either. Format-3 backups copy every retained revision,
+including superseded documents, and record delete markers. Restore replays those
+revisions and emits their exact old-to-new version mapping. The audited recovery
+operation in `scripts/reconcile_storage_versions.py` applies that mapping to the
+four pinned document-version columns without changing sealed evidence or keys.
+Use the incident-only identity and dedicated restore target described in
+[the recovery procedure](bank_key_setup.md#reconcile-pinned-versions-after-replay).
+Missing or ambiguous mappings and scopes matching no pinned references fail closed.
+The format does not capture or replay per-version Object Lock deadlines or legal
+holds: recovery must separately restore and verify those controls before resuming
+filing.
 
 A recoverable object backup needs ciphertext, original bucket/key/metadata and
 the matching `bank_encryption_keys` and `object_key_envelopes` catalogue from
