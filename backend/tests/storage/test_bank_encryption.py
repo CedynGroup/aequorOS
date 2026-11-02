@@ -331,7 +331,9 @@ def test_archived_staff_download_refuses_redaction_before_integrity_checks(
     )
     db_session.add(version)
     db_session.commit()
-    ctx = TenantContext(organization_id=ORG_1, actor_user_id=USER_1, roles=("admin",))
+    ctx = TenantContext(
+        organization_id=ORG_1, actor_user_id=USER_1, roles=("admin",), authorization_version=1
+    )
     assert (
         read_version_bytes(db_session, ctx, "BK-SAMP0001", version.id, bank_storage.storage)[1]
         == content

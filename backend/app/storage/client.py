@@ -65,6 +65,31 @@ class StorageLocation:
         return f"aequoros-{env}-{self.institution_slug}-{self.tier}"
 
 
+#: Every immutable sealed object lives under this prefix in the outputs tier,
+#: keyed by its catalogue UUID. The prefix is a storage contract: generic
+#: writes and deletes refuse it, so the only way to create or replace bytes
+#: there is the conditional sealed publication.
+SEALED_KEY_PREFIX = "sealed/v1/"
+
+
+def sealed_object_key(object_id: UUID) -> str:
+    """The one physical key a catalogue identity may ever occupy."""
+    return f"{SEALED_KEY_PREFIX}{object_id}"
+
+
+def is_sealed_object_key(object_path: str) -> bool:
+    return object_path.startswith(SEALED_KEY_PREFIX)
+
+
+def refuse_sealed_maintenance(location: StorageLocation, operation: str) -> None:
+    """Keep editable-path writes and deletes out of the immutable sealed namespace."""
+    if is_sealed_object_key(location.object_path):
+        raise StorageValidationError(
+            f"Sealed objects are immutable: {operation} is not permitted at "
+            f"{location.object_path}. Publish a new sealed object instead."
+        )
+
+
 @dataclass(frozen=True)
 class SealedEncryptionContext:
     """Trusted catalogue descriptor; never populate from request or object headers.
@@ -158,6 +183,15 @@ class StorageObject:
 
 
 @dataclass(frozen=True)
+class SealedPublication:
+    """The immutable object just created, and the crypto context it was sealed under."""
+
+    descriptor: StorageObject
+    context_format: Literal["aws-esdk-object-v1", "plaintext-v1"]
+    envelope_id: UUID | None
+
+
+@dataclass(frozen=True)
 class StorageHealth:
     healthy: bool
     backend: str
@@ -234,6 +268,29 @@ class StorageClient(ABC):
         an old authenticated path for a new physical key.
         """
         raise StorageValidationError("Stable document reads are unsupported by this backend.")
+
+    def write_sealed(
+        self,
+        location: StorageLocation,
+        data: BinaryIO,
+        metadata: ObjectMetadata,
+        authenticated_context: StorageLocation,
+        content_type: str = "application/octet-stream",
+    ) -> SealedPublication:
+        """Create one immutable sealed object, or refuse.
+
+        ``location`` is the physical sealed key; ``authenticated_context`` is the
+        path the bank-key context binds (a newly published object normally uses
+        the same path for both). The payload is hashed and must equal
+        ``metadata.checksum_sha256`` before it is encrypted.
+
+        Implementations must create the key atomically and never overwrite:
+        a create-only precondition, or the backend's equivalent. A retry with
+        the same content returns the existing object; different content refuses.
+        """
+        raise StorageBackendError(
+            "This storage backend cannot publish immutable sealed documents."
+        )
 
     @abstractmethod
     def exists(self, location: StorageLocation) -> bool: ...

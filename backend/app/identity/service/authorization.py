@@ -273,6 +273,62 @@ def institution_grain_decision(
     return decision
 
 
+def institution_decision(  # noqa: PLR0913 - the complete policy tuple is explicit
+    db: Session,
+    ctx: TenantPrincipalContext,
+    *,
+    bank_id: str,
+    module: Module,
+    sensitivity: Sensitivity,
+    permission: Permission,
+    surface: str,
+    conditions: tuple[ConditionCheck, ...] = (),
+) -> AuthorizationDecision:
+    """One complete active binding for this exact institution, at institution grain.
+
+    This is the decision a caller hands to a kernel boundary that must see the
+    authority itself rather than a boolean — the sealed-document resolver is the
+    first such boundary. An evaluator failure denies, and a denial carries its
+    reason; the caller decides whether that is a 404, a 403 or a storage refusal.
+    """
+    principal = principal_locator(ctx)
+    resource = ResourceLocator(
+        ctx.organization_id,
+        InstitutionScope.INSTITUTION,
+        bank_id,
+        module,
+        sensitivity,
+    )
+    try:
+        decision = evaluate_permission(db, principal, permission, resource, conditions=conditions)
+        whole_institution = False
+        if decision.allowed:
+            whole_institution = effective_data_scope(
+                db,
+                organization_id=ctx.organization_id,
+                binding_ids=decision.matching_binding_ids,
+            ).whole_institution
+        decision = institution_grain_decision(decision, whole_institution=whole_institution)
+    except Exception as exc:  # noqa: BLE001 - enforcement must deny on evaluator failure
+        record_binding_evaluation_failure(
+            principal, permission, resource, surface=surface, error=exc
+        )
+        return AuthorizationDecision(
+            allowed=False,
+            reason="binding_evaluation_failed",
+            permission=permission,
+            principal=principal,
+            resource=resource,
+            matching_binding_ids=(),
+            binding_trace=(),
+            condition_trace=conditions,
+        )
+    record_binding_decision(
+        decision, surface=surface, severity="info" if decision.allowed else "warning"
+    )
+    return decision
+
+
 def record_binding_grant_audit(
     db: Session,
     *,

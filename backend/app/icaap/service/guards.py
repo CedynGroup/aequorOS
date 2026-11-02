@@ -17,6 +17,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import IcaapAccess, TenantContext
+from app.core.authorization import AuthorizationDecision, Module, Permission, Sensitivity
 from app.icaap.domain.frameworks import registry
 from app.icaap.domain.frameworks.schema import Framework
 from app.icaap.models.workspace import IcaapCycle
@@ -67,6 +68,30 @@ def require_bank_class(db: Session, bank: Bank) -> None:
     """
     if institution_types.institution_class(db, bank) != "bank":
         not_found()
+
+
+def sealed_document_decision(db: Session, ctx: TenantContext, bank: Bank) -> AuthorizationDecision:
+    """A fresh whole-institution VIEW decision for reading ICAAP sealed bytes.
+
+    Evidence attached to a cycle and a supervisor's letter share Capital/
+    confidential authority. The storage kernel re-checks that exact module and
+    sensitivity, so this returns the decision rather than a boolean. A refusal
+    hides the document (404), and an impersonated examiner reads no sealed bytes.
+    """
+    from app.identity import public as authorization_service  # noqa: PLC0415
+
+    decision = authorization_service.institution_decision(
+        db,
+        ctx,
+        bank_id=bank.id,
+        module=Module.CAPITAL,
+        sensitivity=Sensitivity.CONFIDENTIAL,
+        permission=Permission.VIEW,
+        surface="icaap_sealed_document_view",
+    )
+    if ctx.impersonation_context is not None or not decision.allowed:
+        not_found()
+    return decision
 
 
 def require_examiner(ctx: TenantContext) -> None:

@@ -8,6 +8,7 @@ subject that runs everywhere.
 
 from __future__ import annotations
 
+import hashlib
 import io
 import logging
 from collections.abc import Iterator
@@ -20,6 +21,8 @@ from app.storage.access_log import AccessLogHook, HashChainedAccessLog, null_acc
 from app.storage.client import (
     RETAINED_TIERS,
     ObjectMetadata,
+    SealedEncryptionContext,
+    SealedPublication,
     StorageClient,
     StorageHealth,
     StorageLocation,
@@ -27,6 +30,8 @@ from app.storage.client import (
     StorageObject,
     StorageValidationError,
     Tier,
+    is_sealed_object_key,
+    refuse_sealed_maintenance,
 )
 
 logger = logging.getLogger(__name__)
@@ -69,6 +74,7 @@ class InMemoryStorageClient(StorageClient):
         metadata: ObjectMetadata,
         content_type: str = "application/octet-stream",
     ) -> StorageObject:
+        refuse_sealed_maintenance(location, "a generic write")
         problems = []
         if not metadata.checksum_sha256:
             problems.append("checksum_sha256 is required")
@@ -104,6 +110,55 @@ class InMemoryStorageClient(StorageClient):
         self._objects.setdefault(self._key(location), []).append(version)
         self._log("write", location, version_id=version.version_id)
         return self._describe(location, version)
+
+    def write_sealed(
+        self,
+        location: StorageLocation,
+        data: BinaryIO,
+        metadata: ObjectMetadata,
+        authenticated_context: StorageLocation,
+        content_type: str = "application/octet-stream",
+    ) -> SealedPublication:
+        if location.tier != "outputs" or not is_sealed_object_key(location.object_path):
+            raise StorageValidationError(
+                "Sealed publication requires an immutable key in the outputs tier."
+            )
+        if (
+            authenticated_context.institution_slug != location.institution_slug
+            or authenticated_context.tier != location.tier
+        ):
+            raise StorageValidationError("Sealed object context must stay in its bank and tier.")
+        payload = data.read()
+        if hashlib.sha256(payload).hexdigest() != metadata.checksum_sha256:
+            raise StorageValidationError(
+                "Sealed publication content does not match its recorded checksum."
+            )
+        current = self._current(location)
+        if current is not None and current.content is not None:
+            if current.content != payload:
+                raise StorageValidationError(
+                    "Sealed publication refused: the immutable key already holds other content."
+                )
+            self._log("write.sealed.noop", location, version_id=current.version_id)
+            return SealedPublication(self._describe(location, current), "plaintext-v1", None)
+        version = _Version(
+            version_id=uuid4().hex,
+            content=payload,
+            metadata=metadata,
+            content_type=content_type,
+        )
+        self._objects.setdefault(self._key(location), []).append(version)
+        self._log("write.sealed", location, version_id=version.version_id)
+        return SealedPublication(self._describe(location, version), "plaintext-v1", None)
+
+    def read_sealed(
+        self, location: StorageLocation, context: SealedEncryptionContext
+    ) -> tuple[StorageObject, BinaryIO]:
+        descriptor, body = self.read(location)
+        if descriptor.metadata.checksum_sha256 != context.sha256:
+            body.close()
+            raise StorageValidationError("Sealed object descriptor does not match its catalogue.")
+        return descriptor, body
 
     def read(
         self,
@@ -149,7 +204,51 @@ class InMemoryStorageClient(StorageClient):
             if version.content is not None:
                 yield self._describe(location, version)
 
+    def corrupt(self, location: StorageLocation, suffix: bytes = b"% tampered") -> None:
+        """Replace the stored content, leaving the recorded metadata alone.
+
+        Test support for the property that a verified read is what makes sealed
+        evidence trustworthy: the bytes change underneath an object whose
+        recorded identity does not. It deliberately bypasses the client's own
+        refusal of the sealed namespace, because the corruption this simulates
+        did not come through the client.
+        """
+        version = self._current(location)
+        if version is None or version.content is None:
+            raise StorageNotFoundError(f"No object at {location.object_path}")
+        version.content = version.content + suffix
+
+    def substitute(
+        self,
+        location: StorageLocation,
+        content: bytes,
+        *,
+        record_checksum: bool = False,
+    ) -> None:
+        """Replace the stored content outright, optionally rewriting its metadata.
+
+        ``record_checksum`` models an attacker who also rewrites the object's own
+        metadata: only the recorded catalogue identity still contradicts them.
+        """
+        version = self._current(location)
+        if version is None or version.content is None:
+            raise StorageNotFoundError(f"No object at {location.object_path}")
+        version.content = content
+        if record_checksum and version.metadata is not None:
+            version.metadata = replace(
+                version.metadata, checksum_sha256=hashlib.sha256(content).hexdigest()
+            )
+
+    def lose(self, location: StorageLocation) -> None:
+        """Delete the object outright, as a lost or expired object would be.
+
+        Every version and delete marker goes, so the identity the caller records
+        resolves to nothing rather than to a neighbouring object.
+        """
+        _ = self._objects.pop(self._key(location), None)
+
     def delete(self, location: StorageLocation) -> None:
+        refuse_sealed_maintenance(location, "delete")
         key = self._key(location)
         if location.tier in RETAINED_TIERS:
             self._objects.setdefault(key, []).append(

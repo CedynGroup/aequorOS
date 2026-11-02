@@ -33,6 +33,7 @@ from app.storage.client import (
     SealedEncryptionContext,
     StorageAccessError,
     StorageLocation,
+    StorageValidationError,
 )
 
 ENCRYPTION_FORMAT = "aws-esdk-object-v1"
@@ -153,15 +154,37 @@ class ObjectEncryption:
             yield self
 
     def encrypt(
-        self, location: StorageLocation, data: BinaryIO, metadata: ObjectMetadata
-    ) -> tuple[BinaryIO, str | None, str | None]:
+        self,
+        location: StorageLocation,
+        data: BinaryIO,
+        metadata: ObjectMetadata,
+        *,
+        authenticated_context: StorageLocation | None = None,
+    ) -> tuple[BinaryIO, UUID | None, str | None]:
+        """Encrypt for ``location``, authenticating the recorded context path.
+
+        ``authenticated_context`` is the path the bank-key context binds when it
+        differs from the physical key being written — a sealed publication keeps
+        its recorded document path in the ciphertext context while the bytes land
+        under an immutable key. Readers reconstruct the same context from the
+        catalogue descriptor.
+
+        The envelope id is returned as the identifier it is; headers that carry it
+        on the object stringify it at the point of serialisation.
+        """
+        context_location = authenticated_context or location
+        if (
+            context_location.institution_slug != location.institution_slug
+            or context_location.tier != location.tier
+        ):
+            raise StorageValidationError("Sealed object context must stay in its bank and tier.")
         try:
             if not self.bank_key_required(location):
                 return data, None, None
-            context = object_context(location, metadata.checksum_sha256)
+            context = object_context(context_location, metadata.checksum_sha256)
             key = self._envelopes().prepare(location.institution_slug, context)
             encrypted = sdk.transform_file(data, key.plaintext, context)
-            return encrypted, str(key.envelope_id), key.key_id
+            return encrypted, key.envelope_id, key.key_id
         except KeyUnavailableError:
             raise
         except (RuntimeError, SQLAlchemyError) as exc:

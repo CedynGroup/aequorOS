@@ -27,11 +27,9 @@ Two attestation prerequisites live here (docs/attestation_esignature.md §3.6):
 
 from __future__ import annotations
 
-import hashlib
-import io
 import logging
 from collections.abc import Sequence
-from datetime import UTC, datetime
+from datetime import datetime
 from typing import Literal
 
 from fastapi import HTTPException, status
@@ -58,8 +56,14 @@ from app.reporting.service.templates import (
     build_rendered_return,
     get_template,
 )
-from app.storage.client import ObjectMetadata, StorageLocation
 from app.storage.factory import get_storage_client
+from app.storage.public import (
+    DocumentBinding,
+    DocumentFamily,
+    PublicationRequest,
+    bind_existing_document,
+    publish_sealed_document,
+)
 
 type ExportKind = Literal["xlsx", "csv", "pdf", "xlsx_working", "docx_working"]
 
@@ -125,7 +129,6 @@ def render_bog_form_pdf(  # noqa: PLR0913 - the attestation record is two named 
 
 logger = logging.getLogger(__name__)
 
-WRITTEN_BY = "regulatory_reporting"
 _CONTENT_TYPES = {
     "xlsx": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     "xlsx_working": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
@@ -495,30 +498,33 @@ def _store_export(  # noqa: PLR0913 - one storage write is its named parts
     file_stem: str,
     snapshot: dict,
 ) -> tuple[RegulatoryPackageArtifact, RegulatoryArtifactVersion]:
-    """Write the bytes, append the immutable version row, upsert the artifact."""
+    """Publish the bytes once, append the immutable version row, upsert the artifact."""
     slug = bank_slug(db, bank)
     object_path = (
         f"bog_returns/{package.reporting_date.isoformat()}/{package.id}/{file_stem}.{extension}"
     )
-    checksum = hashlib.sha256(payload).hexdigest()
-    location = StorageLocation(institution_slug=slug, tier="outputs", object_path=object_path)
-    storage = get_storage_client().for_session(db)
+    storage = get_storage_client()
     storage.ensure_institution(slug)
-    stored = storage.write(
-        location,
-        io.BytesIO(payload),
-        ObjectMetadata(
-            institution_slug=slug,
-            tier="outputs",
-            checksum_sha256=checksum,
-            written_at=datetime.now(UTC),
-            written_by=WRITTEN_BY,
-            as_of_date=package.reporting_date.isoformat(),
-            schema_version=str(snapshot.get("schema_version", "")) or None,
-            source_reference=package.return_code,
-        ),
+    actor = ctx.actor_user_id
+    if actor is None:  # pragma: no cover - an export is a scoped human act
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={"error_code": "actor_required", "message": "This action requires a user."},
+        )
+    request = PublicationRequest(
+        organization_id=ctx.organization_id,
+        bank_id=package.bank_id,
+        storage_slug=slug,
+        context_path=object_path,
+        payload=payload,
         content_type=_CONTENT_TYPES[extension],
+        published_by=actor,
+        as_of_date=package.reporting_date.isoformat(),
+        schema_version=str(snapshot.get("schema_version", "")) or None,
+        source_reference=package.return_code,
     )
+    published = publish_sealed_document(db, storage, request)
+    checksum = published.sha256
 
     # The immutable record of this export. The artifact row below is upserted
     # and therefore forgets every earlier export; this row does not, and it
@@ -528,12 +534,19 @@ def _store_export(  # noqa: PLR0913 - one storage write is its named parts
         package_id=package.id,
         kind=kind,
         object_path=object_path,
-        storage_version_id=stored.version_id,
+        storage_version_id=published.version_id,
         checksum_sha256=checksum,
-        size_bytes=len(payload),
-        created_by=ctx.actor_user_id,
+        size_bytes=published.byte_length,
+        created_by=actor,
     )
     db.add(version)
+    db.flush()
+    bind_existing_document(
+        db,
+        request,
+        published.document,
+        binding=DocumentBinding(DocumentFamily.ARTIFACT, version.id),
+    )
 
     artifact = db.scalar(
         select(RegulatoryPackageArtifact).where(
@@ -549,15 +562,15 @@ def _store_export(  # noqa: PLR0913 - one storage write is its named parts
             kind=kind,
             object_path=object_path,
             checksum_sha256=checksum,
-            size_bytes=len(payload),
+            size_bytes=published.byte_length,
         )
         db.add(artifact)
     else:
         artifact.object_path = object_path
         artifact.checksum_sha256 = checksum
-        artifact.size_bytes = len(payload)
+        artifact.size_bytes = published.byte_length
     db.flush()
     return artifact, version
 
 
-__all__ = ["ExportKind", "WRITTEN_BY", "export_package", "export_package_version"]
+__all__ = ["ExportKind", "export_package", "export_package_version"]

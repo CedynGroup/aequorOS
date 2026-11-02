@@ -9,10 +9,10 @@ are needed by the current permitted import graph.
 
 Two private dependency edges remain, with four lazy import sites:
 
-| Consumer                               | Supplier                           | Import sites                              |
-| -------------------------------------- | ---------------------------------- | ----------------------------------------- |
-| `app.icaap.service.attachments`        | `app.data_engine.service.ingestion.bank_slug` | `upload_attachment`, `prepare_download`   |
-| `app.icaap.service.supervisory_addons` | `app.data_engine.service.ingestion.bank_slug` | `create_addon`, `prepare_letter_download` |
+| Consumer                               | Supplier                           | Import sites                            |
+| -------------------------------------- | ---------------------------------- | --------------------------------------- |
+| `app.icaap.service.attachments`        | `app.data_engine.service.ingestion.bank_slug` | `upload_attachment`, `read_attachment`    |
+| `app.icaap.service.supervisory_addons` | `app.data_engine.service.ingestion.bank_slug` | `create_addon`, `read_letter`             |
 
 The helper assigns and persists a bank's storage slug when necessary. It must
 remain the single implementation of that behavior. The imports stay lazy to

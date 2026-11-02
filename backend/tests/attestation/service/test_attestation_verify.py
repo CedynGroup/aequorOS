@@ -87,7 +87,16 @@ from app.models import (
 from app.reporting.schemas.packages import RegulatoryPackageCreate
 from app.reporting.service import generation, validation
 from app.reporting.service.exports import export_package
-from app.storage.client import ObjectMetadata, StorageLocation
+from app.storage.client import StorageLocation
+from app.storage.models import SealedDocumentObject
+from app.storage.public import (
+    DocumentBinding,
+    DocumentFamily,
+    PublicationRequest,
+    bind_existing_document,
+    find_sealed_document,
+    publish_sealed_document,
+)
 from scripts import verify_attestation as offline_verifier
 from tests.core import test_key_unavailable_numeric as encrypted
 from tests.core.test_bank_field_encryption import KEY_A, NEXT
@@ -99,6 +108,7 @@ from tests.fixtures.canonical_bank_fixture import (
 )
 from tests.support.factories.authorization import grant_institution_authority
 from tests.support.inmemory_storage import InMemoryStorageClient
+from tests.support.sealed_documents import published_bytes
 
 MAKER = TenantContext(
     organization_id=DEMO_ORG_ID, actor_user_id=DEMO_USER_ID, authorization_version=1
@@ -944,35 +954,93 @@ def _store_signed_pdf(
     package: RegulatoryPackage,
     payload: bytes,
 ) -> RegulatoryArtifactVersion:
-    """Write the signed bytes and append the immutable version row that pins them."""
+    """Publish the signed bytes and append the immutable version row that pins them.
+
+    Published through the same primitive a real signing run uses, so the row is
+    bound to a catalogue identity and the verification read resolves it the way
+    it resolves a filed document.
+    """
     slug = db.scalar(select(Bank.storage_slug).where(Bank.id == SAMPLE_BANK_ID))
     assert slug
-    checksum = hashlib.sha256(payload).hexdigest()
-    location = StorageLocation(institution_slug=slug, tier="outputs", object_path=_SIGNED_PDF_PATH)
-    stored = storage_client.write(
-        location,
-        io.BytesIO(payload),
-        ObjectMetadata(
-            institution_slug=slug,
-            tier="outputs",
-            checksum_sha256=checksum,
-            written_at=datetime.now(UTC),
-            written_by="test",
-        ),
+    request = PublicationRequest(
+        organization_id=package.organization_id,
+        bank_id=package.bank_id,
+        storage_slug=slug,
+        context_path=_SIGNED_PDF_PATH,
+        payload=payload,
         content_type="application/pdf",
+        published_by=DEMO_USER_ID,
+        as_of_date=package.reporting_date.isoformat(),
     )
+    published = publish_sealed_document(db, storage_client, request)
     version = RegulatoryArtifactVersion(
         organization_id=package.organization_id,
         package_id=package.id,
         kind="pdf",
         object_path=_SIGNED_PDF_PATH,
-        storage_version_id=stored.version_id,
-        checksum_sha256=checksum,
-        size_bytes=len(payload),
+        storage_version_id=published.version_id,
+        checksum_sha256=published.sha256,
+        size_bytes=published.byte_length,
     )
     db.add(version)
+    db.flush()
+    bind_existing_document(
+        db,
+        request,
+        published.document,
+        binding=DocumentBinding(DocumentFamily.ARTIFACT, version.id),
+    )
     db.commit()
     return version
+
+
+def _filed_object(db: Session, version: RegulatoryArtifactVersion) -> SealedDocumentObject:
+    """The catalogue identity a filed version is bound to."""
+    document = find_sealed_document(
+        db,
+        version.organization_id,
+        SAMPLE_BANK_ID,
+        DocumentBinding(DocumentFamily.ARTIFACT, version.id),
+    )
+    assert document is not None, "a published version row is bound to its identity"
+    return document
+
+
+def _overwrite_object(
+    storage: InMemoryStorageClient,
+    db: Session,
+    version: RegulatoryArtifactVersion,
+    payload: bytes,
+) -> None:
+    """Replace a filed object's bytes underneath the record that names them.
+
+    A ``write`` mints a NEW object version, which is precisely what an immutable
+    sealed key refuses, and the failure this simulates is the one with no new
+    version in it: an attacker with bucket access rewrites the object's bytes and
+    its own metadata, so only the catalogue still contradicts them.
+    """
+    document = _filed_object(db, version)
+    storage.substitute(
+        StorageLocation(
+            institution_slug=document.storage_slug,
+            tier="outputs",
+            object_path=document.physical_key,
+        ),
+        payload,
+        record_checksum=True,
+    )
+
+
+def _record_tampered_bytes(
+    db: Session, version: RegulatoryArtifactVersion, payload: bytes
+) -> None:
+    """Re-record tampered bytes in the catalogue and the version row alike."""
+    document = _filed_object(db, version)
+    digest = hashlib.sha256(payload).hexdigest()
+    document.sha256 = digest
+    document.byte_length = len(payload)
+    version.checksum_sha256 = digest
+    version.size_bytes = len(payload)
 
 
 @dataclass(frozen=True)
@@ -997,10 +1065,7 @@ def _build_signed_pdf_package(
     db.commit()
     slug = db.scalar(select(Bank.storage_slug).where(Bank.id == SAMPLE_BANK_ID))
     assert slug
-    _descriptor, stream = storage_client.read(
-        StorageLocation(institution_slug=slug, tier="outputs", object_path=exported.object_path)
-    )
-    base = stream.read()
+    base = published_bytes(db, storage_client, slug=slug, context_path=exported.object_path)
     assert base.startswith(b"%PDF")
 
     revision_one = _sign_pdf(
@@ -1108,10 +1173,10 @@ def test_an_artifact_signed_with_the_pre_stamp_layout_still_passes_every_check(
     db_session.commit()
     slug = db_session.scalar(select(Bank.storage_slug).where(Bank.id == SAMPLE_BANK_ID))
     assert slug
-    _descriptor, stream = storage.read(
-        StorageLocation(institution_slug=slug, tier="outputs", object_path=exported.object_path)
+    exported_base = published_bytes(
+        db_session, storage, slug=slug, context_path=exported.object_path
     )
-    prepared = pdf_signing.prepare_signature_fields(stream.read(), placements=LEGACY_PLACEMENTS)
+    prepared = pdf_signing.prepare_signature_fields(exported_base, placements=LEGACY_PLACEMENTS)
 
     profile = pdf_signing.PadesProfile(use_pades_lta=False, embed_validation_info=False)
     revision_one = pdf_signing.sign_as_preparer(
@@ -1197,31 +1262,21 @@ def test_a_page_added_after_signing_fails_the_tamper_check(
 
     slug = db_session.scalar(select(Bank.storage_slug).where(Bank.id == SAMPLE_BANK_ID))
     assert slug
-    location = StorageLocation(institution_slug=slug, tier="outputs", object_path=_SIGNED_PDF_PATH)
-    replacement = storage.write(
-        location,
-        io.BytesIO(tampered),
-        ObjectMetadata(
-            institution_slug=slug,
-            tier="outputs",
-            checksum_sha256=hashlib.sha256(tampered).hexdigest(),
-            written_at=datetime.now(UTC),
-            written_by="test",
-        ),
-        content_type="application/pdf",
-    )
-
-    # Stage 1: the pinned version still resolves the untampered bytes, so the
-    # substitution is invisible until the pin itself is repointed. That is the
-    # version pin doing its job.
-    assert _report(db_session, signed.package, storage_client=storage, pki=pki)["overall_passed"]
-
-    # Stage 2: repoint the pin at the tampered object and re-record its checksum
-    # — the most thorough tamper available to someone with database access.
     version = signed.approver_version
-    version.storage_version_id = replacement.version_id
-    version.checksum_sha256 = hashlib.sha256(tampered).hexdigest()
-    version.size_bytes = len(tampered)
+
+    # Stage 1: the object's bytes are replaced underneath the record that names
+    # them. The reader proves every byte against the catalogued identity, so the
+    # substitution is refused rather than served, and it fails the artifact check
+    # with the corruption named — not the syntax error a hostile PDF would raise.
+    _overwrite_object(storage, db_session, version, tampered)
+    stage_one = _report(db_session, signed.package, storage_client=storage, pki=pki)
+    assert stage_one["overall_passed"] is False
+    assert _status(stage_one, verify.CHECK_ARTIFACT_BINDING) == "failed"
+    assert "unresolvable" in _check(stage_one, verify.CHECK_ARTIFACT_BINDING)["detail"]
+
+    # Stage 2: re-record the tampered bytes everywhere the reader trusts — the
+    # most thorough tamper available to someone with database access.
+    _record_tampered_bytes(db_session, version, tampered)
     db_session.commit()
 
     report = _report(db_session, signed.package, storage_client=storage, pki=pki)
@@ -1262,7 +1317,16 @@ def test_unreadable_artifact_skips_the_pdf_checks_but_fails_artifact_binding(
 ) -> None:
     """Unresolvable bytes are an availability problem, not an invalid signature."""
     signed = _build_signed_pdf_package(db_session, storage, pki)
-    signed.approver_version.object_path = "bog_returns/attestation/does-not-exist.pdf"
+    # The filed object is lost, not rewritten: its identity is still recorded, so
+    # the read fails to resolve rather than resolving something else.
+    document = _filed_object(db_session, signed.approver_version)
+    storage.lose(
+        StorageLocation(
+            institution_slug=document.storage_slug,
+            tier="outputs",
+            object_path=document.physical_key,
+        )
+    )
     db_session.commit()
 
     report = _report(db_session, signed.package, storage_client=storage, pki=pki)

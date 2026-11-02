@@ -51,6 +51,7 @@ from tests.icaap.service.test_icaap_stress_appendix2_report import (
     storage,
 )
 from tests.support.inmemory_storage import InMemoryStorageClient
+from tests.support.sealed_documents import published_bytes
 
 __all__ = ["storage"]
 
@@ -75,10 +76,7 @@ def _export(
     artifact = export_package(db, MAKER, package, kind)  # type: ignore[arg-type]
     slug = db.scalar(select(Bank.storage_slug).where(Bank.id == SAMPLE_BANK_ID))
     assert slug
-    for obj in storage_client.list(slug, "outputs"):
-        if obj.location.object_path == artifact.object_path:
-            return storage_client.read(obj.location)[1].read()
-    raise AssertionError(artifact.object_path)
+    return published_bytes(db, storage_client, slug=slug, context_path=artifact.object_path)
 
 
 def _pdf_text(payload: bytes) -> str:

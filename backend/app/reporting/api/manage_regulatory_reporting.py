@@ -82,7 +82,6 @@ from app.reporting.service.anchors import (
     DEFAULT_HORIZON_MONTHS,
     DEFAULT_LOOKBACK_MONTHS,
 )
-from app.storage.client import StorageLocation, StorageNotFoundError
 
 router = APIRouter(tags=["regulatory-reporting"])
 
@@ -335,24 +334,41 @@ def download_regulatory_artifact(
     access: PackageView,
     storage: IngestionStorage,
 ) -> StreamingResponse:
-    """Stream one exported artifact from the outputs tier."""
-    artifact, slug = reporting_workflow.prepare_artifact_download(
-        db, access.ctx, bank_id, artifact_id
+    """Stream one exported artifact, proven against the revision that wrote it.
+
+    The artifact row is upserted per kind: it names a path and a checksum but no
+    provider version, so reading its path directly served whatever the store held
+    under that name. The archived revision with the same path and checksum is the
+    export that produced these bytes, and the read goes through it.
+    """
+    artifact = reporting_workflow.get_artifact_or_404(db, access.ctx, bank_id, artifact_id)
+    version = artifact_versions.archived_version(
+        db,
+        access.ctx,
+        package_id=artifact.package_id,
+        kind=artifact.kind,
+        object_path=artifact.object_path,
+        checksum_sha256=artifact.checksum_sha256,
     )
-    location = StorageLocation(
-        institution_slug=slug, tier="outputs", object_path=artifact.object_path
-    )
-    try:
-        _descriptor, stream = storage.read(location)
-    except StorageNotFoundError as exc:
+    if version is None:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="The artifact's stored object was not found in the outputs tier.",
-        ) from exc
-    filename = PurePosixPath(artifact.object_path).name
+            status_code=status.HTTP_409_CONFLICT,
+            detail={
+                "error_code": "artifact_revision_missing",
+                "message": (
+                    f"No archived revision records the bytes of {artifact.object_path}. "
+                    "The document cannot be proven, so it is not served; re-export the "
+                    "package to mint one."
+                ),
+            },
+        )
+    served, payload = artifact_versions.read_version_bytes(
+        db, access.ctx, bank_id, version.id, storage
+    )
+    filename = PurePosixPath(served.object_path).name
     return StreamingResponse(
-        stream,
-        media_type=_artifact_media_type(artifact.kind, artifact.object_path),
+        io.BytesIO(payload),
+        media_type=_artifact_media_type(served.kind, served.object_path),
         headers=attachment_headers(filename),
     )
 
@@ -489,8 +505,6 @@ def download_email_fallback_eml(
     import io  # noqa: PLC0415
     from email.message import EmailMessage  # noqa: PLC0415
 
-    from app.data_engine.public import bank_slug  # noqa: PLC0415 - avoid an import cycle
-
     bundle = reporting_workflow.email_fallback_instructions(db, access.ctx, bank_id, package_id)
     message = EmailMessage()
     message["Subject"] = bundle.subject
@@ -499,23 +513,30 @@ def download_email_fallback_eml(
         message["To"] = recipient
     message.set_content(bundle.instructions + "\n\n" + bundle.penalty_reminder)
 
-    bank = reporting_workflow.get_bank_or_404(db, access.ctx, bank_id)
-    slug = bank_slug(db, bank)
     for attachment in bundle.attachments:
-        location = StorageLocation(
-            institution_slug=slug, tier="outputs", object_path=attachment.object_path
+        version = artifact_versions.archived_version(
+            db,
+            access.ctx,
+            package_id=package_id,
+            kind=attachment.kind,
+            object_path=attachment.object_path,
+            checksum_sha256=attachment.checksum_sha256,
         )
-        try:
-            _descriptor, stream = storage.read(location)
-        except StorageNotFoundError as exc:
+        if version is None:
             raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=(
-                    f"The {attachment.kind} artifact's stored object was not found; "
-                    "re-export the package before downloading the email bundle."
-                ),
-            ) from exc
-        payload = b"".join(stream)
+                status_code=status.HTTP_409_CONFLICT,
+                detail={
+                    "error_code": "artifact_revision_missing",
+                    "message": (
+                        f"No archived revision records the bytes of "
+                        f"{attachment.object_path}; re-export the package before "
+                        "downloading the email bundle."
+                    ),
+                },
+            )
+        _served, payload = artifact_versions.read_version_bytes(
+            db, access.ctx, bank_id, version.id, storage
+        )
         maintype, _, subtype = _artifact_media_type(
             attachment.kind, attachment.object_path
         ).partition("/")

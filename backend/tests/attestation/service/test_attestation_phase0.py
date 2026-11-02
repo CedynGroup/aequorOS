@@ -83,6 +83,7 @@ from tests.services.test_lrt_packs import (
 )
 from tests.support.factories.authorization import grant_institution_authority
 from tests.support.inmemory_storage import InMemoryStorageClient
+from tests.support.sealed_documents import published_bytes, sealed_document
 
 pytestmark = pytest.mark.usefixtures("return_generation_authority", "institution_profile_authority")
 
@@ -184,11 +185,7 @@ def _bank_slug(db: Session) -> str:
 
 
 def _read_output(db: Session, storage: InMemoryStorageClient, object_path: str) -> bytes:
-    for obj in storage.list(_bank_slug(db), "outputs"):
-        if obj.location.object_path == object_path:
-            _, stream = storage.read(obj.location)
-            return stream.read()
-    raise AssertionError(f"No stored object at {object_path}")
+    return published_bytes(db, storage, slug=_bank_slug(db), context_path=object_path)
 
 
 def _pdf_text(payload: bytes) -> bytes:
@@ -707,12 +704,10 @@ def test_every_export_appends_an_artifact_version_with_storage_version(
     # The backend reports an object-store version id, so "the artifact as
     # filed" is resolvable from the database rather than only from the bucket.
     assert version.storage_version_id
-    stored = next(
-        obj
-        for obj in storage.list(_bank_slug(db_session), "outputs")
-        if obj.location.object_path == artifact.object_path
+    document = sealed_document(
+        db_session, slug=_bank_slug(db_session), context_path=artifact.object_path
     )
-    assert stored.version_id == version.storage_version_id
+    assert document.original_version_id == version.storage_version_id
 
     # Re-export appends rather than overwriting: the upserted artifact row keeps
     # its identity while the version history grows.

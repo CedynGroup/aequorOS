@@ -157,6 +157,17 @@ class RepresentationStorage(InMemoryStorageClient):
         return descriptor, body
 
 
+def store(storage: InMemoryStorageClient, document: SealedDocumentObject, payload: bytes) -> None:
+    """Publish bytes at the catalogue's immutable key, as the primitive would."""
+    physical = StorageLocation(SLUG, "outputs", document.physical_key)
+    storage.write_sealed(
+        physical,
+        io.BytesIO(payload),
+        metadata_for(SLUG, "outputs", payload),
+        StorageLocation(SLUG, "outputs", document.context_path),
+    )
+
+
 @pytest.mark.parametrize(
     ("family", "package_family", "expected_module", "expected_sensitivity"),
     [
@@ -188,8 +199,7 @@ def test_source_family_requires_exact_module_and_sensitivity(  # noqa: PLR0913
     payload = b"synthetic family-gated document"
     binding, document = catalogue(db_session, family, payload, package_family=package_family)
     storage = RepresentationStorage()
-    location = StorageLocation(SLUG, "outputs", document.physical_key)
-    storage.write(location, io.BytesIO(payload), metadata_for(SLUG, "outputs", payload))
+    store(storage, document, payload)
     authority = decision(family, package_family=package_family)
     authority = replace(
         authority, resource=replace(authority.resource, module=module, sensitivity=sensitivity)
@@ -227,8 +237,7 @@ def test_complete_plaintext_is_verified_before_release(
         sha256="0" * 64 if fault == "hash" else None,
     )
     storage = RepresentationStorage()
-    location = StorageLocation(SLUG, "outputs", document.physical_key)
-    storage.write(location, io.BytesIO(payload), metadata_for(SLUG, "outputs", payload))
+    store(storage, document, payload)
     if fault:
         with pytest.raises(
             StorageValidationError, match="checksum" if fault == "hash" else "length"

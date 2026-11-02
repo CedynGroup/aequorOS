@@ -8,6 +8,7 @@ person who confirms it.
 
 from __future__ import annotations
 
+import hashlib
 from datetime import date
 from decimal import Decimal
 from typing import Any
@@ -18,6 +19,7 @@ from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
 from app.api.deps import IcaapAccess, TenantContext
+from app.icaap.models.risk_capital import BankSupervisoryAddon
 from app.icaap.schemas.risk_capital import (
     IcaapAuditFindingWrite,
     IcaapAuditReviewCreate,
@@ -30,6 +32,7 @@ from app.icaap.schemas.risk_capital import (
 from app.icaap.schemas.workspace import IcaapCycleRead
 from app.icaap.service import audit_reviews, challenges, participants, risks, supervisory_addons
 from app.models import Bank, User
+from app.storage.public import DocumentBinding, DocumentFamily, find_sealed_document
 from tests.icaap.service.test_attachments import pdf_bytes
 from tests.support.helpers import ORG_1
 from tests.support.inmemory_storage import InMemoryStorageClient
@@ -306,6 +309,35 @@ def test_a_recorded_letter_starts_as_a_draft_and_is_not_yet_in_force(
     assert created.letter_media_type == "application/pdf"
     cycle_row = _cycle_row(canonical_book, access, cycle)
     assert supervisory_addons.active_for(canonical_book, access, cycle_row) == []
+
+
+def test_a_recorded_letter_is_published_and_binds_its_own_row(
+    canonical_book: Session, access: IcaapAccess, storage: InMemoryStorageClient
+) -> None:
+    """The letter is sealed evidence, so it is published like every other file.
+
+    The row keeps the path an officer reads and the digest it always recorded;
+    the bytes themselves live under an identity a later write cannot move.
+    """
+    created = _record(canonical_book, access, storage)
+    row = canonical_book.get(BankSupervisoryAddon, created.id)
+    assert row is not None
+
+    document = find_sealed_document(
+        canonical_book,
+        row.organization_id,
+        row.bank_id,
+        DocumentBinding(DocumentFamily.SUPERVISORY_LETTER, row.id),
+    )
+    assert document is not None
+    assert document.sha256 == row.letter_sha256
+    assert document.byte_length == row.letter_byte_size
+    assert document.context_path == row.letter_object_path
+    assert document.physical_key.startswith("sealed/v1/")
+
+    served, stream = supervisory_addons.read_letter(canonical_book, access, created.id, storage)
+    with stream:
+        assert hashlib.sha256(stream.read()).hexdigest() == served.letter_sha256
 
 
 def test_the_person_who_recorded_a_letter_cannot_confirm_it(
