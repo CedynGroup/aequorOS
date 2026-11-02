@@ -10,14 +10,14 @@ from __future__ import annotations
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
-from app.core.authorization import AuthorizationDecision, Permission
+from app.core.authorization import AuthorizationDecision, ExaminerDocumentAuthority
 from app.core.return_family_access import gate_for
 from app.identity import public as authorization_service
 
 
 def artifact_view_decision(
     db: Session, ctx: TenantContext, *, bank_id: str, return_family: str, surface: str
-) -> AuthorizationDecision:
+) -> AuthorizationDecision | ExaminerDocumentAuthority:
     """A fresh whole-institution VIEW decision on the package's exact family gate.
 
     The bank and the family are passed as values, not as a package row: this
@@ -25,12 +25,11 @@ def artifact_view_decision(
     feature's model to describe which gate it reads.
     """
     gate = gate_for(return_family)
-    return authorization_service.institution_decision(
+    return authorization_service.document_view_decision(
         db,
         ctx,
         bank_id=bank_id,
         module=gate.module,
         sensitivity=gate.sensitivity,
-        permission=Permission.VIEW,
         surface=surface,
     )

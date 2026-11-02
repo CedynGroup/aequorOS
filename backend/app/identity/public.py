@@ -37,6 +37,7 @@ from app.identity.service.authentication import record_authentication_event
 from app.identity.service.authorization import (
     EffectiveDataScope,
     binding_is_effective,
+    document_view_decision,
     effective_data_scope,
     evaluate_permission,
     evaluate_prefetched_permission,
@@ -113,6 +114,7 @@ __all__ = [
     "get_bank_or_404",
     "get_full_profile",
     "institution_decision",
+    "document_view_decision",
     "institution_grain_decision",
     "load_effective_grants",
     "lock_authenticated_key",

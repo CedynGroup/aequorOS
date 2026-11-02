@@ -19,6 +19,8 @@ from dataclasses import dataclass
 from uuid import UUID, uuid4
 
 from sqlalchemy import select
+from sqlalchemy.dialects.postgresql import insert as pg_insert
+from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.orm import Session
 
 from app.db.base import utc_now
@@ -131,30 +133,40 @@ def publish_sealed_document(
         request.content_type,
     )
     descriptor = publication.descriptor
-    if (
-        descriptor.location != physical
-        or descriptor.metadata.checksum_sha256 != digest
-    ):
+    if descriptor.location != physical or descriptor.metadata.checksum_sha256 != digest:
         raise StorageValidationError("Sealed publication did not store the expected object.")
-    document = SealedDocumentObject(
-        id=identity,
-        organization_id=request.organization_id,
-        bank_id=request.bank_id,
-        storage_slug=request.storage_slug,
-        storage_tier="outputs",
-        physical_key=physical.object_path,
-        sha256=digest,
-        byte_length=len(request.payload),
-        context_format=publication.context_format,
-        context_path=request.context_path,
-        envelope_id=publication.envelope_id,
-        original_version_id=descriptor.version_id,
-        published_by=request.published_by,
+    insert = sqlite_insert if db.get_bind().dialect.name == "sqlite" else pg_insert
+    _ = db.execute(
+        insert(SealedDocumentObject)
+        .values(
+            id=identity,
+            organization_id=request.organization_id,
+            bank_id=request.bank_id,
+            storage_slug=request.storage_slug,
+            storage_tier="outputs",
+            physical_key=physical.object_path,
+            sha256=digest,
+            byte_length=len(request.payload),
+            context_format=publication.context_format,
+            context_path=request.context_path,
+            envelope_id=publication.envelope_id,
+            original_version_id=descriptor.version_id,
+            published_by=request.published_by,
+        )
+        .on_conflict_do_nothing(index_elements=["id"])
     )
-    db.add(document)
-    db.flush()
+    document = db.scalar(
+        select(SealedDocumentObject).where(
+            SealedDocumentObject.id == identity,
+            SealedDocumentObject.organization_id == request.organization_id,
+            SealedDocumentObject.bank_id == request.bank_id,
+        )
+    )
+    if document is None:
+        raise StorageValidationError("Sealed publication identity belongs to another scope.")
+    _require_same_document(document, request, digest)
     _bind(db, binding, request, document)
-    return PublishedDocument(document, descriptor.version_id)
+    return PublishedDocument(document, document.original_version_id)
 
 
 def bind_existing_document(
@@ -199,6 +211,18 @@ def bind_sealed_document(  # noqa: PLR0913 - a binding is its full identity
     describes the same bytes, path, tier and original provider version.
     """
     model = _BINDINGS[binding.family]
+    insert = sqlite_insert if db.get_bind().dialect.name == "sqlite" else pg_insert
+    _ = db.execute(
+        insert(model)
+        .values(
+            source_id=binding.source_id,
+            organization_id=organization_id,
+            bank_id=bank_id,
+            object_id=document.id,
+            bound_by=bound_by,
+        )
+        .on_conflict_do_nothing(index_elements=["source_id"])
+    )
     existing = db.scalar(
         select(model.object_id).where(
             model.source_id == binding.source_id,
@@ -206,27 +230,17 @@ def bind_sealed_document(  # noqa: PLR0913 - a binding is its full identity
             model.bank_id == bank_id,
         )
     )
-    if existing is not None:
-        if existing != document.id:
-            raise StorageValidationError("Sealed document is already bound to another object.")
-        return
-    db.add(
-        model(
-            source_id=binding.source_id,
-            organization_id=organization_id,
-            bank_id=bank_id,
-            object_id=document.id,
-            bound_by=bound_by,
-        )
-    )
-    db.flush()
+    if existing != document.id:
+        raise StorageValidationError("Sealed document is already bound to another object.")
 
 
 def _require_same_document(
     document: SealedDocumentObject, request: PublicationRequest, digest: str
 ) -> None:
     if (
-        document.sha256 != digest
+        document.organization_id != request.organization_id
+        or document.bank_id != request.bank_id
+        or document.sha256 != digest
         or document.byte_length != len(request.payload)
         or document.storage_slug != request.storage_slug
         or document.context_path != request.context_path

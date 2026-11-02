@@ -14,16 +14,27 @@ all the shipping implementations rather than fakes.
 
 import hashlib
 import io
+from concurrent.futures import ThreadPoolExecutor
+from threading import Barrier, Lock
+from typing import BinaryIO
 from uuid import UUID, uuid4
 
 import pytest
-from sqlalchemy import func, select
+from sqlalchemy import Engine, event, func, select
+from sqlalchemy.engine import Connection, ExecutionContext
 from sqlalchemy.orm import Session
+from sqlalchemy.sql.dml import Insert
 
+from app.core.authorization import Module, Sensitivity
 from app.core.key_management import registry
+from app.core.key_management.presentation import SESSION_SUPPORT
+from app.core.key_management.types import ProtectedSupportAccessError
 from app.core.tenancy import TenantContext
+from app.identity.public import document_view_decision
 from app.storage.client import (
+    ObjectMetadata,
     SealedEncryptionContext,
+    SealedPublication,
     StorageAccessError,
     StorageError,
     StorageLocation,
@@ -36,14 +47,17 @@ from app.storage.public import (
     DocumentFamily,
     PublicationRequest,
     RecordedDocument,
+    bind_existing_document,
+    bind_sealed_document,
     publish_sealed_document,
     resolve_document,
     resolve_sealed_document,
 )
 from tests.storage.contract import metadata_for
 from tests.storage.test_bank_encryption import NEXT_KEY, SLUG, BankStorage, bank_storage
-from tests.storage.test_sealed_documents import BANK, decision
+from tests.storage.test_sealed_documents import BANK, MODELS, decision
 from tests.support.helpers import ORG_1, USER_1
+from tests.support.inmemory_storage import InMemoryStorageClient
 from tests.support.sealed_documents import insert_source
 
 __all__ = ["bank_storage"]
@@ -438,7 +452,7 @@ def test_a_bound_row_carries_the_catalogued_object_and_not_a_second_copy(
     assert db_session.scalar(select(func.count()).select_from(SealedDocumentObject)) == 1
 
 
-def test_an_impersonated_session_cannot_resolve_a_published_document(
+def test_an_unverified_impersonated_session_cannot_resolve_a_published_document(
     bank_storage: BankStorage, db_session: Session
 ) -> None:
     """Publishing never outlives the authority that reads it back."""
@@ -457,4 +471,148 @@ def test_an_impersonated_session_cannot_resolve_a_published_document(
             binding,
             bank_storage.storage,
             authorization=decision(binding.family),
+        )
+
+
+@pytest.mark.committing_db
+def test_concurrent_publication_retries_return_one_catalogue_row(
+    bank_storage: BankStorage, db_session: Session, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    engine = db_session.get_bind()
+    assert isinstance(engine, Engine)
+    binding = _source(db_session)
+    db_session.commit()
+    identity = uuid4()
+    storage = InMemoryStorageClient()
+    ready, writing = Barrier(2), Lock()
+    write = storage.write_sealed
+
+    def simultaneous_write(
+        location: StorageLocation,
+        data: BinaryIO,
+        metadata: ObjectMetadata,
+        context: StorageLocation,
+        content_type: str = "application/octet-stream",
+    ) -> SealedPublication:
+        ready.wait(timeout=10)
+        with writing:
+            return write(location, data, metadata, context, content_type)
+
+    monkeypatch.setattr(storage, "write_sealed", simultaneous_write)
+
+    def publish() -> tuple[UUID, str, str | None]:
+        with Session(engine) as peer:
+            result = publish_sealed_document(
+                peer, storage, _request(), object_id=identity, binding=binding
+            )
+            observed = result.document.id, result.sha256, result.version_id
+            peer.commit()
+            return observed
+
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        first, second = pool.submit(publish), pool.submit(publish)
+        assert first.result(timeout=15) == second.result(timeout=15)
+    [document] = _catalogue(db_session)
+    assert document.id == identity
+    assert db_session.scalar(select(PackageAttachmentDocumentBinding.object_id)) == identity
+    assert (
+        len(list(storage.list_versions(StorageLocation(SLUG, "outputs", document.physical_key))))
+        == 1
+    )
+    with pytest.raises(StorageValidationError, match="other content"):
+        publish_sealed_document(db_session, storage, _request(payload=OTHER), object_id=identity)
+
+
+@pytest.mark.committing_db
+@pytest.mark.parametrize("family", list(DocumentFamily))
+def test_concurrent_binding_retries_preserve_the_winning_object(
+    bank_storage: BankStorage, db_session: Session, family: DocumentFamily
+) -> None:
+    engine = db_session.get_bind()
+    assert isinstance(engine, Engine)
+    storage = InMemoryStorageClient()
+    document = publish_sealed_document(db_session, storage, _request()).document
+    source = insert_source(
+        db_session.connection(),
+        family,
+        ORG_1,
+        BANK,
+        document.sha256,
+        document.byte_length,
+        CONTEXT_PATH,
+        version=document.original_version_id,
+    )
+    binding = DocumentBinding(family, source)
+    db_session.commit()
+    identity = document.id
+    ready = Barrier(2)
+
+    def pause_insert(  # noqa: PLR0913
+        _connection: Connection,
+        _cursor: object,
+        _statement: str,
+        _parameters: object,
+        context: ExecutionContext,
+        _executemany: bool,
+    ) -> None:
+        compiled = context.compiled
+        if (
+            compiled is not None
+            and isinstance(compiled.statement, Insert)
+            and compiled.statement.table.name == MODELS[family].__tablename__
+        ):
+            ready.wait(timeout=10)
+
+    def bind(existing: bool) -> None:
+        with Session(engine) as peer:
+            stored = peer.get(SealedDocumentObject, identity)
+            assert stored is not None
+            if existing:
+                bind_existing_document(peer, _request(), stored, binding=binding)
+            else:
+                bind_sealed_document(
+                    peer,
+                    binding,
+                    document=stored,
+                    organization_id=ORG_1,
+                    bank_id=BANK,
+                    bound_by=USER_1,
+                )
+            peer.commit()
+
+    event.listen(engine, "before_cursor_execute", pause_insert)
+    try:
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            first, second = pool.submit(bind, True), pool.submit(bind, False)
+            first.result(timeout=15)
+            second.result(timeout=15)
+    finally:
+        event.remove(engine, "before_cursor_execute", pause_insert)
+    assert db_session.scalar(select(MODELS[family].object_id)) == identity
+    other = publish_sealed_document(db_session, storage, _request()).document
+    with pytest.raises(StorageValidationError, match="another object"):
+        bind_existing_document(db_session, _request(), other, binding=binding)
+    assert db_session.scalar(select(MODELS[family].object_id)) == identity
+
+
+def test_examiner_reads_preserve_connected_key_presentation_restrictions(
+    bank_storage: BankStorage, db_session: Session
+) -> None:
+    binding = _source(db_session)
+    _publish(db_session, bank_storage, binding=binding)
+    ctx = TenantContext(
+        ORG_1, impersonation_context="inspection", actor_operator="staff@example.test"
+    )
+    authority = document_view_decision(
+        db_session,
+        ctx,
+        bank_id=BANK,
+        module=Module.REGULATORY,
+        sensitivity=Sensitivity.RESTRICTED,
+        surface="examiner_key_presentation_regression",
+    )
+    db_session.info[SESSION_SUPPORT] = True
+    with pytest.raises(ProtectedSupportAccessError):
+        resolve_sealed_document(
+            db_session, ctx, BANK, binding, bank_storage.storage, authorization=authority
         )

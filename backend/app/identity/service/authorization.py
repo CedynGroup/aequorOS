@@ -25,6 +25,7 @@ from app.core.authorization import (
     ConditionCheck,
     ConditionKind,
     DataScope,
+    ExaminerDocumentAuthority,
     GrantorType,
     GrantReasonCategory,
     InstitutionScope,
@@ -45,6 +46,7 @@ from app.core.authorization import (
 )
 from app.core.config import get_settings
 from app.core.observability import authorization_binding_decision
+from app.core.tenancy import TenantContext
 from app.db.base import utc_now
 from app.identity.models.authorization import AuthorizationBinding
 from app.identity.models.bank import Bank
@@ -327,6 +329,35 @@ def institution_decision(  # noqa: PLR0913 - the complete policy tuple is explic
         decision, surface=surface, severity="info" if decision.allowed else "warning"
     )
     return decision
+
+
+def document_view_decision(  # noqa: PLR0913
+    db: Session,
+    ctx: TenantContext,
+    *,
+    bank_id: str,
+    module: Module,
+    sensitivity: Sensitivity,
+    surface: str,
+) -> AuthorizationDecision | ExaminerDocumentAuthority:
+    if ctx.impersonation_context is not None:
+        return ExaminerDocumentAuthority(
+            ResourceLocator(
+                ctx.organization_id, InstitutionScope.INSTITUTION, bank_id, module, sensitivity
+            ),
+            ctx.actor_operator if ctx.actor_user_id is None else None,
+            ctx.impersonation_context,
+            request_wide_condition_checks(),
+        )
+    return institution_decision(
+        db,
+        ctx,
+        bank_id=bank_id,
+        module=module,
+        sensitivity=sensitivity,
+        permission=Permission.VIEW,
+        surface=surface,
+    )
 
 
 def record_binding_grant_audit(

@@ -1150,8 +1150,10 @@ def _upload_a_document(
     )
 
 
+@pytest.mark.parametrize("examiner", [False, True])
 def test_a_package_attachment_download_serves_the_bytes_the_row_names(
     db_session: Session,
+    examiner: bool,
 ) -> None:
     from app.api.deps import PackageAccess  # noqa: PLC0415
     from app.reporting.api.manage_package_attachments import (  # noqa: PLC0415
@@ -1164,12 +1166,21 @@ def test_a_package_attachment_download_serves_the_bytes_the_row_names(
     storage = InMemoryStorageClient()
     uploaded = _upload_a_document(db_session, package, storage)
 
+    ctx = (
+        TenantContext(
+            MAKER.organization_id,
+            impersonation_context="inspection",
+            actor_operator="staff@example.test",
+        )
+        if examiner
+        else MAKER
+    )
     response = download_package_attachment(
         bank_id=package.bank_id,
         package_id=package.id,
         attachment_id=uploaded.id,
         db=db_session,
-        access=PackageAccess(ctx=MAKER, bank=_bank(db_session), package=package),
+        access=PackageAccess(ctx=ctx, bank=_bank(db_session), package=package, examiner=examiner),
         storage=storage,
     )
     body = asyncio.run(_drain(response))
@@ -1206,9 +1217,7 @@ def test_a_tampered_package_attachment_is_refused_rather_than_served(
     assert row is not None
     bank = _bank(db_session)
     assert bank.storage_slug is not None
-    document = sealed_document(
-        db_session, slug=bank.storage_slug, context_path=row.object_path
-    )
+    document = sealed_document(db_session, slug=bank.storage_slug, context_path=row.object_path)
     location = StorageLocation(document.storage_slug, "outputs", document.physical_key)
     storage.corrupt(location, b"% substituted")
 

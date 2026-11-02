@@ -76,7 +76,7 @@ from app.attestation.models import AttestationSignature, RegulatoryArtifactVersi
 from app.attestation.service import digests, workflow
 from app.attestation.service.document_access import artifact_view_decision
 from app.attestation.service.workflow import AttestationConflict
-from app.core.authorization import AuthorizationDecision
+from app.core.authorization import AuthorizationDecision, ExaminerDocumentAuthority
 from app.identity.public import Bank
 from app.live.public import RegulatoryRun
 from app.reporting.models.packages import RegulatoryPackage
@@ -602,7 +602,7 @@ def _read_once(  # noqa: PLR0913 - a pinned read needs the whole identity and it
     db: Session,
     ctx: TenantContext,
     package: RegulatoryPackage,
-    decision: AuthorizationDecision | None,
+    decision: AuthorizationDecision | ExaminerDocumentAuthority | None,
 ) -> tuple[bytes | None, str | None]:
     """Read one pinned revision once per (path, recorded pin) pair.
 
@@ -628,7 +628,7 @@ def _read_once(  # noqa: PLR0913 - a pinned read needs the whole identity and it
                 package.bank_id,
                 DocumentBinding(DocumentFamily.ARTIFACT, version.id),
                 client,
-                authorization=cast(AuthorizationDecision, decision),
+                authorization=cast(AuthorizationDecision | ExaminerDocumentAuthority, decision),
                 recorded=RecordedDocument(
                     location=StorageLocation(
                         institution_slug=slug, tier="outputs", object_path=version.object_path

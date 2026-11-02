@@ -311,8 +311,9 @@ def test_a_recorded_letter_starts_as_a_draft_and_is_not_yet_in_force(
     assert supervisory_addons.active_for(canonical_book, access, cycle_row) == []
 
 
+@pytest.mark.parametrize("examiner", [False, True])
 def test_a_recorded_letter_is_published_and_binds_its_own_row(
-    canonical_book: Session, access: IcaapAccess, storage: InMemoryStorageClient
+    canonical_book: Session, access: IcaapAccess, storage: InMemoryStorageClient, examiner: bool
 ) -> None:
     """The letter is sealed evidence, so it is published like every other file.
 
@@ -335,6 +336,24 @@ def test_a_recorded_letter_is_published_and_binds_its_own_row(
     assert document.context_path == row.letter_object_path
     assert document.physical_key.startswith("sealed/v1/")
 
+    if examiner:
+        examiner_access = IcaapAccess(
+            ctx=TenantContext(
+                access.ctx.organization_id,
+                impersonation_context="inspection",
+                actor_operator="staff@example.test",
+            ),
+            bank=access.bank,
+            examiner=True,
+        )
+        with pytest.raises(HTTPException) as refused:
+            supervisory_addons.read_letter(canonical_book, examiner_access, created.id, storage)
+        assert refused.value.status_code == 404
+        checker = _person(canonical_book, access, CHECKER, "addon.checker@example.test")
+        supervisory_addons.confirm_addon(
+            canonical_book, checker, created.id, IcaapReason(reason="Verified.")
+        )
+        access = examiner_access
     served, stream = supervisory_addons.read_letter(canonical_book, access, created.id, storage)
     with stream:
         assert hashlib.sha256(stream.read()).hexdigest() == served.letter_sha256

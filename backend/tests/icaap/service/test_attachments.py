@@ -12,7 +12,8 @@ from fastapi import HTTPException
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.api.deps import IcaapAccess
+from app.api.deps import IcaapAccess, TenantContext
+from app.db.base import utc_now
 from app.icaap.models.workspace import IcaapAttachment, IcaapAttachmentWithdrawal, IcaapCycle
 from app.icaap.schemas.workspace import (
     IcaapAttachmentWithdraw,
@@ -23,7 +24,7 @@ from app.icaap.schemas.workspace import (
     IcaapManualTablePut,
 )
 from app.icaap.service import attachments, blocks
-from app.models import AuditEvent, Bank
+from app.models import AuditEvent, Bank, RegulatoryPackage
 from app.storage.client import StorageLocation
 from app.storage.public import DocumentBinding, DocumentFamily, find_sealed_document
 from tests.support.inmemory_storage import InMemoryStorageClient
@@ -445,13 +446,51 @@ def test_an_upload_publishes_once_and_binds_its_row_to_the_catalogue(
     assert document.physical_key.startswith("sealed/v1/")
 
 
+@pytest.mark.parametrize("examiner", [False, True])
 def test_a_download_is_recorded(
     canonical_book: Session,
     access: IcaapAccess,
     cycle: IcaapCycleRead,
     storage: InMemoryStorageClient,
+    examiner: bool,
 ) -> None:
     uploaded = _upload(canonical_book, access, cycle, storage)
+    if examiner:
+        reader = IcaapAccess(
+            ctx=TenantContext(
+                access.ctx.organization_id,
+                impersonation_context="inspection",
+                actor_operator="staff@example.test",
+            ),
+            bank=access.bank,
+            examiner=True,
+        )
+        with pytest.raises(HTTPException) as refused:
+            attachments.read_attachment(canonical_book, reader, cycle.id, uploaded.id, storage)
+        assert refused.value.status_code == 404
+        cycle_row = canonical_book.get(IcaapCycle, cycle.id)
+        assert cycle_row is not None
+        package = RegulatoryPackage(
+            organization_id=access.ctx.organization_id,
+            bank_id=access.bank.id,
+            return_family="icaap",
+            return_code="ICAAP-REPORT",
+            reporting_date=cycle_row.as_of_date,
+            frequency="annual",
+            basis=cycle_row.basis,
+            status="generated",
+            version=1,
+            snapshot={},
+            source_runs=[],
+            generated_by=cycle_row.created_by,
+        )
+        canonical_book.add(package)
+        canonical_book.flush()
+        cycle_row.package_id = package.id
+        cycle_row.status = "frozen"
+        cycle_row.frozen_at = utc_now()
+        canonical_book.commit()
+        access = reader
     row, stream = attachments.read_attachment(
         canonical_book, access, cycle.id, uploaded.id, storage
     )

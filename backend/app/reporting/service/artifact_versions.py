@@ -30,6 +30,7 @@ bytes as a literal prefix.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime
 from uuid import UUID
 
 from fastapi import HTTPException, status
@@ -227,6 +228,8 @@ def archived_version(  # noqa: PLR0913 - the identity of one archived revision
     kind: str,
     object_path: str,
     checksum_sha256: str,
+    before: datetime | None = None,
+    storage_version_id: str | None = None,
 ) -> RegulatoryArtifactVersion | None:
     """The archived revision that wrote the artifact a row currently describes.
 
@@ -236,20 +239,22 @@ def archived_version(  # noqa: PLR0913 - the identity of one archived revision
     so path and checksum together are the identity. Nothing here picks the newest
     revision for a path: a path alone names a slot, not a document.
     """
+    query = select(RegulatoryArtifactVersion).where(
+        RegulatoryArtifactVersion.organization_id == ctx.organization_id,
+        RegulatoryArtifactVersion.package_id == package_id,
+        RegulatoryArtifactVersion.kind == kind,
+        RegulatoryArtifactVersion.object_path == object_path,
+        RegulatoryArtifactVersion.checksum_sha256 == checksum_sha256,
+    )
+    if before is not None:
+        query = query.where(RegulatoryArtifactVersion.created_at <= before)
+    if storage_version_id is not None:
+        query = query.where(RegulatoryArtifactVersion.storage_version_id == storage_version_id)
     return db.scalar(
-        select(RegulatoryArtifactVersion)
-        .where(
-            RegulatoryArtifactVersion.organization_id == ctx.organization_id,
-            RegulatoryArtifactVersion.package_id == package_id,
-            RegulatoryArtifactVersion.kind == kind,
-            RegulatoryArtifactVersion.object_path == object_path,
-            RegulatoryArtifactVersion.checksum_sha256 == checksum_sha256,
-        )
-        .order_by(
+        query.order_by(
             RegulatoryArtifactVersion.created_at.desc(),
             RegulatoryArtifactVersion.id.desc(),
-        )
-        .limit(1)
+        ).limit(1)
     )
 
 

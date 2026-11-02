@@ -86,6 +86,7 @@ from app.models import (
 )
 from app.reporting.schemas.packages import RegulatoryPackageCreate
 from app.reporting.service import generation, validation
+from app.reporting.service.artifact_versions import read_version_bytes
 from app.reporting.service.exports import export_package
 from app.storage.client import StorageLocation
 from app.storage.models import SealedDocumentObject
@@ -1031,9 +1032,7 @@ def _overwrite_object(
     )
 
 
-def _record_tampered_bytes(
-    db: Session, version: RegulatoryArtifactVersion, payload: bytes
-) -> None:
+def _record_tampered_bytes(db: Session, version: RegulatoryArtifactVersion, payload: bytes) -> None:
     """Re-record tampered bytes in the catalogue and the version row alike."""
     document = _filed_object(db, version)
     digest = hashlib.sha256(payload).hexdigest()
@@ -1105,12 +1104,29 @@ def _build_signed_pdf_package(
     )
 
 
+@pytest.mark.parametrize("examiner", [False, True])
 def test_signed_pdf_passes_the_pdf_tamper_and_artifact_checks(
-    db_session: Session, storage: InMemoryStorageClient, pki: _Pki
+    db_session: Session, storage: InMemoryStorageClient, pki: _Pki, examiner: bool
 ) -> None:
     signed = _build_signed_pdf_package(db_session, storage, pki)
 
-    report = _report(db_session, signed.package, storage_client=storage, pki=pki)
+    ctx = (
+        TenantContext(
+            MAKER.organization_id,
+            impersonation_context="inspection",
+            actor_operator="staff@example.test",
+        )
+        if examiner
+        else MAKER
+    )
+    served, payload = read_version_bytes(
+        db_session, ctx, signed.package.bank_id, signed.approver_version.id, storage
+    )
+    assert served.id == signed.approver_version.id
+    assert payload == signed.revision_two
+    report = verify.verify_attestation(
+        db_session, ctx, signed.package, storage=storage, trust_roots=[pki.ca_pem]
+    )
     assert report["overall_passed"] is True
     for name in verify.CHECK_ORDER:
         assert _status(report, name) == "passed", (name, _check(report, name)["detail"])

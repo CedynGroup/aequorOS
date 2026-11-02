@@ -19,6 +19,7 @@ from app.core.authorization import (
     ConditionCheck,
     ConditionKind,
     DataScope,
+    ExaminerDocumentAuthority,
     InstitutionScope,
     Module,
     Permission,
@@ -276,7 +277,7 @@ def require_view(db: Session, ctx: TenantContext, bank: Bank, package: Regulator
 
 def sealed_document_decision(
     db: Session, ctx: TenantContext, bank: Bank, family: str | None
-) -> AuthorizationDecision:
+) -> AuthorizationDecision | ExaminerDocumentAuthority:
     """A fresh whole-institution VIEW decision for reading this family's sealed bytes.
 
     The storage kernel re-checks the exact module and sensitivity of the decision
@@ -287,16 +288,15 @@ def sealed_document_decision(
     from app.identity import public as authorization_service  # noqa: PLC0415
 
     gate = gate_for(family)
-    decision = authorization_service.institution_decision(
+    decision = authorization_service.document_view_decision(
         db,
         ctx,
         bank_id=bank.id,
         module=gate.module,
         sensitivity=gate.sensitivity,
-        permission=Permission.VIEW,
         surface=f"{family or 'return'}_sealed_document_view",
     )
-    if ctx.impersonation_context is not None or not decision.allowed:
+    if not decision.allowed:
         raise _not_found()
     return decision
 

@@ -15,6 +15,7 @@ from sqlalchemy.orm import Session
 
 from app.core.authorization import (
     AuthorizationDecision,
+    ExaminerDocumentAuthority,
     InstitutionScope,
     Module,
     Permission,
@@ -149,29 +150,57 @@ def find_sealed_document(
     return _bound_document(db, organization_id, bank_id, binding)
 
 
+def document_retention_reference(  # noqa: PLR0913
+    db: Session,
+    organization_id: str,
+    bank_id: str,
+    binding: DocumentBinding,
+    recorded_location: StorageLocation,
+    recorded_version_id: str | None,
+) -> tuple[StorageLocation, str | None]:
+    document = _bound_document(db, organization_id, bank_id, binding)
+    if document is None:
+        return recorded_location, recorded_version_id
+    return (
+        StorageLocation(document.storage_slug, "outputs", document.physical_key),
+        document.original_version_id,
+    )
+
+
 def _authorize(  # noqa: PLR0913 - explicit authorization and storage boundaries
     db: Session,
     ctx: TenantContext,
     bank_id: str,
     binding: DocumentBinding,
-    authorization: AuthorizationDecision,
+    authorization: AuthorizationDecision | ExaminerDocumentAuthority,
 ) -> None:
     resource = authorization.resource
-    principal = authorization.principal
     if (
         not authorization.allowed
-        or not authorization.matching_binding_ids
-        or authorization.permission is not Permission.VIEW
         or resource.organization_id != ctx.organization_id
         or resource.institution_scope is not InstitutionScope.INSTITUTION
         or resource.institution_id != bank_id
-        or principal.organization_id != ctx.organization_id
-        or principal.principal_id != ctx.actor_user_id
-        or principal.principal_type is not PrincipalType.HUMAN
-        or ctx.impersonation_context is not None
-        or ctx.authorization_version is None
     ):
         raise StorageAccessError("Bank document authorization is required.")
+    if isinstance(authorization, ExaminerDocumentAuthority):
+        if (
+            ctx.impersonation_context != authorization.session_id
+            or ctx.actor_operator != authorization.operator
+            or ctx.actor_user_id is not None
+        ):
+            raise StorageAccessError("Bank document authorization is required.")
+    else:
+        principal = authorization.principal
+        if (
+            not authorization.matching_binding_ids
+            or authorization.permission is not Permission.VIEW
+            or principal.organization_id != ctx.organization_id
+            or principal.principal_id != ctx.actor_user_id
+            or principal.principal_type is not PrincipalType.HUMAN
+            or ctx.impersonation_context is not None
+            or ctx.authorization_version is None
+        ):
+            raise StorageAccessError("Bank document authorization is required.")
     gate = _source_gate(db, ctx, bank_id, binding)
     if resource.module is not gate.module or resource.sensitivity is not gate.sensitivity:
         raise StorageAccessError("Bank document authorization is required.")
@@ -245,13 +274,13 @@ def resolve_sealed_document(  # noqa: PLR0913 - explicit authorization and stora
     binding: DocumentBinding,
     storage: StorageClient,
     *,
-    authorization: AuthorizationDecision,
+    authorization: AuthorizationDecision | ExaminerDocumentAuthority,
 ) -> tuple[StorageObject, BinaryIO]:
     """Return a rewound verified file; the caller owns and must close it.
 
-    The owning feature must supply a fresh, whole-institution VIEW decision from
-    scoped authorization (including its workflow/presentation checks) in this
-    request/session. This kernel never infers authority from a scalar role or a
+    The owning feature must supply fresh whole-institution VIEW authority from
+    scoped authorization or a verified examiner session, including its workflow
+    and presentation checks in this request/session. This kernel never infers authority from a scalar role or a
     token claim. A binding is mandatory: absence is an error, never a legacy-read
     or provider-version fallback.
     """
@@ -269,7 +298,7 @@ def resolve_document(  # noqa: PLR0913 - explicit authorization and storage boun
     binding: DocumentBinding,
     storage: StorageClient,
     *,
-    authorization: AuthorizationDecision,
+    authorization: AuthorizationDecision | ExaminerDocumentAuthority,
     recorded: RecordedDocument,
 ) -> tuple[StorageObject, BinaryIO]:
     """Read a source row's bytes by its stable identity, else by its own recorded pin.
@@ -287,4 +316,3 @@ def resolve_document(  # noqa: PLR0913 - explicit authorization and storage boun
     if document is not None:
         return _read_sealed(session_storage, document)
     return _read_recorded(session_storage, recorded)
-

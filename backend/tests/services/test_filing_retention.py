@@ -4,7 +4,9 @@ from __future__ import annotations
 import io
 from collections.abc import Callable, Iterator, Sequence
 from copy import deepcopy
+from datetime import UTC, datetime, timedelta
 from typing import cast
+from uuid import uuid4
 
 import boto3
 import pytest
@@ -26,11 +28,11 @@ from app.models import (
     RegulatorySubmissionEvent,
     User,
 )
-from app.reporting.service import workflow
+from app.reporting.service import artifact_versions, workflow
 from app.reporting.service.channels import FiledArtifact, OrassSandboxChannel
 from app.reporting.service.exports import export_package
-from app.reporting.service.filing_retention import retain_filing
-from app.storage.client import StorageLocation
+from app.reporting.service.filing_retention import filing_version, retain_filing
+from app.storage.client import StorageLocation, StorageValidationError
 from app.storage.config import StorageEngineSettings, get_storage_settings
 from app.storage.encryption import ObjectEncryption
 from app.storage.provisioning import ProvisioningClient
@@ -56,6 +58,7 @@ from tests.storage.test_object_lock import (
     _moto_retention,  # pyright: ignore[reportPrivateUsage]
 )
 from tests.support.helpers import headers
+from tests.support.sealed_documents import published_bytes, sealed_document
 
 
 @pytest.fixture
@@ -142,10 +145,12 @@ def test_submission_preparation_storage_refusals_are_atomic_conflicts(  # noqa: 
     }
     versions_before = set(db_session.scalars(select(RegulatoryArtifactVersion.id)))
     assert missing_kind not in {row.kind for row in artifact_rows}
-    location = StorageLocation(slug, "outputs", signed.object_path)
-    _, stream = store.read(location, signed.storage_version_id)
-    signed_before = stream.read()
-    stream.close()
+    location = StorageLocation(
+        slug,
+        "outputs",
+        sealed_document(db_session, slug=slug, context_path=signed.object_path).physical_key,
+    )
+    signed_before = published_bytes(db_session, store, slug=slug, context_path=signed.object_path)
     bucket = location.bucket_name("dev")
     if policy in {"COMPLIANCE", "GOVERNANCE"}:
 
@@ -204,9 +209,10 @@ def test_submission_preparation_storage_refusals_are_atomic_conflicts(  # noqa: 
     db_session.refresh(package)
     assert package.snapshot == snapshot
     assert package.snapshot_sha256 == seal
-    _, stream = store.read(location, signed.storage_version_id)
-    assert stream.read() == signed_before
-    stream.close()
+    assert (
+        published_bytes(db_session, store, slug=slug, context_path=signed.object_path)
+        == signed_before
+    )
     events = list(db_session.scalars(select(RegulatorySubmissionEvent)))
     if policy == "valid":
         assert package.status == "submitted"
@@ -218,7 +224,11 @@ def test_submission_preparation_storage_refusals_are_atomic_conflicts(  # noqa: 
         for artifact in manifest.filed_artifacts:
             assert artifact.storage_version_id is not None
             retention = client.get_object_retention(
-                Bucket=bucket, Key=artifact.object_path, VersionId=artifact.storage_version_id
+                Bucket=bucket,
+                Key=sealed_document(
+                    db_session, slug=slug, context_path=artifact.object_path
+                ).physical_key,
+                VersionId=artifact.storage_version_id,
             )
             assert cast(dict[str, object], retention["Retention"])["Mode"] == "COMPLIANCE"
     else:
@@ -247,7 +257,11 @@ def test_sign_before_rollout_then_file_exact_versions(
     _preparer, approver = _fully_certify(db_session, package)
     signed = _version(db_session, approver)
     assert signed.storage_version_id is not None
-    location = StorageLocation(slug, "outputs", signed.object_path)
+    location = StorageLocation(
+        slug,
+        "outputs",
+        sealed_document(db_session, slug=slug, context_path=signed.object_path).physical_key,
+    )
     kwargs = {
         "Bucket": location.bucket_name("dev"),
         "Key": location.object_path,
@@ -272,7 +286,9 @@ def test_sign_before_rollout_then_file_exact_versions(
 
         monkeypatch.setattr(client, "put_object_retention", unconfirmed)
     elif outcome == "missing-version":
-        signed.storage_version_id = None
+        sealed_document(
+            db_session, slug=slug, context_path=signed.object_path
+        ).original_version_id = None
         db_session.flush()
     if outcome != "success":
         with pytest.raises(HTTPException) as raised:
@@ -311,7 +327,9 @@ def test_sign_before_rollout_then_file_exact_versions(
         assert record.storage_version_id is not None
         locked = client.get_object_retention(
             Bucket=location.bucket_name("dev"),
-            Key=record.object_path,
+            Key=sealed_document(
+                db_session, slug=slug, context_path=record.object_path
+            ).physical_key,
             VersionId=record.storage_version_id,
         )
         assert cast(dict[str, object], locked["Retention"])["Mode"] == "COMPLIANCE"
@@ -427,7 +445,7 @@ def test_historical_command_is_dry_run_until_explicit_apply(
     assert signed.storage_version_id is not None
     kwargs = {
         "Bucket": StorageLocation(slug, "outputs", "").bucket_name("dev"),
-        "Key": signed.object_path,
+        "Key": sealed_document(db_session, slug=slug, context_path=signed.object_path).physical_key,
         "VersionId": signed.storage_version_id,
     }
     monkeypatch.setattr(
@@ -451,3 +469,71 @@ def test_historical_command_is_dry_run_until_explicit_apply(
         cast(dict[str, object], client.get_object_retention(**kwargs)["Retention"])["Mode"]
         == "COMPLIANCE"
     )
+
+
+def test_archived_revision_lookup_preserves_identity_ordering_and_cutoff(
+    db_session: Session,
+) -> None:
+    package = _seed(db_session)
+    moment = datetime(2026, 9, 1, tzinfo=UTC)
+    versions = [
+        RegulatoryArtifactVersion(
+            id=uuid4(),
+            organization_id=package.organization_id,
+            package_id=package.id,
+            kind="pdf",
+            object_path="archive/return.pdf",
+            checksum_sha256="a" * 64,
+            size_bytes=10,
+            storage_version_id=f"version-{index}",
+            created_by=MAKER.actor_user_id,
+            created_at=moment + timedelta(days=min(index, 1)),
+        )
+        for index in range(3)
+    ]
+    db_session.add_all(versions)
+    db_session.flush()
+    artifact = RegulatoryPackageArtifact(
+        kind="pdf",
+        object_path="archive/return.pdf",
+        checksum_sha256="a" * 64,
+    )
+    latest = max(versions[1:], key=lambda row: row.id)
+    assert filing_version(db_session, package, artifact).id == latest.id
+    assert filing_version(db_session, package, artifact, before=moment).id == versions[0].id
+    pinned = artifact_versions.archived_version(
+        db_session,
+        MAKER,
+        package_id=package.id,
+        kind=artifact.kind,
+        object_path=artifact.object_path,
+        checksum_sha256=artifact.checksum_sha256,
+        storage_version_id="version-0",
+    )
+    assert pinned is not None and pinned.id == versions[0].id
+    for field, value in (
+        ("kind", "csv"),
+        ("object_path", "archive/other.pdf"),
+        ("checksum_sha256", "b" * 64),
+    ):
+        unmatched = RegulatoryPackageArtifact(
+            **{
+                "kind": artifact.kind,
+                "object_path": artifact.object_path,
+                "checksum_sha256": artifact.checksum_sha256,
+                field: value,
+            }
+        )
+        assert (
+            artifact_versions.archived_version(
+                db_session,
+                MAKER,
+                package_id=package.id,
+                kind=unmatched.kind,
+                object_path=unmatched.object_path,
+                checksum_sha256=unmatched.checksum_sha256,
+            )
+            is None
+        )
+        with pytest.raises(StorageValidationError, match="no archived"):
+            filing_version(db_session, package, unmatched)
