@@ -12,12 +12,13 @@ refused by the HTTP layer, so this is parameter injection inside one header
 rather than header splitting — the file itself is still the evidence file, but
 the name it is saved under belongs to whoever uploaded it.
 
-Every download therefore emits two parameters:
+Downloads using this helper emit two parameters after removing directory
+components, ASCII control characters and surrounding whitespace:
 
 * ``filename`` — ASCII only, reduced to ``[A-Za-z0-9._-]``. A client that
   ignores RFC 5987 still gets a usable, inert name.
-* ``filename*`` — the original name, percent-encoded as UTF-8 (RFC 5987), so a
-  bank reviewing its own evidence keeps the spelling it uploaded under.
+* ``filename*`` — the remaining name, percent-encoded as UTF-8 (RFC 5987), so a
+  bank reviewing its own evidence keeps its spaces and non-ASCII spelling.
 
 Neither parameter can carry ``"``, ``;``, ``\\``, a control character or a path
 separator, because the ASCII form is restricted and the UTF-8 form is
@@ -39,8 +40,8 @@ _CONTROL = re.compile(r"[\x00-\x1f\x7f]")
 #: The name a header falls back to when the stored one is unusable.
 DEFAULT_FILENAME = "document"
 
-#: Long enough for a descriptive name, short enough that the whole header stays
-#: well inside the usual 8 KiB request-line budget alongside the UTF-8 form.
+#: Bound the ASCII fallback while leaving room for a descriptive name. The
+#: UTF-8 form is not truncated, so these limits do not bound the whole header.
 _MAX_ASCII_STEM = 120
 _MAX_SUFFIX = 16
 
