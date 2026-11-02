@@ -30,17 +30,19 @@ it.each([
   ['attachment; filename="Board minutes.pdf"', "Board minutes.pdf"],
   ["attachment; filename=draft.docx", "draft.docx"],
   [
-    'attachment; filename="safe.pdf"; filename*=UTF-8\'\'broken%ZZ.pdf',
+    "attachment; filename=\"safe.pdf\"; filename*=UTF-8''broken%ZZ.pdf",
     "safe.pdf",
   ],
   [
-    'attachment; filename="safe.pdf"; filename*=UTF-8\'\'invalid%C3.pdf',
+    "attachment; filename=\"safe.pdf\"; filename*=UTF-8''invalid%C3.pdf",
     "safe.pdf",
   ],
   ["attachment; filename*=UTF-8''broken%", "fallback.pdf"],
   ["attachment", "fallback.pdf"],
 ])("retains the fallback for %s", (disposition, expected) => {
-  expect(filenameFrom(responseWith(disposition), "fallback.pdf")).toBe(expected);
+  expect(filenameFrom(responseWith(disposition), "fallback.pdf")).toBe(
+    expected,
+  );
 });
 
 it("uses the caller's fallback when the header is missing", () => {
