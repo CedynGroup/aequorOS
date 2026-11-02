@@ -1,5 +1,5 @@
 {
-  "//": "Node-runnable build of the console's pure-logic suites (lib/*.test.ts). The app itself is type-checked by tsconfig.json (noEmit); this config only emits the dependency-free modules the tests exercise. Output goes to .test-out/ and is deleted by the `test` script. Mirrors backend/dashboard/tsconfig.test.json.",
+  "//": "Node-runnable build of the console's library and auth-callback suites. The app itself is type-checked by tsconfig.json (noEmit); this config emits the modules the tests exercise, including the Next.js callback route. Output goes to .test-out/ and is deleted by the `test` script. Mirrors backend/dashboard/tsconfig.test.json.",
   "extends": "./tsconfig.json",
   "compilerOptions": {
     "noEmit": false,

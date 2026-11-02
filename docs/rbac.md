@@ -971,6 +971,11 @@ Workspace and Cloud setup (captain/deployment owner):
    [Google security claims and limitations](https://developers.google.com/identity/siwg/security-bundle),
    [Google OIDC and hosted-domain validation](https://developers.google.com/identity/openid-connect/openid-connect).
 
+Known verification limit: live verification covered seven of eight scenarios.
+A real teammate completing enforced Workspace MFA and using delegated Directory
+authorization remains untested; completing that check requires a second real
+Google identity. This residual was accepted for this change.
+
 Follow-ups remain separate: captain-controlled password rejection after teammate
 verification; an audited break-glass emergency login with alerting on every use
 and recovery drills (explicitly deferred by captain decision to a separate backlog
