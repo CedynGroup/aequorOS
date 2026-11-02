@@ -7,8 +7,11 @@ explicit staff row. Assurance is issuer evidence, never a local MFA assertion.
 
 from __future__ import annotations
 
+import hashlib
+import threading
 import time
 from pathlib import Path
+from time import monotonic
 from typing import Literal, Protocol
 from urllib.parse import quote
 
@@ -23,6 +26,10 @@ type WorkforceRole = Literal["developer", "operator_admin", "super_admin"]
 _GOOGLE_ISSUER = "https://accounts.google.com"
 _TOKEN_URL = "https://oauth2.googleapis.com/token"
 _GROUP_SCOPE = "https://www.googleapis.com/auth/admin.directory.group.member.readonly"
+_TOKEN_CACHE_LIMIT = 8
+_TOKEN_CACHE_LOCK = threading.Lock()
+# The fingerprint makes credential rotation invalidate reuse at the same path.
+_TOKEN_CACHE: dict[tuple[str, str, str], tuple[str, float]] = {}
 
 
 class WorkforceDenied(Exception):
@@ -46,6 +53,7 @@ class _ServiceAccount(BaseModel):
 class _AccessToken(BaseModel):
     model_config = ConfigDict(strict=True)
     access_token: str
+    expires_in: int = Field(gt=0)
 
 
 class _Membership(BaseModel):
@@ -57,54 +65,78 @@ class GoogleDirectoryGroups:
     """Delegated service-account access to Directory members.hasMember.
 
     Fixed HTTPS endpoints, bounded requests, no redirects, and strict response
-    models keep failure distinct from non-membership. One instance is used per
-    operator request; the access token is never persisted or sent to the console.
+    models keep failure distinct from non-membership. Access tokens are reused
+    until shortly before expiry; membership is always fetched live. Tokens are
+    never persisted or sent to the console.
     """
 
     def __init__(self, settings: OperatorSettings) -> None:
         self._settings = settings
-        self._access_token: str | None = None
+        self._cache_key: tuple[str, str, str] | None = None
 
     def _token(self) -> str:
-        if self._access_token is not None:
-            return self._access_token
         path = self._settings.google_credentials_file
         admin = self._settings.google_delegated_admin
         if not path or not admin:
             raise GroupsUnavailable
         try:
-            account = _ServiceAccount.model_validate_json(Path(path).read_bytes())
-            now = int(time.time())
-            assertion = jwt.encode(
-                {
-                    "iss": account.client_email,
-                    "sub": admin,
-                    "scope": _GROUP_SCOPE,
-                    "aud": _TOKEN_URL,
-                    "iat": now,
-                    "exp": now + 300,
-                },
-                account.private_key,
-                algorithm="RS256",
-            )
-            response = requests.post(
-                _TOKEN_URL,
-                data={
-                    "grant_type": "urn:ietf:params:oauth:grant-type:jwt-bearer",
-                    "assertion": assertion,
-                },
-                timeout=5,
-                allow_redirects=False,
-            )
-            if response.status_code != 200:
-                raise GroupsUnavailable
-            token = _AccessToken.model_validate_json(response.content).access_token
-            if not token:
-                raise GroupsUnavailable
+            credential = Path(path).read_bytes()
+            account = _ServiceAccount.model_validate_json(credential)
+            key = (path, admin, hashlib.sha256(credential).hexdigest())
+            self._cache_key = key
+            # Serialize token acquisition to avoid a stampede on concurrent API calls.
+            with _TOKEN_CACHE_LOCK:
+                moment = monotonic()
+                for expired in [k for k, (_, until) in _TOKEN_CACHE.items() if until <= moment]:
+                    del _TOKEN_CACHE[expired]
+                cached = _TOKEN_CACHE.get(key)
+                if cached is not None:
+                    return cached[0]
+                token = self._exchange(account, admin)
+                if len(_TOKEN_CACHE) >= _TOKEN_CACHE_LIMIT:
+                    del _TOKEN_CACHE[next(iter(_TOKEN_CACHE))]
+                lifetime = max(0, min(token.expires_in, 3600) - 60)
+                _TOKEN_CACHE[key] = (token.access_token, moment + lifetime)
+                return token.access_token
         except (OSError, ValueError, jwt.PyJWTError, requests.RequestException) as exc:
             raise GroupsUnavailable from exc
-        self._access_token = token
+
+    @staticmethod
+    def _exchange(account: _ServiceAccount, admin: str) -> _AccessToken:
+        now = int(time.time())
+        assertion = jwt.encode(
+            {
+                "iss": account.client_email,
+                "sub": admin,
+                "scope": _GROUP_SCOPE,
+                "aud": _TOKEN_URL,
+                "iat": now,
+                "exp": now + 300,
+            },
+            account.private_key,
+            algorithm="RS256",
+        )
+        response = requests.post(
+            _TOKEN_URL,
+            data={
+                "grant_type": "urn:ietf:params:oauth:grant-type:jwt-bearer",
+                "assertion": assertion,
+            },
+            timeout=5,
+            allow_redirects=False,
+        )
+        if response.status_code != 200:
+            raise GroupsUnavailable
+        token = _AccessToken.model_validate_json(response.content)
+        if not token.access_token:
+            raise GroupsUnavailable
         return token
+
+    def _forget_token(self, token: str) -> None:
+        with _TOKEN_CACHE_LOCK:
+            cached = _TOKEN_CACHE.get(self._cache_key) if self._cache_key is not None else None
+            if cached is not None and cached[0] == token and self._cache_key is not None:
+                del _TOKEN_CACHE[self._cache_key]
 
     def has_member(self, group: str, email: str) -> bool:
         token = self._token()
@@ -116,6 +148,8 @@ class GoogleDirectoryGroups:
                 timeout=5,
                 allow_redirects=False,
             )
+            if response.status_code in {401, 403}:
+                self._forget_token(token)
             if response.status_code != 200:
                 raise GroupsUnavailable
             return _Membership.model_validate_json(response.content).is_member

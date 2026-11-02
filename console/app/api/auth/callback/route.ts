@@ -29,13 +29,20 @@ export const dynamic = "force-dynamic";
 
 function failure(req: NextRequest, code: string): NextResponse {
   const res = NextResponse.redirect(new URL(`/login?error=${code}`, req.url));
-  res.cookies.delete(OAUTH_TXN_COOKIE);
+  res.cookies.set(OAUTH_TXN_COOKIE, "", { path: "/api/auth", maxAge: 0 });
   return res;
 }
 
 export async function GET(req: NextRequest) {
   const env = oidcEnv();
   if (!env) return failure(req, "oidc_not_configured");
+
+  let sessionLimit: number;
+  try {
+    sessionLimit = oidcSessionMaxAge();
+  } catch {
+    return failure(req, "oidc_not_configured");
+  }
 
   const code = req.nextUrl.searchParams.get("code");
   const state = req.nextUrl.searchParams.get("state");
@@ -88,11 +95,11 @@ export async function GET(req: NextRequest) {
   if (typeof exp !== "number" || exp * 1000 <= Date.now())
     return failure(req, "expired");
 
-  const sessionExp = oidcSessionExpiry(exp, claims.iat, oidcSessionMaxAge());
+  const sessionExp = oidcSessionExpiry(exp, claims.iat, sessionLimit);
   if (sessionExp === null) return failure(req, "expired");
 
   const res = NextResponse.redirect(new URL("/tenants", req.url));
-  res.cookies.delete(OAUTH_TXN_COOKIE);
+  res.cookies.set(OAUTH_TXN_COOKIE, "", { path: "/api/auth", maxAge: 0 });
   res.cookies.set(
     SESSION_COOKIE,
     encodeCookie({

@@ -884,7 +884,9 @@ not yet an SSO-only or universally MFA-enforced staff plane.
 | `OPERATOR_OIDC_STEP_UP_MAX_AGE_SECONDS` | `0` (disabled) | Require recent `auth_time` on **all OIDC POST/PUT/PATCH/DELETE requests**; maximum 3,600 seconds, suggested initial value `300`. Reads retain normal session checks.                                                 |
 
 Group membership is fetched from Directory `members.hasMember` on each operator
-request, without a membership cache. Multiple matching groups grant the highest
+request, without a membership cache. Delegated OAuth access tokens are reused in
+process until shortly before their reported expiry; credential-file changes,
+unreadable files and provider token refusals invalidate reuse. Multiple matching groups grant the highest
 mapped role, capped by the staff row's role. Groups never edit that row or confer
 powers above it. No matching group denies access; unavailable credentials, API
 errors, timeouts, unknown groups or malformed responses explicitly deny access

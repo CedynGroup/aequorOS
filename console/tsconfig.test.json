@@ -22,6 +22,8 @@
     "lib/inspector-duration.test.ts",
     "lib/audit-pagination.test.ts",
     "lib/workforce-oidc.ts",
-    "lib/workforce-oidc.test.ts"
+    "lib/workforce-oidc.test.ts",
+    "lib/auth-callback.test.ts",
+    "app/api/auth/callback/route.ts"
   ]
 }

@@ -19309,7 +19309,9 @@
     "tests/operator/test_workspace_directory.py::test_directory_failures_never_supply_membership[500-body3-token]": "unit",
     "tests/operator/test_workspace_directory.py::test_network_timeouts_fail_closed[membership]": "unit",
     "tests/operator/test_workspace_directory.py::test_network_timeouts_fail_closed[token]": "unit",
-    "tests/operator/test_workspace_directory.py::test_unreadable_credentials_fail_closed": "unit"
+    "tests/operator/test_workspace_directory.py::test_unreadable_credentials_fail_closed": "unit",
+    "tests/operator/test_workspace_directory.py::test_cached_token_expires_and_tracks_credentials_while_membership_stays_live": "unit",
+    "tests/operator/test_workspace_directory.py::test_refused_cached_token_is_replaced_on_the_next_request": "unit"
   },
   "services": {
     "tests/attestation/service/test_attestation_openbao.py::test_a_csr_that_does_not_prove_possession_is_never_submitted": "integration",

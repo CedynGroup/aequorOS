@@ -14,6 +14,7 @@ from cryptography.hazmat.primitives.asymmetric import rsa
 from pydantic import JsonValue
 
 from app.core.config import OperatorSettings
+from app.operator.services import workforce
 from app.operator.services.workforce import GoogleDirectoryGroups, GroupsUnavailable
 
 
@@ -45,6 +46,7 @@ def test_delegated_assertion_and_strict_membership_response(
     directory_settings: OperatorSettings, monkeypatch: pytest.MonkeyPatch, member: bool
 ) -> None:
     posts = 0
+    gets = 0
 
     def post(
         url: str, *, data: dict[str, str], timeout: int, allow_redirects: bool
@@ -76,11 +78,13 @@ def test_delegated_assertion_and_strict_membership_response(
         )
         assert isinstance(claims["exp"], int) and isinstance(claims["iat"], int)
         assert claims["exp"] - claims["iat"] == 300
-        return response(200, {"access_token": "directory-token"})
+        return response(200, {"access_token": "directory-token", "expires_in": 3600})
 
     def get(
         url: str, *, headers: dict[str, str], timeout: int, allow_redirects: bool
     ) -> requests.Response:
+        nonlocal gets
+        gets += 1
         assert url.endswith("/staff%40example.test/hasMember/person%2Bstaff%40example.test")
         assert headers == {"Authorization": "Bearer directory-token"}
         assert timeout == 5 and allow_redirects is False
@@ -88,10 +92,15 @@ def test_delegated_assertion_and_strict_membership_response(
 
     monkeypatch.setattr(requests, "post", post)
     monkeypatch.setattr(requests, "get", get)
-    directory = GoogleDirectoryGroups(directory_settings)
     for _ in range(2):
-        assert directory.has_member("staff@example.test", "person+staff@example.test") is member
+        assert (
+            GoogleDirectoryGroups(directory_settings).has_member(
+                "staff@example.test", "person+staff@example.test"
+            )
+            is member
+        )
     assert posts == 1
+    assert gets == 2
 
 
 @pytest.mark.parametrize("phase", ["token", "membership"])
@@ -118,7 +127,11 @@ def test_directory_failures_never_supply_membership(
         _url: str, *, data: dict[str, str], timeout: int, allow_redirects: bool
     ) -> requests.Response:
         _ = data, timeout, allow_redirects
-        return response(status, body) if phase == "token" else response(200, {"access_token": "ok"})
+        return (
+            response(status, body)
+            if phase == "token"
+            else response(200, {"access_token": "ok", "expires_in": 3600})
+        )
 
     def get(
         _url: str, *, headers: dict[str, str], timeout: int, allow_redirects: bool
@@ -153,7 +166,7 @@ def test_network_timeouts_fail_closed(
         _ = data, timeout, allow_redirects
         if phase == "token":
             raise requests.Timeout("provider details")
-        return response(200, {"access_token": "ok"})
+        return response(200, {"access_token": "ok", "expires_in": 3600})
 
     def get(
         _url: str, *, headers: dict[str, str], timeout: int, allow_redirects: bool
@@ -167,3 +180,91 @@ def test_network_timeouts_fail_closed(
         _ = GoogleDirectoryGroups(directory_settings).has_member(
             "staff@example.test", "p@example.test"
         )
+
+
+def test_cached_token_expires_and_tracks_credentials_while_membership_stays_live(
+    directory_settings: OperatorSettings, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    moment = 100.0
+    posts = 0
+    gets = 0
+    member = True
+
+    def post(
+        _url: str, *, data: dict[str, str], timeout: int, allow_redirects: bool
+    ) -> requests.Response:
+        nonlocal posts
+        _ = data, timeout, allow_redirects
+        posts += 1
+        return response(200, {"access_token": f"token-{posts}", "expires_in": 120})
+
+    def get(
+        _url: str, *, headers: dict[str, str], timeout: int, allow_redirects: bool
+    ) -> requests.Response:
+        nonlocal gets
+        _ = timeout, allow_redirects
+        gets += 1
+        assert headers == {"Authorization": f"Bearer token-{posts}"}
+        return response(200, {"isMember": member})
+
+    monkeypatch.setattr(requests, "post", post)
+    monkeypatch.setattr(requests, "get", get)
+    monkeypatch.setattr(workforce, "monotonic", lambda: moment)
+
+    def check() -> bool:
+        return GoogleDirectoryGroups(directory_settings).has_member(
+            "staff@example.test", "p@example.test"
+        )
+
+    assert check() is True
+    member = False
+    moment = 159.0
+    assert check() is False
+    assert posts == 1 and gets == 2
+    moment = 160.0
+    assert check() is False
+    assert posts == 2
+    path = directory_settings.google_credentials_file
+    assert path is not None
+    credential = Path(path)
+    credential.write_bytes(credential.read_bytes() + b"\n")
+    assert check() is False
+    assert posts == 3
+    credential.unlink()
+    with pytest.raises(GroupsUnavailable):
+        _ = check()
+    assert posts == 3 and gets == 4
+
+
+def test_refused_cached_token_is_replaced_on_the_next_request(
+    directory_settings: OperatorSettings, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    posts = 0
+    gets = 0
+
+    def post(
+        _url: str, *, data: dict[str, str], timeout: int, allow_redirects: bool
+    ) -> requests.Response:
+        nonlocal posts
+        _ = data, timeout, allow_redirects
+        posts += 1
+        return response(200, {"access_token": f"token-{posts}", "expires_in": 3600})
+
+    def get(
+        _url: str, *, headers: dict[str, str], timeout: int, allow_redirects: bool
+    ) -> requests.Response:
+        nonlocal gets
+        _ = headers, timeout, allow_redirects
+        gets += 1
+        return response(401, {}) if gets == 1 else response(200, {"isMember": True})
+
+    monkeypatch.setattr(requests, "post", post)
+    monkeypatch.setattr(requests, "get", get)
+    with pytest.raises(GroupsUnavailable):
+        _ = GoogleDirectoryGroups(directory_settings).has_member(
+            "staff@example.test", "p@example.test"
+        )
+    assert GoogleDirectoryGroups(directory_settings).has_member(
+        "staff@example.test", "p@example.test"
+    )
+    assert posts == 2 and gets == 2
