@@ -23,6 +23,8 @@ import {
   type OauthTxn,
 } from "@/lib/server-auth";
 
+import { oidcSessionExpiry, oidcSessionMaxAge } from "@/lib/workforce-oidc";
+
 export const dynamic = "force-dynamic";
 
 function failure(req: NextRequest, code: string): NextResponse {
@@ -86,21 +88,27 @@ export async function GET(req: NextRequest) {
   if (typeof exp !== "number" || exp * 1000 <= Date.now())
     return failure(req, "expired");
 
+  const sessionExp = oidcSessionExpiry(exp, claims.iat, oidcSessionMaxAge());
+  if (sessionExp === null) return failure(req, "expired");
+
   const res = NextResponse.redirect(new URL("/tenants", req.url));
   res.cookies.delete(OAUTH_TXN_COOKIE);
   res.cookies.set(
     SESSION_COOKIE,
-    encodeCookie({ id_token: idToken, email: email.toLowerCase(), exp }),
+    encodeCookie({
+      id_token: idToken,
+      email: email.toLowerCase(),
+      exp: sessionExp,
+    }),
     {
       httpOnly: true,
       sameSite: "lax",
       secure: req.nextUrl.protocol === "https:",
       path: "/",
-      // Session dies with the id_token — the operator API would 401 an
-      // expired token anyway; the cookie just stops pretending earlier.
+      // Mirror the token expiry and optional API session-age cap.
       maxAge: Math.max(
         1,
-        Math.min(exp - Math.floor(Date.now() / 1000), 12 * 3600),
+        Math.min(sessionExp - Math.floor(Date.now() / 1000), 12 * 3600),
       ),
     },
   );

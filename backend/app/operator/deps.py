@@ -31,11 +31,11 @@ from __future__ import annotations
 
 import secrets
 from collections.abc import Iterator
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Annotated, Any, Literal, cast
 from uuid import UUID
 
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel, JsonValue, TypeAdapter
 from sqlalchemy import JSON, String, bindparam, select, text
@@ -55,7 +55,7 @@ from app.db.session import RlsBlindError, get_cross_tenant_engine
 from app.identity.public import Bank
 from app.models import OperatorAuditLog, OperatorInspectorSession, OperatorUser
 from app.operator.models import OPERATOR_ROLE_RANK
-from app.operator.services import operator_auth
+from app.operator.services import operator_auth, workforce
 from app.policy.public import InstitutionType
 
 _bearer_scheme = HTTPBearer(
@@ -84,12 +84,13 @@ class OperatorContext:
     auth_mode: Literal["dev", "oidc", "password"]
     #: Staff authorization role. Password/JWT sessions carry it as a claim
     #: verified against the ``operator_users`` row; OIDC sessions take the
-    #: active provisioned row's role.
+    #: active provisioned row's role, capped by optional workforce group grants.
     #: dev sessions are ``super_admin`` — the local root session IS the
     #: documented bootstrap path for creating the first operator account,
     #: and dev auth cannot exist in production (boot refusal + request-level
     #: check).
     role: OperatorRole
+    assurance: dict[str, JsonValue] = field(default_factory=dict)
 
 
 def _dev_context(token: str, operator_settings: OperatorSettings) -> OperatorContext | None:
@@ -177,10 +178,25 @@ def _oidc_context(token: str, operator_settings: OperatorSettings) -> OperatorCo
     user = _load_operator_user(normalized)
     if user is None or not user.is_active:
         raise _UNAUTHORIZED
-    return OperatorContext(email=normalized, auth_mode="oidc", role=cast("OperatorRole", user.role))
+    verified_claims = cast("dict[str, JsonValue]", claims)
+    try:
+        workforce.verify_claims(verified_claims, operator_settings)
+        role = workforce.group_role(
+            normalized,
+            cast("OperatorRole", user.role),
+            operator_settings,
+            workforce.GoogleDirectoryGroups(operator_settings),
+        )
+    except workforce.WorkforceDenied as exc:
+        raise HTTPException(status_code=401, detail=str(exc)) from exc
+    assurance = {
+        key: verified_claims[key] for key in ("amr", "acr", "auth_time") if key in verified_claims
+    }
+    return OperatorContext(email=normalized, auth_mode="oidc", role=role, assurance=assurance)
 
 
 def get_operator_context(
+    request: Request,
     credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(_bearer_scheme)],
 ) -> OperatorContext:
     if credentials is None or credentials.scheme.lower() != "bearer":
@@ -196,7 +212,15 @@ def get_operator_context(
     password = _password_context(credentials.credentials, operator_settings)
     if password is not None:
         return password
-    return _oidc_context(credentials.credentials, operator_settings)
+    oidc = _oidc_context(credentials.credentials, operator_settings)
+    if request.method not in {"GET", "HEAD", "OPTIONS"}:
+        try:
+            workforce.require_recent_authentication(
+                oidc.assurance, operator_settings.oidc_step_up_max_age_seconds
+            )
+        except workforce.WorkforceDenied as exc:
+            raise HTTPException(status_code=401, detail=str(exc)) from exc
+    return oidc
 
 
 def require_operator_admin(
@@ -283,6 +307,8 @@ def record_operator_action(  # noqa: PLR0913 - actor, scope, evidence and access
     ``detail``: the row is append-only and readable by every operator.
     """
     evidence: dict[str, JsonValue] = dict(detail or {})
+    if operator.auth_mode == "oidc":
+        evidence["oidc_assurance"] = dict(operator.assurance)
     session_id = evidence.get("session_id")
     if target_org is not None and isinstance(session_id, str):
         try:

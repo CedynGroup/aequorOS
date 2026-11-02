@@ -1360,6 +1360,28 @@ class OperatorSettings(BaseSettings):
     oidc_issuer: str | None = Field(default=None, alias="OPERATOR_OIDC_ISSUER")
     oidc_client_id: str | None = Field(default=None, alias="OPERATOR_OIDC_CLIENT_ID")
     oidc_allowed_domain: str = Field(default="aequoros.com", alias="OPERATOR_OIDC_ALLOWED_DOMAIN")
+    # Staged workforce controls: unset deployments retain existing sign-in behavior.
+    oidc_require_hosted_domain: bool = Field(
+        default=False, alias="OPERATOR_OIDC_REQUIRE_HOSTED_DOMAIN"
+    )
+    oidc_group_roles: dict[str, Literal["developer", "operator_admin", "super_admin"]] = Field(
+        default_factory=dict, alias="OPERATOR_OIDC_GROUP_ROLES"
+    )
+    google_credentials_file: str | None = Field(
+        default=None, alias="OPERATOR_GOOGLE_CREDENTIALS_FILE"
+    )
+    google_delegated_admin: str | None = Field(
+        default=None, alias="OPERATOR_GOOGLE_DELEGATED_ADMIN"
+    )
+    oidc_require_assurance: bool = Field(default=False, alias="OPERATOR_OIDC_REQUIRE_ASSURANCE")
+    oidc_required_amr: tuple[str, ...] = Field(default=("mfa",), alias="OPERATOR_OIDC_REQUIRED_AMR")
+    oidc_required_acr: str | None = Field(default=None, alias="OPERATOR_OIDC_REQUIRED_ACR")
+    oidc_session_max_age_seconds: int = Field(
+        default=0, ge=0, le=43200, alias="OPERATOR_OIDC_SESSION_MAX_AGE_SECONDS"
+    )
+    oidc_step_up_max_age_seconds: int = Field(
+        default=0, ge=0, le=3600, alias="OPERATOR_OIDC_STEP_UP_MAX_AGE_SECONDS"
+    )
     #: Origin of the authenticated bank product (bank.aequoros.com). Returned as
     #: ``dashboard_url`` by the act-as-examiner mint endpoint so the console knows
     #: where to hand the operator off with the impersonation token. Never a
@@ -1372,6 +1394,9 @@ class OperatorSettings(BaseSettings):
         "jwt_secret",
         "oidc_issuer",
         "oidc_client_id",
+        "google_credentials_file",
+        "google_delegated_admin",
+        "oidc_required_acr",
         mode="before",
     )
     @classmethod

@@ -20,6 +20,8 @@
     "lib/bi-backfill.test.ts",
     "lib/onboarding.test.ts",
     "lib/inspector-duration.test.ts",
-    "lib/audit-pagination.test.ts"
+    "lib/audit-pagination.test.ts",
+    "lib/workforce-oidc.ts",
+    "lib/workforce-oidc.test.ts"
   ]
 }
