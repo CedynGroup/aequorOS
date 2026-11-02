@@ -149,9 +149,7 @@
   "reportAny": 37
  },
  "app.adapters.database_direct.drivers.snowflake": {
-  "reportAny": 35,
-  "reportUnknownMemberType": 1,
-  "reportUnknownVariableType": 1
+  "reportAny": 35
  },
  "app.adapters.database_direct.drivers.sqlserver": {
   "reportAny": 39
@@ -1068,7 +1066,7 @@
   "reportMissingTypeStubs": 2,
   "reportUnknownArgumentType": 1,
   "reportUnknownMemberType": 4,
-  "reportUnknownVariableType": 5,
+  "reportUnknownVariableType": 3,
   "reportUnnecessaryIsInstance": 1
  },
  "app.services.attestation.signing": {

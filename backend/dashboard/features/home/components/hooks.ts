@@ -5,10 +5,11 @@
  *
  * `useEffectivePeriod` fixes the "populated KPIs next to an empty live card"
  * contradiction: the header can select a latest reporting period that holds no
- * facts (e.g. a period created by ingestion but never activated). Every panel
- * on the home page reads the resolved *effective* period instead — the
+ * facts (e.g. a period created by ingestion but never activated). When facts
+ * reads are authorized, home panels read the resolved *effective* period — the
  * selected period when it has facts, otherwise the newest period that does —
- * and the page labels the fallback explicitly.
+ * and the page labels the fallback explicitly. Without that authority,
+ * independent panels retain the selected period without probing for facts.
  *
  * Only read helpers live here; module data comes from the shared hooks in
  * lib/api/hooks.ts (deduped by TanStack Query key across panels).

@@ -818,6 +818,7 @@ client-supplied principal or status fields are rejected. Pending requests never
 affect derivation or enqueue a refresh. Approval locks the tenant-and-bank-scoped
 proposal, records immutable checker evidence, and enqueues the existing refresh
 when the bank has current financial facts.
+Rejecting a pending proposal records its revocation and prevents later approval.
 Revocation remains append-only and idempotent. Historical approved rows retain
 their evidence; migration neither fabricates missing identities nor grants
 authority. New approvals cannot use missing historical requester evidence.
