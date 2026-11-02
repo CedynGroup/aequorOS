@@ -1072,7 +1072,7 @@ export class RegulatoryReportingApi extends runtime.BaseAPI {
   }
 
   /**
-   * Stream one filed document from the outputs tier.
+   * Stream one filed document, proven against the identity the row carries.  Before slice 2 this read the object path with no version pin and no checksum check, so it served whatever the provider currently held under that name: a replaced object, or one written by a later export, downloaded as the filed document. The row\'s own recorded pin (or, once bound, the catalogue) is now the read identity and every byte is hashed before release.
    * Download Package Attachment
    */
   async downloadPackageAttachmentRaw(
@@ -1138,7 +1138,7 @@ export class RegulatoryReportingApi extends runtime.BaseAPI {
   }
 
   /**
-   * Stream one filed document from the outputs tier.
+   * Stream one filed document, proven against the identity the row carries.  Before slice 2 this read the object path with no version pin and no checksum check, so it served whatever the provider currently held under that name: a replaced object, or one written by a later export, downloaded as the filed document. The row\'s own recorded pin (or, once bound, the catalogue) is now the read identity and every byte is hashed before release.
    * Download Package Attachment
    */
   async downloadPackageAttachment(
@@ -1149,7 +1149,7 @@ export class RegulatoryReportingApi extends runtime.BaseAPI {
   }
 
   /**
-   * Stream one exported artifact from the outputs tier.
+   * Stream one exported artifact, proven against the revision that wrote it.  The artifact row is upserted per kind: it names a path and a checksum but no provider version, so reading its path directly served whatever the store held under that name. The archived revision with the same path and checksum is the export that produced these bytes, and the read goes through it.
    * Download Regulatory Artifact
    */
   async downloadRegulatoryArtifactRaw(
@@ -1204,7 +1204,7 @@ export class RegulatoryReportingApi extends runtime.BaseAPI {
   }
 
   /**
-   * Stream one exported artifact from the outputs tier.
+   * Stream one exported artifact, proven against the revision that wrote it.  The artifact row is upserted per kind: it names a path and a checksum but no provider version, so reading its path directly served whatever the store held under that name. The archived revision with the same path and checksum is the export that produced these bytes, and the read goes through it.
    * Download Regulatory Artifact
    */
   async downloadRegulatoryArtifact(
