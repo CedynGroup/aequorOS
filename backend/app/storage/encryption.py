@@ -28,7 +28,12 @@ from app.core.key_management.types import (
 )
 from app.db import session as database
 from app.db.worker_access import STORAGE_KEY_SIGNATURE, has_worker_function
-from app.storage.client import ObjectMetadata, StorageAccessError, StorageLocation
+from app.storage.client import (
+    ObjectMetadata,
+    SealedEncryptionContext,
+    StorageAccessError,
+    StorageLocation,
+)
 
 ENCRYPTION_FORMAT = "aws-esdk-object-v1"
 
@@ -170,10 +175,38 @@ class ObjectEncryption:
         data: BinaryIO,
         metadata: ObjectMetadata,
         headers: dict[str, str],
+        *,
+        sealed_context: SealedEncryptionContext | None = None,
     ) -> BinaryIO:
         close_source = True
         try:
             self.require_read_access()
+            if sealed_context is not None:
+                original = sealed_context.location
+                if (
+                    original.institution_slug != location.institution_slug
+                    or original.tier != location.tier
+                    or metadata.institution_slug != original.institution_slug
+                    or metadata.tier != original.tier
+                    or metadata.checksum_sha256 != sealed_context.sha256
+                    or (
+                        sealed_context.format == ENCRYPTION_FORMAT
+                        and (
+                            headers.get("encryption-format") != sealed_context.format
+                            or headers.get("key-envelope-id") != str(sealed_context.envelope_id)
+                            or sealed_context.envelope_id is None
+                        )
+                    )
+                    or (
+                        sealed_context.format == "plaintext-v1"
+                        and (
+                            "encryption-format" in headers or sealed_context.envelope_id is not None
+                        )
+                    )
+                    or sealed_context.format not in (ENCRYPTION_FORMAT, "plaintext-v1")
+                ):
+                    raise KeyIntegrityError("The sealed encryption descriptor does not match.")
+                location = original
             if "encryption-format" not in headers and not self.bank_key_required(location):
                 close_source = False
                 return data

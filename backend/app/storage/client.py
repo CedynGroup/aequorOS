@@ -14,7 +14,7 @@ from collections.abc import Callable, Iterator
 from contextlib import AbstractContextManager
 from dataclasses import dataclass
 from datetime import datetime
-from typing import BinaryIO, Literal, Self
+from typing import BinaryIO, Literal, Self, cast
 from uuid import UUID
 
 from sqlalchemy.orm import Session
@@ -63,6 +63,21 @@ class StorageLocation:
 
     def bucket_name(self, env: str) -> str:
         return f"aequoros-{env}-{self.institution_slug}-{self.tier}"
+
+
+@dataclass(frozen=True)
+class SealedEncryptionContext:
+    """Trusted catalogue descriptor; never populate from request or object headers.
+
+    The physical lookup key is separate from the original authenticated path and
+    envelope. Catalogue locators are immutable; see backend/docs/bank_encryption.md.
+    Plaintext is explicit and still refuses for a connected bank.
+    """
+
+    format: Literal["aws-esdk-object-v1", "plaintext-v1"]
+    location: StorageLocation
+    sha256: str
+    envelope_id: UUID | None
 
 
 @dataclass(frozen=True)
@@ -116,7 +131,7 @@ class ObjectMetadata:
 
         return cls(
             institution_slug=raw["institution-slug"],
-            tier=raw["tier"],  # type: ignore[arg-type]
+            tier=cast(Tier, raw["tier"]),
             checksum_sha256=raw["checksum-sha256"],
             written_at=datetime.fromisoformat(raw["written-at"]),
             written_by=raw["written-by"],
@@ -209,6 +224,16 @@ class StorageClient(ABC):
         location: StorageLocation,
         version_id: str | None = None,
     ) -> tuple[StorageObject, BinaryIO]: ...
+
+    def read_sealed(
+        self, location: StorageLocation, context: SealedEncryptionContext
+    ) -> tuple[StorageObject, BinaryIO]:
+        """Read a catalogue representation, preserving its original crypto context.
+
+        Backends must opt in explicitly. Generic reads cannot safely substitute
+        an old authenticated path for a new physical key.
+        """
+        raise StorageValidationError("Stable document reads are unsupported by this backend.")
 
     @abstractmethod
     def exists(self, location: StorageLocation) -> bool: ...

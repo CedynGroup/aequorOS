@@ -177,6 +177,9 @@
     ["aequoros_signed_package_guard", "", "aqs_bi"],
     ["aequoros_signed_package_guard", "", "aqs_operator"],
     ["aequoros_signed_package_guard", "", "aqs_worker"],
+    ["aqs_bound_letter_guard", "", "aqs_api"],
+    ["aqs_document_binding_validate", "", "aqs_api"],
+    ["aqs_sealed_object_validate", "", "aqs_api"],
     ["aqs_worker_audit_check", "timestamp with time zone", "aqs_worker"],
     ["aqs_worker_bank_key", "text", "aqs_worker"],
     [
@@ -218,6 +221,9 @@
       "aqs_worker": ["DELETE", "INSERT", "SELECT", "UPDATE"]
     },
     "alembic_version": {},
+    "artifact_document_bindings": {
+      "aqs_api": ["INSERT", "SELECT"]
+    },
     "attestation_signatures": {
       "aqs_api": ["INSERT", "SELECT"],
       "aqs_worker": ["INSERT", "SELECT"]
@@ -583,6 +589,9 @@
       "aqs_api": ["DELETE", "INSERT", "SELECT", "UPDATE"],
       "aqs_worker": ["DELETE", "INSERT", "SELECT", "UPDATE"]
     },
+    "icaap_attachment_document_bindings": {
+      "aqs_api": ["INSERT", "SELECT"]
+    },
     "icaap_attachment_withdrawals": {
       "aqs_api": ["DELETE", "INSERT", "SELECT"],
       "aqs_worker": ["DELETE", "INSERT", "SELECT"]
@@ -792,6 +801,9 @@
       "aqs_api": ["DELETE", "INSERT", "SELECT", "UPDATE"],
       "aqs_worker": ["DELETE", "INSERT", "SELECT", "UPDATE"]
     },
+    "package_attachment_document_bindings": {
+      "aqs_api": ["INSERT", "SELECT"]
+    },
     "package_signature_placements": {
       "aqs_api": ["DELETE", "INSERT", "SELECT", "UPDATE"],
       "aqs_worker": ["DELETE", "INSERT", "SELECT", "UPDATE"]
@@ -985,6 +997,9 @@
       "aqs_api": ["DELETE", "INSERT", "SELECT", "UPDATE"],
       "aqs_worker": ["DELETE", "INSERT", "SELECT", "UPDATE"]
     },
+    "sealed_document_objects": {
+      "aqs_api": ["INSERT", "SELECT"]
+    },
     "shareholdings": {
       "aqs_api": ["DELETE", "INSERT", "SELECT", "UPDATE"],
       "aqs_worker": ["DELETE", "INSERT", "SELECT", "UPDATE"]
@@ -1016,6 +1031,9 @@
     "stress_scenarios": {
       "aqs_api": ["DELETE", "INSERT", "SELECT", "UPDATE"],
       "aqs_worker": ["DELETE", "INSERT", "SELECT", "UPDATE"]
+    },
+    "supervisory_letter_document_bindings": {
+      "aqs_api": ["INSERT", "SELECT"]
     },
     "system_of_record_declarations": {
       "aqs_api": ["DELETE", "INSERT", "SELECT", "UPDATE"],
