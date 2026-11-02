@@ -20,7 +20,9 @@ from app.case.schemas.calculations import (
     CalculationRunListRead,
     CalculationRunRead,
 )
+from app.case.schemas.disclosure import CaseResponses
 from app.case.service import calculations
+from app.case.service.authorization import has_restricted_view
 
 router = APIRouter(tags=["calculations"])
 
@@ -35,7 +37,7 @@ def list_calculation_runs(  # noqa: PLR0913
     limit: Annotated[int, Query(ge=1, le=100)] = 25,
     offset: Annotated[int, Query(ge=0)] = 0,
 ) -> CalculationRunListRead:
-    return calculations.list_runs(
+    result = calculations.list_runs(
         db,
         ctx,
         case_id,
@@ -44,6 +46,7 @@ def list_calculation_runs(  # noqa: PLR0913
         limit=limit,
         offset=offset,
     )
+    return CaseResponses(has_restricted_view(db, ctx)).calculation_runs(result)
 
 
 @router.post(

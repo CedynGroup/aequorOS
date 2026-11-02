@@ -6,6 +6,15 @@ https://github.com/CedynGroup/aequorOS/pull/759 as the next independently
 reviewable RBAC slice. Its shared capability foundation landed in
 https://github.com/CedynGroup/aequorOS/pull/188.
 
+The captain resumed this stack on 2026-11-02 (Firstmate inbox014):
+"Stack 1 RBAC: PR 759 (#173 data engine) base; #179 cutover stacks on 759" and
+"the next PR in a stack starts while the base PR is still awaiting merge; do not
+hold stacked dependents for base merges, only for their semantic dependency being
+available on the base branch." The parent is #759 at
+`4707d4c2bc20d68d87898d007fd0dc97de11c0a2`; it merges first. This later human
+decision resumes #179 above it without requiring the parent merge before child
+publication.
+
 ## Authority contract
 
 Every supported case API entry requires one complete active **human** binding:
@@ -37,6 +46,18 @@ inputs, calculation/projection details, evidence and exports use restricted.
 The report's JSON and HTML representations both require restricted `export`.
 A restricted viewer cannot download a document or export a report merely by
 holding `view`.
+
+Confidential responses project copies of stored records. Raw case structured
+metadata, score inputs/rule details, finding details and value-bearing narrative,
+assessment inputs/errors, and calculation diagnostics require an independently
+complete restricted `view` binding, including on confidential mutation returns.
+Summary identity, status, scores, categories and counts remain available.
+Assessment and document-parse job polling also requires restricted `view`, with
+opaque denial; starting a job grants no polling authority.
+
+The inherited DATA Temenos polling observation (R2) and DATA dashboard loading
+observation (R4) remain parent/follow-up work for #173, outside this case child.
+No DATA or dashboard fix is included here.
 
 ## Operation matrix
 

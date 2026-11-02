@@ -17,8 +17,10 @@ from app.case.schemas.assessments import (
     AssessmentRunRead,
     RunResponse,
 )
+from app.case.schemas.disclosure import CaseResponses
 from app.case.service import assessments as assessments_service
-from app.models import RiskAssessment, RiskAssessmentRun
+from app.case.service.authorization import has_restricted_view
+from app.models import RiskAssessment
 
 router = APIRouter(tags=["assessments"])
 
@@ -51,10 +53,16 @@ def run_assessment(assessment_id: UUID, db: DbSession, ctx: CaseRestrictedRun) -
 @router.get("/assessments/{assessment_id}/runs", response_model=list[AssessmentRunRead])
 def list_assessment_runs(
     assessment_id: UUID, db: DbSession, ctx: CaseView
-) -> list[RiskAssessmentRun]:
-    return assessments_service.list_assessment_runs(db, ctx, assessment_id)
+) -> list[AssessmentRunRead]:
+    responses = CaseResponses(has_restricted_view(db, ctx))
+    return [
+        responses.assessment_run(row)
+        for row in assessments_service.list_assessment_runs(db, ctx, assessment_id)
+    ]
 
 
 @router.get("/assessment-runs/{run_id}", response_model=AssessmentRunRead)
-def get_assessment_run(run_id: UUID, db: DbSession, ctx: CaseView) -> RiskAssessmentRun:
-    return assessments_service.get_run_or_404(db, ctx.organization_id, run_id)
+def get_assessment_run(run_id: UUID, db: DbSession, ctx: CaseView) -> AssessmentRunRead:
+    return CaseResponses(has_restricted_view(db, ctx)).assessment_run(
+        assessments_service.get_run_or_404(db, ctx.organization_id, run_id)
+    )

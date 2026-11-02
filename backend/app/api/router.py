@@ -18,6 +18,7 @@ from app.bi.api.read_bi_feeds import router as bi_feeds_router
 from app.capital.api.manage_capital_plan import router as capital_plan_router
 from app.capital.api.read_sdi_diagnostics import router as sdi_diagnostics_router
 from app.capital.api.run_regulatory_capital import router as regulatory_capital_router
+from app.case.api.authorization import require_case_job_access
 from app.case.api.bulk_update_cases import router as bulk_update_cases_router
 from app.case.api.generate_case_reports import router as case_reports_router
 from app.case.api.list_case_taxonomy import router as case_taxonomy_router
@@ -222,7 +223,7 @@ v1_router.include_router(financial_workspace_router)
 v1_router.include_router(scenarios_router)
 v1_router.include_router(calculations_router)
 v1_router.include_router(capital_router)
-v1_router.include_router(jobs_router)
+v1_router.include_router(jobs_router, dependencies=[Depends(require_case_job_access)])
 v1_router.include_router(assessments_router)
 v1_router.include_router(findings_router)
 v1_router.include_router(liquidity_router)

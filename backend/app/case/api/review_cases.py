@@ -17,21 +17,24 @@ from app.case.schemas.cases import (
     CaseUpdate,
     ScoreRead,
 )
+from app.case.schemas.disclosure import CaseResponses
 from app.case.service import cases as cases_service
+from app.case.service.authorization import has_restricted_view
 from app.domain.risk_constants import (
     CaseDecision,
     CaseSort,
     CaseStatus,
     RiskLevel,
 )
-from app.models import RiskCase, RiskScore
 
 router = APIRouter(prefix="/cases", tags=["cases"])
 
 
 @router.post("", response_model=CaseRead, status_code=status.HTTP_201_CREATED)
-def create_case(payload: CaseCreate, db: DbSession, ctx: CaseCreator) -> RiskCase:
-    return cases_service.create_case(db, ctx, payload.to_command())
+def create_case(payload: CaseCreate, db: DbSession, ctx: CaseCreator) -> CaseRead:
+    return CaseResponses(has_restricted_view(db, ctx)).case(
+        cases_service.create_case(db, ctx, payload.to_command())
+    )
 
 
 @router.get("", response_model=CaseListRead)
@@ -96,25 +99,34 @@ def case_summary(db: DbSession, ctx: CaseView) -> CaseSummaryRead:
 
 
 @router.get("/{case_id}", response_model=CaseRead)
-def get_case(case_id: UUID, db: DbSession, ctx: CaseView) -> RiskCase:
-    return cases_service.get_case_or_404(db, ctx.organization_id, case_id)
+def get_case(case_id: UUID, db: DbSession, ctx: CaseView) -> CaseRead:
+    return CaseResponses(has_restricted_view(db, ctx)).case(
+        cases_service.get_case_or_404(db, ctx.organization_id, case_id)
+    )
 
 
 @router.patch("/{case_id}", response_model=CaseRead)
-def update_case(case_id: UUID, payload: CaseUpdate, db: DbSession, ctx: CaseEdit) -> RiskCase:
-    return cases_service.update_case(db, ctx, case_id, payload.to_command())
+def update_case(case_id: UUID, payload: CaseUpdate, db: DbSession, ctx: CaseEdit) -> CaseRead:
+    return CaseResponses(has_restricted_view(db, ctx)).case(
+        cases_service.update_case(db, ctx, case_id, payload.to_command())
+    )
 
 
 @router.post("/{case_id}/assign", response_model=CaseRead)
-def assign_case(case_id: UUID, payload: CaseAssign, db: DbSession, ctx: CaseEdit) -> RiskCase:
-    return cases_service.assign_case(db, ctx, case_id, payload.assigned_to_user_id)
+def assign_case(case_id: UUID, payload: CaseAssign, db: DbSession, ctx: CaseEdit) -> CaseRead:
+    return CaseResponses(has_restricted_view(db, ctx)).case(
+        cases_service.assign_case(db, ctx, case_id, payload.assigned_to_user_id)
+    )
 
 
 @router.get("/{case_id}/scores", response_model=list[ScoreRead])
-def list_case_scores(case_id: UUID, db: DbSession, ctx: CaseView) -> list[RiskScore]:
-    return cases_service.list_case_scores(db, ctx, case_id)
+def list_case_scores(case_id: UUID, db: DbSession, ctx: CaseView) -> list[ScoreRead]:
+    responses = CaseResponses(has_restricted_view(db, ctx))
+    return [responses.score(row) for row in cases_service.list_case_scores(db, ctx, case_id)]
 
 
 @router.post("/{case_id}/archive", response_model=CaseRead)
-def archive_case(case_id: UUID, db: DbSession, ctx: CaseEdit) -> RiskCase:
-    return cases_service.archive_case(db, ctx, case_id)
+def archive_case(case_id: UUID, db: DbSession, ctx: CaseEdit) -> CaseRead:
+    return CaseResponses(has_restricted_view(db, ctx)).case(
+        cases_service.archive_case(db, ctx, case_id)
+    )

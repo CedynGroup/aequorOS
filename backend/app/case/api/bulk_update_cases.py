@@ -5,7 +5,9 @@ from fastapi import APIRouter
 from app.api.deps import DbSession
 from app.case.api.authorization import CaseBulkEdit
 from app.case.schemas.cases import CaseBulkActionCreate, CaseBulkActionRead
+from app.case.schemas.disclosure import CaseResponses
 from app.case.service import cases as cases_service
+from app.case.service.authorization import has_restricted_view
 
 router = APIRouter(prefix="/cases", tags=["cases"])
 
@@ -15,4 +17,4 @@ def bulk_case_actions(
     payload: CaseBulkActionCreate, db: DbSession, ctx: CaseBulkEdit
 ) -> CaseBulkActionRead:
     result = cases_service.bulk_case_action(db, ctx, payload.to_command())
-    return CaseBulkActionRead.from_result(result)
+    return CaseResponses(has_restricted_view(db, ctx)).bulk(CaseBulkActionRead.from_result(result))

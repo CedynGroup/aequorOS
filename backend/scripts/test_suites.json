@@ -1,5 +1,13 @@
 {
   "cases": {
+    "tests/case/api/test_case_authorization.py::test_calculation_history_diagnostics_disclosure[False]": "integration",
+    "tests/case/api/test_case_authorization.py::test_calculation_history_diagnostics_disclosure[True]": "integration",
+    "tests/case/api/test_case_authorization.py::test_case_job_polling_uses_current_restricted_authority[delete]": "integration",
+    "tests/case/api/test_case_authorization.py::test_case_job_polling_uses_current_restricted_authority[revoke]": "integration",
+    "tests/case/api/test_case_authorization.py::test_case_payload_disclosure_on_every_mutation_return[False]": "integration",
+    "tests/case/api/test_case_authorization.py::test_case_payload_disclosure_on_every_mutation_return[True]": "integration",
+    "tests/case/api/test_case_authorization.py::test_populated_assessment_scores_findings_and_history_disclosure[False]": "integration",
+    "tests/case/api/test_case_authorization.py::test_populated_assessment_scores_findings_and_history_disclosure[True]": "integration",
     "tests/ai/api/test_ai_settings_routes.py::test_a_change_is_audited": "integration",
     "tests/ai/api/test_ai_settings_routes.py::test_a_row_that_smuggles_an_undescribed_surface_is_refused_by_the_egress_gate[enqueue]": "integration",
     "tests/ai/api/test_ai_settings_routes.py::test_a_row_that_smuggles_an_undescribed_surface_is_refused_by_the_egress_gate[run]": "integration",

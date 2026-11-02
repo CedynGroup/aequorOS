@@ -19,19 +19,12 @@ from app.core.tenancy import TenantContext
 from app.identity import public as authorization
 
 
-def require_permission(
+def _permission_result(
     db: Session,
     ctx: TenantContext,
     permission: Permission,
     sensitivity: Sensitivity,
-    *,
-    opaque: bool,
-) -> None:
-    """Require one complete human binding; a case has no bank target.
-
-    This is the HTTP entry boundary for case services. Trusted calculation and
-    parsing jobs keep their own tenant context and do not gain human authority.
-    """
+) -> tuple[bool, str]:
     allowed = False
     reason = "human_scoped_binding_required"
     if ctx.actor_user_id is not None and ctx.authorization_version is not None:
@@ -61,6 +54,23 @@ def require_permission(
                 principal, permission, resource, surface="case_workspace", error=exc
             )
             reason = "binding_evaluation_failed"
+    return allowed, reason
+
+
+def has_restricted_view(db: Session, ctx: TenantContext) -> bool:
+    allowed, _ = _permission_result(db, ctx, Permission.VIEW, Sensitivity.RESTRICTED)
+    return allowed
+
+
+def require_permission(
+    db: Session,
+    ctx: TenantContext,
+    permission: Permission,
+    sensitivity: Sensitivity,
+    *,
+    opaque: bool,
+) -> None:
+    allowed, reason = _permission_result(db, ctx, permission, sensitivity)
     if allowed:
         return
     authorization_denied(

@@ -10,10 +10,14 @@ import pytest
 from fastapi import FastAPI
 from fastapi.routing import APIRoute
 from fastapi.testclient import TestClient
+from pydantic import TypeAdapter
 from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
-from app.case.schemas.cases import CaseRead
+from app.case.schemas.assessments import AssessmentRead, AssessmentRunRead, RunResponse
+from app.case.schemas.calculations import CalculationRunListRead
+from app.case.schemas.cases import CaseBulkActionRead, CaseRead, ScoreRead
+from app.case.schemas.findings import FindingRead
 from app.core.authorization import (
     GrantorType,
     InstitutionScope,
@@ -28,6 +32,8 @@ from app.identity.models.user import User
 from app.identity.service import authorization
 from app.models import CalculationRun, Document, Job, RiskCase
 from app.models.audit_event import AuditEvent
+from app.schemas.common import ErrorResponse, JsonObject
+from app.schemas.jobs import JobRead
 from tests.conftest import FakeStorage
 from tests.support.api_factories import ApiFactories
 from tests.support.helpers import ORG_1, ORG_2, USER_1, headers
@@ -488,3 +494,286 @@ def test_existing_opaque_resources_are_hidden_before_side_effects(
         assert db_session.scalar(select(func.count()).select_from(model)) == count
     document = db_session.get(Document, document_id)
     assert document is not None and document.status == "uploaded"
+
+
+def _disclosure_grants(db: Session, *, restricted: bool) -> None:
+    db.execute(delete(AuthorizationBinding).where(AuthorizationBinding.principal_user_id == USER_1))
+    db.commit()
+    grant(db)
+    grant(db, RoleBundle.APPROVER)
+    grant(db, RoleBundle.VIEWER, SensitivityScope.RESTRICTED, module=ModuleScope.CAPITAL)
+    if restricted:
+        grant(db, RoleBundle.VIEWER, SensitivityScope.RESTRICTED)
+
+
+@pytest.mark.parametrize("restricted", [False, True])
+def test_case_payload_disclosure_on_every_mutation_return(
+    db_client: TestClient, db_session: Session, restricted: bool
+) -> None:
+    _disclosure_grants(db_session, restricted=restricted)
+    metadata: JsonObject = {"label": "Confidential label", "structured_data": {"debt_to_ebitda": 7}}
+    created = db_client.post(
+        "/api/v1/cases",
+        headers=headers(),
+        json={"title": "Disclosure", "case_type": "vendor", "metadata": metadata},
+    )
+    assert created.status_code == 201, created.text
+    case_id = CaseRead.model_validate(created.json()).id
+    results = [created]
+    for method, suffix, payload in (
+        ("GET", "", None),
+        ("PATCH", "", {"title": "Updated"}),
+        ("POST", "/assign", {"assigned_to_user_id": str(USER_1)}),
+    ):
+        response = db_client.request(
+            method, f"/api/v1/cases/{case_id}{suffix}", headers=headers(), json=payload
+        )
+        assert response.status_code == 200, response.text
+        results.append(response)
+    for action in ("assign", "unassign", "update_status", "archive"):
+        bulk_payload: dict[str, object] = {"case_ids": [str(case_id)], "action": action}
+        if action == "assign":
+            bulk_payload["assigned_to_user_id"] = str(USER_1)
+        elif action == "update_status":
+            bulk_payload["status"] = "active"
+        bulk = db_client.post("/api/v1/cases/bulk-actions", headers=headers(), json=bulk_payload)
+        assert bulk.status_code == 200, bulk.text
+        result = CaseBulkActionRead.model_validate(bulk.json())
+        assert result.failed == []
+        returned = result.succeeded[0].case.metadata
+        assert returned == (metadata if restricted else {"label": "Confidential label"})
+    archived = db_client.post(f"/api/v1/cases/{case_id}/archive", headers=headers())
+    assert archived.status_code == 200, archived.text
+    results.append(archived)
+    for response in results:
+        assert CaseRead.model_validate(response.json()).metadata == (
+            metadata if restricted else {"label": "Confidential label"}
+        )
+    db_session.expire_all()
+    stored = db_session.get(RiskCase, case_id)
+    assert stored is not None and stored.metadata_ == metadata
+
+
+def _populated_assessment(client: TestClient) -> tuple[UUID, UUID, RunResponse]:
+    created = client.post(
+        "/api/v1/cases",
+        headers=headers(),
+        json={
+            "title": "Populated assessment",
+            "case_type": "vendor",
+            "metadata": {"structured_data": {"debt_to_ebitda": 7, "cash_runway_months": 1.25}},
+        },
+    )
+    assert created.status_code == 201, created.text
+    case_id = CaseRead.model_validate(created.json()).id
+    assessment = client.post(
+        "/api/v1/assessments",
+        headers=headers(),
+        json={
+            "case_id": str(case_id),
+            "assessment_type": "vendor_risk",
+            "name": "Disclosure",
+        },
+    )
+    assert assessment.status_code == 201, assessment.text
+    assessment_id = AssessmentRead.model_validate(assessment.json()).id
+    started = client.post(f"/api/v1/assessments/{assessment_id}/run", headers=headers())
+    assert started.status_code == 200, started.text
+    result = RunResponse.model_validate(started.json())
+    assert result.status == "completed"
+    return case_id, assessment_id, result
+
+
+@pytest.mark.parametrize("restricted", [False, True])
+def test_populated_assessment_scores_findings_and_history_disclosure(
+    db_client: TestClient, db_session: Session, restricted: bool
+) -> None:
+    case_id, assessment_id, result = _populated_assessment(db_client)
+    run_id = result.run_id
+    _disclosure_grants(db_session, restricted=restricted)
+    scores = db_client.get(f"/api/v1/cases/{case_id}/scores", headers=headers())
+    assert scores.status_code == 200, scores.text
+    score = TypeAdapter(list[ScoreRead]).validate_python(scores.json())[0]
+    assert score.score > 0
+    if restricted:
+        assert score.input_snapshot == {
+            "structured_data": {"debt_to_ebitda": 7, "cash_runway_months": 1.25}
+        }
+        assert any(
+            rule.get("details")
+            == {"debt_to_ebitda": 7, "medium_threshold": 4, "critical_threshold": 6}
+            for rule in score.rule_results
+        )
+    else:
+        assert score.input_snapshot == {}
+        assert all("details" not in rule for rule in score.rule_results)
+    for path in (f"/assessments/{assessment_id}/runs", f"/assessment-runs/{run_id}"):
+        response = db_client.get(f"/api/v1{path}", headers=headers())
+        assert response.status_code == 200, response.text
+        run = (
+            TypeAdapter(list[AssessmentRunRead]).validate_python(response.json())[0]
+            if path.endswith("/runs")
+            else AssessmentRunRead.model_validate(response.json())
+        )
+        assert run.summary["risk_score"] == score.score
+        assert ("input_snapshot" in run.summary) is restricted
+    sentinel = "RAW_FINANCIAL_EVIDENCE_94821"
+    manual = db_client.post(
+        f"/api/v1/cases/{case_id}/findings",
+        headers=headers(),
+        json={
+            "risk_type": "leverage_risk",
+            "title": "Manual concern",
+            "severity": "high",
+            "summary": sentinel,
+            "rationale": sentinel,
+            "details": {"evidence": [{"quote": sentinel}], "liquidity": {"metrics": [sentinel]}},
+        },
+    )
+    assert manual.status_code == 201, manual.text
+    finding_id = FindingRead.model_validate(manual.json()).id
+    reviewed = db_client.patch(
+        f"/api/v1/findings/{finding_id}", headers=headers(), json={"status": "acknowledged"}
+    )
+    assert reviewed.status_code == 200, reviewed.text
+    for response in (manual, reviewed):
+        assert (sentinel in response.text) is restricted
+        assert bool(FindingRead.model_validate(response.json()).details) is restricted
+    for path in (
+        "/findings",
+        f"/cases/{case_id}/findings",
+        f"/assessments/{assessment_id}/findings",
+    ):
+        response = db_client.get(f"/api/v1{path}", headers=headers())
+        assert response.status_code == 200, response.text
+        findings = TypeAdapter(list[FindingRead]).validate_python(response.json())
+        assert findings
+        for finding in findings:
+            detail = db_client.get(f"/api/v1/findings/{finding.id}", headers=headers())
+            assert detail.status_code == 200, detail.text
+            if restricted:
+                assert FindingRead.model_validate(detail.json()).details
+            else:
+                assert FindingRead.model_validate(detail.json()).details == {}
+                assert FindingRead.model_validate(detail.json()).rationale is None
+                assert "Debt-to-EBITDA is 7" not in detail.text
+                assert "1.25 month" not in detail.text
+                assert sentinel not in detail.text
+    grant(db_session, RoleBundle.VIEWER, SensitivityScope.RESTRICTED)
+    full = db_client.get(f"/api/v1/cases/{case_id}/scores", headers=headers())
+    assert TypeAdapter(list[ScoreRead]).validate_python(full.json())[0].input_snapshot == {
+        "structured_data": {"debt_to_ebitda": 7, "cash_runway_months": 1.25}
+    }
+    full_finding = db_client.get(f"/api/v1/findings/{finding_id}", headers=headers())
+    assert FindingRead.model_validate(full_finding.json()).details["evidence"] == [
+        {"quote": sentinel}
+    ]
+
+
+@pytest.mark.parametrize("restricted", [False, True])
+def test_calculation_history_diagnostics_disclosure(
+    db_client: TestClient, db_session: Session, restricted: bool
+) -> None:
+    from datetime import date  # noqa: PLC0415
+
+    from app.models import RiskScenario  # noqa: PLC0415
+
+    case_id = UUID(create(db_client))
+    scenario = RiskScenario(
+        organization_id=ORG_1,
+        case_id=case_id,
+        name="Baseline",
+        scenario_type="baseline",
+        created_by=USER_1,
+    )
+    db_session.add(scenario)
+    db_session.flush()
+    run = CalculationRun(
+        organization_id=ORG_1,
+        case_id=case_id,
+        scenario_id=scenario.id,
+        status="failed",
+        engine_version="test",
+        input_schema_version="test",
+        output_schema_version="test",
+        input_hash="a" * 64,
+        inputs={"assumptions": {"growth": "94821"}},
+        forecast_periods=3,
+        as_of_date=date(2026, 6, 30),
+        created_by=USER_1,
+        error_code="invalid_assumptions",
+        error_message="Invalid growth 94821",
+        error_details={"assumptions": {"growth": "94821"}},
+    )
+    db_session.add(run)
+    db_session.commit()
+    _disclosure_grants(db_session, restricted=restricted)
+    response = db_client.get(f"/api/v1/cases/{case_id}/calculation-runs", headers=headers())
+    assert response.status_code == 200, response.text
+    error = CalculationRunListRead.model_validate(response.json()).runs[0].error
+    assert error is not None
+    assert error.code == "invalid_assumptions"
+    assert ("94821" in response.text) is restricted
+    assert error.details == ({"assumptions": {"growth": "94821"}} if restricted else None)
+
+
+@pytest.mark.parametrize("removal", ["delete", "revoke"])
+def test_case_job_polling_uses_current_restricted_authority(
+    db_client: TestClient, db_session: Session, removal: str
+) -> None:
+    _, _, result = _populated_assessment(db_client)
+    job_path = f"/api/v1/jobs/{result.job_id}"
+    allowed = db_client.get(job_path, headers=headers())
+    assert allowed.status_code == 200, allowed.text
+    assert JobRead.model_validate(allowed.json()).progress["input_snapshot"] == {
+        "structured_data": {"debt_to_ebitda": 7, "cash_runway_months": 1.25}
+    }
+    assert db_client.get(job_path, headers=headers(ORG_2)).status_code == 404
+    rows = list(
+        db_session.scalars(
+            select(AuthorizationBinding).where(
+                AuthorizationBinding.principal_user_id == USER_1,
+            )
+        )
+    )
+    for row in rows:
+        if removal == "delete":
+            db_session.delete(row)
+        else:
+            row.status = "revoked"
+            row.revoked_at = utc_now()
+            row.revoked_by_type = "system"
+            row.revoked_by_id = "case-authorization-test"
+            row.revoked_reason = "Exercise retained job refusal"
+    version = authorization.invalidate_user_authorization(
+        db_session,
+        organization_id=ORG_1,
+        user_id=USER_1,
+        reason="Job authority removed",
+    )
+    fresh = headers(authorization_version=version)
+    denied = db_client.get(job_path, headers=fresh)
+    unknown = db_client.get(f"/api/v1/jobs/{uuid4()}", headers=fresh)
+    assert denied.status_code == unknown.status_code == 404
+    assert "input_snapshot" not in denied.text
+    assert (
+        ErrorResponse.model_validate(denied.json()).error.message
+        == ErrorResponse.model_validate(unknown.json()).error.message
+    )
+    grant(db_session)
+    assert db_client.get(job_path, headers=headers()).status_code == 404
+    grant(db_session, RoleBundle.VIEWER, SensitivityScope.RESTRICTED, bank_id=bank(db_session))
+    assert db_client.get(job_path, headers=headers()).status_code == 404
+    grant(db_session, RoleBundle.VIEWER, SensitivityScope.RESTRICTED)
+    assert db_client.get(job_path, headers=headers()).status_code == 200
+    unrelated = Job(
+        organization_id=ORG_1, job_type="unrelated", status="queued", progress={"step": 1}
+    )
+    document = Job(organization_id=ORG_1, job_type="document_parse", status="queued")
+    db_session.add_all([unrelated, document])
+    db_session.commit()
+    _disclosure_grants(db_session, restricted=False)
+    assert db_client.get(f"/api/v1/jobs/{unrelated.id}", headers=headers()).status_code == 200
+    assert db_client.get(f"/api/v1/jobs/{document.id}", headers=headers()).status_code == 404
+    grant(db_session, RoleBundle.VIEWER, SensitivityScope.RESTRICTED)
+    assert db_client.get(f"/api/v1/jobs/{document.id}", headers=headers()).status_code == 200
