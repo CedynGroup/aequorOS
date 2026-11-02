@@ -32,6 +32,8 @@ from collections.abc import Iterable, Iterator
 from pathlib import Path
 from typing import IO, Any, Protocol
 
+from openpyxl.worksheet._read_only import ReadOnlyWorksheet
+
 #: Rows in one worksheet. A bank's largest real sheet — a full general ledger
 #: extract — is tens of thousands; a hundred thousand is not a misreading of a
 #: template but a file nobody can review.
@@ -131,12 +133,17 @@ def bounded_rows(worksheet: SheetRows, *, cells_used: list[int]) -> Iterator[tup
     workbook. It is a list rather than a return value because the caller is a
     generator loop, not a function that can hand back a total.
     """
+    if isinstance(worksheet, ReadOnlyWorksheet):
+        worksheet.reset_dimensions()
+    previous_cells = cells_used[0]
+    width = 0
     for rows, row in enumerate(worksheet.iter_rows(values_only=True), start=1):
         if rows > MAX_ROWS_PER_SHEET:
             raise SpreadsheetTooLarge(
                 f"Sheet {worksheet.title!r} has more than {MAX_ROWS_PER_SHEET} rows."
             )
-        cells_used[0] += len(row)
+        width = max(width, len(row))
+        cells_used[0] = previous_cells + rows * width
         if cells_used[0] > MAX_CELLS_PER_WORKBOOK:
             raise SpreadsheetTooLarge(
                 f"The workbook has more than {MAX_CELLS_PER_WORKBOOK} cells; "

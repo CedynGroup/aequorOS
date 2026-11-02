@@ -42,7 +42,6 @@ from reportlab.platypus import (
 )
 
 from app.reporting.service.exports.pdf import AttestedOfficer
-from app.reporting.service.exports.pdf_parts import escape_text
 
 from .engine import FormResult, scale_for_export
 from .layout import SheetLayout
@@ -482,9 +481,9 @@ def _officers_of_record(officers: Sequence[AttestedOfficer]) -> list[Any]:
         )
         rows.append(
             [
-                Paragraph(escape_text(officer.name), _CELL),
-                Paragraph(escape_text(officer.title or "—"), _CELL),
-                Paragraph(escape_text(officer.at), _CELL),
+                Paragraph(officer.name, _CELL),
+                Paragraph(officer.title or "—", _CELL),
+                Paragraph(officer.at, _CELL),
             ]
         )
     if not rows:

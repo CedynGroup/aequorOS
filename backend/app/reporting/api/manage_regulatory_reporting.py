@@ -38,7 +38,6 @@ from app.api.deps import (
     ScopedMutationTenant,
     Tenant,
 )
-from app.core.content_disposition import attachment_headers
 from app.data_engine.public import IngestionStorage
 from app.reporting.schemas.packages import (
     ChannelConfigPut,
@@ -353,7 +352,7 @@ def download_regulatory_artifact(
     return StreamingResponse(
         stream,
         media_type=_artifact_media_type(artifact.kind, artifact.object_path),
-        headers=attachment_headers(filename),
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
 
 
@@ -463,7 +462,7 @@ def download_regulatory_artifact_version(
     return StreamingResponse(
         io.BytesIO(payload),
         media_type=_artifact_media_type(version.kind, version.object_path),
-        headers=attachment_headers(filename),
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
 
 

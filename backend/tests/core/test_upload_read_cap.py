@@ -21,6 +21,7 @@ import io
 import pytest
 from fastapi import HTTPException, UploadFile
 
+from app.data_engine.api import upload_seam
 from app.data_engine.api.upload_seam import MAX_UPLOAD_BYTES, read_upload_within_cap
 
 _CHUNK = 1024 * 1024
@@ -37,13 +38,16 @@ def test_a_legitimate_upload_arrives_whole() -> None:
     assert content == payload
 
 
-def test_an_oversized_body_is_refused_having_read_only_the_cap() -> None:
+def test_an_oversized_body_is_refused_having_read_only_the_cap(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """The old read-then-check consumed all of it; this consumes the cap plus a chunk."""
     limit = 2 * _CHUNK
+    monkeypatch.setattr(upload_seam, "MAX_UPLOAD_BYTES", limit)
     body = io.BytesIO(b"x" * (64 * _CHUNK))
 
     with pytest.raises(HTTPException) as refusal:
-        asyncio.run(read_upload_within_cap(_upload(body), limit=limit))
+        asyncio.run(read_upload_within_cap(_upload(body)))
 
     assert refusal.value.status_code == 413
     assert "limit" in str(refusal.value.detail)
@@ -52,10 +56,11 @@ def test_an_oversized_body_is_refused_having_read_only_the_cap() -> None:
     assert body.tell() < 64 * _CHUNK
 
 
-def test_a_body_exactly_at_the_cap_is_accepted() -> None:
+def test_a_body_exactly_at_the_cap_is_accepted(monkeypatch: pytest.MonkeyPatch) -> None:
     """The boundary the old comparison used (``>``) is preserved, not tightened."""
     payload = b"x" * (2 * _CHUNK)
-    content = asyncio.run(read_upload_within_cap(_upload(io.BytesIO(payload)), limit=len(payload)))
+    monkeypatch.setattr(upload_seam, "MAX_UPLOAD_BYTES", len(payload))
+    content = asyncio.run(read_upload_within_cap(_upload(io.BytesIO(payload))))
 
     assert len(content) == len(payload)
 

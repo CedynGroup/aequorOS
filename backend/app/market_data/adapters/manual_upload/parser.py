@@ -132,10 +132,15 @@ def _read_xlsx(content: bytes, filename: str) -> list[tuple[str, list[list[Any]]
         raise ManualUploadParseError(msg) from exc
     cells_used = [0]
     try:
-        return [
+        grids = [
             (worksheet.title, [list(row) for row in bounded_rows(worksheet, cells_used=cells_used)])
             for worksheet in workbook.worksheets
         ]
+        for _, grid in grids:
+            width = max((len(row) for row in grid), default=0)
+            for row in grid:
+                row.extend([None] * (width - len(row)))
+        return grids
     except SpreadsheetTooLarge as exc:
         raise ManualUploadParseError(str(exc)) from exc
     finally:

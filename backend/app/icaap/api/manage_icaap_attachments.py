@@ -10,7 +10,6 @@ from fastapi.responses import StreamingResponse
 
 from app.api.deps import DbSession, IcaapEdit, IcaapView
 from app.core.config import get_settings
-from app.core.content_disposition import attachment_headers
 from app.icaap.schemas.workspace import (
     IcaapAttachmentListRead,
     IcaapAttachmentRead,
@@ -140,7 +139,7 @@ def download_icaap_attachment(  # noqa: PLR0913 - the addressed file is five pat
     return StreamingResponse(
         stream,
         media_type=row.media_type,
-        headers=attachment_headers(row.original_filename),
+        headers={"Content-Disposition": f'attachment; filename="{row.original_filename}"'},
     )
 
 

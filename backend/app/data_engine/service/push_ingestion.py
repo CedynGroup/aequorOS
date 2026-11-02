@@ -160,12 +160,13 @@ def stage_push_records(  # noqa: PLR0913 - mirrors record_event's shape
                 f"({page.record_count} sent); split it across pages."
             ),
         )
-    if page.payload_bytes > MAX_PAGE_BYTES:
+    payload_bytes = page.payload_bytes
+    if payload_bytes > MAX_PAGE_BYTES:
         raise HTTPException(
             status_code=status.HTTP_413_CONTENT_TOO_LARGE,
             detail=(
                 f"Records page exceeds {MAX_PAGE_BYTES // (1024 * 1024)} MB "
-                f"({page.payload_bytes // (1024 * 1024)} MB sent); split it across pages."
+                f"({payload_bytes // (1024 * 1024)} MB sent); split it across pages."
             ),
         )
 

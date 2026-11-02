@@ -16,8 +16,9 @@ from pathlib import Path
 from typing import Any, cast
 from xml.etree import ElementTree
 
-from openpyxl.utils.cell import range_boundaries
+from openpyxl.utils.cell import coordinate_to_tuple, range_boundaries
 
+from app.core import spreadsheet_limits
 from app.core.spreadsheet_limits import SpreadsheetTooLarge, bounded_rows, inspect_archive
 from app.data_engine.adapters.excel_csv.sheet_analyzer import MergedRange
 
@@ -80,17 +81,26 @@ def _read_xlsx(path: Path) -> list[SheetGrid]:
             ) from exc
         raise WorkbookReadError(f"Cannot open workbook {path.name}: {message}") from exc
 
-    merges = _merged_ranges_by_sheet(path)
     cells_used = [0]
     sheets: list[SheetGrid] = []
     try:
+        merges = _merged_ranges_by_sheet(path)
         for worksheet in workbook.worksheets:
             grid = [list(row) for row in bounded_rows(worksheet, cells_used=cells_used)]
+            sheet_merges = merges.get(worksheet.title, [])
+            width = max((len(row) for row in grid), default=0)
+            unmerged_cells = len(grid) * width
+            width = max(width, max((right for _, _, _, right in sheet_merges), default=0))
+            height = max(len(grid), max((bottom for _, _, bottom, _ in sheet_merges), default=0))
+            grid.extend([] for _ in range(height - len(grid)))
+            for row in grid:
+                row.extend([None] * (width - len(row)))
+            cells_used[0] += height * width - unmerged_cells
             sheets.append(
                 SheetGrid(
                     name=worksheet.title,
                     grid=grid,
-                    merged_ranges=merges.get(worksheet.title, []),
+                    merged_ranges=sheet_merges,
                 )
             )
     except SpreadsheetTooLarge as exc:
@@ -119,7 +129,12 @@ def _merged_ranges_by_sheet(path: Path) -> dict[str, list[MergedRange]]:
     try:
         with zipfile.ZipFile(path) as archive:
             parts = _sheet_parts(archive)
-            return {title: _merge_ranges(archive, part) for title, part in parts.items() if part}
+            cells_used = [0]
+            return {
+                title: _merge_ranges(archive, part, cells_used=cells_used)
+                for title, part in parts.items()
+                if part
+            }
     except (zipfile.BadZipFile, KeyError, OSError):
         return {}
 
@@ -144,24 +159,54 @@ def _sheet_parts(archive: zipfile.ZipFile) -> dict[str, str]:
     return parts
 
 
-def _merge_ranges(archive: zipfile.ZipFile, part: str) -> list[MergedRange]:
+def _merge_ranges(archive: zipfile.ZipFile, part: str, *, cells_used: list[int]) -> list[MergedRange]:
     """``(min_row, min_col, max_row, max_col)`` for every merge in ``part``."""
     ranges: list[MergedRange] = []
+    parents: list[ElementTree.Element] = []
+    previous_cells = cells_used[0]
+    rows = max_row = max_col = cells = 0
+    row_col = 0
     with archive.open(part) as handle:
         for event, element in ElementTree.iterparse(handle, events=("start", "end")):
-            if event != "end":
+            if event == "start":
+                parents.append(element)
+                if element.tag == f"{_MAIN_NS}row":
+                    rows += 1
+                    max_row = max(max_row, rows, int(element.get("r", str(max_row + 1))))
+                    row_col = 0
+                elif element.tag == f"{_MAIN_NS}c":
+                    cells += 1
+                    reference = element.get("r")
+                    cell_row, row_col = (
+                        coordinate_to_tuple(reference) if reference else (max_row, row_col + 1)
+                    )
+                    max_row = max(max_row, cell_row)
+                    max_col = max(max_col, row_col)
+                elif element.tag == f"{_MAIN_NS}mergeCell":
+                    reference = element.get("ref", "")
+                    if ":" in reference:
+                        corners = range_boundaries(reference)
+                        if None not in corners:
+                            left, top, right, bottom = cast("tuple[int, int, int, int]", corners)
+                            ranges.append((top, left, bottom, right))
+                            max_row = max(max_row, bottom)
+                            max_col = max(max_col, right)
+                if max_row > spreadsheet_limits.MAX_ROWS_PER_SHEET:
+                    raise SpreadsheetTooLarge(
+                        f"Sheet {part!r} has more than "
+                        f"{spreadsheet_limits.MAX_ROWS_PER_SHEET} rows."
+                    )
+                cells_used[0] = previous_cells + max(cells, max_row * max_col)
+                if cells_used[0] > spreadsheet_limits.MAX_CELLS_PER_WORKBOOK:
+                    raise SpreadsheetTooLarge(
+                        f"The workbook has more than "
+                        f"{spreadsheet_limits.MAX_CELLS_PER_WORKBOOK} cells; "
+                        "split it into one file per dataset."
+                    )
                 continue
-            if element.tag == f"{_MAIN_NS}mergeCell":
-                reference = element.get("ref", "")
-                if ":" in reference:
-                    corners = range_boundaries(reference)
-                    if None in corners:
-                        continue
-                    min_col, min_row, max_col, max_row = cast("tuple[int, int, int, int]", corners)
-                    ranges.append((min_row, min_col, max_row, max_col))
-            # Cleared as it goes: the merge declarations sit at the end of a
-            # sheet, after every row, so a retained tree would be the whole
-            # worksheet again.
+            parents.pop()
+            if parents:
+                parents[-1].remove(element)
             element.clear()
     return ranges
 

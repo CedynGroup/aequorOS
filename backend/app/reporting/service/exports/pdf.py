@@ -17,7 +17,6 @@ import io
 from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Any
-from xml.sax.saxutils import escape
 
 from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4, landscape
@@ -153,17 +152,7 @@ def _cover(rendered: RenderedReturn) -> list[Any]:
         "Generated at",
     )
     rows = [
-        [
-            Paragraph(f"<b>{label}</b>", _CELL),
-            # The citation is code-owned template text, like the title and
-            # notes. Escape snapshot metadata without changing its glyphs.
-            Paragraph(
-                pairs.get(label, "")
-                if label == "Directive citation"
-                else escape(pairs.get(label, "")),
-                _CELL,
-            ),
-        ]
+        [Paragraph(f"<b>{label}</b>", _CELL), Paragraph(pairs.get(label, ""), _CELL)]
         for label in cover_fields
     ]
     table = Table(rows, colWidths=[42 * mm, 120 * mm])
@@ -250,13 +239,9 @@ def _record_block(officer: AttestedOfficer) -> Table:
     labels = ("Name", "Designation", "Date")
     body = [
         [
-            # Escaped, not interpolated: the name is whichever user set their
-            # own display name, and reportlab's Paragraph reads XML-like markup
-            # — including an <img src=…> it fetches server-side while building
-            # the document of record.
-            Paragraph(escape_text(officer.name), _BODY),
-            Paragraph(escape_text(officer.title or "—"), _BODY),
-            Paragraph(escape_text(officer.at), _BODY),
+            Paragraph(officer.name, _BODY),
+            Paragraph(officer.title or "—", _BODY),
+            Paragraph(officer.at, _BODY),
         ],
         [Paragraph(label, _FIELD_LABEL) for label in labels],
     ]

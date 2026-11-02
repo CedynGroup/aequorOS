@@ -16,14 +16,26 @@ boundary the service applies to it.
 from __future__ import annotations
 
 import json
+from datetime import date
+from typing import cast
+from unittest.mock import Mock
+from uuid import UUID
 
 import pytest
+from fastapi import HTTPException
+from sqlalchemy.orm import Session
 
+from app.api.deps import TenantContext
 from app.data_engine.schemas.push import (
     MAX_PAGE_BYTES,
     MAX_RECORDS_PER_PAGE,
+    PushBatchOpen,
     PushRecordsPage,
 )
+from app.data_engine.service import push_ingestion
+from app.models import Bank
+from app.storage.client import StorageLocation
+from tests.support.inmemory_storage import InMemoryStorageClient
 
 
 def _page(records: list[dict[str, object]]) -> PushRecordsPage:
@@ -45,19 +57,24 @@ def test_an_ordinary_page_is_far_under_the_cap() -> None:
     assert page.payload_bytes < MAX_PAGE_BYTES // 10
 
 
-def test_the_measurement_is_the_staged_bytes() -> None:
+@pytest.mark.parametrize("section", ["entities", "reference", "both"])
+def test_the_measurement_is_the_staged_bytes(tenant_ctx: TenantContext, section: str) -> None:
     """The number is what the staging object holds, so it cannot be gamed by
     envelope formatting."""
-    page = _page([{"source_reference": "GL-1", "name": "x"}])
-
-    expected = len(
-        json.dumps(
-            {"entities": page.entities, "reference": page.reference},
-            separators=(",", ":"),
-            default=str,
-        ).encode()
+    record = {"source_reference": "GL-1", "name": "Café"}
+    page = PushRecordsPage(
+        entities={"gl_account": [record]} if section != "reference" else {},
+        reference={"yield_curve": [record]} if section != "entities" else {},
     )
-    assert page.payload_bytes == expected
+    db, storage, push_id = _open_batch(tenant_ctx)
+
+    result = push_ingestion.stage_push_records(db, tenant_ctx, "BK-SYNTH001", push_id, page, storage)
+    _, stream = storage.read(StorageLocation("synthetic", "temp", f"push/{push_id}/pages/00001.json"))
+    content = stream.read()
+
+    assert result.pages_staged == 1
+    assert page.payload_bytes == len(content)
+    assert json.loads(content) == {"entities": page.entities, "reference": page.reference}
 
 
 def test_a_few_large_records_pass_the_count_cap_and_fail_the_byte_cap() -> None:
@@ -77,10 +94,44 @@ def test_the_count_cap_still_applies() -> None:
 
 
 @pytest.mark.parametrize("size", [MAX_PAGE_BYTES, MAX_PAGE_BYTES + 1])
-def test_the_boundary_is_measured_in_bytes(size: int) -> None:
+def test_the_boundary_is_measured_in_bytes(tenant_ctx: TenantContext, size: int) -> None:
     """The refusal is ``>``: a page exactly at the cap is accepted, as with the
     record cap beside it."""
-    padding = "x" * size
-    page = _page([{"source_reference": "GL-1", "notes": padding}])
+    record: dict[str, object] = {"source_reference": "GL-1", "notes": ""}
+    envelope = {"entities": {"gl_account": [record]}, "reference": {}}
+    record["notes"] = "x" * (size - len(json.dumps(envelope).encode()))
+    page = _page([record])
+    db, storage, push_id = _open_batch(tenant_ctx)
+    location = StorageLocation("synthetic", "temp", f"push/{push_id}/pages/00001.json")
 
-    assert (page.payload_bytes > MAX_PAGE_BYTES) == (size > MAX_PAGE_BYTES - 1_000)
+    assert page.payload_bytes == size
+    if size > MAX_PAGE_BYTES:
+        with pytest.raises(HTTPException) as refusal:
+            push_ingestion.stage_push_records(db, tenant_ctx, "BK-SYNTH001", push_id, page, storage)
+        assert refusal.value.status_code == 413
+        assert not storage.exists(location)
+        assert push_ingestion.get_push_batch(
+            db, tenant_ctx, "BK-SYNTH001", push_id, storage
+        ).pages_staged == 0
+    else:
+        push_ingestion.stage_push_records(db, tenant_ctx, "BK-SYNTH001", push_id, page, storage)
+        _, stream = storage.read(location)
+        assert len(stream.read()) == MAX_PAGE_BYTES
+
+
+def _open_batch(ctx: TenantContext) -> tuple[Session, InMemoryStorageClient, UUID]:
+    bank = Bank(id="BK-SYNTH001", organization_id=ctx.organization_id, storage_slug="synthetic")
+    db = cast("Session", Mock(spec=Session, scalar=Mock(return_value=bank)))
+    storage = InMemoryStorageClient()
+    opened = push_ingestion.open_push_batch(
+        db,
+        ctx,
+        bank.id,
+        PushBatchOpen(
+            as_of_date=date(2026, 6, 30),
+            idempotency_key="byte-cap",
+            reason="Synthetic byte-boundary test.",
+        ),
+        storage,
+    )
+    return db, storage, opened.push_batch_id

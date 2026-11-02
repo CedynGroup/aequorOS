@@ -70,8 +70,6 @@ class PushRecordsPage(BaseModel):
         return len(
             json.dumps(
                 {"entities": self.entities, "reference": self.reference},
-                separators=(",", ":"),
-                default=str,
             ).encode()
         )
 

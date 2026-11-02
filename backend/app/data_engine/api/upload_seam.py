@@ -24,8 +24,8 @@ MAX_UPLOAD_BYTES = 50_000_000
 _UPLOAD_CHUNK_BYTES = 1024 * 1024
 
 
-async def read_upload_within_cap(file: UploadFile, *, limit: int = MAX_UPLOAD_BYTES) -> bytes:
-    """Read ``file`` in chunks, refusing it as soon as it passes ``limit``.
+async def read_upload_within_cap(file: UploadFile) -> bytes:
+    """Read ``file`` in chunks, refusing it as soon as it passes the upload cap.
 
     ``await file.read()`` materializes the whole body first and compares the
     length afterwards, so the cap never bounded the memory the request used: an
@@ -33,7 +33,7 @@ async def read_upload_within_cap(file: UploadFile, *, limit: int = MAX_UPLOAD_BY
     process to exhaustion before a single byte was rejected (issue #701).
 
     Reading in chunks bounds what the handler holds while it decides, and an
-    over-size body is refused after ``limit`` bytes plus one chunk rather than
+    over-size body is refused after the cap plus one chunk rather than
     after all of it. The transport still buffers the request itself — that is
     the proxy's and the server's business, and this repository's deployment
     changes are owned elsewhere — so what this guarantees is that the
@@ -47,10 +47,10 @@ async def read_upload_within_cap(file: UploadFile, *, limit: int = MAX_UPLOAD_BY
     total = 0
     while chunk := await file.read(_UPLOAD_CHUNK_BYTES):
         total += len(chunk)
-        if total > limit:
+        if total > MAX_UPLOAD_BYTES:
             raise HTTPException(
                 status_code=status.HTTP_413_CONTENT_TOO_LARGE,
-                detail=f"Upload exceeds the {limit // 1_000_000} MB limit.",
+                detail=f"Upload exceeds the {MAX_UPLOAD_BYTES // 1_000_000} MB limit.",
             )
         chunks.append(chunk)
     if not total:

@@ -18,6 +18,8 @@ from __future__ import annotations
 
 from pathlib import Path
 from typing import cast
+from xml.etree import ElementTree
+from zipfile import ZIP_DEFLATED, ZipFile
 
 import openpyxl
 import pytest
@@ -28,6 +30,7 @@ from app.data_engine.adapters.excel_csv.workbook_reader import (
     WorkbookReadError,
     read_source,
 )
+from app.market_data.adapters.manual_upload.parser import read_grids
 from tests.data_engine.adapters.excel_csv import fixtures as excel_fixtures
 
 
@@ -111,6 +114,82 @@ def test_a_csv_is_untouched_by_the_spreadsheet_guard(tmp_path: Path) -> None:
 
     assert sheet.grid[1] == ["LN-0001", "100"]
     assert sheet.merged_ranges == []
+
+
+@pytest.mark.parametrize("reader", ["data_engine", "market_data"])
+@pytest.mark.parametrize("dimension", ["A1:A1", "A1:B2", "A1:XFD1048576"])
+def test_declared_dimensions_cannot_hide_or_invent_cells(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, reader: str, dimension: str
+) -> None:
+    monkeypatch.setattr(spreadsheet_limits, "MAX_ROWS_PER_SHEET", 5)
+    monkeypatch.setattr(spreadsheet_limits, "MAX_CELLS_PER_WORKBOOK", 10)
+    path = _positions_workbook(tmp_path / "dimensions.xlsx", rows=4)
+    with ZipFile(path) as archive:
+        sheet = ElementTree.fromstring(archive.read("xl/worksheets/sheet1.xml"))
+    declared = sheet.find("{http://schemas.openxmlformats.org/spreadsheetml/2006/main}dimension")
+    assert declared is not None
+    declared.set("ref", dimension)
+    _replace_sheet(path, ElementTree.tostring(sheet))
+
+    grid = (
+        read_source(path)[0].grid
+        if reader == "data_engine"
+        else read_grids(path.read_bytes(), path.name)[0][1]
+    )
+
+    assert grid == [["AccountRef", "Balance"], *[[f"LN-{i:05d}", i] for i in range(4)]]
+
+
+@pytest.mark.parametrize(
+    ("rows", "limit"),
+    [
+        ('<row r="1"/><row r="2"/><row r="3"/>', "rows"),
+        ('<row r="3"/>', "rows"),
+        ('<row r="1"><c r="A1"/><c r="B1"/><c r="C1"/></row>', "cells"),
+        ('<row r="1"><c r="C1"/></row>', "cells"),
+    ],
+    ids=["empty-rows", "sparse-row", "cells", "sparse-column"],
+)
+def test_merge_extraction_refuses_excess_xml_before_reading_the_tail(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, rows: str, limit: str
+) -> None:
+    monkeypatch.setattr(spreadsheet_limits, "MAX_ROWS_PER_SHEET", 2)
+    monkeypatch.setattr(spreadsheet_limits, "MAX_CELLS_PER_WORKBOOK", 2)
+    path = _positions_workbook(tmp_path / "early-refusal.xlsx", rows=1)
+    xml = (
+        '<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">'
+        '<dimension ref="A1"/><sheetData>'
+        f"{rows}</sheetData>"
+        + " " * 32_768
+        + "<malformed"
+    )
+    _replace_sheet(path, xml.encode())
+
+    with pytest.raises(WorkbookReadError, match=limit):
+        read_source(path)
+
+
+def test_merge_extraction_counts_cells_across_sheets(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(spreadsheet_limits, "MAX_CELLS_PER_WORKBOOK", 3)
+    path = tmp_path / "split.xlsx"
+    workbook = openpyxl.Workbook()
+    _active_sheet(workbook).append([1, 2])
+    workbook.create_sheet("Second").append([3, 4])
+    workbook.save(path)
+
+    with pytest.raises(WorkbookReadError, match="cells"):
+        read_source(path)
+
+
+def _replace_sheet(path: Path, content: bytes) -> None:
+    with ZipFile(path) as archive:
+        parts = {name: archive.read(name) for name in archive.namelist()}
+    parts["xl/worksheets/sheet1.xml"] = content
+    with ZipFile(path, "w", compression=ZIP_DEFLATED) as archive:
+        for name, body in parts.items():
+            archive.writestr(name, body)
 
 
 def _active_sheet(workbook: openpyxl.Workbook) -> Worksheet:

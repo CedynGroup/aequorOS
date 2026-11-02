@@ -21,7 +21,6 @@ from fastapi import APIRouter, Query
 from fastapi.responses import StreamingResponse
 
 from app.api.deps import DbSession, IcaapExport
-from app.core.content_disposition import attachment_headers
 from app.icaap.service import exports_draft
 
 router = APIRouter(tags=["icaap"])
@@ -51,7 +50,7 @@ def _stream(payload: bytes, *, filename: str, media_type: str) -> StreamingRespo
     return StreamingResponse(
         io.BytesIO(payload),
         media_type=media_type,
-        headers=attachment_headers(filename),
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
 
 
