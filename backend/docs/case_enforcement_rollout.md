@@ -1,8 +1,10 @@
 # Case workspace scoped-binding enforcement
 
 Issue [179](https://github.com/CedynGroup/aequorOS/issues/179) governs the advisory
-case plane. It is independent of the human DATA cutover. Its shared capability
-foundation landed in https://github.com/CedynGroup/aequorOS/pull/188.
+case plane. It follows the human DATA cutover in
+https://github.com/CedynGroup/aequorOS/pull/759 as the next independently
+reviewable RBAC slice. Its shared capability foundation landed in
+https://github.com/CedynGroup/aequorOS/pull/188.
 
 ## Authority contract
 
