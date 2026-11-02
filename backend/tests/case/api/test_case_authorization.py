@@ -712,7 +712,9 @@ def _assert_finding_disclosure(
             assert finding.summary == expected_summaries[finding.id]
             detail = db_client.get(f"/api/v1/findings/{finding.id}", headers=headers())
             assert detail.status_code == 200, detail.text
-            assert FindingRead.model_validate(detail.json()).summary == expected_summaries[finding.id]
+            assert (
+                FindingRead.model_validate(detail.json()).summary == expected_summaries[finding.id]
+            )
             assert FindingRead.model_validate(detail.json()).disposition_reason == (
                 reason if restricted else None
             )
@@ -728,6 +730,16 @@ def _assert_finding_disclosure(
     assert TypeAdapter(list[ScoreRead]).validate_python(full.json())[0].input_snapshot == {
         "structured_data": {"debt_to_ebitda": 7, "cash_runway_months": 1.25}
     }
+    _assert_restricted_finding_disclosure(db_client, db_session, finding_id, sentinel, reason)
+
+
+def _assert_restricted_finding_disclosure(
+    db_client: TestClient,
+    db_session: Session,
+    finding_id: UUID,
+    sentinel: str,
+    reason: str,
+) -> None:
     full_finding = db_client.get(f"/api/v1/findings/{finding_id}", headers=headers())
     assert full_finding.status_code == 200, full_finding.text
     assert FindingRead.model_validate(full_finding.json()).summary == sentinel
