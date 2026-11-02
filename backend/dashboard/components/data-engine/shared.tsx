@@ -62,15 +62,14 @@ export function validationReport(batch: IngestionBatchRead): ValidationReport {
 
 export function referenceRowCounts(
   batch: IngestionBatchRead,
-): Record<string, number> {
-  return validationReport(batch).summary?.reference_rows ?? {};
+): Record<string, number> | null {
+  return validationReport(batch).summary?.reference_rows ?? null;
 }
 
-export function referenceRowTotal(batch: IngestionBatchRead): number {
-  return Object.values(referenceRowCounts(batch)).reduce(
-    (sum, count) => sum + count,
-    0,
-  );
+export function referenceRowTotal(batch: IngestionBatchRead): number | null {
+  const counts = referenceRowCounts(batch);
+  if (counts === null) return null;
+  return Object.values(counts).reduce((sum, count) => sum + count, 0);
 }
 
 /** Per-table extraction breakdown: every table found in the source. */
@@ -193,7 +192,7 @@ export function CountStrip({ batch }: { batch: IngestionBatchRead }) {
   const referenceRows = referenceRowTotal(batch);
   const items: {
     label: string;
-    value: number;
+    value: number | null;
     tone?: string;
     title?: string;
   }[] = [
@@ -239,7 +238,7 @@ export function CountStrip({ batch }: { batch: IngestionBatchRead }) {
             {item.label}
           </p>
           <p className={`mt-0.5 font-mono text-h3 ${item.tone ?? "text-navy"}`}>
-            {item.value}
+            {item.value ?? "Unavailable"}
           </p>
         </div>
       ))}

@@ -208,7 +208,7 @@ export default function BatchDetailPage(props: {
           </div>
         )}
 
-        {Object.keys(referenceCounts).length > 0 && (
+        {referenceCounts && Object.keys(referenceCounts).length > 0 && (
           <div className="card p-5">
             <h2 className="text-h3 text-navy">Reference datasets</h2>
             <p className="mt-1 text-caption text-slate">

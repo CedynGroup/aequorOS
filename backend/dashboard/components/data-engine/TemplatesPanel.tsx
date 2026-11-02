@@ -46,7 +46,11 @@ export default function TemplatesPanel() {
   const activate = useActivateTemplate(bank?.id);
 
   const requiredName = REQUIRED_MAPPING[format];
-  const activeConfig = (configsQuery.data?.configs ?? []).find(
+  const activeConfig = (
+    configsQuery.access === "allowed" && configsQuery.isSuccess
+      ? configsQuery.data.configs
+      : undefined
+  )?.find(
     (config) =>
       config.status === "active" && config.sourceSystem === "EXCEL_CSV",
   );
@@ -93,7 +97,7 @@ export default function TemplatesPanel() {
               : "border-warning/30 bg-warning-light/40"
           }`}
         >
-          {configsQuery.access === "loading" || configsQuery.isLoading ? (
+          {configsQuery.access === "loading" ? (
             <p role="status">Loading mapping status…</p>
           ) : configsQuery.access === "denied" ? (
             <DataAccessNotice requirement="DATA · Confidential · View to read mapping status" />
@@ -102,6 +106,8 @@ export default function TemplatesPanel() {
               error={configsQuery.error}
               onRetry={() => void configsQuery.refetch()}
             />
+          ) : !configsQuery.isSuccess ? (
+            <p role="status">Loading mapping status…</p>
           ) : mappingReady ? (
             <span className="text-success">
               Active mapping <span className="font-medium">{requiredName}</span>{" "}

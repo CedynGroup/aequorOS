@@ -224,7 +224,7 @@ it.each([
   expect(requests).toEqual([]);
 });
 
-it("withholds confidential history and mapping metadata from restricted readers", () => {
+it("withholds confidential history and mapping metadata from restricted readers", async () => {
   state.capabilities = [capability("view")];
   mount(() => (
     <>
@@ -239,8 +239,174 @@ it("withholds confidential history and mapping metadata from restricted readers"
   expect(
     screen.getByText(/Confidential · View for mapping metadata/),
   ).toBeVisible();
+  expect(screen.queryByText("Connected")).not.toBeInTheDocument();
+  expect(screen.queryByText("None")).not.toBeInTheDocument();
+  for (const button of screen.getAllByRole("button", {
+    name: "Activate mapping",
+  })) {
+    expect(button).toBeDisabled();
+    await userEvent.setup().click(button);
+  }
   expect(requests).toEqual([]);
 });
+
+it.each(["authority", "request"] as const)(
+  "keeps starter actions disabled during %s loading",
+  async (loading) => {
+    state.capabilities = [capability("view", "confidential")];
+    state.loading = loading === "authority";
+    let release!: () => void;
+    const pending = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    server.use(
+      http.get(`${base}/mapping-configs`, async () => {
+        await pending;
+        return HttpResponse.json({ configs: [] });
+      }),
+    );
+    mount(MappingPanel);
+    expect(screen.getByRole("status")).toHaveTextContent(
+      "Loading mapping status",
+    );
+    expect(screen.queryByText("None")).not.toBeInTheDocument();
+    expect(screen.queryByText("Connected")).not.toBeInTheDocument();
+    for (const button of screen.getAllByRole("button", {
+      name: "Activate mapping",
+    }))
+      expect(button).toBeDisabled();
+    release();
+    if (loading === "request") {
+      await screen.findByText("None");
+      for (const button of screen.getAllByRole("button", {
+        name: "Activate mapping",
+      }))
+        expect(button).toBeEnabled();
+    }
+  },
+);
+
+it("keeps starter activation disabled after a failed read and supports retry", async () => {
+  state.capabilities = [capability("view", "confidential")];
+  server.use(
+    http.get(`${base}/mapping-configs`, () =>
+      HttpResponse.json({}, { status: 503 }),
+    ),
+  );
+  mount(MappingPanel);
+  await screen.findByText("Could not load mapping configurations");
+  expect(screen.queryByText("None")).not.toBeInTheDocument();
+  for (const button of screen.getAllByRole("button", {
+    name: "Activate mapping",
+  }))
+    expect(button).toBeDisabled();
+  server.use(read("mapping-configs", { configs: [] }));
+  await userEvent.setup().click(screen.getByRole("button", { name: "Retry" }));
+  await screen.findByText("None");
+  for (const button of screen.getAllByRole("button", {
+    name: "Activate mapping",
+  }))
+    expect(button).toBeEnabled();
+});
+
+it.each([
+  { name: "mapping panel", Surface: MappingPanel, action: "Activate mapping" },
+  { name: "templates", Surface: TemplatesPanel, action: "Activate it" },
+])(
+  "preserves starter creation and loaded active status in $name",
+  async ({ Surface, action }) => {
+    state.capabilities = [capability("view", "confidential")];
+    let active: object | undefined;
+    let submitted:
+      { name: string; activate: boolean; source_system: string } | undefined;
+    server.use(
+      http.get(`${base}/mapping-configs`, () =>
+        HttpResponse.json({ configs: active ? [active] : [] }),
+      ),
+      http.post(`${base}/mapping-configs`, async ({ request }) => {
+        submitted = (await request.json()) as typeof submitted;
+        active = {
+          ...submitted,
+          id: "mapping",
+          bank_id: state.bank,
+          status: "active",
+          version: 1,
+          config: {},
+          source_ref: "",
+          created_at: "2026-01-01T00:00:00Z",
+        };
+        return HttpResponse.json(active);
+      }),
+    );
+    mount(Surface);
+    await waitFor(() =>
+      expect(screen.getAllByRole("button", { name: action })[0]).toBeEnabled(),
+    );
+    await userEvent
+      .setup()
+      .click(screen.getAllByRole("button", { name: action })[0]);
+    await waitFor(() =>
+      expect(submitted).toMatchObject({
+        activate: true,
+        source_system: "EXCEL_CSV",
+      }),
+    );
+    if (Surface === MappingPanel) {
+      expect(
+        await screen.findByRole("button", { name: "Currently active" }),
+      ).toBeDisabled();
+      expect(screen.getByText("Connected")).toBeVisible();
+      expect(screen.getAllByText(submitted!.name).length).toBeGreaterThan(0);
+    } else
+      expect(await screen.findByText(/these files ingest as-is/)).toBeVisible();
+  },
+);
+
+it.each([
+  { name: "mapping panel", Surface: MappingPanel },
+  { name: "templates", Surface: TemplatesPanel },
+])(
+  "withholds cached active status after a failed refresh in $name",
+  async ({ Surface }) => {
+    state.capabilities = [capability("view", "confidential")];
+    server.use(
+      read("mapping-configs", {
+        configs: [
+          {
+            id: "mapping",
+            name: "Canonical passthrough (API field names)",
+            status: "active",
+            source_system: "EXCEL_CSV",
+            version: 1,
+            config: {},
+            created_at: "2026-01-01T00:00:00Z",
+          },
+        ],
+      }),
+    );
+    mount(Surface);
+    if (Surface === MappingPanel) await screen.findByText("Connected");
+    else await screen.findByText(/these files ingest as-is/);
+    server.use(
+      http.get(`${base}/mapping-configs`, () =>
+        HttpResponse.json({}, { status: 503 }),
+      ),
+    );
+    await client.invalidateQueries();
+    await screen.findByText(
+      Surface === MappingPanel
+        ? "Could not load mapping configurations"
+        : "Could not load data",
+    );
+    expect(screen.queryByText("Connected")).not.toBeInTheDocument();
+    expect(
+      screen.queryByText(/these files ingest as-is/),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText("Currently active")).not.toBeInTheDocument();
+    for (const button of screen.queryAllByRole("button", { name: /Activate/ }))
+      expect(button).toBeDisabled();
+  },
+);
 
 it.each(["aggregated", "confidential", "restricted", "run"] as const)(
   "renders independently authorized overview panels for %s access",

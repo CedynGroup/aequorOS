@@ -12,7 +12,6 @@ import StatusPill from "@/components/ui/StatusPill";
 import { useBankContext } from "@/components/shell/BankContext";
 import { ErrorPanel } from "@/components/ui/QueryBoundary";
 import { isApiError } from "@/lib/api/client";
-import { useDataPermission } from "@/lib/api/dataAccess";
 import DataAccessNotice from "@/components/ui/DataAccessNotice";
 import {
   STARTER_TEMPLATES,
@@ -24,10 +23,11 @@ export default function MappingPanel() {
   const { bank } = useBankContext();
   const configsQuery = useMappingConfigs(bank?.id);
   const activate = useActivateTemplate(bank?.id);
-  const canRead = useDataPermission(bank?.id, "view", "confidential");
-
-  const configs = configsQuery.data?.configs ?? [];
-  const activeConfig = configs.find(
+  const mappingKnown =
+    configsQuery.access === "allowed" && configsQuery.isSuccess;
+  const activeConfig = (
+    mappingKnown ? configsQuery.data?.configs : undefined
+  )?.find(
     (config) =>
       config.status === "active" && config.sourceSystem === "EXCEL_CSV",
   );
@@ -38,9 +38,11 @@ export default function MappingPanel() {
         <div className="flex items-center gap-2">
           <FileSpreadsheet size={18} className="text-success" aria-hidden />
           <h3 className="text-h3 text-navy">Active mapping</h3>
-          <span className="ml-auto inline-flex items-center gap-1 text-caption font-medium text-success">
-            <CheckCircle2 size={13} aria-hidden /> Connected
-          </span>
+          {activeConfig && (
+            <span className="ml-auto inline-flex items-center gap-1 text-caption font-medium text-success">
+              <CheckCircle2 size={13} aria-hidden /> Connected
+            </span>
+          )}
         </div>
         <p className="mt-2 text-body text-slate leading-relaxed">
           First-class onboarding path: workbook and CSV drops with
@@ -50,8 +52,18 @@ export default function MappingPanel() {
           <p className="text-micro uppercase tracking-wider text-slate">
             Active mapping configuration
           </p>
-          {!canRead ? (
+          {configsQuery.access === "loading" ? (
+            <p role="status">Loading mapping status…</p>
+          ) : configsQuery.access === "denied" ? (
             <DataAccessNotice requirement="DATA · Confidential · View for mapping metadata" />
+          ) : configsQuery.isError ? (
+            <ErrorPanel
+              error={configsQuery.error}
+              onRetry={() => void configsQuery.refetch()}
+              title="Could not load mapping configurations"
+            />
+          ) : !mappingKnown ? (
+            <p role="status">Loading mapping status…</p>
           ) : activeConfig ? (
             <p className="mt-1 text-body text-navy">
               {activeConfig.name}{" "}
@@ -79,15 +91,6 @@ export default function MappingPanel() {
           mapping is active per source system at a time; activating another
           creates a new version.
         </p>
-        {configsQuery.isError && (
-          <div className="mt-3">
-            <ErrorPanel
-              error={configsQuery.error}
-              onRetry={() => void configsQuery.refetch()}
-              title="Could not load mapping configurations"
-            />
-          </div>
-        )}
         <div className="mt-4 grid gap-4 md:grid-cols-2">
           {STARTER_TEMPLATES.map((template) => {
             const isActive = activeConfig?.name === template.name;
@@ -125,7 +128,9 @@ export default function MappingPanel() {
                 </ul>
                 <button
                   type="button"
-                  disabled={isActive || activate.isPending || !bank}
+                  disabled={
+                    !mappingKnown || isActive || activate.isPending || !bank
+                  }
                   onClick={() => activate.mutate(template)}
                   className="mt-3 inline-flex items-center px-3 py-1.5 rounded-sm text-caption font-medium bg-action text-white hover:bg-action-hover disabled:opacity-40 disabled:cursor-not-allowed"
                 >

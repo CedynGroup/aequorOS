@@ -8,6 +8,7 @@ import {
   renderHook,
   screen,
   waitFor,
+  within,
 } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -417,10 +418,77 @@ it.each(["rejected", "accepted"] as const)(
     ).not.toBeInTheDocument();
     expect(failures).not.toHaveBeenCalled();
     expect(screen.queryByText("Stored artifacts")).not.toBeInTheDocument();
+    const referenceCount = screen.getByText("Ref rows").parentElement!;
+    expect(within(referenceCount).getByText("Unavailable")).toBeVisible();
+    expect(within(referenceCount).queryByText("0")).not.toBeInTheDocument();
+    expect(screen.queryByText("Reference datasets")).not.toBeInTheDocument();
     if (status === "rejected")
       expect(screen.getByText(/Batch rejected — nothing/)).toBeInTheDocument();
   },
 );
+
+it.each([0, 3])(
+  "shows an observed reference count of %s when the report is available",
+  async (count) => {
+    state.capabilities = [
+      capability("view", "confidential"),
+      capability("view"),
+    ];
+    vi.spyOn(ingestionApi, "getIngestionBatch").mockResolvedValue({
+      ...batch("accepted"),
+      validationReport: {
+        summary: {
+          reference_rows: count === 0 ? {} : { capital_structure: count },
+        },
+      },
+    });
+    vi.spyOn(ingestionApi, "listTranslationFailures").mockResolvedValue({
+      batchId: "batch-fixture",
+      failures: [],
+    });
+    await renderBatchDetail();
+    const referenceCount = screen.getByText("Ref rows").parentElement!;
+    expect(within(referenceCount).getByText(String(count))).toBeVisible();
+    expect(
+      within(referenceCount).queryByText("Unavailable"),
+    ).not.toBeInTheDocument();
+    if (count > 0) expect(screen.getByText("capital_structure")).toBeVisible();
+    else
+      expect(screen.queryByText("Reference datasets")).not.toBeInTheDocument();
+  },
+);
+
+it("keeps a redacted reference count unavailable in upload results", async () => {
+  state.capabilities = [capability("create"), capability("run")];
+  vi.spyOn(ingestionApi, "uploadIngestionSource").mockResolvedValue({
+    filename: "reference.csv",
+    objectPath: "fixture/reference.csv",
+    location: "fixture/reference.csv",
+    byteSize: 8,
+    checksumSha256: "fixture",
+  });
+  vi.spyOn(ingestionApi, "startIngestionBatch").mockResolvedValue({
+    batch: batch("accepted"),
+    reused: false,
+  });
+  render(
+    <Wrapper>
+      <UploadPanel />
+    </Wrapper>,
+  );
+  const user = userEvent.setup();
+  await user.upload(
+    screen.getByLabelText("Source files (.xlsx / .csv)"),
+    new File(["fixture"], "reference.csv", { type: "text/csv" }),
+  );
+  await user.click(screen.getByRole("button", { name: "Upload & ingest" }));
+  const referenceCount = (await screen.findByText("Ref rows")).parentElement!;
+  expect(within(referenceCount).getByText("Unavailable")).toBeVisible();
+  expect(screen.queryByText(/\d+ reference rows/)).not.toBeInTheDocument();
+  expect(
+    within(screen.getByText("Accepted").parentElement!).getByText("2"),
+  ).toBeVisible();
+});
 
 it("holds the batch route while DATA authority is still loading", async () => {
   state.loading = true;

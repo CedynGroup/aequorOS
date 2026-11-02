@@ -203,11 +203,12 @@ export default function UploadPanel() {
                     (idempotent).
                   </span>
                 )}
-                {outcome.batch && referenceRowTotal(outcome.batch) > 0 && (
-                  <span className="text-caption text-slate">
-                    {referenceRowTotal(outcome.batch)} reference rows
-                  </span>
-                )}
+                {outcome.batch &&
+                  (referenceRowTotal(outcome.batch) ?? 0) > 0 && (
+                    <span className="text-caption text-slate">
+                      {referenceRowTotal(outcome.batch)} reference rows
+                    </span>
+                  )}
                 {outcome.batch && (
                   <Link
                     href={`/data-engine/batches/${outcome.batch.id}`}
