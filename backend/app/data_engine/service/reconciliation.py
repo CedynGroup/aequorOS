@@ -1024,7 +1024,7 @@ def revoke_exception(  # noqa: PLR0913 - governed revocation evidence is explici
     revoked_by: str,
     reason: str,
 ) -> ReconciliationException:
-    """Close a live exception without deleting the record, with an audit event."""
+    """Reject a pending proposal or revoke an approved exception, retaining its audit trail."""
     # ``exception_id`` arrives as a string from API payloads and from
     # ``ExceptionGrant.exception_id``; the column is a real UUID.
     try:

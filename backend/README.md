@@ -52,13 +52,10 @@ publication and required migration-role preparation are in
   Decimal engine under `app/domain/` behind an immutable `RegulatoryRun`. See the
   [ECL assumption and coverage contract](../ARCHITECTURE.md#ecl-assumption-and-coverage-contract)
   for register validation, run refusals and provision handling.
-- Live engine: authoritative ingestion, market-data, governed-input, entitlement,
-  and reconciliation mutations enqueue debounced `pipeline_refresh` jobs that
-  re-derive facts and update `live_metrics`/`live_findings`; `GET live-summary`
-  is read-only. Structural unavailability remains stable until an input changes,
-  while true module exceptions retry the same job with bounded backoff and persist
-  their classification, attempt count, and next due time. `official_run` jobs mint
-  the immutable filing runs
+- Live engine: debounced `pipeline_refresh` jobs re-derive facts and update
+  `live_metrics`/`live_findings`. The [live-engine contract](../ARCHITECTURE.md#3b-live-engine-two-tier-always-fresh-view--immutable-official-runs)
+  owns refresh triggers, read-only summaries, bounded retries and immutable
+  official runs.
 - Regulatory reporting: BoG BSD returns generated from the official workbook
   templates, with the templates' own formulas evaluated; PDF/XLSX artifacts
 - Attestation: maker-checker plus PDF e-signature with step-up re-authentication
