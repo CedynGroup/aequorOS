@@ -14,7 +14,7 @@ from collections.abc import Callable, Iterator
 from contextlib import AbstractContextManager
 from dataclasses import dataclass
 from datetime import datetime
-from typing import BinaryIO, Literal, Self
+from typing import BinaryIO, Literal, Self, cast
 from uuid import UUID
 
 from sqlalchemy.orm import Session
@@ -69,8 +69,9 @@ class StorageLocation:
 class SealedEncryptionContext:
     """Trusted catalogue descriptor; never populate from request or object headers.
 
-    The lookup key can change while the authenticated path and original envelope
-    remain fixed. Plaintext is explicit and still refuses for a connected bank.
+    The physical lookup key is separate from the original authenticated path and
+    envelope. Catalogue locators are immutable; see backend/docs/bank_encryption.md.
+    Plaintext is explicit and still refuses for a connected bank.
     """
 
     format: Literal["aws-esdk-object-v1", "plaintext-v1"]
@@ -130,7 +131,7 @@ class ObjectMetadata:
 
         return cls(
             institution_slug=raw["institution-slug"],
-            tier=raw["tier"],  # type: ignore[arg-type]
+            tier=cast(Tier, raw["tier"]),
             checksum_sha256=raw["checksum-sha256"],
             written_at=datetime.fromisoformat(raw["written-at"]),
             written_by=raw["written-by"],
