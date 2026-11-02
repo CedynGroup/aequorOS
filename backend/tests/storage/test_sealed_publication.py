@@ -20,8 +20,10 @@ import pytest
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.core.key_management import registry
 from app.core.tenancy import TenantContext
 from app.storage.client import (
+    SealedEncryptionContext,
     StorageAccessError,
     StorageError,
     StorageLocation,
@@ -39,7 +41,7 @@ from app.storage.public import (
     resolve_sealed_document,
 )
 from tests.storage.contract import metadata_for
-from tests.storage.test_bank_encryption import SLUG, BankStorage, bank_storage
+from tests.storage.test_bank_encryption import NEXT_KEY, SLUG, BankStorage, bank_storage
 from tests.storage.test_sealed_documents import BANK, decision
 from tests.support.helpers import ORG_1, USER_1
 from tests.support.sealed_documents import insert_source
@@ -203,6 +205,93 @@ def test_the_store_refuses_a_conditional_write_the_key_already_holds(
             metadata_for(SLUG, "outputs", OTHER),
             StorageLocation(SLUG, "outputs", CONTEXT_PATH),
         )
+
+
+def test_a_lost_create_race_returns_the_object_that_won_it(
+    bank_storage: BankStorage,
+) -> None:
+    """Same bytes at an occupied key: the store's 412 is a success, not a refusal.
+
+    The retry prepares its own envelope before it discovers the race, and the
+    object that won was sealed under a different one. The identity returned must
+    describe the object that exists — its envelope, not the discarded attempt's —
+    or every later read of that object fails its own descriptor check.
+    """
+    location = StorageLocation(SLUG, "outputs", sealed_object_key(uuid4()))
+    first = bank_storage.storage.write_sealed(
+        location,
+        io.BytesIO(PAYLOAD),
+        metadata_for(SLUG, "outputs", PAYLOAD),
+        StorageLocation(SLUG, "outputs", CONTEXT_PATH),
+    )
+    assert first.context_format == "aws-esdk-object-v1"
+    assert first.envelope_id is not None
+
+    second = bank_storage.storage.write_sealed(
+        location,
+        io.BytesIO(PAYLOAD),
+        metadata_for(SLUG, "outputs", PAYLOAD),
+        StorageLocation(SLUG, "outputs", CONTEXT_PATH),
+    )
+    assert second.descriptor.version_id == first.descriptor.version_id
+    assert second.envelope_id == first.envelope_id
+    assert second.context_format == "aws-esdk-object-v1"
+    # And the object it describes still resolves under that identity.
+    _descriptor, stream = bank_storage.storage.read_sealed(
+        location,
+        SealedEncryptionContext(
+            "aws-esdk-object-v1",
+            StorageLocation(SLUG, "outputs", CONTEXT_PATH),
+            hashlib.sha256(PAYLOAD).hexdigest(),
+            second.envelope_id,
+        ),
+    )
+    with stream:
+        assert stream.read() == PAYLOAD
+    assert len(list(bank_storage.storage.list_versions(location))) == 1
+
+
+def test_a_retry_after_a_key_rotation_returns_the_envelope_the_object_was_sealed_under(
+    bank_storage: BankStorage, db_session: Session
+) -> None:
+    """The retry prepares the CURRENT envelope; the object may carry an earlier one.
+
+    An interrupted publication is retried later, and the bank key can rotate in
+    between. Returning the attempt's freshly prepared envelope would name a key
+    the stored bytes were never sealed under, so the retry has to take its
+    identity from the object that exists. The attempt's own envelope is discarded.
+    """
+    location = StorageLocation(SLUG, "outputs", sealed_object_key(uuid4()))
+    first = bank_storage.storage.write_sealed(
+        location,
+        io.BytesIO(PAYLOAD),
+        metadata_for(SLUG, "outputs", PAYLOAD),
+        StorageLocation(SLUG, "outputs", CONTEXT_PATH),
+    )
+    key = registry.scoped_key(db_session, organization_id=ORG_1, bank_id=BANK)
+    assert registry.rotate(db_session, key, NEXT_KEY, lambda _name: bank_storage.provider) == 0
+    db_session.commit()
+
+    retried = bank_storage.storage.write_sealed(
+        location,
+        io.BytesIO(PAYLOAD),
+        metadata_for(SLUG, "outputs", PAYLOAD),
+        StorageLocation(SLUG, "outputs", CONTEXT_PATH),
+    )
+    assert retried.descriptor.version_id == first.descriptor.version_id
+    assert retried.envelope_id == first.envelope_id
+    _descriptor, stream = bank_storage.storage.read_sealed(
+        location,
+        SealedEncryptionContext(
+            "aws-esdk-object-v1",
+            StorageLocation(SLUG, "outputs", CONTEXT_PATH),
+            hashlib.sha256(PAYLOAD).hexdigest(),
+            retried.envelope_id,
+        ),
+    )
+    with stream:
+        assert stream.read() == PAYLOAD
+    assert len(list(bank_storage.storage.list_versions(location))) == 1
 
 
 def test_a_bound_document_ignores_the_provider_version_the_row_remembers(

@@ -19488,7 +19488,9 @@
     "tests/storage/test_sealed_publication.py::test_an_impersonated_session_cannot_resolve_a_published_document": "integration",
     "tests/storage/test_sealed_publication.py::test_the_same_publication_twice_keeps_one_identity_and_one_object": "integration",
     "tests/storage/test_sealed_publication.py::test_the_sealed_namespace_refuses_generic_writes_and_deletes": "integration",
-    "tests/storage/test_sealed_publication.py::test_the_store_refuses_a_conditional_write_the_key_already_holds": "integration"
+    "tests/storage/test_sealed_publication.py::test_the_store_refuses_a_conditional_write_the_key_already_holds": "integration",
+    "tests/storage/test_sealed_publication.py::test_a_lost_create_race_returns_the_object_that_won_it": "integration",
+    "tests/storage/test_sealed_publication.py::test_a_retry_after_a_key_rotation_returns_the_envelope_the_object_was_sealed_under": "integration"
   },
   "services": {
     "tests/attestation/service/test_attestation_openbao.py::test_a_csr_that_does_not_prove_possession_is_never_submitted": "integration",

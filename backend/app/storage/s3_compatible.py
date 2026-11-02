@@ -25,6 +25,7 @@ from dataclasses import replace
 from datetime import UTC, datetime
 from tempfile import SpooledTemporaryFile
 from typing import Any, BinaryIO, Literal, Protocol, Self, cast
+from uuid import UUID
 
 import boto3
 from boto3.exceptions import S3UploadFailedError
@@ -370,14 +371,13 @@ class S3CompatibleStorageClient(StorageClient):
                 self._log("write.sealed", location, result="error")
                 raise self._translate(exc) from exc
             # The key already exists. Only the identical sealed bytes may be
-            # accepted, and only after the catalogue context authenticates them.
+            # accepted, and only after the object's own recorded context
+            # authenticates them: this attempt's freshly prepared envelope is
+            # NOT the one those bytes were sealed under once the bank key has
+            # rotated, so the identity comes from the object, never the attempt.
             self._log("write.sealed", location, result="exists")
             return self._existing_sealed(
-                location,
-                metadata.checksum_sha256,
-                SealedEncryptionContext(
-                    context_format, authenticated_context, metadata.checksum_sha256, envelope_id
-                ),
+                location, metadata.checksum_sha256, authenticated_context
             )
         except BotoCoreError as exc:
             self._log("write.sealed", location, result="backend_error")
@@ -450,9 +450,16 @@ class S3CompatibleStorageClient(StorageClient):
         self,
         location: StorageLocation,
         expected_sha256: str,
-        context: SealedEncryptionContext,
+        authenticated_context: StorageLocation,
     ) -> SealedPublication:
-        """Accept an existing sealed key only for byte-identical content."""
+        """Accept an existing sealed key only for byte-identical content.
+
+        The sealed context is rebuilt from what the OBJECT records, not from the
+        attempt that lost the race. A retry can run after the bank key rotated,
+        so its own envelope names a key these bytes were never sealed under;
+        using it would fail the descriptor check here and mislabel the publication
+        for every later read.
+        """
         stat = cast(
             Mapping[str, object],
             self._call(
@@ -466,6 +473,7 @@ class S3CompatibleStorageClient(StorageClient):
             raise StorageValidationError(
                 "Sealed publication refused: the immutable key already holds other content."
             )
+        context = self._sealed_context(location, stat, expected_sha256, authenticated_context)
         descriptor, verified = self.read_sealed(location, context)
         with verified:
             digest = hashlib.sha256()
@@ -476,6 +484,34 @@ class S3CompatibleStorageClient(StorageClient):
                 "Sealed publication refused: the immutable key does not hold this content."
             )
         return SealedPublication(descriptor, context.format, context.envelope_id)
+
+    def _sealed_context(
+        self,
+        location: StorageLocation,
+        stat: Mapping[str, object],
+        expected_sha256: str,
+        authenticated_context: StorageLocation,
+    ) -> SealedEncryptionContext:
+        """The descriptor an existing sealed object records about itself."""
+        recorded = _recorded_metadata(stat)
+        envelope = recorded.get("key-envelope-id")
+        if recorded.get("encryption-format") == ENCRYPTION_FORMAT and envelope:
+            try:
+                envelope_id: UUID | None = UUID(envelope)
+            except ValueError as exc:
+                raise StorageValidationError(
+                    "Sealed publication refused: the existing object's key envelope is invalid."
+                ) from exc
+            return SealedEncryptionContext(
+                ENCRYPTION_FORMAT, authenticated_context, expected_sha256, envelope_id
+            )
+        if "encryption-format" in recorded or envelope:
+            raise StorageValidationError(
+                "Sealed publication refused: the existing object's encryption metadata is invalid."
+            )
+        return SealedEncryptionContext(
+            "plaintext-v1", authenticated_context, expected_sha256, None
+        )
 
     def reencrypt(self, item: EncryptionInventoryItem) -> bool:
         result = reencryption.reencrypt(

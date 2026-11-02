@@ -340,8 +340,12 @@ primitive:
 A retry that presents the same content at the same identity is a success and
 returns the existing catalogue identity; a second publication of different bytes at
 that identity is refused, whether it arrives sequentially or as the 412 of a lost
-race (the existing object is then read back and re-verified against its recorded
-checksum). `bind_existing_document` and `bind_sealed_document` attach a binding to a
+race. On that path the existing object's own recorded headers are the identity —
+its encryption format and key envelope are taken from the object, not from the
+attempt that lost the race, because a retry can run after the bank key rotated and
+its freshly prepared envelope would name a key those bytes were never sealed under.
+The object is then read back and re-verified against its recorded checksum.
+`bind_existing_document` and `bind_sealed_document` attach a binding to a
 publication that already exists, so a copy operation — freeze, clone, re-export —
 binds one identity instead of writing the bytes again.
 
