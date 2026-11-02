@@ -116,8 +116,10 @@ the channel submission workflow and preserves the filed snapshot.
   generated_at, notes. Unique current-version per
   (org, bank, return_code, reporting_date, basis) WHERE status != 'superseded'; solo and
   consolidated version chains are independent.
-- `regulatory_package_artifacts`: package_id, kind (xlsx|csv|pdf), object_path (outputs tier:
+- `regulatory_package_artifacts`: package_id, kind (xlsx|csv|pdf), object_path (logical context:
   `bog_returns/{reporting_date}/{package_id}/{return_code}.{ext}`), checksum_sha256, size_bytes.
+  Physical storage and archived-byte resolution follow the
+  [stable sealed-document reference contract](../backend/docs/bank_encryption.md#publication-and-its-callers).
 - `regulatory_package_approvals`: package_id, action (requested|approved|rejected), actor_user_id,
   reason, occurred_at. Checker ≠ maker enforced in service.
 - `regulatory_submission_events`: package_id, channel (orass_sandbox|email|manual),

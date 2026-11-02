@@ -29,7 +29,8 @@ The five, and what each one alone can prove:
    to what was signed. A mismatch here with checks 1–3 green is the precise,
    legible signal that *the stored figures diverged from the signed ones*.
 5. ``artifact_binding`` — the stored object still hashes to the checksum the
-   signature pinned, resolved at the exact object-store version.
+   signature pinned. Archived-byte resolution follows
+   ``backend/docs/bank_encryption.md``, "Publication and its callers".
 
 Plus the per-tenant signature hash chain (``workflow.verify_chain``), an
 independent integrity check alongside the database retention guards owned by

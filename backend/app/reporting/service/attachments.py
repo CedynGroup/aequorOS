@@ -16,9 +16,9 @@ Two sources, one manifest:
   from the client, and the upload row is UNALTERABLE: withdrawing a document is
   a separate event, so "which document did we file" survives anyone's tidying.
 * **``icaap_cycle``** — a document the ICAAP cycle already held, carried onto
-  the package by reference at freeze. The bytes are NOT copied: the cycle's own
-  upload table is unalterable too, so the object at that path cannot change and
-  the sha256 is the binding.
+  the package by reference at freeze. The bytes are NOT copied; reference
+  preservation follows ``backend/docs/bank_encryption.md``, "Publication and its
+  callers".
 
 The kill switch is deliberately out of scope here. ``ATTESTATION_ESIGN_REQUIRED=0``
 suspends SIGNATURES; it has never had anything to say about whether the Board's
@@ -520,10 +520,9 @@ def copy_freeze_attachments(
 ) -> list[RegulatoryPackageAttachment]:
     """Carry an ICAAP cycle's evidence onto the package it froze into.
 
-    By REFERENCE: the object path and sha256 are copied, the bytes are not. The
-    cycle's upload table is unalterable, so the object cannot change under the
-    filing, and the hash is what proves the filed document is that document. No
-    commit — the freeze owns the transaction (P3-DESIGN §3.6).
+    Reference preservation follows ``backend/docs/bank_encryption.md``,
+    "Publication and its callers". No commit — the freeze owns the transaction
+    (P3-DESIGN §3.6).
     """
     from app.icaap.models.workspace import (  # noqa: PLC0415
         IcaapAttachment,

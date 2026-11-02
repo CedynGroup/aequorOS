@@ -3,13 +3,10 @@
 ``export_package`` is the pinned interface the API wave (RR-4) wires to
 ``exportRegulatoryPackage``: it renders the package's immutable snapshot
 through the declarative template registry (``templates.py``), writes the
-bytes to the outputs storage tier at
-``bog_returns/{reporting_date}/{package_id}/{return_code}.{ext}``, and
-upserts the ``regulatory_package_artifacts`` row — re-exporting the same kind
-replaces the object and refreshes checksum/size, never duplicating rows.
-
-Renders are deterministic per package version, so a re-export of an unchanged
-package is an idempotent storage no-op with a stable checksum.
+bytes through sealed publication, and upserts the canonical unsigned
+``regulatory_package_artifacts`` row. Renders are deterministic per package
+version. Publication and re-export identity follow ``backend/docs/bank_encryption.md``,
+"Publication and its callers".
 
 Two attestation prerequisites live here (docs/attestation_esignature.md §3.6):
 
@@ -19,10 +16,10 @@ Two attestation prerequisites live here (docs/attestation_esignature.md §3.6):
   claimed and no code did.
 * **Artifact versions are appended, never overwritten** (gap G2). The upsert of
   ``regulatory_package_artifacts`` stays for backward compatibility, but every
-  export also appends an immutable ``regulatory_artifact_versions`` row pinning
-  the object-store version id, so "the artifact as filed" is resolvable from the
-  database. Once a signature references a version row, re-export is refused: the
-  bytes a signature covers must not be replaceable underneath it.
+  export also appends an immutable ``regulatory_artifact_versions`` row so a
+  signature can pin the revision it covers. Once a signature references a version
+  row, re-export is refused: the bytes a signature covers must not be replaceable
+  underneath it.
 """
 
 from __future__ import annotations
@@ -527,8 +524,8 @@ def _store_export(  # noqa: PLR0913 - one storage write is its named parts
     checksum = published.sha256
 
     # The immutable record of this export. The artifact row below is upserted
-    # and therefore forgets every earlier export; this row does not, and it
-    # carries the object-store version so a signature can pin exact bytes.
+    # and therefore forgets every earlier export; signatures need a revision
+    # identity that survives the next upsert.
     version = RegulatoryArtifactVersion(
         organization_id=ctx.organization_id,
         package_id=package.id,

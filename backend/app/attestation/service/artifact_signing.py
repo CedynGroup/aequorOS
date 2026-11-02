@@ -7,10 +7,10 @@ officer's signature is on the document that goes to the regulator".
 
 **One render, then only appends.** The unsigned PDF is produced exactly once, by
 the export engine, and archived before anything cryptographic happens. Every
-signature afterwards is an incremental update appended to bytes read back out of
-object storage at the version the archive pinned. Signing NEVER re-renders: a
-re-render that shifted one byte would produce a document the preparer's byte
-range does not cover, and the preparer's revision would stop verifying. Reading
+signature afterwards is an incremental update appended to the archived revision's
+verified bytes. Signing NEVER re-renders: a re-render that shifted one byte would
+produce a document the preparer's byte range does not cover, and the preparer's
+revision would stop verifying. Reading
 the bytes back — rather than reusing the buffer the exporter still had in hand —
 is deliberate for the same reason: what is signed is then provably what an
 examiner will later fetch, and the checksum is re-verified on the way in.
