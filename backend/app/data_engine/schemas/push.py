@@ -64,8 +64,8 @@ class PushRecordsPage(BaseModel):
 
         Measured on the records, not the request, so the number matches what the
         staging object holds and cannot be inflated or deflated by envelope
-        whitespace. Serializing is bounded work — the records are already in
-        memory — and it happens once, at the point a page is accepted.
+        whitespace. This measures the serialization before acceptance; staging
+        serializes the accepted page again.
         """
         return len(
             json.dumps(
