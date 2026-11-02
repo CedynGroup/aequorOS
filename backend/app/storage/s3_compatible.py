@@ -44,6 +44,7 @@ from app.storage.client import (
     EncryptionPage,
     ObjectMetadata,
     ReencryptionIsolation,
+    SealedEncryptionContext,
     StorageAccessError,
     StorageBackendError,
     StorageClient,
@@ -284,6 +285,20 @@ class S3CompatibleStorageClient(StorageClient):
         location: StorageLocation,
         version_id: str | None = None,
     ) -> tuple[StorageObject, BinaryIO]:
+        return self._read(location, version_id)
+
+    def read_sealed(
+        self, location: StorageLocation, context: SealedEncryptionContext
+    ) -> tuple[StorageObject, BinaryIO]:
+        return self._read(location, None, sealed_context=context)
+
+    def _read(
+        self,
+        location: StorageLocation,
+        version_id: str | None,
+        *,
+        sealed_context: SealedEncryptionContext | None = None,
+    ) -> tuple[StorageObject, BinaryIO]:
         bucket = location.bucket_name(self._env)
         kwargs: dict[str, Any] = {"Bucket": bucket, "Key": location.object_path}
         if version_id is not None:
@@ -301,7 +316,9 @@ class S3CompatibleStorageClient(StorageClient):
                     response.get("Metadata", {})
                 ).items()
             }
-            plaintext = self._encryption.decrypt(location, body, descriptor.metadata, headers)
+            plaintext = self._encryption.decrypt(
+                location, body, descriptor.metadata, headers, sealed_context=sealed_context
+            )
         except KeyUnavailableError:
             body.close()
             self._log("read", location, result="key-refused")
