@@ -27,7 +27,7 @@ Transport requirements are governed by [the transport contract](transport_securi
 Download credentials and encrypted transfer rules are governed by
 [the download contract](bank_encryption.md#downloads). Keep capability links private.
 
-From `backend/`, download current objects into a distinct directory for each
+From `backend/`, download objects into a distinct directory for each
 backup generation:
 
 ```bash
@@ -42,11 +42,11 @@ uv run python -m scripts.backup_storage --out-dir <backup-directory> --restore-m
 
 Use the `storage-inventory-<timestamp>.json` manifest reported by the download. Missing
 buckets are recreated using the provisioning rules for dialect, versioning, temp
-expiry and configured default SSE. Restore the matching database envelopes to read
-current objects without a version pin. Inventory-only or older manifests are not
+expiry and configured default SSE. Restore the matching database envelopes before
+reading recovered objects. Inventory-only or older manifests are not
 sufficient for encrypted-object recovery.
 
-Backup catalogue requirements and the current-object-only recovery limitation are
+Backup catalogue requirements, retained-version replay and legacy pin recovery are
 owned by [rotation, backups and recovery](bank_encryption.md#rotation-backups-and-recovery).
 
 ## Connect, rotate and retire

@@ -66,6 +66,20 @@ class StorageLocation:
 
 
 @dataclass(frozen=True)
+class SealedEncryptionContext:
+    """Trusted catalogue descriptor; never populate from request or object headers.
+
+    The lookup key can change while the authenticated path and original envelope
+    remain fixed. Plaintext is explicit and still refuses for a connected bank.
+    """
+
+    format: Literal["aws-esdk-object-v1", "plaintext-v1"]
+    location: StorageLocation
+    sha256: str
+    envelope_id: UUID | None
+
+
+@dataclass(frozen=True)
 class ObjectMetadata:
     """Custom metadata attached to every object at write time.
 
@@ -209,6 +223,16 @@ class StorageClient(ABC):
         location: StorageLocation,
         version_id: str | None = None,
     ) -> tuple[StorageObject, BinaryIO]: ...
+
+    def read_sealed(
+        self, location: StorageLocation, context: SealedEncryptionContext
+    ) -> tuple[StorageObject, BinaryIO]:
+        """Read a catalogue representation, preserving its original crypto context.
+
+        Backends must opt in explicitly. Generic reads cannot safely substitute
+        an old authenticated path for a new physical key.
+        """
+        raise StorageValidationError("Stable document reads are unsupported by this backend.")
 
     @abstractmethod
     def exists(self, location: StorageLocation) -> bool: ...

@@ -238,6 +238,13 @@ from app.reporting.models.packages import (
     RegulatoryResubmissionRequest,
     RegulatorySubmissionEvent,
 )
+from app.storage.models import (
+    ArtifactDocumentBinding,
+    IcaapAttachmentDocumentBinding,
+    PackageAttachmentDocumentBinding,
+    SealedDocumentObject,
+    SupervisoryLetterDocumentBinding,
+)
 from app.stress.models.scenario_workbench import SavedScenarioAnalysis, StressScenario
 from app.stress.models.stress import (
     EnterpriseStressSignoff,
@@ -248,6 +255,11 @@ from app.stress.models.stress import (
 )
 
 __all__ = [
+    "ArtifactDocumentBinding",
+    "IcaapAttachmentDocumentBinding",
+    "PackageAttachmentDocumentBinding",
+    "SealedDocumentObject",
+    "SupervisoryLetterDocumentBinding",
     "BankEncryptionKey",
     "RetainedBankKey",
     "ObjectKeyEnvelope",

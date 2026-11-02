@@ -223,12 +223,14 @@ it never uses the application's decrypted read path. Its manifest records the
 original user metadata and content type, including `key-envelope-id`, the
 encryption format, and plaintext and ciphertext checksums. The backup preserves
 existing platform-only objects during optional rollout as well as bank-encrypted
-objects; it does not unwrap either. The script copies current objects.
-Restore assigns new S3 version IDs and does not recover archived versions or
-reconcile database fields that pin original versions. Version-pinned ICAAP
-attachments and regulatory artifacts therefore are not recovered by this
-procedure. Version-addressed backup and restore remain a known pre-existing gap
-tracked in [issue 501](https://github.com/CedynGroup/aequorOS/issues/501).
+objects; it does not unwrap either. Format 3 inventories and downloads every
+retained revision and delete marker. Replay verifies ciphertext checksums, restores
+metadata and content type, and emits the old-to-new provider version mapping.
+Ordinary PUT replay assigns new version IDs. Legacy sealed references therefore
+still require the incident-authorized, audited version reconciler where deployed;
+replay alone does not repair their database pins. The format does not capture or
+replay per-version Object Lock deadlines or legal holds: recovery must separately
+restore and verify those controls before resuming filing.
 
 A recoverable object backup needs ciphertext, original bucket/key/metadata and
 the matching `bank_encryption_keys` and `object_key_envelopes` catalogue from
@@ -249,6 +251,78 @@ version-pinned objects keep their existing protection and remain explicit old-ke
 dependencies; see [the migration contract](bank_field_encryption.md#editable-data-re-encryption).
 Exported plaintext that a user already downloaded is outside object-storage
 revocation.
+
+## Stable sealed document reference contract
+
+`sealed_document_objects` is an additive, immutable catalogue. Each UUID owns one
+physical `sealed/v1/<uuid>` key in its bank's outputs tier, with an expected
+plaintext SHA-256 and byte length. Object UUIDs are unique identities, without
+cross-bank or global content deduplication. The original provider version is
+write-time provenance; stable reads do not send it as a GET version token.
+
+Four append-only association tables bind existing regulatory artifact versions,
+package attachments, ICAAP attachments and supervisory letters to the catalogue.
+They leave original paths, hashes, provider versions and timestamps untouched.
+Real foreign keys preserve source/object existence and organization ownership;
+the object FK includes bank, and an insert trigger checks the source bank,
+plaintext hash/length, tier, original path and provider provenance. Artifact bank
+scope is derived through its package. Published objects and bindings refuse
+UPDATE, DELETE and TRUNCATE, including binding replacement. Binding a draft
+supervisory letter also freezes its hash, length, path, tier and ownership; the
+insert/update guards serialize that transition. A narrow definer guard preserves
+existing worker updates without giving the worker catalogue access, and still
+uses FORCE RLS. Tenant FORCE RLS is
+mandatory; the API role has SELECT/INSERT only and other service roles have no
+catalogue rights. No new authorization vocabulary or enforcement cutover occurs.
+
+The versioned descriptor is stored as typed catalogue fields: `context_format`
+(`aws-esdk-object-v1` or explicit `plaintext-v1`), original `context_path`, bank
+storage slug/tier, expected plaintext hash and the original `envelope_id`.
+The envelope FK includes organization and bank. Physical lookup is separate from
+the authenticated path: copied legacy ciphertext is decrypted under its original
+path, envelope and bank-key dependency. Headers must match the descriptor; a
+replacement envelope or crypto format refuses. Plaintext descriptors never bypass
+connected-key policy. This choice preserves historical key revocation semantics;
+it does not decrypt/re-encrypt old documents under a newer key.
+
+`app.storage.public.resolve_sealed_document` takes an explicit family/source
+binding and a fresh complete bank-scoped VIEW authorization decision supplied by
+the owning feature, with its normal whole-institution and presentation checks.
+Artifact versions and package attachments use their persisted owning package's
+return-family gate: ordinary returns require Regulatory Reporting/restricted,
+while frozen ICAAP packages require Capital/confidential. Direct ICAAP attachments
+and supervisory letters require Capital/confidential. Both module and sensitivity
+must match exactly. Reporting and storage share the classification in
+`app.core.return_family_access`; the storage kernel resolves package ownership
+through bank- and organization-scoped metadata queries without importing a feature.
+Queries constrain both organization and bank even with RLS. Missing bindings
+refuse and do not select a legacy path or try a recorded provider version.
+`StorageClient.read_sealed` fetches the immutable physical key, authenticates the
+original context and decrypts normally. The resolver checks every plaintext byte
+against the catalogue SHA-256 and length before returning a rewound file, using
+an 8 MiB memory spool and bounded 1 MiB reads. Errors close both streams; callers
+must close a successful file. The returned descriptor records the actual provider
+version read for later access/retention evidence. Unsupported backends refuse.
+
+This slice defines schema and resolution only: no existing writer or reader uses
+stable semantics yet. Existing consumers retain their current legacy behavior.
+No new HTTP route is added, so there is no new route IDOR census entry; resolver
+isolation and exact family authority are exercised directly in
+`tests/storage/test_sealed_documents.py` and
+constraint/RLS/upgrade/downgrade behavior in
+`tests/db/test_sealed_document_objects.py`.
+
+Follow-up slices must implement atomic create-only publication, same-content
+retry/conflict handling, audited binding publication with business rows and
+committed envelopes, and conversion of every writer/reader (including clone,
+freeze, signing and verification). Then inventory/backfill legacy revisions by
+verified context-preserving copy, teach maintenance/key-retirement inventories
+about stable objects, adapt retained-version and historical-manifest resolution,
+and capture this catalogue with envelopes in coordinated backups. Keep the
+audited reconciler as the legacy/exceptional-restore fallback. Do not enable
+stable writers before immutable-key overwrite/deletion and maintenance guards
+are enforced. No retention policy, backup format, signature, digest or historical
+audit entry changes in this slice.
 
 ## Scope and executable evidence
 

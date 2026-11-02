@@ -24,32 +24,13 @@ from app.core.authorization import (
     ResourceLocator,
     Sensitivity,
 )
+from app.core.return_family_access import GATED, RETURN_GATE, FamilyGate, gate_for
 from app.identity.public import AuthorizationBinding, Bank
 from app.reporting.models.packages import RETURN_FAMILIES, RegulatoryPackage
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
     from app.api.deps import TenantContext  # noqa: PLC0415
 
-
-@dataclass(frozen=True)
-class FamilyGate:
-    """The authority one return family is read and written under."""
-
-    module: Module
-    sensitivity: Sensitivity
-
-
-#: Family overrides to the Regulatory Reporting authority.
-GATED: Final[dict[str, FamilyGate]] = {
-    # The ICAAP filing family. Same module/sensitivity pair as the ICAAP
-    # workspace (``deps._require_icaap_access``), because they are one body of
-    # information: the report is the workspace, frozen.
-    "icaap": FamilyGate(module=Module.CAPITAL, sensitivity=Sensitivity.CONFIDENTIAL),
-}
-
-RETURN_GATE: Final[FamilyGate] = FamilyGate(
-    module=Module.REGULATORY, sensitivity=Sensitivity.RESTRICTED
-)
 
 _DETAIL = "This return requires an active scoped binding for the institution."
 
@@ -83,10 +64,6 @@ _TRANSMISSION_DETAIL = (
 CHAIN_DECISION_GATE: Final[FamilyGate] = FamilyGate(
     module=Module.REGULATORY, sensitivity=Sensitivity.RESTRICTED
 )
-
-
-def gate_for(family: str | None) -> FamilyGate:
-    return GATED.get(family or "", RETURN_GATE)
 
 
 def _not_found() -> HTTPException:
