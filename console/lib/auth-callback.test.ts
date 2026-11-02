@@ -32,7 +32,7 @@ const envKeys = [
 
 async function withEnvironment(limit: string, run: () => Promise<void>) {
   const saved = envKeys.map((key) => process.env[key]);
-  process.env.OPERATOR_OIDC_ISSUER = "https://callback-fixture.example";
+  process.env.OPERATOR_OIDC_ISSUER = "https://accounts.google.com";
   process.env.OPERATOR_OIDC_CLIENT_ID = "fixture-client";
   process.env.OPERATOR_OIDC_CLIENT_SECRET = "fixture-secret";
   process.env.OPERATOR_OIDC_SESSION_MAX_AGE_SECONDS = limit;
@@ -120,20 +120,29 @@ test("valid callback caps the session and clears the transaction at its original
     return Response.json({ id_token: `header.${payload}.signature` });
   };
   try {
-    await withEnvironment("900", async () => {
-      const response = await GET(request());
-      assert.equal(
-        response.headers.get("location"),
-        "https://console.example/tenants",
-      );
-      assert.equal(response.cookies.get(OAUTH_TXN_COOKIE)?.path, "/api/auth");
-      assert.equal(response.cookies.get(OAUTH_TXN_COOKIE)?.maxAge, 0);
-      const session = decodeCookie<OperatorSession>(
-        response.cookies.get(SESSION_COOKIE)?.value,
-      );
-      assert.equal(session?.exp, issued + 900);
-      assert.equal(response.cookies.get(SESSION_COOKIE)?.httpOnly, true);
-    });
+    for (const issuer of [
+      "https://accounts.google.com",
+      "https://callback-fixture.example",
+    ]) {
+      await withEnvironment("900", async () => {
+        process.env.OPERATOR_OIDC_ISSUER = issuer;
+        const response = await GET(request());
+        assert.equal(
+          response.headers.get("location"),
+          "https://console.example/tenants",
+        );
+        assert.equal(response.cookies.get(OAUTH_TXN_COOKIE)?.path, "/api/auth");
+        assert.equal(response.cookies.get(OAUTH_TXN_COOKIE)?.maxAge, 0);
+        const session = decodeCookie<OperatorSession>(
+          response.cookies.get(SESSION_COOKIE)?.value,
+        );
+        assert.equal(
+          session?.exp,
+          issued + (issuer === "https://accounts.google.com" ? 900 : 3600),
+        );
+        assert.equal(response.cookies.get(SESSION_COOKIE)?.httpOnly, true);
+      });
+    }
   } finally {
     globalThis.fetch = originalFetch;
   }

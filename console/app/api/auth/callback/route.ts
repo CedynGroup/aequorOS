@@ -39,7 +39,7 @@ export async function GET(req: NextRequest) {
 
   let sessionLimit: number;
   try {
-    sessionLimit = oidcSessionMaxAge();
+    sessionLimit = oidcSessionMaxAge(env.issuer);
   } catch {
     return failure(req, "oidc_not_configured");
   }

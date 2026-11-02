@@ -13,7 +13,7 @@ test("default policy preserves generic authorization parameters", () => {
   const before = url.toString();
   applyWorkforcePolicy(url, "https://idp.example", false, {});
   assert.equal(url.toString(), before);
-  assert.equal(oidcSessionMaxAge({}), 0);
+  assert.equal(oidcSessionMaxAge("https://accounts.google.com", {}), 0);
   assert.equal(oidcSessionExpiry(4000, undefined, 0, 1000), 4000);
 });
 
@@ -26,17 +26,22 @@ test("Workspace domain hint accompanies the configured Google login", () => {
   assert.equal(url.searchParams.get("state"), "txn");
 });
 
-test("generic providers receive hosted domain only when explicitly configured", () => {
-  const url = new URL("https://idp.example/authorize");
-  applyWorkforcePolicy(url, "https://idp.example", false, {
-    OPERATOR_OIDC_ALLOWED_DOMAIN: "workforce.example",
-  });
-  assert.equal(url.searchParams.has("hd"), false);
-  applyWorkforcePolicy(url, "https://idp.example", false, {
+test("Google policy leaves generic providers unchanged even when enabled", () => {
+  const url = new URL("https://idp.example/authorize?state=txn");
+  const before = url.toString();
+  applyWorkforcePolicy(url, "https://idp.example", true, {
     OPERATOR_OIDC_ALLOWED_DOMAIN: "workforce.example",
     OPERATOR_OIDC_REQUIRE_HOSTED_DOMAIN: "true",
+    OPERATOR_OIDC_REQUIRE_ASSURANCE: "true",
+    OPERATOR_OIDC_STEP_UP_MAX_AGE_SECONDS: "300",
   });
-  assert.equal(url.searchParams.get("hd"), "workforce.example");
+  assert.equal(url.toString(), before);
+  assert.equal(
+    oidcSessionMaxAge("https://idp.example", {
+      OPERATOR_OIDC_SESSION_MAX_AGE_SECONDS: "900",
+    }),
+    0,
+  );
 });
 
 test("assurance and step-up policy request issuer evidence", () => {
@@ -50,17 +55,12 @@ test("assurance and step-up policy request issuer evidence", () => {
       id_token: {
         auth_time: { essential: true },
         amr: { essential: true },
-        acr: null,
       },
     });
   }
 });
 
-test("generic reauth requests freshness; Google only returns evidence", () => {
-  const url = new URL("https://idp.example/authorize");
-  applyWorkforcePolicy(url, "https://idp.example", true, {});
-  assert.equal(url.searchParams.get("max_age"), "0");
-  assert.equal(url.searchParams.get("prompt"), "login");
+test("Google reauth requests evidence without unsupported freshness parameters", () => {
   const google = new URL("https://accounts.google.com/authorize");
   applyWorkforcePolicy(google, "https://accounts.google.com", true, {});
   assert.equal(google.searchParams.has("max_age"), false);
@@ -70,7 +70,9 @@ test("generic reauth requests freshness; Google only returns evidence", () => {
 
 test("session cap uses original issue time and never extends token expiry", () => {
   assert.equal(
-    oidcSessionMaxAge({ OPERATOR_OIDC_SESSION_MAX_AGE_SECONDS: "900" }),
+    oidcSessionMaxAge("https://accounts.google.com", {
+      OPERATOR_OIDC_SESSION_MAX_AGE_SECONDS: "900",
+    }),
     900,
   );
   assert.equal(oidcSessionExpiry(4000, 900, 900, 1000), 1800);
@@ -81,7 +83,9 @@ test("session cap uses original issue time and never extends token expiry", () =
   assert.equal(oidcSessionExpiry(1000, 900, 900, 1000), null);
   for (const raw of ["bad", "-1", "43201", "1.5"]) {
     assert.throws(() =>
-      oidcSessionMaxAge({ OPERATOR_OIDC_SESSION_MAX_AGE_SECONDS: raw }),
+      oidcSessionMaxAge("https://accounts.google.com", {
+        OPERATOR_OIDC_SESSION_MAX_AGE_SECONDS: raw,
+      }),
     );
   }
 });

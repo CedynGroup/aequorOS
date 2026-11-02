@@ -84,7 +84,7 @@ class OperatorContext:
     auth_mode: Literal["dev", "oidc", "password"]
     #: Staff authorization role. Password/JWT sessions carry it as a claim
     #: verified against the ``operator_users`` row; OIDC sessions take the
-    #: active provisioned row's role, capped by optional workforce group grants.
+    #: active provisioned row's role.
     #: dev sessions are ``super_admin`` — the local root session IS the
     #: documented bootstrap path for creating the first operator account,
     #: and dev auth cannot exist in production (boot refusal + request-level
@@ -181,18 +181,20 @@ def _oidc_context(token: str, operator_settings: OperatorSettings) -> OperatorCo
     verified_claims = cast("dict[str, JsonValue]", claims)
     try:
         workforce.verify_claims(verified_claims, operator_settings)
-        role = workforce.group_role(
-            normalized,
-            cast("OperatorRole", user.role),
-            operator_settings,
-            workforce.GoogleDirectoryGroups(operator_settings),
+        workforce.verify_directory_access(
+            normalized, operator_settings, workforce.GoogleDirectory(operator_settings)
         )
     except workforce.WorkforceDenied as exc:
         raise HTTPException(status_code=401, detail=str(exc)) from exc
     assurance = {
         key: verified_claims[key] for key in ("amr", "acr", "auth_time") if key in verified_claims
     }
-    return OperatorContext(email=normalized, auth_mode="oidc", role=role, assurance=assurance)
+    return OperatorContext(
+        email=normalized,
+        auth_mode="oidc",
+        role=cast("OperatorRole", user.role),
+        assurance=assurance,
+    )
 
 
 def get_operator_context(
@@ -213,7 +215,11 @@ def get_operator_context(
     if password is not None:
         return password
     oidc = _oidc_context(credentials.credentials, operator_settings)
-    if request.method not in {"GET", "HEAD", "OPTIONS"}:
+    if operator_settings.oidc_issuer == "https://accounts.google.com" and request.method not in {
+        "GET",
+        "HEAD",
+        "OPTIONS",
+    }:
         try:
             workforce.require_recent_authentication(
                 oidc.assurance, operator_settings.oidc_step_up_max_age_seconds

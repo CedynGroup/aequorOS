@@ -1364,9 +1364,7 @@ class OperatorSettings(BaseSettings):
     oidc_require_hosted_domain: bool = Field(
         default=False, alias="OPERATOR_OIDC_REQUIRE_HOSTED_DOMAIN"
     )
-    oidc_group_roles: dict[str, Literal["developer", "operator_admin", "super_admin"]] = Field(
-        default_factory=dict, alias="OPERATOR_OIDC_GROUP_ROLES"
-    )
+    oidc_allowed_groups: tuple[str, ...] = Field(default=(), alias="OPERATOR_OIDC_ALLOWED_GROUPS")
     google_credentials_file: str | None = Field(
         default=None, alias="OPERATOR_GOOGLE_CREDENTIALS_FILE"
     )
@@ -1375,7 +1373,6 @@ class OperatorSettings(BaseSettings):
     )
     oidc_require_assurance: bool = Field(default=False, alias="OPERATOR_OIDC_REQUIRE_ASSURANCE")
     oidc_required_amr: tuple[str, ...] = Field(default=("mfa",), alias="OPERATOR_OIDC_REQUIRED_AMR")
-    oidc_required_acr: str | None = Field(default=None, alias="OPERATOR_OIDC_REQUIRED_ACR")
     oidc_session_max_age_seconds: int = Field(
         default=0, ge=0, le=43200, alias="OPERATOR_OIDC_SESSION_MAX_AGE_SECONDS"
     )
@@ -1396,7 +1393,6 @@ class OperatorSettings(BaseSettings):
         "oidc_client_id",
         "google_credentials_file",
         "google_delegated_admin",
-        "oidc_required_acr",
         mode="before",
     )
     @classmethod

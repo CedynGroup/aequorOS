@@ -1,7 +1,9 @@
 /** Staged OIDC policy shared by the login and callback routes. */
 export function oidcSessionMaxAge(
+  issuer: string,
   env: Readonly<Record<string, string | undefined>> = process.env,
 ): number {
+  if (issuer !== "https://accounts.google.com") return 0;
   const raw = env.OPERATOR_OIDC_SESSION_MAX_AGE_SECONDS?.trim();
   if (!raw || raw === "0") return 0;
   const seconds = Number(raw);
@@ -21,12 +23,9 @@ export function applyWorkforcePolicy(
   reauthenticate: boolean,
   env: Readonly<Record<string, string | undefined>> = process.env,
 ): void {
+  if (issuer !== "https://accounts.google.com") return;
   const domain = env.OPERATOR_OIDC_ALLOWED_DOMAIN?.trim();
-  if (
-    domain &&
-    (issuer === "https://accounts.google.com" ||
-      enabled(env.OPERATOR_OIDC_REQUIRE_HOSTED_DOMAIN))
-  ) {
+  if (domain) {
     url.searchParams.set("hd", domain);
   }
   if (
@@ -40,18 +39,9 @@ export function applyWorkforcePolicy(
         id_token: {
           auth_time: { essential: true },
           amr: { essential: true },
-          acr: null,
         },
       }),
     );
-  }
-  if (reauthenticate) {
-    // Google reports auth_time but does not support forcing Account reauth.
-    // The API still requires recent evidence; an unchanged auth_time refuses.
-    if (issuer !== "https://accounts.google.com") {
-      url.searchParams.set("max_age", "0");
-      url.searchParams.set("prompt", "login");
-    }
   }
 }
 

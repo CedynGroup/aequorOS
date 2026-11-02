@@ -1,8 +1,8 @@
 """Optional workforce sign-in controls, independent of tenant SSO and passwords.
 
-Google Directory is an online authorization boundary: no membership cache or
-fallback survives a failed lookup. Group roles cap, rather than rewrite, the
-explicit staff row. Assurance is issuer evidence, never a local MFA assertion.
+Google Directory is an online authorization boundary: no membership or status
+cache survives a failed lookup. Assurance is issuer evidence, never a local MFA
+assertion.
 """
 
 from __future__ import annotations
@@ -12,7 +12,7 @@ import threading
 import time
 from pathlib import Path
 from time import monotonic
-from typing import Literal, Protocol
+from typing import Protocol
 from urllib.parse import quote
 
 import jwt
@@ -20,12 +20,13 @@ import requests
 from pydantic import BaseModel, ConfigDict, Field, JsonValue, ValidationError
 
 from app.core.config import OperatorSettings
-from app.operator.models import OPERATOR_ROLE_RANK
 
-type WorkforceRole = Literal["developer", "operator_admin", "super_admin"]
 _GOOGLE_ISSUER = "https://accounts.google.com"
 _TOKEN_URL = "https://oauth2.googleapis.com/token"
-_GROUP_SCOPE = "https://www.googleapis.com/auth/admin.directory.group.member.readonly"
+_DIRECTORY_SCOPES = (
+    "https://www.googleapis.com/auth/admin.directory.group.member.readonly "
+    "https://www.googleapis.com/auth/admin.directory.user.readonly"
+)
 _TOKEN_CACHE_LIMIT = 8
 _TOKEN_CACHE_LOCK = threading.Lock()
 # The fingerprint makes credential rotation invalidate reuse at the same path.
@@ -36,12 +37,14 @@ class WorkforceDenied(Exception):
     """A safe, operator-facing refusal without provider errors or credentials."""
 
 
-class GroupsUnavailable(Exception):
-    """The directory could not supply authoritative membership evidence."""
+class DirectoryUnavailable(Exception):
+    """The directory could not supply authoritative account or membership evidence."""
 
 
-class GroupLookup(Protocol):
+class DirectoryLookup(Protocol):
     def has_member(self, group: str, email: str) -> bool: ...
+
+    def is_suspended(self, email: str) -> bool: ...
 
 
 class _ServiceAccount(BaseModel):
@@ -61,13 +64,18 @@ class _Membership(BaseModel):
     is_member: bool = Field(alias="isMember")
 
 
-class GoogleDirectoryGroups:
-    """Delegated service-account access to Directory members.hasMember.
+class _UserStatus(BaseModel):
+    model_config = ConfigDict(strict=True)
+    suspended: bool
+
+
+class GoogleDirectory:
+    """Delegated service-account access to Directory.
 
     Fixed HTTPS endpoints, bounded requests, no redirects, and strict response
     models keep failure distinct from non-membership. Access tokens are reused
-    until shortly before expiry; membership is always fetched live. Tokens are
-    never persisted or sent to the console.
+    until shortly before expiry; membership and status are always fetched live.
+    Tokens are never persisted or sent to the console.
     """
 
     def __init__(self, settings: OperatorSettings) -> None:
@@ -78,7 +86,7 @@ class GoogleDirectoryGroups:
         path = self._settings.google_credentials_file
         admin = self._settings.google_delegated_admin
         if not path or not admin:
-            raise GroupsUnavailable
+            raise DirectoryUnavailable
         try:
             credential = Path(path).read_bytes()
             account = _ServiceAccount.model_validate_json(credential)
@@ -99,7 +107,7 @@ class GoogleDirectoryGroups:
                 _TOKEN_CACHE[key] = (token.access_token, moment + lifetime)
                 return token.access_token
         except (OSError, ValueError, jwt.PyJWTError, requests.RequestException) as exc:
-            raise GroupsUnavailable from exc
+            raise DirectoryUnavailable from exc
 
     @staticmethod
     def _exchange(account: _ServiceAccount, admin: str) -> _AccessToken:
@@ -108,7 +116,7 @@ class GoogleDirectoryGroups:
             {
                 "iss": account.client_email,
                 "sub": admin,
-                "scope": _GROUP_SCOPE,
+                "scope": _DIRECTORY_SCOPES,
                 "aud": _TOKEN_URL,
                 "iat": now,
                 "exp": now + 300,
@@ -126,10 +134,10 @@ class GoogleDirectoryGroups:
             allow_redirects=False,
         )
         if response.status_code != 200:
-            raise GroupsUnavailable
+            raise DirectoryUnavailable
         token = _AccessToken.model_validate_json(response.content)
         if not token.access_token:
-            raise GroupsUnavailable
+            raise DirectoryUnavailable
         return token
 
     def _forget_token(self, token: str) -> None:
@@ -138,12 +146,11 @@ class GoogleDirectoryGroups:
             if cached is not None and cached[0] == token and self._cache_key is not None:
                 del _TOKEN_CACHE[self._cache_key]
 
-    def has_member(self, group: str, email: str) -> bool:
+    def _get(self, path: str) -> bytes:
         token = self._token()
         try:
             response = requests.get(
-                "https://admin.googleapis.com/admin/directory/v1/groups/"
-                f"{quote(group, safe='')}/hasMember/{quote(email, safe='')}",
+                f"https://admin.googleapis.com/admin/directory/v1/{path}",
                 headers={"Authorization": f"Bearer {token}"},
                 timeout=5,
                 allow_redirects=False,
@@ -151,37 +158,44 @@ class GoogleDirectoryGroups:
             if response.status_code in {401, 403}:
                 self._forget_token(token)
             if response.status_code != 200:
-                raise GroupsUnavailable
-            return _Membership.model_validate_json(response.content).is_member
-        except (requests.RequestException, ValidationError) as exc:
-            raise GroupsUnavailable from exc
+                raise DirectoryUnavailable
+            return response.content
+        except requests.RequestException as exc:
+            raise DirectoryUnavailable from exc
+
+    def has_member(self, group: str, email: str) -> bool:
+        try:
+            return _Membership.model_validate_json(
+                self._get(f"groups/{quote(group, safe='')}/hasMember/{quote(email, safe='')}")
+            ).is_member
+        except ValidationError as exc:
+            raise DirectoryUnavailable from exc
+
+    def is_suspended(self, email: str) -> bool:
+        try:
+            return _UserStatus.model_validate_json(
+                self._get(f"users/{quote(email, safe='')}")
+            ).suspended
+        except ValidationError as exc:
+            raise DirectoryUnavailable from exc
 
 
-def group_role(
+def verify_directory_access(
     email: str,
-    row_role: WorkforceRole,
     settings: OperatorSettings,
-    lookup: GroupLookup,
-) -> WorkforceRole:
-    """Intersect directory grants with the provisioned staff role on each request."""
-    if not settings.oidc_group_roles:
-        return row_role
-    if settings.oidc_issuer != _GOOGLE_ISSUER:
-        raise WorkforceDenied("Workspace group access requires the Google issuer.")
+    lookup: DirectoryLookup,
+) -> None:
+    if settings.oidc_issuer != _GOOGLE_ISSUER or not settings.oidc_allowed_groups:
+        return
     try:
-        roles: list[WorkforceRole] = [
-            role
-            for group, role in settings.oidc_group_roles.items()
-            if lookup.has_member(group, email)
-        ]
-    except GroupsUnavailable as exc:
+        if lookup.is_suspended(email):
+            raise WorkforceDenied("Your Workspace account is suspended. Operator access denied.")
+        if not any(lookup.has_member(group, email) for group in settings.oidc_allowed_groups):
+            raise WorkforceDenied("Workspace group membership is required for operator access.")
+    except DirectoryUnavailable as exc:
         raise WorkforceDenied(
-            "Workspace group data is unavailable. Operator access denied."
+            "Workspace directory data is unavailable. Operator access denied."
         ) from exc
-    if not roles:
-        raise WorkforceDenied("Workspace group membership is required for operator access.")
-    granted = sorted(roles, key=lambda role: OPERATOR_ROLE_RANK[role])[-1]
-    return row_role if OPERATOR_ROLE_RANK[row_role] <= OPERATOR_ROLE_RANK[granted] else granted
 
 
 def numeric_date(value: JsonValue | None) -> int | None:
@@ -193,6 +207,8 @@ def numeric_date(value: JsonValue | None) -> int | None:
 
 def verify_claims(claims: dict[str, JsonValue], settings: OperatorSettings) -> None:
     """Validate opt-in domain, assurance and session-age policy on verified claims."""
+    if settings.oidc_issuer != _GOOGLE_ISSUER:
+        return
     if settings.oidc_require_hosted_domain and claims.get("hd") != settings.oidc_allowed_domain:
         raise WorkforceDenied("The workforce hosted domain is missing or does not match.")
     now = int(time.time())
@@ -200,18 +216,8 @@ def verify_claims(claims: dict[str, JsonValue], settings: OperatorSettings) -> N
     if settings.oidc_require_assurance:
         amr = claims.get("amr")
         required = settings.oidc_required_amr
-        acr = settings.oidc_required_acr
-        amr_matches = not required or (
-            isinstance(amr, list) and all(method in amr for method in required)
-        )
-        acr_matches = acr is None or claims.get("acr") == acr
-        if (
-            (not required and not acr)
-            or not amr_matches
-            or not acr_matches
-            or auth_time is None
-            or auth_time > now
-        ):
+        amr_matches = isinstance(amr, list) and all(method in amr for method in required)
+        if not required or not amr_matches or auth_time is None or auth_time > now:
             raise WorkforceDenied(
                 "Workforce sign-in lacks the required assurance evidence. "
                 "Re-authenticate or contact your workforce identity administrator."

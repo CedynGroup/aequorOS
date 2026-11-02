@@ -13,7 +13,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core import security
-from app.core.config import get_operator_settings
+from app.core.config import OperatorSettings, get_operator_settings
 from app.db.base import utc_now
 from app.models import OperatorAuditLog, OperatorUser
 from app.operator.schemas import OperatorLoginRead
@@ -39,6 +39,10 @@ def oidc(monkeypatch: pytest.MonkeyPatch) -> dict[str, JsonValue]:
         assert audience == "console-client-id"
         return claims
 
+    def is_suspended(_self: workforce.GoogleDirectory, _email: str) -> bool:
+        return False
+
+    monkeypatch.setattr(workforce.GoogleDirectory, "is_suspended", is_suspended)
     monkeypatch.setattr(security, "verify_oidc_id_token", verify)
     get_operator_settings.cache_clear()
     return claims
@@ -93,9 +97,24 @@ def test_generic_oidc_and_defaults_accept_missing_hd_and_assurance(
     oidc.pop("hd")
     assert read_staff(operator_client) == 200
     configure(monkeypatch, OIDC_ISSUER="https://workforce.example")
+    oidc["iat"] = 0
     assert read_staff(operator_client) == 200
-    configure(monkeypatch, OIDC_GROUP_ROLES='{"staff@aequoros.com":"operator_admin"}')
-    assert read_staff(operator_client) == 401
+    configure(monkeypatch, OIDC_ALLOWED_GROUPS='["staff@aequoros.com"]')
+    configure(
+        monkeypatch,
+        OIDC_REQUIRE_HOSTED_DOMAIN="true",
+        OIDC_REQUIRE_ASSURANCE="true",
+        OIDC_SESSION_MAX_AGE_SECONDS="1",
+        OIDC_STEP_UP_MAX_AGE_SECONDS="1",
+    )
+    assert read_staff(operator_client) == 200
+    assert (
+        operator_client.post(
+            "/operator/v1/operators/ama@aequoros.com/reset-password",
+            headers=operator_headers("oidc"),
+        ).status_code
+        == 200
+    )
 
 
 @pytest.mark.parametrize("active", [None, False])
@@ -109,12 +128,12 @@ def test_group_membership_never_provisions_or_activates_staff(
     _ = oidc
     if active is not None:
         make_operator(operator_db, role="operator_admin", active=active)
-    configure(monkeypatch, OIDC_GROUP_ROLES='{"staff@example.com":"super_admin"}')
+    configure(monkeypatch, OIDC_ALLOWED_GROUPS='["staff@aequoros.com"]')
 
-    def has_member(_self: workforce.GoogleDirectoryGroups, _group: str, _email: str) -> bool:
+    def has_member(_self: workforce.GoogleDirectory, _group: str, _email: str) -> bool:
         return True
 
-    monkeypatch.setattr(workforce.GoogleDirectoryGroups, "has_member", has_member)
+    monkeypatch.setattr(workforce.GoogleDirectory, "has_member", has_member)
     assert read_staff(operator_client) == 401
     operator_db.expire_all()
     row = operator_db.scalar(select(OperatorUser).where(OperatorUser.email == "ama@aequoros.com"))
@@ -134,23 +153,23 @@ def test_group_grant_removal_and_failure(
 ) -> None:
     _ = oidc
     make_operator(operator_db, role="operator_admin")
-    configure(monkeypatch, OIDC_GROUP_ROLES='{"staff@aequoros.com":"operator_admin"}')
+    configure(monkeypatch, OIDC_ALLOWED_GROUPS='["staff@aequoros.com"]')
 
-    def has_member(_self: workforce.GoogleDirectoryGroups, group: str, email: str) -> bool:
+    def has_member(_self: workforce.GoogleDirectory, group: str, email: str) -> bool:
         assert group == "staff@aequoros.com" and email == "ama@aequoros.com"
         if membership == "unavailable":
-            raise workforce.GroupsUnavailable("provider secret must not escape")
+            raise workforce.DirectoryUnavailable("provider secret must not escape")
         return membership
 
-    monkeypatch.setattr(workforce.GoogleDirectoryGroups, "has_member", has_member)
+    monkeypatch.setattr(workforce.GoogleDirectory, "has_member", has_member)
     response = operator_client.get("/operator/v1/operators", headers=operator_headers("oidc"))
     assert response.status_code == (200 if membership is True else 401)
     assert "provider secret" not in response.text
     if membership == "unavailable":
-        assert "group data is unavailable" in response.text
+        assert "directory data is unavailable" in response.text
 
 
-def test_membership_rechecked_and_role_capped_by_row(
+def test_membership_rechecked_and_role_determined_by_row(
     operator_client: TestClient,
     operator_db: Session,
     oidc: dict[str, JsonValue],
@@ -158,13 +177,13 @@ def test_membership_rechecked_and_role_capped_by_row(
 ) -> None:
     _ = oidc
     user = make_operator(operator_db, role="operator_admin")
-    configure(monkeypatch, OIDC_GROUP_ROLES='{"staff@aequoros.com":"super_admin"}')
+    configure(monkeypatch, OIDC_ALLOWED_GROUPS='["staff@aequoros.com"]')
     member = True
 
-    def has_member(_self: workforce.GoogleDirectoryGroups, _group: str, _email: str) -> bool:
+    def has_member(_self: workforce.GoogleDirectory, _group: str, _email: str) -> bool:
         return member
 
-    monkeypatch.setattr(workforce.GoogleDirectoryGroups, "has_member", has_member)
+    monkeypatch.setattr(workforce.GoogleDirectory, "has_member", has_member)
     assert read_staff(operator_client) == 200
     user.role = "developer"
     operator_db.commit()
@@ -176,21 +195,23 @@ def test_membership_rechecked_and_role_capped_by_row(
     )
 
 
-def test_group_role_can_reduce_but_never_raise_staff_authority(
+@pytest.mark.parametrize("role", ["developer", "operator_admin", "super_admin"])
+def test_group_membership_preserves_provisioned_staff_authority(
     operator_client: TestClient,
     operator_db: Session,
     oidc: dict[str, JsonValue],
     monkeypatch: pytest.MonkeyPatch,
+    role: Literal["developer", "operator_admin", "super_admin"],
 ) -> None:
     _ = oidc
-    make_operator(operator_db, role="super_admin")
-    configure(monkeypatch, OIDC_GROUP_ROLES='{"staff@aequoros.com":"developer"}')
+    make_operator(operator_db, role=role)
+    configure(monkeypatch, OIDC_ALLOWED_GROUPS='["other@aequoros.com", "staff@aequoros.com"]')
 
-    def has_member(_self: workforce.GoogleDirectoryGroups, _group: str, _email: str) -> bool:
-        return True
+    def has_member(_self: workforce.GoogleDirectory, group: str, _email: str) -> bool:
+        return group == "staff@aequoros.com"
 
-    monkeypatch.setattr(workforce.GoogleDirectoryGroups, "has_member", has_member)
-    assert read_staff(operator_client) == 403
+    monkeypatch.setattr(workforce.GoogleDirectory, "has_member", has_member)
+    assert read_staff(operator_client) == (403 if role == "developer" else 200)
     assert (
         operator_client.get("/operator/v1/tenants", headers=operator_headers("oidc")).status_code
         == 200
@@ -210,12 +231,8 @@ def test_assurance_policy_is_opt_in(
     assert read_staff(operator_client) == (401 if required else 200)
     oidc.update({"amr": ["pwd", "mfa"], "acr": "workforce", "auth_time": int(time.time())})
     assert read_staff(operator_client) == 200
-    configure(monkeypatch, OIDC_REQUIRED_ACR="stronger")
-    assert read_staff(operator_client) == (401 if required else 200)
-    configure(monkeypatch, OIDC_REQUIRED_AMR="[]", OIDC_REQUIRED_ACR="workforce")
+    configure(monkeypatch, OIDC_REQUIRED_AMR="[]")
     oidc.pop("amr")
-    assert read_staff(operator_client) == 200
-    configure(monkeypatch, OIDC_REQUIRED_ACR="")
     assert read_staff(operator_client) == (401 if required else 200)
 
 
@@ -300,7 +317,7 @@ def test_all_oidc_controls_leave_password_login_and_actions_unchanged(
         monkeypatch,
         OIDC_REQUIRE_HOSTED_DOMAIN="true",
         OIDC_REQUIRE_ASSURANCE="true",
-        OIDC_GROUP_ROLES='{"staff@aequoros.com":"super_admin"}',
+        OIDC_ALLOWED_GROUPS='["staff@aequoros.com"]',
         OIDC_SESSION_MAX_AGE_SECONDS="1",
         OIDC_STEP_UP_MAX_AGE_SECONDS="1",
     )
@@ -337,7 +354,57 @@ def test_missing_directory_credentials_denies_explicitly(
 ) -> None:
     _ = oidc
     make_operator(operator_db, role="operator_admin")
-    configure(monkeypatch, OIDC_GROUP_ROLES='{"staff@aequoros.com":"operator_admin"}')
+    configure(monkeypatch, OIDC_ALLOWED_GROUPS='["staff@aequoros.com"]')
     response = operator_client.get("/operator/v1/operators", headers=operator_headers("oidc"))
     assert response.status_code == 401
-    assert "group data is unavailable" in response.text
+    assert "directory data is unavailable" in response.text
+
+
+class FakeDirectory:
+    def __init__(self) -> None:
+        self.suspended: bool | Literal["unavailable"] = False
+        self.status_requests: list[str] = []
+
+    def is_suspended(self, email: str) -> bool:
+        self.status_requests.append(email)
+        if self.suspended == "unavailable":
+            raise workforce.DirectoryUnavailable("provider secret must not escape")
+        return self.suspended
+
+    def has_member(self, group: str, email: str) -> bool:
+        return group == "staff@aequoros.com" and email == "ama@aequoros.com"
+
+
+@pytest.mark.parametrize("method", ["GET", "POST"])
+def test_live_suspension_and_status_failure_revoke_existing_oidc_access(
+    operator_client: TestClient,
+    operator_db: Session,
+    oidc: dict[str, JsonValue],
+    monkeypatch: pytest.MonkeyPatch,
+    method: str,
+) -> None:
+    _ = oidc
+    make_operator(operator_db, role="operator_admin")
+    configure(monkeypatch, OIDC_ALLOWED_GROUPS='["staff@aequoros.com"]')
+    directory = FakeDirectory()
+
+    def lookup(_settings: OperatorSettings) -> workforce.DirectoryLookup:
+        return directory
+
+    monkeypatch.setattr(workforce, "GoogleDirectory", lookup)
+    path = (
+        "/operator/v1/tenants"
+        if method == "GET"
+        else "/operator/v1/operators/ama@aequoros.com/reset-password"
+    )
+    states: tuple[bool | Literal["unavailable"], ...] = (False, True, "unavailable", False)
+    for state in states:
+        directory.suspended = state
+        result = operator_client.request(method, path, headers=operator_headers("oidc"))
+        assert result.status_code == (200 if state is False else 401)
+        assert "provider secret" not in result.text
+        if state is True:
+            assert "suspended" in result.text
+        elif state == "unavailable":
+            assert "directory data is unavailable" in result.text
+    assert directory.status_requests == ["ama@aequoros.com"] * 4
