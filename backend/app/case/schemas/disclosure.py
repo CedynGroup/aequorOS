@@ -6,6 +6,7 @@ from app.case.schemas.assessments import AssessmentRunRead
 from app.case.schemas.calculations import CalculationRunListRead
 from app.case.schemas.cases import CaseBulkActionRead, CaseRead, ScoreRead
 from app.case.schemas.findings import FindingRead
+from app.domain.risk_constants import MANUAL_FINDING_SOURCE
 
 
 @dataclass(frozen=True)
@@ -56,7 +57,11 @@ class CaseResponses:
             result = result.model_copy(
                 update={
                     "details": {},
-                    "summary": f"{result.risk_type.replace('_', ' ').capitalize()} finding.",
+                    "summary": (
+                        f"{result.risk_type.replace('_', ' ').capitalize()} finding."
+                        if result.source == MANUAL_FINDING_SOURCE
+                        else result.summary
+                    ),
                     "rationale": None,
                     "disposition_reason": None,
                 }

@@ -27,6 +27,7 @@ from app.core.authorization import (
     SensitivityScope,
 )
 from app.db.base import utc_now
+from app.domain.risk_constants import FindingSource
 from app.identity.models.authorization import AuthorizationBinding
 from app.identity.models.user import User
 from app.identity.service import authorization
@@ -629,6 +630,24 @@ def _assert_finding_disclosure(
     restricted: bool,
 ) -> None:
     sentinel = "RAW_FINANCIAL_EVIDENCE_94821"
+    imported = RiskFinding(
+        organization_id=ORG_1,
+        case_id=case_id,
+        assessment_id=assessment_id,
+        risk_type="documentation_gap",
+        title="Missing certificate",
+        summary="Counterparty insurance certificate is missing.",
+        rationale=sentinel,
+        severity="medium",
+        source=FindingSource.IMPORTED.value,
+        details={"evidence": [{"quote": sentinel}]},
+    )
+    db_session.add(imported)
+    db_session.commit()
+    expected_summaries = {
+        finding.id: finding.summary
+        for finding in db_session.scalars(select(RiskFinding).where(RiskFinding.case_id == case_id))
+    }
     manual = db_client.post(
         f"/api/v1/cases/{case_id}/findings",
         headers=headers(),
@@ -643,7 +662,12 @@ def _assert_finding_disclosure(
     )
     assert manual.status_code == 201, manual.text
     finding_id = FindingRead.model_validate(manual.json()).id
+    expected_summaries[finding_id] = sentinel if restricted else "Leverage risk finding."
     assert FindingRead.model_validate(manual.json()).disposition_reason is None
+    stored_manual = db_session.get(RiskFinding, finding_id)
+    assert stored_manual is not None
+    stored_manual.assessment_id = assessment_id
+    db_session.commit()
     reason = "Actual cash shortfall is 94821 GHS"
     reviewed = db_client.patch(
         f"/api/v1/findings/{finding_id}",
@@ -655,6 +679,7 @@ def _assert_finding_disclosure(
         reason if restricted else None
     )
     generated = db_client.get(f"/api/v1/assessments/{assessment_id}/findings", headers=headers())
+    assert generated.status_code == 200, generated.text
     for finding in TypeAdapter(list[FindingRead]).validate_python(generated.json()):
         updated = db_client.patch(
             f"/api/v1/findings/{finding.id}",
@@ -662,10 +687,12 @@ def _assert_finding_disclosure(
             json={"status": "acknowledged", "disposition_reason": reason},
         )
         assert updated.status_code == 200, updated.text
+        assert FindingRead.model_validate(updated.json()).summary == expected_summaries[finding.id]
         assert FindingRead.model_validate(updated.json()).disposition_reason == (
             reason if restricted else None
         )
     for response in (manual, reviewed):
+        assert FindingRead.model_validate(response.json()).summary == expected_summaries[finding_id]
         assert (sentinel in response.text) is restricted
         assert bool(FindingRead.model_validate(response.json()).details) is restricted
     for path in (
@@ -676,14 +703,16 @@ def _assert_finding_disclosure(
         response = db_client.get(f"/api/v1{path}", headers=headers())
         assert response.status_code == 200, response.text
         findings = TypeAdapter(list[FindingRead]).validate_python(response.json())
-        assert findings
+        assert {finding.id for finding in findings} == set(expected_summaries)
         assert all(
             finding.disposition_reason == (reason if restricted else None) for finding in findings
         )
         assert (reason in response.text) is restricted
         for finding in findings:
+            assert finding.summary == expected_summaries[finding.id]
             detail = db_client.get(f"/api/v1/findings/{finding.id}", headers=headers())
             assert detail.status_code == 200, detail.text
+            assert FindingRead.model_validate(detail.json()).summary == expected_summaries[finding.id]
             assert FindingRead.model_validate(detail.json()).disposition_reason == (
                 reason if restricted else None
             )
@@ -692,15 +721,16 @@ def _assert_finding_disclosure(
             else:
                 assert FindingRead.model_validate(detail.json()).details == {}
                 assert FindingRead.model_validate(detail.json()).rationale is None
-                assert "Debt-to-EBITDA is 7" not in detail.text
-                assert "1.25 month" not in detail.text
-                assert sentinel not in detail.text
+                if finding.source == FindingSource.MANUAL.value:
+                    assert sentinel not in detail.text
     grant(db_session, RoleBundle.VIEWER, SensitivityScope.RESTRICTED)
     full = db_client.get(f"/api/v1/cases/{case_id}/scores", headers=headers())
     assert TypeAdapter(list[ScoreRead]).validate_python(full.json())[0].input_snapshot == {
         "structured_data": {"debt_to_ebitda": 7, "cash_runway_months": 1.25}
     }
     full_finding = db_client.get(f"/api/v1/findings/{finding_id}", headers=headers())
+    assert full_finding.status_code == 200, full_finding.text
+    assert FindingRead.model_validate(full_finding.json()).summary == sentinel
     assert FindingRead.model_validate(full_finding.json()).details["evidence"] == [
         {"quote": sentinel}
     ]
@@ -708,6 +738,7 @@ def _assert_finding_disclosure(
     db_session.expire_all()
     stored = db_session.get(RiskFinding, finding_id)
     assert stored is not None and stored.disposition_reason == reason
+    assert stored.summary == sentinel
 
 
 @pytest.mark.parametrize("restricted", [False, True])

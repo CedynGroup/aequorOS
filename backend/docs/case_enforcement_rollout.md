@@ -48,11 +48,18 @@ A restricted viewer cannot download a document or export a report merely by
 holding `view`.
 
 Confidential responses project copies of stored records. Raw case structured
-metadata, score inputs/rule details, finding details and value-bearing narrative
-(summary, rationale and disposition reason), assessment inputs/errors, and
+metadata, score inputs/rule details, finding details, rationale and disposition
+reason, assessment inputs/errors, and
 calculation diagnostics require an independently
 complete restricted `view` binding, including on confidential mutation returns.
 Summary identity, status, scores, categories and counts remain available.
+Finding summaries follow the captain-approved source rule: `manual` summaries
+require independently complete restricted `view`; other sources retain their real
+summary for any permitted reader, including confidential readers. Without
+restricted `view`, manual summaries use the category placeholder. Known limitation:
+confidential creators no longer see their own manual summary back unless they
+hold restricted `view`. This rule applies to lists, detail and mutation returns;
+it does not classify individual text or add a sensitivity flag.
 Assessment and document-parse job polling also requires restricted `view`, with
 opaque denial; starting a job grants no polling authority.
 
