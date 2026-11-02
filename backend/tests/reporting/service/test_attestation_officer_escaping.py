@@ -11,6 +11,10 @@ egress guard. A preparer on an installation whose filing policy does not require
 e-signature could therefore make the platform fetch an intranet or metadata URL
 from inside the PDF it files, and could restyle the document of record.
 
+The same rule covers the BoG form's cover: its Institution row prints
+``Bank.name``, which staff provisioning sets, so that value reaches a
+``Paragraph`` too.
+
 The assertions are on the printed page, because that is where "escaped" and
 "interpolated" differ: escaped markup comes out as the characters the officer
 typed, and interpolated markup becomes an element reportlab acts on — which for
@@ -21,12 +25,14 @@ from __future__ import annotations
 
 import io
 from collections.abc import Sequence
-from typing import Any, cast
+from datetime import UTC, datetime
 
 import pdfplumber
 import pytest
-from reportlab.platypus import Flowable, SimpleDocTemplate
 
+from app.reporting.service.bog_forms.engine import FormResult
+from app.reporting.service.bog_forms.layout import FormLayout
+from app.reporting.service.bog_forms.spec import FormSpec
 from app.reporting.service.exports.pdf import (
     AttestedOfficer,
     render_pdf,
@@ -70,15 +76,47 @@ def _page_text(payload: bytes) -> str:
         return " ".join(" ".join(page.extract_text() or "" for page in document.pages).split())
 
 
-def _printed(flowables: Sequence[Any]) -> str:
-    """What reportlab actually prints for ``flowables``.
+def _form_pdf(*, bank_name: str = "Sample Bank", officers: Sequence[AttestedOfficer] = ()) -> bytes:
+    """The official BoG form as filed, through the public renderer.
 
-    The attestation grid is a table of paragraphs, so the only honest assertion
-    about escaping is what comes back out of a built document.
+    A spec with no sheets keeps the document to the pages this file is about —
+    the cover and the attestation block.
+
+    Imported here, not at module scope: ``bog_forms.render_pdf`` imports
+    ``exports.pdf`` while ``exports/__init__`` imports ``render_form_pdf`` back
+    from it, so whichever side loads FIRST is the one left partially
+    initialized. The module-level import of ``exports.pdf`` above has already
+    loaded the package in the order that works.
     """
-    buffer = io.BytesIO()
-    SimpleDocTemplate(buffer).build(cast("list[Flowable]", list(flowables)))
-    return _page_text(buffer.getvalue())
+    from app.reporting.service.bog_forms.render_pdf import (  # noqa: PLC0415
+        render_form_pdf,
+    )
+
+    return render_form_pdf(
+        FormResult(
+            spec=FormSpec(
+                code="BSD1",
+                title="Daily Statement of Deposits",
+                workbook="BSD1.xlsx",
+                frequency="weekly",
+                time_limit_days=2,
+                basis="solo",
+                sheets=(),
+            ),
+            layout=FormLayout(form="bsd1", workbook="BSD1.xlsx", sheets=()),
+            lines=[],
+            inputs={},
+            formulas={},
+            unmapped_cells=[],
+            unresolved_external=[],
+        ),
+        bank_name=bank_name,
+        period_label="Week ended 31 December 2025",
+        reporting_date="31-Dec-25",
+        generated_at=datetime(2026, 1, 2, tzinfo=UTC),
+        signing_required=False,
+        officers=officers,
+    )
 
 
 def _assert_printed_verbatim(printed: str, fragments: Sequence[str]) -> None:
@@ -113,21 +151,21 @@ def test_the_unsigned_record_block_prints_the_name_literally(
 def test_the_bog_attestation_grid_prints_the_name_literally() -> None:
     """The BoG form's attestation grid escapes the same field the same way.
 
-    Imported here rather than at module scope, and suppressed for it:
-    ``bog_forms.render_pdf`` imports ``exports.pdf`` while ``exports/__init__``
-    imports ``render_form_pdf`` back from it, so whichever side loads FIRST is
-    the one left partially initialized. The module-level import of
-    ``exports.pdf`` above has already loaded the package in the order that works.
+    Rendered through the public ``render_form_pdf``, so the assertion covers the
+    page an institution actually files rather than one private helper's output.
     """
-    from app.reporting.service.bog_forms.render_pdf import (  # noqa: PLC0415
-        _officers_of_record,  # pyright: ignore[reportPrivateUsage]
-    )
-
-    printed = _printed(_officers_of_record([_officer(IMAGE_FETCH)]))
+    printed = _page_text(_form_pdf(officers=(_officer(IMAGE_FETCH),)))
 
     # Interpolated, this line would instead be an ImageReader fetch of
     # 169.254.169.254 and none of these characters would be on the page.
     _assert_printed_verbatim(printed, ["<img", "169.254.169.254"])
+
+
+def test_the_bog_cover_prints_the_bank_name_literally() -> None:
+    """``Bank.name`` is operator-set text and is printed on the cover."""
+    printed = _page_text(_form_pdf(bank_name=f"{IMAGE_FETCH} Bank"))
+
+    _assert_printed_verbatim(printed, ["<img", "169.254.169.254", "Bank"])
 
 
 def test_the_cover_does_not_interpret_snapshot_metadata() -> None:

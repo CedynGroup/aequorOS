@@ -236,7 +236,22 @@ def _signing_block() -> Table:
 #: recognisably the same document. The Signature width is redistributed rather
 #: than left as a gap.
 _RECORD_COLUMN_WIDTHS: tuple[float, ...] = (128 + 79, 128 + 79, 79.2)
-_RECORD_ROW_HEIGHT = 16
+
+#: Floor for the value row, and the clearance a wrapped value keeps above the
+#: rule beneath it. A value that wraps — or a display name carrying a line
+#: break, which ``escape_text`` prints as ``<br/>`` — is taller than the floor,
+#: so the row grows to its own height instead of running into its labels.
+_RECORD_MIN_ROW_HEIGHT = 16
+_RECORD_ROW_CLEARANCE = 2
+
+
+def _record_row_height(values: Sequence[str]) -> float:
+    """The value row's height: the floor, or the tallest value's own height."""
+    tallest = _RECORD_MIN_ROW_HEIGHT
+    for value, width in zip(values, _RECORD_COLUMN_WIDTHS, strict=True):
+        _, height = Paragraph(escape_text(value), _BODY).wrap(width - _SIGNING_COLUMN_GUTTER, 0)
+        tallest = max(tallest, height + _RECORD_ROW_CLEARANCE)
+    return tallest
 
 
 def _record_block(officer: AttestedOfficer) -> Table:
@@ -248,22 +263,19 @@ def _record_block(officer: AttestedOfficer) -> Table:
     and released it, in the shape BoG's form asks for.
     """
     labels = ("Name", "Designation", "Date")
+    # Escaped, not interpolated: the name is whichever user set their own
+    # display name, and reportlab's Paragraph reads XML-like markup — including
+    # an <img src=…> it fetches server-side while building the document of
+    # record.
+    values = (officer.name, officer.title or "—", officer.at)
     body = [
-        [
-            # Escaped, not interpolated: the name is whichever user set their
-            # own display name, and reportlab's Paragraph reads XML-like markup
-            # — including an <img src=…> it fetches server-side while building
-            # the document of record.
-            Paragraph(escape_text(officer.name), _BODY),
-            Paragraph(escape_text(officer.title or "—"), _BODY),
-            Paragraph(escape_text(officer.at), _BODY),
-        ],
+        [Paragraph(escape_text(value), _BODY) for value in values],
         [Paragraph(label, _FIELD_LABEL) for label in labels],
     ]
     table = Table(
         body,
         colWidths=list(_RECORD_COLUMN_WIDTHS),
-        rowHeights=[_RECORD_ROW_HEIGHT, _SIGNING_LABEL_HEIGHT],
+        rowHeights=[_record_row_height(values), _SIGNING_LABEL_HEIGHT],
     )
     table.setStyle(
         TableStyle(

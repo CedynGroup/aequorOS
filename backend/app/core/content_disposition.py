@@ -13,7 +13,9 @@ rather than header splitting — the file itself is still the evidence file, but
 the name it is saved under belongs to whoever uploaded it.
 
 Downloads using this helper emit two parameters after removing directory
-components, ASCII control characters and surrounding whitespace:
+components, ASCII control characters and surrounding whitespace, and after
+replacing a name that is only a directory reference (``.`` or ``..``) with
+:data:`DEFAULT_FILENAME`:
 
 * ``filename`` — ASCII only, reduced to ``[A-Za-z0-9._-]``. A client that
   ignores RFC 5987 still gets a usable, inert name.
@@ -40,6 +42,11 @@ _CONTROL = re.compile(r"[\x00-\x1f\x7f]")
 #: The name a header falls back to when the stored one is unusable.
 DEFAULT_FILENAME = "document"
 
+#: RFC 6266 §4.3: ``.`` and ``..`` name a directory, not a file, and a recipient
+#: is told to ignore them. Both name forms fall back together, so a client that
+#: prefers ``filename*`` never saves a directory reference.
+_SPECIAL_NAMES = frozenset({".", ".."})
+
 #: Bound the ASCII fallback while leaving room for a descriptive name. The
 #: UTF-8 form is not truncated, so these limits do not bound the whole header.
 _MAX_ASCII_STEM = 120
@@ -49,7 +56,11 @@ _MAX_SUFFIX = 16
 def _basename(filename: str) -> str:
     """``filename`` with any directory part and control characters removed."""
     cleaned = _CONTROL.sub("", filename).replace("\\", "/")
-    return cleaned.rsplit("/", 1)[-1].strip() or DEFAULT_FILENAME
+    name = cleaned.rsplit("/", 1)[-1].strip()
+    # A stored ``.`` or ``..`` is a directory reference. The ASCII form already
+    # reduces it to the fallback, so the UTF-8 form must do the same or the two
+    # parameters name different files.
+    return DEFAULT_FILENAME if not name or name in _SPECIAL_NAMES else name
 
 
 def _ascii_form(name: str) -> str:

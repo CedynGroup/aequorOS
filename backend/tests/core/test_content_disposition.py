@@ -118,6 +118,20 @@ def test_the_utf8_form_keeps_the_banks_own_spelling() -> None:
     assert _parameters(header)["filename*"] == "UTF-8''%E6%8A%A5%E5%91%8A%202025.pdf"
 
 
+@pytest.mark.parametrize("name", [pytest.param(".", id="dot"), pytest.param("..", id="dot-dot")])
+def test_a_directory_name_falls_back_in_both_name_forms(name: str) -> None:
+    """RFC 6266 §4.3: ``.`` and ``..`` are ignored or substituted by recipients.
+
+    They are not filenames, so neither parameter may carry one: the ASCII form
+    and the UTF-8 form a browser chooses between must name the same fallback.
+    """
+    assert attachment_name_parts(name) == (DEFAULT_FILENAME, DEFAULT_FILENAME)
+
+    parameters = _parameters(attachment_headers(name)["Content-Disposition"])
+    assert parameters["filename"] == DEFAULT_FILENAME
+    assert parameters["filename*"] == f"UTF-8''{DEFAULT_FILENAME}"
+
+
 def test_a_long_name_does_not_grow_the_header_without_bound() -> None:
     """The schema caps a stored name at 255 characters; the ASCII stem is capped."""
     ascii_name, _ = attachment_name_parts("a" * 255 + ".pdf")
