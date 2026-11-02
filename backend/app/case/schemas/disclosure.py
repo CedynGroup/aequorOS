@@ -58,6 +58,7 @@ class CaseResponses:
                     "details": {},
                     "summary": f"{result.risk_type.replace('_', ' ').capitalize()} finding.",
                     "rationale": None,
+                    "disposition_reason": None,
                 }
             )
         return result

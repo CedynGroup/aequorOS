@@ -8,10 +8,13 @@ from uuid import UUID
 
 import pytest
 from fastapi.testclient import TestClient
+from pydantic import TypeAdapter
 from sqlalchemy import Engine, delete, event, select, text
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
+from app.case.schemas.findings import FindingRead
+from app.case.schemas.liquidity import LiquidityFindingRead, LiquiditySummaryRead
 from app.case.service import calculations, liquidity
 from app.case.service.liquidity import generate_findings
 from app.db.session import get_sessionmaker
@@ -30,6 +33,7 @@ from app.models import (
     RiskScenario,
 )
 from tests.case.api.test_calculations import _financial_inputs, _ready_scenario
+from tests.case.api.test_case_authorization import disclosure_grants
 from tests.support.api_factories import CaseFactory
 from tests.support.database import managed_engine, managed_session_factory
 from tests.support.helpers import ORG_1, ORG_2, USER_1, USER_2, headers
@@ -121,7 +125,9 @@ def test_legacy_successful_run_returns_honest_unavailable_summary(
 
 
 @requires_committing_db
-def test_liquidity_summary_empty_success_evidence_and_review(db_client: TestClient) -> None:
+def test_liquidity_summary_empty_success_evidence_and_review(
+    db_client: TestClient, db_session: Session
+) -> None:
     case = CaseFactory(db_client).create()
     empty = db_client.get(f"/api/v1/cases/{case.id}/liquidity/summary", headers=headers())
     assert empty.status_code == 200
@@ -214,13 +220,15 @@ def test_liquidity_summary_empty_success_evidence_and_review(db_client: TestClie
         json={"action": "dismiss"},
     )
     assert invalid.status_code == 422
+    reason = "Actual cash shortfall is 94821 GHS"
     reviewed = db_client.post(
         f"/api/v1/cases/{case.id}/liquidity/findings/{finding['id']}/review",
         headers=headers(),
-        json={"action": "acknowledge", "reason": "Reviewed forecast evidence"},
+        json={"action": "acknowledge", "reason": reason},
     )
     assert reviewed.status_code == 200, reviewed.text
     assert reviewed.json()["status"] == "acknowledged"
+    assert LiquidityFindingRead.model_validate(reviewed.json()).disposition_reason == reason
 
     with get_sessionmaker()() as session:
         persisted_finding = session.get(RiskFinding, UUID(finding["id"]))
@@ -232,6 +240,43 @@ def test_liquidity_summary_empty_success_evidence_and_review(db_client: TestClie
                 AuditEvent.event_type == "liquidity_finding.reviewed",
             )
         )
+
+    _assert_liquidity_review_disclosure(
+        db_client,
+        db_session,
+        case.id,
+        LiquidityFindingRead.model_validate(reviewed.json()).id,
+        reason,
+    )
+
+
+def _assert_liquidity_review_disclosure(
+    client: TestClient, db: Session, case_id: UUID, finding_id: UUID, reason: str
+) -> None:
+    for restricted in (False, True):
+        disclosure_grants(db, restricted=restricted)
+        for path in ("/findings", f"/cases/{case_id}/findings"):
+            response = client.get(f"/api/v1{path}", headers=headers())
+            assert response.status_code == 200, response.text
+            findings = TypeAdapter(list[FindingRead]).validate_python(response.json())
+            finding = next(item for item in findings if item.id == finding_id)
+            assert finding.status == "acknowledged"
+            assert finding.disposition_reason == (reason if restricted else None)
+            assert (reason in response.text) is restricted
+        detail = client.get(f"/api/v1/findings/{finding_id}", headers=headers())
+        assert detail.status_code == 200, detail.text
+        assert FindingRead.model_validate(detail.json()).disposition_reason == (
+            reason if restricted else None
+        )
+    summary = client.get(f"/api/v1/cases/{case_id}/liquidity/summary", headers=headers())
+    assert summary.status_code == 200, summary.text
+    full = LiquiditySummaryRead.model_validate(summary.json())
+    assert (
+        next(item for item in full.findings if item.id == finding_id).disposition_reason == reason
+    )
+    db.expire_all()
+    stored = db.get(RiskFinding, finding_id)
+    assert stored is not None and stored.disposition_reason == reason
 
 
 @requires_committing_db

@@ -30,7 +30,7 @@ from app.db.base import utc_now
 from app.identity.models.authorization import AuthorizationBinding
 from app.identity.models.user import User
 from app.identity.service import authorization
-from app.models import CalculationRun, Document, Job, RiskCase
+from app.models import CalculationRun, Document, Job, RiskCase, RiskFinding
 from app.models.audit_event import AuditEvent
 from app.schemas.common import ErrorResponse, JsonObject
 from app.schemas.jobs import JobRead
@@ -496,7 +496,7 @@ def test_existing_opaque_resources_are_hidden_before_side_effects(
     assert document is not None and document.status == "uploaded"
 
 
-def _disclosure_grants(db: Session, *, restricted: bool) -> None:
+def disclosure_grants(db: Session, *, restricted: bool) -> None:
     db.execute(delete(AuthorizationBinding).where(AuthorizationBinding.principal_user_id == USER_1))
     db.commit()
     grant(db)
@@ -510,7 +510,7 @@ def _disclosure_grants(db: Session, *, restricted: bool) -> None:
 def test_case_payload_disclosure_on_every_mutation_return(
     db_client: TestClient, db_session: Session, restricted: bool
 ) -> None:
-    _disclosure_grants(db_session, restricted=restricted)
+    disclosure_grants(db_session, restricted=restricted)
     metadata: JsonObject = {"label": "Confidential label", "structured_data": {"debt_to_ebitda": 7}}
     created = db_client.post(
         "/api/v1/cases",
@@ -590,7 +590,7 @@ def test_populated_assessment_scores_findings_and_history_disclosure(
 ) -> None:
     case_id, assessment_id, result = _populated_assessment(db_client)
     run_id = result.run_id
-    _disclosure_grants(db_session, restricted=restricted)
+    disclosure_grants(db_session, restricted=restricted)
     scores = db_client.get(f"/api/v1/cases/{case_id}/scores", headers=headers())
     assert scores.status_code == 200, scores.text
     score = TypeAdapter(list[ScoreRead]).validate_python(scores.json())[0]
@@ -617,6 +617,17 @@ def test_populated_assessment_scores_findings_and_history_disclosure(
         )
         assert run.summary["risk_score"] == score.score
         assert ("input_snapshot" in run.summary) is restricted
+    _assert_finding_disclosure(db_client, db_session, case_id, assessment_id, restricted=restricted)
+
+
+def _assert_finding_disclosure(
+    db_client: TestClient,
+    db_session: Session,
+    case_id: UUID,
+    assessment_id: UUID,
+    *,
+    restricted: bool,
+) -> None:
     sentinel = "RAW_FINANCIAL_EVIDENCE_94821"
     manual = db_client.post(
         f"/api/v1/cases/{case_id}/findings",
@@ -632,10 +643,28 @@ def test_populated_assessment_scores_findings_and_history_disclosure(
     )
     assert manual.status_code == 201, manual.text
     finding_id = FindingRead.model_validate(manual.json()).id
+    assert FindingRead.model_validate(manual.json()).disposition_reason is None
+    reason = "Actual cash shortfall is 94821 GHS"
     reviewed = db_client.patch(
-        f"/api/v1/findings/{finding_id}", headers=headers(), json={"status": "acknowledged"}
+        f"/api/v1/findings/{finding_id}",
+        headers=headers(),
+        json={"status": "acknowledged", "disposition_reason": reason},
     )
     assert reviewed.status_code == 200, reviewed.text
+    assert FindingRead.model_validate(reviewed.json()).disposition_reason == (
+        reason if restricted else None
+    )
+    generated = db_client.get(f"/api/v1/assessments/{assessment_id}/findings", headers=headers())
+    for finding in TypeAdapter(list[FindingRead]).validate_python(generated.json()):
+        updated = db_client.patch(
+            f"/api/v1/findings/{finding.id}",
+            headers=headers(),
+            json={"status": "acknowledged", "disposition_reason": reason},
+        )
+        assert updated.status_code == 200, updated.text
+        assert FindingRead.model_validate(updated.json()).disposition_reason == (
+            reason if restricted else None
+        )
     for response in (manual, reviewed):
         assert (sentinel in response.text) is restricted
         assert bool(FindingRead.model_validate(response.json()).details) is restricted
@@ -648,9 +677,16 @@ def test_populated_assessment_scores_findings_and_history_disclosure(
         assert response.status_code == 200, response.text
         findings = TypeAdapter(list[FindingRead]).validate_python(response.json())
         assert findings
+        assert all(
+            finding.disposition_reason == (reason if restricted else None) for finding in findings
+        )
+        assert (reason in response.text) is restricted
         for finding in findings:
             detail = db_client.get(f"/api/v1/findings/{finding.id}", headers=headers())
             assert detail.status_code == 200, detail.text
+            assert FindingRead.model_validate(detail.json()).disposition_reason == (
+                reason if restricted else None
+            )
             if restricted:
                 assert FindingRead.model_validate(detail.json()).details
             else:
@@ -668,6 +704,10 @@ def test_populated_assessment_scores_findings_and_history_disclosure(
     assert FindingRead.model_validate(full_finding.json()).details["evidence"] == [
         {"quote": sentinel}
     ]
+    assert FindingRead.model_validate(full_finding.json()).disposition_reason == reason
+    db_session.expire_all()
+    stored = db_session.get(RiskFinding, finding_id)
+    assert stored is not None and stored.disposition_reason == reason
 
 
 @pytest.mark.parametrize("restricted", [False, True])
@@ -707,7 +747,7 @@ def test_calculation_history_diagnostics_disclosure(
     )
     db_session.add(run)
     db_session.commit()
-    _disclosure_grants(db_session, restricted=restricted)
+    disclosure_grants(db_session, restricted=restricted)
     response = db_client.get(f"/api/v1/cases/{case_id}/calculation-runs", headers=headers())
     assert response.status_code == 200, response.text
     error = CalculationRunListRead.model_validate(response.json()).runs[0].error
@@ -772,7 +812,7 @@ def test_case_job_polling_uses_current_restricted_authority(
     document = Job(organization_id=ORG_1, job_type="document_parse", status="queued")
     db_session.add_all([unrelated, document])
     db_session.commit()
-    _disclosure_grants(db_session, restricted=False)
+    disclosure_grants(db_session, restricted=False)
     assert db_client.get(f"/api/v1/jobs/{unrelated.id}", headers=headers()).status_code == 200
     assert db_client.get(f"/api/v1/jobs/{document.id}", headers=headers()).status_code == 404
     grant(db_session, RoleBundle.VIEWER, SensitivityScope.RESTRICTED)
