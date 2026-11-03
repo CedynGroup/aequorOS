@@ -45,7 +45,6 @@ import {
   IRRBB_CONFIDENTIAL_RUN_REASON,
 } from "@/lib/modules";
 import { currencyCode, fmtInt } from "@/lib/format";
-import QueryBoundary from "@/components/ui/QueryBoundary";
 import { useBankRules } from "@/lib/api/regulatoryRules";
 import { useBankContext } from "@/components/shell/BankContext";
 import ReportingPeriodNotice from "@/components/shell/ReportingPeriodNotice";

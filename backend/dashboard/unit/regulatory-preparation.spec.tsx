@@ -2,7 +2,7 @@
 import "@testing-library/jest-dom/vitest";
 import { afterEach, expect, it, vi } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
-import SdiLiquidityView from "@/components/liquidity/SdiLiquidityView";
+import SdiLiquidityView from "@/features/liquidity/components/SdiLiquidityView";
 import IcaapPage from "@/app/(app)/icaap/page";
 import { notificationHref } from "@/components/shell/NotificationDrawer";
 import {

@@ -25,7 +25,7 @@ import {
 import fc from "fast-check";
 import { http, HttpResponse } from "msw";
 import { setupServer } from "msw/node";
-import LiveStatusCard from "@/components/live/LiveStatusCard";
+import LiveStatusCard from "@/features/live/components/LiveStatusCard";
 import ForecastingPage from "@/app/(app)/forecasting/page";
 import RiskPage from "@/app/(app)/risk/page";
 import { apiBaseUrl } from "@/lib/api/client";

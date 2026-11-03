@@ -19,19 +19,17 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { QueryAuthorityScopeProvider } from "@/lib/api/useQueryScope";
 import { queryAuthorityScope } from "@/lib/api/queryPolicy";
 import type { SdiLiquidityPosition } from "@/components/basel/sdiHooks";
-import SdiLiquidityMonitoringView from "@/components/liquidity/SdiLiquidityMonitoringView";
+import SdiLiquidityMonitoringView from "@/features/liquidity/components/SdiLiquidityMonitoringView";
 import InstrumentsRegister from "@/components/submissions/InstrumentsRegister";
-import SdiLiquiditySummary from "@/components/home/SdiLiquiditySummary";
-import SdiLiquidityView from "@/components/liquidity/SdiLiquidityView";
+import SdiLiquiditySummary from "@/features/home/components/SdiLiquiditySummary";
+import SdiLiquidityView from "@/features/liquidity/components/SdiLiquidityView";
 import RiskPage from "@/app/(app)/risk/page";
 import AlertsPage from "@/app/(app)/alerts/page";
-import BreachBanner from "@/components/home/BreachBanner";
-import PulseWall from "@/components/home/PulseWall";
-import { usePulseCards } from "@/components/home/pulse";
-import LiveStatusCard from "@/components/live/LiveStatusCard";
+import { BreachBanner, PulseWall, usePulseCards } from "@/features/home/public";
+import LiveStatusCard from "@/features/live/components/LiveStatusCard";
 import UnifiedBell from "@/components/shell/UnifiedBell";
-import RatioTrendChart from "@/components/home/RatioTrendChart";
-import WindowAnalysis from "@/components/home/WindowAnalysis";
+import RatioTrendChart from "@/features/home/components/RatioTrendChart";
+import WindowAnalysis from "@/features/home/components/WindowAnalysis";
 import StressBoardPack from "@/app/(app)/reports/stress-board-pack/page";
 import BoardPackPage from "@/app/(app)/reports/board-pack/page";
 import { SdiLiquidityNotAssessed } from "@/components/stress/EnterpriseStressWorkbench";
@@ -40,14 +38,15 @@ import LiquidityLayout from "@/app/(app)/liquidity/layout";
 import LiquidityCockpit from "@/app/(app)/liquidity/page";
 import CfpPage from "@/app/(app)/liquidity/cfp/page";
 import MonitoringPage from "@/app/(app)/liquidity/monitoring/page";
-import { irrLimits, liquidityLimits } from "@/components/risk/limits";
+import { irrLimits } from "@/features/risk/components/limits";
+import { liquidityLimits } from "@/features/risk/public";
 import { isRuleInForce } from "@/lib/regulatoryInstruments";
 import {
   useBankRules,
   useInForceAlerts,
   useInForceLiveSummary,
 } from "@/lib/api/regulatoryRules";
-import type { BiEChartsOption } from "@/components/bi/EChart";
+import type { BiEChartsOption } from "@/features/bi/public";
 
 beforeAll(() =>
   vi.stubGlobal("matchMedia", () => ({
@@ -128,11 +127,11 @@ vi.mock("next/navigation", () => ({
   usePathname: () => state.path,
   useRouter: () => ({ push: vi.fn() }),
 }));
-vi.mock("@/components/bi/InsightStrip", () => ({
+vi.mock("@/features/bi/components/InsightStrip", () => ({
   LandingInsightStrip: () => null,
   useKpiExplain: () => ({ explainFor: () => undefined, drawer: null }),
 }));
-vi.mock("@/components/bi/EChart", () => ({
+vi.mock("@/features/bi/components/EChart", () => ({
   default: ({
     option,
     ariaLabel,

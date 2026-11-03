@@ -84,11 +84,11 @@ vi.mock("@/lib/api/hooks", () => ({
 vi.mock("@/components/forecasting/hooks", () => ({
   useScenarioRunSet: () => ({}),
 }));
-vi.mock("@/components/bi/InsightStrip", () => ({
+vi.mock("@/features/bi/components/InsightStrip", () => ({
   LandingInsightStrip: () => null,
   useKpiExplain: () => ({}),
 }));
-vi.mock("@/components/bi/EChart", () => ({ default: () => <div>Chart</div> }));
+vi.mock("@/features/bi/components/EChart", () => ({ default: () => <div>Chart</div> }));
 beforeEach(() => {
   vi.stubGlobal("matchMedia", () => ({
     matches: false,
