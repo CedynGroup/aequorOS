@@ -2548,7 +2548,7 @@
   "reportPrivateUsage": 4
  },
  "tests.api.test_examiner_mode": {
-  "reportAny": 22
+  "reportAny": 18
  },
  "tests.api.test_feature_flags": {
   "reportAny": 18
