@@ -8,7 +8,7 @@ door) and is **default-off**:
   that has not opted in behaves as if the route did not exist;
 * a staff row with no enabled emergency credential, an inactive row and a
   wrong code all answer the same generic 401 — no user enumeration;
-* the durable per-credential lockout answers 429 even for the right code;
+* local and durable lockouts answer the same generic 401, even for the right code;
 * every attempt that reaches verification writes an ``operator_audit_log`` row
   (``auth_mode='break_glass'``) and emits the ``auth.break_glass`` warning log.
 
@@ -42,14 +42,6 @@ _INVALID = HTTPException(
 )
 
 
-def _throttled(minutes: int | None = None) -> HTTPException:
-    wait = "in a few minutes" if minutes is None else f"in {minutes} minutes"
-    return HTTPException(
-        status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-        detail=f"Too many failed emergency sign-in attempts. Try again {wait}.",
-    )
-
-
 @router.post("/break-glass", response_model=OperatorLoginRead)
 def operator_break_glass_login(payload: OperatorBreakGlassRequest) -> OperatorLoginRead:
     settings = get_operator_settings()
@@ -71,7 +63,7 @@ def operator_break_glass_login(payload: OperatorBreakGlassRequest) -> OperatorLo
 
     email = payload.email.strip().lower()
     if break_glass.throttle_locked(email):
-        raise _throttled()
+        raise _INVALID
 
     session = get_operator_sessionmaker()()
     try:
@@ -99,8 +91,9 @@ def operator_break_glass_login(payload: OperatorBreakGlassRequest) -> OperatorLo
             )
             raise _INVALID
 
-        expiry = break_glass.account_lock_expiry(credential)
-        if expiry is not None:
+        if break_glass.account_lock_expiry(credential) is not None:
+            break_glass.burn_code_check(payload.code)
+            break_glass.record_login_failure(email)
             break_glass.record_operator_attempt(
                 session,
                 email=email,
@@ -109,7 +102,7 @@ def operator_break_glass_login(payload: OperatorBreakGlassRequest) -> OperatorLo
                 credential_id=credential.id,
                 operator_user_id=user.id,
             )
-            raise _throttled(break_glass.lockout_minutes_remaining(expiry))
+            raise _INVALID
 
         if not security.verify_password(payload.code, credential.code_hash):
             break_glass.record_login_failure(email)

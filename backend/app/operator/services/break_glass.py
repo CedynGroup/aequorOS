@@ -169,10 +169,6 @@ def clear_credential_failures(credential: OperatorBreakGlassCredential) -> None:
     auth_throttle.clear_failures(credential)
 
 
-def lockout_minutes_remaining(expiry: dt.datetime, *, now: dt.datetime | None = None) -> int:
-    return auth_throttle.minutes_remaining(expiry, now=now)
-
-
 # -- session tokens ---------------------------------------------------------------
 def rotation_marker(rotated_at: dt.datetime) -> str:
     aware = rotated_at if rotated_at.tzinfo is not None else rotated_at.replace(tzinfo=dt.UTC)
@@ -375,7 +371,6 @@ __all__ = [
     "disable_credential",
     "generate_code",
     "issue_credential",
-    "lockout_minutes_remaining",
     "mint_token",
     "record_operator_attempt",
     "record_credential_failure",

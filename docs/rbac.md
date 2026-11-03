@@ -1025,9 +1025,10 @@ unchanged while it exists.
   the shared auth throttle settings: `AUTH_MAX_FAILED_LOGINS` (default `5`)
   consecutive failures trigger a lockout starting at `AUTH_LOCKOUT_SECONDS`
   (default `900`, or 15 minutes), doubling on subsequent failures and capped at
-  one hour. During that lockout, even the right code answers 429. The counter
-  is separate from the staff row's password counter, so a guessed emergency
-  code cannot lock ordinary sign-in. A separate process-local per-email guard
+  one hour. During that lockout, even the right code receives the same generic
+  401 as other failed sign-ins. The counter is separate from the staff row's
+  password counter, so a guessed emergency code cannot lock ordinary sign-in.
+  A separate process-local per-email guard
   refuses pre-lookup requests for five minutes after five consecutive failures,
   keeping unknown addresses indistinguishable and throttled. Its expiry does
   not clear a durable credential lockout.
@@ -1038,11 +1039,11 @@ unchanged while it exists.
   The same boundary emits the structured condition `auth.break_glass` with
   `outcome`, `reason`, and account/credential ids. The API deliberately
   distinguishes only `not_designated`, `invalid_code` and `credential_locked`
-  internally; the HTTP response stays a generic 401/429. A request refused by
-  the process-local pre-lookup throttle (a five-minute refusal after five
-  consecutive failures per email) answers 429 without a new audit row or warning
-  log: it never reaches credential verification, and one row per rejected byte
-  would be a log-flooding lever.
+  internally; every failed sign-in returns the same generic 401, including
+  lockouts. A request refused by the process-local pre-lookup throttle (a
+  five-minute refusal after five consecutive failures per email) answers that
+  same 401 without a new audit row or warning log: it never reaches credential
+  verification, and one row per rejected byte would be a log-flooding lever.
 
 | Setting                          | Default | Behavior                                                                                                                       |
 | -------------------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------ |

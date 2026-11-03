@@ -69,9 +69,7 @@ function emergencyErrorMessage(error: ApiError): string {
   if (error.status === 401) return "Invalid emergency access credentials.";
   if (error.status === 404)
     return "Emergency access is not enabled for this deployment.";
-  // 429 (lockout) and 503 (OPERATOR_JWT_SECRET unset while enabled) carry
-  // precise backend messages — surface them verbatim.
-  if (error.status === 429 || error.status === 503) return error.message;
+  if (error.status === 503) return error.message;
   return (
     "Could not reach the operator service, so emergency access could not be " +
     "checked. This is not a problem with your code — try again shortly."

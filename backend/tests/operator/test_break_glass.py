@@ -9,7 +9,8 @@ plus one warning log for every attempt — success or failure.
 from __future__ import annotations
 
 import datetime as dt
-from typing import cast
+from pathlib import Path
+from typing import Never, cast
 
 import jwt as pyjwt
 import pytest
@@ -19,14 +20,16 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core import security
-from app.core.config import get_operator_settings
+from app.core.config import get_operator_settings, get_settings
 from app.db.base import utc_now
+from app.identity.service import auth_throttle
 from app.models import (
     OperatorAuditLog,
     OperatorBreakGlassCredential,
     OperatorUser,
 )
 from app.operator.services import break_glass
+from scripts import manage_break_glass
 from tests.operator.conftest import OPERATOR_JWT_SECRET
 
 PASSWORD = "correct horse battery staple"
@@ -474,7 +477,8 @@ class TestLockout:
         # the DURABLE per-credential lockout refuses even the right code.
         break_glass.reset_login_throttle()
         locked = emergency_login(operator_client, user.email, code)
-        assert locked.status_code == 429
+        assert locked.status_code == 401
+        assert error_message(locked) == "Invalid emergency access credentials."
 
         operator_db.expire_all()
         stored = operator_db.get(OperatorBreakGlassCredential, credential.id)
@@ -490,6 +494,68 @@ class TestLockout:
             ).status_code
             == 200
         )
+
+    def test_failures_are_indistinguishable_across_lockout_windows(
+        self,
+        operator_client: TestClient,
+        operator_db: Session,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        enable(monkeypatch)
+        monkeypatch.setenv("AUTH_MAX_FAILED_LOGINS", "5")
+        monkeypatch.setenv("AUTH_LOCKOUT_SECONDS", "900")
+        get_settings.cache_clear()
+        moment = utc_now()
+        monkeypatch.setattr(break_glass, "utc_now", lambda: moment)
+        monkeypatch.setattr(auth_throttle, "utc_now", lambda: moment)
+        designated = make_operator(operator_db)
+        _credential, code = designate(operator_db, designated)
+        undesignated = make_operator(operator_db, "undesignated@aequoros.com")
+        inactive = make_operator(operator_db, "inactive@aequoros.com")
+        designate(operator_db, inactive)
+        inactive.is_active = False
+        disabled = make_operator(operator_db, "disabled@aequoros.com")
+        disabled_credential, _disabled_code = designate(operator_db, disabled)
+        break_glass.disable_credential(operator_db, disabled_credential)
+        operator_db.commit()
+        emails = [
+            designated.email,
+            undesignated.email,
+            inactive.email,
+            disabled.email,
+            "unknown@aequoros.com",
+        ]
+
+        def assert_refused(email: str, attempted_code: str) -> None:
+            response = emergency_login(operator_client, email, attempted_code)
+            assert response.status_code == 401
+            assert error_message(response) == "Invalid emergency access credentials."
+
+        for _ in range(5):
+            for email in emails:
+                assert_refused(email, "wrong-code")
+        before_throttled = len(audit_rows(operator_db))
+        for email in emails:
+            assert_refused(email, code)
+        assert len(audit_rows(operator_db)) == before_throttled
+
+        moment += dt.timedelta(minutes=6)
+        for email in emails:
+            assert_refused(email, code)
+        rows = audit_rows(operator_db)
+        for email in emails:
+            attempts = [row for row in rows if row.operator_email == email]
+            assert attempts[-1].detail["reason"] == (
+                "credential_locked" if email == designated.email else "not_designated"
+            )
+
+        moment += dt.timedelta(minutes=10)
+        assert emergency_login(operator_client, designated.email, code).status_code == 200
+        stored = break_glass.credential_for_user(operator_db, designated.id)
+        assert stored is not None
+        operator_db.refresh(stored)
+        assert stored.failed_login_attempts == 0
+        assert stored.locked_until is None
 
     def test_success_clears_the_failure_counter(
         self,
@@ -607,7 +673,7 @@ class TestAuditAndLogging:
             emergency_login(operator_client, user.email, "wrong-code")
 
         break_glass.reset_login_throttle()
-        assert emergency_login(operator_client, user.email, code).status_code == 429
+        assert emergency_login(operator_client, user.email, code).status_code == 401
 
         rows = audit_rows(operator_db)
         assert rows[-1].action == break_glass.BREAK_GLASS_DENIED_ACTION
@@ -629,3 +695,62 @@ class TestAuditAndLogging:
         assert emergency_login(operator_client, user.email, code).status_code == 404
         assert warnings.calls == []
         assert audit_rows(operator_db) == []
+
+
+class TestCredentialCli:
+    @pytest.mark.parametrize(
+        ("command", "url_setting"),
+        [
+            (command, source)
+            for command in ("status", "disable", "issue")
+            for source in ("OPERATOR_DATABASE_URL", "DATABASE_URL")
+        ],
+    )
+    def test_commands_forward_tls_policy_to_the_database_driver(
+        self,
+        monkeypatch: pytest.MonkeyPatch,
+        tmp_path: Path,
+        command: str,
+        url_setting: str,
+    ) -> None:
+        ca_bundle = str(tmp_path / "recovery-ca.pem")
+        monkeypatch.setenv("TLS_ALLOW_PLAINTEXT", "0")
+        monkeypatch.setenv("TLS_CA_BUNDLE", ca_bundle)
+        monkeypatch.setenv(
+            "DATABASE_URL",
+            "postgresql+psycopg://operator@fallback.example/control?sslmode=verify-full",
+        )
+        if url_setting == "OPERATOR_DATABASE_URL":
+            monkeypatch.setenv(
+                url_setting,
+                "postgresql+psycopg://operator@operator.example/control?sslmode=verify-full",
+            )
+        get_settings.cache_clear()
+        get_operator_settings.cache_clear()
+        flags = [] if command == "issue" else [f"--{command}"]
+        monkeypatch.setattr(
+            "sys.argv", ["manage_break_glass.py", "--email", "ama@aequoros.com", *flags]
+        )
+        connections: list[dict[str, object]] = []
+
+        class ConnectionCaptured(Exception):
+            pass
+
+        def connect(*_args: object, **kwargs: object) -> Never:
+            connections.append(kwargs)
+            raise ConnectionCaptured
+
+        monkeypatch.setattr("psycopg.connect", connect)
+
+        with pytest.raises(ConnectionCaptured):
+            manage_break_glass.main()
+
+        assert len(connections) == 1
+        assert connections[0]["host"] == (
+            "operator.example" if url_setting == "OPERATOR_DATABASE_URL" else "fallback.example"
+        )
+        assert connections[0]["sslrootcert"] == ca_bundle
+        assert connections[0]["sslmode"] == "verify-full"
+        assert connections[0]["ssl_min_protocol_version"] == "TLSv1.2"
+        assert connections[0]["gssencmode"] == "disable"
+        assert connections[0]["application_name"] == "aequoros-manage-break-glass"

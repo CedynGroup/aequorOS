@@ -36,6 +36,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from sqlalchemy import create_engine, select  # noqa: E402
 from sqlalchemy.orm import Session  # noqa: E402
 
+from app.core.tls import database_connect_args  # noqa: E402
 from app.models import OperatorBreakGlassCredential, OperatorUser  # noqa: E402
 from app.operator.services import break_glass  # noqa: E402
 
@@ -93,12 +94,10 @@ def main() -> int:
         )
         return 1
 
-    engine = create_engine(
-        database_url,
-        connect_args={"application_name": "aequoros-manage-break-glass"}
-        if database_url.startswith("postgresql")
-        else {},
-    )
+    connect_args = database_connect_args(database_url)
+    if database_url.startswith("postgresql"):
+        connect_args["application_name"] = "aequoros-manage-break-glass"
+    engine = create_engine(database_url, connect_args=connect_args)
     try:
         with Session(engine) as session:
             user = _user(session, args.email)

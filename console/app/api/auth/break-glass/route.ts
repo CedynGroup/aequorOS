@@ -6,9 +6,9 @@
  * establishes the same HttpOnly op_session cookie the other routes set — with
  * the short break-glass JWT in `token` and `mode: 'break_glass'`.
  *
- * The operator API owns every policy: disabled deployments answer 404, a
- * non-designated row answers the generic 401, repeated failures answer 429,
- * and each attempt is audited and logged there. The cookie dies with the
+ * The operator API owns every policy: disabled deployments answer 404,
+ * failed sign-ins and lockouts answer the same generic 401, and attempts
+ * reaching verification are audited and logged there. The cookie dies with the
  * token's 15-minute expiry; there is no refresh.
  */
 
@@ -79,8 +79,6 @@ export async function POST(req: NextRequest) {
   }
 
   if (!upstream.ok) {
-    // Pass the backend envelope through untouched: 404 means the deployment
-    // has not enabled emergency access, 401 stays generic, 429 is the lockout.
     const text = await upstream.text();
     return new NextResponse(text, {
       status: upstream.status,
