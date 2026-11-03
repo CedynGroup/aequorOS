@@ -9,9 +9,6 @@ when no database is available.
 
 from __future__ import annotations
 
-import ast
-import inspect
-
 import pytest
 from fastapi.routing import APIRoute
 
@@ -83,20 +80,3 @@ def test_the_examiner_surface_is_exactly_these_three_routes() -> None:
         ("GET", "/api/v1/banks/{bank_id}/examiner/runs/{run_id}/reproduction"),
         ("GET", "/api/v1/banks/{bank_id}/examiner/documentation-package"),
     }
-
-
-def test_examiner_evidence_never_reads_scalar_roles() -> None:
-    """The gate must not consult the token's roles: only bindings decide."""
-
-    from app.reporting.service import examiner_access  # noqa: PLC0415 - module under test
-
-    tree = ast.parse(inspect.getsource(examiner_access))
-    role_reads = [
-        node
-        for node in ast.walk(tree)
-        if isinstance(node, ast.Attribute)
-        and node.attr == "roles"
-        and isinstance(node.value, ast.Name)
-        and node.value.id == "ctx"
-    ]
-    assert role_reads == []

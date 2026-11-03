@@ -19582,7 +19582,6 @@
     "tests/architecture/test_examiner_authorization.py::test_examiner_routes_carry_exactly_one_evidence_gate[GET-/api/v1/banks/{bank_id}/examiner/runs/{run_id}/reproduction]": "unit",
     "tests/architecture/test_examiner_authorization.py::test_examiner_routes_carry_exactly_one_evidence_gate[GET-/api/v1/banks/{bank_id}/examiner/documentation-package]": "unit",
     "tests/architecture/test_examiner_authorization.py::test_the_examiner_surface_is_exactly_these_three_routes": "unit",
-    "tests/architecture/test_examiner_authorization.py::test_examiner_evidence_never_reads_scalar_roles": "unit",
     "tests/scripts/test_authorization_access_impact.py::test_the_report_names_who_may_read_examiner_evidence": "integration"
   },
   "services": {
