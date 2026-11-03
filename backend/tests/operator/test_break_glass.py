@@ -236,8 +236,7 @@ class TestDesignatedRows:
         renewed = emergency_login(operator_client, user.email, new_code)
         assert renewed.status_code == 200
         assert (
-            operator_client.get("/operator/v1/tenants", headers=bearer(renewed)).status_code
-            == 200
+            operator_client.get("/operator/v1/tenants", headers=bearer(renewed)).status_code == 200
         )
 
     def test_turning_the_master_switch_off_revokes_a_minted_session(
