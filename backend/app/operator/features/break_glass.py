@@ -10,7 +10,7 @@ door) and is **default-off**:
   wrong code all answer the same generic 401 — no user enumeration;
 * the durable per-credential lockout answers 429 even for the right code;
 * every attempt that reaches verification writes an ``operator_audit_log`` row
-  (``auth_mode='break_glass'``) and emits the ``auth.break_glass`` alert.
+  (``auth_mode='break_glass'``) and emits the ``auth.break_glass`` warning log.
 
 The response shape is the ordinary login response, but the token carries the
 break-glass ``typ``, a 15-minute fixed lifetime with no refresh, and the bound
@@ -85,6 +85,7 @@ def operator_break_glass_login(payload: OperatorBreakGlassRequest) -> OperatorLo
             or credential is None
             or not credential.is_enabled
             or not credential.code_hash
+            or credential.rotated_at is None
         ):
             break_glass.burn_code_check(payload.code)
             break_glass.record_login_failure(email)
@@ -133,9 +134,10 @@ def operator_break_glass_login(payload: OperatorBreakGlassRequest) -> OperatorLo
             email=user.email,
             role=user.role,
             credential_id=credential.id,
+            rotated_at=credential.rotated_at,
             secret=settings.jwt_secret,
         )
-        # Commits the success stamp and the audit row together, then alerts.
+        # Commits the success stamp and the audit row together, then logs.
         break_glass.record_operator_attempt(
             session,
             email=user.email,

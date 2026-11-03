@@ -19,7 +19,7 @@ second password:
 * a **durable per-credential lockout** on the tenant plane's own primitive
   (``app/identity/service/auth_throttle.py``), fronted by the process-local
   per-email guard that keeps unknown addresses indistinguishable;
-* **every attempt audited and alerted** — ``operator_audit_log`` rows with
+* **every attempt audited and logged** — ``operator_audit_log`` rows with
   ``auth_mode='break_glass'`` plus the ``auth.break_glass`` structured
   condition (see ``docs/rbac.md`` §11.3 for the operations handoff).
 
@@ -73,6 +73,7 @@ class BreakGlassClaims(TypedDict):
     iat: int
     exp: int
     credential_id: str
+    rotated_at: str
 
 
 # -- the code --------------------------------------------------------------------
@@ -173,26 +174,32 @@ def lockout_minutes_remaining(expiry: dt.datetime, *, now: dt.datetime | None = 
 
 
 # -- session tokens ---------------------------------------------------------------
+def rotation_marker(rotated_at: dt.datetime) -> str:
+    aware = rotated_at if rotated_at.tzinfo is not None else rotated_at.replace(tzinfo=dt.UTC)
+    return aware.astimezone(dt.UTC).isoformat()
+
+
 def mint_token(
     *,
     email: str,
     role: str,
     credential_id: UUID,
+    rotated_at: dt.datetime,
     secret: str,
-    now: dt.datetime | None = None,
 ) -> tuple[str, dt.datetime]:
     """Sign a short break-glass session; returns ``(token, expires_at)``.
 
     The distinct ``typ`` claim is load-bearing: it keeps the ordinary operator
     session verifier and this one mutually exclusive.
     """
-    moment = now or utc_now()
+    moment = utc_now()
     expires_at = moment + dt.timedelta(seconds=BREAK_GLASS_TOKEN_TTL_SECONDS)
     payload = {
         "sub": email,
         "role": role,
         "typ": _TOKEN_TYP,
         "bg": str(credential_id),
+        "rotated_at": rotation_marker(rotated_at),
         "iat": int(moment.timestamp()),
         "exp": int(expires_at.timestamp()),
     }
@@ -213,7 +220,7 @@ def verify_token(
             token,
             secret,
             algorithms=["HS256"],
-            options={"require": ["exp", "iat", "sub", "bg"]},
+            options={"require": ["exp", "iat", "sub", "bg", "rotated_at"]},
         )
     except jwt.PyJWTError as exc:
         raise security.TokenInvalidError(str(exc)) from exc
@@ -223,6 +230,7 @@ def verify_token(
         raise security.TokenInvalidError(msg)
     subject = raw.get("sub")
     credential = raw.get("bg")
+    rotated_at = raw.get("rotated_at")
     role = raw.get("role")
     issued_at = raw.get("iat")
     expires_at = raw.get("exp")
@@ -230,6 +238,8 @@ def verify_token(
         raise security.TokenInvalidError("break-glass token carries no subject email")
     if not isinstance(credential, str) or not credential:
         raise security.TokenInvalidError("break-glass token carries no credential id")
+    if not isinstance(rotated_at, str) or not rotated_at:
+        raise security.TokenInvalidError("break-glass token carries no rotation marker")
     if not isinstance(role, str) or not role:
         raise security.TokenInvalidError("break-glass token carries no role")
     if not isinstance(issued_at, int) or isinstance(issued_at, bool):
@@ -255,6 +265,7 @@ def verify_token(
         iat=issued_at,
         exp=expires_at,
         credential_id=str(credential_id),
+        rotated_at=rotated_at,
     )
 
 
@@ -310,7 +321,7 @@ def disable_credential(
     credential.rotated_at = now or utc_now()
 
 
-# -- audit + alert ---------------------------------------------------------------
+# -- audit + log ---------------------------------------------------------------
 def record_operator_attempt(  # noqa: PLR0913 - one audit row carries actor, outcome and session evidence
     db: Session,
     *,
@@ -321,9 +332,9 @@ def record_operator_attempt(  # noqa: PLR0913 - one audit row carries actor, out
     operator_user_id: UUID | None = None,
     expires_at: dt.datetime | None = None,
 ) -> None:
-    """Write the audit row, commit, then emit the operational alert.
+    """Write the audit row, commit, then emit the warning log.
 
-    Every attempt — success or failure — lands here. The alert is emitted only
+    Every attempt — success or failure — lands here. The warning is emitted only
     after the audit row is durable, so a rolled-back transaction never claims
     an emergency sign-in that did not happen.
     """
@@ -370,6 +381,7 @@ __all__ = [
     "record_credential_failure",
     "record_login_failure",
     "reset_login_throttle",
+    "rotation_marker",
     "throttle_locked",
     "verify_token",
 ]

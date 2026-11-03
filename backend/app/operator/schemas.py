@@ -274,7 +274,7 @@ class WorkerHealthRead(ClosedModel):
 class OperatorAuditLogRead(ClosedModel):
     id: str
     operator_email: str
-    auth_mode: Literal["dev", "oidc", "password"]
+    auth_mode: Literal["dev", "oidc", "password", "break_glass"]
     action: str
     target_org: str | None
     detail: JsonObject

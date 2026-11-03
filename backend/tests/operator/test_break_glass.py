@@ -3,7 +3,7 @@
 Covers the contract the operator plane promises: default-off enablement,
 explicit row designation, the row's role and nothing more, a short fixed
 session that revokes immediately, its own durable lockout, and one audit row
-plus one alert for every attempt — success or failure.
+plus one warning log for every attempt — success or failure.
 """
 
 from __future__ import annotations
@@ -80,8 +80,8 @@ def error_message(response: Response) -> str:
     return cast("str", error["message"])
 
 
-class AlertRecorder:
-    """Records the operational alerts the service emits for one test."""
+class WarningRecorder:
+    """Records the service warning hook calls for one test."""
 
     def __init__(self) -> None:
         self.calls: list[dict[str, object]] = []
@@ -200,6 +200,42 @@ class TestDesignatedRows:
             == 401
         )
         assert emergency_login(operator_client, user.email, code).status_code == 401
+
+    @pytest.mark.parametrize("disable_first", [False, True])
+    def test_reissuing_revokes_existing_sessions(
+        self,
+        operator_client: TestClient,
+        operator_db: Session,
+        monkeypatch: pytest.MonkeyPatch,
+        disable_first: bool,
+    ) -> None:
+        enable(monkeypatch)
+        user = make_operator(operator_db)
+        credential, old_code = designate(operator_db, user)
+        signed_in = emergency_login(operator_client, user.email, old_code)
+        assert signed_in.status_code == 200
+        assert (
+            operator_client.get("/operator/v1/tenants", headers=bearer(signed_in)).status_code
+            == 200
+        )
+
+        if disable_first:
+            break_glass.disable_credential(operator_db, credential)
+            operator_db.commit()
+        rotated, new_code = designate(operator_db, user)
+
+        assert rotated.id == credential.id
+        assert (
+            operator_client.get("/operator/v1/tenants", headers=bearer(signed_in)).status_code
+            == 401
+        )
+        assert emergency_login(operator_client, user.email, old_code).status_code == 401
+        renewed = emergency_login(operator_client, user.email, new_code)
+        assert renewed.status_code == 200
+        assert (
+            operator_client.get("/operator/v1/tenants", headers=bearer(renewed)).status_code
+            == 200
+        )
 
     def test_turning_the_master_switch_off_revokes_a_minted_session(
         self,
@@ -338,12 +374,14 @@ class TestSession:
         user = make_operator(operator_db)
         credential, _code = designate(operator_db, user)
         now = utc_now()
+        assert credential.rotated_at is not None
         forged = pyjwt.encode(
             {
                 "sub": user.email,
                 "role": user.role,
                 "typ": "operator_break_glass",
                 "bg": str(credential.id),
+                "rotated_at": break_glass.rotation_marker(credential.rotated_at),
                 "iat": int(now.timestamp()),
                 "exp": int((now + dt.timedelta(hours=8)).timestamp()),
             },
@@ -356,6 +394,36 @@ class TestSession:
         )
 
         assert response.status_code == 401
+
+    def test_a_session_without_a_rotation_marker_is_rejected(
+        self,
+        operator_client: TestClient,
+        operator_db: Session,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        enable(monkeypatch)
+        user = make_operator(operator_db)
+        credential, _code = designate(operator_db, user)
+        now = utc_now()
+        legacy = pyjwt.encode(
+            {
+                "sub": user.email,
+                "role": user.role,
+                "typ": "operator_break_glass",
+                "bg": str(credential.id),
+                "iat": int(now.timestamp()),
+                "exp": int((now + dt.timedelta(minutes=15)).timestamp()),
+            },
+            OPERATOR_JWT_SECRET,
+            algorithm="HS256",
+        )
+
+        assert (
+            operator_client.get(
+                "/operator/v1/tenants", headers={"Authorization": f"Bearer {legacy}"}
+            ).status_code
+            == 401
+        )
 
     def test_an_ordinary_operator_session_is_not_a_break_glass_session(
         self,
@@ -449,16 +517,16 @@ class TestLockout:
         assert emergency_login(operator_client, user.email, code).status_code == 200
 
 
-class TestAuditAndAlert:
-    def test_every_attempt_writes_an_audit_row_and_emits_an_alert(
+class TestAuditAndLogging:
+    def test_every_attempt_writes_an_audit_row_and_emits_a_warning(
         self,
         operator_client: TestClient,
         operator_db: Session,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         enable(monkeypatch)
-        alerts = AlertRecorder()
-        monkeypatch.setattr(break_glass, "operator_break_glass", alerts)
+        warnings = WarningRecorder()
+        monkeypatch.setattr(break_glass, "operator_break_glass", warnings)
         user = make_operator(operator_db)
         credential, code = designate(operator_db, user)
 
@@ -479,7 +547,7 @@ class TestAuditAndAlert:
         assert "wrong-code" not in str(denied.detail)
         assert code not in str(granted.detail)
 
-        assert alerts.calls == [
+        assert warnings.calls == [
             {
                 "success": False,
                 "reason": "invalid_code",
@@ -494,15 +562,45 @@ class TestAuditAndAlert:
             },
         ]
 
-    def test_locked_attempts_are_audited_and_alerted(
+    def test_audit_api_reads_emergency_attempts_and_actions(
         self,
         operator_client: TestClient,
         operator_db: Session,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
         enable(monkeypatch)
-        alerts = AlertRecorder()
-        monkeypatch.setattr(break_glass, "operator_break_glass", alerts)
+        user = make_operator(operator_db, role="operator_admin")
+        _credential, code = designate(operator_db, user)
+        assert emergency_login(operator_client, user.email, "wrong-code").status_code == 401
+        signed_in = emergency_login(operator_client, user.email, code)
+        assert signed_in.status_code == 200
+        assert (
+            operator_client.get("/operator/v1/tenants", headers=bearer(signed_in)).status_code
+            == 200
+        )
+
+        response = operator_client.get("/operator/v1/audit", headers=bearer(signed_in))
+
+        assert response.status_code == 200
+        body = cast("dict[str, object]", response.json())
+        rows = cast("list[dict[str, object]]", body["items"])
+        assert {row["action"] for row in rows} == {
+            break_glass.BREAK_GLASS_DENIED_ACTION,
+            break_glass.BREAK_GLASS_SIGN_IN_ACTION,
+            "tenants.list",
+        }
+        assert all(row["auth_mode"] == "break_glass" for row in rows)
+        assert all(row["operator_email"] == user.email for row in rows)
+
+    def test_locked_attempts_are_audited_and_logged(
+        self,
+        operator_client: TestClient,
+        operator_db: Session,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        enable(monkeypatch)
+        warnings = WarningRecorder()
+        monkeypatch.setattr(break_glass, "operator_break_glass", warnings)
         user = make_operator(operator_db)
         credential, code = designate(operator_db, user)
         for _ in range(5):
@@ -513,21 +611,21 @@ class TestAuditAndAlert:
 
         rows = audit_rows(operator_db)
         assert rows[-1].action == break_glass.BREAK_GLASS_DENIED_ACTION
-        assert alerts.calls[-1]["success"] is False
-        assert alerts.calls[-1]["reason"] == "credential_locked"
-        assert alerts.calls[-1]["credential_id"] == str(credential.id)
+        assert warnings.calls[-1]["success"] is False
+        assert warnings.calls[-1]["reason"] == "credential_locked"
+        assert warnings.calls[-1]["credential_id"] == str(credential.id)
 
-    def test_no_alert_or_audit_before_the_route_is_enabled(
+    def test_no_warning_or_audit_before_the_route_is_enabled(
         self,
         operator_client: TestClient,
         operator_db: Session,
         monkeypatch: pytest.MonkeyPatch,
     ) -> None:
-        alerts = AlertRecorder()
-        monkeypatch.setattr(break_glass, "operator_break_glass", alerts)
+        warnings = WarningRecorder()
+        monkeypatch.setattr(break_glass, "operator_break_glass", warnings)
         user = make_operator(operator_db)
         _credential, code = designate(operator_db, user)
 
         assert emergency_login(operator_client, user.email, code).status_code == 404
-        assert alerts.calls == []
+        assert warnings.calls == []
         assert audit_rows(operator_db) == []

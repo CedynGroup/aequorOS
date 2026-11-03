@@ -187,6 +187,8 @@ def _break_glass_context(token: str, operator_settings: OperatorSettings) -> Ope
             or not user.is_active
             or credential is None
             or not credential.is_enabled
+            or credential.rotated_at is None
+            or claims["rotated_at"] != break_glass.rotation_marker(credential.rotated_at)
             or credential.operator_user_id != user.id
         ):
             raise _UNAUTHORIZED

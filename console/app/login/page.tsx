@@ -349,8 +349,8 @@ function LoginForm() {
             <p className="mt-3 text-micro leading-relaxed text-slate-light">
               Only for when workforce sign-in is unavailable. Uses an emergency
               access code issued to a designated operator. Every use is audited
-              and alerts the on-call engineer; the session expires after 15
-              minutes and cannot be extended.
+              for human review; the session expires after 15 minutes and cannot be
+              extended.
             </p>
             <form onSubmit={onEmergencySubmit} className="mt-3 space-y-3">
               <label className="block">

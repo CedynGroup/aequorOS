@@ -2724,7 +2724,7 @@ export function passwordLogin(
  * Audited emergency (break-glass) sign-in. Exists for the case where the
  * workforce IdP is down or an account was suspended in error; the code is
  * issued by operations to an explicitly designated staff row. Every use is
- * audited and alerted, and the resulting session lasts 15 minutes with no
+ * audited and logged, and the resulting session lasts 15 minutes with no
  * refresh. Absent/disabled deployments answer 404 from this route.
  */
 export function breakGlassLogin(

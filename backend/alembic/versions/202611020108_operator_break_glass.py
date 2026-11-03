@@ -27,7 +27,6 @@ depends_on = None
 
 _AUDIT_TABLE = "operator_audit_log"
 _CREDENTIALS_TABLE = "operator_break_glass_credentials"
-_ORIGINAL_AUTH_MODES = "auth_mode IN ('dev', 'oidc', 'password')"
 _WIDENED_AUTH_MODES = "auth_mode IN ('dev', 'oidc', 'password', 'break_glass')"
 
 
@@ -69,12 +68,3 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     op.drop_table(_CREDENTIALS_TABLE)
-    op.drop_constraint(f"ck_{_AUDIT_TABLE}_auth_mode", _AUDIT_TABLE, type_="check")
-    op.create_check_constraint(f"ck_{_AUDIT_TABLE}_auth_mode", _AUDIT_TABLE, _ORIGINAL_AUTH_MODES)
-    op.alter_column(
-        _AUDIT_TABLE,
-        "auth_mode",
-        existing_type=sa.String(length=16),
-        type_=sa.String(length=8),
-        existing_nullable=False,
-    )

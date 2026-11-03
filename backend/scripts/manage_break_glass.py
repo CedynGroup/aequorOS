@@ -17,7 +17,7 @@ meant to cover.
 The API also needs ``OPERATOR_BREAK_GLASS_ENABLED=true`` before the sign-in
 route accepts anything. Rotation replaces the stored hash, so a previously
 issued code (or a session minted from it) stops working at once. Every use of
-the credential is audited and alerted; see docs/rbac.md §11.3.
+the credential is audited and logged; see docs/rbac.md §11.3.
 
 Uses OPERATOR_DATABASE_URL → DATABASE_URL, from the environment or
 ``backend/.env``. Set OPERATOR_DATABASE_URL to a credential authorized to
@@ -122,7 +122,7 @@ def main() -> int:
             print(f"  {code}")
             print(
                 "\nSet OPERATOR_BREAK_GLASS_ENABLED=true on the operator API to accept it. "
-                "Every use is audited and alerted."
+                "Every use is audited and logged."
             )
     finally:
         engine.dispose()

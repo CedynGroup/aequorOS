@@ -1027,7 +1027,7 @@ unchanged while it exists.
   code. The counter is separate from the staff row's password counter, so a
   guessed emergency code cannot lock ordinary sign-in. A process-local
   per-email guard keeps unknown addresses indistinguishable and throttled.
-- **Audited and alerted on every use, success or failure.** Each attempt that
+- **Audited and logged on every use, success or failure.** Each attempt that
   reaches verification writes one append-only `operator_audit_log` row with
   `auth_mode='break_glass'` and an `action` of `auth.break_glass.sign_in` or
   `auth.break_glass.denied` (generic failure reasons only; never the code).
@@ -1036,7 +1036,7 @@ unchanged while it exists.
   distinguishes only `not_designated`, `invalid_code` and `credential_locked`
   internally; the HTTP response stays a generic 401/429. A request refused by
   the process-local pre-lookup throttle (5 failures per email per 5 minutes)
-  answers 429 without a new audit row or alert: it never reaches credential
+  answers 429 without a new audit row or warning log: it never reaches credential
   verification, and one row per rejected byte would be a log-flooding lever.
 
 | Setting                          | Default | Behavior                                                                                                                       |
@@ -1065,25 +1065,20 @@ unchanged while it exists.
    environment before relying on it: confirm the console accepts the code,
    that `/operator/v1` calls work for 15 minutes, that a 16th-minute request
    is refused, that a wrong code answers 401, and that the audit row and the
-   `auth.break_glass` alert both appear. Record the drill with the incident
+   `auth.break_glass` warning log both appear. Record the drill with the incident
    evidence; repeat after every credential rotation and staff change.
 
-**Operations handoff (alerts).** The operator plane has no webhook or pager
-integration of its own. The alert is the structured `auth.break_glass` log
-line that `app/core/observability.py` writes to the operator API's stderr,
-which the deployment collects with the other service logs (CloudWatch in the
-current Coolify stack). Operations configures one metric filter and alarm:
+**Operations handoff (human audit review).** Alert delivery is not implemented.
+A human-reviewed `operator_audit_log` entry is the control. The deployment owner
+must review emergency sign-in attempts and subsequent actions in the operator
+audit log. The `auth.break_glass` warning log on the operator API's stderr is
+additional evidence; it does not send an on-call notification. Serialized
+Loguru output can be filtered with these CloudWatch expressions:
 
 ```
-{ $.condition = "auth.break_glass" && $.outcome = "success" }   → emergency access used
-{ $.condition = "auth.break_glass" && $.outcome = "failure" }   → emergency access refused
+{ $.record.extra.condition = "auth.break_glass" && $.record.extra.outcome = "success" }   → emergency access used
+{ $.record.extra.condition = "auth.break_glass" && $.record.extra.outcome = "failure" }   → emergency access refused
 ```
-
-Page the security on-call on any success and on a sustained rate of failures;
-the authoritative evidence is the `operator_audit_log` row, and the log line
-is the operational signal. Nothing consumes this condition automatically yet
-— that deployment wiring is an explicit follow-up, reported by the change that
-added the hook.
 
 **Incident use:**
 
@@ -1091,7 +1086,7 @@ added the hook.
    email and code. The session lasts 15 minutes; there is no refresh, so keep
    the immediate task narrow (restore the IdP path, reactivate the wrongly
    suspended account, hand control back).
-2. Security on-call acknowledges the `auth.break_glass` alert and opens an
+2. The designated human reviewer checks the operator audit log and opens an
    incident note: who, when, why, and which recovery action was taken. The
    audit rows supply actor, outcome and session expiry.
 3. After recovery, rotate the used credential and, if the trigger was a

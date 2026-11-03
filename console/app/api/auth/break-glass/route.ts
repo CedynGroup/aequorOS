@@ -8,7 +8,7 @@
  *
  * The operator API owns every policy: disabled deployments answer 404, a
  * non-designated row answers the generic 401, repeated failures answer 429,
- * and each attempt is audited and alerted there. The cookie dies with the
+ * and each attempt is audited and logged there. The cookie dies with the
  * token's 15-minute expiry; there is no refresh.
  */
 
