@@ -8,7 +8,8 @@ Read-only supervisory surfaces over state that already exists:
 - the documentation package: one bundle answering "show me everything" —
   runs per module (latest succeeded, hash, engine version), filed packages
   with their content seals, the Board registers (thresholds, haircuts, ECL,
-  CRM), plan/CFP posture and audit-trail volume for the period.
+  CRM), plan/CFP posture and retained institution audit-trail volume. The audit
+  count excludes staff events and is not limited to the reporting period.
 
 Nothing here mutates.
 

@@ -40,8 +40,7 @@ from app.identity.public import Bank
 #: Evidence is the bank's internal record: restricted, never aggregated.
 AUDIT_SENSITIVITY: Final = Sensitivity.RESTRICTED
 
-#: One sentence for every refusal, so a denied reader cannot probe which half
-#: of the sentence (Audit, or a source module) it is missing.
+#: Uniform entry-gate refusal, without disclosing which binding dimension failed.
 EVIDENCE_DENIAL_DETAIL: Final = (
     "Examiner evidence requires an active scoped binding for this institution."
 )

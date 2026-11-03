@@ -41,32 +41,21 @@ holding one does not acquire the other.
 **Source.** For every source the bundle embeds, the reader's own module
 sentence. Seeing the bundle must not reveal a module the reader cannot open:
 
-| Embedded source | Module | Sensitivity |
-| --------------- | ------ | ----------- |
-| stored runs (`regulatory_runs`) | the canonical run-module map (below) | confidential |
-| filed packages, family `icaap` | `cap` | confidential |
-| filed packages, every other family | `reg` | restricted |
-| register `liquidity-thresholds`, `liquidity-haircuts`, `liquidity/ewis` | `liq` | confidential |
-| register `ecl-assumptions`, `crm-haircuts` | `credit` | confidential |
-| register `capital-plan` | `cap` | confidential |
-| contingency funding plan posture | `liq` | confidential |
-| ICAAP cycles | the `icaap` family gate (`cap`/confidential, bank regime only) | confidential |
-| audit volume | no separate sentence: the count is institution-attributable | restricted |
+| Embedded source                                                         | Module                                                                                                                             | Sensitivity  |
+| ----------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- | ------------ |
+| stored runs (`regulatory_runs`)                                         | the canonical run-module map (below)                                                                                               | confidential |
+| filed packages, family `icaap`                                          | `cap`                                                                                                                              | confidential |
+| filed packages, every other family                                      | `reg`                                                                                                                              | restricted   |
+| register `liquidity-thresholds`, `liquidity-haircuts`, `liquidity/ewis` | `liq`                                                                                                                              | confidential |
+| register `ecl-assumptions`, `crm-haircuts`                              | `credit`                                                                                                                           | confidential |
+| register `capital-plan`                                                 | `cap`                                                                                                                              | confidential |
+| contingency funding plan posture                                        | `liq`                                                                                                                              | confidential |
+| ICAAP cycles                                                            | the `icaap` family gate (`cap`/confidential, bank regime only)                                                                     | confidential |
+| audit volume                                                            | no separate sentence: retained tenant events attributable to this institution, excluding the operator stream (not period-filtered) | restricted   |
 
 The run-module map is **not restated here or in the service**. The canonical map
 is `liquidity.service.regulatory_liquidity._REGULATORY_RUN_AUTHORIZATION`,
-exposed through `app.liquidity.public` as `run_authorization_module(s)`:
-
-| stored run module | source module |
-| ----------------- | ------------- |
-| `capital` | `cap` |
-| `credit` | `credit` |
-| `enterprise_stress` | `risk` |
-| `liquidity` | `liq` |
-| `fx` | `fx` |
-| `irr`, `irr_sf` | `irrbb` |
-| `ftp` | `ftp` |
-| `forecast`, `optimizer`, `whatif`, `reverse_stress` | `fcst` |
+exposed through `app.liquidity.public` as `run_authorization_module(s)`.
 
 An unknown or future stored run module has no established authority and is
 denied, never guessed. A new run module therefore stays hidden from examiners
@@ -81,10 +70,11 @@ sees neither.
 
 - Missing/partial/inactive entry authority → `403` with one uniform sentence
   (`Examiner evidence requires an active scoped binding for this institution.`),
-  so a denied reader cannot probe which half of the sentence it is missing.
-- The run list and the documentation package **filter** their embedded sources
-  in SQL, before the response is composed. They answer `200` with the readable
-  subset.
+  without disclosing which binding dimension failed.
+- The run list and the documentation package filter runs in SQL. The package
+  also filters filed packages by family authority, omits unreadable registers
+  and ICAAP cycles, and skips unreadable CFP retrieval before composing the
+  response. Both routes answer `200` with the readable subset.
 - The by-id run reproduction is the one route whose body discloses a stored
   snapshot's shape, so its source sentence is enforced on the object: a run whose
   source module is not held answers the **same opaque `404`** a nonexistent run
@@ -126,11 +116,11 @@ projects every institution module **except** `audit`). Consequences:
 All paths are prefixed with `/api/v1`. Every row also requires the entry
 sentence; the "source" column is the additional per-object sentence.
 
-| Route | Permission | Sensitivity | Source sentence |
-| ----- | ---------- | ----------- | --------------- |
-| GET `/banks/{bank_id}/examiner/runs` | view | restricted | none on the route; rows filtered per run module at confidential |
-| GET `/banks/{bank_id}/examiner/documentation-package` | view | restricted | none on the route; every embedded block filtered |
-| GET `/banks/{bank_id}/examiner/runs/{run_id}/reproduction` | view | restricted | the run's module view at confidential, else opaque 404 |
+| Route                                                      | Permission | Sensitivity | Source sentence                                                 |
+| ---------------------------------------------------------- | ---------- | ----------- | --------------------------------------------------------------- |
+| GET `/banks/{bank_id}/examiner/runs`                       | view       | restricted  | none on the route; rows filtered per run module at confidential |
+| GET `/banks/{bank_id}/examiner/documentation-package`      | view       | restricted  | none on the route; every embedded block filtered                |
+| GET `/banks/{bank_id}/examiner/runs/{run_id}/reproduction` | view       | restricted  | the run's module view at confidential, else opaque 404          |
 
 These are the only three examiner routes, and
 `tests/architecture/test_examiner_authorization.py` pins that census.
@@ -162,16 +152,16 @@ For every confirmed human evidence reader, operators must explicitly approve
 rows from this table. Every row carries that user's UUID, their exact
 organization ID, `principal_type=human`, active status and approved validity.
 
-| Confirmed duty | role_bundle | institution_scope | module_scope | sensitivity_scope |
-| -------------- | ----------- | ----------------- | ------------ | ----------------- |
-| Opens the supervisory bundle (bank internal auditor, audit liaison) | `auditor` or `viewer` | organization, or the exact bank | `audit` | `restricted` |
-| Reads Liquidity sources (run snapshots, threshold/haircut registers, EWI register, CFP) | `viewer` or `analyst` | as granted | `liq` | `confidential` |
-| Reads Capital sources (capital-plan register, ICAAP packages and cycles) | `viewer` or `analyst` | as granted | `cap` | `confidential` |
-| Reads filed returns (every non-ICAAP family) | `viewer` or `analyst` | as granted | `reg` | `restricted` |
-| Reads Credit sources (ECL assumptions, CRM haircut register) | `viewer` or `analyst` | as granted | `credit` | `confidential` |
-| Reads Forecasting runs (projection, optimizer, what-if, reverse stress) | `viewer` or `analyst` | as granted | `fcst` | `confidential` |
-| Reads IRRBB / FX / FTP runs | `viewer` or `analyst` | as granted | `irrbb` / `fx` / `ftp` | `confidential` |
-| Reads enterprise-stress runs | `viewer` or `analyst` | as granted | `risk` | `confidential` |
+| Confirmed duty                                                                          | role_bundle           | institution_scope               | module_scope           | sensitivity_scope |
+| --------------------------------------------------------------------------------------- | --------------------- | ------------------------------- | ---------------------- | ----------------- |
+| Opens the supervisory bundle (bank internal auditor, audit liaison)                     | `auditor` or `viewer` | organization, or the exact bank | `audit`                | `restricted`      |
+| Reads Liquidity sources (run snapshots, threshold/haircut registers, EWI register, CFP) | `viewer` or `analyst` | as granted                      | `liq`                  | `confidential`    |
+| Reads Capital sources (capital-plan register, ICAAP packages and cycles)                | `viewer` or `analyst` | as granted                      | `cap`                  | `confidential`    |
+| Reads filed returns (every non-ICAAP family)                                            | `viewer` or `analyst` | as granted                      | `reg`                  | `restricted`      |
+| Reads Credit sources (ECL assumptions, CRM haircut register)                            | `viewer` or `analyst` | as granted                      | `credit`               | `confidential`    |
+| Reads Forecasting runs (projection, optimizer, what-if, reverse stress)                 | `viewer` or `analyst` | as granted                      | `fcst`                 | `confidential`    |
+| Reads IRRBB / FX / FTP runs                                                             | `viewer` or `analyst` | as granted                      | `irrbb` / `fx` / `ftp` | `confidential`    |
+| Reads enterprise-stress runs                                                            | `viewer` or `analyst` | as granted                      | `risk`                 | `confidential`    |
 
 `auditor` and `viewer` are permission-equivalent for this cutover: both bundles
 carry exactly `{view}`, and the sensitivity dimension is what separates an audit
@@ -205,10 +195,11 @@ requires a code change to correct — only an approved binding.
   census and each route's dependency set: exactly one
   `require_examiner_evidence`, `resolve_tenant_bank`, no mutation-context
   dependency and no `require_role_*`.
-- `tests/reporting/api/test_examiner_mode.py` keeps its real-database read
+- `tests/reporting/api/test_examiner_mode.py` keeps its read-model
   invariants (hash reproduction, tamper detection, package/CFP/audit bundling,
   tenant isolation), now acting as a principal that explicitly holds the entry
-  and source rows inside the rolled-back transaction.
+  and source rows alongside stored evidence inside the disposable fixture
+  transaction. It does not use the primary database.
 - `tests/scripts/test_authorization_access_impact.py` pins the new `examiner`
   column, and `scripts/authorization_access_impact.py` documents it.
 - The two new test modules are classified in `scripts/test_suites.json`

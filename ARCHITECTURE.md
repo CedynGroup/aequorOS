@@ -1340,9 +1340,10 @@ backfill are described in the [quick start](README.md#quick-start).
   `reverse_stress`); STRESS-PACK return (family `stress`, event-driven); IFRS 9 ECL
   ([assumption and coverage contract](#ecl-assumption-and-coverage-contract)) +
   CRM haircuts (`crm_collateral` facts, Basel ¶151 code defaults +
-  `crm-haircuts` register); ICAAP capital plan + quarterly ILAAP snapshots; examiner role
-  (ladder position analyst > examiner > viewer — reads everything, no mutation gate admits
-  it). LAS-QUARTERLY is registered for preparation under the
+  `crm-haircuts` register); ICAAP capital plan + quarterly ILAAP snapshots; read-only
+  examiner evidence under the
+  [examiner evidence authority contract](backend/docs/examiner_evidence_enforcement_rollout.md).
+  LAS-QUARTERLY is registered for preparation under the
   [instrument-status contract](docs/regulatory_reporting.md#5b-reporting-date-standing-rules)
   and generates `template_pending` until the official form lands (never infer a BoG layout);
   the monthly balance-sheet + P&L pack is
