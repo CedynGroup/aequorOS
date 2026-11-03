@@ -7,7 +7,7 @@ from urllib.parse import parse_qs, urlsplit
 
 import boto3  # pyright: ignore[reportMissingTypeStubs]
 import pytest
-from botocore.client import BaseClient, Config  # pyright: ignore[reportMissingTypeStubs]
+from botocore.client import Config  # pyright: ignore[reportMissingTypeStubs]
 from moto import mock_aws
 
 from app.core.content_digest import ContentReadOverrun
@@ -33,14 +33,12 @@ class _SeedClient(Protocol):
 
 
 def _seed_client() -> _SeedClient:
-    factory = cast(Callable[..., BaseClient], boto3.client)
-    return cast(
-        _SeedClient,
-        factory(
-            "s3",
-            region_name="us-east-1",
-            config=Config(signature_version="s3v4", s3={"addressing_style": "path"}),
-        ),
+    """Boto3's untyped test client is restricted to this fixture's operations."""
+    factory = cast(Callable[..., _SeedClient], boto3.client)
+    return factory(
+        "s3",
+        region_name="us-east-1",
+        config=Config(signature_version="s3v4", s3={"addressing_style": "path"}),
     )
 
 

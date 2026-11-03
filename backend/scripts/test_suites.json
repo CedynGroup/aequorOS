@@ -7574,7 +7574,6 @@
     "tests/case/service/test_document_deletion.py::test_storage_success_with_lost_acknowledgement_is_safe_to_repeat": "integration",
     "tests/case/service/test_documents.py::test_complete_upload_persists_storage_metadata": "integration",
     "tests/case/service/test_documents.py::test_complete_upload_binds_downloads_to_the_verified_snapshot": "integration",
-    "tests/case/service/test_documents.py::test_complete_upload_checks_snapshot_metadata_after_a_staged_overwrite": "integration",
     "tests/case/service/test_documents.py::test_complete_upload_discards_its_snapshot_when_the_pending_state_changes[complete]": "integration",
     "tests/case/service/test_documents.py::test_complete_upload_discards_its_snapshot_when_the_pending_state_changes[delete]": "integration",
     "tests/case/service/test_documents.py::test_document_service_records_audit_events": "integration",
@@ -19630,7 +19629,19 @@
     "tests/architecture/test_examiner_authorization.py::test_examiner_routes_carry_exactly_one_evidence_gate[GET-/api/v1/banks/{bank_id}/examiner/runs/{run_id}/reproduction]": "unit",
     "tests/architecture/test_examiner_authorization.py::test_examiner_routes_carry_exactly_one_evidence_gate[GET-/api/v1/banks/{bank_id}/examiner/documentation-package]": "unit",
     "tests/architecture/test_examiner_authorization.py::test_the_examiner_surface_is_exactly_these_three_routes": "unit",
-    "tests/scripts/test_authorization_access_impact.py::test_the_report_names_who_may_read_examiner_evidence": "integration"
+    "tests/scripts/test_authorization_access_impact.py::test_the_report_names_who_may_read_examiner_evidence": "integration",
+    "tests/case/service/test_documents.py::test_complete_upload_checks_snapshot_metadata_after_a_staged_overwrite[False]": "integration",
+    "tests/case/service/test_documents.py::test_complete_upload_checks_snapshot_metadata_after_a_staged_overwrite[True]": "integration",
+    "tests/case/service/test_documents.py::test_complete_upload_cleans_up_after_storage_verification_errors[False-digest]": "integration",
+    "tests/case/service/test_documents.py::test_complete_upload_cleans_up_after_storage_verification_errors[False-head]": "integration",
+    "tests/case/service/test_documents.py::test_complete_upload_cleans_up_after_storage_verification_errors[True-digest]": "integration",
+    "tests/case/service/test_documents.py::test_complete_upload_cleans_up_after_storage_verification_errors[True-head]": "integration",
+    "tests/case/service/test_documents.py::test_complete_upload_handles_uncertain_commit_without_losing_referenced_content[cleanup_failed]": "integration",
+    "tests/case/service/test_documents.py::test_complete_upload_handles_uncertain_commit_without_losing_referenced_content[committed]": "integration",
+    "tests/case/service/test_documents.py::test_complete_upload_handles_uncertain_commit_without_losing_referenced_content[failed]": "integration",
+    "tests/case/service/test_documents.py::test_complete_upload_handles_uncertain_commit_without_losing_referenced_content[lookup_failed]": "integration",
+    "tests/case/service/test_documents.py::test_complete_upload_handles_uncertain_commit_without_losing_referenced_content[rollback_failed]": "integration",
+    "tests/case/service/test_documents.py::test_fake_storage_refuses_missing_and_deleted_snapshot_keys": "unit"
   },
   "services": {
     "tests/attestation/service/test_attestation_openbao.py::test_a_csr_that_does_not_prove_possession_is_never_submitted": "integration",

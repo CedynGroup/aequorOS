@@ -13,6 +13,7 @@ from app.case.service import documents
 from app.integrations.storage.base import StoredObjectHead
 from app.models import AuditEvent, Document, DocumentChunk, StoredObject
 from tests.case.factories import ServiceFactories, upload_payload
+from tests.conftest import FakeStorage
 
 
 def test_request_upload_validates_content_type_and_size(
@@ -136,27 +137,172 @@ def test_complete_upload_binds_downloads_to_the_verified_snapshot(
     assert factories.storage.downloads == [locator]
 
 
+@pytest.mark.parametrize("over_cap", [False, True])
 def test_complete_upload_checks_snapshot_metadata_after_a_staged_overwrite(
     db_session: Session,
     service_factories: ServiceFactories,
     monkeypatch: pytest.MonkeyPatch,
+    over_cap: bool,
 ) -> None:
     factories = service_factories
-    document_id, _ = _staged_upload(factories, declared=b"declared")
+    body = b"declared"
+    document_id, _ = _staged_upload(
+        factories, declared=body, declared_sha256=hashlib.sha256(body).hexdigest()
+    )
     finalize = factories.storage.finalize_upload
 
     def overwrite_before_copy(*, bucket: str, object_key: str) -> str | None:
         factories.storage.body = b"larger replacement"
-        factories.storage.head = StoredObjectHead(byte_size=18, etag='"replacement"')
+        size = factories.settings.risk_max_upload_bytes + 1 if over_cap else 18
+        factories.storage.head = StoredObjectHead(byte_size=size, etag='"replacement"')
         return finalize(bucket=bucket, object_key=object_key)
 
     monkeypatch.setattr(factories.storage, "finalize_upload", overwrite_before_copy)
     refused = _complete(factories, db_session, document_id)
 
     assert refused.status_code == 400
-    assert "declared size" in str(refused.detail)
+    assert ("maximum size" if over_cap else "declared size") in str(refused.detail)
+    if over_cap:
+        assert factories.storage.digest_reads == []
     assert not factories.storage.finalized_objects
     _assert_still_pending(db_session, document_id)
+
+
+@pytest.mark.parametrize("operation", ["head", "digest"])
+@pytest.mark.parametrize("cleanup_fails", [False, True])
+def test_complete_upload_cleans_up_after_storage_verification_errors(
+    db_session: Session,
+    service_factories: ServiceFactories,
+    monkeypatch: pytest.MonkeyPatch,
+    operation: str,
+    cleanup_fails: bool,
+) -> None:
+    factories = service_factories
+    body = b"body"
+    document_id, _ = _staged_upload(
+        factories, declared=body, declared_sha256=hashlib.sha256(body).hexdigest()
+    )
+    head = factories.storage.head_object
+    delete = factories.storage.delete_object
+    original_error = RuntimeError("verification failed")
+    attempted: list[str] = []
+
+    def failing_head(*, bucket: str, object_key: str) -> StoredObjectHead | None:
+        if "/finalized/" in object_key:
+            raise original_error
+        return head(bucket=bucket, object_key=object_key)
+
+    def failing_digest(*, bucket: str, object_key: str, max_bytes: int) -> tuple[int, str] | None:
+        raise original_error
+
+    def cleanup(*, bucket: str, object_key: str) -> None:
+        assert not db_session.in_transaction()
+        attempted.append(object_key)
+        if cleanup_fails:
+            raise RuntimeError("cleanup failed")
+        delete(bucket=bucket, object_key=object_key)
+
+    monkeypatch.setattr(factories.storage, "delete_object", cleanup)
+    if operation == "head":
+        monkeypatch.setattr(factories.storage, "head_object", failing_head)
+    else:
+        monkeypatch.setattr(factories.storage, "read_object_digest", failing_digest)
+    with pytest.raises(RuntimeError) as refused:
+        documents.complete_upload(
+            db_session,
+            factories.ctx,
+            document_id,
+            settings=factories.settings,
+            storage_client=factories.storage,
+        )
+    assert refused.value is original_error
+    assert len(attempted) == 1 and "/finalized/" in attempted[0]
+    assert bool(factories.storage.finalized_objects) == cleanup_fails
+    _assert_still_pending(db_session, document_id)
+
+
+@pytest.mark.parametrize(
+    "outcome", ["committed", "failed", "lookup_failed", "rollback_failed", "cleanup_failed"]
+)
+def test_complete_upload_handles_uncertain_commit_without_losing_referenced_content(
+    db_session: Session,
+    service_factories: ServiceFactories,
+    monkeypatch: pytest.MonkeyPatch,
+    outcome: str,
+) -> None:
+    factories = service_factories
+    document_id, _ = _staged_upload(factories, declared=b"body")
+    commit = db_session.commit
+    delete = factories.storage.delete_object
+    commits = 0
+    original_error = RuntimeError("commit acknowledgement lost")
+    attempted: list[str] = []
+
+    def failed_database(*args: object, **kwargs: object) -> None:
+        raise RuntimeError("database unavailable")
+
+    def uncertain_commit() -> None:
+        nonlocal commits
+        commits += 1
+        if commits == 1:
+            commit()
+            return
+        if outcome == "committed":
+            commit()
+        elif outcome == "lookup_failed":
+            patches.setattr(db_session, "scalar", failed_database)
+        elif outcome == "rollback_failed":
+            patches.setattr(db_session, "rollback", failed_database)
+        raise original_error
+
+    def cleanup(*, bucket: str, object_key: str) -> None:
+        assert not db_session.in_transaction()
+        attempted.append(object_key)
+        if outcome == "cleanup_failed":
+            raise RuntimeError("cleanup unavailable")
+        delete(bucket=bucket, object_key=object_key)
+
+    with monkeypatch.context() as patches:
+        patches.setattr(db_session, "commit", uncertain_commit)
+        patches.setattr(factories.storage, "delete_object", cleanup)
+        with pytest.raises(RuntimeError) as refused:
+            documents.complete_upload(
+                db_session,
+                factories.ctx,
+                document_id,
+                settings=factories.settings,
+                storage_client=factories.storage,
+            )
+    assert refused.value is original_error
+    db_session.rollback()
+    document = db_session.get(Document, document_id)
+    assert document is not None
+    stored = db_session.get(StoredObject, document.stored_object_id)
+    assert stored is not None
+    if outcome == "committed":
+        assert document.status == "uploaded" and stored.status == "available"
+        assert (stored.bucket, stored.object_key) in factories.storage.finalized_objects
+    else:
+        _assert_still_pending(db_session, document_id)
+    assert len(attempted) == (1 if outcome in {"failed", "cleanup_failed"} else 0)
+    assert bool(factories.storage.finalized_objects) == (outcome != "failed")
+
+
+def test_fake_storage_refuses_missing_and_deleted_snapshot_keys(fake_storage: FakeStorage) -> None:
+    fake_storage.head = StoredObjectHead(byte_size=4)
+    fake_storage.body = b"body"
+    key = fake_storage.finalize_upload(bucket="test", object_key="staged")
+    assert key is not None
+    assert fake_storage.head_object(bucket="test", object_key=key) is not None
+    assert fake_storage.read_object_digest(bucket="test", object_key=key, max_bytes=4) is not None
+    for missing in (key, "staged/finalized/unknown"):
+        fake_storage.delete_object(bucket="test", object_key=key)
+        assert fake_storage.head_object(bucket="test", object_key=missing) is None
+        assert (
+            fake_storage.read_object_digest(bucket="test", object_key=missing, max_bytes=4) is None
+        )
+    fake_storage.delete_object(bucket="test", object_key="staged")
+    assert fake_storage.finalize_upload(bucket="test", object_key="staged") is None
 
 
 @pytest.mark.parametrize("concurrent_action", ["complete", "delete"])
@@ -426,6 +572,7 @@ def test_complete_upload_reads_the_object_only_when_a_digest_was_declared(
 def test_complete_upload_refuses_a_body_that_outgrows_the_reported_size(
     db_session: Session,
     service_factories: ServiceFactories,
+    fake_storage: FakeStorage,
 ) -> None:
     factories = service_factories
     payload = b"declared"
@@ -439,7 +586,11 @@ def test_complete_upload_refuses_a_body_that_outgrows_the_reported_size(
 
     refused = _complete(factories, db_session, document_id)
 
-    assert refused.status_code in {400}
+    assert refused.status_code == 400
+    assert len(factories.storage.digest_reads) == 1
+    # The refused read also removed the snapshot it would have hashed.
+    assert len(fake_storage.deleted) == 1
+    assert "/finalized/" in fake_storage.deleted[0][1]
     _assert_still_pending(db_session, document_id)
 
 

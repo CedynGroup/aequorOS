@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from contextlib import suppress
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any
@@ -179,24 +180,27 @@ def _digest_matches(declared: str, observed: str) -> bool:
 
 
 @dataclass(frozen=True)
-class _StagedSnapshot:
-    """What storage reported for a staged upload and, once copied, its snapshot.
+class _FinalizedSnapshot:
+    """A server-only copy of a staged upload, and what storage reports for it."""
 
-    ``finalized_key`` is set only when the copy was made, ``head`` is the report
-    for that copy when it could be re-headed, and ``digest`` is filled only when
-    a checksum was declared and the copy could still be accepted.
-    """
-
-    finalized_key: str | None
-    head: StoredObjectHead | None
+    bucket: str
+    key: str
     digest: tuple[int, str] | None
+
+
+@dataclass(frozen=True)
+class _StagedSnapshot:
+    """Metadata for the snapshot, or the refused staging object if not copied."""
+
+    head: StoredObjectHead | None
+    copy: _FinalizedSnapshot | None
 
 
 @dataclass(frozen=True)
 class _VerifiedUpload:
     """The snapshot completion records: its locator, metadata and measured size."""
 
-    finalized_key: str
+    key: str
     head: StoredObjectHead
     byte_size: int
 
@@ -231,33 +235,39 @@ def _snapshot_staged_upload(
     declared_digest: str | None,
     max_bytes: int,
 ) -> _StagedSnapshot:
-    """Copy a staged object that could still be accepted to a server-only key.
-
-    Only an object that is present, sized and within the cap is copied and read:
-    an object that is already too large is refused against the cap a few lines
-    later, so reading it first would spend the whole read before saying no —
-    the cap exists to bound exactly this work. Nothing here refuses; completion
-    owns the refusals and their messages.
-    """
+    """Copy and hash outside the transaction, bounding both metadata checks."""
     head = storage_client.head_object(bucket=bucket, object_key=object_key)
     if head is None or head.byte_size is None or head.byte_size > max_bytes:
-        return _StagedSnapshot(finalized_key=None, head=head, digest=None)
+        return _StagedSnapshot(head=head, copy=None)
     finalized_key = storage_client.finalize_upload(bucket=bucket, object_key=object_key)
     if finalized_key is None:
         # The copy source is gone, so the head that found it no longer describes
         # anything that landed.
-        return _StagedSnapshot(finalized_key=None, head=None, digest=None)
-    snapshot_head = storage_client.head_object(bucket=bucket, object_key=finalized_key)
+        return _StagedSnapshot(head=None, copy=None)
+    try:
+        snapshot_head = storage_client.head_object(bucket=bucket, object_key=finalized_key)
+        digest = None
+        if (
+            snapshot_head is not None
+            and snapshot_head.byte_size is not None
+            and snapshot_head.byte_size <= max_bytes
+        ):
+            digest = _read_declared_digest(
+                storage_client,
+                bucket=bucket,
+                finalized_key=finalized_key,
+                declared_digest=declared_digest,
+                observed_size=snapshot_head.byte_size,
+            )
+    except BaseException:
+        # The caller never receives this snapshot, so it cannot be the one to
+        # remove it; a cleanup failure must not replace the original refusal.
+        with suppress(Exception):
+            storage_client.delete_object(bucket=bucket, object_key=finalized_key)
+        raise
     return _StagedSnapshot(
-        finalized_key=finalized_key,
         head=snapshot_head,
-        digest=_read_declared_digest(
-            storage_client,
-            bucket=bucket,
-            finalized_key=finalized_key,
-            declared_digest=declared_digest,
-            observed_size=snapshot_head.byte_size if snapshot_head is not None else None,
-        ),
+        copy=_FinalizedSnapshot(bucket=bucket, key=finalized_key, digest=digest),
     )
 
 
@@ -297,15 +307,15 @@ def _verify_landed_upload(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Uploaded object does not match the declared size.",
         )
-    finalized_key = snapshot.finalized_key
-    if finalized_key is None:
+    copy = snapshot.copy
+    if copy is None:
         # Only an accepted object is copied, so a reported object without a
         # snapshot is not something completion can record.
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail="Uploaded object was not found."
         )
     if declared_digest is not None:
-        digest = snapshot.digest
+        digest = copy.digest
         if (
             digest is None
             or digest[0] != observed_size
@@ -315,7 +325,41 @@ def _verify_landed_upload(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Uploaded object does not match the declared checksum.",
             )
-    return _VerifiedUpload(finalized_key=finalized_key, head=head, byte_size=observed_size)
+    return _VerifiedUpload(key=copy.key, head=head, byte_size=observed_size)
+
+
+def _discard_uncommitted_snapshot(
+    db: Session,
+    organization_id: str,
+    object_id: UUID,
+    *,
+    copy: _FinalizedSnapshot,
+    storage_client: ObjectStorage,
+) -> None:
+    """Remove a snapshot no committed row points at.
+
+    A commit that raised may still have landed, and the row it wrote names this
+    key; deleting then would break an upload the database considers complete.
+    Read the row back and remove the key only when nothing references it.
+    Cleanup is best effort, so a storage failure cannot replace the refusal
+    that caused it.
+    """
+    # If the database cannot establish the outcome, retain the copy. Never
+    # replace the original exception or delete a possibly committed object.
+    with suppress(Exception):
+        db.rollback()
+        try:
+            committed_key = db.scalar(
+                select(StoredObject.object_key).where(
+                    StoredObject.id == object_id,
+                    StoredObject.organization_id == organization_id,
+                )
+            )
+        finally:
+            db.rollback()
+        if committed_key == copy.key:
+            return
+        storage_client.delete_object(bucket=copy.bucket, object_key=copy.key)
 
 
 def complete_upload(
@@ -330,9 +374,10 @@ def complete_upload(
     stored_object = get_stored_object_or_404(db, ctx.organization_id, document.stored_object_id)
     _require_pending_upload(document, stored_object)
     bucket, object_key = stored_object.bucket, stored_object.object_key
+    object_id = stored_object.id
     declared_size, declared_digest = stored_object.byte_size, stored_object.sha256
     db.commit()
-    snapshot = _StagedSnapshot(finalized_key=None, head=None, digest=None)
+    snapshot = _StagedSnapshot(head=None, copy=None)
     completed = False
     try:
         # Every storage call runs with no transaction open, so a slow head, copy
@@ -355,7 +400,7 @@ def complete_upload(
             declared_digest=declared_digest,
             max_bytes=settings.risk_max_upload_bytes,
         )
-        stored_object.object_key = verified.finalized_key
+        stored_object.object_key = verified.key
         stored_object.status = "available"
         stored_object.etag = verified.head.etag
         stored_object.byte_size = verified.byte_size
@@ -374,9 +419,11 @@ def complete_upload(
         completed = True
         return document
     finally:
-        if snapshot.finalized_key is not None and not completed:
-            db.rollback()
-            storage_client.delete_object(bucket=bucket, object_key=snapshot.finalized_key)
+        copy = snapshot.copy
+        if copy is not None and not completed:
+            _discard_uncommitted_snapshot(
+                db, ctx.organization_id, object_id, copy=copy, storage_client=storage_client
+            )
 
 
 def list_case_documents(db: Session, ctx: TenantContext, case_id: UUID) -> list[Document]:

@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from collections.abc import Iterator
 from functools import lru_cache
-from typing import Any, Protocol, cast
+from typing import Protocol, cast
 from uuid import uuid4
 
 import boto3
@@ -34,28 +34,44 @@ class _ObjectClient(Protocol):
         self, operation: str, *, Params: dict[str, str], ExpiresIn: int, HttpMethod: str
     ) -> str: ...
 
-    def head_object(self, *, Bucket: str, Key: str) -> dict[str, Any]: ...
+    def head_object(self, *, Bucket: str, Key: str) -> dict[str, object]: ...
 
-    def get_object(self, *, Bucket: str, Key: str) -> dict[str, Any]: ...
+    def get_object(self, *, Bucket: str, Key: str) -> dict[str, object]: ...
 
     def copy_object(
         self, *, Bucket: str, Key: str, CopySource: dict[str, str]
-    ) -> dict[str, Any]: ...
+    ) -> dict[str, object]: ...
 
-    def delete_object(self, *, Bucket: str, Key: str) -> dict[str, Any]: ...
+    def delete_object(self, *, Bucket: str, Key: str) -> dict[str, object]: ...
 
 
 def _http_status(error: ClientError) -> int | None:
-    metadata = cast(dict[str, Any], error.response).get("ResponseMetadata")
+    """Parse boto3's untyped error response at the adapter boundary."""
+    metadata = cast(dict[str, object], error.response).get("ResponseMetadata")
     if not isinstance(metadata, dict):
         return None
     status_code = cast(dict[str, object], metadata).get("HTTPStatusCode")
     return status_code if isinstance(status_code, int) else None
 
 
+def _stored_head(response: dict[str, object]) -> StoredObjectHead:
+    """Parse boto3's untyped HEAD response at the adapter boundary."""
+    return StoredObjectHead(
+        content_type=cast(str | None, response.get("ContentType")),
+        byte_size=cast(int | None, response.get("ContentLength")),
+        etag=cast(str | None, response.get("ETag")),
+        version_id=cast(str | None, response.get("VersionId")),
+    )
+
+
 def _body_chunks(body: _Body) -> Iterator[bytes]:
     while chunk := body.read(_DIGEST_CHUNK_BYTES):
         yield chunk
+
+
+def _response_body(value: object) -> _Body:
+    """Boto3 returns an untyped StreamingBody at the adapter boundary."""
+    return cast(_Body, value)
 
 
 def _object_client(**config: str | bool | Config | None) -> _ObjectClient:
@@ -89,7 +105,7 @@ class S3ObjectStorage:
             use_ssl=True,
         )
 
-        require_boto_tls(cast(object, self._client))
+        require_boto_tls(self._client)
 
     def create_presigned_upload_url(
         self,
@@ -133,12 +149,7 @@ class S3ObjectStorage:
             if _http_status(exc) == 404:
                 return None
             raise
-        return StoredObjectHead(
-            content_type=cast(str | None, response.get("ContentType")),
-            byte_size=cast(int | None, response.get("ContentLength")),
-            etag=cast(str | None, response.get("ETag")),
-            version_id=cast(str | None, response.get("VersionId")),
-        )
+        return _stored_head(response)
 
     def finalize_upload(self, *, bucket: str, object_key: str) -> str | None:
         finalized_key = f"{object_key}/finalized/{uuid4()}"
@@ -164,7 +175,7 @@ class S3ObjectStorage:
             if _http_status(exc) == 404:
                 return None
             raise
-        body = cast(_Body, cast(object, response["Body"]))
+        body = _response_body(response["Body"])
         try:
             return sha256_of_chunks(_body_chunks(body), max_bytes=max_bytes)
         finally:

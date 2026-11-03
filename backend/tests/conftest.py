@@ -336,6 +336,7 @@ class FakeStorage:
         self.digest_reads: list[tuple[str, str]] = []
         self.deleted: list[tuple[str, str]] = []
         self.finalized_objects: dict[tuple[str, str], tuple[StoredObjectHead, bytes]] = {}
+        self.removed: set[tuple[str, str]] = set()
         self.downloads: list[tuple[str, str]] = []
 
     def create_presigned_upload_url(
@@ -364,11 +365,15 @@ class FakeStorage:
         return self.download_url
 
     def head_object(self, *, bucket: str, object_key: str) -> StoredObjectHead | None:
+        if (bucket, object_key) in self.removed:
+            return None
         snapshot = self.finalized_objects.get((bucket, object_key))
+        if snapshot is None and "/finalized/" in object_key:
+            return None
         return snapshot[0] if snapshot is not None else self.head
 
     def finalize_upload(self, *, bucket: str, object_key: str) -> str | None:
-        if self.head is None:
+        if self.head is None or (bucket, object_key) in self.removed:
             return None
         finalized_key = f"{object_key}/finalized/{uuid4()}"
         self.finalized_objects[bucket, finalized_key] = (self.head, self.body)
@@ -378,13 +383,18 @@ class FakeStorage:
         self, *, bucket: str, object_key: str, max_bytes: int
     ) -> tuple[int, str] | None:
         self.digest_reads.append((bucket, object_key))
+        if (bucket, object_key) in self.removed:
+            return None
         snapshot = self.finalized_objects.get((bucket, object_key))
+        if snapshot is None and "/finalized/" in object_key:
+            return None
         body = snapshot[1] if snapshot is not None else self.body
         return sha256_of_chunks([body], max_bytes=max_bytes)
 
     def delete_object(self, *, bucket: str, object_key: str) -> None:
         self.deleted.append((bucket, object_key))
         self.finalized_objects.pop((bucket, object_key), None)
+        self.removed.add((bucket, object_key))
 
 
 def _postgres_schema_url(database_url: str, schema_name: str) -> str:
