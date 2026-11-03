@@ -617,6 +617,63 @@ class TestLockout:
             assert emergency_login(operator_client, user.email, "wrong-code").status_code == 401
         assert emergency_login(operator_client, user.email, code).status_code == 200
 
+    def test_rotating_a_locked_out_credential_works_immediately(
+        self,
+        operator_client: TestClient,
+        operator_db: Session,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        enable(monkeypatch)
+        monkeypatch.setenv("AUTH_MAX_FAILED_LOGINS", "5")
+        monkeypatch.setenv("AUTH_LOCKOUT_SECONDS", "900")
+        get_settings.cache_clear()
+        user = make_operator(operator_db)
+        _credential, _code = designate(operator_db, user)
+        for _ in range(5):
+            assert emergency_login(operator_client, user.email, "wrong-code").status_code == 401
+
+        # The CLI runs in another process: it clears the durable lockout and
+        # issues a new code, but the API's own guard is still holding the email.
+        _rotated, new_code = designate(operator_db, user)
+
+        # Rotation is the documented recovery path, so it must not wait out the
+        # API's five-minute window.
+        assert emergency_login(operator_client, user.email, new_code).status_code == 200
+
+    def test_a_newly_designated_credential_is_not_blocked_by_earlier_failures(
+        self,
+        operator_client: TestClient,
+        operator_db: Session,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        enable(monkeypatch)
+        user = make_operator(operator_db)
+        for _ in range(5):
+            assert emergency_login(operator_client, user.email, "wrong-code").status_code == 401
+
+        # The row had no credential while those failures were counted; the
+        # guard knows nothing about the code that was just issued.
+        _credential, code = designate(operator_db, user)
+
+        assert emergency_login(operator_client, user.email, code).status_code == 200
+
+    def test_the_local_guard_still_refuses_an_unknown_address(
+        self,
+        operator_client: TestClient,
+        operator_db: Session,
+        monkeypatch: pytest.MonkeyPatch,
+    ) -> None:
+        enable(monkeypatch)
+        email = "unknown@aequoros.com"
+        for _ in range(5):
+            assert emergency_login(operator_client, email, "wrong-code").status_code == 401
+        before = len(audit_rows(operator_db))
+
+        # No credential can rotate for an address with no row, so the guard
+        # keeps refusing it without writing evidence for every attempt.
+        assert emergency_login(operator_client, email, "wrong-code").status_code == 401
+        assert len(audit_rows(operator_db)) == before
+
 
 class TestAuditAndLogging:
     def test_every_attempt_writes_an_audit_row_and_emits_a_warning(

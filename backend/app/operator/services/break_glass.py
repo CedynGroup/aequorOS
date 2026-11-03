@@ -76,32 +76,64 @@ def burn_code_check(code: str) -> None:
 
 # -- login throttle, layer 1: process-local, unknown-principal guard --------------
 _throttle_lock = threading.Lock()
-#: email -> (consecutive_failures, locked_until | None)
-_failures: dict[str, tuple[int, dt.datetime | None]] = {}
+#: email -> (consecutive_failures, locked_until | None, rotation marker | None)
+#:
+#: The rotation marker is the credential state the failures were counted
+#: against. ``manage_break_glass.py`` runs in another process, so clearing its
+#: own guard would not help; instead the guard refuses only while the credential
+#: it tripped on still exists in that state.
+_failures: dict[str, tuple[int, dt.datetime | None, str | None]] = {}
 
 
-def throttle_locked(email: str, now: dt.datetime | None = None) -> bool:
+def _marker(credential: OperatorBreakGlassCredential | None) -> str | None:
+    if credential is None or credential.rotated_at is None:
+        return None
+    return rotation_marker(credential.rotated_at)
+
+
+def throttle_locked(
+    email: str,
+    *,
+    credential: OperatorBreakGlassCredential | None = None,
+    now: dt.datetime | None = None,
+) -> bool:
+    """Whether the process-local guard is refusing ``email``.
+
+    ``credential`` is the resolved row for that address, when there is one. A
+    credential rotated or newly designated after the guard tripped means the
+    failures guarded a secret that no longer exists, so the entry is forgotten
+    and the freshly issued code is accepted at once — the documented rotation
+    recovery path has to work during the incident it exists for.
+    """
     moment = now or utc_now()
     with _throttle_lock:
         entry = _failures.get(email)
         if entry is None:
             return False
-        _count, locked_until = entry
+        _count, locked_until, marker = entry
         if locked_until is None or locked_until <= moment:
             if locked_until is not None:
                 del _failures[email]
             return False
+        if credential is not None and _marker(credential) != marker:
+            del _failures[email]
+            return False
         return True
 
 
-def record_login_failure(email: str, now: dt.datetime | None = None) -> None:
+def record_login_failure(
+    email: str,
+    *,
+    credential: OperatorBreakGlassCredential | None = None,
+    now: dt.datetime | None = None,
+) -> None:
     moment = now or utc_now()
     with _throttle_lock:
-        count, locked_until = _failures.get(email, (0, None))
+        count, locked_until, _marker_at_trip = _failures.get(email, (0, None, None))
         count += 1
         if count >= MAX_FAILED_ATTEMPTS:
             locked_until = moment + dt.timedelta(seconds=LOCKOUT_SECONDS)
-        _failures[email] = (count, locked_until)
+        _failures[email] = (count, locked_until, _marker(credential))
 
 
 def clear_login_failures(email: str) -> None:
@@ -315,6 +347,11 @@ def issue_credential(
     if credential is None:
         credential = OperatorBreakGlassCredential(operator_user_id=user.id)
         db.add(credential)
+    else:
+        # Compare against durable state, not whatever this session loaded before
+        # the sign-in failures landed: clearing the lockout is the point of a
+        # rotation, and an unchanged-looking attribute would skip the UPDATE.
+        db.refresh(credential)
     code = generate_code()
     credential.code_hash = security.hash_password(code)
     credential.is_enabled = True
@@ -345,6 +382,9 @@ def disable_credential(
     Every already-minted break-glass token is refused on its next request
     because the request boundary re-reads this row.
     """
+    # Same reason as rotation: the durable lockout must be cleared against what
+    # the database holds, or a stale copy makes "clear" a silent no-op.
+    db.refresh(credential)
     credential.is_enabled = False
     credential.code_hash = None
     credential.failed_login_attempts = 0

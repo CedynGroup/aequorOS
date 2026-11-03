@@ -1033,9 +1033,12 @@ unchanged while it exists.
   401 as other failed sign-ins. The counter is separate from the staff row's
   password counter, so a guessed emergency code cannot lock ordinary sign-in.
   A separate process-local per-email guard
-  refuses pre-lookup requests for five minutes after five consecutive failures,
-  keeping unknown addresses indistinguishable and throttled. Its expiry does
-  not clear a durable credential lockout.
+  refuses requests for five minutes after five consecutive failures, keeping
+  unknown addresses indistinguishable and throttled. Its expiry does
+  not clear a durable credential lockout, and it forgets an address as soon as
+  that address's credential is rotated or newly designated: rotation is the
+  documented recovery for a credential you no longer trust, so the new code
+  must work immediately rather than after the local window runs out.
 - **Audited and logged on every use, success or failure.** Each attempt that
   reaches verification writes one append-only `operator_audit_log` row with
   `auth_mode='break_glass'` and an `action` of `auth.break_glass.sign_in` or
@@ -1044,7 +1047,7 @@ unchanged while it exists.
   `outcome`, `reason`, and account/credential ids. The API deliberately
   distinguishes only `not_designated`, `invalid_code` and `credential_locked`
   internally; every failed sign-in returns the same generic 401, including
-  lockouts. A request refused by the process-local pre-lookup throttle (a
+  lockouts. A request refused by the process-local throttle (a
   five-minute refusal after five consecutive failures per email) answers that
   same 401 without a new audit row or warning log: it never reaches credential
   verification, and one row per rejected byte would be a log-flooding lever.
@@ -1052,11 +1055,13 @@ unchanged while it exists.
   one `operator_audit_log` row with `auth_mode='break_glass'` and an `action` of
   `auth.break_glass.issued`, `auth.break_glass.rotated` or
   `auth.break_glass.disabled`, in the same transaction as the credential
-  change. `operator_email` is the `--actor` who ran the command;
-  `detail` names the designated `operator_user_id`, the `credential_id` and
-  the designated role, and never the code. `--status` changes nothing and
-  writes nothing. The rows are the record of who was given emergency access
-  and who took it away, so review them alongside the sign-in rows.
+  change. `operator_email` is the `--actor` who ran the command. `detail`
+  always names the designated `operator_user_id` and the `credential_id`, and
+  never the code; issue and rotation rows also carry the designated role,
+  which a revocation row omits because a revoked credential confers nothing.
+  `--status` changes nothing and writes nothing. The rows are the record of
+  who was given emergency access and who took it away, so review them
+  alongside the sign-in rows.
 
 | Setting                        | Default | Behavior                                                                                                                        |
 | ------------------------------ | ------- | ------------------------------------------------------------------------------------------------------------------------------- |
@@ -1078,15 +1083,22 @@ unchanged while it exists.
    ```
 
    `--actor` is the staff member running the command and is required for
-   issue, rotate and revoke: the CLI holds no operator session, so this is how
-   the action becomes attributable. It is recorded on the audit row described
-   below. The code is printed once. Deliver it out-of-band (password manager or
-   sealed envelope) — never email, chat, or the repository.
+   issue, rotate and revoke. The CLI holds no operator session, so the value is
+   **not authenticated** — it is recorded as given. Attribution therefore holds
+   only when CLI execution and the database credential it uses
+   (`OPERATOR_DATABASE_URL`, falling back to `DATABASE_URL`) are restricted to
+   trusted operators; that credential can write control-plane tables directly,
+   so the audit trail is only as strong as that access control. The code is
+   printed once. Deliver it out-of-band (password manager or sealed envelope) —
+   never email, chat, or the repository.
 
 3. Re-run the command to **rotate**: it replaces the stored hash, clears the
    lockout and prints a new code. A previously issued code and every session
-   minted from it stop working immediately. Use `--status` to see whether a
-   row is designated without revealing the code, and `--disable` to revoke.
+   minted from it stop working immediately. The rotation also clears the
+   operator API's process-local refusal for that address, so a rotated code is
+   accepted on the next attempt rather than after that five-minute window. Use
+   `--status` to see whether a row is designated without revealing the code,
+   and `--disable` to revoke.
 4. Prove one complete sign-in with a designated row in a non-production
    environment before relying on it: confirm the console accepts the code,
    that `/operator/v1` calls work for 15 minutes, that a 16th-minute request

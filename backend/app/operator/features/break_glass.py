@@ -62,13 +62,16 @@ def operator_break_glass_login(payload: OperatorBreakGlassRequest) -> OperatorLo
         )
 
     email = payload.email.strip().lower()
-    if break_glass.throttle_locked(email):
-        raise _INVALID
-
     session = get_operator_sessionmaker()()
     try:
         user = session.scalar(select(OperatorUser).where(OperatorUser.email == email))
         credential = break_glass.credential_for_user(session, user.id) if user is not None else None
+        # The guard runs against the resolved row rather than before the lookup:
+        # it has to see whether the credential was rotated (or newly designated)
+        # since it tripped, so a rotated code is accepted the moment the CLI
+        # clears the durable lockout instead of after the local window expires.
+        if break_glass.throttle_locked(email, credential=credential):
+            raise _INVALID
         # Uniform failure: unknown email, inactive row, undesignated row and a
         # disabled credential all burn a hash check and answer the same 401.
         if (
@@ -80,7 +83,7 @@ def operator_break_glass_login(payload: OperatorBreakGlassRequest) -> OperatorLo
             or credential.rotated_at is None
         ):
             break_glass.burn_code_check(payload.code)
-            break_glass.record_login_failure(email)
+            break_glass.record_login_failure(email, credential=credential)
             break_glass.record_operator_attempt(
                 session,
                 email=email,
@@ -93,7 +96,7 @@ def operator_break_glass_login(payload: OperatorBreakGlassRequest) -> OperatorLo
 
         if break_glass.account_lock_expiry(credential) is not None:
             break_glass.burn_code_check(payload.code)
-            break_glass.record_login_failure(email)
+            break_glass.record_login_failure(email, credential=credential)
             break_glass.record_operator_attempt(
                 session,
                 email=email,
@@ -105,7 +108,7 @@ def operator_break_glass_login(payload: OperatorBreakGlassRequest) -> OperatorLo
             raise _INVALID
 
         if not security.verify_password(payload.code, credential.code_hash):
-            break_glass.record_login_failure(email)
+            break_glass.record_login_failure(email, credential=credential)
             # Commits the failure itself; the attempt row follows on the same
             # session. The attempt that trips the threshold still answers 401.
             break_glass.record_credential_failure(session, credential)
