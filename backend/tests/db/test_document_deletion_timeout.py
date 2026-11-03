@@ -234,11 +234,17 @@ def test_upload_completion_cannot_resurrect_deletion_during_head(  # noqa: PLR09
 
 def test_upload_completion_succeeds_after_head_exceeds_idle_budget(
     timeout_role_engines: dict[str, Engine],
+    role_engines: dict[str, Engine],
 ) -> None:
+    ctx = TenantContext(organization_id=ORG_1)
+    settings = get_settings()
+    # Synthetic case construction is not part of the storage-wait scenario.
+    with Session(role_engines["aqs_api"], expire_on_commit=False) as setup:
+        setup.info["organization_id"] = ORG_1
+        upload = ServiceFactories(setup, FakeStorage(), settings, ctx).documents.request_upload()
+
     with Session(timeout_role_engines["aqs_api"], expire_on_commit=False) as api:
         api.info["organization_id"] = ORG_1
-        ctx = TenantContext(organization_id=ORG_1)
-        settings = get_settings()
 
         class SlowStorage(FakeStorage):
             def head_object(self, *, bucket: str, object_key: str) -> StoredObjectHead | None:
@@ -249,7 +255,6 @@ def test_upload_completion_succeeds_after_head_exceeds_idle_budget(
                 )
 
         storage = SlowStorage()
-        upload = ServiceFactories(api, storage, settings, ctx).documents.request_upload()
         uploaded = documents.complete_upload(
             api, ctx, upload.document_id, settings=settings, storage_client=storage
         )
@@ -326,17 +331,22 @@ def test_repeated_deletion_refreshes_preloaded_state(
 def test_deletion_commits_before_storage_and_retries_under_role_timeouts(
     administrator: Engine,
     timeout_role_engines: dict[str, Engine],
+    role_engines: dict[str, Engine],
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    ctx = TenantContext(organization_id=ORG_1)
+    # Upload preparation must not consume the deletion scenario's idle budget.
+    with Session(role_engines["aqs_api"], expire_on_commit=False) as setup:
+        setup.info["organization_id"] = ORG_1
+        factories = ServiceFactories(setup, FakeStorage(), get_settings(), ctx)
+        document = factories.documents.create_uploaded()
+        document_id, object_id = document.id, document.stored_object_id
+
     api_engine, worker_engine = timeout_role_engines["aqs_api"], timeout_role_engines["aqs_worker"]
     with Session(api_engine, expire_on_commit=False) as api:
         api.info["organization_id"] = ORG_1
-        ctx = TenantContext(organization_id=ORG_1)
         assert api.scalar(text("SHOW idle_in_transaction_session_timeout")) == "1s"
         api.commit()
-        factories = ServiceFactories(api, FakeStorage(), get_settings(), ctx)
-        document = factories.documents.create_uploaded()
-        document_id, object_id = document.id, document.stored_object_id
         documents.delete_document(api, ctx, document_id)
         assert not api.in_transaction()
         with Session(administrator) as observer:
