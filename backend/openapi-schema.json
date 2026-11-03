@@ -98079,7 +98079,7 @@
     },
     "/api/v1/banks/{bank_id}/loan-classification": {
       "get": {
-        "description": "Class-aware loan classification, raw DPD, and portfolio-at-risk analytics.",
+        "description": "Class-aware loan classification, raw DPD, and portfolio-at-risk analytics.\n\nAggregate grade buckets and ratios over the institution's book: no obligor,\nfacility reference or counterparty identity, so it is the same CREDIT /\n``aggregated`` / ``view`` sentence as the credit dashboard. Capital authority\ndoes not admit it.",
         "operationId": "getLoanClassification",
         "parameters": [
           {
@@ -111081,7 +111081,7 @@
     },
     "/api/v1/banks/{bank_id}/sdi/large-exposures": {
       "get": {
-        "description": "Connected-group exposure view against the SDI control-plane limits.",
+        "description": "Connected-group exposure view against the SDI control-plane limits.\n\nEach row carries ``counterparty_name`` and every percentage is measured\nagainst Net Own Funds, so this is CREDIT / ``restricted`` / ``view`` over the\nwhole institution. Capital authority does not admit it.",
         "operationId": "getSdiLargeExposures",
         "parameters": [
           {

@@ -47,7 +47,7 @@ sentence. Seeing the bundle must not reveal a module the reader cannot open:
 | filed packages, family `icaap`                                          | `cap`                                                                                                                              | confidential |
 | filed packages, every other family                                      | `reg`                                                                                                                              | restricted   |
 | register `liquidity-thresholds`, `liquidity-haircuts`, `liquidity/ewis` | `liq`                                                                                                                              | confidential |
-| register `ecl-assumptions`, `crm-haircuts`                              | `credit`                                                                                                                           | confidential |
+| register `ecl-assumptions`, `crm-haircuts`                              | `credit`                                                                                                                           | restricted |
 | register `capital-plan`                                                 | `cap`                                                                                                                              | confidential |
 | contingency funding plan posture                                        | `liq`                                                                                                                              | confidential |
 | ICAAP cycles                                                            | the `icaap` family gate (`cap`/confidential, bank regime only)                                                                     | confidential |
@@ -157,7 +157,7 @@ organization ID, `principal_type=human`, active status and approved validity.
 | Reads Liquidity sources (run snapshots, threshold/haircut registers, EWI register, CFP) | `viewer` or `analyst` | as granted                      | `liq`                  | `confidential`    |
 | Reads Capital sources (capital-plan register, ICAAP packages and cycles)                | `viewer`              | as granted                      | `cap`                  | `confidential`    |
 | Reads filed returns (every non-ICAAP family)                                            | `viewer`              | as granted                      | `reg`                  | `restricted`      |
-| Reads Credit sources (ECL assumptions, CRM haircut register)                            | `viewer` or `analyst` | as granted                      | `credit`               | `confidential`    |
+| Reads Credit sources (ECL assumptions, CRM haircut register)                            | `viewer` or `analyst` | as granted                      | `credit`               | `restricted`      |
 | Reads Forecasting runs (projection, optimizer, what-if, reverse stress)                 | `viewer` or `analyst` | as granted                      | `fcst`                 | `confidential`    |
 | Reads IRRBB / FX / FTP runs                                                             | `viewer` or `analyst` | as granted                      | `irrbb` / `fx` / `ftp` | `confidential`    |
 | Reads enterprise-stress runs                                                            | `viewer` or `analyst` | as granted                      | `risk`                 | `confidential`    |

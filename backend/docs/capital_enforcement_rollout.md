@@ -25,6 +25,14 @@ SDI capital assurance requires CAP `view` with sensitivity `restricted`.
 Unauthorized Capital run IDs return 404, and Capital rows are removed before
 regulatory-run counts and pagination are calculated.
 
+The SDI loan-classification and large-exposure diagnostics are **Credit**
+reads, not Capital ones: `/banks/{id}/loan-classification`,
+`/banks/{id}/sdi/loan-classification` need CREDIT/`aggregated` `view`, and
+`/banks/{id}/sdi/large-exposures` needs CREDIT/`restricted` `view`, each over the
+whole institution. Capital authority does not admit them, and the SDI Capital
+screens gate those panels on the corresponding Credit capability. The contract is
+[the Credit rollout](credit_enforcement_rollout.md#phase-5-the-register-and-sdi-remainder-enforced-in-code-2026-11-03).
+
 Capital execution requires whole-institution CAP `run` with sensitivity
 `confidential`. Both the single-run service (`POST /banks/{bank_id}/regulatory-runs`
 with `module=capital`) and the scenario-batch service enforce this before reading

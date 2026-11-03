@@ -1227,7 +1227,7 @@
         "tests/identity/api/test_grant_administration.py::test_institution_route_access_request_carries_expiry_into_the_grant[/institution/outlets-institution-confidential]",
         "tests/identity/api/test_grant_administration.py::test_institution_route_access_request_carries_expiry_into_the_grant[/institution/parties-institution-restricted]",
         "tests/identity/api/test_grant_administration.py::test_institution_route_access_request_carries_expiry_into_the_grant[/institution/products-institution-confidential]",
-        "tests/identity/api/test_grant_administration.py::test_institution_route_access_request_carries_expiry_into_the_grant[/institution/registers-credit-confidential]",
+        "tests/identity/api/test_grant_administration.py::test_institution_route_access_request_carries_expiry_into_the_grant[/institution/registers-credit-restricted]",
         "tests/identity/api/test_grant_administration.py::test_owner_account_admin_conflict_names_only_the_revocable_grant[analyst]",
         "tests/identity/api/test_grant_administration.py::test_owner_account_admin_conflict_names_only_the_revocable_grant[approver]",
         "tests/identity/api/test_grant_administration.py::test_owner_account_admin_conflict_names_only_the_revocable_grant[validator]",

@@ -1201,6 +1201,40 @@ def require_credit_concentration_view(
     )
 
 
+def require_credit_restricted_view(
+    db: DbSession,
+    ctx: Tenant,
+    bank: TenantBank,
+) -> InstitutionPermissionAccess:
+    """CREDIT / ``restricted`` / ``view``, whole institution.
+
+    Named obligor and Board-policy surfaces take this one: the concentration
+    limit register stores ``cp:<counterparty>`` / ``group:<reference>`` buckets,
+    the SDI large-exposure read lists counterparty names, and the four credit
+    registers are the Board's adopted assumptions and limits. They are
+    ``restricted`` because the issue's own classification says so — loan books,
+    borrower/position details, assumptions and run inputs are restricted — and
+    because a register row can name a counterparty.
+
+    Whole institution, because these are the institution's adopted policy and
+    the large-exposure percentages are measured against Net Own Funds: a branch
+    grant cannot produce a smaller register, and a sliced exposure list would be
+    read against an institution limit. A surface that genuinely owns branch
+    rows must opt out of that default and apply the scope; see
+    ``require_credit_blotter_view`` and ``require_credit_activity_view``.
+    """
+    return _require_institution_permission(
+        db,
+        ctx,
+        bank,
+        module=Module.CREDIT,
+        sensitivity=Sensitivity.RESTRICTED,
+        permission=Permission.VIEW,
+        surface="credit_restricted_view",
+        detail=_CREDIT_DETAIL,
+    )
+
+
 def require_credit_blotter_view(
     db: DbSession,
     ctx: Tenant,
@@ -2556,6 +2590,9 @@ CreditAggregatedView = Annotated[
 ]
 CreditConcentrationView = Annotated[
     InstitutionPermissionAccess, Depends(require_credit_concentration_view)
+]
+CreditRestrictedView = Annotated[
+    InstitutionPermissionAccess, Depends(require_credit_restricted_view)
 ]
 CreditBlotterView = Annotated[InstitutionPermissionAccess, Depends(require_credit_blotter_view)]
 CreditActivityView = Annotated[InstitutionPermissionAccess, Depends(require_credit_activity_view)]

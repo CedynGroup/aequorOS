@@ -1743,16 +1743,27 @@ for (const [grants, general, restricted] of [
   }
 }
 // Board Registers keep source authority; Institution grants do not stand in for it.
-for (const grants of [
-  [institutionGeneralView],
-  [{ ...creditView, sensitivity: "confidential" }],
-  [{ ...liquidityView, sensitivity: "confidential" }],
+for (const [grants, allowed] of [
+  [[institutionGeneralView], false],
+  // The retired credit sentence: exact sensitivity, so it no longer opens them.
+  [[{ ...creditView, sensitivity: "confidential" }], false],
+  [[{ ...creditView, sensitivity: "restricted" }], true],
+  [[{ ...liquidityView, sensitivity: "confidential" }], true],
 ] as const) {
   const scope = resolved(true, true, {
     modules: effectiveInstitutionModules(null, grants),
     institutionCapabilities: grants,
   });
-  const allowed = grants[0].module !== "institution";
   assert.equal(isPathVisible("/institution/registers", scope), allowed);
   assert.equal(isHrefVisible("/institution/registers", scope), allowed);
 }
+// A route guard that still names the loose sentence is the failure this pins.
+const registersDenied = resolved(true, true, {
+  modules: effectiveInstitutionModules(null, [institutionGeneralView]),
+  institutionCapabilities: [institutionGeneralView],
+});
+assert.deepEqual(hrefAccess("/institution/registers", registersDenied), {
+  state: "disabled",
+  reason:
+    "Requires Credit · Restricted · View. Ask your organization owner or admin to grant it.",
+});

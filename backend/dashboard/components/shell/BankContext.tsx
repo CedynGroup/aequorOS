@@ -269,6 +269,21 @@ export default function BankProvider({ children }: { children: ReactNode }) {
         "restricted",
         "view",
       ),
+      // Credit's own sentences. Capital authority never becomes Credit, so the
+      // SDI book and exposure panels on Capital screens read these flags rather
+      // than reusing the Capital ones (backend/docs/credit_enforcement_rollout.md).
+      creditAggregatedView: hasEffectiveCapability(
+        institutionCapabilities,
+        "credit",
+        "aggregated",
+        "view",
+      ),
+      creditRestrictedView: hasEffectiveCapability(
+        institutionCapabilities,
+        "credit",
+        "restricted",
+        "view",
+      ),
       capitalRun: hasEffectiveCapability(
         institutionCapabilities,
         "cap",

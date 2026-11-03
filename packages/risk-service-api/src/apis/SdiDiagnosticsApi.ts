@@ -86,7 +86,7 @@ export interface GetSdiReadinessRequest {
  */
 export class SdiDiagnosticsApi extends runtime.BaseAPI {
   /**
-   * Class-aware loan classification, raw DPD, and portfolio-at-risk analytics.
+   * Class-aware loan classification, raw DPD, and portfolio-at-risk analytics.  Aggregate grade buckets and ratios over the institution\'s book: no obligor, facility reference or counterparty identity, so it is the same CREDIT / ``aggregated`` / ``view`` sentence as the credit dashboard. Capital authority does not admit it.
    * Get Loan Classification
    */
   async getLoanClassificationRaw(
@@ -137,7 +137,7 @@ export class SdiDiagnosticsApi extends runtime.BaseAPI {
   }
 
   /**
-   * Class-aware loan classification, raw DPD, and portfolio-at-risk analytics.
+   * Class-aware loan classification, raw DPD, and portfolio-at-risk analytics.  Aggregate grade buckets and ratios over the institution\'s book: no obligor, facility reference or counterparty identity, so it is the same CREDIT / ``aggregated`` / ``view`` sentence as the credit dashboard. Capital authority does not admit it.
    * Get Loan Classification
    */
   async getLoanClassification(
@@ -354,7 +354,7 @@ export class SdiDiagnosticsApi extends runtime.BaseAPI {
   }
 
   /**
-   * Connected-group exposure view against the SDI control-plane limits.
+   * Connected-group exposure view against the SDI control-plane limits.  Each row carries ``counterparty_name`` and every percentage is measured against Net Own Funds, so this is CREDIT / ``restricted`` / ``view`` over the whole institution. Capital authority does not admit it.
    * Get Sdi Large Exposures
    */
   async getSdiLargeExposuresRaw(
@@ -405,7 +405,7 @@ export class SdiDiagnosticsApi extends runtime.BaseAPI {
   }
 
   /**
-   * Connected-group exposure view against the SDI control-plane limits.
+   * Connected-group exposure view against the SDI control-plane limits.  Each row carries ``counterparty_name`` and every percentage is measured against Net Own Funds, so this is CREDIT / ``restricted`` / ``view`` over the whole institution. Capital authority does not admit it.
    * Get Sdi Large Exposures
    */
   async getSdiLargeExposures(

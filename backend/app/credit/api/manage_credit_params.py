@@ -1,8 +1,12 @@
-"""ECL assumption + CRM haircut register endpoints (Phase 2 items 8/9).
+"""ECL assumption, CRM haircut, concentration-limit and credit-threshold registers.
 
-Approver-gated PUTs: adopting PD/LGD assumptions or collateral haircuts is a
-risk-configuration act with model-committee/Board evidence, audited like the
-liquidity threshold register.
+Reads require one complete active CREDIT / ``restricted`` / ``view`` binding for
+the exact institution, covering the whole institution: the registers are the
+Board's adopted assumptions and limits, and a concentration-limit row can name a
+counterparty group. Capital authority does not admit them.
+
+Approver-gated PUTs are unchanged and still on the scalar approver gate; moving
+them to a dedicated Configurator authority is issue 184, not this cutover.
 """
 
 from __future__ import annotations
@@ -12,7 +16,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Query
 
-from app.api.deps import ApproverTenant, DbSession, Tenant
+from app.api.deps import ApproverTenant, CreditRestrictedView, DbSession
 from app.credit.schemas.credit_params import (
     CrmHaircutRegisterRead,
     CrmHaircutUpdate,
@@ -38,11 +42,11 @@ router = APIRouter(tags=["credit-params"])
 def get_ecl_assumption_register(
     bank_id: str,
     db: DbSession,
-    ctx: Tenant,
+    access: CreditRestrictedView,
     as_of: Annotated[date | None, Query()] = None,
 ) -> EclAssumptionRegisterRead:
     resolved_as_of = as_of or date.today()  # noqa: DTZ011 - date-only business resolution
-    return credit_params.get_ecl_register(db, ctx, bank_id, resolved_as_of)
+    return credit_params.get_ecl_register(db, access.ctx, bank_id, resolved_as_of)
 
 
 @router.put(
@@ -67,11 +71,11 @@ def update_ecl_assumption_register(
 def get_crm_haircut_register(
     bank_id: str,
     db: DbSession,
-    ctx: Tenant,
+    access: CreditRestrictedView,
     as_of: Annotated[date | None, Query()] = None,
 ) -> CrmHaircutRegisterRead:
     resolved_as_of = as_of or date.today()  # noqa: DTZ011 - date-only business resolution
-    return credit_params.get_crm_register(db, ctx, bank_id, resolved_as_of)
+    return credit_params.get_crm_register(db, access.ctx, bank_id, resolved_as_of)
 
 
 @router.put(
@@ -96,11 +100,11 @@ def update_crm_haircut_register(
 def get_concentration_limit_register(
     bank_id: str,
     db: DbSession,
-    ctx: Tenant,
+    access: CreditRestrictedView,
     as_of: Annotated[date | None, Query()] = None,
 ) -> ConcentrationLimitRegisterRead:
     resolved_as_of = as_of or date.today()  # noqa: DTZ011 - date-only business resolution
-    return credit_params.get_concentration_limit_register(db, ctx, bank_id, resolved_as_of)
+    return credit_params.get_concentration_limit_register(db, access.ctx, bank_id, resolved_as_of)
 
 
 @router.put(
@@ -125,11 +129,11 @@ def update_concentration_limit_register(
 def get_credit_threshold_register(
     bank_id: str,
     db: DbSession,
-    ctx: Tenant,
+    access: CreditRestrictedView,
     as_of: Annotated[date | None, Query()] = None,
 ) -> CreditThresholdRegisterRead:
     resolved_as_of = as_of or date.today()  # noqa: DTZ011 - date-only business resolution
-    return credit_params.get_credit_threshold_register(db, ctx, bank_id, resolved_as_of)
+    return credit_params.get_credit_threshold_register(db, access.ctx, bank_id, resolved_as_of)
 
 
 @router.put(
