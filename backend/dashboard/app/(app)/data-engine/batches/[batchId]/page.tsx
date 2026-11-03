@@ -58,10 +58,15 @@ export default function BatchDetailPage(props: {
   params: Promise<{ batchId: string }>;
 }) {
   const params = use(props.params);
-  const { bank } = useBankContext();
+  const { bank, authorityPending } = useBankContext();
   const batchQuery = useIngestionBatch(bank?.id, params.batchId);
   const failuresQuery = useTranslationFailures(bank?.id, params.batchId);
-  const metadata = useDataPermissionState(bank?.id, "view", "confidential");
+  const metadata = useDataPermissionState(
+    bank?.id,
+    "view",
+    "confidential",
+    authorityPending,
+  );
   const diagnostics = useDataPermission(bank?.id, "view", "restricted");
 
   if (metadata === "loading") {

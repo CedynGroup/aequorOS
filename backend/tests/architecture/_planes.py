@@ -55,6 +55,7 @@ CASE_PLANE_GLOBS: tuple[str, ...] = (
     "case/models/capital.py",
     "case/models/financial.py",
     "case/schemas/calculations.py",
+    "case/schemas/disclosure.py",
     "case/schemas/capital.py",
     "case/schemas/liquidity.py",
     "case/schemas/financial_workspace*.py",
@@ -64,9 +65,13 @@ CASE_PLANE_GLOBS: tuple[str, ...] = (
     "case/service/liquidity.py",
     "case/service/financial_*.py",
     "case/service/financial_mapping/**/*.py",
+    "case/api/bulk_update_cases.py",
     "case/api/manage_capital.py",
     "case/api/read_financial_workspace.py",
+    "case/api/review_cases.py",
+    "case/api/review_findings.py",
     "case/api/review_liquidity.py",
+    "case/api/run_assessments.py",
     "case/api/run_calculations.py",
 )
 

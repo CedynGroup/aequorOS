@@ -21,7 +21,10 @@ import {
   type ReconciliationExceptionRead,
 } from "@aequoros/risk-service-api";
 import { hasDataCapability } from "../lib/modules";
-import { useDataPermission } from "../lib/api/dataAccess";
+import {
+  useDataPermission,
+  useDataPermissionState,
+} from "../lib/api/dataAccess";
 import { ingestionApi, useIngestionBatches } from "../lib/api/ingestion";
 import { queryAuthorityScope } from "../lib/api/queryPolicy";
 import ReconciliationPanel from "../components/data-engine/ReconciliationPanel";
@@ -737,3 +740,29 @@ it.each([
     }
   },
 );
+
+it("resolves a missing bank to denial only after bank selection finishes", () => {
+  const permission = renderHook(
+    ({ pending }) =>
+      useDataPermissionState(undefined, "view", "restricted", pending),
+    { initialProps: { pending: true } },
+  );
+  expect(permission.result.current).toBe("loading");
+  permission.rerender({ pending: false });
+  expect(permission.result.current).toBe("denied");
+});
+
+it("holds sync controls while profile authority is loading", () => {
+  state.loading = true;
+  state.capabilities = [capability("run")];
+  render(
+    <Wrapper>
+      <SyncPanel bankId={state.bank} connectionId="connection-fixture" />
+    </Wrapper>,
+  );
+  expect(screen.getAllByLabelText("Loading").length).toBeGreaterThan(0);
+  expect(screen.queryByText(/This section requires/)).not.toBeInTheDocument();
+  expect(
+    screen.queryByRole("button", { name: /Sync/ }),
+  ).not.toBeInTheDocument();
+});

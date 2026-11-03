@@ -20,7 +20,8 @@ import AddConnectionPanel from "@/components/t24/AddConnectionPanel";
 import ConnectionCard from "@/components/t24/ConnectionCard";
 import DomainCoverage from "@/components/t24/DomainCoverage";
 import TransportModes from "@/components/t24/TransportModes";
-import { useDataPermission } from "@/lib/api/dataAccess";
+import { useDataPermissionState } from "@/lib/api/dataAccess";
+import { PageSkeleton } from "@/components/ui/QueryBoundary";
 import DataAccessNotice from "@/components/ui/DataAccessNotice";
 
 type Section = "connections" | "domains" | "modes";
@@ -32,14 +33,20 @@ const SECTIONS: { key: Section; label: string }[] = [
 ];
 
 export default function T24Page() {
-  const { bank } = useBankContext();
+  const { bank, authorityPending } = useBankContext();
   const connections = useTemenosConnections(bank?.id);
   const [section, setSection] = useState<Section>("connections");
   const [adding, setAdding] = useState(false);
-  const canRead = useDataPermission(bank?.id, "view", "restricted");
+  const canRead = useDataPermissionState(
+    bank?.id,
+    "view",
+    "restricted",
+    authorityPending,
+  );
 
   const rows = connections.data?.connections ?? [];
-  if (!canRead)
+  if (canRead === "loading") return <PageSkeleton contained />;
+  if (canRead === "denied")
     return (
       <DataAccessNotice requirement="DATA · Restricted · View for connection details" />
     );

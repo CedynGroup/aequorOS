@@ -17,7 +17,11 @@ import { useSyncDatabaseConnection } from "@/lib/api/database-direct";
 import BatchReport from "./BatchReport";
 import { SyncStatusPill } from "./shared";
 import { fmtLocale } from "@/lib/format";
-import { useDataPermission } from "@/lib/api/dataAccess";
+import {
+  useDataPermission,
+  useDataPermissionState,
+} from "@/lib/api/dataAccess";
+import { PageSkeleton } from "@/components/ui/QueryBoundary";
 import DataAccessNotice from "@/components/ui/DataAccessNotice";
 
 function errorMessage(error: unknown): string {
@@ -45,7 +49,8 @@ export default function SyncPanel({
   // Once a sync returns a batch id, load the immutable batch to surface its
   // ETL preprocess + validation reports.
   const batchQuery = useIngestionBatch(bankId, result?.batchId);
-  const canRun = useDataPermission(bankId, "run", "restricted");
+  const runAccess = useDataPermissionState(bankId, "run", "restricted");
+  const canRun = runAccess === "allowed";
   const canReadBatch = useDataPermission(bankId, "view", "confidential");
 
   const runSync = async () => {
@@ -64,6 +69,7 @@ export default function SyncPanel({
     }
   };
 
+  if (runAccess === "loading") return <PageSkeleton contained />;
   if (!canRun)
     return <DataAccessNotice requirement="DATA · Restricted · Run to sync" />;
   return (

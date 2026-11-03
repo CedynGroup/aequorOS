@@ -66,7 +66,9 @@ def test_committed_write_is_rolled_back_between_fixture_lifecycles(
         assert session.get(Organization, _ROLLBACK_ORGANIZATION_ID) is None
 
 
-def test_api_write_is_visible_to_direct_bound_session(db_client: TestClient) -> None:
+def test_api_write_is_visible_to_direct_bound_session(
+    db_client: TestClient, case_api_authority: None
+) -> None:
     case = CaseFactory(db_client).create()
 
     with get_sessionmaker()() as session:

@@ -136,8 +136,8 @@ tenant routes now preview, create, list, and revoke one complete scalar binding
 at a time and aggregate Access → Members. Create and revoke are audited,
 assignment SoD is authoritative, and each mutation invalidates the grantee's
 sessions transactionally. SSO request approval uses the same complete-grant
-path. This administration boundary is enforcing; ordinary product routes are
-still on the legacy gates described above.
+path. This administration boundary is enforcing; product enforcement follows the
+[product rollout contracts](backend/docs/authorization_foundation.md#product-rollout-boundary).
 
 ### 2.2 Institution identity is the platform ID
 

@@ -172,7 +172,7 @@ export default function BankProvider({ children }: { children: ReactNode }) {
     }
   }, [bank]);
 
-  const periodsQuery = useReportingPeriods(bank?.id);
+  const periodsQuery = useReportingPeriods(bank?.id, banksQuery.isLoading);
   const periodsStatus =
     profileQuery.isLoading ||
     banksQuery.isLoading ||

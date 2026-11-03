@@ -20,8 +20,8 @@ import {
 } from "@/lib/api/ingestion";
 
 export default function MappingPanel() {
-  const { bank } = useBankContext();
-  const configsQuery = useMappingConfigs(bank?.id);
+  const { bank, authorityPending } = useBankContext();
+  const configsQuery = useMappingConfigs(bank?.id, authorityPending);
   const activate = useActivateTemplate(bank?.id);
   const mappingKnown =
     configsQuery.access === "allowed" && configsQuery.isSuccess;

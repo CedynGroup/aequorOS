@@ -112,6 +112,8 @@ class UserAccess:
     data_scopes: dict[str, dict[str, dict[str, object]]] = field(default_factory=dict)
     #: Institutions this user may transmit a return to the regulator for.
     filing_institutions: list[str] = field(default_factory=list)
+    #: Organization-wide case authority; bank RISK grants cannot open a case.
+    case_permissions: list[str] = field(default_factory=list)
     flags: list[str] = field(default_factory=list)
 
 
@@ -215,6 +217,11 @@ def build_report(db: Session, *, organization_id: str) -> list[UserAccess]:
                 institutions=institutions,
                 data_scopes=data_scopes,
                 filing_institutions=filing_institutions,
+                case_permissions=sorted(
+                    f"{cap.sensitivity.value}/{cap.permission.value}"
+                    for cap in projection.organization_capabilities
+                    if cap.module is Module.RISK and cap.data_scope.kind == "all"
+                ),
                 flags=flags,
             )
         )
@@ -279,6 +286,7 @@ def render_table(rows: list[UserAccess]) -> str:
         "product view",
         "data scope",
         "filing",
+        "case RISK",
         "flags",
     )
     lines: list[tuple[str, ...]] = [header]
@@ -307,6 +315,7 @@ def render_table(rows: list[UserAccess]) -> str:
                 product,
                 data_scope,
                 ",".join(row.filing_institutions) or "-",
+                ",".join(row.case_permissions) or "-",
                 ",".join(row.flags) or "-",
             )
         )

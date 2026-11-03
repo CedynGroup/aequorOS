@@ -359,8 +359,16 @@ export const STARTER_TEMPLATES: StarterTemplate[] = [
 // Query hooks
 // ---------------------------------------------------------------------------
 
-export function useMappingConfigs(bankId: string | undefined) {
-  const access = useDataPermissionState(bankId, "view", "confidential");
+export function useMappingConfigs(
+  bankId: string | undefined,
+  bankPending = false,
+) {
+  const access = useDataPermissionState(
+    bankId,
+    "view",
+    "confidential",
+    bankPending,
+  );
   const scope = useQueryAuthorityScope();
   const query = useQuery({
     queryKey: scopedQueryKey("de-mapping-configs", scope, bankId),

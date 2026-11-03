@@ -5,7 +5,14 @@ from uuid import UUID
 
 from fastapi import APIRouter, Query
 
-from app.api.deps import DbSession, MutationTenant, Tenant
+from app.api.deps import DbSession
+from app.case.api.authorization import (
+    CaseRestrictedCreate,
+    CaseRestrictedEdit,
+    CaseRestrictedReview,
+    CaseRestrictedView,
+    CaseView,
+)
 from app.case.schemas.scenarios import (
     AssumptionCreate,
     AssumptionReview,
@@ -30,7 +37,7 @@ router = APIRouter(tags=["scenarios"])
 def list_case_scenarios(
     case_id: UUID,
     db: DbSession,
-    ctx: Tenant,
+    ctx: CaseRestrictedView,
     include_archived: Annotated[bool, Query()] = False,
 ) -> ScenarioWorkspaceRead:
     return scenario_service.list_workspace(db, ctx, case_id, include_archived=include_archived)
@@ -38,25 +45,29 @@ def list_case_scenarios(
 
 @router.post("/cases/{case_id}/scenarios/initialize", response_model=ScenarioWorkspaceRead)
 def initialize_case_scenarios(
-    case_id: UUID, payload: ScenarioInitialize, db: DbSession, ctx: MutationTenant
+    case_id: UUID, payload: ScenarioInitialize, db: DbSession, ctx: CaseRestrictedCreate
 ) -> ScenarioWorkspaceRead:
     return scenario_service.initialize_defaults(db, ctx, case_id, payload)
 
 
 @router.post("/cases/{case_id}/scenarios", response_model=ScenarioMutationResponse)
 def create_case_scenario(
-    case_id: UUID, payload: ScenarioCreate, db: DbSession, ctx: MutationTenant
+    case_id: UUID, payload: ScenarioCreate, db: DbSession, ctx: CaseRestrictedCreate
 ) -> ScenarioMutationResponse:
     return scenario_service.create_scenario(db, ctx, case_id, payload)
 
 
 @router.get("/cases/{case_id}/scenarios/readiness", response_model=ScenarioReadinessRead)
-def get_case_scenario_readiness(case_id: UUID, db: DbSession, ctx: Tenant) -> ScenarioReadinessRead:
+def get_case_scenario_readiness(
+    case_id: UUID, db: DbSession, ctx: CaseView
+) -> ScenarioReadinessRead:
     return scenario_service.readiness_for(db, ctx, case_id)
 
 
 @router.get("/cases/{case_id}/scenarios/{scenario_id}", response_model=ScenarioRead)
-def get_case_scenario(case_id: UUID, scenario_id: UUID, db: DbSession, ctx: Tenant) -> ScenarioRead:
+def get_case_scenario(
+    case_id: UUID, scenario_id: UUID, db: DbSession, ctx: CaseRestrictedView
+) -> ScenarioRead:
     return scenario_service.get_scenario(db, ctx, case_id, scenario_id)
 
 
@@ -66,7 +77,7 @@ def update_case_scenario(
     scenario_id: UUID,
     payload: ScenarioUpdate,
     db: DbSession,
-    ctx: MutationTenant,
+    ctx: CaseRestrictedEdit,
 ) -> ScenarioMutationResponse:
     return scenario_service.update_scenario(db, ctx, case_id, scenario_id, payload)
 
@@ -79,7 +90,7 @@ def copy_case_scenario(
     scenario_id: UUID,
     payload: ScenarioCopy,
     db: DbSession,
-    ctx: MutationTenant,
+    ctx: CaseRestrictedCreate,
 ) -> ScenarioMutationResponse:
     return scenario_service.copy_scenario(db, ctx, case_id, scenario_id, payload)
 
@@ -92,7 +103,7 @@ def archive_case_scenario(
     scenario_id: UUID,
     payload: ScenarioArchive,
     db: DbSession,
-    ctx: MutationTenant,
+    ctx: CaseRestrictedEdit,
 ) -> ScenarioMutationResponse:
     return scenario_service.archive_scenario(db, ctx, case_id, scenario_id, payload)
 
@@ -102,7 +113,7 @@ def archive_case_scenario(
     response_model=ScenarioValidationRead,
 )
 def validate_case_scenario(
-    case_id: UUID, scenario_id: UUID, db: DbSession, ctx: Tenant
+    case_id: UUID, scenario_id: UUID, db: DbSession, ctx: CaseRestrictedView
 ) -> ScenarioValidationRead:
     return scenario_service.validation_for(db, ctx, case_id, scenario_id)
 
@@ -116,7 +127,7 @@ def create_scenario_assumption(
     scenario_id: UUID,
     payload: AssumptionCreate,
     db: DbSession,
-    ctx: MutationTenant,
+    ctx: CaseRestrictedCreate,
 ) -> ScenarioMutationResponse:
     return scenario_service.create_assumption(db, ctx, case_id, scenario_id, payload)
 
@@ -131,7 +142,7 @@ def update_scenario_assumption(  # noqa: PLR0913
     assumption_id: UUID,
     payload: AssumptionUpdate,
     db: DbSession,
-    ctx: MutationTenant,
+    ctx: CaseRestrictedEdit,
 ) -> ScenarioMutationResponse:
     return scenario_service.update_assumption(db, ctx, case_id, scenario_id, assumption_id, payload)
 
@@ -146,6 +157,6 @@ def review_scenario_assumption(  # noqa: PLR0913
     assumption_id: UUID,
     payload: AssumptionReview,
     db: DbSession,
-    ctx: MutationTenant,
+    ctx: CaseRestrictedReview,
 ) -> ScenarioMutationResponse:
     return scenario_service.review_assumption(db, ctx, case_id, scenario_id, assumption_id, payload)

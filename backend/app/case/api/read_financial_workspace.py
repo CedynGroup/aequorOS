@@ -15,7 +15,13 @@ from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, Query, status
 
-from app.api.deps import DbSession, MutationTenant, Tenant
+from app.api.deps import DbSession
+from app.case.api.authorization import (
+    CaseRestrictedCreate,
+    CaseRestrictedEdit,
+    CaseRestrictedRun,
+    CaseRestrictedView,
+)
 from app.case.schemas.financial_workspace import (
     FinancialAccountCreate,
     FinancialAccountMutationResponse,
@@ -77,7 +83,7 @@ MUTATION_DESCRIPTION = (
 
 @router.get("/cases/{case_id}/financial-workspace", response_model=FinancialDataWorkspaceRead)
 def get_case_financial_workspace(
-    case_id: UUID, db: DbSession, ctx: Tenant
+    case_id: UUID, db: DbSession, ctx: CaseRestrictedView
 ) -> FinancialDataWorkspaceRead:
     return financial_workspace_service.get_financial_workspace(db, ctx, case_id)
 
@@ -90,7 +96,7 @@ def map_case_financial_workspace(
     case_id: UUID,
     payload: FinancialWorkspaceMapRequest,
     db: DbSession,
-    ctx: MutationTenant,
+    ctx: CaseRestrictedRun,
 ) -> FinancialWorkspaceMapResponse:
     return map_financial_workspace(db, ctx, case_id, payload)
 
@@ -102,7 +108,7 @@ def map_case_financial_workspace(
 def validate_case_financial_data(
     case_id: UUID,
     db: DbSession,
-    ctx: MutationTenant,
+    ctx: CaseRestrictedRun,
 ) -> FinancialValidationRunResponse:
     return financial_validation_service.validate_financial_data(db, ctx, case_id)
 
@@ -114,7 +120,7 @@ def validate_case_financial_data(
 def list_case_financial_validation_issues(
     case_id: UUID,
     db: DbSession,
-    ctx: Tenant,
+    ctx: CaseRestrictedView,
     severity: Annotated[FinancialValidationSeverity | None, Query()] = None,
     entity_type: Annotated[FinancialValidationEntityType | None, Query()] = None,
 ) -> list[FinancialValidationIssueRead]:
@@ -136,7 +142,7 @@ def create_case_financial_cash_flow(
     case_id: UUID,
     payload: FinancialCashFlowCreate,
     db: DbSession,
-    ctx: MutationTenant,
+    ctx: CaseRestrictedCreate,
 ) -> FinancialCashFlowMutationResponse:
     return create_cash_flow(db, ctx, case_id, payload)
 
@@ -151,7 +157,7 @@ def update_case_financial_cash_flow(
     cash_flow_id: UUID,
     payload: FinancialCashFlowUpdate,
     db: DbSession,
-    ctx: MutationTenant,
+    ctx: CaseRestrictedEdit,
 ) -> FinancialCashFlowMutationResponse:
     return update_cash_flow(db, ctx, case_id, cash_flow_id, payload)
 
@@ -162,7 +168,7 @@ def update_case_financial_cash_flow(
     description=MUTATION_DESCRIPTION,
 )
 def create_case_financial_institution(
-    case_id: UUID, payload: FinancialInstitutionCreate, db: DbSession, ctx: MutationTenant
+    case_id: UUID, payload: FinancialInstitutionCreate, db: DbSession, ctx: CaseRestrictedCreate
 ) -> FinancialInstitutionMutationResponse:
     return create_institution(db, ctx, case_id, payload)
 
@@ -177,7 +183,7 @@ def update_case_financial_institution(
     institution_id: UUID,
     payload: FinancialInstitutionUpdate,
     db: DbSession,
-    ctx: MutationTenant,
+    ctx: CaseRestrictedEdit,
 ) -> FinancialInstitutionMutationResponse:
     return update_institution(db, ctx, case_id, institution_id, payload)
 
@@ -188,7 +194,7 @@ def update_case_financial_institution(
     description=MUTATION_DESCRIPTION,
 )
 def create_case_financial_account(
-    case_id: UUID, payload: FinancialAccountCreate, db: DbSession, ctx: MutationTenant
+    case_id: UUID, payload: FinancialAccountCreate, db: DbSession, ctx: CaseRestrictedCreate
 ) -> FinancialAccountMutationResponse:
     return create_account(db, ctx, case_id, payload)
 
@@ -203,7 +209,7 @@ def update_case_financial_account(
     account_id: UUID,
     payload: FinancialAccountUpdate,
     db: DbSession,
-    ctx: MutationTenant,
+    ctx: CaseRestrictedEdit,
 ) -> FinancialAccountMutationResponse:
     return update_account(db, ctx, case_id, account_id, payload)
 
@@ -217,7 +223,7 @@ def create_case_financial_reporting_period(
     case_id: UUID,
     payload: FinancialReportingPeriodCreate,
     db: DbSession,
-    ctx: MutationTenant,
+    ctx: CaseRestrictedCreate,
 ) -> FinancialReportingPeriodMutationResponse:
     return create_reporting_period(db, ctx, case_id, payload)
 
@@ -232,7 +238,7 @@ def update_case_financial_reporting_period(
     reporting_period_id: UUID,
     payload: FinancialReportingPeriodUpdate,
     db: DbSession,
-    ctx: MutationTenant,
+    ctx: CaseRestrictedEdit,
 ) -> FinancialReportingPeriodMutationResponse:
     return update_reporting_period(db, ctx, case_id, reporting_period_id, payload)
 
@@ -243,7 +249,7 @@ def update_case_financial_reporting_period(
     description=MUTATION_DESCRIPTION,
 )
 def create_case_financial_balance(
-    case_id: UUID, payload: FinancialBalanceCreate, db: DbSession, ctx: MutationTenant
+    case_id: UUID, payload: FinancialBalanceCreate, db: DbSession, ctx: CaseRestrictedCreate
 ) -> FinancialBalanceMutationResponse:
     return create_balance(db, ctx, case_id, payload)
 
@@ -258,7 +264,7 @@ def update_case_financial_balance(
     balance_id: UUID,
     payload: FinancialBalanceUpdate,
     db: DbSession,
-    ctx: MutationTenant,
+    ctx: CaseRestrictedEdit,
 ) -> FinancialBalanceMutationResponse:
     return update_balance(db, ctx, case_id, balance_id, payload)
 
@@ -269,7 +275,7 @@ def update_case_financial_balance(
     description=MUTATION_DESCRIPTION,
 )
 def create_case_financial_obligation(
-    case_id: UUID, payload: FinancialObligationCreate, db: DbSession, ctx: MutationTenant
+    case_id: UUID, payload: FinancialObligationCreate, db: DbSession, ctx: CaseRestrictedCreate
 ) -> FinancialObligationMutationResponse:
     return create_obligation(db, ctx, case_id, payload)
 
@@ -284,7 +290,7 @@ def update_case_financial_obligation(
     obligation_id: UUID,
     payload: FinancialObligationUpdate,
     db: DbSession,
-    ctx: MutationTenant,
+    ctx: CaseRestrictedEdit,
 ) -> FinancialObligationMutationResponse:
     return update_obligation(db, ctx, case_id, obligation_id, payload)
 
@@ -295,7 +301,7 @@ def update_case_financial_obligation(
     description=MUTATION_DESCRIPTION,
 )
 def create_case_financial_covenant(
-    case_id: UUID, payload: FinancialCovenantCreate, db: DbSession, ctx: MutationTenant
+    case_id: UUID, payload: FinancialCovenantCreate, db: DbSession, ctx: CaseRestrictedCreate
 ) -> FinancialCovenantMutationResponse:
     return create_covenant(db, ctx, case_id, payload)
 
@@ -310,7 +316,7 @@ def update_case_financial_covenant(
     covenant_id: UUID,
     payload: FinancialCovenantUpdate,
     db: DbSession,
-    ctx: MutationTenant,
+    ctx: CaseRestrictedEdit,
 ) -> FinancialCovenantMutationResponse:
     return update_covenant(db, ctx, case_id, covenant_id, payload)
 
@@ -321,7 +327,7 @@ def update_case_financial_covenant(
 def reject_unsupported_financial_entity_create(case_id: UUID, unsupported_entity_type: str) -> None:
     _ = case_id
     raise HTTPException(
-        status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+        status_code=status.HTTP_404_NOT_FOUND,
         detail={
             "code": "unsupported_financial_entity_type",
             "entity_type": unsupported_entity_type,
@@ -338,7 +344,7 @@ def reject_unsupported_financial_entity_update(
 ) -> None:
     _ = (case_id, entity_id)
     raise HTTPException(
-        status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+        status_code=status.HTTP_404_NOT_FOUND,
         detail={
             "code": "unsupported_financial_entity_type",
             "entity_type": unsupported_entity_type,

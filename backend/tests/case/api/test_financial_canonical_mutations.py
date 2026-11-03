@@ -431,7 +431,7 @@ def test_mutations_reject_unsupported_input_authorization_and_cross_tenant_acces
         json={"name": "Wrong tenant", "reason": "manual"},
     )
 
-    assert unsupported_type.status_code == 422
+    assert unsupported_type.status_code == 404
     assert unsupported_type.json()["error"]["details"]["code"] == (
         "unsupported_financial_entity_type"
     )

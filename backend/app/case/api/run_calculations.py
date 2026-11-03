@@ -12,14 +12,17 @@ from uuid import UUID
 
 from fastapi import APIRouter, Query, status
 
-from app.api.deps import DbSession, MutationTenant, Tenant
+from app.api.deps import DbSession
+from app.case.api.authorization import CaseRestrictedRun, CaseRestrictedView, CaseView
 from app.case.schemas.calculations import (
     CalculationRerunCreate,
     CalculationRunCreate,
     CalculationRunListRead,
     CalculationRunRead,
 )
+from app.case.schemas.disclosure import CaseResponses
 from app.case.service import calculations
+from app.case.service.authorization import has_restricted_view
 
 router = APIRouter(tags=["calculations"])
 
@@ -28,13 +31,13 @@ router = APIRouter(tags=["calculations"])
 def list_calculation_runs(  # noqa: PLR0913
     case_id: UUID,
     db: DbSession,
-    ctx: Tenant,
+    ctx: CaseView,
     scenario_id: Annotated[UUID | None, Query()] = None,
     active_scenarios_only: Annotated[bool, Query()] = False,
     limit: Annotated[int, Query(ge=1, le=100)] = 25,
     offset: Annotated[int, Query(ge=0)] = 0,
 ) -> CalculationRunListRead:
-    return calculations.list_runs(
+    result = calculations.list_runs(
         db,
         ctx,
         case_id,
@@ -43,6 +46,7 @@ def list_calculation_runs(  # noqa: PLR0913
         limit=limit,
         offset=offset,
     )
+    return CaseResponses(has_restricted_view(db, ctx)).calculation_runs(result)
 
 
 @router.post(
@@ -51,14 +55,14 @@ def list_calculation_runs(  # noqa: PLR0913
     status_code=status.HTTP_201_CREATED,
 )
 def start_calculation_run(
-    case_id: UUID, payload: CalculationRunCreate, db: DbSession, ctx: MutationTenant
+    case_id: UUID, payload: CalculationRunCreate, db: DbSession, ctx: CaseRestrictedRun
 ) -> CalculationRunRead:
     return calculations.start_run(db, ctx, case_id, payload)
 
 
 @router.get("/cases/{case_id}/calculation-runs/{run_id}", response_model=CalculationRunRead)
 def get_calculation_run(
-    case_id: UUID, run_id: UUID, db: DbSession, ctx: Tenant
+    case_id: UUID, run_id: UUID, db: DbSession, ctx: CaseRestrictedView
 ) -> CalculationRunRead:
     return calculations.get_run(db, ctx, case_id, run_id)
 
@@ -73,6 +77,6 @@ def rerun_calculation(
     run_id: UUID,
     payload: CalculationRerunCreate,
     db: DbSession,
-    ctx: MutationTenant,
+    ctx: CaseRestrictedRun,
 ) -> CalculationRunRead:
     return calculations.rerun(db, ctx, case_id, run_id, payload)

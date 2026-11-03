@@ -15,7 +15,8 @@ from uuid import UUID
 
 from fastapi import APIRouter, Query
 
-from app.api.deps import DbSession, MutationTenant, Tenant
+from app.api.deps import DbSession
+from app.case.api.authorization import CaseRestrictedReview, CaseRestrictedView
 from app.case.schemas.liquidity import (
     LiquidityFindingRead,
     LiquidityFindingReview,
@@ -34,7 +35,7 @@ router = APIRouter(tags=["liquidity"])
 def get_liquidity_summary(
     case_id: UUID,
     db: DbSession,
-    ctx: Tenant,
+    ctx: CaseRestrictedView,
     scenario_id: Annotated[UUID | None, Query()] = None,
     run_id: Annotated[UUID | None, Query()] = None,
 ) -> LiquiditySummaryRead:
@@ -51,6 +52,6 @@ def review_liquidity_finding(
     finding_id: UUID,
     payload: LiquidityFindingReview,
     db: DbSession,
-    ctx: MutationTenant,
+    ctx: CaseRestrictedReview,
 ) -> LiquidityFindingRead:
     return liquidity.review_finding(db, ctx, case_id, finding_id, payload)

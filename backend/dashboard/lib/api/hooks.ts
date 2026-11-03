@@ -180,9 +180,16 @@ export function useBank(bankId: string | undefined) {
   });
 }
 
-export function useReportingPeriods(bankId: string | undefined) {
+export function useReportingPeriods(
+  bankId: string | undefined,
+  bankPending = false,
+) {
   const scope = useQueryAuthorityScope();
-  const access = useReportingDataPermissionState(bankId, "confidential");
+  const access = useReportingDataPermissionState(
+    bankId,
+    "confidential",
+    bankPending,
+  );
   const query = useQuery({
     queryKey: scopedQueryKey("periods", scope, bankId ?? null),
     queryFn: () =>

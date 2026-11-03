@@ -15,23 +15,29 @@ import { ArrowRight, Database, Loader2, Plus } from "lucide-react";
 import PageHeader from "@/components/ui/PageHeader";
 import EmptyState from "@/components/ui/EmptyState";
 import { useBankContext } from "@/components/shell/BankContext";
-import { ErrorPanel } from "@/components/ui/QueryBoundary";
+import { ErrorPanel, PageSkeleton } from "@/components/ui/QueryBoundary";
 import { useDatabaseConnections } from "@/lib/api/database-direct";
 import AddConnectionPanel from "@/components/database/AddConnectionPanel";
 import ConnectionCard from "@/components/database/ConnectionCard";
-import { useDataPermission } from "@/lib/api/dataAccess";
+import { useDataPermissionState } from "@/lib/api/dataAccess";
 import DataAccessNotice from "@/components/ui/DataAccessNotice";
 
 export default function DatabaseDirectPage() {
-  const { bank } = useBankContext();
+  const { bank, authorityPending } = useBankContext();
   const connections = useDatabaseConnections(bank?.id);
   const [adding, setAdding] = useState(false);
-  const canRead = useDataPermission(bank?.id, "view", "restricted");
+  const canRead = useDataPermissionState(
+    bank?.id,
+    "view",
+    "restricted",
+    authorityPending,
+  );
 
   const rows = connections.data?.connections ?? [];
   const activeCount = rows.filter((row) => row.status === "ACTIVE").length;
 
-  if (!canRead)
+  if (canRead === "loading") return <PageSkeleton contained />;
+  if (canRead === "denied")
     return (
       <DataAccessNotice requirement="DATA · Restricted · View for connection details" />
     );

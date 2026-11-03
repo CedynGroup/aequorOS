@@ -184,7 +184,7 @@ def test_impersonation_fails_closed_when_secret_unset(db_client: TestClient, mon
     assert response.status_code == 401, response.text
 
 
-def test_normal_access_token_unaffected(db_client: TestClient) -> None:
+def test_normal_access_token_unaffected(db_client: TestClient, case_api_authority: None) -> None:
     """Regression: a normal tenant access token authenticates and reads/writes
     exactly as before — the impersonation branch never touches it."""
     admin = headers(ORG_1, roles=("admin",))

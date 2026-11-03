@@ -12,14 +12,14 @@ import type { IngestionBatchRead } from "@aequoros/risk-service-api";
 import { useBankContext } from "@/components/shell/BankContext";
 import DataTable, { type Column } from "@/components/ui/DataTable";
 import EmptyState from "@/components/ui/EmptyState";
-import { ErrorPanel } from "@/components/ui/QueryBoundary";
+import { ErrorPanel, PageSkeleton } from "@/components/ui/QueryBoundary";
 import { SkeletonTable } from "@/components/ui/Skeleton";
 import {
   useIngestionBatches,
   type IngestionSourceSystem,
 } from "@/lib/api/ingestion";
 import { BatchStatusPill, formatDate, formatDateTime } from "./shared";
-import { useDataPermission } from "@/lib/api/dataAccess";
+import { useDataPermissionState } from "@/lib/api/dataAccess";
 import DataAccessNotice from "@/components/ui/DataAccessNotice";
 
 const columns: Column<IngestionBatchRead>[] = [
@@ -123,11 +123,17 @@ export default function BatchesTable({
   title?: string;
   emptyDescription?: string;
 }) {
-  const { bank } = useBankContext();
+  const { bank, authorityPending } = useBankContext();
   const batchesQuery = useIngestionBatches(bank?.id, sourceSystem);
-  const allowed = useDataPermission(bank?.id, "view", "confidential");
+  const allowed = useDataPermissionState(
+    bank?.id,
+    "view",
+    "confidential",
+    authorityPending,
+  );
 
-  if (!allowed)
+  if (allowed === "loading") return <PageSkeleton contained />;
+  if (allowed === "denied")
     return (
       <DataAccessNotice requirement="DATA · Confidential · View for ingestion history" />
     );
