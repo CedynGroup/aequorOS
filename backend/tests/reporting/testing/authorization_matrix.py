@@ -20,10 +20,13 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from app.core.authorization import MACHINE_ROLE_BUNDLES, ModuleScope, RoleBundle, SensitivityScope
+from app.core.authorization import ModuleScope, RoleBundle, SensitivityScope
 from tests.reporting.testing.generators import EvidenceBinding
 
-#: Human bundles that carry ``view`` at all; ``core/authorization.ROLE_PERMISSIONS``.
+#: Human bundles that carry ``view``; ``core/authorization.ROLE_PERMISSIONS``.
+#: Stated here rather than imported so the oracle is a second opinion, and
+#: restricted to human bundles because a human principal cannot hold a machine
+#: one (the service and the database both refuse it).
 VIEW_BUNDLES = frozenset(
     {
         RoleBundle.VIEWER,
@@ -34,7 +37,7 @@ VIEW_BUNDLES = frozenset(
         RoleBundle.APPROVER,
         RoleBundle.VALIDATOR,
     }
-) - frozenset(MACHINE_ROLE_BUNDLES)
+)
 
 
 @dataclass(frozen=True)
