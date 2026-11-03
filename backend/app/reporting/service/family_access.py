@@ -335,6 +335,26 @@ def require_permission(  # noqa: PLR0913 - the complete policy tuple is explicit
         raise _forbidden()
 
 
+def require_export_authority(
+    db: Session,
+    ctx: TenantContext,
+    bank: Bank,
+    package: RegulatoryPackage,
+    *,
+    surface: str = "package_export",
+) -> None:
+    """Taking the return away requires ``EXPORT``, never merely ``VIEW``.
+
+    Reading a filed return and receiving its file are separate acts. A bank
+    grants a supervisor the first without the second, and the artifact, the
+    archived revision and the downtime email bundle are all copies of the same
+    restricted document. Visibility is still decided first: the caller who
+    cannot see the return is told nothing (404), while one who can see it and
+    may not take it is told exactly which grant is missing (403).
+    """
+    require_permission(db, ctx, bank, package, Permission.EXPORT, surface=surface)
+
+
 def require_transmission_authority(  # noqa: PLR0913 - the complete policy tuple is explicit
     db: Session,
     ctx: TenantContext,
@@ -623,6 +643,7 @@ __all__ = [
     "hidden_families",
     "nominee_may_sign",
     "require_certify_authority",
+    "require_export_authority",
     "require_generation_authority",
     "require_permission",
     "require_transmission_authority",
