@@ -348,6 +348,24 @@ it.each(["poll", "notification"])(
   },
 );
 
+it("treats the initial notice feed as a baseline rather than a new change", async () => {
+  noticeId = "older-status-change";
+  render(
+    view(
+      <>
+        <Assessments />
+        <Feed />
+      </>,
+    ),
+  );
+  await screen.findByText("Rule assessment: false");
+  await screen.findByText("Notices: 1");
+  fireEvent.click(screen.getByRole("button", { name: "Refresh notices" }));
+  await screen.findByText("Refreshes: 1");
+  expect(calls.get("BK-SYNTH001")).toBe(1);
+  expect(calls.get("BK-SYNTH002")).toBe(1);
+});
+
 it("refreshes the affected bank on new status notices without losing metadata errors", async () => {
   render(
     view(

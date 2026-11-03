@@ -3539,6 +3539,7 @@ export function useNotifications(unreadOnly = false) {
       const feed = await apiCall(() =>
         notificationsApi.listNotifications({ unreadOnly, limit: 50 }),
       );
+      if (!previous) return feed;
       const changedBanks = new Set(
         feed.notifications
           .filter(
@@ -3546,7 +3547,7 @@ export function useNotifications(unreadOnly = false) {
               notice.type.startsWith("reporting.instrument.changed:") &&
               notice.entityType === "bank" &&
               notice.entityId &&
-              !previous?.notifications.some((old) => old.id === notice.id),
+              !previous.notifications.some((old) => old.id === notice.id),
           )
           .map((notice) => notice.entityId),
       );

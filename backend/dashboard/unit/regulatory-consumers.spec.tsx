@@ -60,6 +60,7 @@ afterAll(() => vi.unstubAllGlobals());
 const state = vi.hoisted(() => ({
   status: "exposure_draft",
   metadata: "ready",
+  rulesRetries: 0,
   liquidityEnabled: undefined as boolean | undefined,
   baselBankId: "",
   sdi: true,
@@ -422,6 +423,9 @@ vi.mock("@/lib/api/hooks", () => ({
     if (state.metadata === "error")
       return {
         ...query(undefined),
+        refetch: () => {
+          state.rulesRetries += 1;
+        },
         error: new Error("Synthetic metadata failure"),
         isError: true,
         isSuccess: false,
@@ -595,6 +599,7 @@ afterEach(() => {
   cleanup();
   state.status = "exposure_draft";
   state.metadata = "ready";
+  state.rulesRetries = 0;
   state.sdi = true;
   state.preparing = false;
   state.onlyIrr = false;
@@ -871,6 +876,13 @@ it("shows SDI ratios only as deliberate monitoring preparation", () => {
     screen.getByRole("cell", { name: "Synthetic LMTD ratio" }),
   ).toBeVisible();
 });
+it("retries the failed rule metadata from the risk error panel", () => {
+  state.metadata = "error";
+  render(<RiskPage />);
+  fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+  expect(state.rulesRetries).toBe(1);
+});
+
 it("does not fetch hidden Basel data in ordinary monitoring", () => {
   state.sdi = false;
   state.status = "unpublished";
