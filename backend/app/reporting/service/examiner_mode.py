@@ -10,8 +10,14 @@ Read-only supervisory surfaces over state that already exists:
   with their content seals, the Board registers (thresholds, haircuts, ECL,
   CRM), plan/CFP posture and audit-trail volume for the period.
 
-Nothing here mutates; the endpoints sit behind the read-only tenant guard
-and the examiner role clears them by construction.
+Nothing here mutates.
+
+Authority is two independent sentences (issue 180, see ``examiner_access``):
+the bundle's AUDIT/restricted ``view`` entry gate, and the exact source-module
+``view`` for every embedded module. Sources the reader cannot open are filtered
+out before the response is composed, and a by-id read of a run whose source
+module is not held answers the same opaque 404 a foreign run does. Operator
+inspection (act-as-examiner staff sessions) remains a separate lifecycle.
 """
 
 from __future__ import annotations
@@ -23,16 +29,15 @@ from typing import Any
 from uuid import UUID
 
 from fastapi import HTTPException, status
-from sqlalchemy import func, select
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
-from app.identity.public import Bank
+from app.identity.public import Bank, count_attributable_events
 from app.liquidity.public import get_bank_or_404 as _get_bank_or_404
 from app.liquidity.public import get_cfp
 from app.liquidity.public import get_period_or_404 as _get_period_or_404
 from app.live.public import RegulatoryRun
-from app.models.audit_event import AuditEvent
 from app.reporting.models.packages import RegulatoryPackage
 from app.reporting.schemas.examiner import (
     ExaminerDocumentationRead,
@@ -42,7 +47,11 @@ from app.reporting.schemas.examiner import (
     ExaminerRunsRead,
     RunReproductionRead,
 )
-from app.reporting.service import family_access
+from app.reporting.service import examiner_access, family_access
+
+#: One sentence for both run refusals, so a principal that cannot see a run's
+#: source module cannot tell that run apart from one that does not exist.
+_RUN_NOT_FOUND = "Regulatory run not found."
 
 
 def _canonical_hash(snapshot: dict[str, Any]) -> str:
@@ -72,11 +81,16 @@ def list_runs(
     module: str | None = None,
 ) -> ExaminerRunsRead:
     bank = _get_bank_or_404(db, ctx, bank_id)
+    examiner_access.require_evidence_view(db, ctx, bank)
     period = _get_period_or_404(db, ctx, bank, reporting_period_id)
+    authority = examiner_access.EvidenceAuthority(db, ctx, bank)
     conditions = [
         RegulatoryRun.organization_id == ctx.organization_id,
         RegulatoryRun.bank_id == bank.id,
         RegulatoryRun.reporting_period_id == period.id,
+        # Filtered in SQL, before the row is read: a run of a module this
+        # principal cannot open is not in the result set at all.
+        RegulatoryRun.module.in_(sorted(authority.run_modules_visible())),
     ]
     if module is not None:
         conditions.append(RegulatoryRun.module == module)
@@ -97,6 +111,8 @@ def reproduce_run(
 ) -> RunReproductionRead:
     """Recompute the canonical hash over the stored snapshot, live."""
     bank = _get_bank_or_404(db, ctx, bank_id)
+    examiner_access.require_evidence_view(db, ctx, bank)
+    authority = examiner_access.EvidenceAuthority(db, ctx, bank)
     run = db.scalar(
         select(RegulatoryRun).where(
             RegulatoryRun.id == run_id,
@@ -104,10 +120,11 @@ def reproduce_run(
             RegulatoryRun.bank_id == bank.id,
         )
     )
-    if run is None:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Regulatory run not found."
-        )
+    # An unauthorized run module is indistinguishable from a missing run: the
+    # reproduction answer discloses the snapshot's shape, so its authority is
+    # the run's own, not the bundle's.
+    if run is None or not authority.run_module_visible(run.module):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=_RUN_NOT_FOUND)
     recomputed = _canonical_hash(run.inputs)
     return RunReproductionRead(
         run_id=run.id,
@@ -129,7 +146,9 @@ def documentation_package(
     db: Session, ctx: TenantContext, bank_id: str, reporting_period_id: UUID
 ) -> ExaminerDocumentationRead:
     bank = _get_bank_or_404(db, ctx, bank_id)
+    examiner_access.require_evidence_view(db, ctx, bank)
     period = _get_period_or_404(db, ctx, bank, reporting_period_id)
+    authority = examiner_access.EvidenceAuthority(db, ctx, bank)
 
     runs = db.scalars(
         select(RegulatoryRun)
@@ -138,6 +157,7 @@ def documentation_package(
             RegulatoryRun.bank_id == bank.id,
             RegulatoryRun.reporting_period_id == period.id,
             RegulatoryRun.status == "succeeded",
+            RegulatoryRun.module.in_(sorted(authority.run_modules_visible())),
         )
         .order_by(RegulatoryRun.created_at.desc(), RegulatoryRun.id.desc())
     ).all()
@@ -175,16 +195,18 @@ def documentation_package(
         if row.return_family not in hidden
     ]
 
-    audit_count = (
-        db.scalar(
-            select(func.count())
-            .select_from(AuditEvent)
-            .where(AuditEvent.organization_id == ctx.organization_id)
-        )
-        or 0
-    )
+    cfp_visible = authority.cfp_visible()
+    cfp = get_cfp(db, ctx, bank_id) if cfp_visible else None
     icaap_cycles = _examiner_icaap_cycles(db, ctx, bank, period.period_end, hidden=hidden)
-    cfp = get_cfp(db, ctx, bank_id)
+    withheld: set[str] = {f"run:{module}" for module in authority.withheld_run_modules()}
+    withheld.update(f"package:{family}" for family in hidden)
+    withheld.update(
+        f"register:{name}"
+        for name, _module, _sensitivity in examiner_access.SOURCE_REGISTERS
+        if not authority.register_visible(name)
+    )
+    if not cfp_visible:
+        withheld.add("cfp")
     # Register reads are import-light here: the examiner package cites their
     # dedicated endpoints rather than duplicating every row inline.
     return ExaminerDocumentationRead(
@@ -196,19 +218,17 @@ def documentation_package(
         as_of_date=period.period_end,
         latest_runs=latest_runs,
         packages=package_reads,
-        cfp_approved_version=cfp.approved.version if cfp.approved else None,
-        cfp_active=bool(cfp.approved and cfp.approved.active),
-        audit_event_count=int(audit_count),
+        cfp_approved_version=(cfp.approved.version if cfp and cfp.approved else None),
+        cfp_active=bool(cfp and cfp.approved and cfp.approved.active),
+        audit_event_count=count_attributable_events(db, ctx, bank),
         register_endpoints=[
-            f"/api/v1/banks/{bank.id}/liquidity-thresholds",
-            f"/api/v1/banks/{bank.id}/liquidity-haircuts",
-            f"/api/v1/banks/{bank.id}/ecl-assumptions",
-            f"/api/v1/banks/{bank.id}/crm-haircuts",
-            f"/api/v1/banks/{bank.id}/liquidity/ewis",
-            f"/api/v1/banks/{bank.id}/capital-plan",
-            *([f"/api/v1/banks/{bank.id}/icaap/cycles"] if icaap_cycles else []),
-        ],
+            f"/api/v1/banks/{bank.id}/{name}"
+            for name, _module, _sensitivity in examiner_access.SOURCE_REGISTERS
+            if authority.register_visible(name)
+        ]
+        + ([f"/api/v1/banks/{bank.id}/icaap/cycles"] if icaap_cycles else []),
         icaap_cycles=icaap_cycles,
+        withheld_sources=sorted(withheld),
     )
 
 

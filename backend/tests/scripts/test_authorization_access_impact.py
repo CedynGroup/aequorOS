@@ -191,3 +191,74 @@ def test_the_report_names_who_may_transmit_a_return(db_session: Session) -> None
     assert rows["checker@impact.example"].filing_institutions == []
     assert rows["filer@impact.example"].filing_institutions == [BANK]
     assert BANK in render_table(list(rows.values()))
+
+
+def test_the_report_names_who_may_read_examiner_evidence(db_session: Session) -> None:
+    """The examiner cutover's gate (issue 180): who keeps the evidence bundle.
+
+    The column is the whole-institution AUDIT/restricted `view` sentence, and
+    only that sentence: a complete Liquidity grant, a confidential Audit grant
+    and account administration all leave it empty, because none of them is the
+    authority the bundle's entry gate asks for.
+    """
+    db_session.add(Organization(id=ORG, name="Examiner impact"))
+    db_session.add(
+        Bank(
+            id=BANK,
+            organization_id=ORG,
+            name="Impact Bank",
+            short_name="Impact",
+            currency="GHS",
+            jurisdiction_code="GH",
+            license_type="universal_bank",
+            institution_type=FALLBACK_TYPE_CODE,
+        )
+    )
+    auditor = _user(db_session, "auditor@impact.example")
+    confidential = _user(db_session, "confidential@impact.example")
+    liquidity_only = _user(db_session, "liquidity@impact.example", role="analyst")
+    account_admin = _user(db_session, "admin@impact.example", role="account_admin")
+    db_session.commit()
+
+    _grant(
+        db_session,
+        auditor,
+        RoleBundle.AUDITOR,
+        institution_scope=InstitutionScope.INSTITUTION,
+        institution_id=BANK,
+        module_scope=ModuleScope.AUDIT,
+        sensitivity_scope=SensitivityScope.RESTRICTED,
+    )
+    _grant(
+        db_session,
+        confidential,
+        RoleBundle.AUDITOR,
+        institution_scope=InstitutionScope.INSTITUTION,
+        institution_id=BANK,
+        module_scope=ModuleScope.AUDIT,
+        sensitivity_scope=SensitivityScope.CONFIDENTIAL,
+    )
+    _grant(
+        db_session,
+        liquidity_only,
+        RoleBundle.ANALYST,
+        institution_scope=InstitutionScope.INSTITUTION,
+        institution_id=BANK,
+        module_scope=ModuleScope.LIQUIDITY,
+        sensitivity_scope=SensitivityScope.CONFIDENTIAL,
+    )
+    _grant(
+        db_session,
+        account_admin,
+        RoleBundle.ACCOUNT_ADMIN,
+        module_scope=ModuleScope.AUDIT,
+        sensitivity_scope=SensitivityScope.RESTRICTED,
+    )
+    db_session.commit()
+
+    rows = {row.email: row for row in build_report(db_session, organization_id=ORG)}
+    assert rows["auditor@impact.example"].examiner_evidence == [BANK]
+    assert rows["confidential@impact.example"].examiner_evidence == []
+    assert rows["liquidity@impact.example"].examiner_evidence == []
+    assert rows["admin@impact.example"].examiner_evidence == []
+    assert BANK in render_table(list(rows.values()))

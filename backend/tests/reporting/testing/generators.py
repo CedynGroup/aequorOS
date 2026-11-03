@@ -3,14 +3,27 @@
 from calendar import monthrange
 from dataclasses import dataclass
 from datetime import date, datetime, time, timedelta
+from typing import Literal
 from zoneinfo import ZoneInfo
 
 from hypothesis import strategies as st
 
+from app.core.authorization import (
+    MACHINE_ROLE_BUNDLES,
+    ModuleScope,
+    RoleBundle,
+    SensitivityScope,
+)
 from app.reporting.schemas.filing_workflow import FilingStageInput
 from app.reporting.service.bog_forms.catalog import WEEKLY_ANCHOR_WEEKDAY
 from app.reporting.service.registry import ACCRA_TZ, REGISTRY, ReturnDefinition
+from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID
 from tests.support.generators import ReviewHistory, review_histories
+
+#: A SECOND bank of the demo organization: institution narrowing has to be
+#: exercised against a sibling, because two banks of one tenant share an
+#: organization-wide row but never each other's.
+SIBLING_BANK_ID = "BK-EXAM0002"
 
 OUTCOMES = ("acknowledged", "rejected", "declined")
 CHECKPOINTS = ("prepared", "review", "decided", "validation", "approved", "submitted", *OUTCOMES)
@@ -94,3 +107,93 @@ def filing_calendar_cases(draw: st.DrawFn) -> FilingCalendarCase:
 def filing_review_histories() -> st.SearchStrategy[ReviewHistory]:
     """Three-officer review/return histories; reporting/domain/workflow.DEFAULT_STAGES."""
     return review_histories(review_decision="approved")
+
+
+@dataclass(frozen=True)
+class EvidenceBinding:
+    """One declared authority sentence for the examiner evidence surfaces.
+
+    Shape sources: ``core/authorization.ROLE_PERMISSIONS`` (fixed bundles),
+    ``identity/service/authorization.create_role_binding`` (the dimensions a row
+    stores) and ``docs/authorization_foundation.md`` §Fixed role bundles.
+    """
+
+    bundle: RoleBundle
+    module: ModuleScope = ModuleScope.AUDIT
+    sensitivity: SensitivityScope = SensitivityScope.RESTRICTED
+    #: ``None`` is an organization-wide row (it covers every institution of the
+    #: organization); a bank id narrows it to exactly that institution.
+    institution_id: str | None = None
+    #: Validity, not a stored dimension: a row outside its window or with a
+    #: non-active status is present and must still deny.
+    lifecycle: Literal["active", "future", "expired", "suspended", "revoked"] = "active"
+
+
+@st.composite
+def evidence_bindings(draw: st.DrawFn) -> EvidenceBinding:
+    """Legal HUMAN grant shapes, including the ones that must never allow.
+
+    Machine bundles are excluded because a human principal cannot hold one (the
+    service and the database both refuse it); generating one would fabricate an
+    impossible row rather than exercise a denial. MEMBER keeps its documented
+    permanent organization-wide Account/restricted shape, and the two audit
+    officer bundles keep whole-institution Audit coverage.
+    """
+
+    bundle = draw(
+        st.sampled_from(
+            tuple(bundle for bundle in RoleBundle if bundle not in MACHINE_ROLE_BUNDLES)
+        )
+    )
+    module = draw(
+        st.sampled_from(
+            (
+                ModuleScope.AUDIT,
+                ModuleScope.AUDIT,
+                ModuleScope.ALL,
+                ModuleScope.LIQUIDITY,
+                ModuleScope.CAPITAL,
+                ModuleScope.REGULATORY,
+                ModuleScope.CREDIT,
+            )
+        )
+    )
+    sensitivity = draw(
+        st.sampled_from(
+            (
+                SensitivityScope.RESTRICTED,
+                SensitivityScope.RESTRICTED,
+                SensitivityScope.CONFIDENTIAL,
+                SensitivityScope.AGGREGATED,
+                SensitivityScope.ALL,
+            )
+        )
+    )
+    institution_id = draw(st.sampled_from((None, None, SAMPLE_BANK_ID, SIBLING_BANK_ID)))
+    lifecycle = draw(
+        st.sampled_from(("active", "active", "future", "expired", "suspended", "revoked"))
+    )
+    if bundle is RoleBundle.MEMBER:
+        module, sensitivity = ModuleScope.ACCOUNT, SensitivityScope.RESTRICTED
+        institution_id, lifecycle = None, "active"
+    elif bundle in (RoleBundle.SECURITY_OFFICER, RoleBundle.COMPLIANCE_OFFICER):
+        module = ModuleScope.AUDIT
+    return EvidenceBinding(bundle, module, sensitivity, institution_id, lifecycle)
+
+
+def evidence_binding_sets() -> st.SearchStrategy[list[EvidenceBinding]]:
+    """Empty, complete, partial and split grants — rows never compose authority."""
+
+    return st.one_of(
+        st.lists(evidence_bindings(), max_size=4),
+        st.lists(
+            st.builds(
+                EvidenceBinding,
+                bundle=st.sampled_from((RoleBundle.VIEWER, RoleBundle.AUDITOR, RoleBundle.ANALYST)),
+                module=st.sampled_from((ModuleScope.AUDIT, ModuleScope.LIQUIDITY)),
+                sensitivity=st.sampled_from(tuple(SensitivityScope)),
+            ),
+            min_size=1,
+            max_size=3,
+        ),
+    )

@@ -19,6 +19,8 @@ from app.liquidity.service.liquidity_thresholds import BANK_MINIMUM_PCT
 from app.liquidity.service.regulatory_liquidity import (
     get_regulatory_run,
     read_regulatory_run_execution_result,
+    run_authorization_module,
+    run_authorization_modules,
 )
 
 __all__ = [
@@ -39,4 +41,6 @@ __all__ = [
     "get_regulatory_run",
     "read_regulatory_run_execution_result",
     "regulatory_liquidity",
+    "run_authorization_module",
+    "run_authorization_modules",
 ]

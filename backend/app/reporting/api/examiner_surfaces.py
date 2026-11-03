@@ -7,7 +7,8 @@ from uuid import UUID
 
 from fastapi import APIRouter, Query
 
-from app.api.deps import DbSession, Tenant
+from app.api.deps import DbSession
+from app.reporting.api.examiner_authorization import ExaminerEvidenceView
 from app.reporting.schemas.examiner import (
     ExaminerDocumentationRead,
     ExaminerRunsRead,
@@ -26,11 +27,11 @@ router = APIRouter(tags=["examiner"])
 def list_examiner_runs(
     bank_id: str,
     db: DbSession,
-    ctx: Tenant,
+    access: ExaminerEvidenceView,
     reporting_period_id: Annotated[UUID, Query()],
     module: Annotated[str | None, Query()] = None,
 ) -> ExaminerRunsRead:
-    return examiner_mode.list_runs(db, ctx, bank_id, reporting_period_id, module)
+    return examiner_mode.list_runs(db, access.ctx, bank_id, reporting_period_id, module)
 
 
 @router.get(
@@ -38,8 +39,10 @@ def list_examiner_runs(
     response_model=RunReproductionRead,
     operation_id="reproduceExaminerRun",
 )
-def reproduce_run(bank_id: str, run_id: UUID, db: DbSession, ctx: Tenant) -> RunReproductionRead:
-    return examiner_mode.reproduce_run(db, ctx, bank_id, run_id)
+def reproduce_run(
+    bank_id: str, run_id: UUID, db: DbSession, access: ExaminerEvidenceView
+) -> RunReproductionRead:
+    return examiner_mode.reproduce_run(db, access.ctx, bank_id, run_id)
 
 
 @router.get(
@@ -50,7 +53,7 @@ def reproduce_run(bank_id: str, run_id: UUID, db: DbSession, ctx: Tenant) -> Run
 def documentation_package(
     bank_id: str,
     db: DbSession,
-    ctx: Tenant,
+    access: ExaminerEvidenceView,
     reporting_period_id: Annotated[UUID, Query()],
 ) -> ExaminerDocumentationRead:
-    return examiner_mode.documentation_package(db, ctx, bank_id, reporting_period_id)
+    return examiner_mode.documentation_package(db, access.ctx, bank_id, reporting_period_id)

@@ -1,13 +1,18 @@
 """Examiner mode v1 (Phase 2 item 7), against the ACTUAL primary database.
 
-The examiner role reads everything and mutates nothing: it clears the read-only
-tenant guard (it ranks above viewer in the ladder) while every mutation gate
-(analyst and above) excludes it. Invariants over the real Sample Bank: the run
-list is the period's stored runs; reproduction re-hashes the stored snapshot to
-its stored ``input_hash`` and a tampered snapshot no longer reproduces; the
-documentation package bundles the period's latest succeeded runs, its packages,
-the CFP approval state and the audit trail, and is tenant-isolated. Opt-in via
-REAL_DATA_DATABASE_URL; everything rolls back inside ``real_client``.
+Authority is two independent sentences (issue 180): the bundle needs a
+whole-institution AUDIT/restricted ``view`` binding, and each embedded source
+needs its own module grant. The suite user here holds both — created inside the
+shared, rolled-back transaction — so the bundle is complete and these tests keep
+asserting the read model over real rows rather than a permission story, which
+``tests/reporting/api/test_examiner_authorization.py`` owns.
+
+Invariants over the real Sample Bank: the run list is the period's stored runs;
+reproduction re-hashes the stored snapshot to its stored ``input_hash`` and a
+tampered snapshot no longer reproduces; the documentation package bundles the
+period's latest succeeded runs, its packages, the CFP approval state and the
+audit trail, and is tenant-isolated. Opt-in via REAL_DATA_DATABASE_URL;
+everything rolls back inside ``real_client``.
 """
 
 from __future__ import annotations
@@ -19,11 +24,22 @@ from fastapi.testclient import TestClient
 from sqlalchemy import update
 from sqlalchemy.orm import Session
 
+from app.core.authorization import (
+    GrantorType,
+    InstitutionScope,
+    ModuleScope,
+    PrincipalType,
+    RoleBundle,
+    SensitivityScope,
+)
 from app.core.security import ROLES, has_role
+from app.identity.models.user import User
+from app.identity.service import authorization
 from app.models import RegulatoryRun
 from tests.real_data import (
     REAL_BANK_ID,
     REAL_ORG_ID,
+    REAL_USER_ID,
     other_headers,
     real_headers,
     requires_real_data,
@@ -31,6 +47,40 @@ from tests.real_data import (
 
 # The ladder test is pure and stays hermetic; the DB-backed tests opt in per test.
 BASE = f"/api/v1/banks/{REAL_BANK_ID}"
+
+
+def _evidence_reader(real_session: Session) -> dict[str, str]:
+    """Grant the entry sentence and every source sentence, then act as them.
+
+    Written on the shared transaction, so the real primary database's grants are
+    untouched after the rollback. The scalar ``examiner`` role is still carried
+    in the token to prove it is authority-neutral: the bindings decide.
+    """
+    real_session.info["organization_id"] = REAL_ORG_ID
+    grants = (
+        (RoleBundle.AUDITOR, ModuleScope.AUDIT, SensitivityScope.RESTRICTED),
+        (RoleBundle.VIEWER, ModuleScope.LIQUIDITY, SensitivityScope.CONFIDENTIAL),
+        (RoleBundle.VIEWER, ModuleScope.CAPITAL, SensitivityScope.CONFIDENTIAL),
+        (RoleBundle.VIEWER, ModuleScope.REGULATORY, SensitivityScope.RESTRICTED),
+    )
+    for bundle, module_scope, sensitivity_scope in grants:
+        authorization.create_role_binding(
+            real_session,
+            organization_id=REAL_ORG_ID,
+            principal_user_id=REAL_USER_ID,
+            principal_type=PrincipalType.HUMAN,
+            role_bundle=bundle,
+            scope=authorization.BindingScope(
+                InstitutionScope.ORGANIZATION, None, module_scope, sensitivity_scope
+            ),
+            grantor=authorization.GrantorRef(GrantorType.SYSTEM, "real-data-examiner-suite"),
+            reason="Exercise the examiner evidence bundle over real rows",
+            commit=False,
+        )
+    real_session.commit()
+    user = real_session.get(User, REAL_USER_ID)
+    assert user is not None
+    return real_headers(roles=("examiner",), authorization_version=user.authorization_version)
 
 
 def _latest_period(client: TestClient) -> dict[str, Any]:
@@ -82,7 +132,7 @@ def test_examiner_surfaces_and_run_reproduction(
     real_client: TestClient, real_session: Session
 ) -> None:
     period_id, run_id = _period_with_liquidity_run(real_client)
-    examiner = real_headers(roles=("examiner",))
+    examiner = _evidence_reader(real_session)
 
     runs = real_client.get(
         f"{BASE}/examiner/runs", headers=examiner, params={"reporting_period_id": period_id}
@@ -143,9 +193,11 @@ def test_examiner_surfaces_and_run_reproduction(
 
 
 @requires_real_data
-def test_documentation_package_bundles_period_evidence(real_client: TestClient) -> None:
+def test_documentation_package_bundles_period_evidence(
+    real_client: TestClient, real_session: Session
+) -> None:
     period_id, run_id = _period_with_liquidity_run(real_client)
-    examiner = real_headers(roles=("examiner",))
+    examiner = _evidence_reader(real_session)
     package = real_client.get(
         f"{BASE}/examiner/documentation-package",
         headers=examiner,

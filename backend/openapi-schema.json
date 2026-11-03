@@ -20540,6 +20540,13 @@
             "format": "uuid",
             "title": "Reporting Period Id",
             "type": "string"
+          },
+          "withheld_sources": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Withheld Sources",
+            "type": "array"
           }
         },
         "required": [

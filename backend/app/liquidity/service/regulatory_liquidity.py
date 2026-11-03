@@ -175,6 +175,26 @@ class _RegulatoryRunAuthorizationPolicy:
     summary_metrics: Callable[[RegulatoryRun], dict[str, Any]] | None = None
 
 
+def run_authorization_module(module: str) -> Module | None:
+    """The source module whose VIEW authority covers one stored run module.
+
+    :data:`_REGULATORY_RUN_AUTHORIZATION` is the ONE canonical run-module map,
+    so any surface that embeds a run (the examiner evidence bundle does) asks
+    here instead of restating the mapping. An unknown or future run module
+    returns ``None``; every caller must then default-deny it rather than guess
+    which module it belongs to.
+    """
+
+    policy = _REGULATORY_RUN_AUTHORIZATION.get(module)
+    return policy.module if policy is not None else None
+
+
+def run_authorization_modules() -> dict[str, Module]:
+    """Every stored run module with the source module that governs it."""
+
+    return {name: policy.module for name, policy in _REGULATORY_RUN_AUTHORIZATION.items()}
+
+
 _REGULATORY_RUN_AUTHORIZATION = {
     "capital": _RegulatoryRunAuthorizationPolicy(Module.CAPITAL, "capital"),
     "credit": _RegulatoryRunAuthorizationPolicy(Module.CREDIT, "credit"),

@@ -771,7 +771,12 @@ register surfaces are owned by the
 [Institution rollout contract](institution_enforcement_rollout.md). Human ingestion
 and bank-data operations follow [Human Data Engine authority](#human-data-engine-authority).
 The bank audit-route cutover is owned by [the bank audit contract](tamper_evident_records.md#bank-audit-read-api). The advisory organization-scoped case plane is owned by the
-[case workspace rollout contract](case_enforcement_rollout.md). Existing
+[case workspace rollout contract](case_enforcement_rollout.md). The tenant
+examiner evidence surfaces — the supervisory run list, run reproduction and
+documentation package, which need the `audit` entry sentence AND each embedded
+source module's own sentence — are owned by the
+[examiner evidence rollout contract](examiner_evidence_enforcement_rollout.md).
+Existing
 operational routes outside these cutovers keep their current checks, while
 grant administration itself requires the owner binding. Explanation endpoints,
 further product-route cutovers,
