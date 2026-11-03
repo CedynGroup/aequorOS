@@ -58,6 +58,11 @@ def _body_chunks(body: _Body) -> Iterator[bytes]:
         yield chunk
 
 
+def _object_client(**config: str | bool | Config | None) -> _ObjectClient:
+    """Build the typed slice of the boto3 client; boto3 itself is untyped."""
+    return cast(_ObjectClient, boto3.client("s3", **config))
+
+
 class S3ObjectStorage:
     def __init__(
         self,
@@ -74,21 +79,14 @@ class S3ObjectStorage:
             signature_version="s3v4",
             s3={"addressing_style": "path" if force_path_style else "virtual"},
         )
-        self._client: _ObjectClient = cast(
-            _ObjectClient,
-            cast(
-                object,
-                boto3.client(
-                    "s3",
-                    verify=get_settings().tls.ca_bundle or True,
-                    use_ssl=True,
-                    region_name=region_name,
-                    endpoint_url=endpoint_url or None,
-                    aws_access_key_id=access_key_id,
-                    aws_secret_access_key=secret_access_key,
-                    config=config,
-                ),
-            ),
+        self._client: _ObjectClient = _object_client(
+            region_name=region_name,
+            endpoint_url=endpoint_url or None,
+            aws_access_key_id=access_key_id,
+            aws_secret_access_key=secret_access_key,
+            config=config,
+            verify=get_settings().tls.ca_bundle or True,
+            use_ssl=True,
         )
 
         require_boto_tls(cast(object, self._client))
