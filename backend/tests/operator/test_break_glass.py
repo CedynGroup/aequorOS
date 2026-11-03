@@ -57,7 +57,7 @@ def make_operator(
 
 
 def designate(db: Session, user: OperatorUser) -> tuple[OperatorBreakGlassCredential, str]:
-    credential, code = break_glass.issue_credential(db, user)
+    credential, code = break_glass.issue_credential(db, user, actor_email=ACTOR)
     db.commit()
     db.refresh(credential)
     return credential, code
@@ -93,7 +93,41 @@ class WarningRecorder:
         self.calls.append({"success": success, "reason": reason, **fields})
 
 
-def audit_rows(db: Session, prefix: str = "auth.break_glass.") -> list[OperatorAuditLog]:
+SIGN_IN_ACTIONS = (break_glass.BREAK_GLASS_SIGN_IN_ACTION, break_glass.BREAK_GLASS_DENIED_ACTION)
+MANAGEMENT_ACTIONS = (
+    break_glass.BREAK_GLASS_ISSUED_ACTION,
+    break_glass.BREAK_GLASS_ROTATED_ACTION,
+    break_glass.BREAK_GLASS_DISABLED_ACTION,
+)
+
+ACTOR = "security-ops@aequoros.com"
+
+
+def audit_rows(
+    db: Session,
+    actions: tuple[str, ...] = SIGN_IN_ACTIONS,
+) -> list[OperatorAuditLog]:
+    """Break-glass audit rows, sign-in attempts by default.
+
+    Credential management writes its own rows, so a test asserting on sign-in
+    evidence must not silently include an issue/rotate/revoke row.
+    """
+    db.expire_all()
+    return list(
+        db.scalars(
+            select(OperatorAuditLog)
+            .where(OperatorAuditLog.action.in_(actions))
+            .order_by(OperatorAuditLog.created_at, OperatorAuditLog.id)
+        )
+    )
+
+
+def management_rows(db: Session) -> list[OperatorAuditLog]:
+    return audit_rows(db, MANAGEMENT_ACTIONS)
+
+
+def audit_rows_with_prefix(db: Session, prefix: str) -> list[OperatorAuditLog]:
+    """Every audit row whose action starts with ``prefix`` (any auth mode)."""
     db.expire_all()
     return list(
         db.scalars(
@@ -195,7 +229,7 @@ class TestDesignatedRows:
             == 200
         )
 
-        break_glass.disable_credential(operator_db, credential)
+        break_glass.disable_credential(operator_db, credential, actor_email=ACTOR)
         operator_db.commit()
 
         assert (
@@ -223,7 +257,7 @@ class TestDesignatedRows:
         )
 
         if disable_first:
-            break_glass.disable_credential(operator_db, credential)
+            break_glass.disable_credential(operator_db, credential, actor_email=ACTOR)
             operator_db.commit()
         rotated, new_code = designate(operator_db, user)
 
@@ -322,7 +356,9 @@ class TestSession:
             operator_client.get("/operator/v1/tenants", headers=bearer(response)).status_code == 200
         )
         read_rows = [
-            row for row in audit_rows(operator_db, "tenants.") if row.auth_mode == "break_glass"
+            row
+            for row in audit_rows_with_prefix(operator_db, "tenants.")
+            if row.auth_mode == "break_glass"
         ]
         assert len(read_rows) == 1
 
@@ -515,7 +551,7 @@ class TestLockout:
         inactive.is_active = False
         disabled = make_operator(operator_db, "disabled@aequoros.com")
         disabled_credential, _disabled_code = designate(operator_db, disabled)
-        break_glass.disable_credential(operator_db, disabled_credential)
+        break_glass.disable_credential(operator_db, disabled_credential, actor_email=ACTOR)
         operator_db.commit()
         emails = [
             designated.email,
@@ -652,10 +688,18 @@ class TestAuditAndLogging:
         assert {row["action"] for row in rows} == {
             break_glass.BREAK_GLASS_DENIED_ACTION,
             break_glass.BREAK_GLASS_SIGN_IN_ACTION,
+            break_glass.BREAK_GLASS_ISSUED_ACTION,
             "tenants.list",
         }
         assert all(row["auth_mode"] == "break_glass" for row in rows)
-        assert all(row["operator_email"] == user.email for row in rows)
+        # Sign-in evidence names the staff member; the issuance row names the
+        # CLI actor who created the credential.
+        assert {(row["action"], row["operator_email"]) for row in rows} == {
+            (break_glass.BREAK_GLASS_DENIED_ACTION, user.email),
+            (break_glass.BREAK_GLASS_SIGN_IN_ACTION, user.email),
+            (break_glass.BREAK_GLASS_ISSUED_ACTION, ACTOR),
+            ("tenants.list", user.email),
+        }
 
     def test_locked_attempts_are_audited_and_logged(
         self,
@@ -696,6 +740,65 @@ class TestAuditAndLogging:
         assert audit_rows(operator_db) == []
 
 
+class TestCredentialManagementAudit:
+    def test_issue_rotate_and_disable_each_write_an_attributable_row(
+        self, operator_db: Session
+    ) -> None:
+        user = make_operator(operator_db, role="operator_admin")
+        credential, first_code = designate(operator_db, user)
+        _rotated, second_code = designate(operator_db, user)
+        break_glass.disable_credential(operator_db, credential, actor_email=ACTOR)
+        operator_db.commit()
+
+        rows = management_rows(operator_db)
+        assert [row.action for row in rows] == [
+            break_glass.BREAK_GLASS_ISSUED_ACTION,
+            break_glass.BREAK_GLASS_ROTATED_ACTION,
+            break_glass.BREAK_GLASS_DISABLED_ACTION,
+        ]
+        assert all(row.auth_mode == "break_glass" for row in rows)
+        # The actor is the person who ran the command, not the designated row.
+        assert all(row.operator_email == ACTOR for row in rows)
+        assert all(row.detail["operator_user_id"] == str(user.id) for row in rows)
+        assert all(row.detail["credential_id"] == str(credential.id) for row in rows)
+        assert rows[0].detail["designated_role"] == "operator_admin"
+        # The secret itself is never recorded, in any form.
+        for row in rows:
+            assert first_code not in str(row.detail)
+            assert second_code not in str(row.detail)
+            assert "code_hash" not in str(row.detail)
+
+    def test_a_rotated_credential_keeps_the_row_and_gains_a_rotation_row(
+        self, operator_db: Session
+    ) -> None:
+        user = make_operator(operator_db)
+        credential, _code = designate(operator_db, user)
+        rotated, _new_code = designate(operator_db, user)
+
+        assert rotated.id == credential.id
+        assert management_rows(operator_db)[-1].action == (break_glass.BREAK_GLASS_ROTATED_ACTION)
+
+    def test_management_rows_name_the_actor_and_carry_no_secret(
+        self, operator_client: TestClient, operator_db: Session, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        enable(monkeypatch)
+        user = make_operator(operator_db, role="operator_admin")
+        _credential, code = designate(operator_db, user)
+        signed_in = emergency_login(operator_client, user.email, code)
+        assert signed_in.status_code == 200
+
+        response = operator_client.get("/operator/v1/audit", headers=bearer(signed_in))
+
+        assert response.status_code == 200
+        body = cast("dict[str, object]", response.json())
+        viewed = cast("list[dict[str, object]]", body["items"])
+        # A reviewer reading the audit log can see that emergency access was
+        # granted, and by whom, without the log ever holding the code.
+        issued = [row for row in viewed if row["action"] == break_glass.BREAK_GLASS_ISSUED_ACTION]
+        assert [row["operator_email"] for row in issued] == [ACTOR]
+        assert code not in str(viewed)
+
+
 class TestCredentialCli:
     @pytest.mark.parametrize(
         ("command", "url_setting"),
@@ -728,7 +831,15 @@ class TestCredentialCli:
         get_operator_settings.cache_clear()
         flags = [] if command == "issue" else [f"--{command}"]
         monkeypatch.setattr(
-            "sys.argv", ["manage_break_glass.py", "--email", "ama@aequoros.com", *flags]
+            "sys.argv",
+            [
+                "manage_break_glass.py",
+                "--email",
+                "ama@aequoros.com",
+                "--actor",
+                ACTOR,
+                *flags,
+            ],
         )
         connections: list[dict[str, object]] = []
 
@@ -753,3 +864,56 @@ class TestCredentialCli:
         assert connections[0]["ssl_min_protocol_version"] == "TLSv1.2"
         assert connections[0]["gssencmode"] == "disable"
         assert connections[0]["application_name"] == "aequoros-manage-break-glass"
+
+    @pytest.mark.parametrize(
+        "flags",
+        [pytest.param([], id="issue"), pytest.param(["--disable"], id="disable")],
+    )
+    def test_state_changes_are_refused_without_an_actor(
+        self, monkeypatch: pytest.MonkeyPatch, flags: list[str]
+    ) -> None:
+        monkeypatch.setenv("DATABASE_URL", "postgresql+psycopg://operator@control.example/control")
+        get_settings.cache_clear()
+        monkeypatch.setattr(
+            "sys.argv", ["manage_break_glass.py", "--email", "ama@aequoros.com", *flags]
+        )
+        connections: list[object] = []
+
+        def connect(*_args: object, **_kwargs: object) -> Never:
+            connections.append(_args)
+            raise AssertionError("the CLI must refuse before opening a connection")
+
+        monkeypatch.setattr("psycopg.connect", connect)
+
+        with pytest.raises(SystemExit) as refused:
+            manage_break_glass.main()
+
+        assert refused.value.code != 0
+        assert connections == []
+
+    def test_status_needs_no_actor_and_changes_nothing(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setenv("DATABASE_URL", "postgresql+psycopg://operator@control.example/control")
+        get_settings.cache_clear()
+        monkeypatch.setattr(
+            "sys.argv",
+            ["manage_break_glass.py", "--email", "ama@aequoros.com", "--status"],
+        )
+        connections: list[object] = []
+
+        class ConnectionCaptured(Exception):
+            pass
+
+        def connect(*_args: object, **_kwargs: object) -> Never:
+            connections.append(_args)
+            raise ConnectionCaptured
+
+        monkeypatch.setattr("psycopg.connect", connect)
+
+        # Reaches the database (it has to read the row) — that is the proof the
+        # read-only mode was not refused for a missing --actor.
+        with pytest.raises(ConnectionCaptured):
+            manage_break_glass.main()
+
+        assert len(connections) == 1

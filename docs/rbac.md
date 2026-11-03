@@ -1005,6 +1005,8 @@ unchanged while it exists.
   `backend/scripts/manage_break_glass.py` (an operator action run inside the
   backend container, the same custody model as `create_operator.py`), and the
   code is printed exactly once. There is no API that mints or returns one.
+  Every issue, rotation and revocation names its `--actor` and writes an audit
+  row (see "Credential management is audited too" below).
 - **Off until configured, twice.** `POST /operator/auth/break-glass` answers
   404 unless `OPERATOR_BREAK_GLASS_ENABLED=true` on the operator API, and a
   staff row without an enabled credential is refused even then. The console's
@@ -1046,6 +1048,15 @@ unchanged while it exists.
   five-minute refusal after five consecutive failures per email) answers that
   same 401 without a new audit row or warning log: it never reaches credential
   verification, and one row per rejected byte would be a log-flooding lever.
+- **Credential management is audited too.** Issue, rotate and revoke each write
+  one `operator_audit_log` row with `auth_mode='break_glass'` and an `action` of
+  `auth.break_glass.issued`, `auth.break_glass.rotated` or
+  `auth.break_glass.disabled`, in the same transaction as the credential
+  change. `operator_email` is the `--actor` who ran the command;
+  `detail` names the designated `operator_user_id`, the `credential_id` and
+  the designated role, and never the code. `--status` changes nothing and
+  writes nothing. The rows are the record of who was given emergency access
+  and who took it away, so review them alongside the sign-in rows.
 
 | Setting                        | Default | Behavior                                                                                                                        |
 | ------------------------------ | ------- | ------------------------------------------------------------------------------------------------------------------------------- |
@@ -1062,10 +1073,14 @@ unchanged while it exists.
    one `super_admin` and one `operator_admin`, in different teams:
 
    ```bash
-   uv run python scripts/manage_break_glass.py --email founder@aequoros.com
+   uv run python scripts/manage_break_glass.py \
+       --email founder@aequoros.com --actor security@aequoros.com
    ```
 
-   The code is printed once. Deliver it out-of-band (password manager or
+   `--actor` is the staff member running the command and is required for
+   issue, rotate and revoke: the CLI holds no operator session, so this is how
+   the action becomes attributable. It is recorded on the audit row described
+   below. The code is printed once. Deliver it out-of-band (password manager or
    sealed envelope) — never email, chat, or the repository.
 
 3. Re-run the command to **rotate**: it replaces the stored hash, clears the

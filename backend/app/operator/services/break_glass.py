@@ -36,6 +36,11 @@ LOCKOUT_SECONDS = 5 * 60
 
 BREAK_GLASS_SIGN_IN_ACTION = "auth.break_glass.sign_in"
 BREAK_GLASS_DENIED_ACTION = "auth.break_glass.denied"
+#: Credential management. The CLI is the only management path, so these rows are
+#: the sole record of who was given an emergency code and who took it away.
+BREAK_GLASS_ISSUED_ACTION = "auth.break_glass.issued"
+BREAK_GLASS_ROTATED_ACTION = "auth.break_glass.rotated"
+BREAK_GLASS_DISABLED_ACTION = "auth.break_glass.disabled"
 
 _TOKEN_TYP = "operator_break_glass"
 
@@ -250,21 +255,63 @@ def credential_for_user(db: Session, user_id: UUID) -> OperatorBreakGlassCredent
 
 
 # -- issuance / revocation (credential-management CLI) ----------------------------
+def _record_management(
+    db: Session,
+    *,
+    actor_email: str,
+    action: str,
+    credential: OperatorBreakGlassCredential,
+    designated_role: str | None = None,
+) -> None:
+    """Stage one credential-management audit row in the caller's transaction.
+
+    ``operator_email`` is the staff member who RAN the command, not the person
+    whose credential changed (named by ``operator_user_id``): the CLI has no
+    operator session, so the actor is supplied explicitly. The plaintext code is
+    never recorded — the row proves the change happened, not what the secret is.
+    """
+    detail: dict[str, Any] = {
+        "policy": "break_glass",
+        "recorded_by": "manage_break_glass_cli",
+        "credential_id": str(credential.id),
+        "operator_user_id": str(credential.operator_user_id),
+    }
+    if designated_role is not None:
+        # A revoked credential confers nothing, so only a live grant carries the
+        # role it was granted at.
+        detail["designated_role"] = designated_role
+    db.add(
+        OperatorAuditLog(
+            operator_email=actor_email,
+            auth_mode="break_glass",
+            action=action,
+            detail=detail,
+        )
+    )
+
+
 def issue_credential(
-    db: Session, user: OperatorUser, *, now: dt.datetime | None = None
+    db: Session,
+    user: OperatorUser,
+    *,
+    actor_email: str,
+    now: dt.datetime | None = None,
 ) -> tuple[OperatorBreakGlassCredential, str]:
     """Designate (or rotate) one staff row's emergency credential.
 
     Returns ``(row, code)`` with the plaintext code shown exactly once — only
     its Argon2id hash is stored. Rotation replaces the hash and clears the
-    lockout, so the previous code stops working immediately. The caller
-    commits.
+    lockout, so the previous code stops working immediately, and every session
+    minted before ``rotated_at`` is refused at the request boundary. The caller
+    commits both the credential and its audit row.
     """
     if not user.is_active:
         msg = f"operator {user.email!r} is not active; reactivate it before designating break-glass"
         raise ValueError(msg)
     moment = now or utc_now()
     credential = credential_for_user(db, user.id)
+    # A brand-new row issues; an existing one rotates. The audit row says which.
+    action = BREAK_GLASS_ISSUED_ACTION if credential is None else BREAK_GLASS_ROTATED_ACTION
     if credential is None:
         credential = OperatorBreakGlassCredential(operator_user_id=user.id)
         db.add(credential)
@@ -274,11 +321,24 @@ def issue_credential(
     credential.rotated_at = moment
     credential.failed_login_attempts = 0
     credential.locked_until = None
+    # Flush so a newly added row has its primary key before the audit row cites it.
+    db.flush()
+    _record_management(
+        db,
+        actor_email=actor_email,
+        action=action,
+        credential=credential,
+        designated_role=user.role,
+    )
     return credential, code
 
 
 def disable_credential(
-    db: Session, credential: OperatorBreakGlassCredential, *, now: dt.datetime | None = None
+    db: Session,
+    credential: OperatorBreakGlassCredential,
+    *,
+    actor_email: str,
+    now: dt.datetime | None = None,
 ) -> None:
     """Revoke the emergency credential; the caller commits.
 
@@ -290,6 +350,12 @@ def disable_credential(
     credential.failed_login_attempts = 0
     credential.locked_until = None
     credential.rotated_at = now or utc_now()
+    _record_management(
+        db,
+        actor_email=actor_email,
+        action=BREAK_GLASS_DISABLED_ACTION,
+        credential=credential,
+    )
 
 
 # -- audit + log ---------------------------------------------------------------
@@ -336,6 +402,9 @@ def record_operator_attempt(  # noqa: PLR0913 - one audit row carries actor, out
 
 __all__ = [
     "BREAK_GLASS_DENIED_ACTION",
+    "BREAK_GLASS_DISABLED_ACTION",
+    "BREAK_GLASS_ISSUED_ACTION",
+    "BREAK_GLASS_ROTATED_ACTION",
     "BREAK_GLASS_SIGN_IN_ACTION",
     "BREAK_GLASS_TOKEN_TTL_SECONDS",
     "account_lock_expiry",

@@ -6,18 +6,22 @@ works without any console sign-in, so it is usable during the incident it is
 meant to cover.
 
     # designate (or rotate) — prints the code ONCE
-    uv run python scripts/manage_break_glass.py --email founder@aequoros.com
+    uv run python scripts/manage_break_glass.py \
+        --email founder@aequoros.com --actor security@aequoros.com
 
     # current state (never the code)
     uv run python scripts/manage_break_glass.py --email founder@aequoros.com --status
 
     # revoke immediately
-    uv run python scripts/manage_break_glass.py --email founder@aequoros.com --disable
+    uv run python scripts/manage_break_glass.py \
+        --email founder@aequoros.com --actor security@aequoros.com --disable
 
 The API also needs ``OPERATOR_BREAK_GLASS_ENABLED=true`` before the sign-in
 route accepts anything. Rotation replaces the stored hash, so a previously
-issued code (or a session minted from it) stops working at once. Every use of
-the credential is audited and logged; see docs/rbac.md §11.3.
+issued code (and a session minted from it) stops working at once. Every
+sign-in attempt that reaches credential verification is audited and logged,
+and every issue/rotate/revoke writes its own audit row naming the ``--actor``
+who took the action. See docs/rbac.md §11.3.
 
 Uses OPERATOR_DATABASE_URL → DATABASE_URL, from the environment or
 ``backend/.env``. Set OPERATOR_DATABASE_URL to a credential authorized to
@@ -68,6 +72,7 @@ def _describe(credential: OperatorBreakGlassCredential | None) -> str:
 
 class _Args(argparse.Namespace):
     email: str
+    actor: str | None
     status: bool
     disable: bool
 
@@ -77,14 +82,37 @@ def build_parser() -> argparse.ArgumentParser:
         description="Designate, inspect, rotate or revoke a staff break-glass credential."
     )
     parser.add_argument("--email", required=True, help="Designated operator email.")
+    parser.add_argument(
+        "--actor",
+        help=(
+            "Email of the staff member running this command. Required for issue, rotate "
+            "and revoke, and recorded as the actor on the audit row — the CLI has no "
+            "operator session of its own."
+        ),
+    )
     mode = parser.add_mutually_exclusive_group()
     mode.add_argument("--status", action="store_true", help="Show state without changing it.")
     mode.add_argument("--disable", action="store_true", help="Revoke the credential immediately.")
     return parser
 
 
+def _actor(args: _Args) -> str:
+    """The acting operator's email, required for anything that changes state."""
+    actor = (args.actor or "").strip().lower()
+    if not actor:
+        msg = (
+            "--actor is required for issue, rotate and revoke: credential management must "
+            "be attributable in operator_audit_log."
+        )
+        raise SystemExit(msg)
+    return actor
+
+
 def main() -> int:
     args = cast("_Args", build_parser().parse_args())
+    # Fail fast: a state change without an actor would be unattributable, so
+    # refuse it before touching the database rather than after.
+    actor = "" if args.status else _actor(args)
     database_url = _database_url()
     if not database_url:
         print(
@@ -109,19 +137,19 @@ def main() -> int:
                 if credential is None:
                     print(f"{user.email}: no emergency credential to disable.")
                     return 0
-                break_glass.disable_credential(session, credential)
+                break_glass.disable_credential(session, credential, actor_email=actor)
                 session.commit()
                 print(f"{user.email}: emergency credential disabled.")
                 return 0
 
-            credential, code = break_glass.issue_credential(session, user)
+            credential, code = break_glass.issue_credential(session, user, actor_email=actor)
             session.commit()
             print(f"{user.email}: emergency credential issued (role={user.role}).")
             print("\nEmergency access code (store securely, shown once):")
             print(f"  {code}")
             print(
                 "\nSet OPERATOR_BREAK_GLASS_ENABLED=true on the operator API to accept it. "
-                "Every use is audited and logged."
+                "Every sign-in attempt is audited and logged."
             )
     finally:
         engine.dispose()
