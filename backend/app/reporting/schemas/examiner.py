@@ -90,8 +90,8 @@ class ExaminerDocumentationRead(ClosedModel):
     #: prefixed keys: ``run:<module>`` for a stored run module,
     #: ``package:<family>`` for a filed return family, ``register:<name>`` for a
     #: cited register endpoint, and ``cfp`` for the contingency-funding-plan
-    #: block. An empty list is a COMPLETE bundle. A withheld block is never
-    #: rendered as an absent fact — ``cfp_active`` is ``false`` only when the
-    #: plan is actually readable and inactive — so a reader is told what the
-    #: bundle does not contain rather than being shown a quiet zero.
+    #: block. An empty list is a COMPLETE bundle, so a client must read this
+    #: list before interpreting a filtered block as an absent fact: when ``cfp``
+    #: is withheld, ``cfp_approved_version`` is null and ``cfp_active`` is
+    #: ``false`` because the plan was not readable, not because it is inactive.
     withheld_sources: list[str] = Field(default_factory=list)

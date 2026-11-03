@@ -100,9 +100,11 @@ sees neither.
 A filtered bundle must never render a withheld source as an absent fact. The
 documentation package therefore carries `withheld_sources`: prefixed keys
 `run:<module>`, `package:<family>`, `register:<name>`, and `cfp`. An empty list
-is a complete bundle. In particular `cfp_active: false` means only that the plan
-is readable and inactive — when the CFP posture is withheld, `cfp_approved_version`
-is null, `cfp_active` is false **and** `cfp` appears in `withheld_sources`.
+is a complete bundle, so a reader checks it before interpreting a filtered block
+as an absent fact. When the CFP posture is withheld,
+`cfp_approved_version` is null and `cfp_active` is false **because the plan was
+not readable**, and `cfp` appears in `withheld_sources`; false therefore means
+"readable and inactive" only when `cfp` is absent from that list.
 
 ### Operator inspection is a separate lifecycle
 
