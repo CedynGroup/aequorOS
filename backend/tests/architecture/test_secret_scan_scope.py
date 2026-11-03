@@ -1,4 +1,4 @@
-"""The required secret scan reads the change under review, not the whole history.
+"""Pull-request secret scans read the change under review, not the whole history.
 
 gitleaks used to walk every commit the checkout held, so a pull request failed on
 a finding in history it never authored: PRs 761, 765 and 766 were failed by two
@@ -8,7 +8,7 @@ commit SHAs and a rebase rewrites them.
 
 These tests execute the workflow's own scan scripts against fixture repositories,
 with a stub ``docker`` recording the arguments gitleaks would receive, and assert
-the commit range each event scans.
+the PR commit range and the event conditions on all scan steps.
 """
 
 from __future__ import annotations
@@ -24,8 +24,6 @@ import yaml
 
 WORKFLOW = Path(__file__).resolve().parents[3] / ".github" / "workflows" / "secret-scan.yml"
 PULL_REQUEST_STEP = "Scan the pull request's commits"
-PUSH_STEP = "Scan the pushed commits"
-ZERO_SHA = "0" * 40
 
 
 def _steps() -> dict[str, dict[str, object]]:
@@ -112,7 +110,7 @@ def test_a_pull_request_scans_only_its_own_commits(repository: Path, tmp_path: P
     first = _commit(repository, "feature.py", "FIRST = 1\n", "first pull-request commit")
     second = _commit(repository, "feature.py", "FIRST = 1\nSECOND = 2\n", "second change")
 
-    arguments = _scan(PULL_REQUEST_STEP, repository, tmp_path, BASE_SHA=base, BASE_REF="main")
+    arguments = _scan(PULL_REQUEST_STEP, repository, tmp_path, BASE_SHA=base)
     log_opts = _log_opts(arguments)
 
     assert _scanned(repository, log_opts) == [second, first]
@@ -134,49 +132,15 @@ def test_a_merge_checkout_scans_the_pull_request_and_no_newer_base_commit(
     merge = _git(repository, "rev-parse", "HEAD")
 
     log_opts = _log_opts(
-        _scan(PULL_REQUEST_STEP, repository, tmp_path, BASE_SHA=base, BASE_REF="main")
+        _scan(PULL_REQUEST_STEP, repository, tmp_path, BASE_SHA=base)
     )
 
     assert _scanned(repository, log_opts) == [merge, second, first]
     assert base not in _scanned(repository, log_opts)
 
 
-def test_a_push_scans_only_the_pushed_commits(repository: Path, tmp_path: Path) -> None:
-    before = _git(repository, "rev-parse", "HEAD")
-    pushed = _commit(repository, "reviewed.py", "BASE = 2\n", "pushed commit")
-
-    log_opts = _log_opts(
-        _scan(PUSH_STEP, repository, tmp_path, BEFORE_SHA=before, AFTER_SHA=pushed)
-    )
-
-    assert log_opts == f"{before}..{pushed}"
-    assert _scanned(repository, log_opts) == [pushed]
-
-
-def test_a_new_branch_push_scans_its_own_history_only(repository: Path, tmp_path: Path) -> None:
-    _ = _git(repository, "checkout", "-q", "-b", "feature")
-    tip = _commit(repository, "feature.py", "FEATURE = 1\n", "first commit on a new branch")
-    _ = _git(repository, "checkout", "-q", "main")
-    unrelated = _commit(repository, "unrelated.py", "OTHER = 1\n", "commit on another branch")
-
-    log_opts = _log_opts(_scan(PUSH_STEP, repository, tmp_path, BEFORE_SHA=ZERO_SHA, AFTER_SHA=tip))
-
-    assert log_opts == tip
-    assert unrelated not in _scanned(repository, log_opts)
-
-
-def test_an_unknown_previous_tip_never_fails_the_check(repository: Path, tmp_path: Path) -> None:
-    """A rewritten server history may drop the previous tip from the clone."""
-    after = _commit(repository, "reviewed.py", "BASE = 3\n", "pushed commit")
-
-    log_opts = _log_opts(
-        _scan(PUSH_STEP, repository, tmp_path, BEFORE_SHA="1" * 40, AFTER_SHA=after)
-    )
-
-    assert log_opts == after
-
-
 def test_each_range_scan_runs_only_for_its_own_event() -> None:
     steps = _steps()
     assert steps[PULL_REQUEST_STEP]["if"] == "github.event_name == 'pull_request'"
-    assert steps[PUSH_STEP]["if"] == "github.event_name == 'push'"
+    assert steps["Scan working tree"]["if"] == "github.event_name == 'push'"
+    assert steps["Scan git history"]["if"] == "github.event_name == 'push'"
