@@ -273,6 +273,28 @@ it.each([
   ).toBeNull();
 });
 
+it("restores every status with the All chip while preserving the search", async () => {
+  fixture.templates = [
+    rule("LIVE", "in_force"),
+    rule("DRAFT", "exposure_draft"),
+  ];
+  render(<InstrumentsRegister />);
+  const user = userEvent.setup();
+  await user.type(screen.getByRole("searchbox"), "Synthetic");
+  await user.click(screen.getByRole("button", { name: "Draft: 1" }));
+  expect(screen.queryByRole("heading", { name: "Synthetic LIVE" })).toBeNull();
+  await user.click(screen.getByRole("button", { name: "All: 2" }));
+  expect(screen.getByRole("button", { name: "All: 2" })).toHaveAttribute(
+    "aria-pressed",
+    "true",
+  );
+  expect(screen.getByRole("searchbox")).toHaveValue("Synthetic");
+  expect(screen.getByRole("heading", { name: "Synthetic LIVE" })).toBeVisible();
+  expect(
+    screen.getByRole("heading", { name: "Synthetic DRAFT" }),
+  ).toBeVisible();
+});
+
 it("combines name search and status filtering, then recovers from no matches", async () => {
   fixture.templates = [
     rule("LIVE", "in_force"),

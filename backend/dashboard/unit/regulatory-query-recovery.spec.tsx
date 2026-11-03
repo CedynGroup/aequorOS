@@ -71,6 +71,48 @@ afterEach(() => {
   setAccessToken(null);
 });
 
+it("shows threshold levels and distinguishes monitoring defaults from Board approval", async () => {
+  client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  setAccessToken("synthetic-token");
+  server.use(
+    http.get(`${apiBaseUrl}/regulatory-reporting/templates`, () =>
+      HttpResponse.json({ templates: [] }),
+    ),
+    http.get(`${apiBaseUrl}/banks/BK-SYNTH001/liquidity-thresholds`, () =>
+      HttpResponse.json({
+        bank_id: "BK-SYNTH001",
+        thresholds: [
+          {
+            threshold_code: "narrow_to_volatile",
+            threshold_pct: "75",
+            institution_class: "bank",
+            source: "board_register",
+            approved_by: "Synthetic Board",
+            effective_from: "2026-09-30",
+          },
+          {
+            threshold_code: "broad_to_volatile",
+            threshold_pct: "50",
+            institution_class: "bank",
+            source: "directive_default",
+          },
+        ],
+        history: [],
+      }),
+    ),
+  );
+  render(view(<ThresholdRegisterCard bankId="BK-SYNTH001" />));
+  expect(await screen.findByText("Synthetic Board")).toBeVisible();
+  expect(
+    screen.getByText("Narrow liquid assets / volatile funds"),
+  ).toBeVisible();
+  expect(screen.getByText("75.00%")).toBeVisible();
+  expect(screen.getByText("Monitoring minimum")).toBeVisible();
+  expect(
+    screen.getByText("Regulatory default — no Board row yet"),
+  ).toBeVisible();
+});
+
 const surfaces = [
   ["instruments", () => <InstrumentsPage />, "Regulatory instruments"],
   ["upcoming", () => <UpcomingRulesPage />, "Preparing for upcoming rules"],

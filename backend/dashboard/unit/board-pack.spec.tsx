@@ -173,6 +173,48 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
+it("recovers the board pack when rule metadata fails and Retry is selected", async () => {
+  let failed = true;
+  let calls = 0;
+  serve();
+  server.use(
+    http.get(`${apiBaseUrl}/regulatory-reporting/templates`, () => {
+      calls += 1;
+      return failed
+        ? HttpResponse.json(
+            { detail: "Synthetic rules unavailable" },
+            { status: 503 },
+          )
+        : HttpResponse.json({
+            templates: ["LCR-NSFR", "IRRBB-PILOT"].map((code) => ({
+              code,
+              instrument_status: "in_force",
+              title: code,
+              family: "liquidity",
+              frequency: "monthly",
+              regulator: "Synthetic",
+              generator: "synthetic",
+              directive_citation: "Synthetic evidence",
+              fidelity: "PARTIAL",
+              template_id: code,
+              default_channel: "manual",
+              supports_working_copy: false,
+            })),
+          });
+    }),
+  );
+  render(view());
+  expect(await screen.findByText("Request failed (503).")).toBeVisible();
+  expect(
+    screen.getByRole("button", { name: "Print / Save as PDF" }),
+  ).toBeDisabled();
+  failed = false;
+  fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+  await screen.findByRole("heading", { name: "Board Risk & Regulatory Pack" });
+  expect(screen.queryByText("Request failed (503).")).toBeNull();
+  expect(calls).toBeGreaterThan(1);
+});
+
 it("labels the library card with its live basis regardless of the selected period", () => {
   const card = () =>
     view(<PackCards bankId={undefined} periodId={selection.period} />);
