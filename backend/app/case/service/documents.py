@@ -332,34 +332,20 @@ def _verify_landed_upload(
 
 def _discard_uncommitted_snapshot(
     db: Session,
-    organization_id: str,
-    object_id: UUID,
     *,
     copy: _FinalizedSnapshot,
     storage_client: ObjectStorage,
+    commit_started: bool,
 ) -> None:
-    """Remove a snapshot no committed row points at.
+    """Discard only snapshots whose final commit was never attempted.
 
-    A commit that raised may still have landed, and the row it wrote names this
-    key; deleting then would break an upload the database considers complete.
-    Read the row back and remove the key only when nothing references it.
-    Cleanup is best effort, so a storage failure cannot replace the refusal
-    that caused it.
+    A failed acknowledgement can leave COMMIT in flight, so even a new
+    connection reading the old locator cannot prove the snapshot is unused.
+    Retaining a possible orphan is safer than deleting committed evidence.
     """
-    # If the database cannot establish the outcome, retain the copy. Never
-    # replace the original exception or delete a possibly committed object.
     with suppress(Exception):
         db.rollback()
-        try:
-            committed_key = db.scalar(
-                select(StoredObject.object_key).where(
-                    StoredObject.id == object_id,
-                    StoredObject.organization_id == organization_id,
-                )
-            )
-        finally:
-            db.rollback()
-        if committed_key == copy.key:
+        if commit_started:
             return
         storage_client.delete_object(bucket=copy.bucket, object_key=copy.key)
 
@@ -376,11 +362,11 @@ def complete_upload(
     stored_object = get_stored_object_or_404(db, ctx.organization_id, document.stored_object_id)
     _require_pending_upload(document, stored_object)
     bucket, object_key = stored_object.bucket, stored_object.object_key
-    object_id = stored_object.id
     declared_size, declared_digest = stored_object.byte_size, stored_object.sha256
     db.commit()
     snapshot = _StagedSnapshot(head=None, copy=None)
     completed = False
+    final_commit_started = False
     try:
         # Every storage call runs with no transaction open, so a slow head, copy
         # or digest read cannot spend the idle-in-transaction budget.
@@ -417,6 +403,7 @@ def complete_upload(
             entity_type="document",
             entity_id=str(document.id),
         )
+        final_commit_started = True
         db.commit()
         completed = True
         return document
@@ -424,7 +411,10 @@ def complete_upload(
         copy = snapshot.copy
         if copy is not None and not completed:
             _discard_uncommitted_snapshot(
-                db, ctx.organization_id, object_id, copy=copy, storage_client=storage_client
+                db,
+                copy=copy,
+                storage_client=storage_client,
+                commit_started=final_commit_started,
             )
 
 

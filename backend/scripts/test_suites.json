@@ -19641,7 +19641,8 @@
     "tests/case/service/test_documents.py::test_complete_upload_handles_uncertain_commit_without_losing_referenced_content[failed]": "integration",
     "tests/case/service/test_documents.py::test_complete_upload_handles_uncertain_commit_without_losing_referenced_content[lookup_failed]": "integration",
     "tests/case/service/test_documents.py::test_complete_upload_handles_uncertain_commit_without_losing_referenced_content[rollback_failed]": "integration",
-    "tests/case/service/test_documents.py::test_fake_storage_refuses_missing_and_deleted_snapshot_keys": "unit"
+    "tests/case/service/test_documents.py::test_fake_storage_refuses_missing_and_deleted_snapshot_keys": "unit",
+    "tests/case/service/test_documents.py::test_complete_upload_handles_uncertain_commit_without_losing_referenced_content[stale_lookup]": "integration"
   },
   "services": {
     "tests/attestation/service/test_attestation_openbao.py::test_a_csr_that_does_not_prove_possession_is_never_submitted": "integration",

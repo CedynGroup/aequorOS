@@ -222,7 +222,8 @@ def test_complete_upload_cleans_up_after_storage_verification_errors(
 
 
 @pytest.mark.parametrize(
-    "outcome", ["committed", "failed", "lookup_failed", "rollback_failed", "cleanup_failed"]
+    "outcome",
+    ["committed", "failed", "lookup_failed", "rollback_failed", "cleanup_failed", "stale_lookup"],
 )
 def test_complete_upload_handles_uncertain_commit_without_losing_referenced_content(
     db_session: Session,
@@ -237,9 +238,14 @@ def test_complete_upload_handles_uncertain_commit_without_losing_referenced_cont
     commits = 0
     original_error = RuntimeError("commit acknowledgement lost")
     attempted: list[str] = []
+    lookups: list[str] = []
 
     def failed_database(*args: object, **kwargs: object) -> None:
         raise RuntimeError("database unavailable")
+
+    def stale_lookup(*args: object, **kwargs: object) -> str:
+        lookups.append("scalar")
+        return "stale-staging-key"
 
     def uncertain_commit() -> None:
         nonlocal commits
@@ -253,6 +259,8 @@ def test_complete_upload_handles_uncertain_commit_without_losing_referenced_cont
             patches.setattr(db_session, "scalar", failed_database)
         elif outcome == "rollback_failed":
             patches.setattr(db_session, "rollback", failed_database)
+        elif outcome == "stale_lookup":
+            patches.setattr(db_session, "scalar", stale_lookup)
         raise original_error
 
     def cleanup(*, bucket: str, object_key: str) -> None:
@@ -284,8 +292,8 @@ def test_complete_upload_handles_uncertain_commit_without_losing_referenced_cont
         assert (stored.bucket, stored.object_key) in factories.storage.finalized_objects
     else:
         _assert_still_pending(db_session, document_id)
-    assert len(attempted) == (1 if outcome in {"failed", "cleanup_failed"} else 0)
-    assert bool(factories.storage.finalized_objects) == (outcome != "failed")
+    assert not attempted and not lookups
+    assert factories.storage.finalized_objects
 
 
 def test_fake_storage_refuses_missing_and_deleted_snapshot_keys(fake_storage: FakeStorage) -> None:
