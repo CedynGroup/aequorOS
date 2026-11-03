@@ -174,6 +174,28 @@ storage tier. Server filesystem paths and other URL schemes return HTTP 422;
 malformed handles are rejected before a batch is created. Upload to the same bank
 that will ingest the file, even when two banks share an organization.
 
+#### Upload and workbook limits
+
+Data Engine source uploads and manual market-data uploads accept at most
+50,000,000 bytes per file (HTTP 413 above the cap; HTTP 422 for an empty file).
+The handlers read in 1 MiB chunks and stop once the cap is exceeded, rather than
+reading the entire oversized file into application memory. This does not set a
+proxy or multipart transport limit.
+
+Both `.xlsx` readers apply these additional limits:
+
+- At most 128 MiB (134,217,728 bytes) of total uncompressed ZIP-entry sizes
+  declared by the archive.
+- At most 100:1 total declared uncompressed-to-compressed size ratio when the
+  declared uncompressed total is at least 1 MiB.
+- At most 100,000 rows per worksheet, including headers and intervening blank rows.
+- At most 2,000,000 cells across the workbook, counting each sheet's rectangular
+  grid, including blank cells. Data Engine merge extents also count.
+
+Workbook limits are checked during parsing, not initial file storage. A refusal
+identifies the exceeded limit; split the source into smaller files before retrying.
+These workbook limits do not apply to CSV or TSV files.
+
 ### API transactions and external waits
 
 Governed BI exports commit authorization before running the query. Certified
