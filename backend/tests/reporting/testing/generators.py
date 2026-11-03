@@ -181,35 +181,38 @@ def evidence_bindings(draw: st.DrawFn) -> EvidenceBinding:
     return EvidenceBinding(bundle, module, sensitivity, institution_id, lifecycle)
 
 
-#: Bundles the database admits at most once while ACTIVE: baseline membership is
-#: unique per principal and the organization owner per organization
-#: (``uq_authorization_bindings_active_member`` and
-#: ``uq_authorization_bindings_active_org_owner``). A generated set may not hold
-#: two ACTIVE rows of either, so ``grant()`` cannot raise an integrity error
-#: instead of exercising authorization.
-ACTIVE_SINGLETON_BUNDLES = frozenset({RoleBundle.MEMBER, RoleBundle.ORG_OWNER})
+#: Bundles an organization admits at most ONCE: baseline membership is unique per
+#: principal and the organization owner per organization,
+#: ``uq_authorization_bindings_active_member`` and
+#: ``uq_authorization_bindings_active_org_owner``. A set holding two of either
+#: therefore raises an integrity error instead of exercising authorization.
+#:
+#: The limit is per BUNDLE, not per ACTIVE row, because both indexes test
+#: ``status = 'active'`` alone — the validity window is not in the predicate —
+#: and every row is INSERTed with that default status. ``create_role_binding``
+#: flushes the INSERT as ACTIVE and the lifecycle is applied to the stored row
+#: afterwards, so a ``future`` or ``expired`` duplicate has already collided on a
+#: non-deferrable index by the time it leaves the active window.
+SINGLETON_BUNDLES = frozenset({RoleBundle.MEMBER, RoleBundle.ORG_OWNER})
 
 
-def at_most_one_active_singleton(
-    bindings: list[EvidenceBinding],
-) -> list[EvidenceBinding]:
-    """Drop repeated ACTIVE ``member``/``org_owner`` rows the database refuses.
+def at_most_one_singleton(bindings: list[EvidenceBinding]) -> list[EvidenceBinding]:
+    """Drop repeated ``member``/``org_owner`` rows the database refuses.
 
-    Inactive duplicates stay: a revoked or expired second row is a legal record
-    and still has to be generated so the lifecycle cases are exercised.
+    Only the lifecycle-free duplicates go. A single ``member`` or ``org_owner``
+    row still generates under every lifecycle, so the present-but-refused cases
+    keep their coverage; the dropped row could not have added any, because
+    neither bundle carries examiner authority (``member`` carries no permission
+    at all and ``org_owner`` only ``administer``) and rows never compose.
     """
 
     kept: list[EvidenceBinding] = []
     for binding in bindings:
-        duplicate = (
-            binding.lifecycle == "active"
-            and binding.bundle in ACTIVE_SINGLETON_BUNDLES
-            and any(
-                other.lifecycle == "active" and other.bundle is binding.bundle for other in kept
-            )
-        )
-        if not duplicate:
-            kept.append(binding)
+        if binding.bundle in SINGLETON_BUNDLES and any(
+            other.bundle is binding.bundle for other in kept
+        ):
+            continue
+        kept.append(binding)
     return kept
 
 
@@ -217,7 +220,7 @@ def evidence_binding_sets() -> st.SearchStrategy[list[EvidenceBinding]]:
     """Empty, complete, partial and split grants — rows never compose authority."""
 
     return st.one_of(
-        st.lists(evidence_bindings(), max_size=4).map(at_most_one_active_singleton),
+        st.lists(evidence_bindings(), max_size=4).map(at_most_one_singleton),
         st.lists(
             st.builds(
                 EvidenceBinding,
