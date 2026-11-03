@@ -8,7 +8,8 @@ commit SHAs and a rebase rewrites them.
 
 These tests execute the workflow's own scan scripts against fixture repositories,
 with a stub ``docker`` recording the arguments gitleaks would receive, and assert
-the PR commit range and the event conditions on all scan steps.
+the PR commit range, the files staged for a content scan, and the event
+conditions on all scan steps.
 """
 
 from __future__ import annotations
@@ -24,6 +25,7 @@ import yaml
 
 WORKFLOW = Path(__file__).resolve().parents[3] / ".github" / "workflows" / "secret-scan.yml"
 PULL_REQUEST_STEP = "Scan the pull request's commits"
+PULL_REQUEST_FILES_STEP = "Scan the pull request's changed files"
 
 
 def _steps() -> dict[str, dict[str, object]]:
@@ -48,7 +50,9 @@ def _git(root: Path, *args: str) -> str:
 
 
 def _commit(root: Path, filename: str, body: str, message: str) -> str:
-    _ = (root / filename).write_text(body, encoding="utf-8")
+    path = root / filename
+    path.parent.mkdir(parents=True, exist_ok=True)
+    _ = path.write_text(body, encoding="utf-8")
     _ = _git(root, "add", ".")
     _ = _git(root, "commit", "-qm", message)
     return _git(root, "rev-parse", "HEAD")
@@ -184,8 +188,36 @@ def test_a_merge_resolution_credential_is_scanned_without_base_changes(
     assert credential not in _git(repository, "show", "HEAD:reviewed.py")
 
 
+def test_a_pull_request_scans_the_complete_content_of_only_its_changed_files(
+    repository: Path, tmp_path: Path
+) -> None:
+    """Unchanged files are never read; changed files are read whole, not as diffs."""
+    base = _git(repository, "rev-parse", "HEAD")
+    _ = _git(repository, "checkout", "-q", "-b", "feature")
+    _ = _commit(repository, "settings/keys.py", "NAME = 'api_key'\nVALUE = 'plain'\n", "add keys")
+    _ = _commit(repository, "notes.txt", "first\n", "add notes")
+
+    arguments = _scan(
+        PULL_REQUEST_FILES_STEP, repository, tmp_path, BASE_SHA=base, RUNNER_TEMP=str(tmp_path)
+    )
+
+    content = tmp_path / "pull-request-content"
+    staged = sorted(
+        path.relative_to(content).as_posix() for path in content.rglob("*") if path.is_file()
+    )
+    assert staged == ["notes.txt", "settings/keys.py"]
+    assert (content / "settings/keys.py").read_text(encoding="utf-8") == (
+        "NAME = 'api_key'\nVALUE = 'plain'\n"
+    )
+    assert "--no-git" in arguments
+    assert arguments[arguments.index("--source") + 1] == "."
+    assert "/workspace/.gitleaks.toml" in arguments
+    assert "--redact" in arguments
+
+
 def test_each_range_scan_runs_only_for_its_own_event() -> None:
     steps = _steps()
     assert steps[PULL_REQUEST_STEP]["if"] == "github.event_name == 'pull_request'"
+    assert steps[PULL_REQUEST_FILES_STEP]["if"] == "github.event_name == 'pull_request'"
     assert steps["Scan working tree"]["if"] == "github.event_name == 'push'"
     assert steps["Scan git history"]["if"] == "github.event_name == 'push'"
