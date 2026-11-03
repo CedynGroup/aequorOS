@@ -8,6 +8,7 @@ import pytest
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.capital.service import sdi_views
 from app.forecasting.schemas.forecasting import ForecastRunCreate
 from app.forecasting.service import regulatory_forecasting
 from app.live.service import alerts, live_view
@@ -28,7 +29,6 @@ from app.models import (
 from app.policy import applicability as regulatory_applicability
 from app.policy.domain.regulatory_instruments import forecast_status
 from app.reporting.service.registry import REGISTRY
-from app.services import sdi_views
 from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID, set_board_threshold
 from tests.fixtures.capital_structure import MAKER, REPORTING_DATE, seed_book
 from tests.fixtures.sdi_capital import create_sdi_bank, seed_sdi_capital, seed_sdi_positions

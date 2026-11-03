@@ -9,6 +9,7 @@ import RegulatoryExportWarning from "@/components/submissions/RegulatoryExportWa
 import { setActiveJurisdiction } from "@/lib/format";
 import { instrumentStatusLabel } from "@/lib/api/returnAnchors";
 import {
+  instrumentDateLabel,
   instrumentDisclosure,
   isUpcomingRule,
   preparationWarning,
@@ -26,6 +27,12 @@ const statuses = [
   "in_force",
   "unpublished",
 ] as const;
+
+it("formats a recorded calendar date from its own parts", () => {
+  expect(instrumentDateLabel("2027-01-01")).toBe("1 Jan 2027");
+  expect(instrumentDateLabel("2026-12-31")).toBe("31 Dec 2026");
+  expect(instrumentDateLabel("not-a-date")).toBe("not-a-date");
+});
 
 it("renders distinct status colours without disclosure markers and keeps explanations in flow", () => {
   const { container } = render(

@@ -13,6 +13,33 @@ export function instrumentIssuer(issuer: string): string {
   return issuer === "BOG" ? "BoG" : issuer;
 }
 
+const MONTH_LABELS = [
+  "Jan",
+  "Feb",
+  "Mar",
+  "Apr",
+  "May",
+  "Jun",
+  "Jul",
+  "Aug",
+  "Sep",
+  "Oct",
+  "Nov",
+  "Dec",
+];
+
+/**
+ * "1 Jan 2027" from an ISO calendar date. The recorded day is formatted from
+ * its own parts so a viewer west of UTC never sees the previous date.
+ */
+export function instrumentDateLabel(value: string): string {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  if (!match) return value;
+  const [, year, month, day] = match;
+  const label = MONTH_LABELS.at(Number(month) - 1) ?? month;
+  return `${Number(day)} ${label} ${year}`;
+}
+
 /** Publication and commencement stay separate from calculation readiness. */
 export function instrumentDisclosure(
   status: string | undefined,

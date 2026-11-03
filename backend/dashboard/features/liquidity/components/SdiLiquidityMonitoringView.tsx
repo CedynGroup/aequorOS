@@ -145,7 +145,7 @@ export default function SdiLiquidityMonitoringView({
   const monitoring = useLiquidityMonitoring(bankId);
   const sdiLiquidity = useSdiLiquidityPosition(isSdi ? bankId : undefined);
   const baselLiquidity = useLiquidityDashboard(
-    !isSdi && scope.liquidityAggregatedView ? bankId : undefined,
+    !isSdi && scope.liquidityAggregatedView && showBasel ? bankId : undefined,
   );
   const data = monitoring.data;
   const sdiData = sdiLiquidity.data;

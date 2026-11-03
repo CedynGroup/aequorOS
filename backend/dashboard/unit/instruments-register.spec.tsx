@@ -73,6 +73,33 @@ function rule(code: string, status: string) {
 }
 
 describe("instruments register", () => {
+  it("groups rows in lifecycle order without dropping unclassified instruments", () => {
+    fixture.templates = [
+      rule("REF", "unpublished"),
+      rule("DRAFT", "exposure_draft"),
+      rule("LIVE", "in_force"),
+      rule("FINAL", "final_not_in_force"),
+      { ...rule("UNKNOWN", "unpublished"), instrumentStatus: undefined },
+    ];
+    render(<InstrumentsRegister />);
+    expect(
+      screen.getAllByRole("heading", { level: 2 }).map((h) => h.textContent),
+    ).toEqual([
+      "Synthetic LIVE",
+      "Synthetic FINAL",
+      "Synthetic DRAFT",
+      "Synthetic REF",
+      "Synthetic UNKNOWN",
+    ]);
+  });
+
+  it("explains an empty register without suggesting an active filter", () => {
+    fixture.templates = [];
+    render(<InstrumentsRegister />);
+    expect(screen.getByText("No instruments in the register.")).toBeVisible();
+    expect(screen.queryByRole("button", { name: "Clear filters" })).toBeNull();
+  });
+
   it("shows every status, dates, dependencies and governed approval evidence together", async () => {
     fixture.templates = [
       rule("LIVE", "in_force"),
@@ -86,7 +113,7 @@ describe("instruments register", () => {
     const live = screen
       .getByRole("heading", { name: "Synthetic LIVE" })
       .closest("section")!;
-    expect(within(live).getByText(/Effective date: 2027-01-01/)).toBeVisible();
+    expect(within(live).getByText("Effective 1 Jan 2027")).toBeVisible();
     await userEvent.click(within(live).getByText("Citation and calculations"));
     expect(
       within(live).getByText(/Governed date differs from the default/),
@@ -123,8 +150,48 @@ describe("instruments register", () => {
       screen.queryByRole("heading", { name: "Synthetic LIVE" }),
     ).toBeNull();
     expect(screen.queryByRole("heading", { name: "Synthetic REF" })).toBeNull();
-    expect(screen.getByText(/Expected start if made final/)).toBeVisible();
+    expect(screen.getByText("Draft, expected 1 Jan 2027")).toBeVisible();
+    expect(screen.getByText("Final, effective 1 Jan 2027")).toBeVisible();
+    expect(
+      screen.getByRole("group", { name: "Filter by status" }),
+    ).toBeVisible();
+    expect(screen.getByRole("button", { name: "Draft: 1" })).toBeVisible();
+    expect(
+      screen.getByRole("button", { name: "Not yet in force: 1" }),
+    ).toBeVisible();
+    expect(screen.queryByRole("button", { name: /^In force:/ })).toBeNull();
   });
+});
+
+it("links the instrument name and shows frequency instead of a repeated return column", () => {
+  fixture.templates = [{ ...rule("LIVE", "in_force"), frequency: "quarterly" }];
+  render(<InstrumentsRegister />);
+  expect(screen.queryByText("Linked return")).toBeNull();
+  expect(screen.getByText("Frequency")).toBeVisible();
+  expect(screen.getByText("Effective or expected date")).toBeVisible();
+  const instrument = screen
+    .getByRole("heading", { name: "Synthetic LIVE" })
+    .closest("section")!;
+  expect(within(instrument).getByText("quarterly")).toBeVisible();
+  expect(within(instrument).getByText("Synthetic regulator")).toBeVisible();
+  expect(
+    within(instrument).getAllByRole("link", { name: "Synthetic LIVE" }),
+  ).toHaveLength(1);
+});
+
+it("keeps the draft caveat in a tooltip so the date cell reads as a date", () => {
+  fixture.templates = [
+    rule("DRAFT", "exposure_draft"),
+    { ...rule("REF", "unpublished"), effectiveFrom: null },
+  ];
+  render(<InstrumentsRegister />);
+  const expected = screen.getByText("Draft, expected 1 Jan 2027");
+  expect(expected).toHaveAttribute(
+    "title",
+    "Expected from 1 Jan 2027 if made final.",
+  );
+  expect(expected).not.toHaveTextContent(/if made final/i);
+  expect(screen.getByText("No filing date")).toBeVisible();
 });
 
 it("offers the supported SDI IRRBB preparation workspace", async () => {
@@ -214,7 +281,7 @@ it("combines name search and status filtering, then recovers from no matches", a
   ];
   render(<InstrumentsRegister />);
   const user = userEvent.setup();
-  await user.selectOptions(screen.getByLabelText("Status"), "exposure_draft");
+  await user.click(screen.getByRole("button", { name: "Draft: 1" }));
   expect(
     screen.getByRole("heading", { name: "Synthetic DRAFT" }),
   ).toBeVisible();
@@ -223,12 +290,12 @@ it("combines name search and status filtering, then recovers from no matches", a
   expect(
     screen.getByText("No instruments match your search and status filter."),
   ).toBeVisible();
-  await user.selectOptions(screen.getByLabelText("Status"), "");
+  await user.click(screen.getByRole("button", { name: "Clear filters" }));
   expect(screen.getByRole("heading", { name: "Synthetic LIVE" })).toBeVisible();
-  await user.clear(screen.getByLabelText("Search instruments"));
   expect(
     screen.getByRole("heading", { name: "Synthetic FINAL" }),
   ).toBeVisible();
+  expect(screen.getByRole("searchbox")).toHaveValue("");
 });
 
 it("keeps in-force status honest when the only citation is provisional", async () => {
@@ -292,9 +359,7 @@ describe("commencement notice", () => {
       screen.getByRole("searchbox", { name: "Search instruments" }),
       "no matching rule",
     );
-    expect(
-      screen.getByText("No instruments match your search and status filter."),
-    ).toBeVisible();
+    expect(screen.getByText("No instruments match your search.")).toBeVisible();
     expect(notice).toHaveTextContent("2 rules commence in the next 90 days.");
   });
 

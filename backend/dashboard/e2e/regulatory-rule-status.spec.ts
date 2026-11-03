@@ -4,6 +4,7 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import { E2E_API_ORIGIN, E2E_TMP } from "../playwright.config";
 import {
+  instrumentDateLabel,
   instrumentIssuer,
   readableCalculation,
 } from "../lib/regulatoryInstruments";
@@ -85,10 +86,11 @@ test("register exposes every status, dates, source and calculation dependencies"
       .click();
     await expect(section).toContainText(item.directive_citation);
     await expect(section).toContainText(
-      item.effective_from ??
-        (item.instrument_status === "unpublished"
-          ? "No filing commencement date"
-          : `Start date not published by ${instrumentIssuer(item.regulator)}`),
+      item.effective_from
+        ? instrumentDateLabel(item.effective_from)
+        : item.instrument_status === "unpublished"
+          ? "No filing date"
+          : `Start date not published by ${instrumentIssuer(item.regulator)}`,
     );
     for (const calculation of item.calculations)
       await expect(section).toContainText(readableCalculation(calculation));
@@ -126,6 +128,82 @@ test("register exposes every status, dates, source and calculation dependencies"
       fullPage: true,
     });
   }
+});
+
+test("status chips count and filter the register in one click", async ({
+  page,
+}) => {
+  const token = await mintBackendToken("admin");
+  const response = await fetch(
+    `${E2E_API_ORIGIN}/api/v1/regulatory-reporting/templates?bank_id=BK-SAMP0001`,
+    { headers: { Authorization: `Bearer ${token}` } },
+  );
+  expect(response.ok).toBeTruthy();
+  const data = await response.json();
+  const templates: {
+    code: string;
+    title: string;
+    instrument_status: string;
+  }[] = data.templates;
+  await page.goto("/submissions/instruments");
+
+  // The instrument name is the link; the duplicated return column is gone.
+  await expect(page.getByText("Linked return", { exact: true })).toHaveCount(0);
+  await expect(page.getByText("Frequency", { exact: true })).toHaveCount(1);
+
+  const chips = page.getByRole("group", { name: "Filter by status" });
+  const drafts = templates.filter(
+    (item) => item.instrument_status === "exposure_draft",
+  );
+  const draftChip = chips.getByRole("button", { name: /^Draft:/ });
+  await expect(draftChip).toContainText(String(drafts.length));
+  await expect(chips.getByRole("button", { name: /^All:/ })).toContainText(
+    String(templates.length),
+  );
+
+  await draftChip.click();
+  await expect(draftChip).toHaveAttribute("aria-pressed", "true");
+  for (const item of templates) {
+    await expect(page.locator(`section[id="${item.code}"]`)).toHaveCount(
+      item.instrument_status === "exposure_draft" ? 1 : 0,
+    );
+  }
+  await expect(
+    page
+      .locator(`section[id="${drafts[0].code}"]`)
+      .getByRole("link", { name: drafts[0].title, exact: true }),
+  ).toHaveAttribute("href", /\/submissions\/returns\?code=/);
+  await expect(
+    page.getByRole("button", { name: "Clear filters" }),
+  ).toBeVisible();
+
+  // A second click on the pressed chip releases the filter.
+  await draftChip.click();
+  await expect(draftChip).toHaveAttribute("aria-pressed", "false");
+  await expect(page.getByRole("button", { name: "Clear filters" })).toHaveCount(
+    0,
+  );
+  await expect(
+    page.locator(`section[id="${templates[0].code}"]`),
+  ).toBeVisible();
+
+  // Search and the chip share one clear affordance.
+  const search = page.getByRole("searchbox", { name: "Search instruments" });
+  await search.fill("no such instrument in this register");
+  await expect(
+    page.getByText("No instruments match your search."),
+  ).toBeVisible();
+  await page.getByRole("button", { name: "Clear filters" }).click();
+  await expect(search).toHaveValue("");
+  await expect(
+    page.locator(`section[id="${templates[0].code}"]`),
+  ).toBeVisible();
+
+  if (evidence)
+    await page.screenshot({
+      path: path.join(evidence, "instruments-status-chips.png"),
+      fullPage: true,
+    });
 });
 
 test("upcoming rules isolate preparation and preserve navigation into a gated module", async ({
@@ -630,6 +708,42 @@ test("status tooltip and source stay readable inside the viewport", async ({
         expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(width);
       }
     }).toPass();
+
+    // Every status badge stays on one line and inside the viewport.
+    const badges = page.locator("section > div > details > summary");
+    await expect(async () => {
+      const count = await badges.count();
+      expect(count).toBeGreaterThan(0);
+      for (let index = 0; index < count; index++) {
+        const badge = badges.nth(index);
+        const bounds = await badge.boundingBox();
+        expect(bounds).not.toBeNull();
+        expect(bounds!.x).toBeGreaterThanOrEqual(0);
+        expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(width);
+        const oneLine = await badge.evaluate((element) => {
+          const range = document.createRange();
+          range.selectNodeContents(element);
+          const lines = new Set(
+            Array.from(range.getClientRects(), (rect) => rect.top),
+          );
+          return (
+            lines.size === 1 && element.scrollWidth <= element.clientWidth + 1
+          );
+        });
+        expect(oneLine).toBe(true);
+      }
+    }).toPass();
+    const chips = page.getByRole("group", { name: "Filter by status" });
+    await expect(chips).toBeVisible();
+    await expect(async () => {
+      for (const chip of await chips.getByRole("button").all()) {
+        const bounds = await chip.boundingBox();
+        expect(bounds).not.toBeNull();
+        expect(bounds!.x).toBeGreaterThanOrEqual(0);
+        expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(width);
+      }
+    }).toPass();
+
     if (evidence) {
       await page.screenshot({
         path: path.join(evidence, `status-tooltip-viewport-${width}.png`),

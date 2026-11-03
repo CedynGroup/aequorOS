@@ -161,6 +161,14 @@ jobs:
           path: ${{ runner.temp }}/browser-contract-results
           include-hidden-files: true
           if-no-files-found: ignore
+      - name: Upload regulatory journey test results
+        if: always() && matrix.shard == 4
+        uses: actions/upload-artifact@v7
+        with:
+          name: dashboard-regulatory-journey-results
+          path: ${{ runner.temp }}/regulatory-results
+          include-hidden-files: true
+          if-no-files-found: ignore
       - name: Upload journey report
         if: always()
         uses: actions/upload-artifact@v7

@@ -61,6 +61,7 @@ const state = vi.hoisted(() => ({
   status: "exposure_draft",
   metadata: "ready",
   liquidityEnabled: undefined as boolean | undefined,
+  baselBankId: "",
   sdi: true,
   preparing: false,
   onlyIrr: false,
@@ -112,6 +113,7 @@ vi.mock("@/components/shell/BankContext", () => ({
       { id: "period", label: "January", periodEnd: new Date("2026-01-31") },
     ],
     setPeriodId: vi.fn(),
+    periodsStatus: "ready",
     moduleScope: scope(),
     institutionCapabilities: scope().institutionCapabilities,
     authorityPending: false,
@@ -452,7 +454,10 @@ vi.mock("@/lib/api/hooks", () => ({
     state.irrLoading
       ? { ...query(undefined), isLoading: true }
       : query(irrDashboard()),
-  useLiquidityDashboard: () => query(liquidityDashboard()),
+  useLiquidityDashboard: (bankId?: string) => {
+    state.baselBankId = bankId ?? "";
+    return query(bankId ? liquidityDashboard() : undefined);
+  },
   useCapitalDashboard: () =>
     query(state.sdi || state.onlyIrr ? undefined : capitalDashboard()),
   useFxDashboard: () => query(undefined),
@@ -865,6 +870,20 @@ it("shows SDI ratios only as deliberate monitoring preparation", () => {
   expect(
     screen.getByRole("cell", { name: "Synthetic LMTD ratio" }),
   ).toBeVisible();
+});
+it("does not fetch hidden Basel data in ordinary monitoring", () => {
+  state.sdi = false;
+  state.status = "unpublished";
+  const view = render(
+    <SdiLiquidityMonitoringView bankId="BK-SYNTH001" institutionClass="bank" />,
+  );
+  expect(state.baselBankId).toBe("");
+  expect(screen.getByText("Liquidity Monitoring Tools")).toBeVisible();
+  state.preparing = true;
+  view.rerender(
+    <SdiLiquidityMonitoringView bankId="BK-SYNTH001" institutionClass="bank" />,
+  );
+  expect(state.baselBankId).toBe("BK-SYNTH001");
 });
 it("offers deliberate reference monitoring from the instruments register", async () => {
   state.sdi = false;
