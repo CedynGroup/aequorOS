@@ -47,6 +47,8 @@ from app.attestation.service.keys import SignerKeyService
 from app.attestation.service.signers import get_raw_signer
 from app.core.authorization import RoleBundle
 from app.core.config import get_settings
+from app.liquidity.schemas.regulatory_liquidity import RegulatoryRunCreate
+from app.liquidity.service import regulatory_liquidity
 from app.models import (
     AttestationSignature,
     Bank,
@@ -66,8 +68,6 @@ from app.reporting.schemas.packages import (
 from app.reporting.service import artifact_versions, generation, validation
 from app.reporting.service import workflow as reporting_workflow
 from app.reporting.service.filing_workflow import chain as filing_chain
-from app.schemas.regulatory_liquidity import RegulatoryRunCreate
-from app.services import regulatory_liquidity
 from app.storage.client import StorageLocation
 from tests.fixtures.canonical_bank_fixture import (
     DEMO_ORG_ID,
@@ -77,6 +77,7 @@ from tests.fixtures.canonical_bank_fixture import (
 )
 from tests.support.factories.authorization import grant_institution_authority
 from tests.support.inmemory_storage import InMemoryStorageClient
+from tests.support.sealed_documents import published_bytes, sealed_document
 
 MAKER = TenantContext(
     organization_id=DEMO_ORG_ID, actor_user_id=DEMO_USER_ID, authorization_version=1
@@ -347,11 +348,7 @@ def _bytes(
 ) -> bytes:
     slug = db.scalar(select(Bank.storage_slug).where(Bank.id == SAMPLE_BANK_ID))
     assert slug
-    _descriptor, stream = storage.read(
-        StorageLocation(institution_slug=slug, tier="outputs", object_path=version.object_path),
-        version_id=version.storage_version_id,
-    )
-    return stream.read()
+    return published_bytes(db, storage, slug=slug, context_path=version.object_path)
 
 
 def _trust(db: Session) -> ValidationContext:
@@ -1036,12 +1033,14 @@ def _corrupt(
 
     Reaching into the in-memory client on purpose: going through ``write`` would
     mint a NEW object version, which is the one thing an object store does that
-    this failure mode is defined by the absence of.
+    this failure mode is defined by the absence of. The object lives under its
+    immutable sealed key, so the catalogue says where that is.
     """
     slug = db.scalar(select(Bank.storage_slug).where(Bank.id == SAMPLE_BANK_ID))
     assert slug
+    document = sealed_document(db, slug=slug, context_path=version.object_path)
     location = StorageLocation(
-        institution_slug=slug, tier="outputs", object_path=version.object_path
+        institution_slug=slug, tier="outputs", object_path=document.physical_key
     )
     stored = storage._objects[storage._key(location)]  # noqa: SLF001 - simulating corruption
     for entry in stored:

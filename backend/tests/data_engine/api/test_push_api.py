@@ -1,0 +1,676 @@
+"""Push API journeys: JSON in over three calls, canonical state and lineage out.
+
+The push flow is the same pipeline as file ingestion — these tests assert the
+staging endpoints' contract (idempotency, page cap, envelope validation,
+tenant isolation) and that committed pushes land in canonical state exactly
+like an uploaded workbook would.
+"""
+
+from __future__ import annotations
+
+from typing import Any
+from weakref import WeakKeyDictionary
+
+import pytest
+from fastapi.testclient import TestClient
+from sqlalchemy import select
+from sqlalchemy import text as sql_text
+
+from app.core.authorization import (
+    GrantorType,
+    InstitutionScope,
+    ModuleScope,
+    PrincipalType,
+    RoleBundle,
+    SensitivityScope,
+)
+from app.data_engine.service.push_ingestion import IDENTITY_MAPPING_NAME
+from app.db.session import get_sessionmaker
+from app.identity.service import authorization
+from app.models import Bank, CanonicalGlAccount, CanonicalLoanEvent, CanonicalReferenceRow, User
+from app.policy.service.institution_types import FALLBACK_TYPE_CODE
+from tests.data_engine.api.test_ingestion import seed_bank
+from tests.support.helpers import ORG_1, ORG_2, USER_1, USER_2, headers
+
+pytestmark = pytest.mark.committing_db
+
+AS_OF = "2026-06-30"
+_MACHINE_BEARERS: WeakKeyDictionary[TestClient, dict[tuple[str, str], dict[str, str]]] = (
+    WeakKeyDictionary()
+)
+
+GL_ACCOUNTS = [
+    {
+        "source_reference": "1000",
+        "account_code": "1000",
+        "name": "Cash and balances",
+        "account_class": "ASSET",
+        "currency": "GHS",
+    },
+    {
+        "source_reference": "2000",
+        "account_code": "2000",
+        "name": "Customer deposits",
+        "account_class": "LIABILITY",
+        "currency": "GHS",
+    },
+]
+
+PRODUCTS = [
+    {
+        "source_reference": "LN.CORP.5Y",
+        "product_code": "LN.CORP.5Y",
+        "name": "5y corporate loan",
+        "regulatory_category": "CORPORATE_LOAN_UNRATED_100RW",
+    },
+    {
+        "source_reference": "DP.CURRENT",
+        "product_code": "DP.CURRENT",
+        "name": "Current account",
+    },
+]
+
+COUNTERPARTIES = [
+    {
+        "source_reference": "C-001",
+        "name": "Volta Agro Ltd",
+        "counterparty_type": "CORPORATE",
+        "country_code": "GH",
+        "external_identifiers": {"tin": "GHA-123"},
+    },
+]
+
+POSITIONS = [
+    {
+        "source_reference": "LN-0001",
+        "position_type": "LOAN",
+        "currency": "GHS",
+        "balance": 1500000.5,
+        "counterparty_reference": "C-001",
+        "product_code": "LN.CORP.5Y",
+        "interest_rate": 0.245,
+        "rate_type": "FIXED",
+        "origination_date": "2026-03-15",
+        "contractual_maturity": "2031-03-15",
+    },
+    {
+        "source_reference": "FXH-0001",
+        "position_type": "FX_HEDGE",
+        "currency": "USD",
+        "balance": "250000",
+        "notional": "250000",
+        "contractual_maturity": "2026-12-31",
+        "attributes": {"currency_pair": "USDGHS", "contract_rate": "15.10"},
+    },
+]
+
+YIELD_CURVE = [
+    {
+        "curve_name": "GHS_SOVEREIGN",
+        "currency": "GHS",
+        "tenor_months": 3,
+        "rate": 0.241,
+        "quote_date": AS_OF,
+    },
+    {
+        "curve_name": "GHS_SOVEREIGN",
+        "currency": "GHS",
+        "tenor_months": 12,
+        "rate": 0.262,
+        "quote_date": AS_OF,
+    },
+]
+
+
+def _machine_headers(
+    client: TestClient,
+    bank_id: str,
+    organization_id: str = ORG_1,
+) -> dict[str, str]:
+    per_client = _MACHINE_BEARERS.setdefault(client, {})
+    cache_key = (organization_id, bank_id)
+    if cache_key in per_client:
+        return per_client[cache_key]
+    user_id = USER_2 if organization_id == ORG_2 else USER_1
+    session = get_sessionmaker()()
+    session.info["organization_id"] = organization_id
+    try:
+        authorization.create_role_binding(
+            session,
+            organization_id=organization_id,
+            principal_user_id=user_id,
+            principal_type=PrincipalType.HUMAN,
+            role_bundle=RoleBundle.ACCOUNT_ADMIN,
+            scope=authorization.BindingScope(
+                InstitutionScope.ORGANIZATION,
+                None,
+                ModuleScope.ACCOUNT,
+                SensitivityScope.RESTRICTED,
+            ),
+            grantor=authorization.GrantorRef(GrantorType.SYSTEM, "push-api-test"),
+            reason="issue the push API test machine credential",
+        )
+        user = session.get(User, user_id)
+        assert user is not None
+        version = user.authorization_version
+    finally:
+        session.close()
+    issued = client.post(
+        "/api/v1/integration-keys",
+        headers=headers(
+            organization_id,
+            user_id=user_id,
+            roles=("viewer",),
+            authorization_version=version,
+        ),
+        json={"bank_id": bank_id, "label": f"Push API tests for {bank_id}"},
+    )
+    assert issued.status_code == 201, issued.text
+    bearer = {"Authorization": f"Bearer {issued.json()['key']}"}
+    per_client[cache_key] = bearer
+    return bearer
+
+
+def _human_headers(organization_id: str = ORG_1) -> dict[str, str]:
+    user_id = USER_2 if organization_id == ORG_2 else USER_1
+    session = get_sessionmaker()()
+    session.info["organization_id"] = organization_id
+    try:
+        user = session.get(User, user_id)
+        assert user is not None
+        return headers(
+            organization_id,
+            user_id=user_id,
+            authorization_version=user.authorization_version,
+        )
+    finally:
+        session.close()
+
+
+def open_push(
+    client: TestClient, bank_id: str, key: str, as_of: str = AS_OF, org: str = ORG_1
+) -> Any:
+    return client.post(
+        f"/api/v1/banks/{bank_id}/push-batches",
+        headers=_machine_headers(client, bank_id, org),
+        json={"as_of_date": as_of, "idempotency_key": key, "reason": "Nightly middleware push."},
+    )
+
+
+def stage(client: TestClient, bank_id: str, push_id: str, page: dict[str, Any]) -> Any:
+    return client.post(
+        f"/api/v1/banks/{bank_id}/push-batches/{push_id}/records",
+        headers=_machine_headers(client, bank_id),
+        json=page,
+    )
+
+
+def commit(client: TestClient, bank_id: str, push_id: str) -> Any:
+    return client.post(
+        f"/api/v1/banks/{bank_id}/push-batches/{push_id}/commit",
+        headers=_machine_headers(client, bank_id),
+    )
+
+
+def push_everything(client: TestClient, bank_id: str, key: str) -> tuple[str, dict[str, Any]]:
+    """Open → two record pages → commit; returns (push_id, commit body)."""
+    opened = open_push(client, bank_id, key)
+    assert opened.status_code == 201, opened.text
+    push_id = opened.json()["push_batch_id"]
+
+    first = stage(
+        client, bank_id, push_id, {"entities": {"gl_account": GL_ACCOUNTS, "product": PRODUCTS}}
+    )
+    assert first.status_code == 200, first.text
+    assert first.json()["records_staged"] == {"gl_account": 2, "product": 2}
+
+    second = stage(
+        client,
+        bank_id,
+        push_id,
+        {
+            "entities": {"counterparty": COUNTERPARTIES, "position": POSITIONS},
+            "reference": {"yield_curve": YIELD_CURVE},
+        },
+    )
+    assert second.status_code == 200, second.text
+    assert second.json()["pages_staged"] == 2
+    assert second.json()["total_records_staged"] == 9
+
+    committed = commit(client, bank_id, push_id)
+    assert committed.status_code == 201, committed.text
+    return push_id, committed.json()
+
+
+def _org_scoped_rows(model: Any, order_by: Any) -> list[Any]:
+    session = get_sessionmaker()()
+    try:
+        if session.get_bind().dialect.name == "postgresql":
+            session.execute(
+                sql_text("SELECT set_config('app.organization_id', :org, true)"),
+                {"org": str(ORG_1)},
+            )
+        return list(session.scalars(select(model).order_by(order_by)).all())
+    finally:
+        session.close()
+
+
+class TestPushHappyPath:
+    def test_three_call_flow_lands_canonical_state(self, db_client: TestClient) -> None:
+        bank_id = seed_bank(db_client)
+        _, started = push_everything(db_client, bank_id, "push-2026-06-30-001")
+
+        batch = started["batch"]
+        assert started["reused"] is False
+        assert batch["source_system"] == "API_PUSH"
+        assert batch["status"] == "accepted"
+        assert batch["records_extracted"] == 9
+        assert batch["records_translated"] == 9
+        assert batch["records_accepted"] == 9
+        assert batch["validation_report"]["summary"]["reference_rows"] == {"yield_curve": 2}
+        assert batch["raw_artifact_path"] == f"api_push/{AS_OF}/{batch['id']}/source.json"
+
+        # The per-table breakdown lists every pushed key, resolved.
+        tables = {entry["source_table"]: entry for entry in batch["validation_report"]["tables"]}
+        assert set(tables) == {"gl_account", "product", "counterparty", "position", "yield_curve"}
+        assert tables["position"]["resolved_to"] == "position"
+        assert tables["position"]["rows_extracted"] == 2
+        assert tables["yield_curve"]["resolved_to"] == "reference:yield_curve"
+        assert tables["yield_curve"]["rows_accepted"] == 2
+
+        positions = db_client.get(
+            f"/api/v1/banks/{bank_id}/canonical-positions", headers=_human_headers()
+        ).json()["positions"]
+        by_reference = {position["source_reference"]: position for position in positions}
+        assert set(by_reference) == {"LN-0001", "FXH-0001"}
+        assert by_reference["LN-0001"]["source_system"] == "API_PUSH"
+        assert by_reference["FXH-0001"]["position_type"] == "FX_HEDGE"
+        assert by_reference["LN-0001"]["validation_status"] == "accepted"
+
+        walk = db_client.get(
+            f"/api/v1/lineage/{by_reference['LN-0001']['lineage_id']}",
+            headers=_human_headers(),
+        ).json()
+        assert [node["operation_type"] for node in walk["nodes"]] == [
+            "VALIDATION",
+            "ADAPTER_TRANSLATE",
+            "ML_ETL_DEDUP",
+            "ML_ETL_PREPROCESS",
+            "ADAPTER_EXTRACT",
+        ]
+
+    def test_reference_rows_land_in_the_canonical_reference_table(
+        self, db_client: TestClient
+    ) -> None:
+        bank_id = seed_bank(db_client)
+        _, started = push_everything(db_client, bank_id, "push-refs-001")
+
+        rows = _org_scoped_rows(CanonicalReferenceRow, CanonicalReferenceRow.row_index)
+        assert [row.row_index for row in rows] == [1, 2]
+        assert {row.dataset_kind for row in rows} == {"yield_curve"}
+        assert rows[0].payload["curve_name"] == "GHS_SOVEREIGN"
+        assert rows[0].payload["tenor_months"] == "3"
+        assert str(rows[0].ingestion_batch_id) == started["batch"]["id"]
+        assert rows[0].source_reference.startswith("source.json#yield_curve!R")
+
+    def test_identity_mapping_is_auto_provisioned(self, db_client: TestClient) -> None:
+        bank_id = seed_bank(db_client)
+        push_everything(db_client, bank_id, "push-identity-001")
+
+        configs = db_client.get(
+            f"/api/v1/banks/{bank_id}/mapping-configs", headers=_human_headers()
+        ).json()["configs"]
+        api_push_configs = [c for c in configs if c["source_system"] == "API_PUSH"]
+        assert len(api_push_configs) == 1
+        assert api_push_configs[0]["name"] == IDENTITY_MAPPING_NAME
+        assert api_push_configs[0]["status"] == "active"
+
+
+class TestPushIdempotency:
+    def test_recommitting_the_same_push_batch_returns_the_same_batch(
+        self, db_client: TestClient
+    ) -> None:
+        bank_id = seed_bank(db_client)
+        push_id, first = push_everything(db_client, bank_id, "push-idem-001")
+
+        again = commit(db_client, bank_id, push_id)
+        assert again.status_code == 201
+        assert again.json()["reused"] is True
+        assert again.json()["batch"]["id"] == first["batch"]["id"]
+
+        status = db_client.get(
+            f"/api/v1/banks/{bank_id}/push-batches/{push_id}",
+            headers=_machine_headers(db_client, bank_id),
+        ).json()
+        assert status["status"] == "committed"
+        assert status["committed_batch_id"] == first["batch"]["id"]
+
+    def test_reopening_the_same_idempotency_key_returns_the_same_push_batch(
+        self, db_client: TestClient
+    ) -> None:
+        bank_id = seed_bank(db_client)
+        first = open_push(db_client, bank_id, "push-key-001")
+        second = open_push(db_client, bank_id, "push-key-001")
+        assert second.status_code == 201
+        assert second.json()["push_batch_id"] == first.json()["push_batch_id"]
+
+        conflicting = open_push(db_client, bank_id, "push-key-001", as_of="2026-07-31")
+        assert conflicting.status_code == 409
+
+    def test_identical_content_under_a_new_key_reuses_the_accepted_batch(
+        self, db_client: TestClient
+    ) -> None:
+        bank_id = seed_bank(db_client)
+        _, first = push_everything(db_client, bank_id, "push-content-001")
+        _, second = push_everything(db_client, bank_id, "push-content-002")
+        assert second["reused"] is True
+        assert second["batch"]["id"] == first["batch"]["id"]
+
+    def test_staging_into_a_committed_push_batch_conflicts(self, db_client: TestClient) -> None:
+        bank_id = seed_bank(db_client)
+        push_id, _ = push_everything(db_client, bank_id, "push-locked-001")
+        late = stage(db_client, bank_id, push_id, {"entities": {"gl_account": GL_ACCOUNTS}})
+        assert late.status_code == 409
+
+
+class TestPushMapping:
+    def test_aliased_mapping_translates_foreign_field_names(self, db_client: TestClient) -> None:
+        bank_id = seed_bank(db_client)
+        response = db_client.post(
+            f"/api/v1/banks/{bank_id}/mapping-configs",
+            headers=_human_headers(),
+            json={
+                "source_system": "API_PUSH",
+                "name": "Middleware field aliases",
+                "config": {
+                    "field_mappings": {
+                        "gl_account": {
+                            "source_table": "gl_account",
+                            "fields": {
+                                "source_reference": "AcctCode",
+                                "account_code": "AcctCode",
+                                "name": "AcctName",
+                                "account_class": "Side",
+                            },
+                        },
+                    },
+                    "enum_mappings": {"account_class": {"A": "ASSET"}},
+                },
+                "activate": True,
+                "reason": "Bank middleware cannot rename its export fields.",
+            },
+        )
+        assert response.status_code == 200, response.text
+
+        opened = open_push(db_client, bank_id, "push-alias-001")
+        push_id = opened.json()["push_batch_id"]
+        staged = stage(
+            db_client,
+            bank_id,
+            push_id,
+            {
+                "entities": {
+                    "gl_account": [{"AcctCode": "9001", "AcctName": "Vault cash", "Side": "A"}]
+                }
+            },
+        )
+        assert staged.status_code == 200, staged.text
+        started = commit(db_client, bank_id, push_id)
+        assert started.status_code == 201, started.text
+        batch = started.json()["batch"]
+        assert batch["status"] == "accepted"
+        assert batch["records_accepted"] == 1
+
+        rows = _org_scoped_rows(CanonicalGlAccount, CanonicalGlAccount.account_code)
+        assert [row.account_code for row in rows] == ["9001"]
+        assert rows[0].account_class == "ASSET"
+        assert rows[0].source_system == "API_PUSH"
+
+
+class TestPushValidation:
+    def test_page_over_the_record_cap_is_rejected(self, db_client: TestClient) -> None:
+        bank_id = seed_bank(db_client)
+        push_id = open_push(db_client, bank_id, "push-cap-001").json()["push_batch_id"]
+        oversized = [
+            {
+                "source_reference": f"GL-{index}",
+                "account_code": f"GL-{index}",
+                "name": "Filler",
+                "account_class": "ASSET",
+            }
+            for index in range(5_001)
+        ]
+        response = stage(db_client, bank_id, push_id, {"entities": {"gl_account": oversized}})
+        assert response.status_code == 413
+        assert "5000" in response.json()["error"]["message"]
+
+    def test_malformed_record_is_rejected_with_a_pointer(self, db_client: TestClient) -> None:
+        bank_id = seed_bank(db_client)
+        push_id = open_push(db_client, bank_id, "push-shape-001").json()["push_batch_id"]
+
+        response = stage(db_client, bank_id, push_id, {"entities": {"gl_account": [42]}})
+        assert response.status_code == 422
+        error = response.json()["error"]
+        assert error["code"] == "validation_error"
+        locs = [detail["loc"] for detail in error["details"]]
+        assert any(loc[-3:] == ["entities", "gl_account", 0] for loc in locs)
+
+        unknown_key = stage(db_client, bank_id, push_id, {"entities": {"ledger": []}})
+        assert unknown_key.status_code == 422
+
+        empty = stage(db_client, bank_id, push_id, {"entities": {"gl_account": []}})
+        assert empty.status_code == 422
+
+    def test_commit_without_records_is_rejected(self, db_client: TestClient) -> None:
+        bank_id = seed_bank(db_client)
+        push_id = open_push(db_client, bank_id, "push-empty-001").json()["push_batch_id"]
+        response = commit(db_client, bank_id, push_id)
+        assert response.status_code == 422
+        assert "No records staged" in response.json()["error"]["message"]
+
+    def test_untranslatable_push_records_are_preserved_for_review(
+        self, db_client: TestClient
+    ) -> None:
+        bank_id = seed_bank(db_client)
+        push_id = open_push(db_client, bank_id, "push-dirty-001").json()["push_batch_id"]
+        stage(
+            db_client,
+            bank_id,
+            push_id,
+            {
+                "entities": {
+                    "position": [
+                        {
+                            "source_reference": "LN-BAD",
+                            "position_type": "LOAN",
+                            "currency": "GHS",
+                            # currency-prefixed: ETL won't guess a critical value
+                            "balance": "GHS 1,500,000.50",
+                            # non-ISO: the ML-ETL layer normalizes to 2031-03-15
+                            "contractual_maturity": "15/03/2031",
+                        },
+                        POSITIONS[0],
+                    ]
+                }
+            },
+        )
+        started = commit(db_client, bank_id, push_id)
+        batch = started.json()["batch"]
+        assert batch["records_translated"] == 1
+
+        failures = db_client.get(
+            f"/api/v1/banks/{bank_id}/ingestion-batches/{batch['id']}/translation-failures",
+            headers=_human_headers(),
+        ).json()["failures"]
+        assert len(failures) == 1
+        assert failures[0]["error_code"] == "coercion_error"
+        # The ML-ETL layer normalized the non-ISO date before translation, so only the
+        # currency-prefixed regulatory-critical balance (which the ETL never guesses)
+        # remains for the strict translator to reject and preserve for review.
+        assert "balance" in failures[0]["error_message"]
+        assert "contractual_maturity" not in failures[0]["error_message"]
+        assert failures[0]["raw_record"]["source_reference"] == "LN-BAD"
+
+
+class TestPushTenantIsolation:
+    def test_other_tenants_see_nothing(self, db_client: TestClient) -> None:
+        bank_id = seed_bank(db_client)
+        push_id, started = push_everything(db_client, bank_id, "push-tenant-001")
+
+        foreign_bank_id = "BK-PUSH0002"
+        session = get_sessionmaker()()
+        session.info["organization_id"] = ORG_2
+        try:
+            session.add(
+                Bank(
+                    id=foreign_bank_id,
+                    organization_id=ORG_2,
+                    name="Other tenant push bank",
+                    short_name="Other push",
+                    currency="GHS",
+                    jurisdiction_code="GH",
+                    license_type="universal_bank",
+                    institution_type=FALLBACK_TYPE_CODE,
+                )
+            )
+            session.commit()
+        finally:
+            session.close()
+        foreign = _machine_headers(db_client, foreign_bank_id, ORG_2)
+        assert (
+            db_client.post(
+                f"/api/v1/banks/{bank_id}/push-batches",
+                headers=foreign,
+                json={
+                    "as_of_date": AS_OF,
+                    "idempotency_key": "push-tenant-002",
+                    "reason": "cross-tenant probe",
+                },
+            ).status_code
+            == 404
+        )
+        assert (
+            db_client.get(
+                f"/api/v1/banks/{bank_id}/push-batches/{push_id}", headers=foreign
+            ).status_code
+            == 404
+        )
+        assert (
+            db_client.post(
+                f"/api/v1/banks/{bank_id}/push-batches/{push_id}/commit", headers=foreign
+            ).status_code
+            == 404
+        )
+        assert (
+            db_client.get(
+                f"/api/v1/banks/{bank_id}/ingestion-batches/{started['batch']['id']}",
+                headers=_human_headers(ORG_2),
+            ).status_code
+            == 404
+        )
+
+
+LOAN_EVENTS = [
+    {
+        "source_reference": "EVT-WO-001",
+        "event_type": "WRITE_OFF",
+        "event_subtype": "non_wilful",
+        "event_date": "2026-06-15",
+        "position_source_reference": "LN-0001",
+        "amount": "250000",
+        "currency": "GHS",
+        "attributes": {"bog_approval_reference": "BOG/WO/2026/041", "fully_provisioned": "true"},
+    },
+    {
+        "source_reference": "EVT-RC-001",
+        "event_type": "RECOVERY",
+        "event_subtype": "property_collateral",
+        "event_date": "2026-06-20",
+        "position_source_reference": "LN-0001",
+        "amount": "40000",
+        "currency": "GHS",
+        "attributes": {"related_writeoff_reference": "EVT-WO-001"},
+    },
+    {
+        "source_reference": "EVT-RS-001",
+        "event_type": "RESTRUCTURE",
+        "event_subtype": "maturity_extension",
+        "event_date": "2026-05-30",
+        # An event may reference a facility from an EARLIER batch or, as here,
+        # one unknown to the platform — a warning, never a hard block.
+        "position_source_reference": "LN-UNKNOWN",
+        "amount": "100000",
+        "currency": "GHS",
+    },
+]
+
+
+class TestLoanEvents:
+    def test_loan_events_land_supersede_and_flag_unknown_facilities(
+        self, db_client: TestClient
+    ) -> None:
+        """The loan-events plane end to end through the push API (credit PR-4):
+        events land as canonical rows; an unknown facility reference degrades
+        to a warning; a re-push of one event's reference supersedes THAT event
+        without touching its siblings."""
+        bank_id = seed_bank(db_client)
+        opened = open_push(db_client, bank_id, "events-1")
+        push_id = opened.json()["push_batch_id"]
+        staged = stage(
+            db_client,
+            bank_id,
+            push_id,
+            {"entities": {"position": POSITIONS, "loan_event": LOAN_EVENTS}},
+        )
+        assert staged.status_code == 200, staged.text
+        assert staged.json()["records_staged"]["loan_event"] == 3
+        committed = commit(db_client, bank_id, push_id)
+        assert committed.status_code == 201, committed.text
+
+        rows = _org_scoped_rows(CanonicalLoanEvent, CanonicalLoanEvent.source_reference)
+        current = [r for r in rows if r.superseded_by is None]
+        assert {r.source_reference for r in current} == {"EVT-WO-001", "EVT-RC-001", "EVT-RS-001"}
+        by_ref = {r.source_reference: r for r in current}
+        assert by_ref["EVT-WO-001"].event_type == "WRITE_OFF"
+        assert by_ref["EVT-WO-001"].event_subtype == "non_wilful"
+        assert by_ref["EVT-WO-001"].validation_status == "accepted"
+        # The unknown-facility event is flagged, not blocked.
+        assert by_ref["EVT-RS-001"].validation_status == "warning"
+
+        # Re-push corrects ONE event by reference; the siblings stay current.
+        corrected = dict(LOAN_EVENTS[0], amount="260000")
+        reopened = open_push(db_client, bank_id, "events-2")
+        second_id = reopened.json()["push_batch_id"]
+        assert (
+            stage(
+                db_client,
+                bank_id,
+                second_id,
+                {"entities": {"loan_event": [corrected]}},
+            ).status_code
+            == 200
+        )
+        assert commit(db_client, bank_id, second_id).status_code == 201
+
+        rows = _org_scoped_rows(CanonicalLoanEvent, CanonicalLoanEvent.source_reference)
+        current = [r for r in rows if r.superseded_by is None and r.withdrawn_at is None]
+        assert len(current) == 3
+        amounts = {r.source_reference: r.amount for r in current}
+        assert str(amounts["EVT-WO-001"]).startswith("260000")
+        superseded = [r for r in rows if r.superseded_by is not None]
+        assert {r.source_reference for r in superseded} == {"EVT-WO-001"}
+
+    def test_unknown_event_type_is_rejected_at_translation(self, db_client: TestClient) -> None:
+        bank_id = seed_bank(db_client)
+        opened = open_push(db_client, bank_id, "events-bad")
+        push_id = opened.json()["push_batch_id"]
+        bad = dict(LOAN_EVENTS[0], source_reference="EVT-BAD", event_type="FORGIVENESS")
+        stage(db_client, bank_id, push_id, {"entities": {"loan_event": [bad]}})
+        committed = commit(db_client, bank_id, push_id)
+        assert committed.status_code == 201, committed.text
+
+        rows = _org_scoped_rows(CanonicalLoanEvent, CanonicalLoanEvent.source_reference)
+        # An unknown movement type fails TRANSLATION (LoanEventData's Literal):
+        # the row never lands, and the batch records an invalid_record failure
+        # instead of persisting something the table CHECK would refuse.
+        assert not [r for r in rows if r.source_reference == "EVT-BAD"]

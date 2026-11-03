@@ -2,7 +2,7 @@
 import "@testing-library/jest-dom/vitest";
 import { afterEach, expect, it } from "vitest";
 import { cleanup, render, screen } from "@testing-library/react";
-import LiveEngineNote from "../components/live/LiveEngineNote";
+import LiveEngineNote from "../features/live/components/LiveEngineNote";
 afterEach(cleanup);
 it("distinguishes the dashboard reporting date from a later computation timestamp", () => {
   render(

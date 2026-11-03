@@ -369,7 +369,7 @@ def oidc_configured(monkeypatch: pytest.MonkeyPatch) -> None:
 def fake_oidc_verifier(monkeypatch: pytest.MonkeyPatch, email: str) -> None:
     def _fake(_token: str, *, issuer: str, audience: str) -> dict[str, Any]:
         _ = issuer, audience
-        return {"email": email, "email_verified": True, "sub": "google-sub"}
+        return {"email": email, "email_verified": True, "sub": "google-sub", "hd": "aequoros.com"}
 
     monkeypatch.setattr(security, "verify_oidc_id_token", _fake)
 

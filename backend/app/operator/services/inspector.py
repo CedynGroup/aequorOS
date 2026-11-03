@@ -24,7 +24,7 @@ from sqlalchemy.orm import Session
 
 from app.db.base import utc_now
 from app.models import OperatorInspectorSession, Organization
-from app.schemas.operator import InspectorSessionListRead, InspectorSessionRead
+from app.operator.schemas import InspectorSessionListRead, InspectorSessionRead
 
 
 def _require_organization(db: Session, organization_id: str) -> Organization:

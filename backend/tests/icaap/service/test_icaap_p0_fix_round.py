@@ -25,6 +25,7 @@ from openpyxl import load_workbook
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.capital.service import capital_plan
 from app.models import Bank, BankReportingPeriod, RegulatoryPackage, RegulatoryRun
 from app.reporting.service import generation, workflow
 from app.reporting.service.exports import export_package
@@ -37,7 +38,6 @@ from app.reporting.service.templates import (
     get_template,
 )
 from app.reporting.service.validation import run_validation_rules
-from app.services import capital_plan
 from app.stress.service import enterprise_stress
 from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID, materialize_canonical_test_book
 from tests.icaap.service.test_icaap_stress_appendix2_report import (
@@ -51,15 +51,16 @@ from tests.icaap.service.test_icaap_stress_appendix2_report import (
     storage,
 )
 from tests.support.inmemory_storage import InMemoryStorageClient
+from tests.support.sealed_documents import published_bytes
 
 __all__ = ["storage"]
 
-# The enterprise stress run this suite prepares requires scoped FX and IRRBB
-# calculation authority (an unconditional IRRBB check landed on the run
-# service), so it takes the same two fixtures as the suite it borrows
-# ``_run_enterprise_stress`` from.
+# Stress runs require scoped Risk, FX and IRRBB calculation authority.
 pytestmark = pytest.mark.usefixtures(
-    "return_generation_authority", "fx_run_authority", "irrbb_run_authority"
+    "return_generation_authority",
+    "fx_run_authority",
+    "irrbb_run_authority",
+    "stress_run_authority",
 )
 
 # --- helpers ---------------------------------------------------------------------
@@ -75,10 +76,7 @@ def _export(
     artifact = export_package(db, MAKER, package, kind)  # type: ignore[arg-type]
     slug = db.scalar(select(Bank.storage_slug).where(Bank.id == SAMPLE_BANK_ID))
     assert slug
-    for obj in storage_client.list(slug, "outputs"):
-        if obj.location.object_path == artifact.object_path:
-            return storage_client.read(obj.location)[1].read()
-    raise AssertionError(artifact.object_path)
+    return published_bytes(db, storage_client, slug=slug, context_path=artifact.object_path)
 
 
 def _pdf_text(payload: bytes) -> str:

@@ -8,21 +8,22 @@ from datetime import datetime
 from typing import TypedDict
 
 from fastapi import HTTPException
-from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.attestation.public import RegulatoryArtifactVersion
 from app.core.tenancy import TenantContext
 from app.reporting.models.packages import RegulatoryPackage
+from app.reporting.service.artifact_versions import archived_version
 from app.reporting.service.channels import FiledArtifact
 from app.reporting.service.common import get_bank_or_404
 from app.storage.client import StorageError, StorageLocation, StorageValidationError
 from app.storage.config import get_storage_settings
 from app.storage.factory import get_storage_client
+from app.storage.public import DocumentBinding, DocumentFamily, document_retention_reference
 from app.storage.retention import retention_until
 
 
-def archived_version(
+def filing_version(
     db: Session,
     package: RegulatoryPackage,
     artifact: FiledArtifact,
@@ -31,19 +32,14 @@ def archived_version(
 ) -> RegulatoryArtifactVersion:
     if isinstance(artifact, RegulatoryArtifactVersion):
         return artifact
-    query = select(RegulatoryArtifactVersion).where(
-        RegulatoryArtifactVersion.organization_id == package.organization_id,
-        RegulatoryArtifactVersion.package_id == package.id,
-        RegulatoryArtifactVersion.kind == artifact.kind,
-        RegulatoryArtifactVersion.object_path == artifact.object_path,
-        RegulatoryArtifactVersion.checksum_sha256 == artifact.checksum_sha256,
-    )
-    if before is not None:
-        query = query.where(RegulatoryArtifactVersion.created_at <= before)
-    version = db.scalar(
-        query.order_by(
-            RegulatoryArtifactVersion.created_at.desc(), RegulatoryArtifactVersion.id.desc()
-        ).limit(1)
+    version = archived_version(
+        db,
+        TenantContext(package.organization_id),
+        package_id=package.id,
+        kind=artifact.kind,
+        object_path=artifact.object_path,
+        checksum_sha256=artifact.checksum_sha256,
+        before=before,
     )
     if version is None:
         raise StorageValidationError("The filed artifact has no archived object version.")
@@ -88,11 +84,18 @@ def retain_filing(
         until = retention_until(settings)
         retained: list[RetainedArtifact] = []
         for artifact in artifacts:
-            version = archived_version(db, package, artifact)
-            version_id = version.storage_version_id
+            version = filing_version(db, package, artifact)
+            location, version_id = document_retention_reference(
+                db,
+                package.organization_id,
+                package.bank_id,
+                DocumentBinding(DocumentFamily.ARTIFACT, version.id),
+                StorageLocation(slug, "outputs", version.object_path),
+                version.storage_version_id,
+            )
             if not version_id or version_id == "null":
                 raise StorageValidationError("Filing retention requires a concrete object version.")
-            client.retain(StorageLocation(slug, "outputs", version.object_path), version_id, until)
+            client.retain(location, version_id, until)
             retained.append(
                 {
                     "kind": artifact.kind,

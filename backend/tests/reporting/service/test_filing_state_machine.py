@@ -21,13 +21,13 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
 from app.core.authorization import RoleBundle
+from app.liquidity.schemas.regulatory_liquidity import RegulatoryRunCreate
+from app.liquidity.service import regulatory_liquidity
 from app.models import Bank, BankReportingPeriod, RegulatoryPackage, User
 from app.reporting.schemas.filing_workflow import PackageStageDecisionCreate
 from app.reporting.schemas.packages import PackageApprovalRequestCreate, RegulatoryPackageCreate
 from app.reporting.service import generation, packages, validation, workflow
 from app.reporting.service.filing_workflow import chain
-from app.schemas.regulatory_liquidity import RegulatoryRunCreate
-from app.services import regulatory_liquidity
 from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID, materialize_canonical_test_book
 from tests.reporting.testing.assertions import (
     assert_distinct_reviewers,

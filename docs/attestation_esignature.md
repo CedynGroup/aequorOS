@@ -124,7 +124,7 @@ fact rows and asserts the per-module baseline hash set is unchanged.
 nothing writes to it. There is no `run.inputs =` or `run.input_hash =`
 assignment outside the constructor anywhere in `app/`, and no PUT/PATCH/DELETE
 route exists on any run resource. Reruns mint a new row; identical inputs
-reproduce an identical hash (`tests/api/test_regulatory_liquidity.py:152`).
+reproduce an identical hash (`tests/liquidity/api/test_regulatory_liquidity.py:152`).
 
 **Baseline caveat.** At the reviewed revision, immutability relied on application
 code (see 1.5). Current database enforcement is governed by
@@ -134,7 +134,7 @@ recipe would silently invalidate every previously filed hash without failing CI.
 
 Distinct and easily confused: `CalculationRun` (`calculation-input-v1`, the
 case/scenario family) is **id-bearing** and its snapshot is legitimately
-rewritten once, pending → established (`app/services/calculations.py:319`).
+rewritten once, pending → established (`app/case/service/calculations.py:319`).
 Attestation binds to `RegulatoryRun` only.
 
 ### 1.3 The maker-checker workflow as it actually stands
@@ -780,8 +780,9 @@ requires all five.
    for each source run and compare to `run.input_hash`. Any mismatch proves the
    stored figures diverged from the signed ones — independently of any PDF.
 5. **Artifact binding** — re-hash the stored PDF bytes and compare to the
-   artifact checksum recorded at signing, resolving the exact S3 `version_id`
-   pinned in the signature record (which requires closing G2).
+   artifact checksum recorded at signing. Resolve the archived revision pinned
+   by `artifact_version_id` through the
+   [stable sealed-document reference contract](../backend/docs/bank_encryption.md#stable-sealed-document-reference-contract).
 
 Surfaces: an in-app **Verification** panel on the package (any viewer), a
 downloadable verification report (JSON + human-readable PDF), and an offline
@@ -805,8 +806,9 @@ Delivered before the first signature is possible:
   [the tamper-evident records contract](../backend/docs/tamper_evident_records.md);
   the storage access log remains a separate in-process chain.
 - **Artifacts become append-only** (G2): a new immutable
-  `regulatory_package_artifact_versions` row per export, persisting the S3
-  `version_id`; the signature record pins the exact version it signed.
+  `regulatory_artifact_versions` row per export; the signature record pins the
+  exact revision it signed. Storage identity and legacy resolution follow the
+  [stable sealed-document reference contract](../backend/docs/bank_encryption.md#stable-sealed-document-reference-contract).
 - **Object Lock (WORM)** (G8): scope, retention and deployment preparation are
   governed by [the write-once objects and backups contract](../backend/docs/tamper_evident_records.md#write-once-objects-and-backups).
 - **`snapshot_sha256` verified** at export, at download and at signing (G3).
@@ -857,7 +859,7 @@ retains an explicit approved-but-not-yet-released state.
   (`generation.py:133`). Correcting a certified return is an explicit,
   audited **void** (T3), never a silent supersession.
 - **Artifact bytes are frozen**: the signed PDF version is pinned by
-  `version_id`; further exports of the signed kind are refused.
+  `artifact_version_id`; further exports of the signed kind are refused.
 - The engine runs are already immutable; the freeze binds _which_ runs are in
   scope so a later run for the same period cannot be swapped in.
 

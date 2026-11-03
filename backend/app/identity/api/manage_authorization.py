@@ -28,8 +28,9 @@ from app.core.authorization import (
     Sensitivity,
     SensitivityScope,
 )
+from app.data_engine.domain.ingestion.reference_schemas import business_units
+from app.data_engine.models.canonical import CanonicalReferenceRow
 from app.db.base import utc_now
-from app.domain.ingestion.reference_schemas import business_units
 from app.identity.models.authorization import AuthorizationAccessRequest, AuthorizationBinding
 from app.identity.models.bank import Bank
 from app.identity.models.user import User
@@ -59,7 +60,6 @@ from app.identity.schemas.authorization import (
     SodPolicyFindingRead,
 )
 from app.identity.service import authorization, grant_administration
-from app.models.canonical import CanonicalReferenceRow
 from app.models.organization import Organization
 from app.policy.models.institution_type import InstitutionType
 from app.services.audit import record_event
@@ -169,6 +169,9 @@ _RouteRequirement = tuple[ModuleScope, Sensitivity, Permission]
 
 #: Routes whose requirements differ from their root's, matched exactly first.
 _EXACT_ROUTE_REQUIREMENTS: dict[str, tuple[_RouteRequirement, ...]] = {
+    "/data-engine/database": ((ModuleScope.DATA, Sensitivity.RESTRICTED, Permission.VIEW),),
+    "/data-engine/positions": ((ModuleScope.DATA, Sensitivity.RESTRICTED, Permission.VIEW),),
+    "/data-engine/t24": ((ModuleScope.DATA, Sensitivity.RESTRICTED, Permission.VIEW),),
     "/institution/parties": ((ModuleScope.INSTITUTION, Sensitivity.RESTRICTED, Permission.VIEW),),
     "/institution/registers": ((ModuleScope.CREDIT, Sensitivity.CONFIDENTIAL, Permission.VIEW),),
     "/liquidity": (
@@ -220,7 +223,7 @@ _ROOT_REQUIREMENTS: dict[str, _RouteRequirement] = {
     "basel": (ModuleScope.CAPITAL, Sensitivity.AGGREGATED, Permission.VIEW),
     "behavioral": (ModuleScope.BEHAVIORAL, Sensitivity.AGGREGATED, Permission.VIEW),
     "credit": (ModuleScope.CREDIT, Sensitivity.AGGREGATED, Permission.VIEW),
-    "data-engine": (ModuleScope.DATA, Sensitivity.RESTRICTED, Permission.VIEW),
+    "data-engine": (ModuleScope.DATA, Sensitivity.AGGREGATED, Permission.VIEW),
     "forecasting": (ModuleScope.FORECASTING, Sensitivity.AGGREGATED, Permission.VIEW),
     "ftp": (ModuleScope.FTP, Sensitivity.AGGREGATED, Permission.VIEW),
     "fx": (ModuleScope.FX, Sensitivity.AGGREGATED, Permission.VIEW),
@@ -228,7 +231,7 @@ _ROOT_REQUIREMENTS: dict[str, _RouteRequirement] = {
     "irr": (ModuleScope.IRRBB, Sensitivity.AGGREGATED, Permission.VIEW),
     "liquidity": (ModuleScope.LIQUIDITY, Sensitivity.AGGREGATED, Permission.VIEW),
     "markets": (ModuleScope.MARKETS, Sensitivity.PUBLISHED, Permission.VIEW),
-    "positions": (ModuleScope.RISK, Sensitivity.CONFIDENTIAL, Permission.VIEW),
+    "positions": (ModuleScope.DATA, Sensitivity.RESTRICTED, Permission.VIEW),
     "reports": (ModuleScope.REGULATORY, Sensitivity.PUBLISHED, Permission.VIEW),
     "risk": (ModuleScope.RISK, Sensitivity.CONFIDENTIAL, Permission.VIEW),
     "submissions": (ModuleScope.REGULATORY, Sensitivity.PUBLISHED, Permission.VIEW),

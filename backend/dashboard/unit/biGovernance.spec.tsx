@@ -14,16 +14,16 @@ import {
   BiMeasureReadFromJSON,
   BiMeasureValidationReadFromJSON,
 } from "@aequoros/risk-service-api";
-import MeasureReview from "../components/bi/MeasureReview";
-import ExpressionEditor from "../components/bi/ExpressionEditor";
+import MeasureReview from "../features/bi/components/MeasureReview";
+import ExpressionEditor from "../features/bi/components/ExpressionEditor";
 import SharePanel, {
   SHARING_GRANTS_NOTHING,
-} from "../components/bi/SharePanel";
-import SavedDashboardScreen from "../components/bi/SavedDashboardScreen";
+} from "../features/bi/components/SharePanel";
+import SavedDashboardScreen from "../features/bi/components/SavedDashboardScreen";
 import MeasuresPage from "../app/(app)/explore/measures/page";
 import SubscriptionsPage from "../app/(app)/explore/subscriptions/page";
 import EditDashboardPage from "../app/(app)/dashboards/[id]/edit/page";
-import ExplainDrawer from "../components/bi/ExplainDrawer";
+import ExplainDrawer from "../features/bi/components/ExplainDrawer";
 import {
   designationLabel,
   aggregationLabel,
@@ -31,7 +31,7 @@ import {
   moduleLabel,
   engineTierLabel,
   regimeLabel,
-} from "../components/bi/labels";
+} from "../features/bi/components/labels";
 import { providers, json, query, queryWire, catalogueWire } from "./biTestSupport";
 
 const navigation = vi.hoisted(() => ({

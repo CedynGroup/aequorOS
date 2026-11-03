@@ -86,3 +86,12 @@ class ExaminerDocumentationRead(ClosedModel):
     #: working draft and a supervisor reading it would be reading figures the
     #: Board has never seen.
     icaap_cycles: list[ExaminerIcaapCycleRead] = Field(default_factory=list)
+    #: Evidence sources the READER's own source-module authority withheld, as
+    #: prefixed keys: ``run:<module>`` for a stored run module,
+    #: ``package:<family>`` for a filed return family, ``register:<name>`` for a
+    #: cited register endpoint, and ``cfp`` for the contingency-funding-plan
+    #: block. An empty list is a COMPLETE bundle, so a client must read this
+    #: list before interpreting a filtered block as an absent fact: when ``cfp``
+    #: is withheld, ``cfp_approved_version`` is null and ``cfp_active`` is
+    #: ``false`` because the plan was not readable, not because it is inactive.
+    withheld_sources: list[str] = Field(default_factory=list)

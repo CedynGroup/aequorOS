@@ -264,10 +264,12 @@ concrete operation must evaluate its maker/checker, step-up, digest, recipient,
 limit, and other workflow context before any side effect.
 
 `GET /banks` returns only institutions with at least one projected capability.
-Bank detail, reporting-period, and fact routes apply the same coverage decision
-and return `404` for an uncovered institution. This is an addressability and
-discovery boundary only: each product route must still enforce its own data
-authorization as described in the [rollout boundary](#product-rollout-boundary).
+Bank detail applies the same coverage decision and returns `404` for an
+uncovered institution. Tenant reporting-period and fact reads enforce the exact
+DATA requirements in [Human Data Engine authority](#human-data-engine-authority).
+Institution coverage is an addressability and discovery boundary only: each
+product route must still enforce its own data authorization as described in the
+[rollout boundary](#product-rollout-boundary).
 Projection failures return `503` and emit denial/error telemetry rather than
 falling back to legacy authority.
 
@@ -279,11 +281,11 @@ Institution Profile navigation (`/institution` and its tabs) requires a final,
 non-contextual organization-scoped ACCOUNT/restricted `view` capability;
 institution-scoped capabilities and Account administration alone do not expose it.
 Context-dependent capabilities may support structural navigation, but actions and deep links never treat them as final authorization.
-This dashboard slice gates action controls only where the projected capability is
-already final and non-contextual. Module-specific mutations such as run,
-configure, approve, sign-off, and submit remain with their dependency-ordered
-endpoint cutovers; each cutover must drive its UI control from the same final
-authority that its backend route enforces before side effects.
+Action controls may use structural eligibility to offer a contextual action;
+the server must still evaluate its workflow conditions before side effects.
+Module-specific mutations such as run, configure, approve, sign-off, and submit
+follow their dependency-ordered endpoint cutovers; each cutover must drive its UI
+control from the matching scoped capability.
 
 Verified operator examiner impersonation remains explicit staff-plane read
 authority rather than a tenant binding. Its server projection grants only
@@ -662,7 +664,7 @@ only — is fixed: by-id lookups under `/banks/{bank_id}`
 (`system_of_record.get_declaration`, `canonical_withdrawal.get_withdrawal`, and
 a withdrawal's cited `declaration_id`) are bank-scoped at the query and return
 the route's ordinary 404 for a sibling bank's row before any state check, with
-no side effects. `tests/api/test_system_of_record_bank_scope.py` is the
+no side effects. `tests/data_engine/api/test_system_of_record_bank_scope.py` is the
 hermetic regression.
 
 `tests/db/test_authorization_object_reference_properties.py` is the generative
@@ -747,6 +749,10 @@ workbench entries, and deployment grants are owned by the
 projection, optimizer, what-if and reverse-stress routes, their rows in shared
 projections and the run registry, and the capital-plan projection they feed —
 is owned by the [Forecasting rollout contract](forecasting_enforcement_rollout.md).
+Stress scenario and management-action governance, sign-off preparation, and
+enterprise execution are owned by the
+[Stress rollout contract](stress_enforcement_rollout.md); final attestation
+remains with the dedicated Signer cutover.
 Behavioral model estimates, liquidity behavior, and retraining are owned by the
 [Behavioral rollout contract](behavioral_enforcement_rollout.md); model
 application stays with the governed model-application cutover. Markets views,
@@ -762,13 +768,88 @@ of the shared live summary / alerts / window / snapshot surfaces, the direct
 branch/region `data_scope` to the rows AND to every count — is
 owned by the [credit rollout contract](credit_enforcement_rollout.md). Institution
 register surfaces are owned by the
-[Institution rollout contract](institution_enforcement_rollout.md). The bank
-audit-route cutover is owned by [the bank audit contract](tamper_evident_records.md#bank-audit-read-api). Existing
+[Institution rollout contract](institution_enforcement_rollout.md). Human ingestion
+and bank-data operations follow [Human Data Engine authority](#human-data-engine-authority).
+The bank audit-route cutover is owned by [the bank audit contract](tamper_evident_records.md#bank-audit-read-api). The advisory organization-scoped case plane is owned by the
+[case workspace rollout contract](case_enforcement_rollout.md). The tenant
+examiner evidence surfaces — the supervisory run list, run reproduction and
+documentation package, which need the `audit` entry sentence AND each embedded
+source module's own sentence — are owned by the
+[examiner evidence rollout contract](examiner_evidence_enforcement_rollout.md).
+Existing
 operational routes outside these cutovers keep their current checks, while
 grant administration itself requires the owner binding. Explanation endpoints,
 further product-route cutovers,
 invite/lifecycle actions, scheduled grants, and owner designation/transfer
 remain separate work.
+
+## Human Data Engine authority
+
+Human ingestion and bank-data operations require one complete, active DATA
+binding for the authenticated principal, tenant and institution (or explicit
+organization target). Scalar roles, a binding for another module or bank, and
+several incomplete bindings confer no access. DATA requires whole-institution
+coverage; Credit branch and region grants do not qualify.
+
+The sensitivity values match exactly, not hierarchically:
+
+| Surface                                                                                                                       | DATA sensitivity and permission                            |
+| ----------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------- |
+| Ingestion overview summaries and activation history                                                                           | aggregated VIEW                                            |
+| Batches, mapping metadata, reporting-period lists, source-of-record, withdrawal and reconciliation registers                  | confidential VIEW                                          |
+| Canonical positions and facets, translation failures, lineage, full reporting facts, DB Direct and Temenos connection details | restricted VIEW                                            |
+| Human upload                                                                                                                  | restricted CREATE                                          |
+| Human batch start, data activation, DB sync, Temenos pull/backfill                                                            | restricted RUN                                             |
+| Position override                                                                                                             | restricted EDIT                                            |
+| DB live test/schema discovery and Temenos live test                                                                           | restricted VALIDATE                                        |
+| Declaration, withdrawal and reconciliation proposals                                                                          | confidential CREATE                                        |
+| Approval, revocation and reversal                                                                                             | confidential APPROVE plus the stored maker/checker context |
+
+An owner must explicitly grant the required operator rows before deployment.
+Analyst and Approver bundles retain their existing permission sets; no new role
+bundle, grant backfill, production reseed or activation accompanies this cutover.
+Run the read-only access-impact report before any enforcement deployment and
+retain the dated output outside the repository. A scalar-only operator is
+expected to be refused, not silently upgraded.
+
+Authorization precedes storage, outbound connections, job enqueueing and
+financial effects. Lists and facets authorize before aggregation, counts or
+pagination. Inaccessible opaque identifiers return 404. Confidential batch
+metadata omits raw reports, diagnostic messages and artifact paths unless the
+reader independently holds restricted VIEW.
+
+Reconciliation CREATE stores a pending proposal with the server-recorded
+requester. Only a different authenticated officer with APPROVE can approve it;
+client-supplied principal or status fields are rejected. Pending requests never
+affect derivation or enqueue a refresh. Approval locks the tenant-and-bank-scoped
+proposal, records immutable checker evidence, and enqueues the existing refresh
+when the bank has current financial facts.
+Rejecting a pending proposal records its revocation and prevents later approval.
+Revocation remains append-only and idempotent. Historical approved rows retain
+their evidence; migration neither fabricates missing identities nor grants
+authority. New approvals cannot use missing historical requester evidence.
+
+VALIDATE permits invoking a check. RUN is a distinct permission even where a
+bundle contains both. Activation still requires the existing engine authority
+and successful-validation/state prerequisites, but gains no EDIT or VALIDATE
+grant prerequisite. Mapping configuration creation, connector credential
+lifecycle (including Temenos stored-credential-shape validation), and machine
+API push retain their existing controls.
+Saving connector credentials without VALIDATE remains successful; the dashboard
+omits the optional post-save live test and explains the missing authority.
+
+Scheduled DB health jobs use the trusted internal probe operation; they do not
+invoke the human VALIDATE entry point. A missing authorization version never
+exempts a human caller from the binding check.
+
+The dashboard uses exact projected capabilities to avoid unauthorized requests
+and unavailable actions, including mixed-sensitivity overview panels. Query
+keys include tenant and authority generation. These projections are eligibility
+hints only; the service rechecks the binding, authenticated checker and object
+state on every mutation.
+Permission-unavailable diagnostics, batch progress, reporting periods and facts
+remain distinct from loading, request failure and successful empty results.
+Independently authorized home panels and operational-feed results remain visible.
 
 ## Whole-institution figures and Credit-only narrowing
 
@@ -803,9 +884,10 @@ Generic regulatory-run lists/details also gate Capital, Credit and enterprise
 stress under their module authorities. Direct enterprise-stress history,
 latest and detail reads require RISK/aggregated (history) or RISK/confidential
 (detail and execution response), with whole-institution coverage. Execution
-retains its existing mutation gate as well. This closes the parallel read path
-that otherwise disclosed capital stress outcomes independently of the FX
-projection. This is a denial-only access change; no bindings are backfilled. Run
+authority follows the [Stress rollout contract](stress_enforcement_rollout.md).
+This closes the parallel read path that otherwise disclosed capital stress
+outcomes independently of the FX projection. This is a denial-only access change;
+no bindings are backfilled. Run
 `scripts/authorization_access_impact.py` for each enforcement deployment
 and retain its dated output outside the repository.
 

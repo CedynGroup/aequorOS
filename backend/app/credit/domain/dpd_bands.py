@@ -2,7 +2,7 @@
 
 These are portfolio-at-risk / roll-rate bands for management views, NOT
 regulatory classification boundaries — those are always resolved from the
-control plane (``app.domain.capital.loan_classification``). Until P0-8 the same
+control plane (``app.capital.domain.loan_classification``). Until P0-8 the same
 seven bands were spelled out three times: the classification service's
 ``_DPD_BANDS`` (with labels), ``credit.migration.ROLL_BUCKETS`` (codes only) and
 ``regulatory_credit._ROLL_BAND_EDGES`` (edges only). This module is the one

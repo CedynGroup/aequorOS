@@ -27,10 +27,10 @@ from pathlib import Path
 
 import pytest
 
-from app.domain.curves.calendars import USA, next_imm_date
-from app.domain.curves.conventions import DayCount, year_fraction
-from app.domain.curves.instruments import DepositHelper
-from app.domain.curves.multicurve import (
+from app.market_data.domain.curves.calendars import USA, next_imm_date
+from app.market_data.domain.curves.conventions import DayCount, year_fraction
+from app.market_data.domain.curves.instruments import DepositHelper
+from app.market_data.domain.curves.multicurve import (
     MarketQuote,
     SolvedCurve,
     build_curve_set,
@@ -86,7 +86,11 @@ def _reproduction(name: str) -> dict[str, float]:
     # Source of truth: the pillar tab as a forward curve anchored at its IMM base.
     source = _solved(BASE, [(m, df_by_mat[m]) for m in nodes])
     reference = forward_grid(
-        source, as_of=BASE, curve_frequency_months=3, calendar=USA, periods=120,
+        source,
+        as_of=BASE,
+        curve_frequency_months=3,
+        calendar=USA,
+        periods=120,
         output_basis=DayCount.ACT_360,
     )
     ref_rows = [row for row in reference.rows[1:] if row.end <= nodes[-1]]
@@ -113,7 +117,8 @@ def _reproduction(name: str) -> dict[str, float]:
     df_imm_src, df_imm_fwd = source.discount(IMM), fwd_curve.discount(IMM)
     pillar_df = max(
         abs(fwd_curve.discount(m) / df_imm_fwd - df_by_mat[m] / df_imm_src)
-        for m in nodes if m > IMM
+        for m in nodes
+        if m > IMM
     )
     fwd_grid = max(abs(_simple_forward(fwd_curve, r.start, r.end) - r.yield_) for r in ref_rows)
 
@@ -169,8 +174,7 @@ def test_print_forward_start_benchmark() -> None:
         "FC-G3 FORWARD-START REPRODUCTION — Eikon v3 pillar tab (USD, as-of 2023-12-29)",
         f"IMM={IMM}  base={BASE}",
         "=" * 84,
-        f"{'curve':10}{'reprice':>12}{'pillarDF':>12}"
-        f"{'fwd-grid(bps)':>16}{'spot-grid(bps)':>16}",
+        f"{'curve':10}{'reprice':>12}{'pillarDF':>12}{'fwd-grid(bps)':>16}{'spot-grid(bps)':>16}",
     ]
     for name in ("curve_1", "3m_sofr"):
         r = _reproduction(name)

@@ -32,13 +32,13 @@ from app.core.key_management.schemas import BankKeyConnect, BankKeyRotate
 from app.core.key_management.settings import get_key_settings
 from app.core.key_management.types import FIELD_FORMAT
 from app.core.tenancy import TenantContext
-from app.domain.ingestion.contracts import EntityMapping, MappingConfig
+from app.data_engine.domain.ingestion.contracts import EntityMapping, MappingConfig
+from app.data_engine.models.canonical import CanonicalCounterparty
+from app.data_engine.schemas.ingestion import InternalIngestionBatchCreate, MappingConfigCreate
+from app.data_engine.service import ingestion
 from app.identity.service import authorization, membership
 from app.models import Bank, Organization, User
-from app.models.canonical import CanonicalCounterparty
 from app.operator.services import bank_encryption
-from app.schemas.ingestion import InternalIngestionBatchCreate, MappingConfigCreate
-from app.services import ingestion
 from tests.support.inmemory_storage import InMemoryStorageClient
 
 STORIES = ("revocation", "outage", "rotation")

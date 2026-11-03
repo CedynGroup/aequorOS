@@ -10,7 +10,7 @@ register — uploaded or pushed, rows preserved verbatim on
 derived from a filed return — so the only schema change the feature needs is the
 kind's admission to ``ck_canonical_reference_rows_dataset_kind``. What a
 well-formed row looks like lives in
-``app/domain/ingestion/reference_schemas/performance_targets.py``.
+``app/data_engine/domain/ingestion/reference_schemas/performance_targets.py``.
 
 ``business_units`` — the sibling Phase 2 schema, which makes the BI branch
 region real — needs NO migration: it has been an admitted kind since the

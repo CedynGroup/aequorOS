@@ -18,7 +18,7 @@ import ScenarioMetrics, {
   scenarioLabel,
   scenarioRisk,
   scenarioValue,
-} from "@/components/workbench/ScenarioMetrics";
+} from "@/features/workbench/components/ScenarioMetrics";
 import {
   useRunScenarioAnalysis,
   useSaveScenarioAnalysis,

@@ -43,7 +43,7 @@ from sqlalchemy import create_engine, select  # noqa: E402
 from sqlalchemy.orm import Session  # noqa: E402
 
 from app.core import security  # noqa: E402
-from app.models.operator import OPERATOR_ROLES, OperatorUser  # noqa: E402
+from app.operator.models import OPERATOR_ROLES, OperatorUser  # noqa: E402
 
 
 def _database_url() -> str | None:

@@ -1,11 +1,9 @@
 # Test database connections
 
-`tests.support.database` owns test connection construction. Shared application
-and database/API fixtures now use this API; remaining area-specific tests migrate in subsequent stack layers.
-`tests/architecture/test_database_connection_allowlist.json` records remaining direct
-constructor calls. The architecture suite rejects new calls and stale entries.
-Remove entries as each test area moves to this API. Once the inventory is empty,
-remove the allowlist and make strict mode the default.
+`tests.support.database` owns test connection construction, including shared
+application fixtures, area-specific tests and database tooling. The constructor
+allowlist is empty, so the architecture guard rejects direct SQLAlchemy and
+psycopg construction elsewhere in tests.
 
 Use `isolated_db` for an **empty**, per-test PostgreSQL schema when
 `TEST_DATABASE_URL` is set, or a temporary SQLite file otherwise. It never seeds
@@ -23,7 +21,8 @@ with isolated_db.connection() as connection:
 ```
 
 Binds from another factory are rejected so a session cannot escape its owning
-schema. The shared application fixtures adopt the cached application engine
+schema, including per-call bind overrides and reconfigured session factories.
+Multiple-bind sessions are outside this API. The shared application fixtures adopt the cached application engine
 before its first checkout. They retain engine identity, the outer rollback
 transaction, savepoints and the separate resettable committing database.
 
@@ -38,7 +37,10 @@ The factory provides:
   from a factory.
 - `connection()` for SQLAlchemy SQL. It rolls back unfinished work on exit.
 - `raw_connection()` for psycopg SQL. It rolls back on exit and returns the
-  underlying connection to the managed pool.
+  underlying connection to the managed pool. `autocommit=True` is explicit and
+  restored on return. Plain `postgresql://` URLs use psycopg 3 for raw borrowing.
+- `sqlite_connection()` for native SQLite SQL and error types. It uses the same
+  managed pool and checkout hooks, and rolls back unfinished work on return.
 - `engine()` for an independent pool, including concurrent connections. These
   pools use the same database, schema and checkout hooks. Connections and pools
   are closed at teardown. Tests should still use context managers so resources
@@ -69,17 +71,30 @@ For an existing schema outside a pytest request's lifecycle, use
 `database_connections(database_url, schema=schema_name)` as a context manager.
 It owns connection resources without creating or dropping the schema.
 
+The legacy read-only and outer-rollback data fixtures use an explicit
+`default_schema="public"` fallback only when their URL does not name a schema.
+URL startup options take precedence, so synthetic callers keep their disposable
+schema. Their read-only and rollback safeguards still apply. Validate these paths
+with synthetic databases; do not run the opt-in primary-data suites for fixture changes.
+
 `managed_session_factory` preserves SQLAlchemy's autoflush and expiry defaults;
 `TestDatabaseConnections.session_factory` defaults both to false for application
-sessions. Both accept explicit options, preserve explicit tenant info, and close
+sessions. Both accept explicit options (including a custom `Session` subclass via `class_`),
+preserve explicit tenant info, and close
 sessions at their owner's teardown. Factories require an engine created by this
 support layer, or explicitly adopted before its first checkout. An owner can
 `adopt_engine(engine)` when the application must construct the engine itself.
+For a cached application engine returned by a real production factory, use
+`adopt_application_engine(request, engine)` before its first checkout. Existing
+managed engines keep their original fixture lifetime; an unowned pool receives
+shared hooks and request-owned teardown. This preserves factory and cache behavior.
+
 Use `managed_session_factory(None, engine)` only within an explicit owner
 lifetime; pytest fixtures normally supply their request for earlier cleanup.
-The database owner weakly tracks connections and sessions. When supplied,
-the pytest request also retains each session's close method as a finalizer until
-that request's teardown. Still-live resources close before pool disposal.
+The database owner weakly tracks connections, sessions and raw pool borrowers.
+When supplied, the pytest request also retains each session's close method as a
+finalizer until that request's teardown. Still-live resources close before pool
+disposal, including raw contexts left active at owner teardown.
 
 Before calling Alembic in a schema fixture, install its engine factory:
 
@@ -93,6 +108,16 @@ resolves its real migration URL and driver settings, including migration role
 and timeout options. Every pool it opens receives the shared hooks and is owned
 by the supplied engine's factory. A different database or schema is refused
 before connecting.
+
+Tests that exercise real application factories can call
+`install_application_engines(monkeypatch, engine)` before invoking them. This
+routes the real factory's constructor through ownership before an internal first
+checkout, preserving its URL, driver options, timeout budgets and cache identity.
+It inherits the supplied engine's hooks and lifetime and refuses another database
+or schema. Role suites can use `managed_application_engines` with their
+`administrator` fixture. The shared committing application fixture installs this
+bridge automatically. Tests that only inspect a never-connected pool can adopt
+it explicitly with `administrative=True` without changing its original URL.
 
 Set explicit tenant and role defaults without leaving the test's schema:
 
@@ -125,6 +150,13 @@ path in pytest's temporary directory. PostgreSQL factories require an explicit
 disposable schema, except for the administrative probes described above. Never
 pass a production database URL.
 
+Backup/restore tests need database-level isolation. Use
+`isolated_postgres_database(explicit_test_cluster_url)` with an isolated cluster
+login that can create databases. It generates a unique database, owns its public
+namespace, closes all source pools and drops the database on exit. The drill test
+retains the tooling's protected-cluster check before provisioning. Its optional
+cluster URL must point at a disposable test cluster and all source rows are synthetic.
+
 `hooks=(install_hook, ...)` on `isolated_database`, `database_connections` or
 `TestDatabaseConnections` installs each engine hook before its first checkout,
 including extra pools, context variants, migration engines and async engines'
@@ -145,10 +177,42 @@ probes that must retain the original lock identity. Other advisory-lock SQL is
 unchanged.
 
 Run the constructor guard with `uv run python scripts/test_database_guard.py`.
-`--strict` rejects all legacy constructors. The temporary allowlist matches
-counts by path and resolved constructor name, so unrelated line movements do
-not change it. Only `tests/support/database.py` is exempt, including in strict
-mode; other support files are checked. It covers imported and assigned aliases
-with lexical scoping and reassignment, SQLAlchemy sync/async factories and
-psycopg sync/async connections. It does not attempt to interpret runtime-generated
+`--strict` rejects all legacy constructors. The allowlist records counts by path
+and resolved constructor name, so unrelated line movements do not change it.
+Only `tests/support/database.py` is exempt, including in strict mode; other support
+files are checked. The guard resolves imported and assigned aliases with lexical
+scoping and reassignment. It covers SQLAlchemy sync/async factories and psycopg
+sync/async connections. It does not attempt to interpret runtime-generated
 imports or reflective calls.
+
+## Prepared canonical books
+
+The `canonical_book_baseline` marker opts a module into a separate synthetic
+canonical-book database. It does not add a bank to `isolated_db`, the ordinary
+shared application baseline, or any provisioning path. The seven measured
+Markets, credit, ICAAP P2, ICAAP freeze/clone, capital-refusal and reporting-currency
+modules select it explicitly.
+
+`canonical_book_database` owns the ORM-created schema and an immutable book
+summary for one pytest worker/session. Each case opens a fresh managed context,
+connection, outer transaction and `create_savepoint` session factory. The API,
+authentication and application session lookups all bind to that transaction;
+clients, storage fakes and ORM objects stay function scoped. Every case rolls
+back the outer transaction, closes its managed resources and compares row counts
+and sorted row-value digests across every model table with the committed baseline.
+The owner also checks the final case before dropping the schema.
+
+Preparation helpers use `canonical_test_book(session)`: only the first request
+in an opted-in test returns the saved summary (and reapplies the original tenant
+context). Later requests rebuild through the real materializer. Calls outside
+this fixture family also materialize normally. Tests of destructive reseeding can
+always call `materialize_canonical_test_book` directly. `committing_db` continues
+to select the existing real-commit fixture family; this marker never changes its
+semantics or adds migration-installed RLS to an ORM-created schema.
+
+`tests/support/test_canonical_book.py` exercises committed mutations followed by
+an unchanged baseline, new connections and ORM objects, application-session
+binding, real repeated materialization and value-based fresh-build equivalence.
+Run the full affected modules in normal and reversed order and with
+`-n 4 --dist loadfile`; keep the ordinary fixture-isolation, migrated RLS and
+concurrency suites as their own gates.

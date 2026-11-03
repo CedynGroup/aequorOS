@@ -13,7 +13,7 @@ from datetime import date
 
 import pytest
 
-from app.domain.curves.conventions import (
+from app.market_data.domain.curves.conventions import (
     Compounding,
     ConventionError,
     DayCount,
@@ -145,9 +145,7 @@ class TestBondPriceYtm:
 
     def test_dirty_round_trip_mid_period(self) -> None:
         settlement = date(2026, 4, 15)  # between coupons: accrued is non-zero
-        dirty = bond_price(
-            0.13, settlement, self.MATURITY, 0.10, 1, DayCount.ACT_365F, clean=False
-        )
+        dirty = bond_price(0.13, settlement, self.MATURITY, 0.10, 1, DayCount.ACT_365F, clean=False)
         clean = bond_price(0.13, settlement, self.MATURITY, 0.10, 1, DayCount.ACT_365F)
         assert dirty - clean == pytest.approx(
             accrued_interest(settlement, self.MATURITY, 0.10, 1, DayCount.ACT_365F), abs=1e-12
@@ -168,9 +166,7 @@ class TestBondPriceYtm:
             bond_ytm(1e9, self.SETTLEMENT, self.MATURITY, 0.10, 1, DayCount.ACT_365F)
 
     def test_cashflow_schedule_semiannual(self) -> None:
-        flows = bond_cashflows(
-            date(2026, 8, 3), date(2028, 8, 3), 0.0835, 2, DayCount.ACT_365F
-        )
+        flows = bond_cashflows(date(2026, 8, 3), date(2028, 8, 3), 0.0835, 2, DayCount.ACT_365F)
         assert [flow.payment_date for flow in flows] == [
             date(2027, 2, 3),
             date(2027, 8, 3),

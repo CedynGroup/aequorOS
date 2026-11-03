@@ -15,8 +15,8 @@ from fastapi import HTTPException
 from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
+from app.capital.domain.engine import CapitalFact
 from app.core.authorization import ModuleScope, SensitivityScope
-from app.domain.capital.engine import CapitalFact
 from app.forecasting.domain.engine import ForecastFact
 from app.live.service.fact_derivation import (
     _derive_specs,  # pyright: ignore[reportPrivateUsage]
@@ -29,11 +29,11 @@ from app.stress.domain.orchestrator import EnterpriseStressInputs, run_enterpris
 from app.stress.domain.projection import EnterpriseProjectionInputs, project_enterprise
 from app.stress.schemas.reverse_stress import ReverseStressRunCreate
 from app.stress.service import enterprise_stress, reverse_stress
+from tests.capital.domain.test_capital_engine import bog_capital_params
 from tests.credit.service.test_crd_credit_exposures import (
     _credit_rwa,  # pyright: ignore[reportPrivateUsage]
     _stress_row,  # pyright: ignore[reportPrivateUsage]
 )
-from tests.domain.test_capital_engine import bog_capital_params
 from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID
 from tests.fixtures.capital_structure import MAKER, REPORTING_DATE, seed_book
 from tests.services.test_derivation_fail_closed_defaults import (

@@ -28,9 +28,8 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import select
 
-from app.db.session import get_sessionmaker
-from app.domain.ingestion.reference_schemas import schema_for
-from app.domain.ingestion.reference_schemas.interest_accruals import (
+from app.data_engine.domain.ingestion.reference_schemas import schema_for
+from app.data_engine.domain.ingestion.reference_schemas.interest_accruals import (
     ASSET_ROWS,
     BSD2_ROW_LABELS,
     BSD2_ROWS,
@@ -38,6 +37,7 @@ from app.domain.ingestion.reference_schemas.interest_accruals import (
     SCHEMA,
     validate_accrual_row,
 )
+from app.db.session import get_sessionmaker
 from app.models import CanonicalReferenceRow
 from app.reporting.service.bog_forms.layout import load_layout
 from app.reporting.service.bog_forms.linemaps import line_maps_for

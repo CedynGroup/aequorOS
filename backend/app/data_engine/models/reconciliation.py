@@ -1,0 +1,115 @@
+"""Governed exceptions to a fail-closed data-integrity control (audit P0-10).
+
+The reconciliation controls (``app/data_engine/service/reconciliation.py``) BLOCK the
+official/filing plane when a bank's ingested book fails a material integrity
+test — today the balance-sheet identity ``Assets = Liabilities + Equity``.
+
+A hard block with no escape valve gets worked around in production (a bank
+edits the upload until the check passes, which is worse than a recorded
+exception), so the control ships with an explicit, governed escape valve. An
+exception is:
+
+* **scoped** — one control, one bank, and a ceiling on how large a breach it
+  covers (never a blank cheque);
+* **effective-dated** — ``effective_from`` / ``effective_to``, so it expires;
+* **revocable** — ``revoked_at`` closes it without deleting the record.
+
+Proposal, approval and revocation authority and audit provenance are defined in
+``backend/docs/authorization_foundation.md`` under "Human Data Engine authority".
+Database lifecycle seals are owned by ``backend/docs/tamper_evident_records.md``.
+
+Tenant-scoped and RLS-forced like every other table carrying a bank's data.
+"""
+
+from __future__ import annotations
+
+from datetime import date, datetime
+from decimal import Decimal
+from uuid import UUID
+
+from sqlalchemy import (
+    CheckConstraint,
+    Date,
+    DateTime,
+    ForeignKeyConstraint,
+    Index,
+    Numeric,
+    String,
+    Text,
+    Uuid,
+)
+from sqlalchemy.orm import Mapped, mapped_column
+
+from app.db.base import Base, TimestampMixin, UuidV7PrimaryKeyMixin
+
+#: The controls an exception may cover. Extend deliberately — every value here
+#: is a place where a material data-integrity failure can be allowed to file.
+RECONCILIATION_CONTROLS: tuple[str, ...] = ("balance_sheet_identity",)
+
+
+class ReconciliationException(UuidV7PrimaryKeyMixin, TimestampMixin, Base):
+    __tablename__ = "reconciliation_exceptions"
+    __table_args__ = (
+        CheckConstraint(
+            "control IN ('balance_sheet_identity')",
+            name="ck_reconciliation_exceptions_control",
+        ),
+        CheckConstraint(
+            "max_gap_fraction > 0",
+            name="ck_reconciliation_exceptions_max_gap_positive",
+        ),
+        CheckConstraint(
+            "effective_to IS NULL OR effective_to >= effective_from",
+            name="ck_reconciliation_exceptions_window",
+        ),
+        CheckConstraint(
+            "length(trim(reason)) > 0",
+            name="ck_reconciliation_exceptions_reason_present",
+        ),
+        CheckConstraint(
+            "status IN ('pending', 'approved')",
+            name="ck_reconciliation_exceptions_status",
+        ),
+        CheckConstraint(
+            "(status = 'pending' AND requested_by IS NOT NULL AND approved_by IS NULL "
+            "AND approved_by_user_id IS NULL AND approval_timestamp IS NULL) OR "
+            "(status = 'approved' AND approved_by IS NOT NULL AND approval_timestamp IS NOT NULL)",
+            name="ck_reconciliation_exceptions_approval",
+        ),
+        ForeignKeyConstraint(
+            ["bank_id", "organization_id"],
+            ["banks.id", "banks.organization_id"],
+        ),
+        Index(
+            "ix_reconciliation_exceptions_lookup",
+            "organization_id",
+            "bank_id",
+            "control",
+            "effective_from",
+        ),
+    )
+
+    organization_id: Mapped[str] = mapped_column(String(16), nullable=False)
+    bank_id: Mapped[str] = mapped_column(String(16), nullable=False)
+    control: Mapped[str] = mapped_column(String(48), nullable=False)
+    #: The largest breach this exception covers, as a fraction of the control's
+    #: denominator (total assets for the balance-sheet identity). A gap beyond
+    #: it blocks even while the exception is live — an exception acknowledges a
+    #: known, bounded data defect, it does not disable the control.
+    max_gap_fraction: Mapped[Decimal] = mapped_column(Numeric(9, 6), nullable=False)
+    effective_from: Mapped[date] = mapped_column(Date, nullable=False)
+    effective_to: Mapped[date | None] = mapped_column(Date, nullable=True)
+    reason: Mapped[str] = mapped_column(Text, nullable=False)
+    requested_by: Mapped[UUID | None] = mapped_column(Uuid(as_uuid=True), nullable=True)
+    requested_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    status: Mapped[str] = mapped_column(
+        String(16), nullable=False, default="approved", server_default="approved"
+    )
+    #: Audit display label only; authenticated checker evidence is stored separately.
+    approved_by: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    approved_by_user_id: Mapped[UUID | None] = mapped_column(Uuid(as_uuid=True), nullable=True)
+    approval_timestamp: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
+    revoked_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    revoked_by: Mapped[str | None] = mapped_column(String(120), nullable=True)

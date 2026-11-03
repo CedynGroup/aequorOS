@@ -21,8 +21,8 @@ from fastapi.testclient import TestClient
 from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
+from app.capital.service import regulatory_capital
 from app.models import BankFinancialFact
-from app.services import regulatory_capital
 from tests.real_data import (
     REAL_BANK_ID,
     REAL_ORG_ID,

@@ -35,12 +35,12 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import select
 
-from app.db.session import get_sessionmaker
-from app.domain.ingestion.reference_schemas import schema_for
-from app.domain.ingestion.reference_schemas.subsidiaries import (
+from app.data_engine.domain.ingestion.reference_schemas import schema_for
+from app.data_engine.domain.ingestion.reference_schemas.subsidiaries import (
     SCHEMA,
     validate_subsidiary_row,
 )
+from app.db.session import get_sessionmaker
 from app.models import Bank, CanonicalReferenceRow
 from app.reporting.service.bog_forms.linemaps import line_maps_for
 from app.reporting.service.bog_forms.linemaps.bsd9 import (

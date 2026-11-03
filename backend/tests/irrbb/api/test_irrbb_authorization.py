@@ -11,6 +11,7 @@ from loguru import logger
 from sqlalchemy import delete, func, select
 
 from app.api.deps import TenantContext
+from app.capital.service import regulatory_capital
 from app.core.authorization import (
     BindingStatus,
     GrantorType,
@@ -25,6 +26,7 @@ from app.db.base import utc_now
 from app.db.session import get_sessionmaker
 from app.identity.service import authorization
 from app.irrbb.service import regulatory_irr
+from app.liquidity.schemas.regulatory_liquidity import RegulatoryRunCreate
 from app.live.service import data_activation
 from app.models import (
     AuditEvent,
@@ -43,8 +45,6 @@ from app.models import (
 )
 from app.policy.service import module_scope
 from app.policy.service.institution_types import FALLBACK_TYPE_CODE
-from app.schemas.regulatory_liquidity import RegulatoryRunCreate
-from app.services import regulatory_capital
 from app.stress.service import analysis_workbench
 from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID, materialize_canonical_test_book
 from tests.support.helpers import ORG_1, ORG_2, USER_1, headers
@@ -637,6 +637,7 @@ def test_mixed_execution_requires_irrbb_only_in_plan(
     irr_authority: bool,
 ) -> None:
     _seed_book()
+    _grant(RoleBundle.ANALYST, module=ModuleScope.DATA, sensitivity=SensitivityScope.RESTRICTED)
     _grant(RoleBundle.ANALYST, module=ModuleScope.CREDIT, sensitivity=SensitivityScope.CONFIDENTIAL)
     _grant(RoleBundle.ANALYST, module=ModuleScope.FX, sensitivity=SensitivityScope.CONFIDENTIAL)
     _grant(RoleBundle.ANALYST, module=ModuleScope.FTP, sensitivity=SensitivityScope.CONFIDENTIAL)

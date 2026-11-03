@@ -65,7 +65,7 @@ from app.bi.service.compiler import (  # pyright: ignore[reportPrivateUsage]
     _POPULATION_COLUMNS,
     _resolve,
 )
-from app.domain.ingestion.reference_schemas import performance_targets
+from app.data_engine.domain.ingestion.reference_schemas import performance_targets
 
 AS_OF = date(2026, 6, 30)
 
@@ -439,7 +439,7 @@ def test_the_catalogue_never_takes_the_default_version(cat: Catalogue) -> None:
 def test_the_version_vocabulary_is_the_registers_own() -> None:
     """One vocabulary, asserted from the side that may see both.
 
-    ``app/domain/ingestion`` is upstream of ``app/bi/domain`` and must not import
+    ``app/data_engine/domain/ingestion`` is upstream of ``app/bi/domain`` and must not import
     it, so the two tuples are mirrors. A version the register accepts but the
     catalogue does not expose is a target the bank states and never sees; one the
     catalogue exposes but the register refuses is a member that can never hold a

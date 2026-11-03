@@ -10,12 +10,12 @@
  * than becoming zero.
  */
 
-import EChart, { type BiEChartsOption } from "@/components/bi/EChart";
+import EChart, { type BiEChartsOption } from "@/features/bi/components/EChart";
 import {
   seriesColor,
   useChartTokens,
   type BiChartTokens,
-} from "@/components/bi/echartsTheme";
+} from "@/features/bi/components/echartsTheme";
 import {
   axisTooltip,
   BAR_SERIES_BASE,

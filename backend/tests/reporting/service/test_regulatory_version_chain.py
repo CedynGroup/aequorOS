@@ -22,6 +22,8 @@ from app.api.deps import TenantContext
 from app.attestation.service import workflow as attestation_workflow
 from app.core.key_management.presentation import LOCKED_JSON, LockReason
 from app.core.key_management.types import KeyUnavailableError, ProtectedSupportAccessError
+from app.liquidity.schemas.regulatory_liquidity import RegulatoryRunCreate
+from app.liquidity.service import regulatory_liquidity
 from app.models import (
     AttestationSignature,
     BankReportingPeriod,
@@ -30,8 +32,6 @@ from app.models import (
 )
 from app.reporting.schemas.packages import RegulatoryPackageCreate
 from app.reporting.service import generation, snapshot_diff, version_chain
-from app.schemas.regulatory_liquidity import RegulatoryRunCreate
-from app.services import regulatory_liquidity
 from tests.fixtures.canonical_bank_fixture import (
     DEMO_ORG_ID,
     DEMO_USER_ID,

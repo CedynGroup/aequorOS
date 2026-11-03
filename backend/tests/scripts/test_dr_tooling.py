@@ -15,15 +15,14 @@ import json
 import os
 from pathlib import Path
 
-import psycopg
 import pytest
-from psycopg import sql
 
 from scripts.dr_common import (
     DisasterRecoveryError,
     assert_client_can_dump,
     assert_dump_role_sees_all_rows,
     describe,
+    protected_urls_from_env,
     refuse_protected_cluster,
     refuse_protected_target,
     same_cluster,
@@ -33,6 +32,7 @@ from scripts.dr_common import (
 )
 from scripts.dr_manifest import BackupManifest, TableFingerprint, TenantProbe, compare
 from scripts.restore_database import filter_toc, maintenance_url, target_database_name
+from tests.support.database import isolated_postgres_database
 
 SECRET = "hunter2superSecret"
 PRIMARY = f"postgresql+psycopg://app:{SECRET}@pg.example.com:5433/aequoros_db"
@@ -210,9 +210,7 @@ class TestTableOfContentsFilter:
         assert "TABLE public banks" in filtered
 
     def test_extensions_and_schemas_can_be_dropped_together(self) -> None:
-        filtered = filter_toc(
-            self.TOC, drop_extensions={"timescaledb"}, drop_schemas={"public"}
-        )
+        filtered = filter_toc(self.TOC, drop_extensions={"timescaledb"}, drop_schemas={"public"})
         assert "timescaledb" not in filtered
         assert "SCHEMA - public" not in filtered
         assert "pgcrypto" in filtered
@@ -221,7 +219,9 @@ class TestTableOfContentsFilter:
 
 class TestRestoreUrlHelpers:
     def test_maintenance_url_keeps_the_cluster_and_swaps_the_database(self) -> None:
-        assert maintenance_url("postgresql://u:p@h:5432/target") == "postgresql://u:p@h:5432/postgres"
+        assert (
+            maintenance_url("postgresql://u:p@h:5432/target") == "postgresql://u:p@h:5432/postgres"
+        )
 
     def test_target_database_name_is_extracted(self) -> None:
         assert target_database_name("postgresql+psycopg://u:p@h:5432/aequoros_restore") == (
@@ -244,13 +244,10 @@ def test_end_to_end_drill_restores_and_verifies(tmp_path: Path) -> None:
     """Back up a seeded database, restore it elsewhere, and verify every check."""
     from scripts.restore_drill import DrillOptions, run_drill  # noqa: PLC0415 - opt-in path
 
-    source_db = "aequoros_dr_pytest_src"
-    with psycopg.connect(to_libpq(_DRILL_CLUSTER), autocommit=True) as conn:
-        conn.execute(sql.SQL("DROP DATABASE IF EXISTS {}").format(sql.Identifier(source_db)))
-        conn.execute(sql.SQL("CREATE DATABASE {}").format(sql.Identifier(source_db)))
-    source_url = maintenance_url(_DRILL_CLUSTER, database=source_db)
-    try:
-        with psycopg.connect(to_libpq(source_url), autocommit=True) as conn:
+    refuse_protected_cluster(_DRILL_CLUSTER, protected_urls_from_env())
+    with isolated_postgres_database(_DRILL_CLUSTER) as source:
+        source_url = source.database_url
+        with source.raw_connection(autocommit=True) as conn:
             conn.execute("CREATE TABLE alembic_version (version_num varchar(32) PRIMARY KEY)")
             conn.execute("INSERT INTO alembic_version VALUES ('test_head')")
             conn.execute("CREATE TABLE organizations (id text PRIMARY KEY, name text NOT NULL)")
@@ -287,6 +284,3 @@ def test_end_to_end_drill_restores_and_verifies(tmp_path: Path) -> None:
                 os.environ["BACKUP_SOURCE_DATABASE_URL"] = previous
         assert ok, "the drill must restore and verify cleanly"
         assert timings.recovery_seconds >= 0.0
-    finally:
-        with psycopg.connect(to_libpq(_DRILL_CLUSTER), autocommit=True) as conn:
-            conn.execute(sql.SQL("DROP DATABASE IF EXISTS {}").format(sql.Identifier(source_db)))

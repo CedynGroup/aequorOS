@@ -18,15 +18,16 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
+from app.capital.schemas.regulatory_capital import CapitalScenarioBatchCreate
+from app.capital.service import regulatory_capital
 from app.forecasting.schemas.forecasting import ForecastRunCreate
 from app.forecasting.service import regulatory_forecasting
+from app.liquidity.schemas.regulatory_liquidity import RegulatoryRunCreate
+from app.liquidity.service import regulatory_liquidity
 from app.models import Bank, BankReportingPeriod, RegulatoryPackage
 from app.reporting.schemas.packages import RegulatoryPackageCreate
 from app.reporting.service import generation
 from app.reporting.service.exports import export_package
-from app.schemas.regulatory_capital import CapitalScenarioBatchCreate
-from app.schemas.regulatory_liquidity import RegulatoryRunCreate
-from app.services import regulatory_capital, regulatory_liquidity
 from app.stress.schemas.reverse_stress import ReverseStressRunCreate
 from app.stress.service import reverse_stress
 from tests.fixtures.canonical_bank_fixture import (
@@ -36,6 +37,7 @@ from tests.fixtures.canonical_bank_fixture import (
     materialize_canonical_test_book,
 )
 from tests.support.inmemory_storage import InMemoryStorageClient
+from tests.support.sealed_documents import published_bytes
 
 MAKER = TenantContext(
     organization_id=DEMO_ORG_ID, actor_user_id=DEMO_USER_ID, authorization_version=1
@@ -119,11 +121,7 @@ def _pdf_text(db: Session, storage: InMemoryStorageClient, package: RegulatoryPa
     artifact = export_package(db, MAKER, package, "pdf")
     slug = db.scalar(select(Bank.storage_slug).where(Bank.id == SAMPLE_BANK_ID))
     assert slug
-    payload = next(
-        storage.read(obj.location)[1].read()
-        for obj in storage.list(slug, "outputs")
-        if obj.location.object_path == artifact.object_path
-    )
+    payload = published_bytes(db, storage, slug=slug, context_path=artifact.object_path)
     with pdfplumber.open(io.BytesIO(payload)) as document:
         text = "\n".join(page.extract_text() or "" for page in document.pages)
     return " ".join(text.split())

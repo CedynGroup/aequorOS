@@ -58,7 +58,7 @@
   --focus: 116 180 255; /* #74B4FF */
 
   /* Charts — full values, read as var(--chart-N) by SVG/DOM and RESOLVED
-     from the computed style for an ECharts canvas (components/bi/echartsTheme) */
+     from the computed style for an ECharts canvas (features/bi/components/echartsTheme) */
   --chart-1: #5b9bff;
   --chart-2: #a78bfa;
   --chart-3: #34d399;

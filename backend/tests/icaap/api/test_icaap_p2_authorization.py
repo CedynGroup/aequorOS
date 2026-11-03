@@ -35,8 +35,8 @@ from app.models import AuthorizationBinding, Bank, User
 from app.policy.service.institution_types import FALLBACK_TYPE_CODE
 from tests.fixtures.canonical_bank_fixture import (
     SAMPLE_BANK_ID,
-    materialize_canonical_test_book,
 )
+from tests.support.canonical_book import canonical_test_book
 from tests.support.helpers import ORG_1, ORG_2, USER_1, USER_2, headers
 
 SDI_BANK_ID = "BK-P2SDI001"
@@ -53,6 +53,9 @@ ADDON_ID = UUID("c2c2c2c2-0000-4000-8000-000000000006")
 REVIEWER = UUID("dddddddd-dddd-4ddd-8ddd-dddddddddddd")
 
 
+pytestmark = pytest.mark.canonical_book_baseline
+
+
 @pytest.fixture(autouse=True)
 def _enable_workspace(monkeypatch: pytest.MonkeyPatch) -> None:
     get_settings.cache_clear()
@@ -66,7 +69,7 @@ def _start_without_fixture_authority(db_client: TestClient) -> None:
         session.execute(
             delete(AuthorizationBinding).where(AuthorizationBinding.organization_id == ORG_1)
         )
-        materialize_canonical_test_book(session)
+        canonical_test_book(session)
         session.commit()
     finally:
         session.close()

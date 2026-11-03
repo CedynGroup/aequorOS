@@ -27,7 +27,7 @@ import { setAccessToken } from "../lib/api/token";
 import AskPage from "../app/(app)/explore/ask/page";
 import ExploreLayout from "../app/(app)/explore/layout";
 import CommandPalette from "../components/shell/CommandPalette";
-import AskAnswer from "../components/bi/AskAnswer";
+import AskAnswer from "../features/bi/components/AskAnswer";
 import { providers, json, queryWire, result, columns } from "./biTestSupport";
 
 const shell = vi.hoisted(() => ({

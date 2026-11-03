@@ -7,7 +7,7 @@ the built one as authoritative.
 DDL files under `/schema/canonical_v1/*.sql`, mirrored in Snowflake.
 
 **What actually exists (and is good):** the canonical model is implemented as SQLAlchemy
-models in `backend/app/models/canonical.py` + Alembic migrations, with provenance metadata
+models in `backend/app/data_engine/models/canonical.py` + Alembic migrations, with provenance metadata
 owned by [Data Engine §4.3](../docs/data_engine.md#43-mandatory-metadata-columns),
 immutable supersession, `NUMERIC(28,6)` money, rates-as-fractions.
 There is no `/schema/` tree and no Snowflake mirror.

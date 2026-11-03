@@ -60,8 +60,8 @@ class MacroScenarioCreate(ClosedModel):
     horizon_years: int = Field(default=3, ge=1, le=10)
     narrative: str | None = Field(default=None, max_length=8000)
     source: str | None = Field(default=None, max_length=2000)
-    #: NULL = global-supervisory (org-wide). Set = bank-specific; validated to
-    #: belong to the tenant.
+    #: NULL = organization resource, regardless of subtype. Set = bank-specific;
+    #: validated to belong to the tenant.
     bank_id: str | None = Field(default=None, max_length=16)
     #: Forward hook for SDI scoping (docs/sdi.md §7); NULL = applies to all.
     institution_type_applicability: list[str] | None = None

@@ -9,20 +9,26 @@ from sqlalchemy import Connection, event, select
 from sqlalchemy.orm import Session
 
 from app.core.key_management.local import LocalKeyProvider
-from app.identity.public import Bank
-from app.models import BankReportingPeriod
-from app.models.canonical import CanonicalCounterparty, CanonicalPosition, CanonicalPositionSnapshot
-from app.reporting.service.bog_forms.sources import ResolveContext
-from app.reporting.service.bog_forms.sources_ext.bsd13 import contracts
-from app.services import canonical_withdrawal
-from app.services.canonical_withdrawal import WithdrawalError
-from app.services.etl_dedup_jobs import (
+from app.data_engine.models.canonical import (
+    CanonicalCounterparty,
+    CanonicalPosition,
+    CanonicalPositionSnapshot,
+)
+from app.data_engine.service import canonical_withdrawal
+from app.data_engine.service.canonical_withdrawal import WithdrawalError
+from app.data_engine.service.etl_dedup_jobs import (
     _load_cross_source_rows,  # pyright: ignore[reportPrivateUsage]
 )
-from app.services.etl_model_training import (
+from app.data_engine.service.etl_model_training import (
     _counterparty_rows,  # pyright: ignore[reportPrivateUsage]
 )
-from app.services.ingestion import _known_references  # pyright: ignore[reportPrivateUsage]
+from app.data_engine.service.ingestion import (
+    _known_references,  # pyright: ignore[reportPrivateUsage]
+)
+from app.identity.public import Bank
+from app.models import BankReportingPeriod
+from app.reporting.service.bog_forms.sources import ResolveContext
+from app.reporting.service.bog_forms.sources_ext.bsd13 import contracts
 from tests.bi.fixtures import materialize_bi_plane
 from tests.core import test_bank_field_encryption as fields
 from tests.support.helpers import ORG_1

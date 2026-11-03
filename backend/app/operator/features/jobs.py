@@ -13,8 +13,8 @@ from typing import Annotated
 from fastapi import APIRouter, Query
 
 from app.operator.deps import Operator, OperatorDb, record_operator_action
+from app.operator.schemas import OperatorJobsRead, StuckDedupBatchesRead
 from app.operator.services import operator_views
-from app.schemas.operator import OperatorJobsRead, StuckDedupBatchesRead
 
 router = APIRouter(prefix="/jobs", tags=["operator-jobs"])
 

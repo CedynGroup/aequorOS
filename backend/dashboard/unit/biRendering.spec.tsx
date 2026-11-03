@@ -15,12 +15,12 @@ import {
   BiDashboardReadFromJSON,
   BiCatalogueReadFromJSON,
 } from "@aequoros/risk-service-api";
-import WidgetRenderer from "../components/bi/WidgetRenderer";
-import NeedsDataWidget from "../components/bi/NeedsDataWidget";
-import InsightStrip from "../components/bi/InsightStrip";
-import DashboardCanvas from "../components/bi/DashboardCanvas";
-import ExportActions from "../components/bi/ExportActions";
-import ExplainDrawer from "../components/bi/ExplainDrawer";
+import WidgetRenderer from "../features/bi/components/WidgetRenderer";
+import NeedsDataWidget from "../features/bi/components/NeedsDataWidget";
+import InsightStrip from "../features/bi/components/InsightStrip";
+import DashboardCanvas from "../features/bi/components/DashboardCanvas";
+import ExportActions from "../features/bi/components/ExportActions";
+import ExplainDrawer from "../features/bi/components/ExplainDrawer";
 import ExplorePage from "../app/(app)/explore/page";
 import DriverWaterfall from "../components/stress/charts/DriverWaterfall";
 import {
@@ -29,10 +29,10 @@ import {
   savedDashboardView,
   useDashboard,
   useDashboardList,
-} from "../components/bi/dashboards";
-import { namedDataset } from "../components/bi/labels";
+} from "../features/bi/components/dashboards";
+import { namedDataset } from "../features/bi/components/labels";
 import { WHOLE_BOOK } from "../lib/api/dataScope";
-import type { BiWidgetSpec } from "../components/bi/types";
+import type { BiWidgetSpec } from "../features/bi/components/types";
 import type { EnterpriseStressRead } from "../components/stress/types";
 import {
   providers,

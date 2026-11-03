@@ -17,6 +17,7 @@ from fastapi.responses import StreamingResponse
 
 from app.api.deps import DbSession, IcaapAddonApprove, IcaapCreate, IcaapView
 from app.core.config import get_settings
+from app.core.content_disposition import attachment_headers
 from app.icaap.schemas.risk_capital import (
     IcaapReason,
     IcaapSupervisoryAddonListRead,
@@ -24,7 +25,7 @@ from app.icaap.schemas.risk_capital import (
 )
 from app.icaap.service import supervisory_addons
 from app.schemas.common import ErrorResponse
-from app.storage import StorageClient, StorageLocation, StorageValidationError
+from app.storage import StorageClient, StorageValidationError
 from app.storage.config import StorageRetiredError
 from app.storage.factory import get_storage_client
 
@@ -184,15 +185,10 @@ def download_icaap_supervisory_addon_letter(
     access: IcaapView,
     storage: IcaapStorage,
 ) -> StreamingResponse:
-    storage = storage.for_session(db)
     _ = bank_id
-    row, slug = supervisory_addons.prepare_letter_download(db, access, addon_id)
-    _object, stream = storage.read(
-        StorageLocation(slug, row.letter_storage_tier, row.letter_object_path),  # pyright: ignore[reportArgumentType]
-        row.letter_storage_version_id,
-    )
+    row, stream = supervisory_addons.read_letter(db, access, addon_id, storage)
     return StreamingResponse(
         stream,
         media_type=row.letter_media_type,
-        headers={"Content-Disposition": f'attachment; filename="{row.letter_original_filename}"'},
+        headers=attachment_headers(row.letter_original_filename),
     )

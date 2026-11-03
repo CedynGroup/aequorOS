@@ -12,6 +12,12 @@ to login and failed external compliance filters.
 
 ---
 
+## Code layout
+
+Feature code moves into `features/<feature>/` one feature per change, with a
+boundary ratchet and a move codemod shared with the backend program: see
+[FEATURE_LAYOUT.md](FEATURE_LAYOUT.md).
+
 ## Scope
 
 App Router pages cover the authenticated shell, login, the inspector,
@@ -47,6 +53,16 @@ documented in [FX dashboard access](../docs/fx_enforcement_rollout.md#dashboard-
 Bank key administration follows [the setup guide](../docs/bank_key_setup.md#bank-administrator-self-service).
 Locked fields and editor recovery follow [the protected presentation contract](../docs/bank_field_encryption.md#protected-presentation-reads).
 
+On **Data Engine → Overview**, use **Reconciliation exceptions** to enter a
+reason, maximum gap fraction and effective dates, then **Record proposal**.
+A checker signs in separately, enters an approval label and chooses
+**Approve exception**, or enters a rejection reason as well and chooses
+**Reject**. Each card retains its state, ceiling, effective dates and reason;
+approved and revoked cards retain their provenance without action controls.
+The maker sees a self-approval explanation; other readers without approval
+authority see **Request access**. Exact grants, checker independence and the
+effect of each decision follow [Human Data Engine authority](../docs/authorization_foundation.md#human-data-engine-authority).
+
 ### Regulatory instruments and preparation
 
 Open **Submissions → Instruments** (`/submissions/instruments`) to inspect every
@@ -57,8 +73,8 @@ approver and approval date. Missing dates and mappings are stated explicitly;
 source links appear when recorded.
 Expand a status badge to read its shared plain-language disclosure and source
 details; legal status is separate from template fidelity and calculation readiness.
-Use **Search instruments** to filter by title, and **Status** to narrow the results
-by legal status.
+Status chips above the table count and filter by legal status, use **Search
+instruments** to filter by title, and **Clear filters** removes both at once.
 
 **Upcoming rules** (`/submissions/upcoming`) lists exposure drafts and final rules
 awaiting commencement. Select a linked return title to prepare that return or
@@ -192,7 +208,7 @@ These are correctness rules, not style preferences. The evidence is
   titles/messages, never `${regShort()} minimum` or "regulatory minimum".
   Historical dashboard, preview and run reads correct the disclosure without
   changing stored validations, calculations or input hashes; see
-  `backend/tests/services/test_liquidity_validation_disclosures.py`.
+  `backend/tests/liquidity/service/test_liquidity_validation_disclosures.py`.
   The [research dossier](../../docs/research/bog_returns_and_templates.md#12-gap-list--what-must-be-simulatedapproximated-clearly-labelled)
   owns the instruments' publication status and calibration gaps.
 - **CET1, Tier 1 and the leverage ratio** are Bank of Ghana CRD requirements —
@@ -717,6 +733,16 @@ subsequently added position book. Other fact groups and historical periods
 retain the canonical spine's figures. Capital and stress expectations for the
 latest period therefore use the position book's net CRD credit basis.
 
+`playwright.config.ts` freezes `E2E_TODAY` once per run, defaulting to the local
+calendar date, and shares it with the bootstrap and journey workers. Set
+`E2E_TODAY=YYYY-MM-DD` to select the last month end on or before that date;
+the anchor remains calendar-derived. For example, `2026-10-30` selects
+September 30, while `2026-10-31` selects October 31. This keeps the bootstrap
+and journey expectations aligned when a run crosses midnight. The liquidity
+journey derives the weighted-average-liability-maturity early-warning value
+from that anchor and the fixture's fixed maturities, because day counts can
+change as the anchor advances.
+
 ```bash
 pnpm --filter @aequoros/dashboard e2e            # functional journeys
 pnpm --filter @aequoros/dashboard e2e:contracts  # browser presentation and HTTP contracts
@@ -1072,6 +1098,8 @@ retain the server's existing sensitivity-specific projection.
 The enterprise stress workbench remains at `/irr/enterprise-stress`, with its
 own IRRBB tab and links from the module workspaces. It runs a governed macro
 scenario across engines. Module scenario tabs never dispatch enterprise stress.
+Access requirements and disabled-action guidance follow the
+[Stress rollout contract](../docs/stress_enforcement_rollout.md#required-authority).
 Its IRRBB correctness dependency remains #306.
 
 FTP what-if compares baseline with a chosen module scenario and optional curve

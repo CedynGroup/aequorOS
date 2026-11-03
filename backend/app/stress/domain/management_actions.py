@@ -62,13 +62,13 @@ from dataclasses import dataclass, field
 from decimal import ROUND_HALF_UP, Decimal
 from typing import Literal
 
+from app.capital.domain.engine import CapitalParams
 from app.domain.authority.outcomes import (
     NotComputable,
     OutcomeDetail,
     OutcomeState,
     outcome,
 )
-from app.domain.capital.engine import CapitalParams
 from app.stress.domain.projection import (
     EnterpriseProjection,
     MinimaCheck,

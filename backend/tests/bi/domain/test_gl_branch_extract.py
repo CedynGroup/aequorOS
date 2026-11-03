@@ -22,7 +22,9 @@ from app.bi.domain.extract import (
     GlMonthlyFactRow,
     gl_branch_monthly_rows,
 )
-from app.domain.ingestion.reference_schemas.gl_segment_balances import RESIDUAL_BRANCH_ID
+from app.data_engine.domain.ingestion.reference_schemas.gl_segment_balances import (
+    RESIDUAL_BRANCH_ID,
+)
 
 ORG, BANK = "OR-TEST0001", "BK-TEST0001"
 JUN, MAY = date(2026, 6, 30), date(2026, 5, 31)

@@ -32,11 +32,10 @@ from app.behavioral.ml.history import available_as_of_dates
 from app.core.authorization import Module, Permission, Sensitivity
 from app.core.config import get_settings
 from app.core.ids import new_uuid7
-from app.data_engine.public import CanonicalReferenceRow
+from app.data_engine.public import CanonicalReferenceRow, IngestionBatch, LineageRecord
 from app.db.base import utc_now
 from app.identity import public as scoped_authorization
 from app.identity.public import Bank
-from app.models.ingestion import IngestionBatch, LineageRecord
 
 _MODULES = {
     "nmd-duration": nmd_duration,

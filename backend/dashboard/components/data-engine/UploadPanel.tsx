@@ -14,6 +14,9 @@ import type { IngestionBatchRead } from "@aequoros/risk-service-api";
 import { useBankContext } from "@/components/shell/BankContext";
 import { isApiError } from "@/lib/api/client";
 import { useUploadAndIngest } from "@/lib/api/ingestion";
+import { useDataPermissionState } from "@/lib/api/dataAccess";
+import { PageSkeleton } from "@/components/ui/QueryBoundary";
+import DataAccessNotice from "@/components/ui/DataAccessNotice";
 import {
   BatchStatusPill,
   CountStrip,
@@ -34,7 +37,7 @@ type FileOutcome = {
 };
 
 export default function UploadPanel() {
-  const { bank } = useBankContext();
+  const { bank, authorityPending } = useBankContext();
   const inputRef = useRef<HTMLInputElement>(null);
   const filesInputId = useId();
   const asOfInputId = useId();
@@ -43,9 +46,23 @@ export default function UploadPanel() {
   const [outcomes, setOutcomes] = useState<FileOutcome[]>([]);
   const [running, setRunning] = useState(false);
   const uploadAndIngest = useUploadAndIngest(bank?.id);
+  const createAccess = useDataPermissionState(
+    bank?.id,
+    "create",
+    "restricted",
+    authorityPending,
+  );
+  const create = createAccess === "allowed";
+  const runAccess = useDataPermissionState(
+    bank?.id,
+    "run",
+    "restricted",
+    authorityPending,
+  );
+  const run = runAccess === "allowed";
 
   const runQueue = async () => {
-    if (!files.length || running) return;
+    if (!create || !run || !files.length || running) return;
     setRunning(true);
     setOutcomes(
       files.map((file) => ({ filename: file.name, state: "queued" as const })),
@@ -96,6 +113,13 @@ export default function UploadPanel() {
     setRunning(false);
   };
 
+  if (createAccess === "loading" || runAccess === "loading")
+    return <PageSkeleton contained />;
+  if (!create || !run) {
+    return (
+      <DataAccessNotice requirement="DATA · Restricted · Create and Run to upload and ingest files" />
+    );
+  }
   return (
     <section className="card p-5 space-y-4">
       <div>
@@ -194,11 +218,12 @@ export default function UploadPanel() {
                     (idempotent).
                   </span>
                 )}
-                {outcome.batch && referenceRowTotal(outcome.batch) > 0 && (
-                  <span className="text-caption text-slate">
-                    {referenceRowTotal(outcome.batch)} reference rows
-                  </span>
-                )}
+                {outcome.batch &&
+                  (referenceRowTotal(outcome.batch) ?? 0) > 0 && (
+                    <span className="text-caption text-slate">
+                      {referenceRowTotal(outcome.batch)} reference rows
+                    </span>
+                  )}
                 {outcome.batch && (
                   <Link
                     href={`/data-engine/batches/${outcome.batch.id}`}

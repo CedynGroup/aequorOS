@@ -10,7 +10,7 @@ from app.core.authorization import Module, Permission, Sensitivity
 from app.ftp import service as regulatory_ftp
 from app.ftp.schemas import FtpDashboardRead, FtpScenarioBatchCreate
 from app.identity import public as scoped_authorization
-from app.schemas.regulatory_liquidity import RegulatoryRunBatchRead
+from app.liquidity.public import RegulatoryRunBatchRead
 
 router = APIRouter(tags=["regulatory-ftp"])
 

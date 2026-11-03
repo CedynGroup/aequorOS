@@ -46,12 +46,12 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))  # backend/ on path
 
-from app.domain.curves.bootstrap import BillQuote, bootstrap_zero_curve  # noqa: E402
-from app.domain.curves.cointegration import (  # noqa: E402
+from app.market_data.domain.curves.bootstrap import BillQuote, bootstrap_zero_curve  # noqa: E402
+from app.market_data.domain.curves.cointegration import (  # noqa: E402
     ADF_CRITICAL_VALUES,
     engle_granger,
 )
-from app.domain.curves.ois_step import MeetingDateStepCurve  # noqa: E402
+from app.market_data.domain.curves.ois_step import MeetingDateStepCurve  # noqa: E402
 
 SERIES_DIR = Path(__file__).resolve().parents[1] / "tests" / "fixtures" / "market_desk" / "series"
 
@@ -134,8 +134,10 @@ def _aligned_pairs(
 def _engle_granger_table(tbill: list[Print], interbank: list[Print]) -> None:
     print("1. Engle-Granger: 91-day T-bill yield on the daily interbank rate")
     print("   (auction-date aligned; residual ADF, AIC lag selection, MacKinnon")
-    print(f"   asymptotic critical values 5%={ADF_CRITICAL_VALUES['5%']}, "
-          f"10%={ADF_CRITICAL_VALUES['10%']})")
+    print(
+        f"   asymptotic critical values 5%={ADF_CRITICAL_VALUES['5%']}, "
+        f"10%={ADF_CRITICAL_VALUES['10%']})"
+    )
     print()
     header = (
         f"   {'window':<30} {'n':>5} {'alpha':>9} {'beta':>8} "
@@ -180,15 +182,23 @@ def _corridor_stats(interbank: list[Print], mpc: list[Print]) -> float:
     latest_print = interbank[-1]
     latest_mpr = mpc[-1]
     latest_spread = latest_print.value - latest_mpr.value
-    print(f"   latest print          : {latest_print.as_of} interbank "
-          f"{latest_print.value:.2f}% vs MPR {latest_mpr.value:.2f}% "
-          f"=> spread {latest_spread * 100:+.0f} bps")
-    print(f"   2026 trading days     : {len(values)}; outside ±100 bps corridor: "
-          f"{outside} ({100.0 * outside / len(values):.0f}%)")
-    print(f"   2026 spread std       : {statistics.pstdev(values) * 100:.0f} bps "
-          f"(mean {statistics.mean(values):+.2f} pp)")
-    print(f"   last 20 business days : mean {statistics.mean(last_20):+.2f} pp, "
-          f"std {statistics.pstdev(last_20) * 100:.2f} bps")
+    print(
+        f"   latest print          : {latest_print.as_of} interbank "
+        f"{latest_print.value:.2f}% vs MPR {latest_mpr.value:.2f}% "
+        f"=> spread {latest_spread * 100:+.0f} bps"
+    )
+    print(
+        f"   2026 trading days     : {len(values)}; outside ±100 bps corridor: "
+        f"{outside} ({100.0 * outside / len(values):.0f}%)"
+    )
+    print(
+        f"   2026 spread std       : {statistics.pstdev(values) * 100:.0f} bps "
+        f"(mean {statistics.mean(values):+.2f} pp)"
+    )
+    print(
+        f"   last 20 business days : mean {statistics.mean(last_20):+.2f} pp, "
+        f"std {statistics.pstdev(last_20) * 100:.2f} bps"
+    )
     print()
     print("   Reading: the corridor is broken as a bound (100% of 2026 days sit")
     print("   below it) but the SPREAD is extremely stable. A short rolling mean")
@@ -267,9 +277,9 @@ def _recommendations() -> None:
     ):
         print(f"   {line}")
     print()
-    print("   Encoded in app/services/market_desk/register.py")
+    print("   Encoded in app/market_data/service/market_desk/register.py")
     print("   (DEFAULT_METHODOLOGY_PARAMETERS_V1) and consumed by")
-    print("   app/services/market_desk/calculation.py.")
+    print("   app/market_data/service/market_desk/calculation.py.")
 
 
 def main() -> None:

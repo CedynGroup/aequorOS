@@ -40,8 +40,8 @@ from sqlalchemy.orm import Session
 
 from app.ai.models import AiCommentarySettings
 from app.core.config import get_settings
+from app.data_engine.api.ingest_data import get_ingestion_storage
 from app.db.base import Base, utc_now
-from app.features.ingest_data import get_ingestion_storage
 from app.icaap.api.manage_icaap_attachments import get_icaap_storage as get_attachment_storage
 from app.icaap.api.manage_icaap_supervisory_addons import get_icaap_storage as get_addon_storage
 from app.integrations.storage.s3 import get_object_storage

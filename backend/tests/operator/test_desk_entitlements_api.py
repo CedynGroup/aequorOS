@@ -26,8 +26,8 @@ from fastapi.testclient import TestClient
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.market_data.models.entitlements import MarketDataEntitlement
 from app.models import OperatorAuditLog
-from app.models.entitlements import MarketDataEntitlement
 from tests.operator.conftest import operator_headers, provision_payload, start_inspection
 
 DESK = "/operator/v1/desk/entitlements"

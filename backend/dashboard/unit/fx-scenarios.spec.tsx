@@ -6,7 +6,7 @@ import fc from "fast-check";
 import { fxScenarios, adversarialFxScenarios } from "./fx/testing/generators";
 import { assertFxDisplay } from "./fx/testing/assertions";
 import type { FxScenarioNopRead } from "@aequoros/risk-service-api";
-import ScenarioStrip, { fxScenarioLabel } from "../components/fx/ScenarioStrip";
+import ScenarioStrip, { fxScenarioLabel } from "../features/fx/components/ScenarioStrip";
 import { setActiveJurisdiction } from "../lib/format";
 
 beforeEach(() =>

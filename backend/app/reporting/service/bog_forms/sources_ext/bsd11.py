@@ -36,13 +36,13 @@ from uuid import UUID
 from sqlalchemy import func, select
 from sqlalchemy.orm import Load
 
+from app.data_engine.domain.ingestion.constants import INCLUDED_VALIDATION_STATUSES
 from app.data_engine.public import (
     CanonicalCounterparty,
     CanonicalPosition,
     CanonicalPositionSnapshot,
     CanonicalProduct,
 )
-from app.domain.ingestion.constants import INCLUDED_VALIDATION_STATUSES
 from app.identity.public import RelatedParty, RelatedPartyRole, Shareholding
 from app.policy.public import base_currency
 

@@ -32,6 +32,11 @@ import {
   warningRuleHint,
 } from "@/components/data-engine/content";
 import { use } from "react";
+import {
+  useDataPermission,
+  useDataPermissionState,
+} from "@/lib/api/dataAccess";
+import DataAccessNotice from "@/components/ui/DataAccessNotice";
 
 type ReportFailure = {
   rule: string;
@@ -53,10 +58,26 @@ export default function BatchDetailPage(props: {
   params: Promise<{ batchId: string }>;
 }) {
   const params = use(props.params);
-  const { bank } = useBankContext();
+  const { bank, authorityPending } = useBankContext();
   const batchQuery = useIngestionBatch(bank?.id, params.batchId);
   const failuresQuery = useTranslationFailures(bank?.id, params.batchId);
+  const metadata = useDataPermissionState(
+    bank?.id,
+    "view",
+    "confidential",
+    authorityPending,
+  );
+  const diagnostics = useDataPermission(bank?.id, "view", "restricted");
 
+  if (metadata === "loading") {
+    return (
+      <PageContainer className="py-6">
+        <PageSkeleton contained />
+      </PageContainer>
+    );
+  }
+  if (metadata === "denied")
+    return <DataAccessNotice requirement="DATA · Confidential · View" />;
   if (batchQuery.isPending) {
     return (
       <PageContainer className="py-6">
@@ -77,7 +98,7 @@ export default function BatchDetailPage(props: {
   }
 
   const batch = batchQuery.data;
-  const report = batch.validationReport as {
+  const report = (batch.validationReport ?? {}) as {
     summary?: Record<string, unknown>;
     failures?: ReportFailure[];
     reconciliation?: Record<string, unknown>;
@@ -128,6 +149,9 @@ export default function BatchDetailPage(props: {
         subtitle={`${batch.sourceSystem} · as of ${formatDate(batch.asOfDate)} · started ${formatDateTime(batch.startedAt ?? batch.createdAt)}`}
       />
       <PageContainer className="py-6 space-y-6">
+        {!diagnostics && (
+          <DataAccessNotice requirement="DATA · Restricted · View for raw diagnostics and artifacts" />
+        )}
         <div className="space-y-2">
           <CountStrip batch={batch} />
           <p className="text-caption text-slate">{WARNING_COUNTS_LEGEND}</p>
@@ -189,7 +213,7 @@ export default function BatchDetailPage(props: {
           </div>
         )}
 
-        {Object.keys(referenceCounts).length > 0 && (
+        {referenceCounts && Object.keys(referenceCounts).length > 0 && (
           <div className="card p-5">
             <h2 className="text-h3 text-navy">Reference datasets</h2>
             <p className="mt-1 text-caption text-slate">
@@ -210,21 +234,23 @@ export default function BatchDetailPage(props: {
           </div>
         )}
 
-        <div className="card p-5 space-y-2">
-          <h2 className="text-h3 text-navy">Stored artifacts</h2>
-          <p className="text-caption text-slate">
-            Immutable, versioned, and encrypted in the institution&apos;s
-            dedicated storage buckets.
-          </p>
-          <ArtifactPath label="Raw source" path={batch.rawArtifactPath} />
-          <ArtifactPath
-            label="Validation report"
-            path={batch.reportArtifactPath}
-          />
-          {batch.contentHash && (
-            <ArtifactPath label="Content SHA-256" path={batch.contentHash} />
-          )}
-        </div>
+        {diagnostics && (
+          <div className="card p-5 space-y-2">
+            <h2 className="text-h3 text-navy">Stored artifacts</h2>
+            <p className="text-caption text-slate">
+              Immutable, versioned, and encrypted in the institution&apos;s
+              dedicated storage buckets.
+            </p>
+            <ArtifactPath label="Raw source" path={batch.rawArtifactPath} />
+            <ArtifactPath
+              label="Validation report"
+              path={batch.reportArtifactPath}
+            />
+            {batch.contentHash && (
+              <ArtifactPath label="Content SHA-256" path={batch.contentHash} />
+            )}
+          </div>
+        )}
 
         <section className="space-y-3">
           <h2 className="text-h2 text-navy">Validation findings</h2>
@@ -237,7 +263,9 @@ export default function BatchDetailPage(props: {
               are counted in the totals above but not listed individually.
             </p>
           )}
-          {protectedPayloadReason(batch.validationReport) ? (
+          {!diagnostics ? (
+            <DataAccessNotice requirement="DATA · Restricted · View for validation findings" />
+          ) : protectedPayloadReason(batch.validationReport) ? (
             <ProtectedDataPlaceholder value={batch.validationReport} />
           ) : findings.length === 0 ? (
             <EmptyState
@@ -273,7 +301,19 @@ export default function BatchDetailPage(props: {
 
         <section className="space-y-3">
           <h2 className="text-h2 text-navy">Untranslatable rows</h2>
-          {translationFailures.length === 0 ? (
+          {!diagnostics ? (
+            <DataAccessNotice requirement="DATA · Restricted · View for untranslatable rows" />
+          ) : failuresQuery.isPending ? (
+            <p role="status" className="text-body text-slate">
+              Loading untranslatable rows…
+            </p>
+          ) : failuresQuery.isError ? (
+            <ErrorPanel
+              error={failuresQuery.error}
+              onRetry={() => void failuresQuery.refetch()}
+              title="Untranslatable rows unavailable"
+            />
+          ) : translationFailures.length === 0 ? (
             <p className="text-body text-slate">
               Every extracted row translated into the canonical model.
             </p>

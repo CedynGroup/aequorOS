@@ -14,11 +14,11 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
+from app.capital.service import sdi_capital, sdi_capital_assurance
 from app.models import (
     CanonicalGlAccount,
     CanonicalReferenceRow,
 )
-from app.services import sdi_capital, sdi_capital_assurance
 from tests.fixtures.sdi_capital import (
     SDI_AS_OF,
     create_sdi_bank,

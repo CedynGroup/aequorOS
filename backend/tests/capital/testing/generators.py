@@ -5,7 +5,7 @@ from decimal import Decimal
 
 from hypothesis import strategies as st
 
-from app.domain.capital.engine import CapitalFact, CapitalParams, compute_rwa, money
+from app.capital.domain.engine import CapitalFact, CapitalParams, compute_rwa, money
 from app.policy.service.parameter_register import BANK_CAPITAL_THRESHOLDS, BANK_RISK_WEIGHTS
 from app.policy.service.regulatory_parameters import SEED_PARAMETERS
 
@@ -46,7 +46,7 @@ class CapitalBook:
 
 @st.composite
 def capital_books(draw: st.DrawFn) -> CapitalBook:
-    """CRD floor source: SEED_PARAMETERS; 4dp MONEY in domain/capital/engine.py.
+    """CRD floor source: SEED_PARAMETERS; 4dp MONEY in capital/domain/engine.py.
 
     Synthetic GHS loans/deposits, three positive BIA years and paid-up equity.
     Concentrate on either side of the governed CAR minimum, mixing broader

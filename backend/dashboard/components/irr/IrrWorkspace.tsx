@@ -19,7 +19,7 @@ import PageHeader from "@/components/ui/PageHeader";
 import { DisabledWithReason } from "@/components/ui/DisabledWithReason";
 import QueryBoundary from "@/components/ui/QueryBoundary";
 import { useBankContext } from "@/components/shell/BankContext";
-import LiveEngineNote from "@/components/live/LiveEngineNote";
+import LiveEngineNote from "@/features/live/components/LiveEngineNote";
 import {
   useIrrDashboard,
   useRegulatoryRun,

@@ -290,12 +290,12 @@ class ReturnSigningPolicy(UuidV4PrimaryKeyMixin, TimestampMixin, Base):
 
 
 class RegulatoryArtifactVersion(UuidV4PrimaryKeyMixin, Base):
-    """One immutable row per export, pinning the object-store version.
+    """One immutable row per export, giving signatures a durable revision identity.
 
     The existing ``regulatory_package_artifacts`` row is upserted in place by
-    the exporter (gap G2), which means "the artifact as filed" cannot be
-    resolved from the database. This table appends instead, and records the S3
-    ``version_id`` so a signature can pin the exact bytes it covered.
+    the exporter (gap G2), so it forgets earlier exports. This table appends
+    instead. Storage identity and legacy resolution follow
+    ``backend/docs/bank_encryption.md``, "Publication and its callers".
     """
 
     __tablename__ = "regulatory_artifact_versions"

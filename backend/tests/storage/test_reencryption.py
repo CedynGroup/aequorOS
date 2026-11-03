@@ -14,6 +14,7 @@ from sqlalchemy import delete
 from sqlalchemy.engine import Connection
 from sqlalchemy.orm import Session
 
+from app.case.models.risk import StoredObject
 from app.core.key_management import reencryption, registry, sdk
 from app.core.key_management.local import LocalKeyProvider
 from app.core.key_management.models import BankEncryptionKey, ObjectKeyEnvelope
@@ -22,7 +23,6 @@ from app.core.key_management.types import KeyIntegrityError, KeyUnavailableError
 from app.db.base import utc_now
 from app.identity.public import Bank
 from app.models.job import Job
-from app.models.risk import StoredObject
 from app.services import job_queue
 from app.storage import reencryption as objects
 from app.storage.client import (
@@ -32,7 +32,9 @@ from app.storage.client import (
     StorageAccessError,
     StorageBackendError,
     StorageLocation,
+    StorageValidationError,
     Tier,
+    sealed_object_key,
 )
 from app.storage.encryption import ENCRYPTION_FORMAT, object_context
 from tests.db.test_postgres_migrations import alembic_config_for_app
@@ -1038,3 +1040,33 @@ def test_versioned_pin_keeps_original_while_current_object_moves(
     progress = reencryption.Progress.model_validate(job.progress)
     assert progress.retained == {"stored_object_versions:raw": 1}
     assert progress.objects_rewritten == 1
+
+
+def test_a_sealed_publication_is_inventoried_retained_and_never_rewritten(
+    bank_storage: BankStorage,
+) -> None:
+    """Rotation must not re-encrypt published ciphertext.
+
+    A sealed object's envelope is part of the identity the catalogue records, so
+    rewriting the ciphertext would break every reference to it as silently as
+    rewriting any other version. The inventory marks it retained for that reason,
+    and the re-encryption path refuses it rather than copying it to the new key.
+    """
+    content = b"%PDF-1.7\nsealed evidence\n%%EOF\n"
+    published = bank_storage.storage.write_sealed(
+        StorageLocation(SLUG, "outputs", sealed_object_key(uuid4())),
+        io.BytesIO(content),
+        metadata_for(SLUG, "outputs", content),
+        StorageLocation(SLUG, "outputs", "reports/evidence.pdf"),
+        content_type="application/pdf",
+    )
+    [item] = list(inventory_items(bank_storage))
+    assert item.retained
+    assert item.envelope_id == published.envelope_id
+    assert item.version_id == published.descriptor.version_id
+
+    with pytest.raises(StorageValidationError, match="Retained object versions"):
+        bank_storage.storage.reencrypt(item)
+    # The refusal left exactly one version: nothing was copied to a new envelope.
+    [unchanged] = list(inventory_items(bank_storage))
+    assert unchanged.version_id == item.version_id

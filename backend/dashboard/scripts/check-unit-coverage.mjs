@@ -14,8 +14,9 @@ const root = path.resolve(rootIndex < 0 ? process.cwd() : args[rootIndex + 1]);
 const update = args.includes("--update");
 const baselinePath = path.join(root, "unit-coverage-baseline.json");
 const read = (file) => JSON.parse(readFileSync(path.join(root, file), "utf8"));
-const roots = ["app", "components", "lib"];
+const roots = ["app", "components", "features", "lib"];
 function inventory(directory) {
+  if (!existsSync(path.join(root, directory))) return [];
   return readdirSync(path.join(root, directory), {
     withFileTypes: true,
   }).flatMap((entry) => {
@@ -96,7 +97,7 @@ try {
     files.some((file) => !native.has(file))
   ) {
     throw new Error(
-      "Vitest coverage must include every production TS/TSX file in app/, components/ and lib/",
+      "Vitest coverage must include every production TS/TSX file in app/, components/, features/ and lib/",
     );
   }
   if (!legacy.size || [...legacy.keys()].some((file) => !native.has(file)))

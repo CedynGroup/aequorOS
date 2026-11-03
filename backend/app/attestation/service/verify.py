@@ -29,7 +29,8 @@ The five, and what each one alone can prove:
    to what was signed. A mismatch here with checks 1–3 green is the precise,
    legible signal that *the stored figures diverged from the signed ones*.
 5. ``artifact_binding`` — the stored object still hashes to the checksum the
-   signature pinned, resolved at the exact object-store version.
+   signature pinned. Archived-byte resolution follows
+   ``backend/docs/bank_encryption.md``, "Publication and its callers".
 
 Plus the per-tenant signature hash chain (``workflow.verify_chain``), an
 independent integrity check alongside the database retention guards owned by
@@ -57,7 +58,7 @@ from base64 import b64encode
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
-from typing import Any, Literal
+from typing import Any, Literal, cast
 from uuid import UUID
 
 from asn1crypto import cms as asn1_cms
@@ -74,12 +75,20 @@ from sqlalchemy.orm import Session
 from app.api.deps import TenantContext
 from app.attestation.models import AttestationSignature, RegulatoryArtifactVersion
 from app.attestation.service import digests, workflow
+from app.attestation.service.document_access import artifact_view_decision
 from app.attestation.service.workflow import AttestationConflict
+from app.core.authorization import AuthorizationDecision, ExaminerDocumentAuthority
 from app.identity.public import Bank
 from app.live.public import RegulatoryRun
 from app.reporting.models.packages import RegulatoryPackage
 from app.reporting.service.generation import snapshot_content_hash
-from app.storage.client import StorageClient, StorageError, StorageLocation
+from app.storage import StorageClient, StorageError, StorageLocation
+from app.storage.public import (
+    DocumentBinding,
+    DocumentFamily,
+    RecordedDocument,
+    resolve_document,
+)
 
 CHECK_PDF_SIGNATURE = "pdf_signature"
 CHECK_INTER_SIGNATURE_TAMPER = "inter_signature_tamper"
@@ -555,18 +564,28 @@ def _collect_artifacts(  # noqa: PLR0913 - one lookup with five distinct inputs
             logger.warning("attestation verification could not obtain a storage client: {}", exc)
             client = None
 
-    if client is not None:
-        client = client.for_session(db)
-
+    decision = (
+        artifact_view_decision(
+            db,
+            ctx,
+            bank_id=package.bank_id,
+            return_family=package.return_family,
+            surface="attestation_verification_read",
+        )
+        if load_bytes
+        else None
+    )
     collected: list[_ArtifactEvidence] = []
-    cache: dict[tuple[str, str | None], tuple[bytes | None, str | None]] = {}
+    cache: dict[UUID, tuple[bytes | None, str | None]] = {}
     for signature in pinned:
         pinned_id = signature.artifact_version_id
         version = rows.get(pinned_id) if pinned_id is not None else None
         if version is None:
             continue
         payload, error = (
-            _read_once(cache, client, slug, version) if load_bytes else (None, "not requested")
+            _read_once(cache, client, slug, version, db, ctx, package, decision)
+            if load_bytes
+            else (None, "not requested")
         )
         collected.append(
             _ArtifactEvidence(
@@ -576,14 +595,32 @@ def _collect_artifacts(  # noqa: PLR0913 - one lookup with five distinct inputs
     return collected
 
 
-def _read_once(
-    cache: dict[tuple[str, str | None], tuple[bytes | None, str | None]],
+def _read_once(  # noqa: PLR0913 - a pinned read needs the whole identity and its authority
+    cache: dict[UUID, tuple[bytes | None, str | None]],
     client: StorageClient | None,
     slug: str | None,
     version: RegulatoryArtifactVersion,
+    db: Session,
+    ctx: TenantContext,
+    package: RegulatoryPackage,
+    decision: AuthorizationDecision | ExaminerDocumentAuthority | None,
 ) -> tuple[bytes | None, str | None]:
-    """Read the pinned object version once per (path, version) pair."""
-    key = (version.object_path, version.storage_version_id)
+    """Read one pinned revision once per artifact version identity.
+
+    The read is the storage kernel's verified resolution rather than a raw
+    provider fetch, so the bytes are proven against the checksum the revision
+    recorded before this check hashes them. Corruption then fails as evidence
+    with its own reason instead of surfacing later as a confusing binding
+    mismatch, and a revision published before stable references still resolves
+    through the pin it carries rather than through whatever is current.
+
+    The cache is keyed by the version row's own identity, because that is the
+    identity the resolver binds: two exports can share an ``object_path`` and a
+    backend that cannot version reports the same (absent) provider pin for both,
+    so keying by path and pin would hand one revision's bytes to the other and
+    convict a sound record of replacing its artifact.
+    """
+    key = version.id
     if key in cache:
         return cache[key]
     if client is None:
@@ -591,14 +628,25 @@ def _read_once(
     elif slug is None:
         result = (None, "the institution has no storage slug, so no object can be resolved")
     else:
-        location = StorageLocation(
-            institution_slug=slug, tier="outputs", object_path=version.object_path
-        )
         try:
-            # The pinned version_id is the point of G2: "the artifact as filed"
-            # must resolve to those exact bytes, not to whatever is current.
-            _descriptor, stream = client.read(location, version_id=version.storage_version_id)
-            result = (stream.read(), None)
+            _descriptor, stream = resolve_document(
+                db,
+                ctx,
+                package.bank_id,
+                DocumentBinding(DocumentFamily.ARTIFACT, version.id),
+                client,
+                authorization=cast(AuthorizationDecision | ExaminerDocumentAuthority, decision),
+                recorded=RecordedDocument(
+                    location=StorageLocation(
+                        institution_slug=slug, tier="outputs", object_path=version.object_path
+                    ),
+                    version_id=version.storage_version_id,
+                    sha256=version.checksum_sha256,
+                    byte_length=version.size_bytes,
+                ),
+            )
+            with stream:
+                result = (stream.read(), None)
         except StorageError as exc:
             result = (None, f"the stored object could not be read: {exc}")
     cache[key] = result
@@ -1290,7 +1338,7 @@ def _check_artifact_binding(artifacts: Sequence[_ArtifactEvidence]) -> CheckResu
     return _passed(
         CHECK_ARTIFACT_BINDING,
         f"All {len(artifacts)} pinned artifact version(s) still hash to the checksum recorded "
-        "at signing, resolved at the exact object-store version.",
+        "at signing, resolved through the pinned artifact revision.",
         artifacts=findings,
     )
 

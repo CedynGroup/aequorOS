@@ -65,7 +65,7 @@ test.describe("the Dashboards page", () => {
     // Every pack the route serves is on screen, by the title the pack file
     // carries, each labelled with the standing that stands behind its figures.
     // Nothing here can be produced by a client-side list: `dashboards.ts` names
-    // no pack (pinned by `components/bi/disclosure.test.ts`).
+    // no pack (pinned by `features/bi/components/disclosure.test.ts`).
     for (const pack of CERTIFIED_PACKS) {
       const tile = page
         .locator("li")
@@ -449,9 +449,9 @@ test.describe("a dashboard the reader saves for themselves", () => {
     objects,
   }) => {
     const dashboardPath = await prepareDashboard(request, objects, true);
-    // A SECOND REAL IDENTITY, not a mocked one: the Liquidity-only reader holds
-    // an exact LIQUIDITY binding and nothing else, so the deposit view is theirs
-    // and the loan view is not. The document is the same document.
+    // A SECOND REAL IDENTITY: the reader holds LIQUIDITY plus DATA/confidential
+    // for reporting periods. The deposit view is theirs and the CREDIT loan
+    // view is not. The document is the same document.
     const context = await browser.newContext({
       storageState: path.join(E2E_TMP, "liquidity_viewer.json"),
       baseURL: E2E_BASE_URL,

@@ -18,6 +18,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import IcaapAccess, TenantContext
+from app.capital.service import regulatory_capital
 from app.core.key_management.types import KeyStatus
 from app.icaap.domain.blocks import P1_BLOCK_TYPES, BlockStatus
 from app.icaap.schemas.workspace import (
@@ -28,9 +29,8 @@ from app.icaap.schemas.workspace import (
     IcaapManualTablePut,
 )
 from app.icaap.service import blocks
+from app.liquidity.schemas.regulatory_liquidity import RegulatoryRunCreate
 from app.models import BankReportingPeriod
-from app.schemas.regulatory_liquidity import RegulatoryRunCreate
-from app.services import regulatory_capital
 from tests.core import test_key_unavailable_numeric as encrypted
 from tests.core.test_bank_field_encryption import KEY_A
 from tests.icaap.service.conftest import AS_OF

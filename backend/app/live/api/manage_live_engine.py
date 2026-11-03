@@ -102,7 +102,7 @@ def list_live_snapshots(
     # here: the pulse requests one ladder per live module, so a module missing
     # from this pattern 422s on every dashboard load ('rating' did, then
     # 'credit' did when the credit module shipped). Keep it in step with
-    # components/home/pulse.ts.
+    # features/home/components/pulse.ts.
     module: Annotated[
         str,
         Query(pattern="^(liquidity|capital|credit|irr|fx|ftp|rating|forecast)$"),

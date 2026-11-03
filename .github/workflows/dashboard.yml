@@ -123,6 +123,8 @@ jobs:
         run: pnpm --filter dashboard exec tsc --noEmit
       - name: Lint dashboard
         run: pnpm --filter dashboard lint
+      - name: Guard dashboard feature boundaries
+        run: pnpm --filter dashboard guard:features
       - name: Test dashboard
         env:
           DASHBOARD_UNIT_REPORT: ${{ runner.temp }}/dashboard-unit-files.json

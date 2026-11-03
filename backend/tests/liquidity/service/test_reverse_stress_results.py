@@ -12,10 +12,10 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
 from app.domain.authority.results import Computed, FigureResult
-from app.domain.liquidity import engine
-from app.domain.liquidity.engine import LcrResult, LiquidityFact, LiquidityParams
+from app.liquidity.domain import engine
+from app.liquidity.domain.engine import LcrResult, LiquidityFact, LiquidityParams
+from app.liquidity.service import regulatory_liquidity
 from app.models import Bank, BankFinancialFact, BankReportingPeriod
-from app.services import regulatory_liquidity
 from tests.liquidity.helpers import inputs
 
 

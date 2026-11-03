@@ -11,7 +11,7 @@ from datetime import date, timedelta
 
 import pytest
 
-from app.domain.curves.ois_step import MeetingDateStepCurve, StepCurveError
+from app.market_data.domain.curves.ois_step import MeetingDateStepCurve, StepCurveError
 
 ANCHOR = date(2026, 1, 1)
 THREE_STEP = MeetingDateStepCurve(

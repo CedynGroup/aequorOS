@@ -9,6 +9,8 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
+from app.liquidity.schemas.regulatory_liquidity import RegulatoryRunCreate
+from app.liquidity.service import regulatory_liquidity
 from app.models import BankReportingPeriod, Notification, RegulatoryPackage, User
 from app.notifications.schemas import NotificationRead
 from app.notifications.service import notifications, reporting_deadline_scan
@@ -18,8 +20,6 @@ from app.reporting.schemas.packages import (
     RegulatoryPackageCreate,
 )
 from app.reporting.service import generation, validation, workflow
-from app.schemas.regulatory_liquidity import RegulatoryRunCreate
-from app.services import regulatory_liquidity
 from tests.fixtures.canonical_bank_fixture import (
     DEMO_ORG_ID,
     DEMO_USER_ID,

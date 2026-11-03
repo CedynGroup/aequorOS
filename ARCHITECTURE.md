@@ -136,8 +136,8 @@ tenant routes now preview, create, list, and revoke one complete scalar binding
 at a time and aggregate Access → Members. Create and revoke are audited,
 assignment SoD is authoritative, and each mutation invalidates the grantee's
 sessions transactionally. SSO request approval uses the same complete-grant
-path. This administration boundary is enforcing; ordinary product routes are
-still on the legacy gates described above.
+path. This administration boundary is enforcing; product enforcement follows the
+[product rollout contracts](backend/docs/authorization_foundation.md#product-rollout-boundary).
 
 ### 2.2 Institution identity is the platform ID
 
@@ -161,7 +161,7 @@ still on the legacy gates described above.
 ## 3. The calculation-run pattern (reuse this for every new engine)
 
 The reference implementation is the balance-sheet forecast + capital + liquidity chain. Concrete
-tables (all in `app/models/calculation.py` and `app/models/capital.py`, migrations
+tables (all in `app/case/models/calculation.py` and `app/case/models/capital.py`, migrations
 `202607130002`, `202607130003`, `202607140001`):
 
 | Table                          | Model                       | Purpose                                                                                                                                                                                                                                                                                                                                     |
@@ -173,8 +173,8 @@ tables (all in `app/models/calculation.py` and `app/models/capital.py`, migratio
 | `capital_projection_findings`  | `CapitalProjectionFinding`  | Join table linking generated `RiskFinding` rows to the projection.                                                                                                                                                                                                                                                                          |
 | `liquidity_analysis_results`   | `LiquidityAnalysisResult`   | Exactly one per successful run (`UniqueConstraint("run_id")`), versioned via `analysis_version`, metrics stored as JSON.                                                                                                                                                                                                                    |
 
-Invariants every new engine must copy (verified in `app/services/calculations.py`,
-`app/services/capital.py`, `app/services/liquidity.py`):
+Invariants every new engine must copy (verified in `app/case/service/calculations.py`,
+`app/case/service/capital.py`, `app/case/service/liquidity.py`):
 
 - **Immutability + append-only history.** Reruns create a new row (`rerun_of_run_id` link);
   failed attempts are persisted with named diagnostics and never replace prior successful output.
@@ -224,7 +224,7 @@ hash. Validated positions may appear in operator logs; the optional `OutcomeDeta
 remains bank-facing data and never enters operator logs.
 Unexpected bugs and infrastructure failures still raise.
 
-`app/domain/liquidity/engine.py::compute_liquidity` is the first migrated boundary:
+`app/liquidity/domain/engine.py::compute_liquidity` is the first migrated boundary:
 LCR and NSFR are evaluated independently, including missing threshold parameters.
 Existing single-ratio entry points keep their exception contracts. The service
 adapter preserves both outcomes for inline dashboard reads, trends, live metrics
@@ -372,8 +372,10 @@ on one canonical store — the live tier for intraday awareness, the official ti
 - **Refresh authority and retries.** `GET /banks/{id}/live-summary` only reads persisted rows and
   computes its staleness signal; it never enqueues or commits. Accepted ingestion and market-data
   writes, approved methodology/regulatory-parameter changes, tenant assumption/threshold/haircut
-  changes, entitlement changes, reconciliation-exception changes, and the explicit refresh action
-  enqueue recomputation in their mutation transaction. A module that successfully returns
+  changes, entitlement changes, reconciliation-exception approvals/revocations, and the explicit
+  refresh action enqueue recomputation in their mutation transaction. Proposal semantics follow
+  [Human Data Engine authority](backend/docs/authorization_foundation.md#human-data-engine-authority).
+  A module that successfully returns
   `availability=unavailable`, or a reconciliation-blocked book, is stable until such an input
   changes. Only an exception raised by a module retries the same job after 10, 20, then 40 seconds
   (default three-attempt cap); `retry_classification`, `retry_attempt_count`, and `next_retry_at`
@@ -532,16 +534,16 @@ official reads must be explicit.
 ## 3c. Market Data Adapter framework (docs/market_data_adapter.md)
 
 Layer-1 source adapters specialized for vendor market data, under
-`backend/app/adapters/market_data/`. Calculation modules never learn the vendor: they consume
-by `DataScope` + as-of + institution through `app/services/market_data.py`, and vendor concepts
+`backend/app/market_data/adapters/`. Calculation modules never learn the vendor: they consume
+by `DataScope` + as-of + institution through `app/market_data/service/market_data.py`, and vendor concepts
 (Bloomberg mnemonics, Refinitiv RICs, raw vendor errors) never cross the adapter boundary.
 
-- **Canonical entities** (`app/models/canonical.py`, full mandatory-metadata mixin + RLS +
+- **Canonical entities** (`app/data_engine/models/canonical.py`, full mandatory-metadata mixin + RLS +
   current-generation supersession): `canonical_yield_curves` (+`_points`), `canonical_fx_rates`,
   `canonical_market_indices`, `canonical_counterparty_ratings`. Rates are decimal fractions
   (0.158, never 15.8).
 - **`MarketDataAdapter(SourceAdapter)`** (`base.py`) with three shipped implementations, each
-  passing one shared contract suite (`tests/adapters/market_data/contract.py`, §4.3 categories +
+  passing one shared contract suite (`tests/market_data/adapters/contract.py`, §4.3 categories +
   a vendor-internal leak canary): `manual_upload` (production path — xlsx templates + parser +
   upload/template endpoints; the staged `temp://` handle is the "credential"; zero vendor quota),
   `refinitiv` (OAuth2 simulated, `ric_catalog.yaml`), `bloomberg` (enterprise-cert simulated,
@@ -583,7 +585,7 @@ by `DataScope` + as-of + institution through `app/services/market_data.py`, and 
 
 ### Market-data standing rules and the research desk
 
-- Market data flows only through `app/adapters/market_data/` (see §3c above and
+- Market data flows only through `app/market_data/adapters/` (see §3c above and
   docs/market_data_adapter.md). Every adapter pull delegates to `pull_runner.execute_pull` —
   the single writer of market-data canonical state; never persist market data elsewhere.
   Vendor catalogs carry only spec-documented identifiers (`supported: false` otherwise —
@@ -593,7 +595,7 @@ by `DataScope` + as-of + institution through `app/services/market_data.py`, and 
   LSEG Workspace; the platform APIs are the LSEG Data Platform, formerly RDP) — the
   internal vendor id stays `refinitiv` for wire/DB stability, user-facing labels read
   "LSEG (formerly Refinitiv)".
-- Calculation modules consume market data ONLY via `app/services/market_data.py`
+- Calculation modules consume market data ONLY via `app/market_data/service/market_data.py`
   (DataScope + as-of + institution, source attribution + staleness on every view);
   `fact_derivation` prefers canonical market-data entities and falls back to legacy
   `canonical_reference_rows`. Cross-source disagreement is resolved at read time
@@ -615,7 +617,7 @@ by `DataScope` + as-of + institution through `app/services/market_data.py`, and 
   additive_bps / assumption_note + rationale) enter `package_digest` and do not rewrite the
   methodology register. Split QA: `rates_qa_passed` gates approve/submit/publish of rates;
   `curves_qa_passed` is advisory for rates publish (curve scopes omitted when false). Quant
-  lib `app/domain/curves/` is pure. Nightly job behind `DESK_CAPTURE_ENABLED`.
+  lib `app/market_data/domain/curves/` is pure. Nightly job behind `DESK_CAPTURE_ENABLED`.
   **Entitlements (spec §10):** `market_data_entitlements` grants org × dataset (tiers
   core/standard/premium); default standard when no rows; publish + market-data reads filter
   AEQ curves / GHS indices accordingly. The credit curve `AEQ.GHS.CORP` is built from liquid
@@ -1002,7 +1004,7 @@ handler marks a newer job succeeded with `progress={"status":"skipped",...}`.
 
 ## 4. Findings infrastructure
 
-Generic, reusable workflow — verified in `app/models/risk.py` and `app/services/findings.py`:
+Generic, reusable workflow — verified in `app/case/models/risk.py` and `app/case/service/findings.py`:
 
 - `risk_findings` (`RiskFinding`): tenant + case scoped; `risk_type` (allow-list in
   `app/domain/risk_constants.py::RISK_TYPES`), `severity` (`low|medium|high|critical`), `status`
@@ -1011,13 +1013,13 @@ Generic, reusable workflow — verified in `app/models/risk.py` and `app/service
 - `risk_finding_evidence` (`RiskFindingEvidence`): per-finding evidence rows with optional
   document/chunk references and a free-form `locator` JSON (source_type, label, `source_url`
   deep link, record ids, `input_hash`).
-- Service helpers in `app/services/findings.py`: `get_finding_or_404`, `list_findings`,
+- Service helpers in `app/case/service/findings.py`: `get_finding_or_404`, `list_findings`,
   `list_case_findings`, `create_case_finding`, `update_finding` / `apply_finding_update`
   (validates status transitions, requires disposition reason for dismissal, stamps
   `reviewed_by`/`reviewed_at` into `details`, emits `finding.status_changed`),
   `is_liquidity_workflow_finding`, `list_finding_evidence`.
 
-How `app/services/liquidity.py` publishes findings (the template for new engines):
+How `app/case/service/liquidity.py` publishes findings (the template for new engines):
 
 1. `calculate_metrics(periods)` — pure, deterministic; returns metrics plus a list of "concern"
    dicts (rule_id, severity, title, summary, rationale, affected periods, metric keys).
@@ -1343,9 +1345,10 @@ backfill are described in the [quick start](README.md#quick-start).
   `reverse_stress`); STRESS-PACK return (family `stress`, event-driven); IFRS 9 ECL
   ([assumption and coverage contract](#ecl-assumption-and-coverage-contract)) +
   CRM haircuts (`crm_collateral` facts, Basel ¶151 code defaults +
-  `crm-haircuts` register); ICAAP capital plan + quarterly ILAAP snapshots; examiner role
-  (ladder position analyst > examiner > viewer — reads everything, no mutation gate admits
-  it). LAS-QUARTERLY is registered for preparation under the
+  `crm-haircuts` register); ICAAP capital plan + quarterly ILAAP snapshots; read-only
+  examiner evidence under the
+  [examiner evidence authority contract](backend/docs/examiner_evidence_enforcement_rollout.md).
+  LAS-QUARTERLY is registered for preparation under the
   [instrument-status contract](docs/regulatory_reporting.md#5b-reporting-date-standing-rules)
   and generates `template_pending` until the official form lands (never infer a BoG layout);
   the monthly balance-sheet + P&L pack is
@@ -1384,7 +1387,7 @@ Supplied exposures with zero base RWA still produce losses and RWA deltas;
 bottom-up engine without exposures refuses as missing input; enterprise stress
 omits that overlay for a matching empty book.
 
-The IFRS 9 model (`backend/app/domain/capital/ecl.py`) runs only when staged
+The IFRS 9 model (`backend/app/capital/domain/ecl.py`) runs only when staged
 `ecl_exposure` facts and an effective `ecl-assumptions` register both exist. It
 is a what-if and stress estimate: Tier 2 always carries the bank's booked
 general provisions, the figure of record, in capital runs, forecasts and
@@ -1452,7 +1455,7 @@ Current calculation versions are owned by the
 [authority registry](backend/app/domain/authority/registry.py) and the engines'
 `ENGINE_VERSION` constants. New versions append runs; stored inputs, hashes and
 results of historical runs remain unchanged. Regression evidence lives in
-`backend/tests/services/test_ecl_and_crm.py` and
+`backend/tests/capital/service/test_ecl_and_crm.py` and
 `backend/tests/stress/domain/test_stress_orchestrator.py`.
 
 ### Governed forecast assumptions

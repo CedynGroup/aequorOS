@@ -45,10 +45,10 @@ from pathlib import Path
 
 import pytest
 
-from app.domain.curves.calendars import USA, BusinessDayConvention, add_calendar_months
-from app.domain.curves.conventions import DayCount
-from app.domain.curves.instruments import DepositHelper, SwapHelper
-from app.domain.curves.multicurve import (
+from app.market_data.domain.curves.calendars import USA, BusinessDayConvention, add_calendar_months
+from app.market_data.domain.curves.conventions import DayCount
+from app.market_data.domain.curves.instruments import DepositHelper, SwapHelper
+from app.market_data.domain.curves.multicurve import (
     MarketQuote,
     SolvedCurve,
     build_curve_set,
@@ -110,9 +110,7 @@ def _solved_from_dates(
     valuation: date, pairs: list[tuple[date, float]], interpolation: str
 ) -> SolvedCurve:
     dates = tuple(day for day, _ in pairs)
-    zeros = tuple(
-        -math.log(df) / ((day - valuation).days / 365.0) for day, df in pairs
-    )
+    zeros = tuple(-math.log(df) / ((day - valuation).days / 365.0) for day, df in pairs)
     return SolvedCurve(valuation, dates, zeros, interpolation=interpolation)
 
 
@@ -141,9 +139,7 @@ def _reproduce_grid(curve: SolvedCurve, name: str) -> tuple[float, float, bool]:
     max_df = 0.0
     max_yield = 0.0
     dates_ok = True
-    for produced_row, (start, end, period_df, yield_value) in zip(
-        produced.rows, grid, strict=True
-    ):
+    for produced_row, (start, end, period_df, yield_value) in zip(produced.rows, grid, strict=True):
         if produced_row.start != start or produced_row.end != end:
             dates_ok = False
         max_df = max(max_df, abs(produced_row.discount_factor - period_df))
@@ -223,10 +219,7 @@ def _closed_loop_recovery(name: str) -> float:
     """Imply par swap/deposit quotes from the pillar DFs, re-bootstrap, recover DFs."""
     by_date = {day: df for _, day, df in _load_pillars(name)}
     deposits = [DepositHelper(t, USA) for t in ("1M", "2M", "3M", "6M", "9M")]
-    swaps = [
-        SwapHelper(t, USA)
-        for t in ("1Y", "2Y", "3Y", "5Y", "7Y", "10Y", "15Y", "20Y", "30Y")
-    ]
+    swaps = [SwapHelper(t, USA) for t in ("1Y", "2Y", "3Y", "5Y", "7Y", "10Y", "15Y", "20Y", "30Y")]
     helpers = [*deposits, *swaps]
     node_dates = sorted(helper.pillar_date(USA, PILLAR_BASE) for helper in helpers)
     source = _solved_from_dates(
@@ -270,8 +263,10 @@ def _pillar_tab_cross_error(name: str) -> float:
     spot = USA.spot_date(AS_OF)
     pairs: list[tuple[date, float]] = []
     for tenor, _fixture_date, df in _load_pillars(name):
-        node = USA.advance(AS_OF, 1) if tenor == "ON" else (
-            spot if tenor == "TN" else USA.add_tenor(spot, tenor)
+        node = (
+            USA.advance(AS_OF, 1)
+            if tenor == "ON"
+            else (spot if tenor == "TN" else USA.add_tenor(spot, tenor))
         )
         if node <= AS_OF:
             continue
@@ -295,25 +290,20 @@ def test_print_benchmark_table() -> None:
         "=" * 92,
     ]
     lines.append(
-        f"{'curve':10}{'grid-math maxDF':>18}{'grid-math maxY(bps)':>22}"
-        f"{'closed-loop maxDF':>20}"
+        f"{'curve':10}{'grid-math maxDF':>18}{'grid-math maxY(bps)':>22}{'closed-loop maxDF':>20}"
     )
     for name in ("curve_1", "3m_sofr"):
         curve = _grid_discount_curve(name)
         max_df, max_yield, _ = _reproduce_grid(curve, name)
         recovery = _closed_loop_recovery(name)
-        lines.append(
-            f"{name:10}{max_df:>18.2e}{max_yield * 1e4:>22.4f}{recovery:>20.2e}"
-        )
+        lines.append(f"{name:10}{max_df:>18.2e}{max_yield * 1e4:>22.4f}{recovery:>20.2e}")
     lines.append("")
     lines.append("Sparse-node densification (16 nodes sampled from the grid curve):")
     lines.append(f"{'curve':10}{'interp':18}{'maxDF':>14}{'maxY(bps)':>14}")
     for name in ("curve_1", "3m_sofr"):
         for interpolation in _SPARSE_INTERP:
             df_error, yield_error = _sparse_reproduction(name, interpolation)
-            lines.append(
-                f"{name:10}{interpolation:18}{df_error:>14.2e}{yield_error * 1e4:>14.2f}"
-            )
+            lines.append(f"{name:10}{interpolation:18}{df_error:>14.2e}{yield_error * 1e4:>14.2f}")
     lines.append("")
     lines.append(
         "Fixture pillar-tab -> grid cross-reproduction (documented inconsistency): "

@@ -3,7 +3,7 @@
 /**
  * DPD bucket roll rates as a CSS-table heatmap. It is a table of tinted cells,
  * not a chart: no chart type is registered for a heatmap in
- * `components/bi/EChartCanvas.tsx`, and faking one out of a scatter would cost a
+ * `features/bi/components/EChartCanvas.tsx`, and faking one out of a scatter would cost a
  * runtime and read worse. Forward rolls tint
  * critical scaled by rate; cures tint success; empty cells stay plain —
  * a bucket with no opening exposure has NO rate, never 0.0%.

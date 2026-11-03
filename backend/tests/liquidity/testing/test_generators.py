@@ -6,7 +6,7 @@ from decimal import Decimal
 from hypothesis import given
 from hypothesis import strategies as st
 
-from app.domain.liquidity.engine import MONEY, compute_currency_gaps, compute_lcr, compute_nsfr
+from app.liquidity.domain.engine import MONEY, compute_currency_gaps, compute_lcr, compute_nsfr
 from tests.liquidity.testing.assertions import (
     TOLERANCE,
     assert_ladder_totals,

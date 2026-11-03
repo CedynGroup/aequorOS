@@ -111,7 +111,7 @@ from KNOWN_DEFECTS`), as the layer is designed to force.
    the nested single-foreign-child cases included); generative layer against
    the disposable Postgres: **2 passed** (46.73s).
 
-The focused hermetic regression `tests/api/test_system_of_record_bank_scope.py`
+The focused hermetic regression `tests/data_engine/api/test_system_of_record_bank_scope.py`
 contains three tests covering declaration approve/revoke, withdrawal approval
 of pending and applied sibling rows, withdrawal reversal, and a withdrawal
 request citing a foreign declaration. Every foreign refusal checks unchanged

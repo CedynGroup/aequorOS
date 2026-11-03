@@ -17,9 +17,12 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
+from app.liquidity.schemas.regulatory_liquidity import RegulatoryRunCreate
+from app.liquidity.service import regulatory_liquidity
 from app.models import (
     Bank,
     BankReportingPeriod,
+    RegulatoryArtifactVersion,
     RegulatoryPackage,
     RegulatoryPackageArtifact,
 )
@@ -33,8 +36,7 @@ from app.reporting.service.templates import (
     CURRENCY_UNIT_NOTE,
     get_template,
 )
-from app.schemas.regulatory_liquidity import RegulatoryRunCreate
-from app.services import regulatory_liquidity
+from app.storage.public import DocumentBinding, DocumentFamily, find_sealed_document
 from tests.fixtures.canonical_bank_fixture import (
     DEMO_ORG_ID,
     DEMO_USER_ID,
@@ -43,6 +45,7 @@ from tests.fixtures.canonical_bank_fixture import (
 )
 from tests.support.factories.canonical import seed_canonical_fixture
 from tests.support.inmemory_storage import InMemoryStorageClient
+from tests.support.sealed_documents import published_bytes
 
 pytestmark = pytest.mark.usefixtures("return_generation_authority")
 
@@ -146,11 +149,7 @@ def _artifact_count(db: Session, package_id: UUID) -> int:
 def _read_output(db: Session, storage: InMemoryStorageClient, object_path: str) -> bytes:
     slug = db.scalar(select(Bank.storage_slug).where(Bank.id == SAMPLE_BANK_ID))
     assert slug, "export_package assigns the bank storage slug on first use"
-    for obj in storage.list(slug, "outputs"):
-        if obj.location.object_path == object_path:
-            _, stream = storage.read(obj.location)
-            return stream.read()
-    raise AssertionError(f"No stored object at {object_path}")
+    return published_bytes(db, storage, slug=slug, context_path=object_path)
 
 
 def test_export_all_kinds_upserts_artifacts_with_stable_checksums(
@@ -187,6 +186,40 @@ def test_export_all_kinds_upserts_artifacts_with_stable_checksums(
         assert again.checksum_sha256 == first_checksums[kind]
     db_session.commit()
     assert _artifact_count(db_session, package.id) == 3
+
+
+def test_every_export_binds_its_archived_version_to_the_catalogue(
+    db_session: Session, storage: InMemoryStorageClient
+) -> None:
+    """The export is a publication: one identity, one catalogue row, one binding.
+
+    Before slice 2 the exporter wrote the document path and recorded whatever
+    provider version came back, so "the artifact as filed" moved whenever the
+    path was written again. The version row now names a catalogue identity whose
+    key cannot be overwritten.
+    """
+    _seed_with_baseline_run(db_session)
+    package = _generate(db_session)
+    artifact = export_package(db_session, MAKER, package, "pdf")
+    db_session.commit()
+
+    [version] = db_session.scalars(
+        select(RegulatoryArtifactVersion).where(RegulatoryArtifactVersion.package_id == package.id)
+    )
+    assert version.object_path == artifact.object_path
+    assert version.checksum_sha256 == artifact.checksum_sha256
+
+    document = find_sealed_document(
+        db_session,
+        version.organization_id,
+        package.bank_id,
+        DocumentBinding(DocumentFamily.ARTIFACT, version.id),
+    )
+    assert document is not None, "an exported revision is bound to its published identity"
+    assert document.sha256 == version.checksum_sha256
+    assert document.byte_length == version.size_bytes
+    assert document.context_path == artifact.object_path
+    assert document.physical_key.startswith("sealed/v1/")
 
 
 def test_xlsx_round_trip_metadata_headers_and_totals(
@@ -275,13 +308,9 @@ def test_sdi_working_xlsx_contains_live_formula_calculations(
 
     artifact = export_package(db_session, MAKER, package, "xlsx_working")
     assert bank.storage_slug is not None
-    stored = next(
-        obj
-        for obj in storage.list(bank.storage_slug, "outputs")
-        if obj.location.object_path == artifact.object_path
+    payload = published_bytes(
+        db_session, storage, slug=bank.storage_slug, context_path=artifact.object_path
     )
-    _, stream = storage.read(stored.location)
-    payload = stream.read()
     workbook = load_workbook(io.BytesIO(payload), data_only=False)
 
     assert artifact.kind == "xlsx_working"

@@ -14,6 +14,7 @@ import type {
   DatabaseConnectionRead,
   DatabaseConnectionTestResult,
 } from "@aequoros/risk-service-api";
+import { useDataPermission } from "@/lib/api/dataAccess";
 import { isApiError } from "@/lib/api/client";
 import {
   useCreateDatabaseConnection,
@@ -36,6 +37,7 @@ export default function AddConnectionPanel({
   existingNames: string[];
   onDone: () => void;
 }) {
+  const canValidate = useDataPermission(bankId, "validate", "restricted");
   const create = useCreateDatabaseConnection(bankId);
   const test = useTestDatabaseConnection(bankId);
 
@@ -73,7 +75,11 @@ export default function AddConnectionPanel({
     try {
       const connection = await create.mutateAsync(buildCreatePayload(form));
       setCreated(connection);
-      if (!connection.validationError && connection.status !== "TESTING") {
+      if (
+        canValidate &&
+        !connection.validationError &&
+        connection.status !== "TESTING"
+      ) {
         setTestResult(await test.mutateAsync(connection.id));
       }
     } catch (caught) {
@@ -138,7 +144,9 @@ export default function AddConnectionPanel({
               ) : (
                 <Plug size={15} aria-hidden />
               )}
-              Create, validate &amp; test connection
+              {canValidate
+                ? "Create, validate & test connection"
+                : "Create connection"}
             </button>
             {(credentialsIncomplete || snowflakeConfigIncomplete) && (
               <span className="text-caption text-slate">
@@ -166,6 +174,12 @@ export default function AddConnectionPanel({
             </div>
           )}
 
+          {!canValidate && !created.validationError && (
+            <p role="status" className="text-caption text-slate">
+              Connection saved. Live test omitted: requires DATA · Restricted ·
+              Validate.
+            </p>
+          )}
           {testResult && (
             <div
               className={`rounded border px-4 py-3 space-y-2 ${

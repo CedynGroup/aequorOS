@@ -98,7 +98,7 @@ Each rule is stated in full in the document the index names.
   with each engine migration. [CODEBASE_CONVENTIONS.md §1](CODEBASE_CONVENTIONS.md#data-truth-in-calculations)
   owns the contracts and migration gates.
 - **The bank's booked IFRS 9 allowance is the capital figure of record.** Modelled ECL
-  (`app/domain/capital/ecl.py`) is a what-if and stress estimate: never substitute it for
+  (`app/capital/domain/ecl.py`) is a what-if and stress estimate: never substitute it for
   booked general provisions in Tier 2; a stressed increase is a CET1 charge.
 - **Periodic reporting dates are the regulator's.** They come from the `ReturnDefinition`
   through `app/reporting/service/anchors.py`, never from
@@ -110,7 +110,7 @@ Each rule is stated in full in the document the index names.
   identity in matching logic or display code. `bog_`-prefixed fact categories and
   the `refinitiv` vendor id are load-bearing keys, not leaks — never rename them.
 - **Market data has one writer.** Persist only through `pull_runner.execute_pull`,
-  read only through `app/services/market_data.py`, keep vendor credentials only in
+  read only through `app/market_data/service/market_data.py`, keep vendor credentials only in
   `EncryptedDbVault`, and never let a raw vendor error reach a bank-facing surface.
 - **Connected bank keys govern object access.** Use `StorageClient` and
   `app/core/key_management`; unavailable connected keys or legacy plaintext refuse
@@ -165,7 +165,7 @@ new topic, add a row here.
 | TLS enforcement and bank-reviewable transport evidence             | [backend/docs/transport_security.md](backend/docs/transport_security.md)                                                                 |
 | Bank-held keys, onboarding, rotation and backup recovery           | [backend/docs/bank_encryption.md](backend/docs/bank_encryption.md)                                                                       |
 | Database institution ownership and deliberate reference exclusions | [backend/docs/database_integrity.md](backend/docs/database_integrity.md)                                                                 |
-| Database role matrix and deployment handoff for Eric           | [docs/ops/database-roles.md](docs/ops/database-roles.md)                                                                                 |
+| Database role matrix and droplet deployment runbook           | [docs/ops/database-roles.md](docs/ops/database-roles.md)                                                                                 |
 | Audit chains, filed-input seals and compliance retention           | [backend/docs/tamper_evident_records.md](backend/docs/tamper_evident_records.md)                                                         |
 | Coolify deployment rules                                           | [deploy/README.md](deploy/README.md#coolify-compose-rules)                                                                               |
 | Host change to `bank.aequoros.com`                                 | [backend/dashboard/README.md](backend/dashboard/README.md#deploy-to-bankaequoroscom)                                                     |

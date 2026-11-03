@@ -318,6 +318,11 @@ def narrowed_credit_executor(db_client: TestClient, request: pytest.FixtureReque
             module_scope=module,
             sensitivity_scope=SensitivityScope.CONFIDENTIAL,
         )
+    _grant(
+        role_bundle=RoleBundle.ANALYST,
+        module_scope=ModuleScope.DATA,
+        sensitivity_scope=SensitivityScope.RESTRICTED,
+    )
     return _grant(
         role_bundle=RoleBundle.ANALYST,
         sensitivity_scope=SensitivityScope.CONFIDENTIAL,

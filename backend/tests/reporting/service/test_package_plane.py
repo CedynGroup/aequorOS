@@ -18,16 +18,20 @@ Four properties this suite exists to keep true:
 
 from __future__ import annotations
 
+import asyncio
+import hashlib
+from collections.abc import AsyncIterable
 from dataclasses import dataclass, replace
 from datetime import UTC, date, datetime
 from decimal import Decimal
-from typing import Any
+from typing import Any, cast
 from uuid import UUID
 
 import pytest
 from fastapi import HTTPException
 from sqlalchemy import select
 from sqlalchemy.orm import Session
+from starlette.responses import StreamingResponse
 
 from app.api.deps import TenantContext
 from app.attestation.service import digests, register_state
@@ -38,6 +42,7 @@ from app.models import (
     RegulatoryPackageArtifact,
     ReturnSigningPolicy,
 )
+from app.reporting.schemas.packages import PackageAttachmentRead
 from app.reporting.service import (
     attachments as package_attachments,
 )
@@ -50,6 +55,7 @@ from app.reporting.service import (
 )
 from app.reporting.service import workflow as reporting_workflow
 from app.reporting.service.registry import REGISTRY, get_definition
+from app.storage.client import StorageClient
 from tests.fixtures.canonical_bank_fixture import (
     DEMO_ORG_ID,
     DEMO_USER_ID,
@@ -1119,3 +1125,114 @@ def test_a_rehearsal_and_a_real_filing_are_separate_version_chains(
     assert prior is None, "a rehearsal must not retire the real filing"
     assert version is None
     assert real.status != "superseded"
+
+
+# --- 6. the download resolves the filed bytes, and proves them --------------
+
+
+async def _drain(response: StreamingResponse) -> bytes:
+    """Read a streaming route's body, which Starlette serves from a thread pool."""
+    body = cast(AsyncIterable[bytes], response.body_iterator)
+    return b"".join([chunk async for chunk in body])
+
+
+def _upload_a_document(
+    db: Session, package: RegulatoryPackage, storage: StorageClient
+) -> PackageAttachmentRead:
+    """Attach one supporting document through the real upload path."""
+    return package_attachments.upload_package_attachment(
+        db,
+        MAKER,
+        _bank(db),
+        package,
+        storage,
+        kind="supporting_document",
+        title="Board resolution",
+        filename="resolution.pdf",
+        content=b"%PDF-1.7\nboard resolution\n%%EOF\n",
+        attributes={},
+        max_bytes=25_000_000,
+    )
+
+
+@pytest.mark.parametrize("examiner", [False, True])
+def test_a_package_attachment_download_serves_the_bytes_the_row_names(
+    db_session: Session,
+    examiner: bool,
+) -> None:
+    from app.api.deps import PackageAccess  # noqa: PLC0415
+    from app.reporting.api.manage_package_attachments import (  # noqa: PLC0415
+        download_package_attachment,
+    )
+    from tests.support.inmemory_storage import InMemoryStorageClient  # noqa: PLC0415
+
+    materialize_canonical_test_book(db_session)
+    package = _package(db_session)
+    storage = InMemoryStorageClient()
+    uploaded = _upload_a_document(db_session, package, storage)
+
+    ctx = (
+        TenantContext(
+            MAKER.organization_id,
+            impersonation_context="inspection",
+            actor_operator="staff@example.test",
+        )
+        if examiner
+        else MAKER
+    )
+    response = download_package_attachment(
+        bank_id=package.bank_id,
+        package_id=package.id,
+        attachment_id=uploaded.id,
+        db=db_session,
+        access=PackageAccess(ctx=ctx, bank=_bank(db_session), package=package, examiner=examiner),
+        storage=storage,
+    )
+    body = asyncio.run(_drain(response))
+    assert hashlib.sha256(body).hexdigest() == uploaded.sha256
+    assert response.headers["content-disposition"].startswith("attachment; filename=")
+
+
+def test_a_tampered_package_attachment_is_refused_rather_than_served(
+    db_session: Session,
+) -> None:
+    """The gap this closes: the download used no version and checked no hash.
+
+    Before slice 2 an attachment replaced under its path was served as the filed
+    document. The read now proves every byte against the identity the row (and,
+    once bound, the catalogue) records, so substitution is a 404 rather than a
+    download nobody can distinguish from the real one.
+    """
+    from app.api.deps import PackageAccess  # noqa: PLC0415
+    from app.reporting.api.manage_package_attachments import (  # noqa: PLC0415
+        download_package_attachment,
+    )
+    from app.storage.client import StorageLocation  # noqa: PLC0415
+    from tests.support.inmemory_storage import InMemoryStorageClient  # noqa: PLC0415
+    from tests.support.sealed_documents import sealed_document  # noqa: PLC0415
+
+    materialize_canonical_test_book(db_session)
+    package = _package(db_session)
+    storage = InMemoryStorageClient()
+    uploaded = _upload_a_document(db_session, package, storage)
+
+    from app.models import RegulatoryPackageAttachment  # noqa: PLC0415
+
+    row = db_session.get(RegulatoryPackageAttachment, uploaded.id)
+    assert row is not None
+    bank = _bank(db_session)
+    assert bank.storage_slug is not None
+    document = sealed_document(db_session, slug=bank.storage_slug, context_path=row.object_path)
+    location = StorageLocation(document.storage_slug, "outputs", document.physical_key)
+    storage.corrupt(location, b"% substituted")
+
+    with pytest.raises(HTTPException) as excinfo:
+        download_package_attachment(
+            bank_id=package.bank_id,
+            package_id=package.id,
+            attachment_id=uploaded.id,
+            db=db_session,
+            access=PackageAccess(ctx=MAKER, bank=bank, package=package),
+            storage=storage,
+        )
+    assert excinfo.value.status_code == 404

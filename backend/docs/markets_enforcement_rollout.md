@@ -223,5 +223,6 @@ Attach all of the following before deployment:
    spread.
 
 The opt-in real-data API suite (`REAL_DATA_DATABASE_URL`) exercises these
-routes as the primary's real administrator; it now requires that identity to
-hold the Markets rows above, exactly as a deployment does.
+routes as its configured administrator; that identity must hold the Markets
+rows above, exactly as a deployment does. Database selection and primary access
+follow the [backend test database guide](../README.md#test-databases-and-the-primary-database).

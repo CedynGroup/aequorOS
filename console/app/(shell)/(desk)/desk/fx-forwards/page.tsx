@@ -34,7 +34,7 @@ const DEFAULT_TENORS = '1M, 3M, 6M, 12M';
 
 /**
  * FX-forward day counts — the three DayCount enum members the resolver accepts
- * (app/services/market_desk/fx_forward.py::_resolve_day_count matches on the
+ * (app/market_data/service/market_desk/fx_forward.py::_resolve_day_count matches on the
  * enum NAME). Deliberately NOT the curve DAYCOUNT_OPTIONS, whose 30/360 and
  * ACT/ACT values the FX resolver would reject.
  */

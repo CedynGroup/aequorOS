@@ -75,7 +75,7 @@ Module shorthand: **LIQ** (Liquidity), **CAP** (Basel Capital), **IRRBB**, **FX*
 | ------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Auth                                 | Zero-trust JWT (HS256), Argon2id passwords, **own-OIDC SSO** (no third-party broker; built 2026-07-20), refresh rotation                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                             | `app/core/security.py`, `dashboard/auth.ts`                                                                                                                                                                                                                                              |
 | SSO self-service (single connection) | **BUILT.** Per-org `sso_connections` row: issuer + client id + AES-256-GCM-sealed secret (write-only), allowed email domains, enable toggle — managed in **Access → Authentication** with organization-wide ACCOUNT/restricted `administer` authority. Backend verifies id_tokens against the connection issuer's JWKS (discovery-based, RS256/ES256, `email_verified` + domain enforcement); the uniquely selected verified connection is the sole organization authority for subject/email lookup, JIT records, and issued tokens. Ambiguous issuer/audience routing fails closed. Dashboard NextAuth loads the client config through an `SSO_INTERNAL_KEY`-gated internal endpoint. Pre-provisioned users by default; **request-access JIT is BUILT as a per-connection opt-in** (`jit_enabled`): first sign-in from an allowed domain records a **deactivated** stub and returns 403 "awaiting administrator approval" — zero access until an Org Owner approves it through the same complete scalar scoped-grant flow in Access → Members. Approval follows the [atomic activation contract](../backend/docs/authorization_foundation.md#scoped-grant-administration-and-members-built-2026-08-29). Refused at config AND login time without a non-empty domain list. One connection per org / one enabled per deployment — Phase 2 lifts this. | `app/identity/models/sso_connection.py`, `app/identity/service/sso_config.py`, `app/identity/service/authentication.py`, `app/identity/api/auth.py`, `dashboard/components/settings/AuthenticationPanel.tsx`, `dashboard/components/settings/MembersPanel.tsx`, `docs/sso-onboarding.md` |
-| Connection health (bank-IT surface)  | **BUILT** (read-only): Data Engine → Overview aggregates every configured source connection (DB-direct, T24, market-data) with live status, last sync, credential expiry, and plain-language remediation hints                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       | `dashboard/components/data-engine/ConnectionHealthPanel.tsx`                                                                                                                                                                                                                             |
+| Connection health (bank-IT surface)  | **BUILT**: Data Engine → Overview shows connection health and remediation. Visibility and operations follow [Human Data Engine authority](../backend/docs/authorization_foundation.md#human-data-engine-authority) and the [Markets contract](../backend/docs/markets_enforcement_rollout.md#dashboard-controls).                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    | `dashboard/components/data-engine/ConnectionHealthPanel.tsx`                                                                                                                                                                                                                             |
 | Legacy roles                         | The operational rank remains `admin > approver > analyst > examiner > viewer` for compatibility, but migration `202608280046` leaves no persisted `admin`: former admins become `account_admin`, which is outside the ladder.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        | `app/core/security.py:ROLES`, `app/identity/models/user.py:USER_ROLES`                                                                                                                                                                                                                   |
 | Endpoint enforcement                 | Enforced surfaces and exact required grants are owned by the [product rollout contracts](../backend/docs/authorization_foundation.md#product-rollout-boundary). Routes outside those cutovers retain their existing checks.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          | `app/api/deps.py`, module feature and service boundaries                                                                                                                                                                                                                                 |
 | Tenancy                              | Postgres RLS forced on `app.organization_id`; worker and operator database access follow [the role handoff runbook](ops/database-roles.md)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           | `app/db/session.py`, [worker role contract](../ARCHITECTURE.md#3b-live-engine-two-tier-always-fresh-view--immutable-official-runs)                                                                                                                                                       |
@@ -851,6 +851,146 @@ _who may sign in_; provisioning decides _who exists_.
   failing at re-authentication. Bank-IT runbook: `docs/sso-onboarding.md`; roadmap: §15
   Phase 2 (multi-connection + home-realm discovery — extend the existing code, don't
   rebuild).
+
+#### Staff sign-in: Google Workspace (operator plane only)
+
+The console retains authorization-code sign-in with PKCE, state and nonce. The
+operator API independently verifies the signed token's issuer, audience and
+expiry on every request, requires a verified workforce email and an active,
+explicitly provisioned `operator_users` row, and takes the role from that row.
+No sign-in provisions or activates an account; tenant/customer SSO is unchanged.
+
+**Google always requires the signed `hd` claim to exactly equal
+`OPERATOR_OIDC_ALLOWED_DOMAIN`, in addition to the verified email-domain check.**
+The console sends that domain as an authorization hint, which grants no access
+by itself. A consumer Google account can have a verified work-domain email;
+email alone does not establish Workspace membership. **Rollout consequence:**
+Google tokens without a matching `hd` now refuse access even when the optional
+Directory gates are disabled. Generic OIDC issuers retain their existing path.
+[Google hosted-domain guidance](https://developers.google.com/identity/openid-connect/openid-connect).
+
+**Staff password sign-in stays fully available, including its existing eight-hour
+sessions, roles and throttling.** Google suspension, group removal and 2SV policy
+changes affect Google OIDC access; deactivate the staff row to revoke both paths.
+Password rejection remains a later, separate rollout after every teammate's
+Google sign-in is confirmed. This is not yet an SSO-only staff plane.
+
+| Setting                                 | Default        | Behavior                                                                                                                                                                                                                 |
+| --------------------------------------- | -------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `OPERATOR_OIDC_ISSUER`                  | unset          | Google is `https://accounts.google.com`; existing generic issuers remain supported.                                                                                                                                      |
+| `OPERATOR_OIDC_CLIENT_ID`               | unset          | Same web OAuth client ID on console and operator API.                                                                                                                                                                    |
+| `OPERATOR_OIDC_CLIENT_SECRET`           | unset          | Console server only; never browser JavaScript.                                                                                                                                                                           |
+| `OPERATOR_OIDC_ALLOWED_DOMAIN`          | `aequoros.com` | Verified email domain and mandatory signed Google `hd`; set explicitly on both services.                                                                                                                                 |
+| `OPERATOR_OIDC_ALLOWED_GROUPS`          | `[]`           | Google issuer or test mode only; ignored for generic OIDC. JSON array of allowed group emails; nonempty requires live unsuspended status and membership in any allowed group. Empty disables this gate.                  |
+| `OPERATOR_GOOGLE_CREDENTIALS_FILE`      | unset          | API-only protected service-account JSON file outside the repository.                                                                                                                                                     |
+| `OPERATOR_GOOGLE_DELEGATED_ADMIN`       | unset          | Workspace administrator impersonated for read-only user and group checks.                                                                                                                                                |
+| `OPERATOR_GOOGLE_REQUIRE_2SV`           | `false`        | Google issuer or test mode only; ignored for generic OIDC. Require both Directory `isEnrolledIn2Sv=true` and `isEnforcedIn2Sv=true`, even without groups. Also checks suspension.                                        |
+| `OPERATOR_OIDC_SESSION_MAX_AGE_SECONDS` | `0` (disabled) | Google issuer or test mode only; ignored for generic OIDC. Lifetime from signed `iat`, at most 43,200 seconds. Set e.g. `1800` on both services. API and cookie independently enforce it without extending token expiry. |
+| `OPERATOR_OIDC_GOOGLE_POLICY_TEST_MODE` | `false`        | Apply the Google domain, Directory and session-cap policy to a stand-in issuer. Local/test only; refused in deployed environments. Set on both services only for isolated tests.                                         |
+
+The Directory 2SV gate deliberately requires **enrollment and enforcement**.
+Enrollment alone means a user has configured 2SV; requiring enforcement as well
+prevents admission when Workspace policy does not require its continued use.
+Both flags are account-policy evidence, **not proof that a particular token or
+session completed MFA or authenticated recently**. The captain must configure
+Workspace 2-Step Verification policy independently of this default-off gate.
+[Directory user fields](https://developers.google.com/workspace/admin/directory/reference/rest/v1/users).
+
+When either Directory gate is enabled, the shared request boundary fetches
+`users.get` exactly once by the verified immutable Google `sub`, checks
+suspension and any required 2SV flags, then checks `members.hasMember` if groups
+are configured. Both lookups use the immutable subject, never the email address,
+so renaming an account or reassigning its old address cannot redirect the checks.
+Reads and writes using already-issued tokens pass through the same live boundary.
+The next request refuses a suspended account or removed membership once Directory
+reports that change. Missing/invalid subjects, missing required 2SV flags,
+malformed responses, absent users/credentials, timeouts and encountered API errors
+deny access; there is no fallback to the staff row alone. Group membership
+preserves the app-assigned role and never changes staff powers.
+
+User status, 2SV flags and membership are **never cached**. Only delegated OAuth
+access tokens are reused in process until shortly before their reported expiry;
+credential fingerprints and provider refusals invalidate reuse. With both gates
+off, no Directory request is made. With either enabled, plan for the live
+fail-closed dependency and Google's propagation timing, including nested groups.
+[User lookup](https://developers.google.com/workspace/admin/directory/reference/rest/v1/users/get),
+[membership lookup](https://developers.google.com/workspace/admin/directory/reference/rest/v1/members/hasMember).
+
+The application does **not request or require `amr`, `acr` or `auth_time` from
+Google**. Google's public discovery document does not advertise those claims;
+optional token evidence is not the basis for these admission controls.
+`detail.oidc_assurance` on operator audit entries records those raw verified claims
+only when present, otherwise `{}`; tokens and Directory credentials are never
+logged. The old `OPERATOR_OIDC_REQUIRE_HOSTED_DOMAIN`,
+`OPERATOR_OIDC_REQUIRE_ASSURANCE`, `OPERATOR_OIDC_REQUIRED_AMR` and
+`OPERATOR_OIDC_STEP_UP_MAX_AGE_SECONDS` settings were removed; remove them from
+existing deployment configuration. There is no Google `auth_time` write gate or
+essential-claims request. Shorter sessions still use signed `iat`, which is token
+issuance time and must not be treated as recent user authentication.
+[Google discovery](https://accounts.google.com/.well-known/openid-configuration).
+
+Workspace and Cloud setup (captain/deployment owner):
+
+1. Configure the workforce OAuth audience and a **Web application** client in
+   Google Cloud. Register the exact HTTPS console `/api/auth/callback` URI,
+   e.g. `https://console.aequoros.com/api/auth/callback`. Register the local URI
+   separately if needed. Set issuer/client ID on both services, client secret
+   only on the console, and trusted `CONSOLE_BASE_URL` / `OPERATOR_API_URL`.
+2. Require enrollment and enforcement under Workspace Admin → Security →
+   Authentication → 2-Step Verification for all staff organizational units or
+   policy groups. Confirm each teammate's enrollment before rollout. Review
+   recovery and protected emergency administrator access separately.
+   [Workspace 2-Step Verification rollout](https://knowledge.workspace.google.com/admin/security/deploy-2-step-verification).
+3. Provision active staff rows with intended app roles. Create the allowed
+   Workspace groups, restrict membership administration, and add staff. Confirm
+   real Google tokens contain the expected signed `hd` before rollout; there is
+   no hosted-domain bypass switch.
+4. Enable **Admin SDK API**. Create a dedicated service account with domain-wide
+   delegation. In Workspace Admin → Security → Access and data control → API
+   controls → Manage Domain Wide Delegation, authorize its numeric client ID for
+   `https://www.googleapis.com/auth/admin.directory.group.member.readonly` and
+   `https://www.googleapis.com/auth/admin.directory.user.readonly`. Choose a
+   delegated admin whose privileges expose suspension and both 2SV flags in the
+   administrator view of `users.get`. Missing/redacted flags deny when 2SV is
+   required; do not infer success. Mount the credential read-only using deployment
+   secret management and set the API-only credential/admin settings. Rotate it
+   under the operational process; no console Directory credential is needed.
+   [Delegation setup](https://developers.google.com/identity/protocols/oauth2/service-account).
+5. Enable groups and `OPERATOR_GOOGLE_REQUIRE_2SV` separately. Verify an active
+   enrolled/enforced member, a nonmember, a suspended user, a user missing either
+   2SV flag, an inactive staff row and an unavailable Directory connection.
+   Reuse an existing token while changing status/membership and confirm the next
+   request refuses access. Confirm the provisioned app role remains unchanged.
+6. Roll out the optional signed-`iat` session cap on both services. Verify normal
+   sign-in, expiry and password sessions before enabling it company-wide.
+
+Automated coverage uses local RSA keys/JWKS and Google-shaped signed tokens at
+the real backend verifier, an in-memory Directory with live refusal cases, and
+console login/callback routes against an in-process HTTP OIDC provider. The
+console test verifies state, nonce, PKCE exchange, domain hint, cookie cleanup and
+session cap without optional assurance claims or a new CI service. It does not
+run a full browser or Google itself. Actual Workspace OAuth consent, delegation,
+admin field visibility and provider propagation still need an authorized second
+Google identity and Workspace setup before rollout.
+
+For an isolated stand-in provider, set `APP_ENV=local` or `test` and
+`OPERATOR_OIDC_GOOGLE_POLICY_TEST_MODE=true` on both services, with the same mock
+issuer/client ID. The backend uses the existing undeployed environment allow-list;
+the console also requires an explicit local/test environment. Staging, production
+and unknown environments refuse this override. The existing backend OIDC guard
+permits loopback HTTP only in local/test;
+the console additionally requires `NODE_ENV=development` or `test` and
+`TLS_ALLOW_PLAINTEXT=1` for HTTP. The override does not weaken signature
+verification, transport guards or audience checks. Never enable it in
+a deployment. The checked-in console route test needs no container; a full browser
+journey would additionally need a console Playwright harness and disposable staff
+API/provider services, which this console currently lacks.
+
+Follow-ups remain separate: captain-controlled password rejection after teammate
+verification; audited break-glass login with per-use alerting and recovery drills;
+and a separate application-held factor or provider-supported mechanism if recent
+user authentication is required for sensitive actions. No tenant SSO, SCIM or
+staff-power changes are included here.
 
 ### 11.4 JIT + SCIM + verified domains
 

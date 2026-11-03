@@ -9,7 +9,7 @@
  *   SVG, and the legend swatches the module pages render as `<span>` elements.
  *   The values are literal `var(--chart-N)` strings, so the browser resolves them
  *   against the active theme with no JavaScript at all.
- * - **`seriesColor(useChartTokens(), n)`** in `components/bi/echartsTheme.ts`, for
+ * - **`seriesColor(useChartTokens(), n)`** in `features/bi/components/echartsTheme.ts`, for
  *   an ECharts canvas. Canvas2D has no CSS cascade: handing it `var(--chart-1)`
  *   paints NOTHING, and it does so without an error.
  *

@@ -40,8 +40,7 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from decimal import ROUND_HALF_UP, Decimal
 
-from app.domain.authority.outcomes import NotComputable, OutcomeState, outcome
-from app.domain.capital.ecl import (
+from app.capital.domain.ecl import (
     BASE_SCENARIO,
     STRESS_CHARGE_TAX_TREATMENT,
     EclAssumption,
@@ -50,7 +49,7 @@ from app.domain.capital.ecl import (
     EclScenario,
     compute_ecl,
 )
-from app.domain.capital.engine import (
+from app.capital.domain.engine import (
     SHOCK_FX_RWA_MULTIPLIER,
     SHOCK_QUARTERLY_CREDIT_LOSS_M,
     SHOCK_QUARTERLY_INCOME_M,
@@ -61,16 +60,7 @@ from app.domain.capital.engine import (
     has_complete_ecl_coverage,
     run_capital_stress,
 )
-from app.domain.liquidity.engine import (
-    LcrResult,
-    LiquidityFact,
-    LiquidityParams,
-    NsfrResult,
-    apply_liquidity_stress,
-    compute_currency_gaps,
-    compute_lcr,
-    compute_nsfr,
-)
+from app.domain.authority.outcomes import NotComputable, OutcomeState, outcome
 from app.fx.domain.engine import (
     FxPosition,
     NopResult,
@@ -95,6 +85,16 @@ from app.irrbb.domain.engine import (
     compute_eve,
     compute_gap,
     scenario_shifts,
+)
+from app.liquidity.domain.engine import (
+    LcrResult,
+    LiquidityFact,
+    LiquidityParams,
+    NsfrResult,
+    apply_liquidity_stress,
+    compute_currency_gaps,
+    compute_lcr,
+    compute_nsfr,
 )
 from app.stress.domain.concentration import (
     ConcentrationInputs,

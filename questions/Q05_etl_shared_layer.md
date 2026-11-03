@@ -24,7 +24,7 @@ and feeds `translate`. It sees only the adapter's declared record shape, not T24
 internals — so §2.1 holds: adapters still own source knowledge; ETL owns cross-source
 normalization/dedup on the neutral post-extract shape.
 
-**Default I'm proceeding on:** `backend/app/etl/` as a shared, source-agnostic layer
+**Default I'm proceeding on:** `backend/app/data_engine/etl/` as a shared, source-agnostic layer
 invoked between extract and translate; it consumes the adapter's neutral extraction output
 and never imports adapter/source internals. Every op emits lineage (§8.2) + audit (§8.4 /
 `storage.md` §9) and honors §12.5 governance.

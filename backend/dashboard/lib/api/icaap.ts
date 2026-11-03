@@ -792,9 +792,21 @@ export function useUploadIcaapAttachment(
  */
 export function filenameFrom(response: Response, fallback: string): string {
   const disposition = response.headers.get("Content-Disposition") ?? "";
-  return (
-    /filename\*?=(?:UTF-8'')?"?([^";]+)"?/.exec(disposition)?.[1] ?? fallback
+  const filename = /(?:^|;)\s*filename=(?:"([^"]+)"|([^;]+))/i.exec(
+    disposition,
   );
+  const ascii = filename?.[1] ?? filename?.[2]?.trim() ?? fallback;
+  const encoded = /(?:^|;)\s*filename\*=UTF-8''([^;\s]+)/i.exec(
+    disposition,
+  )?.[1];
+  if (encoded) {
+    try {
+      return decodeURIComponent(encoded);
+    } catch {
+      return ascii;
+    }
+  }
+  return ascii;
 }
 
 export function saveBlob(blob: Blob, filename: string): void {

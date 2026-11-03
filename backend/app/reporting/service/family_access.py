@@ -15,41 +15,24 @@ from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.core.authorization import (
+    AuthorizationDecision,
     ConditionCheck,
     ConditionKind,
     DataScope,
+    ExaminerDocumentAuthority,
     InstitutionScope,
     Module,
     Permission,
     ResourceLocator,
     Sensitivity,
 )
+from app.core.return_family_access import GATED, RETURN_GATE, FamilyGate, gate_for
 from app.identity.public import AuthorizationBinding, Bank
 from app.reporting.models.packages import RETURN_FAMILIES, RegulatoryPackage
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
     from app.api.deps import TenantContext  # noqa: PLC0415
 
-
-@dataclass(frozen=True)
-class FamilyGate:
-    """The authority one return family is read and written under."""
-
-    module: Module
-    sensitivity: Sensitivity
-
-
-#: Family overrides to the Regulatory Reporting authority.
-GATED: Final[dict[str, FamilyGate]] = {
-    # The ICAAP filing family. Same module/sensitivity pair as the ICAAP
-    # workspace (``deps._require_icaap_access``), because they are one body of
-    # information: the report is the workspace, frozen.
-    "icaap": FamilyGate(module=Module.CAPITAL, sensitivity=Sensitivity.CONFIDENTIAL),
-}
-
-RETURN_GATE: Final[FamilyGate] = FamilyGate(
-    module=Module.REGULATORY, sensitivity=Sensitivity.RESTRICTED
-)
 
 _DETAIL = "This return requires an active scoped binding for the institution."
 
@@ -83,10 +66,6 @@ _TRANSMISSION_DETAIL = (
 CHAIN_DECISION_GATE: Final[FamilyGate] = FamilyGate(
     module=Module.REGULATORY, sensitivity=Sensitivity.RESTRICTED
 )
-
-
-def gate_for(family: str | None) -> FamilyGate:
-    return GATED.get(family or "", RETURN_GATE)
 
 
 def _not_found() -> HTTPException:
@@ -294,6 +273,32 @@ def require_view(db: Session, ctx: TenantContext, bank: Bank, package: Regulator
     """404 when this principal may not know the package exists."""
     if not can_view(db, ctx, bank, package.return_family):
         raise _not_found()
+
+
+def sealed_document_decision(
+    db: Session, ctx: TenantContext, bank: Bank, family: str | None
+) -> AuthorizationDecision | ExaminerDocumentAuthority:
+    """A fresh whole-institution VIEW decision for reading this family's sealed bytes.
+
+    The storage kernel re-checks the exact module and sensitivity of the decision
+    it is handed, so the returned decision is the authority itself rather than a
+    boolean it could not inspect. A refusal hides the document (404) exactly as
+    the surface-level read does.
+    """
+    from app.identity import public as authorization_service  # noqa: PLC0415
+
+    gate = gate_for(family)
+    decision = authorization_service.document_view_decision(
+        db,
+        ctx,
+        bank_id=bank.id,
+        module=gate.module,
+        sensitivity=gate.sensitivity,
+        surface=f"{family or 'return'}_sealed_document_view",
+    )
+    if not decision.allowed:
+        raise _not_found()
+    return decision
 
 
 def require_permission(  # noqa: PLR0913 - the complete policy tuple is explicit

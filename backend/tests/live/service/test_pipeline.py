@@ -20,17 +20,22 @@ import pytest
 from openpyxl.worksheet.worksheet import Worksheet
 from pydantic import InstanceOf, TypeAdapter
 from sqlalchemy import func, select
-from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.orm import Session
 
 from app import worker
 from app.api.deps import TenantContext
+from app.capital.service import regulatory_capital
+from app.core.authorization import ModuleScope, RoleBundle, SensitivityScope
 from app.core.config import get_settings
+from app.data_engine.domain.ingestion.contracts import EntityMapping, MappingConfig
+from app.data_engine.domain.ingestion.locations import StagedIngestionLocation
+from app.data_engine.schemas.ingestion import IngestionBatchCreate, MappingConfigCreate
+from app.data_engine.service import ingestion
 from app.db.base import utc_now
-from app.domain.ingestion.contracts import EntityMapping, MappingConfig
-from app.domain.ingestion.locations import StagedIngestionLocation
 from app.ftp import service as regulatory_ftp
 from app.fx import service as regulatory_fx
 from app.irrbb.service import regulatory_irr
+from app.liquidity.service import regulatory_liquidity
 from app.live.service import live_refresh_triggers, live_view, pipeline
 from app.live.service.fact_derivation import evaluate_balance_identity
 from app.models import (
@@ -48,9 +53,10 @@ from app.models import (
 )
 from app.reporting.schemas.packages import RegulatoryPackageCreate, RegulatoryPackageRead
 from app.reporting.service import generation
-from app.schemas.ingestion import IngestionBatchCreate, MappingConfigCreate
-from app.services import ingestion, job_queue, regulatory_capital, regulatory_liquidity
+from app.services import job_queue
 from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID, materialize_canonical_test_book
+from tests.support.database import managed_session_factory
+from tests.support.factories.authorization import grant_institution_authority
 from tests.support.factories.canonical import (
     FIXTURE_AS_OF,
     seed_canonical_fixture,
@@ -306,6 +312,7 @@ def test_completed_refresh_does_not_reopen_on_unchanged_summary_read(
 def test_transient_module_failure_obeys_bounded_backoff_then_recovers(
     db_session: Session,
     monkeypatch: pytest.MonkeyPatch,
+    request: pytest.FixtureRequest,
 ) -> None:
     _seed(db_session)
     real_scoped_modules = pipeline._scoped_modules  # pyright: ignore[reportPrivateUsage]
@@ -332,7 +339,9 @@ def test_transient_module_failure_obeys_bounded_backoff_then_recovers(
     clock = [start]
     monkeypatch.setattr(worker, "utc_now", lambda: clock[0])
     monkeypatch.setattr(job_queue, "utc_now", lambda: clock[0])
-    worker_sessions = sessionmaker(bind=db_session.get_bind(), expire_on_commit=False)
+    worker_sessions = managed_session_factory(
+        request, db_session.get_bind(), expire_on_commit=False
+    )
 
     def new_worker_session(organization_id: str | None = None) -> Session:
         session = worker_sessions()
@@ -536,6 +545,16 @@ def _cash_correction_workbook(cash: int) -> bytes:
 
 def test_official_remint_reports_same_date_cash_correction_in_bsd2(db_session: Session) -> None:
     _seed(db_session)
+    grant_institution_authority(
+        db_session,
+        organization_id=ORG_1,
+        bank_id=SAMPLE_BANK_ID,
+        user_id=USER_1,
+        bundle=RoleBundle.ANALYST,
+        module=ModuleScope.DATA,
+        sensitivity=SensitivityScope.RESTRICTED,
+    )
+    db_session.commit()
     ctx = TenantContext(organization_id=ORG_1, actor_user_id=USER_1, authorization_version=1)
     storage = InMemoryStorageClient()
     mapping = ingestion.create_mapping_config(
@@ -907,7 +926,9 @@ def test_pipelines_enqueue_no_bi_job_when_the_switch_is_off(db_session: Session)
 
 
 def test_run_refresh_enqueues_one_bi_job_inside_its_commit(
-    db_session: Session, monkeypatch: pytest.MonkeyPatch
+    db_session: Session,
+    monkeypatch: pytest.MonkeyPatch,
+    request: pytest.FixtureRequest,
 ) -> None:
     monkeypatch.setenv("BI_MART_ENQUEUE_ENABLED", "1")
     get_settings.cache_clear()
@@ -924,11 +945,8 @@ def test_run_refresh_enqueues_one_bi_job_inside_its_commit(
         assert job.payload["bank_id"] == SAMPLE_BANK_ID
         assert isinstance(job.payload["builder_version"], int)
         # Committed with the live rows: a fresh session sees it.
-        other = sessionmaker(bind=db_session.get_bind())()
-        try:
+        with managed_session_factory(request, db_session.get_bind())() as other:
             assert other.get(Job, job.id) is not None
-        finally:
-            other.close()
     finally:
         get_settings.cache_clear()
 

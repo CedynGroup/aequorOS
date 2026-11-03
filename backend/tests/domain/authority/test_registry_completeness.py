@@ -1024,7 +1024,7 @@ def test_a_named_line_item_no_authority_claims_fails() -> None:
     failures = registry.check_completeness(
         _evidence(
             filed_line_item_codes={
-                "ratio:car": "app/domain/capital/engine.py:911",
+                "ratio:car": "app/capital/domain/engine.py:911",
                 "fx_var:diversification_benefit": "app/fx/domain/engine.py:340",
             }
         )
@@ -1082,9 +1082,9 @@ def test_a_live_payload_may_carry_labels_beside_its_registered_metrics() -> None
         registry,
         _evidence(
             live_module_metrics={
-                "app/services/regulatory_capital.py": {
-                    "car_pct": "app/services/regulatory_capital.py:1290",
-                    "worst_scenario": "app/services/regulatory_capital.py:1290",
+                "app/capital/service/regulatory_capital.py": {
+                    "car_pct": "app/capital/service/regulatory_capital.py:1290",
+                    "worst_scenario": "app/capital/service/regulatory_capital.py:1290",
                 }
             }
         ),

@@ -10,7 +10,7 @@ architecture. Scope priority: **Rates → Forward Curves** first.*
 ## As-built Status (2026-08-12)
 
 FC-0 through FC-5 are implemented: the pure calendar/schedule and rate-helper
-layers live in `app/domain/curves/`; the simultaneous multi-curve solver and
+layers live in `app/market_data/domain/curves/`; the simultaneous multi-curve solver and
 tenor-adjusted grid are in `multicurve.py`; governed, versioned curve definitions
 and the desk construction workspace are live through the operator API and
 `console/desk/curves`. The bank-facing Markets workspace supports historical
@@ -81,7 +81,7 @@ discount curve; `Convert to` is the yield's output basis.
 
 | Capability | As-built in AequorOS | Reuse for forward curves |
 |---|---|---|
-| Pure quant core | `app/domain/curves/` — bootstrap, **Hagan–West monotone-convex**, PCHIP, log-DF, NSS, `forwards.forward_curve`+`qa_forwards`, `ois_step` (meeting-date step), Engle-Granger, immutable `CurveBuildResult` with canonical-JSON `input_digest` | The interpolation/forward/QA machinery is done; extend the **instrument helpers**, not the math |
+| Pure quant core | `app/market_data/domain/curves/` — bootstrap, **Hagan–West monotone-convex**, PCHIP, log-DF, NSS, `forwards.forward_curve`+`qa_forwards`, `ois_step` (meeting-date step), Engle-Granger, immutable `CurveBuildResult` with canonical-JSON `input_digest` | The interpolation/forward/QA machinery is done; extend the **instrument helpers**, not the math |
 | Curve object model | `objects.py` — `CurveDefinition` (code/kind/interp/day-count/extrapolation), `CurveNodes`, `SUPPORTED_CURVE_CODES` (AEQ.* scheme) | Becomes the `CurveDefinition` the desk builder persists |
 | Day-count | `conventions.py` — ACT/364, ACT/365F, ACT/360, discount↔yield, price↔YTM, compounding | Maps to Eikon `A0/A5/…`; needs the **"Convert to" selectable output basis** + 30/360 family |
 | Golden copy + publication | desk-as-vendor: approved determinations publish into every tenant via `pull_runner.execute_pull` as `aequor_desk`, AEQ.* names coexisting with vendor rows | The forward curve publishes exactly here |
@@ -354,7 +354,7 @@ Both surfaces read the **same methodology register** — one source of truth, tw
 **FC-0 — Calendar & schedule engine (foundational, unblocks everything).**
 Governed calendars (USA + GHIPSS/Ghana seeded), weekend + holiday sets, business-day
 adjustment (Following/ModFollowing/Preceding), spot lag, end-of-month, schedule generation.
-Pure, in `app/domain/curves/`, golden-value tests against the Eikon adjusted dates.
+Pure, in `app/market_data/domain/curves/`, golden-value tests against the Eikon adjusted dates.
 
 **FC-1 — Rate-helper / instrument layer.** Deposit, FRA, par-swap, OIS-swap helpers with
 par→DF solving; instrument-set catalog (governed, with identifiers). Reprice-to-input acid

@@ -12,8 +12,8 @@ import pytest
 from fastapi import HTTPException, Request
 from fastapi.testclient import TestClient
 from pydantic import BaseModel, Field, JsonValue, TypeAdapter
-from sqlalchemy import create_engine, select, text
 from sqlalchemy import event as sqlalchemy_event
+from sqlalchemy import select, text
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import ORMExecuteState, Session, sessionmaker
 from sqlalchemy.sql import Select
@@ -21,6 +21,8 @@ from sqlalchemy.sql import Select
 from app.api import deps
 from app.api.deps import IcaapAccess
 from app.attestation.service import stepup
+from app.capital.domain.engine import CapitalParams, CapitalRatiosResult, RwaResult
+from app.capital.service import regulatory_capital
 from app.core import security
 from app.core.audit_attribution import subject_bank_sql
 from app.core.authorization import (
@@ -37,7 +39,10 @@ from app.core.tenancy import TenantContext
 from app.credit.schemas.credit_params import CrmHaircutUpdate, EclAssumptionUpdate
 from app.credit.schemas.regulatory_credit import ConcentrationLimitUpdate, CreditThresholdUpdate
 from app.credit.service import credit_params
-from app.domain.capital.engine import CapitalParams, CapitalRatiosResult, RwaResult
+from app.data_engine.schemas.database_connection import DatabaseConnectionCreate
+from app.data_engine.schemas.ingestion import PositionSnapshotOverrideCreate
+from app.data_engine.schemas.push import PushBatchOpen, PushRecordsPage
+from app.data_engine.service import database_connections, ingestion, push_ingestion
 from app.icaap.schemas.workspace import (
     IcaapCycleCreate,
     IcaapSectionCommit,
@@ -48,6 +53,11 @@ from app.identity.schemas.audit_log import AuditLogRead
 from app.identity.schemas.auth import MeResponse
 from app.identity.schemas.banks import BankListRead
 from app.identity.service import audit_log, authentication, authorization, grant_administration
+from app.liquidity.schemas.liquidity_thresholds import (
+    LiquidityHaircutUpdate,
+    LiquidityThresholdUpdate,
+)
+from app.liquidity.service import liquidity_thresholds
 from app.models import (
     AuditEvent,
     Bank,
@@ -94,17 +104,6 @@ from app.reporting.schemas.filing_workflow import (
 )
 from app.reporting.service import workflow
 from app.reporting.service.filing_workflow import templates
-from app.schemas.database_connection import DatabaseConnectionCreate
-from app.schemas.ingestion import PositionSnapshotOverrideCreate
-from app.schemas.liquidity_thresholds import LiquidityHaircutUpdate, LiquidityThresholdUpdate
-from app.schemas.push import PushBatchOpen, PushRecordsPage
-from app.services import (
-    database_connections,
-    ingestion,
-    liquidity_thresholds,
-    push_ingestion,
-    regulatory_capital,
-)
 from app.services.audit import record_event
 from tests.conftest import (
     ApiTestApp,
@@ -146,9 +145,8 @@ def audit_database() -> Iterator[ApiTestDatabase]:
             url = migrations.postgres_schema_url(
                 migrations.postgres_administrator_url(), schema.schema_name
             )
-            engine: Engine = create_engine(url)
             with managed_database_connections(url) as owner:
-                _ = owner.adopt_engine(engine)
+                engine: Engine = owner.engine()
                 seed_demo_tenants(engine)
                 yield ApiTestDatabase(database_url=url, engine=engine, seed=seed_demo_tenants)
 
@@ -845,8 +843,17 @@ class _PlanEnvelope(BaseModel):
 
 def test_real_position_override_exposes_change_and_indexed_ownership(db_client: TestClient) -> None:
     grant(RoleBundle.SECURITY_OFFICER)
-    ctx = TenantContext(ORG_1, actor_user_id=USER_1)
+    ctx = TenantContext(ORG_1, actor_user_id=USER_1, authorization_version=1)
     with _session() as db:
+        grant_institution_authority(
+            db,
+            organization_id=ORG_1,
+            bank_id=BANK,
+            user_id=USER_1,
+            bundle=RoleBundle.ANALYST,
+            module=ModuleScope.DATA,
+            sensitivity=SensitivityScope.RESTRICTED,
+        )
         batch, _, _ = _owned_subjects(db, BANK)
         lineage = LineageRecord(
             organization_id=ORG_1,

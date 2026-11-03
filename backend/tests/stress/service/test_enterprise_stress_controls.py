@@ -23,9 +23,9 @@ from uuid import uuid4
 import pytest
 from sqlalchemy.orm import Session
 
+from app.capital.domain.engine import CapitalFact, CapitalParams
 from app.credit.service.credit_exposure_book import ExposureRow
 from app.domain.authority.outcomes import OutcomeState
-from app.domain.capital.engine import CapitalFact, CapitalParams
 from app.models import Bank
 from app.policy.service import regulatory_parameters
 from app.stress.domain.translation import MacroPathPoint

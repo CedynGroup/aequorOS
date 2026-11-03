@@ -4,11 +4,13 @@ The authoritative CRUD + maker-checker lifecycle for ``ManagementActionPlan`` �
 governed, documented set of credible management actions the directive requires
 (¶80). Governance mirrors ``macro_scenarios`` exactly:
 
-- ``draft`` plans are freely editable by an analyst (maker);
+- ``draft`` plans are editable by an authorized maker;
 - ``submit`` moves a draft to ``pending_approval``;
-- ``approve`` requires a DIFFERENT user with the approver role (maker ≠ checker,
+- ``approve`` requires a DIFFERENT authorized checker (maker ≠ checker,
   ¶16), stamps ``approved_by`` / ``approval_timestamp`` and bumps the version;
 - an ``approved`` plan is immutable; ``archive`` retires a plan.
+
+Scoped authority is defined in backend/docs/stress_enforcement_rollout.md.
 
 Only an ``approved`` plan may feed an official enterprise-stress run —
 ``resolve_for_official_run`` is the guard the service calls. ``build_domain_plan``
@@ -24,11 +26,12 @@ from typing import Any
 from uuid import UUID
 
 from fastapi import HTTPException, status
-from sqlalchemy import func, select
+from sqlalchemy import false, func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
+from app.core.authorization import ConditionCheck, ConditionKind, Permission
 from app.db.base import utc_now
 from app.identity.public import Bank
 from app.models import ManagementActionItem, ManagementActionPlan
@@ -53,6 +56,7 @@ from app.stress.schemas.management_actions import (
     ManagementActionPlanTransition,
     ManagementActionPlanUpdate,
 )
+from app.stress.service import scope_authorization
 
 
 def _get_bank_or_404(db: Session, ctx: TenantContext, bank_id: str) -> Bank:
@@ -73,8 +77,10 @@ def _get_plan_or_404(db: Session, ctx: TenantContext, plan_id: UUID) -> Manageme
     )
     if plan is None:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="Management-action plan not found."
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=scope_authorization.RESOURCE_NOT_FOUND_DETAIL,
         )
+    scope_authorization.require_permission(db, ctx, plan.bank_id, Permission.VIEW, opaque=True)
     return plan
 
 
@@ -206,6 +212,7 @@ def _add_items(db: Session, ctx: TenantContext, plan_id: UUID, actions: list[Act
 def create_plan(
     db: Session, ctx: TenantContext, payload: ManagementActionPlanCreate
 ) -> ManagementActionPlanRead:
+    scope_authorization.require_permission(db, ctx, payload.bank_id, Permission.CREATE)
     if payload.bank_id is not None:
         _get_bank_or_404(db, ctx, payload.bank_id)
     if _duplicate_code_exists(db, ctx, payload.bank_id, payload.code):
@@ -259,7 +266,12 @@ def list_plans(
     status_filter: str | None = None,
     include_archived: bool = False,
 ) -> ManagementActionPlanListRead:
-    conditions = [ManagementActionPlan.organization_id == ctx.organization_id]
+    organization_visible, bank_ids = scope_authorization.visible_scopes(db, ctx)
+    conditions = [
+        ManagementActionPlan.organization_id == ctx.organization_id,
+        ManagementActionPlan.bank_id.in_(bank_ids)
+        | (ManagementActionPlan.bank_id.is_(None) if organization_visible else false()),
+    ]
     if bank_id is not None:
         conditions.append(ManagementActionPlan.bank_id == bank_id)
     if status_filter is not None:
@@ -307,6 +319,7 @@ def update_plan(
     db: Session, ctx: TenantContext, plan_id: UUID, payload: ManagementActionPlanUpdate
 ) -> ManagementActionPlanRead:
     plan = _get_plan_or_404(db, ctx, plan_id)
+    scope_authorization.require_permission(db, ctx, plan.bank_id, Permission.EDIT, opaque=True)
     if plan.status != "draft":
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
@@ -341,6 +354,7 @@ def submit_plan(
     db: Session, ctx: TenantContext, plan_id: UUID, payload: ManagementActionPlanTransition
 ) -> ManagementActionPlanRead:
     plan = _get_plan_or_404(db, ctx, plan_id)
+    scope_authorization.require_permission(db, ctx, plan.bank_id, Permission.EDIT, opaque=True)
     if plan.status != "draft":
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
@@ -368,6 +382,20 @@ def approve_plan(
     db: Session, ctx: TenantContext, plan_id: UUID, payload: ManagementActionPlanApproval
 ) -> ManagementActionPlanRead:
     plan = _get_plan_or_404(db, ctx, plan_id)
+    scope_authorization.require_permission(
+        db,
+        ctx,
+        plan.bank_id,
+        Permission.APPROVE,
+        opaque=True,
+        conditions=(
+            ConditionCheck(
+                ConditionKind.MAKER_CHECKER,
+                plan.created_by is None or plan.created_by != ctx.actor_user_id,
+                "The creator must differ from the approver.",
+            ),
+        ),
+    )
     if plan.status != "pending_approval":
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
@@ -406,6 +434,7 @@ def archive_plan(
     db: Session, ctx: TenantContext, plan_id: UUID, payload: ManagementActionPlanTransition
 ) -> ManagementActionPlanRead:
     plan = _get_plan_or_404(db, ctx, plan_id)
+    scope_authorization.require_permission(db, ctx, plan.bank_id, Permission.EDIT, opaque=True)
     if plan.status == "archived":
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,

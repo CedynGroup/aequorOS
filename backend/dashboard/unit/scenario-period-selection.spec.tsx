@@ -11,7 +11,7 @@ import { setupServer } from "msw/node";
 import ProfileProvider from "../components/profile/ProfileProvider";
 import BankProvider from "../components/shell/BankContext";
 import HistoricalPeriodRibbon from "../components/shell/HistoricalPeriodRibbon";
-import ScenarioWorkbench from "../components/workbench/ScenarioWorkbench";
+import ScenarioWorkbench from "../features/workbench/components/ScenarioWorkbench";
 import { apiBaseUrl } from "../lib/api/client";
 import { setAccessToken } from "../lib/api/token";
 import { queryAuthorityScope, scopedQueryKey } from "../lib/api/queryPolicy";
@@ -66,8 +66,12 @@ it("selects a historical period, runs and reloads its stored results without rep
           institution_capabilities: [
             {
               institution_id: bankId,
-              capabilities: ["view", "run"].map((permission) => ({
-                module: "liq",
+              capabilities: [
+                { module: "liq", permission: "view" },
+                { module: "liq", permission: "run" },
+                { module: "data", permission: "view" },
+              ].map(({ module, permission }) => ({
+                module,
                 sensitivity: "confidential",
                 permission,
                 requires_contextual_authorization: false,

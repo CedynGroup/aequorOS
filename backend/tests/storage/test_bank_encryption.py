@@ -21,6 +21,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from app.attestation.public import RegulatoryArtifactVersion
+from app.core.authorization import ModuleScope, RoleBundle, SensitivityScope
 from app.core.config import get_settings
 from app.core.errors import register_exception_handlers
 from app.core.key_management import registry
@@ -40,8 +41,8 @@ from app.core.key_management.types import (
     ProtectedSupportAccessError,
 )
 from app.core.tenancy import TenantContext
+from app.data_engine.api.ingest_data import get_ingestion_storage
 from app.db.base import utc_now
-from app.features.ingest_data import get_ingestion_storage
 from app.identity.public import Bank
 from app.operator.services.bank_encryption import rotate_key
 from app.reporting.models.packages import RegulatoryPackage
@@ -68,6 +69,7 @@ from scripts.backup_storage import (
     restore_storage_backup,
 )
 from tests.storage.contract import metadata_for
+from tests.support.factories.authorization import grant_institution_authority
 from tests.support.helpers import ORG_1, USER_1, headers
 
 KEY = KeyReference(
@@ -236,8 +238,19 @@ def test_staff_export_download_returns_placeholder_without_unwrapping(
 def test_ingestion_upload_preserves_key_refusal_and_recovers(
     bank_storage: BankStorage,
     db_client: TestClient,
+    db_session: Session,
     status: KeyStatus,
 ) -> None:
+    grant_institution_authority(
+        db_session,
+        organization_id=ORG_1,
+        bank_id="BK-SAMP0001",
+        user_id=USER_1,
+        bundle=RoleBundle.ANALYST,
+        module=ModuleScope.DATA,
+        sensitivity=SensitivityScope.RESTRICTED,
+    )
+    db_session.commit()
     app = db_client.app
     assert isinstance(app, FastAPI)
     overrides = app.dependency_overrides
@@ -318,7 +331,9 @@ def test_archived_staff_download_refuses_redaction_before_integrity_checks(
     )
     db_session.add(version)
     db_session.commit()
-    ctx = TenantContext(organization_id=ORG_1, actor_user_id=USER_1, roles=("admin",))
+    ctx = TenantContext(
+        organization_id=ORG_1, actor_user_id=USER_1, roles=("admin",), authorization_version=1
+    )
     assert (
         read_version_bytes(db_session, ctx, "BK-SAMP0001", version.id, bank_storage.storage)[1]
         == content

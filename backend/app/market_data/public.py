@@ -1,21 +1,181 @@
 """Market data's interface for other features: re-exports only, no logic."""
 
-from app.adapters.market_data.credential_manager import (
+from app.market_data.adapters.credential_manager import (
     CredentialVaultError,
     credential_fingerprint,
     decrypt_credential_envelope,
     derive_master_key,
+    derive_status,
     encrypt_credential_envelope,
 )
-from app.services import market_data_sources
-from app.services.market_data_sources import preferred_fx_spot
+from app.market_data.models.desk_operating_environment import (
+    DeskOperatingEnvironmentAssessment,
+)
+from app.market_data.models.market_data import MarketDataConnection
+from app.market_data.models.market_desk import (
+    DeskDetermination,
+    DeskMethodology,
+    DeskObservation,
+    DeskPublication,
+    DeskSourceCapture,
+)
+from app.market_data.models.market_desk_curves import DeskCurveDefinition
+from app.market_data.schemas.fx_forward import (
+    FxForwardConstructRequest,
+    FxForwardConstructResponse,
+    FxForwardRowRead,
+    FxLeg,
+)
+from app.market_data.schemas.market_desk import (
+    DeskCaptureContentView,
+    DeskCaptureListRead,
+    DeskCaptureRead,
+    DeskDeterminationCreate,
+    DeskDeterminationListRead,
+    DeskDeterminationRead,
+    DeskDeterminationReject,
+    DeskEntitlementGrantDataset,
+    DeskEntitlementGrantTier,
+    DeskEntitlementListRead,
+    DeskEntitlementRead,
+    DeskEntitlementRevoke,
+    DeskMethodologyApprove,
+    DeskMethodologyCreate,
+    DeskMethodologyListRead,
+    DeskMethodologyRead,
+    DeskMethodologyVersionPropose,
+    DeskObservationCreate,
+    DeskObservationListRead,
+    DeskObservationRead,
+    DeskObservationSnippet,
+    DeskPackageView,
+    DeskPublicationListRead,
+    DeskPublicationRead,
+    DeskResearchAdjustmentsPut,
+)
+from app.market_data.schemas.market_desk_curves import (
+    DeskCurveConstructRequest,
+    DeskCurveConstructResponse,
+    DeskCurveDefinitionApprove,
+    DeskCurveDefinitionCreate,
+    DeskCurveDefinitionListRead,
+    DeskCurveDefinitionRead,
+    DeskCurveDefinitionVersionPropose,
+    DeskCurveGridRow,
+    DeskCurvePillarView,
+    DeskCurveQaView,
+    DeskCurveStageRequest,
+)
+from app.market_data.schemas.market_desk_operating_environment import (
+    DeskOperatingEnvironmentAssessmentListRead,
+    DeskOperatingEnvironmentAssessmentRead,
+    DeskOperatingEnvironmentComputeRequest,
+    DeskOperatingEnvironmentPreview,
+    DeskOperatingEnvironmentPublishResult,
+)
+from app.market_data.service import market_data, market_data_sources
+from app.market_data.service.market_data import (
+    CurveView,
+    desk_projection_curve_name,
+    list_fx_base_currencies,
+)
+from app.market_data.service.market_data_sources import preferred_fx_spot
+
+# isort: split
+# The research-desk namespaces below are re-exported as modules so callers read
+# ``market_data.public.desk_publication``-style members without this package
+# reaching into private service modules. They import last: each reaches slices
+# of the app (data engine, identity) whose own initialization must be able to
+# resolve a complete ``market_data.public`` namespace if it imports this module.
+from app.market_data.service.market_desk import (  # noqa: E402 - deliberate order
+    calculation,
+    curve_construction,
+    determinations,
+    entitlements,
+    fx_forward,
+    observations,
+    operating_environment,
+    package,
+    publication,
+    register,
+    snippets,
+)
 
 __all__ = [
+    "CurveView",
     "CredentialVaultError",
+    "DeskCaptureContentView",
+    "DeskCaptureListRead",
+    "DeskCaptureRead",
+    "DeskCurveConstructRequest",
+    "DeskCurveConstructResponse",
+    "DeskCurveDefinition",
+    "DeskCurveDefinitionApprove",
+    "DeskCurveDefinitionCreate",
+    "DeskCurveDefinitionListRead",
+    "DeskCurveDefinitionRead",
+    "DeskCurveDefinitionVersionPropose",
+    "DeskCurveGridRow",
+    "DeskCurvePillarView",
+    "DeskCurveQaView",
+    "DeskCurveStageRequest",
+    "DeskDetermination",
+    "DeskDeterminationCreate",
+    "DeskDeterminationListRead",
+    "DeskDeterminationRead",
+    "DeskDeterminationReject",
+    "DeskEntitlementGrantDataset",
+    "DeskEntitlementGrantTier",
+    "DeskEntitlementListRead",
+    "DeskEntitlementRead",
+    "DeskEntitlementRevoke",
+    "DeskMethodology",
+    "DeskMethodologyApprove",
+    "DeskMethodologyCreate",
+    "DeskMethodologyListRead",
+    "DeskMethodologyRead",
+    "DeskMethodologyVersionPropose",
+    "DeskObservation",
+    "DeskObservationCreate",
+    "DeskObservationListRead",
+    "DeskObservationRead",
+    "DeskObservationSnippet",
+    "DeskOperatingEnvironmentAssessment",
+    "DeskOperatingEnvironmentAssessmentListRead",
+    "DeskOperatingEnvironmentAssessmentRead",
+    "DeskOperatingEnvironmentComputeRequest",
+    "DeskOperatingEnvironmentPreview",
+    "DeskOperatingEnvironmentPublishResult",
+    "DeskPackageView",
+    "DeskPublication",
+    "DeskPublicationListRead",
+    "DeskPublicationRead",
+    "DeskResearchAdjustmentsPut",
+    "DeskSourceCapture",
+    "FxForwardConstructRequest",
+    "FxForwardConstructResponse",
+    "FxForwardRowRead",
+    "FxLeg",
+    "MarketDataConnection",
+    "calculation",
+    "curve_construction",
     "credential_fingerprint",
     "decrypt_credential_envelope",
+    "determinations",
     "derive_master_key",
+    "derive_status",
+    "desk_projection_curve_name",
     "encrypt_credential_envelope",
+    "entitlements",
+    "fx_forward",
+    "list_fx_base_currencies",
+    "market_data",
     "market_data_sources",
+    "observations",
+    "operating_environment",
+    "package",
     "preferred_fx_spot",
+    "publication",
+    "register",
+    "snippets",
 ]

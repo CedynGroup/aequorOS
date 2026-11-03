@@ -1,12 +1,12 @@
 """Capital invariants and relations between engine runs; no ratio formula oracle."""
 
-from app.domain.capital.engine import RATIO_PCT, CapitalRatiosResult, RwaResult
+from app.capital.domain.engine import RATIO_PCT, CapitalRatiosResult, RwaResult
 from tests.support.assertions import TolerancePolicy
 
 TOLERANCE = TolerancePolicy(
     2 * RATIO_PCT,
     "percentage points",
-    "domain/capital/engine.py: independent ROUND_HALF_UP ratio quantization",
+    "capital/domain/engine.py: independent ROUND_HALF_UP ratio quantization",
 )
 
 

@@ -11,7 +11,7 @@ Design (¶45 "justify all overlays … with challenge/validation"):
   overridable set of coefficients keyed ``module → shock_key → macro terms``.
   It is a plain in-code register with an ``overrides`` seam rather than a new
   effective-dated DB table, matching the repo's house pattern for methodology
-  coefficients (pure ``app/domain/curves/``; the ECL/CRM engines' "code defaults
+  coefficients (pure ``app/market_data/domain/curves/``; the ECL/CRM engines' "code defaults
   + optional register override"). A pure domain module cannot read the DB, and
   Phase 1 needs no governance surface on the coefficients themselves; the
   ``overrides`` argument is where a governed register or the ``ai_engine.md``
@@ -52,7 +52,7 @@ from app.domain.authority.outcomes import NotComputable, OutcomeState, outcome
 # --- Emitted shock keys (mirror the engine/service constants) ----------------
 # Kept as local literals so this module imports nothing from the service layer;
 # the alignment test proves they equal the live vocabulary.
-_NMD_RUNOFF_PREFIX = "nmd_runoff:"  # app/domain/liquidity/engine.SHOCK_NMD_RUNOFF_PREFIX
+_NMD_RUNOFF_PREFIX = "nmd_runoff:"  # app/liquidity/domain/engine.SHOCK_NMD_RUNOFF_PREFIX
 _INFLOW_MULTIPLIER = "inflow_multiplier"  # …SHOCK_INFLOW_MULTIPLIER
 _HQLA_HAIRCUT = "hqla_securities_haircut_pct"  # …SHOCK_HQLA_SECURITIES_HAIRCUT
 _FX_DEPRECIATION = "fx_depreciation_pct"  # …SHOCK_FX_DEPRECIATION

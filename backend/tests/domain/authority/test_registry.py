@@ -430,7 +430,7 @@ def test_filed_metrics_forbid_the_case_scoped_plane() -> None:
     """The audit's non-competition boundary, encoded per metric."""
     for entry in REGISTRY.filable():
         forbidden = set(entry.forbidden_alternative_sources)
-        assert "app.models.calculation:CalculationRun" in forbidden, (
+        assert "app.case.models.calculation:CalculationRun" in forbidden, (
             f"{entry.key} does not forbid the case-scoped CalculationRun plane"
         )
 
@@ -486,18 +486,18 @@ def test_entries_needing_external_verification_are_flagged_not_guessed() -> None
 #: nor the registry moved.
 _ENGINE_VERSION_MODULES = (
     "app.stress.domain.orchestrator",
-    "app.services.calculations",
-    "app.services.capital",
+    "app.case.service.calculations",
+    "app.case.service.capital",
     "app.stress.service.enterprise_stress",
     "app.rating.service.implied_rating",
-    "app.services.regulatory_capital",
+    "app.capital.service.regulatory_capital",
     "app.credit.service.regulatory_credit",
     "app.forecasting.service.regulatory_forecasting",
     "app.ftp.service",
     "app.fx.service",
     "app.irrbb.service.regulatory_irr",
     "app.irrbb.service.regulatory_irr_sf",
-    "app.services.regulatory_liquidity",
+    "app.liquidity.service.regulatory_liquidity",
     "app.stress.service.reverse_stress",
 )
 

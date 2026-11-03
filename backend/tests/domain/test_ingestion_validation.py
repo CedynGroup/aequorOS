@@ -3,13 +3,13 @@ from __future__ import annotations
 from datetime import date
 from decimal import Decimal
 
-from app.domain.ingestion.contracts import (
+from app.data_engine.domain.ingestion.contracts import (
     CanonicalRecords,
     CounterpartyData,
     GlAccountData,
     PositionData,
 )
-from app.domain.ingestion.validation import (
+from app.data_engine.domain.ingestion.validation import (
     SETTLED_IDENTITY_RULE,
     PositionIdentity,
     RuleConfig,

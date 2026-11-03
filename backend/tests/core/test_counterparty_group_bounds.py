@@ -3,7 +3,7 @@ from pydantic import ValidationError
 from sqlalchemy.orm import Session
 
 from app.core.key_management.local import LocalKeyProvider
-from app.domain.ingestion.contracts import CounterpartyData
+from app.data_engine.domain.ingestion.contracts import CounterpartyData
 from tests.core.test_bank_field_encryption import connect, counterparty, provider
 
 __all__ = ["provider"]

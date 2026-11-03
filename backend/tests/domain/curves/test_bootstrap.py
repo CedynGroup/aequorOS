@@ -15,14 +15,14 @@ from datetime import date
 
 import pytest
 
-from app.domain.curves.bootstrap import (
+from app.market_data.domain.curves.bootstrap import (
     BillQuote,
     BondQuote,
     BootstrapError,
     ZeroCurve,
     bootstrap_zero_curve,
 )
-from app.domain.curves.conventions import bond_cashflows
+from app.market_data.domain.curves.conventions import bond_cashflows
 
 SETTLEMENT = date(2026, 8, 3)
 
@@ -34,19 +34,31 @@ BILLS = (
 )
 BONDS = (
     BondQuote(
-        settlement=SETTLEMENT, maturity=date(2028, 8, 3), coupon_rate=0.0835, frequency=2,
+        settlement=SETTLEMENT,
+        maturity=date(2028, 8, 3),
+        coupon_rate=0.0835,
+        frequency=2,
         price=91.90,
     ),
     BondQuote(
-        settlement=SETTLEMENT, maturity=date(2031, 2, 3), coupon_rate=0.0850, frequency=2,
+        settlement=SETTLEMENT,
+        maturity=date(2031, 2, 3),
+        coupon_rate=0.0850,
+        frequency=2,
         price=81.50,
     ),
     BondQuote(
-        settlement=SETTLEMENT, maturity=date(2033, 8, 3), coupon_rate=0.0880, frequency=2,
+        settlement=SETTLEMENT,
+        maturity=date(2033, 8, 3),
+        coupon_rate=0.0880,
+        frequency=2,
         price=76.00,
     ),
     BondQuote(
-        settlement=SETTLEMENT, maturity=date(2036, 8, 3), coupon_rate=0.0985, frequency=2,
+        settlement=SETTLEMENT,
+        maturity=date(2036, 8, 3),
+        coupon_rate=0.0985,
+        frequency=2,
         price=74.50,
     ),
 )
@@ -96,9 +108,7 @@ class TestAcidRepricing:
             t = curve.time_of(bill.maturity)
             assert curve.df(t) == pytest.approx(bill.discount_factor(), abs=1e-8)
         for bond in BONDS:
-            assert _bond_model_price(curve, bond) == pytest.approx(
-                bond.dirty_price(), abs=1e-8
-            )
+            assert _bond_model_price(curve, bond) == pytest.approx(bond.dirty_price(), abs=1e-8)
 
     def test_nodes_are_maturity_ordered_and_complete(self) -> None:
         curve = bootstrap_zero_curve(BILLS, BONDS)
@@ -162,30 +172,47 @@ class TestDuplicateCollapsing:
 
     def test_duplicate_bonds_volume_weight_prices(self) -> None:
         quote_a = BondQuote(
-            settlement=SETTLEMENT, maturity=date(2028, 8, 3), coupon_rate=0.0835, frequency=2,
-            price=91.00, volume=100.0,
+            settlement=SETTLEMENT,
+            maturity=date(2028, 8, 3),
+            coupon_rate=0.0835,
+            frequency=2,
+            price=91.00,
+            volume=100.0,
         )
         quote_b = BondQuote(
-            settlement=SETTLEMENT, maturity=date(2028, 8, 3), coupon_rate=0.0835, frequency=2,
-            price=93.00, volume=300.0,
+            settlement=SETTLEMENT,
+            maturity=date(2028, 8, 3),
+            coupon_rate=0.0835,
+            frequency=2,
+            price=93.00,
+            volume=300.0,
         )
         curve = bootstrap_zero_curve(BILLS, [quote_a, quote_b])
         blended = BondQuote(
-            settlement=SETTLEMENT, maturity=date(2028, 8, 3), coupon_rate=0.0835, frequency=2,
+            settlement=SETTLEMENT,
+            maturity=date(2028, 8, 3),
+            coupon_rate=0.0835,
+            frequency=2,
             price=0.25 * 91.00 + 0.75 * 93.00,
         )
-        assert _bond_model_price(curve, blended) == pytest.approx(
-            blended.dirty_price(), abs=1e-8
-        )
+        assert _bond_model_price(curve, blended) == pytest.approx(blended.dirty_price(), abs=1e-8)
 
     def test_duplicate_bonds_with_different_terms_raise(self) -> None:
         quote_a = BondQuote(
-            settlement=SETTLEMENT, maturity=date(2028, 8, 3), coupon_rate=0.0835, frequency=2,
-            price=91.00, volume=100.0,
+            settlement=SETTLEMENT,
+            maturity=date(2028, 8, 3),
+            coupon_rate=0.0835,
+            frequency=2,
+            price=91.00,
+            volume=100.0,
         )
         quote_b = BondQuote(
-            settlement=SETTLEMENT, maturity=date(2028, 8, 3), coupon_rate=0.0900, frequency=2,
-            price=93.00, volume=300.0,
+            settlement=SETTLEMENT,
+            maturity=date(2028, 8, 3),
+            coupon_rate=0.0900,
+            frequency=2,
+            price=93.00,
+            volume=300.0,
         )
         with pytest.raises(BootstrapError, match="coupon terms"):
             bootstrap_zero_curve(BILLS, [quote_a, quote_b])
@@ -208,13 +235,18 @@ class TestValidation:
             BillQuote(settlement=SETTLEMENT, maturity=date(2026, 11, 2))
         with pytest.raises(BootstrapError):
             BillQuote(
-                settlement=SETTLEMENT, maturity=date(2026, 11, 2),
-                discount_rate=0.05, yield_rate=0.05,
+                settlement=SETTLEMENT,
+                maturity=date(2026, 11, 2),
+                discount_rate=0.05,
+                yield_rate=0.05,
             )
 
     def test_bond_inside_bill_span_raises(self) -> None:
         early_bond = BondQuote(
-            settlement=SETTLEMENT, maturity=date(2027, 2, 1), coupon_rate=0.08, frequency=2,
+            settlement=SETTLEMENT,
+            maturity=date(2027, 2, 1),
+            coupon_rate=0.08,
+            frequency=2,
             price=95.0,
         )
         with pytest.raises(BootstrapError, match="does not extend"):
@@ -222,7 +254,10 @@ class TestValidation:
 
     def test_unsolvable_bond_price_raises(self) -> None:
         absurd = BondQuote(
-            settlement=SETTLEMENT, maturity=date(2028, 8, 3), coupon_rate=0.0835, frequency=2,
+            settlement=SETTLEMENT,
+            maturity=date(2028, 8, 3),
+            coupon_rate=0.0835,
+            frequency=2,
             price=2000.0,  # far above the sum of undiscounted cash flows
         )
         with pytest.raises(BootstrapError):

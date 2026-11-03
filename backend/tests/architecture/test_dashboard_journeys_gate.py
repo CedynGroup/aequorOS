@@ -84,7 +84,7 @@ def test_required_check_refuses_missing_or_malformed_results(results: str) -> No
         ("backend/tests/fixtures/icaap/frameworks/gh/test_icaap_e2e.json", "true"),
         ("backend/tests/support/factories/canonical.py", "true"),
         ("backend/tests/support/factories/reconciliation.py", "true"),
-        ("backend/tests/adapters/market_data/manual_upload/fixtures.py", "true"),
+        ("backend/tests/market_data/adapters/manual_upload/fixtures.py", "true"),
         ("packages/shared/index.ts", "true"),
         ("backend/.python-version", "true"),
         ("backend/package.json", "true"),

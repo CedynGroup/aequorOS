@@ -59,10 +59,10 @@ authoritative_run_type='capital'
 reporting_mappings=('CAR-RWA', 'BSD5A', 'BSD5B')
 expected_tolerance=Decimal('0')
 advisory_designation=FILED
-forbidden_alternative_sources=('app.services.calculations:calculate_forecast',
-  'app.services.liquidity:calculate_metrics', 'app.services.capital:_indicator',
-  'app.models.calculation:CalculationRun', 'app.models.calculation:CalculationForecastPeriod',
-  'app.models.capital:CapitalProjection', 'dashboard client-side arithmetic')
+forbidden_alternative_sources=('app.case.service.calculations:calculate_forecast',
+  'app.case.service.liquidity:calculate_metrics', 'app.case.service.capital:_indicator',
+  'app.case.models.calculation:CalculationRun', 'app.case.models.calculation:CalculationForecastPeriod',
+  'app.case.models.capital:CapitalProjection', 'dashboard client-side arithmetic')
 ```
 
 The `forbidden_alternative_sources` list is the machine-readable form of the case-plane

@@ -14,9 +14,9 @@ from decimal import Decimal
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
+from app.capital.service import regulatory_capital
 from app.models import Bank, ParamCapitalThreshold
 from app.policy.service import regulatory_parameters as rp
-from app.services import regulatory_capital
 from tests.support.helpers import ORG_1, USER_1
 
 AS_OF = date(2026, 6, 30)

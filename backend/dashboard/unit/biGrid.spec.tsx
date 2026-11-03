@@ -12,11 +12,11 @@ import {
 } from "ag-grid-community";
 import type { AgGridReactProps } from "ag-grid-react";
 import type { GridLayoutProps } from "react-grid-layout";
-import PivotGrid from "../components/bi/PivotGrid";
-import PivotGridCanvas from "../components/bi/PivotGridCanvas";
-import BuilderGrid from "../components/bi/BuilderGrid";
-import { formatCell } from "../components/bi/gridCells";
-import { readChartTokens } from "../components/bi/echartsTheme";
+import PivotGrid from "../features/bi/components/PivotGrid";
+import PivotGridCanvas from "../features/bi/components/PivotGridCanvas";
+import BuilderGrid from "../features/bi/components/BuilderGrid";
+import { formatCell } from "../features/bi/components/gridCells";
+import { readChartTokens } from "../features/bi/components/echartsTheme";
 import { providers, json, query, queryWire, columns } from "./biTestSupport";
 
 const boundary = vi.hoisted(() => ({

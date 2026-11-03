@@ -17,8 +17,10 @@ import os
 from collections.abc import Iterator
 
 import pytest
-from sqlalchemy import create_engine, text
+from sqlalchemy import text
 from sqlalchemy.orm import Session
+
+from tests.support.database import database_connections, managed_session_factory
 
 _URL = os.environ.get("LIVE_DATA_DATABASE_URL", "").strip()
 
@@ -35,25 +37,24 @@ def live_db() -> Iterator[Session]:
     never mutate the data it certifies."""
     if not _URL:  # pragma: no cover - guarded by the module skip
         pytest.skip("LIVE_DATA_DATABASE_URL not set")
-    engine = create_engine(_URL, pool_pre_ping=True)
     org_id = os.environ.get("LIVE_DATA_ORG_ID", "").strip()
-    session = Session(engine, info={"organization_id": org_id} if org_id else None)
-    session.execute(text("SET SESSION CHARACTERISTICS AS TRANSACTION READ ONLY"))
-    # COMMIT the settings transaction: session characteristics take effect from
-    # the NEXT transaction. Everything after this point runs read-only.
-    session.commit()
-    visible = session.execute(text("SELECT count(*) FROM organizations")).scalar()
-    if not visible:
-        pytest.fail(
-            "The connected role sees no organizations. Configure LIVE_DATA_DATABASE_URL "
-            "and LIVE_DATA_ORG_ID following "
-            "backend/README.md#test-databases-and-the-primary-database."
-        )
-    try:
-        yield session
-    finally:
-        session.close()
-        engine.dispose()
+    with database_connections(_URL, default_schema="public") as owner:
+        engine = owner.engine(pool_pre_ping=True)
+        with managed_session_factory(
+            None, engine, info={"organization_id": org_id} if org_id else {}
+        )() as session:
+            session.execute(text("SET SESSION CHARACTERISTICS AS TRANSACTION READ ONLY"))
+            # COMMIT the settings transaction: session characteristics take effect from
+            # the NEXT transaction. Everything after this point runs read-only.
+            session.commit()
+            visible = session.execute(text("SELECT count(*) FROM organizations")).scalar()
+            if not visible:
+                pytest.fail(
+                    "The connected role sees no organizations. Configure LIVE_DATA_DATABASE_URL "
+                    "and LIVE_DATA_ORG_ID following "
+                    "backend/README.md#test-databases-and-the-primary-database."
+                )
+            yield session
 
 
 @pytest.fixture(autouse=True)

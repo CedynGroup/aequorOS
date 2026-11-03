@@ -24,7 +24,7 @@ import sqlalchemy as sa
 from sqlalchemy import String, Table, event, inspect
 from sqlalchemy.dialects import sqlite
 from sqlalchemy.dialects.postgresql import JSONB
-from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.orm import Session
 from sqlalchemy.pool import QueuePool
 
 from app.bi.domain import extract
@@ -53,13 +53,7 @@ from app.bi.models.marts import (
     BiQueryLog,
 )
 from app.bi.models.notifications import BI_NOTIFICATION_TABLES
-from app.core.config import get_settings
-from app.core.key_management.fields import ProtectedText
-from app.credit.domain.dpd_bands import DPD_BAND_CODES
-from app.db.base import Base
-from app.db.session import get_bi_engine, get_bi_sessionmaker, set_tenant_rls_context
-from app.domain.authority.registry import REGISTRY, AdvisoryDesignation, MetricFamily, Regime
-from app.domain.capital.loan_classification import (
+from app.capital.domain.loan_classification import (
     BANK_GRADE_ORDER,
     BASIS_DAYS_PAST_DUE,
     BASIS_RESTRUCTURE_HOLD,
@@ -67,11 +61,25 @@ from app.domain.capital.loan_classification import (
     BASIS_UNCLASSIFIED,
     SDI_GRADE_ORDER,
 )
-from app.domain.ingestion import optional_position_fields
-from app.domain.ingestion.reference_schemas import performance_targets
-from app.domain.liquidity.engine import HQLA_LEVEL_1, HQLA_LEVEL_2A, HQLA_LEVEL_2B
+from app.core.config import get_settings
+from app.core.key_management.fields import ProtectedText
+from app.credit.domain.dpd_bands import DPD_BAND_CODES
+from app.data_engine.domain.ingestion import optional_position_fields
+from app.data_engine.domain.ingestion.reference_schemas import performance_targets
+from app.data_engine.models.canonical import (
+    CanonicalCounterparty,
+    CanonicalGlAccount,
+    CanonicalLoanEvent,
+    CanonicalPosition,
+    CanonicalPositionSnapshot,
+    CanonicalProduct,
+)
+from app.db.base import Base
+from app.db.session import get_bi_engine, get_bi_sessionmaker, set_tenant_rls_context
+from app.domain.authority.registry import REGISTRY, AdvisoryDesignation, MetricFamily, Regime
 from app.identity.models.institution_profile import OUTLET_STATUSES, OUTLET_TYPES, Outlet
 from app.irrbb.domain.engine import IRR_BUCKETS
+from app.liquidity.domain.engine import HQLA_LEVEL_1, HQLA_LEVEL_2A, HQLA_LEVEL_2B
 from app.live.domain.positions.families import (
     LOAN_CATEGORY_MAP,
     PAST_DUE_CATEGORY,
@@ -80,15 +88,12 @@ from app.live.domain.positions.families import (
 )
 from app.live.models.live import LIVE_MODULES, LiveMetric
 from app.live.models.regulatory_run import RegulatoryRun
-from app.models.canonical import (
-    CanonicalCounterparty,
-    CanonicalGlAccount,
-    CanonicalLoanEvent,
-    CanonicalPosition,
-    CanonicalPositionSnapshot,
-    CanonicalProduct,
-)
 from app.policy.models.institution_type import InstitutionType
+from tests.support.database import (
+    adopt_application_engine,
+    managed_engine,
+    managed_session_factory,
+)
 
 MODELS: tuple[type, ...] = (
     BiFactPositionDaily,
@@ -266,8 +271,10 @@ def test_an_unregistered_bi_table_is_caught_rather_than_silently_skipped() -> No
     assert "regulatory_runs" not in derived
 
 
-def test_create_all_on_sqlite_builds_every_bi_table_as_a_plain_table() -> None:
-    engine = sa.create_engine("sqlite://")
+def test_create_all_on_sqlite_builds_every_bi_table_as_a_plain_table(
+    request: pytest.FixtureRequest,
+) -> None:
+    engine = managed_engine(request, "sqlite://")
     Base.metadata.create_all(engine)
     present = set(inspect(engine).get_table_names())
     assert set(BI_TABLES) <= present
@@ -577,7 +584,7 @@ def test_target_vocabularies_match_the_register_that_supplies_them() -> None:
 
     ``app/bi/models/marts.py`` mirrors the ``performance_targets`` register's words
     rather than importing them, because ``app.models`` stays free of
-    ``app.domain.ingestion``. A mirror with nothing holding the two sides
+    ``app.data_engine.domain.ingestion``. A mirror with nothing holding the two sides
     together is the defect it looks like a fix for: a grain added to the
     register would be accepted on ingestion and then refused by
     ``ck_bi_fact_target_period_grain`` when the builder tried to store its
@@ -807,6 +814,7 @@ def test_bi_sessionmaker_is_none_without_a_bi_database_url() -> None:
 
 def test_bi_sessionmaker_binds_the_bi_pool_when_configured(
     monkeypatch: pytest.MonkeyPatch,
+    request: pytest.FixtureRequest,
 ) -> None:
     url = "postgresql+psycopg://bi:bi@localhost:1/never_connected"
     monkeypatch.setenv("BI_DATABASE_URL", url)
@@ -814,6 +822,7 @@ def test_bi_sessionmaker_binds_the_bi_pool_when_configured(
     get_bi_engine.cache_clear()
     try:
         factory = get_bi_sessionmaker()
+        _ = adopt_application_engine(request, get_bi_engine(url), administrative=True)
         assert factory is not None
         assert factory.kw["bind"] is get_bi_engine(url)
     finally:
@@ -821,9 +830,13 @@ def test_bi_sessionmaker_binds_the_bi_pool_when_configured(
         get_settings.cache_clear()
 
 
-def test_bi_engine_is_a_small_named_pool_on_postgres() -> None:
+def test_bi_engine_is_a_small_named_pool_on_postgres(request: pytest.FixtureRequest) -> None:
     get_bi_engine.cache_clear()
-    engine = get_bi_engine("postgresql+psycopg://bi:bi@localhost:1/never_connected")
+    engine = adopt_application_engine(
+        request,
+        get_bi_engine("postgresql+psycopg://bi:bi@localhost:1/never_connected"),
+        administrative=True,
+    )
     seen: dict[str, object] = {}
 
     class _Abort(Exception):
@@ -850,13 +863,17 @@ def test_bi_engine_is_a_small_named_pool_on_postgres() -> None:
         get_bi_engine.cache_clear()
 
 
-def test_bi_sessions_get_the_tenant_guc_listener_for_free(tmp_path) -> None:
+def test_bi_sessions_get_the_tenant_guc_listener_for_free(
+    tmp_path, request: pytest.FixtureRequest
+) -> None:
     """The ``after_begin`` listener is registered on :class:`Session` itself,
     so a session from the BI pool is scoped exactly like a request session."""
     assert event.contains(Session, "after_begin", set_tenant_rls_context)
-    engine = get_bi_engine(f"sqlite+pysqlite:///{tmp_path / 'bi.db'}")
+    engine = adopt_application_engine(
+        request, get_bi_engine(f"sqlite+pysqlite:///{tmp_path / 'bi.db'}")
+    )
     try:
-        with sessionmaker(bind=engine)() as session:
+        with managed_session_factory(request, engine)() as session:
             assert isinstance(session, Session)
             session.info["organization_id"] = "OR-DEM00001"
             session.execute(sa.text("SELECT 1"))  # begins a transaction; the hook runs

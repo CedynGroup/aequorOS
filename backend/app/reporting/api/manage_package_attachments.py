@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import json
 from pathlib import PurePosixPath
-from typing import Annotated, Any
+from typing import Annotated, Any, cast
 from uuid import UUID
 
 from fastapi import APIRouter, Form, HTTPException, UploadFile, status
@@ -23,7 +23,8 @@ from fastapi.responses import StreamingResponse
 
 from app.api.deps import DbSession, PackageEdit, PackageView
 from app.core.config import get_settings
-from app.features.ingest_data import IngestionStorage
+from app.core.content_disposition import attachment_headers
+from app.data_engine.public import IngestionStorage
 from app.icaap.api.manage_icaap_attachments import IcaapStorage
 from app.reporting.schemas.packages import (
     PackageAttachmentListRead,
@@ -32,7 +33,13 @@ from app.reporting.schemas.packages import (
 )
 from app.reporting.service import attachments as package_attachments
 from app.schemas.common import ErrorResponse
-from app.storage.client import StorageLocation, StorageNotFoundError
+from app.storage import StorageError, StorageLocation, Tier
+from app.storage.public import (
+    DocumentBinding,
+    DocumentFamily,
+    RecordedDocument,
+    resolve_document,
+)
 
 router = APIRouter(tags=["regulatory-reporting"])
 
@@ -161,10 +168,15 @@ def download_package_attachment(  # noqa: PLR0913 - path + session + access + st
     access: PackageView,
     storage: IngestionStorage,
 ) -> StreamingResponse:
-    """Stream one filed document from the outputs tier."""
-    _ = (bank_id, package_id)
-    from app.services.ingestion import bank_slug  # noqa: PLC0415 - avoid an import cycle
+    """Stream one filed document, proven against the identity the row carries.
 
+    Before slice 2 this read the object path with no version pin and no checksum
+    check, so it served whatever the provider currently held under that name: a
+    replaced object, or one written by a later export, downloaded as the filed
+    document. The row's own recorded pin (or, once bound, the catalogue) is now
+    the read identity and every byte is hashed before release.
+    """
+    _ = (bank_id, package_id)
     row = next(
         (
             entry
@@ -175,23 +187,40 @@ def download_package_attachment(  # noqa: PLR0913 - path + session + access + st
     )
     if row is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not Found")
-    location = StorageLocation(
-        institution_slug=bank_slug(db, access.bank),
-        tier="outputs",
-        object_path=row.object_path,
+    from app.data_engine.public import bank_slug  # noqa: PLC0415 - avoid an import cycle
+    from app.reporting.service.family_access import sealed_document_decision  # noqa: PLC0415
+
+    decision = sealed_document_decision(db, access.ctx, access.bank, access.package.return_family)
+    recorded = RecordedDocument(
+        location=StorageLocation(
+            institution_slug=bank_slug(db, access.bank),
+            tier=cast(Tier, row.storage_tier),
+            object_path=row.object_path,
+        ),
+        version_id=row.storage_version_id,
+        sha256=row.sha256,
+        byte_length=row.byte_size,
     )
     try:
-        _descriptor, stream = storage.read(location)
-    except StorageNotFoundError as exc:
+        _descriptor, stream = resolve_document(
+            db,
+            access.ctx,
+            access.bank.id,
+            DocumentBinding(DocumentFamily.PACKAGE_ATTACHMENT, row.id),
+            storage,
+            authorization=decision,
+            recorded=recorded,
+        )
+    except StorageError as exc:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="The document's stored object was not found in the outputs tier.",
+            detail="The document's stored object could not be verified in the outputs tier.",
         ) from exc
     filename = PurePosixPath(row.original_filename).name or "document"
     return StreamingResponse(
         stream,
         media_type=row.media_type,
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        headers=attachment_headers(filename),
     )
 
 

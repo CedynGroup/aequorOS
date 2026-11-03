@@ -12,7 +12,8 @@ from app.core.security import hash_password
 from app.identity.models.authorization import AuthorizationBinding
 from app.identity.schemas.auth import MeResponse, TokenResponse
 from app.identity.service import authorization
-from app.models import BankFinancialFact, User
+from app.models import BankFinancialFact, MacroScenario, User
+from app.stress.schemas.stress import MacroScenarioListRead, MacroScenarioRead
 from scripts.e2e_story_identities import (
     SOURCE_ADMIN,
     SOURCE_BANK,
@@ -118,6 +119,7 @@ def test_failed_story_retires_fresh_actors_and_real_refresh_families(
         ],
     )
     credentials: list[TokenResponse] = []
+    scenario_id: UUID | None = None
     with pytest.raises(RuntimeError, match="synthetic body failure"):
         try:
             actors = provision(db_session, request).actors
@@ -135,9 +137,27 @@ def test_failed_story_retires_fresh_actors_and_real_refresh_families(
                 )
                 assert me.status_code == 200, me.text
                 assert MeResponse.model_validate_json(me.text).user_id == actor.user_id
+                if actor.role == "analyst":
+                    headers = {"Authorization": f"Bearer {credential.access_token}"}
+                    catalogue = db_client.get("/api/v1/macro-scenarios", headers=headers)
+                    assert catalogue.status_code == 200, catalogue.text
+                    system_id = (
+                        MacroScenarioListRead.model_validate_json(catalogue.text).scenarios[0].id
+                    )
+                    clone = db_client.post(
+                        f"/api/v1/macro-scenarios/{system_id}/clone",
+                        headers=headers,
+                        json={"reason": "Exercise governed cleanup after a failed story"},
+                    )
+                    assert clone.status_code == 201, clone.text
+                    scenario_id = MacroScenarioRead.model_validate_json(clone.text).id
             raise RuntimeError("synthetic body failure")
         finally:
             retire(db_session, request)
+    assert scenario_id is not None
+    scenario = db_session.get(MacroScenario, scenario_id)
+    assert scenario is not None
+    assert scenario.status == "archived"
     for credential in credentials:
         assert (
             db_client.get(

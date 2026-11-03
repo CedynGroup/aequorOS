@@ -39,6 +39,8 @@ from app.api.deps import TenantContext
 from app.core.observability import Condition
 from app.domain.authority.registry import REGISTRY as authority_registry
 from app.domain.authority.registry import Regime
+from app.liquidity.schemas.regulatory_liquidity import RegulatoryRunCreate
+from app.liquidity.service import regulatory_liquidity
 from app.models import (
     Bank,
     BankFinancialFact,
@@ -62,8 +64,6 @@ from app.reporting.service.provenance import (
     template_digest,
 )
 from app.reporting.service.registry import REGISTRY, ReturnDefinition
-from app.schemas.regulatory_liquidity import RegulatoryRunCreate
-from app.services import regulatory_liquidity
 from tests.fixtures.canonical_bank_fixture import (
     DEMO_ORG_ID,
     DEMO_USER_ID,

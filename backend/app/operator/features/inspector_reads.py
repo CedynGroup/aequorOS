@@ -19,14 +19,14 @@ from sqlalchemy.orm import Session
 from app.core.key_management.presentation import SESSION_STATE, SESSION_SUPPORT, PresentationState
 from app.operator.deps import Operator, OperatorDb, record_operator_action
 from app.operator.inspection import require_active_inspection
-from app.operator.services import inspector_reads
-from app.schemas.operator import (
+from app.operator.schemas import (
     TenantConfigRead,
     TenantFindingsRead,
     TenantIngestionBatchDetailRead,
     TenantIngestionListRead,
     TenantMetricsRead,
 )
+from app.operator.services import inspector_reads
 from app.services.public_ids import normalize_public_id
 
 router = APIRouter(prefix="/tenants", tags=["operator-inspector-reads"])

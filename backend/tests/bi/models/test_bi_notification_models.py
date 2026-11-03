@@ -55,11 +55,13 @@ from app.bi.service import exports, subscriptions
 from app.bi.service.exports import policy
 from app.db.base import Base, utc_now
 from app.models import Bank, User
+from tests.support.database import managed_engine
 from tests.support.helpers import ORG_1, ORG_2, USER_1, USER_2
 
 AS_OF = date(2026, 6, 30)
 BANK_ID = "BK-NOTIFMD1"
 SCHEDULED = datetime(2026, 6, 30, 7, 30, tzinfo=UTC)
+
 FINGERPRINT = "a" * 64
 
 MODELS: tuple[type, ...] = (BiAlert, BiAlertEvent, BiSubscription, BiSubscriptionDelivery)
@@ -164,7 +166,9 @@ def test_every_table_is_declared_and_reachable_through_the_metadata() -> None:
         assert name.startswith("bi_"), name
 
 
-def test_create_all_on_sqlite_builds_every_table_as_a_plain_table() -> None:
+def test_create_all_on_sqlite_builds_every_table_as_a_plain_table(
+    request: pytest.FixtureRequest,
+) -> None:
     """No ``postgresql_partition_by``: partitioning is migration-owned (D-011).
 
     The deliveries table is the only plausible candidate (it grows per recipient
@@ -173,7 +177,7 @@ def test_create_all_on_sqlite_builds_every_table_as_a_plain_table() -> None:
     ``create_all`` produce a childless parent that rejects every INSERT.
     """
 
-    engine = sa.create_engine("sqlite://")
+    engine = managed_engine(request, "sqlite://")
     Base.metadata.create_all(engine)
     present = set(sa.inspect(engine).get_table_names())
     assert set(BI_NOTIFICATION_TABLES) <= present

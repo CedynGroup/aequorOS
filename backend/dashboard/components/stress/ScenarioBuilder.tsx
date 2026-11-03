@@ -16,6 +16,11 @@ import { Plus, Trash2, Wand2 } from "lucide-react";
 import SectionCard from "@/components/ui/SectionCard";
 import StatusPill from "@/components/ui/StatusPill";
 import { ApiError } from "@/lib/api/client";
+import { PermissionButton } from "@/components/ui/PermissionButton";
+import {
+  useStressAuthority,
+  stressPermissionReason,
+} from "./useStressAuthority";
 import {
   MACRO_GROUPS,
   MACRO_VARS,
@@ -90,7 +95,8 @@ function gridFromScenario(scenario: MacroScenario): Grid {
   const grid: Grid = {};
   for (const p of scenario.paths) {
     const meta = MACRO_VAR_BY_KEY[p.variable];
-    const toDisplay = (v: string) => meta?.kind === "fraction" ? String(Number(v) * 100) : v;
+    const toDisplay = (v: string) =>
+      meta?.kind === "fraction" ? String(Number(v) * 100) : v;
     if (!grid[p.variable]) grid[p.variable] = {};
     grid[p.variable][p.year_index] = {
       base: toDisplay(p.base_value),
@@ -111,6 +117,7 @@ export default function ScenarioBuilder({
   onSaved?: (scenarioId: string) => void;
   onCancel?: () => void;
 }) {
+  const authority = useStressAuthority();
   const isEdit = Boolean(editScenario);
   const [code, setCode] = useState(editScenario?.code ?? "");
   const [name, setName] = useState(editScenario?.name ?? "");
@@ -126,7 +133,10 @@ export default function ScenarioBuilder({
   const [horizon, setHorizon] = useState(editScenario?.horizon_years ?? 3);
   const [source, setSource] = useState(editScenario?.source ?? "");
   const [narrative, setNarrative] = useState(editScenario?.narrative ?? "");
-  const [bankScoped, setBankScoped] = useState(Boolean(editScenario?.bank_id));
+  const [bankScoped, setBankScoped] = useState(
+    Boolean(editScenario?.bank_id) ||
+      (!editScenario && Boolean(defaultBankId) && !authority.can("create")),
+  );
   const [grid, setGrid] = useState<Grid>(
     editScenario ? gridFromScenario(editScenario) : {},
   );
@@ -137,7 +147,10 @@ export default function ScenarioBuilder({
   const update = useUpdateMacroScenario();
   const submit = useSubmitMacroScenario();
 
-  const years = useMemo(() => Array.from({ length: horizon }, (_, i) => i + 1), [horizon]);
+  const years = useMemo(
+    () => Array.from({ length: horizon }, (_, i) => i + 1),
+    [horizon],
+  );
   const includedVars = Object.keys(grid);
 
   const toggleVar = (key: string) => {
@@ -145,7 +158,9 @@ export default function ScenarioBuilder({
       const next = { ...g };
       if (next[key]) delete next[key];
       else
-        next[key] = Object.fromEntries(years.map((y) => [y, { base: "", stress: "" }]));
+        next[key] = Object.fromEntries(
+          years.map((y) => [y, { base: "", stress: "" }]),
+        );
       return next;
     });
   };
@@ -175,7 +190,9 @@ export default function ScenarioBuilder({
       for (const [variable, { base, stress }] of Object.entries(
         preset.shocks,
       )) {
-        next[variable] = Object.fromEntries(years.map((y) => [y, { base: String(base), stress: String(stress) }]));
+        next[variable] = Object.fromEntries(
+          years.map((y) => [y, { base: String(base), stress: String(stress) }]),
+        );
       }
       return next;
     });
@@ -185,11 +202,17 @@ export default function ScenarioBuilder({
     const paths: MacroPathIn[] = [];
     for (const variable of includedVars) {
       const meta = MACRO_VAR_BY_KEY[variable];
-      const toStore = (v: string) => meta?.kind === "fraction" ? String(Number(v) / 100) : v;
+      const toStore = (v: string) =>
+        meta?.kind === "fraction" ? String(Number(v) / 100) : v;
       for (const year of years) {
         const cell = grid[variable]?.[year];
-        if (!cell || cell.base.trim() === "" || cell.stress.trim() === "") continue;
-        if (!Number.isFinite(Number(cell.base)) || !Number.isFinite(Number(cell.stress))) continue;
+        if (!cell || cell.base.trim() === "" || cell.stress.trim() === "")
+          continue;
+        if (
+          !Number.isFinite(Number(cell.base)) ||
+          !Number.isFinite(Number(cell.stress))
+        )
+          continue;
         paths.push({
           variable,
           year_index: year,
@@ -202,14 +225,24 @@ export default function ScenarioBuilder({
   };
 
   const validate = (paths: MacroPathIn[]): string | null => {
-    if (!isEdit && !/^[a-z0-9_]{1,60}$/.test(code)) return "Code must be a lowercase slug (a-z, 0-9, underscore).";
+    if (!isEdit && !/^[a-z0-9_]{1,60}$/.test(code))
+      return "Code must be a lowercase slug (a-z, 0-9, underscore).";
     if (!name.trim()) return "Name is required.";
-    if (paths.length === 0) return "Add at least one macro-variable path (base + stress).";
+    if (paths.length === 0)
+      return "Add at least one macro-variable path (base + stress).";
     if (!reason.trim()) return "A change reason is required (governance).";
     return null;
   };
 
+  const targetBankId = isEdit
+    ? editScenario?.bank_id
+    : bankScoped
+      ? defaultBankId
+      : null;
+  const canSave = authority.can(isEdit ? "edit" : "create", targetBankId);
+  const canSubmit = authority.can("edit", targetBankId);
   const save = async (thenSubmit: boolean) => {
+    if (!canSave || (thenSubmit && !canSubmit)) return;
     setError(null);
     const paths = buildPaths();
     const message = validate(paths);
@@ -535,22 +568,32 @@ export default function ScenarioBuilder({
         {error && <p className="text-caption text-critical">{error}</p>}
 
         <div className="flex flex-wrap gap-3">
-          <button
+          <PermissionButton
             type="button"
             className="btn-primary px-4 py-2 text-body font-medium disabled:opacity-50"
-            disabled={pending}
+            disabled={pending || !canSave}
+            reason={
+              canSave
+                ? undefined
+                : stressPermissionReason(isEdit ? "edit" : "create")
+            }
             onClick={() => void save(false)}
           >
             {pending ? "Saving…" : isEdit ? "Save draft" : "Save as draft"}
-          </button>
-          <button
+          </PermissionButton>
+          <PermissionButton
             type="button"
             className="rounded-md border border-border-light px-4 py-2 text-body font-medium text-navy hover:bg-surface disabled:opacity-50"
-            disabled={pending}
+            disabled={pending || !canSave || !canSubmit}
+            reason={
+              canSave && canSubmit
+                ? undefined
+                : stressPermissionReason("create/edit")
+            }
             onClick={() => void save(true)}
           >
             Save &amp; submit for approval
-          </button>
+          </PermissionButton>
           {onCancel && (
             <button
               type="button"

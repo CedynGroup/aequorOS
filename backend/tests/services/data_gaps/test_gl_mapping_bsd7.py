@@ -31,13 +31,13 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import select
 
-from app.db.session import get_sessionmaker
-from app.domain.ingestion.reference_schemas import schema_for
-from app.domain.ingestion.reference_schemas.gl_mapping_bsd7 import (
+from app.data_engine.domain.ingestion.reference_schemas import schema_for
+from app.data_engine.domain.ingestion.reference_schemas.gl_mapping_bsd7 import (
     BSD7_ITEMS,
     SCHEMA,
     validate_mapping_row,
 )
+from app.db.session import get_sessionmaker
 from app.models import CanonicalGlAccount, CanonicalReferenceRow
 from app.reporting.service.bog_forms.linemaps.bsd7a import PL_ROWS
 from scripts import ingest_push

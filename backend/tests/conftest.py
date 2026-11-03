@@ -72,16 +72,20 @@ hypothesis_settings.load_profile(os.environ.get("HYPOTHESIS_PROFILE", "ci"))
 pytest_plugins = [
     "tests.support.database_fixtures",
     "tests.ai.fixtures",
+    "tests.support.canonical_book",
     "tests.bi.fixtures",
     "tests.capital.fixtures",
+    "tests.case.fixtures",
     "tests.credit.fixtures",
     "tests.forecasting.fixtures",
     "tests.ftp.fixtures",
     "tests.fx.fixtures",
     "tests.identity.fixtures",
     "tests.irrbb.fixtures",
+    "tests.icaap.testing.annexes",
     "tests.market_data.fixtures",
     "tests.reporting.fixtures",
+    "tests.stress.fixtures",
 ]
 
 
@@ -297,10 +301,14 @@ def hermetic_etl_models(monkeypatch: pytest.MonkeyPatch) -> None:
     batch's dedup / anomaly output would otherwise depend on whether a developer had
     trained that bank's models locally (absent in CI). Force the deterministic path
     here; a test that exercises a trained model injects it explicitly via
-    ``EtlConfig`` (see ``tests/etl/test_pipeline.py``).
+    ``EtlConfig`` (see ``tests/data_engine/etl/test_pipeline.py``).
     """
-    monkeypatch.setattr("app.etl.model_loading.load_counterparty_model", lambda *a, **k: None)
-    monkeypatch.setattr("app.etl.model_loading.load_anomaly_model", lambda *a, **k: None)
+    monkeypatch.setattr(
+        "app.data_engine.etl.model_loading.load_counterparty_model", lambda *a, **k: None
+    )
+    monkeypatch.setattr(
+        "app.data_engine.etl.model_loading.load_anomaly_model", lambda *a, **k: None
+    )
 
 
 @pytest.fixture
@@ -627,10 +635,14 @@ rollback_sessionmaker_lifecycle = _rollback_sessionmaker_lifecycle
 
 @pytest.fixture
 def _bound_test_sessionmaker(
+    request: pytest.FixtureRequest,
     _shared_test_database: _TestDatabase,
     monkeypatch: pytest.MonkeyPatch,
 ) -> Iterator[sessionmaker]:
     """Bind one test to a connection whose outer transaction is never committed."""
+    if "canonical_book_baseline" in request.keywords:
+        yield cast(sessionmaker[Session], request.getfixturevalue("canonical_book_sessionmaker"))
+        return
     with _rollback_sessionmaker_lifecycle(_shared_test_database, monkeypatch) as maker:
         # SQLite needs a physical BEGIN before the first savepoint; the shared
         # lifecycle also redirects every application session to this connection.
@@ -686,6 +698,7 @@ def _committing_test_database(
     monkeypatch.setattr(auth_mod, "get_sessionmaker", get_sessionmaker)
     owner = database_connections(database_url)
     _ = owner.adopt_engine(engine)
+    owner.install_application_engines(monkeypatch)
     database = _TestDatabase(
         database_url=database_url, engine=engine, seed=_shared_committing_database.seed
     )
@@ -746,7 +759,7 @@ def _db_client_lifecycle(
     fake_storage: FakeStorage,
     storage_engine: InMemoryStorageClient,
 ) -> Iterator[TestClient]:
-    from app.features.ingest_data import get_ingestion_storage  # noqa: PLC0415
+    from app.data_engine.api.ingest_data import get_ingestion_storage  # noqa: PLC0415
 
     def object_storage_override() -> FakeStorage:
         return fake_storage
@@ -817,15 +830,13 @@ def db_session(request: pytest.FixtureRequest) -> Session:
 
 
 # ---------------------------------------------------------------------------
-# DB-backed real-data suite (opt-in): the shared real-tenant identities, the
-# auth-header helper, and the skip marker live in tests/real_data.py. These
-# fixtures wire the app to the ACTUAL primary through ONE connection whose outer
-# transaction is rolled back on teardown — reads see real data, writes are
-# visible within the test (SQLAlchemy ``create_savepoint`` turns each request's
-# ``commit()`` into a savepoint release), and the primary is never mutated.
-# ``real_client`` is the API surface; ``real_session`` shares the same
-# transaction for the few tests that manipulate rows directly (e.g. deleting a
-# parameter to force a failed run).
+# Legacy opt-in data fixtures: identities, auth helpers and the skip marker live
+# in tests/real_data.py. One connection holds the outer transaction;
+# ``create_savepoint`` turns each request's commit into a savepoint release.
+# ``real_client`` and ``real_session`` share that transaction until teardown.
+# Database selection and primary access follow
+# backend/README.md#test-databases-and-the-primary-database; connection ownership
+# is documented in tests/support/DATABASE.md.
 # ---------------------------------------------------------------------------
 @pytest.fixture
 def _real_bound_sessionmaker(monkeypatch: pytest.MonkeyPatch) -> Iterator[sessionmaker]:
@@ -841,25 +852,27 @@ def _real_bound_sessionmaker(monkeypatch: pytest.MonkeyPatch) -> Iterator[sessio
     get_settings.cache_clear()
     get_engine.cache_clear()
 
-    engine = get_engine(REAL_DATA_DATABASE_URL)
-    connection = engine.connect()
-    outer = connection.begin()  # NEVER committed -> the primary is never mutated
-    bound_sessionmaker = sessionmaker(
-        bind=connection,
-        join_transaction_mode="create_savepoint",
-        autoflush=False,
-        expire_on_commit=False,
-    )
-    # deps.py imported get_sessionmaker by name, so patch it there (the API path).
-    monkeypatch.setattr(deps_mod, "get_sessionmaker", lambda: bound_sessionmaker)
-    try:
-        yield bound_sessionmaker
-    finally:
-        outer.rollback()
-        connection.close()
-        engine.dispose()
-        get_settings.cache_clear()
-        get_engine.cache_clear()
+    with database_connections(REAL_DATA_DATABASE_URL, default_schema="public") as owner:
+        engine = owner.adopt_engine(get_engine(REAL_DATA_DATABASE_URL))
+        with engine.connect() as connection:
+            outer = connection.begin()  # Request commits release savepoints inside this rollback.
+            if connection.dialect.name == "sqlite":
+                connection.exec_driver_sql("BEGIN")
+            bound_sessionmaker = managed_session_factory(
+                None,
+                connection,
+                join_transaction_mode="create_savepoint",
+                autoflush=False,
+                expire_on_commit=False,
+            )
+            # deps.py imported get_sessionmaker by name, so patch it there (the API path).
+            monkeypatch.setattr(deps_mod, "get_sessionmaker", lambda: bound_sessionmaker)
+            try:
+                yield bound_sessionmaker
+            finally:
+                outer.rollback()
+                get_settings.cache_clear()
+                get_engine.cache_clear()
 
 
 @pytest.fixture
@@ -869,7 +882,7 @@ def real_client(
     storage_engine: InMemoryStorageClient,
 ) -> Iterator[TestClient]:
     """A TestClient wired to the ACTUAL primary, transaction-isolated."""
-    from app.features.ingest_data import get_ingestion_storage  # noqa: PLC0415
+    from app.data_engine.api.ingest_data import get_ingestion_storage  # noqa: PLC0415
 
     app = _create_app()
     app.dependency_overrides[get_object_storage] = lambda: fake_storage

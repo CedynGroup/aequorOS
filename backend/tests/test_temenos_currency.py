@@ -3,8 +3,8 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
-from app.models.temenos import TemenosConnection
-from app.schemas.temenos_connections import TemenosConnectionCreate
+from app.data_engine.models.temenos import TemenosConnection
+from app.data_engine.schemas.temenos_connections import TemenosConnectionCreate
 
 
 def test_temenos_connection_create_requires_a_reporting_currency() -> None:

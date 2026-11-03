@@ -48,6 +48,7 @@ from tests.fixtures.canonical_bank_fixture import (
     materialize_canonical_test_book,
 )
 from tests.support.inmemory_storage import InMemoryStorageClient
+from tests.support.sealed_documents import published_bytes
 
 MAKER = TenantContext(
     organization_id=DEMO_ORG_ID, actor_user_id=DEMO_USER_ID, authorization_version=1
@@ -95,10 +96,7 @@ def _store(db: Session, record: dict[str, Any]) -> RegulatoryPackage:
 def _stored_bytes(db: Session, storage: InMemoryStorageClient, object_path: str) -> bytes:
     slug = db.scalar(select(Bank.storage_slug).where(Bank.id == SAMPLE_BANK_ID))
     assert slug
-    for obj in storage.list(slug, "outputs"):
-        if obj.location.object_path == object_path:
-            return storage.read(obj.location)[1].read()
-    raise AssertionError(object_path)
+    return published_bytes(db, storage, slug=slug, context_path=object_path)
 
 
 @pytest.mark.parametrize("code", CODES)

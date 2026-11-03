@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from typing import Protocol
 
+from app.case.schemas.cases import CaseRead
 from app.models import RiskCase
-from app.schemas.cases import CaseRead
 
 
 class CreatesApiCase(Protocol):

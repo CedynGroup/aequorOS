@@ -18,13 +18,13 @@ from typing import Any
 from uuid import UUID
 
 import pytest
-from sqlalchemy import select
+import sqlalchemy as sa
 from sqlalchemy.orm import Session
 
 from app.irrbb.domain.engine import IRR_BUCKETS, IrrPosition, compute_nii
 from app.irrbb.service import regulatory_irr
+from app.liquidity.schemas.regulatory_liquidity import RegulatoryRunCreate
 from app.models import BankFinancialFact, RegulatoryRun
-from app.schemas.regulatory_liquidity import RegulatoryRunCreate
 from app.stress.domain import orchestrator
 from app.stress.domain.appendix_ii import thousands
 from app.stress.schemas.enterprise_stress import EnterpriseStressRunCreate
@@ -40,7 +40,7 @@ from tests.icaap.service.test_icaap_stress_appendix2_report import (
 )
 
 pytestmark = [
-    pytest.mark.usefixtures("fx_run_authority", "irrbb_run_authority"),
+    pytest.mark.usefixtures("fx_run_authority", "irrbb_run_authority", "stress_run_authority"),
     pytest.mark.usefixtures("return_generation_authority"),
 ]
 
@@ -91,7 +91,7 @@ def _run_parallel_up(db: Session, monkeypatch: pytest.MonkeyPatch) -> _StressRun
 def _irr_facts(db: Session) -> list[BankFinancialFact]:
     return list(
         db.scalars(
-            select(BankFinancialFact).where(
+            sa.select(BankFinancialFact).where(
                 BankFinancialFact.bank_id == SAMPLE_BANK_ID,
                 BankFinancialFact.reporting_period_id == _period_id(db),
                 BankFinancialFact.fact_group.in_(("irr_position", "irr_swap")),

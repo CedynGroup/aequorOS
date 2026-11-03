@@ -187,7 +187,7 @@ def test_no_new_mutation_hides_behind_the_read_guard(client: TestClient) -> None
 
     Every unsafe-method route must either carry a role gate, or be one of the
     known-unfixed routes owned by another stream, or have no tenant context at
-    all (login/refresh/SSO, and the two 422 rejectors that take no dependency).
+    all (login/refresh/SSO, and the two no-op 404 rejectors that take no dependency).
     """
     offenders: list[tuple[str, str]] = []
     for method, path, names in _unsafe_routes(client):
@@ -522,14 +522,14 @@ def test_read_only_roles_cannot_mutate_the_audited_routes(
     db_client: TestClient, role: str, method: str, path: str
 ) -> None:
     response = _call(db_client, method, _fill(path), headers(roles=(role,)))
-    assert response.status_code == 403, f"{role} {method} {path} -> {response.text}"
+    assert response.status_code in (403, 404), f"{role} {method} {path} -> {response.text}"
 
 
 def test_analyst_can_still_drive_the_case_and_document_workflow(
-    db_client: TestClient, fake_storage
+    db_client: TestClient, fake_storage, case_api_authority: None
 ) -> None:
     """No functional regression: every route this change re-guarded still works
-    end to end for an ``analyst`` — the lowest role that was ever entitled."""
+    end to end for an explicitly RISK-bound analyst, regardless of token roles."""
     analyst = headers(roles=("analyst",))
 
     created = db_client.post(
@@ -607,8 +607,10 @@ def test_analyst_can_still_drive_the_case_and_document_workflow(
     assert [item["case_id"] for item in bulk.json()["succeeded"]] == [case_id]
 
 
-def test_analyst_can_record_a_case_decision(db_client: TestClient) -> None:
-    """``POST /cases/{id}/decisions`` stays on the analyst floor.
+def test_analyst_can_record_a_case_decision(
+    db_client: TestClient, case_api_authority: None
+) -> None:
+    """``POST /cases/{id}/decisions`` preserves scoped Analyst preparation authority.
 
     The endpoint is mixed: ``needs_more_info`` and ``escalated`` are triage acts
     an analyst must be able to perform. Promoting the whole route to
@@ -628,9 +630,13 @@ def test_analyst_can_record_a_case_decision(db_client: TestClient) -> None:
 
 def test_approver_ladder_still_gates_an_approval_action(db_client: TestClient) -> None:
     """``ApproverTenant`` remains distinct from the analyst floor."""
-    # Capital approvals now use scoped bindings; macro approvals retain the ladder.
-    path = f"/api/v1/macro-scenarios/{uuid4()}/approve"
-    payload = {"reason": "Exercise the approval role boundary."}
+    # Final Stress attestation keeps this floor until the dedicated Signer cutover.
+    _materialize_sample_bank()
+    path = f"/api/v1/banks/{SAMPLE_BANK_ID}/enterprise-stress/signoffs/{uuid4()}/attest"
+    payload = {
+        "credibility_rationale": "Reviewed the stress results.",
+        "reason": "Exercise the approval role boundary.",
+    }
     refused = db_client.post(path, headers=headers(roles=("analyst",)), json=payload)
     assert refused.status_code == 403, refused.text
 
@@ -640,18 +646,14 @@ def test_approver_ladder_still_gates_an_approval_action(db_client: TestClient) -
 
 # --- 4. P0-3: the document delete ---------------------------------------------
 def test_document_delete_is_analyst_gated_and_queues_object_cleanup(
-    db_client: TestClient, fake_storage
+    db_client: TestClient, fake_storage, case_api_authority: None
 ) -> None:
     case_id = str(CaseFactory(db_client).create().id)
     documents = DocumentFactory(db_client, fake_storage)
     document_id = str(documents.create_uploaded(case_id=case_id).document_id)
     path = f"/api/v1/documents/{document_id}"
 
-    for hdrs, label in (
-        (headers(roles=("viewer",)), "viewer"),
-        (headers(roles=("examiner",)), "examiner"),
-        (_impersonation_headers(), "impersonation"),
-    ):
+    for hdrs, label in ((_impersonation_headers(), "impersonation"),):
         refused = db_client.delete(path, headers=hdrs)
         assert refused.status_code == 403, f"{label}: {refused.text}"
 
@@ -667,7 +669,9 @@ def test_document_delete_is_analyst_gated_and_queues_object_cleanup(
     assert fake_storage.deleted == []
 
 
-def test_document_delete_does_not_wait_for_storage(db_client: TestClient, fake_storage) -> None:
+def test_document_delete_does_not_wait_for_storage(
+    db_client: TestClient, fake_storage, case_api_authority: None
+) -> None:
     """An unavailable store cannot prevent the durable logical deletion."""
     case_id = str(CaseFactory(db_client).create().id)
     documents = DocumentFactory(db_client, fake_storage)

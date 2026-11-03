@@ -7,7 +7,7 @@
  * presentational.
  */
 
-import RunModuleScenarios from "@/components/workbench/RunModuleScenarios";
+import RunModuleScenarios from "@/features/workbench/components/RunModuleScenarios";
 import PageContainer from "@/components/ui/PageContainer";
 import type { ReactNode } from "react";
 import type {
@@ -17,7 +17,7 @@ import type {
 import PageHeader from "@/components/ui/PageHeader";
 import QueryBoundary from "@/components/ui/QueryBoundary";
 import { useBankContext } from "@/components/shell/BankContext";
-import LiveEngineNote from "@/components/live/LiveEngineNote";
+import LiveEngineNote from "@/features/live/components/LiveEngineNote";
 import { useCreditDashboard } from "@/lib/api/hooks";
 
 export type CreditTabContext = {

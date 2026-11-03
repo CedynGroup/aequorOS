@@ -11,11 +11,7 @@ from fastapi import HTTPException
 from sqlalchemy import delete, select, update
 from sqlalchemy.orm import Session
 
-from app.core.authorization import ModuleScope, SensitivityScope
-from app.core.errors import ModuleDataUnavailable
-from app.credit.service import credit_concentration, regulatory_credit
-from app.domain.authority.outcomes import OutcomeState
-from app.domain.capital.engine import (
+from app.capital.domain.engine import (
     CAPITAL_REGISTER_REFUSED_CATEGORY,
     MODELLED_ECL_CHARGE_CATEGORY,
     CapitalFact,
@@ -24,6 +20,11 @@ from app.domain.capital.engine import (
     compute_rwa,
     tier1_capital,
 )
+from app.capital.service import regulatory_capital
+from app.core.authorization import ModuleScope, SensitivityScope
+from app.core.errors import ModuleDataUnavailable
+from app.credit.service import credit_concentration, regulatory_credit
+from app.domain.authority.outcomes import OutcomeState
 from app.forecasting.schemas.forecasting import (
     ForecastRunCreate,
     OptimizerRunCreate,
@@ -36,6 +37,10 @@ from app.irrbb.domain.standardised_params import REQUIRED_CODES
 from app.irrbb.schemas.regulatory_irr import IrrScenarioBatchCreate
 from app.irrbb.schemas.regulatory_irr_sf import IrrbbSfRunCreate
 from app.irrbb.service import regulatory_irr, regulatory_irr_sf
+from app.liquidity.schemas.regulatory_liquidity import (
+    RegulatoryRunCreate,
+    RegulatoryScenarioCode,
+)
 from app.live.service.fact_derivation import derive_current_facts, derive_facts
 from app.models import (
     Bank,
@@ -48,17 +53,12 @@ from app.models import (
 )
 from app.rating.service import sdi_rating
 from app.reporting.service.bog_forms.sources import ResolveContext, get_resolver
-from app.schemas.regulatory_liquidity import (
-    RegulatoryRunCreate,
-    RegulatoryScenarioCode,
-)
-from app.services import regulatory_capital
 from app.stress.models.stress import MacroScenario, MacroScenarioPath
 from app.stress.schemas.enterprise_stress import EnterpriseStressRunCreate
 from app.stress.schemas.reverse_stress import ReverseStressRunCreate
 from app.stress.schemas.scenario_workbench import AnalysisRunCreate, ScenarioRefIn, WorkbenchModule
 from app.stress.service import analysis_workbench, enterprise_stress, reverse_stress
-from tests.domain.test_capital_engine import bog_capital_params
+from tests.capital.domain.test_capital_engine import bog_capital_params
 from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID
 from tests.fixtures.capital_structure import (
     MAKER,
@@ -69,6 +69,8 @@ from tests.fixtures.capital_structure import (
 )
 from tests.services.sf_book import seed_fx
 from tests.support.authority import grant_organization_analyst
+
+pytestmark = pytest.mark.canonical_book_baseline
 
 
 @pytest.fixture
@@ -631,6 +633,7 @@ def test_forecast_variants_preserve_the_named_register_refusal(
     _assert_named_refusal(run.error.code, run.error.message)
 
 
+@pytest.mark.usefixtures("stress_run_authority")
 def test_enterprise_stress_refuses_the_register_before_projecting(
     db_session: Session, refused_book: tuple[Bank, BankReportingPeriod]
 ) -> None:

@@ -25,6 +25,7 @@ from app.storage.client import (
     StorageBackendError,
     StorageLocation,
     StorageValidationError,
+    is_sealed_object_key,
 )
 from app.storage.encryption import ENCRYPTION_FORMAT, ObjectEncryption
 
@@ -114,7 +115,9 @@ def inventory_page(  # noqa: PLR0913
                     location,
                     entry.VersionId,
                     UUID(envelope) if envelope else None,
-                    not entry.IsLatest or _locked(stat),
+                    # Sealed objects are immutable: rewriting their ciphertext
+                    # would break the catalogue's recorded key dependency.
+                    not entry.IsLatest or _locked(stat) or is_sealed_object_key(entry.Key),
                     TypeAdapter(int).validate_python(stat["ContentLength"]),
                 )
             )
@@ -232,11 +235,11 @@ def reencrypt(  # noqa: PLR0912, PLR0913, PLR0915 - atomic publication and resou
             try:
                 if envelope is None:
                     raise StorageAccessError("Re-encryption requires a connected bank key.")
-                target_version = UUID(envelope)
+                target_version = envelope
                 headers.update(
                     {
                         "encryption-format": ENCRYPTION_FORMAT,
-                        "key-envelope-id": envelope,
+                        "key-envelope-id": str(envelope),
                         "kms-key-id": key_id or "",
                     }
                 )

@@ -28,7 +28,9 @@ import pytest
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.capital.service import capital_plan, regulatory_capital
 from app.domain.authority.outcomes import NotComputable, OutcomeState
+from app.liquidity.schemas.regulatory_liquidity import RegulatoryRunCreate
 from app.models import (
     Bank,
     BankReportingPeriod,
@@ -36,15 +38,13 @@ from app.models import (
     RegulatoryParameter,
     RegulatoryRun,
 )
+from app.operator.schemas import RegulatoryParameterProposeRequest
 from app.operator.services import regulatory_parameters as console
 from app.policy.service import regulatory_parameters
 from app.reporting.schemas.packages import RegulatoryPackageCreate
 from app.reporting.service import generation
 from app.reporting.service.exports import export_package
 from app.reporting.service.templates import report_notes
-from app.schemas.operator import RegulatoryParameterProposeRequest
-from app.schemas.regulatory_liquidity import RegulatoryRunCreate
-from app.services import capital_plan, regulatory_capital
 from app.stress.domain.appendix_ii import build_appendix_ii
 from app.stress.domain.management_actions import (
     ActionTrigger,
@@ -59,6 +59,7 @@ from app.stress.domain.projection import (
     project_enterprise,
 )
 from app.stress.service.enterprise_stress import EnterpriseStressError
+from tests.capital.service.test_capital_plan import _run_forecast
 from tests.fixtures.canonical_bank_fixture import (
     DEMO_ORG_ID,
     SAMPLE_BANK_ID,
@@ -75,7 +76,6 @@ from tests.icaap.service.test_icaap_stress_appendix2_report import (
     _seed_checker,
     storage,
 )
-from tests.services.test_capital_plan import _run_forecast
 from tests.stress.domain.stress_fixtures import (
     BASE_ASSUMPTIONS,
     bog_capital_params,
@@ -84,16 +84,19 @@ from tests.stress.domain.stress_fixtures import (
     severe_paths,
 )
 from tests.support.inmemory_storage import InMemoryStorageClient
+from tests.support.sealed_documents import published_bytes
 
 __all__ = ["storage"]
 
-# The enterprise stress run this suite prepares requires scoped FX and IRRBB
-# calculation authority (an unconditional IRRBB check landed on the run
-# service), and the capital-plan forecast it drives through ``_run_forecast``
-# requires scoped Forecasting ``run`` authority, so it takes the same fixtures
-# as the suites it borrows ``_run_enterprise_stress`` and ``_run_forecast`` from.
+# Stress runs require scoped Risk, FX and IRRBB authority; the capital-plan
+# forecast additionally requires Forecasting RUN.
 pytestmark = [
-    pytest.mark.usefixtures("fx_run_authority", "irrbb_run_authority", "forecasting_run_authority"),
+    pytest.mark.usefixtures(
+        "fx_run_authority",
+        "irrbb_run_authority",
+        "stress_run_authority",
+        "forecasting_run_authority",
+    ),
     pytest.mark.usefixtures("return_generation_authority"),
     pytest.mark.usefixtures("capital_run_authority"),
 ]
@@ -162,10 +165,9 @@ def _export_pdf(
     artifact = export_package(db, MAKER, package, "pdf")
     slug = db.scalar(select(Bank.storage_slug).where(Bank.id == SAMPLE_BANK_ID))
     assert slug
-    for obj in storage_client.list(slug, "outputs"):
-        if obj.location.object_path == artifact.object_path:
-            return _pdf_text(storage_client.read(obj.location)[1].read())
-    raise AssertionError(artifact.object_path)
+    return _pdf_text(
+        published_bytes(db, storage_client, slug=slug, context_path=artifact.object_path)
+    )
 
 
 def _stress_package(db: Session) -> tuple[RegulatoryRun, RegulatoryPackage]:

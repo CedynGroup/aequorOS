@@ -11,9 +11,9 @@ from fastapi import APIRouter, Depends
 from app.core.config import get_settings
 from app.core.tls import require_boto_tls, require_https
 from app.operator.deps import Operator, OperatorDb
+from app.operator.schemas import ProvisioningResultRead, TenantProvisionCreate
 from app.operator.services import tenant_provisioning
 from app.operator.services.tenant_provisioning import ProvisioningClients
-from app.schemas.operator import ProvisioningResultRead, TenantProvisionCreate
 from app.storage.config import StorageRetiredError, enforce_retirement, get_storage_settings
 
 router = APIRouter(prefix="/tenants", tags=["operator-provisioning"])

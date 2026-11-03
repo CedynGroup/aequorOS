@@ -180,9 +180,10 @@ services:
   # Staff control plane (operator API): the app behind console.aequoros.com.
   # Same image, third entrypoint (api/worker/operator). Attach a dedicated
   # domain to container port 8100 (e.g. op.aequoros.com); the console app's
-  # OPERATOR_API_URL points at it. Auth is workforce-OIDC-only in production
-  # (dev auth is hard-refused). Operator credential resolution and activation
-  # follow docs/ops/database-roles.md#worker-compatibility-migration.
+  # OPERATOR_API_URL points at it. Staff authentication and Workspace rollout:
+  # docs/rbac.md#staff-sign-in-google-workspace-operator-plane-only.
+  # Dev auth is hard-refused in production. Operator credential resolution and
+  # activation follow docs/ops/database-roles.md#worker-compatibility-migration.
   risk-operator:
     build: .
     command: ["python", "-m", "app.core.serve", "operator"]

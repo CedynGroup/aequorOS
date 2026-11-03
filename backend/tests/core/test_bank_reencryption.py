@@ -23,16 +23,16 @@ from app.core.key_management.models import BankEncryptionKey, ObjectKeyEnvelope,
 from app.core.key_management.presentation import LOCKED_JSON, SESSION_STATE, PresentationState
 from app.core.key_management.settings import get_key_settings
 from app.core.key_management.types import KeyReference, KeyStatus, KeyUnavailableError
-from app.core.tenancy import TenantContext
+from app.data_engine.models.canonical import CanonicalCounterparty, CanonicalPositionSnapshot
+from app.data_engine.service import canonical_withdrawal
+from app.data_engine.service.canonical_withdrawal import WithdrawalError
 from app.db.base import utc_now
 from app.identity.models.institution_profile import RelatedParty, RelatedPartyRole
 from app.identity.public import Bank
 from app.models.audit_event import AuditEvent
-from app.models.canonical import CanonicalCounterparty, CanonicalPositionSnapshot
 from app.models.job import Job
 from app.reporting.models.packages import RegulatoryPackage
-from app.services import canonical_withdrawal, job_queue
-from app.services.canonical_withdrawal import WithdrawalError
+from app.services import job_queue
 from app.storage.client import (
     EncryptionCursor,
     EncryptionInventoryItem,
@@ -47,6 +47,7 @@ from tests.core.test_bank_field_encryption import (
     BANK_B,
     CTX,
     IDENTIFIER,
+    MAKER_CTX,
     NAME,
     NEXT,
     connect,
@@ -374,7 +375,7 @@ def test_connection_reindexes_withdrawn_generations_before_reimport(
     assert bank is not None
     requested = canonical_withdrawal.request_withdrawal(
         db_session,
-        TenantContext(organization_id=ORG_1, actor_user_id=None, roles=("admin",)),
+        MAKER_CTX,
         bank,
         entity="counterparty",
         source_system=cp.source_system,

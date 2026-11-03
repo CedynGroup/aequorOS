@@ -8,7 +8,7 @@
  * declared something to narrow by. A bank that has not supplied a branch
  * register has no branches; a register with no `region` column has no regions
  * (it is declared, never inferred — see
- * `backend/app/domain/ingestion/reference_schemas/business_units.py`). In both
+ * `backend/app/data_engine/domain/ingestion/reference_schemas/business_units.py`). In both
  * cases the control SAYS SO instead of opening a picker with nothing in it,
  * because an empty picker reads as a broken screen and sends an Org Owner
  * looking for a bug rather than to their data engineers.

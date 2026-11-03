@@ -12,7 +12,7 @@ every one is bound below.
 Sources (data-gap closure 2026-08-16): the ``capital_expenditure`` reference
 dataset — the bank's fixed-asset / capex register, one row per (period_end,
 asset_class), pushed through the Data Engine (schema
-``app/domain/ingestion/reference_schemas/capital_expenditure.py``, spec
+``app/data_engine/domain/ingestion/reference_schemas/capital_expenditure.py``, spec
 docs/data_engine/datasets/capital_expenditure.md). Each cell is ``refs.sum`` of
 the row's field over the register classes the column rolls up
 (``BSD10_COLUMN_CLASSES``: "Land and Buildings" = ``land_buildings`` +
@@ -30,7 +30,9 @@ from __future__ import annotations
 
 from dataclasses import replace
 
-from app.domain.ingestion.reference_schemas.capital_expenditure import BSD10_COLUMN_CLASSES
+from app.data_engine.domain.ingestion.reference_schemas.capital_expenditure import (
+    BSD10_COLUMN_CLASSES,
+)
 
 from ..layout import load_layout
 from ..spec import LineSpec

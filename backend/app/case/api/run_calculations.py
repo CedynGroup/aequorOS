@@ -1,0 +1,82 @@
+"""Case balance-sheet forecast endpoints (advisory, never filed).
+
+Case-scoped routes over `app.case.service.calculations`. Outputs are internal
+credit analysis for one case; the bank's official forecast runs are under
+`/banks/{bank_id}/forecast/runs`. See `app.case.service.case_plane`.
+"""
+
+from __future__ import annotations
+
+from typing import Annotated
+from uuid import UUID
+
+from fastapi import APIRouter, Query, status
+
+from app.api.deps import DbSession
+from app.case.api.authorization import CaseRestrictedRun, CaseRestrictedView, CaseView
+from app.case.schemas.calculations import (
+    CalculationRerunCreate,
+    CalculationRunCreate,
+    CalculationRunListRead,
+    CalculationRunRead,
+)
+from app.case.schemas.disclosure import CaseResponses
+from app.case.service import calculations
+from app.case.service.authorization import has_restricted_view
+
+router = APIRouter(tags=["calculations"])
+
+
+@router.get("/cases/{case_id}/calculation-runs", response_model=CalculationRunListRead)
+def list_calculation_runs(  # noqa: PLR0913
+    case_id: UUID,
+    db: DbSession,
+    ctx: CaseView,
+    scenario_id: Annotated[UUID | None, Query()] = None,
+    active_scenarios_only: Annotated[bool, Query()] = False,
+    limit: Annotated[int, Query(ge=1, le=100)] = 25,
+    offset: Annotated[int, Query(ge=0)] = 0,
+) -> CalculationRunListRead:
+    result = calculations.list_runs(
+        db,
+        ctx,
+        case_id,
+        scenario_id=scenario_id,
+        active_scenarios_only=active_scenarios_only,
+        limit=limit,
+        offset=offset,
+    )
+    return CaseResponses(has_restricted_view(db, ctx)).calculation_runs(result)
+
+
+@router.post(
+    "/cases/{case_id}/calculation-runs",
+    response_model=CalculationRunRead,
+    status_code=status.HTTP_201_CREATED,
+)
+def start_calculation_run(
+    case_id: UUID, payload: CalculationRunCreate, db: DbSession, ctx: CaseRestrictedRun
+) -> CalculationRunRead:
+    return calculations.start_run(db, ctx, case_id, payload)
+
+
+@router.get("/cases/{case_id}/calculation-runs/{run_id}", response_model=CalculationRunRead)
+def get_calculation_run(
+    case_id: UUID, run_id: UUID, db: DbSession, ctx: CaseRestrictedView
+) -> CalculationRunRead:
+    return calculations.get_run(db, ctx, case_id, run_id)
+
+
+@router.post(
+    "/cases/{case_id}/calculation-runs/{run_id}/rerun",
+    response_model=CalculationRunRead,
+    status_code=status.HTTP_201_CREATED,
+)
+def rerun_calculation(
+    case_id: UUID,
+    run_id: UUID,
+    payload: CalculationRerunCreate,
+    db: DbSession,
+    ctx: CaseRestrictedRun,
+) -> CalculationRunRead:
+    return calculations.rerun(db, ctx, case_id, run_id, payload)

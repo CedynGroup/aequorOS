@@ -1,0 +1,33 @@
+"""Refinitiv extractors (§7.3): raw RDP responses -> typed intermediates.
+
+One module per supported scope category (§7.2 catalog): yield curves, FX,
+and credit ratings. Extractors take a transport + session token + the
+scope's catalog request specs, fetch the raw RDP-shaped payload, and parse
+it into typed observation structures. They do not translate to canonical
+(translators do) and do not persist (the pull runner does).
+"""
+
+from app.market_data.adapters.refinitiv.extractors.credit_data import (
+    RatingObservation,
+    extract_ratings,
+)
+from app.market_data.adapters.refinitiv.extractors.curves import (
+    CurveObservation,
+    extract_curve,
+)
+from app.market_data.adapters.refinitiv.extractors.fx import FxObservation, extract_fx
+from app.market_data.adapters.refinitiv.extractors.macro_series import (
+    MacroObservation,
+    extract_macro,
+)
+
+__all__ = [
+    "CurveObservation",
+    "FxObservation",
+    "MacroObservation",
+    "RatingObservation",
+    "extract_curve",
+    "extract_fx",
+    "extract_macro",
+    "extract_ratings",
+]

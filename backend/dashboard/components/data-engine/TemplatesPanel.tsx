@@ -8,6 +8,8 @@
 
 import { useState } from "react";
 import { Download, FileDown } from "lucide-react";
+import DataAccessNotice from "@/components/ui/DataAccessNotice";
+import { ErrorPanel } from "@/components/ui/QueryBoundary";
 import { useBankContext } from "@/components/shell/BankContext";
 import {
   STARTER_TEMPLATES,
@@ -38,18 +40,24 @@ const FORMATS: { key: TemplateFormat; label: string; blurb: string }[] = [
 ];
 
 export default function TemplatesPanel() {
-  const { bank } = useBankContext();
+  const { bank, authorityPending } = useBankContext();
   const [format, setFormat] = useState<TemplateFormat>("canonical");
-  const configsQuery = useMappingConfigs(bank?.id);
+  const configsQuery = useMappingConfigs(bank?.id, authorityPending);
   const activate = useActivateTemplate(bank?.id);
 
   const requiredName = REQUIRED_MAPPING[format];
-  const activeConfig = (configsQuery.data?.configs ?? []).find(
+  const activeConfig = (
+    configsQuery.access === "allowed" && configsQuery.isSuccess
+      ? configsQuery.data.configs
+      : undefined
+  )?.find(
     (config) =>
       config.status === "active" && config.sourceSystem === "EXCEL_CSV",
   );
   const mappingReady = activeConfig?.name === requiredName;
-  const starter = STARTER_TEMPLATES.find((template) => template.name === requiredName);
+  const starter = STARTER_TEMPLATES.find(
+    (template) => template.name === requiredName,
+  );
   const activeFormat = FORMATS.find((entry) => entry.key === format)!;
 
   return (
@@ -89,7 +97,18 @@ export default function TemplatesPanel() {
               : "border-warning/30 bg-warning-light/40"
           }`}
         >
-          {mappingReady ? (
+          {configsQuery.access === "loading" ? (
+            <p role="status">Loading mapping status…</p>
+          ) : configsQuery.access === "denied" ? (
+            <DataAccessNotice requirement="DATA · Confidential · View to read mapping status" />
+          ) : configsQuery.isError ? (
+            <ErrorPanel
+              error={configsQuery.error}
+              onRetry={() => void configsQuery.refetch()}
+            />
+          ) : !configsQuery.isSuccess ? (
+            <p role="status">Loading mapping status…</p>
+          ) : mappingReady ? (
             <span className="text-success">
               Active mapping <span className="font-medium">{requiredName}</span>{" "}
               — these files ingest as-is.

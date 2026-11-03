@@ -129,86 +129,8 @@ FEATURE_RULES: tuple[tuple[str, str], ...] = (
     (r"^schemas/(common|text|health|jobs)$", KERNEL),
     (r"^features/track_jobs$", KERNEL),
     (r"^domain/(risk_constants|authority/.*|workflow/.*)$", KERNEL),
-    # ---- staff operator console
-    (r"^(models|schemas)/operator$", "operator"),
-    # ---- data engine
+    # ---- data engine (the shared adapters namespace is data-engine-owned)
     (r"^adapters/__init__$", "data_engine"),
-    (r"^adapters/(api_push|database_direct|excel_csv|temenos_t24)(/|$)", "data_engine"),
-    (r"^etl(/|$)", "data_engine"),
-    (r"^domain/ingestion/", "data_engine"),
-    (
-        r"^services/(ingestion|push_ingestion|database_connections|database_direct_jobs"
-        r"|temenos_connections|temenos_jobs|system_of_record|canonical_withdrawal"
-        r"|withdrawal_impact|history_loader|etl_dedup_jobs|etl_model_training"
-        r"|document_uploads|reconciliation)$",
-        "data_engine",
-    ),
-    (
-        r"^models/(canonical|canonical_withdrawal|ingestion|database_connection|temenos"
-        r"|system_of_record|reconciliation)$",
-        "data_engine",
-    ),
-    (
-        r"^schemas/(ingestion|push|database_connection|temenos_connections|system_of_record"
-        r"|reconciliation|data_activation)$",
-        "data_engine",
-    ),
-    (r"^api/v1/database_connections$", "data_engine"),
-    (
-        r"^features/(ingest_data|push_data|manage_temenos_connections"
-        r"|manage_system_of_record|manage_reconciliation)$",
-        "data_engine",
-    ),
-    # ---- market data
-    (r"^adapters/market_data(/|$)", "market_data"),
-    (r"^domain/curves/", "market_data"),
-    (r"^services/(market_data.*|market_desk(/.*)?)$", "market_data"),
-    (
-        r"^models/(market_data.*|market_desk.*|desk_operating_environment|entitlements)$",
-        "market_data",
-    ),
-    (r"^schemas/(market_data.*|market_desk.*|fx_forward)$", "market_data"),
-    (
-        r"^features/(manage_market_data_.*|market_data_sources|read_market_data_views)$",
-        "market_data",
-    ),
-    # ---- legacy case vertical
-    (
-        r"^services/(cases|case_plane|case_types|calculations|capital|liquidity|financial_.*"
-        r"|financial_mapping/.*|assessments|documents|findings|reports|scoring|scenarios"
-        r"|scenario_semantics)$",
-        "case",
-    ),
-    (r"^models/(risk|calculation|capital|financial|scenario)$", "case"),
-    (
-        r"^schemas/(cases|calculations|capital|liquidity|financial_workspace.*|assessments"
-        r"|documents|findings|taxonomy|scenarios)$",
-        "case",
-    ),
-    (
-        r"^features/(bulk_update_cases|generate_case_reports|list_case_taxonomy|list_taxonomy"
-        r"|manage_capital|manage_documents|read_financial_workspace|record_case_decisions"
-        r"|review_cases|review_findings|review_liquidity|run_assessments|run_calculations"
-        r"|manage_scenarios)$",
-        "case",
-    ),
-    # ---- regulatory engines
-    (
-        r"^(services/(regulatory_liquidity|liquidity_cfp|liquidity_ewi|liquidity_thresholds"
-        r"|behavioral_liquidity|cashflow_window|window_analytics)|domain/liquidity/.*"
-        r"|models/liquidity_cfp|schemas/(regulatory_liquidity|liquidity_cfp"
-        r"|liquidity_thresholds|cashflow_window|window_analytics)"
-        r"|features/(run_regulatory_liquidity|manage_liquidity_cfp|manage_liquidity_thresholds"
-        r"|read_liquidity_monitoring|read_cashflow_window|read_window_analytics))$",
-        "liquidity",
-    ),
-    (
-        r"^(services/(regulatory_capital|sdi_capital.*|sdi_views|sdi_readiness|capital_plan)"
-        r"|domain/capital/.*|models/capital_plan|schemas/(regulatory_capital|sdi|capital_plan)"
-        r"|features/(run_regulatory_capital|manage_capital_plan|read_sdi_diagnostics))$",
-        "capital",
-    ),
-    # ---- stress, attestation, filing, ICAAP, BI, AI
 )
 _COMPILED_RULES: tuple[tuple[re.Pattern[str], str], ...] = tuple(
     (re.compile(pattern), feature) for pattern, feature in FEATURE_RULES

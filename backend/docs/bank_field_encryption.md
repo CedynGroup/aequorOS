@@ -77,7 +77,7 @@ re-import/reversal; a losing reversal returns 409. Numeric concentration groupin
 Name index tokens are 64 characters for both connected and optional banks.
 Optional banks use unkeyed SHA-256 tokens and retain plaintext names.
 Counterparty names and group references retain the plaintext length limits defined by
-[`CounterpartyData`](../app/domain/ingestion/contracts.py) and
+[`CounterpartyData`](../app/data_engine/domain/ingestion/contracts.py) and
 [`counterparty_group_key`](../app/core/key_management/concentration_identity.py),
 including groups derived from attributes. These limits apply during ingestion and
 before persistence for both optional-key and connected-key banks.

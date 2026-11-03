@@ -1,0 +1,34 @@
+[
+  [
+    "components/fx",
+    "features/fx/components"
+  ],
+  [
+    "components/liquidity",
+    "features/liquidity/components"
+  ],
+  [
+    "components/bi",
+    "features/bi/components"
+  ],
+  [
+    "components/home",
+    "features/home/components"
+  ],
+  [
+    "components/workbench",
+    "features/workbench/components"
+  ],
+  [
+    "components/risk",
+    "features/risk/components"
+  ],
+  [
+    "components/alerts",
+    "features/risk/components"
+  ],
+  [
+    "components/live",
+    "features/live/components"
+  ]
+]

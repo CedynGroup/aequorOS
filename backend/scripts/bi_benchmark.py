@@ -5,7 +5,7 @@ command line:
 
 1. ``generate`` — the existing 10-year history simulator (``data/simulator``)
    writes monthly parquet panels. Nothing is invented here: the panels are the
-   same ones ``app/services/history_loader.py`` reads.
+   same ones ``app/data_engine/service/history_loader.py`` reads.
 2. ``ingest`` — every panel month is pushed through the **Data Engine's own
    push path** (``POST /banks/{id}/push-batches`` → ``/records`` → ``/commit``,
    the three calls ``scripts/ingest_push.py`` makes) with a real bank-scoped
@@ -1951,7 +1951,7 @@ def _configure(options: Options) -> None:
 def _client() -> Any:
     from fastapi.testclient import TestClient  # noqa: PLC0415
 
-    from app.features.ingest_data import get_ingestion_storage  # noqa: PLC0415
+    from app.data_engine.api.ingest_data import get_ingestion_storage  # noqa: PLC0415
     from app.integrations.storage.s3 import get_object_storage  # noqa: PLC0415
     from app.main import create_app  # noqa: PLC0415
     from tests.support.inmemory_storage import InMemoryStorageClient  # noqa: PLC0415

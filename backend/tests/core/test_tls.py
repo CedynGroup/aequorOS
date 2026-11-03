@@ -22,9 +22,6 @@ from starlette.requests import Request
 from starlette.responses import PlainTextResponse
 from starlette.routing import Route
 
-from app.adapters.database_direct.config import ConnectionConfig, TlsConfig
-from app.adapters.database_direct.drivers.base import require_verified_transport
-from app.adapters.database_direct.errors import DatabaseDirectError
 from app.attestation.service.tsa import build_pdf_timestamper
 from app.core.config import Settings, TsaSettings, get_settings
 from app.core.serve import listener_options
@@ -37,6 +34,9 @@ from app.core.tls import (
     validate_service_transports,
 )
 from app.core.tls_evidence import probe_https
+from app.data_engine.adapters.database_direct.config import ConnectionConfig, TlsConfig
+from app.data_engine.adapters.database_direct.drivers.base import require_verified_transport
+from app.data_engine.adapters.database_direct.errors import DatabaseDirectError
 from app.integrations.storage.s3 import S3ObjectStorage
 from app.main import create_app
 from app.reporting.service.channels.errors import ChannelPreconditionError
@@ -458,11 +458,15 @@ def test_listener_runtime_requires_tls12(
 
 
 def test_postgres_plaintext_peer_cannot_receive_startup_credentials(
-    production: None, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    production: None,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    request: pytest.FixtureRequest,
 ) -> None:
     from sqlalchemy.exc import OperationalError  # noqa: PLC0415
 
     from app.db.session import get_engine  # noqa: PLC0415
+    from tests.support.database import adopt_application_engine  # noqa: PLC0415
 
     cert, _key = certificate(tmp_path)
     monkeypatch.setenv("TLS_CA_BUNDLE", str(cert))
@@ -482,8 +486,12 @@ def test_postgres_plaintext_peer_cannot_receive_startup_credentials(
 
         thread = threading.Thread(target=refuse_ssl)
         thread.start()
-        engine = get_engine(
-            f"postgresql+psycopg://synthetic:synthetic@localhost:{port}/bank?sslmode=verify-full"
+        engine = adopt_application_engine(
+            request,
+            get_engine(
+                f"postgresql+psycopg://synthetic:synthetic@localhost:{port}/bank?sslmode=verify-full"
+            ),
+            administrative=True,
         )
         try:
             with pytest.raises(OperationalError, match="does not support SSL"):

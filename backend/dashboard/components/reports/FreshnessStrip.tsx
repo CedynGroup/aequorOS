@@ -18,7 +18,7 @@ import StatusPill from "@/components/ui/StatusPill";
 import { SkeletonLine } from "@/components/ui/Skeleton";
 import { useBankFreshness } from "@/lib/api/hooks";
 import { fmtRelative, shortId } from "@/lib/api/values";
-import { LIVE_MODULE_LABELS } from "@/components/live/moduleDisplay";
+import { LIVE_MODULE_LABELS } from "@/features/live/components/moduleDisplay";
 
 /** Short labels for the live-module grid cells — the full LIVE_MODULE_LABELS
  * truncate to "CA…"/"INT…" at these widths. */

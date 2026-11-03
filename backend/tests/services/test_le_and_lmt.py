@@ -30,9 +30,12 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
+from app.capital.service import regulatory_capital
 from app.db.base import utc_now
 from app.irrbb.schemas.regulatory_irr import IrrScenarioBatchCreate
 from app.irrbb.service import regulatory_irr
+from app.liquidity.schemas.regulatory_liquidity import RegulatoryRunCreate
+from app.liquidity.service import regulatory_liquidity
 from app.models import (
     Bank,
     BankReportingPeriod,
@@ -55,8 +58,6 @@ from app.reporting.service import calendar, generation, validation
 from app.reporting.service.common import UNVALIDATED_BOOK_RULE
 from app.reporting.service.exports import export_package
 from app.reporting.service.registry import REGISTRY
-from app.schemas.regulatory_liquidity import RegulatoryRunCreate
-from app.services import regulatory_capital, regulatory_liquidity
 from tests.fixtures.canonical_bank_fixture import (
     DEMO_ORG_ID,
     DEMO_USER_ID,
@@ -64,6 +65,7 @@ from tests.fixtures.canonical_bank_fixture import (
     materialize_canonical_test_book,
 )
 from tests.support.inmemory_storage import InMemoryStorageClient
+from tests.support.sealed_documents import published_bytes
 
 pytestmark = [
     pytest.mark.usefixtures("return_generation_authority"),
@@ -699,12 +701,11 @@ def test_le_validates_and_exports_round_trip(
     assert xlsx.size_bytes > 0 and pdf.size_bytes > 0
     slug = db_session.scalar(select(Bank.storage_slug).where(Bank.id == SAMPLE_BANK_ID))
     assert slug
-    payloads = {}
-    for obj in storage.list(slug, "outputs"):
-        _, stream = storage.read(obj.location)
-        payloads[obj.location.object_path] = stream.read()
-    assert payloads[pdf.object_path].startswith(b"%PDF")
-    workbook = load_workbook(io.BytesIO(payloads[xlsx.object_path]))
+    assert published_bytes(db_session, storage, slug=slug, context_path=pdf.object_path).startswith(
+        b"%PDF"
+    )
+    payload = published_bytes(db_session, storage, slug=slug, context_path=xlsx.object_path)
+    workbook = load_workbook(io.BytesIO(payload))
     assert workbook.sheetnames == [
         "Return Metadata",
         "LE Template 1 Large Exposures",
@@ -880,11 +881,7 @@ def test_lmt_carries_ladder_concentration_and_unencumbered_sections(  # noqa: PL
     db_session.commit()
     slug = db_session.scalar(select(Bank.storage_slug).where(Bank.id == SAMPLE_BANK_ID))
     assert slug
-    payload = b""
-    for obj in storage.list(slug, "outputs"):
-        if obj.location.object_path == artifact.object_path:
-            _, stream = storage.read(obj.location)
-            payload = stream.read()
+    payload = published_bytes(db_session, storage, slug=slug, context_path=artifact.object_path)
     workbook = load_workbook(io.BytesIO(payload))
     assert "Contractual Maturity Mismatch" in workbook.sheetnames
     # xlsx sheet titles truncate at 31 characters.
@@ -1567,13 +1564,10 @@ def test_sdi_irrbb_uses_net_own_funds_and_omits_bank_outlier_fields(
     artifact = export_package(db_session, MAKER, package, "xlsx_working")
     db_session.refresh(bank)
     assert bank.storage_slug is not None
-    stored = next(
-        obj
-        for obj in storage.list(bank.storage_slug, "outputs")
-        if obj.location.object_path == artifact.object_path
+    payload = published_bytes(
+        db_session, storage, slug=bank.storage_slug, context_path=artifact.object_path
     )
-    _, stream = storage.read(stored.location)
-    workbook = load_workbook(io.BytesIO(stream.read()), data_only=False)
+    workbook = load_workbook(io.BytesIO(payload), data_only=False)
     calculations = workbook["Working Calculations"]
     assert calculations["D6"].data_type == "f"
     assert calculations["D6"].value == "=B6-C6"

@@ -16,13 +16,16 @@ export function assertCanonicalGraph(
   list: CanonicalPositionListRead,
   snapshots: PositionSnapshotRead[],
 ) {
+  const referenceRows = referenceRowTotal(batch);
+  if (referenceRows === null)
+    throw new Error("Canonical: reference row counts unavailable");
   expect(list.bankId, "Canonical: list belongs to another batch bank").toBe(
     batch.bankId,
   );
   expect(
     list.positions,
     "Canonical: accepted count differs from position count",
-  ).toHaveLength(batch.recordsAccepted - referenceRowTotal(batch));
+  ).toHaveLength(batch.recordsAccepted - referenceRows);
   expect(snapshots, "Canonical: snapshot cardinality differs").toHaveLength(
     list.positions.length,
   );

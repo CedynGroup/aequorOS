@@ -28,14 +28,14 @@ from fastapi.testclient import TestClient
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.db.session import get_sessionmaker
-from app.models import BankReportingPeriod, IngestionBatch, LineageRecord
-from app.models.canonical import (
+from app.data_engine.models.canonical import (
     CanonicalCounterparty,
     CanonicalFxRate,
     CanonicalPosition,
     CanonicalPositionSnapshot,
 )
+from app.db.session import get_sessionmaker
+from app.models import BankReportingPeriod, IngestionBatch, LineageRecord
 from app.reporting.service.bog_forms.layout import load_layout
 from app.reporting.service.bog_forms.linemaps import line_maps_for
 from tests.fixtures.canonical_bank_fixture import (

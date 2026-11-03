@@ -21,7 +21,7 @@ from app.behavioral.schemas import (
 )
 from app.core.authorization import Module, Permission, Sensitivity
 from app.identity import public as scoped_authorization
-from app.services import behavioral_liquidity
+from app.liquidity.service import behavioral_liquidity
 
 router = APIRouter(tags=["behavioral-models"])
 

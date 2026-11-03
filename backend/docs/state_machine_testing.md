@@ -17,7 +17,7 @@ transition changes; update its table and independent test model in the same chan
 | Scoped access requests           | `app/identity/api/manage_authorization.py`                                                      | [Access-request machine](../tests/identity/api/test_access_request_state_machine.py)         |
 | Grants and session invalidation  | `app/identity/service/{authentication,authorization,grant_administration}.py`                   | [Existing authorization machines](../tests/identity/api/test_authorization_state_machine.py) |
 | Jobs                             | `app/services/job_queue.py`; `app/worker.py`                                                    | Queue/worker examples; generated retries and stale claims pending                            |
-| Ingestion batches                | `app/services/ingestion.py`                                                                     | Ingestion examples; generated extraction/validation/retry sequences pending                  |
+| Ingestion batches                | `app/data_engine/service/ingestion.py`                                                                     | Ingestion examples; generated extraction/validation/retry sequences pending                  |
 | BI alert verdicts                | `app/bi/service/alerts.py`                                                                      | Alert examples; generated missing-data/breach/recovery sequences pending                     |
 
 The filing, freeze and template machines use real services and persisted audit/submission events.

@@ -10,6 +10,7 @@ from fastapi.responses import StreamingResponse
 
 from app.api.deps import DbSession, IcaapEdit, IcaapView
 from app.core.config import get_settings
+from app.core.content_disposition import attachment_headers
 from app.icaap.schemas.workspace import (
     IcaapAttachmentListRead,
     IcaapAttachmentRead,
@@ -17,7 +18,7 @@ from app.icaap.schemas.workspace import (
 )
 from app.icaap.service import attachments
 from app.schemas.common import ErrorResponse
-from app.storage import StorageClient, StorageLocation, StorageValidationError
+from app.storage import StorageClient, StorageValidationError
 from app.storage.config import StorageRetiredError
 from app.storage.factory import get_storage_client
 
@@ -129,17 +130,12 @@ def download_icaap_attachment(  # noqa: PLR0913 - the addressed file is five pat
     access: IcaapView,
     storage: IcaapStorage,
 ) -> StreamingResponse:
-    storage = storage.for_session(db)
     _ = bank_id
-    row, slug = attachments.prepare_download(db, access, cycle_id, attachment_id)
-    _object, stream = storage.read(
-        StorageLocation(slug, row.storage_tier, row.object_path),  # pyright: ignore[reportArgumentType]
-        row.storage_version_id,
-    )
+    row, stream = attachments.read_attachment(db, access, cycle_id, attachment_id, storage)
     return StreamingResponse(
         stream,
         media_type=row.media_type,
-        headers={"Content-Disposition": f'attachment; filename="{row.original_filename}"'},
+        headers=attachment_headers(row.original_filename),
     )
 
 

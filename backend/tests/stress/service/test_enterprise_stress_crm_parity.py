@@ -37,7 +37,9 @@ from tests.support.helpers import headers
 
 pytestmark = [
     pytest.mark.requirement("BoG CRD (June 2018) ¶98, ¶123, ¶139"),
-    pytest.mark.usefixtures("capital_run_authority", "fx_run_authority", "irrbb_run_authority"),
+    pytest.mark.usefixtures(
+        "capital_run_authority", "fx_run_authority", "irrbb_run_authority", "stress_run_authority"
+    ),
 ]
 
 

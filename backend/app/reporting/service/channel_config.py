@@ -1,7 +1,7 @@
 """Per-bank submission-channel configuration with write-only credentials.
 
 Follows the EncryptedDbVault pattern from
-``app/adapters/market_data/credential_manager.py``: credential material is
+``app/market_data/adapters/credential_manager.py``: credential material is
 AES-256-GCM encrypted with the ``CREDENTIAL_VAULT_MASTER_KEY``-derived key
 before it touches the database, and API responses only ever expose the
 SHA-256 fingerprint — never the plaintext, never the ciphertext.

@@ -21,6 +21,7 @@ the start, and the ICAAP table it was modelled on did not have it.
 
 from __future__ import annotations
 
+import pytest
 import sqlalchemy as sa
 from sqlalchemy.orm import DeclarativeBase, Mapped, Session, mapped_column
 
@@ -36,10 +37,11 @@ from app.core.authorization import (
 )
 from app.db.base import Base, utc_now
 from app.models import AuthorizationBinding
+from tests.support.database import managed_engine
 from tests.support.helpers import ORG_1, USER_1
 
 
-def test_the_two_are_actually_different_in_sql() -> None:
+def test_the_two_are_actually_different_in_sql(request: pytest.FixtureRequest) -> None:
     """The control. Without this, the census below could be asserting nothing."""
 
     class Probe(DeclarativeBase):
@@ -55,7 +57,7 @@ def test_the_two_are_actually_different_in_sql() -> None:
         id: Mapped[int] = mapped_column(primary_key=True)
         payload: Mapped[dict | None] = mapped_column(sa.JSON(none_as_null=True), nullable=True)
 
-    engine = sa.create_engine("sqlite://")
+    engine = managed_engine(request, "sqlite://")
     Probe.metadata.create_all(engine)
     with Session(engine) as session:
         session.add(Default(id=1, payload=None))

@@ -5,13 +5,15 @@ from __future__ import annotations
 import io
 import zipfile
 from typing import Any
+from uuid import UUID
 
 import pytest
 from fastapi import HTTPException
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.api.deps import IcaapAccess
+from app.api.deps import IcaapAccess, TenantContext
+from app.db.base import utc_now
 from app.icaap.models.workspace import IcaapAttachment, IcaapAttachmentWithdrawal, IcaapCycle
 from app.icaap.schemas.workspace import (
     IcaapAttachmentWithdraw,
@@ -22,8 +24,11 @@ from app.icaap.schemas.workspace import (
     IcaapManualTablePut,
 )
 from app.icaap.service import attachments, blocks
-from app.models import AuditEvent
+from app.models import AuditEvent, Bank, RegulatoryPackage
+from app.storage.client import StorageLocation
+from app.storage.public import DocumentBinding, DocumentFamily, find_sealed_document
 from tests.support.inmemory_storage import InMemoryStorageClient
+from tests.support.sealed_documents import sealed_document
 
 REPORT = "senior_management_report"
 RESOLUTION = "board_resolution"
@@ -412,20 +417,120 @@ def test_evidence_a_table_relies_on_cannot_be_withdrawn_from_under_it(
     assert _detail(caught)["error_code"] == "attachment_in_use"
 
 
-def test_a_download_is_recorded(
+def _row(db: Session, attachment_id: UUID) -> IcaapAttachment:
+    row = db.get(IcaapAttachment, attachment_id)
+    assert row is not None
+    return row
+
+
+def test_an_upload_publishes_once_and_binds_its_row_to_the_catalogue(
     canonical_book: Session,
     access: IcaapAccess,
     cycle: IcaapCycleRead,
     storage: InMemoryStorageClient,
 ) -> None:
+    """The upload is a publication, not a put: the row keeps a stable identity."""
     uploaded = _upload(canonical_book, access, cycle, storage)
-    row, slug = attachments.prepare_download(canonical_book, access, cycle.id, uploaded.id)
+    row = _row(canonical_book, uploaded.id)
+
+    document = find_sealed_document(
+        canonical_book,
+        row.organization_id,
+        row.bank_id,
+        DocumentBinding(DocumentFamily.ICAAP_ATTACHMENT, row.id),
+    )
+    assert document is not None
+    assert document.sha256 == row.sha256
+    assert document.byte_length == row.byte_size
+    assert document.context_path == row.object_path
+    assert document.physical_key.startswith("sealed/v1/")
+
+
+@pytest.mark.parametrize("examiner", [False, True])
+def test_a_download_is_recorded(
+    canonical_book: Session,
+    access: IcaapAccess,
+    cycle: IcaapCycleRead,
+    storage: InMemoryStorageClient,
+    examiner: bool,
+) -> None:
+    uploaded = _upload(canonical_book, access, cycle, storage)
+    if examiner:
+        reader = IcaapAccess(
+            ctx=TenantContext(
+                access.ctx.organization_id,
+                impersonation_context="inspection",
+                actor_operator="staff@example.test",
+            ),
+            bank=access.bank,
+            examiner=True,
+        )
+        with pytest.raises(HTTPException) as refused:
+            attachments.read_attachment(canonical_book, reader, cycle.id, uploaded.id, storage)
+        assert refused.value.status_code == 404
+        cycle_row = canonical_book.get(IcaapCycle, cycle.id)
+        assert cycle_row is not None
+        package = RegulatoryPackage(
+            organization_id=access.ctx.organization_id,
+            bank_id=access.bank.id,
+            return_family="icaap",
+            return_code="ICAAP-REPORT",
+            reporting_date=cycle_row.as_of_date,
+            frequency="annual",
+            basis=cycle_row.basis,
+            status="generated",
+            version=1,
+            snapshot={},
+            source_runs=[],
+            generated_by=cycle_row.created_by,
+        )
+        canonical_book.add(package)
+        canonical_book.flush()
+        cycle_row.package_id = package.id
+        cycle_row.status = "frozen"
+        cycle_row.frozen_at = utc_now()
+        canonical_book.commit()
+        access = reader
+    row, stream = attachments.read_attachment(
+        canonical_book, access, cycle.id, uploaded.id, storage
+    )
     assert row.id == uploaded.id
-    assert slug
+    with stream:
+        assert stream.read() == pdf_bytes()
     events = canonical_book.scalars(
         select(AuditEvent).where(AuditEvent.event_type == "icaap.attachment.downloaded")
     ).all()
     assert events and events[-1].details["sha256"] == uploaded.sha256
+
+
+def test_a_tampered_object_is_not_downloaded_or_recorded(
+    canonical_book: Session,
+    access: IcaapAccess,
+    cycle: IcaapCycleRead,
+    storage: InMemoryStorageClient,
+) -> None:
+    """The read is proven against the row before the audit event exists.
+
+    A download that failed verification never happened, so recording it would put
+    a false read in front of an examiner — and serving it would hand them bytes
+    that are not the evidence the cycle filed.
+    """
+    uploaded = _upload(canonical_book, access, cycle, storage)
+    row = _row(canonical_book, uploaded.id)
+    slug = canonical_book.scalar(select(Bank.storage_slug).where(Bank.id == row.bank_id))
+    assert slug
+    document = sealed_document(canonical_book, slug=slug, context_path=row.object_path)
+    storage.corrupt(
+        StorageLocation(document.storage_slug, "outputs", document.physical_key),
+        b"% tampered",
+    )
+
+    with pytest.raises(HTTPException) as caught:
+        attachments.read_attachment(canonical_book, access, cycle.id, uploaded.id, storage)
+    assert caught.value.status_code == 404
+    assert not canonical_book.scalars(
+        select(AuditEvent).where(AuditEvent.event_type == "icaap.attachment.downloaded")
+    ).all()
 
 
 def test_evidence_can_still_be_attached_while_the_report_is_under_review(

@@ -6,7 +6,7 @@ from decimal import Decimal
 from hypothesis import given
 from hypothesis import strategies as st
 
-from app.domain.capital.engine import MONEY, CapitalFact, compute_capital_ratios, compute_rwa
+from app.capital.domain.engine import MONEY, CapitalFact, compute_capital_ratios, compute_rwa
 from tests.capital.testing.assertions import (
     TOLERANCE,
     assert_capital_invariants,

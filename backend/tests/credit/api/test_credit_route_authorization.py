@@ -49,7 +49,8 @@ from app.models import (
 )
 from app.policy.service.institution_types import FALLBACK_TYPE_CODE
 from app.services import job_queue
-from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID, materialize_canonical_test_book
+from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID
+from tests.support.canonical_book import canonical_test_book
 from tests.support.factories.canonical import FIXTURE_AS_OF, seed_canonical_fixture
 from tests.support.helpers import ORG_1, ORG_2, USER_1, headers
 
@@ -70,6 +71,9 @@ BR_ONE_LOANS = {"LOAN/1", "LOAN/4", "LOAN/6", "LOAN/USD"}
 BR_TWO_LOANS = {"LOAN/2", "LOAN/3", "LOAN/5"}
 
 
+pytestmark = pytest.mark.canonical_book_baseline
+
+
 @pytest.fixture(autouse=True)
 def _start_without_fixture_authority(db_client: TestClient) -> None:
     """Drop the hermetic ``viewer / all / all`` sentence so each test grants exactly."""
@@ -88,7 +92,7 @@ def _seed_book() -> None:
     """The canonical fixture book plus one live refresh, as the credit reads need."""
     session = get_sessionmaker()()
     try:
-        materialize_canonical_test_book(session)
+        canonical_test_book(session)
         session.flush()
         seed_canonical_fixture(session, organization_id=ORG_1, bank_id=SAMPLE_BANK_ID)
         session.commit()

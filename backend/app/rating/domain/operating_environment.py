@@ -15,7 +15,7 @@ Non-goals / §8.2), exactly like the PD master scale in
 the numbers are not yet.
 
 Design mirrors ``engine.py``: pure-``Decimal`` arithmetic, frozen dataclasses,
-and an ``input_digest`` reused from ``app.domain.curves.objects`` so two
+and an ``input_digest`` reused from ``app.market_data.domain.curves.objects`` so two
 computations over identical inputs are provably identical.
 """
 
@@ -26,7 +26,7 @@ from dataclasses import dataclass
 from decimal import ROUND_HALF_UP, Decimal
 from typing import Literal
 
-from app.domain.curves.objects import canonical_input_digest
+from app.market_data.domain.curves.objects import canonical_input_digest
 
 __all__ = [
     "DEFAULT_PARAMETERS",

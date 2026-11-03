@@ -15,8 +15,8 @@ from fastapi import APIRouter, Query
 from pydantic import AwareDatetime
 
 from app.operator.deps import OperatorAdmin, OperatorDb, record_operator_action
+from app.operator.schemas import OperatorAuditLogListRead
 from app.operator.services import operator_views
-from app.schemas.operator import OperatorAuditLogListRead
 
 router = APIRouter(prefix="/audit", tags=["operator-audit"])
 

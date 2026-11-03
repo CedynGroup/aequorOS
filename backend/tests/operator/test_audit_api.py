@@ -16,8 +16,8 @@ from sqlalchemy.orm import Session
 
 from app.db.base import utc_now
 from app.models import OperatorAuditLog
+from app.operator.schemas import OperatorAuditLogListRead
 from app.operator.services import operator_views
-from app.schemas.operator import OperatorAuditLogListRead
 from tests.operator.conftest import operator_headers, provision_payload
 from tests.operator.test_operator_auth import PASSWORD, bearer, login, make_operator
 

@@ -35,13 +35,13 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from decimal import ROUND_HALF_UP, Decimal
 
+from app.capital.domain.engine import CapitalLineItem, CapitalRatiosResult, RwaResult
 from app.domain.authority.outcomes import (
     NotComputable,
     OutcomeDetail,
     OutcomeState,
     outcome,
 )
-from app.domain.capital.engine import CapitalLineItem, CapitalRatiosResult, RwaResult
 from app.stress.domain.credit_bottom_up import CRD_EXPOSURE_CLASSES
 from app.stress.domain.management_actions import (
     RECOGNITION_CAP_CODES,

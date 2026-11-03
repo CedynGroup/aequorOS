@@ -30,6 +30,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import TenantContext
 from app.attestation.service import digests
 from app.attestation.service import workflow as attestation
+from app.core.authorization import RoleBundle
 from app.models import (
     Bank,
     BankReportingPeriod,
@@ -74,17 +75,19 @@ from tests.fixtures.canonical_bank_fixture import (
     SAMPLE_BANK_ID,
     materialize_canonical_test_book,
 )
+from tests.stress.authority import grant
 from tests.support.inmemory_storage import InMemoryStorageClient
+from tests.support.sealed_documents import published_bytes
 
 pytestmark = [
-    pytest.mark.usefixtures("fx_run_authority", "irrbb_run_authority"),
+    pytest.mark.usefixtures("fx_run_authority", "irrbb_run_authority", "stress_run_authority"),
     pytest.mark.usefixtures("return_generation_authority"),
 ]
 
 MAKER = TenantContext(
     organization_id=DEMO_ORG_ID, actor_user_id=DEMO_USER_ID, authorization_version=1
 )
-CHECKER_ID = UUID("bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb")
+CHECKER_ID = UUID("ccccbbbb-cccc-4ccc-8ccc-cccccccccccc")
 CHECKER = TenantContext(
     organization_id=DEMO_ORG_ID,
     actor_user_id=CHECKER_ID,
@@ -116,18 +119,18 @@ def _period_id(db: Session) -> UUID:
 
 
 def _seed_checker(db: Session) -> None:
-    if db.get(User, CHECKER_ID) is not None:
-        return
-    db.add(
-        User(
-            id=CHECKER_ID,
-            organization_id=DEMO_ORG_ID,
-            email="stress-board@aequoros.example",
-            display_name="Board Member",
-            role="approver",
+    if db.get(User, CHECKER_ID) is None:
+        db.add(
+            User(
+                id=CHECKER_ID,
+                organization_id=DEMO_ORG_ID,
+                email="stress-board@aequoros.example",
+                display_name="Board Member",
+                role="approver",
+            )
         )
-    )
-    db.commit()
+    db.flush()
+    grant(db, RoleBundle.APPROVER, user_id=CHECKER_ID)
 
 
 def _severe_paths() -> list[dict[str, str | int]]:
@@ -527,12 +530,7 @@ def test_exports_to_xlsx_and_pdf(db_session: Session, storage: InMemoryStorageCl
 
     slug = db_session.scalar(select(Bank.storage_slug).where(Bank.id == SAMPLE_BANK_ID))
     assert slug
-    payload = None
-    for obj in storage.list(slug, "outputs"):
-        if obj.location.object_path == xlsx.object_path:
-            _, stream = storage.read(obj.location)
-            payload = stream.read()
-    assert payload is not None
+    payload = published_bytes(db_session, storage, slug=slug, context_path=xlsx.object_path)
     workbook = load_workbook(io.BytesIO(payload))
     # One sheet per Appendix II table plus metadata / provenance.
     assert "Return Metadata" in workbook.sheetnames
@@ -592,11 +590,7 @@ def test_maker_cannot_attest_own_signoff(db_session: Session) -> None:
 def _stored_bytes(db: Session, storage: InMemoryStorageClient, object_path: str) -> bytes:
     slug = db.scalar(select(Bank.storage_slug).where(Bank.id == SAMPLE_BANK_ID))
     assert slug
-    for obj in storage.list(slug, "outputs"):
-        if obj.location.object_path == object_path:
-            _, stream = storage.read(obj.location)
-            return stream.read()
-    raise AssertionError(f"no stored object at {object_path}")
+    return published_bytes(db, storage, slug=slug, context_path=object_path)
 
 
 def _pdf_text(payload: bytes) -> str:
@@ -774,7 +768,8 @@ def _seed_board_chair(db: Session) -> None:
             role="approver",
         )
     )
-    db.commit()
+    db.flush()
+    grant(db, RoleBundle.VIEWER, user_id=BOARD_CHAIR_ID)
 
 
 def test_attested_narratives_render_in_the_pdf(
@@ -782,6 +777,7 @@ def test_attested_narratives_render_in_the_pdf(
 ) -> None:
     materialize_canonical_test_book(db_session)
     _seed_board_chair(db_session)
+    _seed_checker(db_session)
     scenario_id = _approved_scenario(db_session)
     run_id = _run_enterprise_stress(db_session, scenario_id)
     _attested_signoff(db_session, run_id, checker=BOARD_CHAIR)

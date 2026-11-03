@@ -45,7 +45,7 @@ import RatioPathChart from "@/components/forecasting/charts/RatioPathChart";
 import {
   LandingInsightStrip,
   useKpiExplain,
-} from "@/components/bi/InsightStrip";
+} from "@/features/bi/components/InsightStrip";
 import ForecastingRunGate from "@/components/forecasting/RunGate";
 import { useScenarioRunSet } from "@/components/forecasting/hooks";
 import {
@@ -57,6 +57,7 @@ import {
   yoyPct,
 } from "@/components/forecasting/lib";
 import { useBankContext } from "@/components/shell/BankContext";
+import ReportingPeriodNotice from "@/components/shell/ReportingPeriodNotice";
 import SdiModuleContext from "@/components/sdi/SdiModuleContext";
 import {
   useCreateForecastRun,
@@ -117,7 +118,7 @@ export default function BalanceSheetForecastPage() {
 }
 
 function BalanceSheetWorkspace() {
-  const { bank, period, moduleScope } = useBankContext();
+  const { bank, period, periodsStatus, moduleScope } = useBankContext();
   const bankId = bank?.id;
   const periodId = period?.id;
   // Every Forecasting query waits for the projected authority: summaries ride
@@ -237,19 +238,26 @@ function BalanceSheetWorkspace() {
 
       {!periodId && (
         <PageContainer className="pt-6">
-          <div className="border-l-4 border-l-warning bg-warning-light/40 px-5 py-4 text-body text-navy">
-            <p className="font-medium">
-              A reporting period is required to run a forecast
-            </p>
-            <p className="mt-1 text-slate">
-              This institution has no derived reporting period yet. Activate the
-              current canonical book in the{" "}
-              <Link href="/data-engine" className="text-action hover:underline">
-                Data Engine
-              </Link>{" "}
-              to create the immutable period snapshot used by forecast runs.
-            </p>
-          </div>
+          {periodsStatus !== "ready" ? (
+            <ReportingPeriodNotice />
+          ) : (
+            <div className="border-l-4 border-l-warning bg-warning-light/40 px-5 py-4 text-body text-navy">
+              <p className="font-medium">
+                A reporting period is required to run a forecast
+              </p>
+              <p className="mt-1 text-slate">
+                This institution has no derived reporting period yet. Activate
+                the current canonical book in the{" "}
+                <Link
+                  href="/data-engine"
+                  className="text-action hover:underline"
+                >
+                  Data Engine
+                </Link>{" "}
+                to create the immutable period snapshot used by forecast runs.
+              </p>
+            </div>
+          )}
         </PageContainer>
       )}
 

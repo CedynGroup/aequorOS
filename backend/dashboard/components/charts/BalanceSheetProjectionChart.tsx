@@ -9,8 +9,8 @@
  * rather than filling the band down to zero.
  */
 
-import EChart, { type BiEChartsOption } from "@/components/bi/EChart";
-import { seriesColor, useChartTokens } from "@/components/bi/echartsTheme";
+import EChart, { type BiEChartsOption } from "@/features/bi/components/EChart";
+import { seriesColor, useChartTokens } from "@/features/bi/components/echartsTheme";
 import { axisTooltip, LINE_SERIES_BASE, STACK_ID } from "@/lib/echartsOptions";
 import { currencyCode, fmtLocale } from "@/lib/format";
 

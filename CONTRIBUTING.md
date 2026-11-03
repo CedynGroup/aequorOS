@@ -35,5 +35,5 @@ are always welcome.
   raw hex — use the token classes).
 - Commits follow Conventional Commits (`feat(scope): …`).
 - Use the [pull request description template](.github/PULL_REQUEST_TEMPLATE.md) for every PR.
-- Never commit credentials; `.env` is untracked by design and CI runs secret
-  scanning on every push.
+- Never commit credentials; `.env` is untracked by design. The
+  [secret-scan workflow](.github/workflows/secret-scan.yml) owns CI scan scope.

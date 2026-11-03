@@ -63,6 +63,16 @@ restriction on another). The JSON output carries every ``view`` capability's
 scope so an ``all`` that becomes ``branch`` — or the reverse — is a changed
 value, never a vanished row; the table summarises per institution and flags
 ``scoped_reader`` when any capability is narrower than the whole book.
+
+The ``examiner`` column answers the examiner-evidence cutover of 2026-11-02
+(issue 180, ``backend/docs/examiner_evidence_enforcement_rollout.md``): which
+institutions this user may read the supervisory evidence bundle for. It is the
+whole-institution AUDIT/restricted ``view`` sentence only. The bundle's embedded
+sources take their OWN module grants (Liquidity, Capital, Regulatory Reporting,
+Credit), so a user listed here can still open an empty or partial bundle, and
+the exact source rows an auditor needs are in the rollout document. Operator
+inspection is a separate staff lifecycle and appears in no column: it needs no
+product grant and gains nothing from one.
 """
 
 from __future__ import annotations
@@ -79,7 +89,7 @@ from uuid import UUID
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session
 
-from app.core.authorization import Module, Permission
+from app.core.authorization import Module, Permission, Sensitivity
 from app.identity.service import authorization
 from app.models import AuthorizationBinding, Bank, Organization, User
 
@@ -112,6 +122,13 @@ class UserAccess:
     data_scopes: dict[str, dict[str, dict[str, object]]] = field(default_factory=dict)
     #: Institutions this user may transmit a return to the regulator for.
     filing_institutions: list[str] = field(default_factory=list)
+    #: Organization-wide case authority; bank RISK grants cannot open a case.
+    case_permissions: list[str] = field(default_factory=list)
+    #: Institutions whose EXAMINER evidence bundle this user's whole-institution
+    #: AUDIT/restricted ``view`` opens (issue 180). The bundle's embedded SOURCES
+    #: are a second sentence and are deliberately not counted here: this column
+    #: answers "who loses the examiner surfaces", which is the cutover question.
+    examiner_evidence: list[str] = field(default_factory=list)
     flags: list[str] = field(default_factory=list)
 
 
@@ -192,6 +209,17 @@ def build_report(db: Session, *, organization_id: str) -> list[UserAccess]:
                 for capability in entry.capabilities
             )
         )
+        examiner_evidence = sorted(
+            entry.institution_id
+            for entry in projection.institution_capabilities
+            if any(
+                capability.module == Module.AUDIT.value
+                and capability.permission == Permission.VIEW.value
+                and capability.sensitivity == Sensitivity.RESTRICTED.value
+                and capability.data_scope.kind == "all"
+                for capability in entry.capabilities
+            )
+        )
         flags: list[str] = []
         if binding_count == 0:
             flags.append("no_bindings")
@@ -215,6 +243,12 @@ def build_report(db: Session, *, organization_id: str) -> list[UserAccess]:
                 institutions=institutions,
                 data_scopes=data_scopes,
                 filing_institutions=filing_institutions,
+                case_permissions=sorted(
+                    f"{cap.sensitivity.value}/{cap.permission.value}"
+                    for cap in projection.organization_capabilities
+                    if cap.module is Module.RISK and cap.data_scope.kind == "all"
+                ),
+                examiner_evidence=examiner_evidence,
                 flags=flags,
             )
         )
@@ -279,6 +313,8 @@ def render_table(rows: list[UserAccess]) -> str:
         "product view",
         "data scope",
         "filing",
+        "case RISK",
+        "examiner",
         "flags",
     )
     lines: list[tuple[str, ...]] = [header]
@@ -307,6 +343,8 @@ def render_table(rows: list[UserAccess]) -> str:
                 product,
                 data_scope,
                 ",".join(row.filing_institutions) or "-",
+                ",".join(row.case_permissions) or "-",
+                ",".join(row.examiner_evidence) or "-",
                 ",".join(row.flags) or "-",
             )
         )

@@ -5,7 +5,7 @@ from uuid import UUID
 
 from fastapi.testclient import TestClient
 
-from app.schemas.assessments import AssessmentRead
+from app.case.schemas.assessments import AssessmentRead
 from tests.support.factories import CreatesApiCase, assessment_payload
 from tests.support.helpers import headers
 

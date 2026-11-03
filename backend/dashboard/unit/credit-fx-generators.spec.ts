@@ -7,7 +7,7 @@ import {
   RollRateCellReadFromJSON,
   FxScenarioNopReadFromJSON,
 } from "@aequoros/risk-service-api";
-import { fxPositionSplits, fxRunParameters } from "../components/fx/params";
+import { fxPositionSplits, fxRunParameters } from "../features/fx/components/params";
 import {
   creditEstimates,
   adversarialCreditEstimates,

@@ -13,20 +13,22 @@ from pydantic import BaseModel, TypeAdapter, ValidationError
 from sqlalchemy import select, text
 from sqlalchemy.orm import Session
 
+from app.core.tenancy import TenantContext
 from app.db import session as database
 from app.models import (
     Bank,
-    RegulatoryArtifactVersion,
     RegulatoryPackage,
     RegulatoryPackageArtifact,
     RegulatorySubmissionEvent,
 )
-from app.reporting.service.filing_retention import archived_version
+from app.reporting.service.artifact_versions import archived_version
+from app.reporting.service.filing_retention import filing_version
 from app.reporting.service.registry import get_definition
 from app.reporting.service.workflow import filing_admits_artifact
 from app.storage.client import StorageError, StorageLocation, StorageValidationError
 from app.storage.config import get_storage_settings
 from app.storage.factory import get_storage_client
+from app.storage.public import DocumentBinding, DocumentFamily, document_retention_reference
 from app.storage.retention import retention_until
 
 
@@ -81,25 +83,30 @@ def historical_versions(db: Session, organization_id: str, bank_id: str) -> list
                 checksum_sha256=record.checksum_sha256,
             )
             if record.storage_version_id is not None:
-                version = db.scalar(
-                    select(RegulatoryArtifactVersion).where(
-                        RegulatoryArtifactVersion.organization_id == organization_id,
-                        RegulatoryArtifactVersion.package_id == package.id,
-                        RegulatoryArtifactVersion.kind == record.kind,
-                        RegulatoryArtifactVersion.object_path == record.object_path,
-                        RegulatoryArtifactVersion.checksum_sha256 == record.checksum_sha256,
-                        RegulatoryArtifactVersion.storage_version_id == record.storage_version_id,
-                    )
+                version = archived_version(
+                    db,
+                    TenantContext(organization_id),
+                    package_id=package.id,
+                    kind=record.kind,
+                    object_path=record.object_path,
+                    checksum_sha256=record.checksum_sha256,
+                    storage_version_id=record.storage_version_id,
                 )
                 if version is None:
                     raise StorageValidationError("The filing's pinned version is not archived.")
             else:
-                version = archived_version(db, package, artifact, before=event.created_at)
-            version_id = version.storage_version_id
+                version = filing_version(db, package, artifact, before=event.created_at)
+            location, version_id = document_retention_reference(
+                db,
+                organization_id,
+                bank_id,
+                DocumentBinding(DocumentFamily.ARTIFACT, version.id),
+                StorageLocation(bank.storage_slug, "outputs", record.object_path),
+                version.storage_version_id,
+            )
             if not version_id or version_id == "null":
                 raise StorageValidationError("A historical filing has no concrete object version.")
-            location = StorageLocation(bank.storage_slug, "outputs", record.object_path)
-            found[(record.object_path, version_id)] = FiledVersion(location, version_id)
+            found[(location.object_path, version_id)] = FiledVersion(location, version_id)
     return list(found.values())
 
 

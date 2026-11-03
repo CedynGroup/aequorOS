@@ -29,7 +29,7 @@ import PageHeader from "@/components/ui/PageHeader";
 import EmptyState from "@/components/ui/EmptyState";
 import QueryBoundary from "@/components/ui/QueryBoundary";
 import SubTabs from "@/components/ui/SubTabs";
-import { LandingInsightStrip } from "@/components/bi/InsightStrip";
+import { LandingInsightStrip } from "@/features/bi/components/InsightStrip";
 import { useBankContext } from "@/components/shell/BankContext";
 import SdiModuleContext from "@/components/sdi/SdiModuleContext";
 import {

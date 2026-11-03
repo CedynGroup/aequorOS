@@ -11,7 +11,7 @@ from app.core.key_management.models import BankEncryptionKey
 from app.core.key_management.schemas import BankKeyConnect, BankKeyRead, BankKeyRotate
 from app.core.key_management.types import KeyStatus, KeyUnavailableError
 from app.identity.public import Bank
-from app.models.operator import TenantStorage
+from app.operator.models import TenantStorage
 
 
 @dataclass(frozen=True)

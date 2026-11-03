@@ -35,7 +35,7 @@ from app.models import (
     IngestionBatch,
     LineageRecord,
 )
-from tests.api.test_ingestion import seed_bank
+from tests.data_engine.api.test_ingestion import seed_bank
 from tests.fixtures.capital_structure import MAKER
 from tests.stress.api.test_enterprise_stress import (
     RUNS_URL,
@@ -46,7 +46,9 @@ from tests.stress.api.test_enterprise_stress import (
 )
 from tests.support.helpers import ORG_1, headers
 
-pytestmark = pytest.mark.usefixtures("fx_run_authority", "irrbb_run_authority")
+pytestmark = pytest.mark.usefixtures(
+    "fx_run_authority", "irrbb_run_authority", "stress_run_authority"
+)
 
 _AS_OF = date(2026, 3, 31)
 

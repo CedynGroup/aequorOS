@@ -45,6 +45,12 @@ from app.icaap.service import freeze as freeze_service
 from app.icaap.service import guards
 from app.reporting.public import RegulatoryPackage
 from app.services.audit import record_event
+from app.storage.public import (
+    DocumentBinding,
+    DocumentFamily,
+    bind_sealed_document,
+    find_sealed_document,
+)
 
 #: A cycle can only be revised or updated once it has been through the Board.
 CLONEABLE_STATUSES: frozenset[str] = frozenset({"board_approved", "submitted", "acknowledged"})
@@ -209,7 +215,9 @@ def _copy_attachments(
 
     ``icaap_attachments`` is append-only and the stored object is retained, so
     pointing a second row at the same bytes is safe and keeps the filed
-    document byte-identical to the one that was filed before.
+    document byte-identical to the one that was filed before. A source row that
+    carries a stable identity passes that same identity on; a row published
+    before those existed keeps its recorded locator.
     """
     from app.icaap.service import snapshot  # noqa: PLC0415 - mutual read
 
@@ -221,25 +229,40 @@ def _copy_attachments(
             "cycle_id": str(source.id),
             "attachment_id": str(row.id),
         }
-        db.add(
-            IcaapAttachment(
+        document = find_sealed_document(
+            db,
+            target.organization_id,
+            target.bank_id,
+            DocumentBinding(DocumentFamily.ICAAP_ATTACHMENT, row.id),
+        )
+        carried = IcaapAttachment(
+            organization_id=target.organization_id,
+            bank_id=target.bank_id,
+            cycle_id=target.id,
+            kind=row.kind,
+            title=row.title,
+            original_filename=row.original_filename,
+            media_type=row.media_type,
+            byte_size=row.byte_size,
+            sha256=row.sha256,
+            storage_tier=row.storage_tier,
+            object_path=row.object_path,
+            storage_version_id=row.storage_version_id,
+            section_key=row.section_key,
+            attributes=attributes,
+            uploaded_by=actor,
+        )
+        db.add(carried)
+        db.flush()
+        if document is not None:
+            bind_sealed_document(
+                db,
+                DocumentBinding(DocumentFamily.ICAAP_ATTACHMENT, carried.id),
+                document=document,
                 organization_id=target.organization_id,
                 bank_id=target.bank_id,
-                cycle_id=target.id,
-                kind=row.kind,
-                title=row.title,
-                original_filename=row.original_filename,
-                media_type=row.media_type,
-                byte_size=row.byte_size,
-                sha256=row.sha256,
-                storage_tier=row.storage_tier,
-                object_path=row.object_path,
-                storage_version_id=row.storage_version_id,
-                section_key=row.section_key,
-                attributes=attributes,
-                uploaded_by=actor,
+                bound_by=actor,
             )
-        )
         count += 1
     db.flush()
     return count

@@ -31,6 +31,7 @@ import EmptyState from "@/components/ui/EmptyState";
 import QueryBoundary from "@/components/ui/QueryBoundary";
 import ChartFrame from "@/components/ui/ChartFrame";
 import { useBankContext } from "@/components/shell/BankContext";
+import ReportingPeriodNotice from "@/components/shell/ReportingPeriodNotice";
 import {
   useSdiCapitalSummary,
   useSdiLiquidityPosition,
@@ -57,7 +58,7 @@ import ManagementActionsPanel from "@/components/stress/ManagementActionsPanel";
 import AppendixIITables from "@/components/stress/AppendixIITables";
 
 export default function StressBoardPack() {
-  const { bank, period, periods, moduleScope } = useBankContext();
+  const { bank, period, periodsStatus, moduleScope } = useBankContext();
   const bankId = bank?.id;
   const periodId = period?.id;
   const isSdi = moduleScope.institutionClass === "sdi";
@@ -111,6 +112,8 @@ export default function StressBoardPack() {
     floor === null
       ? `No ${what} floor configured`
       : `Floor ${fmtFloorPct(floor)}`;
+
+  if (periodsStatus !== "ready") return <ReportingPeriodNotice />;
 
   const packCodes = isSdi
     ? ["SDI-STRESS-ANNUAL"]

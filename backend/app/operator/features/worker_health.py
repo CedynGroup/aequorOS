@@ -6,8 +6,8 @@ from fastapi import APIRouter
 
 from app.core.config import get_settings
 from app.operator.deps import Operator, OperatorDb
+from app.operator.schemas import WorkerHealthRead
 from app.operator.services import operator_views
-from app.schemas.operator import WorkerHealthRead
 
 router = APIRouter(prefix="/worker-health", tags=["operator-worker-health"])
 

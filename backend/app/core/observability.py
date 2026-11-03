@@ -131,8 +131,9 @@ CONDITION_SOURCES: Final[dict[Condition, str]] = {
     ),
     Condition.RECONCILIATION_FAILED: (
         "audit_events(event_type='reconciliation.balance_sheet_identity'), written by the "
-        "DERIVATION plane (app/services/reconciliation.py::record_check, which commits its "
-        "own row on a block). The FILING plane deliberately writes no audit row — it runs "
+        "DERIVATION plane (app/data_engine/service/reconciliation.py::record_check, "
+        "which commits its own row on a block). The FILING plane deliberately writes no "
+        "audit row — it runs "
         "inside caller transactions holding pending writes — so for a refused package, "
         "approval, certification, transmission or official run this log line (emitted from "
         "app/reporting/service/filing_reconciliation.py, carrying purpose= and plane=) "

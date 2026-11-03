@@ -13,7 +13,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Query, status
 
-from app.api.deps import ApproverTenant, DbSession, MutationTenant, Tenant
+from app.api.deps import DbSession, ScopedMutationTenant, Tenant
 from app.stress.schemas.management_actions import (
     ManagementActionPlanApproval,
     ManagementActionPlanCreate,
@@ -37,7 +37,7 @@ router = APIRouter(tags=["management-action-plans"])
 def create_management_action_plan(
     payload: ManagementActionPlanCreate,
     db: DbSession,
-    ctx: MutationTenant,
+    ctx: ScopedMutationTenant,
 ) -> ManagementActionPlanRead:
     return management_action_plans.create_plan(db, ctx, payload)
 
@@ -79,7 +79,7 @@ def update_management_action_plan(
     plan_id: UUID,
     payload: ManagementActionPlanUpdate,
     db: DbSession,
-    ctx: MutationTenant,
+    ctx: ScopedMutationTenant,
 ) -> ManagementActionPlanRead:
     return management_action_plans.update_plan(db, ctx, plan_id, payload)
 
@@ -93,7 +93,7 @@ def submit_management_action_plan(
     plan_id: UUID,
     payload: ManagementActionPlanTransition,
     db: DbSession,
-    ctx: MutationTenant,
+    ctx: ScopedMutationTenant,
 ) -> ManagementActionPlanRead:
     return management_action_plans.submit_plan(db, ctx, plan_id, payload)
 
@@ -107,7 +107,7 @@ def approve_management_action_plan(
     plan_id: UUID,
     payload: ManagementActionPlanApproval,
     db: DbSession,
-    ctx: ApproverTenant,
+    ctx: ScopedMutationTenant,
 ) -> ManagementActionPlanRead:
     return management_action_plans.approve_plan(db, ctx, plan_id, payload)
 
@@ -121,6 +121,6 @@ def archive_management_action_plan(
     plan_id: UUID,
     payload: ManagementActionPlanTransition,
     db: DbSession,
-    ctx: MutationTenant,
+    ctx: ScopedMutationTenant,
 ) -> ManagementActionPlanRead:
     return management_action_plans.archive_plan(db, ctx, plan_id, payload)

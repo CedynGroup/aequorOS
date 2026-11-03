@@ -1,0 +1,100 @@
+"use client";
+
+/**
+ * Shared chrome for every FX workspace tab: page header,
+ * freshness / run badges, the run-all-scenarios action, the not-yet-stored
+ * banner, and the query boundary. Sub-pages receive the loaded dashboard via
+ * a render prop so the payload is fetched (and cached) once per query key.
+ */
+
+import { RunModuleScenarios } from "@/features/workbench/public";
+import ValidationList from "@/components/ui/ValidationList";
+import PageContainer from "@/components/ui/PageContainer";
+import type { ReactNode } from "react";
+import type {
+  FxDashboardRead,
+  FxMetricsRead,
+  RegulatoryRunRead,
+} from "@aequoros/risk-service-api";
+import PageHeader from "@/components/ui/PageHeader";
+import QueryBoundary from "@/components/ui/QueryBoundary";
+import { useBankContext } from "@/components/shell/BankContext";
+import { LiveEngineNote } from "@/features/live/public";
+import { useFxDashboard, useRegulatoryRun } from "@/lib/api/hooks";
+import { fmtDateUTC } from "@/lib/api/values";
+
+export type FxFrameContext = {
+  data: FxDashboardRead;
+  metrics: FxMetricsRead;
+  /** Latest stored baseline run (audit trail + parameter snapshot), if any. */
+  run: RegulatoryRunRead | undefined;
+  bankId: string | undefined;
+  periodId: string | undefined;
+};
+
+export default function FxModuleFrame({
+  title,
+  children,
+}: {
+  title: string;
+  children: (ctx: FxFrameContext) => ReactNode;
+}) {
+  const { bank, moduleScope } = useBankContext();
+  const bankId = bank?.id;
+
+  const dashboard = useFxDashboard(
+    moduleScope.fxAggregatedView ? bankId : undefined,
+  );
+  const latestRun = useRegulatoryRun(
+    moduleScope.fxConfidentialView ? bankId : undefined,
+    dashboard.data?.latestRunId,
+  );
+
+  const data = dashboard.data;
+
+  return (
+    <>
+      <PageHeader
+        eyebrow="FX"
+        title={title}
+        action={
+          data ? (
+            <LiveEngineNote
+              live={data.live}
+              stored={data.stored}
+              dataAsOf={data.period.periodEnd}
+            />
+          ) : undefined
+        }
+      />
+
+      <PageContainer className="py-4">
+        <RunModuleScenarios module="fx" />
+      </PageContainer>
+      <QueryBoundary
+        isLoading={dashboard.isLoading}
+        error={dashboard.error}
+        onRetry={() => dashboard.refetch()}
+      >
+        {data && (
+          <PageContainer className="py-6 space-y-6">
+            <ValidationList
+              validations={data.validations.filter(
+                (item) =>
+                  item.ruleCode === "var_sample_evidence" ||
+                  item.ruleCode === "stressed_var_disclosed",
+              )}
+            />
+            {children({
+              data,
+              metrics: data.metrics,
+              run: latestRun.data,
+              bankId,
+              periodId: data.period.id,
+            })}
+          </PageContainer>
+        )}
+      </QueryBoundary>
+    </>
+  );
+}

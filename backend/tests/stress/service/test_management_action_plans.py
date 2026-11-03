@@ -15,6 +15,7 @@ from fastapi import HTTPException
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
+from app.core.authorization import RoleBundle
 from app.models import User
 from app.stress.schemas.management_actions import (
     ManagementActionPlanApproval,
@@ -22,11 +23,14 @@ from app.stress.schemas.management_actions import (
     ManagementActionPlanTransition,
 )
 from app.stress.service import management_action_plans
+from tests.stress.authority import grant
 from tests.support.helpers import ORG_1, USER_1
 
+pytestmark = pytest.mark.usefixtures("stress_run_authority")
+
 CHECKER = UUID("cccccccc-cccc-4ccc-8ccc-cccccccccccc")
-MAKER_CTX = TenantContext(organization_id=ORG_1, actor_user_id=USER_1)
-CHECKER_CTX = TenantContext(organization_id=ORG_1, actor_user_id=CHECKER)
+MAKER_CTX = TenantContext(organization_id=ORG_1, actor_user_id=USER_1, authorization_version=1)
+CHECKER_CTX = TenantContext(organization_id=ORG_1, actor_user_id=CHECKER, authorization_version=1)
 
 
 def _seed_checker(db_session: Session) -> None:
@@ -40,6 +44,7 @@ def _seed_checker(db_session: Session) -> None:
         )
     )
     db_session.commit()
+    grant(db_session, RoleBundle.APPROVER, user_id=CHECKER)
 
 
 def _payload(code: str = "recovery_2027") -> ManagementActionPlanCreate:
@@ -88,6 +93,7 @@ def test_official_run_guard_refuses_until_approved(db_session: Session) -> None:
     management_action_plans.submit_plan(
         db_session, MAKER_CTX, created.id, ManagementActionPlanTransition(reason="submit")
     )
+    grant(db_session, RoleBundle.APPROVER)
     # Maker ≠ checker: the creator cannot approve.
     with pytest.raises(HTTPException) as maker_exc:
         management_action_plans.approve_plan(

@@ -1,7 +1,7 @@
 """The headline metric per live module is declared in THREE places.
 
 ``window_analytics._PRIMARY_METRIC_KEY`` (the daily aggregates), the dashboard's
-``components/live/moduleDisplay.ts`` ``PRIMARY_METRIC`` (the pulse card, the
+``features/live/components/moduleDisplay.ts`` ``PRIMARY_METRIC`` (the pulse card, the
 live status card, the board pack) and ``components/home/WindowAnalysis.tsx``
 ``METRIC_LABELS`` (how the daily aggregates are labelled). Until 2026-09-21 the
 IRR entry named ``eve_limit_pct`` — the LIMIT, a constant — in all three, so the
@@ -22,12 +22,14 @@ import re
 from pathlib import Path
 
 from app.domain.authority.registry import REGISTRY, AdvisoryDesignation
+from app.liquidity.service.window_analytics import (
+    _PRIMARY_METRIC_KEY,  # noqa: PLC2701 - the map under test
+)
 from app.live.models.live import LIVE_MODULES
-from app.services.window_analytics import _PRIMARY_METRIC_KEY  # noqa: PLC2701 - the map under test
 
-_DASHBOARD = Path(__file__).resolve().parents[2] / "dashboard" / "components"
-_MODULE_DISPLAY = _DASHBOARD / "live" / "moduleDisplay.ts"
-_WINDOW_ANALYSIS = _DASHBOARD / "home" / "WindowAnalysis.tsx"
+_DASHBOARD = Path(__file__).resolve().parents[2] / "dashboard"
+_MODULE_DISPLAY = _DASHBOARD / "features" / "live" / "components" / "moduleDisplay.ts"
+_WINDOW_ANALYSIS = _DASHBOARD / "features" / "home" / "components" / "WindowAnalysis.tsx"
 
 #: ``  irr: { key: "worst_eve_change_pct_tier1", label: "ΔEVE / Tier 1" },``
 _TS_PRIMARY_ENTRY = re.compile(r"^\s*(\w+):\s*\{\s*key:\s*[\"']([^\"']+)[\"']", re.MULTILINE)

@@ -9,7 +9,7 @@ from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
-from app.domain.capital.engine import CAPITAL_REGISTER_REFUSED_CATEGORY
+from app.capital.domain.engine import CAPITAL_REGISTER_REFUSED_CATEGORY
 from app.models import (
     Bank,
     BankFinancialFact,

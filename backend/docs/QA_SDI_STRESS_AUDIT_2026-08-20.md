@@ -32,7 +32,7 @@ The current SDI handling only suppresses LCR/NSFR in the forward projection and 
 
 ### P0 — Enterprise stress bypasses the paid-up-capital regulatory parameter
 
-**Evidence:** [backend/app/stress/service/enterprise_stress.py](backend/app/stress/service/enterprise_stress.py) resolves `paid_up_min` from the request payload or tenant `ParamCapitalThreshold`; otherwise it returns zero. It does not call [backend/app/policy/service/regulatory_parameters.py](backend/app/policy/service/regulatory_parameters.py), which is the documented source for licence-specific `paid_up_min`. In contrast, [backend/app/services/sdi_capital_checks.py](backend/app/services/sdi_capital_checks.py) correctly resolves it through that control plane.
+**Evidence:** [backend/app/stress/service/enterprise_stress.py](backend/app/stress/service/enterprise_stress.py) resolves `paid_up_min` from the request payload or tenant `ParamCapitalThreshold`; otherwise it returns zero. It does not call [backend/app/policy/service/regulatory_parameters.py](backend/app/policy/service/regulatory_parameters.py), which is the documented source for licence-specific `paid_up_min`. In contrast, [backend/app/capital/service/sdi_capital_checks.py](backend/app/capital/service/sdi_capital_checks.py) correctly resolves it through that control plane.
 
 **Impact:** A savings-and-loans enterprise stress run can omit the GH¢15m paid-up-capital minimum unless a tenant-specific board threshold is separately configured. This makes the Appendix II minima/gap and management-action sizing non-compliant with the intended SDI control plane.
 
@@ -62,7 +62,7 @@ horizon_years=1, paths=[gdp_growth for year 1]
 
 ### P1 — Tenant overrides are not constrained to tighten a regulatory requirement
 
-**Evidence:** [backend/app/policy/service/regulatory_parameters.py](backend/app/policy/service/regulatory_parameters.py) documents that a hard clamp is “not yet” enforced. [backend/app/services/regulatory_capital.py](backend/app/services/regulatory_capital.py) accepts a tenant `car_min` whenever present, before the control-plane fallback.
+**Evidence:** [backend/app/policy/service/regulatory_parameters.py](backend/app/policy/service/regulatory_parameters.py) documents that a hard clamp is “not yet” enforced. [backend/app/capital/service/regulatory_capital.py](backend/app/capital/service/regulatory_capital.py) accepts a tenant `car_min` whenever present, before the control-plane fallback.
 
 **Impact:** A tenant board register can weaken a global regulatory floor, contrary to the documented “tenant may only tighten” rule.
 
@@ -70,7 +70,7 @@ horizon_years=1, paths=[gdp_growth for year 1]
 
 ### P1 — SDI capital checks are diagnostic-only, not live risk findings
 
-**Evidence:** [backend/app/services/sdi_capital_checks.py](backend/app/services/sdi_capital_checks.py) produces read-only checks. [backend/app/features/read_sdi_diagnostics.py](backend/app/features/read_sdi_diagnostics.py) exposes them only via standalone diagnostic endpoints. The simplified capital view in [backend/dashboard/components/basel/SdiCapitalView.tsx](backend/dashboard/components/basel/SdiCapitalView.tsx) displays them, but the check service has no path to `LiveFinding`, capital run status, alerts, or the enterprise-stress minima outcome.
+**Evidence:** [backend/app/capital/service/sdi_capital_checks.py](backend/app/capital/service/sdi_capital_checks.py) produces read-only checks. [backend/app/capital/api/read_sdi_diagnostics.py](backend/app/capital/api/read_sdi_diagnostics.py) exposes them only via standalone diagnostic endpoints. The simplified capital view in [backend/dashboard/components/basel/SdiCapitalView.tsx](backend/dashboard/components/basel/SdiCapitalView.tsx) displays them, but the check service has no path to `LiveFinding`, capital run status, alerts, or the enterprise-stress minima outcome.
 
 **Impact:** A paid-up-capital or statutory-reserve failure can be visible on one page but absent from Alerts, Risk & Limits, and live governance signals.
 

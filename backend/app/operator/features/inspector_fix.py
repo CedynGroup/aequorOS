@@ -17,8 +17,7 @@ from fastapi import APIRouter
 from app.live.public import live_refresh_triggers
 from app.operator.deps import Operator, OperatorDb, record_operator_action
 from app.operator.inspection import require_active_inspection
-from app.operator.services import inspector_fix
-from app.schemas.operator import (
+from app.operator.schemas import (
     FixConfigChangeRead,
     FixConfigRequest,
     FixJobEnqueuedRead,
@@ -29,6 +28,7 @@ from app.schemas.operator import (
     FixRerunIngestionRead,
     FixRerunIngestionRequest,
 )
+from app.operator.services import inspector_fix
 from app.services.public_ids import normalize_public_id
 
 router = APIRouter(prefix="/tenants", tags=["operator-inspector-fix"])

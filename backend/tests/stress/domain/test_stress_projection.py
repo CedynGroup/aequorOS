@@ -12,7 +12,7 @@ from decimal import Decimal
 
 import pytest
 
-from app.domain.capital.ecl import EclAssumption
+from app.capital.domain.ecl import EclAssumption
 from app.forecasting.domain.engine import ForecastFact, project
 from app.stress.domain.appendix_ii import build_appendix_ii
 from app.stress.domain.credit_bottom_up import CreditExposure

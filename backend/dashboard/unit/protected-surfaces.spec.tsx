@@ -15,6 +15,8 @@ import PositionDrawer from "../components/positions/PositionDrawer";
 import SnapshotPreview from "../components/submissions/SnapshotPreview";
 import { ComparisonPanel } from "../components/submissions/PriorVersionsCard";
 import { setAccessToken } from "../lib/api/token";
+import { QueryAuthorityScopeProvider } from "../lib/api/useQueryScope";
+import { queryAuthorityScope } from "../lib/api/queryPolicy";
 import {
   clearProtectedData,
   observeProtectedData,
@@ -24,6 +26,27 @@ import { setActiveJurisdiction } from "../lib/format";
 
 vi.mock("../components/shell/BankContext", () => ({
   useBankContext: () => ({ bank: { id: "BK-SAMP0001" } }),
+}));
+vi.mock("../components/profile/ProfileProvider", () => ({
+  useUserProfile: () => ({
+    isLoading: false,
+    effectiveAuthority: {
+      institutionCapabilities: [
+        {
+          institutionId: "BK-SAMP0001",
+          capabilities: [
+            {
+              module: "data",
+              permission: "view",
+              sensitivity: "restricted",
+              dataScope: { kind: "all", branches: [], regions: [] },
+              requiresContextualAuthorization: false,
+            },
+          ],
+        },
+      ],
+    },
+  }),
 }));
 vi.mock("../components/credit/CreditWorkspace", () => ({
   default: ({ children }: { children: () => ReactNode }) => children(),
@@ -53,7 +76,11 @@ function view(children: ReactNode, payload: (url: string) => object) {
   );
   return {
     ...render(
-      <QueryClientProvider client={client}>{children}</QueryClientProvider>,
+      <QueryAuthorityScopeProvider
+        scope={queryAuthorityScope("OR-DEM00001", "fixture-reader", 1)}
+      >
+        <QueryClientProvider client={client}>{children}</QueryClientProvider>
+      </QueryAuthorityScopeProvider>,
     ),
     client,
   };

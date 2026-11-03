@@ -44,6 +44,18 @@ const E2E_VAULT_KEY = Buffer.from(
 
 const BACKEND_DIR = path.join(__dirname, "..");
 const E2E_DB = path.join(E2E_TMP, "e2e.db");
+
+// Freeze before spawning the bootstrap and journey workers so a midnight
+// crossing cannot give them different anchors (H-015, scripts/e2e_bootstrap.py).
+// Override usage is documented in README.md#end-to-end-playwright.
+if (process.env.E2E_TODAY === undefined) {
+  const today = new Date();
+  process.env.E2E_TODAY = [
+    today.getFullYear(),
+    String(today.getMonth() + 1).padStart(2, "0"),
+    String(today.getDate()).padStart(2, "0"),
+  ].join("-");
+}
 export const E2E_KMS_UPSTREAM = process.env.BANK_KMS_ENDPOINT_URL ?? "";
 export const E2E_KMS_STATE = path.join(E2E_TMP, "kms-service-state");
 const kmsProxy = `http://127.0.0.1:${runtimePorts.kms}`;

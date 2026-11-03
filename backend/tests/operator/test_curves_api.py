@@ -3,7 +3,7 @@
 Definitions are Track-2 governed at the API boundary (dual control, the operator's
 own email is the actor); construction is an approved-definition-only preview; every
 mutation lands an ``operator_audit_log`` row. Heavy publish fan-out landing is proven
-at the service layer (``tests/services/test_curve_construction.py``); here publish is
+at the service layer (``tests/market_data/service/test_curve_construction.py``); here publish is
 a wiring smoke test (no banks seeded -> a complete, empty fan-out).
 """
 
@@ -15,8 +15,8 @@ from fastapi.testclient import TestClient
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.market_data.service.market_desk import curve_construction as cc
 from app.models import DeskDetermination, OperatorAuditLog
-from app.services.market_desk import curve_construction as cc
 from tests.operator.conftest import operator_headers
 
 BASE = "/operator/v1/curves"
@@ -74,9 +74,7 @@ def _spec(curve_code: str = CURVE_CODE) -> cc.CurveDefinitionSpec:
 
 def _seed_definition(db: Session, *, approve: bool) -> None:
     """Seed a definition with a distinct proposer so the dev operator can approve it."""
-    cc.create_definition(
-        db, spec=_spec(), change_rationale="seed", proposed_by=ANALYST
-    )
+    cc.create_definition(db, spec=_spec(), change_rationale="seed", proposed_by=ANALYST)
     if approve:
         cc.approve_definition_version(
             db,

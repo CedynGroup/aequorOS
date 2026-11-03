@@ -6,7 +6,7 @@ Why this guard exists
 a handler, a model, a full evaluation service and its tests — and NO enqueue
 site anywhere in ``app/``. Alerts therefore never evaluated and ``on_new_data``
 never fired. Nothing caught it: the parity test in
-``tests/services/test_desk_capture_job.py`` proves ``JOB_TYPES`` and ``HANDLERS``
+``tests/market_data/service/test_desk_capture_job.py`` proves ``JOB_TYPES`` and ``HANDLERS``
 cover each other (the defect it was written for, an orphaned type nobody could
 CLAIM), but a type that is claimable and never ENQUEUED looks identical to a
 healthy one from every registry's point of view. The feature is simply inert.

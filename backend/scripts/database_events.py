@@ -4,6 +4,9 @@ from __future__ import annotations
 
 import json
 import os
+from collections.abc import Generator
+from contextlib import contextmanager
+from contextvars import ContextVar
 from pathlib import Path
 from typing import cast
 from urllib.parse import urlsplit
@@ -12,9 +15,26 @@ DIRECTORY_ENV = "CI_DATABASE_OBSERVATIONS"
 CONTEXT_ENV = "CI_DATABASE_CONTEXT"
 RUN_ENV = "CI_DATABASE_OBSERVATION_RUN"
 
+_inherited_context: ContextVar[dict[str, object] | None] = ContextVar(
+    "database_observation_context", default=None
+)
 
-def context() -> dict[str, object]:
-    return cast(dict[str, object], json.loads(os.getenv(CONTEXT_ENV, "{}")))
+
+def context(fallback: str = "{}") -> dict[str, object]:
+    inherited = _inherited_context.get()
+    if inherited is not None:
+        return inherited
+    return cast(dict[str, object], json.loads(os.getenv(CONTEXT_ENV, fallback)))
+
+
+@contextmanager
+def inherited_context(origin: dict[str, object]) -> Generator[None]:
+    """Keep deferred work attributed to the test or fixture that started it."""
+    token = _inherited_context.set(origin)
+    try:
+        yield
+    finally:
+        _inherited_context.reset(token)
 
 
 def emit(kind: str, **values: object) -> None:

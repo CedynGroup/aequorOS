@@ -16,8 +16,8 @@ from app.core.key_management.settings import get_key_settings
 from app.core.key_management.types import KeyReference, KeyStatus
 from app.db.base import utc_now
 from app.models.job import Job
-from app.models.operator import OperatorAuditLog
 from app.operator.deps import OperatorContext, get_operator_context
+from app.operator.models import OperatorAuditLog
 from tests.operator.conftest import BANK_KEY, operator_headers, provision_payload, start_inspection
 
 _BASE = "/operator/v1/tenants/{org_id}/banks/{bank_id}/encryption-key"

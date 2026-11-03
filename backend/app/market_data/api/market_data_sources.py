@@ -1,0 +1,112 @@
+"""Per-bank market-data source-preference API (market_data_sources.md §4).
+
+Under ``/banks/{bank_id}/market-data``:
+
+- ``GET/PUT /source-preferences`` — read / upsert the per-category base-plane
+  + overlay selection (defaults synthesised when no row; PUT keeps the legacy
+  analyst gate until configuration authority lands, and is audited).
+- ``GET /planes`` — the same scope resolved under each base plane, side by
+  side, so the bank sees what each choice would feed the engines.
+- ``GET /curves/{curve_name}/forward-grid`` — the published forward grid for a
+  desk curve (FC-5/G1).
+
+Every read requires an exact MARKETS/published view binding on the bank.
+"""
+
+from __future__ import annotations
+
+from datetime import date
+from typing import Annotated
+
+from fastapi import APIRouter, Query
+
+from app.api.deps import DbSession, MarketsPublishedView, MutationTenant
+from app.core.authorization import Module, Permission, Sensitivity
+from app.identity import public as scoped_authorization
+from app.market_data.schemas.market_data_sources import (
+    ForwardGridRead,
+    PlanesRead,
+    SourcePreferencesRead,
+    SourcePreferencesUpdate,
+)
+from app.market_data.service import market_data_sources
+
+router = APIRouter(tags=["market-data-sources"])
+
+
+@router.get(
+    "/banks/{bank_id}/market-data/source-preferences",
+    response_model=SourcePreferencesRead,
+    operation_id="getMarketDataSourcePreferences",
+)
+def get_source_preferences(
+    bank_id: str,
+    db: DbSession,
+    access: MarketsPublishedView,
+) -> SourcePreferencesRead:
+    return market_data_sources.get_preference(db, access.ctx, access.bank.id)
+
+
+@router.put(
+    "/banks/{bank_id}/market-data/source-preferences",
+    response_model=SourcePreferencesRead,
+    operation_id="updateMarketDataSourcePreferences",
+)
+def update_source_preferences(
+    bank_id: str,
+    payload: SourcePreferencesUpdate,
+    db: DbSession,
+    ctx: MutationTenant,
+) -> SourcePreferencesRead:
+    return market_data_sources.set_preference(db, ctx, bank_id, payload)
+
+
+@router.get(
+    "/banks/{bank_id}/market-data/planes",
+    response_model=PlanesRead,
+    operation_id="getMarketDataPlanes",
+)
+def get_market_data_planes(
+    bank_id: str,
+    db: DbSession,
+    access: MarketsPublishedView,
+    category: Annotated[str, Query()],
+    as_of: Annotated[date | None, Query()] = None,
+) -> PlanesRead:
+    resolved_as_of = as_of or date.today()  # noqa: DTZ011 - date-only business resolution
+    decision = scoped_authorization.evaluate_bank_permission(
+        db,
+        access.ctx,
+        access.bank,
+        permission=Permission.VIEW,
+        module=Module.MARKETS,
+        sensitivity=Sensitivity.CONFIDENTIAL,
+        surface="market_data_planes.overlays",
+    )
+    return market_data_sources.resolve_planes(
+        db,
+        access.ctx,
+        access.bank.id,
+        category,
+        resolved_as_of,
+        include_overlays=decision is not None and decision.allowed,
+    )
+
+
+@router.get(
+    "/banks/{bank_id}/market-data/curves/{curve_name}/forward-grid",
+    response_model=ForwardGridRead,
+    operation_id="getMarketDataForwardGrid",
+)
+def get_forward_grid(  # noqa: PLR0913 - route path, session, tenant, and optional grid selectors
+    bank_id: str,
+    curve_name: str,
+    db: DbSession,
+    access: MarketsPublishedView,
+    as_of: Annotated[date | None, Query()] = None,
+    frequency: Annotated[str | None, Query()] = None,
+) -> ForwardGridRead:
+    resolved_as_of = as_of or date.today()  # noqa: DTZ011 - date-only business resolution
+    return market_data_sources.get_forward_grid(
+        db, access.ctx, access.bank.id, curve_name, resolved_as_of, frequency=frequency
+    )

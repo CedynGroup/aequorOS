@@ -26,9 +26,9 @@ import {
 } from "../lib/api/bi";
 import { QueryAuthorityScopeProvider } from "../lib/api/useQueryScope";
 import { queryAuthorityScope } from "../lib/api/queryPolicy";
-import { insightViews } from "../components/bi/InsightStrip";
+import { insightViews } from "../features/bi/components/InsightStrip";
 import { runBackend } from "./backend";
-import { biTimeFor } from "../components/bi/query";
+import { biTimeFor } from "../features/bi/components/query";
 
 vi.mock("next-auth/react", () => ({ getSession: async () => null }));
 afterEach(() => vi.unstubAllGlobals());

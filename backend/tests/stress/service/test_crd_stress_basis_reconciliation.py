@@ -13,10 +13,12 @@ from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session, undefer_group
 
 from app.api.deps import TenantContext
+from app.core.authorization import ModuleScope, RoleBundle, SensitivityScope
 from app.core.key_management import registry
 from app.core.key_management.local import LocalKeyProvider
 from app.core.key_management.types import KeyReference, KeyStatus, KeyUnavailableError
 from app.credit.service import credit_exposure_book
+from app.data_engine.service import canonical_withdrawal
 from app.domain.authority.outcomes import NotComputable, OutcomeState
 from app.forecasting.domain.engine import ForecastFact
 from app.live.service.fact_derivation import (
@@ -31,8 +33,8 @@ from app.models import (
     CanonicalPosition,
     CanonicalPositionSnapshot,
     RegulatoryRun,
+    User,
 )
-from app.services import canonical_withdrawal
 from app.stress.domain.credit_bottom_up import compute_bottom_up_credit
 from app.stress.domain.projection import (
     EnterpriseProjection,
@@ -43,11 +45,11 @@ from app.stress.service import enterprise_stress
 from app.stress.service.enterprise_stress import (
     _build_credit_exposures,  # pyright: ignore[reportPrivateUsage]
 )
-from tests.api.test_ingestion import seed_bank
+from tests.capital.domain.test_capital_engine import bog_capital_params
 from tests.credit.service.test_crd_credit_exposures import (
     _stress_row,  # pyright: ignore[reportPrivateUsage]
 )
-from tests.domain.test_capital_engine import bog_capital_params
+from tests.data_engine.api.test_ingestion import seed_bank
 from tests.fixtures.capital_structure import MAKER
 from tests.services.test_crd_review_repairs import (
     _ErrorResponse,  # pyright: ignore[reportPrivateUsage]
@@ -75,9 +77,13 @@ from tests.stress.domain.stress_fixtures import (
 from tests.stress.service.test_crd_credit_stress_repairs import (
     _capital_facts,  # pyright: ignore[reportPrivateUsage]
 )
-from tests.support.helpers import USER_2, headers
+from tests.support.factories.authorization import grant_institution_authority
+from tests.support.helpers import headers
 
-pytestmark = pytest.mark.requirement("BoG CRD (June 2018) ¶98, ¶123–124, ¶138–139")
+pytestmark = [
+    pytest.mark.requirement("BoG CRD (June 2018) ¶98, ¶123–124, ¶138–139"),
+    pytest.mark.usefixtures("stress_run_authority"),
+]
 
 
 @pytest.mark.parametrize("foreign", [False, True])
@@ -465,10 +471,30 @@ def _change_credit_source(db_session: Session, bank_id: str, change: str) -> Non
             reason="Retire the final accepted loan.",
             requested_by="maker@bank.test",
         )
+        checker_id = uuid4()
+        db_session.add(
+            User(
+                id=checker_id,
+                organization_id=MAKER.organization_id,
+                email="withdrawal-checker@bank.test",
+            )
+        )
+        db_session.flush()
+        grant_institution_authority(
+            db_session,
+            organization_id=MAKER.organization_id,
+            bank_id=bank.id,
+            user_id=checker_id,
+            bundle=RoleBundle.APPROVER,
+            module=ModuleScope.DATA,
+            sensitivity=SensitivityScope.CONFIDENTIAL,
+        )
         approved = canonical_withdrawal.approve_withdrawal(
             db_session,
             TenantContext(
-                organization_id=MAKER.organization_id, actor_user_id=USER_2, authorization_version=1
+                organization_id=MAKER.organization_id,
+                actor_user_id=checker_id,
+                authorization_version=1,
             ),
             bank,
             withdrawal.id,

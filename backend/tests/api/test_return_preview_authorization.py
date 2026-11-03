@@ -7,13 +7,20 @@ from fastapi import HTTPException
 from fastapi.testclient import TestClient
 from sqlalchemy import delete
 
+from app.capital.service import regulatory_capital
 from app.core.authorization import ModuleScope, RoleBundle, SensitivityScope
 from app.db.session import get_sessionmaker
+from app.liquidity.schemas.regulatory_liquidity import RegulatoryRunCreate
+from app.liquidity.service import regulatory_liquidity
 from app.models import AuthorizationBinding
-from app.schemas.regulatory_liquidity import RegulatoryRunCreate
-from app.services import regulatory_capital, regulatory_liquidity
-from tests.api.test_liquidity_scoped_authorization import BASE, CTX, _auth, _grant, _seed_book
 from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID
+from tests.liquidity.api.test_liquidity_scoped_authorization import (
+    BASE,
+    CTX,
+    _auth,
+    _grant,
+    _seed_book,
+)
 from tests.support.helpers import ORG_1, ORG_2, headers
 
 

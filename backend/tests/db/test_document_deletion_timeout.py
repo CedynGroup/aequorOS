@@ -23,15 +23,16 @@ from sqlalchemy import Engine, select, text
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
+from app.case.service import documents
 from app.core.config import Settings, get_settings
 from app.db.base import utc_now
 from app.integrations.storage.base import StoredObjectHead
 from app.integrations.storage.s3 import S3ObjectStorage
 from app.models import AuditEvent, Document, Job, StoredObject
-from app.services import documents, job_queue
+from app.services import job_queue
+from tests.case.factories import ServiceFactories
 from tests.conftest import FakeStorage
 from tests.db import test_database_roles as role_tests
-from tests.services.factories import ServiceFactories
 from tests.support.database import managed_engine
 from tests.support.helpers import ORG_1
 
@@ -91,17 +92,22 @@ class UploadDeletionRace:
     upload_pid: int = 0
 
     def complete_upload(self) -> str:
-        with Session(self.api_engine, expire_on_commit=self.expire_on_commit) as completing:
-            completing.info["organization_id"] = ORG_1
-            self.upload_pid = cast(int, completing.scalar(text("SELECT pg_backend_pid()")))
-            result = documents.complete_upload(
-                completing,
-                self.ctx,
-                self.document_id,
-                settings=self.settings,
-                storage_client=self.storage,
-            )
-            return result.status
+        with self.api_engine.connect() as connection:
+            self.upload_pid = cast(int, connection.scalar(text("SELECT pg_backend_pid()")))
+            # PID discovery is test setup: do not spend the accelerated idle
+            # budget before the service starts. Retain this exact backend for
+            # the transaction-state assertion while storage is blocked.
+            connection.commit()
+            with Session(connection, expire_on_commit=self.expire_on_commit) as completing:
+                completing.info["organization_id"] = ORG_1
+                result = documents.complete_upload(
+                    completing,
+                    self.ctx,
+                    self.document_id,
+                    settings=self.settings,
+                    storage_client=self.storage,
+                )
+                return result.status
 
     def cleanup(self) -> None:
         with Session(self.worker_engine, expire_on_commit=False) as worker:
@@ -114,6 +120,7 @@ class UploadDeletionRace:
 
 def build_upload_deletion_race(
     timeout_role_engines: dict[str, Engine],
+    setup_engine: Engine,
     monkeypatch: pytest.MonkeyPatch,
     expire_on_commit: bool,
 ) -> UploadDeletionRace:
@@ -122,7 +129,9 @@ def build_upload_deletion_race(
     settings = get_settings()
     storage = BlockingHeadStorage()
     monkeypatch.setattr(documents, "get_object_storage", lambda: storage)
-    with Session(api_engine, expire_on_commit=False) as setup:
+    # Fixture preparation is outside the accelerated idle-budget scenario.
+    # Keep real API authority without timing synthetic case construction.
+    with Session(setup_engine, expire_on_commit=False) as setup:
         setup.info["organization_id"] = ORG_1
         upload = ServiceFactories(setup, storage, settings, ctx).documents.request_upload()
         document = documents.get_document_or_404(setup, ORG_1, upload.document_id)
@@ -206,14 +215,17 @@ def assert_upload_deletion_outcome(scenario: UploadDeletionRace) -> None:
 
 @pytest.mark.parametrize("cleanup_during_head", [False, True])
 @pytest.mark.parametrize("expire_on_commit", [False, True])
-def test_upload_completion_cannot_resurrect_deletion_during_head(
+def test_upload_completion_cannot_resurrect_deletion_during_head(  # noqa: PLR0913
     administrator: Engine,
     timeout_role_engines: dict[str, Engine],
+    role_engines: dict[str, Engine],
     monkeypatch: pytest.MonkeyPatch,
     cleanup_during_head: bool,
     expire_on_commit: bool,
 ) -> None:
-    scenario = build_upload_deletion_race(timeout_role_engines, monkeypatch, expire_on_commit)
+    scenario = build_upload_deletion_race(
+        timeout_role_engines, role_engines["aqs_api"], monkeypatch, expire_on_commit
+    )
 
     delete_during_upload_head(scenario, administrator, cleanup_during_head)
 
@@ -222,11 +234,17 @@ def test_upload_completion_cannot_resurrect_deletion_during_head(
 
 def test_upload_completion_succeeds_after_head_exceeds_idle_budget(
     timeout_role_engines: dict[str, Engine],
+    role_engines: dict[str, Engine],
 ) -> None:
+    ctx = TenantContext(organization_id=ORG_1)
+    settings = get_settings()
+    # Synthetic case construction is not part of the storage-wait scenario.
+    with Session(role_engines["aqs_api"], expire_on_commit=False) as setup:
+        setup.info["organization_id"] = ORG_1
+        upload = ServiceFactories(setup, FakeStorage(), settings, ctx).documents.request_upload()
+
     with Session(timeout_role_engines["aqs_api"], expire_on_commit=False) as api:
         api.info["organization_id"] = ORG_1
-        ctx = TenantContext(organization_id=ORG_1)
-        settings = get_settings()
 
         class SlowStorage(FakeStorage):
             def head_object(self, *, bucket: str, object_key: str) -> StoredObjectHead | None:
@@ -237,7 +255,6 @@ def test_upload_completion_succeeds_after_head_exceeds_idle_budget(
                 )
 
         storage = SlowStorage()
-        upload = ServiceFactories(api, storage, settings, ctx).documents.request_upload()
         uploaded = documents.complete_upload(
             api, ctx, upload.document_id, settings=settings, storage_client=storage
         )
@@ -314,17 +331,22 @@ def test_repeated_deletion_refreshes_preloaded_state(
 def test_deletion_commits_before_storage_and_retries_under_role_timeouts(
     administrator: Engine,
     timeout_role_engines: dict[str, Engine],
+    role_engines: dict[str, Engine],
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    ctx = TenantContext(organization_id=ORG_1)
+    # Upload preparation must not consume the deletion scenario's idle budget.
+    with Session(role_engines["aqs_api"], expire_on_commit=False) as setup:
+        setup.info["organization_id"] = ORG_1
+        factories = ServiceFactories(setup, FakeStorage(), get_settings(), ctx)
+        document = factories.documents.create_uploaded()
+        document_id, object_id = document.id, document.stored_object_id
+
     api_engine, worker_engine = timeout_role_engines["aqs_api"], timeout_role_engines["aqs_worker"]
     with Session(api_engine, expire_on_commit=False) as api:
         api.info["organization_id"] = ORG_1
-        ctx = TenantContext(organization_id=ORG_1)
         assert api.scalar(text("SHOW idle_in_transaction_session_timeout")) == "1s"
         api.commit()
-        factories = ServiceFactories(api, FakeStorage(), get_settings(), ctx)
-        document = factories.documents.create_uploaded()
-        document_id, object_id = document.id, document.stored_object_id
         documents.delete_document(api, ctx, document_id)
         assert not api.in_transaction()
         with Session(administrator) as observer:

@@ -4,7 +4,7 @@ import { cleanup, render as renderUi, screen } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { FxDashboardReadFromJSON } from "@aequoros/risk-service-api";
-import FxModuleFrame from "../components/fx/FxModuleFrame";
+import FxModuleFrame from "../features/fx/components/FxModuleFrame";
 import FxVarPage from "../app/(app)/fx/var/page";
 import FxExposurePage from "../app/(app)/fx/page";
 import FxLimitsPage from "../app/(app)/fx/limits/page";
@@ -25,8 +25,9 @@ function render(ui: React.ReactNode) {
 
 const evidence = vi.hoisted(() => ({ missingFebruary: false }));
 
-vi.mock("../components/bi/EChart", () => ({
-  default: ({
+vi.mock("@/features/bi/public", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/features/bi/public")>()),
+  EChart: ({
     ariaLabel,
     option,
   }: {

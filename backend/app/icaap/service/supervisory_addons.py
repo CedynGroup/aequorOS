@@ -22,8 +22,7 @@ import hashlib
 from collections.abc import Sequence
 from datetime import date
 from decimal import Decimal
-from io import BytesIO
-from typing import Any
+from typing import Any, BinaryIO, cast
 from uuid import UUID
 
 from sqlalchemy import select
@@ -44,7 +43,16 @@ from app.icaap.service import blocks as blocks_service
 from app.icaap.service import guards, pillar2_inputs
 from app.policy.public import jurisdictions
 from app.services.audit import record_event
-from app.storage import ObjectMetadata, StorageClient, StorageLocation
+from app.storage import StorageClient, StorageError, StorageLocation, StorageValidationError, Tier
+from app.storage.public import (
+    DocumentBinding,
+    DocumentFamily,
+    PublicationRequest,
+    RecordedDocument,
+    bind_existing_document,
+    publish_sealed_document,
+    resolve_document,
+)
 
 _STORAGE_TIER = "outputs"
 #: Derived from the column, so a stored name can never exceed what it holds.
@@ -273,28 +281,25 @@ def create_addon(  # noqa: PLR0913 - a recorded letter is its named parts
             )
     digest = hashlib.sha256(content).hexdigest()
 
-    from app.services.ingestion import (  # noqa: PLC0415 - defer cyclic feature dependencies
-        bank_slug,
-    )
+    from app.data_engine.public import bank_slug  # noqa: PLC0415 - avoid an import cycle
 
     slug = bank_slug(db, access.bank)
     storage.ensure_institution(slug)
     extension = attachments_service.ALLOWED_MEDIA[media_type]
     object_path = f"icaap/supervisory/{digest}.{extension}"
-    stored = storage.write(
-        StorageLocation(slug, _STORAGE_TIER, object_path),
-        BytesIO(content),
-        ObjectMetadata(
-            institution_slug=slug,
-            tier=_STORAGE_TIER,
-            checksum_sha256=digest,
-            written_at=utc_now(),
-            written_by=str(guards.actor_id(access)),
-            as_of_date=effective_from.isoformat(),
-            source_reference=letter_reference,
-        ),
+    actor = guards.actor_id(access)
+    request = PublicationRequest(
+        organization_id=access.ctx.organization_id,
+        bank_id=access.bank.id,
+        storage_slug=slug,
+        context_path=object_path,
+        payload=content,
         content_type=media_type,
+        published_by=actor,
+        as_of_date=effective_from.isoformat(),
+        source_reference=letter_reference,
     )
+    published = publish_sealed_document(db, storage, request)
     row = BankSupervisoryAddon(
         organization_id=access.ctx.organization_id,
         bank_id=access.bank.id,
@@ -311,16 +316,22 @@ def create_addon(  # noqa: PLR0913 - a recorded letter is its named parts
         description=description,
         letter_original_filename=filename[:_FILENAME_MAX],
         letter_media_type=media_type,
-        letter_byte_size=len(content),
-        letter_sha256=digest,
+        letter_byte_size=published.byte_length,
+        letter_sha256=published.sha256,
         letter_storage_tier=_STORAGE_TIER,
         letter_object_path=object_path,
-        letter_storage_version_id=stored.version_id,
+        letter_storage_version_id=published.version_id,
         supersedes_addon_id=supersedes_addon_id,
-        created_by=guards.actor_id(access),
+        created_by=actor,
     )
     db.add(row)
     db.flush()
+    bind_existing_document(
+        db,
+        request,
+        published.document,
+        binding=DocumentBinding(DocumentFamily.SUPERVISORY_LETTER, row.id),
+    )
     record_event(
         db,
         access.ctx,
@@ -420,15 +431,38 @@ def withdraw_addon(
     return _read(row, None)
 
 
-def prepare_letter_download(
-    db: Session, access: IcaapAccess, addon_id: UUID
-) -> tuple[BankSupervisoryAddon, str]:
-    from app.services.ingestion import (  # noqa: PLC0415 - defer cyclic feature dependencies
-        bank_slug,
-    )
+def read_letter(
+    db: Session, access: IcaapAccess, addon_id: UUID, storage: StorageClient
+) -> tuple[BankSupervisoryAddon, BinaryIO]:
+    """The add-on and its verified letter bytes, with the read recorded.
+
+    Same contract as the cycle's other evidence: bytes are proven against the
+    identity the row carries before the audit event is written, so a letter that
+    fails verification is a 404 rather than a download.
+    """
+    from app.data_engine.public import bank_slug  # noqa: PLC0415 - avoid an import cycle
 
     row = _addon_or_404(db, access, addon_id)
     slug = bank_slug(db, access.bank)
+    decision = guards.sealed_document_decision(db, access.ctx, access.bank)
+    recorded = RecordedDocument(
+        location=StorageLocation(slug, cast(Tier, row.letter_storage_tier), row.letter_object_path),
+        version_id=row.letter_storage_version_id,
+        sha256=row.letter_sha256,
+        byte_length=row.letter_byte_size,
+    )
+    try:
+        _document, stream = resolve_document(
+            db,
+            access.ctx,
+            access.bank.id,
+            DocumentBinding(DocumentFamily.SUPERVISORY_LETTER, row.id),
+            storage,
+            authorization=decision,
+            recorded=recorded,
+        )
+    except (StorageError, StorageValidationError):
+        guards.not_found()
     record_event(
         db,
         access.ctx,
@@ -438,7 +472,7 @@ def prepare_letter_download(
         details={"letter_reference": row.letter_reference},
     )
     db.commit()
-    return row, slug
+    return row, stream
 
 
 def addons_payload(
@@ -476,7 +510,7 @@ __all__ = [
     "confirmation_conditions",
     "create_addon",
     "list_addons",
-    "prepare_letter_download",
+    "read_letter",
     "unattributed_amount",
     "withdraw_addon",
 ]

@@ -2,12 +2,12 @@
 
 /**
  * Ratio trend line for the IRR workspace. Colours are resolved from the design
- * tokens by `components/bi/echartsTheme`, so dark and light both work. The
+ * tokens by `features/bi/components/echartsTheme`, so dark and light both work. The
  * threshold here is a CEILING (supervisory ΔEVE/Tier-1 limit), not a floor.
  */
 
-import EChart, { type BiEChartsOption } from "@/components/bi/EChart";
-import { seriesColor, useChartTokens } from "@/components/bi/echartsTheme";
+import EChart, { type BiEChartsOption } from "@/features/bi/components/EChart";
+import { seriesColor, useChartTokens } from "@/features/bi/components/echartsTheme";
 import {
   axisTooltip,
   LINE_SERIES_BASE,

@@ -30,7 +30,7 @@ from sqlalchemy.engine import Connection
 from sqlalchemy.exc import IntegrityError
 
 from alembic import command
-from app.domain.ingestion.constants import REFERENCE_DATASET_KINDS
+from app.data_engine.domain.ingestion.constants import REFERENCE_DATASET_KINDS
 from tests.db.test_initial_owner_migration import _insert_organization
 from tests.db.test_postgres_migrations import (
     MigratedPostgresSchema,

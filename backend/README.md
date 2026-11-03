@@ -52,13 +52,10 @@ publication and required migration-role preparation are in
   Decimal engine under `app/domain/` behind an immutable `RegulatoryRun`. See the
   [ECL assumption and coverage contract](../ARCHITECTURE.md#ecl-assumption-and-coverage-contract)
   for register validation, run refusals and provision handling.
-- Live engine: authoritative ingestion, market-data, governed-input, entitlement,
-  and reconciliation mutations enqueue debounced `pipeline_refresh` jobs that
-  re-derive facts and update `live_metrics`/`live_findings`; `GET live-summary`
-  is read-only. Structural unavailability remains stable until an input changes,
-  while true module exceptions retry the same job with bounded backoff and persist
-  their classification, attempt count, and next due time. `official_run` jobs mint
-  the immutable filing runs
+- Live engine: debounced `pipeline_refresh` jobs re-derive facts and update
+  `live_metrics`/`live_findings`. The [live-engine contract](../ARCHITECTURE.md#3b-live-engine-two-tier-always-fresh-view--immutable-official-runs)
+  owns refresh triggers, read-only summaries, bounded retries and immutable
+  official runs.
 - Regulatory reporting: BoG BSD returns generated from the official workbook
   templates, with the templates' own formulas evaluated; PDF/XLSX artifacts
 - Attestation: maker-checker plus PDF e-signature with step-up re-authentication
@@ -165,7 +162,8 @@ Authorization: Bearer <app-access-token>
 
 ### Data Engine file ingestion
 
-With an authorized app session, first upload the source file as multipart field
+With an app session holding the required [human DATA authority](docs/authorization_foundation.md#human-data-engine-authority),
+first upload the source file as multipart field
 `file` to `POST /api/v1/banks/{bank_id}/ingestion-uploads`. Pass the returned
 `location` unchanged to `POST /api/v1/banks/{bank_id}/ingestion-batches`, together
 with the source system, reporting date and reason required by the API schema.
@@ -188,9 +186,9 @@ See [native transaction/role regressions](tests/db/test_bi_export_transactions.p
 
 Document deletion and upload-completion boundaries are documented under
 [the legacy case vertical](#legacy-case-vertical). Remaining transaction-held waits include
-`services/ingestion.py:upload_source` (institution setup and object write),
+`app/data_engine/service/ingestion.py:stage_source` (institution setup and object write),
 `start_ingestion` (source download and raw-artifact write), and
-`services/database_connections.py:test_connection`, `discover_schema` and
+`app/data_engine/service/database_connections.py:probe_connection_internal`, `discover_schema` and
 `sync_now` (remote database inspection or extraction). These require their own
 transaction-boundary work before lowering the API idle budget; the
 [session timeout contract](../docs/ops/database-roles.md#session-timeout-budgets)
@@ -278,6 +276,9 @@ provenance fields. The dashboard's current capabilities are documented in
 
 ### Legacy case vertical
 
+Required authority for case reads, mutations, documents, job polling and exports
+is defined by the [case workspace rollout contract](docs/case_enforcement_rollout.md).
+
 Document deletion commits the document tombstone, the stored object's
 `pending_deletion` status, the audit event and a `document_delete` job atomically.
 The existing deleted response means logical deletion: downloads, parsing and
@@ -292,19 +293,18 @@ acknowledgement leaves pending cleanup safe to retry; duplicate requests preserv
 one job and one deletion event. Existing deleted records remain unchanged.
 The queue's bounded exponential retries and stale-worker reclaim apply; exhausted
 cleanup remains pending and appears as a failed job on the operator jobs board.
-See [`documents.py`](app/services/documents.py) and the
-[deletion regression tests](tests/services/test_document_deletion.py), including
+See [`documents.py`](app/case/service/documents.py) and the
+[deletion regression tests](tests/case/service/test_document_deletion.py), including
 [PostgreSQL concurrency and role-timeout coverage](tests/db/test_document_deletion_timeout.py).
 
 Canonical financial data is read with
 `GET /api/v1/cases/{case_id}/financial-workspace`. Resource-specific `POST` and
 `PATCH` routes below that path support institutions, accounts, reporting
-periods, balances, cash flows, obligations, and covenants. These mutations
-require an authenticated mutation-capable bearer principal; each request body
-requires a non-empty `reason`. Successful responses contain the updated `record` and the case's
-refreshed `validation` state. The request and response schemas live in
-[`app/schemas/financial_workspace.py`](app/schemas/financial_workspace.py);
-[`app/services/financial_canonical_edits.py`](app/services/financial_canonical_edits.py) owns
+periods, balances, cash flows, obligations, and covenants. Each mutation request
+body requires a non-empty `reason`. Successful responses contain the updated
+`record` and the case's refreshed `validation` state. The request and response schemas live in
+[`app/case/schemas/financial_workspace.py`](app/case/schemas/financial_workspace.py);
+[`app/case/service/financial_canonical_edits.py`](app/case/service/financial_canonical_edits.py) owns
 correction-history behavior.
 
 Clients use the generated `FinancialDataApi` from `packages/risk-service-api`
@@ -316,9 +316,9 @@ conventions are owned by [CODEBASE_CONVENTIONS.md](../CODEBASE_CONVENTIONS.md#ap
 Case scenarios are read from `GET /api/v1/cases/{case_id}/scenarios`. Initialize
 the baseline and downside defaults with `POST .../scenarios/initialize`, or use
 the resource-specific scenario, copy, archive, assumption, and review routes
-below that path. All mutations require an authenticated mutation-capable bearer
-principal and a non-empty `reason`. An active scenario is calculation-ready only when it has a non-null,
-reviewed assumption in each required category: growth, expenses, cash-flow
+below that path. All mutations require a non-empty `reason`. An active scenario
+is calculation-ready only when it has a non-null, reviewed assumption in each
+required category: growth, expenses, cash-flow
 timing, credit usage, and repayment behavior. Editing or copying an assumption
 resets its review state to `draft`. Mutation responses include the scenario's
 refreshed validation and the case's refreshed readiness state.
@@ -339,8 +339,7 @@ defaults to today.
 Rerunning creates a new run for the original scenario using current canonical
 financial data and reviewed assumptions. Its body may be `{}`; omitted fields
 reuse the original period count and default the as-of date to today, while
-provided fields override those values. Both mutations require an authenticated
-mutation-capable bearer principal.
+provided fields override those values.
 
 The first engine executes synchronously, but commits its `queued` and `running`
 states before calculation. A `201` response contains the final persisted run,
@@ -369,9 +368,9 @@ GET  /api/v1/cases/{case_id}/capital-summary
 GET  /api/v1/cases/{case_id}/capital-comparison
 ```
 
-Creating a projection requires `calculation_run_id` and an authenticated
-mutation-capable bearer principal. The run must be successful and belong to an active scenario in the
-same case and tenant. Each attempt is immutable and stores the run input hash,
+Creating a projection requires `calculation_run_id`. The run must be successful
+and belong to an active scenario in the same case and tenant. Each attempt is
+immutable and stores the run input hash,
 engine version, reporting currency, lifecycle state, period indicators, and any
 named failure diagnostic. The history route is newest-first and supports
 `limit` (1-100) and `offset`; the summary route returns the latest successful
@@ -416,8 +415,8 @@ POST /api/v1/cases/{case_id}/liquidity/findings/{finding_id}/review
 ```
 
 The body action is `acknowledge` or `dismiss`; dismissal requires a non-empty
-reason. Review requires an authenticated mutation-capable bearer principal, records audit events, and is
-rejected for terminal findings or findings belonging to archived scenarios.
+reason. Review records audit events and is rejected for terminal findings or
+findings belonging to archived scenarios.
 The generic findings update endpoint does not mutate liquidity workflow
 findings. A newer successful run supersedes open findings from the previous run
 for that scenario without altering acknowledged or dismissed history.
@@ -467,6 +466,27 @@ There are no module defaults or manual function overrides. Collection rejects ne
 duplicate collection and conflicting suite markers before marker deselection.
 SQLite counts as a database. Optional primary-data tests retain their explicit
 opt-in; the census never supplies primary-bank data.
+
+[`scripts/database_contracts.json`](scripts/database_contracts.json) records exact
+protected PostgreSQL contract identities with grouped reasons. Changes to that
+reviewed catalogue are deliberate contract changes, not a way to lower a CI count
+floor. A moved or renamed case must retain its integration guarantee and update
+its protected identity in the same review.
+
+The suite plugin rejects unit ownership of protected cases and their direct or
+indirect requests for the standard `current_annex_repository` fake fixture. It
+also rejects database resource fixtures in unit tests. The fake is forbidden under
+database, storage, API and identity test paths; the
+[ICAAP test-input guide](tests/icaap/testing/README.md) owns its permitted use.
+Unit and e2e CI collection reject stale protected identities. Selected protected
+cases require PostgreSQL in CI (or with `CI_REQUIRE_DATABASE_CONTRACTS=1`), and
+skipping one fails its execution.
+
+The catalogue explicitly identifies the existing primary-data opt-in cases.
+Their integration ownership and fake prohibition always apply; execution remains
+conditional on their existing `REAL_DATA_DATABASE_URL` profile. The census never
+supplies that URL or makes primary data a CI prerequisite. When explicitly
+enabled, those cases also require PostgreSQL and may not skip their guarantees.
 
 Refresh ownership after adding tests or changing database or service requirements,
 including tests brought in by merging main. The merge queue executes the combined
@@ -637,7 +657,8 @@ OpenBao execution guards remain in
 
 The integration aggregate also joins the lock and storage execution reports with
 unit, e2e and Postgres shard evidence. Their selected union must match the classified
-collection exactly once. Storage integration cases run only in the storage job,
+collection exactly once. Every selected protected case must execute successfully
+without skips in its Postgres owner. Storage integration cases run only in the storage job,
 except key-rotation concurrency, which belongs to locks. The storage job also
 runs for merge groups. A conservative affected-module run excludes only the
 explicitly unselected suite cases from this cross-owner comparison.
@@ -715,7 +736,7 @@ assignment before removing transferred modules from the refreshed weights.
 - Hermetic and Postgres-gated mutation checks follow [Run Tests](#run-tests), including
   its dedicated test-database requirement. Tests against the primary are limited to the
   read-only live-data suite above.
-- Test connection construction, fixture selection and the direct-constructor ratchet
+- Test connection construction, fixture selection and the direct-constructor guard
   are documented in the [test connection guide](tests/support/DATABASE.md).
 - **`Base.metadata.create_all` skips migrations.** The hermetic pytest suite and the
   shared Playwright bootstrap therefore use `tests/fixtures/reference_data.py` to seed
@@ -728,9 +749,11 @@ assignment before removing transferred modules from the refreshed weights.
   [dashboard end-to-end guide](dashboard/README.md#end-to-end-playwright); for SSO, see its
   [local issuer guidance](dashboard/README.md#single-sign-on-against-a-local-issuer).
   **Default shared test databases are built once per pytest process**
-  (`backend/tests/conftest.py`): tenant API rollback-isolated tests share one
+  (`backend/tests/conftest.py`): default tenant API rollback-isolated tests share one
   schema through a savepoint-bound sessionmaker, and `@pytest.mark.committing_db`
   tests share a second schema that is TRUNCATEd and reseeded before each test.
+  Opt-in [prepared canonical books](tests/support/DATABASE.md#prepared-canonical-books)
+  use a separate baseline with per-test rollback.
   Both default tenant fixture families reuse one application per process.
   BI export header cases (`tests/bi/api/test_bi_exports.py`) reuse a separate
   module-scoped app, built lazily after hermetic settings, BI flags and the fixed

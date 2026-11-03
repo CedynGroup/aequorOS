@@ -17,7 +17,7 @@
  * 2. **A canvas has no CSS cascade.** Recharts rendered SVG, so it accepted the
  *    literal string `var(--chart-1)`. ECharts paints with Canvas2D, which
  *    cannot resolve `var()`. Series colours therefore come from
- *    `components/bi/echartsTheme.ts`, which resolves the tokens against the live
+ *    `features/bi/components/echartsTheme.ts`, which resolves the tokens against the live
  *    document — see `useChartTokens` below for the hook every chart uses.
  *    The TOOLTIP is the exception: ECharts renders it as DOM, so the CSS
  *    variables in `tooltipHtml` do resolve.

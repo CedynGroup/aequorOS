@@ -63,20 +63,19 @@ const ROOT = dashboardRoot();
  */
 const SCANNED_DIRS = [
   "components/stress",
-  "components/liquidity",
+  "features/liquidity",
   "components/basel",
   "components/credit",
   "components/irr",
-  "components/fx",
+  "features/fx",
   "components/ftp",
   "components/forecasting",
   "components/sdi",
-  "components/workbench",
-  "components/risk",
+  "features/workbench",
+  "features/risk",
   "components/reports",
-  "components/alerts",
-  "components/home",
-  "components/live",
+  "features/home",
+  "features/live",
   "components/submissions",
   "components/behavioral",
   "components/charts",
@@ -92,7 +91,7 @@ const SCANNED_DIRS = [
   // answered with nothing. Both of those states are one `?? 0` away from being
   // a fabricated measurement on a board pack, which is exactly this guard's
   // subject — so the whole tree is in scope from the day it exists.
-  "components/bi",
+  "features/bi",
   // The coverage notice is the only thing on a scoped reader's screen that says
   // the totals beside it are not the institution's. It renders no figure itself,
   // but it DECIDES how a figure is read — which is the half of the P0-19 finding
@@ -299,7 +298,7 @@ const RULES: Rule[] = [
     // that reason, so the exception is recorded rather than assumed.
     id: "NEW-53 stored-run threshold used as the current floor",
     // Calls only — the lookbehind lets the helper's own definition (and its
-    // docstring, which names this trap) stay in `components/liquidity/runData.ts`.
+    // docstring, which names this trap) stay in `features/liquidity/components/runData.ts`.
     pattern: /(?<!function\s)\brunMetricThreshold\s*\(/,
     message:
       "A stored run's `threshold_min` is being read as a regulatory floor. It records what was applied WHEN THAT RUN RAN and is absent entirely before an institution's first official run — so it renders a live ratio as \"not assessed\" beside a KPI and a validation that both used the real, governed floor. Read the floor from the governed parameter set on the payload (`buffers.*MinPct`, the SDI s.29 summary, the run's §59(f) coupling) and compare with `assessAgainstFloor`.",

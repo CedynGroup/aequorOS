@@ -24,6 +24,7 @@ generated initializer histories through public service commands.
 | FX                                     | [fx](../fx/testing/)                   | [fx](../../dashboard/unit/fx/testing/)                                           |
 | FTP                                    | [ftp](../ftp/testing/)                 | [ftp](../../dashboard/unit/ftp/testing/)                                         |
 | IRRBB                                  | [irrbb](../irrbb/testing/)             | [irrbb](../../dashboard/unit/irrbb/testing/)                                     |
+| Case workspace authority               | [case](../case/testing/)               | DATA loading regressions in `unit/data-engine-surfaces.spec.tsx`                 |
 | Canonical data                         | [data_engine](../data_engine/testing/) | [data-engine](../../dashboard/unit/data-engine/testing/)                         |
 
 ## Generator contract

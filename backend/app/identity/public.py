@@ -24,6 +24,7 @@ from app.identity.schemas.institution_profile import (
     InstitutionProfileRead,
     RelatedPartyRead,
 )
+from app.identity.service.audit_log import count_attributable_events
 from app.identity.service.auth_throttle import (
     burn_password_check,
     clear_failures,
@@ -37,9 +38,11 @@ from app.identity.service.authentication import record_authentication_event
 from app.identity.service.authorization import (
     EffectiveDataScope,
     binding_is_effective,
+    document_view_decision,
     effective_data_scope,
     evaluate_permission,
     evaluate_prefetched_permission,
+    institution_decision,
     institution_grain_decision,
     load_effective_grants,
     prefetch_principal_bindings,
@@ -107,6 +110,7 @@ __all__ = [
     "binding_is_effective",
     "burn_password_check",
     "clear_failures",
+    "count_attributable_events",
     "effective_data_scope",
     "ensure_baseline_membership",
     "evaluate_bank_permission",
@@ -115,6 +119,8 @@ __all__ = [
     "find_enabled_by_issuer_audience",
     "get_bank_or_404",
     "get_full_profile",
+    "institution_decision",
+    "document_view_decision",
     "institution_grain_decision",
     "load_effective_grants",
     "lock_authenticated_key",

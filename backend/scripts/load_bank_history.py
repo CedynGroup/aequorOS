@@ -34,7 +34,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))  # backend/ on p
 sys.path.insert(0, str(Path(__file__).resolve().parent))  # backend/scripts on path
 
 from app.core.config import get_settings  # noqa: E402
-from app.services.history_loader import (  # noqa: E402
+from app.data_engine.service.history_loader import (  # noqa: E402
     _months_from_panels,
     derive_all_periods,
     load_history,

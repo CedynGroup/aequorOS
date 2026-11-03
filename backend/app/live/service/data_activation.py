@@ -27,9 +27,20 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
+from app.capital.schemas.regulatory_capital import CapitalScenarioBatchCreate
+from app.capital.service import regulatory_capital
 from app.core.authorization import Module, Permission, Sensitivity
 from app.credit.schemas.regulatory_credit import CreditScenarioBatchCreate
 from app.credit.service import regulatory_credit
+from app.data_engine.public import (
+    ACTIVATION_EVENT,
+    ActivationGroupRead,
+    ActivationRunRead,
+    DataActivationCreate,
+    DataActivationListRead,
+    DataActivationRead,
+    DataActivationSummaryRead,
+)
 from app.forecasting.schemas.forecasting import ForecastRunCreate
 from app.forecasting.service import regulatory_forecasting
 from app.ftp import service as regulatory_ftp
@@ -40,24 +51,14 @@ from app.identity import public as scoped_authorization
 from app.identity.public import Bank
 from app.irrbb.schemas.regulatory_irr import IrrScenarioBatchCreate
 from app.irrbb.service import regulatory_irr
+from app.liquidity.schemas.regulatory_liquidity import LiquidityScenarioBatchCreate
+from app.liquidity.service import regulatory_liquidity
 from app.live.service.fact_derivation import DerivationError, DerivationResult, derive_facts
 from app.models import AuditEvent
 from app.policy.public import module_scope
 from app.rating.service import implied_rating
-from app.schemas.data_activation import (
-    ActivationGroupRead,
-    ActivationRunRead,
-    DataActivationCreate,
-    DataActivationListRead,
-    DataActivationRead,
-    DataActivationSummaryRead,
-)
-from app.schemas.regulatory_capital import CapitalScenarioBatchCreate
-from app.schemas.regulatory_liquidity import LiquidityScenarioBatchCreate
-from app.services import regulatory_capital, regulatory_liquidity
 from app.services.audit import record_event
 
-ACTIVATION_EVENT = "bank_data.activated"
 FORECAST_BASE_SCENARIO = "base"
 
 
@@ -66,6 +67,15 @@ def activate_bank_data(
 ) -> DataActivationRead:
     _require_actor(ctx)
     bank = _get_bank_or_404(db, ctx, bank_id)
+    scoped_authorization.require_resolved_bank_permission(
+        db,
+        ctx,
+        bank,
+        permission=Permission.RUN,
+        module=Module.DATA,
+        sensitivity=Sensitivity.RESTRICTED,
+        surface="data_activation",
+    )
     for engine, module in (
         ("credit", Module.CREDIT),
         ("liquidity", Module.LIQUIDITY),
@@ -130,6 +140,15 @@ def list_bank_data_activations(
     db: Session, ctx: TenantContext, bank_id: str, *, limit: int = 10
 ) -> DataActivationListRead:
     bank = _get_bank_or_404(db, ctx, bank_id)
+    scoped_authorization.require_resolved_bank_permission(
+        db,
+        ctx,
+        bank,
+        permission=Permission.VIEW,
+        module=Module.DATA,
+        sensitivity=Sensitivity.AGGREGATED,
+        surface="data_activation",
+    )
     events = db.scalars(
         select(AuditEvent)
         .where(
@@ -431,7 +450,11 @@ def _get_bank_or_404(db: Session, ctx: TenantContext, bank_id: str) -> Bank:
 
 
 def _require_actor(ctx: TenantContext) -> None:
+    if ctx.integration_key_id is not None or ctx.impersonation_context is not None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail="Human activation required."
+        )
     if ctx.actor_user_id is None:
         raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED, detail="X-User-Id header is required."
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="An authenticated user is required."
         )

@@ -337,7 +337,13 @@ def retire(db: Session, request: StoryRequest) -> None:
             _ = macro_scenarios.archive_scenario(
                 db,
                 TenantContext(
-                    organization_id=request.organization_id, actor_user_id=scenario.created_by
+                    organization_id=request.organization_id,
+                    actor_user_id=scenario.created_by,
+                    authorization_version=next(
+                        user.authorization_version
+                        for user in users
+                        if user.id == scenario.created_by
+                    ),
                 ),
                 scenario.id,
                 MacroScenarioTransition(reason="Retire the synthetic story's governed clone"),

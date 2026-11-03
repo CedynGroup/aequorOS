@@ -43,8 +43,8 @@ from typing import Any
 
 from sqlalchemy import func, or_, select
 
+from app.data_engine.domain.ingestion.constants import INCLUDED_VALIDATION_STATUSES
 from app.data_engine.public import CanonicalGlAccount
-from app.domain.ingestion.constants import INCLUDED_VALIDATION_STATUSES
 from app.live.domain.gl import pl_mapping
 from app.live.domain.gl.pl_mapping import (
     LINE_ATTRIBUTE,

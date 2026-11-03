@@ -2,7 +2,7 @@
 
 from decimal import Decimal
 
-from app.domain.ingestion.validation import ValidationOutcome
+from app.data_engine.domain.ingestion.validation import ValidationOutcome
 from tests.data_engine.testing.generators import CanonicalBook
 from tests.support.assertions import TolerancePolicy
 

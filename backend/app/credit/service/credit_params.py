@@ -18,6 +18,8 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
+from app.capital.domain.crm_haircuts import DEFAULT_CRM_HAIRCUTS
+from app.capital.domain.ecl import ALL_SEGMENTS, normalize_segment
 from app.core.key_management.presentation import (
     LOCKED_TEXT,
     SESSION_STATE,
@@ -41,7 +43,6 @@ from app.credit.schemas.regulatory_credit import (
     CreditThresholdUpdate,
 )
 from app.db.base import utc_now
-from app.domain.capital.ecl import ALL_SEGMENTS, normalize_segment
 from app.identity.public import Bank
 from app.live.domain.positions.families import LOAN_EXPOSURE_CATEGORIES
 from app.live.public import live_refresh_triggers
@@ -53,7 +54,6 @@ from app.policy.public import (
     get_active_params,
 )
 from app.services.audit import record_event
-from app.services.regulatory_capital import DEFAULT_CRM_HAIRCUTS
 
 _HUNDRED = Decimal("100")
 

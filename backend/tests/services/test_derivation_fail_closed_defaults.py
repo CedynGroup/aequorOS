@@ -14,12 +14,12 @@ from typing import Any
 import pytest
 from sqlalchemy.orm import Session
 
-from app.domain.authority.outcomes import NotComputable, OutcomeState
-from app.domain.capital.engine import (
+from app.capital.domain.engine import (
     CapitalParams,
     RiskWeightUnavailable,
     resolve_risk_weight,
 )
+from app.domain.authority.outcomes import NotComputable, OutcomeState
 from app.fx.service import _read_positions
 from app.live.domain.positions.credit import sovereign_evidence
 from app.live.service.fact_derivation import (

@@ -4,7 +4,7 @@ import { RegulatoryRunReadFromJSON } from "@aequoros/risk-service-api";
 import {
   parseCurrencyGaps,
   parseStressedLadder,
-} from "../components/liquidity/ladderData";
+} from "../features/liquidity/components/ladderData";
 import {
   currencyLadders,
   adversarialStoredStressFigures,

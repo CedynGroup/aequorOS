@@ -25,13 +25,14 @@ from datetime import date
 from decimal import Decimal, InvalidOperation
 from typing import Any
 
-from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.icaap.domain.annexes import AnnexKey, CurrentAnnexRepository
 from app.icaap.domain.pillar2 import irrbb as irrbb_interim
 from app.icaap.domain.pillar2 import irrbb_sf_method as irrbb_sf
 from app.icaap.domain.reconciliation import PARAM_SOURCE_TOLERANCE
 from app.icaap.domain.units import HUNDRED, ZERO, amount, ratio
+from app.icaap.service.current_annexes import PostgresCurrentAnnexRepository
 from app.irrbb.public import CODE_MANDATORY_FROM as PARAM_SF_MANDATORY_FROM
 from app.reporting.public import RegulatoryPackage
 
@@ -286,23 +287,19 @@ def _as_of(block: dict[str, Any], package: RegulatoryPackage) -> list[dict[str, 
 
 
 def _annex_current(
-    db: Session, block: dict[str, Any], package: RegulatoryPackage
+    annexes: CurrentAnnexRepository, block: dict[str, Any], package: RegulatoryPackage
 ) -> list[dict[str, str]]:
     findings: list[dict[str, str]] = []
     for annex in _entries(block, "annexes"):
         code = str(annex.get("return_code"))
-        current = db.scalar(
-            select(RegulatoryPackage)
-            .where(
-                RegulatoryPackage.organization_id == package.organization_id,
-                RegulatoryPackage.bank_id == package.bank_id,
-                RegulatoryPackage.return_code == code,
-                RegulatoryPackage.reporting_date == package.reporting_date,
-                RegulatoryPackage.basis == package.basis,
-                RegulatoryPackage.status != "superseded",
+        current = annexes.current(
+            AnnexKey(
+                organization_id=package.organization_id,
+                bank_id=package.bank_id,
+                return_code=code,
+                reporting_date=package.reporting_date,
+                basis=package.basis,
             )
-            .order_by(RegulatoryPackage.version.desc())
-            .limit(1)
         )
         if current is None:
             findings.append(
@@ -672,7 +669,14 @@ def _framework_changed(block: dict[str, Any]) -> list[dict[str, str]]:
 
 
 def findings(db: Session, package: RegulatoryPackage) -> list[dict[str, str]]:
-    """Every ICAAP rule, in a stable order."""
+    """Validate with current annexes selected through the caller's session."""
+    return validate_report(package, annexes=PostgresCurrentAnnexRepository(db))
+
+
+def validate_report(
+    package: RegulatoryPackage, *, annexes: CurrentAnnexRepository
+) -> list[dict[str, str]]:
+    """Every ICAAP rule in stable order, after authorized report acquisition."""
     block = _icaap(package)
     if not block:
         # A package of this family with no ICAAP block did not come from a
@@ -690,7 +694,7 @@ def findings(db: Session, package: RegulatoryPackage) -> list[dict[str, str]]:
         *_requirements(block),
         *_freeze_attachments(block),
         *_as_of(block, package),
-        *_annex_current(db, block, package),
+        *_annex_current(annexes, block, package),
         *_pillar2_reconciliation(block),
         *_irrbb_sf_rules(block, package),
         *_stress_rules(block),
@@ -699,4 +703,4 @@ def findings(db: Session, package: RegulatoryPackage) -> list[dict[str, str]]:
     ]
 
 
-__all__ = ["RULE_VERSION", "findings"]
+__all__ = ["RULE_VERSION", "findings", "validate_report"]

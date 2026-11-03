@@ -8,8 +8,8 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field
 
 from app.identity.public import BankRead, BankReportingPeriodRead
+from app.liquidity.public import RegulatoryValidationSeverity
 from app.live.public import LiveModuleView
-from app.schemas.regulatory_liquidity import RegulatoryValidationSeverity
 
 type FxStatus = Literal["green", "amber", "red"]
 type FxSide = Literal["long", "short"]

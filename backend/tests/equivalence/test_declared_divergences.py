@@ -30,7 +30,7 @@ import pytest
 
 from app.domain.authority.registry import REGISTRY
 from app.domain.authority.results import Refused
-from app.domain.liquidity.engine import (
+from app.liquidity.domain.engine import (
     LiquidityFact,
     compute_lcr,
     compute_lcr_result,

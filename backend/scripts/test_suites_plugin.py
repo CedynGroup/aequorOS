@@ -17,6 +17,7 @@ from _pytest.fixtures import FixtureDef, SubRequest
 from _pytest.python import PyCollector
 from _pytest.terminal import TerminalReporter
 
+from scripts import database_contracts
 from scripts.ci_database_children import python_path
 from scripts.ci_no_database import install
 from scripts.test_suites import (
@@ -39,6 +40,16 @@ _COLLECTION_OWNERS = pytest.StashKey[dict[str, set[str]]]()
 def _worker(config: pytest.Config) -> str:
     worker = cast(dict[str, object] | None, getattr(config, "workerinput", None))
     return cast(str, worker["workerid"]) if worker is not None else "main"
+
+
+def _dump_census_diagnostics(config: pytest.Config, payload: dict[str, list[str]]) -> None:
+    # A worker that fails a census guard dies before the controller explains
+    # why; land the evidence in the uploaded report directory instead.
+    directory = config.stash.get(_DIRECTORY, None)
+    if directory is None:
+        return
+    path = directory / f"census-debug-{_worker(config)}.json"
+    _ = path.write_text(json.dumps(payload, indent=2))
 
 
 def pytest_report_header(config: pytest.Config) -> str | None:
@@ -149,6 +160,7 @@ def pytest_load_initial_conftests(early_config: pytest.Config, args: list[str]) 
 
 
 def pytest_configure(config: pytest.Config) -> None:
+    config.addinivalue_line("markers", "database_contract: a protected PostgreSQL guarantee")
     config.addinivalue_line("markers", "unit: database-free test; database connections are refused")
     config.addinivalue_line("markers", "integration: test requiring a database or external service")
     config.addinivalue_line("markers", "e2e: backend contract requiring Playwright")
@@ -208,10 +220,20 @@ def pytest_pycollect_makeitem(
 @pytest.hookimpl(tryfirst=True)
 def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item]) -> None:
     if os.getenv("CI_DATABASE_CENSUS") == "1":
+        for item in items:
+            database_contracts.check_collection(
+                item.nodeid,
+                None,
+                item.fixturenames if isinstance(item, pytest.Function) else [],
+                marked=item.get_closest_marker("database_contract") is not None,
+            )
         return
     nodeids = [item.nodeid for item in items]
     if len(set(nodeids)) != len(nodeids):
-        raise pytest.UsageError("Duplicate test collection")
+        counts = Counter(nodeids)
+        duplicates = sorted(nodeid for nodeid, count in counts.items() if count > 1)
+        _dump_census_diagnostics(config, {"duplicate_nodeids": duplicates[:25]})
+        raise pytest.UsageError("Duplicate test collection: " + ", ".join(duplicates[:10]))
     classified: dict[str, str] = {}
     for item in items:
         try:
@@ -225,6 +247,15 @@ def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item
             raise pytest.UsageError(f"Double-classified or conflicting suite: {item.nodeid}")
         if not markers:
             item.add_marker(suite)
+        try:
+            database_contracts.check_collection(
+                item.nodeid,
+                suite,
+                item.fixturenames if isinstance(item, pytest.Function) else [],
+                marked=item.get_closest_marker("database_contract") is not None,
+            )
+        except ValueError as error:
+            raise pytest.UsageError(str(error)) from error
         classified[item.nodeid] = suite
     if (os.getenv("CI_UNIT_REPORT_DIR") or os.getenv("CI_E2E_REPORT_DIR")) and not config.getoption(
         "collectonly"
@@ -236,13 +267,38 @@ def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item
             set(selected_modules(suite)) if config.getoption("suite_only") else set(modules)
         )
         if expected_modules != actual_modules:
+            _dump_census_diagnostics(
+                config,
+                {
+                    "census_modules_missing_from_collection": sorted(
+                        expected_modules - actual_modules
+                    )[:25],
+                    "collected_modules_missing_from_census": sorted(
+                        actual_modules - expected_modules
+                    )[:25],
+                },
+            )
             raise pytest.UsageError("CI must collect every module containing its selected suite")
-        if {nodeid for nodeid, assigned in overrides.items() if assigned == suite} != {
+        expected_nodeids = {nodeid for nodeid, assigned in overrides.items() if assigned == suite}
+        classified_nodeids = {
             nodeid for nodeid, assigned in classified.items() if assigned == suite
-        }:
+        }
+        if expected_nodeids != classified_nodeids:
+            _dump_census_diagnostics(
+                config,
+                {
+                    "census_nodeids_not_collected": sorted(expected_nodeids - classified_nodeids)[
+                        :25
+                    ],
+                    "collected_nodeids_not_in_census": sorted(
+                        classified_nodeids - expected_nodeids
+                    )[:25],
+                },
+            )
             raise pytest.UsageError("Stale or incomplete generated test suite catalogue")
         paths = cast(list[str], config.getini("testpaths")) or ["."]
         try:
+            database_contracts.check_classification(overrides)
             verify_module_inventory(
                 config.rootpath, paths, cast(list[str], config.getini("python_files"))
             )
@@ -305,6 +361,16 @@ def pytest_runtest_protocol(item: pytest.Item) -> Iterator[None]:
 def pytest_runtest_makereport(
     item: pytest.Item, call: pytest.CallInfo[None]
 ) -> pytest.TestReport | None:
+    if database_contracts.postgres_required() and database_contracts.must_execute(
+        item.nodeid, marked=item.get_closest_marker("database_contract") is not None
+    ):
+        report = pytest.TestReport.from_item_and_call(item, call)
+        if report.skipped:
+            report.outcome = "failed"
+            report.longrepr = (
+                "Protected database contract skipped its required PostgreSQL execution"
+            )
+            return report
     # Emit a failed report so caught attempts also reach an xdist controller.
     if call.when != "teardown" or _ATTEMPTS not in item.config.stash:
         return None
@@ -316,6 +382,14 @@ def pytest_runtest_makereport(
     report.outcome = "failed"
     report.longrepr = "Unit database connection guard failed: " + attempts
     return report
+
+
+def pytest_runtest_setup(item: pytest.Item) -> None:
+    database_contracts.check_backend(
+        item.nodeid,
+        os.getenv("TEST_DATABASE_URL"),
+        marked=item.get_closest_marker("database_contract") is not None,
+    )
 
 
 def _verify_execution(config: pytest.Config, directory: Path) -> None:

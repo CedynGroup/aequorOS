@@ -2,7 +2,7 @@
 
 from decimal import Decimal
 
-from app.domain.liquidity.engine import RATIO_PCT, CurrencyGapResult, LcrResult, NsfrResult
+from app.liquidity.domain.engine import RATIO_PCT, CurrencyGapResult, LcrResult, NsfrResult
 from tests.support.assertions import TolerancePolicy
 
 TOLERANCE = TolerancePolicy(

@@ -6,12 +6,13 @@ from types import SimpleNamespace
 from typing import Any
 
 import pytest
-from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.orm import Session
 
 from app import worker
 from app.db import session as session_module
 from app.models import Job, WorkerHeartbeat
 from app.services import job_queue
+from tests.support.database import managed_session_factory
 from tests.support.helpers import ORG_1
 
 
@@ -20,9 +21,13 @@ def test_run_once_persists_runtime_identity_and_handler_completion(
     monkeypatch: pytest.MonkeyPatch,
     db_session: Session,
     job_type: str,
+    request: pytest.FixtureRequest,
 ) -> None:
-    factory = sessionmaker(
-        bind=db_session.get_bind(), expire_on_commit=False, join_transaction_mode="create_savepoint"
+    factory = managed_session_factory(
+        request,
+        db_session.get_bind(),
+        expire_on_commit=False,
+        join_transaction_mode="create_savepoint",
     )
     monkeypatch.setattr(worker, "get_worker_sessionmaker", lambda: factory)
     job = job_queue.enqueue(db_session, ORG_1, job_type)

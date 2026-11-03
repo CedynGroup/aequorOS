@@ -88,8 +88,7 @@ def _record(**overrides: object) -> query_log.QueryRecord:
 
 @pytest.fixture(scope="module")
 def log_schema(request: pytest.FixtureRequest) -> Iterator[MigratedPostgresSchema]:
-    """A migrated disposable schema holding one tenant, one institution, and the
-    September child created through the definer function."""
+    """A migrated disposable schema holding one tenant and one institution."""
 
     test_database_url = os.environ["TEST_DATABASE_URL"]
     schema_name = f"risk_service_bi_qlog_{uuid4().hex}"
@@ -266,7 +265,7 @@ def test_the_budget_counts_only_the_rows_inside_the_window(
 # --- append-only ---------------------------------------------------------------------------
 
 
-@pytest.mark.parametrize("relation", [TABLE, CHILD])
+@pytest.mark.parametrize("relation", [TABLE, pytest.param(CHILD, id="current-month-partition")])
 @pytest.mark.parametrize("verb", ["UPDATE", "DELETE"])
 def test_a_rewrite_is_refused_through_the_parent_and_through_the_child(
     log_schema: MigratedPostgresSchema, relation: str, verb: str
@@ -291,7 +290,9 @@ def test_a_rewrite_is_refused_through_the_parent_and_through_the_child(
     assert _count(log_schema, TABLE) == before
 
 
-@pytest.mark.parametrize("relation", [TABLE, CHILD, DEFAULT_PARTITION])
+@pytest.mark.parametrize(
+    "relation", [TABLE, pytest.param(CHILD, id="current-month-partition"), DEFAULT_PARTITION]
+)
 def test_truncate_is_refused_everywhere(log_schema: MigratedPostgresSchema, relation: str) -> None:
     _append(log_schema)
     before = _count(log_schema, TABLE)

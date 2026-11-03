@@ -6,10 +6,10 @@ from datetime import date
 
 import pytest
 
-from app.domain.curves.calendars import USA, BusinessDayConvention
-from app.domain.curves.conventions import DayCount
-from app.domain.curves.instruments import DepositHelper, OisHelper, SwapHelper
-from app.domain.curves.multicurve import (
+from app.market_data.domain.curves.calendars import USA, BusinessDayConvention
+from app.market_data.domain.curves.conventions import DayCount
+from app.market_data.domain.curves.instruments import DepositHelper, OisHelper, SwapHelper
+from app.market_data.domain.curves.multicurve import (
     MarketQuote,
     MultiCurveError,
     SolvedCurve,
@@ -40,8 +40,7 @@ def test_solved_curve_discount_basics() -> None:
 def test_simultaneous_two_curve_solve() -> None:
     """OIS-discounted projection curve: solve discount + projection together, all reprice."""
     discount_quotes = [
-        MarketQuote(DepositHelper(t, USA), r)
-        for t, r in [("3M", 0.0525), ("6M", 0.0510)]
+        MarketQuote(DepositHelper(t, USA), r) for t, r in [("3M", 0.0525), ("6M", 0.0510)]
     ] + [
         MarketQuote(OisHelper(t, USA), r)
         for t, r in [("1Y", 0.0475), ("2Y", 0.0430), ("5Y", 0.0395), ("10Y", 0.0390)]
@@ -61,9 +60,7 @@ def test_simultaneous_two_curve_solve() -> None:
     )
     assert not curve_set.is_single_curve
     worst = max(
-        abs(
-            q.helper.reprice_residual(q.quote, curve_set.discount, curve_set.projection)
-        )
+        abs(q.helper.reprice_residual(q.quote, curve_set.discount, curve_set.projection))
         for q in [*discount_quotes, *projection_quotes]
     )
     assert worst < 1e-8
@@ -84,9 +81,7 @@ def test_build_curve_set_requires_ascending_and_distinct_pillars() -> None:
 
 def test_forward_grid_shape_and_stub() -> None:
     curve = _flat_curve(0.04)
-    grid = forward_grid(
-        curve, as_of=AS_OF, curve_frequency_months=3, calendar=USA, periods=8
-    )
+    grid = forward_grid(curve, as_of=AS_OF, curve_frequency_months=3, calendar=USA, periods=8)
     assert len(grid.rows) == 9
     stub = grid.rows[0]
     assert stub.start == AS_OF and stub.end == date(2023, 12, 31)

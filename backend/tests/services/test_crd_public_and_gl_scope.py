@@ -6,7 +6,7 @@ from itertools import combinations
 
 import pytest
 
-from app.domain.capital.engine import CapitalFact, RiskWeightUnavailable
+from app.capital.domain.engine import CapitalFact, RiskWeightUnavailable
 from app.live.service.fact_derivation import _position_row  # pyright: ignore[reportPrivateUsage]
 from app.models import (
     CanonicalCounterparty,
@@ -19,11 +19,11 @@ from app.stress.service.enterprise_stress import (
     EnterpriseStressError,
     _build_credit_exposures,  # pyright: ignore[reportPrivateUsage]
 )
+from tests.capital.domain.test_capital_engine import bog_capital_params
 from tests.credit.service.test_crd_credit_exposures import (
     _credit_rwa,  # pyright: ignore[reportPrivateUsage]
     _stress_row,  # pyright: ignore[reportPrivateUsage]
 )
-from tests.domain.test_capital_engine import bog_capital_params
 from tests.services.test_derivation_fail_closed_defaults import (
     _row,  # pyright: ignore[reportPrivateUsage]
 )

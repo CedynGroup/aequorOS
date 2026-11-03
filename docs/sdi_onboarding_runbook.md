@@ -117,7 +117,7 @@ Push the SDI canonical dataset (docs/sdi.md §5) via the three-call push
 
 ## 5. Confirm module readiness (data-quality diagnostics)
 
-`assess_sdi_readiness` (`app/services/sdi_readiness.py`) reports per module
+`assess_sdi_readiness` (`app/capital/service/sdi_readiness.py`) reports per module
 **READY / PARTIAL / BLOCKED** with the exact missing-data reason, e.g.:
 
 ```

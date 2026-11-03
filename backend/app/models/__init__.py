@@ -50,7 +50,66 @@ from app.bi.models.notifications import (
     BiSubscription,
     BiSubscriptionDelivery,
 )
+from app.capital.models.capital_plan import CapitalPlan, IlaapSnapshot
+from app.case.models.calculation import (
+    CalculationForecastPeriod,
+    CalculationRun,
+    LiquidityAnalysisResult,
+)
+from app.case.models.capital import CapitalIndicator, CapitalProjection, CapitalProjectionFinding
+from app.case.models.financial import (
+    FinancialAccount,
+    FinancialBalance,
+    FinancialCashFlow,
+    FinancialCovenant,
+    FinancialInstitution,
+    FinancialManualEditHistory,
+    FinancialObligation,
+    FinancialRecordSourceLink,
+    FinancialReportingPeriod,
+    FinancialSourceRow,
+    FinancialValidationIssue,
+)
+from app.case.models.risk import (
+    Document,
+    DocumentChunk,
+    DocumentExtraction,
+    RiskAssessment,
+    RiskAssessmentRun,
+    RiskCase,
+    RiskCaseDecision,
+    RiskFinding,
+    RiskFindingEvidence,
+    RiskScore,
+    StoredObject,
+)
+from app.case.models.scenario import RiskScenario, ScenarioAssumption, ScenarioAssumptionHistory
 from app.core.key_management.models import BankEncryptionKey, ObjectKeyEnvelope, RetainedBankKey
+from app.data_engine.models.canonical import (
+    CanonicalCounterparty,
+    CanonicalCounterpartyRating,
+    CanonicalFxRate,
+    CanonicalGlAccount,
+    CanonicalLoanEvent,
+    CanonicalMarketIndex,
+    CanonicalPosition,
+    CanonicalPositionSnapshot,
+    CanonicalProduct,
+    CanonicalReferenceRow,
+    CanonicalYieldCurve,
+    CanonicalYieldCurvePoint,
+)
+from app.data_engine.models.canonical_withdrawal import CanonicalWithdrawal
+from app.data_engine.models.database_connection import DatabaseDirectConnection
+from app.data_engine.models.ingestion import (
+    IngestionBatch,
+    LineageRecord,
+    MappingConfigRecord,
+    TranslationFailure,
+)
+from app.data_engine.models.reconciliation import ReconciliationException
+from app.data_engine.models.system_of_record import SystemOfRecordDeclaration
+from app.data_engine.models.temenos import TemenosConnection
 from app.forecasting.models import ForecastAssumptionVersion
 from app.icaap.models.ai import IcaapAiSuggestion, IcaapAiSuggestionDecision
 from app.icaap.models.risk_capital import (
@@ -100,6 +159,11 @@ from app.identity.models.integration_key import IntegrationKey
 from app.identity.models.refresh_token import RefreshToken
 from app.identity.models.sso_connection import SsoConnection
 from app.identity.models.user import User
+from app.liquidity.models.liquidity_cfp import (
+    CfpActivationEvent,
+    ContingencyFundingPlan,
+    LiquidityEwiIndicator,
+)
 from app.live.models.facts import FinancialFactRow
 from app.live.models.live import (
     CurrentFinancialFact,
@@ -115,96 +179,32 @@ from app.live.models.regulatory_run import (
     RegulatoryRun,
     RegulatoryValidation,
 )
-from app.models.audit_event import AuditEvent
-from app.models.calculation import (
-    CalculationForecastPeriod,
-    CalculationRun,
-    LiquidityAnalysisResult,
-)
-from app.models.canonical import (
-    CanonicalCounterparty,
-    CanonicalCounterpartyRating,
-    CanonicalFxRate,
-    CanonicalGlAccount,
-    CanonicalLoanEvent,
-    CanonicalMarketIndex,
-    CanonicalPosition,
-    CanonicalPositionSnapshot,
-    CanonicalProduct,
-    CanonicalReferenceRow,
-    CanonicalYieldCurve,
-    CanonicalYieldCurvePoint,
-)
-from app.models.canonical_withdrawal import CanonicalWithdrawal
-from app.models.capital import CapitalIndicator, CapitalProjection, CapitalProjectionFinding
-from app.models.capital_plan import CapitalPlan, IlaapSnapshot
-from app.models.database_connection import DatabaseDirectConnection
-from app.models.desk_operating_environment import DeskOperatingEnvironmentAssessment
-from app.models.entitlements import MarketDataEntitlement
-from app.models.financial import (
-    FinancialAccount,
-    FinancialBalance,
-    FinancialCashFlow,
-    FinancialCovenant,
-    FinancialInstitution,
-    FinancialManualEditHistory,
-    FinancialObligation,
-    FinancialRecordSourceLink,
-    FinancialReportingPeriod,
-    FinancialSourceRow,
-    FinancialValidationIssue,
-)
-from app.models.ingestion import (
-    IngestionBatch,
-    LineageRecord,
-    MappingConfigRecord,
-    TranslationFailure,
-)
-from app.models.job import Job
-from app.models.liquidity_cfp import (
-    CfpActivationEvent,
-    ContingencyFundingPlan,
-    LiquidityEwiIndicator,
-)
-from app.models.market_data import (
+from app.market_data.models.desk_operating_environment import DeskOperatingEnvironmentAssessment
+from app.market_data.models.entitlements import MarketDataEntitlement
+from app.market_data.models.market_data import (
     MarketDataConnection,
     MarketDataOverlay,
     MarketDataQuotaUsage,
 )
-from app.models.market_data_sources import MarketDataSourcePreference
-from app.models.market_desk import (
+from app.market_data.models.market_data_sources import MarketDataSourcePreference
+from app.market_data.models.market_desk import (
     DeskDetermination,
     DeskMethodology,
     DeskObservation,
     DeskPublication,
     DeskSourceCapture,
 )
-from app.models.market_desk_curves import DeskCurveDefinition
-from app.models.operator import (
+from app.market_data.models.market_desk_curves import DeskCurveDefinition
+from app.models.audit_event import AuditEvent
+from app.models.job import Job
+from app.models.organization import Organization
+from app.notifications.models import Notification
+from app.operator.models import (
     OperatorAuditLog,
     OperatorInspectorSession,
     OperatorUser,
     TenantStorage,
 )
-from app.models.organization import Organization
-from app.models.reconciliation import ReconciliationException
-from app.models.risk import (
-    Document,
-    DocumentChunk,
-    DocumentExtraction,
-    RiskAssessment,
-    RiskAssessmentRun,
-    RiskCase,
-    RiskCaseDecision,
-    RiskFinding,
-    RiskFindingEvidence,
-    RiskScore,
-    StoredObject,
-)
-from app.models.scenario import RiskScenario, ScenarioAssumption, ScenarioAssumptionHistory
-from app.models.system_of_record import SystemOfRecordDeclaration
-from app.models.temenos import TemenosConnection
-from app.notifications.models import Notification
 from app.policy.models.institution_type import InstitutionType
 from app.policy.models.jurisdiction import Jurisdiction
 from app.policy.models.parameter_register import (
@@ -238,6 +238,13 @@ from app.reporting.models.packages import (
     RegulatoryResubmissionRequest,
     RegulatorySubmissionEvent,
 )
+from app.storage.models import (
+    ArtifactDocumentBinding,
+    IcaapAttachmentDocumentBinding,
+    PackageAttachmentDocumentBinding,
+    SealedDocumentObject,
+    SupervisoryLetterDocumentBinding,
+)
 from app.stress.models.scenario_workbench import SavedScenarioAnalysis, StressScenario
 from app.stress.models.stress import (
     EnterpriseStressSignoff,
@@ -248,6 +255,11 @@ from app.stress.models.stress import (
 )
 
 __all__ = [
+    "ArtifactDocumentBinding",
+    "IcaapAttachmentDocumentBinding",
+    "PackageAttachmentDocumentBinding",
+    "SealedDocumentObject",
+    "SupervisoryLetterDocumentBinding",
     "BankEncryptionKey",
     "RetainedBankKey",
     "ObjectKeyEnvelope",

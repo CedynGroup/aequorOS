@@ -246,8 +246,8 @@ def test_the_probe_sees_a_feature_model_outside_the_registry_package(
 @pytest.mark.parametrize(
     "model_path",
     [
-        "etl/models.py",
-        "etl/models/training.py",
+        "data_engine/etl/models.py",
+        "data_engine/etl/models/training.py",
         "fx/domain/models.py",
         "fx/domain/models/training.py",
     ],

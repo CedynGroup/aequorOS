@@ -15,8 +15,7 @@ import EmptyState from "@/components/ui/EmptyState";
 import QueryBoundary from "@/components/ui/QueryBoundary";
 import DataTable, { type Column } from "@/components/ui/DataTable";
 import CapitalPlanChart from "@/components/basel/charts/CapitalPlanChart";
-import IllustrativeBadge from "@/components/liquidity/IllustrativeBadge";
-import { runComputedAt } from "@/components/liquidity/runData";
+import { IllustrativeBadge, runComputedAt } from "@/features/liquidity/public";
 import { useBankContext } from "@/components/shell/BankContext";
 import {
   useCapitalDashboard,

@@ -43,7 +43,7 @@ class SsoClientConfig:
 
 
 def _master_key() -> bytes:
-    from app.adapters.market_data.credential_manager import (  # noqa: PLC0415 - adapter registry imports identity
+    from app.market_data.public import (  # noqa: PLC0415 - adapter registry imports identity
         derive_master_key,
     )
 
@@ -89,7 +89,7 @@ def upsert_connection(  # noqa: PLR0913 - a connection is configured in one call
 ) -> SsoConnection:
     """Create or update the org's SSO connection. ``client_secret=None`` keeps
     the stored secret; a non-empty value replaces it (write-only semantics)."""
-    from app.adapters.market_data.credential_manager import (  # noqa: PLC0415 - adapter registry imports identity
+    from app.market_data.public import (  # noqa: PLC0415 - adapter registry imports identity
         credential_fingerprint,
         encrypt_credential_envelope,
     )
@@ -144,7 +144,7 @@ def upsert_connection(  # noqa: PLR0913 - a connection is configured in one call
 
 
 def _open_secret(connection: SsoConnection) -> str:
-    from app.adapters.market_data.credential_manager import (  # noqa: PLC0415 - adapter registry imports identity
+    from app.market_data.public import (  # noqa: PLC0415 - adapter registry imports identity
         CredentialVaultError,
         decrypt_credential_envelope,
     )

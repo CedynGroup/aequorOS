@@ -22,7 +22,7 @@ from app.identity.schemas.banks import (
     InstitutionTypeRead,
     JurisdictionRead,
 )
-from app.identity.service import authorization
+from app.identity.service import authorization, scoped_authorization
 from app.live.models.regulatory import BankFinancialFact, BankReportingPeriod
 from app.policy.models.institution_type import InstitutionType
 from app.policy.models.jurisdiction import Jurisdiction
@@ -221,6 +221,17 @@ def list_reporting_periods(
     db: Session, ctx: TenantContext, bank_reference: str
 ) -> BankReportingPeriodListRead:
     bank, _ = require_institution_coverage(db, ctx, bank_reference)
+    if ctx.impersonation_context is None:
+        scoped_authorization.require_resolved_bank_permission(
+            db,
+            ctx,
+            bank,
+            permission=Permission.VIEW,
+            module=Module.DATA,
+            sensitivity=Sensitivity.CONFIDENTIAL,
+            surface="data_engine_facts",
+            denial_status=403,
+        )
     periods = list(
         db.scalars(
             select(BankReportingPeriod)
@@ -244,6 +255,17 @@ def get_period_facts(
     db: Session, ctx: TenantContext, bank_reference: str, period_id: UUID
 ) -> BankFactsRead:
     bank, _ = require_institution_coverage(db, ctx, bank_reference)
+    if ctx.impersonation_context is None:
+        scoped_authorization.require_resolved_bank_permission(
+            db,
+            ctx,
+            bank,
+            permission=Permission.VIEW,
+            module=Module.DATA,
+            sensitivity=Sensitivity.RESTRICTED,
+            surface="data_engine_facts",
+            denial_status=404,
+        )
     period = db.scalar(
         select(BankReportingPeriod).where(
             BankReportingPeriod.id == period_id,

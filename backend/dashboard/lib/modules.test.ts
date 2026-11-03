@@ -1525,18 +1525,19 @@ assert.match(
 // ---------------------------------------------------------------------------
 {
   const dashboardRoot = resolvePath(__dirname, "..", "..");
+  // The explore route bodies moved into features/bi; read the implementation,
+  // not the app/ shim (which carries no content to assert).
   const alerts = readFileSync(
-    joinPath(dashboardRoot, "app", "(app)", "explore", "alerts", "page.tsx"),
+    joinPath(dashboardRoot, "features", "bi", "routes", "explore-alerts.tsx"),
     "utf8",
   );
   const subscriptions = readFileSync(
     joinPath(
       dashboardRoot,
-      "app",
-      "(app)",
-      "explore",
-      "subscriptions",
-      "page.tsx",
+      "features",
+      "bi",
+      "routes",
+      "explore-subscriptions.tsx",
     ),
     "utf8",
   );

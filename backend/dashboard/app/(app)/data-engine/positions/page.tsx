@@ -17,6 +17,8 @@ import { useBankContext } from "@/components/shell/BankContext";
 import { useCanonicalPositions, useLineageWalk } from "@/lib/api/ingestion";
 import { formatDate, formatDateTime } from "@/components/data-engine/shared";
 import { fmtInt, fmtLocale } from "@/lib/format";
+import { useDataPermissionState } from "@/lib/api/dataAccess";
+import DataAccessNotice from "@/components/ui/DataAccessNotice";
 
 function formatAmount(value: string | null): string {
   if (value === null || value === undefined) return "—";
@@ -26,7 +28,7 @@ function formatAmount(value: string | null): string {
 }
 
 function LineageChain({ lineageId }: { lineageId: string }) {
-  const { bank } = useBankContext();
+  const { bank, authorityPending } = useBankContext();
   const walk = useLineageWalk(bank?.id, lineageId);
   if (walk.isPending) {
     return (
@@ -63,11 +65,20 @@ function LineageChain({ lineageId }: { lineageId: string }) {
 }
 
 export default function CanonicalPositionsPage() {
-  const { bank } = useBankContext();
+  const { bank, authorityPending } = useBankContext();
   const [offset, setOffset] = useState(0);
   const positionsQuery = useCanonicalPositions(bank?.id, offset);
   const [expanded, setExpanded] = useState<string | null>(null);
+  const allowed = useDataPermissionState(
+    bank?.id,
+    "view",
+    "restricted",
+    authorityPending,
+  );
 
+  if (allowed === "loading") return <PageSkeleton contained />;
+  if (allowed === "denied")
+    return <DataAccessNotice requirement="DATA · Restricted · View" />;
   return (
     <>
       <PageHeader eyebrow="Data Engine" title="Canonical positions" />

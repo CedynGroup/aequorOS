@@ -1,6 +1,6 @@
 """The filing-plane wiring of the balance-sheet identity control (audit D-2, D-3).
 
-``app/services/reconciliation.py`` built the control and
+``app/data_engine/service/reconciliation.py`` built the control and
 :func:`reconciliation.assert_filing_reconciled` — the gate a filing act is
 supposed to pass — and the independent forensic re-audit of 2026-08-22 found
 that gate had **zero production callers**. The control gated one cold-start code

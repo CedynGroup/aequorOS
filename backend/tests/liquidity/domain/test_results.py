@@ -6,8 +6,8 @@ from decimal import Decimal
 import pytest
 
 from app.domain.authority.results import Computed, Refused
-from app.domain.liquidity import engine
-from app.domain.liquidity.engine import compute_liquidity
+from app.liquidity.domain import engine
+from app.liquidity.domain.engine import compute_liquidity
 from tests.liquidity.helpers import inputs
 
 

@@ -10,7 +10,7 @@ from sqlalchemy import Table, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.models.financial import (
+from app.case.models.financial import (
     FinancialAccount,
     FinancialBalance,
     FinancialCashFlow,

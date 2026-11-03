@@ -45,6 +45,7 @@ from tests.fixtures.canonical_bank_fixture import (
     materialize_canonical_test_book,
 )
 from tests.support.inmemory_storage import InMemoryStorageClient
+from tests.support.sealed_documents import published_bytes
 
 pytestmark = pytest.mark.usefixtures("return_generation_authority", "institution_profile_authority")
 
@@ -297,12 +298,8 @@ def _export_kinds(db: Session, storage: InMemoryStorageClient, package: Regulato
     assert pdf.size_bytes > 0
     slug = db.scalar(select(Bank.storage_slug).where(Bank.id == SAMPLE_BANK_ID))
     assert slug
-    payloads: dict[str, bytes] = {}
-    for obj in storage.list(slug, "outputs"):
-        _, stream = storage.read(obj.location)
-        payloads[obj.location.object_path] = stream.read()
-    assert payloads[pdf.object_path].startswith(b"%PDF")
-    return payloads[xlsx.object_path]
+    assert published_bytes(db, storage, slug=slug, context_path=pdf.object_path).startswith(b"%PDF")
+    return published_bytes(db, storage, slug=slug, context_path=xlsx.object_path)
 
 
 def test_registry_carries_event_driven_corporate_packs() -> None:

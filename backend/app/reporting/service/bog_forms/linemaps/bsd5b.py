@@ -62,7 +62,7 @@ def solo(ref: str, what: str, extra: str = "") -> RowSource:
 
 #: Data-gap closure (2026-08-16): the two consolidation-only lines read the
 #: ``subsidiaries`` reference dataset (schema
-#: ``app/domain/ingestion/reference_schemas/subsidiaries.py``, spec
+#: ``app/data_engine/domain/ingestion/reference_schemas/subsidiaries.py``, spec
 #: docs/data_engine/datasets/subsidiaries.md) — the group's own minority-
 #: interest workings per fully consolidated subsidiary, summed. The solo-linked
 #: lines stay parent-solo: adding subsidiaries' assets / capital to a

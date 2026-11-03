@@ -1,0 +1,128 @@
+"""Push API: institutions' middleware POSTs data as JSON instead of files.
+
+Three-call flow — open a push batch (idempotency key), stage record pages,
+commit. Commit runs the exact same ingestion pipeline as a file upload and
+returns the same batch + validation report shape, so downstream tooling does
+not care how the data arrived. Public contract: docs/API_INTEGRATION.md.
+
+The ``bank_id`` path segment accepts the platform institution ID
+(BK-XXXXXXXX) — the identifier banks are onboarded with.
+
+Auth: an integration key (`aeq_live_...`) is the bearer credential. It resolves
+to a tenant-scoped service account through the separate integration-key
+lifecycle; app-JWT `authv` versioning does not apply to it. Deployments may add
+OAuth2 client-credentials or mTLS in front without changing the resource design.
+"""
+
+from __future__ import annotations
+
+from uuid import UUID
+
+from fastapi import APIRouter
+
+from app.api.deps import DbSession, IntegrationPushResource
+from app.data_engine.api.ingest_data import IngestionStorage
+from app.data_engine.schemas.ingestion import IngestionBatchStartRead
+from app.data_engine.schemas.push import PushBatchOpen, PushBatchStatusRead, PushRecordsPage
+from app.data_engine.service import push_ingestion
+from app.identity.public import BankReference
+
+router = APIRouter(tags=["ingestion"])
+
+
+@router.post(
+    "/banks/{bank_id}/push-batches",
+    response_model=PushBatchStatusRead,
+    status_code=201,
+    operation_id="openPushBatch",
+)
+def open_push_batch(
+    bank_id: BankReference,
+    payload: PushBatchOpen,
+    db: DbSession,
+    access: IntegrationPushResource,
+    storage: IngestionStorage,
+) -> PushBatchStatusRead:
+    result = push_ingestion.open_push_batch(
+        db,
+        access.ctx,
+        access.bank.id,
+        payload,
+        storage,
+    )
+    db.commit()
+    return result
+
+
+@router.post(
+    "/banks/{bank_id}/push-batches/{push_batch_id}/records",
+    response_model=PushBatchStatusRead,
+    operation_id="stagePushBatchRecords",
+)
+def stage_push_batch_records(  # noqa: PLR0913 - mirrors the other ingestion routes' shape
+    bank_id: BankReference,
+    push_batch_id: UUID,
+    payload: PushRecordsPage,
+    db: DbSession,
+    access: IntegrationPushResource,
+    storage: IngestionStorage,
+) -> PushBatchStatusRead:
+    result = push_ingestion.stage_push_records(
+        db,
+        access.ctx,
+        access.bank.id,
+        push_batch_id,
+        payload,
+        storage,
+    )
+    db.commit()
+    return result
+
+
+@router.post(
+    "/banks/{bank_id}/push-batches/{push_batch_id}/commit",
+    response_model=IngestionBatchStartRead,
+    status_code=201,
+    operation_id="commitPushBatch",
+)
+def commit_push_batch(
+    bank_id: BankReference,
+    push_batch_id: UUID,
+    db: DbSession,
+    access: IntegrationPushResource,
+    storage: IngestionStorage,
+) -> IngestionBatchStartRead:
+    result = push_ingestion.commit_push_batch(
+        db,
+        access.ctx,
+        access.bank.id,
+        push_batch_id,
+        storage,
+    )
+    db.commit()
+    return result
+
+
+@router.get(
+    "/banks/{bank_id}/push-batches/{push_batch_id}",
+    response_model=PushBatchStatusRead,
+    operation_id="getPushBatch",
+)
+def get_push_batch(
+    bank_id: BankReference,
+    push_batch_id: UUID,
+    db: DbSession,
+    access: IntegrationPushResource,
+    storage: IngestionStorage,
+) -> PushBatchStatusRead:
+    result = push_ingestion.get_push_batch(
+        db,
+        access.ctx,
+        access.bank.id,
+        push_batch_id,
+        storage,
+    )
+    # The read service has no transaction of its own. Commit the authorized
+    # credential's throttled last-used stamp while its revocation lock is held.
+    db.commit()
+    return result

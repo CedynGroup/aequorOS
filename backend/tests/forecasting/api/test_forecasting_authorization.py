@@ -633,6 +633,7 @@ def test_mixed_execution_requires_forecasting_only_in_plan(
     forecast_authority: bool,
 ) -> None:
     _seed_book()
+    _grant(RoleBundle.ANALYST, module=ModuleScope.DATA, sensitivity=SensitivityScope.RESTRICTED)
     _grant(RoleBundle.ANALYST, module=ModuleScope.CREDIT, sensitivity=SensitivityScope.CONFIDENTIAL)
     version = 1
     for module in (ModuleScope.IRRBB, ModuleScope.FX, ModuleScope.FTP, ModuleScope.LIQUIDITY):

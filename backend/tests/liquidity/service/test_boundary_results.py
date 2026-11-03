@@ -8,7 +8,7 @@ import pytest
 
 from app.core.logging import get_request_id, reset_request_id, safe_request_id, set_request_id
 from app.domain.authority.results import Computed, Refused
-from app.services import regulatory_liquidity
+from app.liquidity.service import regulatory_liquidity
 from tests.liquidity.helpers import inputs
 
 

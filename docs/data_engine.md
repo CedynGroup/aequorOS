@@ -149,7 +149,7 @@ Below is the entity list with primary purpose. Full DDL is expanded in `/schema/
 
 - `position` — a unified abstraction for anything on or off the balance sheet at a point in time
   - `position_type`: `LOAN`, `DEPOSIT`, `SECURITY_HOLDING`, `DERIVATIVE`, `CASH`, `INTERBANK_PLACEMENT`, `INTERBANK_BORROWING`, `LC_GUARANTEE`, `COMMITMENT_UNDRAWN`, etc.
-  - Position state covers counterparties, products, currency, balances and notionals, maturity and repricing, interest terms, credit classification and collateral, with [mandatory metadata](#43-mandatory-metadata-columns). The implemented split between position identity and dated snapshots is owned by [`CanonicalPosition` and `CanonicalPositionSnapshot`](../backend/app/models/canonical.py).
+  - Position state covers counterparties, products, currency, balances and notionals, maturity and repricing, interest terms, credit classification and collateral, with [mandatory metadata](#43-mandatory-metadata-columns). The implemented split between position identity and dated snapshots is owned by [`CanonicalPosition` and `CanonicalPositionSnapshot`](../backend/app/data_engine/models/canonical.py).
 - `position_snapshot` — the position's state as of a specific `as_of_date` (this is the immutable record)
 - `cashflow_schedule` — projected cashflows from a position (amortization schedules)
 - `collateral` — collateral pledged against loans, with type, value, haircut
@@ -187,7 +187,7 @@ Below is the entity list with primary purpose. Full DDL is expanded in `/schema/
 ### 4.3 Mandatory Metadata Columns
 
 The implemented column names, types, nullability and validation values are owned by
-[`CanonicalMetadataMixin` and the concrete canonical models](../backend/app/models/canonical.py).
+[`CanonicalMetadataMixin` and the concrete canonical models](../backend/app/data_engine/models/canonical.py).
 Metadata identifies the tenant and reporting entity,
 business date, ingestion time, source, batch, validation state, lineage and restatement.
 The source reference is the source system's own identifier (for example, a T24 arrangement ID).
@@ -593,7 +593,7 @@ This is the audit trail. Without it, no BoG examiner accepts AequorOS. With it, 
 
 ### 8.2 The Lineage Table
 
-A dedicated [`lineage_records` table](../backend/app/models/ingestion.py) stores a graph of transformations:
+A dedicated [`lineage_records` table](../backend/app/data_engine/models/ingestion.py) stores a graph of transformations:
 
 ```
 lineage_id | operation      | input_lineage_ids | operation_type | operation_ref     | timestamp
@@ -617,7 +617,7 @@ A position's identity is shared by its snapshots. For the same institution, sour
 
 An omitted or unmapped `origination_date` preserves the existing date. An explicitly supplied null or blank clears it before the acceptance boundary and is a change subject to refusal after that boundary.
 
-After acceptance, every attempted identity-field change produces a non-configurable `TEMPORAL` / `ERROR` finding with rule `position_identity_settled`, naming the frozen field and the held and supplied values. The identity remains unchanged and the affected record is excluded from calculations under [§6.2](#62-severity-levels); this finding alone does not reject the entire batch. Superseding or withdrawing an accepted snapshot does not unfreeze its identity. To send a different identity after acceptance, use a new source reference. The executable correction and refusal coverage is in `backend/tests/api/test_ingestion.py::TestPositionIdentityCorrection`.
+After acceptance, every attempted identity-field change produces a non-configurable `TEMPORAL` / `ERROR` finding with rule `position_identity_settled`, naming the frozen field and the held and supplied values. The identity remains unchanged and the affected record is excluded from calculations under [§6.2](#62-severity-levels); this finding alone does not reject the entire batch. Superseding or withdrawing an accepted snapshot does not unfreeze its identity. To send a different identity after acceptance, use a new source reference. The executable correction and refusal coverage is in `backend/tests/data_engine/api/test_ingestion.py::TestPositionIdentityCorrection`.
 
 ### 8.4 Audit Log
 

@@ -4,7 +4,7 @@ from dataclasses import dataclass
 
 from fastapi.testclient import TestClient
 
-from app.schemas.cases import CaseRead
+from app.case.schemas.cases import CaseRead
 from app.schemas.common import JsonObject
 from tests.support.factories import case_payload
 from tests.support.helpers import ORG_1, headers

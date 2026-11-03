@@ -182,7 +182,7 @@ def test_recording_provenance_changes_no_snapshot_and_no_input_hash(
     Resolving a parameter fills the ledger; building the snapshot must not see
     it. This asserts the separation at the seam rather than trusting it.
     """
-    from app.services.regulatory_capital import _snapshot_hash  # noqa: PLC0415
+    from app.capital.service.regulatory_capital import _snapshot_hash  # noqa: PLC0415
 
     bank = _bank(db_session)
     rp.consume_parameter_provenance(db_session)

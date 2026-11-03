@@ -19,12 +19,12 @@ from datetime import date
 
 import pytest
 
-from app.domain.curves.conventions import DayCount, year_fraction
-from app.domain.curves.fx_forward import (
+from app.market_data.domain.curves.conventions import DayCount, year_fraction
+from app.market_data.domain.curves.fx_forward import (
     FxForwardError,
     build_fx_forward_curve,
 )
-from app.domain.curves.multicurve import SolvedCurve
+from app.market_data.domain.curves.multicurve import SolvedCurve
 
 AS_OF = date(2026, 8, 7)
 # A grid of dates roughly 3M / 6M / 1Y / 2Y / 3Y out.
@@ -64,9 +64,7 @@ def test_identical_curves_reproduce_spot() -> None:
 def test_spot_node_at_valuation_date_is_spot() -> None:
     """A date equal to the valuation date is the spot node (tau=0, DF=1, points=0)."""
     spot = 12.5
-    result = build_fx_forward_curve(
-        spot, _flat_curve(0.20), _flat_curve(0.05), (AS_OF, *GRID)
-    )
+    result = build_fx_forward_curve(spot, _flat_curve(0.20), _flat_curve(0.05), (AS_OF, *GRID))
     spot_node = result.points[0]
     assert spot_node.date == AS_OF
     assert spot_node.year_fraction == 0.0
@@ -202,9 +200,7 @@ def test_rejects_bad_spot() -> None:
 
 def test_rejects_mismatched_valuation_dates() -> None:
     base = _flat_curve(0.05)
-    quote = SolvedCurve(
-        date(2026, 8, 6), (date(2027, 8, 9), date(2029, 8, 7)), (0.05, 0.05)
-    )
+    quote = SolvedCurve(date(2026, 8, 6), (date(2027, 8, 9), date(2029, 8, 7)), (0.05, 0.05))
     with pytest.raises(FxForwardError):
         build_fx_forward_curve(12.5, base, quote, GRID)
 
