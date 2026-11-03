@@ -44,12 +44,12 @@ export default function Header() {
             setIdentity(
               session.authenticated && session.email
                 ? {
-                  mode:
-                    session.mode === "password"
-                      ? "password"
-                      : session.mode === "break_glass"
-                        ? "break_glass"
-                        : "oidc",
+                    mode:
+                      session.mode === "password"
+                        ? "password"
+                        : session.mode === "break_glass"
+                          ? "break_glass"
+                          : "oidc",
                     email: session.email,
                   }
                 : null,

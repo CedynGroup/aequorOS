@@ -1,30 +1,7 @@
-"""Emergency-only staff sign-in: credential issuance, throttle, session, audit.
+"""Emergency staff credential issuance, throttle, session and audit helpers.
 
-Break-glass is the answer to one scenario: the workforce IdP (Google
-Workspace) is unreachable, or a staff account was suspended in error, and the
-operator console would otherwise be unreachable. It is deliberately NOT a
-second password:
-
-* a **separate credential** (``operator_break_glass_credentials``) bound to an
-  explicitly designated ``operator_users`` row — never a flag that widens every
-  staff account;
-* **off by default** at the API (``OPERATOR_BREAK_GLASS_ENABLED``) and absent
-  until a credential is issued;
-* a **short fixed session** (15 minutes, no refresh), minted with its own
-  ``typ`` claim so an ordinary operator JWT can never pass as break-glass and
-  vice versa;
-* the **row's role and nothing more** — the credential grants no role of its
-  own, and a disabled credential or deactivated row refuses immediately, even
-  for a token already minted;
-* a **durable per-credential lockout** on the tenant plane's own primitive
-  (``app/identity/service/auth_throttle.py``), fronted by the process-local
-  per-email guard that keeps unknown addresses indistinguishable;
-* **every attempt audited and logged** — ``operator_audit_log`` rows with
-  ``auth_mode='break_glass'`` plus the ``auth.break_glass`` structured
-  condition (see ``docs/rbac.md`` §11.3 for the operations handoff).
-
-Ordinary staff password and Google sign-in are untouched: this module adds a
-third, narrower door beside them.
+The authentication contract and operations handoff are owned by
+``docs/rbac.md`` §11.3, "As built: break-glass emergency staff sign-in".
 """
 
 from __future__ import annotations
@@ -202,9 +179,7 @@ def mint_token(
     return jwt.encode(payload, secret, algorithm="HS256"), expires_at
 
 
-def verify_token(
-    token: str, *, secret: str, now: dt.datetime | None = None
-) -> BreakGlassClaims:
+def verify_token(token: str, *, secret: str, now: dt.datetime | None = None) -> BreakGlassClaims:
     """Verify signature, typ, claims and the fixed lifetime cap.
 
     Raises :class:`app.core.security.TokenInvalidError` on ANY failure — the
@@ -274,7 +249,7 @@ def credential_for_user(db: Session, user_id: UUID) -> OperatorBreakGlassCredent
     )
 
 
-# -- issuance / revocation (console operator API or the bootstrap CLI) -------------
+# -- issuance / revocation (credential-management CLI) ----------------------------
 def issue_credential(
     db: Session, user: OperatorUser, *, now: dt.datetime | None = None
 ) -> tuple[OperatorBreakGlassCredential, str]:
@@ -330,9 +305,9 @@ def record_operator_attempt(  # noqa: PLR0913 - one audit row carries actor, out
 ) -> None:
     """Write the audit row, commit, then emit the warning log.
 
-    Every attempt — success or failure — lands here. The warning is emitted only
-    after the audit row is durable, so a rolled-back transaction never claims
-    an emergency sign-in that did not happen.
+    Called for attempts reaching credential verification, after pre-lookup
+    checks. The warning is emitted only after the audit row is durable, so a
+    rolled-back transaction never claims an emergency sign-in that did not happen.
     """
     detail: dict[str, Any] = {"policy": "break_glass", "reason": reason}
     if credential_id is not None:

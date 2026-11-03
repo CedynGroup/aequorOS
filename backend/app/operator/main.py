@@ -4,9 +4,10 @@ A THIRD entrypoint beside ``app.main`` (tenant API) and ``app.worker``:
 
     uv run uvicorn app.operator.main:app --port ${OPERATOR_PORT:-8100}
 
-It mounts ONLY operator routers under ``/operator/v1`` plus an unauthenticated
-``/operator/health``. It never imports the tenant router, and the tenant app
-never imports this module — ``tests/operator/test_route_isolation.py`` is the
+It mounts ONLY operator routers under ``/operator/v1``, authentication routes
+under ``/operator/auth``, and an unauthenticated ``/operator/health``.
+It never imports the tenant router, and the tenant app never imports this
+module — ``tests/operator/test_route_isolation.py`` is the
 permanent guard on both directions.
 """
 

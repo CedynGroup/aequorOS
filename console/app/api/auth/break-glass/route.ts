@@ -1,8 +1,8 @@
 /**
  * POST /api/auth/break-glass — audited emergency staff sign-in.
  *
- * Relays the designated row's email + one-off emergency code server-side to
- * POST ${OPERATOR_API_URL}/operator/auth/break-glass and, on success,
+ * Relays the designated row's email + separately issued emergency code
+ * server-side to POST ${OPERATOR_API_URL}/operator/auth/break-glass and, on success,
  * establishes the same HttpOnly op_session cookie the other routes set — with
  * the short break-glass JWT in `token` and `mode: 'break_glass'`.
  *

@@ -3642,7 +3642,7 @@
   "reportAny": 17
  },
  "tests.operator.test_tenant_mutation_gate": {
-  "reportAny": 2
+  "reportAny": 1
  },
  "tests.operator.test_views": {
   "reportAny": 15

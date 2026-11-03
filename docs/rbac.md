@@ -1008,8 +1008,10 @@ unchanged while it exists.
 - **Off until configured, twice.** `POST /operator/auth/break-glass` answers
   404 unless `OPERATOR_BREAK_GLASS_ENABLED=true` on the operator API, and a
   staff row without an enabled credential is refused even then. The console's
-  `/login` keeps the form collapsed under "Emergency access"; the browser
-  never sees the code or token (the HttpOnly `op_session` cookie carries it).
+  `/login` keeps the form collapsed under "Emergency access". Staff enter the
+  code in that form; the console relays it server-side to the operator API.
+  The session token stays in the HttpOnly `op_session` cookie, inaccessible to
+  browser JavaScript.
 - **Never more than the row's role.** The credential has no role column. A
   successful sign-in takes the bound row's current role; the row is re-read on
   every request, so promoting or demoting it takes effect immediately and a
@@ -1045,11 +1047,11 @@ unchanged while it exists.
   same 401 without a new audit row or warning log: it never reaches credential
   verification, and one row per rejected byte would be a log-flooding lever.
 
-| Setting                          | Default | Behavior                                                                                                                       |
-| -------------------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------ |
-| `OPERATOR_BREAK_GLASS_ENABLED`    | `false` | Master switch on the operator API. Off answers 404 from the sign-in route and from the console relay — the door does not exist. |
-| `AUTH_MAX_FAILED_LOGINS`          | `5`     | Shared auth setting: consecutive failures before the durable credential lockout starts. |
-| `AUTH_LOCKOUT_SECONDS`            | `900`   | Shared auth setting: initial durable lockout in seconds (15 minutes), doubling on subsequent failures up to one hour. |
+| Setting                        | Default | Behavior                                                                                                                        |
+| ------------------------------ | ------- | ------------------------------------------------------------------------------------------------------------------------------- |
+| `OPERATOR_BREAK_GLASS_ENABLED` | `false` | Master switch on the operator API. Off answers 404 from the sign-in route and from the console relay — the door does not exist. |
+| `AUTH_MAX_FAILED_LOGINS`       | `5`     | Shared auth setting: consecutive failures before the durable credential lockout starts.                                         |
+| `AUTH_LOCKOUT_SECONDS`         | `900`   | Shared auth setting: initial durable lockout in seconds (15 minutes), doubling on subsequent failures up to one hour.           |
 
 **Setup (captain/deployment owner):**
 
@@ -1065,6 +1067,7 @@ unchanged while it exists.
 
    The code is printed once. Deliver it out-of-band (password manager or
    sealed envelope) — never email, chat, or the repository.
+
 3. Re-run the command to **rotate**: it replaces the stored hash, clears the
    lockout and prints a new code. A previously issued code and every session
    minted from it stop working immediately. Use `--status` to see whether a
@@ -1106,7 +1109,7 @@ Loguru output can be filtered with these CloudWatch expressions:
 
 Break-glass deliberately does not bypass the operator API's network
 allowlist/VPN, TLS enforcement, role gates or tenant-scoped authorization: it
-changes only *how* a designated staff member authenticates. Customer/tenant
+changes only _how_ a designated staff member authenticates. Customer/tenant
 SSO, SCIM, password rejection and the Google Directory gates remain out of
 scope and unchanged.
 

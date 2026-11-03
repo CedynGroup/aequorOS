@@ -52,11 +52,12 @@ audit ownership are governed by
   :8100, compose service `risk-operator`; NEVER mounted on the tenant API — a
   route-isolation test pins it) with a cross-tenant BYPASSRLS session; the
   console is the separate `console/` Next.js app (console.aequoros.com, all
-  traffic via its `/api/op` proxy). Staff auth mirrors the client model:
-  email+password against GLOBAL `operator_users` (separate from tenant identity
-  by design; `operator_admin` = super admin, seeded for the founder), OIDC SSO
-  secondary, dev bearer token non-production-only. Tenant onboarding runs as a
-  saga through `provision_institution`; every operator mutation lands in
+  traffic via its `/api/op` proxy). Staff credentials live in GLOBAL
+  `operator_users`, separate from tenant identity by design. Staff sign-in
+  methods and emergency recovery are owned by
+  [the RBAC guide](docs/rbac.md#staff-sign-in-google-workspace-operator-plane-only).
+  Tenant onboarding runs as a saga through `provision_institution`; every
+  operator mutation lands in
   append-only `operator_audit_log`. Workforce domain membership is identity
   evidence, not authorization: OIDC authentication requires a matching active
   `operator_users` row and always takes its explicit role from that row;

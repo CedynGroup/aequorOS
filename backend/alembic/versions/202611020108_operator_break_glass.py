@@ -67,4 +67,6 @@ def upgrade() -> None:
 
 
 def downgrade() -> None:
+    # Retain the widened audit representation: emergency rows are append-only,
+    # hash-chained evidence and must remain readable after credential rollback.
     op.drop_table(_CREDENTIALS_TABLE)

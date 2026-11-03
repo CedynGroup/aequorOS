@@ -22,6 +22,8 @@
  *   (app/api/op/[...path]/route.ts), in all auth modes:
  *   - password (primary): the operator session JWT lives in an HttpOnly
  *     cookie the proxy turns into the bearer — browser JS never holds it;
+ *   - break-glass (emergency): the same cookie carries the emergency JWT;
+ *     recovery policy is owned by docs/rbac.md §11.3;
  *   - workforce OIDC (secondary): identical cookie mechanics, id_token; the
  *     backend requires a matching active operator_users row and uses its role;
  *   - dev token (local only): the sessionStorage token rides the
@@ -1991,7 +1993,7 @@ export function getOverview(): Promise<OverviewResponse> {
 export interface AuditLogItem {
   id: string;
   operator_email: string;
-  /** password | oidc | dev | integration_key — how the actor authenticated. */
+  /** Authentication mode; values are owned by backend/app/operator/schemas.py. */
   auth_mode: string;
   action: string;
   target_org: string | null;
@@ -2723,9 +2725,8 @@ export function passwordLogin(
 /**
  * Audited emergency (break-glass) sign-in. Exists for the case where the
  * workforce IdP is down or an account was suspended in error; the code is
- * issued by operations to an explicitly designated staff row. Every use is
- * audited and logged, and the resulting session lasts 15 minutes with no
- * refresh. Absent/disabled deployments answer 404 from this route.
+ * issued by operations to an explicitly designated staff row. Authentication,
+ * throttling and audit policy are owned by docs/rbac.md §11.3.
  */
 export function breakGlassLogin(
   email: string,

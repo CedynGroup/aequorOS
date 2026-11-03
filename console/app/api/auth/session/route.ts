@@ -5,10 +5,10 @@
  * never leaves the HttpOnly cookie.
  */
 
-import { NextResponse, type NextRequest } from 'next/server';
-import { readSession, sessionMode } from '@/lib/server-auth';
+import { NextResponse, type NextRequest } from "next/server";
+import { readSession, sessionMode } from "@/lib/server-auth";
 
-export const dynamic = 'force-dynamic';
+export const dynamic = "force-dynamic";
 
 export async function GET(req: NextRequest) {
   const session = readSession(req);
