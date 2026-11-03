@@ -1021,12 +1021,16 @@ unchanged while it exists.
   cap), and an ordinary operator session cannot be substituted for it or vice
   versa. Every request re-reads the credential and staff row, so revoking
   either ends an already-minted session on its next call.
-- **Locked out like any credential.** Five consecutive failures against the
-  durable per-credential counter trip the tenant plane's progressive lockout
-  (5 minutes, doubling, capped at one hour) and answer 429 even for the right
-  code. The counter is separate from the staff row's password counter, so a
-  guessed emergency code cannot lock ordinary sign-in. A process-local
-  per-email guard keeps unknown addresses indistinguishable and throttled.
+- **Locked out like any credential.** The durable per-credential counter uses
+  the shared auth throttle settings: `AUTH_MAX_FAILED_LOGINS` (default `5`)
+  consecutive failures trigger a lockout starting at `AUTH_LOCKOUT_SECONDS`
+  (default `900`, or 15 minutes), doubling on subsequent failures and capped at
+  one hour. During that lockout, even the right code answers 429. The counter
+  is separate from the staff row's password counter, so a guessed emergency
+  code cannot lock ordinary sign-in. A separate process-local per-email guard
+  refuses pre-lookup requests for five minutes after five consecutive failures,
+  keeping unknown addresses indistinguishable and throttled. Its expiry does
+  not clear a durable credential lockout.
 - **Audited and logged on every use, success or failure.** Each attempt that
   reaches verification writes one append-only `operator_audit_log` row with
   `auth_mode='break_glass'` and an `action` of `auth.break_glass.sign_in` or
@@ -1035,13 +1039,16 @@ unchanged while it exists.
   `outcome`, `reason`, and account/credential ids. The API deliberately
   distinguishes only `not_designated`, `invalid_code` and `credential_locked`
   internally; the HTTP response stays a generic 401/429. A request refused by
-  the process-local pre-lookup throttle (5 failures per email per 5 minutes)
-  answers 429 without a new audit row or warning log: it never reaches credential
-  verification, and one row per rejected byte would be a log-flooding lever.
+  the process-local pre-lookup throttle (a five-minute refusal after five
+  consecutive failures per email) answers 429 without a new audit row or warning
+  log: it never reaches credential verification, and one row per rejected byte
+  would be a log-flooding lever.
 
 | Setting                          | Default | Behavior                                                                                                                       |
 | -------------------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------ |
 | `OPERATOR_BREAK_GLASS_ENABLED`    | `false` | Master switch on the operator API. Off answers 404 from the sign-in route and from the console relay — the door does not exist. |
+| `AUTH_MAX_FAILED_LOGINS`          | `5`     | Shared auth setting: consecutive failures before the durable credential lockout starts. |
+| `AUTH_LOCKOUT_SECONDS`            | `900`   | Shared auth setting: initial durable lockout in seconds (15 minutes), doubling on subsequent failures up to one hour. |
 
 **Setup (captain/deployment owner):**
 

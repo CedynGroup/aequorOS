@@ -1354,8 +1354,8 @@ class OperatorSettings(BaseSettings):
     jwt_secret: str | None = Field(default=None, alias="OPERATOR_JWT_SECRET")
     #: Emergency-only break-glass sign-in, default OFF. A separate credential
     #: (``operator_break_glass_credentials``) bound to an explicitly designated
-    #: staff row, with a short fixed session and no refresh. Every attempt is
-    #: audited and alerted. Leave off unless the console's emergency form and
+    #: staff row, with a short fixed session and no refresh. Every attempt writes
+    #: an audit entry and warning log. Leave off unless the console's emergency form and
     #: at least one designated credential are ready — see docs/rbac.md §11.3.
     break_glass_enabled: bool = Field(default=False, alias="OPERATOR_BREAK_GLASS_ENABLED")
     #: Workforce OIDC (Google Workspace / Okta issuer). Verified with the same
