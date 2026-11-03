@@ -802,6 +802,7 @@
       "aqs_audit_verifier": ["SELECT"],
       "aqs_api": ["SELECT"]
     },
+    "operator_break_glass_credentials": {},
     "operator_inspector_sessions": {},
     "operator_users": {},
     "organization_owner_assignments": {
