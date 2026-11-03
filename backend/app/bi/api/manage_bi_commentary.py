@@ -7,7 +7,7 @@ the exclusive ``ai`` lane, the handler, the row, the payload minimiser, the
 prompt, the grounding validator and the deterministic fallback were all built and
 tested, and nothing in ``app/`` called
 :func:`app.bi.jobs.bi_commentary.request_commentary`. That is the defect
-``tests/architecture/test_job_enqueue_reachability.py`` names, and a surface is
+``tests/unit/architecture/test_job_enqueue_reachability.py`` names, and a surface is
 the only honest way to clear it.
 
 Four properties decide the shape of this module, and each of them is a rule

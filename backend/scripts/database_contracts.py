@@ -14,7 +14,15 @@ from typing import TypedDict, cast
 
 CATALOGUE = Path(__file__).with_name("database_contracts.json")
 FAKE_FIXTURE = "current_annex_repository"
-FAKE_FORBIDDEN_PATHS = ("tests/db/", "tests/storage/", "tests/api/", "tests/identity/")
+FAKE_FORBIDDEN_PATHS = (
+    "tests/integration/db/",
+    "tests/integration/storage/",
+    "tests/unit/storage/",
+    "tests/integration/api/",
+    "tests/unit/api/",
+    "tests/integration/identity/",
+    "tests/unit/identity/",
+)
 DATABASE_FIXTURES = frozenset(
     {
         "db_session",

@@ -10,9 +10,9 @@ document changes what any principal can reach TODAY; it becomes live the moment
 a deployment sets `BI_ENABLED=1`.
 
 `app/bi/service/authorization.py::authorize_query` is the decision every BI
-surface consults (`tests/bi/api/test_bi_authorization_matrix.py`,
-`tests/bi/service/test_bi_authorization.py`), and every data route calls it
-before it reads anything (`tests/bi/api/test_bi_routes.py`).
+surface consults (`tests/integration/bi/api/test_bi_authorization_matrix.py`,
+`tests/integration/bi/service/test_bi_authorization.py`), and every data route calls it
+before it reads anything (`tests/integration/bi/api/test_bi_routes.py`).
 
 For connected-key banks, capability availability additionally follows the
 [bank-held encryption BI boundary](bank_field_encryption.md#bi).
@@ -125,8 +125,8 @@ other regime-selecting surface does.
 ### What the route layer does (all four landed in this commit)
 
 The authorization decision is complete on its own; these four are the handler's,
-and each is now implemented and pinned by `tests/bi/api/test_bi_routes.py` /
-`tests/bi/api/test_bi_query_log.py`:
+and each is now implemented and pinned by `tests/integration/bi/api/test_bi_routes.py` /
+`tests/integration/bi/api/test_bi_query_log.py`:
 
 1. **404 before 403.** Resolve the institution through `resolve_tenant_bank` /
    `scoped_authorization.resolve_bank` so another tenant's `BK-*` is "not found"
@@ -189,7 +189,7 @@ release. Keep both outputs with the record (`--json` for a machine diff). The
 script takes a database URL (`WORKER_DATABASE_URL` then `DATABASE_URL`), has no
 hermetic mode, and excludes service users — machine principals are covered by
 the SQL below instead. Hermetic coverage:
-`tests/scripts/test_authorization_access_impact.py` (the data-scope column is
+`tests/integration/scripts/test_authorization_access_impact.py` (the data-scope column is
 not yet asserted there).
 
 ### 2. Per-pair inventory (read-only)
@@ -461,10 +461,10 @@ disclosure) or narrowed (a lost figure). Run it before and after any release
 that touches bindings, the evaluator or the resolver. Its hermetic test does
 not yet assert the new column (owed).
 
-Pinned by: `tests/bi/service/test_data_scope.py`, `tests/bi/api/test_bi_data_scope.py`,
-`tests/identity/api/test_data_scope_grants.py`, the A10-01 cases in
-`tests/bi/service/test_bi_authorization.py`, `tests/bi/api/test_bi_feeds.py` and,
-for the credit blotter, `tests/credit/api/test_credit_route_authorization.py`.
+Pinned by: `tests/integration/bi/service/test_data_scope.py`, `tests/integration/bi/api/test_bi_data_scope.py`,
+`tests/integration/identity/api/test_data_scope_grants.py`, the A10-01 cases in
+`tests/integration/bi/service/test_bi_authorization.py`, `tests/integration/bi/api/test_bi_feeds.py` and,
+for the credit blotter, `tests/integration/credit/api/test_credit_route_authorization.py`.
 
 Turning BI on in production is an ordered sequence with its own hazards; it is
 recorded in [`bi_turn_on_runbook.md`](bi_turn_on_runbook.md).
@@ -494,11 +494,11 @@ Before the deployment that enables the BI routes, attach:
 
 | Guarantee                                                                                                            | Test                                                                                                     |
 | -------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
-| The matrix: principal kind × bundle × module × sensitivity × institution × query shape                               | `tests/bi/api/test_bi_authorization_matrix.py`                                                           |
-| Pair collection (filters, hierarchies, ratio components, `over`, Top-N, pivot, sort), call budget, fail-closed edges | `tests/bi/service/test_bi_authorization.py`                                                              |
-| Every catalogue member's module and sensitivity resolves to a platform enum value                                    | `tests/architecture/test_bi_catalogue_authority.py`                                                      |
-| Nothing a client sends becomes SQL                                                                                   | `tests/architecture/test_bi_compiler_injection.py`                                                       |
-| Cross-tenant 404 on every `/bi/*` route, and the route dependency inventory                                          | wave-3 `tests/bi/api/test_bi_routes.py`, `tests/architecture/test_bi_authorization.py` (not yet written) |
+| The matrix: principal kind × bundle × module × sensitivity × institution × query shape                               | `tests/integration/bi/api/test_bi_authorization_matrix.py`                                                           |
+| Pair collection (filters, hierarchies, ratio components, `over`, Top-N, pivot, sort), call budget, fail-closed edges | `tests/integration/bi/service/test_bi_authorization.py`                                                              |
+| Every catalogue member's module and sensitivity resolves to a platform enum value                                    | `tests/unit/architecture/test_bi_catalogue_authority.py`                                                      |
+| Nothing a client sends becomes SQL                                                                                   | `tests/unit/architecture/test_bi_compiler_injection.py`                                                       |
+| Cross-tenant 404 on every `/bi/*` route, and the route dependency inventory                                          | wave-3 `tests/integration/bi/api/test_bi_routes.py`, `tests/integration/bi/service/test_bi_authorization.py` (not yet written) |
 
 ## Rehearsal record
 

@@ -27,10 +27,10 @@ are always welcome.
   `db_client` and `db_session` are the defaults.
   Mark a test with `@pytest.mark.committing_db` when real commits are required
   for DDL, independent connections, raw commit visibility, query-count
-  transaction boundaries, or concurrency/lock behavior. Tests under `tests/db/`
+  transaction boundaries, or concurrency/lock behavior. Tests under `tests/integration/db/`
   select the marker automatically. The executable contract for both families
   and for safe application reuse is
-  `tests/test_database_fixture_isolation.py`.
+  `tests/integration/test_database_fixture_isolation.py`.
 - Dashboard gates: `tsc --noEmit`; both dark and light themes must render (no
   raw hex — use the token classes).
 - Commits follow Conventional Commits (`feat(scope): …`).

@@ -4,7 +4,7 @@
 
 **Sheets (2, official order):** `CAR FORMAT-GROUP` (item No column B · amount column D; 94 captured input cells + **4 official data cells the template leaves blank** — D8 Paid-up Ordinary Share Capital, D24 Undisclosed Reserves, D71 50% of NOP, D72 3-yr average gross income — bound through `grid_lines`; 14 BoG formulas) · `Sheet2` (empty placeholder — no cells, reproduced so the exported workbook's sheet set matches the official file).
 
-Generated from `bog_forms/linemaps/bsd5b.py` + `layouts/BSD5B.json` (do not hand-edit the table; regenerate). Resolvers: `bog_forms/sources_ext/bsd5.py` (shared with BSD5A). Tests: `backend/tests/reporting/service/bog_forms/test_bsd5.py`.
+Generated from `bog_forms/linemaps/bsd5b.py` + `layouts/BSD5B.json` (do not hand-edit the table; regenerate). Resolvers: `bog_forms/sources_ext/bsd5.py` (shared with BSD5A). Tests: `backend/tests/integration/reporting/service/bog_forms/test_bsd5.py`.
 
 ## Basis and how the group form is fed
 
@@ -78,7 +78,7 @@ Same as BSD5A (Explanatory Notes + Composition of Capital), plus the group items
 
 Template formulas (BoG's, evaluated — never bound): `D12` `=SUM(D8:D11)`; `D20` `=D12-SUM(D14:D19)`; `D29` `=SUM(D21:D28)`; `D30` `=D20+D29`; `D46` `=D14`; `D47` `=D16`; `D48` `=D17`; `D49` `=D19`; `D50` `=D20`; `D55` `=D32-SUM(D34:D54)`; `D65` `=SUM(D58:D64)`; `D73` `=D55+D65-D67-D68`; `D74` `=D30/D73%`; `D75` `=D30-(D73*10%)`
 
-**CAR FORMAT-GROUP totals:** 98 cells declared (94 captured + 4 blank data cells) — by declaration 98 bound / 0 input_required (rows 3, 18 read the `subsidiaries` register since 2026-08-16 and are blank at runtime until it is ingested). Runtime availability of BSD5A links follows the [official BSD engine rules](00_full_return_registry.md#6-as-built-engine-rules); fixture status counts and values are pinned in `backend/tests/reporting/service/bog_forms/test_bsd5.py`.
+**CAR FORMAT-GROUP totals:** 98 cells declared (94 captured + 4 blank data cells) — by declaration 98 bound / 0 input_required (rows 3, 18 read the `subsidiaries` register since 2026-08-16 and are blank at runtime until it is ingested). Runtime availability of BSD5A links follows the [official BSD engine rules](00_full_return_registry.md#6-as-built-engine-rules); fixture status counts and values are pinned in `backend/tests/integration/reporting/service/bog_forms/test_bsd5.py`.
 
 ## Residual unmapped lines — data the bank must supply
 
@@ -94,7 +94,7 @@ Template formulas (BoG's, evaluated — never bound): `D12` `=SUM(D8:D11)`; `D20
 
 ## Tests
 
-`backend/tests/reporting/service/bog_forms/test_bsd5.py::test_bsd5b_group_return_links_to_bsd5a_and_reproduces_bogs_group_formulas` (+ the resolver test's BSD5B tail): every captured input cell plus D8/D24/D71/D72 bound, `Sheet2` empty, group-only rows input_required, group = solo cell for cell (18 pairs incl. the blank cells), `D12 = D8+D9+D11 = E10`, `D20 = E17`, `D29 = E24` (finer Tier 2 rows, same total — proven with latent revaluation / cumulative preference / hybrid probe facts), **`D30 = D20+D29 = E25 = 340.0`**, the D46–D50 copies and the `D50=D20` quirk verbatim, `D55`, `D65 = E54`, `D73` excludes rows 50–51, `D74 = D30/D73×100`, `D75 = D30 − 10%×D73`, `E15 = 0`.
+`backend/tests/integration/reporting/service/bog_forms/test_bsd5.py::test_bsd5b_group_return_links_to_bsd5a_and_reproduces_bogs_group_formulas` (+ the resolver test's BSD5B tail): every captured input cell plus D8/D24/D71/D72 bound, `Sheet2` empty, group-only rows input_required, group = solo cell for cell (18 pairs incl. the blank cells), `D12 = D8+D9+D11 = E10`, `D20 = E17`, `D29 = E24` (finer Tier 2 rows, same total — proven with latent revaluation / cumulative preference / hybrid probe facts), **`D30 = D20+D29 = E25 = 340.0`**, the D46–D50 copies and the `D50=D20` quirk verbatim, `D55`, `D65 = E54`, `D73` excludes rows 50–51, `D74 = D30/D73×100`, `D75 = D30 − 10%×D73`, `E15 = 0`.
 
 ## Framework asks
 
@@ -103,7 +103,7 @@ Template formulas (BoG's, evaluated — never bound): `D12` `=SUM(D8:D11)`; `D20
 
 ## Data-gap closure — minority interests (2026-08-16)
 
-Rows 3 (`D10`) and 18 (`D26`) — the two consolidation-only lines — now read the **`subsidiaries`** reference dataset (the subsidiary register + book, one row per subsidiary per reporting date; `docs/data_engine/datasets/subsidiaries.md`; schema `reference_schemas/subsidiaries.py`; ingested through the Data Engine, `docs/API_INTEGRATION.md` §3.5). Binding: `linemaps/bsd5b.py::minority(field, …)` → `refs.sum {kind: subsidiaries, value_field: minority_interest_ghs | minority_interest_tier2_pref_ghs, filters: {consolidation_method: full}}` over the latest register on/before the reporting date — the figures are the group's own consolidation workings (the non-controlling share of a fully consolidated subsidiary's equity / qualifying Tier 2 preferred shares), never derived by the platform. Blank until the register is ingested; `0` when it exists and no fully consolidated subsidiary carries the field. BSD9 row 30 reads the same `minority_interest_ghs` (Domestic/Foreign by functional currency). Proof: `tests/services/data_gaps/test_subsidiaries.py`. Sample Bank onboarding data: `backend/onboarding/sample_bank/subsidiaries.csv`.
+Rows 3 (`D10`) and 18 (`D26`) — the two consolidation-only lines — now read the **`subsidiaries`** reference dataset (the subsidiary register + book, one row per subsidiary per reporting date; `docs/data_engine/datasets/subsidiaries.md`; schema `reference_schemas/subsidiaries.py`; ingested through the Data Engine, `docs/API_INTEGRATION.md` §3.5). Binding: `linemaps/bsd5b.py::minority(field, …)` → `refs.sum {kind: subsidiaries, value_field: minority_interest_ghs | minority_interest_tier2_pref_ghs, filters: {consolidation_method: full}}` over the latest register on/before the reporting date — the figures are the group's own consolidation workings (the non-controlling share of a fully consolidated subsidiary's equity / qualifying Tier 2 preferred shares), never derived by the platform. Blank until the register is ingested; `0` when it exists and no fully consolidated subsidiary carries the field. BSD9 row 30 reads the same `minority_interest_ghs` (Domestic/Foreign by functional currency). Proof: `tests/integration/services/data_gaps/test_subsidiaries.py`. Sample Bank onboarding data: `backend/onboarding/sample_bank/subsidiaries.csv`.
 
 ## Regenerating the table
 

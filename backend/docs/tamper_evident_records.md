@@ -275,7 +275,7 @@ page-size changes, and starts a new browsing window when filters are applied or 
 The requested end date also applies within the server bound. Direct
 `/operator/v1/audit` callers follow `next_cursor`; OFFSET pagination is retired.
 Future bounds are capped by the server's current time. Regression coverage is in
-`tests/operator/test_audit_api.py`, `tests/db/test_operator_audit_pagination.py`
+`tests/integration/operator/test_audit_api.py`, `tests/integration/db/test_operator_audit_pagination.py`
 and `console/lib/audit-pagination.test.ts`.
 
 Password sign-in, SSO and signing re-authentication retain success and refusal
@@ -317,8 +317,8 @@ bank visibility, or a predecessor's source payload. The explicit
 Missing entries and mismatches report `failed`; SQLite reports `unavailable`.
 The platform worker still owns full-chain verification and paging.
 
-Executable evidence lives in `tests/identity/api/test_audit_log.py` and
-`tests/db/test_bank_audit_reader.py`: scoped authority, filtering, cursor ties,
+Executable evidence lives in `tests/integration/identity/api/test_audit_log.py` and
+`tests/integration/db/test_bank_audit_reader.py`: scoped authority, filtering, cursor ties,
 view auditing, staff projection, real NOBYPASSRLS reads and privileged tampering.
 The API tests use their own migrated PostgreSQL schema and execute HTTP reads
 as `aqs_api`; they deliberately skip without `TEST_DATABASE_URL`. Run both
@@ -326,10 +326,10 @@ modules under the native `local_services.py run --postgres --role-admin` wrapper
 
 ## Verification evidence
 
-`tests/db/test_audit_integrity.py` executes real migrated PostgreSQL guards,
+`tests/integration/db/test_audit_integrity.py` executes real migrated PostgreSQL guards,
 transaction rollback, source tampering and chain deletion. It captures the broken
 chain alert, concurrent writers and compatibility with added source columns.
-`tests/services/test_audit_integrity_schedule.py` proves the audit
+`tests/integration/services/test_audit_integrity_schedule.py` proves the audit
 worker reaches the platform task with the audit flag alone, without tenant
 ticks, while AI and BI workers do not repeat it. The PostgreSQL tests exercise
 runtime-role inserts, denied ALTER/UPDATE/DELETE/TRUNCATE and helper replacement,
@@ -350,9 +350,9 @@ either `POSTGRES_ADMIN_URL` or a superuser `TEST_DATABASE_URL`; without superuse
 credentials they skip locally and fail when `POSTGRES_PRIVILEGE_TESTS_REQUIRED`
 is set. Migration-test role preparation is owned by the
 [role handoff runbook](../../docs/ops/database-roles.md#migration-and-local-development-order).
-`tests/core/test_migration_credentials.py` exercises the migration credential
+`tests/unit/core/test_migration_credentials.py` exercises the migration credential
 boundary for each runtime connection role.
-`tests/core/test_audit_integrity_alerts.py` verifies SNS routing, the safe incident
+`tests/unit/core/test_audit_integrity_alerts.py` verifies SNS routing, the safe incident
 payload, and visible missing/failed delivery with a fake publisher.
 PostgreSQL tests use disposable schemas, never the primary database.
 
@@ -408,7 +408,7 @@ the original version and figures. Voiding withdraws certification; it never open
 an in-place financial-content edit. Completed regulatory runs, including their
 inputs and metrics, cannot be updated or deleted. Queued/running work can finish.
 
-`tests/db/test_signed_filing_locks.py` covers runtime column permissions and
+`tests/integration/db/test_signed_filing_locks.py` covers runtime column permissions and
 owner-trigger refusals, completed runs and versioned corrections. Its LRT
 regression retains the attestation/export binding through certification and
 voiding while refusing changes to the register-state digest, signature deletion
@@ -531,19 +531,19 @@ only the pending-to-approved reconciliation transition to fill checker evidence;
 approved or revoked rows cannot rewrite that evidence. Downgrade refuses while
 pending proposals exist, preserving
 requests the previous schema cannot represent. The migrated lifecycle is pinned
-by `tests/db/test_governance_append_only.py`.
+by `tests/integration/db/test_governance_append_only.py`.
 
 No application-set reset flag bypasses the new deletion guards. Destructive test
 setup must use fresh disposable schemas or privileged fixture restoration, never
 a production mutation capability. Every authority mutation continues to use the
 existing transactional authorization invalidation service.
 
-`tests/db/test_signed_filing_locks.py` verifies locked edits/deletes, completion,
-void-and-rework, and linked resubmission. `tests/db/test_append_only_sweep.py`
+`tests/integration/db/test_signed_filing_locks.py` verifies locked edits/deletes, completion,
+void-and-rework, and linked resubmission. `tests/integration/db/test_append_only_sweep.py`
 exercises each board register plus assumption approvals, grant scope/revocation
-and legacy history. `tests/db/test_retained_filing_evidence.py` tests UPDATE, DELETE
+and legacy history. `tests/integration/db/test_retained_filing_evidence.py` tests UPDATE, DELETE
 and cascading TRUNCATE against all eight retained filing-child tables.
-`tests/storage/test_object_lock.py` uses Moto plus real local
+`tests/integration/storage/test_object_lock.py` uses Moto plus real local
 bank-key encryption to verify retention metadata, refusal of version deletion,
 idempotence, no shortening by the retention helper, and revocation refusal.
 Moto's missing GetObjectRetention action is adapted to its real HEAD retention
@@ -574,12 +574,12 @@ env -u TEST_DATABASE_URL -u REAL_DATA_DATABASE_URL \
 
 uv run python scripts/local_services.py run --postgres --role-admin -- \
   uv run pytest -n 4 --dist loadfile --tb=short -q \
-  tests/db/test_postgres_migrations.py \
-  tests/db/test_audit_integrity.py tests/db/test_signed_filing_locks.py \
-  tests/db/test_append_only_sweep.py tests/db/test_retained_filing_evidence.py \
-  tests/db/test_governance_append_only.py tests/core/test_audit_integrity_alerts.py \
-  tests/services/test_audit_integrity_schedule.py tests/storage/test_object_lock.py \
-  tests/db/test_regulatory_event_append_only.py
+  tests/integration/db/test_postgres_migrations.py \
+  tests/integration/db/test_audit_integrity.py tests/integration/db/test_signed_filing_locks.py \
+  tests/integration/db/test_append_only_sweep.py tests/integration/db/test_retained_filing_evidence.py \
+  tests/integration/db/test_governance_append_only.py tests/unit/core/test_audit_integrity_alerts.py \
+  tests/integration/services/test_audit_integrity_schedule.py tests/integration/storage/test_object_lock.py \
+  tests/integration/db/test_regulatory_event_append_only.py
 ```
 
 Production acceptance still needs counsel's retention period, an AWS locked-version

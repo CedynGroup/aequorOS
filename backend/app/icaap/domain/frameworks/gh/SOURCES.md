@@ -2,7 +2,7 @@
 
 This file is the source register for the Ghana ICAAP framework. Every citation in the
 framework JSON must appear in the **Citations** table below;
-`tests/icaap/domain/test_framework_sources.py` parses this file and fails on any citation
+`tests/unit/icaap/domain/test_framework_sources.py` parses this file and fails on any citation
 that is missing, on any row whose document is not listed, and on any row nothing cites.
 
 Rules for editing:

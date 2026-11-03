@@ -35,8 +35,7 @@ FAMILIES_ORIGINAL = (
     "'liquidity', 'capital', 'irrbb', 'fx', 'icaap_stress', 'corporate', 'large_exposures'"
 )
 FAMILIES_WIDENED = (
-    "'liquidity', 'capital', 'irrbb', 'fx', 'icaap_stress', 'corporate', "
-    "'large_exposures', 'dbk'"
+    "'liquidity', 'capital', 'irrbb', 'fx', 'icaap_stress', 'corporate', 'large_exposures', 'dbk'"
 )
 
 SETTINGS_TABLE = "regulatory_reporting_settings"
@@ -76,9 +75,7 @@ def upgrade() -> None:
         "regulatory_packages",
         f"frequency IN ({FREQUENCIES_WIDENED})",
     )
-    op.drop_constraint(
-        "ck_regulatory_packages_return_family", "regulatory_packages", type_="check"
-    )
+    op.drop_constraint("ck_regulatory_packages_return_family", "regulatory_packages", type_="check")
     op.create_check_constraint(
         "ck_regulatory_packages_return_family",
         "regulatory_packages",
@@ -144,9 +141,7 @@ def downgrade() -> None:
     # the constraint reinstatement never fails on live data.
     op.execute("DELETE FROM regulatory_packages WHERE frequency = 'daily'")
     op.execute("DELETE FROM regulatory_packages WHERE return_family = 'dbk'")
-    op.drop_constraint(
-        "ck_regulatory_packages_return_family", "regulatory_packages", type_="check"
-    )
+    op.drop_constraint("ck_regulatory_packages_return_family", "regulatory_packages", type_="check")
     op.create_check_constraint(
         "ck_regulatory_packages_return_family",
         "regulatory_packages",

@@ -205,7 +205,7 @@ Form × (map ✓ · calc ✓ · export ✓ · test ✓ · governance ✓) matrix
   `leaf_lines`. The pre-template `BSD2`(CAR)/`BSD3`(LCR) registry entries are coded
   `CAR-RWA`/`LCR-NSFR`, and there is no `BSD-MONTHLY` placeholder. Weekly returns anchor
   on Friday close (the Guide fixes cadence, not weekday). Gate:
-  `tests/reporting/service/test_bog_forms_framework.py` and `tests/reporting/service/bog_forms/`; matrix
+  `tests/integration/reporting/service/test_bog_forms_framework.py` and `tests/integration/reporting/service/bog_forms/`; matrix
   `scripts/bog_coverage_matrix.py`.
 - **Absent official facts are missing inputs, not mapped zeros.** `facts.sum` leaves
   an input `input_required` when no row matches the reporting snapshot, category and currency
@@ -219,7 +219,7 @@ Form × (map ✓ · calc ✓ · export ✓ · test ✓ · governance ✓) matrix
   was supplied. Live refresh alone does not supply official facts; follow the
   [time-plane contract](../../ARCHITECTURE.md#3a-bis-the-three-time-planes-adopted-2026-08-09)
   to prepare them. Regression coverage:
-  `backend/tests/reporting/service/bog_forms/test_missing_official_facts.py`.
+  `backend/tests/integration/reporting/service/bog_forms/test_missing_official_facts.py`.
 - **A refused capital register makes capital-dependent inputs unavailable.**
   `facts.sum` for `capital_component`, `bsd5.capital_facts` and capital-run
   metric resolvers check the register before selecting categories, tiers or
@@ -229,4 +229,4 @@ Form × (map ✓ · calc ✓ · export ✓ · test ✓ · governance ✓) matrix
   form records the corrective reason and leaves the affected input blank
   (`input_required`). Input and correction contract:
   [API integration §3.5](../API_INTEGRATION.md#capital_structure-contract).
-  Regression coverage: `backend/tests/services/test_capital_register_refusal.py`.
+  Regression coverage: `backend/tests/integration/services/test_capital_register_refusal.py`.

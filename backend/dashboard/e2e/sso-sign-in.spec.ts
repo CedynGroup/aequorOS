@@ -2,8 +2,8 @@
 /**
  * Single sign-on through a real identity provider — the browser leg.
  *
- * The backend suite proves the id_token exchange (`tests/identity/api/test_auth.py`)
- * and the egress guard around discovery (`tests/core/test_oidc_discovery_ssrf.py`).
+ * The backend suite proves the id_token exchange (`tests/integration/identity/api/test_auth.py`)
+ * and the egress guard around discovery (`tests/unit/core/test_oidc_discovery_ssrf.py`).
  * What only a browser can prove is the round trip itself: the login page's
  * SSO button, the redirect to the institution's IdP, its credential form, the
  * NextAuth callback with its PKCE cookie, the `/auth/sso` exchange, and the

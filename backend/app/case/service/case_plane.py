@@ -35,7 +35,7 @@ reconciliation. Case records are hand-editable and carry no ingestion batch,
 so a case figure written as a bank fact would enter a sealed run's
 `input_hash` with no provenance — and would breach the no-seeded-data order in
 `CLAUDE.md`. Nothing does this today. The guard is structural:
-`tests/architecture/test_case_plane_boundary.py` fails if any module reaches
+`tests/unit/architecture/test_case_plane_boundary.py` fails if any module reaches
 across the line in either direction, or if a single module touches both a
 case-plane model and `BankFinancialFact`. Amending that test is the review
 gate — an adapter cannot be written without the change being visible in it.

@@ -22,7 +22,7 @@ than derived from ``REFERENCE_DATASET_KINDS``: a literal keeps a fresh upgrade
 and an already-migrated database on the same constraint after the next kind is
 added, and makes the downgrade restore the historical shape. The parity between
 the constant and the migrated CHECK is asserted instead
-(``tests/db/test_performance_targets_migration.py``), so a kind added to the
+(``tests/integration/db/test_performance_targets_migration.py``), so a kind added to the
 tuple without a migration fails there rather than in a push.
 
 Widening moves no data. NARROWING does: a ``performance_targets`` row cannot

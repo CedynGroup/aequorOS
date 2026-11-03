@@ -181,7 +181,7 @@ def verify_partition(directory: Path, *, protected: Mapping[str, str] | None = N
     bao_keys = {
         case_key(nodeid)
         for nodeid in classified
-        if nodeid.startswith("tests/attestation/service/test_attestation_openbao.py::")
+        if nodeid.startswith("tests/integration/attestation/service/test_attestation_openbao.py::")
         and nodeid not in omitted
     }
     bao_cases = [

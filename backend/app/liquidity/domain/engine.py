@@ -84,7 +84,7 @@ HQLA_LEVEL_2_LEVELS: tuple[str, ...] = (HQLA_LEVEL_2A, HQLA_LEVEL_2B)
 #: wrong: the message fires exactly when an operator is trying to fix the
 #: configuration it names. The template below is a naming convention, not a
 #: regulatory number, so it belongs here alongside the two cap codes, which
-#: already match their stored codes exactly. ``tests/domain/
+#: already match their stored codes exactly. ``tests/unit/liquidity/domain/
 #: test_liquidity_hqla_haircuts_and_caps.py`` pins it against
 #: ``HQLA_HAIRCUT_CODES`` so the two can never drift apart again.
 PARAM_HQLA_HAIRCUT_TEMPLATE = "hqla_{level}_haircut_pct"

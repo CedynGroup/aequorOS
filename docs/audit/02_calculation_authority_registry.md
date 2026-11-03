@@ -1,7 +1,7 @@
 # 02. Calculation Authority Registry
 
 **Module:** `backend/app/domain/authority/registry.py`
-**Tests:** `backend/tests/domain/authority/test_registry.py`, `backend/tests/equivalence/test_declared_divergences.py`
+**Tests:** `backend/tests/unit/domain/authority/test_registry.py`, `backend/tests/unit/equivalence/test_declared_divergences.py`
 **Prepared:** 2026-08-22
 
 The forensic architecture audit's central finding was that a metric could be produced by more
@@ -108,8 +108,8 @@ than engineered away.
 > standardised weights."_
 
 The inequality is proved by
-`tests/reporting/service/bog_forms/test_bsd5.py::test_bsd5a_reconciles_to_the_capital_run_and_bog_arithmetic`.
-The reporting-equivalence suite (`tests/reporting/service/test_reporting_equivalence.py`)
+`tests/integration/reporting/service/bog_forms/test_bsd5.py::test_bsd5a_reconciles_to_the_capital_run_and_bog_arithmetic`.
+The reporting-equivalence suite (`tests/integration/reporting/service/test_reporting_equivalence.py`)
 checks engine-backed resolvers; it excludes this declared alternate methodology.
 
 ### 5.2 `lcr_pct` via `lmtd_table11_capped` (`CF-1`)
@@ -127,7 +127,7 @@ per-figure refusal contract, see
 > FALSE - do not act on it."_), and two tests pin the corrected position:
 > `test_the_two_lcr_methodologies_diverge_in_mechanics_not_in_having_a_cap` and
 > `test_the_bsd3_engine_caps_inflows_in_aggregate`
-> (`tests/equivalence/test_declared_divergences.py`).
+> (`tests/unit/equivalence/test_declared_divergences.py`).
 
 A second, related correction from the source audits: **there is no BoG return code `BSD3`
 for liquidity.** `BSD3A`/`BSD3B` are the Large Exposures returns; migration `202608150013`
@@ -155,7 +155,7 @@ diagnosis matters because the audits named only one of three causes:
 
 The resolution did **not** force two methodologies to agree: both sides call the same
 function, `compute_capital_ratios`. One methodology was being handed two different fact
-sets. Proof suite: `tests/equivalence/` — 13 parity assertions in
+sets. Proof suite: `tests/unit/equivalence/` — 13 parity assertions in
 `test_forecast_capital_parity.py` (including
 `test_year_zero_capital_ratios_equal_the_capital_run` parametrised over ECL and CRM, and
 `test_any_capital_group_the_forecast_drops_is_provably_inert`). Tolerances are
@@ -169,7 +169,7 @@ weaker, true statement.
 
 ## 7. The registry cannot silently gain an unclassified claim
 
-`tests/equivalence/test_declared_divergences.py` classifies every reporting claim the
+`tests/unit/equivalence/test_declared_divergences.py` classifies every reporting claim the
 registry makes and **fails if a new claim appears unclassified**
 (`test_every_reporting_claim_the_registry_makes_is_classified`). Three further guards:
 

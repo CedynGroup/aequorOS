@@ -81,9 +81,7 @@ def upgrade() -> None:
             "curve_kind IN ('forward', 'zero', 'discount')",
             name="ck_desk_curve_definitions_curve_kind",
         ),
-        sa.UniqueConstraint(
-            "curve_code", "version", name="uq_desk_curve_definitions_code_version"
-        ),
+        sa.UniqueConstraint("curve_code", "version", name="uq_desk_curve_definitions_code_version"),
     )
 
 

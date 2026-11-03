@@ -35,7 +35,7 @@ from app.bi.schemas.query import BiClosedModel, BiQuery
 #: that can reach a prompt. Long enough for a real sentence, short enough that it
 #: cannot become a document. It lives HERE, with the wire contract, rather than in
 #: the service: ``app/schemas`` is deliberately outside the BI plane's exemption
-#: (``tests/architecture/test_bi_plane_boundary.py`` rule (a)), so the contract must
+#: (``tests/unit/architecture/test_bi_plane_boundary.py`` rule (a)), so the contract must
 #: not import the service that enforces it — the service imports the bound.
 QUESTION_MAX_CHARS = 300
 

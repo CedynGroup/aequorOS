@@ -36,18 +36,12 @@ def upgrade() -> None:
         sa.Column("revoked_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
-        sa.ForeignKeyConstraint(
-            ["organization_id"], ["organizations.id"], ondelete="CASCADE"
-        ),
+        sa.ForeignKeyConstraint(["organization_id"], ["organizations.id"], ondelete="CASCADE"),
         sa.ForeignKeyConstraint(["service_user_id"], ["users.id"], ondelete="CASCADE"),
         sa.PrimaryKeyConstraint("id"),
     )
-    op.create_index(
-        "uq_integration_keys_key_hash", "integration_keys", ["key_hash"], unique=True
-    )
-    op.create_index(
-        "ix_integration_keys_organization_id", "integration_keys", ["organization_id"]
-    )
+    op.create_index("uq_integration_keys_key_hash", "integration_keys", ["key_hash"], unique=True)
+    op.create_index("ix_integration_keys_organization_id", "integration_keys", ["organization_id"])
     # Service accounts join the allowed auth providers.
     op.execute("ALTER TABLE users DROP CONSTRAINT IF EXISTS ck_users_auth_provider")
     op.execute(

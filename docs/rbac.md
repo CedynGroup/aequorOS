@@ -199,7 +199,7 @@ Every access check answers: **who (role) → may do what (permission) → on wha
   organization. Mount bank routers with `BANK_ROUTE_DEPENDENCIES`, defined in
   `app/api/deps.py`; permission dependencies there consume the resolved bank as
   `TenantBank` rather than re-resolving it. The OpenAPI-enumerated regression in
-  `backend/tests/api/test_cross_tenant_bank_routes.py` checks dependency coverage
+  `backend/tests/integration/api/test_cross_tenant_bank_routes.py` checks dependency coverage
   and sibling-bank 404 responses for reads and mutations on Postgres.
 - **Platform plane** — the cross-tenant surface for AequorOS staff. Its database
   access and the separate worker cutover follow

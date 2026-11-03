@@ -27,8 +27,7 @@ def upgrade() -> None:
     # the market-data adapters; further jurisdictions are registry data, not code.
     op.execute(
         sa.text(
-            "UPDATE jurisdictions SET sovereign_rating_issuer = 'GHANA_SOVEREIGN' "
-            "WHERE code = 'GH'"
+            "UPDATE jurisdictions SET sovereign_rating_issuer = 'GHANA_SOVEREIGN' WHERE code = 'GH'"
         )
     )
 

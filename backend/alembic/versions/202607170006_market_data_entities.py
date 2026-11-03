@@ -404,10 +404,7 @@ def downgrade() -> None:
             f"UPDATE canonical_position_snapshots SET {column} = NULL WHERE {column} IN "
             f"(SELECT id FROM {dimension} WHERE source_system IN ({NEW_SYSTEMS}))"
         )
-    op.execute(
-        "DELETE FROM canonical_position_snapshots "
-        f"WHERE source_system IN ({NEW_SYSTEMS})"
-    )
+    op.execute(f"DELETE FROM canonical_position_snapshots WHERE source_system IN ({NEW_SYSTEMS})")
     op.execute(f"DELETE FROM canonical_positions WHERE source_system IN ({NEW_SYSTEMS})")
     op.execute(
         "UPDATE canonical_gl_accounts SET parent_account_id = NULL WHERE parent_account_id IN "

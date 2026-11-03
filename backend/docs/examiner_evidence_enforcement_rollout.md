@@ -122,7 +122,7 @@ sentence; the "source" column is the additional per-object sentence.
 | GET `/banks/{bank_id}/examiner/runs/{run_id}/reproduction` | view       | restricted  | the run's module view at confidential, else opaque 404          |
 
 These are the only three examiner routes, and
-`tests/architecture/test_examiner_authorization.py` pins that census.
+`tests/unit/architecture/test_examiner_authorization.py` pins that census.
 
 ## Deny impact and explicit operator rows
 
@@ -189,7 +189,7 @@ requires a code change to correct — only an approved binding.
 
 ## Verification and release boundary
 
-- `tests/reporting/api/test_examiner_authorization.py` exercises the scalar-role
+- `tests/integration/reporting/api/test_examiner_authorization.py` exercises the scalar-role
   refusal (including `examiner`), partial-row non-composition, wrong
   module/sensitivity, sibling-institution separation, binding lifecycle
   (future/expired/suspended/revoked), an `account_admin` bundle without `view`,
@@ -200,20 +200,20 @@ requires a code change to correct — only an approved binding.
   tenant grant, gains nothing from one, stays read-only and tenant-isolated).
 - The generated HTTP property compares every examiner operation against an
   independently stated oracle
-  (`tests/reporting/testing/authorization_matrix.py`) over complete, partial,
+  (`tests/unit/reporting/testing/authorization_matrix.py`) over complete, partial,
   irrelevant, sibling-scoped and inactive human binding sets, including an
   `ALL`/`ALL` row and an empty set. Each example runs in a rolled-back savepoint
   and asserts that binding and run counts remain unchanged by the requests.
-- `tests/architecture/test_examiner_authorization.py` pins the three-route
+- `tests/unit/architecture/test_examiner_authorization.py` pins the three-route
   census and each route's dependency set: exactly one
   `require_examiner_evidence`, `resolve_tenant_bank`, no mutation-context
   dependency and no `require_role_*`.
-- `tests/reporting/api/test_examiner_mode.py` keeps its read-model
+- `tests/integration/reporting/api/test_examiner_mode.py` keeps its read-model
   invariants (hash reproduction, tamper detection, package/CFP/audit bundling,
   tenant isolation), now acting as a principal that explicitly holds the entry
   and source rows alongside stored evidence inside the disposable fixture
   transaction. It does not use the primary database.
-- `tests/scripts/test_authorization_access_impact.py` pins the new `examiner`
+- `tests/integration/scripts/test_authorization_access_impact.py` pins the new `examiner`
   column, and `scripts/authorization_access_impact.py` documents it.
 - The two new test modules are classified in `scripts/test_suites.json`
   (`integration` for the HTTP matrix, `unit` for the architecture ratchet).

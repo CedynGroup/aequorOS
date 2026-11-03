@@ -225,9 +225,7 @@ def upgrade() -> None:
         ),
         sa.ForeignKeyConstraint(["supersedes_id"], ["desk_determinations.id"]),
     )
-    op.create_index(
-        "ix_desk_determinations_cob_date", "desk_determinations", ["cob_date"]
-    )
+    op.create_index("ix_desk_determinations_cob_date", "desk_determinations", ["cob_date"])
 
     op.create_table(
         "desk_publications",
@@ -269,9 +267,7 @@ def downgrade() -> None:
             f"UPDATE {table} SET superseded_by = NULL WHERE superseded_by IN "
             f"(SELECT id FROM {table} WHERE source_system = {NEW_SYSTEM})"
         )
-    op.execute(
-        f"DELETE FROM canonical_yield_curve_points WHERE source_system = {NEW_SYSTEM}"
-    )
+    op.execute(f"DELETE FROM canonical_yield_curve_points WHERE source_system = {NEW_SYSTEM}")
     # Desk-typed curves from ANY source must go before the CHECK narrows.
     op.execute(
         "DELETE FROM canonical_yield_curve_points WHERE yield_curve_id IN "
@@ -282,14 +278,10 @@ def downgrade() -> None:
         f"(SELECT id FROM canonical_yield_curves WHERE curve_type IN ({NEW_CURVE_TYPES}))"
     )
     op.execute(f"DELETE FROM canonical_yield_curves WHERE source_system = {NEW_SYSTEM}")
-    op.execute(
-        f"DELETE FROM canonical_yield_curves WHERE curve_type IN ({NEW_CURVE_TYPES})"
-    )
+    op.execute(f"DELETE FROM canonical_yield_curves WHERE curve_type IN ({NEW_CURVE_TYPES})")
     op.execute(f"DELETE FROM canonical_fx_rates WHERE source_system = {NEW_SYSTEM}")
     op.execute(f"DELETE FROM canonical_market_indices WHERE source_system = {NEW_SYSTEM}")
-    op.execute(
-        f"DELETE FROM canonical_counterparty_ratings WHERE source_system = {NEW_SYSTEM}"
-    )
+    op.execute(f"DELETE FROM canonical_counterparty_ratings WHERE source_system = {NEW_SYSTEM}")
     op.execute(
         "DELETE FROM translation_failures WHERE ingestion_batch_id IN "
         f"(SELECT id FROM ingestion_batches WHERE source_system = {NEW_SYSTEM})"

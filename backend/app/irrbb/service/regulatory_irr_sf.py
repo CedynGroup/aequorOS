@@ -812,7 +812,7 @@ def _persist_success(
     run.metrics = _metrics_payload(book, result)
     outlier_status = "red" if result.outlier else "green"
     # Each metric is named with a STRING LITERAL here, not with the module
-    # constant beside it. ``tests/domain/authority/test_registry_completeness``
+    # constant beside it. ``tests/unit/domain/authority/test_registry_completeness``
     # reads every persistence site by AST to check that no filed figure reaches
     # the database without a registered authority, and it refuses to guess: a
     # site it cannot resolve fails the gate rather than quietly disappearing

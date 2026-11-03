@@ -35,7 +35,7 @@ AdvisoryDesignation = Literal["filed", "supervisory_monitoring", "advisory_only"
 
 #: The live-engine module vocabulary (``app.live.models.live.LIVE_MODULES``), restated
 #: here because the domain may not import the model. Parity is pinned by
-#: ``tests/bi/service/test_catalogue_parity.py``.
+#: ``tests/unit/bi/service/test_catalogue_parity.py``.
 ENGINE_MODULES: tuple[str, ...] = (
     "liquidity",
     "capital",

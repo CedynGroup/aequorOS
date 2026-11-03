@@ -103,7 +103,7 @@ for _path in (str(_BACKEND), str(_REPO)):
     if _path not in sys.path:
         sys.path.insert(0, _path)
 
-# --- pure helpers (unit-tested in tests/bi/service/test_benchmark_helpers.py) ------------
+# --- pure helpers (unit-tested in tests/unit/bi/service/test_benchmark_helpers.py) ------------
 
 #: Query classes, and the target each is judged against. The numbers are
 #: ``docs/bi.md`` §Verification "Benchmark"; they are printed beside every

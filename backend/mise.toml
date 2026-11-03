@@ -55,7 +55,7 @@ run = "uv run python scripts/local_services.py run --postgres --role-admin -- uv
 
 [tasks."risk-service:test-postgres-migrations"]
 description = "Run Postgres-backed Alembic migration tests (local or supplied TEST_DATABASE_URL)"
-run = "uv run python scripts/local_services.py run --postgres --role-admin -- uv run pytest tests/db/test_postgres_migrations.py tests/db/test_integration_key_migration.py"
+run = "uv run python scripts/local_services.py run --postgres --role-admin -- uv run pytest tests/integration/db/test_postgres_migrations.py tests/integration/db/test_integration_key_migration.py"
 
 # The concurrency tests guard row locks and advisory locks, which SQLite cannot
 # express — they self-skip ("PostgreSQL row locks are required for concurrency
@@ -68,7 +68,7 @@ run = "uv run python scripts/local_services.py run --postgres --role-admin -- uv
 # locally when one is not already exported.
 [tasks."risk-service:test-postgres-locks"]
 description = "Run the Postgres-only concurrency tests (local or supplied TEST_DATABASE_URL)"
-run = "uv run python scripts/local_services.py run --postgres -- uv run pytest -m integration tests/case/api/test_liquidity.py tests/case/api/test_scenarios.py tests/case/api/test_calculations.py tests/storage/test_key_rotation_concurrency.py"
+run = "uv run python scripts/local_services.py run --postgres -- uv run pytest -m integration tests/integration/case/api/test_liquidity.py tests/integration/case/api/test_scenarios.py tests/integration/case/api/test_calculations.py tests/integration/storage/test_key_rotation_concurrency.py"
 
 [tasks.unit]
 description = "Run database-free unit tests with database connections refused"
@@ -102,7 +102,7 @@ depends = ["integration"]
 # Use unit for database-free guards; integration owns database-using cases.
 [tasks."risk-service:test-architecture"]
 description = "Run the architecture, dependency-boundary and migration-guard tests"
-run = "uv run pytest tests/architecture tests/db/test_bog_return_recode_migration.py"
+run = "uv run pytest tests/unit/architecture tests/integration/db/test_bog_return_recode_migration.py"
 
 # Schema-level truth: the migration chain, the RLS policies it installs, and the
 # server defaults. RLS exists ONLY in migrations (the hermetic suite builds its
@@ -111,22 +111,22 @@ run = "uv run pytest tests/architecture tests/db/test_bog_return_recode_migratio
 # locally when one is not already exported.
 [tasks."risk-service:test-postgres-schema"]
 description = "Run the Postgres schema, migration and RLS suites (local or supplied TEST_DATABASE_URL)"
-run = "uv run python scripts/local_services.py run --postgres --storage --role-admin -- uv run pytest -m integration tests/db"
+run = "uv run python scripts/local_services.py run --postgres --storage --role-admin -- uv run pytest -m integration tests/integration/db"
 
 # Integration siblings own schema, lock and storage cases; markers exclude unit cases.
 # Keep loadfile: OpenBao tests reconfigure shared AppRoles on one worker.
 [tasks."risk-service:test-postgres-suite"]
 description = "Run the remaining integration suite in four Postgres workers"
-run = "uv run python scripts/local_services.py run --postgres -- uv run pytest -m integration -n 4 --dist loadfile --ignore=tests/db --ignore=tests/case/api/test_calculations.py --ignore=tests/case/api/test_liquidity.py --ignore=tests/case/api/test_scenarios.py --ignore=tests/storage"
+run = "uv run python scripts/local_services.py run --postgres -- uv run pytest -m integration -n 4 --dist loadfile --ignore=tests/integration/db --ignore=tests/integration/case/api/test_calculations.py --ignore=tests/integration/case/api/test_liquidity.py --ignore=tests/integration/case/api/test_scenarios.py --ignore=tests/integration/storage"
 
 # The legacy opt-in regulatory/attestation/auth/vendor API surface requires
 # REAL_DATA_DATABASE_URL; without it these tests skip. Database selection and
 # primary access follow README.md#test-databases-and-the-primary-database.
 #
-# The path list omitted tests/adapters and tests/equivalence until 2026-08-22,
+# The path list omitted tests/adapters and tests/unit/equivalence until 2026-08-22,
 # so three modules — including the regulatory report/forecast run-parity suites
 # — were unreachable even WITH the URL set, and their 23 tests could never run
-# anywhere. `tests/architecture/test_ci_task_wiring.py` now derives the required
+# anywhere. `tests/unit/architecture/test_ci_task_wiring.py` now derives the required
 # paths from the `requires_real_data` marker, so the list cannot fall behind a
 # new module again.
 #
@@ -135,7 +135,7 @@ run = "uv run python scripts/local_services.py run --postgres -- uv run pytest -
 # everything while implying a tier that does not exist.
 [tasks."risk-service:test-real-data"]
 description = "Run the opt-in real-data API suite; requires REAL_DATA_DATABASE_URL"
-run = "uv run pytest tests/market_data tests/api tests/data_engine tests/equivalence tests/features tests/identity tests/icaap tests/irrbb tests/liquidity tests/fx tests/ftp tests/forecasting tests/reporting tests/attestation tests/bi tests/live tests/services"
+run = "uv run pytest tests/integration/api tests/integration/attestation tests/integration/data_engine tests/integration/forecasting tests/integration/ftp tests/integration/fx tests/integration/identity tests/integration/irrbb tests/integration/liquidity tests/integration/live tests/integration/reporting tests/unit/equivalence tests/unit/market_data"
 
 # Storage suite execution and CI service setup: README.md#run-tests.
 #
@@ -151,7 +151,7 @@ run = "uv run pytest tests/market_data tests/api tests/data_engine tests/equival
 # Key-rotation concurrency belongs to risk-service:test-postgres-locks.
 [tasks."risk-service:test-storage"]
 description = "Run the storage contract suite against Postgres and S3-compatible storage"
-run = "uv run python scripts/local_services.py run --postgres --storage -- uv run pytest -m integration tests/storage --ignore=tests/storage/test_key_rotation_concurrency.py"
+run = "uv run python scripts/local_services.py run --postgres --storage -- uv run pytest -m integration tests/integration/storage --ignore=tests/integration/storage/test_key_rotation_concurrency.py"
 
 [tasks."risk-service:lint"]
 description = "Run Ruff checks"

@@ -84,9 +84,7 @@ def upgrade() -> None:
         sa.Column("attested_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
-        sa.CheckConstraint(
-            f"status IN {_STATUSES}", name="ck_enterprise_stress_signoffs_status"
-        ),
+        sa.CheckConstraint(f"status IN {_STATUSES}", name="ck_enterprise_stress_signoffs_status"),
         sa.CheckConstraint("version >= 1", name="ck_enterprise_stress_signoffs_version"),
         sa.ForeignKeyConstraint(["organization_id"], ["organizations.id"]),
         sa.ForeignKeyConstraint(
@@ -98,9 +96,7 @@ def upgrade() -> None:
             ],
         ),
         sa.PrimaryKeyConstraint("id"),
-        sa.UniqueConstraint(
-            "organization_id", "run_id", name="uq_enterprise_stress_signoffs_run"
-        ),
+        sa.UniqueConstraint("organization_id", "run_id", name="uq_enterprise_stress_signoffs_run"),
     )
     op.create_index(
         "ix_enterprise_stress_signoffs_scope",

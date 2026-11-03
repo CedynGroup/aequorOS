@@ -40,9 +40,7 @@ def upgrade() -> None:
     # implicit for every membership grant and the extended form is a SYNTAX
     # ERROR. CI runs 17 and production runs 15.13, so the newer form passed
     # every check and failed on the only server that matters.
-    server_version_info = cast(
-        "tuple[int, ...] | None", op.get_bind().dialect.server_version_info
-    )
+    server_version_info = cast("tuple[int, ...] | None", op.get_bind().dialect.server_version_info)
     if (server_version_info or (0,))[0] >= 16:
         op.execute("GRANT aequoros_audit_owner TO CURRENT_USER WITH INHERIT TRUE, SET TRUE")
     else:

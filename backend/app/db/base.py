@@ -26,7 +26,7 @@ def utc_now() -> datetime:
 #: only because that order puts the parent first, so moving a model to another
 #: module would silently reorder flushes and could break a foreign key. Pinning the
 #: key keeps flush order independent of where the code lives. A new model records
-#: its key here; ``tests/architecture/test_model_flush_order.py`` enforces it.
+#: its key here; ``tests/unit/architecture/test_model_flush_order.py`` enforces it.
 FLUSH_ORDER = cast(
     dict[str, str],
     json.loads(Path(__file__).with_name("flush_order.json").read_text(encoding="utf-8")),

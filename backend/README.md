@@ -182,7 +182,7 @@ transaction, with one commit before returning the artifact or queued job.
 The single-database fallback also ends its query transaction before delivery.
 The [database role handoff](../docs/ops/database-roles.md#target-matrix) owns the
 API's guarded query-log partition capability.
-See [native transaction/role regressions](tests/db/test_bi_export_transactions.py).
+See [native transaction/role regressions](tests/integration/db/test_bi_export_transactions.py).
 
 Document deletion and upload-completion boundaries are documented under
 [the legacy case vertical](#legacy-case-vertical). Remaining transaction-held waits include
@@ -294,8 +294,8 @@ one job and one deletion event. Existing deleted records remain unchanged.
 The queue's bounded exponential retries and stale-worker reclaim apply; exhausted
 cleanup remains pending and appears as a failed job on the operator jobs board.
 See [`documents.py`](app/case/service/documents.py) and the
-[deletion regression tests](tests/case/service/test_document_deletion.py), including
-[PostgreSQL concurrency and role-timeout coverage](tests/db/test_document_deletion_timeout.py).
+[deletion regression tests](tests/integration/case/service/test_document_deletion.py), including
+[PostgreSQL concurrency and role-timeout coverage](tests/integration/db/test_document_deletion_timeout.py).
 
 Canonical financial data is read with
 `GET /api/v1/cases/{case_id}/financial-workspace`. Resource-specific `POST` and
@@ -477,7 +477,7 @@ The suite plugin rejects unit ownership of protected cases and their direct or
 indirect requests for the standard `current_annex_repository` fake fixture. It
 also rejects database resource fixtures in unit tests. The fake is forbidden under
 database, storage, API and identity test paths; the
-[ICAAP test-input guide](tests/icaap/testing/README.md) owns its permitted use.
+[ICAAP test-input guide](tests/unit/icaap/testing/README.md) owns its permitted use.
 Unit and e2e CI collection reject stale protected identities. Selected protected
 cases require PostgreSQL in CI (or with `CI_REQUIRE_DATABASE_CONTRACTS=1`), and
 skipping one fails its execution.
@@ -683,7 +683,7 @@ exists, retained for seven days.
 
 Main pushes and queued merge results always run the full suite. On pull requests,
 only changes confined to the
-bodies of existing, unreferenced `tests/domain/test_*.py` tests owned by the
+bodies of existing, unreferenced `tests/unit/domain/test_*.py` tests owned by the
 Postgres suite (including nested domain directories), or comments and formatting
 in those modules, select their affected modules. Changes to fixtures, decorators, production code, new/deleted
 tests, configuration or an uncertain diff select the full suite. Schema/RLS,
@@ -723,11 +723,11 @@ assignment before removing transferred modules from the refreshed weights.
 
 ### Test databases and the primary database
 
-- **Live-data invariant suite** (`backend/tests/live_data/`): read-only checks against the
+- **Live-data invariant suite** (`backend/tests/integration/live_data/`): read-only checks against the
   ACTUAL primary database — provenance (every canonical row ingestion-traced; the
   executable form of the no-seeding order), period-spine contiguity, fact coverage,
   live-metrics presence, sign-in capability. Opt-in:
-  `LIVE_DATA_DATABASE_URL=<authorized read URL> uv run pytest tests/live_data`.
+  `LIVE_DATA_DATABASE_URL=<authorized read URL> uv run pytest tests/integration/live_data`.
   With a tenant-scoped credential, set `LIVE_DATA_ORG_ID` to the `OR-…` platform ID;
   an existing authorized BYPASSRLS credential can inspect all tenants. The new
   `aqs_worker` credential provides no unscoped tenant visibility. The session is server-side read-only —
@@ -755,18 +755,18 @@ assignment before removing transferred modules from the refreshed weights.
   Opt-in [prepared canonical books](tests/support/DATABASE.md#prepared-canonical-books)
   use a separate baseline with per-test rollback.
   Both default tenant fixture families reuse one application per process.
-  BI export header cases (`tests/bi/api/test_bi_exports.py`) reuse a separate
+  BI export header cases (`tests/integration/bi/api/test_bi_exports.py`) reuse a separate
   module-scoped app, built lazily after hermetic settings, BI flags and the fixed
   CORS origin are installed. Each case installs its current dependency overrides,
   opens a fresh client and clears overrides in `finally`; sessions and storage
   fakes remain function-scoped. Settings-sensitive CORS/TLS tests must build their
   own app.
   Bank audit API tests reuse a module-scoped migrated schema and lazily constructed application
-  (`tests/identity/api/test_audit_log.py`), with fresh clients, per-test rollback and
+  (`tests/integration/identity/api/test_audit_log.py`), with fresh clients, per-test rollback and
   `aqs_api` authority for HTTP database dependencies; the dependency override is
   restored at teardown. Operator tests reuse a separate application and SQLite database,
   with the same rollback isolation
-  (`tests/operator/conftest.py`). Each client is function-scoped, with storage
+  (`tests/integration/operator/conftest.py`). Each client is function-scoped, with storage
   dependency overrides removed at teardown. Migration tests and feature-local fixtures
   requiring migrated DDL build isolated schemas of their own. The `catalog_postgres_schema`
   fixture shares a module-scoped forward-migrated schema only for read-only catalog and
@@ -780,7 +780,7 @@ assignment before removing transferred modules from the refreshed weights.
   `--junitxml` output remains a single combined report for the execution-floor guard.
   Two consequences: test ids must be deterministic (xdist refuses to start when workers
   collect different ids, so never put `uuid4()` or set order into a parametrize id), and
-  a test may not depend on another module having run first. The separate `tests/db`
+  a test may not depend on another module having run first. The separate `tests/integration/db`
   schema/migration task stays serial to avoid exhausting Postgres' shared DDL lock
   table (`max_locks_per_transaction`).
 

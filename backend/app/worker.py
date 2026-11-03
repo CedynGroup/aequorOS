@@ -77,7 +77,7 @@ Handler = Callable[[Session, Job], None]
 # JOB_TYPES entry with no handler here is enqueueable but never claimable, so
 # its jobs sit "queued" forever (how notification_email_mirror was orphaned
 # until 2026-08-09: enqueued by every tick, absent here). The parity test in
-# tests/market_data/service/test_desk_capture_job.py enforces the invariant.
+# tests/integration/market_data/service/test_desk_capture_job.py enforces the invariant.
 HANDLERS: dict[str, Handler] = {
     "bank_reencrypt": reencryption.run,
     "session_purge": run_session_purge,

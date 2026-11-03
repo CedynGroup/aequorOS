@@ -237,7 +237,7 @@ schedule's "Total" label or the last labelled item + its blank detail rows); not
   listed on the Completion-notes sheet.
 - **Schedule TOTAL rows** are bound only where the SAME declaration BSD2 uses for the line the annex analyses
   fills the total honestly, so _annex total = spine line by construction_ (proved by
-  `tests/reporting/service/bog_forms/test_bsd2_annexes.py`): Annex 6 ↔ line 11 other assets (`facts balance_sheet
+  `tests/integration/reporting/service/bog_forms/test_bsd2_annexes.py`): Annex 6 ↔ line 11 other assets (`facts balance_sheet
 other_assets`, Domestic B / Foreign C), Annex 7 ↔ 15(e) other reserves, Annex 15 ↔ line 29 other liabilities
   (`positions OTHER_LIABILITY`, Domestic C / Foreign D), Annex 16 rows ↔ line 33 (`I11` = BSD2 `D282`).
   Where BSD2's own line is multi-source or itself input_required / coa-mapping (borrowings Annexes 8–11, Annex 12
@@ -549,7 +549,7 @@ the template's own section/line words), plus `side` (asset | liability, checked 
 `currency_field` option of `refs.sum`. Blank until the sub-ledger has been ingested at all; `0` for a tagged
 line with no row; the TOTAL column stays the template's `=B+C`. Rows 204/211/218/225 were `coa-mapping`
 placeholders inside the deposits-of-financial-institutions blocks and are the same accrual lines. Proof:
-`tests/services/data_gaps/test_interest_accruals.py` (Sample Bank sub-ledger pushed through the real API →
+`tests/integration/services/data_gaps/test_interest_accruals.py` (Sample Bank sub-ledger pushed through the real API →
 all 38 cells `input_required` → `mapped`, expected values, TOTAL = B + C). Sample Bank onboarding data:
 `backend/onboarding/sample_bank/interest_accruals.csv`.
 
@@ -570,7 +570,7 @@ item 12 `=B122−B123` (sub-total of 115–121 less depreciation) is BoG's own a
 construction. Domestic = rows booked in the bank's base currency (or with no `currency`), Foreign = any other
 (Guide §2, `refs.sum currency_field`). Blank until the register has been ingested at all; `0` for a class the
 register carries no row for; the TOTAL column stays the template's `=B+C`. Proof:
-`tests/services/data_gaps/test_capital_expenditure.py` (Sample Bank register pushed through the real API →
+`tests/integration/services/data_gaps/test_capital_expenditure.py` (Sample Bank register pushed through the real API →
 the 16 cells `coa-mapping/input_required` → `mapped`, `SUM(115:121) − 123` = Σ NBV + Σ WIP, an earlier
 period pushed later leaves the later period untouched). Sample Bank onboarding data:
 `backend/onboarding/sample_bank/capital_expenditure*.csv`.

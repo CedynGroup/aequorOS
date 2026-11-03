@@ -1,6 +1,6 @@
 # BI feature boundary
 
-BI application code and tests live in `app/bi/` and `tests/bi/`.
+BI application code and tests live in `app/bi/`, `tests/unit/bi/` and `tests/integration/bi/`.
 Other features use `app.bi.public` for `BUILDER_VERSION` and
 `app.bi.domain` for pure calculation contracts. The public version is the same
 value stamped onto BI job payloads by the enqueue seam.

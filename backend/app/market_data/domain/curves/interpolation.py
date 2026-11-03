@@ -62,9 +62,9 @@ class ZeroInterpolator(Protocol):
     def instantaneous_forward(self, t: float) -> float: ...
 
 
-def _validate_nodes(times: Sequence[float], zeros: Sequence[float]) -> tuple[
-    tuple[float, ...], tuple[float, ...]
-]:
+def _validate_nodes(
+    times: Sequence[float], zeros: Sequence[float]
+) -> tuple[tuple[float, ...], tuple[float, ...]]:
     if len(times) != len(zeros):
         raise InterpolationError("times and zeros must have the same length.")
     if not times:
@@ -403,9 +403,7 @@ def _hagan_west_g(  # noqa: PLR0911, PLR0912 - four regions x two branches each,
         return g1, 0.0
     if g0 == 0.0 and g1 == 0.0:
         return 0.0, 0.0
-    if (g0 < 0.0 and -0.5 * g0 <= g1 <= -2.0 * g0) or (
-        g0 > 0.0 and -0.5 * g0 >= g1 >= -2.0 * g0
-    ):
+    if (g0 < 0.0 and -0.5 * g0 <= g1 <= -2.0 * g0) or (g0 > 0.0 and -0.5 * g0 >= g1 >= -2.0 * g0):
         # Region (i): the plain quadratic is already monotone.
         g_value = g0 * (1.0 - 4.0 * x + 3.0 * x * x) + g1 * (-2.0 * x + 3.0 * x * x)
         integral = g0 * (x - 2.0 * x * x + x**3) + g1 * (-(x * x) + x**3)

@@ -66,7 +66,7 @@ from app.db.base import Base, TimestampMixin, UuidV7PrimaryKeyMixin
 #: columns but are vendor state written by ``pull_runner``; retiring a vendor
 #: series is a market-data-adapter concern with its own supersession discipline,
 #: and admitting it here would silently widen the blast radius of this feature.
-#: ``tests/architecture/test_current_generation_predicate.py`` pins this set, so
+#: ``tests/integration/architecture/test_current_generation_predicate.py`` pins this set, so
 #: extending it is a decision someone has to make on purpose.
 #:
 #: ``position`` retires POSITION SNAPSHOTS, not position identities: a withdrawal

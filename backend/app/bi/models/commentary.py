@@ -11,7 +11,7 @@ two different questions and they have two different answers:
   which prompt and which model, and what came back. Its sibling is the consent
   row that gates it, not a mart.
 
-That split is enforced, not stylistic. ``tests/architecture/test_bi_plane_boundary.py``
+That split is enforced, not stylistic. ``tests/unit/architecture/test_bi_plane_boundary.py``
 derives the set of tables BI may write from the ``bi_``-prefixed tables of
 ``Base.metadata`` and separately asserts that set equals what ``app.bi.models.marts``
 declares; a ``bi_``-named table declared anywhere else breaks the derivation. So

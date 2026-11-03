@@ -60,9 +60,7 @@ def upgrade() -> None:
             "provider IN ('minio', 'aws')",
             name="ck_tenant_storage_provider",
         ),
-        sa.ForeignKeyConstraint(
-            ["organization_id"], ["organizations.id"], ondelete="CASCADE"
-        ),
+        sa.ForeignKeyConstraint(["organization_id"], ["organizations.id"], ondelete="CASCADE"),
         # Unique => indexed: the per-tenant lookup path.
         sa.UniqueConstraint("organization_id", name="uq_tenant_storage_organization_id"),
     )

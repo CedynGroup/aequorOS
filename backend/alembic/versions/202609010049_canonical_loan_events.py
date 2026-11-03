@@ -60,8 +60,7 @@ def upgrade() -> None:
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
         sa.CheckConstraint(
-            "event_type IN ('DISBURSEMENT', 'REPAYMENT', 'WRITE_OFF', 'RECOVERY', "
-            "'RESTRUCTURE')",
+            "event_type IN ('DISBURSEMENT', 'REPAYMENT', 'WRITE_OFF', 'RECOVERY', 'RESTRUCTURE')",
             name="ck_canonical_loan_events_event_type",
         ),
         sa.CheckConstraint(

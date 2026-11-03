@@ -64,8 +64,7 @@ def _set_sdi_modules(modules: list[str]) -> None:
     # app role applies (no organization GUC needed).
     op.execute(
         sa.text(
-            "UPDATE institution_types SET default_modules = :mods "
-            "WHERE institution_class = 'sdi'"
+            "UPDATE institution_types SET default_modules = :mods WHERE institution_class = 'sdi'"
         ).bindparams(sa.bindparam("mods", value=modules, type_=sa.JSON()))
     )
 

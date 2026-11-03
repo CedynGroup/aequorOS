@@ -72,7 +72,7 @@ _UNSAFE_METHODS = frozenset({"POST", "PUT", "PATCH", "DELETE"})
 # Adding an entry here is an explicit, reviewable decision to carve a hole in the
 # absolute "an impersonated session may never mutate" invariant. Before adding
 # one, read the service function and confirm it issues no INSERT/UPDATE/DELETE
-# and no ``commit``. ``tests/api/test_impersonation_boundary.py`` pins this set.
+# and no ``commit``. ``tests/integration/api/test_impersonation_boundary.py`` pins this set.
 IMPERSONATION_READ_ONLY_ROUTES: frozenset[tuple[str, str]] = frozenset(
     {
         # Scenario workbench what-if: ``analysis_workbench.run_analysis`` is
@@ -100,7 +100,7 @@ INTEGRATION_KEY_ROUTES: frozenset[tuple[str, str]] = frozenset(
         # The Power BI Stage B feed. Spelled literally because ``read_bi_feeds``
         # imports THIS module, so importing its ``FEED_INTEGRATION_KEY_ROUTE``
         # here would be a cycle. The duplication is pinned instead: a test in
-        # ``tests/bi/api/test_bi_feeds.py`` asserts this entry equals that constant,
+        # ``tests/integration/bi/api/test_bi_feeds.py`` asserts this entry equals that constant,
         # so the two strings cannot drift apart silently.
         ("GET", "/api/v1/banks/{bank_id}/bi/feeds/{dataset}"),
     }
@@ -282,7 +282,7 @@ def require_role(minimum: str):  # noqa: ANN201 - returns a FastAPI dependency c
 
     # Name the dependency after the role it enforces. The route table is the only
     # place the mutation-guard invariant can be checked wholesale (see
-    # ``tests/api/test_impersonation_boundary.py``), and it classifies routes by
+    # ``tests/integration/api/test_impersonation_boundary.py``), and it classifies routes by
     # dependency name — an anonymous ``_dependency`` closure is indistinguishable
     # from every other factory-produced dependency.
     _dependency.__name__ = f"require_role_{minimum}"
@@ -372,7 +372,7 @@ def get_mutation_tenant_context(
     declares :data:`Tenant` instead never reaches this function. The invariant
     that IS enforced at the boundary — no mutation under impersonation — lives in
     :func:`refuse_impersonated_mutation`; the guard test
-    ``tests/api/test_impersonation_boundary.py`` walks the whole route table to
+    ``tests/integration/api/test_impersonation_boundary.py`` walks the whole route table to
     keep the role side honest.
     """
     # Act-as-examiner impersonation is strictly read-only: an operator viewing a

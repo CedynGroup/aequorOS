@@ -28,9 +28,7 @@ class RunAssessmentResult:
     status: str
 
 
-def get_assessment_or_404(
-    db: Session, organization_id: str, assessment_id: UUID
-) -> RiskAssessment:
+def get_assessment_or_404(db: Session, organization_id: str, assessment_id: UUID) -> RiskAssessment:
     assessment = db.scalar(
         select(RiskAssessment).where(
             RiskAssessment.id == assessment_id,

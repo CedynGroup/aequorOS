@@ -16,7 +16,7 @@ from pathlib import Path
 from pydantic import TypeAdapter
 
 BACKEND = Path(__file__).resolve().parents[1]
-ALLOWLIST = BACKEND / "tests/architecture/test_database_connection_allowlist.json"
+ALLOWLIST = BACKEND / "tests/unit/architecture/test_database_connection_allowlist.json"
 CONSTRUCTORS = frozenset(
     {
         "sqlalchemy.create_engine",

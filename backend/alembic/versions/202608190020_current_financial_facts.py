@@ -55,7 +55,10 @@ def upgrade() -> None:
         ),
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint(
-            "organization_id", "bank_id", "fact_group", "category",
+            "organization_id",
+            "bank_id",
+            "fact_group",
+            "category",
             name="uq_current_financial_facts_bank_group_category",
         ),
     )

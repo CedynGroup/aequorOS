@@ -236,8 +236,7 @@ def upgrade() -> None:
         if rls_state.relrowsecurity:
             op.execute("ALTER TABLE banks DISABLE ROW LEVEL SECURITY")
     op.execute(
-        "UPDATE banks SET institution_type = 'universal_bank' "
-        "WHERE institution_type IS NULL"
+        "UPDATE banks SET institution_type = 'universal_bank' WHERE institution_type IS NULL"
     )
     if rls_state is not None and rls_state.relrowsecurity:
         op.execute("ALTER TABLE banks ENABLE ROW LEVEL SECURITY")

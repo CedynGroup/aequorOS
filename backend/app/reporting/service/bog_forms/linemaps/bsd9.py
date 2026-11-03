@@ -11,7 +11,7 @@ several, in the same Domestic / Foreign columns, so each row binds
 ``bsd9.bsd2_lines`` over the corresponding BSD2 rows (BSD2 is computed first —
 ``depends_on``); BoG's BSD2 arithmetic is what lands here. The mapping keeps
 BSD9 Total Assets == BSD2 item 13 and BSD9 Shareholders' funds == BSD2 item 16
-by construction (proved in tests/reporting/service/bog_forms/test_bsd9.py).
+by construction (proved in tests/integration/reporting/service/bog_forms/test_bsd9.py).
 
 Basis (Guide §1): consolidation only on BSD7B/BSD9. The platform holds the
 parent's books, so every balance-sheet line carries the PARENT'S solo BSD2

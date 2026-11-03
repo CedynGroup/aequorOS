@@ -26,7 +26,7 @@ Design (¶45 "justify all overlays … with challenge/validation"):
   therefore translates to ``{}`` — no stress, which is correct.
 
 The output keys are validated to be a subset of the engines' ``SHOCK_VOCABULARY``
-by ``tests/stress/domain/test_stress_translation.py`` (kept there so this module stays
+by ``tests/unit/stress/domain/test_stress_translation.py`` (kept there so this module stays
 pure — no import of the FastAPI-coupled ``scenario_catalog`` service).
 
 Elasticity provenance (AppI/AppIII risk-driver logic):

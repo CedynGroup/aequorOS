@@ -91,8 +91,8 @@ snapshot panel.
 ## Verify and collect proof
 
 ```sh
-.venv/bin/pytest tests/storage/test_demo_key.py \
-  tests/core/test_bank_field_encryption.py tests/storage/test_key_providers.py -q
+.venv/bin/pytest tests/unit/storage/test_demo_key.py \
+  tests/integration/core/test_bank_field_encryption.py tests/unit/storage/test_key_providers.py -q
 ```
 
 The tests exercise repeated revoke/outage/restore loops across fresh provider

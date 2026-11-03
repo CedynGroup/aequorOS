@@ -328,7 +328,9 @@ def _managed_storage_environment(item: pytest.Item) -> Generator[None]:
     # mocked AWS provisioning tests elsewhere in the tree.
     patches = pytest.MonkeyPatch()
     managed = os.getenv("CI_DATABASE_CENSUS") == "1" or bool(os.getenv("CI_UNIT_REPORT_DIR"))
-    if managed and not item.nodeid.startswith(("tests/storage/", "tests/db/")):
+    if managed and not item.nodeid.startswith(
+        ("tests/integration/storage/", "tests/unit/storage/", "tests/integration/db/")
+    ):
         patches.delenv("S3_ENDPOINT", raising=False)
     try:
         yield

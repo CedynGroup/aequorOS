@@ -20,7 +20,7 @@ later signers' fields fillable. That is why the order is data a package is
 prepared with, not a preference: signing out of order means a later signature
 fills a field an earlier signature's ``/Lock`` already sealed, and pyHanko's diff
 analysis convicts the earlier signature. Verified by execution, not by reading —
-see ``tests/attestation/service/test_attestation_three_signer_chain.py``.
+see ``tests/unit/attestation/service/test_attestation_three_signer_chain.py``.
 
 **Two layouts, not a flag per family.** ``standard`` is every return that exists
 today: two blocks, ``(preparer, approver)``, fixed regardless of what the signing

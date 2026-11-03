@@ -276,7 +276,7 @@ v1_router.include_router(
 # the same order. The commentary engine shipped complete — job type, exclusive
 # ``ai`` lane, handler, model, migration, service package, 105 tests — and with
 # NO ROUTE, so no user could ask for a draft and ``request_commentary`` was
-# called by nobody. ``tests/architecture/test_job_enqueue_reachability.py`` is
+# called by nobody. ``tests/unit/architecture/test_job_enqueue_reachability.py`` is
 # what convicted it and is what keeps this mount honest: a job type whose only
 # enqueue site sits in a function no route reaches fails that guard by design.
 v1_router.include_router(

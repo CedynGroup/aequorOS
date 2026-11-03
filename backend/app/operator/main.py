@@ -6,7 +6,7 @@ A THIRD entrypoint beside ``app.main`` (tenant API) and ``app.worker``:
 
 It mounts ONLY operator routers under ``/operator/v1`` plus an unauthenticated
 ``/operator/health``. It never imports the tenant router, and the tenant app
-never imports this module — ``tests/operator/test_route_isolation.py`` is the
+never imports this module — ``tests/integration/operator/test_route_isolation.py`` is the
 permanent guard on both directions.
 """
 

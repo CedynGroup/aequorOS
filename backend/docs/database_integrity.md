@@ -70,23 +70,23 @@ primary keys.
 
 The executable contracts live in:
 
-- `tests/db/test_bank_organization_integrity.py`: the nine-table ownership cases,
+- `tests/integration/db/test_bank_organization_integrity.py`: the nine-table ownership cases,
   nullable scopes, verification against existing mismatches, and current-head FK parity.
-- `tests/db/test_canonical_bank_integrity.py`: every widened reference, valid
+- `tests/integration/db/test_canonical_bank_integrity.py`: every widened reference, valid
   provenance, lineage scope/null rules, and existing-data backfill/verification.
-- `tests/db/test_loan_event_lineage_integrity.py`: missing/sibling-bank lineage and
+- `tests/integration/db/test_loan_event_lineage_integrity.py`: missing/sibling-bank lineage and
   the original schema omission.
-- `tests/db/test_canonical_migration_structural_parity.py`: every canonical table,
+- `tests/integration/db/test_canonical_migration_structural_parity.py`: every canonical table,
   ingestion batches and lineage, comparing full FK signatures, primary/unique keys
   and declared index presence against Alembic output.
-- `tests/db/test_live_financial_link_integrity.py`: missing/cross-bank/cross-organization
+- `tests/integration/db/test_live_financial_link_integrity.py`: missing/cross-bank/cross-organization
   live links, commit-time supersession refusal, and replacement insertion after retirement.
 
 Organization-bank and canonical-bank verification fixtures migrate to their own
 revision so later guards cannot interfere with testing those earlier upgrades.
 Loan-lineage, structural parity and live-link fixtures migrate to current head.
 Run these with native PostgreSQL 17 via
-`AQS_LOCAL_SERVICES=auto uv run python scripts/local_services.py run --postgres --role-admin -- uv run pytest tests/db/test_*integrity.py tests/db/test_canonical_migration_structural_parity.py`
+`AQS_LOCAL_SERVICES=auto uv run python scripts/local_services.py run --postgres --role-admin -- uv run pytest tests/integration/db/test_*integrity.py tests/integration/db/test_canonical_migration_structural_parity.py`
 from `backend/`; the service wrapper and fixtures isolate the test schemas.
 
 ## Reference JSON shapes and column representations
@@ -109,9 +109,9 @@ types. The whole-root-table
 column type parity test normalizes only the documented JSON/JSONB difference;
 other type/width differences fail. Canonical FK/key/index parity remains intact.
 
-Coverage: `tests/domain/ingestion/test_reference_row_enforcement.py`,
-`tests/data_engine/adapters/test_reference_boundary.py`, adapter end-to-end tests and
-`tests/db/test_column_representation_parity.py`.
+Coverage: `tests/unit/domain/ingestion/test_reference_row_enforcement.py`,
+`tests/unit/data_engine/adapters/test_reference_boundary.py`, adapter end-to-end tests and
+`tests/integration/db/test_column_representation_parity.py`.
 
 ## Measured reverse-lineage indexes (`202610140100`)
 

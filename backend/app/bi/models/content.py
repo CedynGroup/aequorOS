@@ -115,7 +115,7 @@ MEASURE_STATES: tuple[str, ...] = ("personal", "proposed", "bank_certified")
 #: it (``app.models`` stays free of ``app.bi.domain``, the rule
 #: ``app/bi/models/marts.py`` already follows for the target register). A measure is a
 #: figure, so ``text``/``date``/``flag`` — which describe a dimension's values —
-#: are not here. ``tests/bi/models/test_bi_content_models.py`` pins the parity in
+#: are not here. ``tests/unit/bi/models/test_bi_content_models.py`` pins the parity in
 #: both directions.
 MEASURE_VALUE_TYPES: tuple[str, ...] = (
     "amount",

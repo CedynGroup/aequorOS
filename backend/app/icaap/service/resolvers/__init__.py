@@ -11,7 +11,7 @@ Every resolver reads SEALED state for the cycle's exact as-of date — a succeed
 a register digest. None of them reads ``live_metrics`` or the live fact plane:
 those are a monitoring surface the worker rewrites continuously, and a figure in
 a filed report has to be the one that was computed, reviewed and approved.
-``tests/architecture/test_icaap_boundaries.py`` enforces that by import scan.
+``tests/unit/architecture/test_icaap_boundaries.py`` enforces that by import scan.
 
 Values leave here as STRINGS or ``None``. ``None`` renders "Not available"
 everywhere — never 0, which would read as a measured zero.

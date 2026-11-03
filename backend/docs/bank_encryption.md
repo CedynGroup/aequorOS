@@ -321,9 +321,9 @@ version read for later access/retention evidence. Unsupported backends refuse.
 
 No new HTTP route is added, so there is no new route IDOR census entry; resolver
 isolation and exact family authority are exercised directly in
-`tests/storage/test_sealed_documents.py` and
+`tests/integration/storage/test_sealed_documents.py` and
 constraint/RLS/upgrade/downgrade behavior in
-`tests/db/test_sealed_document_objects.py`.
+`tests/integration/db/test_sealed_document_objects.py`.
 
 ### Publication and its callers
 
@@ -390,12 +390,12 @@ their own refusal handling. The retention policy remains owned by
 Re-encryption treats a sealed key as retained: the inventory marks it, and the
 rewrite path refuses it, because rewriting that ciphertext would break the key
 dependency the catalogue records. Writers and readers are exercised in
-`tests/storage/test_sealed_publication.py`, `tests/storage/test_reencryption.py`,
-`tests/icaap/service/test_attachments.py`,
-`tests/icaap/service/test_sealed_by_reference.py`,
-`tests/reporting/service/test_regulatory_reporting_exports.py`,
-`tests/reporting/service/test_package_plane.py` and
-`tests/attestation/service/test_attestation_verify.py`.
+`tests/integration/storage/test_sealed_publication.py`, `tests/integration/storage/test_reencryption.py`,
+`tests/integration/icaap/service/test_attachments.py`,
+`tests/integration/icaap/service/test_sealed_by_reference.py`,
+`tests/integration/reporting/service/test_regulatory_reporting_exports.py`,
+`tests/integration/reporting/service/test_package_plane.py` and
+`tests/integration/attestation/service/test_attestation_verify.py`.
 
 Follow-up slices must inventory/backfill legacy revisions by verified
 context-preserving copy, teach maintenance/key-retirement inventories about stable
@@ -431,14 +431,14 @@ suite. The [synthetic revocation walkthrough](encryption_demo.md) owns the
 file-controlled demo provider's setup and environment restrictions. It is not a
 fallback for an unavailable connected bank-owned key.
 
-Evidence lives in `tests/storage/test_key_providers.py` (local and moto AWS KMS
+Evidence lives in `tests/unit/storage/test_key_providers.py` (local and moto AWS KMS
 conformance, grant denial and outage), `test_bank_encryption.py` (all S3 tiers,
 retained versions, substitution, revocation, downloads and backup recovery),
 `test_key_rotation_concurrency.py` (PostgreSQL readers and concurrent writes),
 `test_bank_key_rollout.py` (optional platform storage, required-key refusal and
 connected-key failures in every environment),
-`tests/operator/test_bank_encryption.py` (staff and bank scoping), and
-`tests/db/test_tenant_rls_completeness.py` (migrated envelope RLS). The HTTP
+`tests/integration/operator/test_bank_encryption.py` (staff and bank scoping), and
+`tests/integration/db/test_tenant_rls_completeness.py` (migrated envelope RLS). The HTTP
 provider contract and its CI service are documented in
 [Local KMS emulator and CI](#local-kms-emulator-and-ci).
 
@@ -473,7 +473,7 @@ Run the provider's HTTP contract from the repository root:
 
 ```sh
 TEST_KMS_ENDPOINT_URL=http://127.0.0.1:18080 mise -C backend exec -- uv run \
-  pytest tests/storage/test_kms_emulator.py -q
+  pytest tests/integration/storage/test_kms_emulator.py -q
 ```
 
 The storage contract job and every dashboard journey CI shard own ephemeral

@@ -1,7 +1,7 @@
 # Citation manifest: `ke/cbk_icaap_gn_2016_11.json`
 
 This file is the source register for the framework above. Every citation in the framework
-JSON must appear in the **Citations** table below; `tests/icaap/domain/test_framework_sources.py`
+JSON must appear in the **Citations** table below; `tests/unit/icaap/domain/test_framework_sources.py`
 parses this file and fails on any citation that is missing, on any row whose document is not
 listed, and on any row nothing cites.
 

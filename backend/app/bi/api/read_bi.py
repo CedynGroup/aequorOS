@@ -23,7 +23,7 @@ consulted in, and it is the order that carries the security properties:
    process — including for the test suite, which pins the flag per test. With
    the flag off every BI route answers 404: the feature is not "forbidden", it
    is not there. The route table still carries the routes, which is what lets
-   the impersonation sweep (``tests/api/test_impersonation_boundary.py``) and
+   the impersonation sweep (``tests/integration/api/test_impersonation_boundary.py``) and
    the cross-tenant sweep see them at all.
 3. **Then the principal.** :func:`require_bi_read` (D-027) admits only an
    interactive tenant human holding a current ``authv``: no machine key, no
@@ -1293,7 +1293,7 @@ def _pack_engine_reach(
 
     A member id the catalogue no longer carries counts towards the total and
     never towards the applicable count, so the pack fails closed and is not
-    served. That is a start-up-level defect — ``tests/bi/domain/test_packs.py``
+    served. That is a start-up-level defect — ``tests/unit/bi/domain/test_packs.py``
     resolves every member of every pack through the catalogue — and withholding
     the dashboard is the right run-time answer to it, rather than a 500 in front
     of a board.

@@ -31,7 +31,7 @@ engine
 The resolver is **pure** — no SQLAlchemy, no FastAPI, no `app.services` import (606 lines).
 `app/policy/service/regulatory_parameters.py` is a thin database adapter over it (`ARCH-2`), and
 the purity is enforced by
-`tests/architecture/test_dependency_boundaries.py::test_the_pure_domain_layer_imports_no_application_state`.
+`tests/unit/architecture/test_dependency_boundaries.py::test_the_pure_domain_layer_imports_no_application_state`.
 
 The resolver keys on jurisdiction → regulator → institution type → regime → return family →
 parameter set → effective date. `resolve_class_value` **requires** a jurisdiction and is
@@ -150,9 +150,9 @@ broken book and a filed return.
 It is now declared **`ceiling`**: the tolerance is a percent of total assets, so a larger
 number admits a more broken book and tightening means smaller. The governed set is pinned at
 26 codes (`test_the_governed_code_set_is_pinned`), and two tests prove the clamp — one pure
-(`tests/policy/domain/test_policy_resolver.py::test_a_board_override_cannot_widen_the_balance_identity_tolerance`)
+(`tests/unit/policy/domain/test_policy_resolver.py::test_a_board_override_cannot_widen_the_balance_identity_tolerance`)
 and one through the seeded control plane for both institution classes
-(`tests/policy/service/test_policy_chain.py::test_a_board_override_cannot_widen_the_filing_tolerance`):
+(`tests/integration/policy/service/test_policy_chain.py::test_a_board_override_cannot_widen_the_filing_tolerance`):
 a board asking for 5.00% against the governed 0.10% is clamped to 0.10% and the attempt is
 recorded as a `ClampRecord`; a board holding itself to 0.02% keeps 0.02%.
 
@@ -356,7 +356,7 @@ nine the audit identified plus eight it missed:
   `le_generation.py:328,1207,1933,2543`, `bog_forms/sources_ext/bsd11.py:301`
 
 All are ORM-side; no migration was needed. The guard suite is
-`backend/tests/policy/service/test_jurisdiction_neutrality.py`.
+`backend/tests/integration/policy/service/test_jurisdiction_neutrality.py`.
 
 Deliberate exceptions, kept literal because they are Ghana-factual content: the BoG return
 artifacts (BSD templates and registry), ORASS/DBK rules, notice citations, and the GHS '000

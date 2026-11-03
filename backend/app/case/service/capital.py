@@ -10,7 +10,7 @@ computed by `app.capital.domain.engine` from `BankFinancialFact` over
 risk-weighted assets, sealed into a `RegulatoryRun`, and filed. An SDI's s.29
 CAR is `app.capital.service.sdi_capital`. Nothing here reads a bank fact, calls a
 regulatory engine, or reaches a return — see `app.case.service.case_plane` for the
-boundary rule and `tests/architecture/test_case_plane_boundary.py` for the
+boundary rule and `tests/unit/architecture/test_case_plane_boundary.py` for the
 guard.
 
 The outputs are therefore labelled "solvency pressure" rather than "capital".

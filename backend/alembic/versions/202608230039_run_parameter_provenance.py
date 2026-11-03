@@ -26,7 +26,7 @@ the hash of every future run, break reproducibility against every existing
 sealed run, and make the hash depend on when a row was last touched. So this
 lands beside the snapshot, never inside it. ``inputs`` is not read or rewritten
 by this migration, and no existing ``input_hash`` moves —
-``tests/services/test_input_hash_determinism.py`` and ``tests/equivalence``
+``tests/integration/services/test_input_hash_determinism.py`` and ``tests/unit/equivalence``
 are the executable proof.
 
 NULL means "minted before this column existed" and is deliberately

@@ -438,9 +438,7 @@ def classify_book(
         )
 
     total_exposure = sum((loan.exposure_ghs for loan in loans), _ZERO)
-    npl_exposure = sum(
-        (bucket.exposure_ghs for bucket in buckets if bucket.non_performing), _ZERO
-    )
+    npl_exposure = sum((bucket.exposure_ghs for bucket in buckets if bucket.non_performing), _ZERO)
     unclassified_exposure = sum(
         (bucket.exposure_ghs for bucket in buckets if bucket.grade == UNCLASSIFIED), _ZERO
     )
@@ -492,9 +490,7 @@ SDI_PARAM_CODES: tuple[str, ...] = (
 )
 
 
-def grid_from_params(
-    institution_class: str, params: Mapping[str, Decimal]
-) -> ClassificationGrid:
+def grid_from_params(institution_class: str, params: Mapping[str, Decimal]) -> ClassificationGrid:
     """Build the class grid from a code → value map of resolved parameters.
 
     ``institution_class`` selects the grid shape; ``params`` supplies every day

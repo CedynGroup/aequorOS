@@ -49,8 +49,8 @@ The BEFORE lists are written out rather than derived from the model constants, a
 already-migrated database on the same constraint after the NEXT kind or check is
 added, and it lets the downgrade restore the historical shape. Parity between the
 constants and the migrated CHECKs is asserted instead, by
-``tests/db/test_bi_migration_structural_parity.py`` and
-``tests/bi/models/test_bi_models.py``.
+``tests/integration/db/test_bi_migration_structural_parity.py`` and
+``tests/unit/bi/models/test_bi_models.py``.
 
 Widening moves no data. NARROWING does, so ``downgrade`` deletes the rows that
 cannot satisfy the older constraints first — and those DELETEs run under

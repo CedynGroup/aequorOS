@@ -51,7 +51,7 @@ import {
  * A ``BiQuery`` with its reporting window left to the reader.
  *
  * Every field of ``BiQuery`` except ``time`` is restated here, and
- * ``tests/domain/bi/test_packs.py`` pins that parity so a new query field
+ * ``tests/unit/bi/domain/test_packs.py`` pins that parity so a new query field
  * cannot land on one and not the other. ``time`` is replaced by ``window``
  * and ``compare``, both closed vocabularies: a pack therefore cannot name a
  * date, which is the one parameter a certified dashboard must take from the

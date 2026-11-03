@@ -25,7 +25,7 @@ else:
 SHARDS = 4
 SCHEMA_SHARDS = 2
 DURATIONS = Path(__file__).with_name("ci_postgres_durations.json")
-BAO_MODULE = "tests/attestation/service/test_attestation_openbao.py"
+BAO_MODULE = "tests/integration/attestation/service/test_attestation_openbao.py"
 
 
 def shard_for(module: str, count: int = SHARDS) -> int:
@@ -138,7 +138,7 @@ def affected_files(root: Path, event: str, base: str, *, worktree: bool = False)
             module = Path(path)
             if (
                 status != "M"
-                or not path.startswith("backend/tests/domain/")
+                or not path.startswith("backend/tests/unit/domain/")
                 or not module.name.startswith("test_")
                 or module.suffix != ".py"
             ):
@@ -175,11 +175,11 @@ def plan(root: Path, event: str, base: str) -> dict[str, object]:
             "include": [
                 {
                     "shard": index,
-                    "minio": (not files or "tests/scripts/test_local_services.py" in files)
+                    "minio": (not files or "tests/e2e/scripts/test_local_services.py" in files)
                     and index
                     == assignments.get(
-                        "tests/scripts/test_local_services.py",
-                        shard_for("tests/scripts/test_local_services.py"),
+                        "tests/e2e/scripts/test_local_services.py",
+                        shard_for("tests/e2e/scripts/test_local_services.py"),
                     ),
                     "openbao": not files
                     and index == assignments.get(BAO_MODULE, shard_for(BAO_MODULE)),
@@ -254,7 +254,7 @@ def verify(directory: Path, files: list[str], suite: str) -> None:
             case
             for case in cases
             if case.get("classname", "").startswith(
-                "tests.attestation.service.test_attestation_openbao"
+                "tests.integration.attestation.service.test_attestation_openbao"
             )
         ]
         if not bao or any(case.find("skipped") is not None for case in bao):

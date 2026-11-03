@@ -137,7 +137,7 @@ MAX_DEPTH: Final = 64
 #: of them into a single query, and a query carries at most this many measures
 #: (``app/bi/schemas/query.py::BI_MAX_MEASURES``); a formula naming more could never
 #: be compiled, so it is cheapest to refuse it here. The two numbers are pinned
-#: equal by ``tests/bi/domain/test_expr.py``.
+#: equal by ``tests/unit/bi/domain/test_expr.py``.
 MAX_MEMBER_REFERENCES: Final = 25
 
 #: The language's own ceiling on ``LAG``'s reach, in periods. It is a STRUCTURAL

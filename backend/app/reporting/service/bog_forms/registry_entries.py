@@ -57,7 +57,7 @@ def weekly_reporting_dates(
 #: three-year average gross income, where the capital engine applies an FX
 #: charge × RWA multiplier and a BIA charge × RWA multiplier. The two are
 #: DIFFERENT BY CONSTRUCTION and their inequality is pinned by
-#: ``tests/reporting/service/bog_forms/test_bsd5.py``. Nothing else is declared, because
+#: ``tests/integration/reporting/service/bog_forms/test_bsd5.py``. Nothing else is declared, because
 #: nothing else is established — a guessed methodology id would be worse than
 #: an absent one.
 _DECLARED_METHODOLOGIES: dict[str, tuple[tuple[str, str], ...]] = {

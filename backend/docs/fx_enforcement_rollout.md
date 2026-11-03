@@ -74,9 +74,9 @@ derivation, or dispatching any module.
 Scheduled jobs use `scheduled-official:{bank_id}:{tick_date}`, while user-requested
 jobs use `official:{bank_id}:{as_of_date}`. Coalescing remains within each source so a
 scheduler tick cannot replace an interactive job's actor or attribution.
-Behavioral coverage lives in `tests/services/test_scheduler.py` and
-`tests/fx/api/test_fx_authorization.py`, `tests/ftp/api/test_ftp_authorization.py`, and
-`tests/forecasting/api/test_forecasting_authorization.py`.
+Behavioral coverage lives in `tests/integration/services/test_scheduler.py` and
+`tests/integration/fx/api/test_fx_authorization.py`, `tests/integration/ftp/api/test_ftp_authorization.py`, and
+`tests/integration/forecasting/api/test_forecasting_authorization.py`.
 
 ## Dashboard access
 

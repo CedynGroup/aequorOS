@@ -6,16 +6,19 @@ from uuid import UUID
 
 import pytest
 
-from tests.icaap.testing.assertions import (
+from tests.support.assertions import TolerancePolicy
+from tests.unit.icaap.testing.assertions import (
     assert_distinct_reviewers as assert_icaap_reviewers,
 )
-from tests.icaap.testing.assertions import assert_frozen_version_unchanged
-from tests.identity.testing.assertions import assert_maker_checker, assert_sealed_approval_unchanged
-from tests.reporting.testing.assertions import (
+from tests.unit.icaap.testing.assertions import assert_frozen_version_unchanged
+from tests.unit.identity.testing.assertions import (
+    assert_maker_checker,
+    assert_sealed_approval_unchanged,
+)
+from tests.unit.reporting.testing.assertions import (
     assert_distinct_reviewers,
     assert_filed_record_unchanged,
 )
-from tests.support.assertions import TolerancePolicy
 
 
 @pytest.mark.parametrize(

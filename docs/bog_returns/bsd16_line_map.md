@@ -308,7 +308,7 @@ _No data cells (empty placeholder tab)._
 
 None once the `atm_operations` register is ingested (2026-08-16). Rows beyond the bank's estate (rows 7 + n … 56 for an estate of n < 50 terminals) stay blank and are listed in the Completion notes as `input_required` — the official grid is simply larger than the estate.
 
-## 5. Critical totals proven by `tests/reporting/service/bog_forms/test_bsd10_11_16_17.py` (structure) and `tests/services/data_gaps/test_atm_operations.py` (data-gap closure)
+## 5. Critical totals proven by `tests/integration/reporting/service/bog_forms/test_bsd10_11_16_17.py` (structure) and `tests/integration/services/data_gaps/test_atm_operations.py` (data-gap closure)
 
 1. every captured ordinal and every blank-grid data cell (252) is declared and bound to a source, no bound cell is a label/formula cell; without a register the form generates 50 mapped / 202 input_required with 0 unmapped cells and no errors;
 2. BoG's own arithmetic over blank inputs: `F7…F56 = D + E = 0` and `F57 = SUM(F7:F56) = 0`;

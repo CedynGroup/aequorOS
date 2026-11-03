@@ -25,7 +25,7 @@ did, and the same bank/period reported two different CARs. The forecast now
 carries both groups end to end, so year-0 CAR/Tier 1/CET1 reconcile with the
 capital run by construction. Like the capital run, Tier 2 carries the bank's
 booked general provisions: a modelled ECL never substitutes for them.
-``tests/equivalence/`` is the executable proof. If you ever need to narrow this
+``tests/unit/equivalence/`` is the executable proof. If you ever need to narrow this
 fact scope again, you are re-opening that finding.
 
 Year ``t`` mechanics (t = 1..years, year 0 = as-of facts):
@@ -134,7 +134,7 @@ FACT_GROUP_CAPITAL_COMPONENT = "capital_component"
 # The two capital fact groups that carry no balance-sheet amount of their own.
 # They are projected (both scale with the loan book) purely so the capital
 # engine sees the SAME input set the capital run gives it — see the module
-# docstring and tests/equivalence/.
+# docstring and tests/unit/equivalence/.
 FACT_GROUP_ECL_EXPOSURE = "ecl_exposure"
 FACT_GROUP_CRM_COLLATERAL = "crm_collateral"
 

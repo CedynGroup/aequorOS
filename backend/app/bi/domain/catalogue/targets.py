@@ -84,7 +84,7 @@ BANK_WIDE_SCOPE = ""
 #: it — ``app/data_engine/domain/ingestion`` is upstream of ``app/bi/domain`` and the register
 #: that feeds the catalogue must not depend on the catalogue that reads it — and
 #: the parity is asserted from the catalogue side, which is the side that may see
-#: both (``tests/bi/domain/test_targets.py``). ``app/bi/models/marts.py::TARGET_VERSIONS``
+#: both (``tests/unit/bi/domain/test_targets.py``). ``app/bi/models/marts.py::TARGET_VERSIONS``
 #: and the mart's ``ck_bi_fact_target_version`` are the third side of the same
 #: vocabulary: a version added here without them is accepted on ingestion and then
 #: refused when the builder tries to store its comparison.

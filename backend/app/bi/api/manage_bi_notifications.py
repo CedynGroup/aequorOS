@@ -35,7 +35,7 @@ recipient ids. It holds no binding id, no permission, no authorization version
 and no rendered figure, because each delivery is authorized and rendered as its
 own recipient at send time. So the route must resolve the AUTHOR's access in
 order to refuse an author who may not ask the question — and must then store
-nothing about that decision. ``tests/bi/api/test_bi_notification_routes.py``
+nothing about that decision. ``tests/integration/bi/api/test_bi_notification_routes.py``
 asserts the stored row's columns against that list.
 
 **A distribution list is a membership disclosure.** Naming who else receives a
@@ -646,7 +646,7 @@ def _require_threshold_pairing(payload: BiAlertUpsert, measure: MeasureDef) -> N
     rather than an integrity error, so the refusal is something a surface can act
     on. The first branch is unreachable while the request model stands; it is
     kept because the database's refusal would be a 500, and it is exercised
-    directly by ``tests/bi/service/test_bi_notification_rules.py``.
+    directly by ``tests/unit/bi/service/test_bi_notification_rules.py``.
 
     The second branch is reachable and is the one the request model cannot make:
     whether the catalogue declares a governed source for this figure at all. A
@@ -1009,7 +1009,7 @@ def _time_zone_name(db: Session, bank: Bank) -> str:
     zone, or one naming a zone this system does not hold, falls back to UTC —
     the only jurisdiction-neutral choice — exactly as
     ``bi/service/subscriptions.py`` does when it decides when to run. The two
-    are pinned together by ``tests/bi/service/test_bi_notification_rules.py``,
+    are pinned together by ``tests/unit/bi/service/test_bi_notification_rules.py``,
     because a surface that displayed one zone while the scan used another would
     be worse than showing none.
     """

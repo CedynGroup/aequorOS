@@ -31,9 +31,7 @@ def upgrade() -> None:
         sa.Column("started_by", sa.String(length=320), nullable=False),
         sa.Column("mode", sa.String(length=16), nullable=False),
         sa.Column("reason", sa.String(), nullable=False),
-        sa.Column(
-            "read_only", sa.Boolean(), server_default=sa.text("true"), nullable=False
-        ),
+        sa.Column("read_only", sa.Boolean(), server_default=sa.text("true"), nullable=False),
         sa.Column("started_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("expires_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("ended_at", sa.DateTime(timezone=True), nullable=True),

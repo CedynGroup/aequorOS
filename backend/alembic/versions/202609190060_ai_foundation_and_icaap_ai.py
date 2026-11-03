@@ -72,8 +72,7 @@ _SUGGESTION_GUARD = (
     "status,completed_at,model_served,fallback_used,request_id,stop_reason,"
     "refusal_category,failure_code,latency_ms,output,output_sha256,"
     "validation_errors,usage,job_id",
-    "completed_at,model_served,request_id,stop_reason,refusal_category,"
-    "output,output_sha256,usage",
+    "completed_at,model_served,request_id,stop_reason,refusal_category,output,output_sha256,usage",
     "status",
     _TERMINAL,
     "",
@@ -142,9 +141,7 @@ def _create_settings() -> None:
         sa.Column("organization_id", sa.String(16), nullable=False),
         sa.Column("enabled", sa.Boolean(), server_default=sa.text("false"), nullable=False),
         sa.Column("enabled_features", sa.JSON(), server_default=sa.text("'[]'"), nullable=False),
-        sa.Column(
-            "descriptor_only", sa.Boolean(), server_default=sa.text("true"), nullable=False
-        ),
+        sa.Column("descriptor_only", sa.Boolean(), server_default=sa.text("true"), nullable=False),
         sa.Column("consent_version", sa.String(40), nullable=True),
         sa.Column("consented_by", sa.Uuid(as_uuid=True), nullable=True),
         sa.Column("consented_at", sa.DateTime(timezone=True), nullable=True),
@@ -211,9 +208,7 @@ def _create_suggestions() -> None:
         ),
         sa.UniqueConstraint("id", "organization_id", name="uq_icaap_ai_suggestions_id_org"),
         sa.CheckConstraint(f"status IN ({_STATUSES})", name="ck_icaap_ai_suggestions_status"),
-        sa.CheckConstraint(
-            f"fact_sheet_mode IN ({_MODES})", name="ck_icaap_ai_suggestions_mode"
-        ),
+        sa.CheckConstraint(f"fact_sheet_mode IN ({_MODES})", name="ck_icaap_ai_suggestions_mode"),
         sa.CheckConstraint(
             "length(fact_sheet_sha256) = 64", name="ck_icaap_ai_suggestions_sheet_sha"
         ),
@@ -267,9 +262,7 @@ def _create_decisions() -> None:
         sa.Column("cycle_id", sa.Uuid(as_uuid=True), nullable=False),
         sa.Column("suggestion_id", sa.Uuid(as_uuid=True), nullable=False),
         sa.Column("decision", sa.String(16), nullable=False),
-        sa.Column(
-            "paragraph_indexes", sa.JSON(), server_default=sa.text("'[]'"), nullable=False
-        ),
+        sa.Column("paragraph_indexes", sa.JSON(), server_default=sa.text("'[]'"), nullable=False),
         sa.Column("inserted_doc_sha256", sa.String(64), nullable=True),
         sa.Column("resulting_working_rev", sa.Integer(), nullable=True),
         sa.Column(
@@ -289,9 +282,7 @@ def _create_decisions() -> None:
             f"decision IN ({_DECISION_KINDS})", name="ck_icaap_ai_decisions_decision"
         ),
     )
-    op.create_index(
-        "ix_icaap_ai_decisions_org_cycle", _DECISIONS, ["organization_id", "cycle_id"]
-    )
+    op.create_index("ix_icaap_ai_decisions_org_cycle", _DECISIONS, ["organization_id", "cycle_id"])
 
 
 def upgrade() -> None:

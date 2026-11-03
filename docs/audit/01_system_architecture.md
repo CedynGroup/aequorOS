@@ -60,7 +60,7 @@ against `app/domain/`, `app/services/regulatory_*.py` and `app/models/`.
 The separation is enforced by an AST-based closure rule over the whole of `app/`, not by a
 hand-kept list of forbidden files:
 
-- `tests/architecture/test_case_plane_boundary.py` — only the modules named in
+- `tests/unit/architecture/test_case_plane_boundary.py` — only the modules named in
   `CASE_PLANE_OWNERS` may reference a case-plane model
   (`test_only_the_case_plane_itself_references_a_case_plane_model`), the owner list must
   name modules that exist (`test_the_case_plane_owner_list_is_exact`), the reverse
@@ -77,7 +77,7 @@ hand-kept list of forbidden files:
   (`test_naming_a_forbidden_symbol_in_a_string_is_not_a_dependency`) — this matters
   because `app/domain/authority/registry.py` names the case plane in order to forbid it.
 
-`tests/architecture/test_dependency_boundaries.py` adds three further guards (`ARCH-5`):
+`tests/unit/architecture/test_dependency_boundaries.py` adds three further guards (`ARCH-5`):
 regulatory reporting never reads a case `CalculationRun`; the official bank run never reads
 case financial records; the pure domain layer imports no application state — plus
 `test_the_boundary_scanner_catches_a_deliberate_violation`.
@@ -119,7 +119,7 @@ The health guards expose an unusable claim credential before jobs strand:
   `_overdue_job_count`.
 - Migration `202608220030` persists `worker_heartbeats`; `GET /operator/v1/worker-health`
   classifies staleness against `WORKER_HEARTBEAT_STALE_SECONDS`.
-- Evidence: `tests/test_worker.py`, `tests/test_health.py`.
+- Evidence: `tests/unit/test_worker.py`, `tests/unit/test_health.py`.
 
 ---
 
@@ -131,7 +131,7 @@ The health guards expose an unusable claim credential before jobs strand:
 
 Storage readiness now calls `StorageClient.health_check()` rather than testing whether the
 S3 environment variables are non-empty (`app/api/health.py::_storage_health`, `P0-17`).
-Healthy, unhealthy and exception paths are covered by `tests/test_health.py`.
+Healthy, unhealthy and exception paths are covered by `tests/unit/test_health.py`.
 
 ---
 

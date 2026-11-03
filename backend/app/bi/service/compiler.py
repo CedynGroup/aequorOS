@@ -7,7 +7,7 @@ statement text contains nothing the client sent — not a member id, not a
 filter value, not a sort key. Column aliases are positional (``k0``, ``m1``),
 so a compiled statement is the same shape whoever asks. There is no ``text()``,
 no ``literal_column`` and no string assembly anywhere in this package
-(``tests/architecture/test_bi_compiler_injection.py``); the two constant
+(``tests/unit/architecture/test_bi_compiler_injection.py``); the two constant
 settings statements the executor issues live in ``execution.py`` and are
 allow-listed there by name.
 
@@ -352,7 +352,7 @@ class _Window:
 #: The one state in which a calculated measure belongs to the INSTITUTION rather
 #: than to one person, and therefore the only one the compiler will evaluate. The
 #: value is pinned against ``app/bi/models/content.py``'s own vocabulary by
-#: ``tests/bi/service/test_compiler_calculated.py``.
+#: ``tests/integration/bi/service/test_compiler_calculated.py``.
 _CERTIFIED_STATE = "bank_certified"
 
 
