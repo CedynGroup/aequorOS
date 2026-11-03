@@ -3,10 +3,10 @@
 Revision ID: 202608070039
 Revises: 202608070038
 
-Widens ``ck_users_role`` to admit ``'examiner'`` — the supervisory read-only
-role: it sits between analyst and viewer in the privilege ladder so it
-clears every viewer-gated read (including the examiner surfaces) while every
-mutation gate (analyst and above) excludes it.
+Widens ``ck_users_role`` to admit ``'examiner'`` — the legacy supervisory
+read-only role between analyst and viewer in the operational privilege ladder.
+Current examiner evidence authority is owned by
+``backend/docs/examiner_evidence_enforcement_rollout.md``.
 """
 
 from __future__ import annotations

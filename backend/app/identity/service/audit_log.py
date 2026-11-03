@@ -6,7 +6,7 @@ import base64
 import binascii
 from contextlib import suppress
 from datetime import UTC, datetime
-from typing import Literal, cast
+from typing import Any, Literal, cast
 from uuid import UUID
 
 from fastapi import HTTPException
@@ -15,6 +15,7 @@ from sqlalchemy import (
     JSON,
     Boolean,
     DateTime,
+    Select,
     String,
     Uuid,
     and_,
@@ -168,22 +169,14 @@ def _validate_range(filters: Filters) -> None:
         raise HTTPException(422, "Audit range end must be after its start.")
 
 
-def read_log(  # noqa: PLR0913 - pagination and filters are independent inputs
-    db: Session,
-    ctx: TenantContext,
-    bank_id: str,
-    filters: Filters,
-    *,
-    cursor: str | None = None,
-    limit: int = 100,
-) -> AuditLogRead:
-    bank = require_access(db, ctx, bank_id, Permission.VIEW)
-    for value in (filters.start, filters.end):
-        if value is not None and value.tzinfo is None:
-            raise HTTPException(422, "Audit dates must include a timezone.")
-    _validate_range(filters)
-    if db.get_bind().dialect.name == "postgresql":
-        db.execute(text("SELECT set_config('app.audit_bank_id', :bank, true)"), {"bank": bank.id})
+def _attributable_tenant_events(db: Session, ctx: TenantContext, bank: Bank) -> Select[Any]:
+    """The tenant audit stream attributable to this ONE institution.
+
+    Extracted so the examiner evidence bundle counts exactly the events this
+    reader could read in the audit log, rather than every event in the
+    organization: two banks of one organization share a tenant, and a
+    bank-scoped auditor must not learn a sibling's filing volume.
+    """
     event = AuditEvent.__table__
     owned_bank = literal_column(
         subject_bank_sql(
@@ -213,7 +206,7 @@ def read_log(  # noqa: PLR0913 - pagination and filters are independent inputs
         ),
         Boolean,
     ).params(audit_bank=bank.id)
-    tenant_events = select(
+    return select(
         event.c.id,
         literal("audit_events").label("stream"),
         event.c.actor_user_id.cast(String).label("actor"),
@@ -260,6 +253,11 @@ def read_log(  # noqa: PLR0913 - pagination and filters are independent inputs
             ),
         ),
     )
+
+
+def _attributable_staff_events(db: Session, ctx: TenantContext, bank: Bank) -> Select[Any]:
+    """The staff audit stream attributable to this ONE institution."""
+
     staff_details = (
         sql_cast(_STAFF.c.detail, JSONB)
         if db.get_bind().dialect.name == "postgresql"
@@ -275,7 +273,7 @@ def read_log(  # noqa: PLR0913 - pagination and filters are independent inputs
     )
     batch_target = _json_text(_STAFF.c.detail, "batch_id")
     staff_bank = _json_text(_STAFF.c.detail, "bank_id")
-    staff_events = select(
+    return select(
         _STAFF.c.id,
         literal("operator_audit_log").label("stream"),
         _STAFF.c.operator_email.label("actor"),
@@ -307,6 +305,39 @@ def read_log(  # noqa: PLR0913 - pagination and filters are independent inputs
             _json_text(_STAFF.c.detail, "after", "bank_id") == bank.id,
         ),
     )
+
+
+def count_attributable_events(db: Session, ctx: TenantContext, bank: Bank) -> int:
+    """How many retained tenant audit events belong to THIS institution.
+
+    The evidence bundle's ``audit_event_count``. It applies the same
+    institution-attribution predicate the audit log read applies to the tenant
+    stream, so a bundle never reports a sibling institution's volume. Staff
+    actions are the separate operator stream and are not counted here.
+    """
+
+    events = _attributable_tenant_events(db, ctx, bank).subquery()
+    return int(db.scalar(select(func.count()).select_from(events)) or 0)
+
+
+def read_log(  # noqa: PLR0913 - pagination and filters are independent inputs
+    db: Session,
+    ctx: TenantContext,
+    bank_id: str,
+    filters: Filters,
+    *,
+    cursor: str | None = None,
+    limit: int = 100,
+) -> AuditLogRead:
+    bank = require_access(db, ctx, bank_id, Permission.VIEW)
+    for value in (filters.start, filters.end):
+        if value is not None and value.tzinfo is None:
+            raise HTTPException(422, "Audit dates must include a timezone.")
+    _validate_range(filters)
+    if db.get_bind().dialect.name == "postgresql":
+        db.execute(text("SELECT set_config('app.audit_bank_id', :bank, true)"), {"bank": bank.id})
+    tenant_events = _attributable_tenant_events(db, ctx, bank)
+    staff_events = _attributable_staff_events(db, ctx, bank)
     feed = tenant_events.union_all(staff_events).subquery()
     query = select(feed)
     if filters.start is not None:

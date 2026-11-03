@@ -124,6 +124,12 @@ export interface ExaminerDocumentationRead {
    * @memberof ExaminerDocumentationRead
    */
   reportingPeriodId: string;
+  /**
+   *
+   * @type {Array<string>}
+   * @memberof ExaminerDocumentationRead
+   */
+  withheldSources?: Array<string>;
 }
 
 /**
@@ -195,6 +201,8 @@ export function ExaminerDocumentationReadFromJSONTyped(
     periodLabel: json["period_label"],
     registerEndpoints: json["register_endpoints"],
     reportingPeriodId: json["reporting_period_id"],
+    withheldSources:
+      json["withheld_sources"] == null ? undefined : json["withheld_sources"],
   };
 }
 
@@ -231,5 +239,6 @@ export function ExaminerDocumentationReadToJSONTyped(
     period_label: value["periodLabel"],
     register_endpoints: value["registerEndpoints"],
     reporting_period_id: value["reportingPeriodId"],
+    withheld_sources: value["withheldSources"],
   };
 }

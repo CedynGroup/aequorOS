@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from uuid import uuid4
 
 from sqlalchemy.orm import Session
@@ -18,12 +19,31 @@ from app.models import Bank, Organization, User
 from app.policy.service.institution_types import FALLBACK_TYPE_CODE
 from scripts.authorization_access_impact import (
     INSTITUTION_MODULES,
+    UserAccess,
     build_report,
     render_table,
 )
 
 ORG = "OR-IMPCT001"
 BANK = "BK-IMPCT001"
+
+
+def _rendered_cells(rows: list[UserAccess]) -> dict[str, dict[str, str]]:
+    """The rendered table parsed back into header-keyed cells per email.
+
+    A column-level assertion is what the operator actually reads: a table-wide
+    containment check passes through an unrelated column (the auditor email also
+    appears under ``product view``), so it cannot prove the column it names.
+    """
+    lines = render_table(rows).splitlines()
+    header = re.split(r"\s{2,}", lines[0].strip())
+    parsed: dict[str, dict[str, str]] = {}
+    for line in lines[1:]:
+        if set(line.strip()) == {"-"}:
+            continue
+        parsed_cell = dict(zip(header, re.split(r"\s{2,}", line.strip()), strict=True))
+        parsed[parsed_cell["email"]] = parsed_cell
+    return parsed
 
 
 def _user(db: Session, email: str, *, role: str = "viewer", **overrides) -> User:
@@ -191,3 +211,78 @@ def test_the_report_names_who_may_transmit_a_return(db_session: Session) -> None
     assert rows["checker@impact.example"].filing_institutions == []
     assert rows["filer@impact.example"].filing_institutions == [BANK]
     assert BANK in render_table(list(rows.values()))
+
+
+def test_the_report_names_who_may_read_examiner_evidence(db_session: Session) -> None:
+    """The examiner cutover's gate (issue 180): who keeps the evidence bundle.
+
+    The column is the whole-institution AUDIT/restricted `view` sentence, and
+    only that sentence: a complete Liquidity grant, a confidential Audit grant
+    and account administration all leave it empty, because none of them is the
+    authority the bundle's entry gate asks for.
+    """
+    db_session.add(Organization(id=ORG, name="Examiner impact"))
+    db_session.add(
+        Bank(
+            id=BANK,
+            organization_id=ORG,
+            name="Impact Bank",
+            short_name="Impact",
+            currency="GHS",
+            jurisdiction_code="GH",
+            license_type="universal_bank",
+            institution_type=FALLBACK_TYPE_CODE,
+        )
+    )
+    auditor = _user(db_session, "auditor@impact.example")
+    confidential = _user(db_session, "confidential@impact.example")
+    liquidity_only = _user(db_session, "liquidity@impact.example", role="analyst")
+    account_admin = _user(db_session, "admin@impact.example", role="account_admin")
+    db_session.commit()
+
+    _grant(
+        db_session,
+        auditor,
+        RoleBundle.AUDITOR,
+        institution_scope=InstitutionScope.INSTITUTION,
+        institution_id=BANK,
+        module_scope=ModuleScope.AUDIT,
+        sensitivity_scope=SensitivityScope.RESTRICTED,
+    )
+    _grant(
+        db_session,
+        confidential,
+        RoleBundle.AUDITOR,
+        institution_scope=InstitutionScope.INSTITUTION,
+        institution_id=BANK,
+        module_scope=ModuleScope.AUDIT,
+        sensitivity_scope=SensitivityScope.CONFIDENTIAL,
+    )
+    _grant(
+        db_session,
+        liquidity_only,
+        RoleBundle.ANALYST,
+        institution_scope=InstitutionScope.INSTITUTION,
+        institution_id=BANK,
+        module_scope=ModuleScope.LIQUIDITY,
+        sensitivity_scope=SensitivityScope.CONFIDENTIAL,
+    )
+    _grant(
+        db_session,
+        account_admin,
+        RoleBundle.ACCOUNT_ADMIN,
+        module_scope=ModuleScope.AUDIT,
+        sensitivity_scope=SensitivityScope.RESTRICTED,
+    )
+    db_session.commit()
+
+    rows = {row.email: row for row in build_report(db_session, organization_id=ORG)}
+    assert rows["auditor@impact.example"].examiner_evidence == [BANK]
+    assert rows["confidential@impact.example"].examiner_evidence == []
+    assert rows["liquidity@impact.example"].examiner_evidence == []
+    assert rows["admin@impact.example"].examiner_evidence == []
+    cells = _rendered_cells(list(rows.values()))
+    assert cells["auditor@impact.example"]["examiner"] == BANK
+    assert cells["confidential@impact.example"]["examiner"] == "-"
+    assert cells["liquidity@impact.example"]["examiner"] == "-"
+    assert cells["admin@impact.example"]["examiner"] == "-"
