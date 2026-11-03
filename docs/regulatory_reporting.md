@@ -338,7 +338,10 @@ listReportingObligations (calendar; `horizon_months` 1–24, optional `limit` 1�
 listReturnAnchors (per-return reporting dates + data coverage), listRegulatoryPackages,
 createRegulatoryPackage (generate),
 getRegulatoryPackage, validateRegulatoryPackage, requestPackageApproval, decidePackageApproval,
-exportRegulatoryPackage (kind → artifact download), submitRegulatoryPackage (channel),
+exportRegulatoryPackage (kind → artifact download; REG/restricted `export`),
+downloadRegulatoryArtifact / downloadRegulatoryArtifactVersion / downloadEmailFallbackEml
+and getEmailFallbackInstructions (also `export`, never merely `view`),
+submitRegulatoryPackage (channel),
 listSubmissionEvents, listReturnTemplates (registry + fidelity + instrument disclosure;
 optional `bank_id` resolves governed commencement and filters hidden return families), get/putChannelConfig
 (credentials write-only). Conventions: manage_live_engine.py patterns, tenant 404s, audit events.
