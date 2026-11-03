@@ -82,8 +82,7 @@ sees neither.
 - A foreign or unknown institution resolves `404` before any authority decision
   (`resolve_tenant_bank`), unchanged from every other bank route.
 - Nothing in the cutover mutates. There is no write path, no grant creation, and
-  no machine entry point: the surfaces are read-only by construction and the
-  tests assert no binding, run, or event is written.
+  no machine entry point: the surfaces are read-only by construction.
 
 ### Disclosed withholding
 
@@ -190,7 +189,7 @@ requires a code change to correct — only an approved binding.
   (`tests/reporting/testing/authorization_matrix.py`) over complete, partial,
   irrelevant, sibling-scoped and inactive human binding sets, including an
   `ALL`/`ALL` row and an empty set. Each example runs in a rolled-back savepoint
-  and asserts the surfaces wrote nothing.
+  and asserts that binding and run counts remain unchanged by the requests.
 - `tests/architecture/test_examiner_authorization.py` pins the three-route
   census and each route's dependency set: exactly one
   `require_examiner_evidence`, `resolve_tenant_bank`, no mutation-context
