@@ -448,6 +448,43 @@ def test_documentation_package_filters_every_embedded_source(
     )
 
 
+def test_credit_registers_require_restricted_not_confidential(
+    db_client: TestClient, db_session: Session
+) -> None:
+    """The examiner's Credit register source uses the register route's sentence.
+
+    The four credit registers became CREDIT / ``restricted`` / ``view`` in the
+    #182 remainder. The bundle cites two of them, so its source map must use the
+    same sensitivity: a CREDIT/``confidential`` row is a different sentence and
+    leaves them withheld rather than showing a register the reader cannot open.
+    """
+
+    grant(db_session)  # the AUDIT/restricted entry sentence
+    grant(
+        db_session,
+        module=ModuleScope.CREDIT,
+        sensitivity=SensitivityScope.CONFIDENTIAL,
+    )
+    confidential = documentation(db_client, db_session)
+    assert all("ecl-assumptions" not in path for path in confidential.register_endpoints)
+    assert all("crm-haircuts" not in path for path in confidential.register_endpoints)
+    assert {"register:ecl-assumptions", "register:crm-haircuts"} <= set(
+        confidential.withheld_sources
+    )
+
+    grant(
+        db_session,
+        module=ModuleScope.CREDIT,
+        sensitivity=SensitivityScope.RESTRICTED,
+    )
+    restricted = documentation(db_client, db_session)
+    assert any(path.endswith("/ecl-assumptions") for path in restricted.register_endpoints)
+    assert any(path.endswith("/crm-haircuts") for path in restricted.register_endpoints)
+    assert {"register:ecl-assumptions", "register:crm-haircuts"}.isdisjoint(
+        restricted.withheld_sources
+    )
+
+
 def test_auditor_and_viewer_bundles_are_equivalent_at_the_permission_level(
     db_client: TestClient, db_session: Session
 ) -> None:

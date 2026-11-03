@@ -2484,7 +2484,7 @@
   "reportUnusedFunction": 1
  },
  "tests.api.test_credit_route_authorization": {
-  "reportAny": 60,
+  "reportAny": 38,
   "reportUnusedFunction": 1
  },
  "tests.api.test_cross_tenant_bank_routes": {

@@ -52,8 +52,8 @@ SOURCE_REGISTERS: Final[tuple[tuple[str, Module, Sensitivity], ...]] = (
     ("liquidity-thresholds", Module.LIQUIDITY, Sensitivity.CONFIDENTIAL),
     ("liquidity-haircuts", Module.LIQUIDITY, Sensitivity.CONFIDENTIAL),
     ("liquidity/ewis", Module.LIQUIDITY, Sensitivity.CONFIDENTIAL),
-    ("ecl-assumptions", Module.CREDIT, Sensitivity.CONFIDENTIAL),
-    ("crm-haircuts", Module.CREDIT, Sensitivity.CONFIDENTIAL),
+    ("ecl-assumptions", Module.CREDIT, Sensitivity.RESTRICTED),
+    ("crm-haircuts", Module.CREDIT, Sensitivity.RESTRICTED),
     ("capital-plan", Module.CAPITAL, Sensitivity.CONFIDENTIAL),
 )
 

@@ -93,18 +93,16 @@ def test_support_register_reads_hide_named_buckets_without_mutating_limits(
     assert ConcentrationLimitRegisterRead.model_validate_json(normal.content) == expected
     token = impersonation._impersonation_token(ORG_1)  # pyright: ignore[reportPrivateUsage]
     staff = db_client.get(url, headers={"Authorization": f"Bearer {token}"})
-    assert staff.status_code == 200, staff.text
-    assert TypeAdapter(dict[str, str]).validate_json(staff.headers[HEADER]) == {
-        SAMPLE_BANK_ID: "support"
-    }
-    assert staff.headers["Cache-Control"] == "no-store"
+    # An act-as-examiner session is not a credit reader: the exact CREDIT
+    # sentence has no impersonated principal, so the support read is refused
+    # before the register is loaded (credit_enforcement_rollout.md §Phase 5).
+    assert staff.status_code == 403, staff.text
     for name in ("Acme", "Private Holdings", "Private Borrower"):
         assert name not in staff.text
     masked = expected.model_copy(deep=True)
     for limit in masked.limits:
         if limit.bucket_key in ("cp:Acme", "group:Private Holdings", "Private Borrower"):
             limit.bucket_key = LOCKED_TEXT
-    assert ConcentrationLimitRegisterRead.model_validate_json(staff.content) == masked
     db_session.info[SESSION_SUPPORT] = True
     assert (
         credit_params.get_concentration_limit_register(
