@@ -3744,6 +3744,7 @@
     "tests/architecture/test_route_mounting.py::test_the_subject_is_the_whole_application_and_not_a_handful": "unit",
     "tests/architecture/test_secret_scan_scope.py::test_a_pull_request_scans_only_its_own_commits": "unit",
     "tests/architecture/test_secret_scan_scope.py::test_a_merge_checkout_scans_the_pull_request_and_no_newer_base_commit": "unit",
+    "tests/architecture/test_secret_scan_scope.py::test_a_merge_resolution_credential_is_scanned_without_base_changes": "unit",
     "tests/architecture/test_secret_scan_scope.py::test_each_range_scan_runs_only_for_its_own_event": "unit",
     "tests/architecture/test_test_database_guard.py::test_guard_accepts_support_layer_and_unrelated_connect_calls": "unit",
     "tests/architecture/test_test_database_guard.py::test_guard_counts_only_bound_constructors[\\n            def direct():\\n                def nested():\\n                    make()\\n                from sqlalchemy.orm import sessionmaker as make\\n            from sqlalchemy.orm import sessionmaker\\n            -1]": "unit",

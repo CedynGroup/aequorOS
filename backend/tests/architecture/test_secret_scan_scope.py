@@ -71,7 +71,9 @@ def _scan(name: str, root: Path, tmp_path: Path, **event: str) -> list[str]:
     binary.mkdir(exist_ok=True)
     calls = tmp_path / "docker-calls.txt"
     stub = binary / "docker"
-    _ = stub.write_text(f'#!/bin/sh\nprintf "%s\\n" "$*" >> "{calls}"\n', encoding="utf-8")
+    _ = stub.write_text(
+        f'#!/bin/sh\nprintf "%s\\0" "$@" >> {shlex.quote(str(calls))}\n', encoding="utf-8"
+    )
     stub.chmod(0o755)
     script = cast(str, _steps()[name]["run"])
     completed = subprocess.run(
@@ -89,9 +91,9 @@ def _scan(name: str, root: Path, tmp_path: Path, **event: str) -> list[str]:
         check=False,
     )
     assert completed.returncode == 0, completed.stdout + completed.stderr
-    recorded = [line for line in calls.read_text(encoding="utf-8").splitlines() if line]
-    assert len(recorded) == 1, recorded
-    return shlex.split(recorded[0])
+    recorded = calls.read_bytes().split(b"\0")
+    assert recorded[-1] == b"", recorded
+    return [argument.decode() for argument in recorded[:-1]]
 
 
 def _log_opts(arguments: list[str]) -> str:
@@ -101,7 +103,11 @@ def _log_opts(arguments: list[str]) -> str:
 
 
 def _scanned(root: Path, log_opts: str) -> list[str]:
-    return _git(root, "rev-list", log_opts).split()
+    return _git(root, "log", *shlex.split(log_opts), "--format=%H", "--no-patch").split()
+
+
+def _patches(root: Path, log_opts: str) -> str:
+    return _git(root, "log", "-p", "-U0", *shlex.split(log_opts))
 
 
 def test_a_pull_request_scans_only_its_own_commits(repository: Path, tmp_path: Path) -> None:
@@ -131,12 +137,51 @@ def test_a_merge_checkout_scans_the_pull_request_and_no_newer_base_commit(
     _ = _git(repository, "merge", "-q", "--no-ff", "-m", "merge pull request", "feature")
     merge = _git(repository, "rev-parse", "HEAD")
 
-    log_opts = _log_opts(
-        _scan(PULL_REQUEST_STEP, repository, tmp_path, BASE_SHA=base)
-    )
+    log_opts = _log_opts(_scan(PULL_REQUEST_STEP, repository, tmp_path, BASE_SHA=base))
 
     assert _scanned(repository, log_opts) == [merge, second, first]
     assert base not in _scanned(repository, log_opts)
+    patches = _patches(repository, log_opts)
+    assert "+FIRST = 1" in patches
+    assert "+SECOND = 2" in patches
+    assert "MERGED = 2" not in patches
+
+
+def test_a_merge_resolution_credential_is_scanned_without_base_changes(
+    repository: Path, tmp_path: Path
+) -> None:
+    credential = "ghp_" + "a1B2c3D4e5F6g7H8i9J0" * 2
+    base_credential = "ghp_" + "k1L2m3N4o5P6q7R8s9T0" * 2
+    _ = _git(repository, "checkout", "-q", "-b", "feature")
+    feature = _commit(repository, "reviewed.py", "BASE = 2\n", "feature edit")
+    _ = _git(repository, "checkout", "-q", "main")
+    _ = _commit(repository, "base_only.py", f'TOKEN = "{base_credential}"\n', "base credential")
+    _ = _commit(repository, "reviewed.py", "BASE = 3\n", "conflicting base edit")
+    _ = _git(repository, "checkout", "-q", "feature")
+    conflict = subprocess.run(
+        ["git", "-C", str(repository), "merge", "--no-ff", "main"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert conflict.returncode == 1, conflict.stdout + conflict.stderr
+    resolution = _commit(
+        repository, "reviewed.py", f'BASE = 4\nTOKEN = "{credential}"\n', "resolve conflict"
+    )
+    deletion = _commit(repository, "reviewed.py", "BASE = 4\n", "remove credential")
+    _ = _git(repository, "checkout", "-q", "main")
+    base = _commit(repository, "newer_base.py", "UNRELATED = 1\n", "newer base edit")
+    _ = _git(repository, "merge", "-q", "--no-ff", "-m", "merge pull request", "feature")
+    checkout = _git(repository, "rev-parse", "HEAD")
+
+    log_opts = _log_opts(_scan(PULL_REQUEST_STEP, repository, tmp_path, BASE_SHA=base))
+    patches = _patches(repository, log_opts)
+
+    assert set(_scanned(repository, log_opts)) == {checkout, deletion, resolution, feature}
+    assert f'+TOKEN = "{credential}"' in patches
+    assert base_credential not in patches
+    assert "UNRELATED = 1" not in patches
+    assert credential not in _git(repository, "show", "HEAD:reviewed.py")
 
 
 def test_each_range_scan_runs_only_for_its_own_event() -> None:
