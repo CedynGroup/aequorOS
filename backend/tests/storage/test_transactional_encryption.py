@@ -20,6 +20,7 @@ from app.core.key_management import registry
 from app.core.key_management.local import LocalKeyProvider
 from app.core.key_management.models import ObjectKeyEnvelope
 from app.core.key_management.types import KeyReference, KeyStatus, KeyUnavailableError
+from app.core.tenancy import TenantContext
 from app.data_engine.api import upload_seam
 from app.data_engine.domain.ingestion.contracts import EntityMapping, MappingConfig
 from app.data_engine.models.canonical import CanonicalCounterparty
@@ -36,12 +37,14 @@ from app.storage import encryption
 from app.storage.client import StorageError, StorageLocation
 from app.storage.config import StorageEngineSettings
 from app.storage.encryption import ObjectEncryption
+from app.storage.models import SealedDocumentObject
 from app.storage.s3_compatible import S3CompatibleStorageClient
 from tests.core.test_bank_field_encryption import AS_OF, BANK_A, CTX, NAME, counterparty
 from tests.storage.contract import metadata_for
 from tests.storage.test_bank_encryption import KEY, NEXT_KEY, SLUG, BankStorage, bank_storage
 from tests.support.helpers import ORG_1, USER_1
 from tests.support.key_concurrency import assert_blocked, backend_pid
+from tests.support.sealed_documents import published_bytes
 
 __all__ = ["bank_storage"]
 pytestmark = pytest.mark.committing_db
@@ -254,7 +257,7 @@ def _register_sibling(db_session: Session, providers: registry.ProviderFactory) 
         for operation in ("ingestion", "push", "export", "attachment")
     ],
 )
-def test_transactional_storage_drains_admitted_writer_and_uses_rotated_version(
+def test_transactional_storage_drains_admitted_writer_and_uses_rotated_version(  # noqa: PLR0915 - exercise every writer across rotation
     bank_storage: BankStorage,
     db_session: Session,
     monkeypatch: pytest.MonkeyPatch,
@@ -330,9 +333,23 @@ def test_transactional_storage_drains_admitted_writer_and_uses_rotated_version(
     ]
     assert encrypted_objects
     for descriptor in encrypted_objects:
-        _, body = storage.read(descriptor.location, descriptor.version_id)
-        with body:
-            assert body.read()
+        document = db_session.scalar(
+            select(SealedDocumentObject).where(
+                SealedDocumentObject.organization_id == ORG_1,
+                SealedDocumentObject.bank_id == BANK_A,
+                SealedDocumentObject.storage_slug == SLUG,
+                SealedDocumentObject.storage_tier == descriptor.location.tier,
+                SealedDocumentObject.physical_key == descriptor.location.object_path,
+            )
+        )
+        if document is not None:
+            assert published_bytes(
+                db_session, storage, slug=SLUG, context_path=document.context_path
+            )
+        else:
+            _, body = storage.read(descriptor.location, descriptor.version_id)
+            with body:
+                assert body.read()
 
 
 def test_bank_key_detection_uses_the_unit_of_work_session(
@@ -546,7 +563,11 @@ def test_package_download_siblings_wait_for_rotation(
         waiter.set_result(backend_pid(db_session))
         loaded.set()
         assert rotating.wait(10)
-        return deps.PackageAccess(ctx=CTX, bank=institution, package=row)
+        return deps.PackageAccess(
+            ctx=TenantContext(ORG_1, USER_1, authorization_version=1),
+            bank=institution,
+            package=row,
+        )
 
     app.dependency_overrides[deps.require_package_view] = package_access
 

@@ -18,7 +18,7 @@ from app.icaap.schemas.workspace import (
 )
 from app.icaap.service import attachments
 from app.schemas.common import ErrorResponse
-from app.storage import StorageClient, StorageLocation, StorageValidationError
+from app.storage import StorageClient, StorageValidationError
 from app.storage.config import StorageRetiredError
 from app.storage.factory import get_storage_client
 
@@ -130,13 +130,8 @@ def download_icaap_attachment(  # noqa: PLR0913 - the addressed file is five pat
     access: IcaapView,
     storage: IcaapStorage,
 ) -> StreamingResponse:
-    storage = storage.for_session(db)
     _ = bank_id
-    row, slug = attachments.prepare_download(db, access, cycle_id, attachment_id)
-    _object, stream = storage.read(
-        StorageLocation(slug, row.storage_tier, row.object_path),  # pyright: ignore[reportArgumentType]
-        row.storage_version_id,
-    )
+    row, stream = attachments.read_attachment(db, access, cycle_id, attachment_id, storage)
     return StreamingResponse(
         stream,
         media_type=row.media_type,

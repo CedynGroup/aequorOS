@@ -46,6 +46,7 @@ from tests.fixtures.canonical_bank_fixture import (
     materialize_canonical_test_book,
 )
 from tests.support.inmemory_storage import InMemoryStorageClient
+from tests.support.sealed_documents import published_bytes
 
 MAKER = TenantContext(
     organization_id=DEMO_ORG_ID, actor_user_id=DEMO_USER_ID, authorization_version=1
@@ -232,12 +233,7 @@ def test_stress_pack_exports_to_xlsx(db_session: Session, storage: InMemoryStora
     artifact = export_package(db_session, MAKER, package, "xlsx")
     slug = db_session.scalar(select(Bank.storage_slug).where(Bank.id == SAMPLE_BANK_ID))
     assert slug
-    payload = None
-    for obj in storage.list(slug, "outputs"):
-        if obj.location.object_path == artifact.object_path:
-            _, stream = storage.read(obj.location)
-            payload = stream.read()
-    assert payload is not None
+    payload = published_bytes(db_session, storage, slug=slug, context_path=artifact.object_path)
     workbook = load_workbook(io.BytesIO(payload))
     assert workbook.sheetnames == [
         "Return Metadata",
@@ -349,12 +345,7 @@ def test_the_withheld_verdict_is_absent_from_the_exported_artifact(
     artifact = export_package(db_session, MAKER, package, "xlsx")
     slug = db_session.scalar(select(Bank.storage_slug).where(Bank.id == SAMPLE_BANK_ID))
     assert slug
-    payload = None
-    for obj in storage.list(slug, "outputs"):
-        if obj.location.object_path == artifact.object_path:
-            _, stream = storage.read(obj.location)
-            payload = stream.read()
-    assert payload is not None
+    payload = published_bytes(db_session, storage, slug=slug, context_path=artifact.object_path)
     sheet = load_workbook(io.BytesIO(payload))["Stress Outcome Traffic Lights"]
     headers = [cell.value for cell in sheet[5]]
     assert headers[:6] == ["Row", "Item", "Value", "Threshold", "Status", "Compliance Basis"]

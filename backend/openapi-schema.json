@@ -102431,7 +102431,7 @@
     },
     "/api/v1/banks/{bank_id}/regulatory-artifacts/{artifact_id}/download": {
       "get": {
-        "description": "Stream one exported artifact from the outputs tier.",
+        "description": "Stream one exported artifact, proven against the revision that wrote it.\n\nThe artifact row is upserted per kind: it names a path and a checksum but no\nprovider version, so reading its path directly served whatever the store held\nunder that name. The archived revision with the same path and checksum is the\nexport that produced these bytes, and the read goes through it.",
         "operationId": "downloadRegulatoryArtifact",
         "parameters": [
           {
@@ -103511,7 +103511,7 @@
     },
     "/api/v1/banks/{bank_id}/regulatory-packages/{package_id}/attachments/{attachment_id}/download": {
       "get": {
-        "description": "Stream one filed document from the outputs tier.",
+        "description": "Stream one filed document, proven against the identity the row carries.\n\nBefore slice 2 this read the object path with no version pin and no checksum\ncheck, so it served whatever the provider currently held under that name: a\nreplaced object, or one written by a later export, downloaded as the filed\ndocument. The row's own recorded pin (or, once bound, the catalogue) is now\nthe read identity and every byte is hashed before release.",
         "operationId": "downloadPackageAttachment",
         "parameters": [
           {

@@ -77,6 +77,7 @@ from tests.fixtures.canonical_bank_fixture import (
 )
 from tests.stress.authority import grant
 from tests.support.inmemory_storage import InMemoryStorageClient
+from tests.support.sealed_documents import published_bytes
 
 pytestmark = [
     pytest.mark.usefixtures("fx_run_authority", "irrbb_run_authority", "stress_run_authority"),
@@ -529,12 +530,7 @@ def test_exports_to_xlsx_and_pdf(db_session: Session, storage: InMemoryStorageCl
 
     slug = db_session.scalar(select(Bank.storage_slug).where(Bank.id == SAMPLE_BANK_ID))
     assert slug
-    payload = None
-    for obj in storage.list(slug, "outputs"):
-        if obj.location.object_path == xlsx.object_path:
-            _, stream = storage.read(obj.location)
-            payload = stream.read()
-    assert payload is not None
+    payload = published_bytes(db_session, storage, slug=slug, context_path=xlsx.object_path)
     workbook = load_workbook(io.BytesIO(payload))
     # One sheet per Appendix II table plus metadata / provenance.
     assert "Return Metadata" in workbook.sheetnames
@@ -594,11 +590,7 @@ def test_maker_cannot_attest_own_signoff(db_session: Session) -> None:
 def _stored_bytes(db: Session, storage: InMemoryStorageClient, object_path: str) -> bytes:
     slug = db.scalar(select(Bank.storage_slug).where(Bank.id == SAMPLE_BANK_ID))
     assert slug
-    for obj in storage.list(slug, "outputs"):
-        if obj.location.object_path == object_path:
-            _, stream = storage.read(obj.location)
-            return stream.read()
-    raise AssertionError(f"no stored object at {object_path}")
+    return published_bytes(db, storage, slug=slug, context_path=object_path)
 
 
 def _pdf_text(payload: bytes) -> str:

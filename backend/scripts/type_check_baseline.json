@@ -4440,9 +4440,7 @@
   "reportAny": 6
  },
  "tests.services.test_le_and_lmt": {
-  "reportAny": 180,
-  "reportUnknownArgumentType": 1,
-  "reportUnknownMemberType": 1
+  "reportAny": 180
  },
  "tests.services.test_liquidity": {
   "reportAny": 7

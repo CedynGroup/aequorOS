@@ -84,6 +84,7 @@ from tests.stress.domain.stress_fixtures import (
     severe_paths,
 )
 from tests.support.inmemory_storage import InMemoryStorageClient
+from tests.support.sealed_documents import published_bytes
 
 __all__ = ["storage"]
 
@@ -164,10 +165,9 @@ def _export_pdf(
     artifact = export_package(db, MAKER, package, "pdf")
     slug = db.scalar(select(Bank.storage_slug).where(Bank.id == SAMPLE_BANK_ID))
     assert slug
-    for obj in storage_client.list(slug, "outputs"):
-        if obj.location.object_path == artifact.object_path:
-            return _pdf_text(storage_client.read(obj.location)[1].read())
-    raise AssertionError(artifact.object_path)
+    return _pdf_text(
+        published_bytes(db, storage_client, slug=slug, context_path=artifact.object_path)
+    )
 
 
 def _stress_package(db: Session) -> tuple[RegulatoryRun, RegulatoryPackage]:

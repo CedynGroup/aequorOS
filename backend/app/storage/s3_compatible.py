@@ -16,12 +16,16 @@ Bucket SSE also protects platform audit logs.
 
 from __future__ import annotations
 
+import hashlib
 import logging
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Iterator, Mapping
+from contextlib import suppress
 from copy import copy
 from dataclasses import replace
 from datetime import UTC, datetime
+from tempfile import SpooledTemporaryFile
 from typing import Any, BinaryIO, Literal, Protocol, Self, cast
+from uuid import UUID
 
 import boto3
 from boto3.exceptions import S3UploadFailedError
@@ -45,6 +49,7 @@ from app.storage.client import (
     ObjectMetadata,
     ReencryptionIsolation,
     SealedEncryptionContext,
+    SealedPublication,
     StorageAccessError,
     StorageBackendError,
     StorageClient,
@@ -56,6 +61,8 @@ from app.storage.client import (
     StorageObject,
     StorageValidationError,
     Tier,
+    is_sealed_object_key,
+    refuse_sealed_maintenance,
 )
 from app.storage.config import StorageEngineSettings, enforce_retirement
 from app.storage.downloads import issue
@@ -75,8 +82,81 @@ class _S3ControlClient(Protocol):
     def list_buckets(self) -> object: ...
 
 
+class _S3CreateClient(Protocol):
+    """The create-only object operations, typed so a sealed write carries no ``Any``.
+
+    boto3's own signatures are only partially known to the type checker, so the
+    sealed path names the five calls it makes and reads their responses as
+    mappings. The runtime client is the same object.
+    """
+
+    def put_object(self, **kwargs: object) -> Mapping[str, object]: ...
+
+    def create_multipart_upload(self, **kwargs: object) -> Mapping[str, object]: ...
+
+    def upload_part(self, **kwargs: object) -> Mapping[str, object]: ...
+
+    def complete_multipart_upload(self, **kwargs: object) -> Mapping[str, object]: ...
+
+    def abort_multipart_upload(self, **kwargs: object) -> Mapping[str, object]: ...
+
+
 _ACCESS_DENIED_CODES = {"AccessDenied", "InvalidAccessKeyId", "SignatureDoesNotMatch", "403"}
 _NOT_FOUND_CODES = {"NoSuchKey", "NoSuchBucket", "NoSuchVersion", "404", "NotFound"}
+_PRECONDITION_FAILED_CODES = {"PreconditionFailed", "412"}
+# A conditional write that collides with a competing write in flight. S3
+# documents this as retryable; it is NOT the "the key already exists" answer.
+_CONDITIONAL_CONFLICT_CODES = {"ConditionalRequestConflict", "409"}
+_SEALED_CREATE_ATTEMPTS = 4
+
+
+def _recorded_metadata(stat: Mapping[str, object]) -> dict[str, str]:
+    """An object's recorded metadata, keyed as S3 returns it on HEAD.
+
+    S3 lower-cases metadata names on the way in and back out, so a comparison
+    against a header name has to be done in that case rather than the caller's.
+    """
+    raw = stat.get("Metadata")
+    if not isinstance(raw, Mapping):
+        return {}
+    recorded = cast(Mapping[object, object], raw)
+    return {str(key).lower(): str(value) for key, value in recorded.items()}
+
+
+def _error_code(exc: ClientError) -> str:
+    """The provider's own error code, which is what every branch here keys on."""
+    response = cast(Mapping[str, object], exc.response)
+    error = response.get("Error")
+    if not isinstance(error, Mapping):
+        return ""
+    code = cast(Mapping[str, object], error).get("Code")
+    return "" if code is None else str(code)
+
+
+def _verified_payload(data: BinaryIO, checksum_sha256: str) -> BinaryIO:
+    """Spool the payload and prove it is the content the catalogue will record.
+
+    Sealed publication hashes the bytes it publishes rather than trusting the
+    caller's own claim, so a mislabelled write cannot pin a checksum the object
+    does not have.
+    """
+    output = SpooledTemporaryFile(max_size=8 * 1024 * 1024, mode="w+b")  # noqa: SIM115 - caller owns result
+    digest = hashlib.sha256()
+    try:
+        for chunk in iter(lambda: data.read(1024 * 1024), b""):
+            digest.update(chunk)
+            _ = output.write(chunk)
+        if digest.hexdigest() != checksum_sha256:
+            raise StorageValidationError(
+                "Sealed publication content does not match its recorded checksum."
+            )
+        _ = output.seek(0)
+        return cast(BinaryIO, output)
+    except BaseException:
+        output.close()
+        raise
+    finally:
+        data.close()
 
 
 # A staged bundle from a core-banking-scale pull (hundreds of thousands of rows
@@ -151,10 +231,36 @@ class S3CompatibleStorageClient(StorageClient):
         metadata: ObjectMetadata,
         content_type: str = "application/octet-stream",
     ) -> StorageObject:
+        refuse_sealed_maintenance(location, "a generic write")
         with self._encryption.publication(location) as encryption:
             bound = copy(self)
             bound._encryption = encryption
             return bound._write(location, data, metadata, content_type)
+
+    def write_sealed(
+        self,
+        location: StorageLocation,
+        data: BinaryIO,
+        metadata: ObjectMetadata,
+        authenticated_context: StorageLocation,
+        content_type: str = "application/octet-stream",
+    ) -> SealedPublication:
+        if location.tier != "outputs" or not is_sealed_object_key(location.object_path):
+            raise StorageValidationError(
+                "Sealed publication requires an immutable key in the outputs tier."
+            )
+        self._validate_metadata(location, metadata)
+        self._require_output_retention_policy(location)
+        payload = _verified_payload(data, metadata.checksum_sha256)
+        try:
+            with self._encryption.publication(location) as encryption:
+                bound = copy(self)
+                bound._encryption = encryption
+                return bound._create_sealed(
+                    location, payload, metadata, authenticated_context, content_type
+                )
+        finally:
+            payload.close()
 
     def _write(
         self,
@@ -189,7 +295,9 @@ class S3CompatibleStorageClient(StorageClient):
         metadata = replace(metadata, kms_key_id=bank_key_id or effective_sse_key)
         headers = metadata.to_object_metadata()
         if envelope_id is not None:
-            headers.update({"encryption-format": ENCRYPTION_FORMAT, "key-envelope-id": envelope_id})
+            headers.update(
+                {"encryption-format": ENCRYPTION_FORMAT, "key-envelope-id": str(envelope_id)}
+            )
         extra_args: dict[str, Any] = {
             "ContentType": content_type,
             "Metadata": headers,
@@ -225,6 +333,214 @@ class S3CompatibleStorageClient(StorageClient):
         version_id = cast(str | None, stat.get("VersionId"))
         self._log("write", location, version_id=version_id)
         return self._to_storage_object(location, stat, version_id=version_id)
+
+    def _create_sealed(  # noqa: PLR0913 - one write is its named parts
+        self,
+        location: StorageLocation,
+        payload: BinaryIO,
+        metadata: ObjectMetadata,
+        authenticated_context: StorageLocation,
+        content_type: str,
+    ) -> SealedPublication:
+        """Create the sealed key once; a same-content retry returns what is there."""
+        bucket = location.bucket_name(self._env)
+        try:
+            encrypted, envelope_id, bank_key_id = self._encryption.encrypt(
+                location, payload, metadata, authenticated_context=authenticated_context
+            )
+        except (StorageAccessError, KeyUnavailableError):
+            self._log("write.sealed", location, result="key-refused")
+            raise
+        effective_sse_key = self._settings.kms_key_id
+        if envelope_id is None:
+            effective_sse_key = metadata.kms_key_id or effective_sse_key
+        metadata = replace(metadata, kms_key_id=bank_key_id or effective_sse_key)
+        headers = metadata.to_object_metadata()
+        if envelope_id is not None:
+            headers.update(
+                {"encryption-format": ENCRYPTION_FORMAT, "key-envelope-id": str(envelope_id)}
+            )
+        arguments: dict[str, object] = {"ContentType": content_type, "Metadata": headers}
+        if effective_sse_key is not None:
+            arguments["ServerSideEncryption"] = "aws:kms"
+            arguments["SSEKMSKeyId"] = effective_sse_key
+        context_format: Literal["aws-esdk-object-v1", "plaintext-v1"] = (
+            ENCRYPTION_FORMAT if envelope_id is not None else "plaintext-v1"
+        )
+        try:
+            version_id = self._create_absorbing_conflicts(bucket, location, encrypted, arguments)
+        except ClientError as exc:
+            if _error_code(exc) not in _PRECONDITION_FAILED_CODES:
+                self._log("write.sealed", location, result="error")
+                raise self._translate(exc) from exc
+            # The key already exists. Only the identical sealed bytes may be
+            # accepted, and only after the object's own recorded context
+            # authenticates them: this attempt's freshly prepared envelope is
+            # NOT the one those bytes were sealed under once the bank key has
+            # rotated, so the identity comes from the object, never the attempt.
+            self._log("write.sealed", location, result="exists")
+            return self._existing_sealed(location, metadata.checksum_sha256, authenticated_context)
+        except BotoCoreError as exc:
+            self._log("write.sealed", location, result="backend_error")
+            raise StorageBackendError(str(exc)) from exc
+        finally:
+            if encrypted is not payload:
+                encrypted.close()
+        stat = cast(
+            Mapping[str, object],
+            self._call(
+                "write.sealed.stat",
+                location,
+                lambda: self._stat_object(bucket, location.object_path),
+                log=False,
+            ),
+        )
+        if _recorded_metadata(stat).get("checksum-sha256") != metadata.checksum_sha256:
+            raise StorageValidationError("Sealed publication did not record its own checksum.")
+        self._log("write.sealed", location, version_id=version_id)
+        published = stat.get("VersionId") or version_id
+        descriptor = self._to_storage_object(
+            location,
+            cast(dict[str, Any], stat),
+            version_id=cast(str | None, published),
+        )
+        return SealedPublication(descriptor, context_format, envelope_id)
+
+    def _create_absorbing_conflicts(
+        self,
+        bucket: str,
+        location: StorageLocation,
+        body: BinaryIO,
+        arguments: dict[str, object],
+    ) -> str | None:
+        """Create the sealed key, absorbing S3's retryable conditional conflict.
+
+        ``If-None-Match: *`` answers ``409 ConditionalRequestConflict`` when a
+        competing conditional write to the same key is still in flight. S3
+        documents that as a retry, not as "the key already exists", so treating
+        it as a backend failure would fail a publication that a moment later
+        resolves cleanly. Retrying keeps the create atomic: the winner is still
+        discovered by the same precondition (412), which is the path that
+        compares content and adopts the object that exists. Every attempt
+        rewinds the body and, above the multipart threshold, creates and on
+        failure aborts its own upload, so a retry never resumes a stale one.
+        """
+        attempts = _SEALED_CREATE_ATTEMPTS
+        while True:
+            try:
+                return self._create_only(bucket, location.object_path, body, arguments)
+            except ClientError as exc:
+                if _error_code(exc) not in _CONDITIONAL_CONFLICT_CODES or attempts == 1:
+                    raise
+                attempts -= 1
+                self._log("write.sealed", location, result="conditional-conflict")
+                _ = body.seek(0)
+
+    def _create_only(
+        self,
+        bucket: str,
+        key: str,
+        body: BinaryIO,
+        arguments: dict[str, object],
+    ) -> str | None:
+        """PUT the body only if the key does not exist (S3 ``If-None-Match: *``).
+
+        ``put_object`` carries the precondition for a single request; a payload
+        above the multipart threshold completes under the same precondition, so
+        the atomic create is preserved at every size. The managed transfer
+        cannot express it, which is why this path is written out.
+        """
+        client = cast(_S3CreateClient, cast(object, self._s3))
+        size = body.seek(0, 2)
+        _ = body.seek(0)
+        if size < reencryption.MULTIPART_SIZE:
+            response = client.put_object(
+                Bucket=bucket, Key=key, Body=body, IfNoneMatch="*", **arguments
+            )
+            return cast(str | None, response.get("VersionId"))
+        upload = client.create_multipart_upload(Bucket=bucket, Key=key, **arguments)
+        upload_id = str(upload["UploadId"])
+        location: dict[str, object] = {"Bucket": bucket, "Key": key, "UploadId": upload_id}
+        parts: list[dict[str, object]] = []
+        try:
+            for number, chunk in enumerate(
+                iter(lambda: body.read(reencryption.MULTIPART_SIZE), b""), start=1
+            ):
+                part = client.upload_part(**location, PartNumber=number, Body=chunk)
+                parts.append({"ETag": part["ETag"], "PartNumber": number})
+            response = client.complete_multipart_upload(
+                **location, MultipartUpload={"Parts": parts}, IfNoneMatch="*"
+            )
+        except BaseException:
+            with suppress(ClientError, BotoCoreError):
+                _ = client.abort_multipart_upload(**location)
+            raise
+        return cast(str | None, response.get("VersionId"))
+
+    def _existing_sealed(
+        self,
+        location: StorageLocation,
+        expected_sha256: str,
+        authenticated_context: StorageLocation,
+    ) -> SealedPublication:
+        """Accept an existing sealed key only for byte-identical content.
+
+        The sealed context is rebuilt from what the OBJECT records, not from the
+        attempt that lost the race. A retry can run after the bank key rotated,
+        so its own envelope names a key these bytes were never sealed under;
+        using it would fail the descriptor check here and mislabel the publication
+        for every later read.
+        """
+        stat = cast(
+            Mapping[str, object],
+            self._call(
+                "write.sealed.stat",
+                location,
+                lambda: self._stat_object(location.bucket_name(self._env), location.object_path),
+                log=False,
+            ),
+        )
+        if _recorded_metadata(stat).get("checksum-sha256") != expected_sha256:
+            raise StorageValidationError(
+                "Sealed publication refused: the immutable key already holds other content."
+            )
+        context = self._sealed_context(location, stat, expected_sha256, authenticated_context)
+        descriptor, verified = self.read_sealed(location, context)
+        with verified:
+            digest = hashlib.sha256()
+            while chunk := verified.read(1024 * 1024):
+                digest.update(chunk)
+        if digest.hexdigest() != expected_sha256:
+            raise StorageValidationError(
+                "Sealed publication refused: the immutable key does not hold this content."
+            )
+        return SealedPublication(descriptor, context.format, context.envelope_id)
+
+    def _sealed_context(
+        self,
+        location: StorageLocation,
+        stat: Mapping[str, object],
+        expected_sha256: str,
+        authenticated_context: StorageLocation,
+    ) -> SealedEncryptionContext:
+        """The descriptor an existing sealed object records about itself."""
+        recorded = _recorded_metadata(stat)
+        envelope = recorded.get("key-envelope-id")
+        if recorded.get("encryption-format") == ENCRYPTION_FORMAT and envelope:
+            try:
+                envelope_id: UUID | None = UUID(envelope)
+            except ValueError as exc:
+                raise StorageValidationError(
+                    "Sealed publication refused: the existing object's key envelope is invalid."
+                ) from exc
+            return SealedEncryptionContext(
+                ENCRYPTION_FORMAT, authenticated_context, expected_sha256, envelope_id
+            )
+        if "encryption-format" in recorded or envelope:
+            raise StorageValidationError(
+                "Sealed publication refused: the existing object's encryption metadata is invalid."
+            )
+        return SealedEncryptionContext("plaintext-v1", authenticated_context, expected_sha256, None)
 
     def reencrypt(self, item: EncryptionInventoryItem) -> bool:
         result = reencryption.reencrypt(
@@ -392,6 +708,7 @@ class S3CompatibleStorageClient(StorageClient):
             raise self._translate(exc) from exc
 
     def delete(self, location: StorageLocation) -> None:
+        refuse_sealed_maintenance(location, "delete")
         bucket = location.bucket_name(self._env)
         if location.tier in RETAINED_TIERS:
             # Versioned bucket: a bare delete writes a delete marker; content

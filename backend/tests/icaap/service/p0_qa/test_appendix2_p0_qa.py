@@ -54,6 +54,7 @@ from tests.icaap.service.test_icaap_stress_appendix2_report import (
 )
 from tests.stress.authority import grant
 from tests.support.inmemory_storage import InMemoryStorageClient
+from tests.support.sealed_documents import published_bytes
 
 __all__ = ["storage"]
 
@@ -115,10 +116,7 @@ def _section(snapshot: dict[str, Any], code: str) -> dict[str, Any] | None:
 def _stored(db: Session, storage_client: InMemoryStorageClient, object_path: str) -> bytes:
     slug = db.scalar(select(Bank.storage_slug).where(Bank.id == SAMPLE_BANK_ID))
     assert slug
-    for obj in storage_client.list(slug, "outputs"):
-        if obj.location.object_path == object_path:
-            return obj and storage_client.read(obj.location)[1].read()
-    raise AssertionError(object_path)
+    return published_bytes(db, storage_client, slug=slug, context_path=object_path)
 
 
 def _export(

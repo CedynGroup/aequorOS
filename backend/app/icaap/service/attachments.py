@@ -18,7 +18,7 @@ to attach a file would make the review trail worse, not better.
 from __future__ import annotations
 
 import hashlib
-from io import BytesIO
+from typing import BinaryIO, cast
 from uuid import UUID
 
 from sqlalchemy import select
@@ -32,7 +32,6 @@ from app.data_engine.public import (
     XLSX_MEDIA_TYPE,
     sniff_media_type,
 )
-from app.db.base import utc_now
 from app.icaap.models.workspace import (
     IcaapAttachment,
     IcaapAttachmentWithdrawal,
@@ -48,7 +47,16 @@ from app.icaap.schemas.workspace import (
 )
 from app.icaap.service import guards
 from app.services.audit import record_event
-from app.storage import ObjectMetadata, StorageClient, StorageLocation
+from app.storage import StorageClient, StorageError, StorageLocation, StorageValidationError, Tier
+from app.storage.public import (
+    DocumentBinding,
+    DocumentFamily,
+    PublicationRequest,
+    RecordedDocument,
+    bind_existing_document,
+    publish_sealed_document,
+    resolve_document,
+)
 
 # The sniffer moved to ``app/data_engine/service/document_uploads.py`` when the package
 # attachment plane (ICAAP P3) needed the identical decision: one implementation,
@@ -219,21 +227,19 @@ def upload_attachment(  # noqa: PLR0913 - an upload is its seven named parts
     storage.ensure_institution(slug)
     extension = ALLOWED_MEDIA[media_type]
     object_path = f"icaap/{cycle.fiscal_year}/{cycle.id}/{digest}.{extension}"
-    location = StorageLocation(slug, _STORAGE_TIER, object_path)
-    stored = storage.write(
-        location,
-        BytesIO(content),
-        ObjectMetadata(
-            institution_slug=slug,
-            tier=_STORAGE_TIER,
-            checksum_sha256=digest,
-            written_at=utc_now(),
-            written_by=str(guards.actor_id(access)),
-            as_of_date=cycle.as_of_date.isoformat(),
-            source_reference=filename[:200],
-        ),
+    actor = guards.actor_id(access)
+    request = PublicationRequest(
+        organization_id=cycle.organization_id,
+        bank_id=cycle.bank_id,
+        storage_slug=slug,
+        context_path=object_path,
+        payload=content,
         content_type=media_type,
+        published_by=actor,
+        as_of_date=cycle.as_of_date.isoformat(),
+        source_reference=filename[:200],
     )
+    published = publish_sealed_document(db, storage, request)
     row = IcaapAttachment(
         organization_id=cycle.organization_id,
         bank_id=cycle.bank_id,
@@ -242,16 +248,22 @@ def upload_attachment(  # noqa: PLR0913 - an upload is its seven named parts
         title=title,
         original_filename=filename[:255],
         media_type=media_type,
-        byte_size=len(content),
-        sha256=digest,
+        byte_size=published.byte_length,
+        sha256=published.sha256,
         storage_tier=_STORAGE_TIER,
         object_path=object_path,
-        storage_version_id=stored.version_id,
+        storage_version_id=published.version_id,
         section_key=section_key,
-        uploaded_by=guards.actor_id(access),
+        uploaded_by=actor,
     )
     db.add(row)
     db.flush()
+    bind_existing_document(
+        db,
+        request,
+        published.document,
+        binding=DocumentBinding(DocumentFamily.ICAAP_ATTACHMENT, row.id),
+    )
     record_event(
         db,
         access.ctx,
@@ -333,10 +345,21 @@ def withdraw_attachment(
     return _read(row, _withdrawals(db, access, cycle).get(row.id))
 
 
-def prepare_download(
-    db: Session, access: IcaapAccess, cycle_id: UUID, attachment_id: UUID
-) -> tuple[IcaapAttachment, str]:
-    """The row and the institution's storage slug, with the read recorded."""
+def read_attachment(
+    db: Session,
+    access: IcaapAccess,
+    cycle_id: UUID,
+    attachment_id: UUID,
+    storage: StorageClient,
+) -> tuple[IcaapAttachment, BinaryIO]:
+    """The row and its verified bytes, with the read recorded.
+
+    The bytes are proven against the identity the row carries before the audit
+    event is written: a download that failed verification never happened, and
+    recording it would put a false read in front of an examiner. A row published
+    before stable references resolves through the pin it recorded; it is never
+    re-read as "whatever is latest".
+    """
     cycle = guards.get_cycle_or_404(db, access, cycle_id)
     row = db.scalar(
         select(IcaapAttachment).where(
@@ -351,6 +374,25 @@ def prepare_download(
     from app.data_engine.public import bank_slug  # noqa: PLC0415 - avoid an import cycle
 
     slug = bank_slug(db, access.bank)
+    decision = guards.sealed_document_decision(db, access.ctx, access.bank)
+    recorded = RecordedDocument(
+        location=StorageLocation(slug, cast(Tier, row.storage_tier), row.object_path),
+        version_id=row.storage_version_id,
+        sha256=row.sha256,
+        byte_length=row.byte_size,
+    )
+    try:
+        _document, stream = resolve_document(
+            db,
+            access.ctx,
+            access.bank.id,
+            DocumentBinding(DocumentFamily.ICAAP_ATTACHMENT, row.id),
+            storage,
+            authorization=decision,
+            recorded=recorded,
+        )
+    except (StorageError, StorageValidationError):
+        guards.not_found()
     record_event(
         db,
         access.ctx,
@@ -360,7 +402,7 @@ def prepare_download(
         details={"cycle_id": str(cycle.id), "kind": row.kind, "sha256": row.sha256},
     )
     db.commit()
-    return row, slug
+    return row, stream
 
 
 __all__ = [
@@ -368,7 +410,7 @@ __all__ = [
     "active_attachment_ids",
     "active_counts",
     "list_attachments",
-    "prepare_download",
+    "read_attachment",
     "sniff_media_type",
     "upload_attachment",
     "withdraw_attachment",

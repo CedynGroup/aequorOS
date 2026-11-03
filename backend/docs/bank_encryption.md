@@ -175,7 +175,7 @@ checks and key reuse follow the
 
 ## Downloads
 
-Bank-encrypted downloads pass through `/api/v1/storage/download`. Link issuance
+Bank-encrypted storage capability downloads pass through `/api/v1/storage/download`. Link issuance
 uses object metadata to pin the current version; decryption, authentication and
 key-access checks happen at redemption. A download link is a capability
 credential: redemption needs no bearer session, and the link must be kept
@@ -226,8 +226,11 @@ existing platform-only objects during optional rollout as well as bank-encrypted
 objects; it does not unwrap either. Format-3 backups copy every retained revision,
 including superseded documents, and record delete markers. Restore replays those
 revisions and emits their exact old-to-new version mapping. The audited recovery
-operation in `scripts/reconcile_storage_versions.py` applies that mapping to the
-four pinned document-version columns without changing sealed evidence or keys.
+operation in `scripts/reconcile_storage_versions.py` applies that mapping to legacy
+references in the four pinned document-version columns without changing sealed
+evidence or keys.
+Recovery of bound documents follows the
+[stable sealed-document contract](#publication-and-its-callers).
 Use the incident-only identity and dedicated restore target described in
 [the recovery procedure](bank_key_setup.md#reconcile-pinned-versions-after-replay).
 Missing or ambiguous mappings and scopes matching no pinned references fail closed.
@@ -260,11 +263,11 @@ revocation.
 `sealed_document_objects` is an additive, immutable catalogue. Each UUID records
 one physical `sealed/v1/<uuid>` key in its bank's outputs tier, with an expected
 plaintext SHA-256 and byte length. The catalogue identity and recorded locator are
-immutable; enforcing create-only writes and preventing physical overwrite or
-deletion are prerequisites for enabling stable writers in a later slice. Object
-UUIDs are unique identities, without cross-bank or global content deduplication.
-The original provider version is write-time provenance; stable reads do not send
-it as a GET version token.
+immutable: `StorageClient.write` and `StorageClient.delete` refuse any key under
+`sealed/v1/`, so the only writer is `write_sealed`. Object UUIDs are unique
+identities, without cross-bank or global content deduplication. The original
+provider version is write-time provenance; stable reads do not send it as a GET
+version token.
 
 Four append-only association tables bind existing regulatory artifact versions,
 package attachments, ICAAP attachments and supervisory letters to the catalogue.
@@ -294,6 +297,11 @@ it does not decrypt/re-encrypt old documents under a newer key.
 `app.storage.public.resolve_sealed_document` takes an explicit family/source
 binding and a fresh complete bank-scoped VIEW authorization decision supplied by
 the owning feature, with its normal whole-institution and presentation checks.
+Verified examiner sessions instead carry the existing
+[staff-plane read authority](authorization_foundation.md#effective-authority-projection-and-institution-coverage)
+through `ExaminerDocumentAuthority`, with the same request-wide vetoes and
+presentation restrictions. Ordinary tenant principals still require a complete
+scoped binding.
 Artifact versions and package attachments use their persisted owning package's
 return-family gate: ordinary returns require Regulatory Reporting/restricted,
 while frozen ICAAP packages require Capital/confidential. Direct ICAAP attachments
@@ -311,25 +319,94 @@ an 8 MiB memory spool and bounded 1 MiB reads. Errors close both streams; caller
 must close a successful file. The returned descriptor records the actual provider
 version read for later access/retention evidence. Unsupported backends refuse.
 
-This slice defines schema and resolution only: no existing writer or reader uses
-stable semantics yet. Existing consumers retain their current legacy behavior.
 No new HTTP route is added, so there is no new route IDOR census entry; resolver
 isolation and exact family authority are exercised directly in
 `tests/storage/test_sealed_documents.py` and
 constraint/RLS/upgrade/downgrade behavior in
 `tests/db/test_sealed_document_objects.py`.
 
-Follow-up slices must implement atomic create-only publication, same-content
-retry/conflict handling, audited binding publication with business rows and
-committed envelopes, and conversion of every writer/reader (including clone,
-freeze, signing and verification). Then inventory/backfill legacy revisions by
-verified context-preserving copy, teach maintenance/key-retirement inventories
-about stable objects, adapt retained-version and historical-manifest resolution,
-and capture this catalogue with envelopes in coordinated backups. Keep the
-audited reconciler as the legacy/exceptional-restore fallback. Do not enable
-stable writers before immutable-key overwrite/deletion and maintenance guards
-are enforced. No retention policy, backup format, signature, digest or historical
-audit entry changes in this slice.
+### Publication and its callers
+
+`app.storage.public.publish_sealed_document` is the one code path that writes a
+sealed document. A caller supplies a `PublicationRequest` — organization, bank,
+storage slug, the feature's own `context_path`, the plaintext payload and content
+type, the publishing user, the as-of date and the source reference — and the
+primitive:
+
+1. derives the object identity and its `sealed/v1/<uuid>` key,
+2. writes the bytes with an `IfNoneMatch: *` conditional (PUT, and the multipart
+   completion when the stored body is at least 16 MiB), so a
+   provider that already holds the key returns `412 PreconditionFailed` instead of
+   replacing it. A `409 ConditionalRequestConflict` — S3's answer while a competing
+   conditional write to that key is still in flight — is retried a bounded number of
+   times, rewinding the body and recreating the upload on each attempt: it is a race
+   to resolve, not an outage. Only `412` means the key exists,
+3. inserts the catalogue row with the plaintext hash, byte length, tier, context
+   path, context format and original envelope, and
+4. binds the caller's business row when a `binding` is given. The optional
+   `object_id` selects the retry identity; it does not create a binding.
+
+A retry that presents the same content at the same identity is a success and
+returns the existing catalogue identity. Catalogue and binding inserts use atomic
+database conflict handling and verify the existing row, including concurrent
+retries; a binding already occupied by another object refuses. A second publication
+of different bytes at that identity is refused, whether it arrives sequentially or
+as the 412 of a lost race. On the storage-conflict path the existing object's own
+recorded headers are the identity —
+its encryption format and key envelope are taken from the object, not from the
+attempt that lost the race, because a retry can run after the bank key rotated and
+its freshly prepared envelope would name a key those bytes were never sealed under.
+The object is then read back and re-verified against its recorded checksum.
+`bind_existing_document` and `bind_sealed_document` attach a binding to a
+publication that already exists. Freeze, clone and package revision copies reuse
+the source binding without writing bytes again; unbound legacy copies keep their
+recorded locators. Re-export publishes a new object and artifact-version row.
+
+Readers go through `resolve_document`, which prefers the catalogue binding and
+falls back to the row's own recorded pin (provider version plus SHA-256 and length)
+for a document published before stable references existed. Either way every byte is
+verified before the stream is released, and a row whose recorded identity no longer
+matches the bytes refuses. No existing row is rewritten and no ciphertext is
+re-encrypted by this slice.
+
+Every sealed-document byte writer now publishes: ICAAP attachments, supervisory add-on
+letters, package-attachment uploads,
+regulatory artifact exports and the attestation signed-PDF archive. Every reader
+resolves: ICAAP attachment and supervisory-letter downloads, package-attachment
+download, artifact-version bytes, the regulatory-artifact download with its email
+fallback, and attestation signing and verification. The package-attachment download
+previously read the object path with neither a version pin nor a checksum check, so
+a replaced object was served as the filed document; it now resolves the row's
+recorded identity (or its catalogue binding) and refuses a mismatch with a 404.
+
+`document_retention_reference` resolves a bound artifact revision to its catalogue
+physical key and original provider version for retention; an unbound legacy
+revision keeps its recorded key/version pair. Submission retention and the
+historical-filing inventory both use it. Archived-revision matching is shared
+through `app.reporting.service.artifact_versions.archived_version`; callers keep
+their own refusal handling. The retention policy remains owned by
+[write-once objects and backups](tamper_evident_records.md#write-once-objects-and-backups).
+
+Re-encryption treats a sealed key as retained: the inventory marks it, and the
+rewrite path refuses it, because rewriting that ciphertext would break the key
+dependency the catalogue records. Writers and readers are exercised in
+`tests/storage/test_sealed_publication.py`, `tests/storage/test_reencryption.py`,
+`tests/icaap/service/test_attachments.py`,
+`tests/icaap/service/test_sealed_by_reference.py`,
+`tests/reporting/service/test_regulatory_reporting_exports.py`,
+`tests/reporting/service/test_package_plane.py` and
+`tests/attestation/service/test_attestation_verify.py`.
+
+Follow-up slices must inventory/backfill legacy revisions by verified
+context-preserving copy, teach maintenance/key-retirement inventories about stable
+objects, and capture this catalogue and its bindings with envelopes in coordinated
+backups. The existing version reconciler matches legacy logical paths and provider
+pins; it does not reconcile bound documents at their catalogue physical keys.
+Stable-document restore reconciliation, retention drills and replication remain
+follow-up work.
+Keep the audited reconciler as the
+legacy/exceptional-restore fallback. No retention policy, backup format, signature,
+digest or historical audit entry changes in this slice.
 
 ## Scope and executable evidence
 

@@ -1751,33 +1751,6 @@ def get_artifact_or_404(
     return artifact
 
 
-def prepare_artifact_download(
-    db: Session, ctx: TenantContext, bank_id: str, artifact_id: UUID
-) -> tuple[RegulatoryPackageArtifact, str]:
-    """Resolve the artifact + institution storage slug and audit the download."""
-    bank = get_bank_or_404(db, ctx, bank_id)
-    artifact = get_artifact_or_404(db, ctx, bank_id, artifact_id)
-    # Lazy import: pulling app.data_engine.service.ingestion at module import time would
-    # drag the whole source-adapter registry into every workflow import.
-    from app.data_engine.public import bank_slug  # noqa: PLC0415 - avoid an import cycle
-
-    slug = bank_slug(db, bank)
-    record_event(
-        db,
-        ctx,
-        event_type="regulatory_artifact.downloaded",
-        entity_type="regulatory_package_artifact",
-        entity_id=artifact.id,
-        details={
-            "package_id": str(artifact.package_id),
-            "kind": artifact.kind,
-            "object_path": artifact.object_path,
-        },
-    )
-    db.commit()
-    return artifact, slug
-
-
 def email_fallback_instructions(
     db: Session, ctx: TenantContext, bank_id: str, package_id: UUID
 ) -> EmailFallbackInstructionsRead:

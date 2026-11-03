@@ -383,6 +383,18 @@ class BindingTrace:
 
 
 @dataclass(frozen=True)
+class ExaminerDocumentAuthority:
+    resource: ResourceLocator
+    operator: str | None
+    session_id: str
+    condition_trace: tuple[ConditionCheck, ...]
+
+    @property
+    def allowed(self) -> bool:
+        return self.operator is not None and all(check.passed for check in self.condition_trace)
+
+
+@dataclass(frozen=True)
 class AuthorizationDecision:
     allowed: bool
     reason: str

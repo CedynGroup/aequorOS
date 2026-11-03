@@ -19,8 +19,10 @@ from app.core.authorization import (
     ResourceLocator,
     Sensitivity,
 )
+from app.core.config import get_settings
 from app.core.key_management.types import KeyStatus, KeyUnavailableError
 from app.core.tenancy import TenantContext
+from app.identity.public import document_view_decision
 from app.reporting.service.family_access import gate_for
 from app.storage.client import (
     SealedEncryptionContext,
@@ -157,6 +159,17 @@ class RepresentationStorage(InMemoryStorageClient):
         return descriptor, body
 
 
+def store(storage: InMemoryStorageClient, document: SealedDocumentObject, payload: bytes) -> None:
+    """Publish bytes at the catalogue's immutable key, as the primitive would."""
+    physical = StorageLocation(SLUG, "outputs", document.physical_key)
+    storage.write_sealed(
+        physical,
+        io.BytesIO(payload),
+        metadata_for(SLUG, "outputs", payload),
+        StorageLocation(SLUG, "outputs", document.context_path),
+    )
+
+
 @pytest.mark.parametrize(
     ("family", "package_family", "expected_module", "expected_sensitivity"),
     [
@@ -188,8 +201,7 @@ def test_source_family_requires_exact_module_and_sensitivity(  # noqa: PLR0913
     payload = b"synthetic family-gated document"
     binding, document = catalogue(db_session, family, payload, package_family=package_family)
     storage = RepresentationStorage()
-    location = StorageLocation(SLUG, "outputs", document.physical_key)
-    storage.write(location, io.BytesIO(payload), metadata_for(SLUG, "outputs", payload))
+    store(storage, document, payload)
     authority = decision(family, package_family=package_family)
     authority = replace(
         authority, resource=replace(authority.resource, module=module, sensitivity=sensitivity)
@@ -227,8 +239,7 @@ def test_complete_plaintext_is_verified_before_release(
         sha256="0" * 64 if fault == "hash" else None,
     )
     storage = RepresentationStorage()
-    location = StorageLocation(SLUG, "outputs", document.physical_key)
-    storage.write(location, io.BytesIO(payload), metadata_for(SLUG, "outputs", payload))
+    store(storage, document, payload)
     if fault:
         with pytest.raises(
             StorageValidationError, match="checksum" if fault == "hash" else "length"
@@ -366,3 +377,53 @@ def test_plaintext_descriptor_does_not_bypass_connected_bank_key(
         resolve_sealed_document(
             db_session, CTX, BANK, binding, bank_storage.storage, authorization=decision(family)
         )
+
+
+@pytest.mark.parametrize("family", list(DocumentFamily))
+@pytest.mark.parametrize("fault", [None, "operator", "session", "demo", "tenant"])
+def test_verified_examiner_authority_reads_each_family_without_tenant_bindings(
+    bank_storage: BankStorage,
+    db_session: Session,
+    monkeypatch: pytest.MonkeyPatch,
+    family: DocumentFamily,
+    fault: str | None,
+) -> None:
+    payload = b"approved examiner evidence"
+    binding, document = catalogue(db_session, family, payload)
+    storage = RepresentationStorage()
+    store(storage, document, payload)
+    ctx = TenantContext(
+        ORG_1, impersonation_context="inspection", actor_operator="staff@example.test"
+    )
+    gate = gate_for(
+        "bsd" if family in (DocumentFamily.ARTIFACT, DocumentFamily.PACKAGE_ATTACHMENT) else "icaap"
+    )
+    if fault == "demo":
+        monkeypatch.setenv("DEMO_MODE", "1")
+        get_settings.cache_clear()
+    authority = document_view_decision(
+        db_session,
+        ctx,
+        bank_id=BANK,
+        module=gate.module,
+        sensitivity=gate.sensitivity,
+        surface="examiner_document_regression",
+    )
+    if fault == "operator":
+        ctx = replace(ctx, actor_operator=None)
+    elif fault == "session":
+        ctx = replace(ctx, impersonation_context=None)
+    elif fault == "tenant":
+        ctx = replace(ctx, actor_user_id=USER_1, authorization_version=1)
+    if fault:
+        with pytest.raises(StorageAccessError):
+            resolve_sealed_document(
+                db_session, ctx, BANK, binding, storage, authorization=authority
+            )
+        assert storage.calls == 0
+    else:
+        _, body = resolve_sealed_document(
+            db_session, ctx, BANK, binding, storage, authorization=authority
+        )
+        with body:
+            assert body.read() == payload

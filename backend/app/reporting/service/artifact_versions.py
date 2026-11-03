@@ -29,8 +29,8 @@ bytes as a literal prefix.
 
 from __future__ import annotations
 
-import hashlib
 from dataclasses import dataclass
+from datetime import datetime
 from uuid import UUID
 
 from fastapi import HTTPException, status
@@ -49,8 +49,15 @@ from app.reporting.service.common import (
     get_bank_or_404,
     get_package_or_404,
 )
+from app.reporting.service.family_access import sealed_document_decision
 from app.services.audit import record_event
-from app.storage.client import StorageClient, StorageError, StorageLocation
+from app.storage import StorageClient, StorageError, StorageLocation
+from app.storage.public import (
+    DocumentBinding,
+    DocumentFamily,
+    RecordedDocument,
+    resolve_document,
+)
 
 
 @dataclass(frozen=True)
@@ -213,6 +220,44 @@ def get_version_or_404(
     return version
 
 
+def archived_version(  # noqa: PLR0913 - the identity of one archived revision
+    db: Session,
+    ctx: TenantContext,
+    *,
+    package_id: UUID,
+    kind: str,
+    object_path: str,
+    checksum_sha256: str,
+    before: datetime | None = None,
+    storage_version_id: str | None = None,
+) -> RegulatoryArtifactVersion | None:
+    """The archived revision that wrote the artifact a row currently describes.
+
+    ``regulatory_package_artifacts`` is upserted per kind and therefore forgets
+    every earlier export, and it carries no provider version at all. The revision
+    with the same path AND the same checksum is the one that wrote those bytes,
+    so path and checksum together are the identity. Nothing here picks the newest
+    revision for a path: a path alone names a slot, not a document.
+    """
+    query = select(RegulatoryArtifactVersion).where(
+        RegulatoryArtifactVersion.organization_id == ctx.organization_id,
+        RegulatoryArtifactVersion.package_id == package_id,
+        RegulatoryArtifactVersion.kind == kind,
+        RegulatoryArtifactVersion.object_path == object_path,
+        RegulatoryArtifactVersion.checksum_sha256 == checksum_sha256,
+    )
+    if before is not None:
+        query = query.where(RegulatoryArtifactVersion.created_at <= before)
+    if storage_version_id is not None:
+        query = query.where(RegulatoryArtifactVersion.storage_version_id == storage_version_id)
+    return db.scalar(
+        query.order_by(
+            RegulatoryArtifactVersion.created_at.desc(),
+            RegulatoryArtifactVersion.id.desc(),
+        ).limit(1)
+    )
+
+
 def read_version_bytes(
     db: Session,
     ctx: TenantContext,
@@ -225,43 +270,67 @@ def read_version_bytes(
     Whole-payload rather than a passthrough stream: a checksum cannot be checked
     on bytes already sent, and half a signed return followed by a 500 is not a
     download an operator can distinguish from a good one.
+
+    The bytes now come from the row's stable identity (or, for a row published
+    before those existed, the pin it recorded) rather than from whatever the
+    provider currently holds at its path, and the verification is the storage
+    kernel's own — every plaintext byte hashed against the recorded digest
+    before this function sees a stream.
     """
-    storage = storage.for_session(db)
     bank = get_bank_or_404(db, ctx, bank_id)
     version = get_version_or_404(db, ctx, bank_id, version_id)
-    # Lazy import, matching prepare_artifact_download: app.data_engine.service.ingestion
+    package = db.scalar(
+        select(RegulatoryPackage).where(
+            RegulatoryPackage.id == version.package_id,
+            RegulatoryPackage.organization_id == ctx.organization_id,
+        )
+    )
+    if package is None:  # pragma: no cover - get_version_or_404 joined it
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Regulatory artifact version not found.",
+        )
+    # Lazy import, matching the reporting artifact readers: app.data_engine.service.ingestion
     # drags the whole source-adapter registry into every importer.
     from app.data_engine.public import bank_slug  # noqa: PLC0415 - avoid an import cycle
 
-    location = StorageLocation(
-        institution_slug=bank_slug(db, bank), tier="outputs", object_path=version.object_path
+    decision = sealed_document_decision(db, ctx, bank, package.return_family)
+    recorded = RecordedDocument(
+        location=StorageLocation(
+            institution_slug=bank_slug(db, bank),
+            tier="outputs",
+            object_path=version.object_path,
+        ),
+        version_id=version.storage_version_id,
+        sha256=version.checksum_sha256,
+        byte_length=version.size_bytes,
     )
     try:
-        _descriptor, stream = storage.read(location, version_id=version.storage_version_id)
-        payload = stream.read()
+        _descriptor, stream = resolve_document(
+            db,
+            ctx,
+            bank_id,
+            DocumentBinding(DocumentFamily.ARTIFACT, version.id),
+            storage,
+            authorization=decision,
+            recorded=recorded,
+        )
+        with stream:
+            payload = stream.read()
     except StorageError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=(
-                f"The stored object for this artifact version ({version.object_path}) "
-                "could not be read from the outputs tier."
-            ),
-        ) from exc
-    digest = hashlib.sha256(payload).hexdigest()
-    if digest != version.checksum_sha256:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail={
                 "error_code": "artifact_version_checksum_mismatch",
                 "message": (
-                    f"The archived document at {version.object_path} no longer matches the "
-                    f"checksum recorded when it was written (recorded "
-                    f"{version.checksum_sha256[:12]}…, read {digest[:12]}…). It is not "
-                    "served: these are the exact bytes a signature covers, so a mismatch "
-                    "is object-store corruption, not a stale render. Escalate it."
+                    f"The archived document for {version.object_path} could not be proven "
+                    f"against the identity recorded when it was written (recorded "
+                    f"{version.checksum_sha256[:12]}…). It is not served: these are the exact "
+                    "bytes a signature covers, so a mismatch is object-store corruption or "
+                    "a missing stable reference, not a stale render. Escalate it."
                 ),
             },
-        )
+        ) from exc
     record_event(
         db,
         ctx,
@@ -282,6 +351,7 @@ def read_version_bytes(
 
 __all__ = [
     "SignedRevision",
+    "archived_version",
     "get_version_or_404",
     "latest_signed_version",
     "list_versions",

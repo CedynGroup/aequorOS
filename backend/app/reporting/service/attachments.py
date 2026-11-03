@@ -16,9 +16,9 @@ Two sources, one manifest:
   from the client, and the upload row is UNALTERABLE: withdrawing a document is
   a separate event, so "which document did we file" survives anyone's tidying.
 * **``icaap_cycle``** — a document the ICAAP cycle already held, carried onto
-  the package by reference at freeze. The bytes are NOT copied: the cycle's own
-  upload table is unalterable too, so the object at that path cannot change and
-  the sha256 is the binding.
+  the package by reference at freeze. The bytes are NOT copied; reference
+  preservation follows ``backend/docs/bank_encryption.md``, "Publication and its
+  callers".
 
 The kill switch is deliberately out of scope here. ``ATTESTATION_ESIGN_REQUIRED=0``
 suspends SIGNATURES; it has never had anything to say about whether the Board's
@@ -29,7 +29,6 @@ signing-infrastructure switch into a regulatory one.
 from __future__ import annotations
 
 import hashlib
-from io import BytesIO
 from typing import TYPE_CHECKING, Any
 from uuid import UUID
 
@@ -39,7 +38,6 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
 from app.data_engine.public import ALLOWED_MEDIA, sniff_media_type
-from app.db.base import utc_now
 from app.identity.public import Bank
 from app.reporting.models.packages import (
     PACKAGE_ATTACHMENT_GATES,
@@ -54,13 +52,21 @@ from app.reporting.schemas.packages import (
 )
 from app.reporting.service import family_hooks
 from app.services.audit import record_event
-from app.storage import ObjectMetadata, StorageClient, StorageLocation
+from app.storage import StorageClient
+from app.storage.public import (
+    DocumentBinding,
+    DocumentFamily,
+    PublicationRequest,
+    bind_existing_document,
+    bind_sealed_document,
+    find_sealed_document,
+    publish_sealed_document,
+)
 
 if TYPE_CHECKING:  # pragma: no cover - typing only
     from app.attestation.public import SigningPolicy  # noqa: PLC0415
 
 _STORAGE_TIER = "outputs"
-WRITTEN_BY = "package_attachment"
 
 #: A document may be attached while the return is still being prepared, routed
 #: or approved. Once it is SUBMITTED the manifest is the record of what went to
@@ -388,20 +394,18 @@ def upload_package_attachment(  # noqa: PLR0913 - an upload is its named parts
         f"bog_returns/{package.reporting_date.isoformat()}/{package.id}"
         f"/attachments/{digest}.{extension}"
     )
-    stored = storage.write(
-        StorageLocation(slug, _STORAGE_TIER, object_path),
-        BytesIO(content),
-        ObjectMetadata(
-            institution_slug=slug,
-            tier=_STORAGE_TIER,
-            checksum_sha256=digest,
-            written_at=utc_now(),
-            written_by=WRITTEN_BY,
-            as_of_date=package.reporting_date.isoformat(),
-            source_reference=package.return_code,
-        ),
+    request = PublicationRequest(
+        organization_id=ctx.organization_id,
+        bank_id=package.bank_id,
+        storage_slug=slug,
+        context_path=object_path,
+        payload=content,
         content_type=media_type,
+        published_by=actor_user_id,
+        as_of_date=package.reporting_date.isoformat(),
+        source_reference=package.return_code,
     )
+    published = publish_sealed_document(db, storage, request)
     row = RegulatoryPackageAttachment(
         organization_id=ctx.organization_id,
         bank_id=package.bank_id,
@@ -411,11 +415,11 @@ def upload_package_attachment(  # noqa: PLR0913 - an upload is its named parts
         title=title,
         original_filename=filename[:255],
         media_type=media_type,
-        byte_size=len(content),
-        sha256=digest,
+        byte_size=published.byte_length,
+        sha256=published.sha256,
         storage_tier=_STORAGE_TIER,
         object_path=object_path,
-        storage_version_id=stored.version_id,
+        storage_version_id=published.version_id,
         source="package_upload",
         source_attachment_id=None,
         gate=allowed[kind],
@@ -424,6 +428,12 @@ def upload_package_attachment(  # noqa: PLR0913 - an upload is its named parts
     )
     db.add(row)
     db.flush()
+    bind_existing_document(
+        db,
+        request,
+        published.document,
+        binding=DocumentBinding(DocumentFamily.PACKAGE_ATTACHMENT, row.id),
+    )
     record_event(
         db,
         ctx,
@@ -510,10 +520,9 @@ def copy_freeze_attachments(
 ) -> list[RegulatoryPackageAttachment]:
     """Carry an ICAAP cycle's evidence onto the package it froze into.
 
-    By REFERENCE: the object path and sha256 are copied, the bytes are not. The
-    cycle's upload table is unalterable, so the object cannot change under the
-    filing, and the hash is what proves the filed document is that document. No
-    commit — the freeze owns the transaction (P3-DESIGN §3.6).
+    Reference preservation follows ``backend/docs/bank_encryption.md``,
+    "Publication and its callers". No commit — the freeze owns the transaction
+    (P3-DESIGN §3.6).
     """
     from app.icaap.models.workspace import (  # noqa: PLC0415
         IcaapAttachment,
@@ -550,30 +559,44 @@ def copy_freeze_attachments(
         gate = gate_by_kind.get(row.kind, "optional")
         if gate not in gates:
             continue
-        copied.append(
-            RegulatoryPackageAttachment(
+        entry = RegulatoryPackageAttachment(
+            organization_id=ctx.organization_id,
+            bank_id=package.bank_id,
+            package_id=package.id,
+            package_version=package.version,
+            kind=row.kind,
+            title=row.title,
+            original_filename=row.original_filename,
+            media_type=row.media_type,
+            byte_size=row.byte_size,
+            sha256=row.sha256,
+            storage_tier=row.storage_tier,
+            object_path=row.object_path,
+            storage_version_id=row.storage_version_id,
+            source="icaap_cycle",
+            source_attachment_id=row.id,
+            gate=gate if gate in PACKAGE_ATTACHMENT_GATES else "optional",
+            attributes={},
+            attached_by=actor_user_id,
+        )
+        db.add(entry)
+        db.flush()
+        document = find_sealed_document(
+            db,
+            ctx.organization_id,
+            package.bank_id,
+            DocumentBinding(DocumentFamily.ICAAP_ATTACHMENT, row.id),
+        )
+        if document is not None:
+            bind_sealed_document(
+                db,
+                DocumentBinding(DocumentFamily.PACKAGE_ATTACHMENT, entry.id),
+                document=document,
                 organization_id=ctx.organization_id,
                 bank_id=package.bank_id,
-                package_id=package.id,
-                package_version=package.version,
-                kind=row.kind,
-                title=row.title,
-                original_filename=row.original_filename,
-                media_type=row.media_type,
-                byte_size=row.byte_size,
-                sha256=row.sha256,
-                storage_tier=row.storage_tier,
-                object_path=row.object_path,
-                storage_version_id=row.storage_version_id,
-                source="icaap_cycle",
-                source_attachment_id=row.id,
-                gate=gate if gate in PACKAGE_ATTACHMENT_GATES else "optional",
-                attributes={},
-                attached_by=actor_user_id,
+                bound_by=actor_user_id,
             )
-        )
-    for entry in copied:
-        db.add(entry)
+        copied.append(entry)
     if copied:
         db.flush()
     return copied

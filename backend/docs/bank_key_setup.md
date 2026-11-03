@@ -48,6 +48,9 @@ Keep the matching database envelopes and all recorded bank keys available.
 
 ### Reconcile pinned versions after replay
 
+This procedure covers legacy pinned references. For bound documents, follow the
+[stable sealed-document recovery limitations](bank_encryption.md#publication-and-its-callers).
+
 Restore replay emits `storage-restore-<timestamp>.json`, mapping each original
 `(bucket, key, version ID)` to the new version ID minted by the recovery store.
 Have the administrator rerun `scripts/database_roles_202610120096.sql` to prepare

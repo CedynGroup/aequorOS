@@ -75,8 +75,8 @@ def test_legacy_object_keys_keep_original_derivation_through_rotation(
     new_body, new_id, new_key = encryption.encrypt(location, io.BytesIO(content), metadata)
     with new_body:
         new_ciphertext = new_body.read()
-    assert new_id is not None and new_id != str(envelope_id) and new_key == NEXT_KEY.key_id
-    new_headers = {"encryption-format": ENCRYPTION_FORMAT, "key-envelope-id": new_id}
+    assert new_id is not None and new_id != envelope_id and new_key == NEXT_KEY.key_id
+    new_headers = {"encryption-format": ENCRYPTION_FORMAT, "key-envelope-id": str(new_id)}
     provider.set_status(KEY, KeyStatus.DISABLED)
     with encryption.decrypt(
         location, io.BytesIO(new_ciphertext), metadata, new_headers

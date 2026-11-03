@@ -7,10 +7,10 @@ officer's signature is on the document that goes to the regulator".
 
 **One render, then only appends.** The unsigned PDF is produced exactly once, by
 the export engine, and archived before anything cryptographic happens. Every
-signature afterwards is an incremental update appended to bytes read back out of
-object storage at the version the archive pinned. Signing NEVER re-renders: a
-re-render that shifted one byte would produce a document the preparer's byte
-range does not cover, and the preparer's revision would stop verifying. Reading
+signature afterwards is an incremental update appended to the archived revision's
+verified bytes. Signing NEVER re-renders: a re-render that shifted one byte would
+produce a document the preparer's byte range does not cover, and the preparer's
+revision would stop verifying. Reading
 the bytes back — rather than reusing the buffer the exporter still had in hand —
 is deliberate for the same reason: what is signed is then provably what an
 examiner will later fetch, and the checksum is re-verified on the way in.
@@ -32,9 +32,7 @@ were never written is a broken evidence chain.
 from __future__ import annotations
 
 import hashlib
-import io
 from collections.abc import Sequence
-from datetime import UTC, datetime
 from typing import Final
 
 from asn1crypto import x509 as asn1_x509
@@ -50,6 +48,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import TenantContext
 from app.attestation.models import AttestationSignature, RegulatoryArtifactVersion, SignerKey
 from app.attestation.service import layouts, pdf_signing, placements, signers
+from app.attestation.service.document_access import artifact_view_decision
 from app.attestation.service.workflow import AttestationConflict
 from app.core.config import Settings, get_settings
 from app.data_engine.public import bank_slug
@@ -57,20 +56,22 @@ from app.reporting.models.packages import RegulatoryPackage
 from app.reporting.service.common import get_bank_or_404
 from app.reporting.service.exports import export_package_version
 from app.services.audit import record_event
-from app.storage.client import (
-    ObjectMetadata,
-    StorageClient,
-    StorageError,
-    StorageLocation,
-)
+from app.storage import StorageClient, StorageError, StorageLocation, StorageValidationError
 from app.storage.factory import get_storage_client
+from app.storage.public import (
+    DocumentBinding,
+    DocumentFamily,
+    PublicationRequest,
+    RecordedDocument,
+    bind_existing_document,
+    publish_sealed_document,
+    resolve_document,
+)
 
 #: The kind every signed revision is filed under. It must stay ``"pdf"``: the
 #: verifier resolves the document to check by kind, and a signed revision under
 #: any other kind would be invisible to checks 1, 2 and 5.
 ARTIFACT_KIND: Final = "pdf"
-
-WRITTEN_BY: Final = "attestation_signing"
 
 #: The roles that have a field on a STANDARD return's artifact — every return
 #: except the ICAAP filing report, whose attestation page this platform draws and
@@ -256,7 +257,7 @@ def _unsigned_base(  # noqa: PLR0913 - the export scope plus the ceremony
     than when each officer takes their turn.
     """
     _artifact, version = export_package_version(db, ctx, package, ARTIFACT_KIND)
-    base = _read(client, slug, version)
+    base = _read(db, ctx, package, client, slug, version)
     resolved = placements.resolve(db, ctx, package, signing_order=signing_order)
     try:
         return pdf_signing.prepare_signature_fields(
@@ -301,23 +302,51 @@ def _previous_revision(  # noqa: PLR0913 - a lookup across five distinct inputs
             "required one. Void the attestation and certify again so both signatures "
             "land on the same document.",
         )
-    return _read(client, slug, version)
+    return _read(db, ctx, package, client, slug, version)
 
 
-def _read(client: StorageClient, slug: str, version: RegulatoryArtifactVersion) -> bytes:
+def _read(  # noqa: PLR0913 - the archived row and its authorized reader
+    db: Session,
+    ctx: TenantContext,
+    package: RegulatoryPackage,
+    client: StorageClient,
+    slug: str,
+    version: RegulatoryArtifactVersion,
+) -> bytes:
     """Fetch the exact archived bytes a version row pins, and prove they are those.
 
-    The checksum comparison is not belt-and-braces: signing bytes that differ
-    from the archived record would produce a signature the artifact-binding
-    check (§3.5 check 5) can never satisfy, and it is far better to discover
-    that here than on the day an examiner runs the verifier.
+    A bound revision resolves through its immutable catalogue identity; a row
+    published before stable references resolves through its own recorded pin.
+    Either way the checksum comparison is not belt-and-braces: signing bytes that
+    differ from the archived record would produce a signature the
+    artifact-binding check (§3.5 check 5) can never satisfy, and it is far better
+    to discover that here than on the day an examiner runs the verifier.
     """
-    location = StorageLocation(
-        institution_slug=slug, tier="outputs", object_path=version.object_path
-    )
     try:
-        _descriptor, stream = client.read(location, version_id=version.storage_version_id)
-        payload = stream.read()
+        _descriptor, stream = resolve_document(
+            db,
+            ctx,
+            package.bank_id,
+            DocumentBinding(DocumentFamily.ARTIFACT, version.id),
+            client,
+            authorization=artifact_view_decision(
+                db,
+                ctx,
+                bank_id=package.bank_id,
+                return_family=package.return_family,
+                surface="attestation_signed_pdf_read",
+            ),
+            recorded=RecordedDocument(
+                StorageLocation(
+                    institution_slug=slug, tier="outputs", object_path=version.object_path
+                ),
+                version.storage_version_id,
+                version.checksum_sha256,
+                version.size_bytes,
+            ),
+        )
+        with stream:
+            payload = stream.read()
     except StorageError as exc:
         raise AttestationConflict(
             "signed_pdf_unreadable",
@@ -347,36 +376,34 @@ def _archive(  # noqa: PLR0913 - a write needs its full destination
     revision: int,
 ) -> RegulatoryArtifactVersion:
     """Store the signed revision and append the row that pins it."""
-    # One path per revision rather than one path with two object versions: on a
-    # backend that cannot version (storage_version_id NULL), the approver's
-    # write would otherwise overwrite the exact bytes the preparer's signature
-    # pins, and the artifact-binding check would start failing on a document
-    # nobody had touched. The attestation cycle is in the path for the same
-    # reason: a void restarts the revision count, and a withdrawn attestation
-    # has to stay legible — including the document it was made on (L15).
+    # Preserve revision-specific archive names, including the attestation cycle:
+    # a void restarts the revision count, and a withdrawn attestation has to stay
+    # distinguishable — including the document it was made on (L15). Physical
+    # byte isolation is enforced by sealed publication's immutable object key.
     object_path = (
         f"bog_returns/{package.reporting_date.isoformat()}/{package.id}/"
         f"{package.return_code}.signed-c{package.attestation_cycle}-{revision}-{role}.pdf"
     )
-    checksum = hashlib.sha256(payload).hexdigest()
-    location = StorageLocation(institution_slug=slug, tier="outputs", object_path=object_path)
+    actor = ctx.actor_user_id
+    if actor is None:  # pragma: no cover - signing is a scoped human act
+        raise AttestationConflict(
+            "signed_pdf_unreadable", "The signed return document requires a signed-in signer."
+        )
     try:
         client.ensure_institution(slug)
-        stored = client.write(
-            location,
-            io.BytesIO(payload),
-            ObjectMetadata(
-                institution_slug=slug,
-                tier="outputs",
-                checksum_sha256=checksum,
-                written_at=datetime.now(UTC),
-                written_by=WRITTEN_BY,
-                as_of_date=package.reporting_date.isoformat(),
-                source_reference=package.return_code,
-            ),
+        request = PublicationRequest(
+            organization_id=ctx.organization_id,
+            bank_id=package.bank_id,
+            storage_slug=slug,
+            context_path=object_path,
+            payload=payload,
             content_type="application/pdf",
+            published_by=actor,
+            as_of_date=package.reporting_date.isoformat(),
+            source_reference=package.return_code,
         )
-    except StorageError as exc:
+        published = publish_sealed_document(db, client, request)
+    except (StorageError, StorageValidationError) as exc:
         raise AttestationConflict(
             "signed_pdf_unreadable",
             f"The signed return document could not be archived, so the signature cannot "
@@ -387,13 +414,19 @@ def _archive(  # noqa: PLR0913 - a write needs its full destination
         package_id=package.id,
         kind=ARTIFACT_KIND,
         object_path=object_path,
-        storage_version_id=stored.version_id,
-        checksum_sha256=checksum,
-        size_bytes=len(payload),
-        created_by=ctx.actor_user_id,
+        storage_version_id=published.version_id,
+        checksum_sha256=published.sha256,
+        size_bytes=published.byte_length,
+        created_by=actor,
     )
     db.add(version)
     db.flush()
+    bind_existing_document(
+        db,
+        request,
+        published.document,
+        binding=DocumentBinding(DocumentFamily.ARTIFACT, version.id),
+    )
     return version
 
 

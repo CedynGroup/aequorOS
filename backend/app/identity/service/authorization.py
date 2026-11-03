@@ -25,6 +25,7 @@ from app.core.authorization import (
     ConditionCheck,
     ConditionKind,
     DataScope,
+    ExaminerDocumentAuthority,
     GrantorType,
     GrantReasonCategory,
     InstitutionScope,
@@ -45,6 +46,7 @@ from app.core.authorization import (
 )
 from app.core.config import get_settings
 from app.core.observability import authorization_binding_decision
+from app.core.tenancy import TenantContext
 from app.db.base import utc_now
 from app.identity.models.authorization import AuthorizationBinding
 from app.identity.models.bank import Bank
@@ -271,6 +273,91 @@ def institution_grain_decision(
             decision, allowed=False, reason="institution_grain_requires_whole_institution"
         )
     return decision
+
+
+def institution_decision(  # noqa: PLR0913 - the complete policy tuple is explicit
+    db: Session,
+    ctx: TenantPrincipalContext,
+    *,
+    bank_id: str,
+    module: Module,
+    sensitivity: Sensitivity,
+    permission: Permission,
+    surface: str,
+    conditions: tuple[ConditionCheck, ...] = (),
+) -> AuthorizationDecision:
+    """One complete active binding for this exact institution, at institution grain.
+
+    This is the decision a caller hands to a kernel boundary that must see the
+    authority itself rather than a boolean — the sealed-document resolver is the
+    first such boundary. An evaluator failure denies, and a denial carries its
+    reason; the caller decides whether that is a 404, a 403 or a storage refusal.
+    """
+    principal = principal_locator(ctx)
+    resource = ResourceLocator(
+        ctx.organization_id,
+        InstitutionScope.INSTITUTION,
+        bank_id,
+        module,
+        sensitivity,
+    )
+    try:
+        decision = evaluate_permission(db, principal, permission, resource, conditions=conditions)
+        whole_institution = False
+        if decision.allowed:
+            whole_institution = effective_data_scope(
+                db,
+                organization_id=ctx.organization_id,
+                binding_ids=decision.matching_binding_ids,
+            ).whole_institution
+        decision = institution_grain_decision(decision, whole_institution=whole_institution)
+    except Exception as exc:  # noqa: BLE001 - enforcement must deny on evaluator failure
+        record_binding_evaluation_failure(
+            principal, permission, resource, surface=surface, error=exc
+        )
+        return AuthorizationDecision(
+            allowed=False,
+            reason="binding_evaluation_failed",
+            permission=permission,
+            principal=principal,
+            resource=resource,
+            matching_binding_ids=(),
+            binding_trace=(),
+            condition_trace=conditions,
+        )
+    record_binding_decision(
+        decision, surface=surface, severity="info" if decision.allowed else "warning"
+    )
+    return decision
+
+
+def document_view_decision(  # noqa: PLR0913
+    db: Session,
+    ctx: TenantContext,
+    *,
+    bank_id: str,
+    module: Module,
+    sensitivity: Sensitivity,
+    surface: str,
+) -> AuthorizationDecision | ExaminerDocumentAuthority:
+    if ctx.impersonation_context is not None:
+        return ExaminerDocumentAuthority(
+            ResourceLocator(
+                ctx.organization_id, InstitutionScope.INSTITUTION, bank_id, module, sensitivity
+            ),
+            ctx.actor_operator if ctx.actor_user_id is None else None,
+            ctx.impersonation_context,
+            request_wide_condition_checks(),
+        )
+    return institution_decision(
+        db,
+        ctx,
+        bank_id=bank_id,
+        module=module,
+        sensitivity=sensitivity,
+        permission=Permission.VIEW,
+        surface=surface,
+    )
 
 
 def record_binding_grant_audit(

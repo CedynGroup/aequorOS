@@ -32,6 +32,7 @@ from tests.icaap.service.test_icaap_stress_reverse_stress import (
     storage,
 )
 from tests.support.inmemory_storage import InMemoryStorageClient
+from tests.support.sealed_documents import published_bytes
 
 pytestmark = pytest.mark.usefixtures(
     "forecasting_run_authority", "return_generation_authority", "capital_run_authority"
@@ -63,10 +64,8 @@ def _stored(
 
     artifact = export_package(db, MAKER, package, kind)  # type: ignore[arg-type]
     slug = db.scalar(select(Bank.storage_slug).where(Bank.id == SAMPLE_BANK_ID))
-    for obj in client.list(slug, "outputs"):  # type: ignore[arg-type]
-        if obj.location.object_path == artifact.object_path:
-            return client.read(obj.location)[1].read()
-    raise AssertionError(artifact.object_path)
+    assert slug
+    return published_bytes(db, client, slug=slug, context_path=artifact.object_path)
 
 
 def test_bound_run_carries_its_own_input_hash_and_appears_in_every_export(

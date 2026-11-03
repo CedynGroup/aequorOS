@@ -32,11 +32,13 @@ from sqlalchemy.orm import Session
 
 from alembic import command
 from app.core.audit_integrity import verify_chains
+from app.core.authorization import RoleBundle
 from app.core.key_management import registry
 from app.core.key_management.local import LocalKeyProvider
 from app.core.key_management.types import KeyStatus, KeyUnavailableError
 from app.core.tenancy import TenantContext
 from app.db.base import Base
+from app.identity.public import User
 from app.reporting.service.artifact_versions import read_version_bytes
 from app.storage.client import StorageLocation
 from app.storage.config import StorageEngineSettings
@@ -66,6 +68,7 @@ from tests.support.database import (
     isolated_postgres_database,
     managed_engine,
 )
+from tests.support.factories.authorization import grant_institution_authority
 from tests.support.helpers import ORG_1, ORG_2
 
 pytestmark = [
@@ -702,6 +705,25 @@ def test_encrypted_backup_loss_restore_reconcile_downloads_original_signed_revis
             return descriptor.version_id
 
         records = _records(recovery_connection, write)
+        contexts: dict[str, TenantContext] = {}
+        with session() as db:
+            for organization, bank in BANKS:
+                user = User(
+                    id=uuid4(),
+                    organization_id=organization,
+                    email=f"recovery-{bank}@example.test",
+                )
+                db.add(user)
+                db.flush()
+                grant_institution_authority(
+                    db,
+                    organization_id=organization,
+                    bank_id=bank,
+                    user_id=user.id,
+                    bundle=RoleBundle.VIEWER,
+                )
+                contexts[bank] = TenantContext(organization, user.id, authorization_version=1)
+            db.commit()
         for _, bank in BANKS:
             location = StorageLocation(bank.lower(), "temp", "upload")
             payload = b"synthetic pending upload"
@@ -756,9 +778,7 @@ def test_encrypted_backup_loss_restore_reconcile_downloads_original_signed_revis
             s3.delete_bucket(Bucket=bucket)
         artifact = next(r for r in records if r.table == TABLES[0])
         with session() as db, pytest.raises(HTTPException):
-            read_version_bytes(
-                db, TenantContext(artifact.organization), artifact.bank, artifact.id, storage
-            )
+            read_version_bytes(db, contexts[artifact.bank], artifact.bank, artifact.id, storage)
         restored = backup_storage.restore_storage_backup(s3, manifest, out_dir=tmp_path)
         temp_versions = [v for v in restored.versions if v.bucket.endswith("-temp")]
         assert len(temp_versions) == len(BANKS)
@@ -797,7 +817,7 @@ def test_encrypted_backup_loss_restore_reconcile_downloads_original_signed_revis
             if record.table == TABLES[0]:
                 with session() as db:
                     row, payload = read_version_bytes(
-                        db, TenantContext(record.organization), record.bank, record.id, storage
+                        db, contexts[record.bank], record.bank, record.id, storage
                     )
                     assert payload == record.payload
                     signature = cast(
@@ -814,20 +834,18 @@ def test_encrypted_backup_loss_restore_reconcile_downloads_original_signed_revis
                         bytes(signature), payload, ec.ECDSA(hashes.SHA256())
                     )
                     assert row.checksum_sha256 == hashlib.sha256(payload).hexdigest()
-                for organization, other_bank in BANKS:
+                for _, other_bank in BANKS:
                     if other_bank != record.bank:
                         with session() as db, pytest.raises(HTTPException) as refusal:
                             read_version_bytes(
-                                db, TenantContext(organization), other_bank, record.id, storage
+                                db, contexts[other_bank], other_bank, record.id, storage
                             )
                         assert refusal.value.status_code == 404
         # Repairing the pin does not grant access to a revoked/unavailable key.
         for state in (KeyStatus.DISABLED, KeyStatus.UNAVAILABLE):
             provider.set_status(KEY, state)
             with session() as db, pytest.raises(KeyUnavailableError):
-                read_version_bytes(
-                    db, TenantContext(artifact.organization), artifact.bank, artifact.id, storage
-                )
+                read_version_bytes(db, contexts[artifact.bank], artifact.bank, artifact.id, storage)
             provider.set_status(KEY, KeyStatus.ACTIVE)
         with session() as db:
             assert all(chain.valid for chain in verify_chains(db))

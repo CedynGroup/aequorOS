@@ -16,6 +16,7 @@ from app.storage.client import (
     StorageNotFoundError,
     StorageObject,
     StorageValidationError,
+    Tier,
 )
 
 __all__ = [
@@ -28,4 +29,5 @@ __all__ = [
     "StorageNotFoundError",
     "StorageObject",
     "StorageValidationError",
+    "Tier",
 ]

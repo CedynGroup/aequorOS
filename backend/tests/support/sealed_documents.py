@@ -3,9 +3,13 @@
 from datetime import date
 from uuid import UUID, uuid4
 
+from sqlalchemy import select
 from sqlalchemy.engine import Connection
+from sqlalchemy.orm import Session
 
 from app.db.base import Base
+from app.storage.client import SealedEncryptionContext, StorageClient, StorageLocation
+from app.storage.models import SealedDocumentObject
 from app.storage.sealed_documents import DocumentFamily
 
 SOURCES = {
@@ -20,6 +24,43 @@ SOURCES = {
         "supervisory_letter_document_bindings",
     ),
 }
+
+
+def sealed_document(db: Session, *, slug: str, context_path: str) -> SealedDocumentObject:
+    """The catalogue row a published document path resolved to, newest first.
+
+    A sealed object lives under ``sealed/v1/<catalogue uuid>`` rather than at the
+    document path the feature records, so the bytes are not findable by listing
+    the tier for that path. The catalogue says which object published the path.
+    """
+    document = db.scalar(
+        select(SealedDocumentObject)
+        .where(
+            SealedDocumentObject.storage_slug == slug,
+            SealedDocumentObject.context_path == context_path,
+        )
+        .order_by(SealedDocumentObject.published_at.desc(), SealedDocumentObject.id.desc())
+    )
+    if document is None:
+        raise AssertionError(f"No sealed document records {context_path}")
+    return document
+
+
+def published_bytes(db: Session, storage: StorageClient, *, slug: str, context_path: str) -> bytes:
+    """The plaintext a sealed publication wrote, addressed by the path its row records."""
+    document = sealed_document(db, slug=slug, context_path=context_path)
+    assert document.context_format in ("aws-esdk-object-v1", "plaintext-v1")
+    context = SealedEncryptionContext(
+        document.context_format,
+        StorageLocation(slug, "outputs", document.context_path),
+        document.sha256,
+        document.envelope_id,
+    )
+    _descriptor, stream = storage.for_session(db).read_sealed(
+        StorageLocation(slug, "outputs", document.physical_key), context
+    )
+    with stream:
+        return stream.read()
 
 
 def insert_source(  # noqa: PLR0913 - synthetic source evidence and ownership
