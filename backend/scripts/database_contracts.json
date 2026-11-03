@@ -942,13 +942,16 @@
         "tests/api/test_cross_tenant_bank_routes.py::test_every_bank_route_hides_sibling_tenant_bank",
         "tests/data_engine/api/test_system_of_record_bank_scope.py::test_a_sibling_banks_declaration_cannot_be_approved_or_revoked_under_this_bank",
         "tests/data_engine/api/test_system_of_record_bank_scope.py::test_a_sibling_banks_withdrawal_cannot_be_approved_or_reversed_under_this_bank",
-        "tests/data_engine/api/test_system_of_record_bank_scope.py::test_a_withdrawal_cannot_cite_a_sibling_banks_declaration"
+        "tests/data_engine/api/test_system_of_record_bank_scope.py::test_a_withdrawal_cannot_cite_a_sibling_banks_declaration",
+        "tests/db/test_authorization_effective_access_properties.py::test_uncovered_institution_is_indistinguishable_from_a_missing_one"
       ]
     },
     {
       "category": "authority state",
       "reason": "Persisted bindings, grants, security state and invalidation require real database outcomes.",
       "cases": [
+        "tests/db/test_authorization_effective_access_properties.py::test_reconciliation_approval_never_skips_the_second_officer",
+        "tests/db/test_authorization_effective_access_properties.py::test_scoped_grant_lifecycle_never_exceeds_current_bindings",
         "tests/identity/api/test_access_request_state_machine.py::test_access_requests_remain_scoped_and_resolved_history_is_terminal",
         "tests/identity/api/test_account_administration_authorization.py::test_account_admin_cannot_approve_sso_request_but_owner_can_reach_workflow",
         "tests/identity/api/test_account_administration_authorization.py::test_account_administer_does_not_imply_organization_directory_view",
