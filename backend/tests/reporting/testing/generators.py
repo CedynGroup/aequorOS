@@ -181,11 +181,43 @@ def evidence_bindings(draw: st.DrawFn) -> EvidenceBinding:
     return EvidenceBinding(bundle, module, sensitivity, institution_id, lifecycle)
 
 
+#: Bundles the database admits at most once while ACTIVE: baseline membership is
+#: unique per principal and the organization owner per organization
+#: (``uq_authorization_bindings_active_member`` and
+#: ``uq_authorization_bindings_active_org_owner``). A generated set may not hold
+#: two ACTIVE rows of either, so ``grant()`` cannot raise an integrity error
+#: instead of exercising authorization.
+ACTIVE_SINGLETON_BUNDLES = frozenset({RoleBundle.MEMBER, RoleBundle.ORG_OWNER})
+
+
+def at_most_one_active_singleton(
+    bindings: list[EvidenceBinding],
+) -> list[EvidenceBinding]:
+    """Drop repeated ACTIVE ``member``/``org_owner`` rows the database refuses.
+
+    Inactive duplicates stay: a revoked or expired second row is a legal record
+    and still has to be generated so the lifecycle cases are exercised.
+    """
+
+    kept: list[EvidenceBinding] = []
+    for binding in bindings:
+        duplicate = (
+            binding.lifecycle == "active"
+            and binding.bundle in ACTIVE_SINGLETON_BUNDLES
+            and any(
+                other.lifecycle == "active" and other.bundle is binding.bundle for other in kept
+            )
+        )
+        if not duplicate:
+            kept.append(binding)
+    return kept
+
+
 def evidence_binding_sets() -> st.SearchStrategy[list[EvidenceBinding]]:
     """Empty, complete, partial and split grants — rows never compose authority."""
 
     return st.one_of(
-        st.lists(evidence_bindings(), max_size=4),
+        st.lists(evidence_bindings(), max_size=4).map(at_most_one_active_singleton),
         st.lists(
             st.builds(
                 EvidenceBinding,

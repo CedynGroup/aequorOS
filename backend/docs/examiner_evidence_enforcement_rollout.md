@@ -155,8 +155,8 @@ organization ID, `principal_type=human`, active status and approved validity.
 | --------------------------------------------------------------------------------------- | --------------------- | ------------------------------- | ---------------------- | ----------------- |
 | Opens the supervisory bundle (bank internal auditor, audit liaison)                     | `auditor` or `viewer` | organization, or the exact bank | `audit`                | `restricted`      |
 | Reads Liquidity sources (run snapshots, threshold/haircut registers, EWI register, CFP) | `viewer` or `analyst` | as granted                      | `liq`                  | `confidential`    |
-| Reads Capital sources (capital-plan register, ICAAP packages and cycles)                | `viewer` or `analyst` | as granted                      | `cap`                  | `confidential`    |
-| Reads filed returns (every non-ICAAP family)                                            | `viewer` or `analyst` | as granted                      | `reg`                  | `restricted`      |
+| Reads Capital sources (capital-plan register, ICAAP packages and cycles)                | `viewer`              | as granted                      | `cap`                  | `confidential`    |
+| Reads filed returns (every non-ICAAP family)                                            | `viewer`              | as granted                      | `reg`                  | `restricted`      |
 | Reads Credit sources (ECL assumptions, CRM haircut register)                            | `viewer` or `analyst` | as granted                      | `credit`               | `confidential`    |
 | Reads Forecasting runs (projection, optimizer, what-if, reverse stress)                 | `viewer` or `analyst` | as granted                      | `fcst`                 | `confidential`    |
 | Reads IRRBB / FX / FTP runs                                                             | `viewer` or `analyst` | as granted                      | `irrbb` / `fx` / `ftp` | `confidential`    |
@@ -167,6 +167,20 @@ carry exactly `{view}`, and the sensitivity dimension is what separates an audit
 reader from a general one. The two audit officer bundles (`security_officer`,
 `compliance_officer`) also carry `view` and satisfy the same sentence when their
 whole-institution Audit coverage invariant holds.
+
+Reading rows take `viewer` wherever the bundle is read-only. `analyst` also
+carries `run`, `create` and `edit`, and two of these modules are already
+binding-cut-over: an `analyst` row at `reg`/`restricted` can generate regulatory
+packages (`require_generation_authority` asks for `run` on ordinary families),
+and one at `cap`/`confidential` can create or edit a capital-plan draft. Grant
+`analyst` only where the user genuinely authors those artefacts, through a
+separate approval.
+
+Every source row needs effective `data_scope_kind=all` as well. The source gate
+asks for whole-institution coverage, so a branch- or region-narrowed `liq`,
+`cap`, `reg`, `credit`, `fcst`, `irrbb`, `fx`, `ftp` or `risk` row leaves that
+source withheld even though the row exists. That includes the Credit registers:
+a narrowed Credit grant does not open `ecl-assumptions` or `crm-haircuts`.
 
 An organization with no `audit`/`restricted` row after this cutover loses every
 examiner route; an organization whose auditor holds only the entry row keeps the

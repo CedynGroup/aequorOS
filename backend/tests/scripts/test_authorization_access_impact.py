@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 from uuid import uuid4
 
 from sqlalchemy.orm import Session
@@ -18,12 +19,31 @@ from app.models import Bank, Organization, User
 from app.policy.service.institution_types import FALLBACK_TYPE_CODE
 from scripts.authorization_access_impact import (
     INSTITUTION_MODULES,
+    UserAccess,
     build_report,
     render_table,
 )
 
 ORG = "OR-IMPCT001"
 BANK = "BK-IMPCT001"
+
+
+def _rendered_cells(rows: list[UserAccess]) -> dict[str, dict[str, str]]:
+    """The rendered table parsed back into header-keyed cells per email.
+
+    A column-level assertion is what the operator actually reads: a table-wide
+    containment check passes through an unrelated column (the auditor email also
+    appears under ``product view``), so it cannot prove the column it names.
+    """
+    lines = render_table(rows).splitlines()
+    header = re.split(r"\s{2,}", lines[0].strip())
+    parsed: dict[str, dict[str, str]] = {}
+    for line in lines[1:]:
+        if set(line.strip()) == {"-"}:
+            continue
+        parsed_cell = dict(zip(header, re.split(r"\s{2,}", line.strip()), strict=True))
+        parsed[parsed_cell["email"]] = parsed_cell
+    return parsed
 
 
 def _user(db: Session, email: str, *, role: str = "viewer", **overrides) -> User:
@@ -261,4 +281,8 @@ def test_the_report_names_who_may_read_examiner_evidence(db_session: Session) ->
     assert rows["confidential@impact.example"].examiner_evidence == []
     assert rows["liquidity@impact.example"].examiner_evidence == []
     assert rows["admin@impact.example"].examiner_evidence == []
-    assert BANK in render_table(list(rows.values()))
+    cells = _rendered_cells(list(rows.values()))
+    assert cells["auditor@impact.example"]["examiner"] == BANK
+    assert cells["confidential@impact.example"]["examiner"] == "-"
+    assert cells["liquidity@impact.example"]["examiner"] == "-"
+    assert cells["admin@impact.example"]["examiner"] == "-"
