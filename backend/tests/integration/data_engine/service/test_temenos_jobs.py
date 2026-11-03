@@ -28,7 +28,7 @@ from tests.support.helpers import ORG_1, USER_1
 from tests.support.inmemory_storage import InMemoryStorageClient
 
 OFS_FIXTURES = (
-    Path(__file__).resolve().parents[2] / "unit/data_engine/adapters/temenos_t24/ofs/fixtures"
+    Path(__file__).resolve().parents[3] / "unit/data_engine/adapters/temenos_t24/ofs/fixtures"
 )
 MASTER_KEY = "temenos-jobs-test-key"
 AS_OF = date(2026, 6, 30)
