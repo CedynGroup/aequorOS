@@ -218,7 +218,9 @@ def _read_declared_digest(
         return None
     try:
         return storage_client.read_object_digest(
-            bucket=bucket, object_key=finalized_key, max_bytes=observed_size
+            bucket=bucket,
+            object_key=finalized_key,
+            max_bytes=observed_size,
         )
     except ContentReadOverrun as exc:
         raise HTTPException(
