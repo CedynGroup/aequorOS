@@ -33,12 +33,15 @@ New code is strict; legacy code may only get stricter.
 - **Strict modules** may have no errors and never take a baseline entry: every new module, every
   module that passed when the baseline was recorded, and the packages and modules listed in
   `STRICT_MODULES` in the script, except the exact-file migration allowances described below.
-- **A legacy module may not add errors.** A rule's count above its baseline fails.
-- **Record every fix.** A count below its baseline also fails until
-  `uv run python scripts/type_check_baseline.py update`, run from `backend/`, writes the lower
-  count.
+- **A legacy module may not add errors.** A rule's count above its baseline fails, even when
+  another module's count fell.
+- **A decrease passes.** A count below its baseline is reported as information only and never
+  fails the gate, so a fix merges without waiting for the baseline. Record it whenever
+  convenient with `uv run python scripts/type_check_baseline.py update`, run from `backend/`;
+  that refresh may be its own reviewed PR.
   `update` refuses to run while any count is above its baseline, so it only lowers numbers and
-  deletes entries; review that the diff does only that.
+  deletes entries; review that the diff does only that. Until a refresh, the stale allowance
+  permits reintroducing that error up to its old count.
 - **Moves.** A module moved by a layout PR keeps its legacy allowance until its package is
   promoted, so a move PR stays a pure rename (§5). The check counts it under the name it had
   before its moves in `backend/scripts/feature_module_moves.json`. A module whose new location is
