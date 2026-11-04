@@ -14,7 +14,7 @@ from uuid import uuid4
 
 import pytest
 from fastapi.routing import APIRoute
-from sqlalchemy import Engine
+from sqlalchemy import Engine, Table, create_engine
 from sqlalchemy.orm import Session
 
 from app.core.authorization import (
@@ -454,6 +454,9 @@ def _assert_configure_artifacts(
         assert configure_impact.main(["--database-url", "sqlite://", "--organization", ORG]) == 0
         output = capsys.readouterr()
         assert '"schema_version": 1' in output.out and not output.err
+        assert configure_impact.main(["--database-url", "sqlite://"]) == 0
+        output = capsys.readouterr()
+        assert '"schema_version": 1' in output.out and not output.err
         cli_dir = tmp_path / "cli"
         assert (
             configure_impact.main(
@@ -483,6 +486,25 @@ def _assert_configure_artifacts(
             == 2
         )
         assert "no complete assessment" in capsys.readouterr().err
+    _assert_configure_empty_inventory(tmp_path, capsys)
+
+
+def _assert_configure_empty_inventory(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    url = f"sqlite:///{tmp_path / 'empty-organizations.sqlite'}"
+    engine = create_engine(url)
+    try:
+        table = Organization.__table__
+        assert isinstance(table, Table)
+        table.create(engine)
+    finally:
+        engine.dispose()
+    destination = tmp_path / "empty-inventory"
+    for output_args in ([], ["--output-dir", str(destination)]):
+        assert configure_impact.main(["--database-url", url, *output_args]) == 2
+        output = capsys.readouterr()
+        assert not output.out
+        assert "no complete assessment" in output.err
+        assert not destination.exists()
 
 
 def _assert_configure_evaluator_failure(db: Session, monkeypatch: pytest.MonkeyPatch) -> None:
