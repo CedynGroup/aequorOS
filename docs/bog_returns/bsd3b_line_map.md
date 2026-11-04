@@ -309,7 +309,7 @@ non_monetary_exposure}, rank)` with the sheet's fields) read through `refs.field
 canonical positions (§7) with `bsd3a.build_lines("BSD3B", "solo")` applied per subsidiary — **plus**
 per-subsidiary emission (§7 ask 1: the catalogue says one workbook PER subsidiary; the generator emits one,
 so a `subsidiary_id` filter alone would emit only the first subsidiary). Proof of the decision:
-`tests/services/data_gaps/test_subsidiaries.py` (BSD3B binds nothing to the register; the 401 roster / count
+`tests/services/data_gaps/test_subsidiaries_integration.py` (BSD3B binds nothing to the register; the 401 roster / count
 cells carry the register-naming note).
 
 ## 4. Residual unmapped lines — data the bank must supply
@@ -322,7 +322,7 @@ the depositor count. Prerequisite for the platform to feed them: a **subsidiary 
 `subsidiary_exposures` roster dataset keyed by `subsidiary_id` (ingested under the subsidiary, or tagged
 with a subsidiary `owning_entity` that the register recognises).
 
-## 5. Critical checks proven by `tests/reporting/service/bog_forms/test_bsd3.py`
+## 5. Critical checks proven by `tests/reporting/service/bog_forms/test_bsd3_integration.py`
 
 1. BSD3B generates through the real package pipeline with `basis == "consolidated"`, no engine
    errors, `unmapped == 0`; `mapped == 4` (row numbers), every other declared cell `input_required`;

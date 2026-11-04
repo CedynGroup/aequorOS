@@ -33,7 +33,7 @@ the Range sheet. Until the register is ingested every cell resolves to
 `input_required` ("tariff register required") at generation, the structure
 exports verbatim and the Completion notes list every line; once ingested the
 cells are `mapped` (the Sample Bank register flips 168 + 75 of them —
-`tests/services/data_gaps/test_tariff_schedule.py`; the two Range block
+`tests/services/data_gaps/test_tariff_schedule_integration.py`; the two Range block
 sub-headings `FX.1` / `FX.6` take no amount by design). The item numbers 1–22
 in column A stay the template's constants. Sharp edge: the Data Engine's type
 coercer reads `N/A` / `Nil` / `-` / `none` as null sentinels, so a tariff

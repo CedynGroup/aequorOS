@@ -99,7 +99,7 @@ def main() -> None:
         "\nLegend: map ✓ = every official leaf input cell is bound (source or explicit input_required); "
         "◐ = some official cells still unmapped. calc = % of bound cells fed from platform data today; the "
         "remainder is data the bank must supply (see each form's line-map doc, 'Residual unmapped lines'). "
-        "The framework gate (tests/reporting/service/test_bog_forms_framework.py) generates + exports EVERY form "
+        "The framework gate (tests/reporting/service/test_bog_forms_framework_integration.py) generates + exports EVERY form "
         "template-faithfully and evaluates 100% of the templates' formulas regardless of map status."
     )
 

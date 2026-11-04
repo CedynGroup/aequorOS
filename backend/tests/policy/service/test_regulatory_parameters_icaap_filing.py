@@ -23,27 +23,25 @@ Also pinned here, because both are judgement calls rather than mechanics:
   layer for either, so a direction entry would be inert while implying a
   tightening rule that does not exist — the same call, for the same reason, that
   the Pillar 2 codes made.
+
+This module's other-suite cases live in
+
+``test_regulatory_parameters_icaap_filing_integration.py``.
 """
 
 from __future__ import annotations
 
+__all__ = ["_migration"]
 import importlib.util
 from collections import Counter
-from collections.abc import Callable
-from copy import deepcopy
 from datetime import date
 from pathlib import Path
 from types import ModuleType
-from typing import Any, cast
+from typing import Any
 
 import pytest
-from alembic.migration import MigrationContext
-from alembic.operations import Operations
-from sqlalchemy import delete, select
-from sqlalchemy.orm import Session
 
 from app.icaap.service import parameters as workspace_parameters
-from app.models import RegulatoryParameter
 from app.policy.domain import parameter_shapes
 from app.policy.service import regulatory_parameters
 
@@ -75,9 +73,6 @@ def _seed_key(row: dict[str, Any]) -> tuple[str, str, str, str]:
     )
 
 
-# --- the disjointness rule ------------------------------------------------
-
-
 def test_no_icaap_code_is_seeded_twice() -> None:
     workspace = workspace_parameters.ICAAP_PARAM_CODES
     pillar2 = regulatory_parameters.P2_PARAMETER_CODES
@@ -105,37 +100,6 @@ def test_the_whole_seed_catalogue_still_has_no_duplicate_generation() -> None:
     assert duplicates == []
     codes = {str(row["param_code"]) for row in rows}
     assert codes >= regulatory_parameters.FILING_PARAMETER_CODES
-
-
-def test_the_hermetic_fixture_seeds_every_filing_code_exactly_once(db_session: Session) -> None:
-    """``create_all`` runs no migration, so the shared fixture is the only seeder.
-
-    Without this the ICAAP eligibility check would answer ``missing_parameter``
-    in every hermetic test and every Playwright journey, which reads as a broken
-    feature rather than as an unseeded database.
-    """
-    expected = regulatory_parameters.FILING_PARAMETER_CODES
-    rows = list(
-        db_session.scalars(
-            select(RegulatoryParameter).where(RegulatoryParameter.param_code.in_(expected))
-        )
-    )
-    counts = Counter(
-        (row.scope_type, row.scope_key, row.param_code, row.jurisdiction_code) for row in rows
-    )
-    assert {code for _st, _sk, code, _j in counts} == expected
-    assert [key for key, count in counts.items() if count > 1] == []
-    for row in rows:
-        assert row.status == "approved"
-        assert row.effective_to is None
-        assert (row.scope_type, row.scope_key, row.jurisdiction_code) == (
-            "institution_class",
-            "bank",
-            "GH",
-        )
-
-
-# --- the catalogue itself --------------------------------------------------
 
 
 @pytest.mark.parametrize(
@@ -188,9 +152,6 @@ def test_no_parameter_direction_entry_was_added_for_the_filing_codes() -> None:
     )
 
 
-# --- the migration agrees with the catalogue ------------------------------
-
-
 def test_the_catalogue_and_the_migration_agree() -> None:
     module = _migration()
     pinned = {
@@ -216,59 +177,12 @@ def test_the_catalogue_and_the_migration_agree() -> None:
     assert module.down_revision == "202609190058"
 
 
-def test_the_migration_pins_its_own_rows_and_imports_no_catalogue(
-    db_session: Session, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    seeds = deepcopy(regulatory_parameters.filing_seed_rows())
-    codes = regulatory_parameters.FILING_PARAMETER_CODES
-
-    def refuse_catalogue() -> list[dict[str, object]]:
-        raise AssertionError("a shipped migration called the live catalogue")
-
-    monkeypatch.setattr(regulatory_parameters, "seed_rows", refuse_catalogue)
-    monkeypatch.setattr(regulatory_parameters, "filing_seed_rows", refuse_catalogue)
-    monkeypatch.setattr(regulatory_parameters, "ICAAP_FILING_SEED_PARAMETERS", ())
-    db_session.execute(delete(RegulatoryParameter).where(RegulatoryParameter.param_code.in_(codes)))
-    module = _migration()
-    with Operations.context(MigrationContext.configure(db_session.connection())):
-        cast(Callable[[], None], module.upgrade)()
-    rows = list(
-        db_session.scalars(
-            select(RegulatoryParameter).where(RegulatoryParameter.param_code.in_(codes))
-        )
-    )
-    actual = {
-        row.param_code: (
-            row.value_numeric,
-            cast(dict[str, object] | None, row.value_json),
-            row.unit,
-            row.confirmation_status,
-            row.source_citation,
-        )
-        for row in rows
-    }
-    expected = {
-        str(row["param_code"]): (
-            row["value_numeric"],
-            row["value_json"],
-            row["unit"],
-            row["confirmation_status"],
-            row["source_citation"],
-        )
-        for row in seeds
-    }
-    assert actual == expected
-
-
 def test_the_migration_does_not_collide_with_the_earlier_icaap_seeds() -> None:
     workspace = set(_load(VERSIONS / "202609190055_icaap_workspace.py", "ws").PARAM_CODES)
     pillar2 = set(_load(VERSIONS / "202609190056_icaap_pillar2_parameters.py", "p2").PARAM_CODES)
     filing = set(_migration().PARAM_CODES)
     assert filing & workspace == set()
     assert filing & pillar2 == set()
-
-
-# --- the artifact-kind vocabulary is stated once --------------------------
 
 
 def test_every_artifact_kind_vocabulary_agrees() -> None:

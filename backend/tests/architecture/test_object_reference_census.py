@@ -1,7 +1,7 @@
 """The object-reference (IDOR) census must resolve on every route the app mounts.
 
-The two IDOR suites (`tests/api/test_authorization_object_reference_coverage.py`
-and `tests/db/test_authorization_object_reference_properties.py`) enumerate
+The two IDOR suites (`tests/api/test_authorization_object_reference_coverage_integration.py`
+and `tests/db/test_authorization_object_reference_properties_integration.py`) enumerate
 their cases from the live FastAPI registry at collection time, so a route that
 adds an object identifier the catalogue does not know breaks BOTH suites at
 collection rather than failing one case.  That is the right severity — an

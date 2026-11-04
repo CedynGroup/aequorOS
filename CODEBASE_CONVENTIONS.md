@@ -366,7 +366,7 @@ generated actors/statuses, compare each outcome with the transition table, then
 re-read the record to check invariants. Include sequences such as submit → maker
 approval refusal → checker approval → file → edit refusal, and cross-bank attempts
 within the same organization as well as cross-organization attempts. The existing
-[`authorization state machines`](backend/tests/identity/api/test_authorization_state_machine.py)
+[`authorization state machines`](backend/tests/identity/api/test_authorization_state_machine_integration.py)
 show `@rule`, `@invariant` and `run_state_machine_as_test` through real services/APIs.
 Run each with bounded settings, for example:
 
@@ -381,6 +381,10 @@ run_state_machine_as_test(
 
 - Layout and fixture ownership follow [the feature layout](#5-feature-layout).
   HTTP-level tests are the default style.
+- **A test module's filename names its suite**: `test_<name>_integration.py` is
+  integration, `test_<name>_e2e.py` is e2e, and suffix-free `test_<name>.py` is unit.
+  Keep the cases for one feature together in its folder; a module that would serve two
+  suites is split into two files rather than mixing them.
 - **Database fixtures**: see [CONTRIBUTING.md](CONTRIBUTING.md) for fixture selection and
   the [backend test database guide](backend/README.md#test-databases-and-the-primary-database)
   for isolation and application reuse.
@@ -399,7 +403,7 @@ run_state_machine_as_test(
   `tests/case/api/test_liquidity.py::test_liquidity_summary_and_review_are_tenant_scoped` — create
   data as ORG_1, then assert the same URLs return `404` with
   `headers(org_id=ORG_2, user_id=USER_2)` for both reads and mutations. DB-level scoping checks
-  live in `tests/case/api/test_scoping.py`.
+  live in `tests/case/api/test_scoping_integration.py`.
 - OpenAPI contract regression: `tests/api/test_openapi_contract.py`.
 
 ---

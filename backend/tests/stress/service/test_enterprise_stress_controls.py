@@ -10,45 +10,28 @@ engines meet the database:
 * **P0-13** — a run whose base-case plan falls back to platform constants records
   that fact field by field, so a Board-attested ICAAP cannot silently rest on
   assumptions the institution never made.
+
+This module's other-suite cases live in
+
+``test_enterprise_stress_controls_integration.py``.
 """
 
 from __future__ import annotations
 
 from dataclasses import replace
-from datetime import date
 from decimal import Decimal
 from typing import Any
 from uuid import uuid4
 
 import pytest
-from sqlalchemy.orm import Session
 
 from app.capital.domain.engine import CapitalFact, CapitalParams
 from app.credit.service.credit_exposure_book import ExposureRow
 from app.domain.authority.outcomes import OutcomeState
-from app.models import Bank
 from app.policy.service import regulatory_parameters
 from app.stress.domain.translation import MacroPathPoint
 from app.stress.schemas.enterprise_stress import EnterpriseStressRunCreate, PlanAssumptionsIn
 from app.stress.service import enterprise_stress as svc
-from tests.support.helpers import ORG_1
-
-AS_OF = date(2026, 6, 30)
-
-
-def _bank(db: Session, *, institution_type: str = "universal_bank") -> Bank:
-    bank = Bank(
-        organization_id=ORG_1,
-        name="Control Test Bank",
-        short_name="CTB",
-        currency="GHS",
-        jurisdiction_code="GH",
-        license_type="universal",
-        institution_type=institution_type,
-    )
-    db.add(bank)
-    db.flush()
-    return bank
 
 
 def _p(variable: str, year: int, base: str, stress: str) -> MacroPathPoint:
@@ -88,23 +71,6 @@ def _payload(**kwargs) -> EnterpriseStressRunCreate:
     )
 
 
-# --- P0-8: the HQLA rates come from the control plane ------------------------
-
-
-def test_the_basel_hqla_haircuts_and_caps_resolve_from_the_control_plane(
-    db_session: Session,
-) -> None:
-    """The engine names no rate; these are the seeded, cited, governed values."""
-    hqla = regulatory_parameters.resolve_hqla_parameters(db_session, _bank(db_session), as_of=AS_OF)
-
-    assert hqla.haircut_pct["L1"] == Decimal("0")
-    assert hqla.haircut_pct["L2A"] == Decimal("15")
-    assert hqla.haircut_pct["L2B"] == Decimal("50")
-    assert hqla.level2_cap_pct == Decimal("40")
-    assert hqla.level2b_cap_pct == Decimal("15")
-    assert hqla.unresolved_codes == ()
-
-
 def test_every_hqla_parameter_carries_a_citation_and_a_confirmation_status() -> None:
     """A regulatory number without a source is not governed, it is a constant."""
     specs = {
@@ -127,22 +93,6 @@ def test_every_hqla_parameter_carries_a_citation_and_a_confirmation_status() -> 
     # confirmed regulatory value.
     assert specs["hqla_l2b_haircut_pct"].confirmation_status == "pending"
     assert specs["hqla_l2a_haircut_pct"].confirmation_status == "confirmed"
-
-
-def test_an_sdi_resolves_no_hqla_parameters(db_session: Session) -> None:
-    """An SDI never runs the Basel LCR, so no HQLA rate is seeded for it."""
-    sdi = _bank(db_session, institution_type="savings_and_loans")
-    hqla = regulatory_parameters.resolve_hqla_parameters(db_session, sdi, as_of=AS_OF)
-    assert hqla.haircut_pct == {}
-    assert hqla.level2_cap_pct is None
-    assert set(hqla.unresolved_codes) == {
-        *regulatory_parameters.HQLA_HAIRCUT_CODES.values(),
-        regulatory_parameters.HQLA_LEVEL2_CAP_CODE,
-        regulatory_parameters.HQLA_LEVEL2B_CAP_CODE,
-    }
-
-
-# --- P0-9: the run refuses an incomplete scenario ----------------------------
 
 
 def test_a_complete_scenario_passes_the_guard() -> None:
@@ -181,9 +131,6 @@ def test_excluding_fx_from_the_run_relaxes_only_the_fx_driver() -> None:
     missing = _detail(exc.value)["details"]["missing_by_module"]
     assert "fx" not in missing
     assert "liquidity" in missing
-
-
-# --- P0-13: invented ICAAP assumptions are bounded and disclosed --------------
 
 
 def test_an_omitted_plan_records_every_platform_default() -> None:
@@ -273,19 +220,6 @@ def test_in_range_plan_assumptions_are_accepted() -> None:
     plan = PlanAssumptionsIn(tax_rate_pct=Decimal("0"), dividend_payout_pct=Decimal("100"))
     assert plan.tax_rate_pct == Decimal("0")
     assert plan.dividend_payout_pct == Decimal("100")
-
-
-# --- D-8a: a credit exposure is never risk weighted by assumption ------------
-#
-# Audit 2026-08-22 D-8a. ``_exposure_risk_weight`` used to read
-# ``risk_weights.get(code, 100)`` and hand back a flat 100% for a row carrying no
-# code at all, so a stressed CAR could be complete, plausible and built entirely
-# on an assumed weight while ``capital.engine`` refused the identical input one
-# module away. The fix routes both callers through the ONE registered authority,
-# ``capital.engine.resolve_risk_weight``. Nothing pinned the refusal itself: the
-# only tests that exercised this path used a fixture with no codes, so they were
-# green under the fail-open default and red under the fix — a defect detector
-# pointing the wrong way. These four are the behavioural anchor.
 
 
 def _exposure_row(

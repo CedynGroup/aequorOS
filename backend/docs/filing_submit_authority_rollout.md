@@ -70,7 +70,7 @@ officer who opened it, and the poll route records the regulator's decision.
 - **Rehearsal packages remain unfilable (D-068).** The rehearsal refusal lives in
   `workflow._ensure_channel_submittable`, before the transition check, and is
   independent of authorization. Pinned by
-  `tests/reporting/api/test_package_authorization.py::test_a_rehearsal_is_unfilable_even_with_transmission_authority`,
+  `tests/reporting/api/test_package_authorization_integration.py::test_a_rehearsal_is_unfilable_even_with_transmission_authority`,
   which holds _both_ the Capital read grant and the filing grant and is still refused.
 - **Existing sealed and submitted packages.** No migration touches
   `regulatory_packages`, `regulatory_package_approvals`, signatures or artifacts.
@@ -259,17 +259,17 @@ blocking the backend deploy:
   stated twice and independently.
 - `tests/core/test_authorization_properties.py` — the generative oracle carries the
   new bundle, so the evaluator is compared against an independent restatement of it.
-- `tests/reporting/api/test_package_authorization.py`, section _transmission to the regulator is
+- `tests/reporting/api/test_package_authorization_integration.py`, section _transmission to the regulator is
   its own authority_ — a complete Approver binding over the filing scope is refused
   with a named reason; a scalar `approver`/`admin` with no binding is refused; a
   Validator binding passes authorization; the preparer cannot file their own return;
   a gated family still hides before it refuses; a rehearsal is refused past both
   grants; an impersonated examiner is refused; cross-tenant is `404`; `poll` carries
   the same authority.
-- `tests/identity/api/test_grant_administration.py::test_approving_and_filing_cannot_land_on_one_identity`
+- `tests/identity/api/test_grant_administration_integration.py::test_approving_and_filing_cannot_land_on_one_identity`
   and `::test_a_validator_grant_is_accepted_for_an_identity_that_does_not_approve`.
-- `tests/scripts/test_authorization_access_impact.py::test_the_report_names_who_may_transmit_a_return`.
-- `tests/reporting/api/test_regulatory_reporting.py` (opt-in, `REAL_DATA_DATABASE_URL`) — the
+- `tests/scripts/test_authorization_access_impact_integration.py::test_the_report_names_who_may_transmit_a_return`.
+- `tests/reporting/api/test_regulatory_reporting_integration.py` (opt-in, `REAL_DATA_DATABASE_URL`) — the
   channel journeys now run three officers. `test_control_actions_require_approver_role`
   was **renamed and rewritten**, not deleted: its old sentence ("channel submissions
   and polls need the `approver` role") was the defect written down as an assertion.

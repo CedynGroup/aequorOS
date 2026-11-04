@@ -35,7 +35,7 @@ recipient ids. It holds no binding id, no permission, no authorization version
 and no rendered figure, because each delivery is authorized and rendered as its
 own recipient at send time. So the route must resolve the AUTHOR's access in
 order to refuse an author who may not ask the question — and must then store
-nothing about that decision. ``tests/bi/api/test_bi_notification_routes.py``
+nothing about that decision. ``tests/bi/api/test_bi_notification_routes_integration.py``
 asserts the stored row's columns against that list.
 
 **A distribution list is a membership disclosure.** Naming who else receives a

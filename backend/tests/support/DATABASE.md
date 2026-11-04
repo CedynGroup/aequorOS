@@ -210,7 +210,7 @@ always call `materialize_canonical_test_book` directly. `committing_db` continue
 to select the existing real-commit fixture family; this marker never changes its
 semantics or adds migration-installed RLS to an ORM-created schema.
 
-`tests/support/test_canonical_book.py` exercises committed mutations followed by
+`tests/support/test_canonical_book_integration.py` exercises committed mutations followed by
 an unchanged baseline, new connections and ORM objects, application-session
 binding, real repeated materialization and value-based fresh-build equivalence.
 Run the full affected modules in normal and reversed order and with

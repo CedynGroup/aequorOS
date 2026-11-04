@@ -203,7 +203,7 @@ keeps its `WORKING COPY — FOR INTERNAL REVIEW · not a filing artifact` label.
   horizon, not just the returned page; see [disclosure below](#filing-state-disclosure).
   Omitting `limit` preserves the original full-horizon response. The contract
   is pinned by
-  `tests/reporting/service/test_regulatory_reporting_calendar_query_shape.py`.
+  `tests/reporting/service/test_regulatory_reporting_calendar_query_shape_integration.py`.
 
 ### 5a. Reporting date vs data arrival (corrected 2026-08-23)
 
@@ -227,7 +227,7 @@ on the primary:
 - A tenant that had ingested nothing had an **empty** reporting calendar rather than a full one with
   nothing computed yet.
 
-Corrected direction, now pinned by `tests/reporting/service/test_reporting_anchors.py`:
+Corrected direction, now pinned by `tests/reporting/service/test_reporting_anchors_integration.py`:
 
 ```
 ReturnDefinition ──▶ reporting date ──▶ snapshot lookup (exact, may miss)
@@ -272,7 +272,7 @@ the calendar still never lists event-driven packs as obligations.
   user's reporting-date list: that makes BoG's calendar a function of ingestion cadence,
   leaves most weekly (Friday-close) filing dates unselectable, and shows a tenant that has
   ingested nothing an EMPTY calendar. Direction, pinned by
-  `tests/reporting/service/test_reporting_anchors.py`:
+  `tests/reporting/service/test_reporting_anchors_integration.py`:
   `ReturnDefinition -> reporting date -> snapshot lookup`. The snapshot match is **exact
   for every cadence** (`common.get_snapshot_for_reporting_date`) — a "latest period ending
   on or before" fallback would fail open by filing a month-old book as a business day's
@@ -307,7 +307,7 @@ the calendar still never lists event-driven packs as obligations.
   Template metadata resolves status as of today, while sealed package provenance records
   status at the reporting date, the resolved commencement and the registry citation.
   Exports consume that sealed disclosure. The contract is pinned by
-  `backend/tests/reporting/service/test_reporting_instrument_status.py`.
+  `backend/tests/reporting/service/test_reporting_instrument_status_integration.py`.
 
 ### Filing-state disclosure
 
@@ -328,8 +328,8 @@ scope. The same filter governs lists, totals, unread badges, individual mark-rea
 responses (404 when hidden), mark-all-read and each email-mirror recipient. An
 org-wide notification or an administrator email destination confers no return
 access. The HTTP contract is pinned by
-`backend/tests/notifications/api/test_notification_authorization.py`; calendar and anchor
-redaction by `backend/tests/reporting/api/test_narrowed_institution_figures.py`.
+`backend/tests/notifications/api/test_notification_authorization_integration.py`; calendar and anchor
+redaction by `backend/tests/reporting/api/test_narrowed_institution_figures_integration.py`.
 
 ## 6. API (`app/reporting/api/manage_regulatory_reporting.py`)
 

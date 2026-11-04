@@ -6,7 +6,7 @@ declares no relationships. Splitting ``Bank`` into its identity feature
 gave it the key ``app.identity.models.bank.Bank``, which sorts before
 ``app.models.organization.Organization``: a flush adding an organization and its
 bank then inserted the bank first and broke the foreign key
-(``tests/scripts/test_authorization_access_impact.py`` caught it).
+(``tests/scripts/test_authorization_access_impact_integration.py`` caught it).
 
 ``app/db/flush_order.json`` pins every model's key to the module it was recorded
 in, so the feature layout can move model files freely. These tests keep that file

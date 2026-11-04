@@ -26,6 +26,10 @@ than decorative: ``icaap/service/params.ParameterRow.representative`` tests
 Pillar 2 register and in a frozen report's parameter provenance. Moving the
 prefix off the front of a string — or explaining the sourcing before it —
 silently removes the label from every one of those surfaces.
+
+This module's other-suite cases live in
+
+``test_regulatory_parameters_icaap_jurisdictions_integration.py``.
 """
 
 from __future__ import annotations
@@ -38,13 +42,10 @@ from types import ModuleType
 from typing import Any
 
 import pytest
-from sqlalchemy import select
-from sqlalchemy.orm import Session
 
 from app.icaap.domain.frameworks import registry
 from app.icaap.service import parameters as workspace_parameters
 from app.icaap.service.params import REPRESENTATIVE_PREFIX, ParameterRow
-from app.models import Jurisdiction, RegulatoryParameter
 from app.policy.domain import parameter_shapes
 from app.policy.service import regulatory_parameters
 from tests.fixtures import reference_data
@@ -95,9 +96,6 @@ def _seed_key(row: dict[str, Any]) -> tuple[str, str, str, str]:
 
 def _spec_id(spec: workspace_parameters.IcaapParamSeed) -> str:
     return f"{spec.jurisdiction_code}-{spec.param_code}"
-
-
-# --- what is here, and what is deliberately not ----------------------------
 
 
 def test_the_catalogue_covers_exactly_nigeria_and_kenya() -> None:
@@ -174,9 +172,6 @@ def test_no_ghana_calibration_was_copied_across_the_border() -> None:
             assert framework.disclosure is None, framework.code
 
 
-# --- the disjointness rule -------------------------------------------------
-
-
 def test_no_row_is_seeded_twice_across_the_five_catalogues() -> None:
     """The row-by-row seeders, which the hermetic fixture runs together.
 
@@ -217,9 +212,6 @@ def test_the_ghana_rows_are_untouched_by_the_new_catalogue() -> None:
     assert ghana & added == set()
     assert all(key[3] in {"NG", "KE"} for key in added)
     assert all(key[3] == "GH" for key in ghana)
-
-
-# --- the catalogue itself --------------------------------------------------
 
 
 @pytest.mark.parametrize("spec", CATALOGUE, ids=_spec_id)
@@ -359,41 +351,6 @@ def test_the_ghana_rows_still_emit_an_identical_dict() -> None:
         }
 
 
-# --- the hermetic database and the registry --------------------------------
-
-
-def test_the_hermetic_fixture_seeds_every_row_exactly_once(db_session: Session) -> None:
-    """``create_all`` runs no migration, so the shared fixture is the only seeder.
-
-    Without it every Nigerian or Kenyan hermetic test would answer
-    ``missing_parameter``, which reads as a broken framework rather than as an
-    unseeded database.
-    """
-    expected = {
-        (spec.param_code, spec.jurisdiction_code): spec
-        for spec in workspace_parameters.ICAAP_JURISDICTION_SEED_PARAMETERS
-    }
-    rows = list(
-        db_session.scalars(
-            select(RegulatoryParameter).where(
-                RegulatoryParameter.jurisdiction_code.in_(["NG", "KE"])
-            )
-        )
-    )
-    counts = Counter((row.param_code, row.jurisdiction_code) for row in rows)
-    assert set(counts) == set(expected)
-    assert [key for key, count in counts.items() if count > 1] == []
-    for row in rows:
-        spec = expected[(row.param_code, row.jurisdiction_code)]
-        assert (row.scope_type, row.scope_key) == ("institution_class", "bank")
-        assert row.status == "approved"
-        assert row.effective_to is None
-        assert row.confirmation_status == "pending"
-        assert row.source_citation == spec.source_citation
-        assert row.value_numeric == (None if spec.value is None else Decimal(spec.value))
-        assert row.value_json == spec.value_json
-
-
 def test_the_fixture_registry_matches_the_jurisdictions_migration() -> None:
     """The fixture grew NG and KE; it must still mirror what is deployed.
 
@@ -419,15 +376,6 @@ def test_the_fixture_registry_matches_the_jurisdictions_migration() -> None:
         expected = deployed[str(fixture["code"])]
         for field, value in expected.items():
             assert fixture[field] == value, (fixture["code"], field)
-
-
-def test_the_hermetic_database_knows_both_regulators(db_session: Session) -> None:
-    rows = {row.code: row.regulator_short for row in db_session.scalars(select(Jurisdiction)).all()}
-    assert rows["NG"] == "CBN"
-    assert rows["KE"] == "CBK"
-
-
-# --- the migration agrees with the catalogue -------------------------------
 
 
 def test_the_catalogue_and_the_migration_agree() -> None:

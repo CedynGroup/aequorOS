@@ -350,7 +350,7 @@ on one canonical store — the live tier for intraday awareness, the official ti
   filing. Every mint re-derives the reporting period's facts from the accepted canonical book,
   including same-date corrections. Prior runs and generated packages retain their frozen evidence;
   unchanged financial values reproduce the same `input_hash` per run (see §3). Regression:
-  `backend/tests/live/service/test_pipeline.py::test_official_remint_reports_same_date_cash_correction_in_bsd2`.
+  `backend/tests/live/service/test_pipeline_integration.py::test_official_remint_reports_same_date_cash_correction_in_bsd2`.
 - **Freshness** (`app/live/service/freshness.py`, `GET /banks/{id}/freshness`): compares each module's
   live `input_hash` to the latest official run's `input_hash`. Because the hash is value-based, a
   bare re-derivation of unchanged data stays **fresh**; only an actual economic change reads as
@@ -1348,7 +1348,7 @@ backfill are described in the [quick start](README.md#quick-start).
   and generates `template_pending` until the official form lands (never infer a BoG layout);
   the monthly balance-sheet + P&L pack is
   filed as the official BSD2 and BSD7A forms. The executable completion proof is
-  `tests/services/test_phase2_full_report_proof.py` — every registered return generates +
+  `tests/services/test_phase2_full_report_proof_integration.py` — every registered return generates +
   exports (or refuses by design) over the full official-run sweep; keep it green.
 
 #### ECL assumption and coverage contract
@@ -1372,7 +1372,7 @@ of its final snapshot, or a missing recorded source basis requires official
 re-derivation before stress; the refusal is HTTP 409 and creates no run. An empty
 book with a matching recorded basis remains valid. This source
 provenance stays outside financial facts, calculation input snapshots and hashes.
-Regression coverage: `backend/tests/stress/service/test_crd_stress_basis_reconciliation.py`.
+Regression coverage: `backend/tests/stress/service/test_crd_stress_basis_reconciliation_integration.py`.
 
 The bottom-up migration and FX overlay covers loans and interbank placements.
 It applies exposure-level RWA deltas to each year's grown net credit buckets after
@@ -1450,7 +1450,7 @@ Current calculation versions are owned by the
 [authority registry](backend/app/domain/authority/registry.py) and the engines'
 `ENGINE_VERSION` constants. New versions append runs; stored inputs, hashes and
 results of historical runs remain unchanged. Regression evidence lives in
-`backend/tests/capital/service/test_ecl_and_crm.py` and
+`backend/tests/capital/service/test_ecl_and_crm_integration.py` and
 `backend/tests/stress/domain/test_stress_orchestrator.py`.
 
 ### Governed forecast assumptions

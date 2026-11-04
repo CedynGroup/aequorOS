@@ -3,16 +3,20 @@
 Each test names the exact substitution the audit found and pins the fail-closed
 behaviour that replaced it. Every case is written against a book that would
 previously have produced a plausible, wrong regulatory number in silence.
+
+This module's other-suite cases live in
+
+``test_derivation_fail_closed_defaults_integration.py``.
 """
 
 from __future__ import annotations
 
+__all__ = ["_canonical", "_classify_loans", "_row"]
 from datetime import date, timedelta
 from decimal import Decimal
 from typing import Any
 
 import pytest
-from sqlalchemy.orm import Session
 
 from app.capital.domain.engine import (
     CapitalParams,
@@ -26,8 +30,6 @@ from app.live.service.fact_derivation import (
     GroupResult,
     _Canonical,
     _classify_loans,
-    _derive_crm_collateral,
-    _derive_ecl_exposure,
     _derive_fx_positions,
     _derive_irr_positions,
     _derive_irr_swaps,
@@ -103,11 +105,6 @@ def _canonical(*rows: _PositionRow, base_currency: str = "GHS") -> _Canonical:
         sovereign_issuer_names=GHS_NAMES,
         domestic_country="GH",
     )
-
-
-# ---------------------------------------------------------------------------
-# FX spot: never 1.0
-# ---------------------------------------------------------------------------
 
 
 def test_fx_spot_is_never_invented_as_one() -> None:
@@ -187,11 +184,6 @@ def test_currency_without_return_history_carries_both_nop_and_capital_exposure()
     assert any("retained for NOP limits" in w for w in fx_group.warnings)
 
 
-# ---------------------------------------------------------------------------
-# Securities: no free Level-1 HQLA at 0% risk weight
-# ---------------------------------------------------------------------------
-
-
 @pytest.mark.parametrize(
     "row",
     [
@@ -241,11 +233,6 @@ def test_non_sovereign_holdings_leave_the_hqla_and_zero_weight_lines() -> None:
     assert any("C/1" in warning for warning in warnings)
 
 
-# ---------------------------------------------------------------------------
-# LCR inflows: no 2%-of-gross-loans assumption
-# ---------------------------------------------------------------------------
-
-
 def test_lcr_inflows_are_zero_not_two_percent_when_no_maturity_exists() -> None:
     """Audit §3: an invented inflow RAISES the LCR. It is now not computable."""
     canonical = _canonical(
@@ -279,11 +266,6 @@ def test_lcr_inflows_still_use_real_maturities_when_they_exist() -> None:
     specs = _derive_lcr_inflows(canonical, loan_rows, groups)
     amounts = {spec.category: spec.amount for spec in specs}
     assert amounts["corporate_sme_repayments"] == Decimal("50000000")
-
-
-# ---------------------------------------------------------------------------
-# Swaps: no assumed direction
-# ---------------------------------------------------------------------------
 
 
 def test_swap_without_a_direction_is_excluded_not_assumed_pay_fixed() -> None:
@@ -326,11 +308,6 @@ def test_swap_without_a_receive_index_warns_about_the_documented_reset() -> None
     assert len(specs) == 1
     group = next(item for item in groups if item.group == "irr_swap")
     assert any("no receive_index was ingested" in warning for warning in group.warnings)
-
-
-# ---------------------------------------------------------------------------
-# IRRBB bucketing: the asymmetric defaults are counted and stamped
-# ---------------------------------------------------------------------------
 
 
 def test_default_bucketing_is_counted_warned_and_stamped() -> None:
@@ -384,36 +361,6 @@ def test_a_dated_book_carries_no_default_stamp() -> None:
     assert all("defaulted_balance" not in spec.attributes for spec in specs)
     group = next(item for item in groups if item.group == "irr_position")
     assert not any("bucketed by a DEFAULT" in warning for warning in group.warnings)
-
-
-# ---------------------------------------------------------------------------
-# ECL / CRM absence is an explicit state, not a silent omission
-# ---------------------------------------------------------------------------
-
-
-def test_absent_ecl_and_crm_report_an_explicit_not_computable_state(
-    db_session: Session,
-) -> None:
-    canonical = _canonical(
-        _row("L/1", "LOAN", balance="40000000", regulatory_category="CORPORATE_UNRATED"),
-    )
-    loan_rows = _classify_loans(canonical, [])
-    groups: list[GroupResult] = []
-    assert _derive_ecl_exposure(loan_rows, groups) == []
-    assert _derive_crm_collateral(canonical, loan_rows, groups) == []
-
-    ecl = next(item for item in groups if item.group == "ecl_exposure")
-    assert ecl.status == "skipped"
-    assert "Not computable" in (ecl.note or "")
-    assert "INGESTED provisions" in (ecl.note or "")
-    crm = next(item for item in groups if item.group == "crm_collateral")
-    assert crm.status == "skipped"
-    assert "Not computable" in (crm.note or "")
-
-
-# ---------------------------------------------------------------------------
-# The BIA base is one named series, not the whole operational_income group
-# ---------------------------------------------------------------------------
 
 
 def test_operational_income_series_are_separately_named_and_capped_at_three_years() -> None:
@@ -475,11 +422,6 @@ def test_operational_income_series_are_separately_named_and_capped_at_three_year
     # The BIA base is a strict subset of the group: averaging the group divides
     # by 15, not 3, and sweeps operating expenses and provisions into "income".
     assert len(specs) == 15
-
-
-# ---------------------------------------------------------------------------
-# D-21: a foreign-currency position with no conversion is absent, never zero
-# ---------------------------------------------------------------------------
 
 
 def _fx_canonical(*rows: _PositionRow) -> _Canonical:
@@ -640,11 +582,6 @@ def test_unconverted_positions_are_excluded_from_the_balance_sheet_and_named() -
     # 1,000 — the USD 500 is NOT in the cedi total, and was never converted at
     # par or at an invented rate to get there.
     assert exposure.amount == Decimal("1000")
-
-
-# ---------------------------------------------------------------------------
-# D-22: an unrecognised loan category gets no risk weight, not RW100
-# ---------------------------------------------------------------------------
 
 
 def test_unmapped_loan_category_carries_no_risk_weight() -> None:

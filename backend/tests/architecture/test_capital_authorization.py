@@ -1,7 +1,7 @@
 """Capital routes must remain on their scoped-binding dependencies.
 
 BSD-2 is a regulatory return; its shared-reader authority is exercised by
-tests/api/test_return_preview_authorization.py, not a Capital route dependency.
+tests/api/test_return_preview_authorization_integration.py, not a Capital route dependency.
 """
 
 from __future__ import annotations

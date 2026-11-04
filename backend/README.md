@@ -182,7 +182,7 @@ transaction, with one commit before returning the artifact or queued job.
 The single-database fallback also ends its query transaction before delivery.
 The [database role handoff](../docs/ops/database-roles.md#target-matrix) owns the
 API's guarded query-log partition capability.
-See [native transaction/role regressions](tests/db/test_bi_export_transactions.py).
+See [native transaction/role regressions](tests/db/test_bi_export_transactions_integration.py).
 
 Document deletion and upload-completion boundaries are documented under
 [the legacy case vertical](#legacy-case-vertical). Remaining transaction-held waits include
@@ -294,8 +294,8 @@ one job and one deletion event. Existing deleted records remain unchanged.
 The queue's bounded exponential retries and stale-worker reclaim apply; exhausted
 cleanup remains pending and appears as a failed job on the operator jobs board.
 See [`documents.py`](app/case/service/documents.py) and the
-[deletion regression tests](tests/case/service/test_document_deletion.py), including
-[PostgreSQL concurrency and role-timeout coverage](tests/db/test_document_deletion_timeout.py).
+[deletion regression tests](tests/case/service/test_document_deletion_integration.py), including
+[PostgreSQL concurrency and role-timeout coverage](tests/db/test_document_deletion_timeout_integration.py).
 
 Canonical financial data is read with
 `GET /api/v1/cases/{case_id}/financial-workspace`. Resource-specific `POST` and
@@ -460,6 +460,10 @@ Install dashboard dependencies with `pnpm install --frozen-lockfile` at the repo
 root before running the e2e suite or the full census.
 
 Feature-local paths stay in place, preserving imports and fixture/data paths.
+Each test module lives beside the rest of its feature's tests, and its filename names
+the suite: `test_<name>_integration.py`, `test_<name>_e2e.py`, and unit as the default
+(`test_<name>.py`). A module that would serve two suites is split, so related unit,
+integration and e2e cases sit in the same folder but never in the same file.
 [`scripts/test_suites.json`](scripts/test_suites.json) is generated from observed
 database and external-service requirements for every exact parametrized test ID.
 There are no module defaults or manual function overrides. Collection rejects new/unclassified IDs,
@@ -762,7 +766,7 @@ assignment before removing transferred modules from the refreshed weights.
   fakes remain function-scoped. Settings-sensitive CORS/TLS tests must build their
   own app.
   Bank audit API tests reuse a module-scoped migrated schema and lazily constructed application
-  (`tests/identity/api/test_audit_log.py`), with fresh clients, per-test rollback and
+  (`tests/identity/api/test_audit_log_integration.py`), with fresh clients, per-test rollback and
   `aqs_api` authority for HTTP database dependencies; the dependency override is
   restored at teardown. Operator tests reuse a separate application and SQLite database,
   with the same rollback isolation

@@ -117,14 +117,14 @@ return hashlib.sha256(payload.encode()).hexdigest()
 by each entry's own canonical JSON, so neither row identity nor DB return order
 can influence the hash. This is deliberate and executably enforced:
 `test_official_input_hash_survives_fact_rederivation`
-(`backend/tests/live/service/test_pipeline.py`) remints official runs with fresh
+(`backend/tests/live/service/test_pipeline_integration.py`) remints official runs with fresh
 fact rows and asserts the per-module baseline hash set is unchanged.
 
 **Immutability in practice.** After a run reaches `succeeded` or `failed`,
 nothing writes to it. There is no `run.inputs =` or `run.input_hash =`
 assignment outside the constructor anywhere in `app/`, and no PUT/PATCH/DELETE
 route exists on any run resource. Reruns mint a new row; identical inputs
-reproduce an identical hash (`tests/liquidity/api/test_regulatory_liquidity.py:152`).
+reproduce an identical hash (`tests/liquidity/api/test_regulatory_liquidity_integration.py:152`).
 
 **Baseline caveat.** At the reviewed revision, immutability relied on application
 code (see 1.5). Current database enforcement is governed by

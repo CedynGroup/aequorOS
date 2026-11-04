@@ -15,194 +15,27 @@ had checked anything:
 These tests pin the replacements: the movement rule now reports what it could
 not compare and only claims a clean bill of health over what it did compare,
 and the balance rule computes a real identity over the projected years.
+
+This module's other-suite cases live in
+
+``test_reporting_validation_honesty_integration.py``.
 """
 
 from __future__ import annotations
 
-from datetime import UTC, date, datetime
 from decimal import Decimal
-from typing import Any
-
-from sqlalchemy.orm import Session
 
 from app.forecasting.domain.engine import ProjectionYear
 from app.forecasting.service.regulatory_forecasting import _balance_ties_row
-from app.models import Bank, RegulatoryPackage
 from app.reporting.service import validation
-from tests.support.helpers import ORG_1, USER_1
-
-
-def _bank(db: Session) -> Bank:
-    """A minimal tenant bank — the movement rule needs a package row, and a
-    package row needs an institution to hang off."""
-    bank = Bank(
-        organization_id=ORG_1,
-        name="Movement rule tenant",
-        short_name="Mov",
-        currency="GHS",
-        jurisdiction_code="GH",
-        license_type="x",
-        institution_type="universal_bank",
-    )
-    db.add(bank)
-    db.flush()
-    return bank
-
-
-def _package(  # noqa: PLR0913 — a package row needs its identifying columns
-    db: Session,
-    bank: Bank,
-    *,
-    reporting_date: date,
-    status: str,
-    totals: list[dict[str, Any]],
-    version: int = 1,
-) -> RegulatoryPackage:
-    package = RegulatoryPackage(
-        organization_id=ORG_1,
-        bank_id=bank.id,
-        return_family="liquidity",
-        return_code="TEST-MOVEMENT",
-        reporting_date=reporting_date,
-        frequency="monthly",
-        basis="solo",
-        status=status,
-        version=version,
-        snapshot={
-            "schema_version": "regulatory-package-v1",
-            "sections": [],
-            "totals": totals,
-            "metadata": {"generated_at": "2026-03-31T00:00:00+00:00"},
-        },
-        source_runs=[],
-        generated_by=USER_1,
-        generated_at=datetime.now(UTC),
-    )
-    db.add(package)
-    db.flush()
-    return package
-
-
-def _details(findings: list[dict[str, str]]) -> str:
-    return " ".join(f["detail"] for f in findings)
-
-
-# ---------------------------------------------------------------------------
-# the movement rule
-# ---------------------------------------------------------------------------
-
-
-def test_a_movement_out_of_zero_is_reported_not_skipped(db_session: Session) -> None:
-    """0 -> X used to be silently skipped and then declared clean."""
-    bank = _bank(db_session)
-    _package(
-        db_session,
-        bank,
-        reporting_date=date(2026, 2, 28),
-        status="submitted",
-        totals=[{"code": "hqla_total_ghs", "value": "0"}],
-    )
-    current = _package(
-        db_session,
-        bank,
-        reporting_date=date(2026, 3, 31),
-        status="generated",
-        totals=[{"code": "hqla_total_ghs", "value": "4200000"}],
-    )
-    findings = validation._movement_findings(db_session, current)  # noqa: SLF001
-    warnings = [f for f in findings if f["severity"] == "WARNING"]
-    assert warnings, findings
-    assert "moved from zero to 4200000" in warnings[0]["detail"]
-    # ... and the false all-clear is gone.
-    assert "No headline total moved more than" not in _details(findings)
-
-
-def test_zero_to_zero_is_genuinely_no_movement(db_session: Session) -> None:
-    """The counterpart: 0 -> 0 must not manufacture a warning."""
-    bank = _bank(db_session)
-    _package(
-        db_session,
-        bank,
-        reporting_date=date(2026, 2, 28),
-        status="submitted",
-        totals=[{"code": "hqla_total_ghs", "value": "0"}],
-    )
-    current = _package(
-        db_session,
-        bank,
-        reporting_date=date(2026, 3, 31),
-        status="generated",
-        totals=[{"code": "hqla_total_ghs", "value": "0"}],
-    )
-    findings = validation._movement_findings(db_session, current)  # noqa: SLF001
-    assert not [f for f in findings if f["severity"] == "WARNING"]
-    assert "1 headline total(s) were compared" in _details(findings)
-
-
-def test_uncomparable_totals_are_named_rather_than_swallowed(db_session: Session) -> None:
-    """A total with no prior counterpart, and one with no numeric value."""
-    bank = _bank(db_session)
-    _package(
-        db_session,
-        bank,
-        reporting_date=date(2026, 2, 28),
-        status="submitted",
-        totals=[{"code": "hqla_total_ghs", "value": "100"}],
-    )
-    current = _package(
-        db_session,
-        bank,
-        reporting_date=date(2026, 3, 31),
-        status="generated",
-        totals=[
-            {"code": "hqla_total_ghs", "value": "105"},
-            {"code": "brand_new_total", "value": "7"},
-            {"code": "narrative_total", "value": "not a number"},
-        ],
-    )
-    findings = validation._movement_findings(db_session, current)  # noqa: SLF001
-    detail = _details(findings)
-    assert "brand_new_total" in detail
-    assert "narrative_total" in detail
-    # The clean statement is scoped to what was actually compared.
-    assert "1 headline total(s) were compared" in detail
-    assert "2 further total(s) could not be compared" in detail
-
-
-def test_a_real_swing_still_warns_with_its_percentage(db_session: Session) -> None:
-    """The rule that already worked must keep working, unchanged."""
-    bank = _bank(db_session)
-    _package(
-        db_session,
-        bank,
-        reporting_date=date(2026, 2, 28),
-        status="submitted",
-        totals=[{"code": "hqla_total_ghs", "value": "100"}],
-    )
-    current = _package(
-        db_session,
-        bank,
-        reporting_date=date(2026, 3, 31),
-        status="generated",
-        totals=[{"code": "hqla_total_ghs", "value": "200"}],
-    )
-    findings = validation._movement_findings(db_session, current)  # noqa: SLF001
-    warnings = [f for f in findings if f["severity"] == "WARNING"]
-    assert len(warnings) == 1
-    assert "100.00%" in warnings[0]["detail"]
 
 
 def test_the_rule_version_records_that_the_rule_changed() -> None:
     # v1.3.0: the completeness rule stopped requiring a headline ``totals``
     # block from a snapshot whose authority record declares an official
     # template as the authority for its derived figures
-    # (tests/reporting/service/test_reporting_totals_authority.py).
+    # (tests/reporting/service/test_reporting_totals_authority_integration.py).
     assert validation.RULE_VERSION == "regulatory-package-validation-v1.3.0"
-
-
-# ---------------------------------------------------------------------------
-# the forecast balance identity
-# ---------------------------------------------------------------------------
 
 
 def _year(  # noqa: PLR0913 — one keyword per balance-sheet component

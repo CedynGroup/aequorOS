@@ -18,6 +18,8 @@ many works perfectly and is discovered by a regulator rather than by a user.
 
 The gap this cannot close is stated in the report: a customer name the tenant's
 registers do not hold, typed into a question, is sent as typed.
+
+This module's other-suite cases live in ``test_nlq_payload_integration.py``.
 """
 
 from __future__ import annotations
@@ -29,7 +31,6 @@ import pytest
 from sqlalchemy.orm import Session
 
 from app.bi.domain.catalogue import Catalogue, catalogue
-from app.bi.schemas.nlq import QUESTION_MAX_CHARS
 from app.bi.service import nlq
 from app.bi.service.nlq import candidates
 from app.models import Bank, Organization, User
@@ -75,10 +76,6 @@ def bank(db_session: Session) -> Bank:
     return existing
 
 
-def _screen(db: Session, bank: Bank, question: str) -> str:
-    return nlq.screen_question(db, organization_id=ORG_1, bank=bank, question=question)
-
-
 def _built(cat: Catalogue, question: str) -> object:
     chosen = candidates.select(
         cat,
@@ -88,68 +85,6 @@ def _built(cat: Catalogue, question: str) -> object:
         capital_regime="crd",
     )
     return nlq.build_payload(chosen, question=question)
-
-
-# --- the screen fires ---------------------------------------------------------------------
-
-
-def test_an_ordinary_question_is_sendable(db_session: Session, bank: Bank) -> None:
-    """The control: without it every refusal below could pass on a broken screen."""
-
-    assert _screen(db_session, bank, "  gross loans by branch  ") == "gross loans by branch"
-
-
-@pytest.mark.parametrize(
-    "question",
-    [
-        pytest.param(f"what are {BANK_NAME}'s gross loans", id="institution_name"),
-        pytest.param("gross loans for Nlq Payload Holdings", id="organization_name"),
-        pytest.param(f"which branch does {COLLEAGUE_NAME} run", id="colleague_name"),
-        pytest.param("show Ghana Cedi exposures", id="jurisdiction_currency_name"),
-        pytest.param("email it to me at x@example.test", id="email"),
-        pytest.param("fetch https://example.test/report", id="url"),
-        pytest.param("gross loans {{E:bank}}", id="placeholder_channel"),
-        pytest.param("gross\x00loans", id="control_character"),
-    ],
-)
-def test_a_question_that_may_not_leave_the_platform_is_refused(
-    db_session: Session, bank: Bank, question: str
-) -> None:
-    with pytest.raises(nlq.QuestionWithheld) as refused:
-        _screen(db_session, bank, question)
-    assert refused.value.code == "question_withheld"
-    assert refused.value.message
-
-
-def test_an_empty_and_an_overlong_question_get_their_own_fixable_message(
-    db_session: Session, bank: Bank
-) -> None:
-    """Three refusals, not one: a reader who typed too much can fix that."""
-
-    with pytest.raises(nlq.QuestionWithheld) as empty:
-        _screen(db_session, bank, "   ")
-    assert empty.value.code == "question_empty"
-    with pytest.raises(nlq.QuestionWithheld) as long:
-        _screen(db_session, bank, "loans " * QUESTION_MAX_CHARS)
-    assert long.value.code == "question_too_long"
-
-
-def test_a_long_question_is_still_screened_for_content(db_session: Session, bank: Bank) -> None:
-    """The screen's own length bound is a table label's (80 chars), not a sentence's.
-
-    A question of 200 characters must still be screened, or the deny terms would stop
-    applying to exactly the questions long enough to hide one.
-    """
-
-    padding = "gross loans by branch and product family " * 4
-    question = f"{padding}{BANK_NAME}"
-    assert len(question) > 80
-    assert len(question) <= QUESTION_MAX_CHARS
-    with pytest.raises(nlq.QuestionWithheld):
-        _screen(db_session, bank, question)
-
-
-# --- the payload carries no value and no date ---------------------------------------------
 
 
 def test_the_payload_carries_no_date_at_all(cat: Catalogue) -> None:

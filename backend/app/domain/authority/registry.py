@@ -69,7 +69,7 @@ The divergences you must not "fix" by asserting equality
   engine.
 * ``car_pct`` / ``bog_bsd5a_form_ratio`` — BoG's own printed BSD5A ratio
   ``E70 = E25/E69``. Different add-on rules by design; the repository already
-  pins the inequality (``tests/reporting/service/bog_forms/test_bsd5.py``: *"by
+  pins the inequality (``tests/reporting/service/bog_forms/test_bsd5_integration.py``: *"by
   construction, not by accident"*).
 * ``car_pct`` / ``act930_s29_nof_rwa`` — the SDI regime's NOF / simplified RWA.
 
@@ -1631,7 +1631,7 @@ REGISTRY.register(
             ),
             resolution_status=ACCEPTED_BY_AUTHORITY,
             evidence=(
-                "backend/tests/reporting/service/bog_forms/test_bsd5.py - "
+                "backend/tests/reporting/service/bog_forms/test_bsd5_integration.py - "
                 '\'assert not _close(e["E70"] * 100, car_pct, "0.5")  '
                 "# by construction, not by accident'",
             ),
@@ -1687,7 +1687,7 @@ REGISTRY.register(
             resolution_status=UNRESOLVED_AUDIT_FINDING,
             equality_assertion_forbidden=False,
             evidence=(
-                "backend/tests/forecasting/api/test_forecasting.py - "
+                "backend/tests/forecasting/api/test_forecasting_integration.py - "
                 "divergence asserted in a comment",
             ),
         ),
@@ -2010,7 +2010,7 @@ REGISTRY.register(
                 "_LCR_INFLOW_CAP applied per currency column",
                 "app.domain.liquidity.engine:compute_lcr - local threshold enforcement "
                 "and aggregate inflow cap from the governed params.inflow_cap_pct",
-                "backend/tests/services/test_le_and_lmt.py",
+                "backend/tests/services/test_le_and_lmt_integration.py",
                 "forensic_calculation_audit_2026-08-21.md - CRITICAL AUDIT FINDINGS 1: "
                 "'BSD3 LCR != LMT Table 11 LCR (Documented Divergence)'",
             ),

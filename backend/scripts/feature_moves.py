@@ -18,6 +18,7 @@ import textwrap
 import tokenize
 from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass
+from functools import cached_property
 from pathlib import Path
 from typing import cast
 
@@ -58,8 +59,17 @@ class Renamer:
 
     moves: tuple[tuple[str, str], ...]
 
+    @cached_property
+    def splits(self) -> frozenset[str]:
+        """Modules recorded as split (see ``split_modules``): their name survives."""
+        return frozenset(split_modules(self.moves))
+
     def __call__(self, name: str) -> str:
         for old, new in self.moves:
+            if old in self.splits:
+                # A split module's parts were written by hand under their own names: the
+                # surviving file keeps the old name, so a reference to it is not a move.
+                continue
             if name == old or name.startswith(f"{old}."):
                 name = new + name[len(old) :]
         return name
@@ -210,10 +220,24 @@ def _module_exists(backend: Path, module: str) -> bool:
     return base.with_suffix(".py").is_file() or (base / "__init__.py").is_file()
 
 
+def split_modules(moves: Sequence[tuple[str, str]]) -> set[str]:
+    """Modules recorded as split: ``[old, old]`` says the name survived with one part."""
+    return {old for old, new in moves if old == new}
+
+
 def unmoved_modules(backend: Path, ledger: Sequence[tuple[str, str]]) -> list[str]:
-    """Ledger sources that still exist although the ledger says they moved away."""
+    """Ledger sources that still exist although the ledger says they moved away.
+
+    A split's ``[old, old]`` pair means the module kept its name while its other-suite
+    parts were written under new ones, so the file at the old path is the outcome.
+    """
+    split = split_modules(ledger)
     rename = Renamer(tuple(ledger))
-    return [old for old, _new in ledger if rename(old) != old and _module_exists(backend, old)]
+    return [
+        old
+        for old, _new in ledger
+        if old not in split and rename(old) != old and _module_exists(backend, old)
+    ]
 
 
 # --------------------------------------------------------------------------
@@ -727,6 +751,7 @@ def _renamed_catalogue(text: str, renames: dict[str, str]) -> str:
 def plan_catalogue_rewrites(backend: Path, rename: Renamer) -> dict[Path, str]:
     """The test-catalogue JSON files whose node-id keys a move renames."""
     planned: dict[Path, str] = {}
+    split = split_modules(rename.moves)
     for relative, sections in _CATALOGUE_SECTIONS.items():
         path = backend / relative
         if not path.is_file():
@@ -740,6 +765,11 @@ def plan_catalogue_rewrites(backend: Path, rename: Renamer) -> dict[Path, str]:
                 # A frozen file keeps its old names on purpose, so the node ids it
                 # generates (old module paths inside parametrized ids) never move.
                 if node_id.partition("::")[0] in _FROZEN_FILES:
+                    continue
+                # A split module's keys are already final: both parts were written
+                # under their own names, so a prefix rename would file every case
+                # under the sibling.
+                if node_id.partition("::")[0].removesuffix(".py").replace("/", ".") in split:
                     continue
                 if (new := _renamed_node_id(node_id, rename)) != node_id:
                     renames[node_id] = new

@@ -321,9 +321,9 @@ version read for later access/retention evidence. Unsupported backends refuse.
 
 No new HTTP route is added, so there is no new route IDOR census entry; resolver
 isolation and exact family authority are exercised directly in
-`tests/storage/test_sealed_documents.py` and
+`tests/storage/test_sealed_documents_integration.py` and
 constraint/RLS/upgrade/downgrade behavior in
-`tests/db/test_sealed_document_objects.py`.
+`tests/db/test_sealed_document_objects_integration.py`.
 
 ### Publication and its callers
 
@@ -390,10 +390,10 @@ their own refusal handling. The retention policy remains owned by
 Re-encryption treats a sealed key as retained: the inventory marks it, and the
 rewrite path refuses it, because rewriting that ciphertext would break the key
 dependency the catalogue records. Writers and readers are exercised in
-`tests/storage/test_sealed_publication.py`, `tests/storage/test_reencryption.py`,
+`tests/storage/test_sealed_publication_integration.py`, `tests/storage/test_reencryption_integration.py`,
 `tests/icaap/service/test_attachments.py`,
-`tests/icaap/service/test_sealed_by_reference.py`,
-`tests/reporting/service/test_regulatory_reporting_exports.py`,
+`tests/icaap/service/test_sealed_by_reference_integration.py`,
+`tests/reporting/service/test_regulatory_reporting_exports_integration.py`,
 `tests/reporting/service/test_package_plane.py` and
 `tests/attestation/service/test_attestation_verify.py`.
 
@@ -437,8 +437,8 @@ retained versions, substitution, revocation, downloads and backup recovery),
 `test_key_rotation_concurrency.py` (PostgreSQL readers and concurrent writes),
 `test_bank_key_rollout.py` (optional platform storage, required-key refusal and
 connected-key failures in every environment),
-`tests/operator/test_bank_encryption.py` (staff and bank scoping), and
-`tests/db/test_tenant_rls_completeness.py` (migrated envelope RLS). The HTTP
+`tests/operator/test_bank_encryption_integration.py` (staff and bank scoping), and
+`tests/db/test_tenant_rls_completeness_integration.py` (migrated envelope RLS). The HTTP
 provider contract and its CI service are documented in
 [Local KMS emulator and CI](#local-kms-emulator-and-ci).
 
@@ -473,7 +473,7 @@ Run the provider's HTTP contract from the repository root:
 
 ```sh
 TEST_KMS_ENDPOINT_URL=http://127.0.0.1:18080 mise -C backend exec -- uv run \
-  pytest tests/storage/test_kms_emulator.py -q
+  pytest tests/storage/test_kms_emulator_integration.py -q
 ```
 
 The storage contract job and every dashboard journey CI shard own ephemeral
