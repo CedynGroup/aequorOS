@@ -207,6 +207,112 @@ def _resource(
     )
 
 
+def test_configurator_is_explicit_exact_and_invalidates_sign_ins(grant_client: TestClient) -> None:
+    with _session() as db:
+        user = db.get(User, GRANTEE)
+        assert user is not None
+        issued = authentication.issue_tokens(db, user)
+        version = user.authorization_version
+        assert not list(
+            db.scalars(
+                select(AuthorizationBinding).where(
+                    AuthorizationBinding.role_bundle == "configurator"
+                )
+            )
+        )
+    grantee_headers = {"Authorization": f"Bearer {issued.access_token}"}
+    assert grant_client.get("/api/v1/auth/me", headers=grantee_headers).status_code == 200
+    payload = _payload(role="configurator", sensitivity="restricted")
+    invalid = {**payload, "institution_id": None}
+    assert (
+        grant_client.post(
+            "/api/v1/authorization/bindings/preview", headers=_owner_headers(), json=invalid
+        ).status_code
+        == 422
+    )
+    created = grant_client.post(
+        "/api/v1/authorization/bindings",
+        headers=_owner_headers(),
+        json=_reviewed_payload(grant_client, payload),
+    )
+    assert created.status_code == 201, created.text
+    result = BindingCreateResponse.model_validate_json(created.text)
+    binding = result.binding
+    assert binding.role_bundle == "configurator"
+    assert binding.institution_id == BANK_A
+    assert binding.module_scope is ModuleScope.LIQUIDITY
+    assert binding.sensitivity_scope is SensitivityScope.RESTRICTED
+    assert binding.authority_sentence == (
+        "Amma Owusu is a Configurator in Liquidity Monitoring for Aequor Bank Ghana, "
+        "covering Restricted data."
+    )
+    assert result.sod_decision.outcome == "allow"
+    assert grant_client.get("/api/v1/auth/me", headers=grantee_headers).status_code == 401
+    assert (
+        grant_client.post(
+            "/api/v1/auth/refresh", json={"refresh_token": issued.refresh_token}
+        ).status_code
+        == 401
+    )
+    with _session() as db:
+        user = db.get(User, GRANTEE)
+        assert user is not None
+        assert user.authorization_version == version + 1
+        principal = PrincipalLocator(ORG_1, GRANTEE, PrincipalType.HUMAN)
+        exact = _resource(BANK_A, Module.LIQUIDITY, Sensitivity.RESTRICTED)
+        assert authorization.evaluate_permission(db, principal, Permission.CONFIGURE, exact).allowed
+        for permission in (
+            Permission.VIEW,
+            Permission.RUN,
+            Permission.APPROVE,
+            Permission.ADMINISTER,
+        ):
+            assert not authorization.evaluate_permission(db, principal, permission, exact).allowed
+        for other in (
+            _resource(BANK_B, Module.LIQUIDITY, Sensitivity.RESTRICTED),
+            _resource(BANK_A, Module.REGULATORY, Sensitivity.RESTRICTED),
+            _resource(BANK_A, Module.LIQUIDITY, Sensitivity.CONFIDENTIAL),
+        ):
+            assert not authorization.evaluate_permission(
+                db, principal, Permission.CONFIGURE, other
+            ).allowed
+        current = authentication.issue_tokens(db, user)
+    assert (
+        grant_client.get(
+            "/api/v1/auth/me", headers={"Authorization": f"Bearer {current.access_token}"}
+        ).status_code
+        == 200
+    )
+    revoked = grant_client.post(
+        f"/api/v1/authorization/bindings/{binding.id}/revoke",
+        headers=_owner_headers(),
+        json={"reason": "Configuration responsibilities reassigned"},
+    )
+    assert revoked.status_code == 200, revoked.text
+    assert (
+        grant_client.get(
+            "/api/v1/auth/me", headers={"Authorization": f"Bearer {current.access_token}"}
+        ).status_code
+        == 401
+    )
+    assert (
+        grant_client.post(
+            "/api/v1/auth/refresh", json={"refresh_token": current.refresh_token}
+        ).status_code
+        == 401
+    )
+    with _session() as db:
+        user = db.get(User, GRANTEE)
+        assert user is not None
+        assert user.authorization_version == version + 2
+        assert not authorization.evaluate_permission(
+            db, principal, Permission.CONFIGURE, exact
+        ).allowed
+        refresh_rows = list(db.scalars(select(RefreshToken).where(RefreshToken.user_id == GRANTEE)))
+        assert refresh_rows
+        assert all(row.revoked_reason == "authorization_changed" for row in refresh_rows)
+
+
 def test_create_and_list_keep_every_scalar_dimension_exact(
     grant_client: TestClient,
 ) -> None:
@@ -1096,7 +1202,7 @@ def test_preview_returns_the_decision_the_create_call_would_reach(
     assert binding_count() == before
 
 
-@pytest.mark.parametrize("role", ["analyst", "approver", "validator"])
+@pytest.mark.parametrize("role", ["analyst", "approver", "validator", "configurator"])
 def test_owner_account_admin_conflict_names_only_the_revocable_grant(
     grant_client: TestClient, role: str
 ) -> None:
@@ -1138,7 +1244,12 @@ def test_owner_account_admin_conflict_names_only_the_revocable_grant(
     assert decision.outcome == "block"
     [finding] = decision.findings
     assert finding.conflicting_binding_ids == [admin_id]
-    requested = {"analyst": "an Analyst", "approver": "an Approver", "validator": "a Validator"}
+    requested = {
+        "analyst": "an Analyst",
+        "approver": "an Approver",
+        "validator": "a Validator",
+        "configurator": "a Configurator",
+    }
     assert finding.message == (
         "Demo User One already has the Organization Administrator grant "
         "(Account Administration, every institution). "
@@ -1184,9 +1295,11 @@ def test_owner_account_admin_conflict_names_only_the_revocable_grant(
         (("account_admin", "account_admin"), "analyst", "Organization Administrator"),
         (("account_admin", "account_admin"), "approver", "Organization Administrator"),
         (("account_admin", "account_admin"), "validator", "Organization Administrator"),
+        (("account_admin", "account_admin"), "configurator", "Organization Administrator"),
         (("analyst", "analyst"), "account_admin", "Analyst"),
         (("approver", "approver"), "account_admin", "Approver"),
         (("validator", "validator"), "account_admin", "Validator"),
+        (("configurator", "configurator"), "account_admin", "Configurator"),
         (("analyst", "approver"), "account_admin", "Analyst and Approver"),
         (("analyst", "validator"), "account_admin", "Analyst and Validator"),
     ],

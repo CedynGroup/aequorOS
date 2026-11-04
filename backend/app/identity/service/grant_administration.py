@@ -91,6 +91,7 @@ _ROLE_LABELS = {
     RoleBundle.ANALYST: "Analyst",
     RoleBundle.APPROVER: "Approver",
     RoleBundle.VALIDATOR: "Validator",
+    RoleBundle.CONFIGURATOR: "Configurator",
     RoleBundle.ACCOUNT_ADMIN: "Organization Administrator",
     RoleBundle.ORG_OWNER: "Organization Owner",
     RoleBundle.INTEGRATION_WRITER: "Integration Writer",
@@ -125,7 +126,7 @@ _SENSITIVITY_LABELS = {
 }
 
 _OPERATIONAL_WRITE_BUNDLES = frozenset(
-    {RoleBundle.ANALYST, RoleBundle.APPROVER, RoleBundle.VALIDATOR}
+    {RoleBundle.ANALYST, RoleBundle.APPROVER, RoleBundle.VALIDATOR, RoleBundle.CONFIGURATOR}
 )
 _ACCOUNT_ADMIN_BUNDLES = frozenset({RoleBundle.ACCOUNT_ADMIN, RoleBundle.ORG_OWNER})
 

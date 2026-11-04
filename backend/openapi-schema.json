@@ -70,6 +70,7 @@
               "analyst",
               "approver",
               "validator",
+              "configurator",
               "account_admin"
             ],
             "title": "Role Bundle",
@@ -8831,6 +8832,7 @@
               "analyst",
               "approver",
               "validator",
+              "configurator",
               "account_admin"
             ],
             "title": "Role Bundle",
@@ -8985,6 +8987,7 @@
               "analyst",
               "approver",
               "validator",
+              "configurator",
               "account_admin"
             ],
             "title": "Role Bundle",
@@ -58173,6 +58176,7 @@
               "analyst",
               "approver",
               "validator",
+              "configurator",
               "account_admin"
             ],
             "title": "Role Bundle",

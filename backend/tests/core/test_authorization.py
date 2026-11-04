@@ -75,6 +75,7 @@ ROLE_EXPECTATIONS: tuple[
         frozenset({Permission.VIEW, Permission.SUBMIT}),
     ),
     (PrincipalType.HUMAN, RoleBundle.ACCOUNT_ADMIN, frozenset({Permission.ADMINISTER})),
+    (PrincipalType.HUMAN, RoleBundle.CONFIGURATOR, frozenset({Permission.CONFIGURE})),
     (PrincipalType.HUMAN, RoleBundle.ORG_OWNER, frozenset({Permission.ADMINISTER})),
     (PrincipalType.MACHINE, RoleBundle.INTEGRATION_WRITER, frozenset({Permission.INGEST})),
 )
@@ -178,6 +179,39 @@ def test_no_bundle_other_than_validator_carries_submit() -> None:
         if Permission.SUBMIT in permissions
     }
     assert carriers == {RoleBundle.VALIDATOR}
+
+
+def test_only_configurator_carries_configure() -> None:
+    assert {
+        bundle
+        for bundle, permissions in ROLE_PERMISSIONS.items()
+        if Permission.CONFIGURE in permissions
+    } == {RoleBundle.CONFIGURATOR}
+
+
+def test_configurator_requires_one_complete_active_binding() -> None:
+    exact = _binding(
+        role=RoleBundle.CONFIGURATOR,
+        module=ModuleScope.LIQUIDITY,
+        sensitivity=SensitivityScope.RESTRICTED,
+    )
+    resource = _resource(sensitivity=Sensitivity.RESTRICTED)
+    assert _evaluate(Permission.CONFIGURE, resource, [exact]).allowed
+    assert not _evaluate(Permission.CONFIGURE, resource, []).allowed
+    mismatches = [
+        replace(exact, institution_id=BANK_B),
+        replace(exact, module_scope=ModuleScope.REGULATORY),
+        replace(exact, sensitivity_scope=SensitivityScope.CONFIDENTIAL),
+        replace(exact, status=BindingStatus.SUSPENDED),
+        replace(exact, status=BindingStatus.REVOKED, revoked_at=NOW),
+        replace(exact, valid_from=NOW + dt.timedelta(seconds=1)),
+        replace(exact, valid_until=NOW),
+    ]
+    for binding in mismatches:
+        assert not _evaluate(Permission.CONFIGURE, resource, [binding]).allowed
+    assert not _evaluate(Permission.CONFIGURE, resource, mismatches).allowed
+    veto = ConditionCheck(ConditionKind.DEMO_MODE, False, "demo mode")
+    assert not _evaluate(Permission.CONFIGURE, resource, [exact], conditions=(veto,)).allowed
 
 
 @pytest.mark.parametrize(("principal_type", "role_bundle", "expected"), ROLE_EXPECTATIONS)

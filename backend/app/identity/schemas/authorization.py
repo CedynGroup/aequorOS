@@ -41,6 +41,7 @@ GrantableRoleBundle = Literal[
     # transmission authority exists only as an explicit binding: nothing
     # backfilled it and no scalar role produces it.
     "validator",
+    "configurator",
     "account_admin",
 ]
 # ``bi_reader`` must stay absent: machine authority must not be assigned through

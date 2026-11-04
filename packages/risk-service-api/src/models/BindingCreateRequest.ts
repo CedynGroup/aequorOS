@@ -165,6 +165,7 @@ export const BindingCreateRequestRoleBundleEnum = {
   Analyst: "analyst",
   Approver: "approver",
   Validator: "validator",
+  Configurator: "configurator",
   AccountAdmin: "account_admin",
 } as const;
 export type BindingCreateRequestRoleBundleEnum =
