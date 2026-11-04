@@ -11,6 +11,9 @@ move PR.
 - **`features/<feature>/`** holds everything a feature owns: its components
   (moved from `components/<feature>/`), feature lib code, and page bodies under
   `routes/`.
+- **`tests/<feature>/`** holds that feature's tests; see the
+  [testing guide](README.md#unit-test-collection) for suite suffixes and runner selection.
+  Shared test helpers live in `tests/support/`.
 - **Route pages stay under `app/`.** App Router requires `page.tsx` inside
   `app/`, so a moved page body lives at `features/<feature>/routes/<name>.tsx`
   and the route file becomes a thin re-export shim

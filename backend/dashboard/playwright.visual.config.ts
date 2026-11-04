@@ -5,6 +5,8 @@ import journeys from "./playwright.config";
 // separate from the required journey suite and its executed-count floor.
 export default defineConfig({
   ...journeys,
-  testDir: "./visual",
+  testDir: "./tests",
+  testMatch: "**/visual-tour.e2e.spec.ts",
+  testIgnore: [],
   reporter: "list",
 });

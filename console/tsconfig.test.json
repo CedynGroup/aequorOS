@@ -1,5 +1,5 @@
 {
-  "//": "Node-runnable build of the console's library and auth-callback suites. The app itself is type-checked by tsconfig.json (noEmit); this config emits the modules the tests exercise, including the Next.js callback route. Output goes to .test-out/ and is deleted by the `test` script. Mirrors backend/dashboard/tsconfig.test.json.",
+  "//": "Node-runnable build of the console's tests under tests/<feature>/. The app itself is type-checked by tsconfig.json (noEmit); this config emits every module those tests exercise, including the Next.js callback route. Output goes to .test-out/ and is deleted by the `test` script. Mirrors backend/dashboard/tsconfig.test.json.",
   "extends": "./tsconfig.json",
   "compilerOptions": {
     "noEmit": false,
@@ -12,18 +12,13 @@
   },
   "include": [
     "lib/parameter-shapes.ts",
-    "lib/parameter-shapes.test.ts",
     "lib/regulatory-parameters.ts",
-    "lib/regulatory-parameters.test.ts",
     "lib/api.ts",
     "lib/bi-backfill.ts",
-    "lib/bi-backfill.test.ts",
-    "lib/onboarding.test.ts",
-    "lib/inspector-duration.test.ts",
-    "lib/audit-pagination.test.ts",
+    "lib/onboarding.ts",
+    "lib/inspector-duration.ts",
     "lib/workforce-oidc.ts",
-    "lib/workforce-oidc.test.ts",
-    "lib/auth-callback.test.ts",
+    "tests/**/*.test.ts",
     "app/api/auth/callback/route.ts",
     "app/api/auth/login/route.ts"
   ]

@@ -5,6 +5,8 @@ import base from "./playwright.config";
 // shared CI journeys whose fixture users and filing history must stay stable.
 export default defineConfig({
   ...base,
-  testDir: "./live-verification",
+  testDir: "./tests",
+  testMatch: "**/*.live.e2e.spec.ts",
+  testIgnore: [],
   reporter: [["list"]],
 });

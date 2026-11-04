@@ -11,7 +11,7 @@
  * one, because it is never given one — and says only that access is restricted
  * and who can change that.
  *
- * `features/bi/components/disclosure.test.ts` pins that property against this file's
+ * `tests/bi/disclosure.test.ts` pins that property against this file's
  * source, because the pressure to "just show which field" arrives with every
  * support ticket.
  */

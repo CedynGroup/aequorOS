@@ -1,10 +1,17 @@
 import { fileURLToPath } from "node:url";
-import { defineConfig } from "vitest/config";
+import { configDefaults, defineConfig } from "vitest/config";
 
 export default defineConfig({
   resolve: { alias: { "@": fileURLToPath(new URL(".", import.meta.url)) } },
   test: {
-    include: ["unit/**/*.spec.{ts,tsx}"],
+    include: ["tests/**/*.spec.{ts,tsx}"],
+    // Browser suites share the feature folders: integration (HTTP and
+    // presentation contracts) and e2e (journeys) belong to Playwright.
+    exclude: [
+      ...configDefaults.exclude,
+      "tests/**/*.integration.spec.ts",
+      "tests/**/*.e2e.spec.ts",
+    ],
     coverage: {
       provider: "v8",
       include: [

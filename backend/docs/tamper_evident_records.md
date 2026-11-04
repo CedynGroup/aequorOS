@@ -276,7 +276,7 @@ The requested end date also applies within the server bound. Direct
 `/operator/v1/audit` callers follow `next_cursor`; OFFSET pagination is retired.
 Future bounds are capped by the server's current time. Regression coverage is in
 `tests/operator/test_audit_api.py`, `tests/db/test_operator_audit_pagination.py`
-and `console/lib/audit-pagination.test.ts`.
+and `console/tests/audit/audit-pagination.test.ts`.
 
 Password sign-in, SSO and signing re-authentication retain success and refusal
 events before returning. Known users are attributed only to banks reachable
