@@ -1062,3 +1062,55 @@ test("light-theme instrument links meet AA and disclosures dismiss without losin
       path: path.join(evidence, "short-screen-full-status.png"),
     });
 });
+
+test("status disclosure remains reachable when its badge scrolls out of view", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 360 });
+  await page.goto("/submissions/instruments");
+  const section = page.locator('section[id="LMT"]');
+  const badge = section.locator("summary").first();
+  const panel = section.getByTestId("instrument-status-disclosure");
+  await badge.click();
+  await expect(panel).toBeVisible();
+  // Scroll the real containing page without touching the floating panel.
+  for (const edge of ["above", "below"] as const) {
+    await badge.evaluate((element, edge) => {
+      for (
+        let parent = element.parentElement;
+        parent;
+        parent = parent.parentElement
+      ) {
+        if (
+          parent.scrollHeight > parent.clientHeight &&
+          /auto|scroll/.test(getComputedStyle(parent).overflowY)
+        ) {
+          const offset = element.getBoundingClientRect().top;
+          parent.scrollTop +=
+            edge === "above" ? offset + 100 : offset - window.innerHeight - 100;
+          return;
+        }
+      }
+      const offset = element.getBoundingClientRect().top;
+      window.scrollBy(
+        0,
+        edge === "above" ? offset + 100 : offset - window.innerHeight - 100,
+      );
+    }, edge);
+    await expect(async () => {
+      const anchor = (await badge.boundingBox())!;
+      if (edge === "above") expect(anchor.y + anchor.height).toBeLessThan(0);
+      else expect(anchor.y).toBeGreaterThan(360);
+      const bounds = await panel.boundingBox();
+      expect(bounds).not.toBeNull();
+      expect(bounds!.y).toBeGreaterThanOrEqual(0);
+      expect(bounds!.y + bounds!.height).toBeLessThanOrEqual(360);
+    }).toPass();
+    if (evidence)
+      await page.screenshot({
+        path: path.join(evidence, `status-scrolled-${edge}.png`),
+      });
+  }
+  await page.keyboard.press("Escape");
+  await expect(panel).toBeHidden();
+});
