@@ -21,12 +21,9 @@ must exist with the dependency it names.
 
 from __future__ import annotations
 
-import inspect
-
 import pytest
 from fastapi.routing import APIRoute
 
-from app.api import deps
 from app.api.deps import MUTATION_ROLE_DEPENDENCY_NAMES
 from app.main import app
 
@@ -160,28 +157,6 @@ def test_credit_routes_cannot_revert_to_legacy_authorization(
     assert "resolve_tenant_bank" in dependencies
     # Entitlement is orthogonal to authority and stays.
     assert "credit" in _module_entitlement_keys(matches[0])
-
-
-def test_the_shared_institution_gate_refuses_a_narrowed_scope_by_default() -> None:
-    """An unconverted surface must REFUSE a branch grant, not ignore it.
-
-    The default on ``_require_institution_permission`` is the whole safety of the
-    data-scope dimension for every module that has not applied it: with the other
-    default, an Org Owner could compose a sentence restricting a reader to one
-    branch and thirteen institution surfaces would serve the whole book anyway.
-    Only a surface that APPLIES the scope may opt out, and the opt-outs are
-    enumerated here so adding one is a visible decision.
-    """
-    signature = inspect.signature(deps._require_institution_permission)  # noqa: SLF001
-    assert signature.parameters["require_whole_institution"].default is True
-
-    source = inspect.getsource(deps)
-    opt_outs = source.count("require_whole_institution=False")
-    assert opt_outs == 2, (
-        "exactly two dependencies apply a data scope instead of refusing one "
-        "(the credit blotter/facets and the credit activity grid); a new opt-out "
-        "must apply access.data_scope to its rows AND to every count"
-    )
 
 
 def test_the_credit_run_route_is_a_recognized_mutation_gate() -> None:

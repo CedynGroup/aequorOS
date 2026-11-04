@@ -769,6 +769,8 @@ SELECT
     t.email,
     COALESCE(bool_or(
         a.principal_type = t.principal_type
+        AND a.role_bundle IN ('viewer', 'auditor', 'analyst', 'approver', 'validator')
+        AND a.data_scope_kind = 'all'
         AND a.module_scope IN ('credit', 'all')
         AND a.sensitivity_scope IN ('aggregated', 'all')
         AND ((a.institution_scope = 'institution' AND a.institution_id = t.institution_id)
@@ -776,6 +778,8 @@ SELECT
     ), FALSE) AS credit_aggregated_view,
     COALESCE(bool_or(
         a.principal_type = t.principal_type
+        AND a.role_bundle IN ('viewer', 'auditor', 'analyst', 'approver', 'validator')
+        AND a.data_scope_kind = 'all'
         AND a.module_scope IN ('credit', 'all')
         AND a.sensitivity_scope IN ('restricted', 'all')
         AND ((a.institution_scope = 'institution' AND a.institution_id = t.institution_id)
@@ -785,6 +789,7 @@ FROM targets AS t
 LEFT JOIN active_bindings AS a
   ON a.organization_id = t.organization_id
  AND a.principal_user_id = t.principal_user_id
+WHERE t.principal_type = 'human'
 GROUP BY t.organization_id, t.institution_id, t.principal_user_id, t.email
 ORDER BY t.organization_id, t.institution_id, t.email;
 ```

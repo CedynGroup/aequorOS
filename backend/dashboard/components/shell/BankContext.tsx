@@ -25,6 +25,7 @@ import type {
   EffectiveCapabilityRead,
 } from "@aequoros/risk-service-api";
 import { isApiError } from "@/lib/api/client";
+import { wholeInstitutionCapabilities } from "@/lib/api/dataScope";
 import { useBiAvailability } from "@/lib/api/bi";
 import { loginUrlWithReason } from "@/lib/loginUrl";
 import { useBanks, useReportingPeriods } from "@/lib/api/hooks";
@@ -273,13 +274,13 @@ export default function BankProvider({ children }: { children: ReactNode }) {
       // SDI book and exposure panels on Capital screens read these flags rather
       // than reusing the Capital ones (backend/docs/credit_enforcement_rollout.md).
       creditAggregatedView: hasEffectiveCapability(
-        institutionCapabilities,
+        wholeInstitutionCapabilities(institutionCapabilities),
         "credit",
         "aggregated",
         "view",
       ),
       creditRestrictedView: hasEffectiveCapability(
-        institutionCapabilities,
+        wholeInstitutionCapabilities(institutionCapabilities),
         "credit",
         "restricted",
         "view",
