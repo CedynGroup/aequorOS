@@ -30,13 +30,12 @@ import { fmtDateUTC, num } from "@/lib/api/values";
 import { fmtPct } from "@/lib/format";
 import { FormActions, ReasonField } from "@/components/institution/shared";
 import {
-  EditRegisterAction,
   EvidenceFields,
   numericInputCls,
   parseDecimalInput,
   sameDecimal,
 } from "./common";
-import { useConfigureEligibility } from "@/lib/api/configureAccess";
+import { EditRegisterAction, useApproverGate } from "./legacyCreditAccess";
 
 /** The closed code list (mirrors the backend's CREDIT_THRESHOLD_CODES). */
 const THRESHOLDS: { code: string; label: string; hint: string }[] = [
@@ -130,21 +129,19 @@ function toViewRows(register: CreditThresholdRegisterRead): ViewRow[] {
 }
 
 export default function CreditThresholdCard({ bankId }: { bankId: string }) {
-  const { allowed, reason } = useConfigureEligibility(bankId, "credit");
+  const { isApprover } = useApproverGate();
   const query = useCreditThresholdRegister(bankId);
   const [editing, setEditing] = useState(false);
 
   return (
     <SectionCard
-      className="[&>div:first-child]:flex-col sm:[&>div:first-child]:flex-row"
       title="Credit early-warning thresholds"
       subtitle="The Board's own watch levels for the credit module — evaluated on every computation once set, disclosed as not-evaluated until then"
       noPadding
       actions={
         query.data && (
           <EditRegisterAction
-            allowed={allowed}
-            reason={reason}
+            isApprover={isApprover}
             editing={editing}
             onEdit={() => setEditing(true)}
           />
@@ -155,7 +152,7 @@ export default function CreditThresholdCard({ bankId }: { bankId: string }) {
           No regulatory instrument prescribes these values — they are the
           institution&apos;s own levels, distinct from the Notice 2025/23 NPL
           ceiling the engine always enforces. Breaches raise credit validations
-          and alerts; updates require scoped configure access and are audited.
+          and alerts; updates are approver-gated and audited.
         </span>
       }
     >
@@ -170,9 +167,8 @@ export default function CreditThresholdCard({ bankId }: { bankId: string }) {
           />
         </div>
       ) : query.data ? (
-        editing && allowed ? (
+        editing ? (
           <ThresholdEditor
-            key={bankId}
             bankId={bankId}
             register={query.data}
             onClose={() => setEditing(false)}

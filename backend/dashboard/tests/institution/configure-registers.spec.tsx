@@ -62,6 +62,9 @@ const cards: readonly {
 }[] = [
   { name: "liquidity thresholds", module: "liq", Card: ThresholdRegisterCard },
   { name: "EWI triggers", module: "liq", Card: EwiRegisterCard },
+];
+// CREDIT configure eligibility and save cases resume in m8 from 5db65e8c (D17).
+const creditCards = [
   { name: "credit thresholds", module: "credit", Card: CreditThresholdCard },
   { name: "CRM haircuts", module: "credit", Card: CrmHaircutCard },
   { name: "ECL assumptions", module: "credit", Card: EclAssumptionCard },
@@ -145,6 +148,37 @@ it.each(cards)("allows $name with an exact configure projection", async ({ Card,
   expect(edit).toBeEnabled();
   await userEvent.click(edit);
   expect(screen.getByRole("button", { name: /Record (generation|trigger levels)/ })).toBeVisible();
+});
+it.each(creditCards.flatMap((card) =>
+  ["viewer", "analyst", "account_admin"].map((role) => ({ ...card, role })),
+))("preserves the base $name denial for $role despite CREDIT configure", async ({ Card, role }) => {
+  authority.roles = [role];
+  authority.capabilities = [
+    capability("credit"),
+    capability("credit", { permission: "view", sensitivity: "confidential" }),
+  ];
+  render(<Card bankId="BK-SAMP0001" />, { wrapper: Providers });
+  const edit = await screen.findByRole("button", { name: "Edit register" });
+  expect(edit).toBeDisabled();
+  expect(edit).toHaveAttribute("title", "Requires the approver role");
+  expect(screen.getByText("Requires the approver role")).toBeVisible();
+  await userEvent.click(edit);
+  expect(screen.queryByRole("button", { name: "Record generation" })).toBeNull();
+  expect(writes).toEqual([]);
+});
+it.each(creditCards.flatMap((card) =>
+  ["approver", "admin"].map((role) => ({ ...card, role })),
+))("preserves the base $name editor for $role without configure", async ({ Card, role }) => {
+  authority.roles = [role];
+  authority.capabilities = [
+    capability("credit", { permission: "view", sensitivity: "confidential" }),
+  ];
+  render(<Card bankId="BK-SAMP0001" />, { wrapper: Providers });
+  const edit = await screen.findByRole("button", { name: "Edit register" });
+  expect(edit).toBeEnabled();
+  await userEvent.click(edit);
+  expect(screen.getByRole("button", { name: "Record generation" })).toBeVisible();
+  expect(screen.queryByRole("button", { name: "Edit register" })).toBeNull();
 });
 it("does not turn configure-only authority into register read/navigation access", () => {
   authority.capabilities = [capability("liq"), capability("credit")];

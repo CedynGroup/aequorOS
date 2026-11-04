@@ -5,8 +5,8 @@
  * haircuts). View mode shows the resolved schedule — the code defaults with
  * any Board-adopted rows over them; edit mode records a new effective-dated
  * generation for the collateral classes whose haircut changed, carrying the
- * Board evidence (approved-by + required audit reason). Editing requires scoped
- * configure access; the capital engine reads this register on every run.
+ * Board evidence (approved-by + required audit reason). Approver-gated
+ * server-side; the capital engine reads this register on every run.
  */
 
 import { useMemo, useState } from "react";
@@ -32,13 +32,12 @@ import {
   textOrNull,
 } from "@/components/institution/shared";
 import {
-  EditRegisterAction,
   EvidenceFields,
   numericInputCls,
   parseDecimalInput,
   sameDecimal,
 } from "./common";
-import { useConfigureEligibility } from "@/lib/api/configureAccess";
+import { EditRegisterAction, useApproverGate } from "./legacyCreditAccess";
 
 const viewColumns: Column<CrmHaircutRead>[] = [
   {
@@ -88,21 +87,19 @@ const viewColumns: Column<CrmHaircutRead>[] = [
 ];
 
 export default function CrmHaircutCard({ bankId }: { bankId: string }) {
-  const { allowed, reason } = useConfigureEligibility(bankId, "credit");
+  const { isApprover } = useApproverGate();
   const query = useCrmHaircutRegister(bankId);
   const [editing, setEditing] = useState(false);
 
   return (
     <SectionCard
-      className="[&>div:first-child]:flex-col sm:[&>div:first-child]:flex-row"
       title="CRM haircut register"
       subtitle="Supervisory collateral haircuts for credit risk mitigation — the Basel ¶151 code defaults under the Board's adopted rows"
       noPadding
       actions={
         query.data && (
           <EditRegisterAction
-            allowed={allowed}
-            reason={reason}
+            isApprover={isApprover}
             editing={editing}
             onEdit={() => setEditing(true)}
           />
@@ -113,7 +110,7 @@ export default function CrmHaircutCard({ bankId }: { bankId: string }) {
           Each save records an effective-dated generation —
           {` ${query.data?.history.length ?? 0} on record. `}
           The capital engine applies these haircuts to `crm_collateral` facts on
-          every run; updates require scoped configure access and are audited.
+          every run; updates are approver-gated and audited.
         </span>
       }
     >
@@ -128,9 +125,8 @@ export default function CrmHaircutCard({ bankId }: { bankId: string }) {
           />
         </div>
       ) : query.data ? (
-        editing && allowed ? (
+        editing ? (
           <CrmEditor
-            key={bankId}
             bankId={bankId}
             register={query.data}
             onClose={() => setEditing(false)}
