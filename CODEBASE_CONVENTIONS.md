@@ -403,7 +403,7 @@ run_state_machine_as_test(
   `DocumentFactory`, `AssessmentFactory` (+ `MutableFakeStorage`); factories create data through
   the real HTTP API and assert status codes.
 - **Cross-tenant isolation test pattern** — every new endpoint needs one. Canonical example:
-  `tests/case/api/test_liquidity.py::test_liquidity_summary_and_review_are_tenant_scoped` — create
+  `tests/case/api/test_liquidity_integration.py::test_liquidity_summary_and_review_are_tenant_scoped` — create
   data as ORG_1, then assert the same URLs return `404` with
   `headers(org_id=ORG_2, user_id=USER_2)` for both reads and mutations. DB-level scoping checks
   live in `tests/case/api/test_scoping_integration.py`.
