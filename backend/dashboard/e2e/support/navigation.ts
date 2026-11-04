@@ -14,8 +14,9 @@ export async function openTab(page: Page, name: string): Promise<void> {
   const link = page.getByRole("link", { name, exact: true });
   const href = await link.getAttribute("href");
   expect(href).not.toBeNull();
+  const destination = new URL(href!, page.url()).href;
   await Promise.all([
-    page.waitForURL((url) => url.pathname === href),
+    page.waitForURL((url) => url.href === destination),
     link.click(),
   ]);
 }

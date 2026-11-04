@@ -37,6 +37,7 @@ from app.data_engine.schemas.data_activation import (
     DataActivationSummaryRead,
 )
 from app.data_engine.service import reconciliation, withdrawal_impact
+from app.data_engine.service.access import resolve_data_bank
 from app.data_engine.service.concentration_labels import counterparty_group_labels
 from app.data_engine.service.document_uploads import (
     ALLOWED_MEDIA,
@@ -94,6 +95,7 @@ __all__ = [
     "counterparty_group_labels",
     "is_current_generation",
     "reconciliation",
+    "resolve_data_bank",
     "sniff_media_type",
     "stage_source",
     "upload_source",

@@ -227,8 +227,9 @@ def test_owner_can_administer_icaap_codes_after_capital_read_is_revoked(
 
     reporting = owner_client.get(catalogue_url, params={"bank_id": SAMPLE_BANK_ID}, headers=auth)
     assert reporting.status_code == 200, reporting.text
-    assert all(
-        t.family != "icaap"
+    # Legal metadata remains public when Capital calculation access is revoked.
+    assert any(
+        t.code == "ICAAP-REPORT"
         for t in ReturnTemplateListRead.model_validate_json(reporting.text).templates
     )
 

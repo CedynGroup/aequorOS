@@ -65,6 +65,7 @@ import {
   fmtBytes,
 } from "@/components/submissions/shared";
 import EventsFeed from "@/components/submissions/EventsFeed";
+import RegulatoryExportWarning from "@/components/submissions/RegulatoryExportWarning";
 import { AttestationSummary } from "@/components/attestation/shared";
 
 const ALL = "all";
@@ -558,6 +559,10 @@ function PackageRecord({
               <p className="text-micro font-medium text-slate uppercase tracking-wider mt-4 mb-1.5">
                 Artifacts
               </p>
+              {((artifacts.data?.artifacts ?? []).length > 0 ||
+                emailChannel) && (
+                <RegulatoryExportWarning snapshot={detail.data?.snapshot} />
+              )}
               {downloadError && (
                 <p className="mb-1.5 text-caption text-critical">
                   {downloadError}

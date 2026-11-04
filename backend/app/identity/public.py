@@ -52,7 +52,11 @@ from app.identity.service.authorization import (
     reduce_data_scope,
     request_wide_condition_checks,
 )
-from app.identity.service.banks import get_bank_or_404, resolve_bank_reference
+from app.identity.service.banks import (
+    get_bank_or_404,
+    require_institution_coverage,
+    resolve_bank_reference,
+)
 from app.identity.service.grant_administration import (
     SodDecision,
     SodFinding,
@@ -133,8 +137,10 @@ __all__ = [
     "record_success",
     "reduce_data_scope",
     "request_wide_condition_checks",
+    "require_institution_coverage",
     "require_bank_permission",
     "require_bank_permission_prefetched",
+    "require_institution_coverage",
     "require_resolved_bank_permission",
     "resolve_bank",
     "resolve_bank_reference",

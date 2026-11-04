@@ -125,7 +125,7 @@ export default function NSFRDashboard() {
 
             <SectionCard
               title="Regulatory floor"
-              subtitle="NSFR is a floor limit — compliant while the ratio stays above the Basel minimum"
+              subtitle="NSFR monitoring assessment against the Basel minimum"
               computedAt={computedAt}
             >
               <LimitBar

@@ -9,16 +9,16 @@ transition changes; update its table and independent test model in the same chan
 
 ## Coverage and order
 
-| Workflow                         | Public interface / transition authority                                                         | Stateful coverage                                                                            |
-| -------------------------------- | ----------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
-| Filing review and submission     | `app/reporting/api/manage_filing_workflow.py`; `app/reporting/service/workflow.py`              | [Filing machine](../tests/reporting/service/test_filing_state_machine.py)                    |
-| ICAAP review, freeze and return  | `app/icaap/service/{workflow,freeze,post_freeze,cycles}.py`                                     | [Freeze machine](../tests/icaap/service/test_freeze_state_machine.py)                        |
-| Maker-checker workflow templates | `app/reporting/service/filing_workflow/templates.py`; `app/icaap/service/workflow_templates.py` | [Template version machine](../tests/reporting/service/test_template_state_machine.py)        |
-| Scoped access requests           | `app/identity/api/manage_authorization.py`                                                      | [Access-request machine](../tests/identity/api/test_access_request_state_machine.py)         |
-| Grants and session invalidation  | `app/identity/service/{authentication,authorization,grant_administration}.py`                   | [Existing authorization machines](../tests/identity/api/test_authorization_state_machine.py) |
-| Jobs                             | `app/services/job_queue.py`; `app/worker.py`                                                    | Queue/worker examples; generated retries and stale claims pending                            |
-| Ingestion batches                | `app/data_engine/service/ingestion.py`                                                                     | Ingestion examples; generated extraction/validation/retry sequences pending                  |
-| BI alert verdicts                | `app/bi/service/alerts.py`                                                                      | Alert examples; generated missing-data/breach/recovery sequences pending                     |
+| Workflow                         | Public interface / transition authority                                                         | Stateful coverage                                                                                                                                                                                     |
+| -------------------------------- | ----------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Filing review and submission     | `app/reporting/api/manage_filing_workflow.py`; `app/reporting/service/workflow.py`              | [Filing machine](../tests/reporting/service/test_filing_state_machine.py)                                                                                                                             |
+| ICAAP review, freeze and return  | `app/icaap/service/{workflow,freeze,post_freeze,cycles}.py`                                     | [Freeze machine](../tests/icaap/service/test_freeze_state_machine.py)                                                                                                                                 |
+| Maker-checker workflow templates | `app/reporting/service/filing_workflow/templates.py`; `app/icaap/service/workflow_templates.py` | [Template version machine](../tests/reporting/service/test_template_state_machine.py)                                                                                                                 |
+| Scoped access requests           | `app/identity/api/manage_authorization.py`                                                      | [Access-request machine](../tests/identity/api/test_access_request_state_machine.py)                                                                                                                  |
+| Grants and session invalidation  | `app/identity/service/{authentication,authorization,grant_administration}.py`                   | [Authorization machines](../tests/identity/api/test_authorization_state_machine.py); [Postgres effective-access and approval machines](../tests/db/test_authorization_effective_access_properties.py) |
+| Jobs                             | `app/services/job_queue.py`; `app/worker.py`                                                    | Queue/worker examples; generated retries and stale claims pending                                                                                                                                     |
+| Ingestion batches                | `app/data_engine/service/ingestion.py`                                                          | Ingestion examples; generated extraction/validation/retry sequences pending                                                                                                                           |
+| BI alert verdicts                | `app/bi/service/alerts.py`                                                                      | Alert examples; generated missing-data/breach/recovery sequences pending                                                                                                                              |
 
 The filing, freeze and template machines use real services and persisted audit/submission events.
 The access-request machine uses HTTP with real scoped bindings and signed tokens,
@@ -205,16 +205,21 @@ do not infer legal transitions solely from a column CHECK constraint.
 20 stateful steps, no wall-clock deadline, `derandomize=True`, `print_blob=True`.
 `HYPOTHESIS_PROFILE` may select an explicitly registered profile. There is no
 scheduled property-test CI job, so no unbounded or larger nightly profile is added.
-The database machines lower examples to 12 to bound persisted workflow setup and
-HTTP requests. The filing/freeze machines additionally build real computed
-positions and/or frozen reports. All retain 20 generated steps. Failure output
+The filing, freeze, template and access-request database machines lower examples
+to 12 to bound persisted workflow setup and HTTP requests. The filing/freeze machines additionally build real computed
+positions and/or frozen reports. These retain 20 generated steps. The Postgres effective-access and reconciliation
+approval machines use 10 examples and 12 generated steps. Failure output
 contains a minimized command sequence and reproduction blob.
 
-Each machine example owns a connection savepoint and a separate session whose
+The filing, freeze, template and access-request machine examples each own a
+connection savepoint and a separate session whose
 service commits release only session savepoints. Teardown closes that session and
 rolls back the example, including audit rows and earlier successful commits. The
 outer pytest fixture remains isolated; Postgres uses its disposable schema. Never
-point these mutating machines at the primary database.
+point these mutating machines at the primary database. The Postgres effective-access
+and reconciliation approval machines instead commit through real HTTP sessions:
+each example creates a new synthetic organization in a migrated, disposable schema
+with FORCE RLS. Append-only governance rows remain until schema teardown.
 
 Setup runs in a Hypothesis initializer so failures still receive teardown. Refused
 commands roll back the request transaction before comparing persisted evidence,

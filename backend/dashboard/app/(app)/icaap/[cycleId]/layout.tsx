@@ -1,5 +1,8 @@
 "use client";
 
+import { useSearchParams } from "next/navigation";
+import { preparationHref } from "@/lib/regulatoryInstruments";
+
 /**
  * The cycle's shell: one header and one tab strip for every tab.
  *
@@ -13,15 +16,20 @@ import { useBankContext } from "@/components/shell/BankContext";
 import CycleHeader from "@/components/icaap/CycleHeader";
 import { icaapTabHrefs } from "@/components/icaap/tabs";
 import { useIcaapCycle, useIcaapReadiness } from "@/lib/api/icaap";
-import { use } from "react";
+import { use, Suspense, type ReactNode } from "react";
 
-export default function IcaapCycleLayout({
-  children,
-  params,
-}: {
-  children: React.ReactNode;
-  params: Promise<{ cycleId: string }>;
-}) {
+type Props = { children: ReactNode; params: Promise<{ cycleId: string }> };
+
+export default function IcaapCycleLayout(props: Props) {
+  return (
+    <Suspense>
+      <IcaapCycleShell {...props} />
+    </Suspense>
+  );
+}
+
+function IcaapCycleShell({ children, params }: Props) {
+  const preparing = useSearchParams().get("preparing") === "1";
   const { cycleId } = use(params);
   const { bank } = useBankContext();
   const cycleQuery = useIcaapCycle(bank?.id, cycleId);
@@ -35,12 +43,12 @@ export default function IcaapCycleLayout({
           cycle={cycleQuery.data}
           deadline={readinessQuery.data?.deadline}
           breadcrumbs={[
-            { label: "ICAAP", href: "/icaap" },
+            { label: "ICAAP", href: preparationHref("/icaap", preparing) },
             { label: cycleQuery.data.title },
           ]}
         />
       )}
-      <ModuleTabs tabs={icaapTabHrefs(cycleId)} />
+      <ModuleTabs tabs={icaapTabHrefs(cycleId, preparing)} />
       {children}
     </>
   );

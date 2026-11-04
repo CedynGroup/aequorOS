@@ -306,11 +306,29 @@ test("WindowAnalysis renders each daily headline with the live card's label", ()
   };
   const originalLoad = loader._load;
   loader._load = (request, parent, isMain) => {
-    if (request === "@/lib/api/hooks") {
+    if (
+      request === "@/lib/api/hooks" ||
+      (request === "./hooks" &&
+        (parent as { filename?: string } | null)?.filename?.endsWith(
+          "/lib/api/regulatoryRules.js",
+        ))
+    ) {
       return {
         useWindowAnalytics: () => ({ data, isFetching: false, error: null }),
+        useReturnTemplates: () => ({
+          data: {
+            templates: [
+              { code: "IRRBB-PILOT", instrumentStatus: "in_force" },
+              { code: "LCR-NSFR", instrumentStatus: "in_force" },
+            ],
+          },
+        }),
       };
     }
+    if (request === "@/components/shell/BankContext")
+      return {
+        useModuleScope: () => ({ institutionClass: "bank" }),
+      };
     if (request === "@/lib/api/client") {
       return { isApiError: () => false, isModuleUnavailable: () => false };
     }

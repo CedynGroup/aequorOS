@@ -16,6 +16,7 @@
     "features/liquidity/components/CfpLifecycle.tsx -> components/profile/ProfileProvider",
     "features/liquidity/components/SdiLiquidityMonitoringView.tsx -> components/basel/sdiHooks",
     "features/liquidity/components/SdiLiquidityView.tsx -> components/basel/sdiHooks",
+    "features/liquidity/components/SdiLiquidityView.tsx -> components/submissions/RegulatoryRuleStatus",
     "features/liquidity/components/results.test.tsx -> features/bi/components/echartsTheme",
     "features/live/components/moduleDisplay.test.ts -> features/home/components/WindowAnalysis",
     "features/risk/routes/alerts.tsx -> components/basel/sdiHooks",

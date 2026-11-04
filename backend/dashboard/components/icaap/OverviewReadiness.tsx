@@ -1,5 +1,8 @@
 "use client";
 
+import { useSearchParams } from "next/navigation";
+import { preparationHref } from "@/lib/regulatoryInstruments";
+
 /**
  * What still stands between this cycle and a freeze.
  *
@@ -20,22 +23,20 @@ import {
   type IcaapReadinessItemRead,
   type IcaapSeverity,
 } from "@/lib/api/icaap";
+import FrameworkStatus from "./FrameworkStatus";
 import DeadlineBadge from "./DeadlineBadge";
-import {
-  ExposureDraftBanner,
-  FrameworkDigestNotice,
-  RehearsalBanner,
-} from "./Notices";
+import { FrameworkDigestNotice, RehearsalBanner } from "./Notices";
 
-const SEVERITY_ORDER: IcaapSeverity[] = [
-  "blocking",
-  "warning",
-  "info",
-];
+const SEVERITY_ORDER: IcaapSeverity[] = ["blocking", "warning", "info"];
 
 const SEVERITY_COPY: Record<
   IcaapSeverity,
-  { title: string; description: string; icon: typeof AlertOctagon; tone: string }
+  {
+    title: string;
+    description: string;
+    icon: typeof AlertOctagon;
+    tone: string;
+  }
 > = {
   blocking: {
     title: "Must be resolved",
@@ -45,7 +46,8 @@ const SEVERITY_COPY: Record<
   },
   warning: {
     title: "Worth attention",
-    description: "None of these stops a freeze, but each one is a judgement a reviewer will ask about.",
+    description:
+      "None of these stops a freeze, but each one is a judgement a reviewer will ask about.",
     icon: AlertTriangle,
     tone: "text-warning",
   },
@@ -78,6 +80,7 @@ export default function OverviewReadiness({
   bankId: string;
   cycleId: string;
 }) {
+  const preparing = useSearchParams().get("preparing") === "1";
   const cycleQuery = useIcaapCycle(bankId, cycleId);
   const readinessQuery = useIcaapReadiness(bankId, cycleId);
   const cycle = cycleQuery.data;
@@ -96,7 +99,7 @@ export default function OverviewReadiness({
       {cycle && readiness && (
         <div className="space-y-4">
           {cycle.cycleKind === "rehearsal" && <RehearsalBanner />}
-          <ExposureDraftBanner framework={cycle.framework} />
+          <FrameworkStatus bankId={bankId} framework={cycle.framework} />
           {!cycle.frameworkDigestMatches && <FrameworkDigestNotice />}
 
           <SectionCard
@@ -128,9 +131,15 @@ export default function OverviewReadiness({
               )}
               <div className="min-w-0 text-body text-navy/80">
                 <p>
-                  {readiness.items.filter((i) => i.severity === "blocking").length}{" "}
+                  {
+                    readiness.items.filter((i) => i.severity === "blocking")
+                      .length
+                  }{" "}
                   blocking,{" "}
-                  {readiness.items.filter((i) => i.severity === "warning").length}{" "}
+                  {
+                    readiness.items.filter((i) => i.severity === "warning")
+                      .length
+                  }{" "}
                   to review.
                 </p>
                 {readiness.pendingPrimaryTextSections.length > 0 && (
@@ -178,7 +187,7 @@ export default function OverviewReadiness({
                         </div>
                         {href && (
                           <Link
-                            href={href}
+                            href={preparationHref(href, preparing)}
                             className="shrink-0 text-caption font-medium text-action hover:underline"
                           >
                             Open

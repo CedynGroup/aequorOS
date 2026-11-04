@@ -7,6 +7,7 @@
  */
 
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { ArrowUpRight, Zap } from "lucide-react";
 import IrrWorkspace from "@/components/irr/IrrWorkspace";
 import TornadoChart from "@/components/irr/charts/TornadoChart";
@@ -40,6 +41,7 @@ const SPARK_COLOR: Record<KpiStatus, string> = {
 };
 
 export default function IrrOverviewPage() {
+  const preparing = useSearchParams().get("preparing") === "1";
   return (
     <IrrWorkspace>
       {({ data, metrics: m, latestRun, computedAt }) => {
@@ -134,7 +136,11 @@ export default function IrrOverviewPage() {
                 subtitle={`${eveBars.length} rate shocks · Base EVE ${fmtCurrency(num(m.eveBaseGhs))} · Tier 1 ${fmtCurrency(num(m.tier1Ghs))}`}
                 actions={
                   <Link
-                    href="/irr/sensitivity"
+                    href={
+                      preparing
+                        ? "/irr/sensitivity?preparing=1"
+                        : "/irr/sensitivity"
+                    }
                     className="inline-flex items-center gap-1 text-caption font-medium text-action hover:underline"
                   >
                     EVE & NII detail
@@ -157,7 +163,7 @@ export default function IrrOverviewPage() {
                 subtitle="Net gap per Basel IRRBB tenor bucket with cumulative overlay"
                 actions={
                   <Link
-                    href="/irr/gaps"
+                    href={preparing ? "/irr/gaps?preparing=1" : "/irr/gaps"}
                     className="inline-flex items-center gap-1 text-caption font-medium text-action hover:underline"
                   >
                     Full gap analysis

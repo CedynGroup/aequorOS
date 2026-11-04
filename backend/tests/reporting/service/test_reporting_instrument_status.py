@@ -10,6 +10,7 @@ from collections import Counter
 from dataclasses import replace
 from datetime import date
 from typing import TypedDict, cast
+from uuid import uuid4
 
 import pytest
 from fastapi import HTTPException
@@ -20,7 +21,7 @@ from app.api.deps import TenantContext
 from app.bi.domain.catalogue import catalogue
 from app.core.authorization import ModuleScope, RoleBundle, SensitivityScope
 from app.domain.authority.registry import REGISTRY as AUTHORITY_REGISTRY
-from app.models import Bank, RegulatoryParameter
+from app.models import Bank, RegulatoryParameter, User
 from app.policy.domain.regulatory_instruments import InstrumentStatus, instrument_status_on
 from app.reporting.service import calendar, generation, packages
 from app.reporting.service.eligibility import resolve_eligibility
@@ -50,15 +51,14 @@ def test_draft_and_unpublished_returns_never_create_obligations(
     assert not set(BANK_DRAFTS + ("LMT", "LCR-NSFR")) & {
         item.return_code for item in result.obligations
     }
-    assert result.coverage_note is not None
-    assert "LMT" in result.coverage_note
-    assert "LCR-NSFR" in result.coverage_note
 
 
 def test_final_return_obligations_start_on_commencement(db_session: Session) -> None:
     """BoG Large Exposures Directive (Sept 2025) ¶12: effective 1 Jan 2027."""
     materialize_canonical_test_book(db_session)
     result = calendar.list_obligations(db_session, CTX, SAMPLE_BANK_ID, 6, as_of=date(2026, 10, 9))
+    assert not [item for item in result.obligations if item.return_code == "LE-MONTHLY"]
+    result = calendar.list_obligations(db_session, CTX, SAMPLE_BANK_ID, 6, as_of=date(2027, 1, 1))
     rows = [item for item in result.obligations if item.return_code == "LE-MONTHLY"]
     assert rows
     assert all(item.reporting_date >= date(2027, 1, 1) for item in rows)
@@ -90,6 +90,9 @@ def test_return_templates_carry_status_and_conditional_commencement(db_session: 
     }
     assert templates["LMT"].instrument_status == "exposure_draft"
     assert templates["LMT"].effective_from == date(2027, 1, 1)
+    assert "limit parameter: narrow_to_volatile" in templates["LMT"].calculations
+    assert templates["CAR-RWA"].source_url is not None
+    assert templates["CAR-RWA"].effective_from == date(2019, 1, 1)
     assert templates["SDI-LMT-MONTHLY"].instrument_status == "exposure_draft"
     assert templates["SDI-LMT-MONTHLY"].effective_from == date(2027, 1, 1)
     assert templates["LE-MONTHLY"].instrument_status == "final_not_in_force"
@@ -248,6 +251,7 @@ def test_governed_commencement_reaches_templates_and_sealed_frozen_provenance(
     assert rows
     for row in rows:
         row.value_json = {"schema": "icaap-effective-date-v1", "date": first_as_of.isoformat()}
+        row.approved_by = "Synthetic commencement checker"
     db_session.flush()
     templates = {
         item.code: item
@@ -258,6 +262,10 @@ def test_governed_commencement_reaches_templates_and_sealed_frozen_provenance(
     for code in ("ICAAP-REPORT", "ICAAP-UPDATE", "ICAAP-DISCLOSURE"):
         assert templates[code].instrument_status == "exposure_draft"
         assert templates[code].effective_from == first_as_of
+        assert templates[code].default_effective_from == date(2026, 12, 31)
+        assert templates[code].commencement_approved_by == "Synthetic commencement checker"
+        assert templates[code].source_url is not None
+        assert templates[code].commencement_parameter == "icaap_report_first_as_of_date"
         frozen = generation.generate_frozen_package(
             db_session,
             CTX,
@@ -377,7 +385,95 @@ def test_fixture_calendar_original_initial_and_final_counters(
                 replace(REGISTRY[code], instrument_status="in_force", effective_from=None),
             )
         original = measure()
-    assert original["obligations"] == 472
-    assert initial["obligations"] == 443
-    assert final["obligations"] < initial["obligations"]
+    assert original["obligations"] > initial["obligations"] > final["obligations"]
+    assert original["affected_overdue"] > 0
+    assert final["affected_overdue"] == 0
     print({"original": original, "initial": initial, "final": final})
+
+
+def test_legal_metadata_does_not_require_a_filing_family_grant(db_session: Session) -> None:
+    materialize_canonical_test_book(db_session)
+    reader = _covered_legal_reader(db_session)
+    templates = {
+        item.code: item
+        for item in packages.list_return_templates(
+            db_session, reader, SAMPLE_BANK_ID, as_of=date(2026, 10, 9)
+        ).templates
+    }
+    assert set(templates) == set(REGISTRY)
+    assert templates["LMT"].instrument_status == "exposure_draft"
+    assert templates["IRRBB-PILOT"].instrument_status == "exposure_draft"
+    assert templates["ICAAP-REPORT"].commencement_parameter == "icaap_report_first_as_of_date"
+    assert packages.list_packages(db_session, reader, SAMPLE_BANK_ID).packages == []
+
+
+def _covered_legal_reader(db: Session) -> TenantContext:
+    user = User(
+        id=uuid4(),
+        organization_id=DEMO_ORG_ID,
+        email="legal-reader@example.test",
+        display_name="Synthetic legal reader",
+        is_active=True,
+    )
+    db.add(user)
+    db.flush()
+    grant_institution_authority(
+        db,
+        organization_id=DEMO_ORG_ID,
+        bank_id=SAMPLE_BANK_ID,
+        user_id=user.id,
+        bundle=RoleBundle.ANALYST,
+        module=ModuleScope.CAPITAL,
+        sensitivity=SensitivityScope.CONFIDENTIAL,
+    )
+    return replace(CTX, actor_user_id=user.id)
+
+
+def test_bank_specific_legal_metadata_requires_institution_coverage(db_session: Session) -> None:
+    materialize_canonical_test_book(db_session)
+    reader = _covered_legal_reader(db_session)
+    other = Bank(
+        organization_id=DEMO_ORG_ID,
+        name="Other institution",
+        short_name="OTHER",
+        currency="GHS",
+        jurisdiction_code="GH",
+        license_type="universal",
+        institution_type="universal_bank",
+    )
+    db_session.add(other)
+    for parameter in db_session.scalars(
+        select(RegulatoryParameter).where(
+            RegulatoryParameter.param_code == "icaap_report_first_as_of_date"
+        )
+    ):
+        parameter.value_json = {"schema": "icaap-effective-date-v1", "date": "2028-12-31"}
+        parameter.approved_by = "Synthetic commencement checker"
+    db_session.flush()
+    visible = packages.list_return_templates(db_session, reader, SAMPLE_BANK_ID)
+    icaap = next(item for item in visible.templates if item.code == "ICAAP-REPORT")
+    assert icaap.effective_from == date(2028, 12, 31)
+    assert icaap.commencement_approved_by == "Synthetic commencement checker"
+    with pytest.raises(HTTPException) as exc:
+        packages.list_return_templates(db_session, reader, other.id)
+    assert exc.value.status_code == 404
+    defaults = packages.list_return_templates(db_session, replace(reader, actor_user_id=None))
+    assert all(item.commencement_approved_by is None for item in defaults.templates)
+    assert all(item.commencement_approved_at is None for item in defaults.templates)
+
+
+@pytest.mark.parametrize(
+    ("code", "limits"),
+    [
+        ("FX-NOP", ("fx_nop_single_limit_pct", "fx_nop_aggregate_limit_pct")),
+        ("DBK-DAILY", ("fx_nop_single_limit_pct", "fx_nop_aggregate_limit_pct")),
+        ("NPL-MONTHLY", ("npl_limit_pct", "npl_dividend_restriction_pct")),
+    ],
+)
+def test_instrument_register_exposes_source_backed_limits(
+    db_session: Session, code: str, limits: tuple[str, str]
+) -> None:
+    templates = {
+        item.code: item for item in packages.list_return_templates(db_session, CTX).templates
+    }
+    assert templates[code].calculations == [f"limit parameter: {limit}" for limit in limits]

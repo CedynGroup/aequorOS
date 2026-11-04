@@ -86,7 +86,7 @@ export default function IrrbbSfCard({
       subtitle={IRRBB_SF_SUPERVISORY_ONLY}
       actions={
         <Link
-          href="/irr/standardised"
+          href="/irr/standardised?preparing=1"
           className="inline-flex items-center gap-1 text-caption text-action underline-offset-2 hover:underline"
         >
           {IRRBB_SF_OPEN_WORKSPACE}
