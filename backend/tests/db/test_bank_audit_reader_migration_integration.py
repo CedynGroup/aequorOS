@@ -25,6 +25,8 @@ def test_audit_reader_replays_after_application_ownership_changes(
 ) -> None:
     schema = migrated_postgres_schema
     config = alembic_config_for_app()
+    # Compare this historical revision to itself, not later reader extensions.
+    command.downgrade(config, "202610120100")
     lineage_indexes = {
         "ix_canonical_positions_lineage_id",
         "ix_canonical_position_snapshots_lineage_id",
