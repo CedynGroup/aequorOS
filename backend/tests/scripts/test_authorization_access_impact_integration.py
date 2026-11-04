@@ -501,11 +501,19 @@ def _assert_artifact_content(report: ConfigureReport, directory: Path) -> None:
     for stage in (before, after):
         expected = [
             {
-                **{
-                    key: value
-                    for key, value in asdict(row).items()
-                    if key not in ("before", "after", "required_grant")
-                },
+                "organization_id": row.organization_id,
+                "principal_id": row.principal_id,
+                "principal_type": row.principal_type,
+                "method": row.method,
+                "path": row.path,
+                "institution_scope": row.institution_scope,
+                "institution_id": row.institution_id,
+                "module": row.module,
+                "effect_scope": row.effect_scope,
+                "storage_table": row.storage_table,
+                "affected_institution_ids": row.affected_institution_ids,
+                "sensitivity": row.sensitivity,
+                "permission": row.permission,
                 "eligibility": asdict(row.before if stage["stage"] == "before" else row.after),
                 "newly_denied": row.newly_denied,
             }
