@@ -28,13 +28,28 @@ from __future__ import annotations
 
 import os
 from enum import StrEnum
+from typing import cast
+from uuid import UUID, uuid4
 
 import pytest
 from sqlalchemy import text
+from sqlalchemy.exc import IntegrityError
+from sqlalchemy.orm import Session
 
-from app.core.authorization import ModuleScope, RoleBundle
+from alembic import command
+from app.core.authorization import (
+    GrantorType,
+    InstitutionScope,
+    ModuleScope,
+    PrincipalType,
+    RoleBundle,
+    SensitivityScope,
+)
+from app.identity.service import authentication, authorization
+from app.models import Organization, User
 from tests.support.postgres_migrations import (
     MigratedPostgresSchema,
+    alembic_config_for_app,
     migrated_postgres_schema,
 )
 
@@ -107,3 +122,110 @@ def test_the_bindings_constraint_accepts_every_vocabulary_value(
         "migration widening this constraint — the model derives it from the enum, "
         "so the hermetic suite will not catch this."
     )
+
+
+def _authority_snapshot(schema: MigratedPostgresSchema) -> tuple[str, ...]:
+    with schema.app_engine.begin() as connection:
+        connection.execute(
+            text("SELECT set_config('app.organization_id', :org, true)"), {"org": ORG}
+        )
+        snapshots: list[str] = []
+        for table in ("users", "authorization_bindings", "refresh_tokens", "audit_events"):
+            # SQL text results are untyped; validate serialized snapshots at this boundary.
+            result = cast(
+                object,
+                connection.scalar(
+                    text(
+                        "SELECT coalesce(jsonb_agg(to_jsonb(t) ORDER BY id)::text, '[]') "
+                        f"FROM {table} t"
+                    )
+                ),
+            )
+            assert isinstance(result, str)
+            snapshots.append(result)
+        return tuple(snapshots)
+
+
+ORG = "OR-CFGM0001"
+
+
+def test_configurator_migration_grants_nothing_and_preserves_existing_authority(
+    migrated_postgres_schema: MigratedPostgresSchema,
+) -> None:
+    schema = migrated_postgres_schema
+    config = alembic_config_for_app()
+    command.downgrade(config, "202611020107")
+    principal_ids: list[UUID] = []
+    with Session(schema.app_engine) as db:
+        db.info["organization_id"] = ORG
+        db.add(Organization(id=ORG, name="Configurator migration test"))
+        db.flush()
+        for bundle in (
+            RoleBundle.ANALYST,
+            RoleBundle.APPROVER,
+            RoleBundle.ACCOUNT_ADMIN,
+            RoleBundle.ORG_OWNER,
+        ):
+            user = User(
+                id=uuid4(),
+                organization_id=ORG,
+                email=f"{bundle.value}@example.test",
+                role="account_admin" if bundle is RoleBundle.ORG_OWNER else bundle.value,
+            )
+            db.add(user)
+            db.flush()
+            authorization.create_role_binding(
+                db,
+                organization_id=ORG,
+                principal_user_id=user.id,
+                principal_type=PrincipalType.HUMAN,
+                role_bundle=bundle,
+                scope=authorization.BindingScope(
+                    InstitutionScope.ORGANIZATION, None, ModuleScope.ALL, SensitivityScope.ALL
+                ),
+                grantor=authorization.GrantorRef(GrantorType.SYSTEM, "migration-test"),
+                reason="Existing explicit authority",
+                commit=False,
+            )
+            _ = authentication.issue_tokens(db, user)
+            principal_ids.append(user.id)
+        db.commit()
+    before = _authority_snapshot(schema)
+    command.upgrade(config, "head")
+    assert _authority_snapshot(schema) == before
+    with schema.app_engine.begin() as connection:
+        connection.execute(
+            text("SELECT set_config('app.organization_id', :org, true)"), {"org": ORG}
+        )
+        assert (
+            connection.scalar(
+                text(
+                    "SELECT count(*) FROM authorization_bindings WHERE role_bundle = 'configurator'"
+                )
+            )
+            == 0
+        )
+        # Exercise the actual migrated CHECK, not just its catalog expression.
+        with connection.begin_nested() as savepoint:
+            connection.execute(
+                text(
+                    "UPDATE authorization_bindings SET role_bundle = 'configurator' "
+                    "WHERE principal_user_id = :user"
+                ),
+                {"user": principal_ids[0]},
+            )
+            savepoint.rollback()
+        with (
+            pytest.raises(IntegrityError, match="ck_authorization_bindings_role_bundle"),
+            connection.begin_nested(),
+        ):
+            connection.execute(
+                text(
+                    "UPDATE authorization_bindings SET role_bundle = 'unknown_bundle' "
+                    "WHERE principal_user_id = :user"
+                ),
+                {"user": principal_ids[0]},
+            )
+    command.downgrade(config, "202611020107")
+    assert _authority_snapshot(schema) == before
+    command.upgrade(config, "head")

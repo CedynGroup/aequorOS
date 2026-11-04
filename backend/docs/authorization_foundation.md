@@ -126,9 +126,19 @@ The policy vocabulary lives only in `backend/app/core/authorization.py`:
 - static bundles and their exact granted actions: the executable
   [`RoleBundle` and `ROLE_PERMISSIONS`](../app/core/authorization.py) definitions.
 
-`configure` and `sign_off` are reserved action names that are not in any v1
-bundle. Workflow-specific authority for them must be designed explicitly rather
-than inferred from a nearby role. `submit` left that reserved set on 2026-09-20:
+`configurator` carries exactly `configure`, with no read, operational, approval,
+sign-off, submission or account-administration authority. Migration
+`202611040108` widens only the bundle CHECK; it creates no grants and changes no
+existing identities or sessions. Owners must explicitly assign complete scoped
+bindings. Grant creation and revocation invalidate the grantee's sessions in the
+same transaction. Configurator participates in the existing C9 operational-duty
+analysis: delegated Account Admin conflicts block in either assignment order;
+the documented Owner exception remains a warning with audit evidence.
+Configuration route enforcement ships in separate module cutovers.
+
+`sign_off` remains reserved, absent from every bundle. Workflow-specific authority
+must be designed explicitly rather than inferred from a nearby role.
+`submit` left that reserved set on 2026-09-20:
 it is carried by the `validator` bundle alone and enforced on the filing surface
 ([filing submit authority rollout](filing_submit_authority_rollout.md)). It is
 the worked example of the rule — the authority was designed, given its own
@@ -342,12 +352,11 @@ refresh families with `authorization_changed`. The scalar `account_admin` value
 does not authorize SSO connection or access-request administration,
 integration-key lifecycle operations, or organization-directory reads. Those
 routes evaluate explicit organization-wide ACCOUNT/restricted bindings. The
-generic `require_role("admin")` dependency remains operational and
-excludes `account_admin`. It sits outside the analyst/approver ladder and cannot reach
-attestation policy, placement-template mutation, or regulatory submission. This
-avoids grandfathering operational superuser authority while binding enforcement
-rolls out route by route. Liquidity Monitoring likewise requires its own
-explicit scoped binding.
+unused generic scalar `require_role` dependency factory has been removed.
+The live legacy mutation dependencies still exclude `account_admin` from the
+analyst/approver ladder; identity protections are unchanged. Attestation policy,
+placement-template mutation and regulatory submission do not gain authority from
+that scalar role. Liquidity Monitoring likewise requires its own explicit binding.
 
 Migration `202609090051` subsequently restores only Account administration for
 eligible administrators in unowned multi-candidate organizations; it does not
