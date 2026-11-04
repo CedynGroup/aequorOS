@@ -35,22 +35,48 @@ class _MiseConfig(TypedDict):
     settings: _SettingsConfig
 
 
+#: Variables that relocate the repository git operates on. A hook runner or caller
+#: shell can export these; inheriting them makes a fixture command act on the real
+#: checkout no matter which ``cwd`` the test passes.
+_GIT_LOCATION_VARIABLES = frozenset(
+    {
+        "GIT_DIR",
+        "GIT_WORK_TREE",
+        "GIT_COMMON_DIR",
+        "GIT_INDEX_FILE",
+        "GIT_OBJECT_DIRECTORY",
+        "GIT_ALTERNATE_OBJECT_DIRECTORIES",
+        "GIT_NAMESPACE",
+        "GIT_PREFIX",
+    }
+)
+
+
+def _isolated_environment(root: Path, **extra: str) -> dict[str, str]:
+    """The inherited environment minus caller git configuration and location."""
+    environment = {
+        key: value
+        for key, value in os.environ.items()
+        if not key.startswith("GIT_CONFIG_") and key not in _GIT_LOCATION_VARIABLES
+    }
+    environment.update(
+        {"GIT_CONFIG_GLOBAL": str(root / "gitconfig"), "GIT_CONFIG_NOSYSTEM": "1", **extra}
+    )
+    return environment
+
+
 @contextlib.contextmanager
 def isolated_git(root: Path, **extra: str) -> Generator[None]:
     """Run with only this fixture's git configuration, never the caller's.
 
     A harness may inject GIT_CONFIG_COUNT/KEY/VALUE (or GIT_CONFIG_PARAMETERS) to
-    redirect core.hooksPath for its own checkouts. Inheriting those makes a fixture
-    checkout look externally managed and fails these contracts for reasons that
-    have nothing to do with the code under test.
+    redirect core.hooksPath for its own checkouts, and a hook that runs pytest may
+    export GIT_DIR/GIT_WORK_TREE/GIT_INDEX_FILE. Inheriting either makes fixture
+    git commands read or write the caller's repository and makes a fixture checkout
+    look externally managed, failing these contracts for reasons that have nothing
+    to do with the code under test.
     """
-    environment = {
-        key: value for key, value in os.environ.items() if not key.startswith("GIT_CONFIG_")
-    }
-    environment.update(
-        {"GIT_CONFIG_GLOBAL": str(root / "gitconfig"), "GIT_CONFIG_NOSYSTEM": "1", **extra}
-    )
-    with patch.dict(os.environ, environment, clear=True):
+    with patch.dict(os.environ, _isolated_environment(root, **extra), clear=True):
         yield
 
 
@@ -296,7 +322,9 @@ class BootstrapTests(unittest.TestCase):
             + '[tasks."risk-service:hooks"]\nrun = "pnpm hooks-boundary"\n'
         )
         environment = {
-            key: value for key, value in os.environ.items() if not key.startswith("MISE_")
+            key: value
+            for key, value in _isolated_environment(plugin.parent).items()
+            if not key.startswith("MISE_")
         }
         environment.update(
             {
@@ -325,7 +353,8 @@ class BootstrapTests(unittest.TestCase):
                 check=False,
             )
 
-        subprocess.run(["git", "init", "--template=", "-q", str(plugin.parent)], check=True)
+        with isolated_git(plugin.parent):
+            subprocess.run(["git", "init", "--template=", "-q", str(plugin.parent)], check=True)
         linked = run("plugins", "link", "aqs-fixture", str(plugin.parent))
         self.assertEqual(linked.returncode, 0, linked.stdout + linked.stderr)
         verify = run("run", "verify")
@@ -339,6 +368,58 @@ class BootstrapTests(unittest.TestCase):
         self.assertIn("install --frozen-lockfile", commands)
         self.assertIn("sync-boundary", commands)
         self.assertIn("hooks-boundary", commands)
+
+    def test_interpreters_before_311_get_a_named_remedy(self) -> None:
+        output = io.StringIO()
+        with (
+            patch.object(bootstrap.sys, "version_info", (3, 9, 0)),
+            contextlib.redirect_stdout(output),
+        ):
+            self.assertEqual(bootstrap.main(["verify", "--root", str(self.root)]), 1)
+        printed = output.getvalue()
+        self.assertIn("python3 is 3.9", printed)
+        self.assertIn("mise install", printed)
+        self.assertNotIn("Traceback", printed)
+
+    def test_fixture_git_never_reaches_a_caller_repository(self) -> None:
+        decoy = self.root / "decoy"
+        subprocess.run(["git", "init", "--template=", "-q", str(decoy)], check=True)
+        fixture = self.root / "fixture"
+        subprocess.run(["git", "init", "--template=", "-q", str(fixture)], check=True)
+        identity = [
+            "-c",
+            "user.name=Fixture",
+            "-c",
+            "user.email=fixture@example.invalid",
+        ]
+        decoy_commit = ["git", *identity, "commit", "--allow-empty", "--no-verify", "-qm", "decoy"]
+        subprocess.run(decoy_commit, cwd=decoy, check=True)
+        decoy_head = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=decoy, text=True)
+        redirect = {
+            "GIT_DIR": str(decoy / ".git"),
+            "GIT_WORK_TREE": str(decoy),
+            "GIT_INDEX_FILE": str(decoy / ".git/index"),
+        }
+        with patch.dict(os.environ, redirect, clear=False), isolated_git(fixture):
+            for name in redirect:
+                self.assertNotIn(name, os.environ)
+            resolved = subprocess.check_output(
+                ["git", "rev-parse", "--absolute-git-dir"], cwd=fixture, text=True
+            ).strip()
+            self.assertEqual(Path(resolved), (fixture / ".git").resolve())
+            subprocess.run(
+                ["git", *identity, "commit", "--allow-empty", "--no-verify", "-qm", "fixture"],
+                cwd=fixture,
+                check=True,
+            )
+            self.assertTrue(
+                subprocess.check_output(
+                    ["git", "rev-parse", "--verify", "HEAD"], cwd=fixture, text=True
+                ).strip()
+            )
+        self.assertEqual(
+            subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=decoy, text=True), decoy_head
+        )
 
     def test_missing_tools_have_named_diagnostics(self) -> None:
         (self.root / "mise.toml").write_text(

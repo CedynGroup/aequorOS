@@ -14,6 +14,11 @@ holds only the logic mise cannot express directly:
 ``verify`` never installs anything: it uses the dependencies ``setup`` left in
 place and exits 0 only when the core checks pass. Exit code 1 means a named
 requirement is missing or a check failed; 2 is reserved for usage errors.
+
+``mise`` runs this module with whatever ``python3`` is on PATH, which before
+``mise install`` can be older than the pinned interpreter. ``main`` therefore
+refuses Python below 3.11 with the detected version and the remedy instead of
+letting the first ``tomllib`` import fail as a traceback.
 """
 
 from __future__ import annotations
@@ -27,7 +32,6 @@ import shutil
 import socket
 import subprocess
 import sys
-import tomllib
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
@@ -143,6 +147,8 @@ def _stream(args: Sequence[str], *, cwd: Path, timeout: float) -> int:
 
 def _pins(root: Path) -> dict[str, str] | None:
     """The ``[tools]`` table, or None when mise.toml is missing or unreadable."""
+    import tomllib  # noqa: PLC0415 - 3.11+; main() refuses older interpreters first.
+
     path = root / "mise.toml"
     if not path.is_file():
         return None
@@ -798,6 +804,15 @@ def setup_report(root: Path) -> int:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
+    # mise runs this with whatever ``python3`` is on PATH, which before
+    # ``mise install`` can be older than the interpreter pinned in mise.toml.
+    if sys.version_info < (3, 11):  # noqa: UP036 - system interpreter guard
+        detected = f"{sys.version_info[0]}.{sys.version_info[1]}"
+        print(
+            f"FAIL     python3 is {detected}; this script needs Python 3.11 or newer.\n"
+            "         Run: mise install"
+        )
+        return 1
     parser = argparse.ArgumentParser(description=__doc__)
     _ = parser.add_argument(
         "action",

@@ -15286,6 +15286,8 @@
     "tests/scripts/test_aqs_bootstrap.py::BootstrapTests::test_missing_tools_have_named_diagnostics": "unit",
     "tests/scripts/test_aqs_bootstrap.py::BootstrapTests::test_optional_services_and_openbao_override": "unit",
     "tests/scripts/test_aqs_bootstrap.py::BootstrapTests::test_verify_readiness_includes_required_env_and_core_checks": "unit",
+    "tests/scripts/test_aqs_bootstrap.py::BootstrapTests::test_interpreters_before_311_get_a_named_remedy": "unit",
+    "tests/scripts/test_aqs_bootstrap.py::BootstrapTests::test_fixture_git_never_reaches_a_caller_repository": "unit",
     "tests/scripts/test_authorization_access_impact.py::test_report_flags_users_the_dashboard_would_show_nothing": "integration",
     "tests/scripts/test_authorization_access_impact.py::test_the_report_names_who_may_transmit_a_return": "integration",
     "tests/scripts/test_dr_tooling.py::TestComparison::test_a_dropped_table_is_reported": "unit",
