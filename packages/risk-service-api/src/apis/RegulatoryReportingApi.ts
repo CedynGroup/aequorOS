@@ -1006,7 +1006,7 @@ export class RegulatoryReportingApi extends runtime.BaseAPI {
   }
 
   /**
-   * The BG/FMD/2026/07 downtime bundle as a send-ready .eml (RFC 822).  Subject, body, and attachments come from the same bundle the email channel records; the operator opens it in their mail client, confirms the recipient (the official downtime address is institution-configured), and sends. No SMTP happens server-side.
+   * The BG/FMD/2026/07 downtime bundle as a send-ready .eml (RFC 822).  Subject, body, and attachments come from the same bundle the email channel records; the operator opens it in their mail client, confirms the recipient (the official downtime address is institution-configured), and sends. No SMTP happens server-side.  This is a download of the filed documents under another name, so it takes ``EXPORT`` exactly as the artifact routes do.
    * Download Email Fallback Eml
    */
   async downloadEmailFallbackEmlRaw(
@@ -1061,7 +1061,7 @@ export class RegulatoryReportingApi extends runtime.BaseAPI {
   }
 
   /**
-   * The BG/FMD/2026/07 downtime bundle as a send-ready .eml (RFC 822).  Subject, body, and attachments come from the same bundle the email channel records; the operator opens it in their mail client, confirms the recipient (the official downtime address is institution-configured), and sends. No SMTP happens server-side.
+   * The BG/FMD/2026/07 downtime bundle as a send-ready .eml (RFC 822).  Subject, body, and attachments come from the same bundle the email channel records; the operator opens it in their mail client, confirms the recipient (the official downtime address is institution-configured), and sends. No SMTP happens server-side.  This is a download of the filed documents under another name, so it takes ``EXPORT`` exactly as the artifact routes do.
    * Download Email Fallback Eml
    */
   async downloadEmailFallbackEml(
@@ -1149,7 +1149,7 @@ export class RegulatoryReportingApi extends runtime.BaseAPI {
   }
 
   /**
-   * Stream one exported artifact, proven against the revision that wrote it.  The artifact row is upserted per kind: it names a path and a checksum but no provider version, so reading its path directly served whatever the store held under that name. The archived revision with the same path and checksum is the export that produced these bytes, and the read goes through it.
+   * Stream one exported artifact, proven against the revision that wrote it.  Downloading requires ``EXPORT``: this serves the return\'s own file, and a bank can let an officer read a filing without letting them take it away. A caller who cannot see the package still receives the opaque 404 that ``PackageExport`` raises before any storage read.  The artifact row is upserted per kind: it names a path and a checksum but no provider version, so reading its path directly served whatever the store held under that name. The archived revision with the same path and checksum is the export that produced these bytes, and the read goes through it.
    * Download Regulatory Artifact
    */
   async downloadRegulatoryArtifactRaw(
@@ -1204,7 +1204,7 @@ export class RegulatoryReportingApi extends runtime.BaseAPI {
   }
 
   /**
-   * Stream one exported artifact, proven against the revision that wrote it.  The artifact row is upserted per kind: it names a path and a checksum but no provider version, so reading its path directly served whatever the store held under that name. The archived revision with the same path and checksum is the export that produced these bytes, and the read goes through it.
+   * Stream one exported artifact, proven against the revision that wrote it.  Downloading requires ``EXPORT``: this serves the return\'s own file, and a bank can let an officer read a filing without letting them take it away. A caller who cannot see the package still receives the opaque 404 that ``PackageExport`` raises before any storage read.  The artifact row is upserted per kind: it names a path and a checksum but no provider version, so reading its path directly served whatever the store held under that name. The archived revision with the same path and checksum is the export that produced these bytes, and the read goes through it.
    * Download Regulatory Artifact
    */
   async downloadRegulatoryArtifact(
@@ -1215,7 +1215,7 @@ export class RegulatoryReportingApi extends runtime.BaseAPI {
   }
 
   /**
-   * Stream one archived revision, with its checksum re-verified first.
+   * Stream one archived revision, with its checksum re-verified first.  The archived chain contains the signed revisions, so ``EXPORT`` — not ``VIEW`` — decides whether these bytes leave the platform.
    * Download Regulatory Artifact Version
    */
   async downloadRegulatoryArtifactVersionRaw(
@@ -1270,7 +1270,7 @@ export class RegulatoryReportingApi extends runtime.BaseAPI {
   }
 
   /**
-   * Stream one archived revision, with its checksum re-verified first.
+   * Stream one archived revision, with its checksum re-verified first.  The archived chain contains the signed revisions, so ``EXPORT`` — not ``VIEW`` — decides whether these bytes leave the platform.
    * Download Regulatory Artifact Version
    */
   async downloadRegulatoryArtifactVersion(
@@ -1435,7 +1435,7 @@ export class RegulatoryReportingApi extends runtime.BaseAPI {
   }
 
   /**
-   * Preview the BG/FMD/2026/07 downtime email bundle without submitting.
+   * Preview the BG/FMD/2026/07 downtime email bundle without submitting.  The preview names the signed documents and the recipient, so it is part of the export surface: ``EXPORT`` is required even though the call itself does not stream a file.
    * Get Email Fallback Instructions
    */
   async getEmailFallbackInstructionsRaw(
@@ -1492,7 +1492,7 @@ export class RegulatoryReportingApi extends runtime.BaseAPI {
   }
 
   /**
-   * Preview the BG/FMD/2026/07 downtime email bundle without submitting.
+   * Preview the BG/FMD/2026/07 downtime email bundle without submitting.  The preview names the signed documents and the recipient, so it is part of the export surface: ``EXPORT`` is required even though the call itself does not stream a file.
    * Get Email Fallback Instructions
    */
   async getEmailFallbackInstructions(
