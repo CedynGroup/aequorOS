@@ -748,9 +748,10 @@ def test_reconciliation_approval_never_skips_the_second_officer(
     | revoked  | revoke  | checker       | terminal state is final  | revoked     |
 
     Each accepted command writes exactly one governance audit event and enqueues no
-    job. Each refusal returns 403 for ungranted authority and an opaque 404 for a
-    foreign bank, the maker's own proposal or a revoked row, leaving the exception
-    rows, the audit count and the job queue exactly as they were.
+    job. Each refusal returns 403 for a covered bank lacking the required permission
+    and an opaque 404 for an uncovered or foreign bank, the maker's own proposal or
+    a revoked row, leaving the exception rows, the audit count and the job queue
+    exactly as they were.
 
         Uses the forward-only migrated schema: pending proposals legitimately exist
     for the previous schema's ``approved_by NOT NULL`` column, so the full
