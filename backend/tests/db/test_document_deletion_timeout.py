@@ -64,6 +64,7 @@ def timeout_role_engines(
 
 class BlockingHeadStorage(FakeStorage):
     def __init__(self) -> None:
+        super().__init__()
         self.entered_head = Event()
         self.resume_head = Event()
         self.head: StoredObjectHead | None = StoredObjectHead(
@@ -210,7 +211,8 @@ def assert_upload_deletion_outcome(scenario: UploadDeletionRace) -> None:
                 storage_client=scenario.storage,
             )
         assert unavailable.value.status_code == 409
-    assert scenario.storage.deleted == [scenario.locator]
+    assert scenario.storage.deleted.count(scenario.locator) == 1
+    assert not scenario.storage.finalized_objects
 
 
 @pytest.mark.parametrize("cleanup_during_head", [False, True])
@@ -250,11 +252,14 @@ def test_upload_completion_succeeds_after_head_exceeds_idle_budget(
             def head_object(self, *, bucket: str, object_key: str) -> StoredObjectHead | None:
                 assert not api.in_transaction()
                 time.sleep(1.5)
-                return StoredObjectHead(
-                    content_type="application/pdf", byte_size=1234, etag='"etag"'
-                )
+                return super().head_object(bucket=bucket, object_key=object_key)
 
         storage = SlowStorage()
+        # A staged object exists, so completion can copy and re-head it; only the
+        # head itself is slow enough to outlast the idle-in-transaction budget.
+        storage.head = StoredObjectHead(
+            content_type="application/pdf", byte_size=1234, etag='"etag"'
+        )
         uploaded = documents.complete_upload(
             api, ctx, upload.document_id, settings=settings, storage_client=storage
         )
@@ -402,7 +407,10 @@ def test_deletion_commits_before_storage_and_retries_under_role_timeouts(
         assert stored.status == "deleted" and job.status == "succeeded"
         documents.run_document_delete(worker, job)
         job_queue.complete(worker, job)
-        assert calls == 2
+        # The failed attempt reached storage once; the retry removed both the
+        # completed snapshot and the staged upload it was copied from; the
+        # succeeded job's replay deletes nothing.
+        assert calls == 3
 
 
 @pytest.mark.skipif(not os.getenv("S3_ENDPOINT"), reason="local MinIO required")
