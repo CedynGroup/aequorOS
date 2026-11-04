@@ -4,6 +4,7 @@ import NodeModule from "node:module";
 import React from "react";
 import { act, create } from "react-test-renderer";
 import * as modules from "../../lib/modules";
+import * as dataScope from "../../lib/api/dataScope";
 
 let pathname = "/settings";
 let capabilities: EffectiveCapabilityRead[] = [];
@@ -21,6 +22,7 @@ const originalLoad = loader._load;
 loader._load = (request, parent, isMain) => {
   if (request === "next/navigation") return { usePathname: () => pathname };
   if (request === "@/lib/modules") return modules;
+  if (request === "@/lib/api/dataScope") return dataScope;
   if (request === "@/lib/api/hooks")
     return {
       useBanks: (enabled: boolean) => {
