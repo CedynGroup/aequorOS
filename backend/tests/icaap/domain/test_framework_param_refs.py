@@ -31,6 +31,7 @@ import re
 
 import pytest
 
+from app.core.config import IcaapSettings
 from app.icaap.domain.frameworks import registry
 from app.icaap.domain.frameworks.schema import Framework
 from app.icaap.service.parameters import (
@@ -43,6 +44,44 @@ from app.policy.service.regulatory_parameters import seed_rows as core_seed_rows
 
 PUBLISHED = list(registry.load_all())
 IDS = [f"{framework.code} {framework.version}" for framework in PUBLISHED]
+
+#: Framework codes a deployment publishes out of the box. Nigeria and Kenya
+#: ship as reference data and are opt-in (D-046 §4), which is why the seeding
+#: assertions are scoped to what is enabled rather than to everything that
+#: parses.
+DEFAULT_ENABLED = frozenset(IcaapSettings.model_fields["frameworks_enabled"].default.split(","))
+
+#: The published set split by what the deployment enables by default. Each
+#: seeding test runs over one half and skips over the other, so the two halves
+#: are also a suite boundary: a case that skips is a case whose coverage is
+#: unknown, and unknown coverage is not database-free. Keeping the skipping
+#: half in ``test_framework_param_refs_integration.py`` therefore keeps each
+#: module to one suite rather than filing a case by the name of the test it
+#: happens to skip in.
+ENABLED_FRAMEWORKS = [f for f in PUBLISHED if f.code in DEFAULT_ENABLED]
+ENABLED_IDS = [f"{f.code} {f.version}" for f in ENABLED_FRAMEWORKS]
+OPT_IN_FRAMEWORKS = [f for f in PUBLISHED if f.code not in DEFAULT_ENABLED]
+OPT_IN_IDS = [f"{f.code} {f.version}" for f in OPT_IN_FRAMEWORKS]
+
+#: Frameworks that are published as data but whose governed rows have not been
+#: seeded for their jurisdiction yet, and the codes each still needs. This is a
+#: CEILING, asserted with ``<=``: seeding a row makes the set shrink and the
+#: test still passes, while a new unseeded reference makes it grow and fails.
+#: The rows themselves belong to a parameter catalogue, not to the framework
+#: data.
+#:
+#: **Both sets are now EMPTY.** They held six Nigerian and eight Kenyan codes
+#: from the day those frameworks shipped until ``202609200063`` seeded them
+#: (``app/icaap/service/parameters.ICAAP_JURISDICTION_SEED_PARAMETERS``). The
+#: entries stay, empty, rather than being deleted: an empty set is the record
+#: that a framework was checked and found complete, and a framework published
+#: with nothing recorded here still fails the assertion below. Shrinking this
+#: because a row was seeded is the only legitimate edit; widening it to make a
+#: red test green would be hiding exactly what it exists to show.
+OUTSTANDING_JURISDICTION_SEEDS: dict[str, frozenset[str]] = {
+    "cbn_srp_icaap": frozenset(),
+    "cbk_icaap_gn": frozenset(),
+}
 _PLACEHOLDER = re.compile(r"\{param:[a-z][a-z0-9_]{2,60}\}")
 _DIGIT = re.compile(r"\d")
 #: Basel and BoG nomenclature in which a digit is part of a NAME, not a value.
@@ -139,4 +178,64 @@ def test_every_published_framework_has_a_row_for_every_code_it_quotes(
         f"{framework.code} ({framework.jurisdiction}) quotes {missing}, which no catalogue "
         f"seeds for {framework.jurisdiction}. A bank there gets a missing_parameter refusal "
         "instead of its deadline, its review intervals or its materiality matrix."
+    )
+
+
+@pytest.mark.parametrize("framework", ENABLED_FRAMEWORKS, ids=ENABLED_IDS)
+def test_a_framework_the_deployment_publishes_has_its_rows_seeded(
+    framework: Framework,
+) -> None:
+    """The invariant that actually bites: an ENABLED framework must resolve.
+
+    A bank whose framework quotes a code with no row for its jurisdiction gets
+    a ``missing_parameter`` refusal rather than a deadline or a threshold —
+    correct behaviour (D-024 §4), and useless to that bank. So for every
+    framework the deployment publishes by default, every code it quotes is
+    seeded for its own jurisdiction.
+
+    The opt-in half of this parametrization runs in
+    ``test_framework_param_refs_integration.py``, because those rows skip.
+    """
+    if framework.code not in DEFAULT_ENABLED:
+        pytest.skip(f"{framework.code} is not published by default (ICAAP_FRAMEWORKS_ENABLED)")
+    missing = sorted(
+        code
+        for code in framework.param_refs()
+        if framework.jurisdiction not in SEEDED.get(code, set())
+    )
+    assert not missing, (
+        f"{framework.code} is enabled for {framework.jurisdiction} but these codes have no "
+        f"row for that jurisdiction: {missing}"
+    )
+
+
+@pytest.mark.parametrize("framework", OPT_IN_FRAMEWORKS, ids=OPT_IN_IDS)
+def test_an_opt_in_framework_needs_no_more_rows_than_we_already_know_about(
+    framework: Framework,
+) -> None:
+    """The known seeding gap is pinned so it cannot quietly widen.
+
+    Nigeria and Kenya ship as reference data before their rows exist. That is a
+    documented precondition for turning them on, not a surprise — so the set of
+    codes each still needs is recorded here as a ceiling. Seeding one shrinks
+    the set and this still passes; quoting a new unseeded code grows it and
+    this fails.
+
+    The default-enabled half of this parametrization runs in
+    ``test_framework_param_refs_integration.py``, because those rows skip.
+    """
+    if framework.code in DEFAULT_ENABLED:
+        pytest.skip(f"{framework.code} is published by default and is checked in full above")
+    outstanding = OUTSTANDING_JURISDICTION_SEEDS.get(framework.code)
+    assert outstanding is not None, (
+        f"{framework.code} is published but not enabled, and nothing records which of its "
+        "governed codes still need rows before it can be turned on"
+    )
+    missing = {
+        code
+        for code in framework.param_refs()
+        if framework.jurisdiction not in SEEDED.get(code, set())
+    }
+    assert missing <= outstanding, (
+        f"{framework.code} now needs rows nobody recorded: {sorted(missing - outstanding)}"
     )

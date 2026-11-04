@@ -17,6 +17,16 @@ import pytest
 BACKEND = Path(__file__).parents[2]
 
 
+def standalone_contracts(tmp_path: Path) -> str:
+    """Standalone ownership probes supply both of their catalogue inputs."""
+    path = tmp_path / "contracts.json"
+    _ = path.write_text(json.dumps({"contracts": []}))
+    return (
+        "from scripts import database_contracts\n"
+        f"database_contracts.CATALOGUE = Path({str(path)!r})\n"
+    )
+
+
 @pytest.mark.parametrize("mutation", ["none", "missing", "duplicate", "wrong-suite"])
 def test_ci_partition_requires_exactly_one_suite_execution(
     tmp_path: Path, mutation: str, monkeypatch: pytest.MonkeyPatch
@@ -210,3 +220,172 @@ def _assert_calendar_stable_query_log_collection(tmp_path: Path, cases: dict[str
         assert result.returncode == 0, f"{day}: {result.stdout}{result.stderr}"
         collected = cast(list[str], json.loads(collection.read_text()))
         assert sorted(collected) == expected, day
+
+
+@pytest.mark.parametrize(
+    ("suite", "body", "passes", "attempts"),
+    [
+        ("unit", "assert True", True, False),
+        ("integration", "assert True", True, False),
+        ("unknown", "assert True", False, False),
+        ("unit", "__unclassified__", False, False),
+        ("unit", "__double__", False, False),
+        ("unit", "__deselect__", False, False),
+        ("unit", "__duplicate__", False, False),
+        ("unit", "__stale__", False, False),
+        ("unit", "import pytest; pytest.skip('unexpected')", False, False),
+        ("unit", "assert False", False, False),
+    ],
+)
+def test_suite_execution_boundary(
+    tmp_path: Path, suite: str, body: str, passes: bool, attempts: bool
+) -> None:
+    catalogue = tmp_path / "suites.json"
+    _ = catalogue.write_text(
+        json.dumps(
+            {
+                "cases": {"test_probe.py::test_probe": suite, "test_probe.py::test_other": suite}
+                if body == "__deselect__"
+                else {"test_probe.py::test_probe": suite}
+            }
+        )
+    )
+    _ = (tmp_path / "conftest.py").write_text(
+        "from pathlib import Path\nfrom scripts import test_suites\n"
+        + f"test_suites.CATALOGUE = Path({str(catalogue)!r})\n"
+        + "test_suites.catalogue.cache_clear()\n"
+        + standalone_contracts(tmp_path)
+    )
+    if body == "__unclassified__":
+        _ = catalogue.write_text(json.dumps({"cases": {}}))
+        body = "assert True"
+    arguments: list[str] = []
+    suffix = ""
+    if body == "__deselect__":
+        body = "assert True"
+        suffix = "\ndef test_other(): pass\n"
+        arguments = ["-k", "test_probe and not test_other"]
+    if body == "__duplicate__":
+        body = "assert True"
+        arguments = ["--keep-duplicates", "test_probe.py"]
+    if body == "__stale__":
+        body = "assert True"
+        _ = catalogue.write_text(
+            json.dumps(
+                {
+                    "cases": {
+                        "test_probe.py::test_probe": suite,
+                        "test_probe.py::test_absent": "unit",
+                    },
+                }
+            )
+        )
+    prefix = ""
+    if suite == "unit" and passes:
+        prefix = (
+            "import os, pytest\n"
+            "pytestmark = pytest.mark.skipif(os.getenv('TEST_DATABASE_URL') is None, "
+            "reason='mixed-module database profile gate')\n"
+        )
+    if body == "__double__":
+        prefix = "import pytest\npytestmark = [pytest.mark.unit, pytest.mark.integration]\n"
+        body = "assert True"
+    _ = (tmp_path / "test_probe.py").write_text(
+        prefix + f"def test_probe():\n    {body}\n" + suffix
+    )
+    environment = {
+        **os.environ,
+        "PYTHONPATH": str(BACKEND),
+        "PYTEST_ADDOPTS": "",
+        "PYTEST_DISABLE_PLUGIN_AUTOLOAD": "1",
+    }
+    _ = environment.pop("CI_UNIT_REPORT_DIR", None)
+    _ = environment.pop("CI_DATABASE_CENSUS", None)
+    _ = environment.pop("TEST_DATABASE_URL", None)
+    if suite == "unit":
+        environment["CI_UNIT_REPORT_DIR"] = str(tmp_path / "evidence")
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "pytest",
+            "--rootdir=.",
+            "test_probe.py",
+            "-p",
+            "scripts.test_suites_plugin",
+            "-m",
+            suite,
+            *arguments,
+        ],
+        cwd=tmp_path,
+        env=environment,
+        capture_output=True,
+        text=True,
+        timeout=60,
+        check=False,
+    )
+    assert (result.returncode == 0) == passes, result.stdout + result.stderr
+    logs = (tmp_path / "evidence").glob("connection-attempts-*.txt")
+    assert any(path.read_text() for path in logs) == attempts, result.stdout + result.stderr
+    if suite == "unit" and passes:
+        manifest = tmp_path / "evidence" / "collection.json"
+        assert json.loads(manifest.read_text()) == {"test_probe.py::test_probe": "unit"}
+
+
+@pytest.mark.parametrize("caught", [False])
+@pytest.mark.parametrize("ci", [False, True])
+def test_caught_unit_attempt_is_a_failure_in_parallel_combined_runs(
+    tmp_path: Path, caught: bool, ci: bool
+) -> None:
+    catalogue = tmp_path / "suites.json"
+    _ = catalogue.write_text(json.dumps({"cases": {"test_probe.py::test_probe": "unit"}}))
+    _ = (tmp_path / "conftest.py").write_text(
+        "from pathlib import Path\nfrom scripts import test_suites\n"
+        + f"test_suites.CATALOGUE = Path({str(catalogue)!r})\n"
+        + "test_suites.catalogue.cache_clear()\n"
+        + standalone_contracts(tmp_path)
+    )
+    body = "pass"
+    if caught:
+        body = (
+            "import sqlite3\n    try: sqlite3.connect(':memory:')\n    except AssertionError: pass"
+        )
+    _ = (tmp_path / "test_probe.py").write_text(f"def test_probe():\n    {body}\n")
+    environment = {
+        **os.environ,
+        "PYTHONPATH": str(BACKEND),
+        "PYTEST_ADDOPTS": "",
+        "PYTEST_DISABLE_PLUGIN_AUTOLOAD": "1",
+    }
+    _ = environment.pop("CI_UNIT_REPORT_DIR", None)
+    _ = environment.pop("CI_DATABASE_CENSUS", None)
+    _ = environment.pop("TEST_DATABASE_URL", None)
+    arguments = []
+    if ci:
+        environment["CI_UNIT_REPORT_DIR"] = str(tmp_path / "evidence")
+        arguments = ["-m", "unit"]
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "pytest",
+            "--rootdir=.",
+            "test_probe.py",
+            "-p",
+            "scripts.test_suites_plugin",
+            "-p",
+            "xdist.plugin",
+            "-n",
+            "2",
+            *arguments,
+        ],
+        cwd=tmp_path,
+        env=environment,
+        capture_output=True,
+        text=True,
+        timeout=60,
+        check=False,
+    )
+    assert (result.returncode != 0) == caught, result.stdout + result.stderr
+    if caught:
+        assert "Unit database connection guard failed" in result.stdout + result.stderr

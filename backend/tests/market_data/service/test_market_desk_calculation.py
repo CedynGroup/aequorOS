@@ -21,7 +21,7 @@ from fastapi import HTTPException
 
 from app.market_data.domain.curves.conventions import DayCount, bond_price
 from app.market_data.service.market_desk import calculation, register
-from app.market_data.service.market_desk.calculation import run_pipeline
+from app.market_data.service.market_desk.calculation import CalculationError, run_pipeline
 from app.models import (
     DeskDetermination,
 )
@@ -103,3 +103,47 @@ class TestQaGateFailure:
         with pytest.raises(HTTPException) as empty:
             calculation.ensure_approvable(determination)
         assert empty.value.status_code == 409
+
+
+class TestRealFixtureIntegration:
+    """The dense-surface case that runs on the pure fixture helper, not a database."""
+
+    def test_legacy_sparse_tenor_parameter_still_publishes_dense_surface(self) -> None:
+        parameters = dict(PARAMS)
+        parameters["fwd_node_grid_months"] = [3, 6, 12, 24, 36, 60, 84, 120]
+        derived, _ = run_pipeline(_minimal_snapshot(), parameters, COB)
+
+        tenors = [point["tenor_months"] for point in derived["curves"]["AEQ.GHS.SOV.FWD"]["points"]]
+        assert tenors[:12] == list(range(1, 13))
+        assert tenors[-1] == 120
+        assert set(derived["forward_grids"]["AEQ.GHS.SOV.FWD"]["grids"]) == {
+            "1D",
+            "1M",
+            "3M",
+            "6M",
+            "1Y",
+        }
+
+
+class TestTreatments:
+    def test_series_without_declared_treatment_is_a_hard_error(self) -> None:
+        snapshot = [*_minimal_snapshot(), _entry("GHS.MYSTERY.RATE", COB, "1.23")]
+        with pytest.raises(CalculationError, match="GHS.MYSTERY.RATE"):
+            run_pipeline(sorted(snapshot, key=_canonical), PARAMS, COB)
+
+    def test_every_emitted_series_has_a_declared_treatment(self) -> None:
+        for series_code in calculation.EMITTED_RATE_SERIES:
+            treatment = calculation.resolve_treatment(series_code, PARAMS)
+            assert treatment["treatment"] in {"pass_through", "windowed", "derived"}
+        for series_code in ("GHS.USDGHS.MID", "GHS.FX.USDGHS.REF"):
+            assert calculation.resolve_treatment(series_code, PARAMS)["treatment"] == (
+                "pass_through"
+            )
+        # Pattern families resolve too (per-bank APRs, GFIM bond quotes).
+        assert calculation.resolve_treatment("GHS.APR.GCB", PARAMS)["role"] == (
+            "lending_indicator_input"
+        )
+        assert (
+            calculation.resolve_treatment("GHS.GOG.BOND.20330329.1250.CLEAN", PARAMS)["treatment"]
+            == "bond_quote"
+        )

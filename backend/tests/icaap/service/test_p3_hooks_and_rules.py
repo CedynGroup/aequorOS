@@ -9,9 +9,18 @@ from __future__ import annotations
 import pytest
 
 from app.core.config import IcaapSettings
+from app.reporting.service import family_hooks
 from tests.icaap.service.p3_support import (
     FRAMEWORK_ROOT,
 )
+
+
+class TestFamilyHooks:
+    def test_the_icaap_family_is_the_one_the_generic_plane_dispatches_to(self) -> None:
+        hooks = family_hooks.for_family("icaap")
+        assert hooks is not None
+        assert hooks.family == "icaap"
+        assert family_hooks.for_family("bsd") is None
 
 
 class TestTheExtraFrameworkDirectory:

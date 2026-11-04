@@ -94,6 +94,30 @@ def staged_entity_bundle(mode: str, fixtures_dir, tmp_path) -> AdapterConfig:
     return AdapterConfig(location=str(path))
 
 
+class BankFacingLeakCanary:
+    """The database-free half of the Temenos contract.
+
+    This case asserts a pure error-rendering property, so it carries no fixtures and
+    belongs with the unit suite. It lives here rather than in ``TemenosContractSuite``
+    so a per-mode unit module can inherit exactly this case without acquiring the
+    service-backed machinery below.
+    """
+
+    def test_leak_canary_absent_from_bank_facing_error(self) -> None:
+        bank_facing: BankFacingError = render_bank_facing(
+            TemenosErrorCode.CORE_UNAVAILABLE,
+            core_system="Temenos T24",
+            timestamp=_AS_OF.isoformat(),
+        )
+        err = TemenosError(
+            bank_facing,
+            internal_detail=f"OFS sign-on rejected {TEMENOS_INTERNAL_MARKER} pw=deadbeef",
+        )
+        assert TEMENOS_INTERNAL_MARKER not in str(err)
+        assert TEMENOS_INTERNAL_MARKER not in err.bank_facing.message
+        assert TEMENOS_INTERNAL_MARKER in err.internal_detail
+
+
 class TemenosContractSuite:
     # --- fixtures a per-mode subclass MUST provide ------------------------
 
@@ -460,17 +484,3 @@ class TemenosContractSuite:
             )
         ).all()
         assert len(after) == len(before)
-
-    def test_leak_canary_absent_from_bank_facing_error(self) -> None:
-        bank_facing: BankFacingError = render_bank_facing(
-            TemenosErrorCode.CORE_UNAVAILABLE,
-            core_system="Temenos T24",
-            timestamp=_AS_OF.isoformat(),
-        )
-        err = TemenosError(
-            bank_facing,
-            internal_detail=f"OFS sign-on rejected {TEMENOS_INTERNAL_MARKER} pw=deadbeef",
-        )
-        assert TEMENOS_INTERNAL_MARKER not in str(err)
-        assert TEMENOS_INTERNAL_MARKER not in err.bank_facing.message
-        assert TEMENOS_INTERNAL_MARKER in err.internal_detail

@@ -13,25 +13,12 @@ from pathlib import Path
 
 import pytest
 
-from tests.architecture.test_test_suites import BACKEND
-
-
-def _standalone_contracts(tmp_path: Path) -> str:
-    """Standalone ownership probes supply both of their catalogue inputs."""
-    path = tmp_path / "contracts.json"
-    _ = path.write_text(json.dumps({"contracts": []}))
-    return (
-        "from scripts import database_contracts\n"
-        f"database_contracts.CATALOGUE = Path({str(path)!r})\n"
-    )
+from tests.architecture.test_test_suites import BACKEND, standalone_contracts
 
 
 @pytest.mark.parametrize(
     ("suite", "body", "passes", "attempts"),
     [
-        ("unit", "assert True", True, False),
-        ("integration", "assert True", True, False),
-        ("unknown", "assert True", False, False),
         ("unit", "import sqlite3; sqlite3.connect(':memory:')", False, True),
         ("unit", "import psycopg; psycopg.connect('')", False, True),
         ("unit", "import psycopg; psycopg.Connection.connect('')", False, True),
@@ -48,19 +35,12 @@ def _standalone_contracts(tmp_path: Path) -> str:
             True,
         ),
         ("unit", "import oracledb; oracledb.connect(dsn='localhost/unused')", False, True),
-        ("unit", "__unclassified__", False, False),
-        ("unit", "__double__", False, False),
-        ("unit", "__deselect__", False, False),
-        ("unit", "__duplicate__", False, False),
-        ("unit", "__stale__", False, False),
         (
             "unit",
             "import sqlite3\n    try: sqlite3.connect(':memory:')\n    except AssertionError: pass",
             False,
             True,
         ),
-        ("unit", "import pytest; pytest.skip('unexpected')", False, False),
-        ("unit", "assert False", False, False),
         (
             "unit",
             "import subprocess, sys; subprocess.run([sys.executable, '-c', "
@@ -87,7 +67,7 @@ def test_suite_execution_boundary(
         "from pathlib import Path\nfrom scripts import test_suites\n"
         + f"test_suites.CATALOGUE = Path({str(catalogue)!r})\n"
         + "test_suites.catalogue.cache_clear()\n"
-        + _standalone_contracts(tmp_path)
+        + standalone_contracts(tmp_path)
     )
     if body == "__unclassified__":
         _ = catalogue.write_text(json.dumps({"cases": {}}))
@@ -165,7 +145,7 @@ def test_suite_execution_boundary(
         assert json.loads(manifest.read_text()) == {"test_probe.py::test_probe": "unit"}
 
 
-@pytest.mark.parametrize("caught", [False, True])
+@pytest.mark.parametrize("caught", [True])
 @pytest.mark.parametrize("ci", [False, True])
 def test_caught_unit_attempt_is_a_failure_in_parallel_combined_runs(
     tmp_path: Path, caught: bool, ci: bool
@@ -176,7 +156,7 @@ def test_caught_unit_attempt_is_a_failure_in_parallel_combined_runs(
         "from pathlib import Path\nfrom scripts import test_suites\n"
         + f"test_suites.CATALOGUE = Path({str(catalogue)!r})\n"
         + "test_suites.catalogue.cache_clear()\n"
-        + _standalone_contracts(tmp_path)
+        + standalone_contracts(tmp_path)
     )
     body = "pass"
     if caught:

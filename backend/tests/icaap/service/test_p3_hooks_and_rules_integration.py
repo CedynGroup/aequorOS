@@ -147,12 +147,6 @@ def _record_ai_suggestion(db: Session, cycle_id):  # noqa: ANN001, ANN202
 
 
 class TestFamilyHooks:
-    def test_the_icaap_family_is_the_one_the_generic_plane_dispatches_to(self) -> None:
-        hooks = family_hooks.for_family("icaap")
-        assert hooks is not None
-        assert hooks.family == "icaap"
-        assert family_hooks.for_family("bsd") is None
-
     def test_the_required_documents_come_from_the_frozen_snapshot(
         self, canonical_book: Session, extra_frameworks: None
     ) -> None:

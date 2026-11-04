@@ -29,37 +29,19 @@ from __future__ import annotations
 
 import pytest
 
-from app.core.config import IcaapSettings
 from app.icaap.domain.frameworks.schema import Framework
-from tests.icaap.domain.test_framework_param_refs import IDS, PUBLISHED, SEEDED
-
-#: Framework codes a deployment publishes out of the box. Nigeria and Kenya
-#: ship as reference data and are opt-in (D-046 §4), which is why the seeding
-#: assertion below is scoped to what is enabled rather than to everything that
-#: parses.
-DEFAULT_ENABLED = frozenset(IcaapSettings.model_fields["frameworks_enabled"].default.split(","))
-#: Frameworks that are published as data but whose governed rows have not been
-#: seeded for their jurisdiction yet, and the codes each still needs. This is a
-#: CEILING, asserted with ``<=``: seeding a row makes the set shrink and the
-#: test still passes, while a new unseeded reference makes it grow and fails.
-#: The rows themselves belong to a parameter catalogue, not to the framework
-#: data.
-#:
-#: **Both sets are now EMPTY.** They held six Nigerian and eight Kenyan codes
-#: from the day those frameworks shipped until ``202609200063`` seeded them
-#: (``app/icaap/service/parameters.ICAAP_JURISDICTION_SEED_PARAMETERS``). The
-#: entries stay, empty, rather than being deleted: an empty set is the record
-#: that a framework was checked and found complete, and a framework published
-#: with nothing recorded here still fails the assertion below. Shrinking this
-#: because a row was seeded is the only legitimate edit; widening it to make a
-#: red test green would be hiding exactly what it exists to show.
-OUTSTANDING_JURISDICTION_SEEDS: dict[str, frozenset[str]] = {
-    "cbn_srp_icaap": frozenset(),
-    "cbk_icaap_gn": frozenset(),
-}
+from tests.icaap.domain.test_framework_param_refs import (
+    DEFAULT_ENABLED,
+    ENABLED_FRAMEWORKS,
+    ENABLED_IDS,
+    OPT_IN_FRAMEWORKS,
+    OPT_IN_IDS,
+    OUTSTANDING_JURISDICTION_SEEDS,
+    SEEDED,
+)
 
 
-@pytest.mark.parametrize("framework", PUBLISHED, ids=IDS)
+@pytest.mark.parametrize("framework", OPT_IN_FRAMEWORKS, ids=OPT_IN_IDS)
 def test_a_framework_the_deployment_publishes_has_its_rows_seeded(
     framework: Framework,
 ) -> None:
@@ -84,7 +66,7 @@ def test_a_framework_the_deployment_publishes_has_its_rows_seeded(
     )
 
 
-@pytest.mark.parametrize("framework", PUBLISHED, ids=IDS)
+@pytest.mark.parametrize("framework", ENABLED_FRAMEWORKS, ids=ENABLED_IDS)
 def test_an_opt_in_framework_needs_no_more_rows_than_we_already_know_about(
     framework: Framework,
 ) -> None:

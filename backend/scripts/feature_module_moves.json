@@ -7401,6 +7401,10 @@
   ],
   [
     "tests.icaap.service.test_p3_stage_chain",
+    "tests.icaap.service.test_p3_stage_chain"
+  ],
+  [
+    "tests.icaap.service.test_p3_stage_chain",
     "tests.icaap.service.test_p3_stage_chain_integration"
   ],
   [

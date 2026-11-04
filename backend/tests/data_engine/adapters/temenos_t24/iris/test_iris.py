@@ -10,6 +10,7 @@ import pytest
 from app.data_engine.adapters.temenos_t24.adapter import TemenosT24Adapter
 from app.data_engine.domain.ingestion.adapter import SourceAdapter
 from tests.data_engine.adapters.contract import AdapterContractSuite
+from tests.data_engine.adapters.temenos_t24.contract import BankFacingLeakCanary
 
 
 @pytest.fixture
@@ -19,3 +20,7 @@ def adapter() -> SourceAdapter:
 
 class TestIrisSourceAdapterContract(AdapterContractSuite):
     """The generic SourceAdapter conformance suite, run against IRIS fixtures."""
+
+
+class TestIrisEndToEnd(BankFacingLeakCanary):
+    """The database-free Temenos contract case, IRIS mode."""
