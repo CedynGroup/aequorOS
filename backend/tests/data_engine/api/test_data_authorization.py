@@ -45,7 +45,7 @@ from app.models import (
 )
 from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID, materialize_canonical_test_book
 from tests.support.factories.canonical import FIXTURE_AS_OF, seed_canonical_fixture
-from tests.support.helpers import ORG_1, ORG_2, USER_1, headers
+from tests.support.helpers import ORG_1, ORG_2, USER_1, error_envelope, headers
 from tests.support.inmemory_storage import InMemoryStorageClient
 
 BASE = f"/api/v1/banks/{SAMPLE_BANK_ID}"
@@ -154,7 +154,18 @@ def test_sensitivities_are_exact_not_hierarchical(
 
 def test_scalar_roles_and_partial_bindings_cannot_compose(db_client: TestClient) -> None:
     before = _counts()
-    assert db_client.get(f"{BASE}/ingestion-summary", headers=_auth()).status_code == 403
+    assert db_client.get(f"{BASE}/ingestion-summary", headers=_auth()).status_code == 404
+    auth = _auth()
+    for path in (
+        "ingestion-summary",
+        "ingestion-batches",
+        "canonical-positions",
+        "reconciliation/exceptions",
+    ):
+        uncovered = db_client.get(f"/api/v1/banks/{SIBLING}/{path}", headers=auth)
+        missing = db_client.get(f"/api/v1/banks/BK-MISSING1/{path}", headers=auth)
+        assert uncovered.status_code == missing.status_code == 404
+        assert error_envelope(uncovered) == error_envelope(missing)
     _grant(SensitivityScope.RESTRICTED, bank_id=SIBLING, bundle=RoleBundle.ANALYST)
     _grant(SensitivityScope.CONFIDENTIAL, bundle=RoleBundle.ANALYST)
     _grant(SensitivityScope.RESTRICTED, module=ModuleScope.MARKETS, bundle=RoleBundle.ANALYST)
@@ -197,7 +208,7 @@ def test_binding_and_principal_lifecycle_fail_closed(
         db.commit()
     before = _counts()
     result = db_client.get(f"{BASE}/canonical-positions/facets", headers=_auth())
-    assert result.status_code in {401, 403}, result.text
+    assert result.status_code in {401, 404}, result.text
     assert _counts() == before
 
 

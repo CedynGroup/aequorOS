@@ -589,7 +589,7 @@ def test_scoped_grant_lifecycle_never_exceeds_current_bindings(
                 response = self.client.get(
                     f"/api/v1/banks/{bank_id}/{path}", headers=target_headers
                 )
-                assert response.status_code == (200 if expected else 403), (
+                assert response.status_code == (200 if expected else 403 if covered else 404), (
                     path,
                     response.text,
                 )
@@ -944,7 +944,11 @@ def test_reconciliation_approval_never_skips_the_second_officer(
             if not self.allowed(
                 self.tenant.maker, bank_id, Sensitivity.CONFIDENTIAL, Permission.CREATE
             ):
-                assert response.status_code == 403, response.text
+                covered = any(
+                    owner == self.tenant.maker and spec.covers(bank_id)
+                    for owner, spec in self.grants.values()
+                )
+                assert response.status_code == (403 if covered else 404), response.text
                 assert self._evidence() == before
                 return
             assert response.status_code == 201, response.text
@@ -1060,7 +1064,13 @@ def test_reconciliation_approval_never_skips_the_second_officer(
                     expected_read = self.allowed(
                         user_id, bank_id, Sensitivity.CONFIDENTIAL, Permission.VIEW
                     )
-                    assert listed.status_code == (200 if expected_read else 403), listed.text
+                    covered = any(
+                        owner == user_id and spec.covers(bank_id)
+                        for owner, spec in self.grants.values()
+                    )
+                    assert listed.status_code == (
+                        200 if expected_read else 403 if covered else 404
+                    ), listed.text
                     if expected_read:
                         # A pending proposal is never effective; only an
                         # unrevoked approval inside its window can be applied.
@@ -1207,6 +1217,7 @@ def test_uncovered_institution_is_indistinguishable_from_a_missing_one(
                 == expected_on_a
             ), path
             sibling = client.get(f"/api/v1/banks/{tenant.bank_b}/{path}", headers=target_headers)
-            assert sibling.status_code == 403, sibling.text
+            assert sibling.status_code == 404, sibling.text
             missing = client.get(f"/api/v1/banks/{missing_bank}/{path}", headers=target_headers)
             assert missing.status_code == 404, missing.text
+            assert error_envelope(sibling) == error_envelope(missing)

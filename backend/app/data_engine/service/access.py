@@ -9,7 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.core.authorization import ConditionCheck, ConditionKind, Module, Permission, Sensitivity
 from app.core.tenancy import TenantContext
-from app.identity.public import Bank, require_bank_permission
+from app.identity.public import Bank, require_bank_permission, require_institution_coverage
 
 
 def require_data_access(  # noqa: PLR0913 - one explicit authorization sentence
@@ -28,6 +28,8 @@ def require_data_access(  # noqa: PLR0913 - one explicit authorization sentence
         permission is not Permission.VIEW and ctx.impersonation_context is not None
     ):
         raise HTTPException(status_code=404 if opaque else 403, detail="Data access refused.")
+    if ctx.impersonation_context is None:
+        require_institution_coverage(db, ctx, bank_id)
     return require_bank_permission(
         db,
         ctx,

@@ -791,6 +791,15 @@ organization target). Scalar roles, a binding for another module or bank, and
 several incomplete bindings confer no access. DATA requires whole-institution
 coverage; Credit branch and region grants do not qualify.
 
+Human DATA bank paths first require the same institution coverage as bank detail.
+An existing uncovered bank and a missing bank both return `404 Bank not found.`;
+a covered bank without the exact DATA permission retains its existing 403 (or
+opaque-object 404). This deliberately hides same-organization bank existence
+after grants are revoked or scoped elsewhere. Integration-key and examiner
+refusals retain their existing behavior. Dashboard DATA hooks gate requests on
+effective permissions and normalize errors through `apiCall`; they do not depend
+on the former uncovered-bank 403.
+
 The sensitivity values match exactly, not hierarchically:
 
 | Surface                                                                                                                       | DATA sensitivity and permission                            |
