@@ -31,7 +31,7 @@ const evidenceDir = process.env.E2E_EVIDENCE_DIR;
 
 test.beforeAll(() => requireObjectStorage());
 const API = `${E2E_API_ORIGIN}/api/v1`;
-const RETURNS = "/submissions/returns?code=BSD3";
+const RETURNS = "/submissions/returns?code=LCR-NSFR";
 const GATED_RETURN = "/submissions/returns?code=LMT";
 
 test.describe("attestation surfaces", () => {
@@ -91,9 +91,9 @@ test.describe("the certification ceremony", () => {
   }) => {
     const admin = await mintBackendToken("admin");
     const authorize = { Authorization: `Bearer ${admin}` };
-    // LMT, not BSD3: the other journeys submit BSD3, and Playwright runs files
+    // LMT, not LCR-NSFR: the other journeys submit LCR-NSFR, and Playwright runs files
     // in parallel against ONE database, so a mandatory-signature policy on
-    // BSD3 would block them mid-run.
+    // LCR-NSFR would block them mid-run.
     const scope = {
       return_code: "LMT",
       required_signatures: [
@@ -345,7 +345,7 @@ test.describe("the signing workspace", () => {
     test.setTimeout(180_000);
     const admin = await mintBackendToken("admin");
     const authorize = { Authorization: `Bearer ${admin}` };
-    // LMT again, and for the same reason as the ceremony journey above: BSD3 is
+    // LMT again, and for the same reason as the ceremony journey above: LCR-NSFR is
     // submitted by the lifecycle journeys, and one database is shared.
     const scope = {
       return_code: "LMT",

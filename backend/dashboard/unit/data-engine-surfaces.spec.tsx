@@ -64,6 +64,7 @@ vi.mock("@/components/shell/BankContext", () => ({
     period: { periodEnd: new Date("2026-09-30") },
     moduleScope: { marketsRestrictedView: false },
   }),
+  useModuleScope: () => ({ institutionClass: "bank", modules: new Set() }),
 }));
 vi.mock("@/components/impersonation/useImpersonation", () => ({
   useImpersonation: () => ({ impersonating: false }),

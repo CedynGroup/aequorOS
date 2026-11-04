@@ -19,6 +19,7 @@ import type {
   LiquidityThresholdRead,
   LiquidityThresholdUpdate,
 } from "@aequoros/risk-service-api";
+import RegulatoryRuleStatus from "@/components/submissions/RegulatoryRuleStatus";
 import SectionCard from "@/components/ui/SectionCard";
 import StatusPill from "@/components/ui/StatusPill";
 import DataTable, { type Column } from "@/components/ui/DataTable";
@@ -95,7 +96,7 @@ const viewColumns: Column<LiquidityThresholdRead>[] = [
       r.source === "board_register" ? (
         <StatusPill tone="success">Board register</StatusPill>
       ) : (
-        <StatusPill tone="slate">Directive minimum</StatusPill>
+        <StatusPill tone="slate">Monitoring minimum</StatusPill>
       ),
   },
   {
@@ -125,16 +126,19 @@ export default function ThresholdRegisterCard({ bankId }: { bankId: string }) {
   return (
     <SectionCard
       title="Board threshold register"
-      subtitle="Liquidity thresholds — the Board's adopted levels over the exposure draft's stated minimums (LMTD ¶11(b)–(e), Feb 2026 draft, not yet in force). The Board's own levels are what bind today."
+      subtitle="Board-adopted liquidity thresholds and their approval evidence."
       noPadding
       actions={
-        query.data && (
-          <EditRegisterAction
-            isApprover={isApprover}
-            editing={editing}
-            onEdit={() => setEditing(true)}
-          />
-        )
+        <>
+          <RegulatoryRuleStatus code="LMT" sdiCode="SDI-LMT-MONTHLY" />
+          {query.data && (
+            <EditRegisterAction
+              isApprover={isApprover}
+              editing={editing}
+              onEdit={() => setEditing(true)}
+            />
+          )}
+        </>
       }
       footer={
         <span>
@@ -188,7 +192,9 @@ function ThresholdEditor({
   // Editable rows: the resolved bank-class thresholds, plus an adoption row
   // for each limit-shaped extra code the Board has not adopted yet.
   const rows = useMemo(() => {
-    const bankRows = register.thresholds.filter((r) => r.institutionClass === "bank");
+    const bankRows = register.thresholds.filter(
+      (r) => r.institutionClass === "bank",
+    );
     const present = new Set(bankRows.map((r) => r.thresholdCode));
     const extras = ADOPTABLE_EXTRA_CODES.filter((code) => !present.has(code));
     return { bankRows, extras };
@@ -196,7 +202,8 @@ function ThresholdEditor({
 
   const [values, setValues] = useState<Record<string, string>>(() => {
     const initial: Record<string, string> = {};
-    for (const row of rows.bankRows) initial[row.thresholdCode] = String(row.thresholdPct);
+    for (const row of rows.bankRows)
+      initial[row.thresholdCode] = String(row.thresholdPct);
     for (const code of rows.extras) initial[code] = "";
     return initial;
   });
@@ -207,7 +214,12 @@ function ThresholdEditor({
 
   const currentByCode = useMemo(
     () =>
-      new Map(rows.bankRows.map((row) => [row.thresholdCode, String(row.thresholdPct)])),
+      new Map(
+        rows.bankRows.map((row) => [
+          row.thresholdCode,
+          String(row.thresholdPct),
+        ]),
+      ),
     [rows],
   );
 

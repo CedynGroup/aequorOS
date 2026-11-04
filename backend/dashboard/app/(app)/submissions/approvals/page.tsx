@@ -76,6 +76,7 @@ const FILING_DECISION_LABELS: Record<string, string> = {
 import TransmitConfirmDialog from "@/components/submissions/TransmitConfirmDialog";
 import FiledRecord from "@/components/submissions/FiledRecord";
 import DowntimeFallback from "@/components/submissions/DowntimeFallback";
+import RegulatoryExportWarning from "@/components/submissions/RegulatoryExportWarning";
 
 export default function ApprovalsPage() {
   const { bank } = useBankContext();
@@ -549,38 +550,41 @@ function DecidePanel({
             <SkeletonTable rows={1} />
           )
         ) : downtime || pendingReupload ? (
-          <DowntimeFallback
-            returnCode={pkg.returnCode}
-            reportingDate={fmtDateUTC(pkg.reportingDate)}
-            deadlineLabel={null}
-            message={
-              downtime ?? "This return was filed by the downtime bundle."
-            }
-            attemptsLabel={null}
-            recipient={
-              fallbackQuery.data?.recipientGuidance.downtimeReturnAddress ??
-              null
-            }
-            subject={fallbackQuery.data?.subject ?? null}
-            attachments={(fallbackQuery.data?.attachments ?? []).map(
-              (file) => ({
-                filename: file.filename,
-                role: file.kind,
-                sizeBytes: file.sizeBytes,
-              }),
-            )}
-            instructions={fallbackQuery.data?.instructions ?? null}
-            onDownloadEml={() => {
-              void downloadEmailFallbackEml(bankId!, pkg.id);
-            }}
-            onRecordEmailSubmission={() =>
-              decide.mutate({ packageId: pkg.id, action: "approved" })
-            }
-            onRetryPortal={() => setConfirmingTransmit(true)}
-            recording={decide.isPending}
-            error={decide.error}
-            pendingReupload={Boolean(pendingReupload)}
-          />
+          <>
+            <RegulatoryExportWarning snapshot={detailQuery.data?.snapshot} />
+            <DowntimeFallback
+              returnCode={pkg.returnCode}
+              reportingDate={fmtDateUTC(pkg.reportingDate)}
+              deadlineLabel={null}
+              message={
+                downtime ?? "This return was filed by the downtime bundle."
+              }
+              attemptsLabel={null}
+              recipient={
+                fallbackQuery.data?.recipientGuidance.downtimeReturnAddress ??
+                null
+              }
+              subject={fallbackQuery.data?.subject ?? null}
+              attachments={(fallbackQuery.data?.attachments ?? []).map(
+                (file) => ({
+                  filename: file.filename,
+                  role: file.kind,
+                  sizeBytes: file.sizeBytes,
+                }),
+              )}
+              instructions={fallbackQuery.data?.instructions ?? null}
+              onDownloadEml={() => {
+                void downloadEmailFallbackEml(bankId!, pkg.id);
+              }}
+              onRecordEmailSubmission={() =>
+                decide.mutate({ packageId: pkg.id, action: "approved" })
+              }
+              onRetryPortal={() => setConfirmingTransmit(true)}
+              recording={decide.isPending}
+              error={decide.error}
+              pendingReupload={Boolean(pendingReupload)}
+            />
+          </>
         ) : isFiled ? (
           <FiledRecord
             pkg={pkg}

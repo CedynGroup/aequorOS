@@ -392,6 +392,12 @@ class ReturnAnchorListRead(ClosedModel):
 
 
 class ReturnTemplateRead(ClosedModel):
+    source_url: str | None = None
+    default_effective_from: date | None = None
+    commencement_parameter: str | None = None
+    commencement_approved_by: str | None = None
+    commencement_approved_at: datetime | None = None
+    calculations: list[str] = Field(default_factory=list)
     instrument_status: InstrumentStatus = "in_force"
     effective_from: date | None = None
     code: str

@@ -10,6 +10,7 @@
  * Returns workspace.
  */
 
+import Link from "next/link";
 import PageContainer from "@/components/ui/PageContainer";
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -27,8 +28,8 @@ import SectionCard from "@/components/ui/SectionCard";
 import QueryBoundary from "@/components/ui/QueryBoundary";
 import EmptyState from "@/components/ui/EmptyState";
 import { useBankContext } from "@/components/shell/BankContext";
-import { useReportingObligations } from "@/lib/api/hooks";
-import { instrumentStatusLabel } from "@/lib/api/returnAnchors";
+import { useReportingObligations, useReturnTemplates } from "@/lib/api/hooks";
+import InstrumentStatusBadge from "@/components/submissions/InstrumentStatusBadge";
 import { fmtDateUTC, isoDate } from "@/lib/api/values";
 import {
   FAMILY_LABELS,
@@ -68,6 +69,7 @@ export default function RegulatoryCalendarPage() {
   const [offset, setOffset] = useState(0);
 
   const query = useReportingObligations(bankId, horizon, PAGE_SIZE, offset);
+  const templatesQuery = useReturnTemplates(bankId);
   const obligations = query.data?.obligations ?? [];
   const asOf = query.data?.asOf;
   const summary = query.data?.summary;
@@ -96,9 +98,26 @@ export default function RegulatoryCalendarPage() {
             <p className="text-caption text-slate truncate max-w-[320px]">
               {o.title}
             </p>
-            <p className="text-micro text-slate">
-              {instrumentStatusLabel(o.instrumentStatus, o.effectiveFrom)}
-            </p>
+            <InstrumentStatusBadge
+              status={o.instrumentStatus}
+              regulator={
+                templatesQuery.data?.templates.find(
+                  (item) => item.code === o.returnCode,
+                )?.regulator
+              }
+              effectiveFrom={o.effectiveFrom}
+              code={o.returnCode}
+              citation={
+                templatesQuery.data?.templates.find(
+                  (item) => item.code === o.returnCode,
+                )?.directiveCitation
+              }
+              sourceUrl={
+                templatesQuery.data?.templates.find(
+                  (item) => item.code === o.returnCode,
+                )?.sourceUrl
+              }
+            />
             {/*
             An annex is filed INSIDE its parent return, so it is not a separate
             obligation with a separate deadline. Listing one as its own row told
@@ -199,7 +218,7 @@ export default function RegulatoryCalendarPage() {
           ),
       },
     ],
-    [],
+    [templatesQuery.data],
   );
 
   return (
@@ -236,6 +255,12 @@ export default function RegulatoryCalendarPage() {
           error={query.error}
           onRetry={() => query.refetch()}
         >
+          <Link
+            className="text-action underline text-caption"
+            href="/submissions/upcoming"
+          >
+            Preparing for upcoming rules
+          </Link>
           {query.data?.coverageNote && (
             <p className="rounded border border-border bg-surface-raised px-4 py-3 text-body text-slate">
               {query.data.coverageNote}

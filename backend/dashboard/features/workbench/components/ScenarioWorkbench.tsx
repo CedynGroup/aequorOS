@@ -1,5 +1,7 @@
 "use client";
 
+import { useSearchParams } from "next/navigation";
+import { preparationHref } from "@/lib/regulatoryInstruments";
 import { wholeInstitutionCapabilities } from "@/lib/api/dataScope";
 import { useBankContext } from "@/components/shell/BankContext";
 import SectionCard from "@/components/ui/SectionCard";
@@ -40,6 +42,7 @@ export default function ScenarioWorkbench({
 }) {
   const { bank, period, institutionCapabilities, moduleScope } =
     useBankContext();
+  const preparing = useSearchParams()?.get("preparing") === "1";
   const name = MODULE_NAMES[module];
   const confidential = hasEffectiveCapability(
     wholeInstitutionCapabilities(institutionCapabilities),
@@ -81,7 +84,7 @@ export default function ScenarioWorkbench({
       </p>
       {enterprise.state !== "hidden" && (
         <PermissionLink
-          href="/irr/enterprise-stress"
+          href={preparationHref("/irr/enterprise-stress", preparing)}
           className="text-action underline"
           reason={
             enterprise.state === "disabled" ? enterprise.reason : undefined

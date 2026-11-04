@@ -265,6 +265,7 @@ export type SdiExposure = {
   pct_net_own_funds: string | null;
   single_obligor_limit_pct: string;
   large_exposure_limit_pct: string;
+  applicable_limit_pct: string;
   status: "ok" | "above_limit" | "not_computable";
   exempt: boolean;
 };

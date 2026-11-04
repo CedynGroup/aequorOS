@@ -1,3 +1,5 @@
+import { preparationHref } from "../../lib/regulatoryInstruments";
+
 /**
  * The ICAAP cycle's workspace tabs.
  *
@@ -39,9 +41,12 @@ export const ICAAP_CYCLE_TABS: readonly IcaapTab[] = [
   { segment: "filing", label: "Filing", phase: "P3", enabled: true },
 ];
 
-export function icaapTabHrefs(cycleId: string): { href: string; label: string }[] {
+export function icaapTabHrefs(
+  cycleId: string,
+  preparing = false,
+): { href: string; label: string }[] {
   return ICAAP_CYCLE_TABS.filter((tab) => tab.enabled).map((tab) => ({
-    href: `/icaap/${cycleId}/${tab.segment}`,
+    href: preparationHref(`/icaap/${cycleId}/${tab.segment}`, preparing),
     label: tab.label,
   }));
 }

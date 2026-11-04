@@ -23,12 +23,7 @@ export default function ModuleTabs({ tabs }: { tabs: Tab[] }) {
         aria-label="Module sections"
       >
         {visibleTabs.map((t) => {
-          const active =
-            t.href === pathname ||
-            (t.href !== "/" && pathname.startsWith(t.href + "/")) ||
-            (t.href.split("/").length > 2 && pathname === t.href);
-          // Refined active match: exact match or first path-segment-after-href is empty
-          const isActive = pathname === t.href;
+          const isActive = pathname === t.href.split("?")[0];
           const reason =
             t.access.state === "disabled" ? t.access.reason : undefined;
           return (

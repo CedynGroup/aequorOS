@@ -342,7 +342,7 @@ test("an uploaded book becomes fresh 645.16% liquidity coverage and the BSD2 cas
     });
 
     await test.step("the treasury cockpit shows the uploaded book's exact figures", async () => {
-      await page.goto("/liquidity");
+      await page.goto("/liquidity?preparing=1");
       await expectKpi(page, "HQLA stock", "GHS 2.0M", "Post-haircut weighted");
       await expectKpi(
         page,

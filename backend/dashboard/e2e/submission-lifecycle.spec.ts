@@ -91,9 +91,7 @@ test.describe("submission pipeline", () => {
     await expect(page).toHaveURL(/\/submissions\/calendar/);
     await expect(page.getByRole("table")).toBeVisible();
     await expect(
-      page.getByText(
-        /preparation only; no filing obligation or statutory penalty estimate/i,
-      ),
+      page.getByRole("link", { name: "Preparing for upcoming rules" }),
     ).toBeVisible();
     // These instruments are drafts or unpublished. None may become an
     // obligation or acquire an indicative statutory penalty on any page.

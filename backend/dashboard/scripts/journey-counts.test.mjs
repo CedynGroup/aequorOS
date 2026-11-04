@@ -70,6 +70,148 @@ function invoke(root, data) {
   assert.equal(readFileSync(summary, "utf8"), existingSummary + result.stdout);
   return result;
 }
+
+function runConfiguredReporter(root, configName, tests, args = []) {
+  const report = path.join(root, "results.json");
+  const config = path.join(root, "playwright.config.cjs");
+  writeFileSync(
+    config,
+    `const base = require(${JSON.stringify(path.join(dashboard, configName))}).default;
+const reporter = base.reporter.map(([name, ...options]) => [name.startsWith('.') ? require('node:path').resolve(${JSON.stringify(dashboard)}, name) : name, ...options]);
+module.exports = { ...base, reporter, testDir: ${JSON.stringify(root)}, testMatch: 'report.spec.cjs', testIgnore: [], outputDir: ${JSON.stringify(path.join(root, "results"))}, workers: 1, globalSetup: undefined, webServer: [] };`,
+  );
+  const playwright = path.join(dashboard, "node_modules/@playwright/test");
+  writeFileSync(
+    path.join(root, "report.spec.cjs"),
+    `const {test,expect} = require(${JSON.stringify(playwright)});\n${tests}`,
+  );
+  const result = spawnSync(
+    process.execPath,
+    [path.join(playwright, "cli.js"), "test", "--config", config, ...args],
+    {
+      encoding: "utf8",
+      env: { ...process.env, CI: "1", PLAYWRIGHT_QUARANTINE_REPORT: report },
+    },
+  );
+  return {
+    ...result,
+    report: JSON.parse(readFileSync(report, "utf8")),
+  };
+}
+
+const thirteenPassing =
+  "for(let n=0;n<13;n++)test('journey '+n,()=>expect(1).toBe(1));";
+
+test("isolated regulatory reporter accepts all fourteen selected journeys", () =>
+  fixture((root) => {
+    const result = runConfiguredReporter(
+      root,
+      "playwright.regulatory.config.ts",
+      `${thirteenPassing}test('last journey',()=>expect(1).toBe(1));`,
+    );
+    assert.equal(result.status, 0, result.stdout + result.stderr);
+    assert.equal(result.report.discovered, 14);
+    assert.equal(result.report.executed, 14);
+    assert.deepEqual(result.report.integrityErrors, []);
+  }));
+
+test("isolated regulatory reporter rejects a skipped selected journey", () =>
+  fixture((root) => {
+    const result = runConfiguredReporter(
+      root,
+      "playwright.regulatory.config.ts",
+      `${thirteenPassing}test.skip('last journey',()=>{});`,
+    );
+    assert.equal(result.status, 1);
+    assert.equal(result.report.discovered, 14);
+    assert.equal(result.report.executed, 13);
+    assert.equal(result.report.skipped, 1);
+    assert.ok(
+      result.report.integrityErrors.some((error) =>
+        error.includes("expects at least 14"),
+      ),
+    );
+  }));
+
+test("isolated regulatory reporter rejects a run stopped after failure", () =>
+  fixture((root) => {
+    const result = runConfiguredReporter(
+      root,
+      "playwright.regulatory.config.ts",
+      `test('first journey',()=>expect(1).toBe(2));${thirteenPassing}`,
+      ["--max-failures=1"],
+    );
+    assert.equal(result.status, 1);
+    assert.equal(result.report.discovered, 14);
+    assert.equal(result.report.executed, 1);
+    assert.equal(result.report.status, "failed");
+    assert.ok(
+      result.report.integrityErrors.some((error) =>
+        error.includes("expects at least 14"),
+      ),
+    );
+  }));
+
+test("isolated regulatory reporter preserves quarantine admission", () =>
+  fixture((root) => {
+    const result = runConfiguredReporter(
+      root,
+      "playwright.regulatory.config.ts",
+      `${thirteenPassing}test.fail('unlisted failure',()=>expect(1).toBe(2));`,
+    );
+    assert.equal(result.status, 1);
+    assert.equal(result.report.executed, 14);
+    assert.ok(
+      result.report.integrityErrors.some((error) =>
+        error.includes("missing from the quarantine list"),
+      ),
+    );
+  }));
+
+test("isolated regulatory reporter preserves failures in a complete run", () =>
+  fixture((root) => {
+    const result = runConfiguredReporter(
+      root,
+      "playwright.regulatory.config.ts",
+      `${thirteenPassing}test('last journey',()=>expect(1).toBe(2));`,
+    );
+    assert.equal(result.status, 1);
+    assert.equal(result.report.executed, 14);
+    assert.equal(result.report.status, "failed");
+    assert.deepEqual(result.report.integrityErrors, []);
+  }));
+
+test("isolated regulatory reporter rejects empty discovery", () =>
+  fixture((root) => {
+    const result = runConfiguredReporter(
+      root,
+      "playwright.regulatory.config.ts",
+      "",
+    );
+    assert.equal(result.status, 1);
+    assert.equal(result.report.executed, 0);
+    assert.ok(
+      result.report.integrityErrors.some((error) =>
+        error.includes("expects at least 1"),
+      ),
+    );
+  }));
+
+test("main reporter retains its twenty-journey execution floor", () =>
+  fixture((root) => {
+    const result = runConfiguredReporter(
+      root,
+      "playwright.config.ts",
+      "for(let n=0;n<19;n++)test('journey '+n,()=>expect(1).toBe(1));",
+    );
+    assert.equal(result.status, 1);
+    assert.equal(result.report.executed, 19);
+    assert.ok(
+      result.report.integrityErrors.some((error) =>
+        error.includes("expects at least 20"),
+      ),
+    );
+  }));
 test("accepts a complete four-shard run at the executed-journey floor", () =>
   fixture((root) => {
     const result = invoke(root, reports());
