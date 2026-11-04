@@ -126,6 +126,7 @@ def test_the_bindings_constraint_accepts_every_vocabulary_value(
 
 
 def _authority_snapshot(schema: MigratedPostgresSchema) -> tuple[str, ...]:
+    """Capture tenant identity, binding, session and audit state for exact comparison."""
     with schema.app_engine.begin() as connection:
         connection.execute(
             text("SELECT set_config('app.organization_id', :org, true)"), {"org": ORG}
@@ -153,6 +154,7 @@ ORG = "OR-CFGM0001"
 def test_configurator_migration_grants_nothing_and_preserves_existing_authority(
     forward_migrated_postgres_schema: MigratedPostgresSchema,
 ) -> None:
+    """Widen and narrow the CHECK without altering preexisting authority or sessions."""
     # Post-migration Account Admins cannot round-trip through the historical
     # ownership migration. This test round-trips only the Configurator migration.
     schema = forward_migrated_postgres_schema

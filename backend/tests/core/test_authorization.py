@@ -182,6 +182,7 @@ def test_no_bundle_other_than_validator_carries_submit() -> None:
 
 
 def test_only_configurator_carries_configure() -> None:
+    """No existing bundle implicitly acquires configuration authority."""
     assert {
         bundle
         for bundle, permissions in ROLE_PERMISSIONS.items()
@@ -190,6 +191,7 @@ def test_only_configurator_carries_configure() -> None:
 
 
 def test_configurator_requires_one_complete_active_binding() -> None:
+    """Mismatched or ineffective grants cannot compose into configure authority."""
     exact = _binding(
         role=RoleBundle.CONFIGURATOR,
         module=ModuleScope.LIQUIDITY,

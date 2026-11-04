@@ -208,6 +208,7 @@ def _resource(
 
 
 def test_configurator_is_explicit_exact_and_invalidates_sign_ins(grant_client: TestClient) -> None:
+    """Create and revoke exact configure-only authority while invalidating old tokens."""
     with _session() as db:
         user = db.get(User, GRANTEE)
         assert user is not None
