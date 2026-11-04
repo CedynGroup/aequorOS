@@ -1401,8 +1401,12 @@ def test_view_authority_does_not_export_download_or_email_the_return(
 
     assert db_client.post(f"{base}/export", headers=auth, params={"kind": "pdf"}).status_code == 403
     # The service repeats the gate, so a caller that reaches it without the
-    # route dependency still cannot mint an artifact.
+    # route dependency still cannot mint an artifact. The session carries the
+    # tenant like every other one here: the bank and package lookups run before
+    # the export decision, so an unset organization would let row-level
+    # security answer 404 for a reason this test does not mean to exercise.
     with get_sessionmaker()() as session:
+        session.info["organization_id"] = ORG_1
         ctx = TenantContext(
             organization_id=ORG_1, actor_user_id=USER_1, authorization_version=authv
         )
