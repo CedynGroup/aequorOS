@@ -40,12 +40,11 @@ function recordCreditRegisterRequests(page: import("@playwright/test").Page) {
 }
 
 /** Capture after the page's own reads settle, so no shimmer reaches the image. */
-async function screenshot(
-  page: import("@playwright/test").Page,
-  name: string,
-) {
+async function screenshot(page: import("@playwright/test").Page, name: string) {
   if (!process.env.E2E_EVIDENCE_DIR) return;
-  await page.waitForLoadState("networkidle", { timeout: 15_000 }).catch(() => {});
+  await page
+    .waitForLoadState("networkidle", { timeout: 15_000 })
+    .catch(() => {});
   await page.screenshot({
     path: path.join(process.env.E2E_EVIDENCE_DIR, name),
     fullPage: true,
@@ -59,7 +58,11 @@ identityTest.describe("a reader without the restricted Credit sentence", () => {
       roles: ["viewer"],
       bindings: [
         // Opens Institution Profile, where the registers live.
-        { bundle: "viewer", module: "institution", sensitivity: "confidential" },
+        {
+          bundle: "viewer",
+          module: "institution",
+          sensitivity: "confidential",
+        },
         // Opens the page through the Liquidity register family.
         { bundle: "viewer", module: "liq", sensitivity: "confidential" },
         // Capital authority never implies Credit.
@@ -107,25 +110,32 @@ identityTest.describe("a reader holding neither register family", () => {
     storyConfig: {
       roles: ["viewer"],
       bindings: [
-        { bundle: "viewer", module: "institution", sensitivity: "confidential" },
+        {
+          bundle: "viewer",
+          module: "institution",
+          sensitivity: "confidential",
+        },
         { bundle: "viewer", module: "credit", sensitivity: "confidential" },
       ],
     },
   });
 
-  identityTest("is told the exact sentence that opens them", async ({ page }) => {
-    const requests = recordCreditRegisterRequests(page);
+  identityTest(
+    "is told the exact sentence that opens them",
+    async ({ page }) => {
+      const requests = recordCreditRegisterRequests(page);
 
-    await page.goto(REGISTERS);
-    await expect(
-      page.getByRole("heading", { name: "Access required" }),
-    ).toBeVisible();
-    // The retired sentence must not be the one the page names.
-    await expect(
-      page.getByText("Credit · Restricted · View", { exact: true }),
-    ).toBeVisible();
-    expect(requests).toEqual([]);
-  });
+      await page.goto(REGISTERS);
+      await expect(
+        page.getByRole("heading", { name: "Access required" }),
+      ).toBeVisible();
+      // The retired sentence must not be the one the page names.
+      await expect(
+        page.getByText("Credit · Restricted · View", { exact: true }),
+      ).toBeVisible();
+      expect(requests).toEqual([]);
+    },
+  );
 });
 
 identityTest.describe("a reader holding the restricted Credit sentence", () => {
@@ -134,34 +144,38 @@ identityTest.describe("a reader holding the restricted Credit sentence", () => {
     storyConfig: {
       roles: ["viewer"],
       bindings: [
-        { bundle: "viewer", module: "institution", sensitivity: "confidential" },
+        {
+          bundle: "viewer",
+          module: "institution",
+          sensitivity: "confidential",
+        },
         { bundle: "viewer", module: "credit", sensitivity: "restricted" },
       ],
     },
   });
 
-  identityTest("reads the credit registers from the real API", async ({
-    page,
-  }) => {
-    const first = page.waitForResponse(
-      (response) =>
+  identityTest(
+    "reads the credit registers from the real API",
+    async ({ page }) => {
+      const first = page.waitForResponse((response) =>
         /\/banks\/[^/]+\/(ecl-assumptions|crm-haircuts|credit-thresholds)(?:\?|$)/.test(
           response.url(),
         ),
-    );
+      );
 
-    await page.goto(REGISTERS);
-    for (const title of CREDIT_REGISTER_TITLES) {
-      await expect(
-        page.getByRole("heading", { name: title, exact: true }),
-      ).toBeVisible();
-    }
+      await page.goto(REGISTERS);
+      for (const title of CREDIT_REGISTER_TITLES) {
+        await expect(
+          page.getByRole("heading", { name: title, exact: true }),
+        ).toBeVisible();
+      }
 
-    expect((await first).status()).toBe(200);
-    // The register tables render the API's own empty-register answer rather than
-    // an authorization error.
-    await expect(page.getByText("No assumptions adopted")).toBeVisible();
+      expect((await first).status()).toBe(200);
+      // The register tables render the API's own empty-register answer rather than
+      // an authorization error.
+      await expect(page.getByText("No assumptions adopted")).toBeVisible();
 
-    await screenshot(page, "credit-registers-allowed-restricted.png");
-  });
+      await screenshot(page, "credit-registers-allowed-restricted.png");
+    },
+  );
 });

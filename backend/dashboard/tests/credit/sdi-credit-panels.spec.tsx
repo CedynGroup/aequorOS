@@ -94,9 +94,8 @@ vi.mock("../../components/basel/charts/SdiCapitalReviewCharts", () => ({
   SdiRwaCompositionChart: () => null,
 }));
 
-const { default: SdiCapitalView } = await import(
-  "../../components/basel/SdiCapitalView"
-);
+const { default: SdiCapitalView } =
+  await import("../../components/basel/SdiCapitalView");
 
 afterEach(() => {
   cleanup();
@@ -119,9 +118,9 @@ describe("an SDI capital screen without the Credit sentence", () => {
     // Both KPIs read the requirement, and neither invents a figure.
     expect(screen.getByText("NPL ratio")).toBeVisible();
     expect(screen.getByText("NPL ratio").closest("*")).not.toBeNull();
-    expect(screen.getAllByText("Requires Credit · Aggregated · View").length).toBe(
-      2,
-    );
+    expect(
+      screen.getAllByText("Requires Credit · Aggregated · View").length,
+    ).toBe(2);
     expect(screen.getByText("Provisions required").closest("*")).not.toBeNull();
     // The hook was called with no bank: no request is possible.
     expect(classificationCalls).toEqual([undefined]);
@@ -145,6 +144,8 @@ describe("an SDI capital screen holding the Credit sentence", () => {
       screen.getByRole("columnheader", { name: "Provision required" }),
     ).toBeVisible();
     expect(screen.getByText("substandard")).toBeVisible();
-    expect(screen.getByText("Non-performing loans ÷ total exposure")).toBeVisible();
+    expect(
+      screen.getByText("Non-performing loans ÷ total exposure"),
+    ).toBeVisible();
   });
 });
