@@ -52,6 +52,9 @@ _CATALOGUE_SECTIONS = {
     "scripts/ci_postgres_durations.json": ("durations",),
 }
 
+#: Suffixes a split writes its other-suite parts under (see ``split_modules``).
+_PARTITION_SUFFIXES = ("_integration", "_e2e")
+
 
 @dataclass(frozen=True)
 class Renamer:
@@ -64,11 +67,17 @@ class Renamer:
         """Modules recorded as split (see ``split_modules``): their name survives."""
         return frozenset(split_modules(self.moves))
 
+    def _partition(self, old: str, new: str) -> bool:
+        """Whether ``old -> new`` records a split part rather than a move of the module."""
+        return old in self.splits and new in {old + suffix for suffix in _PARTITION_SUFFIXES}
+
     def __call__(self, name: str) -> str:
         for old, new in self.moves:
-            if old in self.splits:
+            if self._partition(old, new):
                 # A split module's parts were written by hand under their own names: the
                 # surviving file keeps the old name, so a reference to it is not a move.
+                # Only the partition itself is exempt: the same module may still be moved
+                # again later, and that later move has to reach this reference.
                 continue
             if name == old or name.startswith(f"{old}."):
                 name = new + name[len(old) :]

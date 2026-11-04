@@ -368,6 +368,30 @@ def test_test_catalogue_node_ids_follow_the_move(repository: Path) -> None:
     }
 
 
+def test_a_split_module_still_follows_a_later_move_of_the_surviving_file() -> None:
+    """A ``[old, old]`` split pair exempts the partition, not every move of that module."""
+    rename = Renamer(
+        (
+            ("tests.services.test_health", "tests.test_health"),
+            ("tests.test_health", "tests.test_health"),
+            ("tests.test_health", "tests.test_readiness"),
+        )
+    )
+    assert rename("tests.test_health") == "tests.test_readiness"
+
+
+def test_a_split_module_keeps_its_name_for_the_partition_only() -> None:
+    """The surviving file keeps its name although its integration part was written out."""
+    rename = Renamer(
+        (
+            ("tests.services.test_health", "tests.test_health"),
+            ("tests.test_health", "tests.test_health"),
+            ("tests.test_health", "tests.test_health_integration"),
+        )
+    )
+    assert rename("tests.test_health") == "tests.test_health"
+
+
 def test_a_wrapped_rewritten_import_keeps_its_noqa_on_the_first_line(tmp_path: Path) -> None:
     rename = Renamer(
         (("app.services.regulatory_liquidity", "app.liquidity.service.regulatory_liquidity"),)
