@@ -899,7 +899,9 @@ lists filter before counts and pagination. Calendar/anchor links, signing
 inboxes, snapshots, comparisons, artifacts and attestation reads hide returns
 without that authority. Taking the return away is a separate act: artifact
 generation, artifact and archived-revision downloads, and the downtime email
-bundle require REG/restricted EXPORT as well as VIEW. A VIEW-only reader keeps
+bundle (including its instructions preview) require EXPORT as well as VIEW under
+the return family's authority: REG/restricted for ordinary returns and
+CAPITAL/confidential for ICAAP. A VIEW-only reader keeps
 the package, its metadata and its history, but receives no file; an invisible
 package still returns 404 before any storage read, and a denied export writes
 no artifact, audit event or object. Package comparisons filter both referenced
@@ -938,7 +940,7 @@ repository; do not auto-grant.
 
 The downtime email bundle deserves its own warning: it is the fallback channel
 the Validator uses when ORASS is unreachable, and the `validator` bundle carries
-`view` + `submit` only. After this cutover a bin that relies on email fallback
+`view` + `submit` only. After this cutover a bank that relies on email fallback
 needs its Validator to hold an export-capable binding as well (today that means
 an `analyst` REG/restricted row, which also confers preparation). That is a
 real tension with the approved three-role design and is recorded as a gap for a

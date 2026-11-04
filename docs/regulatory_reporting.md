@@ -338,9 +338,10 @@ listReportingObligations (calendar; `horizon_months` 1–24, optional `limit` 1�
 listReturnAnchors (per-return reporting dates + data coverage), listRegulatoryPackages,
 createRegulatoryPackage (generate),
 getRegulatoryPackage, validateRegulatoryPackage, requestPackageApproval, decidePackageApproval,
-exportRegulatoryPackage (kind → artifact download; REG/restricted `export`),
+exportRegulatoryPackage (kind → artifact download),
 downloadRegulatoryArtifact / downloadRegulatoryArtifactVersion / downloadEmailFallbackEml
-and getEmailFallbackInstructions (also `export`, never merely `view`),
+and getEmailFallbackInstructions (authority follows the
+[returns authorization contract](../backend/docs/authorization_foundation.md#whole-institution-figures-and-credit-only-narrowing)),
 submitRegulatoryPackage (channel),
 listSubmissionEvents, listReturnTemplates (registry + fidelity + instrument disclosure;
 optional `bank_id` resolves governed commencement and filters hidden return families), get/putChannelConfig
