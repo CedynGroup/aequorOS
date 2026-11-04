@@ -573,7 +573,7 @@ section of this document said so; there is now.
 | Each route names its dependency and carries no scalar gate                                     | `tests/architecture/test_credit_route_authorization.py`                                                                     |
 | **Every** `/credit/` route is in the authority table (a new one cannot ship ungated)           | the same file, `test_every_credit_route_is_in_the_authority_table`                                                          |
 | `require_credit_run` is a recognized mutation gate (impersonation boundary)                    | the same file                                                                                                               |
-| The correct sentence is admitted, per route                                                    | `tests/credit/api/test_credit_route_authorization.py`                                                                              |
+| The correct sentence is admitted, per route                                                    | `tests/credit/api/test_credit_route_authorization.py`                                                                       |
 | A scalar role alone is refused, per route, for five roles                                      | the same file, `test_a_scalar_role_alone_is_refused`                                                                        |
 | A `risk`, `liquidity` or `capital` binding is refused, per route                               | the same file                                                                                                               |
 | Every OTHER sensitivity is refused, per route; `all` admits every route                        | the same file                                                                                                               |
@@ -586,7 +586,7 @@ section of this document said so; there is now.
 | A region resolves through the register, follows it forward, and discloses an unresolved region | the same file                                                                                                               |
 | `mixed` unions branches and regions; one `all` row beside a branch row wins                    | the same file                                                                                                               |
 | Activity attribution follows D-018 and refuses a cross-system or pre-book event                | the same file                                                                                                               |
-| The blotter's pre-existing filter, date and refusal contract is unchanged                      | `tests/credit/service/test_regulatory_credit.py`, `tests/credit/api/test_regulatory_credit.py`                                           |
+| The blotter's pre-existing filter, date and refusal contract is unchanged                      | `tests/credit/service/test_regulatory_credit.py`, `tests/credit/api/test_regulatory_credit.py`                              |
 | Object references under `/credit/*` are catalogued and refuse a foreign object                 | `tests/fixtures/object_reference_routes.py` (auto-discovered) + `tests/api/test_authorization_object_reference_coverage.py` |
 
 ### Deployment order and release record (Phase 4)
@@ -650,15 +650,15 @@ Derivation-only activation remains unchanged. No grants are backfilled or widene
 
 Seven read routes still asked only whether the caller belonged to the tenant:
 
-| Route                                             | Gate BEFORE | What that admitted                                                      |
-| ------------------------------------------------- | ----------- | ----------------------------------------------------------------------- |
-| `GET /banks/{id}/ecl-assumptions`                 | `Tenant`    | The Board's PD/LGD assumptions behind the ECL engine                    |
-| `GET /banks/{id}/crm-haircuts`                    | `Tenant`    | The Board's collateral haircut schedule                                 |
-| `GET /banks/{id}/concentration-limits`            | `Tenant`    | Board limits whose `bucket_key` can name a counterparty (`cp:`, `group:`) |
-| `GET /banks/{id}/credit-thresholds`               | `Tenant`    | The Board's credit early-warning thresholds                             |
-| `GET /banks/{id}/loan-classification`             | `Tenant`    | Grade buckets, NPL ratio and provisions for the whole book              |
-| `GET /banks/{id}/sdi/loan-classification`         | `Tenant`    | The same response on the compatibility path                             |
-| `GET /banks/{id}/sdi/large-exposures`             | `Tenant`    | One row per connected counterparty with `counterparty_name`             |
+| Route                                     | Gate BEFORE | What that admitted                                                        |
+| ----------------------------------------- | ----------- | ------------------------------------------------------------------------- |
+| `GET /banks/{id}/ecl-assumptions`         | `Tenant`    | The Board's PD/LGD assumptions behind the ECL engine                      |
+| `GET /banks/{id}/crm-haircuts`            | `Tenant`    | The Board's collateral haircut schedule                                   |
+| `GET /banks/{id}/concentration-limits`    | `Tenant`    | Board limits whose `bucket_key` can name a counterparty (`cp:`, `group:`) |
+| `GET /banks/{id}/credit-thresholds`       | `Tenant`    | The Board's credit early-warning thresholds                               |
+| `GET /banks/{id}/loan-classification`     | `Tenant`    | Grade buckets, NPL ratio and provisions for the whole book                |
+| `GET /banks/{id}/sdi/loan-classification` | `Tenant`    | The same response on the compatibility path                               |
+| `GET /banks/{id}/sdi/large-exposures`     | `Tenant`    | One row per connected counterparty with `counterparty_name`               |
 
 `require_module_access("credit")` still runs on these routers; it is a licence
 entitlement question and is orthogonal to authority.
@@ -706,7 +706,7 @@ computed monitor from the register.
 
 - Missing, partial, inactive or lifetime-expired authority → `403` with the same
   uniform sentence Phase 4 uses (`Credit access requires an active scoped
-  binding.`); the response never says which dimension failed.
+binding.`); the response never says which dimension failed.
 - A bank of another tenant resolves `404` first (`resolve_tenant_bank`), even for
   a caller holding an organization-wide sentence.
 - An act-as-examiner session is denied on all seven reads: the scoped evaluator
@@ -717,12 +717,12 @@ computed monitor from the register.
 
 ### Consumers aligned in the same change
 
-| Consumer                                         | Before                                                          | After                                                                                              |
-| ------------------------------------------------ | --------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
-| `/institution/registers` — the three credit cards | mounted on a CREDIT/`confidential` view capability              | mounted only on CREDIT/`restricted`; a confidential or Capital-only reader mounts no card and fires no request (`dashboard/app/(app)/institution/registers/page.tsx`) |
-| `/basel` SDI capital view — NPL and provisions    | fetched `/loan-classification` unconditionally                   | fetched only on CREDIT/`aggregated`; otherwise the KPIs read `—` and name the required sentence    |
-| `/basel` SDI capital view — classification table  | fetched unconditionally                                          | shown only on CREDIT/`aggregated`; otherwise a sentence names the requirement                     |
-| `/risk` and `/alerts` SDI exposure panels         | fetched `/sdi/large-exposures` on institution class alone        | fetched only on CREDIT/`restricted`                                                                |
+| Consumer                                          | Before                                                    | After                                                                                                                                                                 |
+| ------------------------------------------------- | --------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `/institution/registers` — the three credit cards | mounted on a CREDIT/`confidential` view capability        | mounted only on CREDIT/`restricted`; a confidential or Capital-only reader mounts no card and fires no request (`dashboard/app/(app)/institution/registers/page.tsx`) |
+| `/basel` SDI capital view — NPL and provisions    | fetched `/loan-classification` unconditionally            | fetched only on CREDIT/`aggregated`; otherwise the KPIs read `—` and name the required sentence                                                                       |
+| `/basel` SDI capital view — classification table  | fetched unconditionally                                   | shown only on CREDIT/`aggregated`; otherwise a sentence names the requirement                                                                                         |
+| `/risk` and `/alerts` SDI exposure panels         | fetched `/sdi/large-exposures` on institution class alone | fetched only on CREDIT/`restricted`                                                                                                                                   |
 
 The access-request catalogue moved with it. `_EXACT_ROUTE_REQUIREMENTS` in
 `app/identity/api/manage_authorization.py` still named
@@ -741,9 +741,11 @@ CREDIT/`confidential` sees them withheld rather than disclosed.
 
 ### Who loses these reads, and why that is correct
 
-Nothing is backfilled. The mirror migration `202609220067` created only
-`aggregated`-capable rows, so no reader gains `restricted` from it, and no
-reader gains a CREDIT row from holding Capital.
+Nothing is backfilled by this cutover. The mirror migration `202609220067`
+preserved each source Risk binding's sensitivity; it did not widen it. No reader
+gains a CREDIT row from holding Capital. The read outcomes below assume a
+complete active view binding with whole-institution coverage; narrowed bindings
+do not admit these reads.
 
 - **Readers with only a Capital binding** lose all seven reads. Capital screens
   keep their own capital figures; the credit book and the named exposures are a
@@ -799,10 +801,10 @@ Every affected principal is listed by name; no row is created by this change.
 
 ### Exact binding rows operators must create
 
-| Need                                                       | `role_bundle`                                              | `institution_scope`        | `module_scope` | `sensitivity_scope` | `data_scope_kind` |
-| ---------------------------------------------------------- | ---------------------------------------------------------- | -------------------------- | -------------- | ------------------- | ----------------- |
-| Four Board registers and the SDI large-exposure list        | `viewer`, `auditor`, `analyst`, `approver`, or `validator` | exact `BK-*` or explicit organization-wide | `credit`       | `restricted`        | `all` (required)  |
-| Loan classification (both routes), the credit dashboards    | the same set                                               | exact `BK-*` or explicit organization-wide | `credit`       | `aggregated`        | `all` (required)  |
+| Need                                                     | `role_bundle`                                              | `institution_scope`                        | `module_scope` | `sensitivity_scope` | `data_scope_kind` |
+| -------------------------------------------------------- | ---------------------------------------------------------- | ------------------------------------------ | -------------- | ------------------- | ----------------- |
+| Four Board registers and the SDI large-exposure list     | `viewer`, `auditor`, `analyst`, `approver`, or `validator` | exact `BK-*` or explicit organization-wide | `credit`       | `restricted`        | `all` (required)  |
+| Loan classification (both routes), the credit dashboards | the same set                                               | exact `BK-*` or explicit organization-wide | `credit`       | `aggregated`        | `all` (required)  |
 
 One row per need: the two sensitivities are separate sentences and are never
 composed from one another. A branch or region scope cannot be attached — the
@@ -826,16 +828,16 @@ Attach, in addition to Phase 4's record:
 
 ### Executable verification (Phase 5)
 
-| Property                                                                     | Pinned by                                                                                       |
-| ---------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
-| Each of the seven routes names its CREDIT dependency, no scalar or CAP gate   | `tests/architecture/test_credit_route_authorization.py`                                         |
-| A fifth register on the register router cannot ship ungated                  | the same file, `test_every_register_router_read_is_in_the_authority_table`                      |
-| The four register PUTs remain #184's Configurator work                       | the same file, `test_register_writes_stay_pending_configurator`                                 |
-| Exact sentence admitted; scalar roles, CAP, other modules, other sensitivities, sibling institution and narrowed scopes refused | `tests/credit/api/test_credit_route_authorization.py`, `test_remainder_reads_require_one_complete_exact_credit_sentence` |
-| The registers page mounts its credit cards only on CREDIT/`restricted`, names that sentence when it refuses, and asks the API for nothing on a refusal | `dashboard/e2e/credit-register-authorization.spec.ts` (real bindings, three journeys) |
-| An SDI capital and risk reader is not shown, and does not request, the loan classification or the named exposures without the matching Credit sentence | `dashboard/e2e/sdi-credit-authorization.spec.ts` (real bindings, three journeys) |
-| The examiner register source uses the register route's sensitivity            | `tests/reporting/api/test_examiner_authorization.py::test_credit_registers_require_restricted_not_confidential` |
-| A support impersonation read is refused before the register loads            | `tests/credit/service/test_concentration_identity_limits.py`                                     |
-| The dashboard mounts and fetches credit registers only on `restricted`       | `dashboard/unit/institution-registers-access.spec.tsx`                                           |
-| The access-request prompt asks for the sentence that opens the page          | `dashboard/lib/accessRequests.test.ts` (against the server's `_ROUTE_REQUIREMENT` table) and `tests/identity/api/test_grant_administration.py::test_institution_route_access_request_carries_expiry_into_the_grant[/institution/registers-credit-restricted]` |
-| The SDI capital screen renders the requirement, and asks for no book, without CREDIT/`aggregated` | `dashboard/unit/sdi-credit-panels.spec.tsx`                                                      |
+| Property                                                                                                                                               | Pinned by                                                                                                                                                                                                                                                     |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Each of the seven routes names its CREDIT dependency, no scalar or CAP gate                                                                            | `tests/architecture/test_credit_route_authorization.py`                                                                                                                                                                                                       |
+| A fifth register on the register router cannot ship ungated                                                                                            | the same file, `test_every_register_router_read_is_in_the_authority_table`                                                                                                                                                                                    |
+| The four register PUTs remain #184's Configurator work                                                                                                 | the same file, `test_register_writes_stay_pending_configurator`                                                                                                                                                                                               |
+| Exact sentence admitted; scalar roles, CAP, other modules, other sensitivities, sibling institution and narrowed scopes refused                        | `tests/credit/api/test_credit_route_authorization.py`, `test_remainder_reads_require_one_complete_exact_credit_sentence`                                                                                                                                      |
+| The registers page mounts its credit cards only on CREDIT/`restricted`, names that sentence when it refuses, and asks the API for nothing on a refusal | `dashboard/e2e/credit-register-authorization.spec.ts` (real bindings, three journeys)                                                                                                                                                                         |
+| An SDI capital and risk reader is not shown, and does not request, the loan classification or the named exposures without the matching Credit sentence | `dashboard/e2e/sdi-credit-authorization.spec.ts` (real bindings, three journeys)                                                                                                                                                                              |
+| The examiner register source uses the register route's sensitivity                                                                                     | `tests/reporting/api/test_examiner_authorization.py::test_credit_registers_require_restricted_not_confidential`                                                                                                                                               |
+| A support impersonation read is refused before the register loads                                                                                      | `tests/credit/service/test_concentration_identity_limits.py`                                                                                                                                                                                                  |
+| The dashboard mounts and fetches credit registers only on `restricted`                                                                                 | `dashboard/unit/institution-registers-access.spec.tsx`                                                                                                                                                                                                        |
+| The access-request prompt asks for the sentence that opens the page                                                                                    | `dashboard/lib/accessRequests.test.ts` (against the server's `_ROUTE_REQUIREMENT` table) and `tests/identity/api/test_grant_administration.py::test_institution_route_access_request_carries_expiry_into_the_grant[/institution/registers-credit-restricted]` |
+| The SDI capital screen renders the requirement, and asks for no book, without CREDIT/`aggregated`                                                      | `dashboard/unit/sdi-credit-panels.spec.tsx`                                                                                                                                                                                                                   |

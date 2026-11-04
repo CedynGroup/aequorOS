@@ -187,10 +187,7 @@ it.each([
   },
   {
     name: "both source modules",
-    grants: [
-      grant("liq"),
-      grant("credit", { sensitivity: "restricted" }),
-    ],
+    grants: [grant("liq"), grant("credit", { sensitivity: "restricted" })],
     paths: [...liquidityPaths, ...creditPaths],
     titles: [...liquidityTitles, ...creditTitles],
     hidden: [],
