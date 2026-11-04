@@ -954,6 +954,11 @@ def _activity_event_banks(  # noqa: PLR0911 - explicit audit ownership variants
         local_marker: object = details.get("bank_id")
         if local_marker is not None and local_marker != event.entity_id:
             return []
+        local_scope = details.get("scope")
+        if isinstance(local_scope, dict):
+            local_institution = local_scope.get("institution_id")
+            if local_institution is not None and local_institution != event.entity_id:
+                return []
         return list(
             db.scalars(
                 select(Bank.id).where(
