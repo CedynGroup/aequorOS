@@ -17452,6 +17452,14 @@
     "tests/scripts/test_authorization_access_impact_integration.py::test_report_flags_users_the_dashboard_would_show_nothing": "integration",
     "tests/scripts/test_authorization_access_impact_integration.py::test_the_report_names_who_may_read_examiner_evidence": "integration",
     "tests/scripts/test_authorization_access_impact_integration.py::test_the_report_names_who_may_transmit_a_return": "integration",
+    "tests/scripts/test_bootstrap.py::BootstrapTests::test_env_creation_is_repeatable_and_preserves_values": "unit",
+    "tests/scripts/test_bootstrap.py::BootstrapTests::test_external_managers_remain_untouched_and_unverified": "unit",
+    "tests/scripts/test_bootstrap.py::BootstrapTests::test_mise_verify_does_not_install_but_setup_explicitly_installs": "unit",
+    "tests/scripts/test_bootstrap.py::BootstrapTests::test_missing_tools_have_named_diagnostics": "unit",
+    "tests/scripts/test_bootstrap.py::BootstrapTests::test_optional_services_and_openbao_override": "unit",
+    "tests/scripts/test_bootstrap.py::BootstrapTests::test_verify_readiness_includes_required_env_and_core_checks": "unit",
+    "tests/scripts/test_bootstrap.py::BootstrapTests::test_interpreters_before_311_get_a_named_remedy": "unit",
+    "tests/scripts/test_bootstrap.py::BootstrapTests::test_fixture_git_never_reaches_a_caller_repository": "unit",
     "tests/scripts/test_dr_tooling.py::TestComparison::test_a_dropped_table_is_reported": "unit",
     "tests/scripts/test_dr_tooling.py::TestComparison::test_altered_values_are_reported_as_a_digest_difference": "unit",
     "tests/scripts/test_dr_tooling.py::TestComparison::test_an_extra_table_is_reported": "unit",
@@ -19686,7 +19694,12 @@
     "tests/test_worker.py::test_production_worker_requires_dedicated_database_url": "unit",
     "tests/test_worker_integration.py::test_heartbeat_records_work_and_error": "integration",
     "tests/test_worker_integration.py::test_run_once_persists_runtime_identity_and_handler_completion[bi_mart_refresh]": "integration",
-    "tests/test_worker_integration.py::test_run_once_persists_runtime_identity_and_handler_completion[reporting_deadline_scan]": "integration"
+    "tests/test_worker_integration.py::test_run_once_persists_runtime_identity_and_handler_completion[reporting_deadline_scan]": "integration",
+    "tests/scripts/test_bootstrap_integration.py::BootstrapIntegrationTests::test_unmanaged_noop_hooks_fail_verification_and_install_postcheck": "integration",
+    "tests/scripts/test_bootstrap_integration.py::BootstrapIntegrationTests::test_backend_smoke_never_bootstraps_an_environment": "integration",
+    "tests/scripts/test_bootstrap_integration.py::BootstrapIntegrationTests::test_setup_refuses_a_lockfile_that_trails_project_metadata": "integration",
+    "tests/scripts/test_feature_moves.py::test_a_split_module_still_follows_a_later_move_of_the_surviving_file": "unit",
+    "tests/scripts/test_feature_moves.py::test_a_split_module_keeps_its_name_for_the_partition_only": "unit"
   },
   "services": [
     "tests/attestation/service/test_attestation_openbao_integration.py::test_a_csr_that_does_not_prove_possession_is_never_submitted",

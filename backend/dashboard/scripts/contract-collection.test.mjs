@@ -81,7 +81,7 @@ test("ownership passing cannot hide a skipped or missing noncritical contract", 
   for (const mode of ["skipped", "missing"]) {
     const data = report();
     const ownership = data.contracts.find((contract) =>
-      contract.name.startsWith("bi-ask.spec.ts"),
+      contract.name.startsWith("bi/bi-ask.integration.spec.ts › "),
     );
     assert.ok(
       ownership,

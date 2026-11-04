@@ -176,7 +176,7 @@ including axes that breached before reaching that limit.
 - **No mock data layer.** There is no `lib/data/` module. If a screen has
   nothing to show, it renders an empty or "not computable" state rather than a
   placeholder number — see `lib/api/values.ts` (`numOrNull`) and
-  `lib/api/fail-open-guard.test.ts`, which fails the build if a hardcoded
+  `tests/access/fail-open-guard.test.ts`, which fails the build if a hardcoded
   regulatory floor or a zero-on-absence ratio is reintroduced.
 - **No second authority for a backend figure.** The browser may format, sum and
   divide what the API returns; it may not decide a number the engines own. See
@@ -244,7 +244,7 @@ presentation arithmetic over API figures — format them, sum them, take a delta
 divide two sums for a chart. It may not become a second authority for a figure an
 engine owns, and it may not invent a threshold.
 
-Three rules, all enforced by `lib/api/fail-open-guard.test.ts`:
+Three rules, all enforced by `tests/access/fail-open-guard.test.ts`:
 
 1. **A regulatory threshold is resolved, never written down.** Read the floor
    from the payload — the run's §59(f) coupling, `buffers.car_min_pct`, or the
@@ -384,7 +384,7 @@ when the current response names a different period (or fails), preserving
 historical semantics without duplicating equivalent payloads. The deterministic
 fixture records the bounded-idle improvement as **23 resources / 44 calls / 21
 detail calls before** and **22 / 33 / 5 after**, with zero detail polling. Keep
-`lib/api/queryPolicy.test.ts` and `lib/api/queryAuthorityBoundary.test.tsx` green
+`tests/access/queryPolicy.test.ts` and `tests/access/queryAuthorityBoundary.test.tsx` green
 when changing query keys, refresh behavior, session authority, or home requests.
 
 The regulatory calendar uses 25-row server pages through the native `DataTable`.
@@ -475,8 +475,14 @@ discovered, executed and failed file names in `dashboard-unit-collection`,
 including partial evidence if execution fails.
 The script contract tests also run through the standard `test` command.
 
-New Vitest behavior tests live in `unit/**/*.spec.ts(x)`; `vitest.config.mjs`
-collects that entire directory without a file list and excludes Playwright specs.
+Tests live with their feature under `tests/<feature>/`, and the filename states
+the suite: unit is the default, `.spec.ts(x)` for Vitest behavior tests and
+`.test.ts(x)` for the legacy Node runner; `*.integration.spec.ts` files are the
+Playwright browser contracts; `*.e2e.spec.ts` files are the Playwright
+journeys; `*.live.e2e.spec.ts` files are the mutation journeys that own their own
+stack, and `visual-tour.e2e.spec.ts` is the opt-in screenshot tour.
+`vitest.config.mjs` collects every unit `.spec` file without a file list and
+excludes the Playwright suffixes.
 Follow the [shared testing standard](../../CODEBASE_CONVENTIONS.md#behavior-properties-and-state-machines-backend-and-dashboard):
 Testing Library queries by role, label and text, API-boundary mocks only, and
 fast-check for broad formatting and numeric input spaces. Legacy suites retain
@@ -509,7 +515,7 @@ currencies and stored net/cumulative figures. Filing capability properties gener
 module, sensitivity and permission combinations independently for sibling banks.
 These pure properties use 100 runs and preserve fast-check's failure seed/path.
 
-`unit/filing-state-machine.spec.tsx` models server status responses and officer,
+`tests/submissions/filing-state-machine.spec.tsx` models server status responses and officer,
 institution, authority resolution, clearance and in-flight changes through the
 public filing projection and visible `PrimaryActionButton`. Every status/officer
 checkpoint runs explicitly; generated sequences use 20 examples of at most 25
@@ -533,7 +539,7 @@ server transitions, freeze financial content or make the final contextual
 maker-checker decision. Those invariants are exercised by the
 [backend state machines](../docs/state_machine_testing.md), not inferred from a UI button.
 
-`unit/transmit-confirm-state-machine.spec.tsx` exercises the dialog's own
+`tests/submissions/transmit-confirm-state-machine.spec.tsx` exercises the dialog's own
 acknowledgment state with Testing Library: unacknowledged → acknowledged →
 pending → refused/retry, plus cancel/reopen. Confirmation requires acknowledgment
 and no in-flight submission; network rerenders retain acknowledgment, while a new
@@ -541,7 +547,7 @@ dialog requires it afresh. A fixed refusal/retry path complements 20 generated
 examples of at most 15 commands. Each example unmounts its components and resets
 shared jurisdiction state, and failures retain fast-check's replay seed/path.
 
-BI contract suites use `unit/backend.ts` to execute the backend's actual schema
+BI contract suites use `tests/support/backend.ts` to execute the backend's actual schema
 validators and serializers through `uv run --frozen --no-python-downloads`.
 Running `test`, `test:legacy` or `test:coverage` therefore also requires uv and
 Python 3.13; prepare the [backend environment](../README.md#local-setup) before
@@ -625,13 +631,13 @@ without the explicit opt-in, startup refuses SQLite with "Database transport
 requires PostgreSQL with a hostname." Exception limits are governed by
 [the transport contract](../docs/transport_security.md#local-development-and-narrowly-bounded-exceptions).
 
-`e2e/session-cookie-hygiene.spec.ts` deliberately sends a cookie encrypted with a
+`tests/session/session-cookie-hygiene.e2e.spec.ts` deliberately sends a cookie encrypted with a
 foreign secret, verifies it is cleared and completes a subsequent real login.
 Auth.js reports `JWTSessionError` and "no matching decryption secret" during that
-refusal. `contracts/session-http.spec.ts` checks malformed cookie families and
+refusal. `tests/session/session-http.integration.spec.ts` checks malformed cookie families and
 runtime host warnings.
 The server configuration imports the minting helper's test secret constants, and
-`session-lifecycle.spec.ts` decrypts a real login cookie and verifies rotation.
+`tests/session/session-lifecycle.e2e.spec.ts` decrypts a real login cookie and verifies rotation.
 
 The credential helpers in `e2e/support/mint.ts` read the principal's current
 authorization version from the disposable SQLite fixture on each default mint.
@@ -701,7 +707,7 @@ diagnosis:
    Start it and export `BANK_KMS_ENDPOINT_URL` before the commands below. The local
    service runner provisions Postgres and MinIO; it does not start this emulator.
 
-`00-ingestion-worker.spec.ts` exercises the worker path separately. It provisions
+`tests/data-engine/00-ingestion-worker.e2e.spec.ts` exercises the worker path separately. It provisions
 an empty tenant and real analyst/approver bindings, uploads a balanced synthetic
 book and market data through the bank UI, and approves forecast assumptions
 through the bank API. A standalone `app.worker` claims the queued refresh and
@@ -712,7 +718,7 @@ start with another bank's queued work, stops its own worker in `finally`, and
 removes its tenant and session state. Keep this story ahead of shared-bank
 mutation stories and keep Playwright at one worker.
 
-`00-treasury-boundaries.spec.ts` uses the same upload and worker path with a
+`tests/liquidity/00-treasury-boundaries.e2e.spec.ts` uses the same upload and worker path with a
 fresh setup tenant and fresh analyst/approver identities per story. It pins zero
 cash, the 100% LCR threshold, the 75% inflow cap, Level 2A/2B haircuts and both
 HQLA caps, and exclusion of public-sector securities lacking HQLA classification.
@@ -749,9 +755,10 @@ pnpm --filter @aequoros/dashboard e2e:contracts  # browser presentation and HTTP
 AQS_LOCAL_SERVICES=native pnpm --filter @aequoros/dashboard e2e:visual
 ```
 
-Functional outcomes live in `e2e/`: source ingestion, computed figures,
-navigation and recovery, scoped authority, and persisted user actions.
-`contracts/` owns presentation and HTTP contracts: header geometry and metadata,
+Functional outcomes live in `tests/<feature>/*.e2e.spec.ts`: source ingestion,
+computed figures, navigation and recovery, scoped authority, and persisted user
+actions. `tests/<feature>/*.integration.spec.ts` owns presentation and HTTP
+contracts: header geometry and metadata,
 Settings section placement, authentication/cookie protocols, grant/access-request
 contracts, BI authorization/privacy/governance, and the exhaustive macro-scenario
 API catalogue. Both commands boot the same
@@ -765,8 +772,8 @@ exact names in `.github/scripts/dashboard_contracts.json`; removing, renaming or
 adding a contract requires a reviewed manifest change, just as the journey floor
 does. A passing critical ownership outcome cannot replace other contracts.
 
-Navigation/recovery remains in `e2e/navigation-recovery.spec.ts`; macro read-only
-UI checks live together in `e2e/default-macro-scenarios.spec.ts`. Settings authority
+Navigation/recovery remains in `tests/shell/navigation-recovery.e2e.spec.ts`; macro read-only
+UI checks live together in `tests/forecasting/default-macro-scenarios.e2e.spec.ts`. Settings authority
 and preference persistence use fresh actors, while shell presentation is checked
 once in the contract suite.
 
@@ -780,17 +787,17 @@ reviewed as pixels rather than as a diff. Run the commands from the repository
 root; the tour writes full-page screenshots of every route to
 `backend/dashboard/e2e/.tmp/visual-tour/`.
 
-The Data Engine journeys (`e2e/data-engine-ingestion.spec.ts`) use the fixtures in
-`e2e/fixtures/data-engine/` to cover Excel/CSV upload, legacy `.xls` refusal,
+The Data Engine journeys (`tests/data-engine/data-engine-ingestion.e2e.spec.ts`) use the fixtures in
+`tests/data-engine/fixtures/` to cover Excel/CSV upload, legacy `.xls` refusal,
 batch findings, correction by re-upload, downstream positions, and manual market
-data upload. The machine-key journey (`e2e/integration-key-use.spec.ts`)
+data upload. The machine-key journey (`tests/integration-keys/integration-key-use.e2e.spec.ts`)
 provisions its own two-bank tenant with real scoped bindings. A key issued in the browser pushes a
 balanced synthetic book through the Data Engine, is refused by the existing
 sibling bank, and loses push and batch-read access after browser revocation.
 Canonical balances, batch lineage and absence of sibling writes are checked
 before finally-based credential and tenant cleanup.
 
-The full filing lifecycle (`e2e/full-lifecycle.spec.ts`) takes both a regulator
+The full filing lifecycle (`tests/submissions/full-lifecycle.e2e.spec.ts`) takes both a regulator
 rejection and a checker send-back through correction of a synthetic source book
 via the Data Engine, a replacement package, renewed maker and checker signatures,
 and acknowledgement. It pins the replacement cash figure and its new source run
@@ -861,7 +868,7 @@ If MinIO reports insufficient free disk space, also remove the disposable
 
 ### Single sign-on against a local issuer
 
-The SSO journeys (`e2e/sso-sign-in.spec.ts`) need no bank IdP or additional
+The SSO journeys (`tests/session/sso-sign-in.e2e.spec.ts`) need no bank IdP or additional
 identity-provider setup. With the [stack prerequisites](#end-to-end-playwright)
 in place, run `pnpm --filter @aequoros/dashboard e2e`; the SSO attestation
 journey also requires object storage. The config

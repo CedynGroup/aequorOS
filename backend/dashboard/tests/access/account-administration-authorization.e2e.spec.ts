@@ -1,0 +1,263 @@
+// Set E2E_EVIDENCE_DIR to write reviewer-visible screenshots outside version
+// control:
+// E2E_CAPABILITY_ONLY=1 E2E_EVIDENCE_DIR=<path> pnpm exec playwright test tests/access/account-administration-authorization.e2e.spec.ts
+import { expect } from "@playwright/test";
+import { test } from "../../e2e/support/story-identities";
+import { expectBankStatus } from "../../e2e/support/real-authority";
+import path from "path";
+import { E2E_TMP } from "../../playwright.config";
+
+const evidenceDir = process.env.E2E_EVIDENCE_DIR;
+
+test.describe("explicit Account administrator", () => {
+  test.use({
+    storageState: path.join(E2E_TMP, "account_admin.json"),
+    storyConfig: { roles: ["account_admin"] },
+  });
+
+  test("keeps delegated administrators out of Members without forbidden requests", async ({
+    page,
+  }) => {
+    const ownerRequests: string[] = [];
+    page.on("request", (request) => {
+      if (
+        /\/organization\/(members|institutions)|\/authorization\/access-requests/.test(
+          request.url(),
+        )
+      ) {
+        ownerRequests.push(request.url());
+      }
+    });
+
+    await page.goto("/access");
+    await expect(page).toHaveURL(/\/access\/my-access$/);
+    const members = page.getByRole("link", { name: "Members", exact: true });
+    await expect(members).toHaveAttribute("aria-disabled", "true");
+    await members.focus();
+    await expect(page.getByRole("tooltip")).toContainText(
+      "Requires Organization Owner authority.",
+    );
+    await expect(
+      page.getByRole("link", { name: "Authentication", exact: true }),
+    ).toHaveAttribute("href", "/access/authentication");
+    await expect(
+      page.getByRole("link", { name: "Integration keys", exact: true }),
+    ).toHaveAttribute("href", "/access/integration-keys");
+
+    await page.goto("/access/members");
+    await expect(
+      page.getByText("Only organization owners can manage members and grants."),
+    ).toBeVisible();
+    expect(ownerRequests).toEqual([]);
+  });
+
+  test("can manage authentication without gaining operational modules", async ({
+    page,
+  }) => {
+    // Sign-in lands on the root. Account administration alone does not reach
+    // the Command Center, so the guard routes to Access — not 404.
+    await page.goto("/");
+    await expect(page).toHaveURL(/\/access(?:[/?#]|$)/);
+    await expect(
+      page.getByRole("heading", { name: "Access control", exact: true }),
+    ).toBeVisible();
+    await page.goto("/access/authentication");
+    await expect(
+      page.getByRole("heading", { name: "Authentication (SSO)" }),
+    ).toBeVisible();
+
+    await page.goto("/access/authentication");
+    await expect(
+      page.getByRole("heading", { name: "Authentication (SSO)" }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: "Save connection" }),
+    ).toBeVisible();
+    if (evidenceDir) {
+      await page.screenshot({
+        path: path.join(
+          evidenceDir,
+          "account-admin-authentication-administration.png",
+        ),
+        fullPage: true,
+      });
+    }
+
+    await page.goto("/data-engine/api");
+    await expect(
+      page.getByRole("heading", { name: "Access required" }),
+    ).toBeVisible();
+    await expect(
+      page.getByText("Data Engine · Aggregated · View", { exact: true }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "Integration keys" }),
+    ).toHaveCount(0);
+
+    if (evidenceDir) {
+      await page.screenshot({
+        path: path.join(
+          evidenceDir,
+          "account-admin-no-operational-modules.png",
+        ),
+        fullPage: true,
+      });
+    }
+
+    // When the app signs someone out on purpose — their own grant, or an
+    // administrator changing their access — the sign-in page says why.
+    await page.goto("/login?reason=access_changed");
+    await expect(page.getByRole("status")).toContainText(
+      "Your access was updated",
+    );
+    await page.goto("/login?reason=session_ended");
+    await expect(page.getByRole("status")).toContainText("Your session ended");
+  });
+});
+
+test.describe("legacy scalar Account administrator", () => {
+  test.use({
+    storageState: path.join(E2E_TMP, "legacy_account_admin.json"),
+    storyConfig: { roles: ["legacy_account_admin"] },
+  });
+
+  test("cannot open account administration without a binding", async ({
+    page,
+  }) => {
+    const accountRequests: string[] = [];
+    page.on("request", (request) => {
+      if (
+        /\/auth\/sso\/(connection|access-requests)|\/integration-keys/.test(
+          request.url(),
+        )
+      ) {
+        accountRequests.push(request.url());
+      }
+    });
+
+    await page.goto("/access/authentication");
+    await expect(
+      page.getByText(
+        "This section is available to organization owners and administrators.",
+      ),
+    ).toBeVisible();
+    expect(accountRequests).toEqual([]);
+
+    if (evidenceDir) {
+      await page.screenshot({
+        path: path.join(evidenceDir, "legacy-account-admin-denied.png"),
+        fullPage: true,
+      });
+    }
+  });
+});
+
+test.describe("operational Analyst", () => {
+  test.use({
+    storageState: path.join(E2E_TMP, "analyst.json"),
+    storyConfig: { roles: ["analyst"] },
+  });
+
+  test("can use API Push without administering integration keys", async ({
+    page,
+  }) => {
+    const keyRequests: string[] = [];
+    page.on("request", (request) => {
+      if (/\/integration-keys/.test(request.url())) {
+        keyRequests.push(request.url());
+      }
+    });
+
+    await page.goto("/data-engine/api");
+    await expect(page.getByRole("heading", { name: "API Push" })).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: /^Generate .* key$/ }),
+    ).toHaveCount(0);
+    expect(keyRequests).toEqual([]);
+
+    if (evidenceDir) {
+      await page.screenshot({
+        path: path.join(evidenceDir, "analyst-cannot-administer-keys.png"),
+        fullPage: true,
+      });
+    }
+  });
+});
+
+test.describe("Organization Owner", () => {
+  test.use({
+    storageState: path.join(E2E_TMP, "admin.json"),
+    storyConfig: { roles: ["admin"], ownedTenant: true },
+  });
+
+  test.describe("Regulatory-only read grants", () => {
+    test.use({
+      storyConfig: {
+        roles: ["admin"],
+        ownedTenant: true,
+        ownerReadModules: ["reg"],
+      },
+    });
+    test("signing policies use the registry when Capital reads are unavailable", async ({
+      page,
+      storyIdentity,
+    }) => {
+      await expectBankStatus("/capital/dashboard", 403, {
+        role: "admin",
+        bankId: storyIdentity.bankId,
+      });
+      await page.route("**/regulatory-reporting/templates*", async (route) => {
+        const response = await route.fetch();
+        const catalogue = await response.json();
+        if (new URL(route.request().url()).searchParams.has("bank_id")) {
+          catalogue.templates = catalogue.templates.filter(
+            (template: { family: string }) => template.family !== "icaap",
+          );
+        }
+        await route.fulfill({ response, json: catalogue });
+      });
+      await page.goto("/submissions/settings");
+      const selector = page.getByLabel("Return code", { exact: true });
+      await expect(selector).toBeVisible();
+      await expect(
+        selector.locator('option[value="ICAAP-REPORT"]'),
+      ).toHaveCount(1);
+      await selector.selectOption("ICAAP-REPORT");
+      await expect(selector).toHaveValue("ICAAP-REPORT");
+      if (evidenceDir) {
+        await page.screenshot({
+          path: path.join(
+            evidenceDir,
+            "owner-signing-policy-without-capital-read.png",
+          ),
+          fullPage: true,
+        });
+      }
+    });
+  });
+
+  test("can administer integration keys from Access", async ({ page }) => {
+    await page.goto("/access");
+    await expect(page).toHaveURL(/\/access\/members$/);
+    await expect(
+      page.getByRole("link", { name: "Members", exact: true }),
+    ).toHaveAttribute("href", "/access/members");
+    await page.goto("/access/integration-keys");
+    await expect(
+      page.getByRole("heading", { name: "Integration keys" }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: "Generate data push key", exact: true }),
+    ).toBeVisible();
+
+    if (evidenceDir) {
+      await page.screenshot({
+        path: path.join(
+          evidenceDir,
+          "organization-owner-key-administration.png",
+        ),
+        fullPage: true,
+      });
+    }
+  });
+});

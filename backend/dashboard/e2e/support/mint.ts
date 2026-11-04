@@ -192,7 +192,7 @@ export const E2E_USERS: Record<
     authv: 4,
   },
   // The officer the local issuer's linked account maps onto
-  // (e2e/sso-sign-in.spec.ts). Same grants as `analyst`; the SSO journeys
+  // (tests/session/sso-sign-in.e2e.spec.ts). Same grants as `analyst`; the SSO journeys
   // sign in through the issuer rather than minting this token.
   sso_analyst: {
     id: identities.bootstrap.sso_analyst,

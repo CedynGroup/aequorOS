@@ -13,7 +13,7 @@ export default defineConfig({
         ["list"],
       ]
     : base.reporter,
-  testMatch: "regulatory-rule-status.spec.ts",
+  testMatch: "**/regulatory-rule-status.e2e.spec.ts",
   testIgnore: [],
   webServer: (Array.isArray(base.webServer) ? base.webServer : []).map(
     (server) =>

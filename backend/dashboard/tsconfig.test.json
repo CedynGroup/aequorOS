@@ -75,8 +75,9 @@
     "features/home/components/RoleLens.tsx",
     "app/api/impersonation/status/route.ts",
     "lib/outbound.ts",
-    "**/*.test.ts",
-    "**/*.test.tsx"
+    "tests/**/*.test.ts",
+    "tests/**/*.test.tsx",
+    "e2e/support/*.test.ts"
   ],
   "exclude": ["node_modules", ".test-out"]
 }

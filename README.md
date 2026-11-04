@@ -51,6 +51,27 @@ The audit-chain migration also requires
 
 ## Prerequisites
 
+From the repository root, `mise run setup` installs the pinned toolchain and
+lockfile-pinned dependencies, copies missing env templates (never overwriting local
+values), and installs hooks in unmanaged checkouts. `mise run verify` uses only
+installed tools and dependencies to check core readiness without Docker or a
+database; it runs the backend CI task-wiring smoke test and dashboard typecheck.
+Run `mise run setup` to provision missing tools: automatic tool installation
+is disabled for this repository, so other mise tasks report missing tools instead
+of downloading them. The manual steps follow.
+
+An externally configured `core.hooksPath` is left untouched. Setup reports
+incomplete and verify reports NOT READY because hook enforcement is unverified;
+the output lists the commands your manager must run for pre-commit, commit-msg,
+and pre-push, including argument and stdin forwarding. Verify continues to report
+these hooks as unverified while `core.hooksPath` is configured. Core readiness also
+requires the setup env files to exist; template credentials, Git identity, remote
+access, and optional services are reported separately and do not establish API
+readiness.
+
+- **mise** — installs the pinned toolchain below; see the
+  [installation guide](https://mise.jdx.dev/getting-started.html). `mise run setup`
+  needs it.
 - **Python 3.13** and [uv](https://docs.astral.sh/uv/). `pyproject.toml` pins
   `>=3.13,<3.14`. Create the environment once: `cd backend && uv sync`.
 - **Node 24** (`.nvmrc`, `engines.node >= 24`) and **pnpm 11.2.2** — the exact

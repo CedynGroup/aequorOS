@@ -1,0 +1,297 @@
+// Set E2E_EVIDENCE_DIR to write screenshot evidence to that directory:
+// E2E_CAPABILITY_ONLY=1 E2E_EVIDENCE_DIR=<path> pnpm exec playwright test tests/liquidity/liquidity-monitoring-authorization.e2e.spec.ts
+// Keep the output outside version control; /docs/** is ignored by publication policy.
+import { expect } from "@playwright/test";
+import { test } from "../../e2e/support/story-identities";
+import { expectBankStatus } from "../../e2e/support/real-authority";
+import path from "path";
+import { E2E_TMP } from "../../playwright.config";
+
+const evidenceDir = process.env.E2E_EVIDENCE_DIR;
+test.use({ storyConfig: { roles: ["viewer"] } });
+
+test.describe("unbound Liquidity Monitoring user", () => {
+  test.use({ storageState: path.join(E2E_TMP, "viewer.json") });
+
+  test("disables navigation and denies deep links", async ({ page }) => {
+    const productRequests: string[] = [];
+    page.on("request", (request) => {
+      if (
+        /\/banks\/[^/]+\/(live-summary|freshness|liquidity)/.test(request.url())
+      ) {
+        productRequests.push(request.url());
+      }
+    });
+    await page.goto("/");
+    await expect(
+      page.getByText("No authorized institutions yet", { exact: true }),
+    ).toBeVisible();
+    // Since #201 the shell LISTS the modules a baseline member cannot reach,
+    // as `role="link"` spans carrying `aria-disabled="true"` and no href, each
+    // explaining why it is blocked. Counting landmarks or roles therefore says
+    // nothing about authority. What must hold is that no MODULE is followable:
+    // the only enabled entries are the member's own Access area and personal
+    // settings, which `tests/shell/modules.test.ts` pins as reachable by every member.
+    const followable = page.locator(
+      'nav [role="link"]:not([aria-disabled="true"]), nav a[href]',
+    );
+    await expect(followable).toHaveCount(2);
+    await expect(followable.nth(0)).toHaveAttribute("href", "/access");
+    await expect(followable.nth(1)).toHaveAttribute("href", "/settings");
+    await expect(
+      page
+        .getByRole("navigation")
+        .getByRole("link", { name: "Liquidity", exact: true }),
+    ).toHaveAttribute("aria-disabled", "true");
+
+    await page.goto("/liquidity?preparing=1");
+    // A member deep-linking to a module route of their own organization is
+    // shown the access-denied page naming the grant to request, not a 404:
+    // 404 is kept for routes whose existence is itself the secret (cross-tenant,
+    // unknown, and object-detail routes). The security property is unchanged
+    // and still asserted below: no request for the module's data is made.
+    await expect(
+      page.getByRole("heading", { name: "Access required" }),
+    ).toBeVisible();
+    await expect(page).toHaveURL(/\/liquidity\?preparing=1$/);
+
+    await page.goto("/liquidity/monitoring?preparing=1");
+    await expect(
+      page.getByRole("heading", { name: "Access required" }),
+    ).toBeVisible();
+    await expect(
+      page.getByText("Liquidity Monitoring · Confidential · View"),
+    ).toBeVisible();
+    await expect(page).toHaveURL(/\/liquidity\/monitoring\?preparing=1$/);
+    expect(productRequests).toEqual([]);
+    if (evidenceDir) {
+      await page.screenshot({
+        path: path.join(evidenceDir, "liquidity-monitoring-unbound.png"),
+        fullPage: true,
+      });
+    }
+  });
+});
+
+test.describe("exactly bound Liquidity user", () => {
+  test.use({
+    storageState: path.join(E2E_TMP, "viewer.json"),
+    storyConfig: {
+      roles: ["viewer"],
+      bindings: [{ bundle: "viewer", module: "liq", sensitivity: "all" }],
+    },
+  });
+
+  test.describe("confidential-only scope", () => {
+    test.use({
+      storyConfig: {
+        roles: ["viewer"],
+        bindings: [
+          { bundle: "viewer", module: "liq", sensitivity: "confidential" },
+          { bundle: "viewer", module: "data", sensitivity: "confidential" },
+        ],
+      },
+    });
+    test("confidential-only monitoring omits unavailable metric status and names collapsed links", async ({
+      page,
+    }) => {
+      await expectBankStatus("/liquidity/dashboard", 403);
+      await expectBankStatus("/liquidity/ewis", 200);
+      const aggregateRequests: string[] = [];
+      page.on("request", (request) => {
+        if (request.url().includes("/liquidity/dashboard")) {
+          aggregateRequests.push(request.url());
+        }
+      });
+      const periodsLoaded = page.waitForResponse(
+        (response) =>
+          /\/banks\/[^/]+\/reporting-periods$/.test(
+            new URL(response.url()).pathname,
+          ) && response.request().method() === "GET",
+      );
+      await page.goto("/liquidity/monitoring?preparing=1");
+      const periodsResponse = await periodsLoaded;
+      expect(periodsResponse.ok()).toBeTruthy();
+      await periodsResponse.finished();
+      for (const label of ["FX funding gap", "FX share of liabilities"]) {
+        const card = page.locator(".card").filter({
+          has: page.getByText(label, { exact: true }),
+        });
+        await expect(card).toBeVisible();
+        await expect(card.getByText("—", { exact: true })).toBeVisible();
+        await expect(card).not.toHaveCSS("box-shadow", /inset/);
+      }
+      expect(aggregateRequests).toEqual([]);
+      await page.getByRole("button", { name: "Collapse sidebar" }).click();
+      const liquidity = page
+        .getByRole("navigation")
+        .getByRole("link", { name: "Liquidity", exact: true });
+      await expect(liquidity).toHaveAttribute("aria-disabled", "true");
+      const reason =
+        "Requires Liquidity Monitoring · Aggregated · View. Ask your organization owner or admin to grant it.";
+      await liquidity.focus();
+      await expect(liquidity).toBeFocused();
+      await expect(
+        page.getByRole("tooltip").filter({ hasText: reason }),
+      ).toBeVisible();
+      await liquidity.press("Enter");
+      await expect(page).toHaveURL(/\/liquidity\/monitoring\?preparing=1$/);
+      if (evidenceDir) {
+        await page.screenshot({
+          path: path.join(evidenceDir, "liquidity-confidential-monitoring.png"),
+          fullPage: true,
+        });
+      }
+    });
+  });
+
+  test("shows only authorized Liquidity reads", async ({ page }) => {
+    await page.goto("/liquidity?preparing=1");
+    await expect(
+      page.getByRole("heading", { name: "Liquidity Cockpit" }),
+    ).toBeVisible();
+    await page.getByRole("button", { name: "Collapse sidebar" }).click();
+    const sidebarLiquidity = page
+      .getByRole("navigation")
+      .getByRole("link", { name: "Liquidity", exact: true });
+    await expect(sidebarLiquidity).toBeVisible();
+    await expect(sidebarLiquidity).toHaveAttribute("href", "/liquidity");
+    await sidebarLiquidity.focus();
+    await expect(
+      page.getByRole("tooltip").filter({ hasText: /^Liquidity$/ }),
+    ).toBeVisible();
+    const link = page.getByRole("link", { name: "Monitoring Tools" });
+    await expect(link).toBeVisible();
+    const ftp = page
+      .getByRole("navigation")
+      .getByRole("link", { name: "FTP", exact: true });
+    await expect(ftp).toBeVisible();
+    await expect(ftp).toHaveAttribute("aria-disabled", "true");
+    await expect(ftp).not.toHaveAttribute("href", /.+/);
+    const irrbb = page.getByRole("link", { name: "IRRBB", exact: true });
+    await expect(irrbb).toBeVisible();
+    await expect(irrbb).toHaveAttribute("aria-disabled", "true");
+    await irrbb.focus();
+    await expect(irrbb).toBeFocused();
+    await expect(
+      page.getByRole("tooltip").filter({
+        hasText:
+          "Requires IRRBB · Aggregated · View. Ask your organization owner or admin to grant it.",
+      }),
+    ).toBeVisible();
+    await irrbb.press("Enter");
+    const fx = page
+      .getByRole("navigation")
+      .getByRole("link", { name: "FX", exact: true });
+    await expect(fx).toBeVisible();
+    await expect(fx).toHaveAttribute("aria-disabled", "true");
+    await expect(fx).not.toHaveAttribute("href", /.+/);
+    await fx.click({ force: true });
+    await expect(page).toHaveURL(/\/liquidity\?preparing=1$/);
+    const scenarios = page.getByRole("link", {
+      name: "Scenarios",
+      exact: true,
+    });
+    await expect(scenarios).toHaveAttribute(
+      "href",
+      "/liquidity/stress?preparing=1",
+    );
+    await scenarios.click();
+    await expect(
+      page.getByRole("heading", { name: "Liquidity Scenarios", exact: true }),
+    ).toBeVisible();
+    await expect(
+      page.getByRole("heading", { name: "Liquidity scenario definitions" }),
+    ).toBeVisible();
+    const enterprise = page.getByRole("link", {
+      name: "Open enterprise stress workbench",
+    });
+    await expect(enterprise).toHaveAttribute("aria-disabled", "true");
+    await enterprise.hover();
+    await expect(
+      page.getByRole("tooltip").filter({
+        hasText:
+          "Requires IRRBB · Confidential · View. Ask your organization owner or admin to grant it.",
+      }),
+    ).toBeVisible();
+    await link.click();
+    await expect(page).toHaveURL(/\/liquidity\/monitoring\?preparing=1$/);
+    await expect(
+      page.getByRole("heading", { name: "Liquidity Monitoring Tools" }).first(),
+    ).toBeVisible();
+    if (evidenceDir) {
+      await page.screenshot({
+        path: path.join(evidenceDir, "liquidity-monitoring-bound.png"),
+        fullPage: true,
+      });
+    }
+  });
+});
+
+test.describe("aggregated-only Liquidity user", () => {
+  test.use({
+    storageState: path.join(E2E_TMP, "viewer.json"),
+    storyConfig: {
+      roles: ["viewer"],
+      bindings: [
+        { bundle: "viewer", module: "liq", sensitivity: "aggregated" },
+      ],
+    },
+  });
+
+  test("omits confidential assessments and requests from the cockpit", async ({
+    page,
+  }) => {
+    const confidentialRequests: string[] = [];
+    page.on("request", (request) => {
+      if (
+        /\/banks\/[^/]+\/(liquidity\/(ewis|cfp)|regulatory-runs\/|liquidity-thresholds|liquidity-haircuts)/.test(
+          request.url(),
+        )
+      ) {
+        confidentialRequests.push(request.url());
+      }
+    });
+    const dashboardResponse = page.waitForResponse(
+      (response) =>
+        response.url().includes("/liquidity/dashboard") &&
+        response.status() === 200,
+    );
+    await page.goto("/liquidity?preparing=1");
+    await dashboardResponse;
+    await expect(
+      page.getByText("Largest HQLA concentration", { exact: true }),
+    ).toBeVisible();
+    await expect(page.getByText("LCR headroom", { exact: true })).toHaveCount(
+      0,
+    );
+    await expect(
+      page.getByText("Early-warning posture", { exact: true }),
+    ).toHaveCount(0);
+    await expect(page.getByText("CFP readiness", { exact: true })).toHaveCount(
+      0,
+    );
+    await expect(
+      page.getByText(/pp above minimum|above minimum requirement/),
+    ).toHaveCount(0);
+    const monitoring = page.getByRole("link", {
+      name: "Monitoring Tools",
+    });
+    await expect(monitoring).toHaveAttribute("aria-disabled", "true");
+    const tooltipId = await monitoring.getAttribute("aria-describedby");
+    expect(tooltipId).toBeTruthy();
+    await monitoring.hover();
+    const tooltip = page.locator(`[id="${tooltipId}"]`);
+    await expect(tooltip).toBeVisible();
+    await expect(tooltip).toHaveText(
+      "Requires Liquidity Monitoring · Confidential · View. Ask your organization owner or admin to grant it.",
+    );
+    expect(confidentialRequests).toEqual([]);
+    if (evidenceDir) {
+      await page.screenshot({
+        path: path.join(evidenceDir, "liquidity-aggregated-cockpit.png"),
+        fullPage: true,
+      });
+    }
+  });
+});
