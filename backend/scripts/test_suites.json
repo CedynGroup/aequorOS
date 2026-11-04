@@ -14415,7 +14415,8 @@
     "tests/reporting/api/test_package_authorization.py::test_comparison_hides_unauthorized_targets_in_both_family_directions[liquidity]": "integration",
     "tests/reporting/api/test_package_authorization.py::test_comparison_target_is_scoped_to_the_path_bank[OR-1S000002]": "integration",
     "tests/reporting/api/test_package_authorization.py::test_comparison_target_is_scoped_to_the_path_bank[OR-DEM00001]": "integration",
-    "tests/reporting/api/test_package_authorization.py::test_export_authority_generates_downloads_and_email_fallback": "integration",
+    "tests/reporting/api/test_package_authorization.py::test_export_authority_generates_downloads_and_email_fallback[icaap]": "integration",
+    "tests/reporting/api/test_package_authorization.py::test_export_authority_generates_downloads_and_email_fallback[liquidity]": "integration",
     "tests/reporting/api/test_package_authorization.py::test_icaap_capital_approver_ignores_regulatory_near_miss[legacy]": "integration",
     "tests/reporting/api/test_package_authorization.py::test_icaap_capital_approver_ignores_regulatory_near_miss[stage]": "integration",
     "tests/reporting/api/test_package_authorization.py::test_narrowed_or_unbound_assignee_has_an_empty_signer_queue[narrowed]": "integration",
@@ -14442,7 +14443,9 @@
     "tests/reporting/api/test_package_authorization.py::test_the_scalar_approver_ladder_never_approves": "integration",
     "tests/reporting/api/test_package_authorization.py::test_the_validators_stage_is_not_open_to_approval_authority": "integration",
     "tests/reporting/api/test_package_authorization.py::test_transmission_does_not_cross_a_tenant_boundary": "integration",
-    "tests/reporting/api/test_package_authorization.py::test_view_authority_does_not_export_download_or_email_the_return": "integration",
+    "tests/reporting/api/test_package_authorization.py::test_view_authority_does_not_export_download_or_email_the_return[icaap-False]": "integration",
+    "tests/reporting/api/test_package_authorization.py::test_view_authority_does_not_export_download_or_email_the_return[icaap-True]": "integration",
+    "tests/reporting/api/test_package_authorization.py::test_view_authority_does_not_export_download_or_email_the_return[liquidity-False]": "integration",
     "tests/reporting/api/test_package_authorization.py::test_without_a_capital_binding_an_icaap_package_does_not_exist": "integration",
     "tests/reporting/api/test_regulatory_artifact_media_type.py::test_artifact_media_type_follows_the_stored_container[csv-bog_returns/2026-06-30/pkg/BSD2.zip-application/zip]": "unit",
     "tests/reporting/api/test_regulatory_artifact_media_type.py::test_artifact_media_type_follows_the_stored_container[csv-bog_returns/2026-06-30/pkg/BSD7A.csv-text/csv]": "unit",
@@ -19645,7 +19648,8 @@
     "tests/case/service/test_documents.py::test_complete_upload_handles_uncertain_commit_without_losing_referenced_content[lookup_failed]": "integration",
     "tests/case/service/test_documents.py::test_complete_upload_handles_uncertain_commit_without_losing_referenced_content[rollback_failed]": "integration",
     "tests/case/service/test_documents.py::test_fake_storage_refuses_missing_and_deleted_snapshot_keys": "unit",
-    "tests/case/service/test_documents.py::test_complete_upload_handles_uncertain_commit_without_losing_referenced_content[stale_lookup]": "integration"
+    "tests/case/service/test_documents.py::test_complete_upload_handles_uncertain_commit_without_losing_referenced_content[stale_lookup]": "integration",
+    "tests/reporting/api/test_package_authorization.py::test_icaap_export_requires_visibility_before_regulatory_authority": "integration"
   },
   "services": {
     "tests/attestation/service/test_attestation_openbao.py::test_a_csr_that_does_not_prove_possession_is_never_submitted": "integration",

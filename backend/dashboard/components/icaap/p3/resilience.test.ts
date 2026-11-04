@@ -50,6 +50,9 @@ type Renderable = Parameters<typeof React.createElement>[0];
 // Stubs for everything that is not the component under test
 // ---------------------------------------------------------------------------
 
+let exportModule = "reg";
+let exportSensitivity = "restricted";
+
 const hookStubs: Record<string, () => unknown> = {};
 const idleMutation = () => ({
   mutate: () => {},
@@ -78,6 +81,22 @@ function settledStub(data: unknown) {
 
 function stubFor(specifier: string): unknown | undefined {
   switch (specifier) {
+    case "@/components/profile/ProfileProvider":
+      return {
+        useUserProfile: () => ({
+          isLoading: false,
+          effectiveAuthority: {
+            institutionCapabilities: [{
+              institutionId: "BK-SAMP0001",
+              capabilities: [{
+                module: exportModule,
+                sensitivity: exportSensitivity,
+                permission: "export",
+              }],
+            }],
+          },
+        }),
+      };
     case "@/lib/api/icaapFiling":
       return hooksModule;
     case "@/lib/api/hooks":
@@ -595,6 +614,27 @@ test("an annual cycle carries no rehearsal notice", () => {
     cycleKind: "annual",
   });
   assert.ok(!text.includes(labels.REHEARSAL_HEADLINE));
+});
+
+test("ICAAP return working copies require Regulatory Reporting restricted export", () => {
+  for (const [module, sensitivity, offered] of [
+    ["capital", "confidential", false],
+    ["reg", "confidential", false],
+    ["reg", "restricted", true],
+  ] as const) {
+    exportModule = module;
+    exportSensitivity = sensitivity;
+    stubRead("useIcaapFiling", settled(normalize.normalizeFiling({
+      _package: { id: "p", status: "generated" },
+    })));
+    const text = render(component("FilingWorkspace.tsx"), {
+      ...PROPS,
+      bankId: "BK-SAMP0001",
+    });
+    assert.equal(text.includes("Produce a Word working copy"), offered);
+  }
+  exportModule = "reg";
+  exportSensitivity = "restricted";
 });
 
 test("a cycle with no sealed report says there is nothing to file", () => {

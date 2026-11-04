@@ -899,9 +899,9 @@ lists filter before counts and pagination. Calendar/anchor links, signing
 inboxes, snapshots, comparisons, artifacts and attestation reads hide returns
 without that authority. Taking the return away is a separate act: artifact
 generation, artifact and archived-revision downloads, and the downtime email
-bundle (including its instructions preview) require EXPORT as well as VIEW under
-the return family's authority: REG/restricted for ordinary returns and
-CAPITAL/confidential for ICAAP. A VIEW-only reader keeps
+bundle (including its instructions preview) require REG/restricted EXPORT for every family, ICAAP included, after
+family-based VIEW. ICAAP visibility stays CAPITAL/confidential; a Capital-only
+grant no longer takes an ICAAP return away. A VIEW-only reader keeps
 the package, its metadata and its history, but receives no file; an invisible
 package still returns 404 before any storage read, and a denied export writes
 no artifact, audit event or object. Package comparisons filter both referenced
@@ -922,7 +922,13 @@ to their bundle permissions; an Org Owner must explicitly issue an appropriate
 whole-institution reporting grant for a former scalar-only reader or preparer.
 Valid Credit grants remain valid for Credit, and never grant reporting access.
 
-**Export cutover (2026-11-03).** The EXPORT requirement denies artifact
+**Export cutover (2026-11-03; uniform ICAAP policy 2026-11-04).** This is a
+deliberate production behavior change: every return family, including ICAAP,
+requires REG/restricted EXPORT. ICAAP retains Capital/confidential visibility,
+and a Capital-only grant no longer exports its return artifacts. The analyst
+bundle remains the only shipped human exporter.
+
+The EXPORT requirement denies artifact
 generation, artifact/revision download and the downtime email bundle to every
 active human whose REG/restricted binding carries only VIEW — the `viewer`,
 `auditor`, `approver` and `validator` bundles. Reads, lists, history,

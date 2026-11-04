@@ -2292,7 +2292,7 @@ def _require_package_access(  # noqa: PLR0913 - the complete policy tuple is exp
     permission: Permission,
     surface: str,
     conditions: tuple[ConditionCheck, ...] = (),
-    authority: Literal["family", "transmission", "chain"] = "family",
+    authority: Literal["family", "transmission", "chain", "export"] = "family",
 ) -> PackageAccess:
     from app.reporting.service import family_access  # noqa: PLC0415
 
@@ -2303,6 +2303,10 @@ def _require_package_access(  # noqa: PLR0913 - the complete policy tuple is exp
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail="Regulatory package not found."
         )
+    if authority == "export":
+        scoped = get_scoped_mutation_tenant_context(ctx)
+        family_access.require_export_authority(db, scoped, bank, package, surface=surface)
+        return PackageAccess(ctx=scoped, bank=bank, package=package)
     if authority == "chain":
         chained = _chain_authority_access(
             db=db,
@@ -2366,7 +2370,13 @@ def require_package_edit(request: Request, db: DbSession, ctx: Tenant) -> Packag
 
 def require_package_export(request: Request, db: DbSession, ctx: Tenant) -> PackageAccess:
     return _require_package_access(
-        request, db, ctx, gate="mutation", permission=Permission.EXPORT, surface="package_export"
+        request,
+        db,
+        ctx,
+        gate="mutation",
+        permission=Permission.EXPORT,
+        surface="package_export",
+        authority="export",
     )
 
 
