@@ -90,6 +90,8 @@ export const ROLE_OPTIONS = [
   ["viewer", "Viewer"],
   ["auditor", "Auditor"],
   ["analyst", "Analyst"],
+  // Configuration only; reading, approving and filing need separate grants.
+  ["configurator", "Configurator"],
   ["approver", "Approver"],
   // The only bundle that transmits to the regulator. It carries VIEW and
   // SUBMIT and deliberately NOT approve: before 2026-09-20 approving and
