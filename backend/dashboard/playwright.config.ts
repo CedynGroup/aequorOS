@@ -61,8 +61,16 @@ export const E2E_KMS_STATE = path.join(E2E_TMP, "kms-service-state");
 const kmsProxy = `http://127.0.0.1:${runtimePorts.kms}`;
 
 export default defineConfig({
-  testDir: "./e2e",
-  testIgnore: "regulatory-rule-status.spec.ts",
+  testDir: "./tests",
+  testMatch: "**/*.e2e.spec.ts",
+  // Regulatory journeys own their own stack (playwright.regulatory.config.ts),
+  // the mutation journeys own a separate disposable stack
+  // (playwright.fx-live.config.ts), and the visual tour is not a gate.
+  testIgnore: [
+    "**/regulatory-rule-status.e2e.spec.ts",
+    "**/*.live.e2e.spec.ts",
+    "**/visual-tour.e2e.spec.ts",
+  ],
   outputDir: path.join(E2E_TMP, "test-results"),
   globalSetup: "./e2e/global-setup.ts",
   timeout: 60_000,
@@ -186,7 +194,7 @@ export default defineConfig({
         // would navigate to a walled-up door and pass on an empty state. Setting it
         // sends nothing to any vendor: the AI gates are separate and all shut here
         // (no approved configuration, no credential, no `ai`-lane worker). HTTP
-        // refusals and ownership live in `contracts/bi-ask.spec.ts`. It is set HERE
+        // refusals and ownership live in `tests/bi/bi-ask.integration.spec.ts`. It is set HERE
         // rather than in `backend/.env` so a developer's own flag state cannot change
         // what the journeys see, and the flag-OFF shell is asserted by intercepting
         // `/feature-flags`, as the BI flag's own journey does.

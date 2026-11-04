@@ -5,7 +5,9 @@ import journeys from "./playwright.config";
 // remain required in CI, but presentation and HTTP checks do not count as journeys.
 export default defineConfig({
   ...journeys,
-  testDir: "./contracts",
+  testDir: "./tests",
+  testMatch: "**/*.integration.spec.ts",
+  testIgnore: [],
   reporter: [
     ["./e2e/support/artifact-reporter.ts"],
     ["./e2e/support/contract-reporter.ts"],

@@ -1,0 +1,197 @@
+// Set E2E_EVIDENCE_DIR to write reviewer-visible screenshots outside version control.
+import { expect } from "@playwright/test";
+import { test } from "../../e2e/support/story-identities";
+import {
+  currentBankPeriod,
+  expectBankStatus,
+} from "../../e2e/support/real-authority";
+import path from "path";
+import { E2E_API_ORIGIN, E2E_BASE_URL, E2E_TMP } from "../../playwright.config";
+import {
+  E2E_USERS,
+  mintBackendToken,
+  writeStorageState,
+} from "../../e2e/support/mint";
+
+const evidenceDir = process.env.E2E_EVIDENCE_DIR;
+
+test.describe("default macro scenarios", () => {
+  test.use({
+    storageState: path.join(E2E_TMP, "analyst.json"),
+    storyConfig: { roles: ["analyst"] },
+  });
+
+  test("shows system defaults and runs one on a fresh scenario library", async ({
+    page,
+  }) => {
+    await page.goto("/irr/enterprise-stress?preparing=1");
+
+    await expect(
+      page.getByRole("heading", { name: "Enterprise Stress Workbench" }),
+    ).toBeVisible();
+    await expect(
+      page.getByText("Base consensus path", { exact: true }).first(),
+    ).toBeVisible();
+    await expect(
+      page.getByText("IRRBB parallel +200bp", { exact: true }).first(),
+    ).toBeVisible();
+    await expect(
+      page.getByText("BoG supervisory scenario", { exact: true }).first(),
+    ).toBeVisible();
+    await expect(
+      page
+        .getByRole("listitem")
+        .filter({ hasText: "BoG supervisory scenario" })
+        .getByText("not runnable", { exact: true }),
+    ).toBeVisible();
+    await expect(page.getByLabel("Approved scenario")).not.toHaveValue("");
+
+    if (evidenceDir) {
+      await page.screenshot({
+        path: path.join(evidenceDir, "default-macro-scenario-library.png"),
+        fullPage: true,
+      });
+    }
+
+    await page
+      .getByRole("button", { name: "Run enterprise stress", exact: true })
+      .click();
+
+    await expect(
+      page.getByText("CAR — base vs stress", { exact: true }),
+    ).toBeVisible({
+      timeout: 30_000,
+    });
+    await expect(page.getByText("No stress run selected")).toHaveCount(0);
+
+    if (evidenceDir) {
+      await page.screenshot({
+        path: path.join(evidenceDir, "default-macro-scenario-results.png"),
+        fullPage: true,
+      });
+    }
+  });
+
+  test.describe("read-only grant", () => {
+    test.use({
+      storageState: path.join(E2E_TMP, "viewer.json"),
+      storyConfig: {
+        roles: ["viewer"],
+        bindings: [
+          { bundle: "viewer", module: "irrbb", sensitivity: "all" },
+          { bundle: "viewer", module: "risk", sensitivity: "confidential" },
+          { bundle: "viewer", module: "data", sensitivity: "confidential" },
+          { bundle: "viewer", module: "ftp", sensitivity: "all" },
+          { bundle: "viewer", module: "fx", sensitivity: "all" },
+        ],
+      },
+    });
+    test("read-only grants refuse execution and explain the missing authority in IRRBB, FTP and FX", async ({
+      browser,
+      request,
+    }) => {
+      // System definitions are organization resources; the bank grants above
+      // authorize only the selected institution's data and controls.
+      const grant = {
+        principal_user_id: E2E_USERS.viewer.id,
+        role_bundle: "viewer",
+        institution_scope: "organization",
+        institution_id: null,
+        module_scope: "risk",
+        sensitivity_scope: "confidential",
+        reason_category: "other",
+        reason_detail: "Read system defaults in the read-only stress journey",
+      };
+      const headers = {
+        Authorization: `Bearer ${await mintBackendToken("admin")}`,
+      };
+      const grantsUrl = `${E2E_API_ORIGIN}/api/v1/authorization/bindings`;
+      const grantPreview = await request.post(`${grantsUrl}/preview`, {
+        headers,
+        data: grant,
+      });
+      expect(grantPreview.status()).toBe(200);
+      const created = await request.post(grantsUrl, {
+        headers,
+        data: {
+          ...grant,
+          expected_authority_sentence: (await grantPreview.json())
+            .authority_sentence,
+        },
+      });
+      expect(created.status()).toBe(201);
+      const storageState = await writeStorageState(
+        "viewer",
+        E2E_BASE_URL,
+        E2E_TMP,
+      );
+      const context = await browser.newContext({ storageState });
+      const page = await context.newPage();
+      await page.goto("/irr/enterprise-stress?preparing=1");
+      const scenario = page.getByLabel("Approved scenario");
+      await expect(scenario).not.toHaveValue("");
+      await expectBankStatus("/enterprise-stress/runs", 403, {
+        method: "POST",
+        data: {
+          scenario_id: await scenario.inputValue(),
+          reporting_period_id: await currentBankPeriod(),
+          reason: "Read-only scenario execution must be refused",
+        },
+      });
+      const cloneControls = page.getByRole("button", {
+        name: "Requires Risk · Confidential · create. Ask your organization owner or admin for access.",
+        exact: true,
+      });
+      await expect(cloneControls).toHaveCount(9);
+      for (const clone of await cloneControls.all()) {
+        await expect(clone).toBeVisible();
+        await expect(clone).toBeDisabled();
+      }
+      const run = page.getByRole("button", {
+        name: "Run enterprise stress",
+        exact: true,
+      });
+      await expect(run).toBeVisible();
+      await expect(run).toBeDisabled();
+      const runTrigger = run.locator("..");
+      await runTrigger.focus();
+      await expect(runTrigger).toBeFocused();
+      await expect(page.getByRole("tooltip")).toHaveText(
+        "Requires Risk · Confidential · run. Ask your organization owner or admin for access.",
+      );
+
+      await page.goto("/ftp/scenarios");
+      const preview = page.getByRole("button", { name: "Preview FTP what-if" });
+      await expect(preview).toBeDisabled();
+      // Period selection remounts the FTP workbench; focus its ready control.
+      await expect(
+        page.getByText(/^As of (?!no period selected)/),
+      ).toBeVisible();
+      const previewTrigger = preview.locator("..");
+      await previewTrigger.focus();
+      await expect(previewTrigger).toBeFocused();
+      await expect(page.getByRole("tooltip")).toHaveText(
+        "Requires FTP · Confidential · Run authority.",
+      );
+      await expect(
+        page.getByRole("button", { name: "Save FTP analysis" }),
+      ).toBeDisabled();
+      await expect(run).toHaveCount(0);
+
+      await page.goto("/fx/scenarios");
+      await expect(
+        page.getByRole("heading", { name: "FX scenario definitions" }),
+      ).toBeVisible();
+      await expect(run).toHaveCount(0);
+
+      if (evidenceDir) {
+        await page.screenshot({
+          path: path.join(
+            evidenceDir,
+            "default-macro-scenario-run-permission.png",
+          ),
+        });
+      }
+    });
+  });
+});

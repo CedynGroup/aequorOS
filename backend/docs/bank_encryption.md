@@ -487,7 +487,7 @@ belong to their separate feature stacks.
 
 ### Browser encryption journeys
 
-`backend/dashboard/e2e/bank-encryption.spec.ts` exercises the real AWS provider
+`backend/dashboard/tests/institution/bank-encryption.e2e.spec.ts` exercises the real AWS provider
 through a loopback HTTP fault proxy. Set `BANK_KMS_ENDPOINT_URL` to the emulator
 above before running `pnpm --filter @aequoros/dashboard e2e bank-encryption.spec.ts`.
 A missing emulator fails the stories; they never silently substitute the local

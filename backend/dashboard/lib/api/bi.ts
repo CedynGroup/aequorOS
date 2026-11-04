@@ -632,7 +632,7 @@ export {
  * dashboard edit of an alert's threshold silently deleted every user recipient an
  * Org Owner had added through the API, and answered 200. A generated serializer
  * would have made those fields part of the shape the compiler checks. Both are
- * now stated by hand, and `features/bi/components/notifications.test.ts` pins the field
+ * now stated by hand, and `tests/bi/notifications.test.ts` pins the field
  * lists against the generated serializers so the next omission fails there —
  * but the honest fix is the swap, not the pin.
  *
