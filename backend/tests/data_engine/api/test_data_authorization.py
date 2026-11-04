@@ -170,6 +170,19 @@ def test_sensitivities_are_exact_not_hierarchical(
         )
         assert sibling.status_code == missing.status_code == 404
         assert error_envelope(sibling) == error_envelope(missing)
+    payload = {"as_of_date": "2026-07-01", "reason": "Refresh"}
+    sibling = db_client.post(
+        f"/api/v1/banks/{SIBLING}/data-activations", headers=auth, json=payload
+    )
+    missing = db_client.post(
+        "/api/v1/banks/BK-MISSING1/data-activations", headers=auth, json=payload
+    )
+    assert sibling.status_code == missing.status_code == 404
+    assert error_envelope(sibling) == error_envelope(missing)
+    sibling_read = db_client.get(f"/api/v1/banks/{SIBLING}/data-activations", headers=auth)
+    missing_read = db_client.get("/api/v1/banks/BK-MISSING1/data-activations", headers=auth)
+    assert sibling_read.status_code == missing_read.status_code == 404
+    assert error_envelope(sibling_read) == error_envelope(missing_read)
     assert _counts() == before
 
 

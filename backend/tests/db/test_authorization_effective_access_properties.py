@@ -578,6 +578,7 @@ def test_scoped_grant_lifecycle_never_exceeds_current_bindings(
             assert detail.status_code == (200 if covered else 404), detail.text
             for path, sensitivity in (
                 ("ingestion-summary", Sensitivity.AGGREGATED),
+                ("data-activations", Sensitivity.AGGREGATED),
                 ("ingestion-batches", Sensitivity.CONFIDENTIAL),
                 ("canonical-positions", Sensitivity.RESTRICTED),
             ):
@@ -1207,6 +1208,7 @@ def test_uncovered_institution_is_indistinguishable_from_a_missing_one(
         # sibling identifier is not even confirmed to exist.
         for path, expected_on_a in (
             ("ingestion-summary", 403),
+            ("data-activations", 403),
             ("ingestion-batches", 403),
             ("canonical-positions", 200),
         ):
@@ -1239,3 +1241,17 @@ def test_uncovered_institution_is_indistinguishable_from_a_missing_one(
             )
             assert sibling.status_code == missing.status_code == 404
             assert error_envelope(sibling) == error_envelope(missing)
+
+        payload = {"as_of_date": "2026-07-01", "reason": "Refresh"}
+        sibling = client.post(
+            f"/api/v1/banks/{tenant.bank_b}/data-activations",
+            headers=target_headers,
+            json=payload,
+        )
+        missing = client.post(
+            f"/api/v1/banks/{missing_bank}/data-activations",
+            headers=target_headers,
+            json=payload,
+        )
+        assert sibling.status_code == missing.status_code == 404
+        assert error_envelope(sibling) == error_envelope(missing)
