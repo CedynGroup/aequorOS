@@ -35,6 +35,8 @@ Use the [pull request description template](.github/PULL_REQUEST_TEMPLATE.md) fo
 ## Commands
 
 ```bash
+mise run setup                          # fresh checkout: pinned tools, frozen deps, env templates, hooks
+mise run verify                         # prove core readiness (no Docker or database required)
 mise run risk-service:check            # backend lint, typecheck and hermetic tests
 mise run risk-service:test-postgres    # Postgres-gated tests (TEST_DATABASE_URL or an isolated local service)
 mise run risk-service:openapi-client   # regenerate packages/risk-service-api after an API change

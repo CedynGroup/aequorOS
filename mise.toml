@@ -40,11 +40,25 @@ uv = "0.11.18"
 # ---------------------------------------------------------------------------
 
 [tasks.setup]
-description = "Install all workspace dependencies (JS and backend Python)"
+description = "Prepare a fresh checkout: pinned tools, dependencies, env files, and hooks"
+# Frozen syncs keep a fresh checkout reproducible: a stale lockfile fails loudly
+# instead of being silently re-resolved. Env copies never overwrite a local file,
+# and an existing managed core.hooksPath chain is preserved.
+env = { UV_FROZEN = "1" }
 run = [
-  "pnpm install",
-  "cd backend && uv sync",
+  "mise install",
+  "python3 backend/scripts/aqs_bootstrap.py env",
+  "pnpm install --frozen-lockfile",
+  "mise run risk-service:sync",
+  "python3 backend/scripts/aqs_bootstrap.py hooks",
+  "python3 backend/scripts/aqs_bootstrap.py report",
 ]
+
+[tasks.verify]
+description = "Prove core checkout readiness without Docker, a database, or a service"
+# Deliberately no dependencies: verify uses what setup installed and must never
+# sync, install, or start anything on its own.
+run = "python3 backend/scripts/aqs_bootstrap.py verify"
 
 [tasks."risk-service:sync"]
 description = "Install risk service dependencies with uv"

@@ -51,6 +51,14 @@ The audit-chain migration also requires
 
 ## Prerequisites
 
+From the repository root, `mise run setup` installs the pinned toolchain and frozen
+dependencies, copies missing env templates (never overwriting local values), and
+installs hooks. `mise run verify` proves core readiness without Docker or a
+database. The manual steps follow.
+
+- **mise** — installs the pinned toolchain below; see the
+  [installation guide](https://mise.jdx.dev/getting-started.html). `mise run setup`
+  needs it.
 - **Python 3.13** and [uv](https://docs.astral.sh/uv/). `pyproject.toml` pins
   `>=3.13,<3.14`. Create the environment once: `cd backend && uv sync`.
 - **Node 24** (`.nvmrc`, `engines.node >= 24`) and **pnpm 11.2.2** — the exact
