@@ -383,43 +383,53 @@ class BootstrapTests(unittest.TestCase):
 
     def test_fixture_git_never_reaches_a_caller_repository(self) -> None:
         decoy = self.root / "decoy"
-        subprocess.run(["git", "init", "--template=", "-q", str(decoy)], check=True)
         fixture = self.root / "fixture"
-        subprocess.run(["git", "init", "--template=", "-q", str(fixture)], check=True)
         identity = [
             "-c",
             "user.name=Fixture",
             "-c",
             "user.email=fixture@example.invalid",
         ]
-        decoy_commit = ["git", *identity, "commit", "--allow-empty", "--no-verify", "-qm", "decoy"]
-        subprocess.run(decoy_commit, cwd=decoy, check=True)
-        decoy_head = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=decoy, text=True)
         redirect = {
             "GIT_DIR": str(decoy / ".git"),
             "GIT_WORK_TREE": str(decoy),
             "GIT_INDEX_FILE": str(decoy / ".git/index"),
         }
-        with patch.dict(os.environ, redirect, clear=False), isolated_git(fixture):
-            for name in redirect:
-                self.assertNotIn(name, os.environ)
-            resolved = subprocess.check_output(
-                ["git", "rev-parse", "--absolute-git-dir"], cwd=fixture, text=True
-            ).strip()
-            self.assertEqual(Path(resolved), (fixture / ".git").resolve())
-            subprocess.run(
-                ["git", *identity, "commit", "--allow-empty", "--no-verify", "-qm", "fixture"],
-                cwd=fixture,
-                check=True,
-            )
-            self.assertTrue(
-                subprocess.check_output(
-                    ["git", "rev-parse", "--verify", "HEAD"], cwd=fixture, text=True
+        with isolated_git(self.root):
+            subprocess.run(["git", "init", "--template=", "-q", str(decoy)], check=True)
+            subprocess.run(["git", "init", "--template=", "-q", str(fixture)], check=True)
+            decoy_commit = [
+                "git",
+                *identity,
+                "commit",
+                "--allow-empty",
+                "--no-verify",
+                "-qm",
+                "decoy",
+            ]
+            subprocess.run(decoy_commit, cwd=decoy, check=True)
+            decoy_head = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=decoy, text=True)
+            with patch.dict(os.environ, redirect, clear=False), isolated_git(fixture):
+                for name in redirect:
+                    self.assertNotIn(name, os.environ)
+                resolved = subprocess.check_output(
+                    ["git", "rev-parse", "--absolute-git-dir"], cwd=fixture, text=True
                 ).strip()
+                self.assertEqual(Path(resolved), (fixture / ".git").resolve())
+                subprocess.run(
+                    ["git", *identity, "commit", "--allow-empty", "--no-verify", "-qm", "fixture"],
+                    cwd=fixture,
+                    check=True,
+                )
+                self.assertTrue(
+                    subprocess.check_output(
+                        ["git", "rev-parse", "--verify", "HEAD"], cwd=fixture, text=True
+                    ).strip()
+                )
+            self.assertEqual(
+                subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=decoy, text=True),
+                decoy_head,
             )
-        self.assertEqual(
-            subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=decoy, text=True), decoy_head
-        )
 
     def test_missing_tools_have_named_diagnostics(self) -> None:
         (self.root / "mise.toml").write_text(
