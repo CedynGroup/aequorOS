@@ -51,11 +51,15 @@ description = "Prepare a fresh checkout: pinned tools, dependencies, env files, 
 env = { UV_LOCKED = "1" }
 run = [
   "mise install",
-  "python3 backend/scripts/bootstrap.py env",
-  "pnpm install --frozen-lockfile",
+  # ``mise`` computes this task's PATH before running any entry, so a tool it
+  # installs here is not yet visible to the rest of the array. ``mise exec``
+  # re-resolves the tool environment, which is what makes setup reliable on a
+  # machine where the pinned tools were absent.
+  "mise exec -- python3 backend/scripts/bootstrap.py env",
+  "mise exec -- pnpm install --frozen-lockfile",
   "mise run risk-service:sync",
   "mise run risk-service:hooks",
-  "python3 backend/scripts/bootstrap.py report",
+  "mise exec -- python3 backend/scripts/bootstrap.py report",
 ]
 
 [tasks.verify]

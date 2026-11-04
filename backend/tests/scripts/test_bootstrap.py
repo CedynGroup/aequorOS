@@ -285,35 +285,47 @@ class BootstrapTests(unittest.TestCase):
         )
         profile = self.root / "mise-profile"
         profile.mkdir()
+        install_log = profile / "install-log"
+        commands = profile / "command-log"
+        # The commands the setup array invokes are provided by the tools mise
+        # installs, exactly as on a machine where they are not yet on PATH.
+        providers = {
+            name: (
+                "#!/bin/sh\n"
+                'echo "$*" >> "$AQS_TEST_COMMAND_LOG"\n'
+                + (
+                    'case "$*" in *verify*) echo "VERIFY: NOT READY"; exit 1;; esac\n'
+                    if name != "aqs-fixture"
+                    else ""
+                )
+                + "exit 0\n"
+            )
+            for name in ("python3", "pnpm", "aqs-fixture")
+        }
         plugin = profile / "plugin/bin"
         plugin.mkdir(parents=True)
-        install_log = profile / "install-log"
         install = plugin / "install"
         install.write_text(
             "#!/bin/sh\nset -eu\n"
             'echo installed >> "$AQS_TEST_INSTALL_LOG"\n'
             'mkdir -p "$ASDF_INSTALL_PATH/bin"\n'
-            'printf "#!/bin/sh\\nexit 0\\n" > "$ASDF_INSTALL_PATH/bin/aqs-fixture"\n'
-            'chmod +x "$ASDF_INSTALL_PATH/bin/aqs-fixture"\n'
+            + "".join(
+                f'cat > "$ASDF_INSTALL_PATH/bin/{name}" <<'
+                f"'AQS_PROVIDER_EOF'\n{body}AQS_PROVIDER_EOF\n"
+                f'chmod +x "$ASDF_INSTALL_PATH/bin/{name}"\n'
+                for name, body in providers.items()
+            )
         )
         install.chmod(0o755)
         (plugin / "list-all").write_text("#!/bin/sh\necho 1.0.0\n")
         (plugin / "list-all").chmod(0o755)
-        stubs = profile / "stubs"
-        stubs.mkdir()
-        for command in ("python3", "pnpm"):
-            stub = stubs / command
-            stub.write_text(
-                '#!/bin/sh\necho "$*" >> "$AQS_TEST_COMMAND_LOG"\n'
-                'case "$*" in *verify*) echo "VERIFY: NOT READY"; exit 1;; esac\n'
-            )
-            stub.chmod(0o755)
         tasks = config["tasks"]
         settings = config["settings"]
         (profile / "aqs-test.toml").write_text(
             "[settings]\nauto_install = "
             + str(settings["auto_install"]).lower()
-            + '\n[tools]\n"aqs-fixture" = "1.0.0"\n'
+            + "\n[tools]\n"
+            + "".join(f'"{name}" = "1.0.0"\n' for name in providers)
             + "[tasks.setup]\nrun = "
             + json.dumps(tasks["setup"]["run"])
             + "\n"
@@ -342,8 +354,7 @@ class BootstrapTests(unittest.TestCase):
                 "MISE_OVERRIDE_CONFIG_FILENAMES": "aqs-test.toml",
                 "MISE_TRUSTED_CONFIG_PATHS": str(profile),
                 "AQS_TEST_INSTALL_LOG": str(install_log),
-                "AQS_TEST_COMMAND_LOG": str(profile / "command-log"),
-                "PATH": str(stubs) + os.pathsep + os.environ["PATH"],
+                "AQS_TEST_COMMAND_LOG": str(commands),
             }
         )
 
@@ -360,19 +371,24 @@ class BootstrapTests(unittest.TestCase):
 
         with isolated_git(plugin.parent):
             subprocess.run(["git", "init", "--template=", "-q", str(plugin.parent)], check=True)
-        linked = run("plugins", "link", "aqs-fixture", str(plugin.parent))
-        self.assertEqual(linked.returncode, 0, linked.stdout + linked.stderr)
+            for name in providers:
+                linked = run("plugins", "link", name, str(plugin.parent))
+                self.assertEqual(linked.returncode, 0, linked.stdout + linked.stderr)
         verify = run("run", "verify")
         self.assertNotEqual(verify.returncode, 0)
         self.assertFalse(install_log.exists(), verify.stdout + verify.stderr)
         self.assertFalse((profile / "data/installs/aqs-fixture/1.0.0").exists())
         setup = run("run", "setup")
         self.assertEqual(setup.returncode, 0, setup.stdout + setup.stderr)
-        self.assertEqual(install_log.read_text().splitlines(), ["installed"])
-        commands = (profile / "command-log").read_text().splitlines()
-        self.assertIn("install --frozen-lockfile", commands)
-        self.assertIn("sync-boundary", commands)
-        self.assertIn("hooks-boundary", commands)
+        self.assertEqual(install_log.read_text().splitlines(), ["installed"] * len(providers))
+        recorded = commands.read_text().splitlines()
+        # Each post-install entry must reach the tool installed by this same array,
+        # which only happens when it runs through a refreshed mise environment.
+        self.assertIn("backend/scripts/bootstrap.py env", recorded)
+        self.assertIn("install --frozen-lockfile", recorded)
+        self.assertIn("backend/scripts/bootstrap.py report", recorded)
+        self.assertIn("sync-boundary", recorded)
+        self.assertIn("hooks-boundary", recorded)
 
     def test_setup_refuses_a_lockfile_that_trails_project_metadata(self) -> None:
         """The setup task's own env must reject a stale ``uv.lock``, not consume it."""
