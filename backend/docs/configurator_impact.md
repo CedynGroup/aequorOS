@@ -14,8 +14,10 @@ uv run python -m scripts.authorization_configure_impact \
 The connection defaults to `WORKER_DATABASE_URL`, then `DATABASE_URL`.
 `--database-url` overrides it. Use an authorized read-only database role.
 Omit `--organization` only with a role allowed to enumerate every tenant.
-Each tenant is queried with its organization context; PostgreSQL assessment
-transactions are explicitly read-only. No database URL or identity email is
+Each tenant is queried with its organization context in its own read-only
+PostgreSQL REPEATABLE READ snapshot, so concurrent principal, bank or binding
+changes cannot split that tenant's inventory. This is not one cross-tenant
+snapshot. No database URL or identity email is
 exported. The output still contains principal and binding IDs, so keep it
 private and outside the repository.
 

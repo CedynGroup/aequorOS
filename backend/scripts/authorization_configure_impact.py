@@ -18,7 +18,7 @@ from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
 
-from sqlalchemy import Engine, create_engine, select, text
+from sqlalchemy import Engine, create_engine, select
 from sqlalchemy.orm import Session
 
 from app.core.authorization import (
@@ -420,11 +420,16 @@ def main(argv: list[str] | None = None) -> int:
     report = ConfigureReport(generated_at=_date(moment) or "")
     try:
         engine = create_engine(url)
+        # Configure before Session's after_begin tenant-context queries establish
+        # a snapshot. Each fresh tenant session owns one read-only transaction.
+        assessment_engine = (
+            engine.execution_options(isolation_level="REPEATABLE READ", postgresql_readonly=True)
+            if engine.dialect.name == "postgresql"
+            else engine
+        )
         for organization_id in _organizations(engine, args.organization):
-            with Session(engine, autoflush=False) as db:
+            with Session(assessment_engine, autoflush=False) as db:
                 db.info["organization_id"] = organization_id
-                if engine.dialect.name == "postgresql":
-                    _ = db.execute(text("SET TRANSACTION READ ONLY"))
                 tenant = build_configure_report(db, organization_id=organization_id, now=moment)
                 report.principals.extend(tenant.principals)
                 report.existing_grants.extend(tenant.existing_grants)
