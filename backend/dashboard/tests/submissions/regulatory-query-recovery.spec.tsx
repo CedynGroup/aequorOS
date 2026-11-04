@@ -11,6 +11,7 @@ import FrameworkStatus from "@/components/icaap/FrameworkStatus";
 import RegulatoryModuleTabs from "@/components/shell/RegulatoryModuleTabs";
 import SdiLiquidityBoardDisclosure from "@/components/reports/SdiLiquidityBoardDisclosure";
 import ThresholdRegisterCard from "@/components/institution/registers/ThresholdRegisterCard";
+import ProfileProvider from "@/components/profile/ProfileProvider";
 import { apiBaseUrl } from "@/lib/api/client";
 import { setAccessToken } from "@/lib/api/token";
 import { QueryAuthorityScopeProvider } from "@/lib/api/useQueryScope";
@@ -21,7 +22,7 @@ vi.mock("next/navigation", () => ({
   useSearchParams: () => new URLSearchParams("preparing=1"),
 }));
 vi.mock("next-auth/react", () => ({
-  useSession: () => ({ data: { user: { roles: [] } } }),
+  useSession: () => ({ data: null, status: "unauthenticated" }),
 }));
 vi.mock("@/components/shell/BankContext", () => {
   const scope = {
@@ -59,7 +60,7 @@ function view(children: React.ReactNode) {
       <QueryAuthorityScopeProvider
         scope={queryAuthorityScope("OR-SYNTH001", "synthetic@example.test", 1)}
       >
-        {children}
+        <ProfileProvider>{children}</ProfileProvider>
       </QueryAuthorityScopeProvider>
     </QueryClientProvider>
   );
