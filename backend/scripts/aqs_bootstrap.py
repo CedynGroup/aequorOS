@@ -279,7 +279,7 @@ def _installed_python(root: Path) -> Path:
     return root / "backend" / ".venv" / "bin" / "python"
 
 
-def _check_hook_artifacts(root: Path, directory: Path) -> int:
+def _check_hook_artifacts(directory: Path) -> int:
     import shlex
 
     from pre_commit.util import resource_text
@@ -289,7 +289,7 @@ def _check_hook_artifacts(root: Path, directory: Path) -> int:
     _, after = rest.split("# end templated\n")
     missing: list[str] = []
     for name in REQUIRED_HOOKS:
-        args = ["hook-impl", f"--config={root / '.pre-commit-config.yaml'}",
+        args = ["hook-impl", "--config=.pre-commit-config.yaml",
                 f"--hook-type={name}"]
         expected = (before + "# start templated\n"
                     + f"INSTALL_PYTHON={shlex.quote(sys.executable)}\n"
@@ -304,7 +304,32 @@ def _check_hook_artifacts(root: Path, directory: Path) -> int:
     return 0
 
 
+def _external_hook_check(root: Path) -> Check | None:
+    import shlex
+
+    code, managed = _capture(["git", "config", "--get", "core.hooksPath"], cwd=root)
+    if code != 0:
+        return None
+    commands = []
+    for name in REQUIRED_HOOKS:
+        command = shlex.join([
+            str(_installed_python(root)), "-m", "pre_commit", "hook-impl",
+            "--config", str(root / ".pre-commit-config.yaml"), "--hook-type", name, "--",
+        ])
+        commands.append(f'{name}: {command} "$@"')
+    return Check(
+        "Hooks", "missing",
+        f"unverified: externally configured core.hooksPath ({managed!r}) left untouched",
+        "Configure your hook manager to run each command below from " + str(root)
+        + ", forwarding hook arguments and pre-push stdin; then verify enforcement under your manager.\n"
+        + "\n".join(commands),
+    )
+
+
 def hook_checks(root: Path) -> list[Check]:
+    external = _external_hook_check(root)
+    if external is not None:
+        return [external]
     directory = _git_path(root, "hooks")
     python = _installed_python(root)
     if directory is None or not python.is_file() or not os.access(python, os.X_OK):
@@ -314,8 +339,8 @@ def hook_checks(root: Path) -> list[Check]:
         [str(python), "-c",
          "import sys; from pathlib import Path; "
          "from scripts.aqs_bootstrap import _check_hook_artifacts; "
-         "sys.exit(_check_hook_artifacts(Path(sys.argv[1]), Path(sys.argv[2])))",
-         str(root), str(directory)], cwd=root / "backend",
+         "sys.exit(_check_hook_artifacts(Path(sys.argv[1])))",
+         str(directory)], cwd=root / "backend",
     )
     if code != 0:
         return [Check("Hooks", "missing", output or "cannot validate pre-commit hooks",
@@ -324,36 +349,18 @@ def hook_checks(root: Path) -> list[Check]:
 
 
 def install_hooks(root: Path) -> int:
-    from pre_commit.commands.install_uninstall import install
-    from pre_commit.store import Store
+    external = _external_hook_check(root)
+    if external is not None:
+        _print_check(external)
+        return 0
 
-    directory = root / "backend" / ".venv" / "hooks"
-    previous = _git_path(root, "hooks")
-    if previous is None:
-        print("MISSING Hooks: cannot resolve existing hook directory")
-        return 1
-    directory.mkdir(parents=True, exist_ok=True)
-    if previous != directory:
-        for name in REQUIRED_HOOKS:
-            original = previous / name
-            legacy = directory / (name + ".legacy")
-            if legacy.is_symlink() and legacy.resolve() == original.resolve():
-                continue
-            if legacy.exists() or legacy.is_symlink():
-                print(f"MISSING Hooks: existing chain conflicts at {legacy}")
-                return 1
-            if original.exists():
-                legacy.symlink_to(original)
-    code = install(str(root / ".pre-commit-config.yaml"), Store(),
-                   list(REQUIRED_HOOKS), hooks=True, git_dir=str(directory.parent))
+    args = [str(_installed_python(root)), "-m", "pre_commit", "install",
+            "--config", str(root / ".pre-commit-config.yaml"), "--install-hooks"]
+    for name in REQUIRED_HOOKS:
+        args.extend(["--hook-type", name])
+    code = _stream(args, cwd=root, timeout=300)
     if code != 0:
         return code
-    code, _ = _capture(["git", "config", "--local", "extensions.worktreeConfig", "true"], cwd=root)
-    if code == 0:
-        code, _ = _capture(["git", "config", "--worktree", "core.hooksPath", str(directory)], cwd=root)
-    if code != 0:
-        print("MISSING Hooks: cannot activate repository-local hooks")
-        return 1
     checks = hook_checks(root)
     for check in checks:
         _print_check(check)

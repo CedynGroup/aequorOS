@@ -74,12 +74,15 @@ class BootstrapTests(unittest.TestCase):
                            input=f'refs/heads/main {revision} refs/heads/main {"0" * 40}\n',
                            text=True, check=True)
 
-    def test_managed_hooks_preserve_shared_manager_across_checkouts(self) -> None:
+    def test_external_managers_remain_untouched_and_unverified(self) -> None:
         shared = self.root / 'shared'
         shared.mkdir()
-        for name in bootstrap.REQUIRED_HOOKS:
+        helper = shared / 'helper'
+        helper.write_text('#!/bin/sh\necho manager >> hook-log\n')
+        helper.chmod(0o755)
+        for name in (*bootstrap.REQUIRED_HOOKS, 'post-checkout'):
             hook = shared / name
-            hook.write_text(f'#!/bin/sh\necho manager-{name} >> hook-log\n')
+            hook.write_text('#!/bin/sh\n"$(dirname "$0")/helper"\n')
             hook.chmod(0o755)
         before = {path.name: (path.read_bytes(), path.stat().st_mode) for path in shared.iterdir()}
         global_config = self.root / 'gitconfig'
@@ -87,25 +90,33 @@ class BootstrapTests(unittest.TestCase):
         with patch.dict(os.environ, {'GIT_CONFIG_GLOBAL': str(global_config),
                                     'GIT_CONFIG_NOSYSTEM': '1',
                                     'PRE_COMMIT_HOME': str(self.root / 'cache')}):
-            roots = [self.root / 'first', self.root / 'second']
-            self.prepare_hook_checkout(roots[0])
-            subprocess.run(['git', 'worktree', 'add', '--detach', str(roots[1]), 'HEAD'], cwd=roots[0], check=True)
-            self.prepare_hook_checkout(roots[1])
-            for root in roots:
-                self.assertEqual(bootstrap.hook_checks(root)[0].state, 'missing')
-                self.assertEqual(bootstrap.install_hooks(root), 0)
-                self.assertEqual(bootstrap.install_hooks(root), 0)
-                self.assertEqual(bootstrap.hook_checks(root)[0].state, 'ok')
+            for name in ('first', 'second'):
+                root = self.root / name
+                self.prepare_hook_checkout(root)
+                config = root / '.git/config'
+                initial_config = config.read_bytes()
+                with contextlib.redirect_stdout(io.StringIO()) as output:
+                    self.assertEqual(bootstrap.install_hooks(root), 0)
+                    self.assertEqual(bootstrap.install_hooks(root), 0)
+                check = bootstrap.hook_checks(root)[0]
+                self.assertEqual(check.state, 'missing')
+                self.assertIn('unverified', check.detail)
+                self.assertIn('forwarding hook arguments and pre-push stdin', output.getvalue())
+                self.assertEqual(config.read_bytes(), initial_config)
+                self.assertFalse((root / 'backend/.venv/hooks').exists())
                 self.run_required_hooks(root)
-            self.run_required_hooks(roots[0])
-            for root in roots:
-                lines = (root / 'hook-log').read_text().splitlines()
-                repetitions = 2 if root == roots[0] else 1
-                for name in bootstrap.REQUIRED_HOOKS:
-                    self.assertEqual(lines.count(name), repetitions)
-                    self.assertEqual(lines.count('manager-' + name), repetitions)
-                self.assertTrue(all((root / 'backend/.venv/hooks' / (name + '.legacy')).is_symlink()
-                                    for name in bootstrap.REQUIRED_HOOKS))
+                subprocess.run([str(shared / 'post-checkout')], cwd=root, check=True)
+                self.assertEqual((root / 'hook-log').read_text().splitlines(), ['manager'] * 4)
+                with contextlib.ExitStack() as stack:
+                    for function in ('toolchain_checks', 'dependency_checks', 'env_checks', 'git_checks', 'credential_checks', 'capability_checks'):
+                        stack.enter_context(patch.object(bootstrap, function, return_value=[]))
+                    for function in ('backend_smoke', 'frontend_check'):
+                        stack.enter_context(patch.object(bootstrap, function, return_value=bootstrap.Check('core', 'ok', 'passed')))
+                    result = stack.enter_context(contextlib.redirect_stdout(io.StringIO()))
+                    self.assertEqual(bootstrap.verify(root), 1)
+                    self.assertEqual(bootstrap.setup_report(root), 1)
+                    self.assertIn('VERIFY: NOT READY', result.getvalue())
+                    self.assertIn('unverified', result.getvalue())
         self.assertEqual(before, {path.name: (path.read_bytes(), path.stat().st_mode) for path in shared.iterdir()})
         self.assertEqual(global_config.read_text(), f'[core]\n hooksPath = {shared}\n')
 
@@ -124,12 +135,15 @@ class BootstrapTests(unittest.TestCase):
                 hook.write_text('#!/bin/sh\nexit 0\n')
                 hook.chmod(0o755)
             self.assertEqual(bootstrap.hook_checks(root)[0].state, 'missing')
+            config_before = (root / '.git/config').read_bytes()
             self.assertEqual(bootstrap.install_hooks(root), 0)
+            self.assertEqual(bootstrap.install_hooks(root), 0)
+            self.assertEqual((root / '.git/config').read_bytes(), config_before)
+            self.assertFalse((root / 'backend/.venv/hooks').exists())
             self.run_required_hooks(root)
             self.assertEqual(set((root / 'hook-log').read_text().splitlines()), set(bootstrap.REQUIRED_HOOKS))
-            from pre_commit.commands import install_uninstall
-            with patch.object(install_uninstall, 'install', return_value=0):
-                (root / 'backend/.venv/hooks/pre-push').write_text('#!/bin/sh\nexit 0\n')
+            with patch.object(bootstrap, '_stream', return_value=0):
+                (directory / 'pre-push').write_text('#!/bin/sh\nexit 0\n')
                 self.assertEqual(bootstrap.install_hooks(root), 1)
 
     def test_backend_smoke_never_bootstraps_an_environment(self) -> None:
