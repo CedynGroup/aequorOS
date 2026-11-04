@@ -268,6 +268,22 @@ BCP-47-like `locale`, IANA `timezone`, and `light` / `dark` / `system` `theme`
 with `PATCH /api/v1/auth/me`. The patch rejects extra fields, so email, role,
 organization, and security settings cannot be changed through this endpoint.
 
+### Liquidity Board registers
+
+| API under `/api/v1/banks/{bank_id}` | Required whole-institution authority | Effect scope |
+| --- | --- | --- |
+| `GET /liquidity-thresholds`, `GET /liquidity-haircuts` | LIQ / confidential / view | Read this bank's effective register and history |
+| `PUT /liquidity-thresholds`, `PUT /liquidity-haircuts` | LIQ / restricted / configure | This bank's values, generation history, audit subject and refresh only |
+
+Configurator does not convey VIEW; grant reading separately if needed. Neither
+scalar roles nor sibling-bank grants authorize a PUT. The bank-local tables
+`bank_liquidity_threshold` and `bank_liquidity_haircut` retain the
+`ParamLiquidityThreshold` / `ParamLiquidityHaircut` ORM names; old
+`param_liquidity_*` tables are read-only archives, never fallback policy.
+The [LIQ rollout runbook](docs/liquidity_enforcement_rollout.md#bank-local-register-deployment)
+owns migrations `202611040109/110`, stop/migrate/restart sequencing, reader and
+staff-audit inventory, and rollback refusal after bank-local divergence.
+
 ### Forecast assumption workflow
 
 A newly provisioned bank has no forecast assumption values. Its provisioning

@@ -115,6 +115,9 @@ class ConfigureImpact:
     before: Eligibility
     after: Eligibility
     required_grant: RequiredGrant | None
+    effect_scope: str | None = None
+    storage_table: str | None = None
+    affected_institution_ids: list[str] = field(default_factory=list)
     sensitivity: str = "restricted"
     permission: str = "configure"
 
@@ -148,6 +151,8 @@ class ConfigureReport:
                 "Not HTTP success: visibility, entitlements and workflow conditions still apply.",
                 "Required grants need operator approval. No grants are created or backfilled.",
                 "Machines cannot hold Configurator or call these human-only routes.",
+                "LIQ threshold/haircut effects are bank-local after migrations 202611040109/110; "
+                "this inventory does not verify deployed storage or persisted state.",
             ],
             "evaluation_failed": self.evaluation_failed,
             "routes": [asdict(route) for route in CONFIGURE_ROUTES],
@@ -261,6 +266,11 @@ def _impact(
         before,
         after,
         required,
+        effect_scope=route.effect_scope,
+        storage_table=route.storage_table,
+        affected_institution_ids=[bank_id]
+        if route.effect_scope == "bank_local" and bank_id is not None
+        else [],
     )
 
 
@@ -365,8 +375,16 @@ def write_artifacts(report: ConfigureReport, directory: Path) -> None:
             "evaluation_failed": report.evaluation_failed,
             "principals": common["principals"],
             "existing_grants": common["existing_grants"],
+            "routes": common["routes"],
             "required_grants": [
-                {"method": row.method, "path": row.path, **asdict(row.required_grant)}
+                {
+                    "method": row.method,
+                    "path": row.path,
+                    "effect_scope": row.effect_scope,
+                    "storage_table": row.storage_table,
+                    "affected_institution_ids": row.affected_institution_ids,
+                    **asdict(row.required_grant),
+                }
                 for row in report.impacts
                 if row.required_grant is not None
             ],
