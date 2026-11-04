@@ -39,8 +39,8 @@ import {
   EditRegisterAction,
   numericInputCls,
   sameDecimal,
-  useApproverGate,
 } from "./common";
+import { useConfigureEligibility } from "@/lib/api/configureAccess";
 
 // ---------------------------------------------------------------------------
 // Directive starter vocabulary — mirrors the backend's LRMD ¶28(f) starter
@@ -266,7 +266,7 @@ export default function EwiRegisterCard({
   bankId: string;
   periodId: string | undefined;
 }) {
-  const { isApprover } = useApproverGate();
+  const { allowed, reason } = useConfigureEligibility(bankId, "liq");
   const query = useEwiDashboard(bankId, periodId);
   const [editing, setEditing] = useState(false);
 
@@ -274,13 +274,15 @@ export default function EwiRegisterCard({
 
   return (
     <SectionCard
+      className="[&>div:first-child]:flex-col sm:[&>div:first-child]:flex-row"
       title="EWI trigger-level register"
       subtitle="Watch and action trigger levels for the early-warning indicators — Board configuration with approval evidence (LRMD ¶28(e)–(f))"
       noPadding
       actions={
         query.data && (
           <EditRegisterAction
-            isApprover={isApprover}
+            allowed={allowed}
+            reason={reason}
             editing={editing}
             onEdit={() => setEditing(true)}
             label="Edit trigger levels"
@@ -291,7 +293,8 @@ export default function EwiRegisterCard({
         <span>
           Indicator values and RAG states are computed server-side on the CFP
           dashboard; an indicator without levels shows Unconfigured rather than
-          an invented classification. Updates are approver-gated and audited.
+          an invented classification. Updates require scoped configure access
+          and are audited.
         </span>
       }
     >
@@ -312,8 +315,9 @@ export default function EwiRegisterCard({
           />
         </div>
       ) : query.data ? (
-        editing ? (
+        editing && allowed ? (
           <EwiEditor
+            key={bankId}
             bankId={bankId}
             rows={rows}
             onClose={() => setEditing(false)}
@@ -356,8 +360,8 @@ function EwiEditor({
   const setDraft = (code: string, patch: Partial<EwiDraft>) =>
     setDrafts((prev) => ({ ...prev, [code]: { ...prev[code], ...patch } }));
 
-  // Only rows the approver actually changed ride the PUT; each included row
-  // carries its full state because the register write replaces the row.
+  // Only changed rows ride the PUT; each included row carries its full state
+  // because the register write replaces the row.
   const changedEntries = useMemo(() => {
     const entries: EwiIndicatorUpdate[] = [];
     for (const row of rows) {

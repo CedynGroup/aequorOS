@@ -2,59 +2,53 @@
 
 /**
  * Shared grammar for the Board Registers editor surface (Governance →
- * Board Registers). Every register here is Board configuration: the PUTs are
- * approver-gated server-side and audited, so each card shares the same
- * ceremony — an Edit action gated on the approver role, effective-dated
+ * Board Registers). Each card shares the same configuration ceremony:
+ * an Edit action gated on scoped configure authority, effective-dated
  * approval evidence (approved by + effective from), and the required audit
  * reason. Values travel as strings end-to-end so no decimal precision is
  * lost between the form and the generated contract.
  */
 
-import { useSession } from 'next-auth/react';
+import { useId } from 'react';
 import { Pencil } from 'lucide-react';
 import { Field, inputCls } from '@/components/institution/shared';
 
 // ---------------------------------------------------------------------------
-// Role gating — the PUTs require the approver role server-side; the UI mirrors
-// that gate so an analyst sees why the action is unavailable, not a 403.
+// Configuration gating — read/navigation authority remains independent.
 // ---------------------------------------------------------------------------
 
-/** Client-side mirror of the server's approver gate (approver or admin). */
-export function useApproverGate(): { isApprover: boolean } {
-  const { data: session } = useSession();
-  const roles = session?.user?.roles ?? [];
-  return { isApprover: roles.includes('approver') || roles.includes('admin') };
-}
-
 /**
- * The "Edit register" action for a SectionCard header: enabled for approvers,
- * disabled-with-reason for everyone else (the server enforces the same gate).
+ * Disabled controls retain a visible, accessible explanation.
  */
 export function EditRegisterAction({
-  isApprover,
+  allowed,
+  reason,
   editing,
   onEdit,
   label = 'Edit register',
 }: {
-  isApprover: boolean;
+  allowed: boolean;
+  reason: string;
   editing: boolean;
   onEdit: () => void;
   label?: string;
 }) {
-  if (editing) return null;
-  if (!isApprover) {
+  const reasonId = useId();
+  if (editing && allowed) return null;
+  if (!allowed) {
     return (
-      <span className="inline-flex items-center gap-2">
+      <span className="inline-flex flex-wrap items-center justify-end gap-2 max-w-56 sm:max-w-64">
         <button
           type="button"
           disabled
-          title="Requires the approver role"
+          title={reason}
+          aria-describedby={reasonId}
           className="inline-flex items-center gap-1.5 px-3 py-2 text-caption font-medium text-slate border border-border rounded-md opacity-60 cursor-not-allowed"
         >
           <Pencil size={13} aria-hidden />
           {label}
         </button>
-        <span className="text-micro text-slate">Requires the approver role</span>
+        <span id={reasonId} className="text-micro text-slate">{reason}</span>
       </span>
     );
   }
