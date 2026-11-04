@@ -14,7 +14,7 @@ from uuid import uuid4
 
 import pytest
 from fastapi.routing import APIRoute
-from sqlalchemy import Engine, Table, create_engine
+from sqlalchemy import Engine, Table
 from sqlalchemy.orm import Session
 
 from app.core.authorization import (
@@ -42,6 +42,7 @@ from scripts.authorization_configure_impact import (
     write_artifacts,
 )
 from scripts.authorization_configure_routes import CONFIGURE_ROUTES
+from tests.support.database import isolated_database
 
 ORG = "OR-IMPCT001"
 BANK = "BK-IMPCT001"
@@ -495,13 +496,10 @@ def _assert_configure_artifacts(
 def _assert_configure_empty_inventory(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
     """An invisible tenant inventory must not publish successful evidence in either mode."""
     url = f"sqlite:///{tmp_path / 'empty-organizations.sqlite'}"
-    engine = create_engine(url)
-    try:
+    with isolated_database(url) as database:
         table = Organization.__table__
         assert isinstance(table, Table)
-        table.create(engine)
-    finally:
-        engine.dispose()
+        table.create(database.engine())
     destination = tmp_path / "empty-inventory"
     for output_args in ([], ["--output-dir", str(destination)]):
         assert configure_impact.main(["--database-url", url, *output_args]) == 2
