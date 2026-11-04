@@ -944,6 +944,15 @@ not a reason to infer EXPORT from VIEW. Enumerate affected principals and
 retain the dated `scripts/authorization_access_impact.py` output outside the
 repository; do not auto-grant.
 
+The signing workspace reads the document through those same artifact and
+archived-revision download routes, so a signing officer needs REG/restricted
+EXPORT alongside the family visibility and the bank's ceremony authority to see
+the page they certify. There is no ceremony-preview byte exception: an officer
+holding only review/approve (the `approver` bundle) can open the ceremony but is
+not served the document, and the workspace says which grant is missing instead
+of attempting a refused read or a dead export. The action permissions
+themselves are unchanged.
+
 The downtime email bundle deserves its own warning: it is the fallback channel
 the Validator uses when ORASS is unreachable, and the `validator` bundle carries
 `view` + `submit` only. After this cutover a bank that relies on email fallback

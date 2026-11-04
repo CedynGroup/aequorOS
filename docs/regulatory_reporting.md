@@ -342,7 +342,10 @@ exportRegulatoryPackage (kind → artifact generation; it creates the artifact a
 artifact metadata, and the routes below are what serve the bytes),
 downloadRegulatoryArtifact / downloadRegulatoryArtifactVersion / downloadEmailFallbackEml
 and getEmailFallbackInstructions (authority follows the
-[returns authorization contract](../backend/docs/authorization_foundation.md#whole-institution-figures-and-credit-only-narrowing)),
+[returns authorization contract](../backend/docs/authorization_foundation.md#whole-institution-figures-and-credit-only-narrowing);
+the signing workspace renders the document through the two artifact download
+routes, so a signing officer also needs REG/restricted EXPORT and there is no
+ceremony-preview byte exception),
 submitRegulatoryPackage (channel),
 listSubmissionEvents, listReturnTemplates (registry + fidelity + instrument disclosure;
 optional `bank_id` resolves governed commencement and filters hidden return families), get/putChannelConfig

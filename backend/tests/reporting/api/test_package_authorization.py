@@ -1522,6 +1522,121 @@ def test_export_authority_generates_downloads_and_email_fallback(
     assert db_client.get(f"{base}/email-fallback.eml", headers=auth).status_code == 200
 
 
+def test_an_approver_without_export_cannot_read_the_document_they_certify(
+    db_client: TestClient,
+    storage_engine: InMemoryStorageClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The ceremony's page is the return's file, and reading it is EXPORT.
+
+    A signing officer holds REG/restricted VIEW, REVIEW and APPROVE but not
+    EXPORT. Every read that describes the ceremony still answers, because
+    reading the return is not taking its file; the two document byte routes
+    refuse, and they refuse before the store is touched. One exact
+    REG/restricted EXPORT row is what admits the same officer to the bytes.
+    """
+    package_id = _package(family="liquidity", return_code="LCR-NSFR")
+    artifact_id, version_id = _artifact(package_id, storage_engine)
+    approver = _grant(
+        role_bundle=RoleBundle.APPROVER,
+        module_scope=ModuleScope.REGULATORY,
+        sensitivity_scope=SensitivityScope.RESTRICTED,
+    )
+    base = f"/api/v1/banks/{SAMPLE_BANK_ID}"
+    preview_auth = headers(roles=("approver",), authorization_version=approver)
+
+    # The ceremony itself is readable: the officer can still see the package,
+    # the figures preview and the attestation state.
+    package = db_client.get(f"{base}/regulatory-packages/{package_id}", headers=preview_auth)
+    assert package.status_code == 200, package.text
+    assert (
+        db_client.get(
+            f"{base}/regulatory-packages/{package_id}/artifact-versions",
+            headers=preview_auth,
+        ).status_code
+        == 200
+    )
+
+    read = storage_engine.read
+    monkeypatch.setattr(
+        storage_engine,
+        "read",
+        Mock(side_effect=AssertionError("a denied document read reached the store")),
+    )
+    for path in (
+        f"regulatory-artifacts/{artifact_id}/download",
+        f"regulatory-artifact-versions/{version_id}/download",
+    ):
+        refused = db_client.get(f"{base}/{path}", headers=preview_auth)
+        assert refused.status_code == 403, path
+        assert b"LCR-NSFR:pdf:" not in refused.content
+    assert _audit_events(str(version_id), "regulatory_artifact_version.downloaded") == []
+
+    # One exact REG/restricted EXPORT row is the grant a signing officer needs
+    # in addition to the ceremony authority; nothing else is inferred.
+    monkeypatch.setattr(storage_engine, "read", read)
+    authorized = _grant(
+        role_bundle=RoleBundle.ANALYST,
+        module_scope=ModuleScope.REGULATORY,
+        sensitivity_scope=SensitivityScope.RESTRICTED,
+    )
+    export_auth = headers(roles=("approver",), authorization_version=authorized)
+    for path in (
+        f"regulatory-artifacts/{artifact_id}/download",
+        f"regulatory-artifact-versions/{version_id}/download",
+    ):
+        served = db_client.get(f"{base}/{path}", headers=export_auth)
+        assert served.status_code == 200, path
+        assert served.content.startswith(b"LCR-NSFR:pdf:")
+
+
+def test_icaap_signing_officer_needs_export_beside_capital_approval(
+    db_client: TestClient,
+    storage_engine: InMemoryStorageClient,
+) -> None:
+    """ICAAP keeps Capital/confidential visibility; its document is still EXPORT.
+
+    The ICAAP approver holds exactly the Capital/confidential APPROVE binding the
+    ceremony asks for. The package, its figures and its revisions remain
+    readable, but the document bytes require the same REG/restricted EXPORT as
+    every other return family. Adding that row — not extending the Capital
+    binding — is what serves the page they sign.
+    """
+    package_id = _package()
+    artifact_id, version_id = _artifact(package_id, storage_engine)
+    capital_approver = _grant(
+        role_bundle=RoleBundle.APPROVER,
+        module_scope=ModuleScope.CAPITAL,
+        sensitivity_scope=SensitivityScope.CONFIDENTIAL,
+    )
+    base = f"/api/v1/banks/{SAMPLE_BANK_ID}"
+    approval_auth = headers(roles=("approver",), authorization_version=capital_approver)
+
+    assert (
+        db_client.get(f"{base}/regulatory-packages/{package_id}", headers=approval_auth).status_code
+        == 200
+    )
+    for path in (
+        f"regulatory-artifacts/{artifact_id}/download",
+        f"regulatory-artifact-versions/{version_id}/download",
+    ):
+        assert db_client.get(f"{base}/{path}", headers=approval_auth).status_code == 403, path
+
+    exported = _grant(
+        role_bundle=RoleBundle.ANALYST,
+        module_scope=ModuleScope.REGULATORY,
+        sensitivity_scope=SensitivityScope.RESTRICTED,
+    )
+    export_auth = headers(roles=("approver",), authorization_version=exported)
+    for path in (
+        f"regulatory-artifacts/{artifact_id}/download",
+        f"regulatory-artifact-versions/{version_id}/download",
+    ):
+        served = db_client.get(f"{base}/{path}", headers=export_auth)
+        assert served.status_code == 200, path
+        assert served.content.startswith(b"ICAAP-REPORT:pdf:")
+
+
 def test_artifact_download_hides_a_package_from_a_sibling_bank(
     db_client: TestClient, storage_engine: InMemoryStorageClient
 ) -> None:

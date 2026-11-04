@@ -90,6 +90,7 @@ import {
   useUpsertSignaturePlacementTemplate,
 } from "@/lib/api/hooks";
 import { useUserProfile } from "@/components/profile/ProfileProvider";
+import { filingAuthorityFor } from "@/lib/submissions/filingAuthority";
 import { hasAccountDirectoryAuthority } from "@/lib/api/accountAdministration";
 import {
   fetchArtifactBytes,
@@ -180,7 +181,16 @@ export default function SigningWorkspace({
   const placementsQuery = usePackageSignaturePlacements(bankId, packageId);
   const appearanceQuery = useMyAdoptedSignature();
   const identityQuery = useMySignerIdentity();
-  const { effectiveAuthority } = useUserProfile();
+  const { effectiveAuthority, isLoading: authorityLoading } = useUserProfile();
+  /**
+   * The document bytes are the return's own file, so they follow the export
+   * authority rather than the signing authority. An officer who may certify a
+   * return but may not take it away gets no copy of it — including this
+   * render, which cannot promise the browser will not keep what it draws.
+   */
+  const mayReadDocument = filingAuthorityFor(effectiveAuthority, bankId, {
+    resolved: !authorityLoading,
+  }).mayExport;
   const usersQuery = useOrganizationUsers(
     hasAccountDirectoryAuthority(effectiveAuthority),
   );
@@ -292,7 +302,7 @@ export default function SigningWorkspace({
     setPageSizes((sizes) => ({ ...sizes, [next.pageIndex]: next }));
   }, []);
 
-  const bytes = usePackageDocument(bankId, packageId);
+  const bytes = usePackageDocument(bankId, packageId, mayReadDocument);
 
   const violations = useMemo(
     () =>
@@ -697,7 +707,13 @@ export default function SigningWorkspace({
             onScale={setScale}
           />
           <div className="flex-1 min-h-0 overflow-auto p-6 flex justify-center">
-            {bytes.error ? (
+            {authorityLoading ? (
+              <DocumentPending exporting={false} />
+            ) : !mayReadDocument ? (
+              <div className="max-w-xl self-center">
+                <DocumentExportRequired />
+              </div>
+            ) : bytes.error ? (
               <div className="max-w-xl">
                 <ErrorPanel
                   error={bytes.error}
@@ -981,8 +997,18 @@ function SendBackPanel({
  * preparer places boxes on is what gets signed. When no PDF exists at all one is
  * minted — once per mount, tracked by a ref rather than by query state, because
  * an export is a write and a re-render must not repeat it.
+ *
+ * The document is served by the artifact and archived-revision download routes,
+ * which require Regulatory Reporting/restricted EXPORT as well as the signing
+ * authority. `allowed` is that answer: without it this hook asks for no bytes
+ * and mints nothing, so a signing officer who may not export never triggers a
+ * refused read or a dead export attempt.
  */
-function usePackageDocument(bankId: string, packageId: string) {
+function usePackageDocument(
+  bankId: string,
+  packageId: string,
+  allowed: boolean,
+) {
   const artifactsQuery = usePackageArtifacts(bankId, packageId);
   const versionsQuery = usePackageArtifactVersions(bankId, packageId);
   const exportPackage = useExportRegulatoryPackage(bankId);
@@ -1008,7 +1034,7 @@ function usePackageDocument(bankId: string, packageId: string) {
     // The versions query decides which document this is, so wait for it rather
     // than showing the unsigned base for a beat and swapping it underneath a
     // signer mid-review.
-    if (!versionsQuery.isSuccess) return;
+    if (!allowed || !versionsQuery.isSuccess) return;
     const source = signed
       ? { id: signed.id, fetch: fetchArtifactVersionBytes }
       : pdf
@@ -1021,23 +1047,73 @@ function usePackageDocument(bankId: string, packageId: string) {
       .fetch(bankId, source.id)
       .then(setData)
       .catch((cause: unknown) => setError(cause));
-  }, [bankId, pdf, signed, versionsQuery.isSuccess]);
+  }, [allowed, bankId, pdf, signed, versionsQuery.isSuccess]);
 
   useEffect(() => {
-    if (pdf || signed || !artifactsQuery.isSuccess || requestedExport.current)
+    if (
+      !allowed ||
+      pdf ||
+      signed ||
+      !artifactsQuery.isSuccess ||
+      requestedExport.current
+    )
       return;
     requestedExport.current = true;
     exportPackage.mutate(
       { packageId, kind: "pdf" },
       { onError: (cause) => setError(cause) },
     );
-  }, [pdf, signed, artifactsQuery.isSuccess, exportPackage, packageId]);
+  }, [
+    allowed,
+    pdf,
+    signed,
+    artifactsQuery.isSuccess,
+    exportPackage,
+    packageId,
+  ]);
 
   return {
     data,
     error: error ?? artifactsQuery.error ?? versionsQuery.error,
-    exporting: exportPackage.isPending,
+    exporting: allowed && exportPackage.isPending,
   };
+}
+
+/**
+ * The ceremony is the officer's, the document is the return's file.
+ *
+ * Rendering the PDF here serves its bytes, so the same export authority that
+ * governs a download governs this screen. There is deliberately no preview
+ * exception: a document drawn in a browser can be saved, and a second path
+ * would be a byte-access hole with a friendlier label. The officer is told the
+ * exact grant rather than shown an empty page or a bare 403.
+ */
+function DocumentExportRequired() {
+  return (
+    <div
+      role="status"
+      data-testid="document-export-required"
+      className="rounded-sm border border-border bg-surface-raised p-5"
+    >
+      <div className="flex items-start gap-2.5">
+        <FileWarning
+          size={18}
+          className="text-slate shrink-0 mt-0.5"
+          aria-hidden
+        />
+        <div>
+          <p className="text-body font-medium text-navy">
+            The return document is not available to you
+          </p>
+          <p className="mt-1 text-caption text-slate leading-relaxed">
+            Viewing it requires Regulatory Reporting · Restricted · Export in
+            addition to your signing authority for this return. An Organization
+            Owner grants it under Access → Members. Nothing has been signed.
+          </p>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 function DocumentPending({ exporting }: { exporting: boolean }) {

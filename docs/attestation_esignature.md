@@ -156,7 +156,11 @@ Attestation binds to `RegulatoryRun` only.
 
 Package access, signer setup, certification and nomination follow the
 [whole-institution family contract](../backend/docs/authorization_foundation.md#whole-institution-figures-and-credit-only-narrowing).
-Transmission has its own [filing authority](../backend/docs/filing_submit_authority_rollout.md),
+The signing workspace renders the return's own file through the artifact and
+archived-revision download routes, so viewing the document also requires
+REG/restricted EXPORT; there is no preview exception, because a copy drawn in
+the browser can be saved. Transmission has its own
+[filing authority](../backend/docs/filing_submit_authority_rollout.md),
 and review-stage separation follows the
 [filing workflow](../backend/docs/filing_workflow_redesign.md).
 Configuring signing policies and placement templates requires `GrantAdminTenant`
