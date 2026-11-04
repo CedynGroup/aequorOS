@@ -49,6 +49,8 @@ def projection_session(
         "param_credit_threshold",
         "param_liquidity_threshold",
         "param_liquidity_haircut",
+        "bank_liquidity_threshold",
+        "bank_liquidity_haircut",
     ],
 )
 @pytest.mark.parametrize("staff", [False, True])
@@ -135,8 +137,10 @@ def test_shared_register_bank_projections(
     )
     db.flush()
     original_id = original.id
-    expected_banks: set[str] = {source, sibling} | (
-        {klass} if subject != "param_liquidity_threshold" else set()
+    expected_banks: set[str] = (
+        {source}
+        if subject.startswith("bank_liquidity_")
+        else {source, sibling} | ({klass} if subject != "param_liquidity_threshold" else set())
     )
     activity = get_tenant_activity(db, ORG_1, 100)
     assert {

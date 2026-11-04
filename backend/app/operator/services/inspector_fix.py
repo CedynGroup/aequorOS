@@ -489,6 +489,7 @@ def _supersede_liquidity(  # noqa: PLR0913 - the full supersession record, one a
     current.effective_to = today
     new_row = ParamLiquidityThreshold(
         organization_id=current.organization_id,
+        bank_id=current.bank_id,
         jurisdiction_code=current.jurisdiction_code,
         institution_class=current.institution_class,
         threshold_code=current.threshold_code,
@@ -506,6 +507,7 @@ def _supersede_liquidity(  # noqa: PLR0913 - the full supersession record, one a
         target_id=str(new_row.id),
         before={
             "register": "liquidity",
+            "bank_id": current.bank_id,
             "jurisdiction_code": current.jurisdiction_code,
             "threshold_code": current.threshold_code,
             "institution_class": current.institution_class,
@@ -514,6 +516,7 @@ def _supersede_liquidity(  # noqa: PLR0913 - the full supersession record, one a
         },
         after={
             "register": "liquidity",
+            "bank_id": current.bank_id,
             "jurisdiction_code": current.jurisdiction_code,
             "threshold_code": new_row.threshold_code,
             "institution_class": new_row.institution_class,

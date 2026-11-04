@@ -60,11 +60,13 @@ SUBJECT_TABLES = {
     "param_credit_threshold": "banks",
     "param_liquidity_threshold": "banks",
     "param_liquidity_haircut": "banks",
+    "bank_liquidity_threshold": "banks",
+    "bank_liquidity_haircut": "banks",
 }
 
 PACKAGE_SUBJECTS = {"regulatory_package_artifact", "regulatory_artifact_version"}
 SHARED_REGISTER_SUBJECTS = frozenset(
-    kind for kind, table in SUBJECT_TABLES.items() if table == "banks"
+    kind for kind, table in SUBJECT_TABLES.items() if table == "banks" and kind.startswith("param_")
 )
 
 

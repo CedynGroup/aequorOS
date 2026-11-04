@@ -10,6 +10,7 @@ from sqlalchemy import (
     Date,
     DateTime,
     ForeignKey,
+    ForeignKeyConstraint,
     Integer,
     Numeric,
     String,
@@ -202,18 +203,8 @@ class ParamCreditThreshold(RegulatoryParameterMixin, Base):
     value_pct: Mapped[Decimal] = mapped_column(Numeric(12, 6), nullable=False)
 
 
-class ParamLiquidityThreshold(RegulatoryParameterMixin, Base):
-    """LMTD 2026 ¶11(b)–(e): the Board-set internal threshold register.
-
-    The Board must set internal thresholds for the six liquidity monitoring
-    tools at least annually; the mixin's ``approved_by``/``approval_timestamp``
-    plus the effective-dated generations ARE the Board-approval evidence an
-    examiner asks for ("show me your Board-approved thresholds"). Ratio floors
-    for Table 1 live here first; mismatch and concentration limits join as
-    their tools land. ``institution_class`` matters because ¶9 makes these
-    binding compliance ratios for SDIs while remaining monitoring tools for
-    banks — same register, different consequence.
-    """
+class LegacyParamLiquidityThreshold(RegulatoryParameterMixin, Base):
+    """Read-only pre-cutover archive, never a runtime policy fallback."""
 
     __tablename__ = "param_liquidity_threshold"
     __table_args__: TableArgs = (
@@ -237,7 +228,73 @@ class ParamLiquidityThreshold(RegulatoryParameterMixin, Base):
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
 
 
-class ParamLiquidityHaircut(RegulatoryParameterMixin, Base):
+class LegacyParamLiquidityHaircut(RegulatoryParameterMixin, Base):
+    """Read-only pre-cutover archive, never a runtime policy fallback."""
+
+    __tablename__ = "param_liquidity_haircut"
+    __table_args__: TableArgs = (
+        UniqueConstraint(
+            "organization_id",
+            "jurisdiction_code",
+            "asset_class",
+            "effective_from",
+            name="uq_param_liquidity_haircut_scope",
+        ),
+    )
+
+    asset_class: Mapped[str] = mapped_column(String(80), nullable=False)
+    haircut_pct: Mapped[Decimal] = mapped_column(Numeric(9, 6), nullable=False)
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+
+class BankLiquidityParameterMixin(RegulatoryParameterMixin):
+    """Bank-owned configuration; shared legacy rows are archive-only."""
+
+    bank_id: Mapped[str] = mapped_column(String(16), nullable=False)
+
+
+class ParamLiquidityThreshold(BankLiquidityParameterMixin, Base):
+    """LMTD 2026 ¶11(b)–(e): the Board-set internal threshold register.
+
+    The Board must set internal thresholds for the six liquidity monitoring
+    tools at least annually; the mixin's ``approved_by``/``approval_timestamp``
+    plus the effective-dated generations ARE the Board-approval evidence an
+    examiner asks for ("show me your Board-approved thresholds"). Ratio floors
+    for Table 1 live here first; mismatch and concentration limits join as
+    their tools land. ``institution_class`` matters because ¶9 makes these
+    binding compliance ratios for SDIs while remaining monitoring tools for
+    banks — same register, different consequence.
+    """
+
+    __tablename__ = "bank_liquidity_threshold"
+    __table_args__: TableArgs = (
+        CheckConstraint(
+            "institution_class IN ('bank', 'sdi')",
+            name="ck_bank_liquidity_threshold_institution_class",
+        ),
+        ForeignKeyConstraint(
+            ["bank_id", "organization_id"],
+            ["banks.id", "banks.organization_id"],
+            name="fk_bank_liquidity_threshold_org_bank",
+        ),
+        UniqueConstraint(
+            "organization_id",
+            "bank_id",
+            "jurisdiction_code",
+            "institution_class",
+            "threshold_code",
+            "effective_from",
+            name="uq_bank_liquidity_threshold_scope",
+        ),
+    )
+
+    institution_class: Mapped[str] = mapped_column(String(8), default="bank", nullable=False)
+    threshold_code: Mapped[str] = mapped_column(String(60), nullable=False)
+    threshold_pct: Mapped[Decimal] = mapped_column(Numeric(12, 6), nullable=False)
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+
+class ParamLiquidityHaircut(BankLiquidityParameterMixin, Base):
     """LRMD 2026 ¶60–63: the institution's internal liquidity-value schedule.
 
     Estimated haircuts per asset class, re-assessed at least annually by
@@ -251,14 +308,20 @@ class ParamLiquidityHaircut(RegulatoryParameterMixin, Base):
     broadly ("SOVEREIGN") or precisely ("SOVEREIGN_GOG_TBILL").
     """
 
-    __tablename__ = "param_liquidity_haircut"
+    __tablename__ = "bank_liquidity_haircut"
     __table_args__: TableArgs = (
+        ForeignKeyConstraint(
+            ["bank_id", "organization_id"],
+            ["banks.id", "banks.organization_id"],
+            name="fk_bank_liquidity_haircut_org_bank",
+        ),
         UniqueConstraint(
             "organization_id",
+            "bank_id",
             "jurisdiction_code",
             "asset_class",
             "effective_from",
-            name="uq_param_liquidity_haircut_scope",
+            name="uq_bank_liquidity_haircut_scope",
         ),
     )
 

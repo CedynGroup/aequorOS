@@ -276,6 +276,14 @@
       "aqs_api": ["DELETE", "INSERT", "SELECT", "UPDATE"],
       "aqs_worker": ["DELETE", "INSERT", "SELECT", "UPDATE"]
     },
+    "bank_liquidity_haircut": {
+      "aqs_api": ["INSERT", "SELECT", "UPDATE"],
+      "aqs_worker": ["INSERT", "SELECT", "UPDATE"]
+    },
+    "bank_liquidity_threshold": {
+      "aqs_api": ["INSERT", "SELECT", "UPDATE"],
+      "aqs_worker": ["INSERT", "SELECT", "UPDATE"]
+    },
     "bank_name_history": {
       "aqs_api": ["DELETE", "INSERT", "SELECT", "UPDATE"],
       "aqs_worker": ["DELETE", "INSERT", "SELECT", "UPDATE"]
@@ -860,12 +868,12 @@
       "aqs_worker": ["INSERT", "SELECT", "UPDATE"]
     },
     "param_liquidity_haircut": {
-      "aqs_api": ["INSERT", "SELECT", "UPDATE"],
-      "aqs_worker": ["INSERT", "SELECT", "UPDATE"]
+      "aqs_api": ["SELECT"],
+      "aqs_worker": ["SELECT"]
     },
     "param_liquidity_threshold": {
-      "aqs_api": ["INSERT", "SELECT", "UPDATE"],
-      "aqs_worker": ["INSERT", "SELECT", "UPDATE"]
+      "aqs_api": ["SELECT"],
+      "aqs_worker": ["SELECT"]
     },
     "param_nsfr_weight": {
       "aqs_api": ["INSERT", "SELECT", "UPDATE"],

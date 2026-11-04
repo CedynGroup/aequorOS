@@ -2,6 +2,12 @@
   "contracts": [
     {
       "cases": [
+        "tests/db/test_append_only_sweep_integration.py::test_every_retained_table_refuses_truncate[owner-bank_liquidity_threshold]",
+        "tests/db/test_append_only_sweep_integration.py::test_every_retained_table_refuses_truncate[runtime-bank_liquidity_haircut]",
+        "tests/db/test_append_only_sweep_integration.py::test_approved_parameter_value_and_evidence_are_retained[bank_liquidity_threshold]",
+        "tests/db/test_append_only_sweep_integration.py::test_every_retained_table_refuses_truncate[owner-bank_liquidity_haircut]",
+        "tests/db/test_append_only_sweep_integration.py::test_approved_parameter_value_and_evidence_are_retained[bank_liquidity_haircut]",
+        "tests/db/test_append_only_sweep_integration.py::test_every_retained_table_refuses_truncate[runtime-bank_liquidity_threshold]",
         "tests/db/test_bindings_constraint_migrations_integration.py::test_configurator_migration_grants_nothing_and_preserves_existing_authority",
         "tests/db/test_ai_migration_integration.py::test_a_decision_takes_no_update_at_all",
         "tests/db/test_ai_migration_integration.py::test_a_finished_request_frees_the_in_flight_slot",
@@ -26,8 +32,6 @@
         "tests/db/test_append_only_sweep_integration.py::test_approved_parameter_value_and_evidence_are_retained[param_crm_haircut]",
         "tests/db/test_append_only_sweep_integration.py::test_approved_parameter_value_and_evidence_are_retained[param_ecl_assumption]",
         "tests/db/test_append_only_sweep_integration.py::test_approved_parameter_value_and_evidence_are_retained[param_lcr_runoff_rate]",
-        "tests/db/test_append_only_sweep_integration.py::test_approved_parameter_value_and_evidence_are_retained[param_liquidity_haircut]",
-        "tests/db/test_append_only_sweep_integration.py::test_approved_parameter_value_and_evidence_are_retained[param_liquidity_threshold]",
         "tests/db/test_append_only_sweep_integration.py::test_approved_parameter_value_and_evidence_are_retained[param_nsfr_weight]",
         "tests/db/test_append_only_sweep_integration.py::test_approved_parameter_value_and_evidence_are_retained[param_risk_weight]",
         "tests/db/test_append_only_sweep_integration.py::test_approved_parameter_value_and_evidence_are_retained[param_stress_shock]",

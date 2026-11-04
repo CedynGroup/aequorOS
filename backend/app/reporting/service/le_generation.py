@@ -72,7 +72,7 @@ from app.market_data import public as market_data_sources
 from app.policy.public import (
     ParamLiquidityHaircut,
     ParamLiquidityThreshold,
-    get_active_params,
+    get_active_bank_params,
     jurisdictions,
     regulatory_parameters,
 )
@@ -1372,8 +1372,8 @@ def _table1_thresholds(
             )
         resolved[code] = (default, "regulatory_default")
     jurisdiction = jurisdictions.jurisdiction_code(bank)
-    for row in get_active_params(
-        db, ctx.organization_id, jurisdiction, ParamLiquidityThreshold, as_of
+    for row in get_active_bank_params(
+        db, ctx.organization_id, bank.id, jurisdiction, ParamLiquidityThreshold, as_of
     ):
         if row.institution_class == klass and row.threshold_code in resolved:
             resolved[row.threshold_code] = (Decimal(str(row.threshold_pct)), "board_register")
@@ -2098,7 +2098,9 @@ def _haircut_schedule(
 ) -> list[tuple[str, Decimal]]:
     """Active liquidity-value rows, longest asset-class prefix first."""
     jurisdiction = jurisdictions.jurisdiction_code(bank)
-    rows = get_active_params(db, ctx.organization_id, jurisdiction, ParamLiquidityHaircut, as_of)
+    rows = get_active_bank_params(
+        db, ctx.organization_id, bank.id, jurisdiction, ParamLiquidityHaircut, as_of
+    )
     return sorted(
         ((row.asset_class.upper(), Decimal(str(row.haircut_pct))) for row in rows),
         key=lambda item: -len(item[0]),

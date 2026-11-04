@@ -121,6 +121,7 @@ DOOR_ONLY_NAMES: frozenset[str] = frozenset(
         "PrefetchedParameterResolver",
         "PrefetchedActiveParams",
         "get_active_params",
+        "get_active_bank_params",
         "prefetch_active_params",
         "policy_scope",
         "tighten",
