@@ -22,6 +22,7 @@ import argparse
 import os
 import re
 import shutil
+import shlex
 import socket
 import subprocess
 import sys
@@ -279,18 +280,15 @@ def _managed_hooks_path(root: Path) -> str | None:
     return _git_config(root, "core.hooksPath")
 
 
-def _managed_hook_detail(root: Path, managed: str) -> str:
-    detail = f"core.hooksPath is managed ({managed}); the chain is preserved unchanged"
-    location = _git_path(root, "hooks")
-    if location is not None and not location.is_dir():
-        detail += f"; {location} does not exist, so git runs no hooks"
-    return detail
+def _managed_hook(root: Path, directory: Path, name: str) -> str:
+    python = root / "backend" / ".venv" / "bin" / "python"
+    args = [str(python), "-m", "pre_commit", "hook-impl",
+            "--config", str(root / ".pre-commit-config.yaml"),
+            "--hook-type", name, "--hook-dir", str(directory)]
+    return '#!/bin/sh\nexec ' + shlex.join(args) + ' -- "$@"\n'
 
 
 def hook_checks(root: Path) -> list[Check]:
-    managed = _managed_hooks_path(root)
-    if managed:
-        return [Check("Hooks", "skip", _managed_hook_detail(root, managed))]
     directory = _git_path(root, "hooks")
     if directory is None:
         return [
@@ -301,7 +299,13 @@ def hook_checks(root: Path) -> list[Check]:
                 "git rev-parse --git-path hooks",
             )
         ]
-    missing = [name for name in REQUIRED_HOOKS if not (directory / name).is_file()]
+    missing = [
+        name for name in REQUIRED_HOOKS
+        if not (directory / name).is_file()
+        or not os.access(directory / name, os.X_OK)
+        or (_managed_hooks_path(root) and
+            (directory / name).read_text() != _managed_hook(root, directory, name))
+    ]
     if missing:
         return [
             Check(
@@ -318,7 +322,30 @@ def install_hooks(root: Path) -> int:
     print("Hooks")
     managed = _managed_hooks_path(root)
     if managed:
-        print(f"  skipped  Hooks: {_managed_hook_detail(root, managed)}; left unchanged")
+        directory = _git_path(root, "hooks")
+        if directory is None:
+            print("  MISSING  Hooks: cannot resolve managed hooks directory")
+            return 1
+        code = _stream(
+            ["uv", "run", "pre-commit", "install-hooks", "--config",
+             str(root / ".pre-commit-config.yaml")],
+            cwd=root / "backend", timeout=300,
+        )
+        if code != 0:
+            print("  MISSING  Hooks: pre-commit environment installation failed")
+            return 1
+        directory.mkdir(parents=True, exist_ok=True)
+        for name in REQUIRED_HOOKS:
+            hook = directory / name
+            content = _managed_hook(root, directory, name)
+            if hook.exists() and hook.read_text() != content:
+                legacy = directory / (name + ".legacy")
+                if legacy.exists():
+                    print(f"  MISSING  Hooks: cannot preserve both {hook} and {legacy}")
+                    return 1
+                hook.rename(legacy)
+            hook.write_text(content)
+            hook.chmod(0o755)
         return 0
     if shutil.which("mise") is None:
         print("  MISSING  Hooks: mise is not on PATH")
@@ -588,7 +615,7 @@ def _openbao_check(values: Mapping[str, str]) -> Check:
     openbao = os.environ.get("OPENBAO_TEST_ADDR") or values.get("OPENBAO_TEST_ADDR")
     if _configured(openbao):
         return Check("OpenBao", "info", "OPENBAO_TEST_ADDR is set (presence only; not probed)")
-    if shutil.which("bao") is not None:
+    if shutil.which(os.environ.get("AQS_OPENBAO_BIN") or "bao") is not None:
         return Check(
             "OpenBao",
             "info",
@@ -708,7 +735,7 @@ def verify(root: Path) -> int:
     blocking += _print_section("Toolchain", toolchain_checks(root))
     blocking += _print_section("Dependencies", dependency_checks(root))
     blocking += _print_section("Hooks", hook_checks(root))
-    _print_section("Setup artifacts", env_checks(root))
+    blocking += _print_section("Setup artifacts", env_checks(root))
 
     print("\nCore checks")
     smoke = backend_smoke(root)

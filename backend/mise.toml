@@ -8,11 +8,11 @@ run = "uv sync"
 
 [tasks."risk-service:hooks"]
 description = "Install pre-commit, commit-msg, and pre-push hooks"
-run = "uv run pre-commit install --config ../../.pre-commit-config.yaml --install-hooks"
+run = "uv run pre-commit install --config ../.pre-commit-config.yaml --install-hooks"
 
 [tasks."risk-service:precommit"]
 description = "Run pre-commit hooks against all files"
-run = "uv run pre-commit run --all-files --config ../../.pre-commit-config.yaml"
+run = "uv run pre-commit run --all-files --config ../.pre-commit-config.yaml"
 
 [tasks."risk-service:dev"]
 description = "Run FastAPI and the live-engine worker for local development"
