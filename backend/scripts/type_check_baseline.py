@@ -1,4 +1,6 @@
-"""Hold the backend to basedpyright strict against a shrink-only legacy error baseline.
+"""Enforce basedpyright strict with a growth-only gate on legacy errors.
+
+Decreases pass without requiring a same-PR baseline refresh.
 
 Contributor commands and baseline maintenance rules are owned by
 ``CODEBASE_CONVENTIONS.md`` §1, "Type-check baseline".
