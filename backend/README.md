@@ -477,11 +477,8 @@ also have `risk-service:test-unit` and `risk-service:test-integration` aliases.
 Install dashboard dependencies with `pnpm install --frozen-lockfile` at the repository
 root before running the e2e suite or the full census.
 
-Feature-local paths stay in place, preserving imports and fixture/data paths.
-Each test module lives beside the rest of its feature's tests, and its filename names
-the suite: `test_<name>_integration.py`, `test_<name>_e2e.py`, and unit as the default
-(`test_<name>.py`). A module that would serve two suites is split, so related unit,
-integration and e2e cases sit in the same folder but never in the same file.
+Test placement and suite filename conventions follow the
+[testing standard](../CODEBASE_CONVENTIONS.md#behavior-properties-and-state-machines-backend-and-dashboard).
 [`scripts/test_suites.json`](scripts/test_suites.json) is generated from observed
 database and external-service requirements for every exact parametrized test ID.
 There are no module defaults or manual function overrides. Collection rejects new/unclassified IDs,
