@@ -6,7 +6,7 @@ notifications: ``due_soon`` once per T-7/T-3/T-1 threshold, ``overdue`` once
 per day, and pending ORASS re-upload (BG/FMD/2026/07 downtime email
 submissions) once per day.
 
-Idempotency: each emission's deterministic dedupe key IS its ``type`` value —
+Deadline idempotency: each emission's deterministic dedupe key IS its ``type`` value —
 ``reporting.deadline.<kind>:<return_code>:<reporting_date>[:<scan_date>]`` —
 scoped to the bank via ``entity_type='bank'``/``entity_id``. A second scan of
 the same day finds the existing row and emits nothing. Daily kinds append the
@@ -15,11 +15,14 @@ scan date; threshold kinds do not, so each threshold fires exactly once.
 Scheduling: ``enqueue_due_deadline_scan`` is called from the hourly
 ``scheduled_tick`` (see ``scheduler.run_tick``); the scan date rides the job
 coalesce key so each org gets at most one ``reporting_deadline_scan`` job per
-day. The worker handler is ``run_reporting_deadline_scan``.
+day. ``app.worker._run_reporting_scan`` injects the instrument observer before
+calling ``run_reporting_deadline_scan``. Instrument notification rules are owned by
+``docs/regulatory_reporting.md`` §5b.
 """
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from datetime import date, datetime
 from typing import Any
 
@@ -38,6 +41,8 @@ from app.reporting.service import calendar
 from app.reporting.service.workflow import has_pending_orass_reupload
 from app.services import job_queue
 
+type InstrumentScan = Callable[[Session, TenantContext, Bank, date], int]
+
 DEADLINE_SCAN = "reporting_deadline_scan"
 _HORIZON_MONTHS = 2
 # The notifier's trailing window is deliberately its own, and NOT the picker's.
@@ -54,7 +59,11 @@ _DUE_SOON_THRESHOLDS = (1, 3, 7)
 
 
 def scan_reporting_deadlines(
-    db: Session, organization_id: str, *, as_of: date | None = None
+    db: Session,
+    organization_id: str,
+    *,
+    as_of: date | None = None,
+    instrument_scan: InstrumentScan | None = None,
 ) -> dict[str, Any]:
     """Scan one org's banks and emit deadline notifications (no commit)."""
     ctx = TenantContext(organization_id=organization_id)
@@ -62,6 +71,8 @@ def scan_reporting_deadlines(
     banks = list(db.scalars(select(Bank).where(Bank.organization_id == organization_id)))
     emitted = 0
     for bank in banks:
+        if instrument_scan is not None:
+            emitted += instrument_scan(db, ctx, bank, today)
         obligations = calendar.deadline_scan_obligations(
             db,
             organization_id,
@@ -202,8 +213,12 @@ def enqueue_due_deadline_scan(
     return True
 
 
-def run_reporting_deadline_scan(session: Session, job: Job) -> None:
+def run_reporting_deadline_scan(
+    session: Session, job: Job, *, instrument_scan: InstrumentScan | None = None
+) -> None:
     """Worker handler: scan one org's reporting deadlines and commit."""
-    summary = scan_reporting_deadlines(session, job.organization_id)
+    summary = scan_reporting_deadlines(
+        session, job.organization_id, instrument_scan=instrument_scan
+    )
     session.commit()
     job.progress = summary

@@ -45,7 +45,7 @@ from app.models import (
 )
 from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID, materialize_canonical_test_book
 from tests.support.factories.canonical import FIXTURE_AS_OF, seed_canonical_fixture
-from tests.support.helpers import ORG_1, ORG_2, USER_1, headers
+from tests.support.helpers import ORG_1, ORG_2, USER_1, error_envelope, headers
 from tests.support.inmemory_storage import InMemoryStorageClient
 
 BASE = f"/api/v1/banks/{SAMPLE_BANK_ID}"
@@ -151,10 +151,51 @@ def test_sensitivities_are_exact_not_hierarchical(
         result = db_client.get(f"{BASE}/{path}", headers=_auth())
         assert result.status_code == (200 if sensitivity == required else 403), (path, result.text)
 
+    auth = _auth()
+    before = _counts()
+    for resource, action, payload in (
+        ("reconciliation/exceptions", "approve", {"approved_by": "Checker"}),
+        ("reconciliation/exceptions", "revoke", {"revoked_by": "Checker", "reason": "Review"}),
+        ("system-of-record", "approve", {"approved_by": "Checker"}),
+        ("system-of-record", "revoke", {"revoked_by": "Checker", "reason": "Review"}),
+        ("canonical-withdrawals", "approve", {"approved_by": "Checker"}),
+        ("canonical-withdrawals", "reverse", {"reversed_by": "Checker", "reason": "Review"}),
+    ):
+        suffix = f"{resource}/{uuid4()}/{action}"
+        sibling = db_client.post(f"/api/v1/banks/{SIBLING}/{suffix}", headers=auth, json=payload)
+        missing = db_client.post(f"/api/v1/banks/BK-MISSING1/{suffix}", headers=auth, json=payload)
+        assert sibling.status_code == missing.status_code == 404
+        assert error_envelope(sibling) == error_envelope(missing)
+    payload = {"as_of_date": "2026-07-01", "reason": "Refresh"}
+    sibling = db_client.post(
+        f"/api/v1/banks/{SIBLING}/data-activations", headers=auth, json=payload
+    )
+    missing = db_client.post(
+        "/api/v1/banks/BK-MISSING1/data-activations", headers=auth, json=payload
+    )
+    assert sibling.status_code == missing.status_code == 404
+    assert error_envelope(sibling) == error_envelope(missing)
+    sibling_read = db_client.get(f"/api/v1/banks/{SIBLING}/data-activations", headers=auth)
+    missing_read = db_client.get("/api/v1/banks/BK-MISSING1/data-activations", headers=auth)
+    assert sibling_read.status_code == missing_read.status_code == 404
+    assert error_envelope(sibling_read) == error_envelope(missing_read)
+    assert _counts() == before
+
 
 def test_scalar_roles_and_partial_bindings_cannot_compose(db_client: TestClient) -> None:
     before = _counts()
-    assert db_client.get(f"{BASE}/ingestion-summary", headers=_auth()).status_code == 403
+    assert db_client.get(f"{BASE}/ingestion-summary", headers=_auth()).status_code == 404
+    auth = _auth()
+    for path in (
+        "ingestion-summary",
+        "ingestion-batches",
+        "canonical-positions",
+        "reconciliation/exceptions",
+    ):
+        uncovered = db_client.get(f"/api/v1/banks/{SIBLING}/{path}", headers=auth)
+        missing = db_client.get(f"/api/v1/banks/BK-MISSING1/{path}", headers=auth)
+        assert uncovered.status_code == missing.status_code == 404
+        assert error_envelope(uncovered) == error_envelope(missing)
     _grant(SensitivityScope.RESTRICTED, bank_id=SIBLING, bundle=RoleBundle.ANALYST)
     _grant(SensitivityScope.CONFIDENTIAL, bundle=RoleBundle.ANALYST)
     _grant(SensitivityScope.RESTRICTED, module=ModuleScope.MARKETS, bundle=RoleBundle.ANALYST)
@@ -197,7 +238,7 @@ def test_binding_and_principal_lifecycle_fail_closed(
         db.commit()
     before = _counts()
     result = db_client.get(f"{BASE}/canonical-positions/facets", headers=_auth())
-    assert result.status_code in {401, 403}, result.text
+    assert result.status_code in {401, 404}, result.text
     assert _counts() == before
 
 

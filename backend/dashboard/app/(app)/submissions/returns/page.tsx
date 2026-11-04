@@ -40,6 +40,13 @@
  * so the officer meets one decision, in one place.
  */
 
+import InstrumentStatusBadge from "@/components/submissions/InstrumentStatusBadge";
+import RegulatoryExportWarning from "@/components/submissions/RegulatoryExportWarning";
+import {
+  preparationWarning,
+  preparationHref,
+  isRuleInForce,
+} from "@/lib/regulatoryInstruments";
 import PageContainer from "@/components/ui/PageContainer";
 import {
   Suspense,
@@ -112,7 +119,6 @@ import { hasAccountDirectoryAuthority } from "@/lib/api/accountAdministration";
 import { fmtDateUTC, fmtTimestamp, isoDate, shortId } from "@/lib/api/values";
 import {
   defaultReportingDate,
-  instrumentStatusLabel,
   reportingDateOptionLabel,
   toReportingDateOptions,
 } from "@/lib/api/returnAnchors";
@@ -217,10 +223,13 @@ function ReturnsWorkspace() {
   const templatesQuery = useReturnTemplates(bankId);
   const templates = useMemo(
     () =>
-      (templatesQuery.data?.templates ?? []).filter((template) =>
-        isSdi ? template.family === "sdi" : template.family !== "sdi",
+      (templatesQuery.data?.templates ?? []).filter(
+        (template) =>
+          (isSdi ? template.family === "sdi" : template.family !== "sdi") &&
+          (isRuleInForce(template) ||
+            template.code === searchParams.get("code")),
       ),
-    [isSdi, templatesQuery.data],
+    [isSdi, templatesQuery.data, searchParams],
   );
 
   const codeParam = searchParams.get("code");
@@ -299,7 +308,7 @@ function ReturnsWorkspace() {
   // Regenerate for the case the button is actually for, which is source figures
   // that moved under a version that already exists.
   const runChecks = useValidateRegulatoryPackage(bankId);
-  const generateAndCheck = (returnCode: string, reportingDate: string) =>
+  const generateAndCheck = (returnCode: string, reportingDate: string) => {
     generate.mutate(
       { returnCode, reportingDate },
       {
@@ -308,6 +317,7 @@ function ReturnsWorkspace() {
         },
       },
     );
+  };
 
   // An ICAAP return is NOT generated from this workspace. It is minted by
   // freezing an ICAAP cycle, in one transaction with the cycle's seal, so the
@@ -473,6 +483,11 @@ function ReturnsWorkspace() {
               code={code!}
               date={date!}
               isIcaapReturn={isIcaapReturn}
+              warning={preparationWarning(
+                template?.instrumentStatus,
+                template?.effectiveFrom,
+                template?.regulator,
+              )}
               authority={authority}
               onGenerate={() => code && date && generateAndCheck(code, date)}
               pending={generate.isPending || runChecks.isPending}
@@ -512,6 +527,7 @@ function ReturnsWorkspace() {
  * does, rather than shown a button the server would refuse.
  */
 function FirstVersionCard({
+  warning,
   code,
   date,
   isIcaapReturn,
@@ -523,11 +539,14 @@ function FirstVersionCard({
   code: string;
   date: string;
   isIcaapReturn: boolean;
+  warning: string | null;
   authority: FilingAuthority;
   onGenerate: () => void;
   pending: boolean;
   error: unknown;
 }) {
+  const preparing =
+    useSearchParams().get("preparing") === "1" || Boolean(warning);
   return (
     <SectionCard
       title={`${code} · ${date}`}
@@ -537,6 +556,11 @@ function FirstVersionCard({
           : "No version of this return exists for this reporting date yet"
       }
     >
+      {warning && (
+        <p role="note" className="mb-3 text-caption text-warning">
+          {warning}
+        </p>
+      )}
       <div className="flex items-start justify-between gap-4 flex-wrap">
         {isIcaapReturn ? (
           <>
@@ -546,7 +570,7 @@ function FirstVersionCard({
               filing and the assessment behind it are the same document.
             </p>
             <Link
-              href="/icaap"
+              href={preparationHref("/icaap", preparing)}
               className="inline-flex items-center gap-1.5 px-3 py-2 text-caption font-medium btn-primary"
             >
               Open ICAAP
@@ -607,21 +631,20 @@ function FidelityBanner({ template }: { template: ReturnTemplateRead }) {
           {template.code} — {template.title}
         </p>
         <FidelityPill fidelity={template.fidelity} />
-        <span className="text-caption font-medium text-slate">
-          {instrumentStatusLabel(
-            template.instrumentStatus,
-            template.effectiveFrom,
-          )}
-        </span>
+        <InstrumentStatusBadge
+          status={template.instrumentStatus}
+          regulator={template.regulator}
+          effectiveFrom={template.effectiveFrom}
+          citation={template.directiveCitation}
+          sourceUrl={template.sourceUrl}
+          code={template.code}
+        />
       </div>
       <details className="mt-1 pl-6">
         <summary className="cursor-pointer text-caption font-medium text-action hover:text-action-hover">
           Directive basis
         </summary>
         <p className="mt-1 text-caption text-navy/80 max-w-3xl">{info.blurb}</p>
-        <p className="mt-1 text-caption text-slate leading-relaxed max-w-3xl">
-          {template.directiveCitation}
-        </p>
       </details>
     </div>
   );
@@ -843,6 +866,12 @@ function PackageWorkspace({
   }, [comparison.data]);
 
   const takeArtifact = (kind: ArtifactKind) => {
+    if (!pkg) {
+      setDownloadError(
+        "The pack's legal basis is still loading. Try again once it has loaded.",
+      );
+      return;
+    }
     setDownloadError(null);
     const fail = (error: unknown) =>
       setDownloadError(
@@ -936,6 +965,12 @@ function PackageWorkspace({
 
   return (
     <div className="space-y-4">
+      <RegulatoryExportWarning
+        snapshot={pkg?.snapshot}
+        status={pkg ? undefined : template?.instrumentStatus}
+        effectiveFrom={pkg ? undefined : template?.effectiveFrom}
+        regulator={pkg ? undefined : template?.regulator}
+      />
       <ReturnCommandBarBlock
         summary={summary}
         template={template}

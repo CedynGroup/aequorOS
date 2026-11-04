@@ -15,6 +15,7 @@
  * is for.
  */
 
+import { instrumentDisclosure } from "../regulatoryInstruments";
 import { isoDate } from "./values";
 
 /** One selectable reporting date, reduced to what the picker renders. */
@@ -94,27 +95,7 @@ export function instrumentStatusLabel(
     | "unpublished"
     | undefined,
   effectiveFrom?: Date | string | null,
+  regulator?: string,
 ): string {
-  const effective =
-    typeof effectiveFrom === "string"
-      ? effectiveFrom
-      : effectiveFrom
-        ? isoDate(effectiveFrom)
-        : null;
-  switch (status) {
-    case "exposure_draft":
-      return effective
-        ? `Exposure draft · effective ${effective} if final · preparation only`
-        : "Exposure draft · preparation only";
-    case "unpublished":
-      return "Unpublished instrument · Basel reference · no filing obligation";
-    case "final_not_in_force":
-      return effective
-        ? `Final · not yet in force · effective ${effective}`
-        : "Final · not yet in force";
-    case "in_force":
-      return effective ? `In force from ${effective}` : "In force";
-    default:
-      return "Instrument status unavailable";
-  }
+  return instrumentDisclosure(status, effectiveFrom, regulator).tooltip;
 }

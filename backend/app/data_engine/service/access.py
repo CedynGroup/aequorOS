@@ -9,7 +9,19 @@ from sqlalchemy.orm import Session
 
 from app.core.authorization import ConditionCheck, ConditionKind, Module, Permission, Sensitivity
 from app.core.tenancy import TenantContext
-from app.identity.public import Bank, require_bank_permission
+from app.identity.public import (
+    Bank,
+    require_institution_coverage,
+    require_resolved_bank_permission,
+    resolve_bank,
+)
+
+
+def resolve_data_bank(db: Session, ctx: TenantContext, bank_id: str) -> Bank:
+    if ctx.integration_key_id is None and ctx.impersonation_context is None:
+        bank, _ = require_institution_coverage(db, ctx, bank_id)
+        return bank
+    return resolve_bank(db, ctx, bank_id, module=Module.DATA)
 
 
 def require_data_access(  # noqa: PLR0913 - one explicit authorization sentence
@@ -28,10 +40,11 @@ def require_data_access(  # noqa: PLR0913 - one explicit authorization sentence
         permission is not Permission.VIEW and ctx.impersonation_context is not None
     ):
         raise HTTPException(status_code=404 if opaque else 403, detail="Data access refused.")
-    return require_bank_permission(
+    bank = resolve_data_bank(db, ctx, bank_id)
+    require_resolved_bank_permission(
         db,
         ctx,
-        bank_id,
+        bank,
         permission=permission,
         module=Module.DATA,
         sensitivity=sensitivity,
@@ -52,3 +65,4 @@ def require_data_access(  # noqa: PLR0913 - one explicit authorization sentence
         if opaque
         else "This action requires an active DATA binding.",
     )
+    return bank

@@ -940,13 +940,16 @@
         "tests/api/test_cross_tenant_bank_routes_integration.py::test_every_bank_route_hides_sibling_tenant_bank",
         "tests/data_engine/api/test_system_of_record_bank_scope_integration.py::test_a_sibling_banks_declaration_cannot_be_approved_or_revoked_under_this_bank",
         "tests/data_engine/api/test_system_of_record_bank_scope_integration.py::test_a_sibling_banks_withdrawal_cannot_be_approved_or_reversed_under_this_bank",
-        "tests/data_engine/api/test_system_of_record_bank_scope_integration.py::test_a_withdrawal_cannot_cite_a_sibling_banks_declaration"
+        "tests/data_engine/api/test_system_of_record_bank_scope_integration.py::test_a_withdrawal_cannot_cite_a_sibling_banks_declaration",
+        "tests/db/test_authorization_effective_access_properties_integration.py::test_uncovered_institution_is_indistinguishable_from_a_missing_one"
       ],
       "category": "bank isolation",
       "reason": "Queries and real request refusals must distinguish sibling banks and organizations."
     },
     {
       "cases": [
+        "tests/db/test_authorization_effective_access_properties_integration.py::test_reconciliation_approval_never_skips_the_second_officer",
+        "tests/db/test_authorization_effective_access_properties_integration.py::test_scoped_grant_lifecycle_never_exceeds_current_bindings",
         "tests/identity/api/test_access_request_state_machine_integration.py::test_access_requests_remain_scoped_and_resolved_history_is_terminal",
         "tests/identity/api/test_account_administration_authorization_integration.py::test_account_admin_cannot_approve_sso_request_but_owner_can_reach_workflow",
         "tests/identity/api/test_account_administration_authorization_integration.py::test_account_administer_does_not_imply_organization_directory_view",
@@ -1204,6 +1207,12 @@
         "tests/identity/api/test_grant_administration_integration.py::test_credit_and_institution_grants_round_trip_as_exact_vocabulary[institution]",
         "tests/identity/api/test_grant_administration_integration.py::test_duplicate_effective_grant_is_targetable_and_revoke_removes_equivalent_authority",
         "tests/identity/api/test_grant_administration_integration.py::test_institution_directory_is_account_plane_and_owner_gated",
+        "tests/identity/api/test_grant_administration_integration.py::test_institution_route_access_request_carries_expiry_into_the_grant[/institution-institution-confidential]",
+        "tests/identity/api/test_grant_administration_integration.py::test_institution_route_access_request_carries_expiry_into_the_grant[/institution/history-institution-confidential]",
+        "tests/identity/api/test_grant_administration_integration.py::test_institution_route_access_request_carries_expiry_into_the_grant[/institution/outlets-institution-confidential]",
+        "tests/identity/api/test_grant_administration_integration.py::test_institution_route_access_request_carries_expiry_into_the_grant[/institution/parties-institution-restricted]",
+        "tests/identity/api/test_grant_administration_integration.py::test_institution_route_access_request_carries_expiry_into_the_grant[/institution/products-institution-confidential]",
+        "tests/identity/api/test_grant_administration_integration.py::test_institution_route_access_request_carries_expiry_into_the_grant[/institution/registers-credit-confidential]",
         "tests/identity/api/test_grant_administration_integration.py::test_members_are_tenant_scoped_and_no_binding_means_no_authority",
         "tests/identity/api/test_grant_administration_integration.py::test_members_distinguish_unattributed_historical_revoker",
         "tests/identity/api/test_grant_administration_integration.py::test_multiple_conflicting_bindings_must_all_be_removed[held_roles0-validator-Approver]",
@@ -1217,12 +1226,6 @@
         "tests/identity/api/test_grant_administration_integration.py::test_multiple_conflicting_bindings_must_all_be_removed[held_roles8-account_admin-Analyst and Approver]",
         "tests/identity/api/test_grant_administration_integration.py::test_multiple_conflicting_bindings_must_all_be_removed[held_roles9-account_admin-Analyst and Validator]",
         "tests/identity/api/test_grant_administration_integration.py::test_one_request_cannot_fan_out_and_two_combinations_require_two_requests",
-        "tests/identity/api/test_grant_administration_integration.py::test_institution_route_access_request_carries_expiry_into_the_grant[/institution-institution-confidential]",
-        "tests/identity/api/test_grant_administration_integration.py::test_institution_route_access_request_carries_expiry_into_the_grant[/institution/history-institution-confidential]",
-        "tests/identity/api/test_grant_administration_integration.py::test_institution_route_access_request_carries_expiry_into_the_grant[/institution/outlets-institution-confidential]",
-        "tests/identity/api/test_grant_administration_integration.py::test_institution_route_access_request_carries_expiry_into_the_grant[/institution/parties-institution-restricted]",
-        "tests/identity/api/test_grant_administration_integration.py::test_institution_route_access_request_carries_expiry_into_the_grant[/institution/products-institution-confidential]",
-        "tests/identity/api/test_grant_administration_integration.py::test_institution_route_access_request_carries_expiry_into_the_grant[/institution/registers-credit-confidential]",
         "tests/identity/api/test_grant_administration_integration.py::test_owner_account_admin_conflict_names_only_the_revocable_grant[analyst]",
         "tests/identity/api/test_grant_administration_integration.py::test_owner_account_admin_conflict_names_only_the_revocable_grant[approver]",
         "tests/identity/api/test_grant_administration_integration.py::test_owner_account_admin_conflict_names_only_the_revocable_grant[validator]",

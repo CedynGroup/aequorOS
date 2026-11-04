@@ -679,9 +679,7 @@
  },
  "app.integrations.storage.s3": {
   "reportMissingTypeStubs": 3,
-  "reportUnknownArgumentType": 4,
-  "reportUnknownMemberType": 12,
-  "reportUnknownVariableType": 2
+  "reportUnknownMemberType": 1
  },
  "app.jobs.bi_alerts": {
   "reportAny": 41
@@ -1993,9 +1991,6 @@
  },
  "app.services.regulatory_reporting.provenance": {
   "reportAny": 16
- },
- "app.services.regulatory_reporting.registry": {
-  "reportUnusedFunction": 1
  },
  "app.services.regulatory_reporting.reporting_settings": {
   "reportAny": 2

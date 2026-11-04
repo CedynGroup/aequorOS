@@ -31,9 +31,9 @@ test.describe("IRRBB standardised framework", () => {
       }
     });
 
-    await page.goto("/irr");
+    await page.goto("/irr?preparing=1");
     await page.getByRole("link", { name: "Standardised Framework" }).click();
-    await expect(page).toHaveURL(/\/irr\/standardised$/);
+    await expect(page).toHaveURL(/\/irr\/standardised\?preparing=1$/);
 
     await expect(
       page.getByRole("heading", { name: "Standardised Framework" }).first(),
@@ -45,9 +45,9 @@ test.describe("IRRBB standardised framework", () => {
     await expect
       .poll(() => frameworkReads.length, { timeout: 15_000 })
       .toBeGreaterThan(0);
-    await expect(page.getByText(/could not reach the risk service/i)).toHaveCount(
-      0,
-    );
+    await expect(
+      page.getByText(/could not reach the risk service/i),
+    ).toHaveCount(0);
 
     // These figures are supervisory monitoring, and the screen says so.
     await expect(
@@ -57,7 +57,9 @@ test.describe("IRRBB standardised framework", () => {
     // No run exists for the fixture's reporting date, so the honest state is
     // "no result", not an error panel and not a zeroed measure.
     await expect(
-      page.getByText(/No standardised framework result for this reporting date/i),
+      page.getByText(
+        /No standardised framework result for this reporting date/i,
+      ),
     ).toBeVisible();
     await expect(page.getByText(/nothing has gone wrong/i)).toBeVisible();
 
@@ -72,7 +74,7 @@ test.describe("IRRBB standardised framework", () => {
   test("offers the run control with its reason when the reader cannot mint", async ({
     page,
   }) => {
-    await page.goto("/irr/standardised");
+    await page.goto("/irr/standardised?preparing=1");
     const runButton = page.getByRole("button", {
       name: "Run the standardised framework",
     });
@@ -99,7 +101,7 @@ test.describe("unbound IRRBB user", () => {
       }
     });
 
-    await page.goto("/irr/standardised");
+    await page.goto("/irr/standardised?preparing=1");
     await expect(
       page.getByRole("heading", { name: "Access required" }),
     ).toBeVisible();
@@ -120,7 +122,7 @@ test.describe("IRRBB runner", () => {
   test("mints a run and states the outcome, whichever it is", async ({
     page,
   }) => {
-    await page.goto("/irr/standardised");
+    await page.goto("/irr/standardised?preparing=1");
     const runButton = page.getByRole("button", {
       name: "Run the standardised framework",
     });
@@ -158,16 +160,18 @@ test.describe("IRRBB runner", () => {
       // Refused to mint: the screen says the run could not be made, and does
       // NOT quietly leave the reader on an unchanged page.
       await expect(
-        page.getByText(
-          /could not be run for this reporting date|No standardised framework result/i,
-        ).first(),
+        page
+          .getByText(
+            /could not be run for this reporting date|No standardised framework result/i,
+          )
+          .first(),
       ).toBeVisible();
     }
 
     // Never a transport error against a healthy backend.
-    await expect(page.getByText(/could not reach the risk service/i)).toHaveCount(
-      0,
-    );
+    await expect(
+      page.getByText(/could not reach the risk service/i),
+    ).toHaveCount(0);
 
     if (evidenceDir) {
       await page.screenshot({

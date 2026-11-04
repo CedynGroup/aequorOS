@@ -8682,5 +8682,29 @@
   [
     "tests.test_worker",
     "tests.test_worker_integration"
+  ],
+  [
+    "tests.case.service.test_documents",
+    "tests.case.service.test_documents"
+  ],
+  [
+    "tests.db.test_authorization_effective_access_properties",
+    "tests.db.test_authorization_effective_access_properties_integration"
+  ],
+  [
+    "tests.reporting.service.test_instrument_notifications",
+    "tests.reporting.service.test_instrument_notifications"
+  ],
+  [
+    "tests.reporting.service.test_instrument_notifications",
+    "tests.reporting.service.test_instrument_notifications_integration"
+  ],
+  [
+    "tests.services.test_rule_applicability",
+    "tests.services.test_rule_applicability"
+  ],
+  [
+    "tests.services.test_rule_applicability",
+    "tests.services.test_rule_applicability_integration"
   ]
 ]

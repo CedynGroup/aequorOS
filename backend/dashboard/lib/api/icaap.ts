@@ -168,6 +168,34 @@ export function useIcaapFrameworks(bankId: string | undefined) {
   });
 }
 
+export function useIcaapFramework(
+  bankId: string | undefined,
+  code: string | undefined,
+  version: string | undefined,
+) {
+  const workspaceEnabled = useIcaapWorkspaceEnabled();
+  const scope = useQueryAuthorityScope();
+  return useQuery({
+    queryKey: scopedQueryKey(
+      "icaap-framework",
+      scope,
+      bankId ?? null,
+      code ?? null,
+      version ?? null,
+    ),
+    queryFn: () =>
+      apiCall(() =>
+        icaapApi.getIcaapFramework({
+          bankId: bankId!,
+          frameworkCode: code!,
+          version: version!,
+        }),
+      ),
+    enabled: workspaceEnabled && Boolean(bankId && code && version),
+    ...HEAVY_DASHBOARD_QUERY_POLICY,
+  });
+}
+
 export function useIcaapBlockTypes(bankId: string | undefined) {
   const workspaceEnabled = useIcaapWorkspaceEnabled();
   const scope = useQueryAuthorityScope();

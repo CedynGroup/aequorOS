@@ -99,7 +99,15 @@ for (const [source, links] of [
       }
       await link.click();
       await expect(page).toHaveURL(new RegExp(`${destination}$`));
-      await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+      if (destination === "/irr" || destination === "/liquidity") {
+        await expect(
+          page.getByText(
+            "This capability is available from Preparing for upcoming rules.",
+          ),
+        ).toBeVisible();
+      } else {
+        await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+      }
     }
   });
 }

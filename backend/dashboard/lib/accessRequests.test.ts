@@ -108,6 +108,20 @@ for (const route of PUBLIC_MODULE_ROUTES) {
   );
 }
 
+for (const path of ["/submissions/instruments", "/submissions/upcoming"]) {
+  const scope: ModuleScope = {
+    modules: new Set(),
+    organizationModules: new Set(),
+    hasInstitutionAuthority: false,
+    institutionClass: "bank",
+    isResolved: true,
+  };
+  assert.equal(isPathVisible(path, scope), true);
+  assert.equal(accessDeniedForPath(path, scope), null);
+  assert.deepEqual(accessRequestRequirements(path, [], "bank"), []);
+  assert.equal(PUBLIC_MODULE_ROUTES.has(path), false);
+}
+
 function capability(
   module: EffectiveCapabilityRead["module"],
   sensitivity: EffectiveCapabilityRead["sensitivity"],

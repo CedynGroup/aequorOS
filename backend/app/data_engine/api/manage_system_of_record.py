@@ -19,7 +19,7 @@ from uuid import UUID
 from fastapi import APIRouter, Query
 
 from app.api.deps import DbSession, ScopedMutationTenant, Tenant
-from app.core.authorization import Module, Permission, Sensitivity
+from app.core.authorization import Permission, Sensitivity
 from app.data_engine.domain.ingestion.constants import PositionType, SourceSystem
 from app.data_engine.schemas.system_of_record import (
     CanonicalWithdrawalApproveRequest,
@@ -38,8 +38,7 @@ from app.data_engine.schemas.system_of_record import (
     TypeFindingRead,
 )
 from app.data_engine.service import canonical_withdrawal, system_of_record
-from app.data_engine.service.access import require_data_access
-from app.identity.public import resolve_bank
+from app.data_engine.service.access import require_data_access, resolve_data_bank
 from app.live.service import fact_derivation
 from app.models import CanonicalWithdrawal, SystemOfRecordDeclaration
 
@@ -121,7 +120,7 @@ def approve_system_of_record_declaration(
     db: DbSession,
     ctx: ScopedMutationTenant,
 ) -> SystemOfRecordDeclarationRead:
-    bank = resolve_bank(db, ctx, bank_id, module=Module.DATA)
+    bank = resolve_data_bank(db, ctx, bank_id)
     row = system_of_record.approve(db, ctx, bank, declaration_id, approved_by=payload.approved_by)
     db.commit()
     db.refresh(row)
@@ -140,7 +139,7 @@ def revoke_system_of_record_declaration(
     db: DbSession,
     ctx: ScopedMutationTenant,
 ) -> SystemOfRecordDeclarationRead:
-    bank = resolve_bank(db, ctx, bank_id, module=Module.DATA)
+    bank = resolve_data_bank(db, ctx, bank_id)
     row = system_of_record.revoke(
         db, ctx, bank, declaration_id, revoked_by=payload.revoked_by, reason=payload.reason
     )
@@ -300,7 +299,7 @@ def approve_canonical_withdrawal(
     ctx: ScopedMutationTenant,
 ) -> CanonicalWithdrawalRead:
     """Apply a pending withdrawal. The approver must not be the requester."""
-    bank = resolve_bank(db, ctx, bank_id, module=Module.DATA)
+    bank = resolve_data_bank(db, ctx, bank_id)
     row = canonical_withdrawal.approve_withdrawal(
         db, ctx, bank, withdrawal_id, approved_by=payload.approved_by
     )
@@ -322,7 +321,7 @@ def reverse_canonical_withdrawal(
     ctx: ScopedMutationTenant,
 ) -> CanonicalWithdrawalRead:
     """Restore a withdrawn book, with its own reason and its own audit trail."""
-    bank = resolve_bank(db, ctx, bank_id, module=Module.DATA)
+    bank = resolve_data_bank(db, ctx, bank_id)
     row = canonical_withdrawal.reverse_withdrawal(
         db, ctx, bank, withdrawal_id, reversed_by=payload.reversed_by, reason=payload.reason
     )

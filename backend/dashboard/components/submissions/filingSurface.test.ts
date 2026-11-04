@@ -831,7 +831,7 @@ function renderWorkspace(
   const previousWindow = Object.getOwnPropertyDescriptor(globalThis, "window");
   Object.defineProperty(globalThis, "window", {
     configurable: true,
-    value: { location: { search: "" } },
+    value: Object.assign(new EventTarget(), { location: { search: "" } }),
   });
   let tree: ReturnType<typeof create> | undefined;
   try {

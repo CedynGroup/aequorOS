@@ -9,6 +9,7 @@
  * ladder per module over the same window.
  */
 
+import { useBankRules } from "@/lib/api/regulatoryRules";
 import { useState } from "react";
 import type { LiveModule, WindowRatio } from "@aequoros/risk-service-api";
 import SectionCard from "@/components/ui/SectionCard";
@@ -96,7 +97,21 @@ export default function WindowAnalysis({
     Boolean(applied),
   );
 
-  const data = query.data;
+  const rules = useBankRules(bankId);
+  const data =
+    rules.isReady && query.data
+      ? {
+          ...query.data,
+          ratios: query.data.ratios.filter(
+            (row) =>
+              (row.ratio !== "lcr_pct" && row.ratio !== "nsfr_pct") ||
+              rules.isInForce("LCR-NSFR"),
+          ),
+          daily: query.data.daily.filter((row) =>
+            rules.isModuleInForce(row.module),
+          ),
+        }
+      : undefined;
   const storedPoints = (data?.ratios ?? []).reduce(
     (count, stat) => count + stat.points.filter((p) => p.stored).length,
     0,
@@ -165,18 +180,21 @@ export default function WindowAnalysis({
             Pick a start and end date (or a preset), then Compute — the engines
             resolve every period in the window server-side.
           </p>
-        ) : query.isFetching ? (
+        ) : query.isFetching || rules.isLoading ? (
           <div className="space-y-2.5" aria-busy="true" aria-label="Computing">
             <SkeletonLine width="70%" height={12} />
             <SkeletonLine width="65%" height={12} />
             <SkeletonLine width="72%" height={12} />
             <SkeletonLine width="60%" height={12} />
           </div>
-        ) : query.error ? (
+        ) : query.error || rules.error ? (
           <ErrorPanel
-            error={query.error}
+            error={query.error ?? rules.error}
             title="Could not compute the window"
-            onRetry={() => void query.refetch()}
+            onRetry={() => {
+              void query.refetch();
+              void rules.query.refetch();
+            }}
           />
         ) : data && data.ratios.length === 0 && data.daily.length === 0 ? (
           <p className="text-body text-slate">No periods in this window.</p>

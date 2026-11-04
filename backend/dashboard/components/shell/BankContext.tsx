@@ -54,6 +54,7 @@ export type InstitutionTypeInfo = {
 
 type BankContextValue = {
   bank: BankRead | null;
+  banks?: BankRead[];
   institutionType: InstitutionTypeInfo | null;
   /**
    * The active tenant's module scope (docs/sdi.md §3, §6.3) — the set of
@@ -492,6 +493,7 @@ export default function BankProvider({ children }: { children: ReactNode }) {
   const value = useMemo<BankContextValue>(
     () => ({
       bank,
+      banks: banksQuery.data?.banks,
       institutionType,
       moduleScope,
       period,
@@ -506,6 +508,7 @@ export default function BankProvider({ children }: { children: ReactNode }) {
     }),
     [
       bank,
+      banksQuery.data,
       banksQuery.isLoading,
       institutionCapabilities,
       institutionType,

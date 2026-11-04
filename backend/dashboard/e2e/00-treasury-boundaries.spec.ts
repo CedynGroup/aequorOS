@@ -41,7 +41,7 @@ test("zero uploaded cash produces a real zero HQLA and red 0% coverage", async (
     equity: "100000",
   });
   figures(result, 0, 31_000, 0, "red");
-  await page.goto("/liquidity");
+  await page.goto("/liquidity?preparing=1");
   await expectKpi(page, "HQLA stock", "GHS 0", "Post-haircut weighted");
   await expectKpi(page, "Liquidity Coverage Ratio", "0.00%");
 });
@@ -91,7 +91,7 @@ test("correcting cash across the 100% LCR threshold changes amber to green at th
       result.validations.find((row) => row.rule_code === "lcr_above_minimum")
         ?.passed,
     ).toBe(point.passed);
-    await page.goto("/liquidity");
+    await page.goto("/liquidity?preparing=1");
     await expectKpi(page, "Liquidity Coverage Ratio", point.shown);
   }
 });
@@ -112,7 +112,7 @@ test("a loan repaying within 30 days binds the 75% inflow cap and leaves 7,750 n
     result.validations.find((row) => row.rule_code === "inflow_cap_applied")
       ?.message,
   ).toMatch(/75% inflow cap bound:.*capped at 23250/);
-  await page.goto("/liquidity");
+  await page.goto("/liquidity?preparing=1");
   await expectKpi(
     page,
     "30-day net outflows",
@@ -164,7 +164,7 @@ test("Level 2A and 2B holdings receive haircuts and both caps before the 50,000 
         ?.weighted_amount,
     ),
   ).toBe(-72_500);
-  await page.goto("/liquidity");
+  await page.goto("/liquidity?preparing=1");
   await expectKpi(page, "HQLA stock", "GHS 50.0K", "Post-haircut weighted");
   await expectKpi(page, "Liquidity Coverage Ratio", "161.29%");
 });
@@ -194,7 +194,7 @@ test("an uploaded public-sector holding without Basel classification stays in th
       0,
     ),
   ).toBe(31_000);
-  await page.goto("/liquidity");
+  await page.goto("/liquidity?preparing=1");
   await expectKpi(page, "HQLA stock", "GHS 31.0K", "Post-haircut weighted");
   await expectKpi(page, "Liquidity Coverage Ratio", "100.00%");
 });

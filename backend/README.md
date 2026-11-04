@@ -283,10 +283,11 @@ Document deletion commits the document tombstone, the stored object's
 `pending_deletion` status, the audit event and a `document_delete` job atomically.
 The existing deleted response means logical deletion: downloads, parsing and
 upload completion refuse the document immediately. Upload completion commits its
-read transaction before storage HEAD, then reloads locked rows and revalidates
-the pending upload. Completion returns HTTP 409 if deletion committed during HEAD,
-even if cleanup has already finished. Downloads also refuse tombstones with
-inconsistent live statuses. The core worker closes its read transaction before
+read transaction before storage HEAD, snapshot copying and digest reads, then
+reloads locked rows and revalidates the pending upload. Completion returns HTTP
+409 if deletion committed during that storage work, even if cleanup has already
+finished. Downloads also refuse tombstones with inconsistent live statuses.
+The core worker closes its read transaction before
 deleting from storage, then commits the object's
 `deleted` acknowledgement with job completion. A transport failure or lost
 acknowledgement leaves pending cleanup safe to retry; duplicate requests preserve
@@ -296,6 +297,23 @@ cleanup remains pending and appears as a failed job on the operator jobs board.
 See [`documents.py`](app/case/service/documents.py) and the
 [deletion regression tests](tests/case/service/test_document_deletion_integration.py), including
 [PostgreSQL concurrency and role-timeout coverage](tests/db/test_document_deletion_timeout_integration.py).
+
+Upload completion also checks the object that landed against what the client
+declared at request time. A presigned PUT accepts any body, so the declaration is
+provenance only once completion has compared it: storage must report a size, that
+size must equal the declared `byte_size`, and when a `sha256` was declared the
+stored bytes are re-read and hashed under a read bound of the snapshot's reported
+size, refusing on mismatch. Before verification, completion copies the staged
+object to a unique server-only key. Metadata and digest reads use that snapshot,
+and the committed object locator, downloads, and deletion all use the same key. Replaying the
+upload URL cannot change completed bytes. Failed completion removes its snapshot;
+document cleanup deletes both the snapshot and its staged upload key.
+Nothing is recorded unverified — an uncomparable or unparseable
+declaration is refused, not accepted. A declaration that is not 64 hexadecimal
+characters, including one padded with whitespace, is refused at the request
+schema; valid uppercase hex is normalized to lowercase. The store-facing
+half of the check is covered at the adapter boundary in
+[`test_legacy_document_transfers.py`](tests/storage/test_legacy_document_transfers.py).
 
 Canonical financial data is read with
 `GET /api/v1/cases/{case_id}/financial-workspace`. Resource-specific `POST` and

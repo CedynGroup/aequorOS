@@ -14,6 +14,7 @@
  * regulator-request kinds arrive with the P3 workflow that gives them meaning.
  */
 
+import FrameworkStatus from "./FrameworkStatus";
 import { useState } from "react";
 import { FlaskConical } from "lucide-react";
 import { isApiError } from "@/lib/api/client";
@@ -123,9 +124,7 @@ export default function CreateCycleDialog({
                 key={`${entry.code}|${entry.version}`}
                 value={`${entry.code}|${entry.version}`}
               >
-                {`${entry.regulator} · ${entry.shortTitle} · ${entry.version}${
-                  entry.status === "exposure_draft" ? " (exposure draft)" : ""
-                }`}
+                {`${entry.regulator} · ${entry.shortTitle} · ${entry.version}`}
               </option>
             ))}
           </select>
@@ -146,12 +145,7 @@ export default function CreateCycleDialog({
             Issued by {framework.regulator}.
           </p>
         )}
-        {framework?.status === "exposure_draft" && (
-          <p className="-mt-1 text-caption text-warning">
-            This version is an exposure draft. {framework.regulator} may change
-            the text before it is final.
-          </p>
-        )}
+        {framework && <FrameworkStatus bankId={bankId} framework={framework} />}
 
         <div className="grid grid-cols-2 gap-4">
           <FieldLabel label="Financial year">

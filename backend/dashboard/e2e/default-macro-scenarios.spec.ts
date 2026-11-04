@@ -17,7 +17,7 @@ test.describe("default macro scenarios", () => {
   test("shows system defaults and runs one on a fresh scenario library", async ({
     page,
   }) => {
-    await page.goto("/irr/enterprise-stress");
+    await page.goto("/irr/enterprise-stress?preparing=1");
 
     await expect(
       page.getByRole("heading", { name: "Enterprise Stress Workbench" }),
@@ -120,7 +120,7 @@ test.describe("default macro scenarios", () => {
       );
       const context = await browser.newContext({ storageState });
       const page = await context.newPage();
-      await page.goto("/irr/enterprise-stress");
+      await page.goto("/irr/enterprise-stress?preparing=1");
       const scenario = page.getByLabel("Approved scenario");
       await expect(scenario).not.toHaveValue("");
       await expectBankStatus("/enterprise-stress/runs", 403, {

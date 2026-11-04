@@ -30,6 +30,10 @@ function isExpectedFailure(testCase: TestCase): boolean {
 
 /** Enforce that the quarantine is exact, applied, and unable to drift quietly. */
 export default class QuarantineReporter implements Reporter {
+  constructor(
+    private readonly options: { requireCompleteExecution?: boolean } = {},
+  ) {}
+
   private errors: string[] = [];
   private discovered = 0;
   private shard: FullConfig["shard"] = null;
@@ -103,9 +107,12 @@ export default class QuarantineReporter implements Reporter {
         `only ${journeys.length} of ${this.discovered} discovered journeys reported a result`,
       );
     }
-    if (executed < 20) {
+    const minimumExecuted = this.options.requireCompleteExecution
+      ? Math.max(1, this.discovered)
+      : 20;
+    if (executed < minimumExecuted) {
       this.errors.push(
-        `only ${executed} journeys executed; the CI gate expects at least 20`,
+        `only ${executed} journeys executed; the CI gate expects at least ${minimumExecuted}`,
       );
     }
     if (quarantinedExecuted !== QUARANTINED_JOURNEYS.length) {

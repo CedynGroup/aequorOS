@@ -1,5 +1,7 @@
 "use client";
 
+import { useSearchParams } from "next/navigation";
+import { preparationHref } from "@/lib/regulatoryInstruments";
 import PageContainer from "@/components/ui/PageContainer";
 import Link from "next/link";
 import { PermissionLink } from "@/components/ui/DisabledWithReason";
@@ -43,7 +45,7 @@ const thresholdColumns: Column<LiquidityThresholdRead>[] = [
         <p className="font-medium text-navy">{r.thresholdCode}</p>
         <p className="text-caption text-slate">
           {r.institutionClass === "sdi"
-            ? "Binding for SDIs (¶9)"
+            ? "SDI monitoring threshold"
             : "Monitoring tool for banks"}
         </p>
       </div>
@@ -102,6 +104,7 @@ const haircutColumns: Column<LiquidityHaircutRead>[] = [
 
 function BankMonitoringTools({ embedded = false }: { embedded?: boolean }) {
   const { bank, moduleScope } = useBankContext();
+  const preparing = useSearchParams().get("preparing") === "1";
   const bankId = bank?.id;
   const stressAccess = hrefAccess("/liquidity/stress", moduleScope);
 
@@ -230,7 +233,7 @@ function BankMonitoringTools({ embedded = false }: { embedded?: boolean }) {
 
             <SectionCard
               title="The eleven LMTD appendix tables"
-              subtitle="Filed through the Regulatory Reporting as the LMT return"
+              subtitle="Prepared through Regulatory Reporting as the LMT return"
             >
               <div className="text-body text-navy/85 leading-relaxed space-y-3">
                 <p>
@@ -240,7 +243,7 @@ function BankMonitoringTools({ embedded = false }: { embedded?: boolean }) {
                   unencumbered-assets schedule — generate from canonical
                   position data and export in the return format from the{" "}
                   <Link
-                    href="/submissions"
+                    href="/submissions/returns?code=LMT&preparing=1"
                     className="text-action hover:underline"
                   >
                     Regulatory Reporting
@@ -252,7 +255,7 @@ function BankMonitoringTools({ embedded = false }: { embedded?: boolean }) {
                       {" "}
                       on the{" "}
                       <PermissionLink
-                        href="/liquidity/stress"
+                        href={preparationHref("/liquidity/stress", preparing)}
                         reason={
                           stressAccess.state === "disabled"
                             ? stressAccess.reason

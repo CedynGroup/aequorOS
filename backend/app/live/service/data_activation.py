@@ -40,6 +40,7 @@ from app.data_engine.public import (
     DataActivationListRead,
     DataActivationRead,
     DataActivationSummaryRead,
+    resolve_data_bank,
 )
 from app.forecasting.schemas.forecasting import ForecastRunCreate
 from app.forecasting.service import regulatory_forecasting
@@ -66,7 +67,7 @@ def activate_bank_data(
     db: Session, ctx: TenantContext, bank_id: str, payload: DataActivationCreate
 ) -> DataActivationRead:
     _require_actor(ctx)
-    bank = _get_bank_or_404(db, ctx, bank_id)
+    bank = resolve_data_bank(db, ctx, bank_id)
     scoped_authorization.require_resolved_bank_permission(
         db,
         ctx,
@@ -139,7 +140,7 @@ def activate_bank_data(
 def list_bank_data_activations(
     db: Session, ctx: TenantContext, bank_id: str, *, limit: int = 10
 ) -> DataActivationListRead:
-    bank = _get_bank_or_404(db, ctx, bank_id)
+    bank = resolve_data_bank(db, ctx, bank_id)
     scoped_authorization.require_resolved_bank_permission(
         db,
         ctx,

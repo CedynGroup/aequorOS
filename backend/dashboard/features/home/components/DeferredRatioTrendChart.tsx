@@ -3,7 +3,6 @@
 import dynamic from "next/dynamic";
 import { useEffect, useRef, useState } from "react";
 import ChartFrame from "@/components/ui/ChartFrame";
-import { useModuleScope } from "@/components/shell/BankContext";
 
 const RatioTrendChart = dynamic(() => import("./RatioTrendChart"), {
   ssr: false,
@@ -60,16 +59,10 @@ export default function DeferredRatioTrendChart({
 
 /** Matches the loaded frame's fixed geometry so the async swap cannot shift it. */
 function RatioTrendChartSkeleton() {
-  const isSdi = useModuleScope().institutionClass === "sdi";
-
   return (
     <ChartFrame
       title="Ratio trend"
-      subtitle={
-        isSdi
-          ? "CAR (s.29) per reporting period"
-          : "LCR & NSFR (left axis) · CAR (right axis) per reporting period"
-      }
+      subtitle="Regulatory ratios per reporting period"
       height={280}
       loading
       actions={
@@ -86,9 +79,7 @@ function RatioTrendChartSkeleton() {
       }
       footer={
         <span className="invisible" aria-hidden>
-          {isSdi
-            ? "0 periods · 0 with stored results"
-            : "0 periods · LCR +0.0pp over the window · 0 with stored results"}
+          0 periods · 0 with stored results
         </span>
       }
     >
