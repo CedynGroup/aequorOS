@@ -107,8 +107,16 @@ _GRANTABLE_ROLES = (RoleBundle.VIEWER, RoleBundle.ANALYST, RoleBundle.APPROVER)
 #: being granted by the machines: they prove the grid denies unrequested cells
 #: instead of merely confirming the ones the machine happened to create.
 _GRID_MODULES = (Module.DATA, Module.LIQUIDITY, Module.CREDIT, Module.FX)
+#: The modules the generated rules may grant; ``FX`` stays an ungranted column.
+_GRANTABLE_MODULES = (Module.DATA, Module.LIQUIDITY, Module.CREDIT)
 _GRID_SENSITIVITIES = (
     Sensitivity.PUBLISHED,
+    Sensitivity.AGGREGATED,
+    Sensitivity.CONFIDENTIAL,
+    Sensitivity.RESTRICTED,
+)
+#: The sensitivities the generated rules may grant; ``PUBLISHED`` stays a control.
+_GRANTABLE_SENSITIVITIES = (
     Sensitivity.AGGREGATED,
     Sensitivity.CONFIDENTIAL,
     Sensitivity.RESTRICTED,
@@ -598,8 +606,8 @@ def test_scoped_grant_lifecycle_never_exceeds_current_bindings(
         @rule(
             role=st.sampled_from(_GRANTABLE_ROLES),
             bank=st.sampled_from((0, 1, None)),
-            module=st.sampled_from(_GRID_MODULES),
-            sensitivity=st.sampled_from(_GRID_SENSITIVITIES[1:]),
+            module=st.sampled_from(_GRANTABLE_MODULES),
+            sensitivity=st.sampled_from(_GRANTABLE_SENSITIVITIES),
         )
         def create_one_complete_grant(
             self,
@@ -649,8 +657,8 @@ def test_scoped_grant_lifecycle_never_exceeds_current_bindings(
         @rule(
             slot=st.integers(min_value=0, max_value=31),
             bank=st.sampled_from((0, 1)),
-            module=st.sampled_from(_GRID_MODULES),
-            sensitivity=st.sampled_from(_GRID_SENSITIVITIES),
+            module=st.sampled_from(_GRANTABLE_MODULES),
+            sensitivity=st.sampled_from(_GRANTABLE_SENSITIVITIES),
         )
         def change_scope(
             self,
