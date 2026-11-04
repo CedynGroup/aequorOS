@@ -15,6 +15,8 @@
  * screen never decides that a report is ready.
  */
 
+import { useUserProfile } from "@/components/profile/ProfileProvider";
+import { filingAuthorityFor } from "@/lib/submissions/filingAuthority";
 import { useState } from "react";
 import { CornerUpLeft } from "lucide-react";
 import type { PackageStatus } from "@aequoros/risk-service-api";
@@ -30,7 +32,10 @@ import P2Unavailable, {
 } from "@/components/icaap/p2/availability";
 import { SecondaryButton } from "@/components/icaap/Dialog";
 import { useModuleScope } from "@/components/shell/BankContext";
-import { useRegulatoryPackage, useValidateRegulatoryPackage } from "@/lib/api/hooks";
+import {
+  useRegulatoryPackage,
+  useValidateRegulatoryPackage,
+} from "@/lib/api/hooks";
 import { fmtLocale } from "@/lib/format";
 import { DIGEST_CHARS, ICON_SM } from "@/components/icaap/p2/display";
 import { useIcaapFiling, useIcaapStages } from "@/lib/api/icaapFiling";
@@ -76,6 +81,10 @@ export default function FilingWorkspace({
   cycleTitle: string;
 }) {
   const scope = useModuleScope();
+  const { effectiveAuthority, isLoading: authorityLoading } = useUserProfile();
+  const filingAuthority = filingAuthorityFor(effectiveAuthority, bankId, {
+    resolved: !authorityLoading,
+  });
   const filingQuery = useIcaapFiling(bankId, cycleId);
   const stagesQuery = useIcaapStages(bankId, cycleId);
   const [returning, setReturning] = useState(false);
@@ -96,7 +105,8 @@ export default function FilingWorkspace({
   const pkg = filing?.package ?? null;
   const status = (pkg?.status ?? "generated") as PackageStatus;
   const report = packageQuery.data?.validationReport ?? null;
-  const validationClean = report !== null && report.passed && report.errorCount === 0;
+  const validationClean =
+    report !== null && report.passed && report.errorCount === 0;
 
   return (
     <div className="space-y-4">
@@ -110,7 +120,10 @@ export default function FilingWorkspace({
       >
         {filing && pkg === null && (
           <SectionCard title="Filing">
-            <EmptyState title="Nothing to file yet" description={NOTHING_TO_FILE} />
+            <EmptyState
+              title="Nothing to file yet"
+              description={NOTHING_TO_FILE}
+            />
           </SectionCard>
         )}
 
@@ -202,7 +215,7 @@ export default function FilingWorkspace({
             <FilingDownloads
               bankId={bankId}
               packageId={pkg.id}
-              canExport={scope.capitalExport === true}
+              canExport={filingAuthority.mayExport}
             />
 
             <DisclosurePanel

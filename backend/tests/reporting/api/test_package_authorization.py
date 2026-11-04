@@ -1,7 +1,8 @@
 """Every return needs whole-institution scoped authority.
 
 Regulatory Reporting/restricted governs ordinary returns; ICAAP keeps
-Capital/confidential. Missing visibility hides the return, while visible returns
+Capital/confidential visibility; every return artifact requires REG/restricted
+EXPORT. Missing visibility hides the return, while visible returns
 require their own action permission. Scalar roles cannot satisfy either gate.
 """
 
@@ -11,6 +12,7 @@ import hashlib
 import io
 from datetime import UTC, date, datetime
 from typing import Any
+from unittest.mock import Mock
 from uuid import UUID, uuid4
 
 import pytest
@@ -1355,17 +1357,23 @@ def _audit_events(entity_id: str, event_type: str) -> list[UUID]:
         )
 
 
+@pytest.mark.parametrize(
+    ("family", "capital_export"), [("liquidity", False), ("icaap", False), ("icaap", True)]
+)
 def test_view_authority_does_not_export_download_or_email_the_return(
     db_client: TestClient,
     storage_engine: InMemoryStorageClient,
     monkeypatch: pytest.MonkeyPatch,
+    family: str,
+    capital_export: bool,
 ) -> None:
     """Export is its own permission: reading a return never hands over its file.
 
     Every refusal lands before the effect: no exporter runs, no artifact is
     minted or written, and no export/download audit event is recorded.
     """
-    package_id = _package(family="liquidity", return_code="LCR-NSFR")
+    code = "ICAAP-REPORT" if family == "icaap" else "LCR-NSFR"
+    package_id = _package(family=family, return_code=code)
     artifact_id, version_id = _artifact(package_id, storage_engine)
     invoked: list[str] = []
 
@@ -1378,9 +1386,14 @@ def test_view_authority_does_not_export_download_or_email_the_return(
 
     monkeypatch.setattr(reporting_workflow, "_resolve_exporter", lambda: _spy_export)
     authv = _grant(
-        role_bundle=RoleBundle.VIEWER,
-        module_scope=ModuleScope.REGULATORY,
-        sensitivity_scope=SensitivityScope.RESTRICTED,
+        role_bundle=RoleBundle.ANALYST if capital_export else RoleBundle.VIEWER,
+        module_scope=ModuleScope.CAPITAL if family == "icaap" else ModuleScope.REGULATORY,
+        sensitivity_scope=(
+            SensitivityScope.CONFIDENTIAL if family == "icaap" else SensitivityScope.RESTRICTED
+        ),
+    )
+    monkeypatch.setattr(
+        storage_engine, "write", Mock(side_effect=AssertionError("unauthorized storage write"))
     )
     auth = headers(roles=("viewer",), authorization_version=authv)
     base = f"/api/v1/banks/{SAMPLE_BANK_ID}/regulatory-packages/{package_id}"
@@ -1428,13 +1441,16 @@ def test_view_authority_does_not_export_download_or_email_the_return(
     assert _audit_events(str(version_id), "regulatory_artifact_version.downloaded") == []
 
 
+@pytest.mark.parametrize("family", ["liquidity", "icaap"])
 def test_export_authority_generates_downloads_and_email_fallback(
     db_client: TestClient,
     storage_engine: InMemoryStorageClient,
     monkeypatch: pytest.MonkeyPatch,
+    family: str,
 ) -> None:
     """The same principal gains every export surface through one REG EXPORT row."""
-    package_id = _package(family="liquidity", return_code="LCR-NSFR")
+    code = "ICAAP-REPORT" if family == "icaap" else "LCR-NSFR"
+    package_id = _package(family=family, return_code=code)
     artifact_id, version_id = _artifact(package_id, storage_engine)
 
     def _fake_export(
@@ -1454,6 +1470,13 @@ def test_export_authority_generates_downloads_and_email_fallback(
         return row
 
     monkeypatch.setattr(reporting_workflow, "_resolve_exporter", lambda: _fake_export)
+    _grant(
+        role_bundle=RoleBundle.VIEWER,
+        module_scope=ModuleScope.CAPITAL if family == "icaap" else ModuleScope.REGULATORY,
+        sensitivity_scope=(
+            SensitivityScope.CONFIDENTIAL if family == "icaap" else SensitivityScope.RESTRICTED
+        ),
+    )
     authv = _grant(
         role_bundle=RoleBundle.ANALYST,
         module_scope=ModuleScope.REGULATORY,
@@ -1481,7 +1504,7 @@ def test_export_authority_generates_downloads_and_email_fallback(
         headers=auth,
     )
     assert download.status_code == 200, download.text
-    assert download.content.startswith(b"LCR-NSFR:pdf:")
+    assert download.content.startswith(f"{code}:pdf:".encode())
 
     version = db_client.get(
         f"/api/v1/banks/{SAMPLE_BANK_ID}/regulatory-artifact-versions/{version_id}/download",
@@ -1518,3 +1541,59 @@ def test_artifact_download_hides_a_package_from_a_sibling_bank(
         f"/api/v1/banks/{OTHER_ORG_BANK_ID}/regulatory-artifacts/{artifact_id}/download",
     ):
         assert db_client.get(url, headers=auth).status_code == 404
+
+
+def test_icaap_export_requires_visibility_before_regulatory_authority(
+    db_client: TestClient,
+    storage_engine: InMemoryStorageClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    package_id = _package()
+    artifact_id, version_id = _artifact(package_id, storage_engine)
+    authv = _grant(
+        module_scope=ModuleScope.REGULATORY,
+        sensitivity_scope=SensitivityScope.RESTRICTED,
+    )
+    auth = headers(roles=("analyst",), authorization_version=authv)
+    monkeypatch.setattr(
+        reporting_workflow,
+        "_resolve_exporter",
+        Mock(side_effect=AssertionError("invisible exporter")),
+    )
+    monkeypatch.setattr(
+        storage_engine, "write", Mock(side_effect=AssertionError("invisible storage write"))
+    )
+    base = f"/api/v1/banks/{SAMPLE_BANK_ID}"
+    surfaces = [
+        (
+            "post",
+            f"regulatory-packages/{package_id}/export?kind=pdf",
+            f"regulatory-packages/{uuid4()}/export?kind=pdf",
+        ),
+        (
+            "get",
+            f"regulatory-artifacts/{artifact_id}/download",
+            f"regulatory-artifacts/{uuid4()}/download",
+        ),
+        (
+            "get",
+            f"regulatory-artifact-versions/{version_id}/download",
+            f"regulatory-artifact-versions/{uuid4()}/download",
+        ),
+        (
+            "get",
+            f"regulatory-packages/{package_id}/email-fallback.eml",
+            f"regulatory-packages/{uuid4()}/email-fallback.eml",
+        ),
+        (
+            "get",
+            f"regulatory-packages/{package_id}/email-fallback-instructions",
+            f"regulatory-packages/{uuid4()}/email-fallback-instructions",
+        ),
+    ]
+    for method, visible, unknown in surfaces:
+        refused = db_client.request(method, f"{base}/{visible}", headers=auth)
+        missing = db_client.request(method, f"{base}/{unknown}", headers=auth)
+        assert refused.status_code == missing.status_code == 404
+    assert _audit_events(str(package_id), "regulatory_package.exported") == []
+    assert _audit_events(str(version_id), "regulatory_artifact_version.downloaded") == []

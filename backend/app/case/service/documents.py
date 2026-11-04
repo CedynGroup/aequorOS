@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from contextlib import suppress
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any
@@ -12,9 +13,10 @@ from sqlalchemy.orm import Session
 from app.api.deps import TenantContext
 from app.case.service.cases import get_case_or_404
 from app.core.config import Settings
+from app.core.content_digest import ContentReadOverrun, DeclaredDigestError, digest_matches
 from app.db.base import utc_now
 from app.domain.risk_constants import ALLOWED_UPLOAD_CONTENT_TYPES
-from app.integrations.storage.base import ObjectStorage
+from app.integrations.storage.base import ObjectStorage, StoredObjectHead
 from app.integrations.storage.s3 import get_object_storage
 from app.models import Document, DocumentChunk, Job, StoredObject
 from app.services import job_queue
@@ -163,6 +165,191 @@ def _require_pending_upload(document: Document, stored_object: StoredObject) -> 
         )
 
 
+def _digest_matches(declared: str, observed: str) -> bool:
+    """Compare digests, refusing a stored declaration that is not one.
+
+    A row written before the request schema validated declarations can hold
+    anything. Treating an unparseable value as a match would accept it, and
+    treating it as an error would surface as a server fault, so it is a
+    mismatch: the object cannot be shown to be what was declared.
+    """
+    try:
+        return digest_matches(declared, observed)
+    except DeclaredDigestError:
+        return False
+
+
+@dataclass(frozen=True)
+class _FinalizedSnapshot:
+    """A server-only copy of a staged upload, and what storage reports for it."""
+
+    bucket: str
+    key: str
+    digest: tuple[int, str] | None
+
+
+@dataclass(frozen=True)
+class _StagedSnapshot:
+    """Metadata for the snapshot, or the refused staging object if not copied."""
+
+    head: StoredObjectHead | None
+    copy: _FinalizedSnapshot | None
+
+
+@dataclass(frozen=True)
+class _VerifiedUpload:
+    """The snapshot completion records: its locator, metadata and measured size."""
+
+    key: str
+    head: StoredObjectHead
+    byte_size: int
+
+
+def _read_declared_digest(
+    storage_client: ObjectStorage,
+    *,
+    bucket: str,
+    finalized_key: str,
+    declared_digest: str | None,
+    observed_size: int | None,
+) -> tuple[int, str] | None:
+    """Hash the snapshot under its own reported size when a checksum was declared."""
+    if declared_digest is None or observed_size is None:
+        return None
+    try:
+        return storage_client.read_object_digest(
+            bucket=bucket,
+            object_key=finalized_key,
+            max_bytes=observed_size,
+        )
+    except ContentReadOverrun as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Uploaded object is larger than the size storage reported.",
+        ) from exc
+
+
+def _snapshot_staged_upload(
+    storage_client: ObjectStorage,
+    *,
+    bucket: str,
+    object_key: str,
+    declared_digest: str | None,
+    max_bytes: int,
+) -> _StagedSnapshot:
+    """Copy and hash outside the transaction, bounding both metadata checks."""
+    head = storage_client.head_object(bucket=bucket, object_key=object_key)
+    if head is None or head.byte_size is None or head.byte_size > max_bytes:
+        return _StagedSnapshot(head=head, copy=None)
+    finalized_key = storage_client.finalize_upload(bucket=bucket, object_key=object_key)
+    if finalized_key is None:
+        # The copy source is gone, so the head that found it no longer describes
+        # anything that landed.
+        return _StagedSnapshot(head=None, copy=None)
+    try:
+        snapshot_head = storage_client.head_object(bucket=bucket, object_key=finalized_key)
+        digest = None
+        if (
+            snapshot_head is not None
+            and snapshot_head.byte_size is not None
+            and snapshot_head.byte_size <= max_bytes
+        ):
+            digest = _read_declared_digest(
+                storage_client,
+                bucket=bucket,
+                finalized_key=finalized_key,
+                declared_digest=declared_digest,
+                observed_size=snapshot_head.byte_size,
+            )
+    except BaseException:
+        # The caller never receives this snapshot, so it cannot be the one to
+        # remove it; a cleanup failure must not replace the original refusal.
+        with suppress(Exception):
+            storage_client.delete_object(bucket=bucket, object_key=finalized_key)
+        raise
+    return _StagedSnapshot(
+        head=snapshot_head,
+        copy=_FinalizedSnapshot(bucket=bucket, key=finalized_key, digest=digest),
+    )
+
+
+def _verify_landed_upload(
+    snapshot: _StagedSnapshot,
+    *,
+    declared_size: int | None,
+    declared_digest: str | None,
+    max_bytes: int,
+) -> _VerifiedUpload:
+    """Return the recorded snapshot, refusing anything the client did not declare.
+
+    A declaration is provenance only once it has been compared with the object
+    that landed, so every way of failing to prove a match is a refusal rather
+    than a recorded declaration.
+    """
+    head = snapshot.head
+    if head is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Uploaded object was not found."
+        )
+    observed_size = head.byte_size
+    if observed_size is None:
+        # Without an observed size there is nothing to compare the declaration
+        # against, and recording it unverified is the defect this guard prevents.
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Storage did not report the uploaded object's size.",
+        )
+    if observed_size > max_bytes:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Uploaded object exceeds maximum size.",
+        )
+    if declared_size is not None and observed_size != declared_size:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Uploaded object does not match the declared size.",
+        )
+    copy = snapshot.copy
+    if copy is None:
+        # Only an accepted object is copied, so a reported object without a
+        # snapshot is not something completion can record.
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Uploaded object was not found."
+        )
+    if declared_digest is not None:
+        digest = copy.digest
+        if (
+            digest is None
+            or digest[0] != observed_size
+            or not _digest_matches(declared_digest, digest[1])
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Uploaded object does not match the declared checksum.",
+            )
+    return _VerifiedUpload(key=copy.key, head=head, byte_size=observed_size)
+
+
+def _discard_uncommitted_snapshot(
+    db: Session,
+    *,
+    copy: _FinalizedSnapshot,
+    storage_client: ObjectStorage,
+    commit_started: bool,
+) -> None:
+    """Discard only snapshots whose final commit was never attempted.
+
+    A failed acknowledgement can leave COMMIT in flight, so even a new
+    connection reading the old locator cannot prove the snapshot is unused.
+    Retaining a possible orphan is safer than deleting committed evidence.
+    """
+    with suppress(Exception):
+        db.rollback()
+        if commit_started:
+            return
+        storage_client.delete_object(bucket=copy.bucket, object_key=copy.key)
+
+
 def complete_upload(
     db: Session,
     ctx: TenantContext,
@@ -175,38 +362,60 @@ def complete_upload(
     stored_object = get_stored_object_or_404(db, ctx.organization_id, document.stored_object_id)
     _require_pending_upload(document, stored_object)
     bucket, object_key = stored_object.bucket, stored_object.object_key
+    declared_size, declared_digest = stored_object.byte_size, stored_object.sha256
     db.commit()
-    head = storage_client.head_object(bucket=bucket, object_key=object_key)
-    document = get_document_or_404(db, ctx.organization_id, document_id, for_update=True)
-    stored_object = get_stored_object_or_404(
-        db, ctx.organization_id, document.stored_object_id, for_update=True
-    )
-    _require_pending_upload(document, stored_object)
-    if head is None:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail="Uploaded object was not found."
+    snapshot = _StagedSnapshot(head=None, copy=None)
+    completed = False
+    final_commit_started = False
+    try:
+        # Every storage call runs with no transaction open, so a slow head, copy
+        # or digest read cannot spend the idle-in-transaction budget.
+        snapshot = _snapshot_staged_upload(
+            storage_client,
+            bucket=bucket,
+            object_key=object_key,
+            declared_digest=declared_digest,
+            max_bytes=settings.risk_max_upload_bytes,
         )
-    if head.byte_size is not None and head.byte_size > settings.risk_max_upload_bytes:
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Uploaded object exceeds maximum size.",
+        document = get_document_or_404(db, ctx.organization_id, document_id, for_update=True)
+        stored_object = get_stored_object_or_404(
+            db, ctx.organization_id, document.stored_object_id, for_update=True
         )
-    stored_object.status = "available"
-    stored_object.etag = head.etag
-    stored_object.byte_size = head.byte_size or stored_object.byte_size
-    stored_object.content_type = head.content_type or stored_object.content_type
-    stored_object.version_id = head.version_id
-    document.status = "uploaded"
-    document.uploaded_at = datetime.now(UTC)
-    record_event(
-        db,
-        ctx,
-        event_type="document.upload_completed",
-        entity_type="document",
-        entity_id=str(document.id),
-    )
-    db.commit()
-    return document
+        _require_pending_upload(document, stored_object)
+        verified = _verify_landed_upload(
+            snapshot,
+            declared_size=declared_size,
+            declared_digest=declared_digest,
+            max_bytes=settings.risk_max_upload_bytes,
+        )
+        stored_object.object_key = verified.key
+        stored_object.status = "available"
+        stored_object.etag = verified.head.etag
+        stored_object.byte_size = verified.byte_size
+        stored_object.content_type = verified.head.content_type or stored_object.content_type
+        stored_object.version_id = verified.head.version_id
+        document.status = "uploaded"
+        document.uploaded_at = datetime.now(UTC)
+        record_event(
+            db,
+            ctx,
+            event_type="document.upload_completed",
+            entity_type="document",
+            entity_id=str(document.id),
+        )
+        final_commit_started = True
+        db.commit()
+        completed = True
+        return document
+    finally:
+        copy = snapshot.copy
+        if copy is not None and not completed:
+            _discard_uncommitted_snapshot(
+                db,
+                copy=copy,
+                storage_client=storage_client,
+                commit_started=final_commit_started,
+            )
 
 
 def list_case_documents(db: Session, ctx: TenantContext, case_id: UUID) -> list[Document]:
@@ -391,7 +600,11 @@ def run_document_delete(session: Session, job: Job) -> None:
     if target is None:
         return
     object_id, bucket, object_key = target
-    get_object_storage().delete_object(bucket=bucket, object_key=object_key)
+    storage_client = get_object_storage()
+    storage_client.delete_object(bucket=bucket, object_key=object_key)
+    staging_key, finalized, _ = object_key.partition("/finalized/")
+    if finalized:
+        storage_client.delete_object(bucket=bucket, object_key=staging_key)
     session.execute(
         update(StoredObject)
         .where(

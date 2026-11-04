@@ -131,7 +131,7 @@ export function filingAuthorityFor(
     isReadOnly: false,
     mayPrepare: holds(capabilities, null, "create"),
     mayRunChecks: holds(capabilities, null, "validate"),
-    mayExport: holds(capabilities, null, "export"),
+    mayExport: holds(capabilities, TRANSMISSION_SENSITIVITY, "export"),
     // Exactly gated, like transmission. `null` here was the fail-open half of
     // the live 403: the server evaluates a chain decision against Regulatory
     // Reporting / RESTRICTED, so an Approver grant at a narrower sensitivity

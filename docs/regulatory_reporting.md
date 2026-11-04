@@ -339,7 +339,7 @@ listReturnAnchors (per-return reporting dates + data coverage), listRegulatoryPa
 createRegulatoryPackage (generate),
 getRegulatoryPackage, validateRegulatoryPackage, requestPackageApproval, decidePackageApproval,
 exportRegulatoryPackage (kind → artifact generation; it creates the artifact and returns
-package metadata, and the routes below are what serve the bytes),
+artifact metadata, and the routes below are what serve the bytes),
 downloadRegulatoryArtifact / downloadRegulatoryArtifactVersion / downloadEmailFallbackEml
 and getEmailFallbackInstructions (authority follows the
 [returns authorization contract](../backend/docs/authorization_foundation.md#whole-institution-figures-and-credit-only-narrowing)),

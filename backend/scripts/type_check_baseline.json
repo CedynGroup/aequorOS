@@ -679,9 +679,7 @@
  },
  "app.integrations.storage.s3": {
   "reportMissingTypeStubs": 3,
-  "reportUnknownArgumentType": 4,
-  "reportUnknownMemberType": 12,
-  "reportUnknownVariableType": 2
+  "reportUnknownMemberType": 1
  },
  "app.jobs.bi_alerts": {
   "reportAny": 41
