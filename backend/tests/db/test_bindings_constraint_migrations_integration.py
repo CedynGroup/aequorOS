@@ -157,7 +157,7 @@ def test_configurator_migration_grants_nothing_and_preserves_existing_authority(
     # ownership migration. This test round-trips only the Configurator migration.
     schema = forward_migrated_postgres_schema
     config = alembic_config_for_app()
-    command.downgrade(config, "202611020107")
+    command.downgrade(config, "202611030001")
     principal_ids: list[UUID] = []
     with Session(schema.app_engine) as db:
         db.info["organization_id"] = ORG
@@ -236,6 +236,6 @@ def test_configurator_migration_grants_nothing_and_preserves_existing_authority(
                 candidate,
                 {"id": uuid4(), "bundle": "unknown_bundle", "user": principal_ids[0]},
             )
-    command.downgrade(config, "202611020107")
+    command.downgrade(config, "202611030001")
     assert _authority_snapshot(schema) == before
     command.upgrade(config, "head")
