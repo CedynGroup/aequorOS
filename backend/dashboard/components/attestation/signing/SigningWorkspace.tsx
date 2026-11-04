@@ -487,20 +487,44 @@ export default function SigningWorkspace({
         (role) => !signatureRolesPlaced(placements ?? []).has(role),
       )
     : [];
-  const blockedReason = offending
-    ? `The ${offending.ownerLabel.toLowerCase()} ${FIELD_TYPE_LABELS[
-        fieldTypeOf(offending.placement)
-      ].toLowerCase()} field cannot be filed: ${offending.violation}`
-    : unplaced.length > 0
-      ? `Place a signature field for ${unplaced.map(roleNoun).join(" and ")}. ` +
-        "Every field has to exist before the first signature — the certification " +
-        "permits only form filling afterwards, so one left unplaced can never be added."
-      : missingNominee
-        ? "Name who signs next before certifying. The signature and the routing land in " +
-          "one transaction, so a return cannot be certified into nobody’s queue."
-        : reason.trim().length === 0
-          ? "A reason is recorded against the placement and the routing. Say why in a line."
+  /**
+   * The ceremony certifies the page on screen, so it cannot start before that
+   * page exists. Without this the officer who may not take the return away
+   * could still sign it unseen, and the export requirement would only hide a
+   * document that was certified anyway.
+   */
+  const documentBlockedReason = authorityLoading
+    ? "Checking your authority for this return. Certification opens once the " +
+      "document is on screen."
+    : !mayReadDocument
+      ? "Viewing the return needs Regulatory Reporting · Restricted · Export, and " +
+        "you certify the page you can see. Ask an Organization Owner for it under " +
+        "Access → Members. Nothing has been signed."
+      : bytes.error
+        ? "The return document could not be loaded, so there is nothing here to " +
+          "certify. Reload the workspace, and ask an Organization Owner for " +
+          "Regulatory Reporting · Restricted · Export if the refusal repeats."
+        : !bytes.data
+          ? "The return document is still loading. You certify the page you can " +
+            "see, so it has to be on screen before the signature starts."
           : null;
+
+  const blockedReason =
+    documentBlockedReason ??
+    (offending
+      ? `The ${offending.ownerLabel.toLowerCase()} ${FIELD_TYPE_LABELS[
+          fieldTypeOf(offending.placement)
+        ].toLowerCase()} field cannot be filed: ${offending.violation}`
+      : unplaced.length > 0
+        ? `Place a signature field for ${unplaced.map(roleNoun).join(" and ")}. ` +
+          "Every field has to exist before the first signature — the certification " +
+          "permits only form filling afterwards, so one left unplaced can never be added."
+        : missingNominee
+          ? "Name who signs next before certifying. The signature and the routing land in " +
+            "one transaction, so a return cannot be certified into nobody’s queue."
+          : reason.trim().length === 0
+            ? "A reason is recorded against the placement and the routing. Say why in a line."
+            : null);
 
   /**
    * The placement to send: only when it is still ours to set, and only the

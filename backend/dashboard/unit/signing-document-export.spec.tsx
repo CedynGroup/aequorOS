@@ -23,6 +23,8 @@ const state = vi.hoisted(() => ({
     objectPath: string;
   }[],
   versions: [] as { id: string; isFiled: boolean }[],
+  preview: undefined as unknown,
+  stepUpBlockedReason: null as string | null,
   fetchArtifactBytes: vi.fn(),
   fetchArtifactVersionBytes: vi.fn(),
   exportMutate: vi.fn(),
@@ -72,7 +74,7 @@ vi.mock("@/lib/api/hooks", () => {
     refetch: vi.fn(),
   });
   return {
-    useCertificationPreview: () => settled(undefined),
+    useCertificationPreview: () => settled(state.preview),
     usePackageSignaturePlacements: () => settled(undefined),
     useMyAdoptedSignature: () => settled(undefined),
     useMySignerIdentity: () => settled(undefined),
@@ -115,7 +117,12 @@ vi.mock("@/components/attestation/review", () => ({
   PreviewError: () => null,
   SsoOutcomeNotice: () => null,
   StatementSection: () => null,
-  StepUpSection: () => null,
+  // The proof buttons live here; what matters to this file is the reason the
+  // workspace hands them, because a non-empty reason is what disables both.
+  StepUpSection: (props: { blockedReason?: string | null }) => {
+    state.stepUpBlockedReason = props.blockedReason ?? null;
+    return null;
+  },
   isTerminalFailure: () => false,
 }));
 vi.mock("@/components/attestation/shared", () => ({
@@ -138,10 +145,23 @@ const PDF_ARTIFACT = {
   objectPath: "returns/ICAAP.pdf",
 };
 
+/**
+ * Enough of the certification preview that the workspace reaches the proof
+ * buttons: a preview with nothing outstanding renders the ceremony, so a
+ * blocked certification is visible as a blocked one rather than as absence.
+ */
+const READY_PREVIEW = {
+  outstanding: [],
+  certificationDigest: "digest-1",
+  statement: "I certify this return.",
+};
+
 beforeEach(() => {
   state.permissions = [];
   state.artifacts = [];
   state.versions = [];
+  state.preview = undefined;
+  state.stepUpBlockedReason = null;
   state.fetchArtifactBytes.mockReset();
   state.fetchArtifactVersionBytes.mockReset();
   state.exportMutate.mockReset();
@@ -166,6 +186,7 @@ function renderWorkspace() {
 it("tells an approver without export which grant the document needs", async () => {
   state.permissions = ["view", "review", "approve"];
   state.artifacts = [PDF_ARTIFACT];
+  state.preview = READY_PREVIEW;
   renderWorkspace();
 
   expect(screen.getByTestId("document-export-required")).toBeVisible();
@@ -178,11 +199,16 @@ it("tells an approver without export which grant the document needs", async () =
   expect(state.fetchArtifactBytes).not.toHaveBeenCalled();
   expect(state.fetchArtifactVersionBytes).not.toHaveBeenCalled();
   expect(state.exportMutate).not.toHaveBeenCalled();
+  // The ceremony does not start on a page the officer cannot see: a non-empty
+  // reason is what disables both the password proof and the SSO proof.
+  expect(state.stepUpBlockedReason).toMatch(/Export/);
+  expect(state.stepUpBlockedReason).toMatch(/Nothing has been signed/);
 });
 
 it("serves the page to a signing officer holding the exact export row", async () => {
   state.permissions = ["view", "review", "approve", "export"];
   state.artifacts = [PDF_ARTIFACT];
+  state.preview = READY_PREVIEW;
   renderWorkspace();
 
   expect(
@@ -193,6 +219,8 @@ it("serves the page to a signing officer holding the exact export row", async ()
   );
   // The unsigned export already exists, so nothing is minted.
   expect(state.exportMutate).not.toHaveBeenCalled();
+  // Nothing about the authority stands between this officer and the ceremony.
+  expect(state.stepUpBlockedReason ?? "").not.toMatch(/Export/);
 });
 
 it("reads the filed revision once one exists", async () => {
