@@ -29,6 +29,7 @@ from app.models import (
     ParamLiquidityThreshold,
     User,
 )
+from tests.liquidity.configure_helpers import CONFIGURATOR, configure_headers
 from tests.support.helpers import ORG_1, ORG_2, USER_1, headers
 
 BANK = "BK-LIQCFG01"
@@ -256,3 +257,27 @@ def test_cross_tenant_bank_is_hidden(db_client: TestClient, path: str) -> None:
     )
     assert response.status_code == 404, response.text
     assert _state() == before
+
+
+def test_configure_fixture_grants_each_bank_without_duplicate_bindings(
+    db_client: TestClient,
+) -> None:
+    for bank_id in (BANK, OTHER, BANK):
+        response = db_client.put(
+            f"/api/v1/banks/{bank_id}/liquidity/ewis",
+            headers=configure_headers(bank_id),
+            json=_payload("liquidity/ewis"),
+        )
+        assert response.status_code == 204, response.text
+    with get_sessionmaker()() as db:
+        assert (
+            db.scalar(
+                select(func.count())
+                .select_from(AuthorizationBinding)
+                .where(
+                    AuthorizationBinding.principal_user_id == CONFIGURATOR,
+                    AuthorizationBinding.role_bundle == RoleBundle.CONFIGURATOR.value,
+                )
+            )
+            == 2
+        )

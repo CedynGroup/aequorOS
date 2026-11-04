@@ -237,6 +237,11 @@ families are revoked in the same transaction.
 | Read forecasts, CFP, thresholds, haircuts, SDI positions, scenario details, and full run snapshots | `human`          | `viewer` or institution-approved `auditor`/`analyst`/`approver` | `institution`       | exact `BK-*`     | `liq`          | `confidential`      |
 | Create runs and analyses; create/edit CFP drafts and scenario artifacts                            | `human`          | `analyst`                                                       | `institution`       | exact `BK-*`     | `liq`          | `confidential`      |
 | Approve, activate, and de-escalate CFPs                                                            | `human`          | `approver`                                                      | `institution`       | exact `BK-*`     | `liq`          | `confidential`      |
+| Configure Liquidity threshold, haircut, and EWI registers                                         | `human`          | `configurator`                                                  | `institution`       | exact `BK-*`     | `liq`          | `restricted`        |
+
+Configurator carries only `configure`, not `view`. Add the separate
+LIQ/confidential view row above only when the officer's confirmed duties also
+include reading the register; a configure-only officer can PUT without GET.
 
 If an institution explicitly approves coverage across all its banks, replace
 only `institution_scope` with `organization` and `institution_id` with `NULL`.
