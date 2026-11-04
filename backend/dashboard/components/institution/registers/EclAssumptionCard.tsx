@@ -8,7 +8,7 @@
  * empty register is a deliberate state, not a gap. Edit mode records a new
  * effective-dated generation for changed rows and lets the Board adopt new
  * segment/stage assumptions; every save carries the approval evidence and
- * the required audit reason. Editing requires scoped configure access.
+ * the required audit reason. Approver-gated server-side.
  */
 
 import { useMemo, useState } from "react";
@@ -37,13 +37,12 @@ import {
   textOrNull,
 } from "@/components/institution/shared";
 import {
-  EditRegisterAction,
   EvidenceFields,
   numericInputCls,
   parseDecimalInput,
   sameDecimal,
 } from "./common";
-import { useConfigureEligibility } from "@/lib/api/configureAccess";
+import { EditRegisterAction, useApproverGate } from "./legacyCreditAccess";
 
 const viewColumns: Column<EclAssumptionRead>[] = [
   {
@@ -87,21 +86,19 @@ const viewColumns: Column<EclAssumptionRead>[] = [
 ];
 
 export default function EclAssumptionCard({ bankId }: { bankId: string }) {
-  const { allowed, reason } = useConfigureEligibility(bankId, "credit");
+  const { isApprover } = useApproverGate();
   const query = useEclAssumptionRegister(bankId);
   const [editing, setEditing] = useState(false);
 
   return (
     <SectionCard
-      className="[&>div:first-child]:flex-col sm:[&>div:first-child]:flex-row"
       title="ECL assumptions register"
       subtitle="IFRS 9 expected-credit-loss assumptions — Board-adopted PD and LGD per segment and stage"
       noPadding
       actions={
         query.data && (
           <EditRegisterAction
-            allowed={allowed}
-            reason={reason}
+            isApprover={isApprover}
             editing={editing}
             onEdit={() => setEditing(true)}
           />
@@ -111,7 +108,7 @@ export default function EclAssumptionCard({ bankId }: { bankId: string }) {
         <span>
           The ECL engine activates only when exposure facts and this register
           both exist — until then provisions flow from ingested figures
-          unchanged. Updates require scoped configure access and are audited;
+          unchanged. Updates are approver-gated and audited;
           {` ${query.data?.history.length ?? 0} generation${(query.data?.history.length ?? 0) === 1 ? "" : "s"} on record.`}
         </span>
       }
@@ -127,9 +124,8 @@ export default function EclAssumptionCard({ bankId }: { bankId: string }) {
           />
         </div>
       ) : query.data ? (
-        editing && allowed ? (
+        editing ? (
           <EclEditor
-            key={bankId}
             bankId={bankId}
             register={query.data}
             onClose={() => setEditing(false)}
