@@ -38,12 +38,13 @@ PARAMETERS: dict[str, dict[str, object]] = {
         "value": 5,
     },
     "param_credit_threshold": {"threshold_code": "test", "value_pct": 5},
-    "param_liquidity_threshold": {
+    "bank_liquidity_threshold": {
+        "bank_id": "BK-SEAL001",
         "institution_class": "bank",
         "threshold_code": "test",
         "threshold_pct": 5,
     },
-    "param_liquidity_haircut": {"asset_class": "test", "haircut_pct": 5},
+    "bank_liquidity_haircut": {"bank_id": "BK-SEAL001", "asset_class": "test", "haircut_pct": 5},
     "param_ecl_assumption": {"segment": "test", "stage": 1, "pd_pct": 5, "lgd_pct": 5},
     "param_crm_haircut": {"collateral_class": "test", "haircut_pct": 5},
 }
@@ -55,6 +56,8 @@ AUDIT_OWNER_TABLES = (
 )
 RETAINED_TABLES = (
     *PARAMETERS,
+    "param_liquidity_threshold",
+    "param_liquidity_haircut",
     *AUDIT_OWNER_TABLES,
     "scenario_assumption_history",
     "financial_manual_edit_history",

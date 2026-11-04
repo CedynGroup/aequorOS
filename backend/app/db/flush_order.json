@@ -118,6 +118,8 @@
   "IntegrationKey": "app.models.integration_key.IntegrationKey",
   "Job": "app.models.risk.Job",
   "Jurisdiction": "app.models.jurisdiction.Jurisdiction",
+  "LegacyParamLiquidityHaircut": "app.policy.models.parameter_register.LegacyParamLiquidityHaircut",
+  "LegacyParamLiquidityThreshold": "app.policy.models.parameter_register.LegacyParamLiquidityThreshold",
   "LineageRecord": "app.models.ingestion.LineageRecord",
   "LiquidityAnalysisResult": "app.models.calculation.LiquidityAnalysisResult",
   "LiquidityEwiIndicator": "app.models.liquidity_cfp.LiquidityEwiIndicator",

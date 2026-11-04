@@ -44,7 +44,7 @@ from app.live.public import live_refresh_triggers
 from app.policy.public import (
     ParamLiquidityHaircut,
     ParamLiquidityThreshold,
-    get_active_params,
+    get_active_bank_params,
     jurisdictions,
     regulatory_parameters,
 )
@@ -135,8 +135,8 @@ def get_register(
     klass = cast(InstitutionClass, _resolve_institution_class(db, bank))
     active_rows = {
         (row.institution_class, row.threshold_code): row
-        for row in get_active_params(
-            db, ctx.organization_id, jurisdiction, ParamLiquidityThreshold, as_of
+        for row in get_active_bank_params(
+            db, ctx.organization_id, bank.id, jurisdiction, ParamLiquidityThreshold, as_of
         )
     }
     thresholds: list[LiquidityThresholdRead] = []
@@ -218,6 +218,7 @@ def get_register(
         select(ParamLiquidityThreshold)
         .where(
             ParamLiquidityThreshold.organization_id == ctx.organization_id,
+            ParamLiquidityThreshold.bank_id == bank.id,
             ParamLiquidityThreshold.jurisdiction_code == jurisdiction,
         )
         .order_by(
@@ -310,6 +311,7 @@ def update_register(
         open_rows = db.scalars(
             select(ParamLiquidityThreshold).where(
                 ParamLiquidityThreshold.organization_id == ctx.organization_id,
+                ParamLiquidityThreshold.bank_id == bank.id,
                 ParamLiquidityThreshold.jurisdiction_code == jurisdiction,
                 ParamLiquidityThreshold.institution_class == payload.institution_class,
                 ParamLiquidityThreshold.threshold_code == code,
@@ -329,6 +331,7 @@ def update_register(
             row.effective_to = payload.effective_from
         created = ParamLiquidityThreshold(
             organization_id=ctx.organization_id,
+            bank_id=bank.id,
             jurisdiction_code=jurisdiction,
             institution_class=payload.institution_class,
             threshold_code=code,
@@ -347,7 +350,7 @@ def update_register(
         db,
         ctx,
         event_type="liquidity_thresholds.updated",
-        entity_type="param_liquidity_threshold",
+        entity_type="bank_liquidity_threshold",
         entity_id=bank.id,
         details={
             "institution_class": payload.institution_class,
@@ -361,10 +364,10 @@ def update_register(
             "reason": payload.reason,
         },
     )
-    live_refresh_triggers.enqueue_organization_change(
+    live_refresh_triggers.enqueue_bank_change(
         db,
         organization_id=ctx.organization_id,
-        jurisdiction_code=jurisdiction,
+        bank_id=bank.id,
         reason="liquidity threshold register updated",
     )
     db.commit()
@@ -387,14 +390,15 @@ def get_haircut_schedule(
             approval_timestamp=row.approval_timestamp,
             notes=row.notes,
         )
-        for row in get_active_params(
-            db, ctx.organization_id, jurisdiction, ParamLiquidityHaircut, as_of
+        for row in get_active_bank_params(
+            db, ctx.organization_id, bank.id, jurisdiction, ParamLiquidityHaircut, as_of
         )
     ]
     history_rows = db.scalars(
         select(ParamLiquidityHaircut)
         .where(
             ParamLiquidityHaircut.organization_id == ctx.organization_id,
+            ParamLiquidityHaircut.bank_id == bank.id,
             ParamLiquidityHaircut.jurisdiction_code == jurisdiction,
         )
         .order_by(ParamLiquidityHaircut.asset_class, ParamLiquidityHaircut.effective_from.desc())
@@ -454,6 +458,7 @@ def update_haircut_schedule(
         open_rows = db.scalars(
             select(ParamLiquidityHaircut).where(
                 ParamLiquidityHaircut.organization_id == ctx.organization_id,
+                ParamLiquidityHaircut.bank_id == bank.id,
                 ParamLiquidityHaircut.jurisdiction_code == jurisdiction,
                 ParamLiquidityHaircut.asset_class == normalized,
                 ParamLiquidityHaircut.effective_to.is_(None),
@@ -472,6 +477,7 @@ def update_haircut_schedule(
             row.effective_to = payload.effective_from
         created = ParamLiquidityHaircut(
             organization_id=ctx.organization_id,
+            bank_id=bank.id,
             jurisdiction_code=jurisdiction,
             asset_class=normalized,
             haircut_pct=pct,
@@ -489,7 +495,7 @@ def update_haircut_schedule(
         db,
         ctx,
         event_type="liquidity_haircuts.updated",
-        entity_type="param_liquidity_haircut",
+        entity_type="bank_liquidity_haircut",
         entity_id=bank.id,
         details={
             "effective_from": payload.effective_from.isoformat(),
@@ -500,10 +506,10 @@ def update_haircut_schedule(
             "reason": payload.reason,
         },
     )
-    live_refresh_triggers.enqueue_organization_change(
+    live_refresh_triggers.enqueue_bank_change(
         db,
         organization_id=ctx.organization_id,
-        jurisdiction_code=jurisdiction,
+        bank_id=bank.id,
         reason="liquidity haircut schedule updated",
     )
     db.commit()

@@ -567,6 +567,7 @@ class TenantMappingConfigRead(ClosedModel):
 
 class TenantLiquidityThresholdRead(ClosedModel):
     id: str
+    bank_id: str
     institution_class: str
     threshold_code: str
     threshold_pct: float
