@@ -29,6 +29,8 @@ const state = vi.hoisted(() => ({
   stepUpBlockedReason: null as string | null,
   /** Whether the mocked canvas reports a drawn page, as a real one would. */
   rendersPage: true,
+  /** Whether the mocked canvas reports a real render failure instead. */
+  renderFails: false,
   fetchArtifactBytes: vi.fn(),
   fetchArtifactVersionBytes: vi.fn(),
   exportMutate: vi.fn(),
@@ -101,16 +103,24 @@ vi.mock("@/lib/api/hooks", () => {
 
 vi.mock("@/components/attestation/signing/DocumentCanvas", async () => {
   const { useEffect } = await import("react");
-  // Reports a drawn page the way the real canvas does, and stays silent when it
-  // could not draw, which is the case the blocker has to survive.
+  // The real canvas reports these as two separate events: the page count when
+  // the PDF parses, and a drawn page only once the render promise resolves.
+  // The mock keeps them separate for the same reason — a single "loaded" signal
+  // is the defect this file exists to catch. `rendersPage` decides the paint.
   function MockDocumentCanvas({
     onDocumentLoaded,
+    onPageDrawn,
+    onPageFailed,
   }: {
     onDocumentLoaded: (n: number) => void;
+    onPageDrawn?: () => void;
+    onPageFailed?: () => void;
   }) {
     useEffect(() => {
-      if (state.rendersPage) onDocumentLoaded(1);
-    }, [onDocumentLoaded]);
+      onDocumentLoaded(1);
+      if (state.renderFails) onPageFailed?.();
+      else if (state.rendersPage) onPageDrawn?.();
+    }, [onDocumentLoaded, onPageDrawn, onPageFailed]);
     return <div data-testid="document-canvas" />;
   }
   return { default: MockDocumentCanvas };
@@ -180,6 +190,7 @@ beforeEach(() => {
   state.preview = undefined;
   state.stepUpBlockedReason = null;
   state.rendersPage = true;
+  state.renderFails = false;
   state.fetchArtifactBytes.mockReset();
   state.fetchArtifactVersionBytes.mockReset();
   state.exportMutate.mockReset();
@@ -255,6 +266,24 @@ it("keeps certification shut while the page has not drawn", async () => {
     expect(state.fetchArtifactBytes).toHaveBeenCalledWith("BK-A", "artifact-1"),
   );
   expect(screen.getByTestId("document-canvas")).toBeInTheDocument();
+  await waitFor(() =>
+    expect(state.stepUpBlockedReason).toMatch(/not on screen yet/),
+  );
+});
+
+it("closes the ceremony again when the page render fails", async () => {
+  state.permissions = ["view", "review", "approve", "export"];
+  state.artifacts = [PDF_ARTIFACT];
+  state.preview = READY_PREVIEW;
+  // The PDF parses and the canvas mounts; the page then fails to draw. The
+  // officer certifies what they see, and there is nothing to see.
+  state.rendersPage = false;
+  state.renderFails = true;
+  renderWorkspace();
+
+  await waitFor(() =>
+    expect(state.fetchArtifactBytes).toHaveBeenCalledWith("BK-A", "artifact-1"),
+  );
   await waitFor(() =>
     expect(state.stepUpBlockedReason).toMatch(/not on screen yet/),
   );

@@ -316,18 +316,23 @@ export default function SigningWorkspace({
   const bytes = usePackageDocument(bankId, packageId, mayReadDocument);
 
   /**
-   * The canvas reporting a drawn page. It fires from inside the canvas's own
-   * render effect, so reaching here means a page exists to look at; the buffer
-   * is recorded alongside the page count so the blocker can tell which document
-   * the officer is actually seeing.
+   * A page actually painted. The canvas reports this only once its render
+   * promise resolves, which is later than the PDF parsing — so a document that
+   * opens and then fails to draw never reaches here. The buffer is recorded
+   * alongside it so the blocker can tell which document is on screen.
    */
-  const onDocumentDrawn = useCallback(
-    (count: number) => {
-      setPageCount(count);
-      setRenderedDocument(bytes.data);
-    },
-    [bytes.data],
-  );
+  const onPageDrawn = useCallback(() => {
+    setRenderedDocument(bytes.data);
+  }, [bytes.data]);
+
+  /**
+   * A real render failure, not a cancellation from paging or zooming. Any
+   * earlier success is withdrawn, so the ceremony closes again rather than
+   * standing on a page that has stopped drawing.
+   */
+  const onPageFailed = useCallback(() => {
+    setRenderedDocument(null);
+  }, []);
 
   const violations = useMemo(
     () =>
@@ -781,7 +786,9 @@ export default function SigningWorkspace({
                 bytes={bytes.data}
                 pageIndex={pageIndex}
                 scale={scale}
-                onDocumentLoaded={onDocumentDrawn}
+                onDocumentLoaded={setPageCount}
+                onPageDrawn={onPageDrawn}
+                onPageFailed={onPageFailed}
                 onPageSpace={onPageSpace}
               >
                 {space && (
