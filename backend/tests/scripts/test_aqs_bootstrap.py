@@ -10,6 +10,8 @@ from pathlib import Path
 import subprocess
 import sys
 import tempfile
+import json
+import tomllib
 import unittest
 from unittest.mock import patch
 
@@ -161,6 +163,80 @@ class BootstrapTests(unittest.TestCase):
         self.assertEqual(bootstrap.backend_smoke(self.root).state, 'ok')
         self.assertEqual((self.root / 'backend/smoke-args').read_text().splitlines(),
                          ['-m', 'pytest', '-q', 'tests/architecture/test_ci_task_wiring.py'])
+
+    def test_mise_verify_does_not_install_but_setup_explicitly_installs(self) -> None:
+        mise = shutil.which('mise')
+        self.assertIsNotNone(mise, 'mise is required for the entrypoint regression')
+        assert mise is not None
+        config = tomllib.loads((Path(bootstrap.DEFAULT_ROOT) / 'mise.toml').read_text())
+        profile = self.root / 'mise-profile'
+        profile.mkdir()
+        plugin = profile / 'plugin/bin'
+        plugin.mkdir(parents=True)
+        install_log = profile / 'install-log'
+        install = plugin / 'install'
+        install.write_text(
+            '#!/bin/sh\nset -eu\n'
+            'echo installed >> "$AQS_TEST_INSTALL_LOG"\n'
+            'mkdir -p "$ASDF_INSTALL_PATH/bin"\n'
+            'printf "#!/bin/sh\\nexit 0\\n" > "$ASDF_INSTALL_PATH/bin/aqs-fixture"\n'
+            'chmod +x "$ASDF_INSTALL_PATH/bin/aqs-fixture"\n'
+        )
+        install.chmod(0o755)
+        (plugin / 'list-all').write_text('#!/bin/sh\necho 1.0.0\n')
+        (plugin / 'list-all').chmod(0o755)
+        stubs = profile / 'stubs'
+        stubs.mkdir()
+        for command in ('python3', 'pnpm'):
+            stub = stubs / command
+            stub.write_text(
+                '#!/bin/sh\necho "$*" >> "$AQS_TEST_COMMAND_LOG"\n'
+                'case "$*" in *verify*) echo "VERIFY: NOT READY"; exit 1;; esac\n'
+            )
+            stub.chmod(0o755)
+        tasks = config['tasks']
+        settings = config['settings']
+        (profile / 'aqs-test.toml').write_text(
+            '[settings]\nauto_install = ' + str(settings['auto_install']).lower()
+            + '\n[tools]\n"aqs-fixture" = "1.0.0"\n'
+            + '[tasks.setup]\nrun = ' + json.dumps(tasks['setup']['run'])
+            + '\nenv = { UV_FROZEN = "1" }\n'
+            + '[tasks.verify]\nrun = ' + json.dumps(tasks['verify']['run'])
+            + '\n[tasks."risk-service:sync"]\nrun = "pnpm sync-boundary"\n'
+            + '[tasks."risk-service:hooks"]\nrun = "pnpm hooks-boundary"\n'
+        )
+        environment = {key: value for key, value in os.environ.items()
+                       if not key.startswith('MISE_')}
+        environment.update({
+            'MISE_DATA_DIR': str(profile / 'data'),
+            'MISE_CACHE_DIR': str(profile / 'cache'),
+            'MISE_CONFIG_DIR': str(profile / 'config'),
+            'MISE_STATE_DIR': str(profile / 'state'),
+            'MISE_SYSTEM_CONFIG_DIR': str(profile / 'system'),
+            'MISE_GLOBAL_CONFIG_FILE': str(profile / 'global.toml'),
+            'MISE_OVERRIDE_CONFIG_FILENAMES': 'aqs-test.toml',
+            'MISE_TRUSTED_CONFIG_PATHS': str(profile),
+            'AQS_TEST_INSTALL_LOG': str(install_log),
+            'AQS_TEST_COMMAND_LOG': str(profile / 'command-log'),
+            'PATH': str(stubs) + os.pathsep + os.environ['PATH'],
+        })
+        def run(*args: str) -> subprocess.CompletedProcess[str]:
+            return subprocess.run([mise, *args], cwd=profile, env=environment,
+                                  text=True, capture_output=True, timeout=60, check=False)
+        subprocess.run(['git', 'init', '--template=', '-q', str(plugin.parent)], check=True)
+        linked = run('plugins', 'link', 'aqs-fixture', str(plugin.parent))
+        self.assertEqual(linked.returncode, 0, linked.stdout + linked.stderr)
+        verify = run('run', 'verify')
+        self.assertNotEqual(verify.returncode, 0)
+        self.assertFalse(install_log.exists(), verify.stdout + verify.stderr)
+        self.assertFalse((profile / 'data/installs/aqs-fixture/1.0.0').exists())
+        setup = run('run', 'setup')
+        self.assertEqual(setup.returncode, 0, setup.stdout + setup.stderr)
+        self.assertEqual(install_log.read_text().splitlines(), ['installed'])
+        commands = (profile / 'command-log').read_text().splitlines()
+        self.assertIn('install --frozen-lockfile', commands)
+        self.assertIn('sync-boundary', commands)
+        self.assertIn('hooks-boundary', commands)
 
     def test_missing_tools_have_named_diagnostics(self) -> None:
         (self.root / 'mise.toml').write_text('[tools]\nnode="24"\npnpm="11"\npython="3.13"\nuv="0.11"\n')

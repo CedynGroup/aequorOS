@@ -54,7 +54,9 @@ The audit-chain migration also requires
 From the repository root, `mise run setup` installs the pinned toolchain and frozen
 dependencies, copies missing env templates (never overwriting local values), and
 installs hooks. `mise run verify` proves core readiness without Docker or a
-database. The manual steps follow.
+database. Run `mise run setup` to provision missing tools: automatic tool installation
+is disabled for this repository, so other mise tasks report missing tools instead
+of downloading them. The manual steps follow.
 
 - **mise** — installs the pinned toolchain below; see the
   [installation guide](https://mise.jdx.dev/getting-started.html). `mise run setup`
