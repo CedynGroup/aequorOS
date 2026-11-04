@@ -226,6 +226,14 @@ class BootstrapTests(unittest.TestCase):
             (self.root / "backend/smoke-args").read_text().splitlines(),
             ["-m", "pytest", "-q", "tests/architecture/test_ci_task_wiring.py"],
         )
+        test.rename(test.with_name("test_ci_task_wiring_alternate.py"))
+        relocated = self.root / "backend/tests/test_ci_task_wiring.py"
+        relocated.write_text("")
+        with patch.object(bootstrap, "_stream") as stream:
+            result = bootstrap.backend_smoke(self.root)
+            self.assertEqual(result.state, "missing")
+            self.assertIn("backend/tests/architecture/test_ci_task_wiring.py", result.detail)
+            stream.assert_not_called()
 
     def test_mise_verify_does_not_install_but_setup_explicitly_installs(self) -> None:
         mise = shutil.which("mise")

@@ -657,34 +657,14 @@ def capability_checks(root: Path) -> list[Check]:
     ]
 
 
-def _backend_smoke_path(root: Path) -> Path | None:
-    """Find the wiring guard wherever the test-layout work has placed it."""
-    tests = root / "backend" / "tests"
-    if not tests.is_dir():
-        return None
-    candidates = [
-        path for path in tests.rglob("test_ci_task_wiring*.py") if "__pycache__" not in path.parts
-    ]
-    if not candidates:
-        return None
-    return min(
-        candidates,
-        key=lambda path: (
-            path.parent.name != "architecture",
-            len(path.parts),
-            path.as_posix(),
-        ),
-    )
-
-
 def backend_smoke(root: Path) -> Check:
-    test_path = _backend_smoke_path(root)
-    if test_path is None:
+    test_path = root / "backend/tests/architecture/test_ci_task_wiring.py"
+    if not test_path.is_file():
         return Check(
             "Backend smoke",
             "missing",
-            "no test_ci_task_wiring*.py module found under backend/tests",
-            "keep the wiring guard or update backend/scripts/aqs_bootstrap.py",
+            "backend/tests/architecture/test_ci_task_wiring.py is missing",
+            "restore backend/tests/architecture/test_ci_task_wiring.py",
         )
     backend = root / "backend"
     python = _installed_python(root)
