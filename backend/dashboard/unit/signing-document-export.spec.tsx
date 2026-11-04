@@ -8,7 +8,9 @@
  * officer's seat: a signing officer who cannot export is told which grant is
  * missing and downloads nothing, while the same officer with the exact
  * REG/restricted EXPORT row is served the document. No preview route, and no
- * automatic export attempt for a principal the server would refuse.
+ * automatic export attempt for a principal the server would refuse. Beyond the
+ * grant, the ceremony also waits for the page to be drawn: certification is
+ * what-you-see-is-what-you-sign, so a PDF that never painted cannot be signed.
  */
 import "@testing-library/jest-dom/vitest";
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
@@ -25,6 +27,8 @@ const state = vi.hoisted(() => ({
   versions: [] as { id: string; isFiled: boolean }[],
   preview: undefined as unknown,
   stepUpBlockedReason: null as string | null,
+  /** Whether the mocked canvas reports a drawn page, as a real one would. */
+  rendersPage: true,
   fetchArtifactBytes: vi.fn(),
   fetchArtifactVersionBytes: vi.fn(),
   exportMutate: vi.fn(),
@@ -95,9 +99,22 @@ vi.mock("@/lib/api/hooks", () => {
   };
 });
 
-vi.mock("@/components/attestation/signing/DocumentCanvas", () => ({
-  default: () => <div data-testid="document-canvas" />,
-}));
+vi.mock("@/components/attestation/signing/DocumentCanvas", async () => {
+  const { useEffect } = await import("react");
+  // Reports a drawn page the way the real canvas does, and stays silent when it
+  // could not draw, which is the case the blocker has to survive.
+  function MockDocumentCanvas({
+    onDocumentLoaded,
+  }: {
+    onDocumentLoaded: (n: number) => void;
+  }) {
+    useEffect(() => {
+      if (state.rendersPage) onDocumentLoaded(1);
+    }, [onDocumentLoaded]);
+    return <div data-testid="document-canvas" />;
+  }
+  return { default: MockDocumentCanvas };
+});
 vi.mock("@/components/attestation/signing/PlacementLayer", () => ({
   default: () => null,
 }));
@@ -162,6 +179,7 @@ beforeEach(() => {
   state.versions = [];
   state.preview = undefined;
   state.stepUpBlockedReason = null;
+  state.rendersPage = true;
   state.fetchArtifactBytes.mockReset();
   state.fetchArtifactVersionBytes.mockReset();
   state.exportMutate.mockReset();
@@ -219,8 +237,27 @@ it("serves the page to a signing officer holding the exact export row", async ()
   );
   // The unsigned export already exists, so nothing is minted.
   expect(state.exportMutate).not.toHaveBeenCalled();
-  // Nothing about the authority stands between this officer and the ceremony.
-  expect(state.stepUpBlockedReason ?? "").not.toMatch(/Export/);
+  // The page drew, so the authority no longer stands between this officer and
+  // the ceremony.
+  await waitFor(() => expect(state.stepUpBlockedReason).toBeNull());
+});
+
+it("keeps certification shut while the page has not drawn", async () => {
+  state.permissions = ["view", "review", "approve", "export"];
+  state.artifacts = [PDF_ARTIFACT];
+  state.preview = READY_PREVIEW;
+  // The bytes arrive and the canvas is on screen, but it never reports a page:
+  // a PDF that failed to parse looks exactly like this.
+  state.rendersPage = false;
+  renderWorkspace();
+
+  await waitFor(() =>
+    expect(state.fetchArtifactBytes).toHaveBeenCalledWith("BK-A", "artifact-1"),
+  );
+  expect(screen.getByTestId("document-canvas")).toBeInTheDocument();
+  await waitFor(() =>
+    expect(state.stepUpBlockedReason).toMatch(/not on screen yet/),
+  );
 });
 
 it("reads the filed revision once one exists", async () => {

@@ -226,6 +226,17 @@ export default function SigningWorkspace({
   const [scale, setScale] = useState(1);
   const [space, setSpace] = useState<PageSpace | null>(null);
   const [pageSizes, setPageSizes] = useState<Record<number, PageSpace>>({});
+  /**
+   * The document bytes the canvas has actually drawn a page from.
+   *
+   * Bytes arriving is not the page being on screen: the PDF still has to parse
+   * and paint, and it may fail to. Identity is the comparison because a new
+   * upload is a new buffer, so a swap resets this to the previous document and
+   * the ceremony waits again rather than certifying a page nobody has seen.
+   */
+  const [renderedDocument, setRenderedDocument] = useState<ArrayBuffer | null>(
+    null,
+  );
   /** The rendered page's own box, so a drop can be resolved to page pixels. */
   const pageRef = useRef<HTMLDivElement>(null);
 
@@ -303,6 +314,20 @@ export default function SigningWorkspace({
   }, []);
 
   const bytes = usePackageDocument(bankId, packageId, mayReadDocument);
+
+  /**
+   * The canvas reporting a drawn page. It fires from inside the canvas's own
+   * render effect, so reaching here means a page exists to look at; the buffer
+   * is recorded alongside the page count so the blocker can tell which document
+   * the officer is actually seeing.
+   */
+  const onDocumentDrawn = useCallback(
+    (count: number) => {
+      setPageCount(count);
+      setRenderedDocument(bytes.data);
+    },
+    [bytes.data],
+  );
 
   const violations = useMemo(
     () =>
@@ -507,7 +532,11 @@ export default function SigningWorkspace({
         : !bytes.data
           ? "The return document is still loading. You certify the page you can " +
             "see, so it has to be on screen before the signature starts."
-          : null;
+          : renderedDocument !== bytes.data
+            ? "The return document is not on screen yet. You certify the page you " +
+              "can see, so the signature starts once it has drawn — reload the " +
+              "workspace if it never appears."
+            : null;
 
   const blockedReason =
     documentBlockedReason ??
@@ -557,7 +586,10 @@ export default function SigningWorkspace({
 
   const onPasswordSubmit = (event: React.FormEvent) => {
     event.preventDefault();
-    if (!preview) return;
+    // The buttons are disabled by the same reason, but a submit can still be
+    // reached by a keyboard gesture or a stale click while the document is
+    // swapping. Certifying here would sign a page the officer never saw.
+    if (!preview || blockedReason) return;
     void (async () => {
       const granted = await stepUp.mutateAsync({
         packageId,
@@ -581,7 +613,7 @@ export default function SigningWorkspace({
 
   const onHeldAuthorizationSubmit = (event: React.FormEvent) => {
     event.preventDefault();
-    if (!preview) return;
+    if (!preview || blockedReason) return;
     void certifyWithHeld
       .mutateAsync({
         packageId,
@@ -749,7 +781,7 @@ export default function SigningWorkspace({
                 bytes={bytes.data}
                 pageIndex={pageIndex}
                 scale={scale}
-                onDocumentLoaded={setPageCount}
+                onDocumentLoaded={onDocumentDrawn}
                 onPageSpace={onPageSpace}
               >
                 {space && (
@@ -1074,11 +1106,16 @@ function usePackageDocument(
   }, [allowed, bankId, pdf, signed, versionsQuery.isSuccess]);
 
   useEffect(() => {
+    // `signed` is null while the versions query is in flight, so without this
+    // guard a package whose filed revision is a beat away from arriving would
+    // mint an unsigned export it never uses: a write and an audit entry for a
+    // document the signer then does not see.
     if (
       !allowed ||
       pdf ||
       signed ||
       !artifactsQuery.isSuccess ||
+      !versionsQuery.isSuccess ||
       requestedExport.current
     )
       return;
@@ -1092,6 +1129,7 @@ function usePackageDocument(
     pdf,
     signed,
     artifactsQuery.isSuccess,
+    versionsQuery.isSuccess,
     exportPackage,
     packageId,
   ]);
