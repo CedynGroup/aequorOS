@@ -29,11 +29,12 @@ from app.models import (
     ReturnSigningPolicy,
     User,
 )
-from tests.attestation.service.test_attestation_spine import _package
-from tests.attestation.service.test_attestation_spine import _pepper as _pepper
+from tests.attestation.service.test_attestation_spine import _package, signer_pepper
 from tests.fixtures.canonical_bank_fixture import DEMO_USER_ID, SAMPLE_BANK_ID
 from tests.support.factories.attestation import relax_signing
 from tests.support.helpers import ORG_1
+
+__all__ = ["signer_pepper"]
 
 
 def _ctx() -> TenantContext:

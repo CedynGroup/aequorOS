@@ -39,8 +39,8 @@ from tests.support.helpers import ORG_1
 PEPPER = "test-signer-pepper-not-production-0000"
 
 
-@pytest.fixture(autouse=True)
-def _pepper(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
+@pytest.fixture(name="_pepper", autouse=True)
+def signer_pepper(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     monkeypatch.setenv("SIGNER_ID_PEPPER", PEPPER)
     get_settings.cache_clear()
     yield

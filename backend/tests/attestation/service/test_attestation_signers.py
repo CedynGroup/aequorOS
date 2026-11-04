@@ -46,8 +46,8 @@ SIGNER_ID = "SGN-7K4M9PQR2VWX3YZ8"
 DIGEST = hashlib.sha256(b"aequoros attestation payload").digest()
 
 
-@pytest.fixture(autouse=True)
-def _signing_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Any:
+@pytest.fixture(name="_signing_env", autouse=True)
+def signing_env(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Any:
     """A configured vault and a throwaway soft-key store.
 
     The suite blanks CREDENTIAL_VAULT_MASTER_KEY so a developer's .env cannot
