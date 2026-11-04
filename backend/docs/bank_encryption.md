@@ -489,7 +489,7 @@ belong to their separate feature stacks.
 
 `backend/dashboard/tests/institution/bank-encryption.e2e.spec.ts` exercises the real AWS provider
 through a loopback HTTP fault proxy. Set `BANK_KMS_ENDPOINT_URL` to the emulator
-above before running `pnpm --filter @aequoros/dashboard e2e bank-encryption.spec.ts`.
+above before running `pnpm --filter @aequoros/dashboard e2e bank-encryption.e2e.spec.ts`.
 A missing emulator fails the stories; they never silently substitute the local
 in-memory provider. CI supplies one emulator per shard and keeps a single browser
 worker, just like the other journeys.

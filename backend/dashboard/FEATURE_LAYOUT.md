@@ -11,10 +11,9 @@ move PR.
 - **`features/<feature>/`** holds everything a feature owns: its components
   (moved from `components/<feature>/`), feature lib code, and page bodies under
   `routes/`.
-- **`tests/<feature>/`** holds that feature's tests: unit is the default
-  (`.spec.ts(x)` for Vitest, `.test.ts(x)` for the legacy Node runner),
-  `*.integration.spec.ts` for browser contracts and `*.e2e.spec.ts` for
-  Playwright journeys. Shared test helpers live in `tests/support/`.
+- **`tests/<feature>/`** holds that feature's tests; see the
+  [testing guide](README.md#unit-test-collection) for suite suffixes and runner selection.
+  Shared test helpers live in `tests/support/`.
 - **Route pages stay under `app/`.** App Router requires `page.tsx` inside
   `app/`, so a moved page body lives at `features/<feature>/routes/<name>.tsx`
   and the route file becomes a thin re-export shim

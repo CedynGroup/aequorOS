@@ -105,7 +105,10 @@ import {
   utcDay,
 } from "./biKeys";
 import { expressionDigest } from "@/features/bi/components/expressionDigest";
-import { isGrantDenial, refusalSentence } from "@/features/bi/components/refusal";
+import {
+  isGrantDenial,
+  refusalSentence,
+} from "@/features/bi/components/refusal";
 
 const biApi = new BiApi(configuration);
 const featureFlagsApi = new FeatureFlagsApi(configuration);

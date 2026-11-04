@@ -13,8 +13,8 @@ live in the package's `test_generators.py`; dashboard validity properties live i
 the feature suites under `unit`. Filing, ICAAP and approval models also validate
 generated initializer histories through public service commands.
 
-| Domain                                 | Backend test package                   | Dashboard test package                                                           |
-| -------------------------------------- | -------------------------------------- | -------------------------------------------------------------------------------- |
+| Domain                                 | Backend test package                   | Dashboard test package                                                            |
+| -------------------------------------- | -------------------------------------- | --------------------------------------------------------------------------------- |
 | Filing and reporting calendars         | [reporting](../reporting/testing/)     | [submissions](../../dashboard/tests/submissions/testing/)                         |
 | ICAAP workflow and freeze              | [icaap](../icaap/testing/)             | Shared [submissions](../../dashboard/tests/submissions/testing/) authority inputs |
 | Governed approvals and access requests | [identity](../identity/testing/)       | Shared [submissions](../../dashboard/tests/submissions/testing/) authority inputs |
@@ -23,8 +23,8 @@ generated initializer histories through public service commands.
 | Credit                                 | [credit](../credit/testing/)           | [credit](../../dashboard/tests/credit/testing/)                                   |
 | FX                                     | [fx](../fx/testing/)                   | [fx](../../dashboard/tests/fx/testing/)                                           |
 | FTP                                    | [ftp](../ftp/testing/)                 | [ftp](../../dashboard/tests/ftp/testing/)                                         |
-| IRRBB                                  | [irrbb](../irrbb/testing/)             | [irrbb](../../dashboard/tests/irrbb/testing/)                                     |
-| Case workspace authority               | [case](../case/testing/)               | DATA loading regressions in `tests/data-engine/data-engine-surfaces.spec.tsx`                 |
+| IRRBB                                  | [irrbb](../irrbb/testing/)             | [irrbb](../../dashboard/tests/irr/testing/)                                       |
+| Case workspace authority               | [case](../case/testing/)               | DATA loading regressions in `tests/data-engine/data-engine-surfaces.spec.tsx`     |
 | Canonical data                         | [data_engine](../data_engine/testing/) | [data-engine](../../dashboard/tests/data-engine/testing/)                         |
 
 ## Generator contract
