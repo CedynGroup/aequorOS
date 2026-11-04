@@ -73,6 +73,8 @@ approver and approval date. Missing dates and mappings are stated explicitly;
 source links appear when recorded.
 Expand a status badge to read its shared plain-language disclosure and source
 details; legal status is separate from template fidelity and calculation readiness.
+The disclosure keeps full text available when the badge is truncated and scrolls
+internally on short screens. Press **Escape** or click outside it to dismiss it.
 Status chips above the table count and filter by legal status, use **Search
 instruments** to filter by title, and **Clear filters** removes both at once.
 

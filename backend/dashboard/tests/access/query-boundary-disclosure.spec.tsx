@@ -23,7 +23,7 @@ it.each(["loading", "error"])(
       </QueryBoundary>,
     );
     await userEvent.click(screen.getByText("Draft"));
-    expect(screen.getByRole("tooltip")).toBeVisible();
+    expect(screen.getByTestId("instrument-status-disclosure")).toBeVisible();
     await act(async () =>
       view.rerender(
         <QueryBoundary
@@ -37,7 +37,9 @@ it.each(["loading", "error"])(
         </QueryBoundary>,
       ),
     );
-    expect(screen.queryByRole("tooltip")).toBeNull();
+    expect(
+      screen.getByTestId("instrument-status-disclosure"),
+    ).not.toBeVisible();
     await act(async () =>
       view.rerender(
         <QueryBoundary contained isLoading={false} error={null}>
@@ -49,10 +51,9 @@ it.each(["loading", "error"])(
         </QueryBoundary>,
       ),
     );
-    expect(screen.getByRole("tooltip")).toBeVisible();
-    expect(screen.getByRole("tooltip")).toHaveTextContent("Updated source");
-    expect(screen.getByRole("tooltip")).not.toHaveTextContent(
-      "Original source",
-    );
+    const disclosure = screen.getByTestId("instrument-status-disclosure");
+    expect(disclosure).toBeVisible();
+    expect(disclosure).toHaveTextContent("Updated source");
+    expect(disclosure).not.toHaveTextContent("Original source");
   },
 );

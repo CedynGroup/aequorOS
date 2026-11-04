@@ -248,9 +248,9 @@ it.each(["Returns", "Templates"])(
     );
     expect(badge.getAttribute("title")).not.toContain("CBK");
     fireEvent.click(badge);
-    expect(within(badge.parentElement!).getByRole("tooltip")).toHaveTextContent(
-      "Synthetic source",
-    );
+    expect(
+      within(badge.parentElement!).getByTestId("instrument-status-disclosure"),
+    ).toHaveTextContent("Synthetic source");
   },
 );
 

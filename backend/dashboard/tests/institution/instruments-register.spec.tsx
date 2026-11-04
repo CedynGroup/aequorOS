@@ -234,7 +234,7 @@ it.each([
     expect(badge).toHaveAttribute("title", expect.stringContaining(wording));
     expect(badge.getAttribute("title")).not.toContain("CBK");
     await userEvent.setup().click(badge);
-    const tooltip = within(screen.getByRole("tooltip"));
+    const tooltip = within(screen.getByTestId("instrument-status-disclosure"));
     expect(tooltip.getByText("Synthetic citation")).toBeVisible();
     expect(
       tooltip.getByRole("link", { name: "Read the source" }),

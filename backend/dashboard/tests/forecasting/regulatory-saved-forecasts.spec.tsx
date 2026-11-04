@@ -88,7 +88,9 @@ vi.mock("@/features/bi/components/InsightStrip", () => ({
   LandingInsightStrip: () => null,
   useKpiExplain: () => ({}),
 }));
-vi.mock("@/features/bi/components/EChart", () => ({ default: () => <div>Chart</div> }));
+vi.mock("@/features/bi/components/EChart", () => ({
+  default: () => <div>Chart</div>,
+}));
 beforeEach(() => {
   vi.stubGlobal("matchMedia", () => ({
     matches: false,
