@@ -2,12 +2,23 @@
 
 from __future__ import annotations
 
+import json
+import os
 import re
+from collections.abc import Generator
+from contextlib import contextmanager
+from datetime import UTC, datetime, timedelta
+from pathlib import Path
+from typing import cast
 from uuid import uuid4
 
+import pytest
+from fastapi.routing import APIRoute
+from sqlalchemy import Engine
 from sqlalchemy.orm import Session
 
 from app.core.authorization import (
+    DataScope,
     InstitutionScope,
     ModuleScope,
     PrincipalType,
@@ -15,14 +26,22 @@ from app.core.authorization import (
     SensitivityScope,
 )
 from app.identity.service import authorization
-from app.models import Bank, Organization, User
+from app.main import app
+from app.models import AuthorizationBinding, Bank, Organization, User
 from app.policy.service.institution_types import FALLBACK_TYPE_CODE
+from scripts import authorization_configure_impact as configure_impact
 from scripts.authorization_access_impact import (
     INSTITUTION_MODULES,
     UserAccess,
     build_report,
     render_table,
 )
+from scripts.authorization_configure_impact import (
+    ConfigureReport,
+    build_configure_report,
+    write_artifacts,
+)
+from scripts.authorization_configure_routes import CONFIGURE_ROUTES
 
 ORG = "OR-IMPCT001"
 BANK = "BK-IMPCT001"
@@ -86,7 +105,12 @@ def _grant(  # noqa: PLR0913 - one indivisible sentence per call
     )
 
 
-def test_report_flags_users_the_dashboard_would_show_nothing(db_session: Session) -> None:
+def test_report_flags_users_the_dashboard_would_show_nothing(
+    db_session: Session,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
     db_session.add(Organization(id=ORG, name="Impact proof"))
     db_session.add(
         Bank(
@@ -105,11 +129,23 @@ def test_report_flags_users_the_dashboard_would_show_nothing(db_session: Session
     liquidity_only = _user(db_session, "liquidity@impact.example", role="analyst")
     _user(db_session, "nobody@impact.example")
     _user(db_session, "gone@impact.example", is_active=False)
-    _user(db_session, "feed@impact.example", role="analyst", auth_provider="service")
+    feed = _user(db_session, "feed@impact.example", role="analyst", auth_provider="service")
     db_session.commit()
 
     _grant(db_session, owner, RoleBundle.ORG_OWNER, module_scope=ModuleScope.ACCOUNT)
     _grant(db_session, reader, RoleBundle.VIEWER)
+    authorization.create_role_binding(
+        db_session,
+        organization_id=ORG,
+        principal_user_id=feed.id,
+        principal_type=PrincipalType.MACHINE,
+        role_bundle=RoleBundle.INTEGRATION_WRITER,
+        scope=authorization.BindingScope(
+            InstitutionScope.INSTITUTION, BANK, ModuleScope.DATA, SensitivityScope.RESTRICTED
+        ),
+        grantor=authorization.GrantorRef(authorization.GrantorType.SYSTEM, "test:impact"),
+        reason="machine inventory",
+    )
     _grant(
         db_session,
         liquidity_only,
@@ -160,6 +196,305 @@ def test_report_flags_users_the_dashboard_would_show_nothing(db_session: Session
     assert f"{BANK}: all" in table
     assert f"{BANK}: liq" in table
     assert "no_bindings,no_product_view" in table
+    _assert_configure_cutover(db_session, owner, liquidity_only)
+    _assert_configure_lifecycle(db_session)
+    _assert_configure_artifacts(db_session, tmp_path, monkeypatch, capsys)
+    _assert_configure_evaluator_failure(db_session, monkeypatch)
+
+
+def _assert_configure_cutover(db: Session, owner: User, analyst: User) -> None:
+    """The same cutover inventory must include machines and never infer grants."""
+    before = build_configure_report(db, organization_id=ORG)
+    assert len(CONFIGURE_ROUTES) == 31
+    assert len({(route.method, route.path) for route in CONFIGURE_ROUTES}) == 31
+    mounted = {
+        (method, route.path)
+        for route in app.routes
+        if isinstance(route, APIRoute)
+        for method in route.methods
+    }
+    assert {(route.method, route.path) for route in CONFIGURE_ROUTES} <= mounted
+    assert {route.module.value for route in CONFIGURE_ROUTES} == {
+        "liq",
+        "credit",
+        "data",
+        "markets",
+        "reg",
+        "beh",
+    }
+    assert not any(
+        route.path.endswith(("/test", "/schema", "/sync", "/pull")) for route in CONFIGURE_ROUTES
+    )
+    machine = next(user for user in before.principals if user.principal_type == "machine")
+    machine_impacts = [row for row in before.impacts if row.principal_id == machine.principal_id]
+    assert machine_impacts
+    assert all(not row.before.allowed and not row.after.allowed for row in machine_impacts)
+    assert all(row.after.reason == "human_session_required" for row in machine_impacts)
+    assert all(row.required_grant is None for row in machine_impacts)
+    assert any(
+        row.principal_id == machine.principal_id
+        and row.principal_type == "machine"
+        and row.role_bundle == "integration_writer"
+        for row in before.existing_grants
+    )
+    assert all(not row.after.allowed for row in before.impacts)
+    analyst_impacts = [row for row in before.impacts if row.principal_id == str(analyst.id)]
+    assert any(row.newly_denied for row in analyst_impacts if row.module == "data")
+    assert all(not row.before.allowed for row in analyst_impacts if row.module == "liq")
+    owner_org = [
+        row
+        for row in before.impacts
+        if row.principal_id == str(owner.id) and row.institution_scope == "organization"
+    ]
+    assert len(owner_org) == 2
+    assert all(row.before.allowed and row.newly_denied for row in owner_org)
+
+    _grant(
+        db,
+        analyst,
+        RoleBundle.CONFIGURATOR,
+        institution_scope=InstitutionScope.INSTITUTION,
+        institution_id=BANK,
+        module_scope=ModuleScope.LIQUIDITY,
+        sensitivity_scope=SensitivityScope.RESTRICTED,
+    )
+    _grant(
+        db,
+        owner,
+        RoleBundle.CONFIGURATOR,
+        module_scope=ModuleScope.REGULATORY,
+        sensitivity_scope=SensitivityScope.RESTRICTED,
+    )
+    db.commit()
+    after = build_configure_report(db, organization_id=ORG)
+    allowed = [
+        row for row in after.impacts if row.principal_id == str(analyst.id) and row.after.allowed
+    ]
+    assert len(allowed) == 3
+    assert all(row.module == "liq" and row.after.matching_binding_ids for row in allowed)
+    assert all(row.required_grant is None for row in allowed)
+    needed = next(
+        row.required_grant
+        for row in after.impacts
+        if row.principal_id == str(analyst.id) and row.module == "credit"
+    )
+    assert needed is not None
+    assert (
+        needed.organization_id,
+        needed.principal_id,
+        needed.principal_type,
+        needed.institution_scope,
+        needed.institution_id,
+        needed.module_scope,
+        needed.sensitivity_scope,
+        needed.role_bundle,
+        needed.data_scope_kind,
+        needed.status,
+    ) == (
+        ORG,
+        str(analyst.id),
+        "human",
+        "institution",
+        BANK,
+        "credit",
+        "restricted",
+        "configurator",
+        "all",
+        "active",
+    )
+    assert needed.approval_required is True
+    owner_allowed = [
+        row
+        for row in after.impacts
+        if row.principal_id == str(owner.id) and row.institution_scope == "organization"
+    ]
+    assert len(owner_allowed) == 2 and all(row.after.allowed for row in owner_allowed)
+    # A bank grant never grants either organization-targeted settings action.
+    assert all(
+        not row.after.allowed
+        for row in after.impacts
+        if row.principal_id == str(analyst.id) and row.institution_scope == "organization"
+    )
+    assert any(row.role_bundle == "configurator" for row in after.existing_grants)
+    assert not db.new and not db.dirty and not db.deleted
+
+
+def _assert_configure_lifecycle(db: Session) -> None:
+    """Wrong dimensions, incomplete rows and ineffective lifecycle never compose."""
+    now = datetime.now(UTC)
+    user = _user(db, "matrix@impact.example", role="approver")
+    other_bank = "BK-IMPCT002"
+    db.add(
+        Bank(
+            id=other_bank,
+            organization_id=ORG,
+            name="Other bank",
+            short_name="Other",
+            currency="GHS",
+            jurisdiction_code="GH",
+            license_type="universal_bank",
+            institution_type=FALLBACK_TYPE_CODE,
+        )
+    )
+    db.commit()
+    for index, overrides in enumerate(
+        [
+            {"module_scope": "data"},
+            {"sensitivity_scope": "confidential"},
+            {"role_bundle": "viewer"},
+            {"institution_id": other_bank},
+            {"valid_until": now - timedelta(days=1)},
+            {"valid_from": now + timedelta(days=1)},
+            {"status": "suspended"},
+            {
+                "status": "revoked",
+                "revoked_at": now,
+                "revoked_by_type": "system",
+                "revoked_by_id": "test",
+                "revoked_reason": "test",
+            },
+            {"data_scope_kind": DataScope.BRANCH.value, "data_scope_values": ["B1"]},
+        ]
+    ):
+        values: dict[str, object] = {
+            "id": uuid4(),
+            "organization_id": ORG,
+            "principal_user_id": user.id,
+            "principal_type": "human",
+            "role_bundle": "configurator",
+            "institution_scope": "institution",
+            "institution_id": BANK,
+            "module_scope": "credit",
+            "sensitivity_scope": "restricted",
+            "granted_by_type": "system",
+            "granted_by_id": f"test:{index}",
+            "grant_reason": "impact matrix",
+            "valid_from": now - timedelta(days=2),
+        }
+        db.add(AuthorizationBinding(**(values | overrides)))
+    db.commit()
+    report = build_configure_report(db, organization_id=ORG, now=now)
+    rows = [
+        row
+        for row in report.impacts
+        if row.principal_id == str(user.id)
+        and row.module == "credit"
+        and row.institution_id == BANK
+    ]
+    assert rows and all(row.before.allowed and not row.after.allowed for row in rows)
+    assert all(row.required_grant is not None for row in rows)
+    stored = [row for row in report.existing_grants if row.principal_id == str(user.id)]
+    assert {row.status for row in stored} == {"active", "suspended", "revoked"}
+    assert any(not row.effective for row in stored)
+    # All existing rows remain evidence, including narrowed rows and validity windows.
+    assert any(
+        row.data_scope_kind == "branch" and row.data_scope_values == ["B1"] for row in stored
+    )
+    # The fixture's other tenants and banks never enter this tenant's inventory.
+    assert {row.organization_id for row in report.principals} == {ORG}
+    assert {row.institution_id for row in report.impacts} == {BANK, other_bank, None}
+
+
+def _read_json(path: Path) -> dict[str, object]:
+    # Test-only JSON file boundary; the producer's dataclass schema is checked below.
+    return cast(dict[str, object], json.loads(path.read_text()))
+
+
+def _assert_artifact_content(report: ConfigureReport, directory: Path) -> None:
+    before = _read_json(directory / "configure-before.json")
+    after = _read_json(directory / "configure-after.json")
+    grants = _read_json(directory / "configure-exact-grants.json")
+    assert before["stage"] == "before" and after["stage"] == "after"
+    assert before["generated_at"] == after["generated_at"] == grants["generated_at"]
+    assert before["principals"] == after["principals"] == grants["principals"]
+    assert before["outcomes"] != after["outcomes"]
+    assert grants["existing_grants"] == report.to_dict()["existing_grants"]
+    required = grants["required_grants"]
+    assert isinstance(required, list) and required
+    assert "approval_required" in json.dumps(required)
+    for path in directory.glob("*.json"):
+        assert path.stat().st_mode & 0o777 == 0o600
+        content = path.read_text()
+        assert "@impact.example" not in content
+        assert "password_hash" not in content and "grant_reason" not in content
+    with pytest.raises(FileExistsError):
+        write_artifacts(report, directory)
+    assert _read_json(directory / "configure-after.json") == after
+
+
+def _assert_configure_artifacts(
+    db: Session,
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    report = build_configure_report(db, organization_id=ORG)
+    destination = tmp_path / "configure"
+    write_artifacts(report, destination)
+    _assert_artifact_content(report, destination)
+    evidence = os.getenv("CONFIGURE_IMPACT_EVIDENCE_DIR")
+    if evidence:
+        write_artifacts(report, Path(evidence))
+
+    bind = db.get_bind()
+    engine = bind if isinstance(bind, Engine) else bind.engine
+
+    @contextmanager
+    def session_boundary(_engine: Engine, *, autoflush: bool) -> Generator[Session]:
+        assert autoflush is False
+        yield db
+
+    def engine_boundary(_url: str) -> Engine:
+        return engine
+
+    with monkeypatch.context() as patch:
+        patch.setattr(configure_impact, "create_engine", engine_boundary)
+        patch.setattr(configure_impact, "Session", session_boundary)
+        patch.setattr(engine, "dispose", lambda: None)
+        assert configure_impact.main(["--database-url", "sqlite://", "--organization", ORG]) == 0
+        output = capsys.readouterr()
+        assert '"schema_version": 1' in output.out and not output.err
+        cli_dir = tmp_path / "cli"
+        assert (
+            configure_impact.main(
+                [
+                    "--database-url",
+                    "sqlite://",
+                    "--organization",
+                    ORG,
+                    "--output-dir",
+                    str(cli_dir),
+                ]
+            )
+            == 0
+        )
+        _assert_artifact_content(report, cli_dir)
+        assert (
+            configure_impact.main(
+                [
+                    "--database-url",
+                    "sqlite://",
+                    "--organization",
+                    ORG,
+                    "--output-dir",
+                    str(cli_dir),
+                ]
+            )
+            == 2
+        )
+        assert "no complete assessment" in capsys.readouterr().err
+
+
+def _assert_configure_evaluator_failure(db: Session, monkeypatch: pytest.MonkeyPatch) -> None:
+    def failed(*_args: object, **_kwargs: object) -> None:
+        raise RuntimeError("sensitive evaluator detail must not enter the artifact")
+
+    with monkeypatch.context() as patch:
+        patch.setattr(authorization, "evaluate_prefetched_permission", failed)
+        report = build_configure_report(db, organization_id=ORG)
+    assert report.evaluation_failed
+    assert all(not row.after.allowed for row in report.impacts)
+    assert any(row.after.reason == "evaluation_failed" for row in report.impacts)
 
 
 def test_the_report_names_who_may_transmit_a_return(db_session: Session) -> None:
