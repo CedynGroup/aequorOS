@@ -151,6 +151,27 @@ def test_sensitivities_are_exact_not_hierarchical(
         result = db_client.get(f"{BASE}/{path}", headers=_auth())
         assert result.status_code == (200 if sensitivity == required else 403), (path, result.text)
 
+    auth = _auth()
+    before = _counts()
+    for resource, action, payload in (
+        ("reconciliation/exceptions", "approve", {"approved_by": "Checker"}),
+        ("reconciliation/exceptions", "revoke", {"revoked_by": "Checker", "reason": "Review"}),
+        ("system-of-record", "approve", {"approved_by": "Checker"}),
+        ("system-of-record", "revoke", {"revoked_by": "Checker", "reason": "Review"}),
+        ("canonical-withdrawals", "approve", {"approved_by": "Checker"}),
+        ("canonical-withdrawals", "reverse", {"reversed_by": "Checker", "reason": "Review"}),
+    ):
+        suffix = f"{resource}/{uuid4()}/{action}"
+        sibling = db_client.post(
+            f"/api/v1/banks/{SIBLING}/{suffix}", headers=auth, json=payload
+        )
+        missing = db_client.post(
+            f"/api/v1/banks/BK-MISSING1/{suffix}", headers=auth, json=payload
+        )
+        assert sibling.status_code == missing.status_code == 404
+        assert error_envelope(sibling) == error_envelope(missing)
+    assert _counts() == before
+
 
 def test_scalar_roles_and_partial_bindings_cannot_compose(db_client: TestClient) -> None:
     before = _counts()

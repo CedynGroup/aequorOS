@@ -15,7 +15,7 @@ from fastapi import APIRouter, HTTPException, Query, status
 from sqlalchemy import select
 
 from app.api.deps import DbSession, ScopedMutationTenant, Tenant
-from app.core.authorization import Module, Permission, Sensitivity
+from app.core.authorization import Permission, Sensitivity
 from app.data_engine.schemas.reconciliation import (
     ReconciliationExceptionApprove,
     ReconciliationExceptionCreate,
@@ -24,9 +24,8 @@ from app.data_engine.schemas.reconciliation import (
     ReconciliationExceptionRevoke,
 )
 from app.data_engine.service import reconciliation
-from app.data_engine.service.access import require_data_access
+from app.data_engine.service.access import require_data_access, resolve_data_bank
 from app.data_engine.service.reconciliation import ReconciliationExceptionError
-from app.identity.public import resolve_bank
 from app.models import ReconciliationException
 
 router = APIRouter(tags=["reconciliation"])
@@ -129,7 +128,7 @@ def approve_reconciliation_exception(
     db: DbSession,
     ctx: ScopedMutationTenant,
 ) -> ReconciliationExceptionRead:
-    bank = resolve_bank(db, ctx, bank_id, module=Module.DATA)
+    bank = resolve_data_bank(db, ctx, bank_id)
     try:
         row = reconciliation.approve_exception(
             db, ctx, bank, exception_id, approved_by=payload.approved_by
@@ -153,7 +152,7 @@ def revoke_reconciliation_exception(
     db: DbSession,
     ctx: ScopedMutationTenant,
 ) -> ReconciliationExceptionRead:
-    bank = resolve_bank(db, ctx, bank_id, module=Module.DATA)
+    bank = resolve_data_bank(db, ctx, bank_id)
     try:
         row = reconciliation.revoke_exception(
             db,

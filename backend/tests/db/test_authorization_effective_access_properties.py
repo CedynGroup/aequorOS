@@ -1221,3 +1221,21 @@ def test_uncovered_institution_is_indistinguishable_from_a_missing_one(
             missing = client.get(f"/api/v1/banks/{missing_bank}/{path}", headers=target_headers)
             assert missing.status_code == 404, missing.text
             assert error_envelope(sibling) == error_envelope(missing)
+
+        for resource, action, payload in (
+            ("reconciliation/exceptions", "approve", {"approved_by": "Checker"}),
+            ("reconciliation/exceptions", "revoke", {"revoked_by": "Checker", "reason": "Review"}),
+            ("system-of-record", "approve", {"approved_by": "Checker"}),
+            ("system-of-record", "revoke", {"revoked_by": "Checker", "reason": "Review"}),
+            ("canonical-withdrawals", "approve", {"approved_by": "Checker"}),
+            ("canonical-withdrawals", "reverse", {"reversed_by": "Checker", "reason": "Review"}),
+        ):
+            suffix = f"{resource}/{uuid4()}/{action}"
+            sibling = client.post(
+                f"/api/v1/banks/{tenant.bank_b}/{suffix}", headers=target_headers, json=payload
+            )
+            missing = client.post(
+                f"/api/v1/banks/{missing_bank}/{suffix}", headers=target_headers, json=payload
+            )
+            assert sibling.status_code == missing.status_code == 404
+            assert error_envelope(sibling) == error_envelope(missing)
