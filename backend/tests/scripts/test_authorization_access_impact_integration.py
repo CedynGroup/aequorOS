@@ -14,7 +14,8 @@ from uuid import uuid4
 
 import pytest
 from fastapi.routing import APIRoute
-from sqlalchemy import Engine, Table
+from sqlalchemy import Engine, String, Table, event, func, select
+from sqlalchemy.engine import Connection
 from sqlalchemy.orm import Session
 
 from app.core.authorization import (
@@ -521,6 +522,115 @@ def _assert_configure_evaluator_failure(db: Session, monkeypatch: pytest.MonkeyP
     assert report.evaluation_failed
     assert all(not row.after.allowed for row in report.impacts)
     assert any(row.after.reason == "evaluation_failed" for row in report.impacts)
+
+
+@pytest.mark.skipif(
+    os.getenv("TEST_DATABASE_URL") is None,
+    reason="Snapshot interleaving requires independent PostgreSQL connections.",
+)
+@pytest.mark.committing_db
+def test_configure_inventory_uses_one_read_only_snapshot(
+    db_session: Session,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """A concurrent atomic change must not split principal and grant evidence."""
+    db_session.add(Organization(id=ORG, name="Snapshot impact"))
+    user = _user(db_session, "snapshot@impact.example")
+    db_session.commit()
+    _grant(db_session, user, RoleBundle.CONFIGURATOR, module_scope=ModuleScope.REGULATORY)
+    db_session.commit()
+    binding = db_session.scalar(
+        select(AuthorizationBinding).where(AuthorizationBinding.principal_user_id == user.id)
+    )
+    assert binding is not None
+    expected = build_configure_report(db_session, organization_id=ORG).to_dict()
+    db_session.commit()
+    engine = db_session.get_bind()
+    assert isinstance(engine, Engine)
+    committed = False
+    settings: list[tuple[str | None, str | None]] = []
+
+    def change_between_reads(
+        connection: Connection,
+        _cursor: object,
+        statement: str,
+        _parameters: object,
+        _context: object,
+        _executemany: bool,
+    ) -> None:
+        nonlocal committed
+        if committed or "FROM users" not in statement:
+            return
+        committed = True
+        # The reader is paused after its users SELECT. A separate connection
+        # commits both changes before the reader can select bindings.
+        user.is_active = False
+        binding.status = "suspended"
+        db_session.commit()
+        settings.append(
+            (
+                connection.scalar(
+                    select(func.current_setting("transaction_isolation", type_=String))
+                ),
+                connection.scalar(
+                    select(func.current_setting("transaction_read_only", type_=String))
+                ),
+            )
+        )
+
+    def engine_boundary(_url: str) -> Engine:
+        return engine
+
+    with monkeypatch.context() as patch:
+        patch.setattr(configure_impact, "create_engine", engine_boundary)
+        patch.setattr(engine, "dispose", lambda: None)
+        event.listen(engine, "after_cursor_execute", change_between_reads)
+        try:
+            assert (
+                configure_impact.main(
+                    [
+                        "--database-url",
+                        "postgresql://",
+                        "--organization",
+                        ORG,
+                        "--output-dir",
+                        str(tmp_path / "snapshot"),
+                    ]
+                )
+                == 0
+            )
+        finally:
+            event.remove(engine, "after_cursor_execute", change_between_reads)
+        assert committed
+        first = _read_json(tmp_path / "snapshot" / "configure-exact-grants.json")
+        assert first["principals"] == expected["principals"]
+        assert first["existing_grants"] == expected["existing_grants"]
+        assert settings == [("repeatable read", "on")]
+
+        # A new assessment gets a new snapshot, not the previous tenant's state.
+        assert (
+            configure_impact.main(
+                [
+                    "--database-url",
+                    "postgresql://",
+                    "--organization",
+                    ORG,
+                    "--output-dir",
+                    str(tmp_path / "fresh"),
+                ]
+            )
+            == 0
+        )
+    fresh = build_configure_report(db_session, organization_id=ORG).to_dict()
+    second = _read_json(tmp_path / "fresh" / "configure-exact-grants.json")
+    assert second["principals"] == fresh["principals"] != first["principals"]
+    assert second["existing_grants"] == fresh["existing_grants"] != first["existing_grants"]
+    assert second["required_grants"] == []
+    assert (
+        _read_json(tmp_path / "snapshot" / "configure-after.json")["outcomes"]
+        != _read_json(tmp_path / "fresh" / "configure-after.json")["outcomes"]
+    )
 
 
 def test_the_report_names_who_may_transmit_a_return(db_session: Session) -> None:
