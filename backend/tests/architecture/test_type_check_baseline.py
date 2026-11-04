@@ -1,10 +1,10 @@
-"""The type-check baseline gate stands on a strict configuration and a shrink-only baseline.
+"""The type-check baseline gate stands on a strict configuration and a growth-only baseline.
 
 ``scripts/type_check_baseline.py`` runs basedpyright and is the ``risk-service:typecheck``
 gate (CODEBASE_CONVENTIONS.md §1, "Type-check baseline"). A full type check takes about a
 minute, so these hermetic guards check what that gate relies on without running it:
 the configuration it reads is strict, the baseline is canonical and never covers a
-strict module, and its comparison and ``update`` rules fire on synthetic reports.
+strict module, and its comparison, ``check`` and ``update`` rules fire on synthetic reports.
 """
 
 from __future__ import annotations
@@ -235,6 +235,14 @@ def test_the_comparison_charges_each_rule() -> None:
     )
     assert type_check.compare({}, baseline).shrunk == (Drift("app.legacy", "reportAny", 0, 2),)
 
+    assert type_check.compare({"app.legacy": {"reportAny": 2}}, baseline).passes
+    assert type_check.compare({"app.legacy": {"reportAny": 1}}, baseline).passes
+    assert type_check.compare({}, baseline).passes
+    mixed = type_check.compare(
+        {"app.legacy": {"reportAny": 0}, "app.fresh": {"reportAny": 1}}, baseline
+    )
+    assert mixed.shrunk and mixed.grown and not mixed.passes
+
     strict = type_check.compare({}, {"app.forecasting.service": {"reportAny": 1}})
     assert strict.strict_entries == ("app.forecasting.service",)
     assert not type_check.is_strict_module("app.forecasting_legacy")
@@ -312,22 +320,83 @@ def test_a_move_into_a_strict_path_never_inherits_a_legacy_allowance(
     assert scratch_baseline.read_bytes() == before
 
     _checker_reports(monkeypatch, json.dumps({"generalDiagnostics": []}))
-    assert type_check.main(["check"]) == 1
+    assert type_check.main(["check"]) == 0
     assert type_check.main(["update"]) == 0
     assert type_check.load_baseline() == {}
     assert type_check.main(["check"]) == 0
 
 
-def test_check_fails_on_growth_and_on_unrecorded_fixes(
+def test_check_passes_with_unchanged_counts(
     scratch_baseline: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     legacy = _diagnostic("app.legacy")
+    before = scratch_baseline.read_bytes()
     _report(monkeypatch, legacy, legacy)
     assert type_check.main(["check"]) == 0
-    _report(monkeypatch, legacy, legacy, _diagnostic("app.fresh"))
+    assert scratch_baseline.read_bytes() == before
+
+
+def test_check_passes_on_a_decrease_without_recording_it(
+    scratch_baseline: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """A fix passes before the baseline catches up (CODEBASE_CONVENTIONS.md §1)."""
+    before = scratch_baseline.read_bytes()
+    _report(monkeypatch, _diagnostic("app.legacy"))
+    assert type_check.main(["check"]) == 0
+    assert scratch_baseline.read_bytes() == before
+    captured = capsys.readouterr()
+    assert "below the baseline" in captured.out
+    assert "update" in captured.out
+
+
+def test_check_passes_when_a_legacy_module_is_deleted(
+    scratch_baseline: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    before = scratch_baseline.read_bytes()
+    _report(monkeypatch)
+    assert type_check.main(["check"]) == 0
+    assert scratch_baseline.read_bytes() == before
+
+
+def test_check_fails_on_growth_in_a_legacy_module(
+    scratch_baseline: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    legacy = _diagnostic("app.legacy")
+    _report(monkeypatch, legacy, legacy, _diagnostic("app.legacy", "reportPrivateUsage"))
     assert type_check.main(["check"]) == 1
-    _report(monkeypatch, legacy)
+
+
+def test_new_module_errors_fail_without_a_baseline_entry(
+    scratch_baseline: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _report(monkeypatch, _diagnostic("app.fresh"))
     assert type_check.main(["check"]) == 1
+
+
+def test_mixed_net_decrease_still_fails_on_one_growing_module(
+    scratch_baseline: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Two fixed errors do not buy one new error elsewhere."""
+    _report(monkeypatch, _diagnostic("app.fresh"))
+    assert type_check.main(["check"]) == 1
+
+
+def test_a_basedpyright_failure_is_never_read_as_a_decrease(
+    scratch_baseline: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """An unusable tool run fails the gate instead of looking like fixed errors."""
+
+    def crashed(*_args: object, **_kwargs: object) -> subprocess.CompletedProcess[str]:
+        return subprocess.CompletedProcess(["basedpyright", "--outputjson"], 2, "", "boom")
+
+    monkeypatch.setattr(type_check.subprocess, "run", crashed)
+    before = scratch_baseline.read_bytes()
+    with pytest.raises(SystemExit) as failure:
+        type_check.main(["check"])
+    assert failure.value.code != 0
+    assert scratch_baseline.read_bytes() == before
 
 
 def test_update_records_fixes_and_never_grows_the_baseline(

@@ -1,4 +1,9 @@
-"""Hold the backend to basedpyright strict against a shrink-only legacy error baseline.
+"""Hold the backend to basedpyright strict against a growth-only legacy error baseline.
+
+The gate fails when a module or rule exceeds its recorded allowance. A decrease
+passes without editing the baseline: a stale allowance only lets an old error be
+reintroduced up to its old count, so retirement is maintenance, not a PR condition.
+``update`` still refuses to record growth.
 
 Contributor commands and baseline maintenance rules are owned by
 ``CODEBASE_CONVENTIONS.md`` §1, "Type-check baseline".
@@ -131,7 +136,18 @@ class Comparison:
 
     @property
     def clean(self) -> bool:
+        """Whether the measured counts exactly match the baseline."""
         return not (self.grown or self.shrunk or self.strict_entries)
+
+    @property
+    def passes(self) -> bool:
+        """Whether the gate accepts the change.
+
+        Growth and baseline entries for strict modules fail. A decrease is
+        information only, so a PR that removes errors never waits for the
+        baseline refresh in the same change.
+        """
+        return not (self.grown or self.strict_entries)
 
 
 def module_of(path: Path) -> str:
@@ -240,7 +256,7 @@ def write_baseline(counts: Counts) -> None:
 
 
 def report(diagnostics: Sequence[Diagnostic], comparison: Comparison) -> list[str]:
-    """The failure message for ``comparison``, empty when it is clean."""
+    """The failure message for ``comparison``, empty when the gate passes."""
     lines: list[str] = []
     if comparison.strict_entries:
         lines.append(
@@ -258,23 +274,31 @@ def report(diagnostics: Sequence[Diagnostic], comparison: Comparison) -> list[st
         for drift in comparison.grown:
             lines.append(f"  {drift}")
             lines.extend(f"    {diagnostic}" for diagnostic in found[drift.module, drift.rule])
-    if comparison.shrunk:
-        lines.append(
-            "These errors are fixed; record them with "
-            "`uv run python scripts/type_check_baseline.py update` so the baseline keeps the gain:"
-        )
-        lines.extend(f"  {drift}" for drift in comparison.shrunk)
     return lines
+
+
+def reductions(comparison: Comparison) -> list[str]:
+    """Counts below the baseline, as information; recording them is optional."""
+    if not comparison.shrunk:
+        return []
+    return [
+        f"{len(comparison.shrunk)} count(s) are below the baseline. The gate passes; "
+        "record them whenever convenient with "
+        "`uv run python scripts/type_check_baseline.py update`:",
+        *(f"  {drift}" for drift in comparison.shrunk),
+    ]
 
 
 def check() -> int:
     diagnostics = run_basedpyright()
     comparison = compare(count(diagnostics), load_baseline())
-    if comparison.clean:
-        print(f"Type-check baseline clean: {len(diagnostics)} baselined legacy errors.")
-        return 0
-    print("\n".join(report(diagnostics, comparison)))
-    return 1
+    if not comparison.passes:
+        print("\n".join(report(diagnostics, comparison)))
+        return 1
+    print(f"Type-check baseline clean: {len(diagnostics)} baselined legacy errors.")
+    for line in reductions(comparison):
+        print(line)
+    return 0
 
 
 def update() -> int:
@@ -282,9 +306,10 @@ def update() -> int:
     current = count(diagnostics)
     comparison = compare(current, load_baseline())
     if comparison.grown or comparison.strict_entries:
-        failed = Comparison(comparison.grown, (), comparison.strict_entries)
         print(
-            "\n".join(["The baseline only shrinks; fix these first.", *report(diagnostics, failed)])
+            "\n".join(
+                ["The baseline only shrinks; fix these first.", *report(diagnostics, comparison)]
+            )
         )
         return 1
     write_baseline(current)
