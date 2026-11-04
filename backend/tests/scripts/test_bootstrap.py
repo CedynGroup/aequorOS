@@ -15,7 +15,7 @@ import tomllib
 import unittest
 from collections.abc import Generator
 from pathlib import Path
-from typing import TypedDict, cast
+from typing import NotRequired, TypedDict, cast
 from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
@@ -24,6 +24,7 @@ from scripts import bootstrap
 
 class _TaskConfig(TypedDict):
     run: str | list[str]
+    env: NotRequired[dict[str, str]]
 
 
 class _SettingsConfig(TypedDict):
@@ -315,7 +316,11 @@ class BootstrapTests(unittest.TestCase):
             + '\n[tools]\n"aqs-fixture" = "1.0.0"\n'
             + "[tasks.setup]\nrun = "
             + json.dumps(tasks["setup"]["run"])
-            + '\nenv = { UV_FROZEN = "1" }\n'
+            + "\n"
+            + "".join(
+                f'env."{key}" = {json.dumps(value)}\n'
+                for key, value in (tasks["setup"].get("env") or {}).items()
+            )
             + "[tasks.verify]\nrun = "
             + json.dumps(tasks["verify"]["run"])
             + '\n[tasks."risk-service:sync"]\nrun = "pnpm sync-boundary"\n'
@@ -368,6 +373,69 @@ class BootstrapTests(unittest.TestCase):
         self.assertIn("install --frozen-lockfile", commands)
         self.assertIn("sync-boundary", commands)
         self.assertIn("hooks-boundary", commands)
+
+    def test_setup_refuses_a_lockfile_that_trails_project_metadata(self) -> None:
+        """The setup task's own env must reject a stale ``uv.lock``, not consume it."""
+        uv = shutil.which("uv")
+        self.assertIsNotNone(uv, "uv is required for the lockfile-freshness regression")
+        assert uv is not None
+        config = cast(
+            _MiseConfig, tomllib.loads((Path(bootstrap.DEFAULT_ROOT) / "mise.toml").read_text())
+        )
+        setup_environment = dict(config["tasks"]["setup"].get("env") or {})
+        self.assertTrue(setup_environment, "setup must declare its dependency environment")
+        project = self.root / "uv-project"
+        (project / "dependency").mkdir(parents=True)
+        (project / "dependency/pyproject.toml").write_text(
+            '[project]\nname = "aqs-local-dependency"\nversion = "1.0.0"\n'
+            'requires-python = ">=3.11"\n'
+        )
+        (project / "pyproject.toml").write_text(
+            '[project]\nname = "aqs-lock-probe"\nversion = "0.1.0"\n'
+            'requires-python = ">=3.11"\ndependencies = []\n'
+        )
+        environment = {
+            key: value
+            for key, value in _isolated_environment(self.root).items()
+            if not key.startswith("UV_")
+        }
+        lock = subprocess.run(
+            [uv, "lock", "--offline"],
+            cwd=project,
+            env=environment,
+            text=True,
+            capture_output=True,
+            timeout=60,
+            check=False,
+        )
+        self.assertEqual(lock.returncode, 0, lock.stdout + lock.stderr)
+        locked = (project / "uv.lock").read_text()
+        # Declaring a dependency after the lock was written is exactly the drift a
+        # maintainer creates by editing pyproject.toml and forgetting `uv lock`.
+        (project / "pyproject.toml").write_text(
+            '[project]\nname = "aqs-lock-probe"\nversion = "0.1.0"\n'
+            'requires-python = ">=3.11"\ndependencies = ["aqs-local-dependency"]\n'
+            '\n[tool.uv.sources]\naqs-local-dependency = { path = "dependency" }\n'
+        )
+
+        def sync(**extra: str) -> subprocess.CompletedProcess[str]:
+            return subprocess.run(
+                [uv, "sync", "--offline"],
+                cwd=project,
+                env={**environment, **extra},
+                text=True,
+                capture_output=True,
+                timeout=120,
+                check=False,
+            )
+
+        refused = sync(**setup_environment)
+        self.assertNotEqual(refused.returncode, 0, refused.stdout + refused.stderr)
+        self.assertIn("uv.lock", refused.stderr)
+        self.assertEqual((project / "uv.lock").read_text(), locked)
+        # Counterfactual: the previous frozen setting silently accepted that drift.
+        accepted = sync(UV_FROZEN="1")
+        self.assertEqual(accepted.returncode, 0, accepted.stdout + accepted.stderr)
 
     def test_interpreters_before_311_get_a_named_remedy(self) -> None:
         output = io.StringIO()

@@ -51,12 +51,12 @@ The audit-chain migration also requires
 
 ## Prerequisites
 
-From the repository root, `mise run setup` installs the pinned toolchain and frozen
-dependencies, copies missing env templates (never overwriting local values), and
-installs hooks in unmanaged checkouts. `mise run verify` uses only installed tools
-and dependencies to check core readiness without Docker or a database; it runs the
-backend CI task-wiring smoke test and dashboard typecheck. Run `mise run setup` to
-provision missing tools: automatic tool installation
+From the repository root, `mise run setup` installs the pinned toolchain and
+lockfile-pinned dependencies, copies missing env templates (never overwriting local
+values), and installs hooks in unmanaged checkouts. `mise run verify` uses only
+installed tools and dependencies to check core readiness without Docker or a
+database; it runs the backend CI task-wiring smoke test and dashboard typecheck.
+Run `mise run setup` to provision missing tools: automatic tool installation
 is disabled for this repository, so other mise tasks report missing tools instead
 of downloading them. The manual steps follow.
 

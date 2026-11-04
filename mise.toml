@@ -44,10 +44,11 @@ uv = "0.11.18"
 
 [tasks.setup]
 description = "Prepare a fresh checkout: pinned tools, dependencies, env files, and hooks"
-# Frozen syncs keep a fresh checkout reproducible: a stale lockfile fails loudly
-# instead of being silently re-resolved. Env copies never overwrite a local file,
-# and an existing managed core.hooksPath chain is preserved.
-env = { UV_FROZEN = "1" }
+# Locked syncs keep a fresh checkout reproducible: UV_LOCKED asserts that uv.lock
+# matches pyproject.toml, so a stale lockfile fails loudly instead of being used
+# silently. Env copies never overwrite a local file, and an existing managed
+# core.hooksPath chain is preserved.
+env = { UV_LOCKED = "1" }
 run = [
   "mise install",
   "python3 backend/scripts/bootstrap.py env",
