@@ -275,6 +275,7 @@ def test_configure_fixture_grants_each_bank_without_duplicate_bindings(
                 select(func.count())
                 .select_from(AuthorizationBinding)
                 .where(
+                    AuthorizationBinding.organization_id == ORG_1,
                     AuthorizationBinding.principal_user_id == CONFIGURATOR,
                     AuthorizationBinding.role_bundle == RoleBundle.CONFIGURATOR.value,
                 )
