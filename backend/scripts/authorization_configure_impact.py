@@ -370,6 +370,7 @@ def write_artifacts(report: ConfigureReport, directory: Path) -> None:
 
 def _write_json(path: Path, payload: dict[str, object]) -> None:
     """Create private evidence without overwriting an existing artifact."""
+
     def private_opener(name: str, flags: int) -> int:
         return os.open(name, flags, 0o600)
 
