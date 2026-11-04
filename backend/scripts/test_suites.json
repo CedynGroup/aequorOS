@@ -2486,7 +2486,6 @@
     "tests/architecture/test_credit_route_authorization.py::test_credit_routes_cannot_revert_to_legacy_authorization[key8-require_credit_run]": "unit",
     "tests/architecture/test_credit_route_authorization.py::test_every_credit_route_is_in_the_authority_table": "unit",
     "tests/architecture/test_credit_route_authorization.py::test_the_credit_run_route_is_a_recognized_mutation_gate": "unit",
-    "tests/architecture/test_credit_route_authorization.py::test_the_shared_institution_gate_refuses_a_narrowed_scope_by_default": "unit",
     "tests/architecture/test_credit_route_authorization.py::test_credit_authorized_reads_outside_credit_cut_over[key0-require_credit_restricted_view]": "unit",
     "tests/architecture/test_credit_route_authorization.py::test_credit_authorized_reads_outside_credit_cut_over[key1-require_credit_restricted_view]": "unit",
     "tests/architecture/test_credit_route_authorization.py::test_credit_authorized_reads_outside_credit_cut_over[key2-require_credit_restricted_view]": "unit",
