@@ -50,10 +50,11 @@ from app.models import Organization, User
 from tests.support.postgres_migrations import (
     MigratedPostgresSchema,
     alembic_config_for_app,
+    forward_migrated_postgres_schema,
     migrated_postgres_schema,
 )
 
-__all__ = ["migrated_postgres_schema"]
+__all__ = ["forward_migrated_postgres_schema", "migrated_postgres_schema"]
 
 pytestmark = [
     pytest.mark.committing_db,
@@ -150,9 +151,11 @@ ORG = "OR-CFGM0001"
 
 
 def test_configurator_migration_grants_nothing_and_preserves_existing_authority(
-    migrated_postgres_schema: MigratedPostgresSchema,
+    forward_migrated_postgres_schema: MigratedPostgresSchema,
 ) -> None:
-    schema = migrated_postgres_schema
+    # Post-migration Account Admins cannot round-trip through the historical
+    # ownership migration. This test round-trips only the Configurator migration.
+    schema = forward_migrated_postgres_schema
     config = alembic_config_for_app()
     command.downgrade(config, "202611020107")
     principal_ids: list[UUID] = []
@@ -205,26 +208,33 @@ def test_configurator_migration_grants_nothing_and_preserves_existing_authority(
             )
             == 0
         )
-        # Exercise the actual migrated CHECK, not just its catalog expression.
+        # Insert a new generation: authoritative binding rows are sealed.
+        candidate = text(
+            "INSERT INTO authorization_bindings "
+            "(id, organization_id, principal_user_id, principal_type, role_bundle, "
+            "institution_scope, institution_id, module_scope, sensitivity_scope, "
+            "granted_by_type, granted_by_id, grant_reason_category, grant_reason, "
+            "granted_at, status, valid_from, created_at, updated_at) "
+            "SELECT :id, organization_id, principal_user_id, principal_type, :bundle, "
+            "institution_scope, institution_id, module_scope, sensitivity_scope, "
+            "granted_by_type, granted_by_id, grant_reason_category, grant_reason, "
+            "granted_at, status, valid_from, created_at, updated_at "
+            "FROM authorization_bindings WHERE principal_user_id = :user"
+        )
         with connection.begin_nested() as savepoint:
-            connection.execute(
-                text(
-                    "UPDATE authorization_bindings SET role_bundle = 'configurator' "
-                    "WHERE principal_user_id = :user"
-                ),
-                {"user": principal_ids[0]},
+            inserted = connection.execute(
+                candidate,
+                {"id": uuid4(), "bundle": "configurator", "user": principal_ids[0]},
             )
+            assert inserted.rowcount == 1
             savepoint.rollback()
         with (
             pytest.raises(IntegrityError, match="ck_authorization_bindings_role_bundle"),
             connection.begin_nested(),
         ):
             connection.execute(
-                text(
-                    "UPDATE authorization_bindings SET role_bundle = 'unknown_bundle' "
-                    "WHERE principal_user_id = :user"
-                ),
-                {"user": principal_ids[0]},
+                candidate,
+                {"id": uuid4(), "bundle": "unknown_bundle", "user": principal_ids[0]},
             )
     command.downgrade(config, "202611020107")
     assert _authority_snapshot(schema) == before
