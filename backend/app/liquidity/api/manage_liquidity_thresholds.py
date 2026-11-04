@@ -3,7 +3,7 @@
 GET resolves the thresholds active on a date (Board register over regulatory
 defaults) plus the full generation history — the artifact behind "show me
 your Board-approved thresholds." PUT records a new Board-approved generation;
-approver-gated because adopting Board thresholds is a risk-configuration act,
+Configurator-gated because adopting Board thresholds is a risk-configuration act,
 and audited like every configuration change.
 """
 
@@ -14,7 +14,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Query
 
-from app.api.deps import ApproverTenant, DbSession, LiquidityConfidentialResource
+from app.api.deps import DbSession, LiquidityConfidentialResource, ScopedMutationTenant
 from app.liquidity.schemas.liquidity_thresholds import (
     LiquidityHaircutScheduleRead,
     LiquidityHaircutUpdate,
@@ -55,7 +55,7 @@ def update_liquidity_threshold_register(
     bank_id: str,
     payload: LiquidityThresholdUpdate,
     db: DbSession,
-    ctx: ApproverTenant,
+    ctx: ScopedMutationTenant,
 ) -> LiquidityThresholdRegisterRead:
     return liquidity_thresholds.update_register(db, ctx, bank_id, payload)
 
@@ -89,6 +89,6 @@ def update_liquidity_haircut_schedule(
     bank_id: str,
     payload: LiquidityHaircutUpdate,
     db: DbSession,
-    ctx: ApproverTenant,
+    ctx: ScopedMutationTenant,
 ) -> LiquidityHaircutScheduleRead:
     return liquidity_thresholds.update_haircut_schedule(db, ctx, bank_id, payload)

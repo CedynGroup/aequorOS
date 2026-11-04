@@ -54,6 +54,7 @@ from app.models import (
 )
 from app.policy.service import sdi_regime
 from app.stress.service import enterprise_stress
+from tests.liquidity.configure_helpers import grant_configure
 from tests.support.helpers import ORG_1, USER_1
 
 _AS_OF = date(2026, 6, 30)
@@ -521,6 +522,7 @@ def test_a_board_generation_for_the_other_class_is_refused(db_session: Session) 
     recorded under the other class would never be applied — the payload field's
     "bank" default made that the silent outcome for an SDI."""
     sdi = _sdi(db_session)
+    grant_configure(db_session, sdi.id)
     with pytest.raises(Exception) as exc:  # noqa: B017 - HTTPException, asserted below
         liquidity_thresholds.update_register(
             db_session,
@@ -542,6 +544,7 @@ def test_a_board_generation_for_its_own_class_is_recorded_and_read_back(
     db_session: Session,
 ) -> None:
     sdi = _sdi(db_session)
+    grant_configure(db_session, sdi.id)
     register = liquidity_thresholds.update_register(
         db_session,
         _CTX,
