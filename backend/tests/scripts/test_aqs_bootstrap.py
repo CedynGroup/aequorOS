@@ -13,16 +13,30 @@ import sys
 import tempfile
 import tomllib
 import unittest
-from collections.abc import Iterator
+from collections.abc import Generator
 from pathlib import Path
+from typing import TypedDict, cast
 from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
 from scripts import aqs_bootstrap as bootstrap
 
 
+class _TaskConfig(TypedDict):
+    run: str | list[str]
+
+
+class _SettingsConfig(TypedDict):
+    auto_install: bool
+
+
+class _MiseConfig(TypedDict):
+    tasks: dict[str, _TaskConfig]
+    settings: _SettingsConfig
+
+
 @contextlib.contextmanager
-def isolated_git(root: Path, **extra: str) -> Iterator[None]:
+def isolated_git(root: Path, **extra: str) -> Generator[None]:
     """Run with only this fixture's git configuration, never the caller's.
 
     A harness may inject GIT_CONFIG_COUNT/KEY/VALUE (or GIT_CONFIG_PARAMETERS) to
@@ -239,7 +253,9 @@ class BootstrapTests(unittest.TestCase):
         mise = shutil.which("mise")
         self.assertIsNotNone(mise, "mise is required for the entrypoint regression")
         assert mise is not None
-        config = tomllib.loads((Path(bootstrap.DEFAULT_ROOT) / "mise.toml").read_text())
+        config = cast(
+            _MiseConfig, tomllib.loads((Path(bootstrap.DEFAULT_ROOT) / "mise.toml").read_text())
+        )
         profile = self.root / "mise-profile"
         profile.mkdir()
         plugin = profile / "plugin/bin"
@@ -338,7 +354,14 @@ class BootstrapTests(unittest.TestCase):
         binary.write_text("#!/bin/sh\nexit 0\n")
         binary.chmod(0o755)
         with patch.dict(os.environ, {"AQS_OPENBAO_BIN": str(binary)}, clear=True):
-            self.assertEqual(bootstrap._openbao_check({}).state, "info")
+            self.assertEqual(
+                next(
+                    check
+                    for check in bootstrap.capability_checks(self.root)
+                    if check.label == "OpenBao"
+                ).state,
+                "info",
+            )
         with (
             patch.dict(os.environ, {}, clear=True),
             patch.object(bootstrap.shutil, "which", return_value=None),

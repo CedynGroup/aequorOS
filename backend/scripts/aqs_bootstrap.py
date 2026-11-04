@@ -19,8 +19,10 @@ requirement is missing or a check failed; 2 is reserved for usage errors.
 from __future__ import annotations
 
 import argparse
+import importlib.resources
 import os
 import re
+import shlex
 import shutil
 import socket
 import subprocess
@@ -279,22 +281,23 @@ def _installed_python(root: Path) -> Path:
     return root / "backend" / ".venv" / "bin" / "python"
 
 
-def _check_hook_artifacts(directory: Path) -> int:
-    import shlex
-
-    from pre_commit.util import resource_text
-
-    template = resource_text("hook-tmpl")
+def check_hook_artifacts(directory: Path) -> int:
+    template = (importlib.resources.files("pre_commit") / "resources" / "hook-tmpl").read_text(
+        encoding="UTF-8"
+    )
     before, rest = template.split("# start templated\n")
     _, after = rest.split("# end templated\n")
     missing: list[str] = []
     for name in REQUIRED_HOOKS:
-        args = ["hook-impl", "--config=.pre-commit-config.yaml",
-                f"--hook-type={name}"]
-        expected = (before + "# start templated\n"
-                    + f"INSTALL_PYTHON={shlex.quote(sys.executable)}\n"
-                    + f"ARGS=({shlex.join(args)})\n"
-                    + "# end templated\n" + after)
+        args = ["hook-impl", "--config=.pre-commit-config.yaml", f"--hook-type={name}"]
+        expected = (
+            before
+            + "# start templated\n"
+            + f"INSTALL_PYTHON={shlex.quote(sys.executable)}\n"
+            + f"ARGS=({shlex.join(args)})\n"
+            + "# end templated\n"
+            + after
+        )
         hook = directory / name
         if not hook.is_file() or not os.access(hook, os.X_OK) or hook.read_text() != expected:
             missing.append(name)
@@ -305,24 +308,33 @@ def _check_hook_artifacts(directory: Path) -> int:
 
 
 def _external_hook_check(root: Path) -> Check | None:
-    import shlex
-
     code, managed = _capture(["git", "config", "--get", "core.hooksPath"], cwd=root)
     if code != 0:
         return None
-    commands = []
+    commands: list[str] = []
     for name in REQUIRED_HOOKS:
-        command = shlex.join([
-            str(_installed_python(root)), "-m", "pre_commit", "hook-impl",
-            "--config", str(root / ".pre-commit-config.yaml"), "--hook-type", name, "--",
-        ])
+        command = shlex.join(
+            [
+                str(_installed_python(root)),
+                "-m",
+                "pre_commit",
+                "hook-impl",
+                "--config",
+                str(root / ".pre-commit-config.yaml"),
+                "--hook-type",
+                name,
+                "--",
+            ]
+        )
         commands.append(f'{name}: {command} "$@"')
     return Check(
-        "Hooks", "missing",
+        "Hooks",
+        "missing",
         f"unverified: externally configured core.hooksPath ({managed!r}) left untouched",
-        "Configure your hook manager to run each command below from " + str(root)
-        + ", forwarding hook arguments and pre-push stdin; then verify enforcement under your manager.\n"
-        + "\n".join(commands),
+        "Configure your hook manager to run each command below from "
+        + str(root)
+        + ", forwarding hook arguments and pre-push stdin; "
+        "then verify enforcement under your manager.\n" + "\n".join(commands),
     )
 
 
@@ -333,18 +345,31 @@ def hook_checks(root: Path) -> list[Check]:
     directory = _git_path(root, "hooks")
     python = _installed_python(root)
     if directory is None or not python.is_file() or not os.access(python, os.X_OK):
-        return [Check("Hooks", "missing", "hooks directory or installed Python unavailable",
-                      "mise run setup")]
+        return [
+            Check(
+                "Hooks",
+                "missing",
+                "hooks directory or installed Python unavailable",
+                "mise run setup",
+            )
+        ]
     code, output = _capture(
-        [str(python), "-c",
-         "import sys; from pathlib import Path; "
-         "from scripts.aqs_bootstrap import _check_hook_artifacts; "
-         "sys.exit(_check_hook_artifacts(Path(sys.argv[1])))",
-         str(directory)], cwd=root / "backend",
+        [
+            str(python),
+            "-c",
+            "import sys; from pathlib import Path; "
+            "from scripts.aqs_bootstrap import check_hook_artifacts; "
+            "sys.exit(check_hook_artifacts(Path(sys.argv[1])))",
+            str(directory),
+        ],
+        cwd=root / "backend",
     )
     if code != 0:
-        return [Check("Hooks", "missing", output or "cannot validate pre-commit hooks",
-                      "mise run setup")]
+        return [
+            Check(
+                "Hooks", "missing", output or "cannot validate pre-commit hooks", "mise run setup"
+            )
+        ]
     return [Check("Hooks", "ok", f"all required pre-commit dispatchers installed in {directory}")]
 
 
@@ -354,8 +379,15 @@ def install_hooks(root: Path) -> int:
         _print_check(external)
         return 0
 
-    args = [str(_installed_python(root)), "-m", "pre_commit", "install",
-            "--config", str(root / ".pre-commit-config.yaml"), "--install-hooks"]
+    args = [
+        str(_installed_python(root)),
+        "-m",
+        "pre_commit",
+        "install",
+        "--config",
+        str(root / ".pre-commit-config.yaml"),
+        "--install-hooks",
+    ]
     for name in REQUIRED_HOOKS:
         args.extend(["--hook-type", name])
     code = _stream(args, cwd=root, timeout=300)
@@ -669,8 +701,9 @@ def backend_smoke(root: Path) -> Check:
     backend = root / "backend"
     python = _installed_python(root)
     if not python.is_file() or not os.access(python, os.X_OK):
-        return Check("Backend smoke", "missing", "installed backend Python unavailable",
-                     "mise run setup")
+        return Check(
+            "Backend smoke", "missing", "installed backend Python unavailable", "mise run setup"
+        )
     code = _stream(
         [
             str(python),
