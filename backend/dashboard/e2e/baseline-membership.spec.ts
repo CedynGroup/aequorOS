@@ -1,4 +1,4 @@
-import { expect } from "@playwright/test";
+import { expect, type Locator, type Page } from "@playwright/test";
 import { test } from "./support/story-identities";
 import path from "path";
 import { E2E_API_ORIGIN, E2E_BASE_URL, E2E_TMP } from "../playwright.config";
@@ -27,6 +27,15 @@ test.describe("fresh active member baseline", () => {
         productRequests.push(request.url());
       }
     });
+
+    // Chromium skips redundant mousemove at unchanged coordinates, so a
+    // palette entry re-rendered under a stationary pointer never fires
+    // mouseenter and its tooltip never opens. Force a real pointer
+    // transition before every hover.
+    const hoverWithTransition = async (locator: Locator) => {
+      await page.mouse.move(0, 0);
+      await locator.hover();
+    };
 
     await page.goto("/");
     await expect(
@@ -71,7 +80,7 @@ test.describe("fresh active member baseline", () => {
       name: "Liquidity",
       exact: true,
     });
-    await liquidity.hover();
+    await hoverWithTransition(liquidity);
     await expect(
       page.getByRole("tooltip").filter({
         hasText:
@@ -103,7 +112,7 @@ test.describe("fresh active member baseline", () => {
       exact: true,
     });
     await expect(stress).toHaveAttribute("aria-disabled", "true");
-    await stress.hover();
+    await hoverWithTransition(stress);
     await expect(
       page.getByRole("tooltip").filter({
         hasText:
@@ -124,7 +133,7 @@ test.describe("fresh active member baseline", () => {
       exact: true,
     });
     await expect(workbench).toHaveAttribute("aria-disabled", "true");
-    await workbench.hover();
+    await hoverWithTransition(workbench);
     await expect(
       page.getByRole("tooltip").filter({
         hasText:
@@ -177,7 +186,7 @@ test.describe("fresh active member baseline", () => {
       name: "Members",
       exact: true,
     });
-    await membersTab.hover();
+    await hoverWithTransition(membersTab);
     await expect(
       page.getByRole("tooltip").filter({
         hasText:
