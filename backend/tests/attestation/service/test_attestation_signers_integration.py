@@ -34,6 +34,7 @@ from app.attestation.service.signers import (
 from app.db.base import Base
 from app.models import AuditEvent, SignerIdentity
 from tests.attestation.service.test_attestation_signers import DIGEST, SIGNER_ID
+from tests.attestation.service.test_attestation_signers import _signing_env as _signing_env
 from tests.support.helpers import ORG_1, ORG_2, USER_1, USER_2
 
 OTHER_SIGNER_ID = "SGN-2ABC4DEF6GHJ8KMN"

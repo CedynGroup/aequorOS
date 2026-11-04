@@ -11,6 +11,7 @@ from app.api import health
 from app.core.config import get_settings
 from app.db.session import get_worker_sessionmaker
 from app.storage.client import StorageHealth
+from tests.test_health import stub_storage_probe as stub_storage_probe
 
 # Readiness probes open independent database connections by design.
 requires_committing_db = pytest.mark.committing_db
