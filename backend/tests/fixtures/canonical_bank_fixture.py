@@ -39,8 +39,8 @@ from app.models import (
 )
 from app.policy.models.parameter_register import RegulatoryParameterMixin
 from app.policy.service import parameter_register
+from tests.forecasting.assumption_fixtures import FORECAST_PRESETS
 from tests.support.factories.reconciliation import allow_fixture_balance_gap
-from tests.unit.forecasting.assumption_fixtures import FORECAST_PRESETS
 
 # Deterministic platform IDs for the hermetic test fixture (valid BK-/OR-
 # format; Crockford charset). Real tenants — the primary DB sandbox included —

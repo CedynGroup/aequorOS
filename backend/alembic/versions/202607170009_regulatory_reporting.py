@@ -138,7 +138,9 @@ def upgrade() -> None:
             ondelete="CASCADE",
         ),
         sa.PrimaryKeyConstraint("id"),
-        sa.UniqueConstraint("id", "organization_id", name="uq_regulatory_package_artifacts_id_org"),
+        sa.UniqueConstraint(
+            "id", "organization_id", name="uq_regulatory_package_artifacts_id_org"
+        ),
     )
     op.create_index(
         "ix_regulatory_package_artifacts_org_package",
@@ -166,7 +168,9 @@ def upgrade() -> None:
             ondelete="CASCADE",
         ),
         sa.PrimaryKeyConstraint("id"),
-        sa.UniqueConstraint("id", "organization_id", name="uq_regulatory_package_approvals_id_org"),
+        sa.UniqueConstraint(
+            "id", "organization_id", name="uq_regulatory_package_approvals_id_org"
+        ),
     )
     op.create_index(
         "ix_regulatory_package_approvals_org_package",
@@ -204,7 +208,9 @@ def upgrade() -> None:
             ondelete="CASCADE",
         ),
         sa.PrimaryKeyConstraint("id"),
-        sa.UniqueConstraint("id", "organization_id", name="uq_regulatory_submission_events_id_org"),
+        sa.UniqueConstraint(
+            "id", "organization_id", name="uq_regulatory_submission_events_id_org"
+        ),
     )
     op.create_index(
         "ix_regulatory_submission_events_org_package",
@@ -270,7 +276,9 @@ def downgrade() -> None:
         op.execute(f"ALTER TABLE {table} NO FORCE ROW LEVEL SECURITY")
         op.execute(f"ALTER TABLE {table} DISABLE ROW LEVEL SECURITY")
 
-    op.drop_index("ix_regulatory_channel_configs_org_bank", table_name="regulatory_channel_configs")
+    op.drop_index(
+        "ix_regulatory_channel_configs_org_bank", table_name="regulatory_channel_configs"
+    )
     op.drop_table("regulatory_channel_configs")
     op.drop_index(
         "ix_regulatory_submission_events_org_package", table_name="regulatory_submission_events"

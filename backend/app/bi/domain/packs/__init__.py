@@ -9,7 +9,7 @@ The packs are DATA: a file can name catalogue member ids, a closed window
 vocabulary and a closed panel key, and nothing else — no table, no column, no
 route, no parameter and no date. That is a property of
 :class:`app.bi.schemas.query.BiPackSpec` (every model closed, every source a
-Literal), not of a convention, and ``tests/unit/bi/domain/test_packs.py`` proves
+Literal), not of a convention, and ``tests/bi/domain/test_packs.py`` proves
 each file also resolves through the catalogue and passes the compiler's shape
 rules without a database.
 

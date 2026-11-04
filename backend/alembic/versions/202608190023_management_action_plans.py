@@ -40,7 +40,8 @@ _TENANT_ID_EXPR = "NULLIF(current_setting('app.organization_id', true), '')"
 
 _STATUSES = "('draft', 'pending_approval', 'approved', 'archived')"
 _KINDS = (
-    "('raise_capital', 'revise_dividend', 'reduce_risk', 'sell_assets', 'change_strategy', 'other')"
+    "('raise_capital', 'revise_dividend', 'reduce_risk', 'sell_assets', "
+    "'change_strategy', 'other')"
 )
 _TIERS = "('cet1', 'at1', 'tier2')"
 _SIZING = "('fixed', 'fill_residual')"
@@ -123,14 +124,18 @@ def upgrade() -> None:
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
         sa.CheckConstraint(f"kind IN {_KINDS}", name="ck_mgmt_action_items_kind"),
-        sa.CheckConstraint(f"capital_raise_tier IN {_TIERS}", name="ck_mgmt_action_items_tier"),
+        sa.CheckConstraint(
+            f"capital_raise_tier IN {_TIERS}", name="ck_mgmt_action_items_tier"
+        ),
         sa.CheckConstraint(f"sizing IN {_SIZING}", name="ck_mgmt_action_items_sizing"),
         sa.CheckConstraint(
             f"trigger_kind IN {_TRIGGERS}", name="ck_mgmt_action_items_trigger_kind"
         ),
         sa.CheckConstraint("effective_year >= 1", name="ck_mgmt_action_items_effective_year"),
         sa.ForeignKeyConstraint(["organization_id"], ["organizations.id"]),
-        sa.ForeignKeyConstraint(["plan_id"], ["management_action_plans.id"], ondelete="CASCADE"),
+        sa.ForeignKeyConstraint(
+            ["plan_id"], ["management_action_plans.id"], ondelete="CASCADE"
+        ),
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint("plan_id", "action_id", name="uq_mgmt_action_items_action"),
     )

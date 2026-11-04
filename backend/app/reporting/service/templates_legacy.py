@@ -13,7 +13,7 @@ P0 changed). ``templates.template_for_snapshot`` selects them for a snapshot
 that carries no ``metadata.template_revision`` stamp — every package generated
 before P0 — and, for the two Appendix II templates, for any snapshot without the
 ``metadata.parameter_provenance`` the neutral headers rely on to state the
-minima. ``tests/unit/reporting/service/test_pre_p0_template_rerender.py`` pins the re-export of
+minima. ``tests/reporting/service/test_pre_p0_template_rerender.py`` pins the re-export of
 real pre-P0 packages byte-for-byte against the baseline renderer.
 
 NEVER EDIT THE TEXT BELOW. It is the historical artifact wording; a change here

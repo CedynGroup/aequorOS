@@ -1,0 +1,12 @@
+{
+  "records": [
+    {
+      "id": "LC80001",
+      "customer": "C1002",
+      "currency": "USD",
+      "lcAmount": "500000",
+      "expiryDate": "20261130",
+      "lcyLcAmount": "7750000"
+    }
+  ]
+}

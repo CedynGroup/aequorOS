@@ -15,7 +15,7 @@ seeded kind.  Catalogue path/query parameters (``module``, ``signing_role``, …
 take fixed valid values so the request reaches the object lookup.
 
 Both suites read the census at collection, so an uncatalogued identifier
-errors them before a single case runs; ``tests/unit/architecture/
+errors them before a single case runs; ``tests/architecture/
 test_object_reference_census.py`` runs :func:`uncatalogued_references` on
 every PR without Postgres and names the identifiers to catalogue.
 """

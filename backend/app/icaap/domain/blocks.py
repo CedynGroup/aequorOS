@@ -12,7 +12,7 @@ Two rules are load-bearing and live here rather than in a service:
   ``RegulatoryRun``, package, sign-off, approved plan, snapshot or register
   digest for the cycle's exact as-of date. ``live_metrics`` is a monitoring
   surface that the worker rewrites continuously; a filed report cannot cite it.
-  ``tests/unit/architecture/test_icaap_boundaries.py`` enforces the import ban.
+  ``tests/architecture/test_icaap_boundaries.py`` enforces the import ban.
 * **Staleness is computed on read, never stored.** A binding records what it
   pinned; :func:`evaluate_status` compares that with what would bind now, so a
   new capital run makes every cycle that cites it say so immediately.

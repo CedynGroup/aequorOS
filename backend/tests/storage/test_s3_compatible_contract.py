@@ -1,0 +1,161 @@
+"""StorageClient contract suite bound to the live S3-compatible backend.
+
+Provisions a throwaway institution on the configured MinIO, runs the shared
+suite, and deprovisions on teardown. Runs whenever S3_* credentials are
+configured (locally via apps/risk-service/.env, per the everything-on-managed-MinIO
+decision) and skips cleanly without credentials, so CI stays hermetic.
+"""
+
+from __future__ import annotations
+
+import io as io_module
+from datetime import UTC, datetime, timedelta
+from typing import ClassVar, cast
+from uuid import uuid4
+
+import pytest
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
+
+from app.core.key_management.local import LocalKeyProvider
+from app.core.key_management.types import KeyReference
+from app.storage.access_log import HashChainedAccessLog
+from app.storage.api import router
+from app.storage.client import StorageClient, StorageLocation, StorageValidationError
+from app.storage.config import StorageEngineSettings
+from app.storage.encryption import ObjectEncryption
+from app.storage.factory import get_storage_client
+from app.storage.provisioning import (
+    ProvisioningClient,
+    deprovision_institution,
+    provision_institution,
+)
+from app.storage.s3_compatible import S3CompatibleStorageClient
+from tests.storage.contract import StorageContractSuite, metadata_for
+from tests.storage.test_object_lock import LockClient
+from tests.support.key_envelopes import MemoryEnvelopeStore
+
+pytestmark = [
+    pytest.mark.requires_service("minio"),
+    pytest.mark.skipif(
+        not StorageEngineSettings().configured,
+        reason="S3_* storage credentials are not configured.",
+    ),
+]
+
+
+@pytest.mark.parametrize("mode", ["COMPLIANCE", "GOVERNANCE"])
+def test_archived_version_refuses_changed_default_retention(mode: str) -> None:
+    settings = StorageEngineSettings().model_copy(update={"object_lock_enabled": True})
+    slug = f"lock-{uuid4().hex[:8]}"
+    key = KeyReference("local", "retention-bank-key", "local", "retention-bank")
+    provider = LocalKeyProvider()
+    provider.add_key(key)
+    storage = S3CompatibleStorageClient(
+        settings, encryption=ObjectEncryption(MemoryEnvelopeStore(slug, key, provider))
+    )
+    client = cast(LockClient, storage._s3)  # pyright: ignore[reportPrivateUsage]
+    provision_institution(cast(ProvisioningClient, client), settings, slug)
+    location = StorageLocation(slug, "outputs", "archived/report.pdf")
+    bucket = location.bucket_name(settings.env)
+    content = b"synthetic archived filing"
+    try:
+        stored = storage.write(
+            location, io_module.BytesIO(content), metadata_for(slug, "outputs", content)
+        )
+        assert stored.version_id is not None
+        kwargs = {"Bucket": bucket, "Key": location.object_path, "VersionId": stored.version_id}
+        original = client.head_object(**kwargs)
+        assert original.get("ObjectLockMode") is None
+        assert original.get("ObjectLockRetainUntilDate") is None
+        _ = client.put_object_lock_configuration(
+            Bucket=bucket,
+            ObjectLockConfiguration={
+                "ObjectLockEnabled": "Enabled",
+                "Rule": {"DefaultRetention": {"Mode": mode, "Days": 2555}},
+            },
+        )
+        policy = client.get_object_lock_configuration(Bucket=bucket)["ObjectLockConfiguration"]
+        with pytest.raises(StorageValidationError, match="Rule.DefaultRetention"):
+            storage.retain(location, stored.version_id, datetime.now(UTC) + timedelta(days=7))
+        retained = client.head_object(**kwargs)
+        assert retained.get("ObjectLockMode") is None
+        assert retained.get("ObjectLockRetainUntilDate") is None
+        assert (
+            client.get_object_lock_configuration(Bucket=bucket)["ObjectLockConfiguration"] == policy
+        )
+        _, decrypted = storage.read(location, stored.version_id)
+        assert decrypted.read() == content
+        decrypted.close()
+    finally:
+        deprovision_institution(cast(ProvisioningClient, client), settings, slug)
+
+
+class TestS3CompatibleStorageContract(StorageContractSuite):
+    _live_client: ClassVar[StorageClient | None] = None
+
+    @pytest.fixture(scope="class")
+    def settings(self) -> StorageEngineSettings:
+        return StorageEngineSettings()
+
+    @pytest.fixture(scope="class")
+    def access_log(self) -> HashChainedAccessLog:
+        return HashChainedAccessLog(identity="contract-suite")
+
+    @pytest.fixture(scope="class")
+    def slug(self) -> str:
+        return f"ctest-{uuid4().hex[:8]}"
+
+    @pytest.fixture(scope="class")
+    def client(
+        self,
+        settings: StorageEngineSettings,
+        access_log: HashChainedAccessLog,
+        slug: str,
+    ):
+        key = KeyReference("local", "contract-bank-key", "local", "contract-bank")
+        provider = LocalKeyProvider()
+        provider.add_key(key)
+        storage = S3CompatibleStorageClient(
+            settings,
+            access_log=access_log,
+            encryption=ObjectEncryption(MemoryEnvelopeStore(slug, key, provider)),
+        )
+        type(self)._live_client = storage
+        provisioning_client = cast("ProvisioningClient", storage._s3)  # noqa: SLF001
+        provision_institution(provisioning_client, settings, slug)
+        yield storage
+        deprovision_institution(storage._s3, settings, slug)  # noqa: SLF001
+
+    def test_backend_identifies_as_minio(self, client) -> None:
+        assert client.health_check().backend == "minio"
+
+    def expected_kms_key(self) -> str | None:
+        return "contract-bank-key"
+
+    def fetch_presigned(self, url: str) -> bytes:
+        app = FastAPI()
+        app.include_router(router, prefix="/api/v1")
+        app.dependency_overrides[get_storage_client] = lambda: self._live_client
+        with TestClient(app) as client:
+            response = client.get(url)
+            assert response.status_code == 200, response.text
+            return response.content
+
+    def read_audit_segment(self, client: StorageClient, segment_path: str) -> str:
+        bucket, _, key = segment_path.partition("/")
+        s3 = cast("S3CompatibleStorageClient", client)._s3  # noqa: SLF001
+        response = s3.get_object(Bucket=bucket, Key=key)
+        return response["Body"].read().decode()
+
+    def test_objects_are_sse_kms_encrypted_at_rest(self, client, slug) -> None:
+        """Live-only: the backend must stamp SSE-KMS on the stored object."""
+        content = b"sse probe"
+        location = StorageLocation(slug, "canonical", "encrypted/sse-probe.parquet")
+        client.write(location, io_module.BytesIO(content), metadata_for(slug, "canonical", content))
+        response = client._s3.get_object(  # noqa: SLF001
+            Bucket=location.bucket_name("mvp"), Key=location.object_path
+        )
+        response["Body"].close()
+        assert response.get("ServerSideEncryption") == "aws:kms"
+        assert "aequoros-key" in response.get("SSEKMSKeyId", "")

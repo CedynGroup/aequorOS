@@ -67,7 +67,7 @@ METADATA_SHEET = "Export metadata"
 #: that precision; ``duration_years`` two, because it is a span in years.
 #:
 #: Completeness is asserted against the catalogue vocabulary in
-#: ``tests/unit/bi/service/test_export_value_types.py``: a value type with no entry
+#: ``tests/bi/service/test_export_value_types.py``: a value type with no entry
 #: here falls through to text, so the column stops being summable in a
 #: reviewer's spreadsheet without anything raising.
 _NUMBER_FORMATS: dict[str, str] = {

@@ -70,7 +70,7 @@ _QUANT = Decimal("0.000001")
 
 # Mirror of the dashboard's features/live/components/moduleDisplay.ts PRIMARY_METRIC —
 # the one headline metric per live module, in LIVE_MODULES order (``_daily_stats``
-# emits rows in this order). ``tests/unit/services/test_primary_metric_parity.py``
+# emits rows in this order). ``tests/services/test_primary_metric_parity.py``
 # reads both maps and fails when they drift.
 _PRIMARY_METRIC_KEY: dict[str, str] = {
     "liquidity": "lcr_pct",
@@ -87,7 +87,7 @@ _PRIMARY_METRIC_KEY: dict[str, str] = {
     # while the pulse card headlined the same figure. The window-analysis panel
     # marks it (and FTP, and forecast) advisory — ``ADVISORY_HEADLINE_MODULES``
     # in ``features/live/components/moduleDisplay.ts``, pinned against this registry by
-    # ``tests/unit/services/test_primary_metric_parity.py``.
+    # ``tests/services/test_primary_metric_parity.py``.
     "rating": "pit_pd_upper_pct",
     "forecast": "year5_car_pct",
 }
@@ -190,7 +190,7 @@ def _periods_in_window(
     window at 13 points — a change to what an API field means, not a tidier
     selection. A daily feeder returning ~250 points a year is the honest answer
     to the dates it was given. Pinned by
-    ``tests/integration/liquidity/service/test_window_analytics.py::test_period_count_counts_every_period_the_caller_asked_for``.
+    ``tests/liquidity/service/test_window_analytics.py::test_period_count_counts_every_period_the_caller_asked_for``.
     """
     return list(
         db.scalars(

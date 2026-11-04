@@ -125,7 +125,7 @@ class DataScope(StrEnum):
 #: stores both ``branch_code`` and ``region`` as ``VARCHAR(120)``), so a longer
 #: value is refused at the boundary rather than stored as a grant that silently
 #: matches nothing. Restated here rather than imported: the account plane must
-#: not depend on the BI plane, and ``tests/unit/core/test_data_scopes.py`` pins the
+#: not depend on the BI plane, and ``tests/core/test_data_scopes.py`` pins the
 #: two numbers together so the restatement cannot drift.
 DATA_SCOPE_VALUE_MAX_LENGTH: Final = 120
 

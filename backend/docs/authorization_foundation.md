@@ -81,7 +81,7 @@ aggregation are live. Subsequent product cutovers are tracked in the
   belong to Markets, not Data Engine. The authoritative tier, projection,
   template-target, and held-configuration contracts live in
   [the Markets rollout](markets_enforcement_rollout.md), pinned by
-  `backend/tests/unit/architecture/test_markets_authorization.py`.
+  `backend/tests/architecture/test_markets_authorization.py`.
 - **Filing is its OWN authority.** Approving a return and transmitting it to the
   regulator are separate permissions, so whoever approves cannot thereby file to BoG.
   `Permission.SUBMIT` is carried by the `validator` bundle (`view`+`submit`, never
@@ -111,7 +111,7 @@ it refuses an integration-key context or a context without an authorization
 version before evaluating bindings. An expanded authentication allow-list cannot
 give a machine principal module-route access, even with a matching view binding.
 API Push and the BI feed use their dedicated machine dependencies. Regression:
-`tests/integration/identity/api/test_integration_keys.py::test_machine_view_binding_cannot_reach_module_route_when_allowlist_widens`.
+`tests/identity/api/test_integration_keys.py::test_machine_view_binding_cannot_reach_module_route_when_allowlist_widens`.
 
 The policy vocabulary lives only in `backend/app/core/authorization.py`:
 
@@ -207,9 +207,9 @@ organizations, sets `app.organization_id` per organization, and explicitly filte
 each tenant mutation. Its `force_rls_suspended` contexts temporarily suspend FORCE
 for the migration owner and restore it afterward. Downgrade invalidates sessions
 for users with membership rows before removing those rows and the added index.
-`tests/integration/db/test_baseline_membership_migration.py` pins the multi-tenant backfill;
-`tests/integration/identity/api/test_baseline_membership.py` and
-`tests/unit/core/test_authorization_properties.py` pin lifecycle and non-authority.
+`tests/db/test_baseline_membership_migration.py` pins the multi-tenant backfill;
+`tests/identity/api/test_baseline_membership.py` and
+`tests/core/test_authorization_properties.py` pin lifecycle and non-authority.
 
 ## Decision semantics and conditions
 
@@ -587,10 +587,10 @@ post-revocation denial, and fail-closed evaluator errors. The architecture test
 pins the route's named binding dependency and forbids legacy role dependencies.
 Generative suites add coverage beyond the fixed examples:
 
-- `tests/unit/core/test_authorization_properties.py` compares the evaluator with an
+- `tests/core/test_authorization_properties.py` compares the evaluator with an
   independent per-binding oracle across binding order, partial cross-row
   matches, runtime conditions, and exact lifecycle boundaries;
-- `tests/integration/identity/api/test_authorization_state_machine.py` exercises arbitrary sequences
+- `tests/identity/api/test_authorization_state_machine.py` exercises arbitrary sequences
   of token-family issue, refresh rotation, authorization invalidation, scoped
   grant creation, and exact single-row revocation. It checks the effective union
   against an independent finite oracle, including sensitivity, after every
@@ -598,7 +598,7 @@ Generative suites add coverage beyond the fixed examples:
   machine checks initial assignment, idempotent owner read access, public grants,
   JIT approval, revocation, and refusal of public owner creation or revocation,
   preserving assignment and audit evidence after each transition; and
-- `tests/integration/db/test_authorization_tenant_isolation_properties.py` generates tenant
+- `tests/db/test_authorization_tenant_isolation_properties.py` generates tenant
   bindings against a migrated Postgres schema with FORCE RLS, checks direct
   current-fact isolation, and discovers bank GET and organization listing routes
   from FastAPI. A persisted tenant-B reporting period and fact have an HTTP 200
@@ -638,7 +638,7 @@ including package/resubmission, party/shareholding and scenario/assumption guard
 
 Both layers read the census at collection, so a route whose identifier the
 catalogue does not know fails them at collection rather than in one case.
-`tests/unit/architecture/test_object_reference_census.py` runs that census in the
+`tests/architecture/test_object_reference_census.py` runs that census in the
 architecture job on every PR — no Postgres — and names the exact uncatalogued
 identifiers, and checks that every `KNOWN_UNCOVERED` and `KNOWN_DEFECTS` entry
 still names a mounted route. Catalogue a new path identifier with a seeded
@@ -646,7 +646,7 @@ still names a mounted route. Catalogue a new path identifier with a seeded
 `tests/fixtures/object_references.py`; record routes that cannot be exercised in
 `KNOWN_UNCOVERED` with a reason.
 
-`tests/integration/api/test_authorization_object_reference_coverage.py` is the deterministic
+`tests/api/test_authorization_object_reference_coverage.py` is the deterministic
 layer: it `pytest.mark.parametrize`s one case per route × HTTP method × layout,
 fixes a fully entitled bank-A caller, and checks the refusal shape and that no
 table content changes, including on reads, using portable per-table content
@@ -664,10 +664,10 @@ only — is fixed: by-id lookups under `/banks/{bank_id}`
 (`system_of_record.get_declaration`, `canonical_withdrawal.get_withdrawal`, and
 a withdrawal's cited `declaration_id`) are bank-scoped at the query and return
 the route's ordinary 404 for a sibling bank's row before any state check, with
-no side effects. `tests/integration/data_engine/api/test_system_of_record_bank_scope.py` is the
+no side effects. `tests/data_engine/api/test_system_of_record_bank_scope.py` is the
 hermetic regression.
 
-`tests/integration/db/test_authorization_object_reference_properties.py` is the generative
+`tests/db/test_authorization_object_reference_properties.py` is the generative
 layer, Postgres-only against a migrated schema with FORCE RLS so the RLS
 backstop is exercised too. Hypothesis varies legacy token roles alongside
 role/permission bundles, module scope, sensitivity scope, institution scope and
@@ -693,7 +693,7 @@ product API to exercise. The generated route property checks identifier leakage 
 successful responses; the separate sibling-bank read regression now enforces the
 [bank-route existence rule](../../docs/rbac.md#4-tenancy--the-two-planes), implemented
 by `app/api/deps.py::resolve_tenant_bank`, without an expected failure.
-`tests/integration/api/test_cross_tenant_bank_routes.py` also enumerates
+`tests/api/test_cross_tenant_bank_routes.py` also enumerates
 OpenAPI bank-path and bank-query operations, generates request inputs for reads and
 mutations, and checks the shared dependency and standard error envelope for an
 authenticated sibling-organization member with no bindings on Postgres.
@@ -730,7 +730,7 @@ Migration `202609300081` introduced the grantable vocabulary and widened
 `ck_authorization_bindings_module_scope`; this enforcement cutover adds no bundle,
 migration or automatic grant. A migrated database retains its literal CHECK
 list, while the hermetic schema derives it from the enum;
-`tests/integration/db/test_bindings_constraint_migrations.py` pins both vocabularies against
+`tests/db/test_bindings_constraint_migrations.py` pins both vocabularies against
 a migrated schema. Credit retains its own module and
 [rollout contract](credit_enforcement_rollout.md).
 
@@ -915,15 +915,15 @@ to their bundle permissions; an Org Owner must explicitly issue an appropriate
 whole-institution reporting grant for a former scalar-only reader or preparer.
 Valid Credit grants remain valid for Credit, and never grant reporting access.
 
-Executable evidence: `tests/integration/reporting/api/test_narrowed_institution_figures.py` probes the
+Executable evidence: `tests/reporting/api/test_narrowed_institution_figures.py` probes the
 shared HTTP feeds, every engine's snapshots, Liquidity dependencies and
 regulatory figures, every registered return family's read/download paths,
 generation, legacy approval, signing inboxes and calendar links alongside a
 row-filtered Credit control;
-`tests/integration/services/test_institution_data_scope_enforcement.py` exercises matching
+`tests/services/test_institution_data_scope_enforcement.py` exercises matching
 narrowed bindings through both shared gates and family visibility;
-`tests/integration/identity/api/test_data_scope_grants.py` refuses every unsupported module;
-`tests/integration/db/test_credit_only_narrowing_schema.py` verifies the migrated CHECK
+`tests/identity/api/test_data_scope_grants.py` refuses every unsupported module;
+`tests/db/test_credit_only_narrowing_schema.py` verifies the migrated CHECK
 and downgrade/re-upgrade on Postgres;
-`tests/integration/db/test_data_scope_check_constraints.py` verifies stored-scope refusal on
+`tests/db/test_data_scope_check_constraints.py` verifies stored-scope refusal on
 both database dialects. The existing Credit and BI suites prove row filtering on their surfaces.

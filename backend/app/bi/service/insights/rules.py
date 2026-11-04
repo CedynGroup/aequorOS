@@ -121,7 +121,7 @@ class InsightSet:
 #: proportion of one is the same quantity once scaled, so it shares that unit; a
 #: difference in an index is index points; a difference in a duration is years.
 #: An ``index`` and a ``count`` change bare because neither has a unit.
-#: Completeness is asserted in ``tests/unit/bi/service/test_insights_value_types.py``
+#: Completeness is asserted in ``tests/bi/service/test_insights_value_types.py``
 #: — a type missing here renders a change with no unit at all (audit A8-03).
 _CHANGE_SUFFIX: dict[str, str] = {
     "pct": " percentage points",

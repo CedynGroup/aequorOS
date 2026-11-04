@@ -161,7 +161,7 @@ No document, signature, content digest, timestamp, envelope or bank key is rewri
 After committing, exercise version-pinned downloads through the application and
 verify the archived bytes and signature bindings. Reconciliation does not unwrap
 keys and cannot override revoked or unavailable bank keys. The synthetic migrated
-PostgreSQL regression in `tests/integration/db/test_storage_version_recovery.py` covers three
+PostgreSQL regression in `tests/db/test_storage_version_recovery.py` covers three
 banks in two organizations, historical revisions, encrypted-store loss and replay,
 old-key reads, key refusals, bank/tenant isolation, audit-chain integrity and
 unauthorized writes. Whole-service orchestration and backup cadence remain separate.

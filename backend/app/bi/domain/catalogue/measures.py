@@ -13,7 +13,7 @@ Ratios are composed from other measures by id (``numerator`` /
 ``denominator``), so the compiler emits ``sum(num) / nullif(sum(den), 0)``
 and a NULL denominator gives NULL. Band predicates are the SET of band codes
 they cover, derived from the domain vocabulary — no threshold literal enters
-the catalogue (pinned by ``tests/unit/architecture/test_bi_catalogue_authority.py``).
+the catalogue (pinned by ``tests/architecture/test_bi_catalogue_authority.py``).
 """
 
 from __future__ import annotations

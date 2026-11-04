@@ -63,8 +63,8 @@ The ORM declares these as plain tables (D-011): the hermetic suite builds its
 schema with ``create_all`` on SQLite, which has no partitions, and a Postgres
 ``create_all`` with ``PARTITION BY`` would create a parent with no partition
 that rejects every insert. Partition routing and partition RLS are proven only
-by the Postgres-gated suite: ``tests/integration/db/test_bi_foundation_migration.py`` and
-``tests/integration/db/test_bi_partition_rls.py``.
+by the Postgres-gated suite: ``tests/db/test_bi_foundation_migration.py`` and
+``tests/db/test_bi_partition_rls.py``.
 """
 
 from __future__ import annotations

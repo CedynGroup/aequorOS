@@ -327,7 +327,7 @@ class BiPackQuery(BiClosedModel):
     """A ``BiQuery`` with its reporting window left to the reader.
 
     Every field of ``BiQuery`` except ``time`` is restated here, and
-    ``tests/unit/bi/domain/test_packs.py`` pins that parity so a new query field
+    ``tests/domain/bi/test_packs.py`` pins that parity so a new query field
     cannot land on one and not the other. ``time`` is replaced by ``window``
     and ``compare``, both closed vocabularies: a pack therefore cannot name a
     date, which is the one parameter a certified dashboard must take from the
@@ -567,7 +567,7 @@ BiComparisonRole = Literal["current", "prior", "delta", "delta_pct"]
 #: could be held to it and every one of them fell through to text (D-189). It is
 #: restated here rather than imported because ``app/schemas`` may not import
 #: ``app.bi.domain`` — the plane boundary deliberately keeps this file in its scan
-#: — and ``tests/integration/bi/service/test_compiler_calculated.py`` asserts the two sides
+#: — and ``tests/bi/service/test_compiler_calculated.py`` asserts the two sides
 #: equal in BOTH directions, the same way ``BiExportFormat`` is held to the
 #: renderers it names.
 BiResultColumnFormat = Literal[
@@ -654,7 +654,7 @@ class BiQueryResult(BiClosedModel):
 # does. ``app/schemas`` may not import ``app.bi.domain`` — the plane boundary
 # scans everything outside the BI-owned paths — so restating each Literal here
 # would be a second copy free to drift from the catalogue that owns it.
-# ``tests/integration/bi/api/test_bi_routes.py`` pins the values a route can emit.
+# ``tests/bi/api/test_bi_routes.py`` pins the values a route can emit.
 
 
 class BiPagedQueryRequest(BiClosedModel):

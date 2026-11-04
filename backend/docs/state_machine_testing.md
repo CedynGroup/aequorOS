@@ -11,11 +11,11 @@ transition changes; update its table and independent test model in the same chan
 
 | Workflow                         | Public interface / transition authority                                                         | Stateful coverage                                                                            |
 | -------------------------------- | ----------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- |
-| Filing review and submission     | `app/reporting/api/manage_filing_workflow.py`; `app/reporting/service/workflow.py`              | [Filing machine](../tests/integration/reporting/service/test_filing_state_machine.py)                    |
-| ICAAP review, freeze and return  | `app/icaap/service/{workflow,freeze,post_freeze,cycles}.py`                                     | [Freeze machine](../tests/integration/icaap/service/test_freeze_state_machine.py)                        |
-| Maker-checker workflow templates | `app/reporting/service/filing_workflow/templates.py`; `app/icaap/service/workflow_templates.py` | [Template version machine](../tests/integration/reporting/service/test_template_state_machine.py)        |
-| Scoped access requests           | `app/identity/api/manage_authorization.py`                                                      | [Access-request machine](../tests/integration/identity/api/test_access_request_state_machine.py)         |
-| Grants and session invalidation  | `app/identity/service/{authentication,authorization,grant_administration}.py`                   | [Existing authorization machines](../tests/integration/identity/api/test_authorization_state_machine.py) |
+| Filing review and submission     | `app/reporting/api/manage_filing_workflow.py`; `app/reporting/service/workflow.py`              | [Filing machine](../tests/reporting/service/test_filing_state_machine.py)                    |
+| ICAAP review, freeze and return  | `app/icaap/service/{workflow,freeze,post_freeze,cycles}.py`                                     | [Freeze machine](../tests/icaap/service/test_freeze_state_machine.py)                        |
+| Maker-checker workflow templates | `app/reporting/service/filing_workflow/templates.py`; `app/icaap/service/workflow_templates.py` | [Template version machine](../tests/reporting/service/test_template_state_machine.py)        |
+| Scoped access requests           | `app/identity/api/manage_authorization.py`                                                      | [Access-request machine](../tests/identity/api/test_access_request_state_machine.py)         |
+| Grants and session invalidation  | `app/identity/service/{authentication,authorization,grant_administration}.py`                   | [Existing authorization machines](../tests/identity/api/test_authorization_state_machine.py) |
 | Jobs                             | `app/services/job_queue.py`; `app/worker.py`                                                    | Queue/worker examples; generated retries and stale claims pending                            |
 | Ingestion batches                | `app/data_engine/service/ingestion.py`                                                                     | Ingestion examples; generated extraction/validation/retry sequences pending                  |
 | BI alert verdicts                | `app/bi/service/alerts.py`                                                                      | Alert examples; generated missing-data/breach/recovery sequences pending                     |
@@ -232,19 +232,19 @@ matching the API session boundary without discarding earlier committed actions.
   owns round interpretation, compatibility and same-stage constraints.
 
 The freeze regression covers each return target and checks the old sealed
-snapshot after refreeze. `tests/integration/db/test_icaap_filing_migration.py` exercises the
+snapshot after refreeze. `tests/db/test_icaap_filing_migration.py` exercises the
 constraint against a migrated PostgreSQL schema, including its negative cases.
 
 ```sh
 cd backend
-CASHFLOW_FAST_TEST=1 uv run pytest tests/integration/reporting/service/test_filing_state_machine.py tests/integration/icaap/service/test_freeze_state_machine.py
-AQS_LOCAL_SERVICES=native uv run python scripts/local_services.py run --postgres -- uv run pytest tests/integration/reporting/service/test_filing_state_machine.py tests/integration/icaap/service/test_freeze_state_machine.py
+CASHFLOW_FAST_TEST=1 uv run pytest tests/reporting/service/test_filing_state_machine.py tests/icaap/service/test_freeze_state_machine.py
+AQS_LOCAL_SERVICES=native uv run python scripts/local_services.py run --postgres -- uv run pytest tests/reporting/service/test_filing_state_machine.py tests/icaap/service/test_freeze_state_machine.py
 ```
 
 Run the template/access-request models with:
 
 ```sh
 cd backend
-CASHFLOW_FAST_TEST=1 uv run pytest tests/integration/reporting/service/test_template_state_machine.py tests/integration/identity/api/test_access_request_state_machine.py
-AQS_LOCAL_SERVICES=native uv run python scripts/local_services.py run --postgres -- uv run pytest tests/integration/reporting/service/test_template_state_machine.py tests/integration/identity/api/test_access_request_state_machine.py
+CASHFLOW_FAST_TEST=1 uv run pytest tests/reporting/service/test_template_state_machine.py tests/identity/api/test_access_request_state_machine.py
+AQS_LOCAL_SERVICES=native uv run python scripts/local_services.py run --postgres -- uv run pytest tests/reporting/service/test_template_state_machine.py tests/identity/api/test_access_request_state_machine.py
 ```

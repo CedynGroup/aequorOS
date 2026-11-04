@@ -47,7 +47,7 @@ opportunities but are load-bearing.
   `PrefetchedParameterResolver.load()` requires an explicit `record=` with no default (with
   a default, adding one registry entry moves an unrelated family's content digest). Every
   ICAAP read of a governed row goes through `app/icaap/service/parameters.py`; no ICAAP
-  module may touch the live plane (`tests/unit/architecture/test_icaap_boundaries.py`).
+  module may touch the live plane (`tests/architecture/test_icaap_boundaries.py`).
 
 ---
 
@@ -175,9 +175,9 @@ Founder directive (D-024), and the single most invasive rule in this build.
    representative calibration that presents as confirmed is worse than no
    calibration.
 
-Guards: `tests/unit/architecture/test_icaap_governed_literals.py`,
+Guards: `tests/architecture/test_icaap_governed_literals.py`,
 `test_icaap_no_regulatory_literals.py`, and — for the values a bank actually
-files — `tests/unit/policy/service/test_regulatory_parameters_p5.py`, which holds the
+files — `tests/policy/service/test_regulatory_parameters_p5.py`, which holds the
 shock magnitudes as a deliberateness gate: a change to a number a bank files
 has to be made in a test that says so.
 
@@ -185,7 +185,7 @@ has to be made in a test that says so.
 in the service catalogue, in the migration and in the domain test fixture. An
 assertion that compares one of them with a constant in its own file proves
 nothing. Compare copies against each other
-(`tests/unit/irrbb/domain/test_sf_fixtures.py::test_the_fixture_reproduces_the_seed_table`
+(`tests/irrbb/domain/test_sf_fixtures.py::test_the_fixture_reproduces_the_seed_table`
 compares the fixture to the seeded catalogue row by row; it caught a unit drift
 the day it was written).
 
@@ -214,7 +214,7 @@ two registry-driven sites (`eligibility.parameter_resolver()`,
 `record=True`. The ICAAP report plane seals no run at all and writes its own
 governed-row record onto the frozen snapshot, so every ICAAP read goes through
 `app/icaap/service/parameters.py` — the plane's one non-recording door, pinned
-by `tests/unit/architecture/test_icaap_boundaries.py`.
+by `tests/architecture/test_icaap_boundaries.py`.
 
 Nothing special-cases ICAAP or any parameter code. A future registry entry —
 Nigeria, Kenya, an SDI pack — can only reach the ledger through that one
@@ -268,7 +268,7 @@ frozen decision to determine the closed round for approval validity. Stored
 decisions and their displayed rounds remain unchanged, as do sealed snapshots.
 Migration `202610110092` admits same-stage returns with a package reference;
 downgrade refuses while such history exists. The
-[freeze regressions](../tests/integration/icaap/service/test_freeze_state_machine.py) cover
+[freeze regressions](../tests/icaap/service/test_freeze_state_machine.py) cover
 all return targets and legacy-history refreeze without rewriting evidence.
 
 **The Board resolution is required by the FRAMEWORK, not by the signing
@@ -390,7 +390,7 @@ is **not** verified provenance.
 
 Also open by design, and visible rather than hidden: NG and KE have **no
 governed parameter rows at all** (6 and 8 codes drafted). That gap is pinned as
-a shrinkable ceiling in `tests/unit/icaap/domain/test_framework_param_refs.py`, so it
+a shrinkable ceiling in `tests/icaap/domain/test_framework_param_refs.py`, so it
 cannot grow unnoticed.
 
 ### One thing that is NOT a jurisdiction leak

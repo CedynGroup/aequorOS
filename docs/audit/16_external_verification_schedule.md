@@ -74,11 +74,11 @@ cannot be read as "40 metrics with no authority at all".
 The family split is already in `02` §8 and `15` §2. The split that matters more for the
 founder is **what each authority is allowed to do while unverified**:
 
-| `advisory_designation`   |      n | What it means                                                                                                                                           |
-| ------------------------ | -----: | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **`filed`**              | **14** | The metric **can reach a Bank of Ghana return** while the authority behind it is unverified. This is the actionable half of the list.                   |
-| `supervisory_monitoring` |     23 | Internal / supervisory-facing only.                                                                                                                     |
-| `advisory_only`          |      3 | Structurally barred from filing (`test_unresolved_divergences_are_never_designated_filed`, `backend/tests/unit/domain/authority/test_registry.py:250`). |
+| `advisory_designation`   |      n | What it means                                                                                                                                      |
+| ------------------------ | -----: | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **`filed`**              | **14** | The metric **can reach a Bank of Ghana return** while the authority behind it is unverified. This is the actionable half of the list.              |
+| `supervisory_monitoring` |     23 | Internal / supervisory-facing only.                                                                                                                |
+| `advisory_only`          |      3 | Structurally barred from filing (`test_unresolved_divergences_are_never_designated_filed`, `backend/tests/domain/authority/test_registry.py:250`). |
 
 The 14 filed authorities are **FX (5)**, **IRRBB (7)** and **bank credit classification (2)**.
 Nothing has yet been filed with the Bank of Ghana — the only two `fully_certified` packages in
@@ -204,11 +204,11 @@ Missing: `authority_reference`.
 
 Methodology `bank_forecast_projection_path`, regime `advisory_internal`, class `bank`.
 
-|   # | Metric     | Position                                                                                                                                                                                                                                                                                                                        |
-| --: | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-|  38 | `car_pct`  | `resolution_status = unresolved_audit_finding`, designated `ADVISORY_ONLY`. The underlying numeric divergence **is** closed and proved at `Decimal(0)` tolerance in `backend/tests/unit/equivalence/`, but the designation was deliberately left advisory: numeric equality under a tested baseline is not an enforced identity |
-|  39 | `lcr_pct`  | Same                                                                                                                                                                                                                                                                                                                            |
-|  40 | `nsfr_pct` | Same                                                                                                                                                                                                                                                                                                                            |
+|   # | Metric     | Position                                                                                                                                                                                                                                                                                                                   |
+| --: | ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+|  38 | `car_pct`  | `resolution_status = unresolved_audit_finding`, designated `ADVISORY_ONLY`. The underlying numeric divergence **is** closed and proved at `Decimal(0)` tolerance in `backend/tests/equivalence/`, but the designation was deliberately left advisory: numeric equality under a tested baseline is not an enforced identity |
+|  39 | `lcr_pct`  | Same                                                                                                                                                                                                                                                                                                                       |
+|  40 | `nsfr_pct` | Same                                                                                                                                                                                                                                                                                                                       |
 
 These are the _correct_ end state for an unresolved divergence, not a backlog item. Do not
 close them by asserting equality.
@@ -282,7 +282,7 @@ for a in sorted(REGISTRY.requiring_external_verification(),
 ```
 
 The current verification set is generated by the [registry census](02_calculation_authority_registry.md#1-registry-census); historical counts here are not a drift gate.
-`backend/tests/unit/domain/authority/test_registry.py::test_entries_needing_external_verification_are_flagged_not_guessed`
+`backend/tests/domain/authority/test_registry.py::test_entries_needing_external_verification_are_flagged_not_guessed`
 is the gate that keeps the flagging honest.
 
 ---

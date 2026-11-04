@@ -5,7 +5,7 @@
  * floor, a buffer, a band edge, a shock, a tolerance, a materiality threshold,
  * a deadline — is a control-plane row resolved at runtime, never a literal in
  * engine, service, template or FRONTEND code. The backend half is pinned by
- * `tests/unit/architecture/test_icaap_no_regulatory_literals.py`; this is its
+ * `tests/architecture/test_icaap_no_regulatory_literals.py`; this is its
  * counterpart, and it is the reason a preparer can trust that what the ICAAP
  * screens print is what the console says.
  *

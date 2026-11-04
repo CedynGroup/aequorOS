@@ -131,7 +131,7 @@ pnpm --filter @aequoros/console typecheck
 pnpm --filter @aequoros/dashboard typecheck
 ```
 
-`tests/unit/core/test_tls.py` exercises production startup refusals, database downgrade
+`tests/core/test_tls.py` exercises production startup refusals, database downgrade
 options, the local-only exception, listener key requirements, rejection of
 spoofed plaintext ASGI requests, and real loopback certificate handshakes for
 untrusted roots, wrong hostnames and expired certificates. These tests prove

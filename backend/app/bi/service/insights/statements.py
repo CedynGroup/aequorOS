@@ -75,7 +75,7 @@ _STATEMENT_ORDER: dict[StatementClass, int] = {
 #: ``index`` and a ``count`` are deliberately bare: neither has a unit, and
 #: inventing one would be a claim about the number. Completeness over the
 #: catalogue's numeric vocabulary is asserted in
-#: ``tests/unit/bi/service/test_insights_value_types.py``, because a value type this
+#: ``tests/bi/service/test_insights_value_types.py``, because a value type this
 #: map does not know is not rejected — it silently falls through unscaled.
 _STATED_AS: dict[str, tuple[Decimal, str]] = {
     "pct": (Decimal(1), " %"),

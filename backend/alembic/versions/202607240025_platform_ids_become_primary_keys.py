@@ -36,129 +36,45 @@ depends_on = None
 # Frozen from Base.metadata at authoring time (excludes the identity tables
 # themselves; banks appears in ORG_TABLES for its organization_id column).
 ORG_TABLES = [
-    "jobs",
-    "scenario_assumption_history",
-    "stored_objects",
-    "banks",
-    "param_capital_threshold",
-    "param_lcr_runoff_rate",
-    "param_nsfr_weight",
-    "param_risk_weight",
-    "param_stress_shock",
-    "sso_connections",
-    "users",
-    "audit_events",
-    "bank_licenses",
-    "bank_name_history",
-    "bank_products",
-    "bank_reporting_periods",
-    "database_direct_connections",
-    "institution_profiles",
-    "mapping_configs",
-    "market_data_connections",
-    "market_data_quota_usage",
-    "notifications",
-    "outlets",
-    "regulatory_channel_configs",
-    "regulatory_packages",
-    "regulatory_reporting_settings",
-    "related_parties",
-    "risk_cases",
-    "temenos_connections",
-    "bank_financial_facts",
-    "documents",
-    "financial_institutions",
-    "financial_manual_edit_history",
-    "financial_reporting_periods",
-    "financial_validation_issues",
-    "ingestion_batches",
-    "live_findings",
-    "live_metrics",
-    "regulatory_package_approvals",
-    "regulatory_package_artifacts",
-    "regulatory_resubmission_requests",
-    "regulatory_runs",
-    "regulatory_submission_events",
-    "related_party_roles",
-    "risk_assessments",
-    "risk_case_decisions",
-    "risk_scenarios",
-    "shareholdings",
-    "calculation_runs",
-    "document_chunks",
-    "document_extractions",
-    "financial_accounts",
-    "lineage_records",
-    "regulatory_line_items",
-    "regulatory_metric_results",
-    "regulatory_validations",
-    "risk_assessment_runs",
-    "scenario_assumptions",
-    "translation_failures",
-    "calculation_forecast_periods",
-    "canonical_counterparties",
-    "canonical_counterparty_ratings",
-    "canonical_fx_rates",
-    "canonical_gl_accounts",
-    "canonical_market_indices",
-    "canonical_positions",
-    "canonical_products",
-    "canonical_reference_rows",
-    "canonical_yield_curves",
-    "capital_projections",
-    "financial_balances",
-    "financial_cash_flows",
-    "financial_obligations",
-    "financial_source_rows",
-    "liquidity_analysis_results",
-    "risk_findings",
-    "risk_scores",
-    "canonical_position_snapshots",
-    "canonical_yield_curve_points",
-    "capital_indicators",
-    "capital_projection_findings",
-    "financial_covenants",
-    "financial_record_source_links",
-    "risk_finding_evidence",
+    "jobs", "scenario_assumption_history", "stored_objects", "banks", "param_capital_threshold",
+    "param_lcr_runoff_rate", "param_nsfr_weight", "param_risk_weight", "param_stress_shock",
+    "sso_connections", "users", "audit_events", "bank_licenses", "bank_name_history",
+    "bank_products", "bank_reporting_periods", "database_direct_connections",
+    "institution_profiles", "mapping_configs", "market_data_connections",
+    "market_data_quota_usage", "notifications", "outlets", "regulatory_channel_configs",
+    "regulatory_packages", "regulatory_reporting_settings", "related_parties", "risk_cases",
+    "temenos_connections", "bank_financial_facts", "documents", "financial_institutions",
+    "financial_manual_edit_history", "financial_reporting_periods",
+    "financial_validation_issues", "ingestion_batches", "live_findings", "live_metrics",
+    "regulatory_package_approvals", "regulatory_package_artifacts",
+    "regulatory_resubmission_requests", "regulatory_runs", "regulatory_submission_events",
+    "related_party_roles", "risk_assessments", "risk_case_decisions", "risk_scenarios",
+    "shareholdings", "calculation_runs", "document_chunks", "document_extractions",
+    "financial_accounts", "lineage_records", "regulatory_line_items",
+    "regulatory_metric_results", "regulatory_validations", "risk_assessment_runs",
+    "scenario_assumptions", "translation_failures", "calculation_forecast_periods",
+    "canonical_counterparties", "canonical_counterparty_ratings", "canonical_fx_rates",
+    "canonical_gl_accounts", "canonical_market_indices", "canonical_positions",
+    "canonical_products", "canonical_reference_rows", "canonical_yield_curves",
+    "capital_projections", "financial_balances", "financial_cash_flows",
+    "financial_obligations", "financial_source_rows", "liquidity_analysis_results",
+    "risk_findings", "risk_scores", "canonical_position_snapshots",
+    "canonical_yield_curve_points", "capital_indicators", "capital_projection_findings",
+    "financial_covenants", "financial_record_source_links", "risk_finding_evidence",
 ]
 
 BANK_TABLES = [
-    "jobs",
-    "bank_licenses",
-    "bank_name_history",
-    "bank_products",
-    "bank_reporting_periods",
-    "database_direct_connections",
-    "institution_profiles",
-    "mapping_configs",
-    "market_data_connections",
-    "market_data_quota_usage",
-    "outlets",
-    "regulatory_channel_configs",
-    "regulatory_packages",
-    "regulatory_reporting_settings",
-    "related_parties",
-    "temenos_connections",
-    "bank_financial_facts",
-    "ingestion_batches",
-    "live_findings",
-    "live_metrics",
-    "regulatory_runs",
-    "regulatory_line_items",
-    "regulatory_metric_results",
-    "regulatory_validations",
-    "translation_failures",
-    "canonical_counterparties",
-    "canonical_counterparty_ratings",
-    "canonical_fx_rates",
-    "canonical_gl_accounts",
-    "canonical_market_indices",
-    "canonical_positions",
-    "canonical_products",
-    "canonical_reference_rows",
-    "canonical_yield_curves",
-    "canonical_position_snapshots",
-    "canonical_yield_curve_points",
+    "jobs", "bank_licenses", "bank_name_history", "bank_products", "bank_reporting_periods",
+    "database_direct_connections", "institution_profiles", "mapping_configs",
+    "market_data_connections", "market_data_quota_usage", "outlets",
+    "regulatory_channel_configs", "regulatory_packages", "regulatory_reporting_settings",
+    "related_parties", "temenos_connections", "bank_financial_facts", "ingestion_batches",
+    "live_findings", "live_metrics", "regulatory_runs", "regulatory_line_items",
+    "regulatory_metric_results", "regulatory_validations", "translation_failures",
+    "canonical_counterparties", "canonical_counterparty_ratings", "canonical_fx_rates",
+    "canonical_gl_accounts", "canonical_market_indices", "canonical_positions",
+    "canonical_products", "canonical_reference_rows", "canonical_yield_curves",
+    "canonical_position_snapshots", "canonical_yield_curve_points",
 ]
 
 ENTITY_TEXT_COLUMNS = (
@@ -248,10 +164,13 @@ def upgrade() -> None:  # noqa: PLR0912, PLR0915 - one-time identity epoch, kept
     def case_expression(column: str, entity_type: str) -> str:
         pairs = _rows(
             connection,
-            "SELECT legacy_uuid, id FROM platform_id_legacy_map WHERE entity_type = :entity",
+            "SELECT legacy_uuid, id FROM platform_id_legacy_map "
+            "WHERE entity_type = :entity",
             entity=entity_type,
         )
-        whens = " ".join(f"WHEN '{legacy}'::uuid THEN '{code}'" for legacy, code in pairs)
+        whens = " ".join(
+            f"WHEN '{legacy}'::uuid THEN '{code}'" for legacy, code in pairs
+        )
         return f"CASE {column} {whens} END" if whens else "NULL"
 
     org_case = case_expression("organization_id", "organization")
@@ -262,7 +181,9 @@ def upgrade() -> None:  # noqa: PLR0912, PLR0915 - one-time identity epoch, kept
     for table in dict.fromkeys([*ORG_TABLES, *BANK_TABLES]):
         clauses = []
         if table in org_set:
-            clauses.append(f"ALTER COLUMN organization_id TYPE varchar(16) USING ({org_case})")
+            clauses.append(
+                f"ALTER COLUMN organization_id TYPE varchar(16) USING ({org_case})"
+            )
         if table in bank_set:
             clauses.append(f"ALTER COLUMN bank_id TYPE varchar(16) USING ({bank_case})")
         op.execute(f"ALTER TABLE {table} " + ", ".join(clauses))
@@ -281,7 +202,8 @@ def upgrade() -> None:  # noqa: PLR0912, PLR0915 - one-time identity epoch, kept
     #       join for forensic reads. ------------------------------------------
     for table, column in ENTITY_TEXT_COLUMNS:
         op.execute(
-            f"ALTER TABLE {table} ALTER COLUMN {column} TYPE varchar(40) USING {column}::text"
+            f"ALTER TABLE {table} ALTER COLUMN {column} TYPE varchar(40) "
+            f"USING {column}::text"
         )
     for table in ("jobs", "notifications"):
         op.execute(
@@ -377,10 +299,13 @@ def downgrade() -> None:  # noqa: PLR0912, PLR0915 - mirror of upgrade, kept lin
     def reverse_case(column: str, entity_type: str) -> str:
         pairs = _rows(
             connection,
-            "SELECT id, legacy_uuid FROM platform_id_legacy_map WHERE entity_type = :entity",
+            "SELECT id, legacy_uuid FROM platform_id_legacy_map "
+            "WHERE entity_type = :entity",
             entity=entity_type,
         )
-        whens = " ".join(f"WHEN '{code}' THEN '{legacy}'::uuid" for code, legacy in pairs)
+        whens = " ".join(
+            f"WHEN '{code}' THEN '{legacy}'::uuid" for code, legacy in pairs
+        )
         return f"CASE {column} {whens} END" if whens else "NULL"
 
     org_case = reverse_case("organization_id", "organization")
@@ -398,7 +323,10 @@ def downgrade() -> None:  # noqa: PLR0912, PLR0915 - mirror of upgrade, kept lin
             "WHERE entity_id IS NOT NULL AND entity_id !~ "
             "'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'"
         )
-        op.execute(f"ALTER TABLE {table} ALTER COLUMN entity_id TYPE uuid USING entity_id::uuid")
+        op.execute(
+            f"ALTER TABLE {table} ALTER COLUMN entity_id TYPE uuid "
+            f"USING entity_id::uuid"
+        )
 
     op.execute("ALTER TABLE organizations ADD COLUMN public_id varchar(16)")
     op.execute("UPDATE organizations SET public_id = id")
@@ -407,11 +335,16 @@ def downgrade() -> None:  # noqa: PLR0912, PLR0915 - mirror of upgrade, kept lin
         "ALTER TABLE organizations ALTER COLUMN id TYPE uuid "
         f"USING ({reverse_case('id', 'organization')})"
     )
-    op.execute("CREATE UNIQUE INDEX uq_organizations_public_id ON organizations (public_id)")
+    op.execute(
+        "CREATE UNIQUE INDEX uq_organizations_public_id ON organizations (public_id)"
+    )
     op.execute("ALTER TABLE banks ADD COLUMN public_id varchar(16)")
     op.execute("UPDATE banks SET public_id = id")
     op.execute("ALTER TABLE banks ALTER COLUMN public_id SET NOT NULL")
-    op.execute(f"ALTER TABLE banks ALTER COLUMN id TYPE uuid USING ({reverse_case('id', 'bank')})")
+    op.execute(
+        "ALTER TABLE banks ALTER COLUMN id TYPE uuid "
+        f"USING ({reverse_case('id', 'bank')})"
+    )
     op.execute("CREATE UNIQUE INDEX uq_banks_public_id ON banks (public_id)")
 
     org_set = set(ORG_TABLES)
@@ -428,16 +361,12 @@ def downgrade() -> None:  # noqa: PLR0912, PLR0915 - mirror of upgrade, kept lin
         op.execute(f'ALTER TABLE {table} ADD CONSTRAINT "{name}" {definition}')
     guc = "NULLIF(current_setting('app.organization_id'::text, true), ''::text)"
     for table, name, permissive, roles, cmd, qual, with_check in policies:
-        qual_text = (
-            (qual or "")
-            .replace(f"(organization_id)::text = {guc}", f"organization_id = ({guc})::uuid")
-            .replace(f"(id)::text = {guc}", f"id = ({guc})::uuid")
-        )
-        check_text = (
-            (with_check or "")
-            .replace(f"(organization_id)::text = {guc}", f"organization_id = ({guc})::uuid")
-            .replace(f"(id)::text = {guc}", f"id = ({guc})::uuid")
-        )
+        qual_text = (qual or "").replace(
+            f"(organization_id)::text = {guc}", f"organization_id = ({guc})::uuid"
+        ).replace(f"(id)::text = {guc}", f"id = ({guc})::uuid")
+        check_text = (with_check or "").replace(
+            f"(organization_id)::text = {guc}", f"organization_id = ({guc})::uuid"
+        ).replace(f"(id)::text = {guc}", f"id = ({guc})::uuid")
         role_list = ", ".join(roles) if roles else "PUBLIC"
         statement = f'CREATE POLICY "{name}" ON {table}'
         statement += f" AS {'PERMISSIVE' if permissive == 'PERMISSIVE' else 'RESTRICTIVE'}"

@@ -33,7 +33,7 @@ from . import ReferenceSchema, register
 #: Official BSD7A/BSD7B item tags the P&L line map binds (item numbers of the
 #: official form; ``2a_*`` are the four "(a) on deposits" sub-lines of item 2).
 #: Kept in step with ``bog_forms/linemaps/bsd7a.py::PL_ROWS`` by
-#: ``tests/integration/services/data_gaps/test_gl_mapping_bsd7.py``.
+#: ``tests/services/data_gaps/test_gl_mapping_bsd7.py``.
 BSD7_ITEMS: tuple[str, ...] = (
     "1a",  # interest received — overdrafts, loans & other advances
     "1b",  # interest received — bills (including discounts)

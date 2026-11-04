@@ -86,7 +86,7 @@ def upgrade() -> None:
     # existing partition, including the DEFAULT one — the children inherit the
     # constraint rather than owning a copy of it.
     for column in SUM_COLUMNS:
-        op.execute(sa.text(f"ALTER TABLE {TABLE} ALTER COLUMN {column} DROP NOT NULL"))
+        op.execute(sa.text(f'ALTER TABLE {TABLE} ALTER COLUMN {column} DROP NOT NULL'))
 
 
 def downgrade() -> None:
@@ -94,6 +94,8 @@ def downgrade() -> None:
         return
     with force_rls_suspended(op.get_bind(), TABLE):
         for column in SUM_COLUMNS:
-            op.execute(sa.text(f"UPDATE {TABLE} SET {column} = 0 WHERE {column} IS NULL"))
+            op.execute(
+                sa.text(f'UPDATE {TABLE} SET {column} = 0 WHERE {column} IS NULL')
+            )
     for column in SUM_COLUMNS:
-        op.execute(sa.text(f"ALTER TABLE {TABLE} ALTER COLUMN {column} SET NOT NULL"))
+        op.execute(sa.text(f'ALTER TABLE {TABLE} ALTER COLUMN {column} SET NOT NULL'))

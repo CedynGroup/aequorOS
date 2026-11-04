@@ -54,7 +54,7 @@ BALANCE_BASES: tuple[BalanceBasis, ...] = (YTD, PERIOD)
 #: The signs the ``gl_mapping_bsd7`` register admits: ``1`` normal, ``-1`` contra.
 #: This is the INGESTION CONTRACT's own enum
 #: (``domain/ingestion/reference_schemas/gl_mapping_bsd7.SIGNS``), pinned against
-#: it by ``tests/unit/live/domain/gl/test_pl_mapping.py`` so a third value cannot appear
+#: it by ``tests/live/domain/gl/test_pl_mapping.py`` so a third value cannot appear
 #: there without this vocabulary noticing. :func:`mapping_rule` deliberately
 #: does NOT enforce it — BSD7 has always taken the register's number as given
 #: and multiplies it into the filed line, so narrowing the parse would change a

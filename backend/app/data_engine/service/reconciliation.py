@@ -31,9 +31,8 @@ independent forensic re-audit of 2026-08-22 (D-2) found this function with zero
 production callers while this docstring asserted the integration in the present
 tense, and a reviewer who trusted the prose could not see the gap. If you are
 adding a new filing surface, call ``filing_reconciliation`` from it; if you are
-reading this to check the claim, the parity test in
-``tests/integration/data_engine/service/test_reconciliation_control.py``
-(``test_every_filing_path_reaches_the_reconciliation_gate``) fails the moment any
+reading this to check the claim, ``tests/data_engine/service/test_reconciliation_control.py``
+::``test_every_filing_path_reaches_the_reconciliation_gate`` fails the moment any
 of those call sites disappears.
 
 **The escape valve is governed too.** ``ReconciliationException`` rows carry

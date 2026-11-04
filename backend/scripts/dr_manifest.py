@@ -286,7 +286,9 @@ class Difference:
     actual: str
 
 
-def compare(expected: list[TableFingerprint], actual: list[TableFingerprint]) -> list[Difference]:
+def compare(
+    expected: list[TableFingerprint], actual: list[TableFingerprint]
+) -> list[Difference]:
     """Differences between a manifest's fingerprints and a restored target's.
 
     Row-count and digest mismatches are reported as distinct ``kind`` values:

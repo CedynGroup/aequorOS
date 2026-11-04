@@ -42,7 +42,7 @@ Two structural points that are easy to miss:
 
 **The row lives in the AI plane, and so do its writes.** The draft row is
 ``ai_commentary_drafts`` (``app/bi/models/commentary.py``) — AI egress evidence,
-beside the consent row that gates it. ``tests/unit/architecture/test_bi_plane_boundary.py``
+beside the consent row that gates it. ``tests/architecture/test_bi_plane_boundary.py``
 therefore forbids anything under ``app/bi/service`` from writing it, so the row
 lifecycle — the request, the job handler, the audit event — lives in
 ``app/bi/jobs/bi_commentary.py``, exactly as ``app/bi/jobs/bi_export.py`` owns the

@@ -1,0 +1,15 @@
+{
+  "records": [
+    {
+      "id": "MM60001",
+      "customer": "BANK.ECOBANK",
+      "currency": "GHS",
+      "principal": "5000000",
+      "valueDate": "20260610",
+      "maturityDate": "20260710",
+      "interestRate": "0.255",
+      "coCode": "GH0010001",
+      "lcyPrincipal": "5000000"
+    }
+  ]
+}

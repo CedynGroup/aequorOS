@@ -190,7 +190,7 @@ These conditions follow the institution-scoped resolution rule in
 
 Every ICAAP route that carries an object identifier is in the object-reference
 census (`backend/tests/fixtures/object_reference_routes.py`). The coverage layer
-(`backend/tests/integration/api/test_authorization_object_reference_coverage.py`) refuses
+(`backend/tests/api/test_authorization_object_reference_coverage.py`) refuses
 each one on the cross-organization, sibling-institution and single-foreign-child
 layouts, and `test_icaap_refusal_is_the_unknown_object_answer` holds ICAAP to
 the stricter shape in

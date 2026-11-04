@@ -4,7 +4,7 @@ The substantive judgment ("when this figure rises, is the bank stronger or
 weaker?") lives in ``app.reporting.service.report_comparison`` — the module the
 comparison and board-pack surfaces already use. ``app.domain`` may not import
 ``app.services``, so the catalogue restates the direction for each engine
-metric it exposes, and ``tests/unit/bi/service/test_catalogue_directions.py``
+metric it exposes, and ``tests/bi/service/test_catalogue_directions.py``
 asserts, for EVERY engine measure, that the value here equals
 ``report_comparison.favorable_direction(metric_id)``. A metric absent from this
 table is ``neutral``, exactly as it is there.

@@ -22,20 +22,20 @@ def scheduler(config: pytest.Config, log: object) -> object:
             # The audit assertion consumes earlier cases through a class log.
             (
                 "storage-audit",
-                ("tests/unit/storage/test_inmemory_contract.py::TestInMemoryStorageContract::",),
+                ("tests/storage/test_inmemory_contract.py::TestInMemoryStorageContract::",),
             ),
             # Rebuilding these immutable module fixtures on every worker costs
             # more than their independent assertions can save in parallel.
-            ("openapi-schema", ("tests/unit/api/test_openapi_contract.py::",)),
+            ("openapi-schema", ("tests/api/test_openapi_contract.py::",)),
             (
                 "job-reachability",
-                ("tests/unit/architecture/test_job_enqueue_reachability.py::",),
+                ("tests/architecture/test_job_enqueue_reachability.py::",),
             ),
             (
                 "shard-reports",
                 (
-                    "tests/unit/architecture/test_ci_postgres.py::test_real_workers_partition_every_test_and_preserve_junit_names",
-                    "tests/unit/architecture/test_ci_postgres.py::test_coverage_guard_rejects_incomplete_or_inconsistent_results[",
+                    "tests/architecture/test_ci_postgres.py::test_real_workers_partition_every_test_and_preserve_junit_names",
+                    "tests/architecture/test_ci_postgres.py::test_coverage_guard_rejects_incomplete_or_inconsistent_results[",
                 ),
             ),
         )

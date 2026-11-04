@@ -50,7 +50,7 @@ New code is strict; legacy code may only get stricter.
 - **Promoting a package.** A package joins `STRICT_MODULES` once it is clean: fix its modules'
   errors, run `update` so the baseline holds no entry for them (moved modules' entries sit under
   their pre-move names), then add the package to `STRICT_MODULES`.
-  `tests/unit/architecture/test_type_check_baseline.py` then rejects any baseline entry for it.
+  `tests/architecture/test_type_check_baseline.py` then rejects any baseline entry for it.
 - Plain `uv run basedpyright <files>` shows a file's strict errors, legacy ones included, and is
   not a gate. Narrow `Any` with `isinstance`, a pydantic `TypeAdapter` or a typed SQLAlchemy result
   (`.tuples()`, `.scalars()`) rather than silencing it.
@@ -340,7 +340,7 @@ Examples of observable assertions:
   the mutation hook or count invalidation calls.
 - An allocation property generates totals and weights and asserts that all public
   result amounts are nonnegative and sum to the original Decimal total. See
-  [`test_allocation.py`](backend/tests/unit/icaap/domain/test_allocation.py).
+  [`test_allocation.py`](backend/tests/icaap/domain/test_allocation.py).
 
 A dashboard property can assert that missing measurements never imply compliance
 for any positive floor (fast-check is the required library for these tests):
@@ -366,7 +366,7 @@ generated actors/statuses, compare each outcome with the transition table, then
 re-read the record to check invariants. Include sequences such as submit → maker
 approval refusal → checker approval → file → edit refusal, and cross-bank attempts
 within the same organization as well as cross-organization attempts. The existing
-[`authorization state machines`](backend/tests/integration/identity/api/test_authorization_state_machine.py)
+[`authorization state machines`](backend/tests/identity/api/test_authorization_state_machine.py)
 show `@rule`, `@invariant` and `run_state_machine_as_test` through real services/APIs.
 Run each with bounded settings, for example:
 
@@ -396,11 +396,11 @@ run_state_machine_as_test(
   `DocumentFactory`, `AssessmentFactory` (+ `MutableFakeStorage`); factories create data through
   the real HTTP API and assert status codes.
 - **Cross-tenant isolation test pattern** — every new endpoint needs one. Canonical example:
-  `tests/integration/case/api/test_liquidity.py::test_liquidity_summary_and_review_are_tenant_scoped` — create
+  `tests/case/api/test_liquidity.py::test_liquidity_summary_and_review_are_tenant_scoped` — create
   data as ORG_1, then assert the same URLs return `404` with
   `headers(org_id=ORG_2, user_id=USER_2)` for both reads and mutations. DB-level scoping checks
-  live in `tests/integration/case/api/test_scoping.py`.
-- OpenAPI contract regression: `tests/unit/api/test_openapi_contract.py`.
+  live in `tests/case/api/test_scoping.py`.
+- OpenAPI contract regression: `tests/api/test_openapi_contract.py`.
 
 ---
 
@@ -505,7 +505,7 @@ screen, regulatory-copy, arithmetic, and local-development rules live in
   `jurisdictions.base_currency(bank)`, which deliberately has no fallback: an unset
   currency is a skipped decision at the creation site, not a Ghanaian bank. Never write a
   currency literal into bank-facing narrative — the guard suite
-  `tests/integration/policy/service/test_jurisdiction_neutrality.py` exercises currency-labelled liquidity
+  `tests/policy/service/test_jurisdiction_neutrality.py` exercises currency-labelled liquidity
   narratives and unresolved-identity refusals, alongside registry and model checks. On the dashboard,
   `fmtCurrency(value)` uses the active jurisdiction; passing a second argument OVERRIDES
   it, so pass it only when the currency is genuinely not the bank's own.
@@ -530,21 +530,19 @@ feature. New code goes in the target layout; existing code moves one feature per
   (`app/models/{organization,audit_event,job}.py`) and `TenantContext` (`app/core/tenancy.py`,
   re-exported by `app.api.deps`) are shared by every feature.
 - **Feature names and layers** live in `LAYERS` in
-  `backend/tests/unit/architecture/test_feature_boundaries.py`; `PEER_EDGES` defines the permitted
+  `backend/tests/architecture/test_feature_boundaries.py`; `PEER_EDGES` defines the permitted
   same-layer directions and `FEATURE_RULES` assigns ownership in the existing layered tree.
 - **Imports.** A feature imports only lower layers (same-layer only along a declared
   `PEER_EDGES` direction), and only another feature's `public` module or pure `domain`
   engines. The kernel imports no feature. Feature code never imports through the `app.models`
   aggregator; it is a registry, not an API.
-- **Test layout is suite-first, then feature**: `app/<feature>/service.py` is tested under
-  `tests/<suite>/<feature>/service/`, where `<suite>` is the module's classification in
-  `backend/scripts/test_suites.json` (`unit`, `integration` or `e2e`). Cross-cutting guards stay in
-  `tests/unit/architecture/` and shared helpers in `tests/support/`. `tests/conftest.py` keeps only
-  the fixtures every feature shares (settings, database, session, client, storage fakes, demo
-  tenants); a feature's fixtures live in `tests/<suite>/<feature>/fixtures.py`, registered by the
-  root `pytest_plugins`. `tests/unit/architecture/test_test_layout.py` guards the suite directories,
-  new top-level directory names and registered fixture ownership; its legacy layer-directory list
-  shrinks as tests move.
+- **Target test layout mirrors the source**: `app/<feature>/service.py` is tested under
+  `tests/<feature>/service/`. Cross-cutting guards stay in `tests/architecture/` and shared
+  helpers in `tests/support/`. `tests/conftest.py` keeps only the fixtures every feature shares
+  (settings, database, session, client, storage fakes, demo tenants); a feature's fixtures live in
+  `tests/<feature>/fixtures.py`, registered by the root `pytest_plugins`.
+  `tests/architecture/test_test_layout.py` guards new top-level directory names and
+  registered fixture ownership; its legacy layer-directory list shrinks as tests move.
 - **The ratchet.** `test_feature_boundaries.py` assigns every `app/` module an owner and
   records today's violations in `feature_boundary_baseline.json`. A new violation fails, and so
   does a baseline entry that no longer occurs, so the baseline only shrinks.
@@ -556,7 +554,7 @@ feature. New code goes in the target layout; existing code moves one feature per
   endpoints back through the ledger for baseline identity. A file move leaves baseline lines
   unchanged; a dependency fix deletes them.
   After fixing dependencies, regenerate the baseline from `backend/` with
-  `uv run python -c "import tests.unit.architecture.test_feature_boundaries as t; t.write_baseline()"`
+  `uv run python -c "import tests.architecture.test_feature_boundaries as t; t.write_baseline()"`
   and review that the diff only deletes entries. `write_baseline()` owns the generated JSON's
   formatting.
 - **Moving code.** A move PR runs `uv run python scripts/feature_moves.py move OLD NEW` from
@@ -596,8 +594,8 @@ feature. New code goes in the target layout; existing code moves one feature per
   `calculation_engine` ids are persisted in filed packages and stay frozen;
   `backend/app/domain/authority/engines.py` maps them to the engines' current locations.
   The codemod rewrites those locations while preserving the identifiers; the registry tests
-  pin them against `backend/tests/unit/domain/authority/frozen_engine_ids.json`.
-  `backend/tests/unit/architecture/feature_boundary_split_origins.json` freezes the exact pre-existing
+  pin them against `backend/tests/domain/authority/frozen_engine_ids.json`.
+  `backend/tests/architecture/feature_boundary_split_origins.json` freezes the exact pre-existing
   importer/target pairs affected by the model split. Only those pairs retain their historical
   target module and feature after reversing the move ledger; all other imports use current
   ownership. Its importer lists may only shrink, and the scanner rejects resolved entries

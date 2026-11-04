@@ -25,7 +25,7 @@ name: Risk Service CI
 # itself and recursed 440 times in ~1 minute before the step failed. Nothing in
 # the output said "missing file" — it read like a hang. Two additions close it:
 # the `preflight` job below (stdlib Python, no mise, no uv, every other job
-# needs it) and `backend/tests/unit/architecture/test_ci_task_wiring.py`. The
+# needs it) and `backend/tests/architecture/test_ci_task_wiring.py`. The
 # preflight is the one that matters, because the test is only reachable THROUGH
 # a proxy — a guard that runs only when the thing it guards is healthy is not a
 # guard.
@@ -39,8 +39,8 @@ name: Risk Service CI
 #   backend-e2e — Backend Playwright contracts; backend/README.md#run-tests
 #   postgres    — aggregate of schema shards and the lock job: migration chain,
 #                 RLS policies, schema defaults, row/advisory locks.
-#                 `risk-service:test-postgres-schema` covers integration cases in tests/integration/db,
-#                 including tests/integration/db/test_tenant_rls_completeness.py — the structural
+#                 `risk-service:test-postgres-schema` covers integration cases in tests/db,
+#                 including tests/db/test_tenant_rls_completeness.py — the structural
 #                 guard on tenant isolation.
 #   postgres-suite — the integration aggregate, including exact cross-owner
 #                 coverage and observed database-ownership checks. Suite ownership,
@@ -62,7 +62,7 @@ name: Risk Service CI
 #                 Previously a local pre-push hook only, so a stale client could
 #                 (and did) reach main.
 #   real-data   — the DB-backed regulatory/attestation/auth/vendor API surface,
-#                 plus BOTH run-parity proofs (tests/unit/equivalence). 25 modules
+#                 plus BOTH run-parity proofs (tests/equivalence). 25 modules
 #                 import `requires_real_data` (measured by AST import, not
 #                 substring). It cannot run here and this is not a scheduling
 #                 problem: tests/real_data.py pins REAL_ORG_ID/REAL_BANK_ID to
@@ -94,7 +94,7 @@ name: Risk Service CI
 #
 # EXCLUDED from every job, with the reason — the honest complement of the list
 # above. None of these is a scheduling oversight:
-#   tests/integration/live_data — opt-in BY DESIGN. It reads the ACTUAL primary
+#   tests/live_data          — opt-in BY DESIGN. It reads the ACTUAL primary
 #                              through a server-side read-only session, and
 #                              pointing CI at production is the one thing this
 #                              programme must not do. Skips cleanly with
@@ -102,9 +102,9 @@ name: Risk Service CI
 #                              skipif), so it costs the full-suite run nothing.
 #   25 `requires_real_data`  — see the real-data job above.
 #     modules
-#   tests/integration/data_engine/etl/test_training_on_data.py — needs the untracked Sample Bank CSVs
+#   tests/data_engine/etl/test_training_on_data.py — needs the untracked Sample Bank CSVs
 #                              under backend/data/, deliberately not in the repo.
-#   tests/unit/scripts/test_dr_tooling.py DR-drill cases — need DR_DRILL_CLUSTER_URL,
+#   tests/scripts/test_dr_tooling.py DR-drill cases — need DR_DRILL_CLUSTER_URL,
 #                              i.e. a disposable cluster the drill may destroy.
 #   `ruff format --check .`  — not a gate anywhere; a tree-wide format pass has
 #                              to land first. Named so a future format gate is
@@ -389,13 +389,13 @@ jobs:
       # superuser bypass. Owner membership below is test infrastructure. A superuser here
       # hides exactly the class of defect audit finding P0-18 is about — and it
       # does not hide it quietly in one direction only. Measured 2026-08-22, the
-      # same `tests/integration/db` against two roles:
+      # same `tests/db` against two roles:
       #   * as the `postgres` SUPERUSER — 5 failures, every one an RLS-isolation
       #     assertion, because the superuser bypasses the policy and the "other
       #     tenant's rows are invisible" checks see them;
       #   * as this NOBYPASSRLS role — 0 RLS failures; all of
-      #     tests/integration/db/test_tenant_rls_completeness.py and
-      #     tests/integration/db/test_governance_append_only.py pass.
+      #     tests/db/test_tenant_rls_completeness.py and
+      #     tests/db/test_governance_append_only.py pass.
       # So a superuser does not merely weaken the gate, it INVERTS it: the tests
       # that exist to prove tenant isolation are the ones that go red, which
       # invites "fix" by relaxing the assertion. Never point this job at a
@@ -528,7 +528,7 @@ jobs:
       fail-fast: false
       matrix: ${{ fromJSON(needs.preflight.outputs.postgres_matrix) }}
     env:
-      # Ungates tests/integration/attestation/service/test_attestation_openbao.py against native OpenBao
+      # Ungates tests/attestation/service/test_attestation_openbao.py against native OpenBao
       # started below. Absent (a developer's machine), those tests skip and the
       # rest of the suite is unaffected.
       OPENBAO_TEST_ADDR: http://127.0.0.1:8200
@@ -726,7 +726,7 @@ jobs:
       # STORAGE_RETIRE_AFTER is REQUIRED: enforce_retirement refuses to build a
       # client for env=mvp without one, so every contract test errors in its
       # fixture without it. It used to be omitted because the process env leaked
-      # into tests/unit/storage/test_storage_config.py and defeated the refusal that
+      # into tests/storage/test_storage_config.py and defeated the refusal that
       # file asserts; that test now clears the name itself, so setting it here is
       # safe. The date is CI-local and deliberately far out — this job proves the
       # storage contract, not the retirement policy, which

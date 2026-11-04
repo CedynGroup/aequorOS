@@ -34,7 +34,7 @@ What moves to the package row, where the danger actually is:
 
 What a CHECK CANNOT express, stated here rather than left implicit — both are
 cross-table or cross-row, and both are pinned by tests in
-``tests/integration/reporting/service/test_package_plane.py``:
+``tests/reporting/service/test_package_plane.py``:
 
 1. **A real package must not supersede a rehearsal.** ``supersedes_id`` points
    at another row, and a row-level CHECK cannot read it. Enforced in

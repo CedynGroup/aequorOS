@@ -79,7 +79,7 @@ Focused review command:
 
 ```sh
 cd backend
-AQS_LOCAL_SERVICES=native CASHFLOW_FAST_TEST=1 uv run python scripts/local_services.py run --postgres -- uv run pytest -q --show-capture=no tests/integration/icaap/service/test_freeze_state_machine.py
+AQS_LOCAL_SERVICES=native CASHFLOW_FAST_TEST=1 uv run python scripts/local_services.py run --postgres -- uv run pytest -q --show-capture=no tests/icaap/service/test_freeze_state_machine.py
 ```
 
 </details>

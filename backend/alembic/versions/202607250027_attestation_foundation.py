@@ -274,7 +274,9 @@ def upgrade() -> None:  # noqa: PLR0915 - one linear schema wave, kept readable
             ondelete="CASCADE",
         ),
         sa.PrimaryKeyConstraint("id"),
-        sa.UniqueConstraint("id", "organization_id", name="uq_regulatory_artifact_versions_id_org"),
+        sa.UniqueConstraint(
+            "id", "organization_id", name="uq_regulatory_artifact_versions_id_org"
+        ),
     )
     op.create_index(
         "ix_regulatory_artifact_versions_org_package_kind",
@@ -344,7 +346,9 @@ def upgrade() -> None:  # noqa: PLR0915 - one linear schema wave, kept readable
         "attestation_signatures",
         ["organization_id", "package_id"],
     )
-    op.create_index("ix_attestation_signatures_signer_id", "attestation_signatures", ["signer_id"])
+    op.create_index(
+        "ix_attestation_signatures_signer_id", "attestation_signatures", ["signer_id"]
+    )
 
     # -- 2. attestation columns on the package -----------------------------
     op.add_column(

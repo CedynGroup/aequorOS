@@ -47,7 +47,7 @@ they are the catalogue's ``MeasureDef.favourable_direction``, which
 ``app.reporting.service.report_comparison.favorable_direction``. What this function adds
 is the same verdict keyed on the direction rather than on a run-metric key,
 which is what a portfolio measure — a measure with no run-metric key at all —
-needs. ``tests/unit/bi/service/test_insights_drivers.py`` asserts the two agree for
+needs. ``tests/bi/service/test_insights_drivers.py`` asserts the two agree for
 every key in both of ``report_comparison``'s registries, in both directions, so
 the judgement cannot drift from the one the comparison surfaces already apply.
 

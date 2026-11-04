@@ -16,9 +16,8 @@ every digest and re-checks every signature using only ``cryptography``,
 recipe, the payload shape and the signature verification are reimplemented here
 from the published specification so that this file is a *self-contained artefact*
 an examiner can read, audit, and run against a document. The duplication cannot
-drift silently: ``tests/integration/attestation/service/``
-``test_attestation_verify.py`` asserts that this script's ``canonical_json``,
-``attestation_payload`` and ``certification_digest``
+drift silently: ``tests/attestation/service/test_attestation_verify.py`` asserts that this
+script's ``canonical_json``, ``attestation_payload`` and ``certification_digest``
 agree byte-for-byte with the platform's.
 
 **What it can and cannot prove.** It proves the record is internally consistent

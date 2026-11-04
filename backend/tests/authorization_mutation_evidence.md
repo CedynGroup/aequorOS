@@ -10,8 +10,8 @@ This document records the executed mutation-proof evidence.
 
 ```sh
 TEST_DATABASE_URL=<disposable-postgres-url> uv run pytest \
-  tests/integration/identity/api/test_authorization_state_machine.py \
-  tests/integration/db/test_authorization_tenant_isolation_properties.py -q
+  tests/identity/api/test_authorization_state_machine.py \
+  tests/db/test_authorization_tenant_isolation_properties.py -q
 ```
 
 Initial result: 11 passed, 1 failed, 1 xfailed (183.28s). The RLS negative control
@@ -24,7 +24,7 @@ Focused correction verification:
 
 ```sh
 TEST_DATABASE_URL=<disposable-postgres-url> uv run pytest \
-  tests/integration/identity/api/test_authorization_state_machine.py -k ownership -q
+  tests/identity/api/test_authorization_state_machine.py -k ownership -q
 ```
 
 Result: **2 passed, 8 deselected** (7.76s), including
@@ -51,9 +51,9 @@ PostgreSQL 17 with the NOBYPASSRLS `risk_service_test` role (the CI role),
 schema migrated to head.
 
 ```sh
-uv run pytest tests/integration/api/test_authorization_object_reference_coverage.py -q
+uv run pytest tests/api/test_authorization_object_reference_coverage.py -q
 TEST_DATABASE_URL=<disposable-postgres-url> uv run pytest \
-  tests/integration/db/test_authorization_object_reference_properties.py -q
+  tests/db/test_authorization_object_reference_properties.py -q
 ```
 
 Coverage layer result: **341 passed, 2 skipped** (~12s). The parametrization
@@ -111,7 +111,7 @@ from KNOWN_DEFECTS`), as the layer is designed to force.
    the nested single-foreign-child cases included); generative layer against
    the disposable Postgres: **2 passed** (46.73s).
 
-The focused hermetic regression `tests/integration/data_engine/api/test_system_of_record_bank_scope.py`
+The focused hermetic regression `tests/data_engine/api/test_system_of_record_bank_scope.py`
 contains three tests covering declaration approve/revoke, withdrawal approval
 of pending and applied sibling rows, withdrawal reversal, and a withdrawal
 request citing a foreign declaration. Every foreign refusal checks unchanged
@@ -143,10 +143,10 @@ identifiers across 91 routes that had no catalogue entry, so both suites
 errored before running a case.
 
 ```sh
-uv run pytest tests/unit/architecture/test_object_reference_census.py -q
-uv run pytest tests/integration/api/test_authorization_object_reference_coverage.py -q
+uv run pytest tests/architecture/test_object_reference_census.py -q
+uv run pytest tests/api/test_authorization_object_reference_coverage.py -q
 TEST_DATABASE_URL=<disposable-postgres-url> uv run pytest \
-  tests/integration/db/test_authorization_object_reference_properties.py -q
+  tests/db/test_authorization_object_reference_properties.py -q
 ```
 
 Catalogued with seeded fixtures: `filing_workflow_template`
@@ -194,10 +194,10 @@ enumerated by the census through the ICAAP kinds already seeded in
 `tests/fixtures/object_references.py`. `KNOWN_UNCOVERED` holds no ICAAP entry.
 
 ```sh
-uv run pytest tests/unit/architecture/test_object_reference_census.py -q
-uv run pytest tests/integration/api/test_authorization_object_reference_coverage.py -q
+uv run pytest tests/architecture/test_object_reference_census.py -q
+uv run pytest tests/api/test_authorization_object_reference_coverage.py -q
 TEST_DATABASE_URL=<disposable-postgres-url> uv run pytest \
-  tests/integration/db/test_authorization_object_reference_properties.py -q
+  tests/db/test_authorization_object_reference_properties.py -q
 ```
 
 Three sweep blind spots were closed first, because a refusal raised before the

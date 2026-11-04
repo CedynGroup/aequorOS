@@ -147,7 +147,7 @@ class ProvenanceIncomplete(ValueError):
 
 #: Every element that must be present before a computed figure may be filed.
 #: The equality of this tuple with :meth:`CalculationProvenance.to_dict` keys is
-#: asserted by ``tests/unit/domain/authority/test_provenance.py``.
+#: asserted by ``tests/domain/authority/test_provenance.py``.
 REQUIRED_PROVENANCE_FIELDS: tuple[str, ...] = (
     "run_id",
     "organization_id",

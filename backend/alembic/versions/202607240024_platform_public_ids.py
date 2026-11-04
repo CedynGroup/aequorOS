@@ -51,7 +51,9 @@ def upgrade() -> None:
         if is_postgres:
             forced_rls = bool(
                 connection.execute(
-                    sa.text("SELECT relforcerowsecurity FROM pg_class WHERE relname = :table"),
+                    sa.text(
+                        "SELECT relforcerowsecurity FROM pg_class WHERE relname = :table"
+                    ),
                     {"table": table},
                 ).scalar()
             )

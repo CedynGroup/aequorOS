@@ -27,7 +27,9 @@ from app.operator.deps import OperatorContext
 #: as a generic authorization failure.
 INSPECTION_REQUIRED_DETAIL: dict[str, str] = {
     "code": "inspection_required",
-    "message": ("Start a Tenant Inspector session for this organization to view its data."),
+    "message": (
+        "Start a Tenant Inspector session for this organization to view its data."
+    ),
 }
 
 

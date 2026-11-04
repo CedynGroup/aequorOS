@@ -21,7 +21,7 @@ Design rules
 
 1. **One authority per (metric_id x regime x methodology_id).** Registering a
    second entry for the same triple raises :class:`DuplicateAuthorityError`.
-   ``tests/unit/domain/authority/test_registry.py`` proves it fails loudly.
+   ``tests/domain/authority/test_registry.py`` proves it fails loudly.
 2. **A genuine alternate methodology is a first-class entry, never a silent
    duplicate.** It carries its own ``methodology_id``, its own authority
    citation, and a mandatory :class:`MethodologyDivergence` saying *why* it
@@ -69,7 +69,7 @@ The divergences you must not "fix" by asserting equality
   engine.
 * ``car_pct`` / ``bog_bsd5a_form_ratio`` — BoG's own printed BSD5A ratio
   ``E70 = E25/E69``. Different add-on rules by design; the repository already
-  pins the inequality (``tests/integration/reporting/service/bog_forms/test_bsd5.py``: *"by
+  pins the inequality (``tests/reporting/service/bog_forms/test_bsd5.py``: *"by
   construction, not by accident"*).
 * ``car_pct`` / ``act930_s29_nof_rwa`` — the SDI regime's NOF / simplified RWA.
 
@@ -1311,7 +1311,7 @@ def _irr_sf(metric_id: str, *, engine: str, notes: str = "") -> MetricAuthority:
         # ICAAP Pillar 2 item (or lands an IRRBB-SF-QUARTERLY return) flips this
         # to FILED, adds the return code to ``reporting_mappings``, and MUST put
         # this methodology back into BOTH acknowledgement registers in
-        # ``tests/unit/domain/authority/test_registry_completeness`` — the sentinel
+        # ``tests/domain/authority/test_registry_completeness`` — the sentinel
         # register, because the calibration tables are unverified, and the
         # draft-instrument register, because the guideline has not commenced.
         # Those two rules only bite on FILED entries, so they go quiet here and
@@ -1631,7 +1631,7 @@ REGISTRY.register(
             ),
             resolution_status=ACCEPTED_BY_AUTHORITY,
             evidence=(
-                "backend/tests/integration/reporting/service/bog_forms/test_bsd5.py - "
+                "backend/tests/reporting/service/bog_forms/test_bsd5.py - "
                 '\'assert not _close(e["E70"] * 100, car_pct, "0.5")  '
                 "# by construction, not by accident'",
             ),
@@ -1687,7 +1687,7 @@ REGISTRY.register(
             resolution_status=UNRESOLVED_AUDIT_FINDING,
             equality_assertion_forbidden=False,
             evidence=(
-                "backend/tests/integration/forecasting/api/test_forecasting.py - "
+                "backend/tests/forecasting/api/test_forecasting.py - "
                 "divergence asserted in a comment",
             ),
         ),
@@ -2010,7 +2010,7 @@ REGISTRY.register(
                 "_LCR_INFLOW_CAP applied per currency column",
                 "app.domain.liquidity.engine:compute_lcr - local threshold enforcement "
                 "and aggregate inflow cap from the governed params.inflow_cap_pct",
-                "backend/tests/integration/services/test_le_and_lmt.py",
+                "backend/tests/services/test_le_and_lmt.py",
                 "forensic_calculation_audit_2026-08-21.md - CRITICAL AUDIT FINDINGS 1: "
                 "'BSD3 LCR != LMT Table 11 LCR (Documented Divergence)'",
             ),
@@ -2480,7 +2480,7 @@ _CREDIT_ENGINE = "app.domain.capital.loan_classification:classify_book"
 #: metric a class does not emit (OLEM for an SDI) simply never appears.
 #:
 #: Reporting mappings are PER METRIC because they are claims, and the
-#: declared-divergence ledger (tests/unit/equivalence) classifies every one: the
+#: declared-divergence ledger (tests/equivalence) classifies every one: the
 #: NPL-MONTHLY levels table carries exactly gross loans, the NPL stock, the
 #: ratio and the provisions-held/coverage rows; the PAR measures and the
 #: unclassified balance reach NO return today (module views only), and

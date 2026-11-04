@@ -127,7 +127,7 @@ const ADVERSE_WHEN_UP: ReadonlySet<LiveModule> = new Set<LiveModule>([
  * D-022), so any surface showing one of these has to say it is advisory.
  *
  * The authority is `app/domain/authority/registry.py`, not this set;
- * `backend/tests/unit/services/test_primary_metric_parity.py` reads both and fails
+ * `backend/tests/services/test_primary_metric_parity.py` reads both and fails
  * when a headline metric loses its filed standing without being listed here.
  * Designations that depend on the institution class are deliberately NOT
  * covered — an SDI's CAR is `supervisory_monitoring` where a bank's is filed,

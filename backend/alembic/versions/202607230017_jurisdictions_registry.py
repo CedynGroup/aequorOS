@@ -33,40 +33,14 @@ FK = "fk_banks_jurisdiction_code_jurisdictions"
 
 SEED_ROWS = [
     # code, country, ccy, ccy name, locale, central bank, short, portal, tz
-    ("GH", "Ghana", "GHS", "Ghana Cedi", "en-GH", "Bank of Ghana", "BoG", "ORASS", "Africa/Accra"),
-    (
-        "NG",
-        "Nigeria",
-        "NGN",
-        "Nigerian Naira",
-        "en-NG",
-        "Central Bank of Nigeria",
-        "CBN",
-        None,
-        "Africa/Lagos",
-    ),
-    (
-        "KE",
-        "Kenya",
-        "KES",
-        "Kenyan Shilling",
-        "en-KE",
-        "Central Bank of Kenya",
-        "CBK",
-        None,
-        "Africa/Nairobi",
-    ),
-    (
-        "ZA",
-        "South Africa",
-        "ZAR",
-        "South African Rand",
-        "en-ZA",
-        "South African Reserve Bank",
-        "SARB",
-        None,
-        "Africa/Johannesburg",
-    ),
+    ("GH", "Ghana", "GHS", "Ghana Cedi", "en-GH", "Bank of Ghana", "BoG",
+     "ORASS", "Africa/Accra"),
+    ("NG", "Nigeria", "NGN", "Nigerian Naira", "en-NG", "Central Bank of Nigeria",
+     "CBN", None, "Africa/Lagos"),
+    ("KE", "Kenya", "KES", "Kenyan Shilling", "en-KE", "Central Bank of Kenya",
+     "CBK", None, "Africa/Nairobi"),
+    ("ZA", "South Africa", "ZAR", "South African Rand", "en-ZA",
+     "South African Reserve Bank", "SARB", None, "Africa/Johannesburg"),
 ]
 
 
@@ -97,15 +71,8 @@ def upgrade() -> None:
         connection.execute(
             insert,
             {
-                "code": code,
-                "country": country,
-                "ccy": ccy,
-                "ccy_name": ccy_name,
-                "locale": locale,
-                "cb": cb,
-                "short": short,
-                "portal": portal,
-                "tz": tz,
+                "code": code, "country": country, "ccy": ccy, "ccy_name": ccy_name,
+                "locale": locale, "cb": cb, "short": short, "portal": portal, "tz": tz,
             },
         )
     op.create_foreign_key(FK, "banks", TABLE, ["jurisdiction_code"], ["code"])

@@ -23,7 +23,7 @@ from typing import cast
 
 BACKEND = Path(__file__).resolve().parents[1]
 
-#: The cumulative move ledger, shared with ``tests/unit/architecture/test_feature_boundaries.py``:
+#: The cumulative move ledger, shared with ``tests/architecture/test_feature_boundaries.py``:
 #: ``[old, new]`` pairs of exact dotted module names in move order. Append only.
 LEDGER = Path("scripts") / "feature_module_moves.json"
 
@@ -34,16 +34,16 @@ _TEXT_SUFFIXES = (
 )
 _SKIPPED_PREFIXES = ("packages/",)
 #: Files that name old paths on purpose: this script and its own tests.
-_FROZEN_FILES = frozenset({"scripts/feature_moves.py", "tests/unit/scripts/test_feature_moves.py"})
+_FROZEN_FILES = frozenset({"scripts/feature_moves.py", "tests/scripts/test_feature_moves.py"})
 #: The architecture guards address source files relative to ``app/``.
-_ARCHITECTURE_DIR = "tests/unit/architecture/"
+_ARCHITECTURE_DIR = "tests/architecture/"
 _LINE_LENGTH = 100
 #: The frozen calculation-engine identifiers: the keys of this module's table.
 _ENGINE_TABLE = "app.domain.authority.engines"
 _ENGINE_TABLE_NAME = "ENGINE_LOCATIONS"
 #: Node-id catalogues whose keys follow a moved test module, and the sections that
 #: map node ids to suites. Every other JSON file keeps its keys: ``app/db/flush_order.json``
-#: pins pre-move modules (``tests/unit/architecture/test_model_flush_order.py``), the boundary
+#: pins pre-move modules (``tests/architecture/test_model_flush_order.py``), the boundary
 #: baseline is canonicalized by the move ledger, and
 #: ``feature_boundary_split_origins.json`` is documented as outside rewrite scope.
 _CATALOGUE_SECTIONS = {

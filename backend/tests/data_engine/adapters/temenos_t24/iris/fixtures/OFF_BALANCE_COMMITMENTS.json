@@ -1,0 +1,12 @@
+{
+  "records": [
+    {
+      "id": "CM90001",
+      "customer": "C1001",
+      "currency": "GHS",
+      "undrawnAmount": "800000",
+      "maturityDate": "20440115",
+      "lcyUndrawnAmount": "800000"
+    }
+  ]
+}

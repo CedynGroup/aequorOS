@@ -180,7 +180,7 @@ def canonical_constraints(table_name: str) -> tuple:
 #: The current generation, as SQL. Every partial index over the live generation
 #: and every reader's predicate uses exactly this pair of conditions. A reader
 #: that checks only ``superseded_by`` resurrects a withdrawn book, which is why
-#: ``tests/integration/architecture/test_current_generation_predicate.py`` fails the build
+#: ``tests/architecture/test_current_generation_predicate.py`` fails the build
 #: when a query filters one without the other.
 CURRENT_GENERATION_SQL = "superseded_by IS NULL AND withdrawn_at IS NULL"
 

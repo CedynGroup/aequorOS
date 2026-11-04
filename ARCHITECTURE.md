@@ -263,8 +263,8 @@ The shared Loguru patcher also replaces unexpected exception messages and remove
 serialized exception values, tracebacks and bound customer context before sinks
 receive a record. Such fallback records retain only a validated tenant id, safe
 correlation id and the `unexpected_error` code.
-Behavioral/redaction tests live in `backend/tests/unit/liquidity/` and
-`backend/tests/unit/core/test_calculation_logging.py` and `test_worker_error_logging.py`.
+Behavioral/redaction tests live in `backend/tests/liquidity/` and
+`backend/tests/core/test_calculation_logging.py` and `test_worker_error_logging.py`.
 
 ---
 
@@ -350,7 +350,7 @@ on one canonical store — the live tier for intraday awareness, the official ti
   filing. Every mint re-derives the reporting period's facts from the accepted canonical book,
   including same-date corrections. Prior runs and generated packages retain their frozen evidence;
   unchanged financial values reproduce the same `input_hash` per run (see §3). Regression:
-  `backend/tests/integration/live/service/test_pipeline.py::test_official_remint_reports_same_date_cash_correction_in_bsd2`.
+  `backend/tests/live/service/test_pipeline.py::test_official_remint_reports_same_date_cash_correction_in_bsd2`.
 - **Freshness** (`app/live/service/freshness.py`, `GET /banks/{id}/freshness`): compares each module's
   live `input_hash` to the latest official run's `input_hash`. Because the hash is value-based, a
   bare re-derivation of unchanged data stays **fresh**; only an actual economic change reads as
@@ -492,7 +492,7 @@ official reads must be explicit.
   reconciliation gaps and needless data withdrawals while `live_metrics` says
   `ready`. Health checks read `live_metrics` /
   `GET /banks/{id}/live-summary|freshness|alerts`, or the module's own service
-  (`sdi_readiness`, `sdi_views`). `tests/unit/architecture/test_derivation_plane_boundary.py`
+  (`sdi_readiness`, `sdi_views`). `tests/architecture/test_derivation_plane_boundary.py`
   pins the caller allow-list; only `pipeline.run_official`,
   `data_activation.activate_bank_data` and `history_loader` may call the filing
   derivation.
@@ -513,9 +513,9 @@ official reads must be explicit.
   A job type with a worker lane, a reclaim-window decision, a handler and passing handler
   tests but no caller is never run, and every gate stays green because each half is correct.
   **When you add a job type, the same change must add its enqueue site, and a test must
-  assert the caller calls it** — `tests/unit/architecture/test_job_enqueue_reachability.py`
+  assert the caller calls it** — `tests/architecture/test_job_enqueue_reachability.py`
   requires a reachable enqueue site for every registered type, and
-  `tests/integration/bi/jobs/test_bi_jobs.py` asserts both directions for the BI triggers (a succeeded
+  `tests/bi/jobs/test_bi_jobs.py` asserts both directions for the BI triggers (a succeeded
   build asks, a skipped build does not). Enqueue counts ride on the job's progress record so
   "queued nothing" is distinguishable from "was never asked".
   The same class hides elsewhere in a green suite: a guard whose rules were never proven
@@ -538,7 +538,7 @@ by `DataScope` + as-of + institution through `app/market_data/service/market_dat
   `canonical_market_indices`, `canonical_counterparty_ratings`. Rates are decimal fractions
   (0.158, never 15.8).
 - **`MarketDataAdapter(SourceAdapter)`** (`base.py`) with three shipped implementations, each
-  passing one shared contract suite (`tests/unit/market_data/adapters/contract.py`, §4.3 categories +
+  passing one shared contract suite (`tests/market_data/adapters/contract.py`, §4.3 categories +
   a vendor-internal leak canary): `manual_upload` (production path — xlsx templates + parser +
   upload/template endpoints; the staged `temp://` handle is the "credential"; zero vendor quota),
   `refinitiv` (OAuth2 simulated, `ric_catalog.yaml`), `bloomberg` (enterprise-cert simulated,
@@ -633,7 +633,7 @@ data blocks bound to computed evidence, and — at freeze — an immutable
 regulatory package. It reuses the calculation-run pattern (§3) for every figure
 and the live/governance boundary (§3b) absolutely: no ICAAP module may import
 the live plane or re-derive facts, pinned by
-`tests/unit/architecture/test_icaap_boundaries.py`. A Board-approved figure is one
+`tests/architecture/test_icaap_boundaries.py`. A Board-approved figure is one
 that was computed once, reviewed, and can be pointed at afterwards.
 
 Four structural facts this plane adds, each of which has already cost a defect
@@ -684,7 +684,7 @@ is covered on the day it is written) **plus `ai_commentary_drafts`** — the one
 non-`bi_` table a BI-owned module writes, by decision D-191, from
 `app/bi/jobs/bi_commentary.py`. Platform audit, queue, notification and operator
 audit writes go only through the helpers named in `PERMITTED_MEDIATED_WRITES` in
-`tests/unit/architecture/test_bi_plane_boundary.py`. Its ownership and write scans
+`tests/architecture/test_bi_plane_boundary.py`. Its ownership and write scans
 cover the BI package and BI operator modules; `app/bi/schemas/query.py` also
 remains subject to the import ban on BI internals. The regulatory/live plane
 may import only `app/bi/service/enqueue.py` and `app/bi/service/versions.py`,
@@ -750,7 +750,7 @@ server-side. There is no `text()` anywhere in `app/bi/service` or
 `app/bi/domain`. The executor alone may call `exec_driver_sql` with two named
 constant statements that set the statement timeout and read-only flag; the
 timeout is a bound parameter. This boundary is pinned by
-`tests/unit/architecture/test_bi_compiler_injection.py`, which proves its AST guard
+`tests/architecture/test_bi_compiler_injection.py`, which proves its AST guard
 against deliberate violations and fuzzes client input with Hypothesis.
 
 **BI gets its own worker lane** (`risk-worker-bi`, `WORKER_JOB_TYPES=lane:bi`)
@@ -949,7 +949,7 @@ handler marks a newer job succeeded with `progress={"status":"skipped",...}`.
   different capital regime and is refused the packs surface until its own pack set ships
   (the gate resolves through the authority registry and opens by itself).
 - **BI model registration and migration parity** are pinned by
-  `tests/integration/db/test_bi_owned_tables_parity.py`: its subject is the union of tables declared
+  `tests/db/test_bi_owned_tables_parity.py`: its subject is the union of tables declared
   under `app.bi.models` and `bi_*` tables in `Base.metadata`, including
   `ai_commentary_drafts`. Each must appear in exactly one model module's table tuple.
   Its Postgres checks cover RLS, column types/lengths/nullability and CHECK names/values;
@@ -1260,7 +1260,7 @@ and [public ECR authentication](https://docs.aws.amazon.com/AmazonECR/latest/pub
   Dashboard and Web aggregate gates still report, accepting intentional skips
   and rejecting failed or cancelled dependencies. Pull requests retain their
   change-based selection, and checks on pushes to `main` remain enabled.
-  [The merge-queue guard](backend/tests/unit/architecture/test_merge_queue.py) pins
+  [The merge-queue guard](backend/tests/architecture/test_merge_queue.py) pins
   the triggers and required-check names. Enabling the queue and configuring
   required checks on `main` remain repository-settings work.
 - **CI enforces every surface.** `risk-service.yml` gates the backend; `dashboard.yml`
@@ -1311,7 +1311,7 @@ market-data scope, and effective date; none is shared across requests or tenants
 trend therefore has effectively flat query growth while retaining stored-run precedence and
 the existing calculation engines. Audit-style full-HTTP query counts fell from 331 to 14
 (liquidity), 494 to 15 (capital), 164 to 16 (IRR), and 73 to 12 for both FX and FTP.
-`backend/tests/integration/services/test_regulatory_dashboard_query_shape.py` pins those counts, one bulk
+`backend/tests/services/test_regulatory_dashboard_query_shape.py` pins those counts, one bulk
 load per request resource, flat one-versus-twelve-period growth, and byte-identical serialized
 dashboard responses against the former per-period path.
 
@@ -1348,7 +1348,7 @@ backfill are described in the [quick start](README.md#quick-start).
   and generates `template_pending` until the official form lands (never infer a BoG layout);
   the monthly balance-sheet + P&L pack is
   filed as the official BSD2 and BSD7A forms. The executable completion proof is
-  `tests/integration/services/test_phase2_full_report_proof.py` — every registered return generates +
+  `tests/services/test_phase2_full_report_proof.py` — every registered return generates +
   exports (or refuses by design) over the full official-run sweep; keep it green.
 
 #### ECL assumption and coverage contract
@@ -1363,7 +1363,7 @@ accounts from residual RWA to avoid deducting the same provision twice; general 
 credit RWA. Official, live, forecast and enterprise-stress readers must include
 this group; a missing basis refuses fresh calculations until facts are re-derived.
 Older immutable snapshots retain their original measurement basis.
-Regression coverage: `backend/tests/unit/credit/service/test_crd_credit_exposures.py`.
+Regression coverage: `backend/tests/credit/service/test_crd_credit_exposures.py`.
 
 Enterprise stress compares the current accepted loan and placement source identities,
 lineage and values with the source basis recorded on `bank_reporting_periods` by
@@ -1372,7 +1372,7 @@ of its final snapshot, or a missing recorded source basis requires official
 re-derivation before stress; the refusal is HTTP 409 and creates no run. An empty
 book with a matching recorded basis remains valid. This source
 provenance stays outside financial facts, calculation input snapshots and hashes.
-Regression coverage: `backend/tests/integration/stress/service/test_crd_stress_basis_reconciliation.py`.
+Regression coverage: `backend/tests/stress/service/test_crd_stress_basis_reconciliation.py`.
 
 The bottom-up migration and FX overlay covers loans and interbank placements.
 It applies exposure-level RWA deltas to each year's grown net credit buckets after
@@ -1450,8 +1450,8 @@ Current calculation versions are owned by the
 [authority registry](backend/app/domain/authority/registry.py) and the engines'
 `ENGINE_VERSION` constants. New versions append runs; stored inputs, hashes and
 results of historical runs remain unchanged. Regression evidence lives in
-`backend/tests/integration/capital/service/test_ecl_and_crm.py` and
-`backend/tests/unit/stress/domain/test_stress_orchestrator.py`.
+`backend/tests/capital/service/test_ecl_and_crm.py` and
+`backend/tests/stress/domain/test_stress_orchestrator.py`.
 
 ### Governed forecast assumptions
 

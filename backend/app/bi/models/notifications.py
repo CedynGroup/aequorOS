@@ -41,7 +41,7 @@ composite foreign key to ``banks``; JSON columns are ``sa.JSON`` and never
 JSONB, because the hermetic suite and the Playwright stack build this schema
 with ``create_all`` on SQLite. Row-level security lives in the migration, like
 every other tenant table, and the Postgres census
-(``tests/integration/db/test_tenant_rls_completeness.py``) is what finds a table that ships
+(``tests/db/test_tenant_rls_completeness.py``) is what finds a table that ships
 without it.
 
 BI table registration and migration-parity coverage are owned by
@@ -130,7 +130,7 @@ SUBSCRIPTION_CADENCES: tuple[str, ...] = ("daily", "weekly", "monthly", "on_new_
 
 #: The artifact a subscription asks for. Parity with
 #: ``app/bi/service/exports.EXPORT_FORMATS`` is asserted by
-#: ``tests/integration/bi/models/test_bi_notification_models.py`` rather than imported: a model
+#: ``tests/bi/models/test_bi_notification_models.py`` rather than imported: a model
 #: module must not import a service.
 SUBSCRIPTION_FORMATS: tuple[str, ...] = ("csv", "xlsx", "pdf")
 

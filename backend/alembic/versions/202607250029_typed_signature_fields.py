@@ -65,8 +65,12 @@ def upgrade() -> None:
             ["organization_id", "package_id", "signing_role", "field_type", "field_index"],
         )
 
-    op.drop_index("uq_return_signature_placements_bank", table_name="return_signature_placements")
-    op.drop_index("uq_return_signature_placements_org", table_name="return_signature_placements")
+    op.drop_index(
+        "uq_return_signature_placements_bank", table_name="return_signature_placements"
+    )
+    op.drop_index(
+        "uq_return_signature_placements_org", table_name="return_signature_placements"
+    )
     op.create_index(
         "uq_return_signature_placements_bank",
         "return_signature_placements",
@@ -99,8 +103,12 @@ def downgrade() -> None:
     for table in _TABLES:
         op.execute(sa.text(f"DELETE FROM {table} WHERE field_type <> 'signature'"))  # noqa: S608
 
-    op.drop_index("uq_return_signature_placements_bank", table_name="return_signature_placements")
-    op.drop_index("uq_return_signature_placements_org", table_name="return_signature_placements")
+    op.drop_index(
+        "uq_return_signature_placements_bank", table_name="return_signature_placements"
+    )
+    op.drop_index(
+        "uq_return_signature_placements_org", table_name="return_signature_placements"
+    )
     op.create_index(
         "uq_return_signature_placements_bank",
         "return_signature_placements",

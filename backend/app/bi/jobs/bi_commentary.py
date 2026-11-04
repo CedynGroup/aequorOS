@@ -3,7 +3,7 @@
 This module owns every WRITE the feature makes, and that is a boundary rather
 than a preference. ``ai_commentary_drafts`` is an AI-plane table (the egress
 record, beside the consent row that gates it), and
-``tests/unit/architecture/test_bi_plane_boundary.py`` allows nothing under
+``tests/architecture/test_bi_plane_boundary.py`` allows nothing under
 ``app/bi/service`` to write a table outside the ``bi_*`` marts. So the decisions
 live in ``app/bi/service/commentary`` (a pure minimiser, a prompt, a validator, a
 deterministic fallback, a renderer) and the writes live here — the same split
@@ -75,7 +75,7 @@ if TYPE_CHECKING:  # Annotations only. ``from __future__ import annotations`` ke
 #: switched on (D-008), so every module under ``app/jobs`` must import cleanly on
 #: a worker where the BI feature is absent. An import statement — even inside a
 #: function — would name the dependency in a way ``sys.modules`` cannot stand in
-#: for, so ``tests/integration/bi/jobs/test_bi_jobs.py`` refuses one anywhere in an
+#: for, so ``tests/bi/jobs/test_bi_jobs.py`` refuses one anywhere in an
 #: ``app/bi/jobs/bi_*.py`` and ``bi_common.load_builder`` exists as the sanctioned
 #: form. ``bi_export.py`` is written exactly this way. The accessors below are
 #: that rule, and they are what a test binds a stub to.

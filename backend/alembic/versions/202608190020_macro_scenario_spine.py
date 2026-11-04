@@ -120,14 +120,18 @@ def upgrade() -> None:
         sa.ForeignKeyConstraint(["organization_id"], ["organizations.id"]),
         sa.ForeignKeyConstraint(["bank_id"], ["banks.id"]),
         sa.PrimaryKeyConstraint("id"),
-        sa.UniqueConstraint("organization_id", "bank_id", "code", name="uq_macro_scenarios_scope"),
+        sa.UniqueConstraint(
+            "organization_id", "bank_id", "code", name="uq_macro_scenarios_scope"
+        ),
     )
     op.create_index(
         "ix_macro_scenarios_org_bank_status",
         _SCENARIOS,
         ["organization_id", "bank_id", "status"],
     )
-    op.create_index("ix_macro_scenarios_org_type", _SCENARIOS, ["organization_id", "scenario_type"])
+    op.create_index(
+        "ix_macro_scenarios_org_type", _SCENARIOS, ["organization_id", "scenario_type"]
+    )
     _enable_rls(_SCENARIOS)
 
     op.create_table(
@@ -141,16 +145,22 @@ def upgrade() -> None:
         sa.Column("stress_value", sa.Numeric(precision=28, scale=6), nullable=False),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
-        sa.CheckConstraint(f"variable IN {_VARIABLES}", name="ck_macro_scenario_paths_variable"),
+        sa.CheckConstraint(
+            f"variable IN {_VARIABLES}", name="ck_macro_scenario_paths_variable"
+        ),
         sa.CheckConstraint("year_index >= 0", name="ck_macro_scenario_paths_year_index"),
         sa.ForeignKeyConstraint(["organization_id"], ["organizations.id"]),
-        sa.ForeignKeyConstraint(["scenario_id"], ["macro_scenarios.id"], ondelete="CASCADE"),
+        sa.ForeignKeyConstraint(
+            ["scenario_id"], ["macro_scenarios.id"], ondelete="CASCADE"
+        ),
         sa.PrimaryKeyConstraint("id"),
         sa.UniqueConstraint(
             "scenario_id", "variable", "year_index", name="uq_macro_scenario_paths_point"
         ),
     )
-    op.create_index("ix_macro_scenario_paths_scenario", _PATHS, ["organization_id", "scenario_id"])
+    op.create_index(
+        "ix_macro_scenario_paths_scenario", _PATHS, ["organization_id", "scenario_id"]
+    )
     _enable_rls(_PATHS)
 
 

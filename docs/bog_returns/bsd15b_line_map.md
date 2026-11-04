@@ -30,7 +30,7 @@ e.g. `1.1` = L/C imports establishment commission, `17.1` = account closure)
 — and carries the row's `charge_value` text as published. Until the register
 is ingested every cell resolves to `input_required` ("tariff register
 required") at generation; once ingested all 309 are `mapped` (the Sample Bank
-register — `tests/integration/services/data_gaps/test_tariff_schedule.py`). Row selection
+register — `tests/services/data_gaps/test_tariff_schedule.py`). Row selection
 follows `linemaps/bsd15a.tariff_rows` (every labelled row except a heading
 that introduces sub-lines; childless headings such as `17. ACCOUNT CLOSURE`
 take the value). Sharp edge: `N/A` / `Nil` / `-` are null sentinels to the Data

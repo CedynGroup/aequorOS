@@ -496,7 +496,7 @@ class FieldPlacement:
 #: per labelled cell.
 #:
 #: The pairing is asserted against the RENDERED page in
-#: ``tests/unit/attestation/service/test_attestation_pdf_signing.py``, not trusted: this is two
+#: ``tests/attestation/service/test_attestation_pdf_signing.py``, not trusted: this is two
 #: files' worth of arithmetic about one layout, and the failure mode when they
 #: drift is a filed return whose signature stamp sits beside its line rather than
 #: on it.
@@ -1296,7 +1296,7 @@ def prepare_signature_fields(
     ``/All``. For a three-signer ICAAP ceremony the ``/All`` lock MOVES to the
     Board and the approver takes an ``/Exclude`` over the Board's fields —
     which is the part that had to be proved by execution rather than by reading
-    (``tests/unit/attestation/service/test_attestation_three_signer_chain.py``).
+    (``tests/attestation/service/test_attestation_three_signer_chain.py``).
 
     Returns the original bytes plus one incremental update; the input is left
     intact as a prefix.

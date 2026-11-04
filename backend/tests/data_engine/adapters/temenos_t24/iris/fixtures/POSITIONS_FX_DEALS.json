@@ -1,0 +1,17 @@
+{
+  "records": [
+    {
+      "id": "FX30001",
+      "counterparty": "BANK.STANBIC",
+      "currencySold": "USD",
+      "amountSold": "1000000",
+      "valueDateFwd": "20261231",
+      "currencyBought": "GHS",
+      "dealRate": "15.5",
+      "dealType": "fx_forward",
+      "hedgeRef": "HEDGE.USD.1",
+      "lcyAmountSold": "15500000",
+      "lcyMtm": "250000"
+    }
+  ]
+}

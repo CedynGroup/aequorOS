@@ -6,7 +6,7 @@ canonical book, ``live_metrics``, ``regulatory_runs`` and the governed
 registers with ``record=False``, and writes ONLY ``bi_*`` tables. Nothing in
 ``app/bi/domain`` or ``app/bi/service`` may write a canonical, regulatory or
 live table, and no regulatory code may import this module. The pure half of
-that boundary is pinned today by ``tests/unit/architecture/test_bi_catalogue_authority.py``
+that boundary is pinned today by ``tests/architecture/test_bi_catalogue_authority.py``
 (``test_bi_domain_imports_no_service_model_or_sql``) and the generic
 ``test_dependency_boundaries.py::test_the_pure_domain_layer_imports_no_application_state``;
 the "regulatory code never imports BI" half is the guards wave's
@@ -44,11 +44,11 @@ nothing for SQLite, but a Postgres ``create_all`` (the ``TEST_DATABASE_URL``
 conftest path) would create a parent with zero partitions that rejects every
 INSERT, and the fix for that is partition DDL in the model module — a second
 owner of what the migration already owns. Partition routing and partition RLS
-are therefore proven only in the Postgres-gated suite (``tests/integration/db/``), never
+are therefore proven only in the Postgres-gated suite (``tests/db/``), never
 mocked as passing on SQLite.
 
 Row-level security lives in the migration too, like every other tenant
-table; the Postgres census ``tests/integration/db/test_tenant_rls_completeness.py``
+table; the Postgres census ``tests/db/test_tenant_rls_completeness.py``
 enumerates partitioned parents and their children alike.
 """
 
@@ -104,7 +104,7 @@ GL_BALANCE_BASES: tuple[str, ...] = ("ytd", "period")
 #: ``bi_fact_target`` vocabularies, mirroring
 #: ``app/data_engine/domain/ingestion/reference_schemas/performance_targets.py`` without
 #: importing it (``app.models`` stays free of ``app.data_engine.domain.ingestion``);
-#: ``tests/unit/bi/models/test_bi_models.py`` asserts the parity in both
+#: ``tests/bi/models/test_bi_models.py`` asserts the parity in both
 #: directions, so a grain or version added to the register cannot be stored
 #: under a CHECK that does not know it.
 TARGET_PERIOD_GRAINS: tuple[str, ...] = ("month", "quarter", "half_year", "year")
@@ -121,7 +121,7 @@ TARGET_SCOPE_BASES: tuple[str, ...] = ("exact", "bank_wide")
 #: (``counterparty.group`` and ``loan.employer``, both ``String(255)``); a
 #: narrower mart column turns one long register row into a nightly total build
 #: failure for that tenant (audit A8-01). Asserted against the catalogue's
-#: scopeable dimensions in ``tests/unit/bi/models/test_bi_models.py``, so a new wider
+#: scopeable dimensions in ``tests/bi/models/test_bi_models.py``, so a new wider
 #: dimension fails there rather than in a tenant's build.
 TARGET_SCOPE_VALUE_WIDTH = 255
 #: ``bi_fact_target.scope_dimension`` / ``scope_value`` for a bank-wide target.

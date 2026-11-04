@@ -71,21 +71,21 @@ hypothesis_settings.load_profile(os.environ.get("HYPOTHESIS_PROFILE", "ci"))
 #: and the demo tenants.
 pytest_plugins = [
     "tests.support.database_fixtures",
-    "tests.unit.ai.fixtures",
+    "tests.ai.fixtures",
     "tests.support.canonical_book",
-    "tests.integration.bi.fixtures",
-    "tests.unit.capital.fixtures",
-    "tests.integration.case.fixtures",
-    "tests.unit.credit.fixtures",
-    "tests.unit.forecasting.fixtures",
-    "tests.integration.ftp.fixtures",
-    "tests.unit.fx.fixtures",
-    "tests.unit.identity.fixtures",
-    "tests.unit.irrbb.fixtures",
-    "tests.unit.icaap.testing.annexes",
-    "tests.unit.market_data.fixtures",
-    "tests.integration.reporting.fixtures",
-    "tests.unit.stress.fixtures",
+    "tests.bi.fixtures",
+    "tests.capital.fixtures",
+    "tests.case.fixtures",
+    "tests.credit.fixtures",
+    "tests.forecasting.fixtures",
+    "tests.ftp.fixtures",
+    "tests.fx.fixtures",
+    "tests.identity.fixtures",
+    "tests.irrbb.fixtures",
+    "tests.icaap.testing.annexes",
+    "tests.market_data.fixtures",
+    "tests.reporting.fixtures",
+    "tests.stress.fixtures",
 ]
 
 
@@ -301,7 +301,7 @@ def hermetic_etl_models(monkeypatch: pytest.MonkeyPatch) -> None:
     batch's dedup / anomaly output would otherwise depend on whether a developer had
     trained that bank's models locally (absent in CI). Force the deterministic path
     here; a test that exercises a trained model injects it explicitly via
-    ``EtlConfig`` (see ``tests/unit/data_engine/etl/test_pipeline.py``).
+    ``EtlConfig`` (see ``tests/data_engine/etl/test_pipeline.py``).
     """
     monkeypatch.setattr(
         "app.data_engine.etl.model_loading.load_counterparty_model", lambda *a, **k: None

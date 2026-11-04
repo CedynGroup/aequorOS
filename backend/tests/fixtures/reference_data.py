@@ -102,9 +102,9 @@ def seed_global_reference_data(session: Session) -> None:
     # row rather than under the "table is empty" guard above: a database built
     # before ICAAP shipped has parameters but not these. The five sets are
     # disjoint on (code, jurisdiction) — each row is seeded exactly once, and
-    # tests/unit/policy/service/test_regulatory_parameters_icaap_p2.py,
-    # tests/unit/policy/service/test_regulatory_parameters_p5.py and
-    # tests/unit/policy/service/test_regulatory_parameters_icaap_jurisdictions.py pin that.
+    # tests/policy/service/test_regulatory_parameters_icaap_p2.py,
+    # tests/policy/service/test_regulatory_parameters_p5.py and
+    # tests/policy/service/test_regulatory_parameters_icaap_jurisdictions.py pin that.
     for row in (
         *icaap_parameter_seed_rows(),
         *icaap_p2_parameter_seed_rows(),

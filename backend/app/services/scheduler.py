@@ -55,7 +55,7 @@ BI_RETENTION = "bi_retention"
 SESSION_PURGE = "session_purge"
 #: The hourly BI subscription sweep. A LITERAL, like ``BI_RETENTION``: this
 #: module may import only the two thin BI seam modules (``bi.enqueue``,
-#: ``bi.versions``) — ``tests/unit/architecture/test_bi_plane_boundary.py`` rule (a)
+#: ``bi.versions``) — ``tests/architecture/test_bi_plane_boundary.py`` rule (a)
 #: — so the tick enqueues the scan and the scan, which runs in the ``bi`` lane,
 #: does the reading. ``job_queue.enqueue`` validates the name against
 #: ``JOB_TYPES``.

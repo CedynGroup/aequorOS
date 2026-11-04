@@ -500,7 +500,7 @@ def try_resolve(
     The ICAAP report plane's ONE door to a governed row — non-recording, for the
     reason in the module docstring. Nothing under ``app/icaap/service`` calls
     ``regulatory_parameters.try_resolve``/``resolve`` directly; a guard in
-    ``tests/unit/architecture/test_icaap_boundaries.py`` keeps it that way, so the
+    ``tests/architecture/test_icaap_boundaries.py`` keeps it that way, so the
     plane boundary cannot be reopened by a call site that did not know it existed.
     """
     return regulatory_parameters.try_resolve(db, bank, param_code, as_of=as_of, record=False)

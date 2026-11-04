@@ -96,6 +96,7 @@ from app.models import (
     RegulatoryParameter,
     User,
 )
+from tests.bi.fixtures import materialize_bi_plane
 from tests.fixtures.canonical_bank_fixture import (
     SAMPLE_BANK_ID,
     extend_canonical_test_book,
@@ -103,7 +104,6 @@ from tests.fixtures.canonical_bank_fixture import (
 )
 from tests.fixtures.live_plane import materialize_live_plane
 from tests.fixtures.reference_data import seed_global_reference_data
-from tests.integration.bi.fixtures import materialize_bi_plane
 from tests.support.factories.canonical import seed_canonical_fixture
 
 # The platform tenant ID used by the hermetic E2E fixture.

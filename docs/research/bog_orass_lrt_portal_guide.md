@@ -49,7 +49,7 @@ Approved / Rejected / Declined`, where **Rejected** = returned for correction
 Resubmission of a submitted/acknowledged return: **Request Resubmission
 (reason) → granted/denied → revision +0.1**. AequorOS mirrors this exactly —
 see `docs/submission_pipeline_plan.md` §W1 and the fidelity suite
-`backend/tests/integration/reporting/service/test_regulatory_reporting_fidelity.py`.
+`backend/tests/reporting/service/test_regulatory_reporting_fidelity.py`.
 
 ## 3. Roles (as implemented, plan W2)
 

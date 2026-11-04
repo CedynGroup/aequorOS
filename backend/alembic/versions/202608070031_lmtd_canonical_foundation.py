@@ -79,6 +79,8 @@ def upgrade() -> None:
 def downgrade() -> None:
     op.drop_column("canonical_counterparties", "resident")
     with op.batch_alter_table("canonical_position_snapshots") as batch:
-        batch.drop_constraint("ck_canonical_position_snapshots_deposit_account_type", type_="check")
+        batch.drop_constraint(
+            "ck_canonical_position_snapshots_deposit_account_type", type_="check"
+        )
     for column in reversed(_SNAPSHOT_COLUMNS):
         op.drop_column("canonical_position_snapshots", column.name)

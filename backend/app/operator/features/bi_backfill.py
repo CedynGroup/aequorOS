@@ -10,7 +10,7 @@ is required and carried into the audit detail. Org-scoped throughout: a
 sibling tenant's bank is a 404.
 
 Mounted ONLY on the operator app (``app.operator.main``); the tenant API never
-exposes it — ``tests/integration/operator/test_route_isolation.py`` pins the path.
+exposes it — ``tests/operator/test_route_isolation.py`` pins the path.
 """
 
 from __future__ import annotations

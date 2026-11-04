@@ -9,7 +9,7 @@ of an attachment, the render and the relay — lives in
 **Why there are two job types and not one.** ``docs/bi.md`` puts the due-within-
 the-hour sweep in ``scheduler.run_tick``, and the tick runs in the CORE worker
 lane. Reading ``bi_subscriptions`` there would make the regulatory/live plane
-import the BI plane, which ``tests/unit/architecture/test_bi_plane_boundary.py``
+import the BI plane, which ``tests/architecture/test_bi_plane_boundary.py``
 forbids and which D-041 exists to prevent: the seam the scheduler may import is
 deliberately thin. So the tick enqueues ONE ``bi_subscription_scan`` with nothing
 but a literal job type — no BI import at all — and the scan, which runs in the

@@ -16,7 +16,7 @@ Conventions
 * Labels are production copy — no raw enums, no wire keys.
 * ``module`` is an ``app.core.authorization.Module`` VALUE (``"cap"``,
   ``"credit"``), carried as a string so this package stays import-free of the
-  authorization core; ``tests/unit/architecture/test_bi_catalogue_authority.py``
+  authorization core; ``tests/architecture/test_bi_catalogue_authority.py``
   resolves every value through the enum.
 """
 

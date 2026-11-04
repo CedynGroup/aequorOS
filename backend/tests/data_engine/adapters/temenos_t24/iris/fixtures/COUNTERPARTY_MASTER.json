@@ -1,0 +1,22 @@
+{
+  "records": [
+    {
+      "id": "C1001",
+      "name1": "Ama Mensah",
+      "sector": "1000",
+      "country": "GH",
+      "lCuRating": "B",
+      "coCode": "GH0010001",
+      "industry": "6800"
+    },
+    {
+      "id": "C1002",
+      "name1": "Kofi Traders Ltd",
+      "sector": "2000",
+      "country": "GH",
+      "lCuRating": "BB",
+      "coCode": "GH0010001",
+      "industry": "4700"
+    }
+  ]
+}

@@ -49,7 +49,7 @@ OpenBao ACL paths scope anyway, so the property the slashes were for survives.
 
 **The credential.** ``OPENBAO_SECRET_ID`` is a secret. It appears in exactly one
 place — the body of the AppRole login — and nowhere else: not in a log record,
-not in an exception message, not in an audit event. ``tests/integration/attestation/service/
+not in an exception message, not in an audit event. ``tests/services/
 test_attestation_openbao.py`` asserts that rather than trusting this paragraph.
 
 **Never a fallback.** Every failure raises out of the ``SignerBackendError``

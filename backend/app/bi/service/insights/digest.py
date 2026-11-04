@@ -38,7 +38,7 @@ Two details that decide whether the digest is really value-based:
   derivations that produce the same facts in different orders hash the same.
 
 Adding a fact type without teaching :func:`fact_payload` about it raises rather
-than silently hashing nothing; ``tests/unit/bi/service/test_insights_digest.py``
+than silently hashing nothing; ``tests/bi/service/test_insights_digest.py``
 pins that every member of the ``Fact`` union is covered.
 """
 

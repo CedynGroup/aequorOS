@@ -43,8 +43,8 @@ Generated from `bog_forms/linemaps/bsd7a.py` + `layouts/BSD7A.json` (row tables 
   [capital register refusal rule](00_full_return_registry.md#6-as-built-engine-rules).
 - On the primary database the GL panel carried ASSET/LIABILITY/EQUITY accounts only until 2026-08-16, so
   **every P&L line was blank (input_required) until a bank ingests its P&L ledger and maps it** — the honest
-  state; the hermetic proof (`tests/integration/reporting/service/bog_forms/test_bsd7.py`) inserts a tagged ledger and shows the
-  full chain, and `tests/integration/services/data_gaps/test_gl_mapping_bsd7.py` pushes the Sample Bank's P&L ledger + the
+  state; the hermetic proof (`tests/reporting/service/bog_forms/test_bsd7.py`) inserts a tagged ledger and shows the
+  full chain, and `tests/services/data_gaps/test_gl_mapping_bsd7.py` pushes the Sample Bank's P&L ledger + the
   `gl_mapping_bsd7` register through the real API (see _Data-gap closure_ below).
 
 ## Sheet `BSD7A` — P&L spine, averages, staff (item-number cells omitted from the table: 51 × `constant`)
@@ -149,7 +149,7 @@ tag → the register's exact-code row → the register's longest matching prefix
 `account_code_prefixes`; sign and basis apply per account. Nothing changes for a ledger tagged the old way. The
 line map itself is unchanged (`pl(tag, …)` per row); the register is read at generation time (latest as-of on/
 before the reporting date), so a bank changes its mapping by re-pushing the register, not the ledger. Proof:
-`tests/integration/services/data_gaps/test_gl_mapping_bsd7.py` — vocabulary == line-map tags; four month-ends of the ledger
+`tests/services/data_gaps/test_gl_mapping_bsd7.py` — vocabulary == line-map tags; four month-ends of the ledger
 
 - the register pushed through the real API (`scripts/ingest_push.py`'s three-call `push()`) → all 124 BSD7A cells
   and 62 BSD7B cells `input_required` → `mapped`, month = Δ YTD, contra sign, exact-beats-prefix, own tag beats

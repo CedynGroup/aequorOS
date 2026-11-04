@@ -309,7 +309,7 @@ CRD_CAPITAL_FLOOR_SEEDS: tuple[tuple[str, str, str, str], ...] = (
 # filing deadline, the amber window, the materiality thresholds and the two
 # horizons) belong to the workspace and are seeded by ``202609190055`` through
 # ``app/icaap/service/parameters.py`` — each ICAAP code is seeded exactly once,
-# and ``tests/unit/policy/service/test_regulatory_parameters_icaap_p2.py`` pins that.
+# and ``tests/policy/service/test_regulatory_parameters_icaap_p2.py`` pins that.
 #
 # Most of these are REPRESENTATIVE calibrations (D-039): the Bank of Ghana has
 # published no benchmark for concentration bands, FX shocks, operational

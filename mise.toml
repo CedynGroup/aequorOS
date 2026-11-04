@@ -28,7 +28,7 @@ uv = "0.11.18"
 # a task defined only here recurses until the runner gives up.
 #
 # It is guarded in two places, deliberately not one:
-#   * `backend/tests/unit/architecture/test_ci_task_wiring.py` — the static contract
+#   * `backend/tests/architecture/test_ci_task_wiring.py` — the static contract
 #     (no self-delegation, every workflow-invoked task defined here, every
 #     delegation target present in the backend file);
 #   * `.github/scripts/mise_wiring_preflight.py` — the SAME check in plain

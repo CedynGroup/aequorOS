@@ -1,0 +1,24 @@
+{
+  "records": [
+    {
+      "id": "MORTGAGE.1",
+      "description": "Residential Mortgage",
+      "productLine": "MORTGAGE",
+      "riskWeightBand": "RW035",
+      "productGroup": "LENDING"
+    },
+    {
+      "id": "SME.TERM.1",
+      "description": "SME Term Loan",
+      "productLine": "CORPORATE",
+      "riskWeightBand": "RW100",
+      "productGroup": "LENDING"
+    },
+    {
+      "id": "TERM.DEP.1",
+      "description": "Fixed Term Deposit",
+      "productLine": "DEPOSITS",
+      "productGroup": "DEPOSITS"
+    }
+  ]
+}

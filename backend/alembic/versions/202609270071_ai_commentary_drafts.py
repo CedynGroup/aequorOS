@@ -14,7 +14,7 @@ and one date. It is named for the FEATURE and tabled in the AI plane, beside
   which prompt and which model, and what came back.
 
 Its sibling is the consent row that gates it, not a mart. The split is also
-ENFORCED rather than stylistic: ``tests/unit/architecture/test_bi_plane_boundary.py``
+ENFORCED rather than stylistic: ``tests/architecture/test_bi_plane_boundary.py``
 derives the tables BI may write from the ``bi_``-prefixed tables of
 ``Base.metadata`` and separately asserts that set equals what ``app/bi/models/marts.py``
 declares, so a ``bi_``-named table declared elsewhere breaks the derivation. The

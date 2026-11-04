@@ -60,7 +60,7 @@ Each rule is stated in full in the document the index names.
   creates tenant setup records (organization, bank, administrator, ownership,
   membership, SSO, storage, and required parameter register), but no bank financial
   data. There is no seeding route; never add one to the UI
-  or re-add seed CLI scripts. `tests/integration/identity/api/test_banks.py::test_seed_route_is_retired`
+  or re-add seed CLI scripts. `tests/identity/api/test_banks.py::test_seed_route_is_retired`
   pins it.
 - **Institution identity is the platform ID.** `organizations.id` (`OR-…`) and
   `banks.id` (`BK-…`) are the primary key, API path token, `org` claim, RLS GUC
@@ -68,7 +68,7 @@ Each rule is stated in full in the document the index names.
   either; every other entity keeps UUID primary keys.
 - **Code is filed by feature.** The backend is moving to `app/<feature>/` packages that
   cross features only through `public.py` or pure `domain/`.
-  `backend/tests/unit/architecture/test_feature_boundaries.py` ratchets the import graph; its
+  `backend/tests/architecture/test_feature_boundaries.py` ratchets the import graph; its
   baseline only shrinks.
 - **New backend code is basedpyright strict** (`reportAny` and `reportUnknown*` included).
   Legacy errors are counted in `backend/scripts/type_check_baseline.json`, which only shrinks;
@@ -78,7 +78,7 @@ Each rule is stated in full in the document the index names.
 - **Every route that accepts an object id must be in the IDOR census.**
   Follow [the authorization verification contract](backend/docs/authorization_foundation.md#executable-verification)
   for catalogue entries, exclusions and defect quarantine.
-  `backend/tests/unit/architecture/test_object_reference_census.py` guards catalogue
+  `backend/tests/architecture/test_object_reference_census.py` guards catalogue
   completeness and stale route decisions without Postgres.
   By-id lookups under `/banks/{bank_id}` must be bank-scoped at the query: two banks
   of one organization share an RLS tenant.
@@ -119,10 +119,10 @@ Each rule is stated in full in the document the index names.
 - **SSO is AequorOS' own OIDC relying party.** Never reintroduce `AUTH0_*`, and never
   let JIT auto-activate an account.
 - **A new job type ships with its enqueue site** and a test asserting the caller
-  calls it (`backend/tests/unit/architecture/test_job_enqueue_reachability.py`).
+  calls it (`backend/tests/architecture/test_job_enqueue_reachability.py`).
 - **Never point mutating tests at the primary database.** The default suite is
   hermetic; Postgres-gated tests use disposable schemas via `TEST_DATABASE_URL`, and
-  `backend/tests/integration/live_data` is read-only.
+  `backend/tests/live_data` is read-only.
 - **Restart long-lived local processes after a code change.** The standalone worker
   has no `--reload` and writes `live_metrics` with whatever code it holds; find
   stale ones with

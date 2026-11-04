@@ -9,7 +9,7 @@ It is not the regulatory liquidity plane. Basel LCR and NSFR are computed by
 `app.liquidity.domain.engine` from `BankFinancialFact`, sealed into a
 `RegulatoryRun`, and filed. Nothing here reads a bank fact, calls a regulatory
 engine, or reaches a return — see `app.case.service.case_plane` for the boundary
-rule and `tests/unit/architecture/test_case_plane_boundary.py` for the guard.
+rule and `tests/architecture/test_case_plane_boundary.py` for the guard.
 
 The outputs are therefore labelled "cash-flow adequacy" rather than
 "liquidity". Stored identifiers (`liquidity_analysis_results`, the

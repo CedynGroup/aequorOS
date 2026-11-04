@@ -13,7 +13,7 @@ risk-service:sync` lines in its first step and failed there, so lint,
 typecheck, the hermetic suite and both Postgres suites executed nothing. From
 the log it looked like a hang, not a missing file.
 
-`backend/tests/unit/architecture/test_ci_task_wiring.py` asserts the same contract,
+`backend/tests/architecture/test_ci_task_wiring.py` asserts the same contract,
 but it cannot be the only guard: its CI execution depends on the task wiring
 it checks. A guard that only runs when the thing it guards is healthy is not a
 guard. Hence this script — stdlib only, no mise, no uv, no dependency install —

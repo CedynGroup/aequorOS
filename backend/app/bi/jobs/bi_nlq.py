@@ -136,7 +136,7 @@ _WITHDRAWALS: frozenset[str] = frozenset(
 #: WHY THE BI SERVICE IS REACHED THROUGH ``importlib`` AND NEVER IMPORTED: a BI job
 #: handler is REGISTERED a release before the surface that enqueues it is switched on
 #: (D-008), so every module under ``app/jobs`` must import cleanly on a worker where
-#: the BI feature is absent. ``tests/integration/bi/jobs/test_bi_jobs.py`` refuses an
+#: the BI feature is absent. ``tests/bi/jobs/test_bi_jobs.py`` refuses an
 #: ``app.bi.service`` import statement anywhere in an ``app/bi/jobs/bi_*.py``.
 _NLQ_MODULE = "app.bi.service.nlq"
 _CATALOGUE_MODULE = "app.bi.domain.catalogue"

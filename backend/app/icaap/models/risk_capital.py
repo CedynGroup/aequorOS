@@ -73,7 +73,7 @@ from app.db.base import Base, TimestampMixin, UuidV7PrimaryKeyMixin, utc_now
 #: exports ``ICAAP_BASES``, meaning the REPORTING basis (solo / consolidated).
 #: This one is the AMOUNT basis. Neither is re-exported from ``app.models``, so
 #: an importer must name the module and cannot pick one up by accident;
-#: ``tests/unit/policy/domain/test_parameter_shapes.py`` pins the two apart.
+#: ``tests/policy/domain/test_parameter_shapes.py`` pins the two apart.
 ICAAP_BASES: tuple[str, ...] = (
     "pct_total_rwa",
     "pct_credit_rwa",
@@ -592,7 +592,7 @@ class IcaapPillar2Item(UuidV7PrimaryKeyMixin, TimestampMixin, Base):
     #: ``None`` as the JSON value ``null``, which is NOT SQL NULL, so
     #: ``IS NOT NULL`` is TRUE for a column holding nothing and the CHECK below
     #: that requires a value is satisfied by a row that has none. Pinned by
-    #: ``tests/unit/models/test_nullable_json_is_sql_null.py``, which scans for exactly
+    #: ``tests/models/test_nullable_json_is_sql_null.py``, which scans for exactly
     #: this pairing of a nullable JSON column and a constraint asserting its
     #: nullness.
     scenario_definition: Mapped[dict[str, Any] | None] = mapped_column(

@@ -68,7 +68,9 @@ _SERIES_ALIASES: dict[str, tuple[str, ...]] = {
 }
 
 
-def _latest_observation(db: Session, series_code: str, cob_date: date) -> DeskObservation | None:
+def _latest_observation(
+    db: Session, series_code: str, cob_date: date
+) -> DeskObservation | None:
     codes = _SERIES_ALIASES.get(series_code, (series_code,))
     best: DeskObservation | None = None
     for code in codes:
@@ -232,7 +234,9 @@ def prior_published_package(
             DeskDetermination.status == "published",
             DeskDetermination.cob_date < cob_date,
         )
-        .order_by(DeskDetermination.cob_date.desc(), DeskDetermination.published_at.desc())
+        .order_by(
+            DeskDetermination.cob_date.desc(), DeskDetermination.published_at.desc()
+        )
         .limit(1)
     )
     if exclude_id is not None:
@@ -240,7 +244,9 @@ def prior_published_package(
     return db.scalar(query)
 
 
-def rates_wow_deltas(current: DeskDetermination, prior: DeskDetermination | None) -> dict[str, Any]:
+def rates_wow_deltas(
+    current: DeskDetermination, prior: DeskDetermination | None
+) -> dict[str, Any]:
     """Week-over-week (package-over-package) deltas for published rate levels."""
     current_rates = (current.derived_values or {}).get("rates") or {}
     if not isinstance(current_rates, dict):
@@ -275,7 +281,9 @@ def rates_wow_deltas(current: DeskDetermination, prior: DeskDetermination | None
                 "current": cur_raw,
                 "prior": prior_raw,
                 "delta_pp": delta_pp,
-                "unit": (current_rates.get(code, {}) or {}).get("unit")
+                "unit": (
+                    current_rates.get(code, {}) or {}
+                ).get("unit")
                 if isinstance(current_rates.get(code), dict)
                 else "pct",
             }
@@ -291,7 +299,9 @@ def rates_wow_deltas(current: DeskDetermination, prior: DeskDetermination | None
     }
 
 
-def input_provenance_rows(db: Session, determination: DeskDetermination) -> list[dict[str, Any]]:
+def input_provenance_rows(
+    db: Session, determination: DeskDetermination
+) -> list[dict[str, Any]]:
     """Per snapshot entry: value + capture/manual provenance for field review."""
     rows: list[dict[str, Any]] = []
     for entry in determination.input_snapshot or []:

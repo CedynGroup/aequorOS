@@ -17,7 +17,7 @@ canonical adapter and a reconciliation. These records are hand-entered and
 carry no ingestion batch, so writing one as a bank fact would put an
 untraceable figure inside a sealed run's `input_hash` and breach the
 no-seeded-data order in `CLAUDE.md`. `app.case.service.case_plane` states the rule;
-`tests/unit/architecture/test_case_plane_boundary.py` enforces it, and amending
+`tests/architecture/test_case_plane_boundary.py` enforces it, and amending
 that test is the review gate for any future adapter.
 """
 

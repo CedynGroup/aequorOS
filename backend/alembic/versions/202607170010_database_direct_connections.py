@@ -81,7 +81,9 @@ def upgrade() -> None:
             server_default=sa.text("true"),
             nullable=False,
         ),
-        sa.Column("tls_enabled", sa.Boolean(), server_default=sa.text("true"), nullable=False),
+        sa.Column(
+            "tls_enabled", sa.Boolean(), server_default=sa.text("true"), nullable=False
+        ),
         sa.Column(
             "tls_verify_server_certificate",
             sa.Boolean(),
@@ -94,7 +96,9 @@ def upgrade() -> None:
             server_default=sa.text("300"),
             nullable=False,
         ),
-        sa.Column("connection_options", sa.JSON(), server_default=sa.text("'{}'"), nullable=False),
+        sa.Column(
+            "connection_options", sa.JSON(), server_default=sa.text("'{}'"), nullable=False
+        ),
         sa.Column("extraction_spec", sa.JSON(), server_default=sa.text("'{}'"), nullable=False),
         sa.Column("credential_ciphertext", sa.Text(), nullable=True),
         sa.Column("credential_fingerprint", sa.String(length=64), nullable=True),
@@ -118,7 +122,9 @@ def upgrade() -> None:
             ["banks.id", "banks.organization_id"],
         ),
         sa.PrimaryKeyConstraint("id"),
-        sa.UniqueConstraint("id", "organization_id", name="uq_database_direct_connections_id_org"),
+        sa.UniqueConstraint(
+            "id", "organization_id", name="uq_database_direct_connections_id_org"
+        ),
         sa.UniqueConstraint(
             "organization_id",
             "bank_id",

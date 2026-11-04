@@ -46,7 +46,7 @@ NEW_SURFACES = ("nlq",)
 #: already-migrated database on the same constraint after the NEXT surface is
 #: added, and lets the downgrade restore the historical shape. Parity between the
 #: constant and the migrated CHECK is asserted instead, by
-#: ``tests/integration/db/test_bi_migration_structural_parity.py``.
+#: ``tests/db/test_bi_migration_structural_parity.py``.
 SURFACES_BEFORE = (
     "'query', 'grid', 'drill', 'explain', 'export', 'feed', 'trust', 'catalogue', "
     "'packs', 'insights'"

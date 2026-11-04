@@ -168,7 +168,9 @@ def count_observations(
     return int(db.scalar(query) or 0)
 
 
-def list_captures(db: Session, *, source_key: str | None = None) -> list[DeskSourceCapture]:
+def list_captures(
+    db: Session, *, source_key: str | None = None
+) -> list[DeskSourceCapture]:
     query = select(DeskSourceCapture).order_by(DeskSourceCapture.captured_at.desc())
     if source_key is not None:
         query = query.where(DeskSourceCapture.source_key == source_key)

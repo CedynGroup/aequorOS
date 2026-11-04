@@ -28,7 +28,7 @@ This migration closes the two that are tenant data:
     what a tenant can see.
 
 The three that remain outside are deliberate and are pinned as such by
-``tests/integration/db/test_tenant_rls_completeness.py``, which is the RULE this migration
+``tests/db/test_tenant_rls_completeness.py``, which is the RULE this migration
 ships with: it fails when ANY ``organization_id`` table is not FORCE-RLS and is
 not on that documented list, so a sixth table cannot appear unnoticed.
 

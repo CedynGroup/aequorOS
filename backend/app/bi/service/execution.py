@@ -21,7 +21,7 @@ Three things happen here and nowhere else in the BI plane:
   lower the surface's ``row_cap``, never raise it.
 
 **The two literal statements below are the ONLY SQL text in
-``app/bi/service`` and ``app/bi/domain``.** ``tests/unit/architecture/
+``app/bi/service`` and ``app/bi/domain``.** ``tests/architecture/
 test_bi_compiler_injection.py`` forbids ``text()``, ``literal_column()``,
 ``exec_driver_sql()`` and any string-built SQL across both packages and
 allow-lists exactly these two constants by name: they are compile-time

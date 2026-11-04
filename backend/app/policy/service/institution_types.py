@@ -195,7 +195,7 @@ def default_modules(db: Session, bank: Bank) -> list[str]:
 # (``202608190018`` created the registry, ``202608210026`` widened the SDI module
 # set). Those migrations keep their own historical snapshots on purpose — a
 # migration must describe the change it made — so the invariant is pinned by a
-# test (``tests/integration/policy/service/test_institution_types.py::
+# test (``tests/policy/service/test_institution_types.py::
 # test_seed_catalogue_matches_the_migration_chain_end_state``) rather than by an
 # import. Change a licence class here and that test tells you whether a new
 # migration is owed.

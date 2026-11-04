@@ -1,0 +1,12 @@
+{
+  "records": [
+    {
+      "id": "GT80101",
+      "customer": "C1002",
+      "currency": "GHS",
+      "lcAmount": "3000000",
+      "expiryDate": "20270331",
+      "lcyLcAmount": "3000000"
+    }
+  ]
+}

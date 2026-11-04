@@ -210,7 +210,7 @@ class IcaapAiSuggestion(Base):
     #: refusing a legitimate cancelled row. Found while building the BI
     #: commentary sibling, whose own columns carry the same flag for the same
     #: reason; demonstrated and pinned in
-    #: ``tests/unit/models/test_nullable_json_is_sql_null.py``.
+    #: ``tests/models/test_nullable_json_is_sql_null.py``.
     output: Mapped[dict[str, Any] | None] = mapped_column(JSON(none_as_null=True), nullable=True)
     output_sha256: Mapped[str | None] = mapped_column(String(64), nullable=True)
     #: ``[{code, where, span}]`` — codes and locations, never the text.

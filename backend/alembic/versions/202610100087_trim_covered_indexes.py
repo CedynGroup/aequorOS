@@ -36,7 +36,7 @@ Concurrent drops avoid blocking writers and are safe before the model changes.
 Each statement commits independently; IF EXISTS makes interrupted upgrades
 restartable. Downgrade preserves valid originals and recreates missing or invalid
 indexes concurrently, so retrying a failed build restores usable indexes. The
-Postgres regression in tests/integration/db/test_trim_covered_indexes_migration.py exercises
+Postgres regression in tests/db/test_trim_covered_indexes_migration.py exercises
 this recovery alongside the normal round-trip.
 """
 

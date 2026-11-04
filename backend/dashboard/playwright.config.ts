@@ -173,7 +173,7 @@ export default defineConfig({
         // configuration and deliberate. `BI_MART_ENQUEUE_ENABLED` would enqueue
         // `bi_mart_refresh` into the `bi` worker lane, and the shared fixture has
         // no BI-lane worker — the marts are materialised synchronously by
-        // `tests/integration/bi/fixtures.py` during bootstrap, exactly as the live
+        // `tests/bi/fixtures.py` during bootstrap, exactly as the live
         // plane is, so an enqueue flag here would only orphan jobs in `queued`.
         // `BI_SCHEDULER_ENABLED` / `BI_SUBSCRIPTIONS_ENABLED` add tick branches
         // nothing here runs, and `BI_ALERTS_ENABLED` is evaluated by a succeeded

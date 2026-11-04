@@ -14,7 +14,7 @@ Generated from `bog_forms/linemaps/bsd9.py` + `layouts/BSD9.json` (row tables re
   (`depends_on`) and the resolver picks the column's BSD2 letter and sums the rows — BoG's BSD2 arithmetic
   (sub-totals, TOTAL column) is what lands here, never a second implementation. A BSD9 line whose every BSD2
   source cell is blank stays blank (input_required) instead of reading as a zero.
-- Reconciliations held **by construction** (proved in `tests/integration/reporting/service/bog_forms/test_bsd9.py` through the real
+- Reconciliations held **by construction** (proved in `tests/reporting/service/bog_forms/test_bsd9.py` through the real
   package pipeline): BSD9 item 7 Total Assets == BSD2 item 13; BSD9 Shareholders' funds == BSD2 item 16; BSD9
   item 9 net loans == BSD2 item 8 (net); item 6 == BSD2 6(a)+(b); item 7 == BSD2 6(c)+(d)+(e); items 10–13 ==
   BSD2 9–12; item 21 Total Liabilities == BSD2 item 31 + item 17 (Other amounts allowed as capital, which BSD2
@@ -32,7 +32,7 @@ Generated from `bog_forms/linemaps/bsd9.py` + `layouts/BSD9.json` (row tables re
   ingested through the Data Engine — now feeds the two consolidation-only blocks: "10. Minority interests"
   (`refs.sum` of the group's own `minority_interest_ghs` workings over fully consolidated subsidiaries,
   Domestic/Foreign by `functional_currency`) and the Annexure (per-subsidiary inter-company receivables and
-  payables, `refs.field` ranked by amount). Proof: `tests/integration/services/data_gaps/test_subsidiaries.py`.
+  payables, `refs.field` ranked by amount). Proof: `tests/services/data_gaps/test_subsidiaries.py`.
 
 ## Sheet `BSD9`
 

@@ -41,7 +41,7 @@ THREE places that must change together — ``job_queue.JOB_TYPES``,
 ``worker.HANDLERS``, and ``scheduler.any_scheduling_enabled`` (via
 ``DESK_CAPTURE_ENABLED``). Missing the handler strands jobs "queued" forever;
 missing the flag strands the feature with no tick chain. The parity test in
-``tests/integration/market_data/service/test_desk_capture_job.py`` enforces the first two.
+``tests/market_data/service/test_desk_capture_job.py`` enforces the first two.
 """
 
 from __future__ import annotations

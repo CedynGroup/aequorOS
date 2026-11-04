@@ -127,7 +127,7 @@ EXPRESSION_ACCEPTED = "This formula is valid."
 #:
 #: The hook landed (``authorize_query`` now walks
 #: ``compiler.expand_calculated_measures``), and the route-level proof is
-#: ``tests/integration/bi/api/test_bi_content_routes.py::
+#: ``tests/bi/api/test_bi_content_routes.py::
 #: test_a_certified_measure_can_be_charted_through_the_query_route``. A formula is
 #: authorized as the FIGURES ITS TEXT NAMES, so being able to chart one grants a
 #: reader nothing they did not already hold.
@@ -1030,7 +1030,7 @@ def set_shares(
     if removed:
         # A Core delete naming its table, rather than ``db.delete(row)`` over a
         # collection: the plane guard resolves a write's TARGET statically
-        # (``tests/unit/architecture/test_bi_plane_boundary.py``), and a target it
+        # (``tests/architecture/test_bi_plane_boundary.py``), and a target it
         # cannot read is a write it cannot vouch for.
         db.execute(
             delete(BiDashboardShare).where(

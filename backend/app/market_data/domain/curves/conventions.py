@@ -215,7 +215,9 @@ def yield_to_discount(
     t = days / day_count.basis
     denominator = 1.0 + yield_rate * t
     if denominator <= 0.0:
-        raise ConventionError(f"Yield {yield_rate} over {days} days implies a non-positive price.")
+        raise ConventionError(
+            f"Yield {yield_rate} over {days} days implies a non-positive price."
+        )
     return yield_rate / denominator
 
 

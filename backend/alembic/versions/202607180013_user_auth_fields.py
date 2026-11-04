@@ -25,7 +25,9 @@ _SSO_UNIQUE = "uq_users_auth_provider_sso_subject"
 
 
 def upgrade() -> None:
-    op.add_column(TABLE, sa.Column("role", sa.String(16), nullable=False, server_default="viewer"))
+    op.add_column(
+        TABLE, sa.Column("role", sa.String(16), nullable=False, server_default="viewer")
+    )
     op.add_column(
         TABLE,
         sa.Column("auth_provider", sa.String(16), nullable=False, server_default="password"),
@@ -34,7 +36,9 @@ def upgrade() -> None:
     op.add_column(TABLE, sa.Column("sso_subject", sa.String(255), nullable=True))
     op.add_column(
         TABLE,
-        sa.Column("failed_login_attempts", sa.Integer(), nullable=False, server_default="0"),
+        sa.Column(
+            "failed_login_attempts", sa.Integer(), nullable=False, server_default="0"
+        ),
     )
     op.add_column(TABLE, sa.Column("locked_until", sa.DateTime(timezone=True), nullable=True))
     op.add_column(TABLE, sa.Column("last_login_at", sa.DateTime(timezone=True), nullable=True))
@@ -42,7 +46,9 @@ def upgrade() -> None:
     op.create_check_constraint(
         _ROLE_CK, TABLE, "role IN ('admin', 'approver', 'analyst', 'viewer')"
     )
-    op.create_check_constraint(_PROVIDER_CK, TABLE, "auth_provider IN ('password', 'auth0')")
+    op.create_check_constraint(
+        _PROVIDER_CK, TABLE, "auth_provider IN ('password', 'auth0')"
+    )
     op.create_index(
         _SSO_UNIQUE,
         TABLE,

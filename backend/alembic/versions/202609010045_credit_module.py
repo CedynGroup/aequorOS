@@ -23,7 +23,9 @@ branch_labels = None
 depends_on = None
 
 _LIVE_OLD = "module IN ('liquidity', 'capital', 'irr', 'fx', 'ftp', 'rating', 'forecast')"
-_LIVE_NEW = "module IN ('liquidity', 'capital', 'credit', 'irr', 'fx', 'ftp', 'rating', 'forecast')"
+_LIVE_NEW = (
+    "module IN ('liquidity', 'capital', 'credit', 'irr', 'fx', 'ftp', 'rating', 'forecast')"
+)
 _RUNS_OLD = (
     "module IN ('liquidity', 'capital', 'forecast', 'optimizer', 'whatif', "
     "'irr', 'fx', 'ftp', 'reverse_stress', 'enterprise_stress')"

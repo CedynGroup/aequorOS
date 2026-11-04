@@ -32,7 +32,7 @@ Two invariants hold across all four:
   the issued certificate and metadata; nothing else. The soft-key store is a
   file tree, deliberately outside the database, so no schema change can ever
   make a private key a queryable column (asserted by
-  ``tests/unit/attestation/service/test_attestation_signers.py``).
+  ``tests/attestation/service/test_attestation_signers.py``).
 * **The algorithm is recorded, never guessed.** Every key row carries its
   ``algorithm``, which maps to exactly one ``signature_method`` on the
   signature record (:data:`SIGNATURE_METHOD_BY_ALGORITHM`), so verification

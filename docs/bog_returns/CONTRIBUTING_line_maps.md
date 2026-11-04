@@ -2,15 +2,15 @@
 
 The framework (`backend/app/reporting/service/bog_forms/`) already makes every
 official form **registered, structure-exported template-faithfully, formula-evaluated and
-governed** (see `00_full_return_registry.md` §4 and `tests/integration/reporting/service/test_bog_forms_framework.py`).
+governed** (see `00_full_return_registry.md` §4 and `tests/reporting/service/test_bog_forms_framework.py`).
 Per-form work is exactly three deliverables — nothing else may be edited:
 
-| Deliverable                      | Path (one per form; create it)                                         |
-| -------------------------------- | ---------------------------------------------------------------------- |
-| Line map                         | `backend/app/reporting/service/bog_forms/linemaps/<form>.py`           |
-| Extra resolvers (only if needed) | `backend/app/reporting/service/bog_forms/sources_ext/<form>.py`        |
-| Line/cell map doc                | `docs/bog_returns/<form>_line_map.md`                                  |
-| Tests                            | `backend/tests/integration/reporting/service/bog_forms/test_<form>.py` |
+| Deliverable                      | Path (one per form; create it)                                  |
+| -------------------------------- | --------------------------------------------------------------- |
+| Line map                         | `backend/app/reporting/service/bog_forms/linemaps/<form>.py`    |
+| Extra resolvers (only if needed) | `backend/app/reporting/service/bog_forms/sources_ext/<form>.py` |
+| Line/cell map doc                | `docs/bog_returns/<form>_line_map.md`                           |
+| Tests                            | `backend/tests/reporting/service/bog_forms/test_<form>.py`      |
 
 **Do not edit** `spec.py`, `engine.py`, `render.py`, `catalog.py`, `sources.py`, `registry.py`,
 `layouts/*.json`, or another form's files. If the framework genuinely blocks you, write the need
@@ -47,7 +47,7 @@ value_columns={…}, row_sources=…)` naming the official data rows/columns you
    `rc` = `ResolveContext(db, ctx, bank, period, column, dependencies, cache)`. Read-only; never
    compute a BoG figure by a new rule — aggregate/select existing platform state.
 7. **Tests** (hermetic, `db_client` + `materialize_canonical_test_book`; see
-   `tests/integration/reporting/service/test_bog_forms_framework.py` for the pattern): (a) generate the form through
+   `tests/reporting/service/test_bog_forms_framework.py` for the pattern): (a) generate the form through
    `POST /api/v1/banks/{bank}/regulatory-packages`; (b) assert every leaf row is bound and the
    mapped share is what your doc claims; (c) assert 2–5 **critical totals/relationships** hold on
    the exported values (e.g. a section total = Σ of its leaves via BoG's formula; a cross-form
@@ -60,8 +60,8 @@ value_columns={…}, row_sources=…)` naming the official data rows/columns you
    the line map (see how `bsd2_line_map.md` was produced) so it cannot drift.
 9. Gates before you finish: `uv run ruff check <your files>` clean, the type-check baseline
    (`uv run python scripts/type_check_baseline.py check`) clean,
-   `DATABASE_URL="" uv run pytest tests/integration/reporting/service/test_bog_forms_framework.py
-tests/integration/reporting/service/bog_forms/test_<form>.py -q -p no:cacheprovider` green. **Do not commit.**
+   `DATABASE_URL="" uv run pytest tests/reporting/service/test_bog_forms_framework.py
+tests/reporting/service/bog_forms/test_<form>.py -q -p no:cacheprovider` green. **Do not commit.**
 
 Report back: files created, mapped/input_required/coa-mapping counts per sheet, the critical
 totals your tests prove, and any framework asks.

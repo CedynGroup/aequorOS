@@ -58,7 +58,9 @@ class MeetingDateStepCurve:
             if right <= left:
                 raise StepCurveError("Meeting dates must be strictly increasing.")
         if self.expected_moves_bps is not None and len(self.expected_moves_bps) != len(dates):
-            raise StepCurveError("expected_moves_bps must align one-to-one with meeting_dates.")
+            raise StepCurveError(
+                "expected_moves_bps must align one-to-one with meeting_dates."
+            )
         object.__setattr__(self, "meeting_dates", dates)
 
     def overnight_rate(self, day: date) -> float:
