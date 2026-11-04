@@ -50,7 +50,7 @@ run = [
   "python3 backend/scripts/aqs_bootstrap.py env",
   "pnpm install --frozen-lockfile",
   "mise run risk-service:sync",
-  "python3 backend/scripts/aqs_bootstrap.py hooks",
+  "mise run risk-service:hooks",
   "python3 backend/scripts/aqs_bootstrap.py report",
 ]
 

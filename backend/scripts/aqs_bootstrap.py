@@ -22,7 +22,6 @@ import argparse
 import os
 import re
 import shutil
-import shlex
 import socket
 import subprocess
 import sys
@@ -276,97 +275,89 @@ def _git_path(root: Path, name: str) -> Path | None:
     return Path(output) if code == 0 and output else None
 
 
-def _managed_hooks_path(root: Path) -> str | None:
-    return _git_config(root, "core.hooksPath")
+def _installed_python(root: Path) -> Path:
+    return root / "backend" / ".venv" / "bin" / "python"
 
 
-def _managed_hook(root: Path, directory: Path, name: str) -> str:
-    python = root / "backend" / ".venv" / "bin" / "python"
-    args = [str(python), "-m", "pre_commit", "hook-impl",
-            "--config", str(root / ".pre-commit-config.yaml"),
-            "--hook-type", name, "--hook-dir", str(directory)]
-    return '#!/bin/sh\nexec ' + shlex.join(args) + ' -- "$@"\n'
+def _check_hook_artifacts(root: Path, directory: Path) -> int:
+    import shlex
+
+    from pre_commit.util import resource_text
+
+    template = resource_text("hook-tmpl")
+    before, rest = template.split("# start templated\n")
+    _, after = rest.split("# end templated\n")
+    missing: list[str] = []
+    for name in REQUIRED_HOOKS:
+        args = ["hook-impl", f"--config={root / '.pre-commit-config.yaml'}",
+                f"--hook-type={name}"]
+        expected = (before + "# start templated\n"
+                    + f"INSTALL_PYTHON={shlex.quote(sys.executable)}\n"
+                    + f"ARGS=({shlex.join(args)})\n"
+                    + "# end templated\n" + after)
+        hook = directory / name
+        if not hook.is_file() or not os.access(hook, os.X_OK) or hook.read_text() != expected:
+            missing.append(name)
+    if missing:
+        print("missing or incorrect pre-commit dispatchers: " + ", ".join(missing))
+        return 1
+    return 0
 
 
 def hook_checks(root: Path) -> list[Check]:
     directory = _git_path(root, "hooks")
-    if directory is None:
-        return [
-            Check(
-                "Hooks",
-                "missing",
-                "cannot resolve this repository's hooks directory",
-                "git rev-parse --git-path hooks",
-            )
-        ]
-    missing = [
-        name for name in REQUIRED_HOOKS
-        if not (directory / name).is_file()
-        or not os.access(directory / name, os.X_OK)
-        or (_managed_hooks_path(root) and
-            (directory / name).read_text() != _managed_hook(root, directory, name))
-    ]
-    if missing:
-        return [
-            Check(
-                "Hooks",
-                "missing",
-                f"{directory} is missing {', '.join(missing)}",
-                "mise run setup  # installs pre-commit, commit-msg and pre-push",
-            )
-        ]
-    return [Check("Hooks", "ok", f"pre-commit, commit-msg and pre-push installed in {directory}")]
+    python = _installed_python(root)
+    if directory is None or not python.is_file() or not os.access(python, os.X_OK):
+        return [Check("Hooks", "missing", "hooks directory or installed Python unavailable",
+                      "mise run setup")]
+    code, output = _capture(
+        [str(python), "-c",
+         "import sys; from pathlib import Path; "
+         "from scripts.aqs_bootstrap import _check_hook_artifacts; "
+         "sys.exit(_check_hook_artifacts(Path(sys.argv[1]), Path(sys.argv[2])))",
+         str(root), str(directory)], cwd=root / "backend",
+    )
+    if code != 0:
+        return [Check("Hooks", "missing", output or "cannot validate pre-commit hooks",
+                      "mise run setup")]
+    return [Check("Hooks", "ok", f"all required pre-commit dispatchers installed in {directory}")]
 
 
 def install_hooks(root: Path) -> int:
-    print("Hooks")
-    managed = _managed_hooks_path(root)
-    if managed:
-        directory = _git_path(root, "hooks")
-        if directory is None:
-            print("  MISSING  Hooks: cannot resolve managed hooks directory")
-            return 1
-        code = _stream(
-            ["uv", "run", "pre-commit", "install-hooks", "--config",
-             str(root / ".pre-commit-config.yaml")],
-            cwd=root / "backend", timeout=300,
-        )
-        if code != 0:
-            print("  MISSING  Hooks: pre-commit environment installation failed")
-            return 1
-        directory.mkdir(parents=True, exist_ok=True)
+    from pre_commit.commands.install_uninstall import install
+    from pre_commit.store import Store
+
+    directory = root / "backend" / ".venv" / "hooks"
+    previous = _git_path(root, "hooks")
+    if previous is None:
+        print("MISSING Hooks: cannot resolve existing hook directory")
+        return 1
+    directory.mkdir(parents=True, exist_ok=True)
+    if previous != directory:
         for name in REQUIRED_HOOKS:
-            hook = directory / name
-            content = _managed_hook(root, directory, name)
-            if hook.exists() and hook.read_text() != content:
-                legacy = directory / (name + ".legacy")
-                if legacy.exists():
-                    print(f"  MISSING  Hooks: cannot preserve both {hook} and {legacy}")
-                    return 1
-                hook.rename(legacy)
-            hook.write_text(content)
-            hook.chmod(0o755)
-        return 0
-    if shutil.which("mise") is None:
-        print("  MISSING  Hooks: mise is not on PATH")
-        print("           install mise from https://mise.jdx.dev")
-        return 1
-    code = _stream(["mise", "run", "risk-service:hooks"], cwd=root, timeout=300)
+            original = previous / name
+            legacy = directory / (name + ".legacy")
+            if legacy.is_symlink() and legacy.resolve() == original.resolve():
+                continue
+            if legacy.exists() or legacy.is_symlink():
+                print(f"MISSING Hooks: existing chain conflicts at {legacy}")
+                return 1
+            if original.exists():
+                legacy.symlink_to(original)
+    code = install(str(root / ".pre-commit-config.yaml"), Store(),
+                   list(REQUIRED_HOOKS), hooks=True, git_dir=str(directory.parent))
     if code != 0:
-        print("  FAIL     Hooks: mise run risk-service:hooks failed; see the output above")
+        return code
+    code, _ = _capture(["git", "config", "--local", "extensions.worktreeConfig", "true"], cwd=root)
+    if code == 0:
+        code, _ = _capture(["git", "config", "--worktree", "core.hooksPath", str(directory)], cwd=root)
+    if code != 0:
+        print("MISSING Hooks: cannot activate repository-local hooks")
         return 1
-    directory = _git_path(root, "hooks")
-    missing = (
-        REQUIRED_HOOKS
-        if directory is None
-        else tuple(name for name in REQUIRED_HOOKS if not (directory / name).is_file())
-    )
-    if missing:
-        location = directory if directory is not None else "the hooks directory"
-        print(f"  FAIL     Hooks: pre-commit did not install {', '.join(missing)} in {location}")
-        return 1
-    print(f"  ok       Hooks: pre-commit, commit-msg and pre-push installed in {directory}")
-    return 0
+    checks = hook_checks(root)
+    for check in checks:
+        _print_check(check)
+    return int(any(check.state == "missing" for check in checks))
 
 
 def _create_absent(source: Path, destination: Path) -> bool:
@@ -689,12 +680,13 @@ def backend_smoke(root: Path) -> Check:
             "keep the wiring guard or update backend/scripts/aqs_bootstrap.py",
         )
     backend = root / "backend"
+    python = _installed_python(root)
+    if not python.is_file() or not os.access(python, os.X_OK):
+        return Check("Backend smoke", "missing", "installed backend Python unavailable",
+                     "mise run setup")
     code = _stream(
         [
-            "uv",
-            "run",
-            "--no-sync",
-            "python",
+            str(python),
             "-m",
             "pytest",
             "-q",
