@@ -32,7 +32,10 @@ import P2Unavailable, {
 } from "@/components/icaap/p2/availability";
 import { SecondaryButton } from "@/components/icaap/Dialog";
 import { useModuleScope } from "@/components/shell/BankContext";
-import { useRegulatoryPackage, useValidateRegulatoryPackage } from "@/lib/api/hooks";
+import {
+  useRegulatoryPackage,
+  useValidateRegulatoryPackage,
+} from "@/lib/api/hooks";
 import { fmtLocale } from "@/lib/format";
 import { DIGEST_CHARS, ICON_SM } from "@/components/icaap/p2/display";
 import { useIcaapFiling, useIcaapStages } from "@/lib/api/icaapFiling";
@@ -102,7 +105,8 @@ export default function FilingWorkspace({
   const pkg = filing?.package ?? null;
   const status = (pkg?.status ?? "generated") as PackageStatus;
   const report = packageQuery.data?.validationReport ?? null;
-  const validationClean = report !== null && report.passed && report.errorCount === 0;
+  const validationClean =
+    report !== null && report.passed && report.errorCount === 0;
 
   return (
     <div className="space-y-4">
@@ -116,7 +120,10 @@ export default function FilingWorkspace({
       >
         {filing && pkg === null && (
           <SectionCard title="Filing">
-            <EmptyState title="Nothing to file yet" description={NOTHING_TO_FILE} />
+            <EmptyState
+              title="Nothing to file yet"
+              description={NOTHING_TO_FILE}
+            />
           </SectionCard>
         )}
 

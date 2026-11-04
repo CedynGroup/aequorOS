@@ -356,7 +356,7 @@ def require_export_authority(
     archived revision and the downtime email bundle are all copies of the same
     restricted document. Visibility is still decided first: the caller who
     cannot see the return is told nothing (404), while one who can see it and
-    may not take it is told exactly which grant is missing (403).
+    may not take it receives a forbidden response (403).
     """
     require_view(db, ctx, bank, package)
     if ctx.impersonation_context is not None or not _evaluate(
