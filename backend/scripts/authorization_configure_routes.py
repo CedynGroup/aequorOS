@@ -25,6 +25,7 @@ _BANK = "/api/v1/banks/{bank_id}"
 
 
 def _lifecycle(prefix: str, module: Module, *, validate: bool) -> list[ConfigureRoute]:
+    """Inventory connection configuration, excluding operational test and pull."""
     base = f"{_BANK}/{prefix}/connections"
     item = base + "/{connection_id}"
     routes = [

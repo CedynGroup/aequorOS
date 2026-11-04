@@ -111,6 +111,7 @@ def test_report_flags_users_the_dashboard_would_show_nothing(
     tmp_path: Path,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
+    """Compare real bindings and CLI evidence without deriving access from scalar roles."""
     db_session.add(Organization(id=ORG, name="Impact proof"))
     db_session.add(
         Bank(
@@ -401,6 +402,7 @@ def _read_json(path: Path) -> dict[str, object]:
 
 
 def _assert_artifact_content(report: ConfigureReport, directory: Path) -> None:
+    """Verify consistent, private and non-overwritable policy assessment artifacts."""
     before = _read_json(directory / "configure-before.json")
     after = _read_json(directory / "configure-after.json")
     grants = _read_json(directory / "configure-exact-grants.json")
@@ -428,6 +430,7 @@ def _assert_configure_artifacts(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
+    """Exercise successful CLI output, collision refusal and empty-inventory failure."""
     report = build_configure_report(db, organization_id=ORG)
     destination = tmp_path / "configure"
     write_artifacts(report, destination)
@@ -490,6 +493,7 @@ def _assert_configure_artifacts(
 
 
 def _assert_configure_empty_inventory(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    """An invisible tenant inventory must not publish successful evidence in either mode."""
     url = f"sqlite:///{tmp_path / 'empty-organizations.sqlite'}"
     engine = create_engine(url)
     try:
@@ -508,6 +512,8 @@ def _assert_configure_empty_inventory(tmp_path: Path, capsys: pytest.CaptureFixt
 
 
 def _assert_configure_evaluator_failure(db: Session, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Evaluator exceptions remain failed decisions without exposing sensitive details."""
+
     def failed(*_args: object, **_kwargs: object) -> None:
         raise RuntimeError("sensitive evaluator detail must not enter the artifact")
 

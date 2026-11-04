@@ -33,6 +33,7 @@ _AFTER = (*_BEFORE, "configurator")
 
 
 def _apply(bundles: tuple[str, ...]) -> None:
+    """Replace only the literal bundle CHECK, without changing stored authority."""
     values = ", ".join(f"'{bundle}'" for bundle in bundles)
     op.drop_constraint(_CONSTRAINT, _TABLE, type_="check")
     op.create_check_constraint(_CONSTRAINT, _TABLE, f"role_bundle IN ({values})")
