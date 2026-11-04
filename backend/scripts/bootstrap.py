@@ -364,7 +364,7 @@ def hook_checks(root: Path) -> list[Check]:
             str(python),
             "-c",
             "import sys; from pathlib import Path; "
-            "from scripts.aqs_bootstrap import check_hook_artifacts; "
+            "from scripts.bootstrap import check_hook_artifacts; "
             "sys.exit(check_hook_artifacts(Path(sys.argv[1])))",
             str(directory),
         ],

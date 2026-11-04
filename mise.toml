@@ -50,18 +50,18 @@ description = "Prepare a fresh checkout: pinned tools, dependencies, env files, 
 env = { UV_FROZEN = "1" }
 run = [
   "mise install",
-  "python3 backend/scripts/aqs_bootstrap.py env",
+  "python3 backend/scripts/bootstrap.py env",
   "pnpm install --frozen-lockfile",
   "mise run risk-service:sync",
   "mise run risk-service:hooks",
-  "python3 backend/scripts/aqs_bootstrap.py report",
+  "python3 backend/scripts/bootstrap.py report",
 ]
 
 [tasks.verify]
 description = "Prove core checkout readiness without Docker, a database, or a service"
 # Deliberately no dependencies: verify uses what setup installed and must never
 # sync, install, or start anything on its own.
-run = "python3 backend/scripts/aqs_bootstrap.py verify"
+run = "python3 backend/scripts/bootstrap.py verify"
 
 [tasks."risk-service:sync"]
 description = "Install risk service dependencies with uv"

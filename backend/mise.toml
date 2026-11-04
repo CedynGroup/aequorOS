@@ -8,7 +8,7 @@ run = "uv sync"
 
 [tasks."risk-service:hooks"]
 description = "Install pre-commit, commit-msg, and pre-push hooks"
-run = "uv run python scripts/aqs_bootstrap.py hooks --root .."
+run = "uv run python scripts/bootstrap.py hooks --root .."
 
 [tasks."risk-service:precommit"]
 description = "Run pre-commit hooks against all files"

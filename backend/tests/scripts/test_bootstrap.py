@@ -19,7 +19,7 @@ from typing import TypedDict, cast
 from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-from scripts import aqs_bootstrap as bootstrap
+from scripts import bootstrap
 
 
 class _TaskConfig(TypedDict):
@@ -107,7 +107,7 @@ class BootstrapTests(unittest.TestCase):
             subprocess.run(["git", "init", "--template=", "-q", str(root)], check=True)
         scripts = root / "backend/scripts"
         scripts.mkdir(parents=True)
-        shutil.copyfile(Path(bootstrap.__file__), scripts / "aqs_bootstrap.py")
+        shutil.copyfile(Path(bootstrap.__file__), scripts / "bootstrap.py")
         python = root / "backend/.venv/bin/python"
         python.parent.mkdir(parents=True)
         python.write_text("#!/bin/sh\nexec " + shlex.quote(sys.executable) + ' "$@"\n')
