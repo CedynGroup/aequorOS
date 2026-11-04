@@ -519,12 +519,14 @@ def _assert_normal_child_refusals(tmp_path: Path) -> None:
 
 def _assert_managed_service_scope(tmp_path: Path) -> None:
     scope_root = tmp_path / "service_scope"
-    (scope_root / "tests/storage").mkdir(parents=True)
+    for directory in ("tests/integration/storage", "tests/unit/storage", "tests/integration/db"):
+        contract_directory = scope_root / directory
+        contract_directory.mkdir(parents=True)
+        _ = (contract_directory / "test_contract.py").write_text(
+            "import os\ndef test_contract(): assert os.environ['S3_ENDPOINT'] == 'http://managed.test'\n"
+        )
     _ = (scope_root / "tests/test_baseline.py").write_text(
         "import os\ndef test_baseline(): assert os.getenv('S3_ENDPOINT') is None\n"
-    )
-    _ = (scope_root / "tests/storage/test_contract.py").write_text(
-        "import os\ndef test_contract(): assert os.environ['S3_ENDPOINT'] == 'http://managed.test'\n"
     )
     scope_program = (
         "import os,sys; "
@@ -532,7 +534,7 @@ def _assert_managed_service_scope(tmp_path: Path) -> None:
         + "os.environ['CI_DATABASE_CONTEXT']='{}'; os.environ['CI_DATABASE_CENSUS']='1'; "
         + "os.environ['S3_ENDPOINT']='http://managed.test'; "
         + "os.environ.pop('CI_UNIT_REPORT_DIR',None); "
-        + "import pytest; sys.exit(pytest.main(['--rootdir=.', '-p', "
+        + "import pytest; sys.exit(pytest.main(['--rootdir=.', '--import-mode=importlib', '-p', "
         + "'scripts.test_suites_plugin', '-p', 'scripts.database_observation_plugin', 'tests']))"
     )
     scoped = subprocess.run(
