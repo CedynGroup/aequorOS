@@ -162,12 +162,8 @@ def test_sensitivities_are_exact_not_hierarchical(
         ("canonical-withdrawals", "reverse", {"reversed_by": "Checker", "reason": "Review"}),
     ):
         suffix = f"{resource}/{uuid4()}/{action}"
-        sibling = db_client.post(
-            f"/api/v1/banks/{SIBLING}/{suffix}", headers=auth, json=payload
-        )
-        missing = db_client.post(
-            f"/api/v1/banks/BK-MISSING1/{suffix}", headers=auth, json=payload
-        )
+        sibling = db_client.post(f"/api/v1/banks/{SIBLING}/{suffix}", headers=auth, json=payload)
+        missing = db_client.post(f"/api/v1/banks/BK-MISSING1/{suffix}", headers=auth, json=payload)
         assert sibling.status_code == missing.status_code == 404
         assert error_envelope(sibling) == error_envelope(missing)
     payload = {"as_of_date": "2026-07-01", "reason": "Refresh"}

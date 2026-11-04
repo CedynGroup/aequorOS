@@ -792,7 +792,8 @@ several incomplete bindings confer no access. DATA requires whole-institution
 coverage; Credit branch and region grants do not qualify.
 
 Human DATA bank paths first require the same institution coverage as bank detail,
-including governance approval, revocation and reversal paths before object lookup.
+including data activation and governance approval, revocation and reversal paths
+before object lookup.
 An existing uncovered bank and a missing bank both return `404 Bank not found.`;
 a covered bank without the exact DATA permission retains its existing 403 (or
 opaque-object 404). This deliberately hides same-organization bank existence
