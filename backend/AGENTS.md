@@ -50,8 +50,7 @@ This file is the starting point for agents working in `backend`.
   calculation run and immutable input hash.
 - New code passes basedpyright strict, `reportAny` and `reportUnknown*` included; legacy errors
   live in `scripts/type_check_baseline.json`, which only shrinks. The gate is
-  `mise run risk-service:typecheck`; after fixing legacy errors run
-  `uv run python scripts/type_check_baseline.py update`. Rules:
+  `mise run risk-service:typecheck`. Baseline maintenance rules:
   [the type-check baseline](../CODEBASE_CONVENTIONS.md#type-check-baseline).
 
 ## Legacy case vertical

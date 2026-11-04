@@ -1,4 +1,4 @@
-"""The type-check baseline gate stands on a strict configuration and a growth-only baseline.
+"""The type-check baseline gate stands on a strict configuration and a shrink-only baseline.
 
 ``scripts/type_check_baseline.py`` runs basedpyright and is the ``risk-service:typecheck``
 gate (CODEBASE_CONVENTIONS.md §1, "Type-check baseline"). A full type check takes about a

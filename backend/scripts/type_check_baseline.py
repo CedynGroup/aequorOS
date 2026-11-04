@@ -1,9 +1,4 @@
-"""Hold the backend to basedpyright strict against a growth-only legacy error baseline.
-
-The gate fails when a module or rule exceeds its recorded allowance. A decrease
-passes without editing the baseline: a stale allowance only lets an old error be
-reintroduced up to its old count, so retirement is maintenance, not a PR condition.
-``update`` still refuses to record growth.
+"""Hold the backend to basedpyright strict against a shrink-only legacy error baseline.
 
 Contributor commands and baseline maintenance rules are owned by
 ``CODEBASE_CONVENTIONS.md`` §1, "Type-check baseline".
