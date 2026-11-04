@@ -39,6 +39,7 @@ from scripts.authorization_configure_routes import CONFIGURE_ROUTES, ConfigureRo
 
 
 def _date(value: datetime | None) -> str | None:
+    """Serialize optional validity timestamps consistently in UTC."""
     if value is None:
         return None
     return value.replace(tzinfo=value.tzinfo or UTC).astimezone(UTC).isoformat()
@@ -113,6 +114,7 @@ class ConfigureImpact:
 
     @property
     def newly_denied(self) -> bool:
+        """Identify a lost eligibility, not a failed HTTP request."""
         return self.before.allowed and not self.after.allowed
 
 
@@ -125,11 +127,13 @@ class ConfigureReport:
 
     @property
     def evaluation_failed(self) -> bool:
+        """Keep any incomplete evaluator result visible in the aggregate."""
         return any(
             "evaluation_failed" in (row.before.reason, row.after.reason) for row in self.impacts
         )
 
     def to_dict(self) -> dict[str, object]:
+        """Serialize inventory and decisions with their assessment limitations."""
         return {
             "schema_version": 1,
             "generated_at": self.generated_at,
@@ -155,6 +159,7 @@ def _eligibility(
     *,
     owner_only: bool = False,
 ) -> Eligibility:
+    """Evaluate complete bindings and whole-institution scope, failing closed."""
     try:
         decision = authorization.evaluate_prefetched_permission(
             principal,
@@ -190,6 +195,7 @@ def _impact(
     bindings: list[AuthorizationBinding],
     now: datetime,
 ) -> ConfigureImpact:
+    """Compare baseline and proposed eligibility for one principal and target."""
     kind = PrincipalType.MACHINE if user.auth_provider == "service" else PrincipalType.HUMAN
     principal = PrincipalLocator(user.organization_id, user.id, kind)
     resource = ResourceLocator(
@@ -363,6 +369,7 @@ def write_artifacts(report: ConfigureReport, directory: Path) -> None:
 
 
 def _write_json(path: Path, payload: dict[str, object]) -> None:
+    """Create private evidence without overwriting an existing artifact."""
     def private_opener(name: str, flags: int) -> int:
         return os.open(name, flags, 0o600)
 
@@ -371,6 +378,7 @@ def _write_json(path: Path, payload: dict[str, object]) -> None:
 
 
 def _target_fields(row: ConfigureImpact) -> dict[str, object]:
+    """Select resource identity without embedding either eligibility decision."""
     values: dict[str, object] = asdict(row)
     return {
         key: value
@@ -386,13 +394,18 @@ class _Args(argparse.Namespace):
 
 
 def _organizations(engine: Engine, organization_id: str | None) -> list[str]:
+    """Select the requested tenant or fail if enumeration cannot see any tenant."""
     if organization_id is not None:
         return [organization_id]
     with Session(engine, autoflush=False) as db:
-        return list(db.scalars(select(Organization.id).order_by(Organization.id)))
+        organizations = list(db.scalars(select(Organization.id).order_by(Organization.id)))
+    if not organizations:
+        raise ValueError("no organizations visible to this database role")
+    return organizations
 
 
 def main(argv: list[str] | None = None) -> int:
+    """Assess visible tenants read-only and report incomplete runs without secrets."""
     parser = argparse.ArgumentParser(description=__doc__)
     _ = parser.add_argument("--database-url")
     _ = parser.add_argument("--organization")
