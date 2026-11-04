@@ -61,6 +61,7 @@ from tests.fixtures.canonical_bank_fixture import (
     SAMPLE_BANK_ID,
     materialize_canonical_test_book,
 )
+from tests.liquidity.configure_helpers import grant_configure
 from tests.services.test_le_and_lmt_integration import _CanonicalSeeder
 from tests.support.helpers import headers
 
@@ -267,6 +268,8 @@ def test_board_thresholds_drive_rag_and_escalation(db_session: Session) -> None:
     materialize_canonical_test_book(db_session)
     _seed_ewi_book(db_session)
     _ensure_checker(db_session)
+    assert CHECKER.actor_user_id is not None
+    grant_configure(db_session, SAMPLE_BANK_ID, CHECKER.actor_user_id)
 
     liquidity_ewi.update_register(
         db_session,

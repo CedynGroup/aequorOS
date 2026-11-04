@@ -2,7 +2,7 @@
 
 The register resolves regulatory defaults until a Board generation exists,
 records generations effective-dated with approval evidence, keeps history,
-rejects unknown codes and non-positive floors, and gates writes at approver.
+rejects unknown codes and non-positive floors, and requires explicit configure.
 """
 
 from __future__ import annotations
@@ -13,6 +13,7 @@ from fastapi.testclient import TestClient
 
 from app.liquidity.service.liquidity_thresholds import BANK_MINIMUM_PCT
 from tests.data_engine.api.test_ingestion_integration import seed_bank
+from tests.liquidity.configure_helpers import configure_headers
 from tests.support.helpers import ORG_2, headers
 
 URL = "/api/v1/banks/{bank_id}/liquidity-thresholds"
@@ -35,7 +36,7 @@ def test_board_generations_supersede_and_keep_history(db_client: TestClient) -> 
     bank_id = seed_bank(db_client)
     first = db_client.put(
         URL.format(bank_id=bank_id),
-        headers=headers(roles=("approver",)),
+        headers=configure_headers(bank_id),
         json={
             "effective_from": "2026-04-01",
             "approved_by": "Board minute 2026-14",
@@ -53,7 +54,7 @@ def test_board_generations_supersede_and_keep_history(db_client: TestClient) -> 
 
     second = db_client.put(
         URL.format(bank_id=bank_id),
-        headers=headers(roles=("approver",)),
+        headers=configure_headers(bank_id),
         json={
             "effective_from": "2026-06-01",
             "approved_by": "Board minute 2026-22",
@@ -89,7 +90,7 @@ def test_validation_and_authorization_guards(db_client: TestClient) -> None:
     bank_id = seed_bank(db_client)
     unknown = db_client.put(
         URL.format(bank_id=bank_id),
-        headers=headers(roles=("approver",)),
+        headers=configure_headers(bank_id),
         json={
             "effective_from": "2026-04-01",
             "approved_by": "Board minute",
@@ -102,7 +103,7 @@ def test_validation_and_authorization_guards(db_client: TestClient) -> None:
 
     non_positive = db_client.put(
         URL.format(bank_id=bank_id),
-        headers=headers(roles=("approver",)),
+        headers=configure_headers(bank_id),
         json={
             "effective_from": "2026-04-01",
             "approved_by": "Board minute",
@@ -139,7 +140,7 @@ def test_haircut_schedule_lifecycle(db_client: TestClient) -> None:
 
     first = db_client.put(
         HAIRCUT_URL.format(bank_id=bank_id),
-        headers=headers(roles=("approver",)),
+        headers=configure_headers(bank_id),
         json={
             "effective_from": "2026-04-01",
             "approved_by": "ALCO review 2026-04",
@@ -155,7 +156,7 @@ def test_haircut_schedule_lifecycle(db_client: TestClient) -> None:
 
     revised = db_client.put(
         HAIRCUT_URL.format(bank_id=bank_id),
-        headers=headers(roles=("approver",)),
+        headers=configure_headers(bank_id),
         json={
             "effective_from": "2026-07-01",
             "approved_by": "ALCO review 2026-07",
@@ -171,7 +172,7 @@ def test_haircut_schedule_lifecycle(db_client: TestClient) -> None:
 
     out_of_range = db_client.put(
         HAIRCUT_URL.format(bank_id=bank_id),
-        headers=headers(roles=("approver",)),
+        headers=configure_headers(bank_id),
         json={
             "effective_from": "2026-08-01",
             "approved_by": "x",

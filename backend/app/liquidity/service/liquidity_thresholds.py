@@ -25,8 +25,10 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
+from app.core.authorization import Module, Permission, Sensitivity
 from app.db.base import utc_now
 from app.domain.authority.outcomes import OutcomeState, outcome
+from app.identity import public as scoped_authorization
 from app.identity.public import Bank
 from app.liquidity.schemas.liquidity_thresholds import (
     InstitutionClass,
@@ -257,6 +259,15 @@ def update_register(
     server-side). The write is audited; history keeps every generation.
     """
     bank = _get_bank_or_404(db, ctx, bank_id)
+    scoped_authorization.require_resolved_bank_permission(
+        db,
+        ctx,
+        bank,
+        permission=Permission.CONFIGURE,
+        module=Module.LIQUIDITY,
+        sensitivity=Sensitivity.RESTRICTED,
+        surface="liquidity_thresholds.update_register",
+    )
     jurisdiction = _jurisdiction(bank)
     if payload.institution_class not in _INSTITUTION_CLASSES:
         raise HTTPException(
@@ -414,6 +425,15 @@ def update_haircut_schedule(
 ) -> LiquidityHaircutScheduleRead:
     """Record a reviewed liquidity-value generation (LRMD ¶62(b) evidence)."""
     bank = _get_bank_or_404(db, ctx, bank_id)
+    scoped_authorization.require_resolved_bank_permission(
+        db,
+        ctx,
+        bank,
+        permission=Permission.CONFIGURE,
+        module=Module.LIQUIDITY,
+        sensitivity=Sensitivity.RESTRICTED,
+        surface="liquidity_thresholds.update_haircut_schedule",
+    )
     jurisdiction = _jurisdiction(bank)
     out_of_range = sorted(
         asset_class

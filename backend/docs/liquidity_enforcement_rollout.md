@@ -22,6 +22,7 @@ sensitivity, and permission is denied immediately (403 unless the object-hiding
 | Create a CFP draft, custom scenario, or saved analysis                                                                                                     | LIQ / `confidential` / `create`                                                       |
 | Update a CFP draft or custom scenario; archive a scenario; delete a saved analysis                                                                         | LIQ / `confidential` / `edit`                                                         |
 | Approve, activate, or de-escalate a CFP                                                                                                                    | LIQ / `confidential` / `approve`, with maker-checker still a global veto for approval |
+| Liquidity threshold, haircut, and EWI register PUTs | LIQ / `restricted` / `configure`, evaluated for the exact target bank before any mutation |
 
 Regulatory-run lists remove unauthorized LIQ rows before total counts, offsets,
 and limits. Live summaries omit unauthorized Liquidity metrics; alerts omit
@@ -56,8 +57,17 @@ EWI reads, so a verified act-as-examiner session bound to the bank in the path
 reads those three and no other Liquidity surface
 (`app/core/examiner.py`, `examiner_evidence_enforcement_rollout.md`).
 
-The EWI, Liquidity threshold, and Liquidity haircut PUT routes remain on their
-existing configuration gate until issue #184. Scheduled internal live
+Issue #184 replaces the held Approver gate on EWI, Liquidity threshold, and
+Liquidity haircut PUTs with service-enforced scoped configuration authority.
+Analyst, Approver, Account Admin, and Owner bindings do not convey `configure`;
+no existing principal receives a compatibility grant. A Configurator can PUT
+without `view`. GET still requires a separate LIQ/confidential view grant.
+The existing effective-dated history, Board evidence, audit, refresh triggers,
+and response shapes are preserved. Denial precedes register reads, generation
+closure, parameter writes, success audit, and job enqueue. Threshold and haircut
+storage remains the existing organization/jurisdiction register, while the
+authorization target is the bank named by the request.
+Scheduled internal live
 computation does not impersonate a user and receives no binding; this cutover
 checks tenant-facing entry points. Scheduled official-run authority is owned by
 the [FX queued-run contract](fx_enforcement_rollout.md#queued-and-scheduled-official-runs).
@@ -83,6 +93,14 @@ navigation follows
 The SDI Liquidity landing requires confidential view because it reads the SDI position.
 
 ## Deny-impact inventory
+
+For configuration cutover evidence, run
+`python -m scripts.authorization_configure_impact --organization OR-XXXXXXXX
+--output-dir /outside/repo/dated-configure-impact`, as described in
+[the configuration inventory contract](configurator_impact.md).
+Keep dated deny-impact and exact-grant artifacts outside the repository. The
+inventory covers human and machine principals; machine keys cannot use these
+interactive-human configuration endpoints even with a matching binding.
 
 Run this read-only query with a role that can see all organizations, banks,
 users, and bindings. It evaluates active human and machine principals without

@@ -26,6 +26,7 @@ from tests.fixtures.canonical_bank_fixture import (
     SAMPLE_BANK_ID,
     materialize_canonical_test_book,
 )
+from tests.liquidity.configure_helpers import grant_configure
 from tests.support.factories.authorization import grant_institution_authority
 from tests.support.factories.canonical import FIXTURE_AS_OF
 from tests.support.helpers import ORG_1, USER_1
@@ -85,6 +86,7 @@ def test_live_consumed_governed_mutations_refresh_the_affected_bank(
     db_session: Session,
 ) -> None:
     ctx = _seed_live_input(db_session)
+    grant_configure(db_session, SAMPLE_BANK_ID)
 
     credit_params.update_ecl_register(
         db_session,
