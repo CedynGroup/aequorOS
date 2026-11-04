@@ -140,6 +140,7 @@ __all__ = [
     "require_institution_coverage",
     "require_bank_permission",
     "require_bank_permission_prefetched",
+    "require_institution_coverage",
     "require_resolved_bank_permission",
     "resolve_bank",
     "resolve_bank_reference",

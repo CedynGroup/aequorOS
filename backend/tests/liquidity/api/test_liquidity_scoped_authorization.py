@@ -512,11 +512,15 @@ def test_shared_live_views_filter_liquidity_and_require_exact_snapshot_authority
     assert snapshots.json()["snapshots"][0]["metrics"] == {"ratio": 123}
 
 
-@pytest.mark.parametrize("binding", [None, "aggregated", "viewer", "capital"])
+@pytest.mark.parametrize(
+    ("binding", "expected_status"),
+    [(None, 404), ("aggregated", 403), ("viewer", 403), ("capital", 403)],
+)
 def test_activation_run_denies_before_derivation_or_writes(
     db_client: TestClient,
     monkeypatch: pytest.MonkeyPatch,
     binding: str | None,
+    expected_status: int,
 ) -> None:
     _seed_book()
     version = 1
@@ -549,7 +553,7 @@ def test_activation_run_denies_before_derivation_or_writes(
             "run_calculations": True,
         },
     )
-    assert response.status_code == 403, response.text
+    assert response.status_code == expected_status, response.text
     assert calls == []
     with get_sessionmaker()() as session:
         assert [
