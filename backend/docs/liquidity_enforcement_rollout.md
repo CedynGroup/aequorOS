@@ -167,7 +167,8 @@ The SDI Liquidity landing requires confidential view because it reads the SDI po
 
 ## Deny-impact inventory
 
-For configuration cutover evidence, run
+For configuration cutover evidence, change to `backend/` from the repository
+root, then run
 `python -m scripts.authorization_configure_impact --organization OR-XXXXXXXX
 --output-dir /outside/repo/dated-configure-impact`, as described in
 [the configuration inventory contract](configurator_impact.md).

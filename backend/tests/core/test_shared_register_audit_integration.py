@@ -135,6 +135,14 @@ def test_shared_register_bank_projections(
         entity_id=source,
         details={**details, "bank_id": jurisdiction},
     )
+    record_event(
+        db,
+        writer,
+        event_type="shared.changed",
+        entity_type=subject,
+        entity_id=source,
+        details={**details, "bank_id": source, "scope": {"institution_id": sibling}},
+    )
     db.flush()
     original_id = original.id
     expected_banks: set[str] = (
@@ -143,6 +151,9 @@ def test_shared_register_bank_projections(
         else {source, sibling} | ({klass} if subject != "param_liquidity_threshold" else set())
     )
     activity = get_tenant_activity(db, ORG_1, 100)
+    assert sum(item.summary.startswith("shared.changed") for item in activity.items) == len(
+        expected_banks
+    )
     assert {
         item.bank_id for item in activity.items if item.summary.startswith("shared.changed")
     } == expected_banks
