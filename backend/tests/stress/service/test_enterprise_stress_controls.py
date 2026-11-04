@@ -12,7 +12,6 @@ engines meet the database:
   assumptions the institution never made.
 
 This module's other-suite cases live in
-
 ``test_enterprise_stress_controls_integration.py``.
 """
 

@@ -25,7 +25,6 @@ Also pinned here, because both are judgement calls rather than mechanics:
   the Pillar 2 codes made.
 
 This module's other-suite cases live in
-
 ``test_regulatory_parameters_icaap_filing_integration.py``.
 """
 

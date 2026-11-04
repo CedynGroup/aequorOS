@@ -9,7 +9,6 @@ never duplicated or overwritten), and its downgrade must remove only the rows
 the seed itself wrote.
 
 This module's other-suite cases live in
-
 ``test_crd_capital_floor_parameters_migration_integration.py``.
 """
 

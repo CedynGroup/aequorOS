@@ -11,7 +11,6 @@ both sides:
   their original columns on downgrade, and go again on the next upgrade.
 
 This module's other-suite cases live in
-
 ``test_trim_covered_indexes_migration_integration.py``.
 """
 

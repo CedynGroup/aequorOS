@@ -27,7 +27,6 @@ asserted here are the ones that would be DEFECTS if they regressed:
   throttle in place.
 
 This module's other-suite cases live in
-
 ``test_attestation_stepup_throttle_integration.py``.
 """
 

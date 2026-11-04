@@ -10,7 +10,6 @@ T24 sign-on is the offline simulated provider, so nothing here touches a
 network.
 
 This module's other-suite cases live in
-
 ``test_temenos_connections_outbound_integration.py``.
 """
 

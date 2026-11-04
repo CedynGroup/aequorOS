@@ -17,7 +17,6 @@ not compare and only claims a clean bill of health over what it did compare,
 and the balance rule computes a real identity over the projected years.
 
 This module's other-suite cases live in
-
 ``test_reporting_validation_honesty_integration.py``.
 """
 

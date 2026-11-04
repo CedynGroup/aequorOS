@@ -4,7 +4,6 @@ Primary authority:
 https://www.bog.gov.gh/wp-content/uploads/2022/05/Basel-II-BOG-CRD-Final-27-June-2018-Basel-Committee-BSD.pdf
 
 This module's other-suite cases live in
-
 ``test_crd_counterparty_and_bank_claims_integration.py``.
 """
 

@@ -24,7 +24,6 @@ constraints and indexes after the child, and the parent is the thing the model
 declares.
 
 This module's other-suite cases live in
-
 ``test_bi_migration_structural_parity_integration.py``.
 """
 

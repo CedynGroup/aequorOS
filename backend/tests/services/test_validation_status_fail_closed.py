@@ -11,7 +11,6 @@ of them admit only ``("accepted", "warning")``), so an unvalidated row is
 persisted, visible and traceable, but cannot reach a regulatory number.
 
 This module's other-suite cases live in
-
 ``test_validation_status_fail_closed_integration.py``.
 """
 

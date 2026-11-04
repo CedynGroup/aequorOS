@@ -1,7 +1,6 @@
 """Desk dataset entitlement tiers (spec §10).
 
 This module's other-suite cases live in
-
 ``test_market_desk_entitlements_integration.py``.
 """
 

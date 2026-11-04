@@ -1,7 +1,6 @@
 """Current-generation predicates admit active rows and allow replacement of retired rows.
 
 This module's other-suite cases live in
-
 ``test_current_generation_predicate_integration.py``.
 """
 

@@ -28,7 +28,6 @@ prefix off the front of a string — or explaining the sourcing before it —
 silently removes the label from every one of those surfaces.
 
 This module's other-suite cases live in
-
 ``test_regulatory_parameters_icaap_jurisdictions_integration.py``.
 """
 

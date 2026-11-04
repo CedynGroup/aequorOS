@@ -1,7 +1,6 @@
 """Persisted reconciliation proposals, authenticated four-eyes approval and revocation.
 
 This module's other-suite cases live in
-
 ``test_reconciliation_exceptions_integration.py``.
 """
 

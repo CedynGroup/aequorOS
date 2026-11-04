@@ -6,7 +6,6 @@ is the shared unit-aware guard; the capital engine applies it so a board CAR
 minimum below the regulatory floor (Ghana 13% = 10% + 3% CCB) is clamped up.
 
 This module's other-suite cases live in
-
 ``test_regulatory_parameter_tightening_integration.py``.
 """
 

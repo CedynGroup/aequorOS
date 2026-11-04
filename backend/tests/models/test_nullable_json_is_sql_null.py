@@ -19,7 +19,6 @@ defect — which is how this was found: the BI commentary table got the flag fro
 the start, and the ICAAP table it was modelled on did not have it.
 
 This module's other-suite cases live in
-
 ``test_nullable_json_is_sql_null_integration.py``.
 """
 

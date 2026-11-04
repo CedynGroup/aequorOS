@@ -1,7 +1,6 @@
 """Status observation, date transitions and reminder delivery contracts.
 
 This module's other-suite cases live in
-
 ``test_instrument_notifications_integration.py``.
 """
 

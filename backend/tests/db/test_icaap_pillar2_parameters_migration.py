@@ -12,7 +12,6 @@ column, and a seed that inserted them as text, or dropped a nested null, would
 look fine in Python and wrong in Postgres.
 
 This module's other-suite cases live in
-
 ``test_icaap_pillar2_parameters_migration_integration.py``.
 """
 

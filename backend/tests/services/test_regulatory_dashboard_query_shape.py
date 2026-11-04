@@ -1,7 +1,6 @@
 """Query-shape characterization for the five detailed regulatory dashboards.
 
 This module's other-suite cases live in
-
 ``test_regulatory_dashboard_query_shape_integration.py``.
 """
 

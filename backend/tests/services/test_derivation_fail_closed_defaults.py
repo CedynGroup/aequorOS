@@ -5,7 +5,6 @@ behaviour that replaced it. Every case is written against a book that would
 previously have produced a plausible, wrong regulatory number in silence.
 
 This module's other-suite cases live in
-
 ``test_derivation_fail_closed_defaults_integration.py``.
 """
 

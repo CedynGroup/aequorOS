@@ -22,7 +22,6 @@ REPRESENTATIVE calibration ships ``pending`` (D-039), every citation fits the
 column, and the ``202609190056`` migration's pinned rows equal the catalogue's.
 
 This module's other-suite cases live in
-
 ``test_regulatory_parameters_icaap_p2_integration.py``.
 """
 

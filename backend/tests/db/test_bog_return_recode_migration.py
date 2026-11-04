@@ -10,7 +10,6 @@ These tests pin the replacement: ``force_rls_suspended`` makes the rewrite
 actually see every tenant, and where it cannot it raises instead of returning.
 
 This module's other-suite cases live in
-
 ``test_bog_return_recode_migration_integration.py``.
 """
 

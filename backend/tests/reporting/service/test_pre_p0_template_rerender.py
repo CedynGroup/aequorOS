@@ -16,7 +16,6 @@ Regenerating a fixture is only ever done from a checkout of the baseline
 commit, never from the current code — the hashes are the historical record.
 
 This module's other-suite cases live in
-
 ``test_pre_p0_template_rerender_integration.py``.
 """
 
