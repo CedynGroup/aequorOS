@@ -459,7 +459,9 @@ also have `risk-service:test-unit` and `risk-service:test-integration` aliases.
 Install dashboard dependencies with `pnpm install --frozen-lockfile` at the repository
 root before running the e2e suite or the full census.
 
-Feature-local paths stay in place, preserving imports and fixture/data paths.
+Backend tests live under `tests/unit/`, `tests/integration/` and `tests/e2e/`,
+with feature directories inside each suite and shared infrastructure under
+`tests/support/`. Suite markers remain the execution selectors.
 [`scripts/test_suites.json`](scripts/test_suites.json) is generated from observed
 database and external-service requirements for every exact parametrized test ID.
 There are no module defaults or manual function overrides. Collection rejects new/unclassified IDs,

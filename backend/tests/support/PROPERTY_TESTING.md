@@ -170,7 +170,7 @@ can make a fixed percentage-only tolerance too small. Dashboard mandatory and
 outlier-set measure membership is derived from the corresponding scenario flags
 and checked exactly before and after normalization; stored figures remain exact.
 
-Canonical helpers live under `tests/data_engine/testing` and dashboard
+Canonical helpers live under `tests/unit/data_engine/testing` and dashboard
 `unit/data-engine/testing`. Synthetic UUIDs, source references and one bank scope
 link batches, lineage, products, borrowers, positions and their snapshots. Amounts
 use the canonical six-place storage precision and fractional rates ten places.
