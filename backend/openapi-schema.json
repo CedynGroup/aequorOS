@@ -102337,7 +102337,7 @@
     },
     "/api/v1/banks/{bank_id}/regulatory-artifact-versions/{version_id}/download": {
       "get": {
-        "description": "Stream one archived revision, with its checksum re-verified first.",
+        "description": "Stream one archived revision, with its checksum re-verified first.\n\nThe archived chain contains the signed revisions, so ``EXPORT`` \u2014 not\n``VIEW`` \u2014 decides whether these bytes leave the platform.",
         "operationId": "downloadRegulatoryArtifactVersion",
         "parameters": [
           {
@@ -102438,7 +102438,7 @@
     },
     "/api/v1/banks/{bank_id}/regulatory-artifacts/{artifact_id}/download": {
       "get": {
-        "description": "Stream one exported artifact, proven against the revision that wrote it.\n\nThe artifact row is upserted per kind: it names a path and a checksum but no\nprovider version, so reading its path directly served whatever the store held\nunder that name. The archived revision with the same path and checksum is the\nexport that produced these bytes, and the read goes through it.",
+        "description": "Stream one exported artifact, proven against the revision that wrote it.\n\nDownloading requires ``EXPORT``: this serves the return's own file, and a\nbank can let an officer read a filing without letting them take it away.\nA caller who cannot see the package still receives the opaque 404 that\n``PackageExport`` raises before any storage read.\n\nThe artifact row is upserted per kind: it names a path and a checksum but no\nprovider version, so reading its path directly served whatever the store held\nunder that name. The archived revision with the same path and checksum is the\nexport that produced these bytes, and the read goes through it.",
         "operationId": "downloadRegulatoryArtifact",
         "parameters": [
           {
@@ -105372,7 +105372,7 @@
     },
     "/api/v1/banks/{bank_id}/regulatory-packages/{package_id}/email-fallback-instructions": {
       "get": {
-        "description": "Preview the BG/FMD/2026/07 downtime email bundle without submitting.",
+        "description": "Preview the BG/FMD/2026/07 downtime email bundle without submitting.\n\nThe preview names the signed documents and the recipient, so it is part of\nthe export surface: ``EXPORT`` is required even though the call itself does\nnot stream a file.",
         "operationId": "getEmailFallbackInstructions",
         "parameters": [
           {
@@ -105480,7 +105480,7 @@
     },
     "/api/v1/banks/{bank_id}/regulatory-packages/{package_id}/email-fallback.eml": {
       "get": {
-        "description": "The BG/FMD/2026/07 downtime bundle as a send-ready .eml (RFC 822).\n\nSubject, body, and attachments come from the same bundle the email\nchannel records; the operator opens it in their mail client, confirms the\nrecipient (the official downtime address is institution-configured), and\nsends. No SMTP happens server-side.",
+        "description": "The BG/FMD/2026/07 downtime bundle as a send-ready .eml (RFC 822).\n\nSubject, body, and attachments come from the same bundle the email\nchannel records; the operator opens it in their mail client, confirms the\nrecipient (the official downtime address is institution-configured), and\nsends. No SMTP happens server-side.\n\nThis is a download of the filed documents under another name, so it takes\n``EXPORT`` exactly as the artifact routes do.",
         "operationId": "downloadEmailFallbackEml",
         "parameters": [
           {
