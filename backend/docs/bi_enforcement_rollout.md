@@ -10,8 +10,8 @@ document changes what any principal can reach TODAY; it becomes live the moment
 a deployment sets `BI_ENABLED=1`.
 
 `app/bi/service/authorization.py::authorize_query` is the decision every BI
-surface consults (`tests/bi/api/test_bi_authorization_matrix.py`,
-`tests/bi/service/test_bi_authorization.py`), and every data route calls it
+surface consults (`tests/bi/api/test_bi_authorization_matrix_integration.py`,
+`tests/bi/service/test_bi_authorization_integration.py`), and every data route calls it
 before it reads anything (`tests/bi/api/test_bi_routes.py`).
 
 For connected-key banks, capability availability additionally follows the
@@ -189,7 +189,7 @@ release. Keep both outputs with the record (`--json` for a machine diff). The
 script takes a database URL (`WORKER_DATABASE_URL` then `DATABASE_URL`), has no
 hermetic mode, and excludes service users — machine principals are covered by
 the SQL below instead. Hermetic coverage:
-`tests/scripts/test_authorization_access_impact.py` (the data-scope column is
+`tests/scripts/test_authorization_access_impact_integration.py` (the data-scope column is
 not yet asserted there).
 
 ### 2. Per-pair inventory (read-only)
@@ -461,10 +461,10 @@ disclosure) or narrowed (a lost figure). Run it before and after any release
 that touches bindings, the evaluator or the resolver. Its hermetic test does
 not yet assert the new column (owed).
 
-Pinned by: `tests/bi/service/test_data_scope.py`, `tests/bi/api/test_bi_data_scope.py`,
-`tests/identity/api/test_data_scope_grants.py`, the A10-01 cases in
-`tests/bi/service/test_bi_authorization.py`, `tests/bi/api/test_bi_feeds.py` and,
-for the credit blotter, `tests/credit/api/test_credit_route_authorization.py`.
+Pinned by: `tests/bi/service/test_data_scope_integration.py`, `tests/bi/api/test_bi_data_scope_integration.py`,
+`tests/identity/api/test_data_scope_grants_integration.py`, the A10-01 cases in
+`tests/bi/service/test_bi_authorization_integration.py`, `tests/bi/api/test_bi_feeds_integration.py` and,
+for the credit blotter, `tests/credit/api/test_credit_route_authorization_integration.py`.
 
 Turning BI on in production is an ordered sequence with its own hazards; it is
 recorded in [`bi_turn_on_runbook.md`](bi_turn_on_runbook.md).
@@ -494,8 +494,8 @@ Before the deployment that enables the BI routes, attach:
 
 | Guarantee                                                                                                            | Test                                                                                                     |
 | -------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
-| The matrix: principal kind × bundle × module × sensitivity × institution × query shape                               | `tests/bi/api/test_bi_authorization_matrix.py`                                                           |
-| Pair collection (filters, hierarchies, ratio components, `over`, Top-N, pivot, sort), call budget, fail-closed edges | `tests/bi/service/test_bi_authorization.py`                                                              |
+| The matrix: principal kind × bundle × module × sensitivity × institution × query shape                               | `tests/bi/api/test_bi_authorization_matrix_integration.py`                                               |
+| Pair collection (filters, hierarchies, ratio components, `over`, Top-N, pivot, sort), call budget, fail-closed edges | `tests/bi/service/test_bi_authorization_integration.py`                                                  |
 | Every catalogue member's module and sensitivity resolves to a platform enum value                                    | `tests/architecture/test_bi_catalogue_authority.py`                                                      |
 | Nothing a client sends becomes SQL                                                                                   | `tests/architecture/test_bi_compiler_injection.py`                                                       |
 | Cross-tenant 404 on every `/bi/*` route, and the route dependency inventory                                          | wave-3 `tests/bi/api/test_bi_routes.py`, `tests/architecture/test_bi_authorization.py` (not yet written) |

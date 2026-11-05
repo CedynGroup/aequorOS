@@ -128,7 +128,7 @@ change new-role defaults. Do not change or reset legacy role defaults.
 Validate fresh API, worker, BI and migration logins with `SHOW
 idle_in_transaction_session_timeout` and `SHOW statement_timeout`. Observe the
 pool identities in `pg_stat_activity`. Native PostgreSQL 17 tests in
-`backend/tests/db/test_database_timeouts.py` prove fresh-login budgets using
+`backend/tests/db/test_database_timeouts_integration.py` prove fresh-login budgets using
 disposable probe logins with the configured role settings and service privileges
 (PostgreSQL role settings are not inherited via membership). They also prove
 real API idle termination/lock release using a short
@@ -136,7 +136,7 @@ transaction-local probe limit, legacy connection budgets and worker/BI completio
 The BI export probe verifies the fresh-login default separately, then scales the
 transaction-local interactive and export budgets to prove cancellation, a successful
 override and restoration of the prior budget. Native regressions in
-`backend/tests/db/test_bi_export_transactions.py` prove through `pg_stat_activity`
+`backend/tests/db/test_bi_export_transactions_integration.py` prove through `pg_stat_activity`
 that slow BI statements and compiler probes hold no API transaction, and that
 delivery audit/query-log/job writes commit atomically. Document deletion
 concurrency and role-timeout coverage is linked from the backend API guide above.
@@ -184,7 +184,7 @@ For externally supplied test services, an administrator must prepare the version
 foundation SQL, `backend/scripts/database_session_timeouts.sql`, and the test actor's
 ADMIN, INHERIT and SET owner memberships before
 running the migration suites. Real-login role proofs in
-`backend/tests/db/test_database_roles.py` also require a superuser
+`backend/tests/db/test_database_roles_integration.py` also require a superuser
 `POSTGRES_ADMIN_URL` (or a superuser `TEST_DATABASE_URL`) on the same disposable
 test database to create and remove probe logins. The local runner and CI prepare
 these prerequisites; never use the primary database.
@@ -282,7 +282,7 @@ Captures retain robot provenance; observation financial values, dates and captur
 lineage remain immutable. Only current observations may update supersession,
 `updated_at`, `quality_flags` and the `attributes.cross_source_mismatch` reconciliation
 metadata; other attributes remain immutable. Writes compare the complete OLD row
-to refuse concurrent changes. `backend/tests/db/test_worker_database_access.py`
+to refuse concurrent changes. `backend/tests/db/test_worker_database_access_integration.py`
 exercises disagreeing-source ingestion, supersession and financial/lineage refusal.
 Determinations must remain robot-prepared drafts based on approved effective
 methodologies. The worker cannot approve, publish, delete, edit human drafts or
@@ -310,7 +310,7 @@ checks stay authoritative. Role timeout budgets follow
 
 Native real-login tests cover the transition model, cross-tenant refusal,
 concurrent claims, key isolation, desk governance, audit verification and partition
-allow-lists. The [privilege-drift ratchet](../../backend/tests/db/test_database_roles.py)
+allow-lists. The [privilege-drift ratchet](../../backend/tests/db/test_database_roles_integration.py)
 checks the application schema, worker-view namespace and cluster-level role
 attributes against the [reviewed manifest](../../backend/tests/db/database_role_grants.json).
 Its attribute checks cover the runtime roles, `aqs_owner` and `aqs_migrator`;

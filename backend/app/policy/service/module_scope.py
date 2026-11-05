@@ -43,7 +43,7 @@ Three independent gates, all data-driven
    one case: SDI liquidity is LMTD/Reserve, not Basel LCR/NSFR.
 
 A universal bank passes all three for every module, so this is byte-identical
-for banks — pinned by ``tests/policy/service/test_module_scope.py``.
+for banks — pinned by ``tests/policy/service/test_module_scope_integration.py``.
 """
 
 from __future__ import annotations

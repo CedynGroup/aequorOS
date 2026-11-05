@@ -25,7 +25,7 @@ else:
 SHARDS = 4
 SCHEMA_SHARDS = 2
 DURATIONS = Path(__file__).with_name("ci_postgres_durations.json")
-BAO_MODULE = "tests/attestation/service/test_attestation_openbao.py"
+BAO_MODULE = "tests/attestation/service/test_attestation_openbao_integration.py"
 
 
 def shard_for(module: str, count: int = SHARDS) -> int:
@@ -175,11 +175,13 @@ def plan(root: Path, event: str, base: str) -> dict[str, object]:
             "include": [
                 {
                     "shard": index,
-                    "minio": (not files or "tests/scripts/test_local_services.py" in files)
+                    "minio": (
+                        not files or "tests/scripts/test_local_services_integration.py" in files
+                    )
                     and index
                     == assignments.get(
-                        "tests/scripts/test_local_services.py",
-                        shard_for("tests/scripts/test_local_services.py"),
+                        "tests/scripts/test_local_services_integration.py",
+                        shard_for("tests/scripts/test_local_services_integration.py"),
                     ),
                     "openbao": not files
                     and index == assignments.get(BAO_MODULE, shard_for(BAO_MODULE)),
@@ -254,7 +256,7 @@ def verify(directory: Path, files: list[str], suite: str) -> None:
             case
             for case in cases
             if case.get("classname", "").startswith(
-                "tests.attestation.service.test_attestation_openbao"
+                BAO_MODULE.removesuffix(".py").replace("/", ".")
             )
         ]
         if not bao or any(case.find("skipped") is not None for case in bao):

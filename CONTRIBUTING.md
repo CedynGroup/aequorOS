@@ -30,7 +30,7 @@ are always welcome.
   transaction boundaries, or concurrency/lock behavior. Tests under `tests/db/`
   select the marker automatically. The executable contract for both families
   and for safe application reuse is
-  `tests/test_database_fixture_isolation.py`.
+  `tests/test_database_fixture_isolation_integration.py`.
 - Dashboard gates: `tsc --noEmit`; both dark and light themes must render (no
   raw hex — use the token classes).
 - Commits follow Conventional Commits (`feat(scope): …`).

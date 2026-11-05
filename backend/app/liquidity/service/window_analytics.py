@@ -190,7 +190,7 @@ def _periods_in_window(
     window at 13 points — a change to what an API field means, not a tidier
     selection. A daily feeder returning ~250 points a year is the honest answer
     to the dates it was given. Pinned by
-    ``tests/liquidity/service/test_window_analytics.py::test_period_count_counts_every_period_the_caller_asked_for``.
+    ``tests/liquidity/service/test_window_analytics_integration.py::test_period_count_counts_every_period_the_caller_asked_for``.
     """
     return list(
         db.scalars(

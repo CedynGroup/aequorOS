@@ -44,7 +44,7 @@ There are at least four calculation planes:
 
 The existence of multiple planes is **not automatically a defect**. The SDI and universal-bank planes calculate different legal regimes, and the case plane has not been shown to feed regulatory filing. However, there are confirmed and material architectural risks:
 
-- **Confirmed semantic divergence:** a bank-scoped forecast run's Year-0 CAR can differ from the capital run's CAR for the same bank/period because the forecast snapshot excludes `ecl_exposure`, while capital may include modeled ECL. This is explicitly asserted in `tests/forecasting/api/test_forecasting.py`.
+- **Confirmed semantic divergence:** a bank-scoped forecast run's Year-0 CAR can differ from the capital run's CAR for the same bank/period because the forecast snapshot excludes `ecl_exposure`, while capital may include modeled ECL. This is explicitly asserted in `tests/forecasting/api/test_forecasting_integration.py`.
 - **Confirmed independent reporting computation:** template-based BoG returns calculate from mapped facts/positions and the workbook's formulas. Some returns consume run lines/metrics; others compute cells directly from facts. Equivalence to the relevant operational engine is not uniformly proved.
 - **Confirmed independent case formulas:** case “liquidity” and “capital” calculations are mathematically different from regulatory LCR/NSFR/CAR. They do not currently feed filings, but their overlapping names create a material interpretation and ownership risk.
 - **Policy split:** universal-bank engines use legacy tenant `Param*` tables through `params.get_active_params`; SDI engines use the newer global `RegulatoryParameter` resolver. Some stress/fact-derivation defaults remain code constants.
@@ -105,7 +105,7 @@ Canonical positions/reference rows
 
 Formula: `LCR = HQLA / (weighted outflows - min(weighted inflows, outflows x cap)) x 100`; decimal values quantized in the domain engine.
 
-Evidence: `domain/liquidity/engine.py::compute_lcr`; `regulatory_liquidity.py::compute_live`; `app/reporting/service/generation.py::_generate_liquidity`; `tests/reporting/api/test_regulatory_reporting.py::_assert_snapshot_binds_run`.
+Evidence: `domain/liquidity/engine.py::compute_lcr`; `regulatory_liquidity.py::compute_live`; `app/reporting/service/generation.py::_generate_liquidity`; `tests/reporting/api/test_regulatory_reporting_integration.py::_assert_snapshot_binds_run`.
 
 ### 4.2 Universal CAR
 

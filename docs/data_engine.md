@@ -77,7 +77,7 @@ These principles govern every implementation decision. Deviations require explic
   membership, SSO, storage, and required parameter register), but no bank financial
   data; every bank financial figure arrives through ingestion.
   There is **no seeding route and no `DEMO_SEED_ENABLED` flag**:
-  `tests/identity/api/test_banks.py::test_seed_route_is_retired` pins that `POST /banks/seed-demo`
+  `tests/identity/api/test_banks_integration.py::test_seed_route_is_retired` pins that `POST /banks/seed-demo`
   resolves to no handler for any role or tenant. Never add seeding paths to the UI, and
   never re-add seed CLI scripts. The live-data suite's provenance check (every canonical
   row ingestion-traced) is the executable form of this order.
@@ -617,7 +617,7 @@ A position's identity is shared by its snapshots. For the same institution, sour
 
 An omitted or unmapped `origination_date` preserves the existing date. An explicitly supplied null or blank clears it before the acceptance boundary and is a change subject to refusal after that boundary.
 
-After acceptance, every attempted identity-field change produces a non-configurable `TEMPORAL` / `ERROR` finding with rule `position_identity_settled`, naming the frozen field and the held and supplied values. The identity remains unchanged and the affected record is excluded from calculations under [§6.2](#62-severity-levels); this finding alone does not reject the entire batch. Superseding or withdrawing an accepted snapshot does not unfreeze its identity. To send a different identity after acceptance, use a new source reference. The executable correction and refusal coverage is in `backend/tests/data_engine/api/test_ingestion.py::TestPositionIdentityCorrection`.
+After acceptance, every attempted identity-field change produces a non-configurable `TEMPORAL` / `ERROR` finding with rule `position_identity_settled`, naming the frozen field and the held and supplied values. The identity remains unchanged and the affected record is excluded from calculations under [§6.2](#62-severity-levels); this finding alone does not reject the entire batch. Superseding or withdrawing an accepted snapshot does not unfreeze its identity. To send a different identity after acceptance, use a new source reference. The executable correction and refusal coverage is in `backend/tests/data_engine/api/test_ingestion_integration.py::TestPositionIdentityCorrection`.
 
 ### 8.4 Audit Log
 

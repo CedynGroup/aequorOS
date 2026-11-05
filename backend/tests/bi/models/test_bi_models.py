@@ -13,19 +13,20 @@ The BI session factory lives here too: with no ``BI_DATABASE_URL`` it yields
 ``None`` (the request session is used), and any session made from the BI pool
 is an ordinary :class:`Session`, so the global ``after_begin`` tenant-GUC
 listener applies to it unchanged.
+
+This module's other-suite cases live in ``test_bi_models_integration.py``.
 """
 
 from __future__ import annotations
 
+__all__ = ["_table"]
 from typing import cast
 
 import pytest
 import sqlalchemy as sa
-from sqlalchemy import String, Table, event, inspect
+from sqlalchemy import String, Table
 from sqlalchemy.dialects import sqlite
 from sqlalchemy.dialects.postgresql import JSONB
-from sqlalchemy.orm import Session
-from sqlalchemy.pool import QueuePool
 
 from app.bi.domain import extract
 from app.bi.domain.authority import UNREGISTERED
@@ -75,7 +76,7 @@ from app.data_engine.models.canonical import (
     CanonicalProduct,
 )
 from app.db.base import Base
-from app.db.session import get_bi_engine, get_bi_sessionmaker, set_tenant_rls_context
+from app.db.session import get_bi_engine, get_bi_sessionmaker
 from app.domain.authority.registry import REGISTRY, AdvisoryDesignation, MetricFamily, Regime
 from app.identity.models.institution_profile import OUTLET_STATUSES, OUTLET_TYPES, Outlet
 from app.irrbb.domain.engine import IRR_BUCKETS
@@ -91,8 +92,6 @@ from app.live.models.regulatory_run import RegulatoryRun
 from app.policy.models.institution_type import InstitutionType
 from tests.support.database import (
     adopt_application_engine,
-    managed_engine,
-    managed_session_factory,
 )
 
 MODELS: tuple[type, ...] = (
@@ -112,7 +111,6 @@ MODELS: tuple[type, ...] = (
     BiMartBuild,
     BiQueryLog,
 )
-
 #: Primary keys per the contract — partition key first where partitioned.
 PRIMARY_KEYS: dict[str, tuple[str, ...]] = {
     "bi_fact_position_daily": ("as_of_date", "snapshot_id"),
@@ -159,7 +157,6 @@ PRIMARY_KEYS: dict[str, tuple[str, ...]] = {
     "bi_mart_builds": ("id",),
     "bi_query_log": ("queried_at", "id"),
 }
-
 #: The contract's named vocabularies and the CHECK that must carry each.
 VOCABULARIES: tuple[tuple[str, str, tuple[str, ...]], ...] = (
     (
@@ -269,22 +266,6 @@ def test_an_unregistered_bi_table_is_caught_rather_than_silently_skipped() -> No
     assert derived != frozenset(BI_TABLES), "the derivation is blind to a new bi_* table"
     assert derived - frozenset(BI_TABLES) == {"bi_fact_hypothetical_future_mart"}
     assert "regulatory_runs" not in derived
-
-
-def test_create_all_on_sqlite_builds_every_bi_table_as_a_plain_table(
-    request: pytest.FixtureRequest,
-) -> None:
-    engine = managed_engine(request, "sqlite://")
-    Base.metadata.create_all(engine)
-    present = set(inspect(engine).get_table_names())
-    assert set(BI_TABLES) <= present
-    # D-011: partitioning is migration-owned. A ``postgresql_partition_by`` here
-    # would make a Postgres ``create_all`` produce a childless parent that
-    # rejects every INSERT on the TEST_DATABASE_URL conftest path.
-    for model in MODELS:
-        assert _table(model).dialect_options["postgresql"]["partition_by"] is None, _table(
-            model
-        ).name
 
 
 @pytest.mark.parametrize("model", MODELS, ids=lambda model: _table(model).name)
@@ -621,8 +602,6 @@ def test_partition_keys_are_named_for_the_builder() -> None:
         assert PRIMARY_KEYS[name][0] == key, name
 
 
-# --- column widths ---------------------------------------------------------------
-
 #: Every vocabulary a ``String(n)`` column in the marts is written from, read
 #: from the module that OWNS it, so a value added there is measured here. The
 #: defect this pins: ``bi_fact_engine_metric.status`` was ``String(8)`` while
@@ -693,7 +672,6 @@ VOCABULARY_WIDTHS: tuple[tuple[str, str, tuple[str, ...]], ...] = (
     ("bi_query_log", "decision", bi.QUERY_LOG_DECISIONS),
     ("bi_query_log", "catalogue_version", (CATALOGUE_VERSION,)),
 )
-
 #: Columns COPIED from another table's column must be at least as wide as it.
 COPIED_WIDTHS: tuple[tuple[str, str, type, str], ...] = (
     ("bi_fact_position_daily", "source_system", CanonicalPositionSnapshot, "source_system"),
@@ -804,9 +782,6 @@ def test_copied_columns_are_at_least_as_wide_as_their_source(
     )
 
 
-# --- session factory -----------------------------------------------------------
-
-
 def test_bi_sessionmaker_is_none_without_a_bi_database_url() -> None:
     """The hermetic and single-database default: the request session is used."""
     assert get_bi_sessionmaker() is None
@@ -828,55 +803,3 @@ def test_bi_sessionmaker_binds_the_bi_pool_when_configured(
     finally:
         get_bi_engine.cache_clear()
         get_settings.cache_clear()
-
-
-def test_bi_engine_is_a_small_named_pool_on_postgres(request: pytest.FixtureRequest) -> None:
-    get_bi_engine.cache_clear()
-    engine = adopt_application_engine(
-        request,
-        get_bi_engine("postgresql+psycopg://bi:bi@localhost:1/never_connected"),
-        administrative=True,
-    )
-    seen: dict[str, object] = {}
-
-    class _Abort(Exception):
-        pass
-
-    # ``do_connect`` sees the merged connect arguments just before the DBAPI
-    # call; raising there inspects them without ever reaching a server.
-    @event.listens_for(engine, "do_connect")
-    def _capture(_dialect, _record, _cargs, cparams) -> None:
-        seen.update(cparams)
-        raise _Abort
-
-    try:
-        assert isinstance(engine.pool, QueuePool)
-        assert engine.pool.size() == 3
-        assert engine.pool._max_overflow == 2  # pyright: ignore[reportAttributeAccessIssue]
-        with pytest.raises(_Abort):
-            engine.connect()
-        assert seen["application_name"] == "aequoros-bi"
-        assert seen["keepalives"] == 1
-        assert get_bi_engine("postgresql+psycopg://bi:bi@localhost:1/never_connected") is engine
-    finally:
-        engine.dispose()
-        get_bi_engine.cache_clear()
-
-
-def test_bi_sessions_get_the_tenant_guc_listener_for_free(
-    tmp_path, request: pytest.FixtureRequest
-) -> None:
-    """The ``after_begin`` listener is registered on :class:`Session` itself,
-    so a session from the BI pool is scoped exactly like a request session."""
-    assert event.contains(Session, "after_begin", set_tenant_rls_context)
-    engine = adopt_application_engine(
-        request, get_bi_engine(f"sqlite+pysqlite:///{tmp_path / 'bi.db'}")
-    )
-    try:
-        with managed_session_factory(request, engine)() as session:
-            assert isinstance(session, Session)
-            session.info["organization_id"] = "OR-DEM00001"
-            session.execute(sa.text("SELECT 1"))  # begins a transaction; the hook runs
-    finally:
-        engine.dispose()
-        get_bi_engine.cache_clear()

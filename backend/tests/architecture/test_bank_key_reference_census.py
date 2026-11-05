@@ -3,7 +3,7 @@ from __future__ import annotations
 from fastapi.routing import APIRoute
 
 from app.operator.main import create_operator_app
-from tests.operator.test_bank_encryption import KEY_REFERENCE_CENSUS
+from tests.operator.test_bank_encryption_integration import KEY_REFERENCE_CENSUS
 
 
 def test_bank_key_reference_census_matches_the_mounted_staff_routes() -> None:

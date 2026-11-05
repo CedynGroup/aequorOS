@@ -18,6 +18,7 @@ import textwrap
 import tokenize
 from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass
+from functools import cached_property
 from pathlib import Path
 from typing import cast
 
@@ -51,6 +52,9 @@ _CATALOGUE_SECTIONS = {
     "scripts/ci_postgres_durations.json": ("durations",),
 }
 
+#: Suffixes a split writes its other-suite parts under (see ``split_modules``).
+_PARTITION_SUFFIXES = ("_integration", "_e2e")
+
 
 @dataclass(frozen=True)
 class Renamer:
@@ -58,8 +62,23 @@ class Renamer:
 
     moves: tuple[tuple[str, str], ...]
 
+    @cached_property
+    def splits(self) -> frozenset[str]:
+        """Modules recorded as split (see ``split_modules``): their name survives."""
+        return frozenset(split_modules(self.moves))
+
+    def _partition(self, old: str, new: str) -> bool:
+        """Whether ``old -> new`` records a split part rather than a move of the module."""
+        return old in self.splits and new in {old + suffix for suffix in _PARTITION_SUFFIXES}
+
     def __call__(self, name: str) -> str:
         for old, new in self.moves:
+            if self._partition(old, new):
+                # A split module's parts were written by hand under their own names: the
+                # surviving file keeps the old name, so a reference to it is not a move.
+                # Only the partition itself is exempt: the same module may still be moved
+                # again later, and that later move has to reach this reference.
+                continue
             if name == old or name.startswith(f"{old}."):
                 name = new + name[len(old) :]
         return name
@@ -210,10 +229,24 @@ def _module_exists(backend: Path, module: str) -> bool:
     return base.with_suffix(".py").is_file() or (base / "__init__.py").is_file()
 
 
+def split_modules(moves: Sequence[tuple[str, str]]) -> set[str]:
+    """Modules recorded as split: ``[old, old]`` says the name survived with one part."""
+    return {old for old, new in moves if old == new}
+
+
 def unmoved_modules(backend: Path, ledger: Sequence[tuple[str, str]]) -> list[str]:
-    """Ledger sources that still exist although the ledger says they moved away."""
+    """Ledger sources that still exist although the ledger says they moved away.
+
+    A split's ``[old, old]`` pair means the module kept its name while its other-suite
+    parts were written under new ones, so the file at the old path is the outcome.
+    """
+    split = split_modules(ledger)
     rename = Renamer(tuple(ledger))
-    return [old for old, _new in ledger if rename(old) != old and _module_exists(backend, old)]
+    return [
+        old
+        for old, _new in ledger
+        if old not in split and rename(old) != old and _module_exists(backend, old)
+    ]
 
 
 # --------------------------------------------------------------------------

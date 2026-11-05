@@ -183,7 +183,7 @@ transaction, with one commit before returning the artifact or queued job.
 The single-database fallback also ends its query transaction before delivery.
 The [database role handoff](../docs/ops/database-roles.md#target-matrix) owns the
 API's guarded query-log partition capability.
-See [native transaction/role regressions](tests/db/test_bi_export_transactions.py).
+See [native transaction/role regressions](tests/db/test_bi_export_transactions_integration.py).
 
 Document deletion and upload-completion boundaries are documented under
 [the legacy case vertical](#legacy-case-vertical). Remaining transaction-held waits include
@@ -296,8 +296,8 @@ one job and one deletion event. Existing deleted records remain unchanged.
 The queue's bounded exponential retries and stale-worker reclaim apply; exhausted
 cleanup remains pending and appears as a failed job on the operator jobs board.
 See [`documents.py`](app/case/service/documents.py) and the
-[deletion regression tests](tests/case/service/test_document_deletion.py), including
-[PostgreSQL concurrency and role-timeout coverage](tests/db/test_document_deletion_timeout.py).
+[deletion regression tests](tests/case/service/test_document_deletion_integration.py), including
+[PostgreSQL concurrency and role-timeout coverage](tests/db/test_document_deletion_timeout_integration.py).
 
 Upload completion also checks the object that landed against what the client
 declared at request time. A presigned PUT accepts any body, so the declaration is
@@ -478,7 +478,8 @@ also have `risk-service:test-unit` and `risk-service:test-integration` aliases.
 Install dashboard dependencies with `pnpm install --frozen-lockfile` at the repository
 root before running the e2e suite or the full census.
 
-Feature-local paths stay in place, preserving imports and fixture/data paths.
+Test placement and suite filename conventions follow the
+[testing standard](../CODEBASE_CONVENTIONS.md#behavior-properties-and-state-machines-backend-and-dashboard).
 [`scripts/test_suites.json`](scripts/test_suites.json) is generated from observed
 database and external-service requirements for every exact parametrized test ID.
 There are no module defaults or manual function overrides. Collection rejects new/unclassified IDs,
@@ -781,7 +782,7 @@ assignment before removing transferred modules from the refreshed weights.
   fakes remain function-scoped. Settings-sensitive CORS/TLS tests must build their
   own app.
   Bank audit API tests reuse a module-scoped migrated schema and lazily constructed application
-  (`tests/identity/api/test_audit_log.py`), with fresh clients, per-test rollback and
+  (`tests/identity/api/test_audit_log_integration.py`), with fresh clients, per-test rollback and
   `aqs_api` authority for HTTP database dependencies; the dependency override is
   restored at teardown. Operator tests reuse a separate application and SQLite database,
   with the same rollback isolation

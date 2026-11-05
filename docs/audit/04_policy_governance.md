@@ -152,7 +152,7 @@ number admits a more broken book and tightening means smaller. The governed set 
 26 codes (`test_the_governed_code_set_is_pinned`), and two tests prove the clamp — one pure
 (`tests/policy/domain/test_policy_resolver.py::test_a_board_override_cannot_widen_the_balance_identity_tolerance`)
 and one through the seeded control plane for both institution classes
-(`tests/policy/service/test_policy_chain.py::test_a_board_override_cannot_widen_the_filing_tolerance`):
+(`tests/policy/service/test_policy_chain_integration.py::test_a_board_override_cannot_widen_the_filing_tolerance`):
 a board asking for 5.00% against the governed 0.10% is clamped to 0.10% and the attempt is
 recorded as a `ClampRecord`; a board holding itself to 0.02% keeps 0.02%.
 
