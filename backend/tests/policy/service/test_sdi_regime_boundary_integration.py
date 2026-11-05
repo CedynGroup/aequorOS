@@ -545,7 +545,7 @@ def test_a_board_generation_for_its_own_class_is_recorded_and_read_back(
 ) -> None:
     sdi = _sdi(db_session)
     grant_configure(db_session, sdi.id)
-    register = liquidity_thresholds.update_register(
+    acknowledgement = liquidity_thresholds.update_register(
         db_session,
         _CTX,
         sdi.id,
@@ -557,6 +557,9 @@ def test_a_board_generation_for_its_own_class_is_recorded_and_read_back(
             reason="Annual review adopted a stricter internal floor.",
         ),
     )
+    assert acknowledgement.institution_class == "sdi"
+    assert len(acknowledgement.written) == 1
+    register = liquidity_thresholds.get_register(db_session, _CTX, sdi.id, _AS_OF)
     by_code = {row.threshold_code: row for row in register.thresholds}
     assert by_code["narrow_to_volatile"].threshold_pct == Decimal("95")
     assert by_code["narrow_to_volatile"].source == "board_register"
