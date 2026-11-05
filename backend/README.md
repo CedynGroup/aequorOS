@@ -161,6 +161,11 @@ App-session API requests use an access token issued by password or SSO login:
 Authorization: Bearer <app-access-token>
 ```
 
+`GET /api/v1/risk-types`, `GET /api/v1/assessment-types` and
+`GET /api/v1/taxonomies/cases` require the same authenticated app session.
+These static taxonomy reads have no additional role or institution-scope gate.
+Missing, invalid or expired bearer tokens receive the standard HTTP 401 response.
+
 ### Data Engine file ingestion
 
 With an app session holding the required [human DATA authority](docs/authorization_foundation.md#human-data-engine-authority),
