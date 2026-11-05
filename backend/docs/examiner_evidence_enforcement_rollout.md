@@ -281,8 +281,8 @@ requires a code change to correct — only an approved binding.
   transaction. It does not use the primary database.
 - `tests/scripts/test_authorization_access_impact_integration.py` pins the new `examiner`
   column, and `scripts/authorization_access_impact.py` documents it.
-- The two new test modules are classified in `scripts/test_suites.json`
-  (`integration` for the HTTP matrix, `unit` for the architecture ratchet).
+- The HTTP matrix uses an `_integration.py` filename; the architecture ratchet
+  uses the default unit filename. Suite membership requires no registration.
 
 No dashboard change is required: no page consumes the generated
 `ExaminerApi` client, so this cutover has no user-visible UI surface and no

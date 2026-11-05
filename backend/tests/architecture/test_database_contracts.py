@@ -52,15 +52,14 @@ def test_contract_collection_and_required_execution(
         "skipped-contract",
         "stale-protected",
     }
-    suites = tmp_path / "suites.json"
-    cases = {nodeid: "integration" if integration else "unit"}
-    sql_node = "test_sql.py::test_sql"
+    if integration:
+        module = module.removesuffix(".py") + "_integration.py"
+        nodeid = module + "::test_probe"
+    sql_node = "test_sql_integration.py::test_sql"
     if scenario == "unit":
-        cases[sql_node] = "integration"
-        _ = (tmp_path / "test_sql.py").write_text(
+        _ = (tmp_path / "test_sql_integration.py").write_text(
             "def test_sql(): raise AssertionError('not unit')\n"
         )
-    _ = suites.write_text(json.dumps({"cases": cases}))
     contracts = tmp_path / "contracts.json"
     _ = contracts.write_text(
         json.dumps(
@@ -85,9 +84,7 @@ def test_contract_collection_and_required_execution(
     )
     _ = (tmp_path / "conftest.py").write_text(
         "from pathlib import Path\nimport pytest\n"
-        "from scripts import test_suites, database_contracts\n"
-        f"test_suites.CATALOGUE = Path({str(suites)!r})\n"
-        "test_suites.catalogue.cache_clear()\n"
+        "from scripts import database_contracts\n"
         f"database_contracts.CATALOGUE = Path({str(contracts)!r})\n"
         "@pytest.fixture\ndef current_annex_repository(): return object()\n"
         "@pytest.fixture\ndef annex_input(current_annex_repository):\n"
@@ -123,12 +120,14 @@ def test_contract_collection_and_required_execution(
         if scenario == "missing-postgres"
         else "postgresql+psycopg://guard:guard@127.0.0.1:1/guard",
     }
-    for name in ("CI_UNIT_REPORT_DIR", "CI_DATABASE_CENSUS"):
+    for name in ("CI_UNIT_REPORT_DIR",):
         _ = environment.pop(name, None)
     selection: list[str] = []
-    if scenario in {"stale-protected", "unit"}:
+    if scenario == "unit":
         environment["CI_UNIT_REPORT_DIR"] = str(tmp_path / "evidence")
         selection = ["-m", "unit"]
+    if scenario == "stale-protected":
+        selection = ["--collect-only", "--collection-output=" + str(tmp_path / "all-tests.json")]
     result = subprocess.run(
         [
             sys.executable,

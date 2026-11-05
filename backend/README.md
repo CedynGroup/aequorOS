@@ -476,136 +476,74 @@ These commands work at the repository root or in `backend/`. Their explicit
 pytest selectors are `-m unit`, `-m integration` and `-m e2e`; unit and integration
 also have `risk-service:test-unit` and `risk-service:test-integration` aliases.
 Install dashboard dependencies with `pnpm install --frozen-lockfile` at the repository
-root before running the e2e suite or the full census.
+root before running the e2e suite.
 
 Test placement and suite filename conventions follow the
 [testing standard](../CODEBASE_CONVENTIONS.md#behavior-properties-and-state-machines-backend-and-dashboard).
-[`scripts/test_suites.json`](scripts/test_suites.json) is generated from observed
-database and external-service requirements for every exact parametrized test ID.
-There are no module defaults or manual function overrides. Collection rejects new/unclassified IDs,
-duplicate collection and conflicting suite markers before marker deselection.
-SQLite counts as a database. Optional primary-data tests retain their explicit
-opt-in; the census never supplies primary-bank data.
+The module filename is the only source of suite membership:
+`test_<name>_integration.py` is integration, `test_<name>_e2e.py` is e2e,
+and other discovered test filenames are unit. Feature folders do not assign a
+suite. Split a mixed module rather than adding a marker override. New cases and
+parametrizations inherit their file's suite without a registration step.
+Collection rejects duplicates and conflicting suite markers.
 
-[`scripts/database_contracts.json`](scripts/database_contracts.json) records exact
-protected PostgreSQL contract identities with grouped reasons. Changes to that
-reviewed catalogue are deliberate contract changes, not a way to lower a CI count
-floor. A moved or renamed case must retain its integration guarantee and update
-its protected identity in the same review.
-
-The suite plugin rejects unit ownership of protected cases and their direct or
-indirect requests for the standard `current_annex_repository` fake fixture. It
-also rejects database resource fixtures in unit tests. The fake is forbidden under
-database, storage, API and identity test paths; the
-[ICAAP test-input guide](tests/icaap/testing/README.md) owns its permitted use.
-Unit and e2e CI collection reject stale protected identities. Selected protected
+[`scripts/database_contracts.json`](scripts/database_contracts.json) remains a
+separate reviewed catalogue of PostgreSQL guarantees, with exact identities and
+grouped reasons. It does not select tests. A moved or renamed protected case must
+retain its integration guarantee and update its protected identity in the same
+review. The plugin rejects unit ownership of protected cases, direct or indirect
+requests for the `current_annex_repository` fake in protected/API/database/storage/
+identity contracts, and database resource fixtures in unit files. The
+[ICAAP test-input guide](tests/icaap/testing/README.md) owns the fake's permitted use.
+The complete CI collection rejects stale protected identities. Selected protected
 cases require PostgreSQL in CI (or with `CI_REQUIRE_DATABASE_CONTRACTS=1`), and
 skipping one fails its execution.
 
-The catalogue explicitly identifies the existing primary-data opt-in cases.
-Their integration ownership and fake prohibition always apply; execution remains
-conditional on their existing `REAL_DATA_DATABASE_URL` profile. The census never
-supplies that URL or makes primary data a CI prerequisite. When explicitly
-enabled, those cases also require PostgreSQL and may not skip their guarantees.
+Primary-data contracts keep their existing explicit opt-in. Neither suite
+selection nor CI supplies `REAL_DATA_DATABASE_URL` or makes primary-bank data a
+prerequisite. When explicitly enabled, those cases require PostgreSQL and may
+not skip their guarantees.
 
-Refresh ownership after adding tests or changing database or service requirements,
-including tests brought in by merging main. The merge queue executes the combined
-tree, so a catalogue checked only against an older PR head is insufficient:
+With `CI_DATABASE_OBSERVATIONS=<evidence-directory>`, the observer records driver
+connection attempts, pooled checkouts, external service use, shared fixtures,
+deferred threads and inherited Python children. Attempts count even when caught
+or refused. The independent `scripts/database_observation_check.py` consumer
+rejects unit database/service use, unconfirmed unit children, incomplete or
+duplicated execution evidence, and skipped or failed external-service contracts.
+It never infers a suite from resource use, demotes an integration file because it
+did not connect, or generates membership data. The `requires_service(name)` marker
+declares a runtime requirement, not a suite override.
 
-```bash
-mise run risk-service:refresh-test-suites /absolute/path/to/empty/census-evidence
-```
+MinIO runs in storage/schema jobs and the shard containing native service
+contracts. OpenBao runs in its integration shard. Backend Playwright contracts
+have an explicit e2e job beside dashboard journeys. Their runtime and
+zero-skip guards remain independent of filename selection.
 
-This runs the entire test tree serially with disposable native PostgreSQL 17 and
-MinIO plus its own loopback OpenBao, clearing ambient database and primary-data URLs.
-Install OpenBao or set `AQS_OPENBAO_BIN` to its verified binary. See the local-services
-guide below for installing the native binaries. To use disposable Docker instead,
-run `uv run python -m scripts.test_suite_census refresh <evidence-dir> --mode docker`
-from `backend/`. Keep the evidence directory outside the repository. The full run
-can take substantially longer than the unit suite; retain its log and let fixture
-teardown and child processes finish before generation. Commit the regenerated
-catalogue. For a service-gated case requiring another applicable profile, work from
-`backend/` and collect that profile with `CI_DATABASE_CENSUS=1` and `CI_DATABASE_OBSERVATIONS=<separate-dir>`,
-then run `uv run python -m scripts.test_suite_census generate <full-dir> --supplement <profile-dir>`.
-The supplement must contain only identities from the full census, and conflicting
-proven ownership across profiles is rejected. A failing run returns nonzero and reports its inconclusive cases;
-fix failures before claiming full validation.
-For newly merged tests, `--extend <complete-new-test-profile>` adds disjoint
-identities with the same execution evidence requirements; overlapping identities
-are rejected. Existing ownership still comes from the retained full census.
+A dedicated unit run uses pytest's normal discovery and configured file patterns,
+excluding integration/e2e filenames before imports. Every selected unit module
+must collect cases; new functions and parameter identities need no catalogue.
+Numeric libraries use one thread per worker to avoid nested OpenMP/BLAS pools.
+The run uses the runner's detected CPU count (`-n auto`) and per-case load
+scheduling, retaining state-sharing and expensive module fixtures on one worker.
+`--durations=20` reports setup/call/teardown outliers.
 
-The observer records driver connection attempts and SQLAlchemy pooled checkouts
-across setup, call, teardown, shared fixtures and inherited Python subprocesses.
-Shared-fixture evidence applies to every consumer, including failed setup and
-cached setup failures; nested fixtures and registered finalizers retain attribution.
-An attempted acquisition counts as database use even when it fails or is caught:
-the unit guard must not replace a driver's expected refusal. A fully passing case
-with no observed database or external-service use and no unconfirmed children is
-unit-owned. Positive database acquisition evidence rules out unit ownership even
-when execution fails or a child does not confirm instrumentation; neither profile
-may replace it with proven unit ownership. Without a database or service requirement,
-skipped/failed cases and unconfirmed children retain conservative integration
-ownership and appear in `inconclusive.json`. A skipped case is not
-proof that an integration test could be moved; run its applicable profile to obtain
-evidence. This preserves explicit ownership without changing product assertions.
+The unit guard supplies a refused loopback port-1 `TEST_DATABASE_URL` sentinel
+before collection and permits no database connection, including SQLite,
+SQLAlchemy, psycopg, installed database-direct drivers and fresh-environment
+Python children. Combined runs apply refusal before each unit test's fixture
+setup. Fixture finalization follows its consumers, so integration-only cleanup
+remains permitted while unit-consumed fixtures retain refusal. Caught attempts
+still fail the run.
 
-The unit owner has no PostgreSQL, MinIO, OpenBao or dashboard dependency setup.
-Observed MinIO/OpenBao connections and native service processes are integration
-requirements; Playwright launches are e2e requirements. A declared
-`requires_service` marker covers contracts whose assertions consume state from
-earlier service-using cases and service-gated contracts such as the local KMS.
-The generated catalogue also records these service requirements so the aggregate
-rejects skipped service contracts. To enrich an
-older database-only census, pass `--services <complete-service-profile>` to
-`generate`; only positive service requirements can change ownership. MinIO runs
-in storage/schema jobs and the shard containing native service contracts;
-OpenBao runs in its integration shard. Backend Playwright contracts have one
-explicit e2e job beside dashboard journeys. Every test has one of three owners:
-unit, integration or e2e.
-
-Every CI owner emits the same observations alongside its JUnit report. The final
-integration gate invokes `scripts/test_suite_census.py check` on those existing
-executions: observed unit database/service use and fully executed integration/e2e cases without
-their observed dependency both fail with the exact IDs to refresh. The independent partition
-guard proves the observed selection has exactly one execution owner, including
-conservative affected-module CI runs. Original database-free files remain in
-place; classification never changes test imports or fixtures.
-
-The unit guard supplies a loopback port-1 `TEST_DATABASE_URL` sentinel before
-collection. This enables model-only checks inside mixed migration modules whose
-module-wide skip condition requires that setting. No PostgreSQL service is
-provisioned, and any attempted use of the sentinel fails the connection guard.
-
-A dedicated unit run selects only generated unit-bearing modules before imports,
-then prunes known non-unit functions before parametrization. Unknown test functions
-and parameter identities fail collection. With CI evidence enabled, missing cases
-also fail collection and the filesystem inventory must match the catalogue.
-Aggregate execution reports prove the other owners'
-exact coverage; a second full-tree collection is unnecessary. Integration-only
-modules are never imported by this selector. Mixed modules still share their
-module imports, while their known integration/e2e functions are not collected.
-Numeric libraries use one thread per worker to avoid nested OpenMP/BLAS pools
-when several ML cases fit concurrently. The run uses the runner's detected CPU
-count (`-n auto`) and per-case load scheduling, retaining
-the in-memory storage audit sequence on one worker because it shares mutable
-class state. The immutable OpenAPI schema and generated shard reports also stay
-on one worker each, avoiding repeated expensive module-fixture setup. `--durations=20` reports setup/call/teardown outliers. Database
-connections are refused before collection. Each process records attempts separately;
-the controller requires identical worker classifications and exact combined JUnit
-coverage. Combined local runs also refuse connections for each unit test, before
-fixture setup. Finalization follows fixture ownership: integration-only fixture
-cleanup remains permitted when the last test is unit-owned, while fixtures consumed
-by a unit test retain refusal during their finalizers.
-SQLAlchemy, psycopg (including async), SQLite and installed database-direct driver
-entry points are guarded, including Python subprocesses with fresh environments.
-Ordinary Python children start with stdlib-only instrumentation; a loader wraps
-database drivers before their imports return instead of eagerly importing every
-SDK into tiny subprocess probes. SQLite also has a process-wide audit guard.
-Grandchildren retain refusal and observation even with a fresh environment.
-Attempts fail the run even when caught. The unit CI owner compares the complete
-classified collection with JUnit identities and permits no dropped, duplicated,
-skipped, failed or errored unit case. It uploads `unit-tests` classification,
-connection-attempt and execution evidence. Module inventory and exact case coverage remain enforced in that same collection.
+CI retains each unit/e2e worker's selected collection and verifies exact JUnit
+coverage with no dropped, duplicated, skipped, failed or errored case. The unit
+job also performs one independent full-tree **collection only**:
+`uv run pytest --collect-only -q --collection-output=<artifact-directory>/all-tests.json`.
+It uses the same refusal guard and filename classifier without a database or
+external-service setup. This temporary runtime artifact, not a committed
+membership input, is the expected identity set for the cross-suite aggregate.
+The aggregate compares every execution report against it, including all
+parametrizations, and rejects missing or duplicate cases and wrong-suite owners.
 
 `mise run risk-service:test` remains the combined compatibility run:
 
@@ -703,9 +641,9 @@ exists, retained for seven days.
 
 Main pushes and queued merge results always run the full suite. On pull requests,
 only changes confined to the
-bodies of existing, unreferenced `tests/domain/test_*.py` tests owned by the
-Postgres suite (including nested domain directories), or comments and formatting
-in those modules, select their affected modules. Changes to fixtures, decorators, production code, new/deleted
+bodies of existing, unreferenced integration-suffixed tests in a `domain/`
+folder anywhere under `tests/` (including feature-local domain folders), or
+comments and formatting in those modules, select their affected modules. Changes to fixtures, decorators, production code, new/deleted
 tests, configuration or an uncertain diff select the full suite. Schema/RLS,
 locks, unit and storage gates keep their coverage. The stdlib planner/coverage verifier is
 [`scripts/ci_postgres.py`](scripts/ci_postgres.py); pytest selection is opt-in via
@@ -740,6 +678,34 @@ changes, and compare actual job timings rather than treating summed test duratio
 as wall time. The baseline's `source_run` links the complete successful hosted run used for its
 weights. On an ownership change, verify the source artifacts against the old
 assignment before removing transferred modules from the refreshed weights.
+
+#### Measured suffix-only runner cost
+
+On 2026-11-05, a shared Linux host with 4 CPUs and 31 GiB RAM measured the
+following serial outer pytest processes (`CASHFLOW_FAST_TEST=1`, one BLAS thread).
+Collection imports test modules but executes no cases. The execution rows cover
+only the runner, observer, database-contract, CI, move and bootstrap regressions,
+not the complete product suites.
+
+| Operation                       |      Cases | Wall time |  Peak RSS |
+| ------------------------------- | ---------: | --------: | --------: |
+| Independent complete collection |     19,728 |    47.5 s | 1,255 MiB |
+| Unit-only collection            |     10,429 |    43.3 s | 1,149 MiB |
+| Integration-only collection     |      9,298 |    32.4 s |   807 MiB |
+| E2E-only collection             |          1 |     8.4 s |   375 MiB |
+| Targeted unit execution         | 251 passed |   120.3 s |   265 MiB |
+| Targeted integration execution  |  11 passed |    16.7 s |   203 MiB |
+
+The selected collection union matched the complete collection exactly once.
+All 19,702 pre-removal identities remain after explicitly mapping renamed tooling
+regressions; 26 new regression cases account for the increase. No product case
+or parametrization changed suite or disappeared. Dashboard, console, marketing,
+package and deployment runners were unchanged.
+
+The independent CI collection adds real work, about 47.5 seconds in this sample.
+These figures are not full-suite or hosted-CI execution timings and establish no
+speedup. Compare actual hosted unit, schema, lock, storage, integration-shard and
+e2e job durations after validation; do not infer wall time from duration weights.
 
 ### Test databases and the primary database
 
