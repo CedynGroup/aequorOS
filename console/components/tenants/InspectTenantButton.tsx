@@ -2,9 +2,15 @@
 
 import { useEffect, useState } from "react";
 import { Eye, ShieldAlert } from "lucide-react";
-import { getTenant, startInspectorSession, toApiError } from "@/lib/api";
+import {
+  listTenants,
+  startInspectorSession,
+  toApiError,
+  type OperatorTenant,
+} from "@/lib/api";
 import { useInspector } from "@/lib/inspector";
 import { inspectorHours } from "@/lib/inspector-duration";
+import { examinableBanks } from "@/lib/inspector-bank";
 import { useMutation } from "@/lib/use-api";
 import { Button, Field, Input, Modal, Select, Textarea } from "@/components/ui";
 
@@ -19,8 +25,11 @@ import { Button, Field, Input, Modal, Select, Textarea } from "@/components/ui";
  * The session is bound to ONE bank — the institution it examines — because the
  * act-as-examiner token inherits that bank and the tenant API only serves the
  * filed registers an examination cites when the bound bank is the bank in the
- * path. The bank comes from the tenant's own record (GET /operator/v1/tenants/
- * {org}) when the modal opens, so an operator never types an institution id.
+ * path. The candidates come from the tenant board (GET /operator/v1/tenants,
+ * which returns one row PER BANK) when the modal opens, so an operator never
+ * types an institution id — and an organization with several banks offers each
+ * of them. `GET /tenants/{org}` is not used for this: it answers with the
+ * earliest-created bank, which would make a sibling bank unreachable.
  */
 
 // consent = a read-only look with the tenant's knowledge; break_glass = an
@@ -46,24 +55,30 @@ export function InspectTenantButton({
   const [durationUnit, setDurationUnit] = useState<"hours" | "minutes">(
     "hours",
   );
-  // The examined bank, read from the tenant record when the modal first opens.
+  // The organization's banks, read from the tenant board when the modal opens.
+  // `loadedForOrg` travels with the cache: the desktop entitlements page keeps
+  // this button mounted while the selected organization changes, and a cache
+  // keyed on nothing would offer the previous organization's banks.
+  const [banks, setBanks] = useState<OperatorTenant[] | null>(null);
+  const [loadedForOrg, setLoadedForOrg] = useState<string | null>(null);
   const [bankId, setBankId] = useState<string | null>(null);
-  const [bankLabel, setBankLabel] = useState<string | null>(null);
   const [bankLoading, setBankLoading] = useState(false);
   const [bankError, setBankError] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!open || bankId !== null) return;
+    if (!open || (banks !== null && loadedForOrg === orgId)) return;
     let alive = true;
     setBankLoading(true);
     setBankError(null);
-    getTenant(orgId)
-      .then((tenant) => {
+    listTenants()
+      .then((response) => {
         if (!alive) return;
-        setBankId(tenant.bank_id ?? null);
-        setBankLabel(tenant.bank_name ?? null);
+        const candidates = examinableBanks(response.tenants, orgId);
+        setBanks(candidates);
+        setLoadedForOrg(orgId);
+        setBankId(candidates[0]?.bank_id ?? null);
         setBankError(
-          tenant.bank_id
+          candidates.length > 0
             ? null
             : "This organization has no bank yet, so there is no institution to examine.",
         );
@@ -78,7 +93,7 @@ export function InspectTenantButton({
     return () => {
       alive = false;
     };
-  }, [open, orgId, bankId]);
+  }, [open, orgId, banks, loadedForOrg]);
 
   const start = useMutation(startInspectorSession, {
     successMessage: "Inspector session started",
@@ -154,12 +169,28 @@ export function InspectTenantButton({
         <div className="space-y-4">
           <Field label="Examination bank" required>
             {bankLoading ? (
-              <p className="text-caption text-muted">Loading the institution…</p>
+              <p className="text-caption text-muted">
+                Loading the institutions…
+              </p>
             ) : bankError ? (
               <p className="text-caption text-critical">{bankError}</p>
+            ) : (banks?.length ?? 0) > 1 ? (
+              // Several institutions in one organization: the session is bound
+              // to ONE of them, so the operator picks which.
+              <Select
+                value={bankId ?? ""}
+                onChange={(e) => setBankId(e.target.value)}
+                aria-label="Examination bank"
+              >
+                {banks?.map((bank) => (
+                  <option key={bank.bank_id} value={bank.bank_id ?? ""}>
+                    {bank.bank_name ?? "Unnamed bank"} · {bank.bank_id}
+                  </option>
+                ))}
+              </Select>
             ) : (
               <p className="text-body">
-                {bankLabel ?? "This institution"}{" "}
+                {banks?.[0]?.bank_name ?? "This institution"}{" "}
                 <span className="font-mono text-caption text-muted">
                   {bankId}
                 </span>

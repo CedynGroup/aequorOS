@@ -40,6 +40,7 @@ import {
   inspectorDurationMinutes,
   type InspectorDurationUnit,
 } from "@/lib/inspector-duration";
+import { examinedOptionOf, splitExaminedOption } from "@/lib/inspector-bank";
 
 interface StartForm {
   organization_id: string;
@@ -98,12 +99,16 @@ export default function InspectorView() {
     return map;
   }, [tenants.data]);
 
+  const examinedOption = examinedOptionOf(form.organization_id, form.bank_id);
+
   const examinedBankLabel = useMemo(() => {
     const tenant = (tenants.data?.tenants ?? []).find(
-      (t) => t.organization_id === form.organization_id,
+      (t) =>
+        t.organization_id === form.organization_id &&
+        t.bank_id === form.bank_id,
     );
     return tenant?.bank_name ?? null;
-  }, [tenants.data, form.organization_id]);
+  }, [tenants.data, form.organization_id, form.bank_id]);
 
   const startM = useMutation(startInspectorSession, {
     errorContext: "Start inspection",
@@ -453,24 +458,29 @@ export default function InspectorView() {
             {hasTenants ? (
               <Select
                 id="insp-org"
-                value={form.organization_id}
+                value={examinedOption}
                 invalid={Boolean(formErr.organization_id)}
                 onChange={(e) => {
-                  const organizationId = e.target.value;
-                  const tenant = (tenants.data?.tenants ?? []).find(
-                    (t) => t.organization_id === organizationId,
+                  const { organizationId, bankId } = splitExaminedOption(
+                    e.target.value,
                   );
                   setForm((f) => ({
                     ...f,
                     organization_id: organizationId,
-                    bank_id: tenant?.bank_id ?? "",
+                    bank_id: bankId,
                   }));
                 }}
               >
                 <option value="">Select a tenant…</option>
                 {(tenants.data?.tenants ?? []).map((t) => (
-                  <option key={t.organization_id} value={t.organization_id}>
+                  <option
+                    key={examinedOptionOf(t.organization_id, t.bank_id)}
+                    value={examinedOptionOf(t.organization_id, t.bank_id)}
+                  >
                     {t.organization_name} · {t.organization_id}
+                    {t.bank_id
+                      ? ` · ${t.bank_name ?? "unnamed bank"} (${t.bank_id})`
+                      : " · no bank"}
                   </option>
                 ))}
               </Select>

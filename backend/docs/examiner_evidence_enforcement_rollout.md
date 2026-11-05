@@ -149,16 +149,32 @@ replaced their tenancy-only gate, the liquidity half for longer.
   routes, the gates behind them and that derivation;
   `tests/api/test_examiner_register_reads_integration.py` pins the behaviour.
 
-The bank claim is a **register-read** guarantee, not an entry-gate one, and the
-difference shows up in exactly one place. The bundle's entry gate
-(`staff_inspection`) and its per-source sentences admit a verified read-only
-inspection on the AUDIT entry sentence; neither consults `bank_id`. A session
-opened before the binding landed therefore still receives the bundle and still
-sees the six citations disclosed under its held authority — it just cannot open
-any of them, because the register gate is where the claim is compared with the
-bank in the path. The console records the examined bank on every session it opens,
-so this is a legacy-row shape rather than a live one, and it fails closed: the
-citations `403`, and nothing widens to the organization.
+### The bank claim bounds the register reads, NOT the bundle
+
+The binding is a **register-read** guarantee, and the boundary is worth stating
+plainly because it is narrower than "the session is confined to one bank". The
+bundle's own gates — the entry gate `require_evidence_view` / `staff_inspection`
+and the per-source sentences on `EvidenceAuthority` — admit a verified read-only
+inspection on operator provenance, the request-wide conditions and the AUDIT
+entry sentence. **Neither consults `bank_id`.** Two consequences follow, and
+neither is a defect this change introduces (before the binding landed, a session
+named no institution at all and reached every bank of its organization):
+
+- A session bound to bank A can request bank B's evidence bundle within the SAME
+  organization, and the bundle's entry sentence admits it. Its six cited register
+  reads then return `403` for `bank B`, because `app/core/examiner.py` compares
+  the claim with the bank in the path. So the citations the bundle advertises are
+  openable only for the bank the session is examining.
+- A session opened before the binding landed carries no `bank` claim and is in the
+  same position: it receives the bundle, sees the six citations disclosed under
+  its held authority, and can open none of them.
+
+Both fail closed on the register surface and neither widens the organization-wide
+read, but an operator reading this page should not assume the bank binding limits
+the bundle itself: to read bank B's bundle in full, open a session bound to bank B.
+Tightening the bundle entry gate to the claim is a separate, deliberate decision:
+it would NARROW examiner reach rather than preserve it, so this change leaves the
+bundle gate exactly as it found it and does not claim the binding covers it.
 
 ## Operation matrix
 
