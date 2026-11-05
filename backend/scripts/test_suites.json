@@ -19672,6 +19672,7 @@
     "tests/test_e2e_story_identities_integration.py::test_failed_story_retires_fresh_actors_and_real_refresh_families": "integration",
     "tests/test_e2e_story_identities_integration.py::test_owner_stories_have_distinct_tenants_and_no_financial_fixture_writes": "integration",
     "tests/test_e2e_story_identities_integration.py::test_scoped_story_credentials_enforce_real_backend_permission_boundaries": "integration",
+    "tests/test_e2e_story_identities_integration.py::test_signing_story_officers_hold_return_export_and_other_stories_do_not": "integration",
     "tests/test_health.py::test_an_openbao_deployment_with_no_trust_anchor_says_so_at_startup": "unit",
     "tests/test_health.py::test_create_app": "unit",
     "tests/test_health.py::test_http_error_uses_error_envelope": "unit",

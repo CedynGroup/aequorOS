@@ -37,6 +37,16 @@ from app.stress.service import macro_scenarios
 SOURCE_ORG = "OR-DEM00001"
 SOURCE_BANK = "BK-SAMP0001"
 SOURCE_ADMIN = UUID("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa")
+#: The story officers who must take a return away: the Approver reads the page
+#: they sign, and the Validator sends the downtime email bundle. Both are
+#: refused REG/restricted EXPORT by the 2026-11-03 export cutover, and only the
+#: ``analyst`` bundle carries it for a human (there is no read-only exporter
+#: bundle for returns yet), so a signing story grants it rather than run the
+#: ceremony against an officer the backend would refuse. This is the documented
+#: remediation, not a fixture relaxation: the exports it enables are exactly the
+#: ones the policy requires those officers to hold
+#: (backend/docs/authorization_foundation.md, "Export cutover").
+RETURN_EXPORT_ROLES = frozenset({"approver", "validator"})
 BASELINE_ROLES = frozenset(
     {
         "viewer",
@@ -270,6 +280,18 @@ def provision(db: Session, request: StoryRequest) -> StoryRead:
     by_role = {spec.role: user for spec, user in users}
     _apply_scoped_bindings(db, request, by_role)
     _configure_owner_read(db, request, by_role)
+    if request.signing:
+        for spec, user in users:
+            if spec.role in RETURN_EXPORT_ROLES:
+                # Whole-institution return export on top of the officer's own
+                # bundle, which the ceremony keeps requiring for the action.
+                _grant(
+                    db,
+                    user,
+                    RoleBundle.ANALYST,
+                    ModuleScope.REGULATORY,
+                    SensitivityScope.RESTRICTED,
+                )
     db.commit()
     if request.signing:
         ctx = TenantContext(organization_id=request.organization_id)
