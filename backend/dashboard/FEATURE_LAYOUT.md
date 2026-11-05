@@ -47,6 +47,18 @@ compares every cross-feature or unowned import against
 The guard runs as the `Guard dashboard feature boundaries` CI step and is
 wired into the `test:legacy` suite via `scripts/check_feature_boundaries.test.mjs`.
 
+`scripts/check_public_interfaces.mjs` separately enforces the re-export-only
+syntax contract using the installed TypeScript parser. Every
+`features/**/public.ts` may contain comments, leading string directives, static
+imports and export declarations (named, type-only, wildcard or namespace).
+Module specifiers and import/export attribute values must be string literals.
+Local definitions, variable declarations (even literal initializers), default
+export expressions, calls and control flow are rejected. An established public
+root disappearing fails coverage; new public modules are discovered recursively.
+The guard never imports dependencies or changes declaration order. Its CLI
+controls and current-tree check run in `test:legacy` through
+`scripts/check_public_interfaces.test.mjs`.
+
 ## Moving a feature
 
 A move PR runs the codemod from `backend/dashboard/`, then nothing else:
