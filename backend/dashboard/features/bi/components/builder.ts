@@ -4,7 +4,7 @@
  * Everything here is a pure function over a DRAFT — the canvas a reader is
  * arranging — so the rules that decide what may be saved, what a widget's id is
  * and whether a stored canvas can be edited at all are provable without a
- * browser (`features/bi/components/disclosure.test.ts` exercises them directly).
+ * browser (`tests/bi/disclosure.test.ts` exercises them directly).
  *
  * THREE PROPERTIES LIVE HERE AND MATTER.
  *
@@ -37,7 +37,7 @@ import type {
   BiPackWidgetRead,
 } from "@aequoros/risk-service-api";
 // A RELATIVE path, deliberately: this module is exercised by a plain Node test
-// (`features/bi/components/disclosure.test.ts`), and Node does not resolve the `@/` alias
+// (`tests/bi/disclosure.test.ts`), and Node does not resolve the `@/` alias
 // at run time. `features/bi/components/drill.ts` and `result.ts` do the same for the same
 // reason.
 import { ROLE_OPTIONS } from "../../../lib/api/grants";

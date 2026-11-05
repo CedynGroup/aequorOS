@@ -2,7 +2,7 @@
  * The ONLY numeric literals the IRRBB Standardised Framework components are
  * allowed to carry.
  *
- * `components/icaap/p2/no-literals.test.ts` walks every other file under
+ * `tests/icaap/p2-no-literals.test.ts` walks every other file under
  * `components/irr/sf/`, plus `components/irr/StandardisedFramework.tsx`, with
  * the TypeScript compiler and fails on any numeric literal other than 0 or 1
  * (D-024: a threshold, shock, cap, band or tolerance must arrive on an API

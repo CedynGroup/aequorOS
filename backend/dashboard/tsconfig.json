@@ -47,9 +47,9 @@
     "node_modules",
     "e2e",
     "playwright.config.ts",
-    "visual",
+    "tests/**/*.integration.spec.ts",
+    "tests/**/*.e2e.spec.ts",
     "playwright.visual.config.ts",
-    "contracts",
     "playwright.contracts.config.ts"
   ]
 }
