@@ -26,4 +26,4 @@ control and the adapter's real SQL/isolation matrix remain integration-owned.
 
 The [backend test guide](../../../README.md#run-tests) owns the protected database
 contract catalogue, fake-fixture restrictions, required backend and execution
-checks, and census refresh procedure.
+checks.
