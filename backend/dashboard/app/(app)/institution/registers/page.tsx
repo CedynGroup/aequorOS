@@ -8,6 +8,12 @@
  * an approver records the Board's adopted levels with approval evidence.
  * Every PUT is approver-gated server-side and audited with a required
  * reason; the Edit actions mirror that gate client-side.
+ *
+ * Reads follow each source module's own sentence, and they are not the same
+ * one: Liquidity's registers are `confidential`, while the credit registers are
+ * `restricted` (they are the Board's assumptions and limits, and a
+ * concentration-limit row can name a counterparty group). Capital authority
+ * does not admit the credit registers at all.
  */
 
 import { wholeInstitutionCapabilities } from "@/lib/api/dataScope";
@@ -34,7 +40,7 @@ export default function BoardRegistersPage() {
   const creditView = hasEffectiveCapability(
     eligible,
     "credit",
-    "confidential",
+    "restricted",
     "view",
   );
   const bankId = bank?.id;

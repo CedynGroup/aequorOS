@@ -1533,7 +1533,7 @@ def test_active_member_route_access_request_is_deduplicated_audited_and_approved
         ("/institution/outlets", "institution", "confidential"),
         ("/institution/products", "institution", "confidential"),
         ("/institution/parties", "institution", "restricted"),
-        ("/institution/registers", "credit", "confidential"),
+        ("/institution/registers", "credit", "restricted"),
     ],
 )
 def test_institution_route_access_request_carries_expiry_into_the_grant(

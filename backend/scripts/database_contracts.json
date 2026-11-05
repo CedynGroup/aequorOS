@@ -1212,7 +1212,7 @@
         "tests/identity/api/test_grant_administration_integration.py::test_institution_route_access_request_carries_expiry_into_the_grant[/institution/outlets-institution-confidential]",
         "tests/identity/api/test_grant_administration_integration.py::test_institution_route_access_request_carries_expiry_into_the_grant[/institution/parties-institution-restricted]",
         "tests/identity/api/test_grant_administration_integration.py::test_institution_route_access_request_carries_expiry_into_the_grant[/institution/products-institution-confidential]",
-        "tests/identity/api/test_grant_administration_integration.py::test_institution_route_access_request_carries_expiry_into_the_grant[/institution/registers-credit-confidential]",
+        "tests/identity/api/test_grant_administration_integration.py::test_institution_route_access_request_carries_expiry_into_the_grant[/institution/registers-credit-restricted]",
         "tests/identity/api/test_grant_administration_integration.py::test_members_are_tenant_scoped_and_no_binding_means_no_authority",
         "tests/identity/api/test_grant_administration_integration.py::test_members_distinguish_unattributed_historical_revoker",
         "tests/identity/api/test_grant_administration_integration.py::test_multiple_conflicting_bindings_must_all_be_removed[held_roles0-validator-Approver]",

@@ -46,7 +46,11 @@ export default function AlertCenterPage() {
   const sdiChecks = useSdiCapitalChecks(
     isSdi && moduleScope.capitalAggregatedView ? bank?.id : undefined,
   );
-  const sdiExposures = useSdiLargeExposures(isSdi ? bank?.id : undefined);
+  const sdiExposures = useSdiLargeExposures(
+    // The exposure stream names counterparties, so it needs Credit's restricted
+    // sentence; a Capital grant does not carry it.
+    isSdi && moduleScope.creditRestrictedView ? bank?.id : undefined,
+  );
   const [groupBy, setGroupBy] = useState<AlertGroupBy>("module");
 
   const rules = useBankRules(bank?.id);

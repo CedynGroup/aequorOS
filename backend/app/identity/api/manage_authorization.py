@@ -173,7 +173,10 @@ _EXACT_ROUTE_REQUIREMENTS: dict[str, tuple[_RouteRequirement, ...]] = {
     "/data-engine/positions": ((ModuleScope.DATA, Sensitivity.RESTRICTED, Permission.VIEW),),
     "/data-engine/t24": ((ModuleScope.DATA, Sensitivity.RESTRICTED, Permission.VIEW),),
     "/institution/parties": ((ModuleScope.INSTITUTION, Sensitivity.RESTRICTED, Permission.VIEW),),
-    "/institution/registers": ((ModuleScope.CREDIT, Sensitivity.CONFIDENTIAL, Permission.VIEW),),
+    # The page's credit cards became CREDIT/restricted in the #182 remainder; its
+    # Liquidity registers are admitted on LIQUIDITY/confidential, but the sentence
+    # a denied reader is asked to request is the credit one (the page names it).
+    "/institution/registers": ((ModuleScope.CREDIT, Sensitivity.RESTRICTED, Permission.VIEW),),
     "/liquidity": (
         (ModuleScope.LIQUIDITY, Sensitivity.AGGREGATED, Permission.VIEW),
         (ModuleScope.LIQUIDITY, Sensitivity.CONFIDENTIAL, Permission.VIEW),

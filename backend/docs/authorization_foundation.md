@@ -292,6 +292,12 @@ authority rather than a tenant binding. Its server projection grants only
 institution `view` capabilities, applies the same request-wide vetoes, and is
 shared by profile bootstrap and bank list/detail/period/fact coverage. It grants
 no tenant mutation capability and never advertises Liquidity Monitoring access.
+Separately, and per route rather than per capability, the six filed registers the
+evidence bundle cites are readable by a verified inspection session BOUND to the
+bank in the path (`app/core/examiner.py`; see
+[the examiner rollout](examiner_evidence_enforcement_rollout.md)). That admission
+is invisible to every capability projection, admits nothing a tenant reader could
+not reach with its own sentence, and mutates nothing.
 Bank audit visibility follows [the bank audit contract](tamper_evident_records.md#bank-audit-read-api).
 
 ## Liquidity enforcement

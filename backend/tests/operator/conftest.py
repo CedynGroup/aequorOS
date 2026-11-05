@@ -28,6 +28,7 @@ from app.core.key_management.types import KeyReference
 from app.models import InstitutionType, Jurisdiction, RegulatoryParameter
 from app.operator.features.provision import get_provisioning_clients
 from app.operator.main import create_operator_app
+from app.operator.schemas import TenantRead
 from app.operator.services import operator_auth
 from app.operator.services.tenant_provisioning import ProvisioningClients
 from app.policy.service.regulatory_parameters import seed_rows as _regparam_seed_rows
@@ -75,22 +76,42 @@ def provision_payload(**overrides: Any) -> dict[str, Any]:
     return payload
 
 
+def bank_id_for(
+    client: TestClient, organization_id: str, *, token: str = DEV_TOKEN
+) -> str:
+    """The organization's bank — the institution an inspection session examines.
+
+    Resolved through the operator's own tenant read rather than assumed, so a
+    test never invents an institution the saga did not provision."""
+    response = client.get(
+        f"/operator/v1/tenants/{organization_id}", headers=operator_headers(token)
+    )
+    assert response.status_code == 200, response.text
+    bank_id = TenantRead.model_validate_json(response.text).bank_id
+    assert bank_id, "a provisioned tenant has a bank"
+    return bank_id
+
+
 def start_inspection(
     client: TestClient,
     organization_id: str,
     *,
     mode: str = "consent",
     token: str = DEV_TOKEN,
+    bank_id: str | None = None,
 ) -> str:
     """Open an ACTIVE Tenant Inspector session and return its session_id.
 
     The deep per-tenant read endpoints are gated on such a session; tests that
-    exercise a 200 read open one first through this helper."""
+    exercise a 200 read open one first through this helper. The session is bound
+    to the organization's bank — the institution it examines — unless a test
+    names another one explicitly."""
     response = client.post(
         "/operator/v1/inspector/sessions",
         json={
             "support_reference": "SUP-TEST",
             "organization_id": organization_id,
+            "bank_id": bank_id or bank_id_for(client, organization_id, token=token),
             "reason": "test inspection",
             "mode": mode,
         },

@@ -22,6 +22,7 @@ from datetime import date as date_type
 from decimal import Decimal
 from typing import Any
 
+import httpx2
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import delete, select
@@ -278,7 +279,9 @@ class Surface:
     whole_institution_only: bool
     ok_status: int = 200
 
-    def call(self, client: TestClient, version: int, bank_id: str = SAMPLE_BANK_ID) -> Any:
+    def call(
+        self, client: TestClient, version: int, bank_id: str = SAMPLE_BANK_ID
+    ) -> httpx2.Response:
         url = f"/api/v1/banks/{bank_id}{self.path}"
         auth = headers(authorization_version=version)
         if self.method == "POST":
@@ -360,6 +363,76 @@ SURFACES: tuple[Surface, ...] = (
     ),
 )
 
+#: The Phase 5 remainder: credit-authorized reads outside ``/credit/``. The Board
+#: registers are the institution's adopted assumptions and limits
+#: (``restricted``); loan classification is an aggregate of the book
+#: (``aggregated``); the SDI large-exposure list names counterparties
+#: (``restricted``). Every one is the institution's, so a narrowed grant is
+#: refused rather than applied.
+REMAINDER_SURFACES: tuple[Surface, ...] = (
+    Surface(
+        "ecl-assumptions",
+        "GET",
+        "/ecl-assumptions",
+        SensitivityScope.RESTRICTED,
+        RoleBundle.VIEWER,
+        True,
+    ),
+    Surface(
+        "crm-haircuts",
+        "GET",
+        "/crm-haircuts",
+        SensitivityScope.RESTRICTED,
+        RoleBundle.VIEWER,
+        True,
+    ),
+    Surface(
+        "concentration-limits",
+        "GET",
+        "/concentration-limits",
+        SensitivityScope.RESTRICTED,
+        RoleBundle.VIEWER,
+        True,
+    ),
+    Surface(
+        "credit-thresholds",
+        "GET",
+        "/credit-thresholds",
+        SensitivityScope.RESTRICTED,
+        RoleBundle.VIEWER,
+        True,
+    ),
+    Surface(
+        "loan-classification",
+        "GET",
+        "/loan-classification",
+        SensitivityScope.AGGREGATED,
+        RoleBundle.VIEWER,
+        True,
+    ),
+    Surface(
+        "sdi-loan-classification",
+        "GET",
+        "/sdi/loan-classification",
+        SensitivityScope.AGGREGATED,
+        RoleBundle.VIEWER,
+        True,
+    ),
+    Surface(
+        "sdi-large-exposures",
+        "GET",
+        "/sdi/large-exposures",
+        SensitivityScope.RESTRICTED,
+        RoleBundle.VIEWER,
+        True,
+        # The canonical fixture is a universal bank, so the SDI large-exposure
+        # computation itself answers 409. That is the service refusing a
+        # non-SDI regime, not the authority gate: admission is proven by the
+        # answer no longer being 403.
+        ok_status=409,
+    ),
+)
+
 #: Every sensitivity a credit sentence can name, so "the wrong one" is exhaustive.
 _SENSITIVITIES = (
     SensitivityScope.AGGREGATED,
@@ -415,6 +488,106 @@ def test_a_binding_for_another_module_is_refused(db_client: TestClient, surface:
         )
         response = surface.call(db_client, version)
         assert response.status_code == 403, f"{surface.label}/{module.value}: {response.text}"
+
+
+_PHASE_FIVE_SURFACES = REMAINDER_SURFACES
+
+
+def _regrant(  # noqa: PLR0913 - mirrors _grant's binding dimensions
+    *,
+    role_bundle: RoleBundle = RoleBundle.VIEWER,
+    module_scope: ModuleScope = ModuleScope.CREDIT,
+    sensitivity_scope: SensitivityScope = SensitivityScope.RESTRICTED,
+    institution_scope: InstitutionScope = InstitutionScope.INSTITUTION,
+    institution_id: str | None = SAMPLE_BANK_ID,
+    data_scope: DataScope = DataScope.ALL,
+    data_scope_values: tuple[str, ...] = (),
+) -> int:
+    """Replace USER_1's bindings with one sentence and return the new ``authv``.
+
+    The matrix below tries one candidate sentence at a time, so the previous
+    candidate must not remain as a second row: partial matches never compose, and
+    a leftover row would make the next refusal look like a failure.
+    """
+    session = get_sessionmaker()()
+    session.info["organization_id"] = ORG_1
+    try:
+        session.execute(
+            delete(AuthorizationBinding).where(AuthorizationBinding.organization_id == ORG_1)
+        )
+        session.commit()
+    finally:
+        session.close()
+    return _grant(
+        role_bundle=role_bundle,
+        module_scope=module_scope,
+        sensitivity_scope=sensitivity_scope,
+        institution_scope=institution_scope,
+        institution_id=institution_id,
+        data_scope=data_scope,
+        data_scope_values=data_scope_values,
+    )
+
+
+@pytest.mark.parametrize("surface", _PHASE_FIVE_SURFACES, ids=_ids(_PHASE_FIVE_SURFACES))
+def test_remainder_reads_require_one_complete_exact_credit_sentence(
+    db_client: TestClient, surface: Surface
+) -> None:
+    """The Phase 5 matrix, one surface at a time.
+
+    Each candidate sentence is installed ALONE, so a refusal proves that sentence
+    is not authority rather than that the previous one was still missing.
+    """
+    _seed_book()
+
+    for role in ("admin", "analyst", "approver", "examiner", "viewer"):
+        response = db_client.get(f"{BASE}{surface.path}", headers=headers(roles=(role,)))
+        assert response.status_code == 403, f"{surface.label}/scalar-{role}: {response.text}"
+
+    # Capital authority never implies Credit authority, at any sensitivity.
+    for capital_sensitivity in _SENSITIVITIES:
+        version = _regrant(module_scope=ModuleScope.CAPITAL, sensitivity_scope=capital_sensitivity)
+        response = surface.call(db_client, version)
+        assert response.status_code == 403, (
+            f"{surface.label}/CAP-{capital_sensitivity.value}: {response.text}"
+        )
+
+    # Other modules at the right sensitivity are not this sentence either.
+    for module in (ModuleScope.RISK, ModuleScope.LIQUIDITY):
+        version = _regrant(module_scope=module, sensitivity_scope=surface.sensitivity)
+        assert surface.call(db_client, version).status_code == 403, (
+            f"{surface.label}/{module.value}"
+        )
+
+    # Sensitivity is exact-or-``all``, never a ladder.
+    for sensitivity in _SENSITIVITIES:
+        if sensitivity is surface.sensitivity:
+            continue
+        version = _regrant(sensitivity_scope=sensitivity)
+        assert surface.call(db_client, version).status_code == 403, (
+            f"{surface.label}/{sensitivity.value}"
+        )
+
+    # Institution coverage is exact: a sibling's row does not cover this bank.
+    _add_sibling_bank()
+    version = _regrant(sensitivity_scope=surface.sensitivity, institution_id=SIBLING_BANK_ID)
+    assert surface.call(db_client, version).status_code == 403, surface.label
+
+    # The register and exposure figures are the institution's: a narrowed grant
+    # is refused rather than silently narrowed.
+    for data_scope, values in ((DataScope.BRANCH, (BR_ONE,)), (DataScope.REGION, ("Coastal",))):
+        version = _regrant(
+            sensitivity_scope=surface.sensitivity,
+            data_scope=data_scope,
+            data_scope_values=values,
+        )
+        narrowed = surface.call(db_client, version)
+        assert narrowed.status_code == 403, f"{surface.label}/{data_scope.value}"
+        assert "whole institution" in narrowed.text
+
+    exact = _regrant(sensitivity_scope=surface.sensitivity)
+    allowed = surface.call(db_client, exact)
+    assert allowed.status_code == surface.ok_status, f"{surface.label}: {allowed.text}"
 
 
 @pytest.mark.parametrize("surface", SURFACES, ids=_ids(SURFACES))

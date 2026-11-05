@@ -1,8 +1,8 @@
 # Credit scoped-binding enforcement rollout
 
 Credit enforcement replaces scalar role checks with independently complete
-authorization bindings on the `credit` module. It ships in two releases, and
-this one document is the contract for both:
+authorization bindings on the `credit` module. It ships in three releases, and
+this one document is the contract for all of them:
 
 - **Phase 1 (enforced now, 2026-09-22):** `Module.CREDIT` exists, a mirror
   migration widens the database to match it, and the credit rows of the SHARED
@@ -14,6 +14,10 @@ this one document is the contract for both:
   **Nothing is deployed until the release record at the end of the Phase 4 section
   is attached**, and two migrations (`202609270073`, `202609270074`) must be
   applied before the gate script can even run — see the deployment order there.
+- **Phase 5 (enforced in code, 2026-11-03):** the four Board register GETs and the
+  three SDI credit reads — the last tenancy-only credit reads — now carry exact
+  CREDIT sentences, and their dashboard consumers gate on the same capabilities.
+  The register PUTs remain issue 184's Configurator work.
 
 Run the inventory against each target deployment immediately before each
 release. Store the dated output with the deployment record. Do not copy
@@ -628,10 +632,257 @@ Derivation-only activation remains unchanged. No grants are backfilled or widene
    record-level blotter CSV would need CREDIT/`restricted` `export` and would be
    unavailable to Viewers, Auditors and Approvers without a bundle change. There is
    no credit export route today; decide before adding one.
-2. **The credit registers** (`manage_credit_params.py`: thresholds, concentration
-   limits, classification grids) stay on `Tenant` reads and `ApproverTenant`
-   writes. They are recorded here so the omission does not read as an oversight.
+2. **The credit register writes** (`manage_credit_params.py` PUTs) stay on the
+   scalar `ApproverTenant` gate. Their reads were cut over in Phase 5 below; a
+   dedicated Configurator authority for the writes is issue 184.
 3. **Branch-level credit figures.** §Why four surfaces refuse a narrowed data
    scope explains why a sliced dashboard, migration matrix, vintage curve or PD is
    refused rather than computed. If a bank wants them, they need their own limit
    set and their own payload statement of the population.
+
+## Phase 5: the register and SDI remainder (enforced in code 2026-11-03)
+
+> **Status: enforced in code, not yet released.** Issue 182's remaining reads now
+> run on the same `_require_institution_permission` sentences as Phase 4. No grant
+> is created by the cutover.
+
+### What was wrong
+
+Seven read routes still asked only whether the caller belonged to the tenant:
+
+| Route                                     | Gate BEFORE | What that admitted                                                        |
+| ----------------------------------------- | ----------- | ------------------------------------------------------------------------- |
+| `GET /banks/{id}/ecl-assumptions`         | `Tenant`    | The Board's PD/LGD assumptions behind the ECL engine                      |
+| `GET /banks/{id}/crm-haircuts`            | `Tenant`    | The Board's collateral haircut schedule                                   |
+| `GET /banks/{id}/concentration-limits`    | `Tenant`    | Board limits whose `bucket_key` can name a counterparty (`cp:`, `group:`) |
+| `GET /banks/{id}/credit-thresholds`       | `Tenant`    | The Board's credit early-warning thresholds                               |
+| `GET /banks/{id}/loan-classification`     | `Tenant`    | Grade buckets, NPL ratio and provisions for the whole book                |
+| `GET /banks/{id}/sdi/loan-classification` | `Tenant`    | The same response on the compatibility path                               |
+| `GET /banks/{id}/sdi/large-exposures`     | `Tenant`    | One row per connected counterparty with `counterparty_name`               |
+
+These two routers are mounted with `BANK_ROUTE_DEPENDENCIES` alone, so
+`require_module_access("credit")` does NOT run on these routes — that licence
+entitlement gate sits on `run_regulatory_credit`'s router, not here. What decides
+each read is the required active, whole-institution Credit binding, enforced by
+`require_credit_aggregated_view` or `require_credit_restricted_view`.
+
+### The authority table (enforced)
+
+| Route                                     | Module / sensitivity / permission | Data scope        | Dependency                       |
+| ----------------------------------------- | --------------------------------- | ----------------- | -------------------------------- |
+| `GET /banks/{id}/ecl-assumptions`         | CREDIT / `restricted` / `view`    | whole institution | `require_credit_restricted_view` |
+| `GET /banks/{id}/crm-haircuts`            | CREDIT / `restricted` / `view`    | whole institution | `require_credit_restricted_view` |
+| `GET /banks/{id}/concentration-limits`    | CREDIT / `restricted` / `view`    | whole institution | `require_credit_restricted_view` |
+| `GET /banks/{id}/credit-thresholds`       | CREDIT / `restricted` / `view`    | whole institution | `require_credit_restricted_view` |
+| `GET /banks/{id}/loan-classification`     | CREDIT / `aggregated` / `view`    | whole institution | `require_credit_aggregated_view` |
+| `GET /banks/{id}/sdi/loan-classification` | CREDIT / `aggregated` / `view`    | whole institution | `require_credit_aggregated_view` |
+| `GET /banks/{id}/sdi/large-exposures`     | CREDIT / `restricted` / `view`    | whole institution | `require_credit_restricted_view` |
+
+The reasoning:
+
+- **The four registers are `restricted`.** The issue's own classification puts
+  assumptions and run inputs at `restricted`, and these are the Board's adopted
+  assumption and limit registers, not portfolio figures. A concentration-limit row
+  can name a counterparty through `cp:<name>` / `group:<reference>`, which is the
+  same disclosure the restricted concentration monitor already carries. They are
+  the institution's: a branch grant cannot produce a smaller register, so the
+  whole-institution default REFUSES a narrowed row rather than serving one.
+- **Loan classification is `aggregated`.** It returns grade buckets, one NPL
+  ratio, delinquency bands, PAR and provisions — no obligor, no facility reference
+  and no counterparty identity. It is the same disclosure tier as the credit
+  dashboard, which is likewise `aggregated` and whole-institution.
+- **SDI large exposures are `restricted`.** Every row carries
+  `counterparty_name` and is measured against Net Own Funds, an institution-grain
+  denominator; a sliced list compared to an institution limit would be a wrong
+  number with a right-looking name.
+- **Capital authority is not credit authority.** None of these routes names a
+  Capital dependency, so a CAP binding of any sensitivity is refused. This is the
+  point of the remainder: they sat on Capital screens and were reachable by
+  Capital readers only because no route asked.
+
+`require_credit_restricted_view` is the shared sentence for named-obligor and
+Board-policy reads. It does not replace `require_credit_concentration_view`,
+which stays the monitor's own surface name so telemetry distinguishes the
+computed monitor from the register.
+
+### Denial semantics
+
+- Missing, partial, inactive or lifetime-expired authority → `403` with the same
+  uniform sentence Phase 4 uses (`Credit access requires an active scoped
+binding.`); the response never says which dimension failed.
+- A bank of another tenant resolves `404` first (`resolve_tenant_bank`), even for
+  a caller holding an organization-wide sentence.
+- An act-as-examiner session holds no tenant binding at all, so the scoped
+  evaluator denies it. Two of these seven — `ecl-assumptions` and `crm-haircuts` —
+  are the credit registers the examiner evidence bundle cites, and they are served
+  to it through the separate examiner register contract
+  (`app/core/examiner.py`): a verified read-only inspection bound to the bank in
+  the path, and no other surface. The other five stay denied for it; see
+  `examiner_evidence_enforcement_rollout.md`.
+- No engine runs before the decision: these are reads, and the register services
+  keep their existing bank scoping.
+
+### Consumers aligned in the same change
+
+| Consumer                                          | Before                                                    | After                                                                                                                                                                 |
+| ------------------------------------------------- | --------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `/institution/registers` — the three credit cards | mounted on a CREDIT/`confidential` view capability        | mounted only on CREDIT/`restricted`; a confidential or Capital-only reader mounts no card and fires no request (`dashboard/app/(app)/institution/registers/page.tsx`) |
+| `/basel` SDI capital view — NPL and provisions    | fetched `/loan-classification` unconditionally            | fetched only on CREDIT/`aggregated`; otherwise the KPIs read `—` and name the required sentence                                                                       |
+| `/basel` SDI capital view — classification table  | fetched unconditionally                                   | shown only on CREDIT/`aggregated`; otherwise a sentence names the requirement                                                                                         |
+| `/risk` and `/alerts` SDI exposure panels         | fetched `/sdi/large-exposures` on institution class alone | fetched only on CREDIT/`restricted`                                                                                                                                   |
+
+The access-request catalogue moved with it. `_EXACT_ROUTE_REQUIREMENTS` in
+`app/identity/api/manage_authorization.py` still named
+CREDIT/`confidential`/`view` for `/institution/registers`, so a reader who
+followed the page's own "Request access" prompt filed for a sentence that no
+longer opens anything. It now names CREDIT/`restricted`/`view`, which is the
+sentence the page asks for; `dashboard/tests/access/accessRequests.test.ts` pins the
+client's advertised requirements against that server table, and
+`tests/identity/api/test_grant_administration_integration.py` proves the approval carries the
+new grant, its institution and its expiry.
+
+The examiner bundle's source map is aligned too: `ecl-assumptions` and
+`crm-haircuts` are now CREDIT/`restricted` sources
+(`app/reporting/service/examiner_access.py`), so an examiner holding only
+CREDIT/`confidential` sees them withheld rather than disclosed. They are also two
+of the six registers a bank-bound examination session reads directly — the
+bundle cites the endpoint rather than copying the rows, and
+`app/core/examiner.py` is the allow-list that lets the cited reader open it.
+
+### Who loses these reads, and why that is correct
+
+Nothing is backfilled by this cutover. The mirror migration `202609220067`
+preserved each source Risk binding's sensitivity; it did not widen it. No reader
+gains a CREDIT row from holding Capital. The read outcomes below assume a
+complete active view binding with whole-institution coverage; narrowed bindings
+do not admit these reads.
+
+- **Readers with only a Capital binding** lose all seven reads. Capital screens
+  keep their own capital figures; the credit book and the named exposures are a
+  different sentence.
+- **Readers with CREDIT/`aggregated`** keep the two loan-classification reads and
+  lose the four registers and the large-exposure list.
+- **Readers with CREDIT/`confidential`** (the retired register sentence) lose all
+  seven reads: the four registers and `GET /banks/{id}/sdi/large-exposures` are
+  `restricted`, and the two loan-classification reads are `aggregated` —
+  sensitivity is exact-or-`all`, never a ladder, so `confidential` admits neither.
+  Their Phase 4 activity grid is the one credit read they keep. The dashboard no
+  longer mounts the cards for them, so a half-migrated grant shows a missing
+  panel, not a 403.
+- **Rows holding `all` module/sensitivity** keep every read, as everywhere else.
+- **Machine principals** are denied all seven. **Act-as-examiner sessions** are
+  denied five and read the two cited credit registers through the examiner
+  register contract, which binds them to one bank.
+
+Run the same read-only inventory as Phase 4 and add these columns to identify the
+affected population before release:
+
+`targets` and `active_bindings` come from the Phase 1 inventory and CTEs do not
+persist between statements, so the block below restates them: it runs on its own.
+
+```sql
+-- Per active human principal and institution: do they hold the Phase 5
+-- sentences?  Same active/lifecycle filters as the Phase 1 inventory.
+WITH active_principals AS (
+    SELECT
+        u.organization_id,
+        u.id AS principal_user_id,
+        CASE
+            WHEN u.auth_provider = 'service' THEN 'machine'
+            ELSE 'human'
+        END AS principal_type,
+        u.email
+    FROM users AS u
+    WHERE u.is_active IS TRUE
+),
+targets AS (
+    SELECT
+        p.*,
+        b.id AS institution_id
+    FROM active_principals AS p
+    JOIN banks AS b ON b.organization_id = p.organization_id
+),
+active_bindings AS (
+    SELECT *
+    FROM authorization_bindings
+    WHERE status = 'active'
+      AND revoked_at IS NULL
+      AND valid_from <= CURRENT_TIMESTAMP
+      AND (valid_until IS NULL OR valid_until > CURRENT_TIMESTAMP)
+)
+SELECT
+    t.organization_id,
+    t.institution_id,
+    t.principal_user_id,
+    t.email,
+    COALESCE(bool_or(
+        a.principal_type = t.principal_type
+        AND a.role_bundle IN ('viewer', 'auditor', 'analyst', 'approver', 'validator')
+        AND a.data_scope_kind = 'all'
+        AND a.module_scope IN ('credit', 'all')
+        AND a.sensitivity_scope IN ('aggregated', 'all')
+        AND ((a.institution_scope = 'institution' AND a.institution_id = t.institution_id)
+             OR (a.institution_scope = 'organization' AND a.institution_id IS NULL))
+    ), FALSE) AS credit_aggregated_view,
+    COALESCE(bool_or(
+        a.principal_type = t.principal_type
+        AND a.role_bundle IN ('viewer', 'auditor', 'analyst', 'approver', 'validator')
+        AND a.data_scope_kind = 'all'
+        AND a.module_scope IN ('credit', 'all')
+        AND a.sensitivity_scope IN ('restricted', 'all')
+        AND ((a.institution_scope = 'institution' AND a.institution_id = t.institution_id)
+             OR (a.institution_scope = 'organization' AND a.institution_id IS NULL))
+    ), FALSE) AS credit_restricted_view
+FROM targets AS t
+LEFT JOIN active_bindings AS a
+  ON a.organization_id = t.organization_id
+ AND a.principal_user_id = t.principal_user_id
+WHERE t.principal_type = 'human'
+GROUP BY t.organization_id, t.institution_id, t.principal_user_id, t.email
+ORDER BY t.organization_id, t.institution_id, t.email;
+```
+
+Every affected principal is listed by name; no row is created by this change.
+
+### Exact binding rows operators must create
+
+| Need                                                     | `role_bundle`                                              | `institution_scope`                        | `module_scope` | `sensitivity_scope` | `data_scope_kind` |
+| -------------------------------------------------------- | ---------------------------------------------------------- | ------------------------------------------ | -------------- | ------------------- | ----------------- |
+| Four Board registers and the SDI large-exposure list     | `viewer`, `auditor`, `analyst`, `approver`, or `validator` | exact `BK-*` or explicit organization-wide | `credit`       | `restricted`        | `all` (required)  |
+| Loan classification (both routes), the credit dashboards | the same set                                               | exact `BK-*` or explicit organization-wide | `credit`       | `aggregated`        | `all` (required)  |
+
+One row per need: the two sensitivities are separate sentences and are never
+composed from one another. A branch or region scope cannot be attached — the
+whole-institution rule refuses it. The `analyst` bundle is not required for
+either read; grant it only for the run route in Phase 4's table.
+
+### Release record (Phase 5)
+
+Attach, in addition to Phase 4's record:
+
+1. The dated inventory above BEFORE and AFTER, with the population that loses
+   each of the seven reads and the reason it is correct.
+2. The exact CREDIT/`restricted` and CREDIT/`aggregated` rows created before
+   release (one per named principal need; none backfilled).
+3. Confirmation that the dashboard gates shipped with the backend: the registers
+   page on `restricted`, and the SDI panels on the credit capability flags. A
+   backend-only deploy leaves the old page mounting cards that now 403.
+4. Real-binding browser evidence of the allowed and denied register page and SDI
+   panels, including the retired confidential sentence.
+5. Signed-in confirmation for every principal whose `authv` changed.
+
+### Executable verification (Phase 5)
+
+| Property                                                                                                                                               | Pinned by                                                                                                                                                                                                                                                                     |
+| ------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Each of the seven routes names its CREDIT dependency, no scalar or CAP gate                                                                            | `tests/architecture/test_credit_route_authorization.py`                                                                                                                                                                                                                       |
+| A fifth register on the register router cannot ship ungated                                                                                            | the same file, `test_every_register_router_read_is_in_the_authority_table`                                                                                                                                                                                                    |
+| The four register PUTs remain #184's Configurator work                                                                                                 | the same file, `test_register_writes_stay_pending_configurator`                                                                                                                                                                                                               |
+| Exact sentence admitted; scalar roles, CAP, other modules, other sensitivities, sibling institution and narrowed scopes refused                        | `tests/credit/api/test_credit_route_authorization_integration.py`, `test_remainder_reads_require_one_complete_exact_credit_sentence`                                                                                                                                                      |
+| The registers page mounts its credit cards only on CREDIT/`restricted`, names that sentence when it refuses, and asks the API for nothing on a refusal | `dashboard/tests/credit/credit-register-authorization.e2e.spec.ts` (real bindings, three journeys)                                                                                                                                                                            |
+| An SDI capital and risk reader is not shown, and does not request, the loan classification or the named exposures without the matching Credit sentence | `dashboard/tests/credit/sdi-credit-authorization.e2e.spec.ts` (real bindings, three journeys)                                                                                                                                                                                 |
+| The examiner register source uses the register route's sensitivity                                                                                     | `tests/reporting/api/test_examiner_authorization_integration.py::test_credit_registers_require_restricted_not_confidential`                                                                                                                                                               |
+| A support impersonation read is refused before the register loads                                                                                      | `tests/credit/service/test_concentration_identity_limits_integration.py`                                                                                                                                                                                                                  |
+| The dashboard mounts and fetches credit registers only on `restricted`                                                                                 | `dashboard/tests/institution/institution-registers-access.spec.tsx`                                                                                                                                                                                                           |
+| The access-request prompt asks for the sentence that opens the page                                                                                    | `dashboard/tests/access/accessRequests.test.ts` (against the server's `_EXACT_ROUTE_REQUIREMENTS` table) and `tests/identity/api/test_grant_administration_integration.py::test_institution_route_access_request_carries_expiry_into_the_grant[/institution/registers-credit-restricted]` |
+| The SDI capital screen renders the requirement, and asks for no book, without CREDIT/`aggregated`                                                      | `dashboard/tests/credit/sdi-credit-panels.spec.tsx`                                                                                                                                                                                                                           |

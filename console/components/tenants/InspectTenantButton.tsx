@@ -1,10 +1,16 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Eye, ShieldAlert } from "lucide-react";
-import { startInspectorSession } from "@/lib/api";
+import {
+  listTenants,
+  startInspectorSession,
+  toApiError,
+  type OperatorTenant,
+} from "@/lib/api";
 import { useInspector } from "@/lib/inspector";
 import { inspectorHours } from "@/lib/inspector-duration";
+import { examinableBanks } from "@/lib/inspector-bank";
 import { useMutation } from "@/lib/use-api";
 import { Button, Field, Input, Modal, Select, Textarea } from "@/components/ui";
 
@@ -15,6 +21,15 @@ import { Button, Field, Input, Modal, Select, Textarea } from "@/components/ui";
  * pushes the result into the shell's inspector context so the un-dismissable
  * ImpersonationBanner appears. This console surface only OPENS a session — the
  * /admin/inspector page owns management.
+ *
+ * The session is bound to ONE bank — the institution it examines — because the
+ * act-as-examiner token inherits that bank and the tenant API only serves the
+ * filed registers an examination cites when the bound bank is the bank in the
+ * path. The candidates come from the tenant board (GET /operator/v1/tenants,
+ * which returns one row PER BANK) when the modal opens, so an operator never
+ * types an institution id — and an organization with several banks offers each
+ * of them. `GET /tenants/{org}` is not used for this: it answers with the
+ * earliest-created bank, which would make a sibling bank unreachable.
  */
 
 // consent = a read-only look with the tenant's knowledge; break_glass = an
@@ -40,6 +55,45 @@ export function InspectTenantButton({
   const [durationUnit, setDurationUnit] = useState<"hours" | "minutes">(
     "hours",
   );
+  // The organization's banks, read from the tenant board when the modal opens.
+  // `loadedForOrg` travels with the cache: the desktop entitlements page keeps
+  // this button mounted while the selected organization changes, and a cache
+  // keyed on nothing would offer the previous organization's banks.
+  const [banks, setBanks] = useState<OperatorTenant[] | null>(null);
+  const [loadedForOrg, setLoadedForOrg] = useState<string | null>(null);
+  const [bankId, setBankId] = useState<string | null>(null);
+  const [bankLoading, setBankLoading] = useState(false);
+  const [bankError, setBankError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!open || (banks !== null && loadedForOrg === orgId)) return;
+    let alive = true;
+    setBankLoading(true);
+    setBankError(null);
+    listTenants()
+      .then((response) => {
+        if (!alive) return;
+        const candidates = examinableBanks(response.tenants, orgId);
+        setBanks(candidates);
+        setLoadedForOrg(orgId);
+        setBankId(candidates[0]?.bank_id ?? null);
+        setBankError(
+          candidates.length > 0
+            ? null
+            : "This organization has no bank yet, so there is no institution to examine.",
+        );
+      })
+      .catch((error: unknown) => {
+        if (!alive) return;
+        setBankError(toApiError(error).message);
+      })
+      .finally(() => {
+        if (alive) setBankLoading(false);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [open, orgId, banks, loadedForOrg]);
 
   const start = useMutation(startInspectorSession, {
     successMessage: "Inspector session started",
@@ -87,7 +141,7 @@ export function InspectTenantButton({
             <Button
               variant={breakGlass ? "danger" : "primary"}
               loading={start.loading}
-              disabled={!reasonValid || !supportReference.trim()}
+              disabled={!reasonValid || !supportReference.trim() || !bankId}
               icon={
                 breakGlass ? (
                   <ShieldAlert size={14} aria-hidden />
@@ -95,15 +149,17 @@ export function InspectTenantButton({
                   <Eye size={14} aria-hidden />
                 )
               }
-              onClick={() =>
+              onClick={() => {
+                if (!bankId) return;
                 void start.mutate({
                   organization_id: orgId,
+                  bank_id: bankId,
                   reason: reason.trim(),
                   support_reference: supportReference.trim(),
                   mode,
                   ttl_minutes: ttl,
-                })
-              }
+                });
+              }}
             >
               {breakGlass ? "Break glass" : "Start read-only"}
             </Button>
@@ -111,6 +167,42 @@ export function InspectTenantButton({
         }
       >
         <div className="space-y-4">
+          <Field label="Examination bank" required>
+            {bankLoading ? (
+              <p className="text-caption text-muted">
+                Loading the institutions…
+              </p>
+            ) : bankError ? (
+              <p className="text-caption text-critical">{bankError}</p>
+            ) : (banks?.length ?? 0) > 1 ? (
+              // Several institutions in one organization: the session is bound
+              // to ONE of them, so the operator picks which.
+              <Select
+                value={bankId ?? ""}
+                onChange={(e) => setBankId(e.target.value)}
+                aria-label="Examination bank"
+              >
+                {banks?.map((bank) => (
+                  <option key={bank.bank_id} value={bank.bank_id ?? ""}>
+                    {bank.bank_name ?? "Unnamed bank"} · {bank.bank_id}
+                  </option>
+                ))}
+              </Select>
+            ) : (
+              <p className="text-body">
+                {banks?.[0]?.bank_name ?? "This institution"}{" "}
+                <span className="font-mono text-caption text-muted">
+                  {bankId}
+                </span>
+              </p>
+            )}
+            <p className="mt-1 text-caption text-muted">
+              The session is bound to this institution: its act-as-examiner
+              token can read this bank&apos;s filed registers and no other
+              institution&apos;s.
+            </p>
+          </Field>
+
           <Field label="Reason" required>
             <Textarea
               value={reason}
