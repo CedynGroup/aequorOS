@@ -128,6 +128,52 @@ def test_direct_state_clients_are_forbidden(pure_app: Path, client: str) -> None
 
 
 @pytest.mark.parametrize(
+    "relative",
+    [
+        "capital/domain/probe.py",
+        "bi/schemas/query.py",
+        "capital/__init__.py",
+    ],
+)
+@pytest.mark.parametrize(
+    "source,target",
+    [
+        ("import urllib.request\n", "urllib.request"),
+        ("from urllib import request\n", "urllib.request"),
+        ("from urllib.request import urlopen\n", "urllib.request.urlopen"),
+        ("import http.client\n", "http.client"),
+        ("from http import client\n", "http.client"),
+        ("from http.client import HTTPSConnection\n", "http.client.HTTPSConnection"),
+        ('import importlib\nimportlib.import_module("urllib.request")\n', "urllib.request"),
+        ('__import__("http.client")\n', "http.client"),
+    ],
+)
+def test_stdlib_http_clients_are_forbidden(
+    pure_app: Path, relative: str, source: str, target: str
+) -> None:
+    _write(pure_app, relative, source)
+    module = "app." + relative.removesuffix(".py").replace("/", ".")
+    assert domain_state_imports(pure_app) == {module: {target}}
+
+
+@pytest.mark.parametrize(
+    "source",
+    [
+        "import urllib.parse\n",
+        "from urllib import parse\n",
+        "from urllib.parse import urlparse\n",
+        "from http import HTTPStatus\n",
+        "from http.cookies import SimpleCookie\n",
+        'import importlib\nimportlib.import_module("urllib.parse")\n',
+        '__import__("http")\n',
+    ],
+)
+def test_pure_stdlib_url_and_http_helpers_are_allowed(pure_app: Path, source: str) -> None:
+    _write(pure_app, "capital/domain/probe.py", source)
+    assert domain_state_imports(pure_app) == {}
+
+
+@pytest.mark.parametrize(
     "source,target",
     [
         ("from ..service import engine\n", "app.capital.service.engine"),

@@ -52,6 +52,8 @@ STATE_CLIENTS: frozenset[str] = frozenset(
         "requests",
         "httpx",
         "aiohttp",
+        "urllib.request",
+        "http.client",
     }
 )
 
