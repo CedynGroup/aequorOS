@@ -1254,6 +1254,7 @@
     "tests/api/test_examiner_register_reads_integration.py::test_a_session_without_a_bank_claim_reads_nothing[GET /api/v1/banks/{bank_id}/liquidity-thresholds]": "integration",
     "tests/api/test_examiner_register_reads_integration.py::test_a_session_without_a_bank_claim_reads_nothing[GET /api/v1/banks/{bank_id}/liquidity/ewis]": "integration",
     "tests/api/test_examiner_register_reads_integration.py::test_a_tenant_principal_still_needs_the_exact_binding": "integration",
+    "tests/api/test_examiner_register_reads_integration.py::test_an_admitted_read_is_recorded_as_an_allowed_decision": "integration",
     "tests/api/test_examiner_register_reads_integration.py::test_an_examination_mutates_nothing[/api/v1/banks/BK-SAMP0001/capital-plan]": "integration",
     "tests/api/test_examiner_register_reads_integration.py::test_an_examination_mutates_nothing[/api/v1/banks/BK-SAMP0001/crm-haircuts]": "integration",
     "tests/api/test_examiner_register_reads_integration.py::test_an_examination_mutates_nothing[/api/v1/banks/BK-SAMP0001/ecl-assumptions]": "integration",

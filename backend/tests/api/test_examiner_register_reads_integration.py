@@ -23,15 +23,19 @@ The widening is narrow and it is a widening of REACH only:
 from __future__ import annotations
 
 import datetime as dt
+from collections.abc import Iterator
+from typing import TYPE_CHECKING, cast
 
 import pytest
 from fastapi.testclient import TestClient
+from loguru import logger
 from sqlalchemy import delete
 from sqlalchemy.orm import Session
 
 from app.core import security
 from app.core.config import get_settings
 from app.core.examiner import EXAMINER_REGISTER_ROUTES
+from app.core.observability import Condition
 from app.db.base import utc_now
 from app.identity.models.authorization import AuthorizationBinding
 from app.models import Bank
@@ -40,6 +44,11 @@ from tests.fixtures.canonical_bank_fixture import (
     materialize_canonical_test_book,
 )
 from tests.support.helpers import ORG_1, headers
+
+if TYPE_CHECKING:
+    # ``Message`` lives in loguru's stub only — it is the sink's message type,
+    # never imported at runtime — so the annotation is deferred.
+    from loguru import Message
 
 #: A second institution of the SAME organization: an examination of the sibling
 #: must not read this bank's registers (two banks of one org share an RLS tenant).
@@ -117,6 +126,27 @@ def _register_id(register: tuple[str, str]) -> str:
     return f"{register[0]} {register[1]}"
 
 
+def _structured_fields(message: Message) -> dict[str, object]:
+    """The emitted fields of one record, typed at the loguru boundary.
+
+    ``loguru.Record.extra`` is ``dict[Any, Any]`` by design — a sink carries
+    arbitrary fields — so it is narrowed once here instead of reaching into an
+    ``Any`` from every assertion below."""
+    return cast("dict[str, object]", message.record["extra"])
+
+
+@pytest.fixture
+def captured_events() -> Iterator[list[dict[str, object]]]:
+    """Collect the records one request emits on the observability channel."""
+    records: list[dict[str, object]] = []
+    sink_id = logger.add(
+        lambda message: records.append(_structured_fields(message)),
+        level="DEBUG",
+    )
+    yield records
+    logger.remove(sink_id)
+
+
 @pytest.mark.parametrize("register", CITED, ids=_register_id)
 def test_a_bound_examination_reads_every_cited_register(
     db_client: TestClient, register: tuple[str, str]
@@ -154,6 +184,35 @@ def test_a_session_without_a_bank_claim_reads_nothing(
     path = _path(templated)
     response = db_client.request(method, path, headers=_examiner(None))
     assert response.status_code == 403, f"{method} {path}: {response.text}"
+
+
+def test_an_admitted_read_is_recorded_as_an_allowed_decision(
+    db_client: TestClient, captured_events: list[dict[str, object]]
+) -> None:
+    """A permitted register read is a DECISION, never a denial.
+
+    ``authorization_denied`` is the warning-level refusal channel an operator
+    watches; filing an allowed read there would show a healthy examination as a
+    denial storm and bury real refusals."""
+    response = db_client.get(f"{BASE}/ecl-assumptions", headers=_examiner())
+    assert response.status_code == 200, response.text
+    decisions = [
+        record
+        for record in captured_events
+        if record.get("condition") == Condition.AUTHORIZATION_BINDING_DECISION.value
+        and record.get("reason") == "examiner_register_read"
+    ]
+    assert len(decisions) == 1, "the permitted read records exactly one decision"
+    assert decisions[0]["allowed"] is True
+    assert decisions[0]["severity"] == "info"
+    assert decisions[0]["register"] == "ecl-assumptions"
+    denied = [
+        record
+        for record in captured_events
+        if record.get("condition") == Condition.AUTHORIZATION_DENIED.value
+        and record.get("route") == "/api/v1/banks/{bank_id}/ecl-assumptions"
+    ]
+    assert denied == [], "an allowed read must emit no denial"
 
 
 def test_the_binding_is_exact_in_both_directions(db_client: TestClient) -> None:

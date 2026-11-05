@@ -21,7 +21,11 @@ from app.core.authorization import (
 )
 from app.core.config import get_settings
 from app.core.key_management.presentation import SESSION_STATE, SESSION_SUPPORT, PresentationState
-from app.core.observability import authorization_denied, cross_tenant_attempt
+from app.core.observability import (
+    authorization_binding_decision,
+    authorization_denied,
+    cross_tenant_attempt,
+)
 from app.core.tenancy import TenantContext
 from app.db.session import get_sessionmaker
 from app.identity.service.authorization import EffectiveDataScope
@@ -867,9 +871,7 @@ def _examiner_register_access(
         or ctx.actor_user_id is not None
     ):
         return False
-    if not all(
-        check.passed for check in authorization_service.request_wide_condition_checks()
-    ):
+    if not all(check.passed for check in authorization_service.request_wide_condition_checks()):
         authorization_denied(
             reason="examiner_register_request_condition_failed",
             method=request.method.upper(),
@@ -907,14 +909,25 @@ def _examiner_register_access(
                 "open an inspection session for this bank to read its registers."
             ),
         )
-    authorization_denied(
+    # An ALLOWED decision, recorded on the same channel every other enforcing
+    # decision uses: this read is a binding decision like any other, and
+    # ``authorization_denied`` would file a permitted read as a warning-level
+    # denial and pollute the refusal signal an operator watches.
+    authorization_binding_decision(
+        allowed=True,
         reason="examiner_register_read",
+        severity="info",
+        surface="examiner_register",
         method=request.method.upper(),
         route=route_path,
         organization_id=ctx.organization_id,
         bank_id=bank.id,
         session_id=ctx.impersonation_context,
+        examiner_bank_id=ctx.examiner_bank_id,
         register=register.name,
+        register_module=register.module.value,
+        register_sensitivity=register.sensitivity.value,
+        permission=Permission.VIEW.value,
     )
     return True
 
