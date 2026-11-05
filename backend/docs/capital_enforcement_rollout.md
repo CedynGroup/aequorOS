@@ -25,6 +25,10 @@ SDI capital assurance requires CAP `view` with sensitivity `restricted`.
 Unauthorized Capital run IDs return 404, and Capital rows are removed before
 regulatory-run counts and pagination are calculated.
 
+The SDI loan-classification and large-exposure diagnostics are Credit reads.
+Their authority requirements and Capital-screen behavior are owned by
+[the Credit rollout](credit_enforcement_rollout.md#phase-5-the-register-and-sdi-remainder-enforced-in-code-2026-11-03).
+
 Capital execution requires whole-institution CAP `run` with sensitivity
 `confidential`. Both the single-run service (`POST /banks/{bank_id}/regulatory-runs`
 with `module=capital`) and the scenario-batch service enforce this before reading
@@ -41,6 +45,12 @@ Capital entries in `/scenario-workbench/capital` apply the same CAP
 `run`/`create`/`view`/`edit` split. No route infers authority from `users.role`,
 token `roles[]`, a different module, a different sensitivity, or separate
 partial bindings.
+
+One examiner exception, and it is not an inference: the evidence bundle CITES
+`GET /banks/{bank_id}/capital-plan`, so a verified act-as-examiner session bound
+to the bank in the path reads that one summary and nothing else here —
+`/capital-plan/ilaap` and every CAP run route stay refused
+(`app/core/examiner.py`, [the examiner rollout](examiner_evidence_enforcement_rollout.md)).
 
 ## Dashboard access
 

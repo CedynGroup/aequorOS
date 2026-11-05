@@ -17,6 +17,8 @@ from sqlalchemy import func, select
 from app.api.deps import (
     CapitalAggregatedView,
     CapitalRestrictedView,
+    CreditAggregatedView,
+    CreditRestrictedView,
     DbSession,
     LiquidityConfidentialResource,
     Tenant,
@@ -242,12 +244,17 @@ def _loan_classification_read(
 def get_loan_classification(
     bank_id: str,
     db: DbSession,
-    ctx: Tenant,
+    access: CreditAggregatedView,
     as_of: Annotated[date | None, Query()] = None,
 ) -> SdiLoanClassificationRead:
-    """Class-aware loan classification, raw DPD, and portfolio-at-risk analytics."""
-    bank = banks_service.resolve_bank_reference(db, ctx, bank_id)
-    return _loan_classification_read(db, ctx, bank, as_of)
+    """Class-aware loan classification, raw DPD, and portfolio-at-risk analytics.
+
+    Aggregate grade buckets and ratios over the institution's book: no obligor,
+    facility reference or counterparty identity, so it is the same CREDIT /
+    ``aggregated`` / ``view`` sentence as the credit dashboard. Capital authority
+    does not admit it.
+    """
+    return _loan_classification_read(db, access.ctx, access.bank, as_of)
 
 
 @router.get(
@@ -258,12 +265,11 @@ def get_loan_classification(
 def get_sdi_loan_classification(
     bank_id: str,
     db: DbSession,
-    ctx: Tenant,
+    access: CreditAggregatedView,
     as_of: Annotated[date | None, Query()] = None,
 ) -> SdiLoanClassificationRead:
     """Compatibility route for the class-aware loan classification response."""
-    bank = banks_service.resolve_bank_reference(db, ctx, bank_id)
-    return _loan_classification_read(db, ctx, bank, as_of)
+    return _loan_classification_read(db, access.ctx, access.bank, as_of)
 
 
 @router.get(
@@ -457,11 +463,17 @@ def get_sdi_liquidity_position(
 def get_sdi_large_exposures(
     bank_id: str,
     db: DbSession,
-    ctx: Tenant,
+    access: CreditRestrictedView,
     as_of: Annotated[date | None, Query()] = None,
 ) -> SdiLargeExposuresRead:
-    """Connected-group exposure view against the SDI control-plane limits."""
-    bank = banks_service.resolve_bank_reference(db, ctx, bank_id)
+    """Connected-group exposure view against the SDI control-plane limits.
+
+    Each row carries ``counterparty_name`` and every percentage is measured
+    against Net Own Funds, so this is CREDIT / ``restricted`` / ``view`` over the
+    whole institution. Capital authority does not admit it.
+    """
+    ctx = access.ctx
+    bank = access.bank
     when = _effective_as_of(db, ctx, bank, as_of)
     report = sdi_views.get_sdi_large_exposures(db, ctx, bank, when)
     return SdiLargeExposuresRead(

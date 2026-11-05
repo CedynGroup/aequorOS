@@ -33,3 +33,9 @@ class TenantContext:
     # The email of the operator acting as examiner (impersonation only) —
     # provenance for audit; never a tenant identity.
     actor_operator: str | None = None
+    # The ONE bank the originating inspection session is examining, carried in
+    # the signed impersonation token. Absent for every other principal and for a
+    # legacy session minted before the bank was recorded; a surface that admits
+    # an examiner read requires it to equal the bank in the path, so a missing
+    # claim refuses rather than falling back to the whole organization.
+    examiner_bank_id: str | None = None

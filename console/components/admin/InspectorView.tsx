@@ -40,9 +40,13 @@ import {
   inspectorDurationMinutes,
   type InspectorDurationUnit,
 } from "@/lib/inspector-duration";
+import { examinedOptionOf, splitExaminedOption } from "@/lib/inspector-bank";
 
 interface StartForm {
   organization_id: string;
+  /** The examined institution. Required: the act-as-examiner token inherits it,
+   * and the tenant API serves a cited register only for that bank. */
+  bank_id: string;
   reason: string;
   support_reference: string;
   mode: InspectorMode;
@@ -51,6 +55,7 @@ interface StartForm {
 
 const BLANK_FORM: StartForm = {
   organization_id: "",
+  bank_id: "",
   reason: "",
   support_reference: "",
   mode: "consent",
@@ -94,6 +99,17 @@ export default function InspectorView() {
     return map;
   }, [tenants.data]);
 
+  const examinedOption = examinedOptionOf(form.organization_id, form.bank_id);
+
+  const examinedBankLabel = useMemo(() => {
+    const tenant = (tenants.data?.tenants ?? []).find(
+      (t) =>
+        t.organization_id === form.organization_id &&
+        t.bank_id === form.bank_id,
+    );
+    return tenant?.bank_name ?? null;
+  }, [tenants.data, form.organization_id, form.bank_id]);
+
   const startM = useMutation(startInspectorSession, {
     errorContext: "Start inspection",
     successMessage: (s) => `Inspecting ${s.organization_id}`,
@@ -129,6 +145,10 @@ export default function InspectorView() {
     const errs: Partial<Record<keyof StartForm, string>> = {};
     if (!form.organization_id)
       errs.organization_id = "Choose a tenant to inspect.";
+    if (!form.bank_id)
+      errs.bank_id = hasTenants
+        ? "This organization has no bank yet, so there is no institution to examine."
+        : "Enter the institution this session examines.";
     if (!form.reason.trim())
       errs.reason = "A reason is required and is written to the audit log.";
     if (!form.support_reference.trim())
@@ -147,6 +167,7 @@ export default function InspectorView() {
     if (Object.keys(errs).length > 0) return;
     void startM.mutate({
       organization_id: form.organization_id,
+      bank_id: form.bank_id,
       reason: form.reason.trim(),
       support_reference: form.support_reference.trim(),
       mode: form.mode,
@@ -176,6 +197,19 @@ export default function InspectorView() {
           <MonoId id={s.organization_id} />
         </div>
       ),
+    },
+    {
+      key: "bank",
+      header: "Examination bank",
+      sortable: true,
+      sortAccessor: (s) => s.bank_id ?? "",
+      render: (s) =>
+        s.bank_id ? (
+          <MonoId id={s.bank_id} />
+        ) : (
+          // Opened before the binding landed: no institution, no register reads.
+          <span className="text-caption text-muted">—</span>
+        ),
     },
     {
       key: "mode",
@@ -424,16 +458,29 @@ export default function InspectorView() {
             {hasTenants ? (
               <Select
                 id="insp-org"
-                value={form.organization_id}
+                value={examinedOption}
                 invalid={Boolean(formErr.organization_id)}
-                onChange={(e) =>
-                  setForm((f) => ({ ...f, organization_id: e.target.value }))
-                }
+                onChange={(e) => {
+                  const { organizationId, bankId } = splitExaminedOption(
+                    e.target.value,
+                  );
+                  setForm((f) => ({
+                    ...f,
+                    organization_id: organizationId,
+                    bank_id: bankId,
+                  }));
+                }}
               >
                 <option value="">Select a tenant…</option>
                 {(tenants.data?.tenants ?? []).map((t) => (
-                  <option key={t.organization_id} value={t.organization_id}>
+                  <option
+                    key={examinedOptionOf(t.organization_id, t.bank_id)}
+                    value={examinedOptionOf(t.organization_id, t.bank_id)}
+                  >
                     {t.organization_name} · {t.organization_id}
+                    {t.bank_id
+                      ? ` · ${t.bank_name ?? "unnamed bank"} (${t.bank_id})`
+                      : " · no bank"}
                   </option>
                 ))}
               </Select>
@@ -445,6 +492,33 @@ export default function InspectorView() {
                 invalid={Boolean(formErr.organization_id)}
                 onChange={(e) =>
                   setForm((f) => ({ ...f, organization_id: e.target.value }))
+                }
+              />
+            )}
+          </Field>
+
+          <Field
+            label="Examination bank"
+            required
+            error={formErr.bank_id}
+            htmlFor="insp-bank"
+            hint="The session is bound to ONE institution: its act-as-examiner token reads this bank's filed registers and no other institution's."
+          >
+            {hasTenants ? (
+              <p className="text-body" id="insp-bank">
+                {examinedBankLabel ?? "Select a tenant to resolve its bank"}{" "}
+                <span className="font-mono text-caption text-muted">
+                  {form.bank_id || "—"}
+                </span>
+              </p>
+            ) : (
+              <Input
+                id="insp-bank"
+                placeholder="BK-XXXXXXXX"
+                value={form.bank_id}
+                invalid={Boolean(formErr.bank_id)}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, bank_id: e.target.value }))
                 }
               />
             )}

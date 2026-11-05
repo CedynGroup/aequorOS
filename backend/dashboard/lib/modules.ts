@@ -173,6 +173,10 @@ export type ModuleScope = {
   capitalConfidentialView?: boolean;
   /** Exact CAP/restricted view authority for assurance evidence. */
   capitalRestrictedView?: boolean;
+  /** Exact CREDIT/aggregated view authority for dashboard figures and loan classification. */
+  creditAggregatedView?: boolean;
+  /** Exact CREDIT/restricted view authority for obligor-named and Board-policy reads. */
+  creditRestrictedView?: boolean;
   /** Exact CAP/confidential run authority. */
   capitalRun?: boolean;
   /** Exact CAP/confidential create authority (new ICAAP cycles). */
@@ -974,12 +978,18 @@ function institutionRequirements(
   const capabilities = scope.institutionCapabilities ?? [];
   const eligible = capabilities.filter((row) => row.dataScope?.kind === "all");
   if (path === "/institution/registers") {
+    // The page mounts whichever register family the reader holds. Liquidity's
+    // registers are `confidential`; the credit registers became `restricted` in
+    // the #182 remainder, because they are the Board's own assumptions and
+    // limits and a concentration-limit row can name a counterparty group. A
+    // Capital grant opens neither, and the retired Credit/confidential sentence
+    // no longer counts.
     if (
       hasEffectiveCapability(eligible, "liq", "confidential", "view") ||
-      hasEffectiveCapability(eligible, "credit", "confidential", "view")
+      hasEffectiveCapability(eligible, "credit", "restricted", "view")
     )
       return [];
-    return [requirement("credit", "Credit", "confidential", "Confidential")];
+    return [requirement("credit", "Credit", "restricted", "Restricted")];
   }
   if (
     path === "/institution" &&

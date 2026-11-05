@@ -89,7 +89,17 @@ export default function SdiCapitalView({
   const summary = useSdiCapitalSummary(aggregateBankId);
   const assurance = useSdiCapitalAssurance(assuranceBankId);
   const checks = useSdiCapitalChecks(aggregateBankId);
-  const classification = useSdiLoanClassification(bankId);
+  // The classified book is Credit's figure, not Capital's. Capital authority
+  // does not imply it, so the panel is fetched only on the exact Credit sentence
+  // and otherwise explains the requirement instead of showing a 403.
+  const creditAggregated = moduleScope.creditAggregatedView === true;
+  const classification = useSdiLoanClassification(
+    creditAggregated ? bankId : undefined,
+  );
+  // One authority sentence, reused verbatim so the KPI hints and the denied
+  // panel never drift into two names for the same requirement.
+  const creditAggregatedSentence = "Credit · Aggregated · View";
+  const creditAggregatedHint = `Requires ${creditAggregatedSentence}`;
 
   const cap = summary.data;
   // The s.29 minimum is control-plane data carried on the summary. There is
@@ -132,7 +142,10 @@ export default function SdiCapitalView({
     carPct: point.car_pct === null ? null : num(point.car_pct),
     // A null NPL ratio plotted as 0% — the best possible reading of a figure
     // that was never computed. Null keeps the point off the line instead.
-    nplPct: numOrNull(point.npl_ratio) === null ? null : numOrNull(point.npl_ratio)! * 100,
+    nplPct:
+      numOrNull(point.npl_ratio) === null
+        ? null
+        : numOrNull(point.npl_ratio)! * 100,
   }));
   const currentAssurance = assurance.data?.current;
 
@@ -264,9 +277,11 @@ export default function SdiCapitalView({
                   unit="%"
                   status="ok"
                   hint={
-                    classification.data?.npl_ratio != null
-                      ? "Non-performing loans ÷ total exposure"
-                      : "No loans in the current book to measure"
+                    !creditAggregated
+                      ? creditAggregatedHint
+                      : classification.data?.npl_ratio != null
+                        ? "Non-performing loans ÷ total exposure"
+                        : "No loans in the current book to measure"
                   }
                 />
                 <KpiStat
@@ -279,7 +294,11 @@ export default function SdiCapitalView({
                       : "—"
                   }
                   status="ok"
-                  hint="Class-aware NBFI 4-grade provisioning"
+                  hint={
+                    creditAggregated
+                      ? "Class-aware NBFI 4-grade provisioning"
+                      : creditAggregatedHint
+                  }
                 />
               </div>
             </PageContainer>
@@ -575,22 +594,29 @@ export default function SdiCapitalView({
           <SectionCard
             title="Loan classification & provisioning"
             subtitle="NBFI 4-grade (Standard / Sub-standard / Doubtful / Loss); NPL at 90 days past due"
-            noPadding
+            noPadding={creditAggregated}
           >
-            <QueryBoundary
-              contained
-              isLoading={classification.isLoading}
-              error={classification.error}
-              onRetry={() => classification.refetch()}
-            >
-              {classification.data ? (
-                <DataTable
-                  columns={bucketColumns}
-                  rows={classification.data.buckets}
-                  density="compact"
-                />
-              ) : null}
-            </QueryBoundary>
+            {creditAggregated ? (
+              <QueryBoundary
+                contained
+                isLoading={classification.isLoading}
+                error={classification.error}
+                onRetry={() => classification.refetch()}
+              >
+                {classification.data ? (
+                  <DataTable
+                    columns={bucketColumns}
+                    rows={classification.data.buckets}
+                    density="compact"
+                  />
+                ) : null}
+              </QueryBoundary>
+            ) : (
+              <p className="p-4 text-body text-slate">
+                Loan classification requires {creditAggregatedSentence}. A
+                Capital grant does not include the credit book.
+              </p>
+            )}
           </SectionCard>
         </PageContainer>
       </div>

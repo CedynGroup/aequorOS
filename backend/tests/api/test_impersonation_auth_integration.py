@@ -30,15 +30,20 @@ _SESSION_ID = "11111111-2222-4333-8444-555555555555"
 _OPERATOR = "ops@aequoros.com"
 
 
-def _impersonation_token(
+def _impersonation_token(  # noqa: PLR0913 - one keyword per signed claim
     org_id: str,
     *,
     session_id: str = _SESSION_ID,
     operator: str = _OPERATOR,
     ttl_minutes: float = 15,
     secret: str | None = None,
+    bank_id: str | None = None,
 ) -> str:
-    """Mint an act-as-examiner token the tenant API will verify."""
+    """Mint an act-as-examiner token the tenant API will verify.
+
+    ``bank_id`` is the examination bank the originating session recorded. A
+    token without one is still a read-only examiner of the ORGANIZATION — it
+    simply reads no filed register (``app.core.examiner``)."""
     resolved = secret or get_settings().auth.impersonation_jwt_secret
     assert resolved, "the impersonation secret must be configured for this helper"
     now = utc_now()
@@ -49,6 +54,7 @@ def _impersonation_token(
         secret=resolved,
         issued_at=now,
         expires_at=now + dt.timedelta(minutes=ttl_minutes),
+        bank_id=bank_id,
     )
 
 

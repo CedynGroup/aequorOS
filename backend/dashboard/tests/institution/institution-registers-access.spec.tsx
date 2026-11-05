@@ -171,29 +171,31 @@ function view(children: ReactNode) {
 it.each([
   {
     name: "Liquidity only",
-    modules: ["liq"] as const,
+    grants: [grant("liq")],
     paths: liquidityPaths,
     titles: liquidityTitles,
     hidden: creditTitles,
   },
   {
+    // The credit registers are restricted: the Board's assumptions and limits,
+    // one of which can name a counterparty group.
     name: "Credit only",
-    modules: ["credit"] as const,
+    grants: [grant("credit", { sensitivity: "restricted" })],
     paths: creditPaths,
     titles: creditTitles,
     hidden: liquidityTitles,
   },
   {
     name: "both source modules",
-    modules: ["liq", "credit"] as const,
+    grants: [grant("liq"), grant("credit", { sensitivity: "restricted" })],
     paths: [...liquidityPaths, ...creditPaths],
     titles: [...liquidityTitles, ...creditTitles],
     hidden: [],
   },
 ])(
   "shows and fetches only authorized Board registers with $name",
-  async ({ modules, paths, titles, hidden }) => {
-    selection.capabilities = modules.map((module) => grant(module));
+  async ({ grants, paths, titles, hidden }) => {
+    selection.capabilities = grants;
     selection.resolved = false;
     const rendered = view(
       <ModuleGuard>
@@ -213,7 +215,7 @@ it.each([
     for (const title of hidden)
       expect(screen.queryByRole("heading", { name: title })).toBeNull();
     await waitFor(() =>
-      expect(screen.getAllByRole("table")).toHaveLength(modules.length * 2),
+      expect(screen.getAllByRole("table")).toHaveLength(grants.length * 2),
     );
     if (paths.includes("ecl-assumptions"))
       expect(await screen.findByText("No assumptions adopted")).toBeVisible();
@@ -243,15 +245,25 @@ it.each([
     grants: [
       grant("liq", { sensitivity: "restricted" }),
       grant("liq", { permission: "edit" }),
-      grant("credit", { sensitivity: "restricted" }),
+      grant("credit", { sensitivity: "confidential" }),
       grant("credit", { permission: "edit" }),
     ],
+  },
+  {
+    // The credit registers moved from confidential to restricted in #182. The
+    // old sentence must no longer mount or fetch them, so a half-migrated grant
+    // shows the requirement instead of a server 403.
+    name: "the retired Credit/confidential sentence",
+    grants: [grant("credit", { sensitivity: "confidential" })],
   },
   {
     name: "contextual grants",
     grants: [
       grant("liq", { requiresContextualAuthorization: true }),
-      grant("credit", { requiresContextualAuthorization: true }),
+      grant("credit", {
+        sensitivity: "restricted",
+        requiresContextualAuthorization: true,
+      }),
     ],
   },
   {
@@ -261,6 +273,7 @@ it.each([
         dataScope: { kind: "branch", branches: ["A"], regions: [] },
       }),
       grant("credit", {
+        sensitivity: "restricted",
         dataScope: { kind: "branch", branches: ["A"], regions: [] },
       }),
     ],
@@ -272,6 +285,7 @@ it.each([
         dataScope: { kind: "region", branches: [], regions: ["A"] },
       }),
       grant("credit", {
+        sensitivity: "restricted",
         dataScope: { kind: "region", branches: [], regions: ["A"] },
       }),
     ],

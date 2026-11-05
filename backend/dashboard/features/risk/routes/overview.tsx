@@ -107,7 +107,10 @@ export default function RiskLimitMonitorPage() {
   const sdiChecks = useSdiCapitalChecks(
     isSdi && scope.capitalAggregatedView ? bankId : undefined,
   );
-  const sdiExposures = useSdiLargeExposures(isSdi ? bankId : undefined);
+  const sdiExposures = useSdiLargeExposures(
+    // Named counterparty exposures are Credit's row, not Capital's.
+    isSdi && scope.creditRestrictedView ? bankId : undefined,
+  );
 
   const [filter, setFilter] = useState<Filter>("all");
   const [tab, setTab] = useState("wall");

@@ -50,7 +50,11 @@ cross-tenant institutions return 404. The evaluator emits
 `authz.binding_decision` with target, outcome, matching binding IDs, and
 per-binding reasons; evaluation failure records `binding_evaluation_failed` and
 denies closed. Operator impersonation
-and integration keys do not satisfy the interactive human-binding gate.
+and integration keys do not satisfy the interactive human-binding gate, with one
+narrow exception: the examiner evidence bundle CITES the threshold, haircut and
+EWI reads, so a verified act-as-examiner session bound to the bank in the path
+reads those three and no other Liquidity surface
+(`app/core/examiner.py`, `examiner_evidence_enforcement_rollout.md`).
 
 The EWI, Liquidity threshold, and Liquidity haircut PUT routes remain on their
 existing configuration gate until issue #184. Scheduled internal live

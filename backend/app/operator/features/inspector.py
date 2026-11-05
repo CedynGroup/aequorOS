@@ -10,8 +10,9 @@ the operator read endpoints under that session.
 BANK APP, seeing exactly what the tenant sees, mapped to the read-only
 ``examiner`` role. The token is signed with the DEDICATED
 ``IMPERSONATION_JWT_SECRET`` (fail-closed: 503 when unset), is scoped to the one
-tenant + the examiner role, never outlives its session (min(session, +15m)), and
-grants no mutation (the tenant API refuses every write under impersonation). This
+tenant + the examiner role + the ONE bank the session examines, never outlives
+its session (min(session, +15m)), and grants no mutation (the tenant API refuses
+every write under impersonation). This
 is the ONLY operator path that touches tenant auth, and it does so only through
 the published token contract in ``app/core/security.py`` — never by importing
 ``app/api/deps.py``.
@@ -69,6 +70,7 @@ def start_inspector_session(
     row = inspector.start_session(
         db,
         organization_id=organization_id,
+        bank_id=normalize_public_id(payload.bank_id),
         started_by=operator.email,
         mode=payload.mode,
         reason=payload.reason,
@@ -82,6 +84,7 @@ def start_inspector_session(
         target_org=organization_id,
         detail={
             "session_id": str(row.id),
+            "bank_id": row.bank_id,
             "mode": row.mode,
             "read_only": row.read_only,
             "ttl_minutes": payload.ttl_minutes,
@@ -187,6 +190,11 @@ def mint_inspector_act_token(
     expires_at = min(session_expires_at, now + ACT_TOKEN_MAX_TTL)
     act_token = security.mint_impersonation_token(
         organization_id=row.organization_id,
+        # The examination bank, recorded when the session was opened. A session
+        # opened before the binding landed has none: the token then carries no
+        # ``bank`` claim and the tenant API reads no filed register through it
+        # (``app.core.examiner``) — there is no organization-wide fallback.
+        bank_id=row.bank_id,
         act_operator=operator.email,
         session_id=str(row.id),
         secret=impersonation_secret,
@@ -201,6 +209,7 @@ def mint_inspector_act_token(
         # Never the token — only its provenance/expiry.
         detail={
             "session_id": str(row.id),
+            "bank_id": row.bank_id,
             "role": "examiner",
             "expires_at": expires_at.isoformat(),
         },

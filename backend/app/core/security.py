@@ -207,7 +207,8 @@ def decode_token(
 # it is worthless on the normal access-token path and a normal access token can
 # never masquerade as one. The tenant API pins the role to ``examiner``
 # regardless of the claim; the token merely carries provenance (which operator,
-# which inspector session, which tenant).
+# which inspector session, which tenant, and — since the bank binding landed —
+# which ONE bank that session is examining).
 IMPERSONATION_TOKEN_TYP = "impersonation"
 
 
@@ -220,12 +221,19 @@ def mint_impersonation_token(  # noqa: PLR0913 - one keyword per signed claim
     issued_at: dt.datetime,
     expires_at: dt.datetime,
     roles: list[str] | None = None,
+    bank_id: str | None = None,
 ) -> str:
     """Sign an act-as-examiner impersonation token for one tenant.
 
     ``expires_at`` is supplied already clamped to the originating inspector
     session's window (the operator endpoint does the clamping); this function
     signs exactly what it is given so the crypto stays policy-free.
+
+    ``bank_id`` is the bank the inspection session is examining, recorded
+    durably when the session was opened. It becomes the ``bank`` claim: the
+    tenant API reads an examiner register ONLY when that claim names the bank in
+    the path, so a token minted without one (a session opened before the bank
+    was recorded) can never widen to the whole organization.
     """
     payload: dict[str, Any] = {
         "typ": IMPERSONATION_TOKEN_TYP,
@@ -236,6 +244,8 @@ def mint_impersonation_token(  # noqa: PLR0913 - one keyword per signed claim
         "iat": int(issued_at.timestamp()),
         "exp": int(expires_at.timestamp()),
     }
+    if bank_id is not None:
+        payload["bank"] = str(bank_id)
     return jwt.encode(payload, secret, algorithm="HS256")
 
 

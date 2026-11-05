@@ -1366,6 +1366,7 @@ def test_real_staff_batch_read_uses_session_evidence(
         session = inspector.start_session(
             db,
             organization_id=ORG_1,
+            bank_id=BANK,
             started_by=operator.email,
             reason="Diagnose bank upload",
             support_reference="SUP-494",
@@ -1571,6 +1572,7 @@ def test_historical_staff_session_evidence_does_not_cross_ownership(
         session = inspector.start_session(
             db,
             organization_id=ORG_2 if mismatch == "organization" else ORG_1,
+            bank_id=FOREIGN if mismatch == "organization" else BANK,
             started_by="other-staff@example.test"
             if mismatch == "operator"
             else "audit-staff@example.test",
@@ -1608,6 +1610,7 @@ def test_actual_inspector_resources_are_separated_per_bank(
         inspector.start_session(
             db,
             organization_id=ORG_1,
+            bank_id=BANK,
             started_by=operator.email,
             reason="Review returned resources",
             support_reference="SUP-CATALOGUE",
@@ -1742,6 +1745,7 @@ def test_staff_feed_reads_resolve_retained_bank_subjects(
         inspector.start_session(
             db,
             organization_id=ORG_1,
+            bank_id=BANK,
             started_by=operator.email,
             reason="Review retained bank evidence",
             support_reference="SUP-FEEDS",
@@ -1857,6 +1861,7 @@ def test_organization_binding_grants_and_removals_cover_each_tenant_bank(
                 inspection = inspector.start_session(
                     db,
                     organization_id=org,
+                    bank_id=BANK,
                     started_by=operator.email,
                     reason="Review organization-wide access",
                     support_reference="SUP-ORG-GRANT",
@@ -1974,6 +1979,7 @@ def test_only_explicit_session_id_attaches_inspection_evidence(
         inspection = inspector.start_session(
             db,
             organization_id=ORG_1,
+            bank_id=BANK,
             started_by=operator.email,
             reason="Investigate unrelated upload",
             support_reference="SUP-UPLOAD",
@@ -2218,6 +2224,7 @@ def test_shared_register_visibility_redaction_and_integrity(
         session = inspector.start_session(
             db,
             organization_id=ORG_1,
+            bank_id=BANK,
             started_by="private-staff@example.test",
             reason="Private investigation",
             support_reference="PRIVATE-TICKET",

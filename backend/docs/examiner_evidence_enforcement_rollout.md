@@ -47,7 +47,7 @@ sentence. Seeing the bundle must not reveal a module the reader cannot open:
 | filed packages, family `icaap`                                          | `cap`                                                                                                                              | confidential |
 | filed packages, every other family                                      | `reg`                                                                                                                              | restricted   |
 | register `liquidity-thresholds`, `liquidity-haircuts`, `liquidity/ewis` | `liq`                                                                                                                              | confidential |
-| register `ecl-assumptions`, `crm-haircuts`                              | `credit`                                                                                                                           | confidential |
+| register `ecl-assumptions`, `crm-haircuts`                              | `credit`                                                                                                                           | restricted   |
 | register `capital-plan`                                                 | `cap`                                                                                                                              | confidential |
 | contingency funding plan posture                                        | `liq`                                                                                                                              | confidential |
 | ICAAP cycles                                                            | the `icaap` family gate (`cap`/confidential, bank regime only)                                                                     | confidential |
@@ -110,6 +110,72 @@ projects every institution module **except** `audit`). Consequences:
 - the seat stays read-only: every mutation still refuses, and the session is
   still tenant-isolated (`404` for another tenant's institution).
 
+### The cited registers are readable, inside ONE bank (issue 182)
+
+The bundle cites six register endpoints rather than copying their rows. That
+made a staff session's own catalogue unopenable: the session holds no tenant
+binding, so `GET /banks/{id}/liquidity-thresholds`, `/liquidity-haircuts`,
+`/liquidity/ewis`, `/ecl-assumptions`, `/crm-haircuts` and `/capital-plan` all
+answered `403` — the ECL and CRM two only since the Phase 5 credit cutover
+replaced their tenancy-only gate, the liquidity half for longer.
+
+`app/core/examiner.py` is the fix, and it is deliberately the ONLY widening:
+
+- **The allow-list is the route.** `EXAMINER_REGISTER_ROUTES` maps
+  `(method, templated path)` to the register it serves. Nothing else is admitted,
+  so a gate shared with an uncited surface cannot leak: `/concentration-limits`,
+  `/credit-thresholds`, `/sdi/large-exposures`, `/sdi/loan-classification`,
+  `/liquidity/cfp` and `/capital-plan/ilaap` sit on the SAME dependencies as cited
+  routes and stay refused.
+- **The session is bound to ONE bank.** `operator_inspector_sessions.bank_id`
+  records the examined institution when the session is opened
+  (`202611030002`), and `POST …/sessions/{id}/act-token` carries it into the
+  signed impersonation token as the `bank` claim. The tenant API reads a cited
+  register only when that claim equals the bank in the path. Two banks of one
+  organization share an RLS tenant, so the claim — not `org` — is the boundary.
+- **No bank means no read.** The column is nullable only because sessions already
+  open when it landed cannot be back-filled: one organization can hold several
+  banks, so an organization id names no institution. A token without a `bank`
+  claim reads nothing. There is no organization-wide fallback.
+- **The rest of the inspection is unchanged.** Provenance and the request-wide
+  conditions are re-checked per request; the seat stays read-only (every register
+  PUT is still `403`); a foreign bank still resolves `404` first; and a tenant
+  principal gains nothing from any of it, because its own exact binding sentence
+  is what decides.
+- **One copy of the list.** The bundle's `SOURCE_REGISTERS` is derived from the
+  kernel table, so the module and sensitivity the catalogue advertises for a
+  register are the ones its gate enforces, and the two cannot drift.
+  `tests/architecture/test_examiner_register_routes.py` pins the table, its
+  routes, the gates behind them and that derivation;
+  `tests/api/test_examiner_register_reads_integration.py` pins the behaviour.
+
+### The bank claim bounds the register reads, NOT the bundle
+
+The binding is a **register-read** guarantee, and the boundary is worth stating
+plainly because it is narrower than "the session is confined to one bank". The
+bundle's own gates — the entry gate `require_evidence_view` / `staff_inspection`
+and the per-source sentences on `EvidenceAuthority` — admit a verified read-only
+inspection on operator provenance, the request-wide conditions and the AUDIT
+entry sentence. **Neither consults `bank_id`.** Two consequences follow, and
+neither is a defect this change introduces (before the binding landed, a session
+named no institution at all and reached every bank of its organization):
+
+- A session bound to bank A can request bank B's evidence bundle within the SAME
+  organization, and the bundle's entry sentence admits it. Its six cited register
+  reads then return `403` for `bank B`, because `app/core/examiner.py` compares
+  the claim with the bank in the path. So the citations the bundle advertises are
+  openable only for the bank the session is examining.
+- A session opened before the binding landed carries no `bank` claim and is in the
+  same position: it receives the bundle, sees the six citations disclosed under
+  its held authority, and can open none of them.
+
+Both fail closed on the register surface and neither widens the organization-wide
+read, but an operator reading this page should not assume the bank binding limits
+the bundle itself: to read bank B's bundle in full, open a session bound to bank B.
+Tightening the bundle entry gate to the claim is a separate, deliberate decision:
+it would NARROW examiner reach rather than preserve it, so this change leaves the
+bundle gate exactly as it found it and does not claim the binding covers it.
+
 ## Operation matrix
 
 All paths are prefixed with `/api/v1`. Every row also requires the entry
@@ -157,7 +223,7 @@ organization ID, `principal_type=human`, active status and approved validity.
 | Reads Liquidity sources (run snapshots, threshold/haircut registers, EWI register, CFP) | `viewer` or `analyst` | as granted                      | `liq`                  | `confidential`    |
 | Reads Capital sources (capital-plan register, ICAAP packages and cycles)                | `viewer`              | as granted                      | `cap`                  | `confidential`    |
 | Reads filed returns (every non-ICAAP family)                                            | `viewer`              | as granted                      | `reg`                  | `restricted`      |
-| Reads Credit sources (ECL assumptions, CRM haircut register)                            | `viewer` or `analyst` | as granted                      | `credit`               | `confidential`    |
+| Reads Credit sources (ECL assumptions, CRM haircut register)                            | `viewer` or `analyst` | as granted                      | `credit`               | `restricted`      |
 | Reads Forecasting runs (projection, optimizer, what-if, reverse stress)                 | `viewer` or `analyst` | as granted                      | `fcst`                 | `confidential`    |
 | Reads IRRBB / FX / FTP runs                                                             | `viewer` or `analyst` | as granted                      | `irrbb` / `fx` / `ftp` | `confidential`    |
 | Reads enterprise-stress runs                                                            | `viewer` or `analyst` | as granted                      | `risk`                 | `confidential`    |

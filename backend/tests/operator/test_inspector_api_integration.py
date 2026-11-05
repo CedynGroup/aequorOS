@@ -15,8 +15,8 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models import OperatorAuditLog, OperatorInspectorSession
-from app.operator.schemas import InspectorSessionRead
-from tests.operator.conftest import operator_headers, provision_payload
+from app.operator.schemas import InspectorSessionRead, ProvisioningResultRead
+from tests.operator.conftest import bank_id_for, operator_headers, provision_payload
 from tests.operator.test_operator_auth_integration import PASSWORD, bearer, login, make_operator
 
 SESSIONS = "/operator/v1/inspector/sessions"
@@ -42,6 +42,7 @@ def test_start_consent_session_returns_read_only_window_and_audits(
         json={
             "support_reference": "SUP-TEST",
             "organization_id": organization_id,
+            "bank_id": bank_id_for(operator_client, organization_id),
             "reason": "customer asked for help with an ingestion error",
             "mode": "consent",
             "ttl_minutes": 30,
@@ -81,6 +82,7 @@ def test_start_unknown_org_is_404(operator_client: TestClient) -> None:
         SESSIONS,
         json={
             "organization_id": "OR-00000000",
+            "bank_id": "BK-00000000",
             "reason": "x",
             "mode": "consent",
             "support_reference": "SUP-TEST",
@@ -96,6 +98,7 @@ def test_reason_is_required(operator_client: TestClient) -> None:
         SESSIONS,
         json={
             "organization_id": organization_id,
+            "bank_id": bank_id_for(operator_client, organization_id),
             "reason": "",
             "mode": "consent",
             "support_reference": "SUP-TEST",
@@ -113,6 +116,7 @@ def test_ttl_out_of_range_is_422(operator_client: TestClient) -> None:
             json={
                 "support_reference": "SUP-TEST",
                 "organization_id": organization_id,
+                "bank_id": bank_id_for(operator_client, organization_id),
                 "reason": "r",
                 "mode": "consent",
                 "ttl_minutes": ttl,
@@ -132,6 +136,7 @@ def test_break_glass_requires_operator_admin(
     payload = {
         "support_reference": "SUP-TEST",
         "organization_id": organization_id,
+        "bank_id": bank_id_for(operator_client, organization_id),
         "reason": "incident triage",
         "mode": "break_glass",
     }
@@ -155,6 +160,7 @@ def test_list_newest_first_and_active_filter(operator_client: TestClient) -> Non
         SESSIONS,
         json={
             "organization_id": organization_id,
+            "bank_id": bank_id_for(operator_client, organization_id),
             "reason": "one",
             "mode": "consent",
             "support_reference": "SUP-TEST",
@@ -165,6 +171,7 @@ def test_list_newest_first_and_active_filter(operator_client: TestClient) -> Non
         SESSIONS,
         json={
             "organization_id": organization_id,
+            "bank_id": bank_id_for(operator_client, organization_id),
             "reason": "two",
             "mode": "consent",
             "support_reference": "SUP-TEST",
@@ -209,6 +216,7 @@ def test_list_scoped_by_organization(operator_client: TestClient) -> None:
             SESSIONS,
             json={
                 "organization_id": org,
+                "bank_id": bank_id_for(operator_client, org),
                 "reason": "r",
                 "mode": "consent",
                 "support_reference": "SUP-TEST",
@@ -228,6 +236,7 @@ def test_end_is_idempotent_and_audited(operator_client: TestClient, operator_db:
         SESSIONS,
         json={
             "organization_id": organization_id,
+            "bank_id": bank_id_for(operator_client, organization_id),
             "reason": "r",
             "mode": "consent",
             "support_reference": "SUP-TEST",
@@ -263,6 +272,7 @@ def test_read_only_column_is_always_true(operator_client: TestClient, operator_d
         SESSIONS,
         json={
             "organization_id": organization_id,
+            "bank_id": bank_id_for(operator_client, organization_id),
             "reason": "r",
             "mode": "consent",
             "support_reference": "SUP-TEST",
@@ -277,6 +287,7 @@ def test_support_reference_is_required(operator_client: TestClient) -> None:
     for reference in (None, "", "   ", "x" * 201):
         body = {
             "organization_id": "OR-00000000",
+            "bank_id": "BK-00000000",
             "reason": "Support investigation",
             "mode": "consent",
         }
@@ -284,3 +295,100 @@ def test_support_reference_is_required(operator_client: TestClient) -> None:
             body["support_reference"] = reference
         response = operator_client.post(SESSIONS, json=body, headers=operator_headers())
         assert response.status_code == 422
+
+
+def test_session_is_bound_to_one_examined_bank(
+    operator_client: TestClient, operator_db: Session
+) -> None:
+    """The durable half of the bank binding: the row records WHICH institution.
+
+    The act-as-examiner token inherits this, and the tenant API serves a cited
+    register only for the bank named here — so the session, not the token
+    mint, is where an examination acquires its scope."""
+    organization_id = _provision(operator_client)
+    bank_id = bank_id_for(operator_client, organization_id)
+    response = operator_client.post(
+        SESSIONS,
+        json={
+            "support_reference": "SUP-TEST",
+            "organization_id": organization_id,
+            "bank_id": bank_id,
+            "reason": "examination",
+            "mode": "consent",
+        },
+        headers=operator_headers(),
+    )
+    assert response.status_code == 201, response.text
+    body = InspectorSessionRead.model_validate_json(response.text)
+    assert body.bank_id == bank_id
+    retained = operator_db.get(OperatorInspectorSession, uuid.UUID(body.session_id))
+    assert retained is not None and retained.bank_id == bank_id
+    # The bank is part of the diligence record, not just the row.
+    audit = list(
+        operator_db.scalars(
+            select(OperatorAuditLog).where(OperatorAuditLog.action == "inspector.session.start")
+        )
+    )
+    assert audit and audit[0].detail["bank_id"] == bank_id
+
+
+def test_session_without_a_bank_is_refused(operator_client: TestClient) -> None:
+    """An examination is of ONE institution: the bank is not inferable."""
+    organization_id = _provision(operator_client)
+    response = operator_client.post(
+        SESSIONS,
+        json={
+            "support_reference": "SUP-TEST",
+            "organization_id": organization_id,
+            "reason": "examination",
+            "mode": "consent",
+        },
+        headers=operator_headers(),
+    )
+    assert response.status_code == 422, response.text
+
+
+def test_session_against_an_unknown_bank_is_404(operator_client: TestClient) -> None:
+    organization_id = _provision(operator_client)
+    response = operator_client.post(
+        SESSIONS,
+        json={
+            "support_reference": "SUP-TEST",
+            "organization_id": organization_id,
+            "bank_id": "BK-00000000",
+            "reason": "examination",
+            "mode": "consent",
+        },
+        headers=operator_headers(),
+    )
+    assert response.status_code == 404, response.text
+
+
+def test_session_against_another_tenants_bank_is_404(operator_client: TestClient) -> None:
+    """A binding that could name another tenant's bank would bind nothing."""
+    organization_id = _provision(operator_client)
+    provisioned = operator_client.post(
+        "/operator/v1/tenants",
+        json=provision_payload(
+            organization_name="Sibling Holdings",
+            bank_name="Sibling Bank",
+            admin_email="admin@sibling.example",
+        ),
+        headers=operator_headers(),
+    )
+    assert provisioned.status_code == 200, provisioned.text
+    other_org = ProvisioningResultRead.model_validate_json(provisioned.text).organization_id
+    assert other_org is not None
+    foreign_bank = bank_id_for(operator_client, other_org)
+    response = operator_client.post(
+        SESSIONS,
+        json={
+            "support_reference": "SUP-TEST",
+            "organization_id": organization_id,
+            "bank_id": foreign_bank,
+            "reason": "examination",
+            "mode": "consent",
+        },
+        headers=operator_headers(),
+    )
+    assert response.status_code == 404, response.text
