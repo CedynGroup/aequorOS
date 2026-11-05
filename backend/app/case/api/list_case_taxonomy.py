@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter
 
+from app.api.deps import Tenant
 from app.case.schemas.cases import CaseTaxonomyRead
 from app.domain.risk_constants import (
     CASE_DECISIONS,
@@ -14,7 +15,7 @@ router = APIRouter(tags=["taxonomy"])
 
 
 @router.get("/taxonomies/cases", response_model=CaseTaxonomyRead)
-def case_taxonomy_resource() -> CaseTaxonomyRead:
+def case_taxonomy_resource(_ctx: Tenant) -> CaseTaxonomyRead:
     return CaseTaxonomyRead(
         statuses=sorted(CASE_STATUSES),
         decisions=sorted(CASE_DECISIONS),
