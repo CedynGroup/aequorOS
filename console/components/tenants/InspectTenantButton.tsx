@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Eye, ShieldAlert } from "lucide-react";
-import { startInspectorSession } from "@/lib/api";
+import { getTenant, startInspectorSession, toApiError } from "@/lib/api";
 import { useInspector } from "@/lib/inspector";
 import { inspectorHours } from "@/lib/inspector-duration";
 import { useMutation } from "@/lib/use-api";
@@ -15,6 +15,12 @@ import { Button, Field, Input, Modal, Select, Textarea } from "@/components/ui";
  * pushes the result into the shell's inspector context so the un-dismissable
  * ImpersonationBanner appears. This console surface only OPENS a session — the
  * /admin/inspector page owns management.
+ *
+ * The session is bound to ONE bank — the institution it examines — because the
+ * act-as-examiner token inherits that bank and the tenant API only serves the
+ * filed registers an examination cites when the bound bank is the bank in the
+ * path. The bank comes from the tenant's own record (GET /operator/v1/tenants/
+ * {org}) when the modal opens, so an operator never types an institution id.
  */
 
 // consent = a read-only look with the tenant's knowledge; break_glass = an
@@ -40,6 +46,39 @@ export function InspectTenantButton({
   const [durationUnit, setDurationUnit] = useState<"hours" | "minutes">(
     "hours",
   );
+  // The examined bank, read from the tenant record when the modal first opens.
+  const [bankId, setBankId] = useState<string | null>(null);
+  const [bankLabel, setBankLabel] = useState<string | null>(null);
+  const [bankLoading, setBankLoading] = useState(false);
+  const [bankError, setBankError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!open || bankId !== null) return;
+    let alive = true;
+    setBankLoading(true);
+    setBankError(null);
+    getTenant(orgId)
+      .then((tenant) => {
+        if (!alive) return;
+        setBankId(tenant.bank_id ?? null);
+        setBankLabel(tenant.bank_name ?? null);
+        setBankError(
+          tenant.bank_id
+            ? null
+            : "This organization has no bank yet, so there is no institution to examine.",
+        );
+      })
+      .catch((error: unknown) => {
+        if (!alive) return;
+        setBankError(toApiError(error).message);
+      })
+      .finally(() => {
+        if (alive) setBankLoading(false);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [open, orgId, bankId]);
 
   const start = useMutation(startInspectorSession, {
     successMessage: "Inspector session started",
@@ -87,7 +126,7 @@ export function InspectTenantButton({
             <Button
               variant={breakGlass ? "danger" : "primary"}
               loading={start.loading}
-              disabled={!reasonValid || !supportReference.trim()}
+              disabled={!reasonValid || !supportReference.trim() || !bankId}
               icon={
                 breakGlass ? (
                   <ShieldAlert size={14} aria-hidden />
@@ -95,15 +134,17 @@ export function InspectTenantButton({
                   <Eye size={14} aria-hidden />
                 )
               }
-              onClick={() =>
+              onClick={() => {
+                if (!bankId) return;
                 void start.mutate({
                   organization_id: orgId,
+                  bank_id: bankId,
                   reason: reason.trim(),
                   support_reference: supportReference.trim(),
                   mode,
                   ttl_minutes: ttl,
-                })
-              }
+                });
+              }}
             >
               {breakGlass ? "Break glass" : "Start read-only"}
             </Button>
@@ -111,6 +152,26 @@ export function InspectTenantButton({
         }
       >
         <div className="space-y-4">
+          <Field label="Examination bank" required>
+            {bankLoading ? (
+              <p className="text-caption text-muted">Loading the institution…</p>
+            ) : bankError ? (
+              <p className="text-caption text-critical">{bankError}</p>
+            ) : (
+              <p className="text-body">
+                {bankLabel ?? "This institution"}{" "}
+                <span className="font-mono text-caption text-muted">
+                  {bankId}
+                </span>
+              </p>
+            )}
+            <p className="mt-1 text-caption text-muted">
+              The session is bound to this institution: its act-as-examiner
+              token can read this bank&apos;s filed registers and no other
+              institution&apos;s.
+            </p>
+          </Field>
+
           <Field label="Reason" required>
             <Textarea
               value={reason}

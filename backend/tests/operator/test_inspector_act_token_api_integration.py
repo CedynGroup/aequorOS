@@ -21,7 +21,7 @@ from app.core import security
 from app.core.config import get_operator_settings, get_settings
 from app.db.base import utc_now
 from app.models import OperatorAuditLog, OperatorInspectorSession
-from tests.operator.conftest import operator_headers, provision_payload
+from tests.operator.conftest import bank_id_for, operator_headers, provision_payload
 from tests.operator.test_operator_auth_integration import PASSWORD, bearer, login, make_operator
 
 SESSIONS = "/operator/v1/inspector/sessions"
@@ -45,6 +45,7 @@ def _start_session(
         json={
             "support_reference": "SUP-TEST",
             "organization_id": org_id,
+            "bank_id": bank_id_for(client, org_id),
             "reason": "act-as-examiner",
             "mode": "consent",
             "ttl_minutes": ttl_minutes,
@@ -86,6 +87,9 @@ def test_mint_success_returns_scoped_token_and_audits(
     assert claims["session_id"] == session_id
     assert claims["act_operator"] == "dev@aequoros.com"
     assert claims["roles"] == ["examiner"]
+    # The examination bank travels in the signed token: the tenant API reads a
+    # cited register ONLY when this claim equals the bank in the path.
+    assert claims["bank"] == bank_id_for(operator_client, organization_id)
 
     # A 60-minute session is clamped to the 15-minute act-token ceiling.
     expires_at = dt.datetime.fromisoformat(body["expires_at"])

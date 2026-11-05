@@ -51,6 +51,7 @@ test("hour inputs submit the existing minute-based API contract", async (t) => {
   for (const hours of [0.25, 0.5, 0.5833333333333331, 1, 2]) {
     await startInspectorSession({
       organization_id: "OR-DEMO0001",
+      bank_id: "BK-DEMO0001",
       reason: "Demo investigation",
       support_reference: "DEMO-123",
       mode: "consent",
@@ -61,6 +62,7 @@ test("hour inputs submit the existing minute-based API contract", async (t) => {
     submitted,
     [15, 30, 35, 60, 120].map((ttl_minutes) => ({
       organization_id: "OR-DEMO0001",
+      bank_id: "BK-DEMO0001",
       reason: "Demo investigation",
       support_reference: "DEMO-123",
       mode: "consent",
@@ -95,6 +97,7 @@ test("both selected units submit the same session duration", async (t) => {
   ] as const) {
     await startInspectorSession({
       organization_id: "OR-DEMO0001",
+      bank_id: "BK-DEMO0001",
       reason: "Demo investigation",
       support_reference: "DEMO-123",
       mode: "consent",

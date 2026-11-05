@@ -2373,6 +2373,8 @@ export type InspectorMode = "consent" | "break_glass";
 export interface InspectorSession {
   session_id: string;
   organization_id: string;
+  /** The ONE bank this session examines; null only for a pre-binding session. */
+  bank_id?: string | null;
   mode: string;
   read_only: boolean;
   started_by: string;
@@ -2392,6 +2394,10 @@ export interface InspectorSessionsResponse {
 /** POST /operator/v1/inspector/sessions — open a time-boxed inspector session. 201. */
 export function startInspectorSession(body: {
   organization_id: string;
+  /** The examined bank. Required: an examination is of one institution, and
+   * the act-as-examiner token inherits it, so a session without one can read
+   * no filed register. */
+  bank_id: string;
   reason: string;
   support_reference: string;
   mode: InspectorMode;

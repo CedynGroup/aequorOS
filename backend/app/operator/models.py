@@ -170,6 +170,12 @@ class OperatorInspectorSession(UuidV4PrimaryKeyMixin, Base):
     act-as-user sign-in is deliberately out of scope (separate security review),
     so ``read_only`` is always true this wave.
 
+    ``bank_id`` names the institution the session examines. The act-as-examiner
+    token inherits it as its ``bank`` claim, and a cited register read requires
+    that claim to equal the bank in the path — an examination is of ONE
+    institution, so an examination session never becomes an organization-wide
+    read.
+
     GLOBAL table, deliberately NOT RLS-forced (the operator-control-plane
     precedent): these are staff records owned by the operator role.
     """
@@ -192,6 +198,16 @@ class OperatorInspectorSession(UuidV4PrimaryKeyMixin, Base):
         String(16),
         ForeignKey("organizations.id", ondelete="CASCADE"),
         nullable=False,
+    )
+    #: The ONE bank this session examines, recorded when the session is opened
+    #: and carried into every act-as-examiner token it mints. NULL only for
+    #: sessions opened before the bank binding landed: those read no filed
+    #: register (there is no org-wide fallback — a session that names no bank
+    #: examines no bank).
+    bank_id: Mapped[str | None] = mapped_column(
+        String(16),
+        ForeignKey("banks.id", ondelete="CASCADE"),
+        nullable=True,
     )
     started_by: Mapped[str] = mapped_column(String(320), nullable=False)
     mode: Mapped[str] = mapped_column(String(16), nullable=False)

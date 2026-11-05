@@ -387,6 +387,10 @@ type InspectorMode = Literal["consent", "break_glass"]
 
 class InspectorSessionCreate(ClosedModel):
     organization_id: str = Field(min_length=1, max_length=16)
+    #: The ONE bank this session examines. Required: an examination is of one
+    #: institution, and the act-as-examiner token inherits it as its ``bank``
+    #: claim, so a session that named no bank could read no filed register.
+    bank_id: str = Field(min_length=1, max_length=16)
     reason: str = Field(min_length=1, max_length=2000)
     support_reference: Annotated[
         str, StringConstraints(strip_whitespace=True, min_length=1, max_length=200)
@@ -400,6 +404,9 @@ class InspectorSessionCreate(ClosedModel):
 class InspectorSessionRead(ClosedModel):
     session_id: str
     organization_id: str
+    #: The examined institution. ``None`` only for a session opened before the
+    #: bank binding landed; such a session reads no filed register.
+    bank_id: str | None = None
     mode: InspectorMode
     #: The viewing window is read-only; separately minted examiner tokens also grant only reads.
     read_only: bool

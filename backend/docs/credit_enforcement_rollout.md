@@ -709,9 +709,13 @@ computed monitor from the register.
 binding.`); the response never says which dimension failed.
 - A bank of another tenant resolves `404` first (`resolve_tenant_bank`), even for
   a caller holding an organization-wide sentence.
-- An act-as-examiner session is denied on all seven reads: the scoped evaluator
-  has no impersonated principal. The examiner evidence bundle reaches a register
-  only through its own AUDIT entry and per-source sentences (below).
+- An act-as-examiner session holds no tenant binding at all, so the scoped
+  evaluator denies it. Two of these seven — `ecl-assumptions` and `crm-haircuts` —
+  are the credit registers the examiner evidence bundle cites, and they are served
+  to it through the separate examiner register contract
+  (`app/core/examiner.py`): a verified read-only inspection bound to the bank in
+  the path, and no other surface. The other five stay denied for it; see
+  `examiner_evidence_enforcement_rollout.md`.
 - No engine runs before the decision: these are reads, and the register services
   keep their existing bank scoping.
 
@@ -737,7 +741,10 @@ new grant, its institution and its expiry.
 The examiner bundle's source map is aligned too: `ecl-assumptions` and
 `crm-haircuts` are now CREDIT/`restricted` sources
 (`app/reporting/service/examiner_access.py`), so an examiner holding only
-CREDIT/`confidential` sees them withheld rather than disclosed.
+CREDIT/`confidential` sees them withheld rather than disclosed. They are also two
+of the six registers a bank-bound examination session reads directly — the
+bundle cites the endpoint rather than copying the rows, and
+`app/core/examiner.py` is the allow-list that lets the cited reader open it.
 
 ### Who loses these reads, and why that is correct
 
@@ -752,11 +759,17 @@ do not admit these reads.
   different sentence.
 - **Readers with CREDIT/`aggregated`** keep the two loan-classification reads and
   lose the four registers and the large-exposure list.
-- **Readers with CREDIT/`confidential`** (the retired register sentence) lose the
-  four registers and keep their activity grid. The dashboard no longer mounts the
-  cards for them, so a half-migrated grant shows a missing panel, not a 403.
+- **Readers with CREDIT/`confidential`** (the retired register sentence) lose all
+  seven reads: the four registers and `GET /banks/{id}/sdi/large-exposures` are
+  `restricted`, and the two loan-classification reads are `aggregated` —
+  sensitivity is exact-or-`all`, never a ladder, so `confidential` admits neither.
+  Their Phase 4 activity grid is the one credit read they keep. The dashboard no
+  longer mounts the cards for them, so a half-migrated grant shows a missing
+  panel, not a 403.
 - **Rows holding `all` module/sensitivity** keep every read, as everywhere else.
-- **Machine principals and act-as-examiner sessions** are denied all seven.
+- **Machine principals** are denied all seven. **Act-as-examiner sessions** are
+  denied five and read the two cited credit registers through the examiner
+  register contract, which binds them to one bank.
 
 Run the same read-only inventory as Phase 4 and add these columns to identify the
 affected population before release:

@@ -46,6 +46,12 @@ Capital entries in `/scenario-workbench/capital` apply the same CAP
 token `roles[]`, a different module, a different sensitivity, or separate
 partial bindings.
 
+One examiner exception, and it is not an inference: the evidence bundle CITES
+`GET /banks/{bank_id}/capital-plan`, so a verified act-as-examiner session bound
+to the bank in the path reads that one summary and nothing else here —
+`/capital-plan/ilaap` and every CAP run route stay refused
+(`app/core/examiner.py`, [the examiner rollout](examiner_evidence_enforcement_rollout.md)).
+
 ## Dashboard access
 
 Capital navigation and deep links follow the server's effective-authority

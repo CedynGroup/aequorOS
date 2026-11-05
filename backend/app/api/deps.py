@@ -233,12 +233,17 @@ def _authenticate_principal(
             # the tenant API decides what an impersonation session may do, and
             # examiner sits in no mutation ladder (read everything, mutate
             # nothing). actor_user_id stays None — the actor is an operator.
+            # The bank claim is provenance the session recorded, and it is the
+            # ONLY thing that admits an examiner register read; a token without
+            # one reads nothing (`app.core.examiner`).
+            bank_claim = impersonation_claims.get("bank")
             return TenantContext(
                 organization_id=str(impersonation_claims["org"]),
                 actor_user_id=None,
                 roles=("examiner",),
                 impersonation_context=str(impersonation_claims["session_id"]),
                 actor_operator=str(impersonation_claims["act_operator"]),
+                examiner_bank_id=bank_claim if isinstance(bank_claim, str) else None,
             )
     try:
         claims = security.decode_token(credentials.credentials, expected_type="access")
@@ -797,6 +802,123 @@ def require_liquidity_monitoring_view(
     )
 
 
+def _examiner_register_access(
+    request: Request,
+    ctx: TenantContext,
+    bank: Bank,
+    *,
+    module: Module,
+    sensitivity: Sensitivity,
+) -> bool:
+    """Whether this request is one cited register an examination session may read.
+
+    The examiner evidence bundle cites six register endpoints instead of copying
+    their rows. Without this admission the bundle discloses a catalogue the
+    reader cannot open: a staff inspection session holds no tenant binding at
+    all (``actor_user_id`` is None), so every register gate answered 403.
+
+    Four conditions, and a refusal on any one of them — this is a widening of
+    who may READ six named GETs, never a fallback for a missing binding:
+
+    * the ``(method, templated path)`` is in ``EXAMINER_REGISTER_ROUTES``
+      (``app.core.examiner``), which is the allow-list itself;
+    * the request IS a verified read-only inspection — operator provenance
+      present, no tenant actor, and every request-wide condition passing, the
+      same test ``app/reporting/service/examiner_access.staff_inspection`` makes
+      for the bundle's entry gate;
+    * the session's bound bank IS the bank in the path; a bank-scoped
+      examination cannot read another institution's register, and a session
+      minted before the bank was recorded binds nothing, so it reads nothing;
+    * the register's contract authority (module, sensitivity) is the one this
+      gate enforces — if those ever disagree, one of the two was edited alone,
+      and the request is refused rather than admitted by the weaker of them.
+
+    Returns False (not raises) when the request is simply not an examination of
+    a cited register, so the caller falls through to its binding sentence and
+    tenant principals are unaffected.
+    """
+    from app.core.authorization import Permission  # noqa: PLC0415 - kernel vocabulary
+    from app.core.examiner import register_for  # noqa: PLC0415 - kernel table
+    from app.identity.service import authorization as authorization_service  # noqa: PLC0415
+
+    route_path = getattr(request.scope.get("route"), "path", None)
+    register = register_for(request.method, route_path)
+    if register is None:
+        return False
+    if (register.module, register.sensitivity) != (module, sensitivity):
+        authorization_denied(
+            reason="examiner_register_contract_mismatch",
+            method=request.method.upper(),
+            route=route_path,
+            register_module=register.module.value,
+            register_sensitivity=register.sensitivity.value,
+            gate_module=module.value,
+            gate_sensitivity=sensitivity.value,
+            organization_id=ctx.organization_id,
+            bank_id=bank.id,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="This register's authority does not match its examiner contract.",
+        )
+    if (
+        ctx.impersonation_context is None
+        or ctx.actor_operator is None
+        or ctx.actor_user_id is not None
+    ):
+        return False
+    if not all(
+        check.passed for check in authorization_service.request_wide_condition_checks()
+    ):
+        authorization_denied(
+            reason="examiner_register_request_condition_failed",
+            method=request.method.upper(),
+            route=route_path,
+            organization_id=ctx.organization_id,
+            bank_id=bank.id,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="This examination session cannot read registers right now.",
+        )
+    if ctx.examiner_bank_id != bank.id:
+        # Two ways to land here, and both are refusals by design: the session
+        # was minted without an examination bank (legacy row), or the caller
+        # asked for a bank the session is not examining. Neither falls back to
+        # the organization's other institutions.
+        authorization_denied(
+            reason=(
+                "examiner_bank_scope_mismatch"
+                if ctx.examiner_bank_id is not None
+                else "examiner_bank_scope_missing"
+            ),
+            method=request.method.upper(),
+            route=route_path,
+            organization_id=ctx.organization_id,
+            bank_id=bank.id,
+            session_id=ctx.impersonation_context,
+            examiner_bank_id=ctx.examiner_bank_id,
+            permission=Permission.VIEW.value,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=(
+                "This examination session is bound to a different institution; "
+                "open an inspection session for this bank to read its registers."
+            ),
+        )
+    authorization_denied(
+        reason="examiner_register_read",
+        method=request.method.upper(),
+        route=route_path,
+        organization_id=ctx.organization_id,
+        bank_id=bank.id,
+        session_id=ctx.impersonation_context,
+        register=register.name,
+    )
+    return True
+
+
 def _require_liquidity_view(  # noqa: PLR0913 - complete authorization sentence
     request: Request,
     db: DbSession,
@@ -808,7 +930,18 @@ def _require_liquidity_view(  # noqa: PLR0913 - complete authorization sentence
     prefetch: bool = False,
 ) -> LiquidityMonitoringAccess:
     from app.core.authorization import Module, Permission  # noqa: PLC0415
+    from app.core.examiner import register_for  # noqa: PLC0415 - kernel table
     from app.identity.service import scoped_authorization  # noqa: PLC0415
+
+    bank_id = str(request.path_params.get("bank_id", ""))
+    # Only the routes the examiner contract cites resolve the institution here,
+    # so the ordinary three-query path below is untouched for every other read.
+    if register_for(request.method, getattr(request.scope.get("route"), "path", None)) is not None:
+        cited_bank = scoped_authorization.resolve_bank(db, ctx, bank_id, module=Module.LIQUIDITY)
+        if _examiner_register_access(
+            request, ctx, cited_bank, module=Module.LIQUIDITY, sensitivity=sensitivity
+        ):
+            return LiquidityMonitoringAccess(ctx=ctx, bank=cited_bank)
 
     require_permission = (
         scoped_authorization.require_bank_permission_prefetched
@@ -818,7 +951,7 @@ def _require_liquidity_view(  # noqa: PLR0913 - complete authorization sentence
     bank = require_permission(
         db,
         ctx,
-        str(request.path_params.get("bank_id", "")),
+        bank_id,
         permission=Permission.VIEW,
         module=Module.LIQUIDITY,
         sensitivity=sensitivity,
@@ -941,6 +1074,7 @@ def _require_institution_permission(  # noqa: PLR0913 - complete policy tuple is
     conditions: tuple[ConditionCheck, ...] = (),
     require_whole_institution: bool = True,
     denial_status: int = status.HTTP_403_FORBIDDEN,
+    request: Request | None = None,
 ) -> InstitutionPermissionAccess:
     """Require a human principal and one complete binding for an exact institution.
 
@@ -968,12 +1102,27 @@ def _require_institution_permission(  # noqa: PLR0913 - complete policy tuple is
 
     ``denial_status`` lets an object-detail route hide what the caller may not
     see behind the same 404 a cross-tenant probe receives.
+
+    ``request`` opts a gate into the examiner register contract
+    (``app.core.examiner``). Only a gate that guards an endpoint the evidence
+    bundle CITES passes it, and even then only the request paths the table names
+    are admitted, so a gate shared by a cited register and an uncited one keeps
+    refusing the uncited one (``require_credit_restricted_view`` guards both
+    ``/ecl-assumptions`` and ``/concentration-limits``). Omit it and the gate
+    admits no examiner at all.
     """
 
     from app.identity.service import authorization as authorization_service  # noqa: PLC0415
 
     if bank is None:  # pragma: no cover - institution permissions are bank-scoped
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Bank not found.")
+    if request is not None and _examiner_register_access(
+        request, ctx, bank, module=module, sensitivity=sensitivity
+    ):
+        # An examination reads the institution whole: the session is bound to
+        # this bank, and there is no tenant binding whose declared data scope
+        # could narrow it.
+        return InstitutionPermissionAccess(ctx=ctx, bank=bank, data_scope=EffectiveDataScope())
     if ctx.actor_user_id is None:
         authorization_denied(
             reason="scoped_binding_principal_required",
@@ -1093,6 +1242,7 @@ def require_capital_aggregated_view(
 
 
 def require_capital_confidential_view(
+    request: Request,
     db: DbSession,
     ctx: Tenant,
     bank: TenantBank,
@@ -1106,6 +1256,8 @@ def require_capital_confidential_view(
         permission=Permission.VIEW,
         surface="capital_confidential_view",
         detail="Capital access requires an active scoped binding.",
+        # The evidence bundle cites GET /capital-plan (app.core.examiner).
+        request=request,
     )
 
 
@@ -1202,6 +1354,7 @@ def require_credit_concentration_view(
 
 
 def require_credit_restricted_view(
+    request: Request,
     db: DbSession,
     ctx: Tenant,
     bank: TenantBank,
@@ -1232,6 +1385,11 @@ def require_credit_restricted_view(
         permission=Permission.VIEW,
         surface="credit_restricted_view",
         detail=_CREDIT_DETAIL,
+        # The evidence bundle cites GET /ecl-assumptions and GET /crm-haircuts.
+        # The three OTHER routes on this dependency (/concentration-limits,
+        # /credit-thresholds, /sdi/large-exposures) are not cited, so the
+        # examiner contract refuses them for an inspection session.
+        request=request,
     )
 
 

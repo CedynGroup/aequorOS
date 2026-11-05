@@ -110,6 +110,44 @@ projects every institution module **except** `audit`). Consequences:
 - the seat stays read-only: every mutation still refuses, and the session is
   still tenant-isolated (`404` for another tenant's institution).
 
+### The cited registers are readable, inside ONE bank (issue 182)
+
+The bundle cites six register endpoints rather than copying their rows. That
+made a staff session's own catalogue unopenable: the session holds no tenant
+binding, so `GET /banks/{id}/liquidity-thresholds`, `/liquidity-haircuts`,
+`/liquidity/ewis`, `/ecl-assumptions`, `/crm-haircuts` and `/capital-plan` all
+answered `403` — the ECL and CRM two only since the Phase 5 credit cutover
+replaced their tenancy-only gate, the liquidity half for longer.
+
+`app/core/examiner.py` is the fix, and it is deliberately the ONLY widening:
+
+- **The allow-list is the route.** `EXAMINER_REGISTER_ROUTES` maps
+  `(method, templated path)` to the register it serves. Nothing else is admitted,
+  so a gate shared with an uncited surface cannot leak: `/concentration-limits`,
+  `/credit-thresholds`, `/sdi/large-exposures`, `/sdi/loan-classification`,
+  `/liquidity/cfp` and `/capital-plan/ilaap` sit on the SAME dependencies as cited
+  routes and stay refused.
+- **The session is bound to ONE bank.** `operator_inspector_sessions.bank_id`
+  records the examined institution when the session is opened
+  (`202611030002`), and `POST …/sessions/{id}/act-token` carries it into the
+  signed impersonation token as the `bank` claim. The tenant API reads a cited
+  register only when that claim equals the bank in the path. Two banks of one
+  organization share an RLS tenant, so the claim — not `org` — is the boundary.
+- **No bank means no read.** The column is nullable only because sessions already
+  open when it landed cannot be back-filled: one organization can hold several
+  banks, so an organization id names no institution. A token without a `bank`
+  claim reads nothing. There is no organization-wide fallback.
+- **The rest of the inspection is unchanged.** Provenance and the request-wide
+  conditions are re-checked per request; the seat stays read-only (every register
+  PUT is still `403`); a foreign bank still resolves `404` first; and a tenant
+  principal gains nothing from any of it, because its own exact binding sentence
+  is what decides.
+- **One copy of the list.** The bundle's `SOURCE_REGISTERS` is derived from the
+  kernel table, so the catalogue it discloses cannot name a register the session
+  cannot open. `tests/architecture/test_examiner_register_routes.py` pins the
+  table, its routes, the gates behind them and that derivation;
+  `tests/api/test_examiner_register_reads_integration.py` pins the behaviour.
+
 ## Operation matrix
 
 All paths are prefixed with `/api/v1`. Every row also requires the entry

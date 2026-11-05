@@ -23,6 +23,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.db.base import utc_now
+from app.identity.public import Bank
 from app.models import OperatorInspectorSession, Organization
 from app.operator.schemas import InspectorSessionListRead, InspectorSessionRead
 
@@ -34,10 +35,24 @@ def _require_organization(db: Session, organization_id: str) -> Organization:
     return organization
 
 
+def _require_bank(db: Session, organization_id: str, bank_id: str) -> Bank:
+    """One bank OF THIS organization, or the same 404 an unknown id gets.
+
+    The examination binding is only worth something if it cannot be opened
+    against an institution of another tenant."""
+    bank = db.scalar(
+        select(Bank).where(Bank.id == bank_id, Bank.organization_id == organization_id)
+    )
+    if bank is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Bank not found.")
+    return bank
+
+
 def session_read(row: OperatorInspectorSession) -> InspectorSessionRead:
     return InspectorSessionRead(
         session_id=str(row.id),
         organization_id=row.organization_id,
+        bank_id=row.bank_id,
         mode=row.mode,  # type: ignore[arg-type]  # DB-constrained to the literal set
         read_only=row.read_only,
         started_by=row.started_by,
@@ -54,21 +69,26 @@ def start_session(  # noqa: PLR0913 - one argument per session attribute
     db: Session,
     *,
     organization_id: str,
+    bank_id: str,
     started_by: str,
     mode: str,
     reason: str,
     support_reference: str,
     ttl_minutes: int,
 ) -> OperatorInspectorSession:
-    """Open a READ-ONLY inspection window against a tenant (404 if unknown org).
+    """Open a READ-ONLY inspection window against one bank (404 if unknown).
 
     Caller (the feature layer) owns the commit and the audit row; this only
     stages the session. ``read_only`` is forced true — no path this wave sets
-    it otherwise."""
+    it otherwise. ``bank_id`` is the institution the session examines; the
+    act-as-examiner token inherits it, so this is the durable half of the bank
+    binding."""
     _require_organization(db, organization_id)
+    _require_bank(db, organization_id, bank_id)
     now = utc_now()
     row = OperatorInspectorSession(
         organization_id=organization_id,
+        bank_id=bank_id,
         started_by=started_by,
         mode=mode,
         reason=reason,

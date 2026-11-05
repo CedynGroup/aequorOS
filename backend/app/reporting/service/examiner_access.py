@@ -32,6 +32,7 @@ from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
 from app.core.authorization import Module, Permission, Sensitivity
+from app.core.examiner import EXAMINER_REGISTER_ROUTES
 from app.core.observability import authorization_denied
 from app.core.tenancy import TenantContext
 from app.identity import public as authorization_service
@@ -48,13 +49,15 @@ EVIDENCE_DENIAL_DETAIL: Final = (
 #: What the evidence bundle embeds, and the authority each source takes. The
 #: register endpoints the bundle cites are listed with their source too, so a
 #: disclosed catalogue cannot outrun the reader's module authority.
-SOURCE_REGISTERS: Final[tuple[tuple[str, Module, Sensitivity], ...]] = (
-    ("liquidity-thresholds", Module.LIQUIDITY, Sensitivity.CONFIDENTIAL),
-    ("liquidity-haircuts", Module.LIQUIDITY, Sensitivity.CONFIDENTIAL),
-    ("liquidity/ewis", Module.LIQUIDITY, Sensitivity.CONFIDENTIAL),
-    ("ecl-assumptions", Module.CREDIT, Sensitivity.RESTRICTED),
-    ("crm-haircuts", Module.CREDIT, Sensitivity.RESTRICTED),
-    ("capital-plan", Module.CAPITAL, Sensitivity.CONFIDENTIAL),
+#:
+#: The register rows are READ from the kernel contract
+#: (``app.core.examiner.EXAMINER_REGISTER_ROUTES``) rather than restated here:
+#: that table is also the allow-list ``app/api/deps.py`` admits a bank-bound
+#: examination session against, and two copies of it could drift into a bundle
+#: that cites a register the session cannot open.
+SOURCE_REGISTERS: Final[tuple[tuple[str, Module, Sensitivity], ...]] = tuple(
+    (register.name, register.module, register.sensitivity)
+    for register in EXAMINER_REGISTER_ROUTES.values()
 )
 
 
