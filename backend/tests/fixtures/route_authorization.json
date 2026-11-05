@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "baseline": "4aee570fd8800da7e952bfae91f2cab95c8d2583",
+  "baseline": "cd8cc7aa55099070fa7bd8e26e46ec63da901380",
   "rules": [
     {
       "name": "operator-dependencies-09529af2555f",
@@ -6377,6 +6377,42 @@
           "method": "GET",
           "path": "/api/v1/auth/sso/client-config",
           "endpoint": "app.identity.api.auth:sso_client_config"
+        }
+      ]
+    },
+    {
+      "name": "tenant-taxonomy-authenticated",
+      "kind": "dependency",
+      "basis": "The separately authorized taxonomy authentication change is landed. These exact static-vocabulary GETs require the existing Tenant authentication chain, with no additional role or module-scope gate.",
+      "references": [
+        "app/case/api/list_taxonomy.py:risk_types and assessment_types",
+        "app/case/api/list_case_taxonomy.py:case_taxonomy_resource",
+        "tests/case/api/test_taxonomy_authentication_integration.py"
+      ],
+      "authentication": "tenant",
+      "dependencies": [
+        "app.api.deps:get_current_principal",
+        "app.api.deps:get_tenant_context",
+        "fastapi.security.http:HTTPBearer"
+      ],
+      "routes": [
+        {
+          "application": "tenant",
+          "method": "GET",
+          "path": "/api/v1/assessment-types",
+          "endpoint": "app.case.api.list_taxonomy:assessment_types"
+        },
+        {
+          "application": "tenant",
+          "method": "GET",
+          "path": "/api/v1/risk-types",
+          "endpoint": "app.case.api.list_taxonomy:risk_types"
+        },
+        {
+          "application": "tenant",
+          "method": "GET",
+          "path": "/api/v1/taxonomies/cases",
+          "endpoint": "app.case.api.list_case_taxonomy:case_taxonomy_resource"
         }
       ]
     },
