@@ -4,6 +4,8 @@ The baseline names the pre-cutover dependency, not an observed HTTP outcome.
 Operational connection test/schema/sync/pull routes deliberately stay outside.
 """
 
+from __future__ import annotations
+
 from dataclasses import dataclass
 from typing import Literal
 
