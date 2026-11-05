@@ -1,6 +1,6 @@
 """Configurator authority is complete, active, and independent of read authority."""
 
-from datetime import date, timedelta
+from datetime import UTC, date, timedelta
 from decimal import Decimal
 from uuid import UUID
 
@@ -261,7 +261,11 @@ def _assert_write_acknowledgement(path: str, content: bytes, effective_from: dat
         assert row is not None
         assert row.bank_id == BANK
         assert row.effective_from == effective_from
-        assert row.approval_timestamp == ack.approval_timestamp
+        # SQLite drops timezone metadata; PostgreSQL retains it.
+        stored_timestamp = row.approval_timestamp
+        if stored_timestamp.tzinfo is None:
+            stored_timestamp = stored_timestamp.replace(tzinfo=UTC)
+        assert stored_timestamp == ack.approval_timestamp
     return ack.written[0].id
 
 
