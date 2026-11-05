@@ -331,10 +331,15 @@ def download_regulatory_artifact(
     bank_id: str,
     artifact_id: UUID,
     db: DbSession,
-    access: PackageView,
+    access: PackageExport,
     storage: IngestionStorage,
 ) -> StreamingResponse:
     """Stream one exported artifact, proven against the revision that wrote it.
+
+    Downloading requires ``EXPORT``: this serves the return's own file, and a
+    bank can let an officer read a filing without letting them take it away.
+    A caller who cannot see the package still receives the opaque 404 that
+    ``PackageExport`` raises before any storage read.
 
     The artifact row is upserted per kind: it names a path and a checksum but no
     provider version, so reading its path directly served whatever the store held
@@ -468,10 +473,14 @@ def download_regulatory_artifact_version(
     bank_id: str,
     version_id: UUID,
     db: DbSession,
-    access: PackageView,
+    access: PackageExport,
     storage: IngestionStorage,
 ) -> StreamingResponse:
-    """Stream one archived revision, with its checksum re-verified first."""
+    """Stream one archived revision, with its checksum re-verified first.
+
+    The archived chain contains the signed revisions, so ``EXPORT`` — not
+    ``VIEW`` — decides whether these bytes leave the platform.
+    """
     version, payload = artifact_versions.read_version_bytes(
         db, access.ctx, bank_id, version_id, storage
     )
@@ -492,7 +501,7 @@ def download_email_fallback_eml(
     bank_id: str,
     package_id: UUID,
     db: DbSession,
-    access: PackageView,
+    access: PackageExport,
     storage: IngestionStorage,
 ) -> StreamingResponse:
     """The BG/FMD/2026/07 downtime bundle as a send-ready .eml (RFC 822).
@@ -501,6 +510,9 @@ def download_email_fallback_eml(
     channel records; the operator opens it in their mail client, confirms the
     recipient (the official downtime address is institution-configured), and
     sends. No SMTP happens server-side.
+
+    This is a download of the filed documents under another name, so it takes
+    ``EXPORT`` exactly as the artifact routes do.
     """
     import io  # noqa: PLC0415
     from email.message import EmailMessage  # noqa: PLC0415
@@ -721,9 +733,14 @@ def get_email_fallback_instructions(
     bank_id: str,
     package_id: UUID,
     db: DbSession,
-    access: PackageView,
+    access: PackageExport,
 ) -> EmailFallbackInstructionsRead:
-    """Preview the BG/FMD/2026/07 downtime email bundle without submitting."""
+    """Preview the BG/FMD/2026/07 downtime email bundle without submitting.
+
+    The preview names the signed documents and the recipient, so it is part of
+    the export surface: ``EXPORT`` is required even though the call itself does
+    not stream a file.
+    """
     return reporting_workflow.email_fallback_instructions(db, access.ctx, bank_id, package_id)
 
 

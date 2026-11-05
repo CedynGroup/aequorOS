@@ -914,8 +914,15 @@ requires whole-institution REG/restricted VIEW; ICAAP retains CAPITAL/confidenti
 and its workspace freeze rules. Ordinary generation additionally requires REG/restricted RUN. Package
 lists filter before counts and pagination. Calendar/anchor links, signing
 inboxes, snapshots, comparisons, artifacts and attestation reads hide returns
-without that authority. Package comparisons filter both referenced packages by
-family before disclosing mismatches. Ordinary approval, signing and nomination
+without that authority. Taking the return away is a separate act: artifact
+generation, artifact and archived-revision downloads, and the downtime email
+bundle (including its instructions preview) require REG/restricted EXPORT for every family, ICAAP included, after
+family-based VIEW. ICAAP visibility stays CAPITAL/confidential; a Capital-only
+grant no longer takes an ICAAP return away. A VIEW-only reader keeps
+the package, its metadata and its history, but receives no file; an invisible
+package still returns 404 before any storage read, and a denied export writes
+no artifact, audit event or object. Package comparisons filter both referenced
+packages by family before disclosing mismatches. Ordinary approval, signing and nomination
 no longer fall back to scalar roles; the action permission and maker/checker
 conditions remain required. Caller-owned signer identity and signature-appearance setup
 require an interactive human with current authorization, without a scalar-role
@@ -931,6 +938,51 @@ No return authority is inferred or backfilled. Existing whole-institution REG
 to their bundle permissions; an Org Owner must explicitly issue an appropriate
 whole-institution reporting grant for a former scalar-only reader or preparer.
 Valid Credit grants remain valid for Credit, and never grant reporting access.
+
+**Export cutover (2026-11-03; uniform ICAAP policy 2026-11-04).** This is a
+deliberate production behavior change: every return family, including ICAAP,
+requires REG/restricted EXPORT. ICAAP retains Capital/confidential visibility,
+and a Capital-only grant no longer exports its return artifacts. The analyst
+bundle remains the only shipped human exporter.
+
+The EXPORT requirement denies artifact
+generation, artifact/revision download and the downtime email bundle to every
+active human whose REG/restricted binding carries only VIEW — the `viewer`,
+`auditor`, `approver` and `validator` bundles. Reads, lists, history,
+attestation and comparisons are unchanged. Nothing is backfilled. The only
+human bundle that carries EXPORT with Regulatory Reporting authority today is
+`analyst`, so an officer who must take the return away needs one whole-institution
+binding with `role_bundle='analyst'`, the exact `institution_id='BK-…'`,
+`module_scope='reg'`, `sensitivity_scope='restricted'` and
+`data_scope_kind='all'`; that row also grants preparation. There is no
+read-only exporter bundle for returns yet, so a viewer who needs the file must
+be granted preparation as well until a dedicated bundle exists — a known gap,
+not a reason to infer EXPORT from VIEW. Enumerate affected principals and
+retain the dated `scripts/authorization_access_impact.py` output outside the
+repository; do not auto-grant.
+
+The signing workspace reads the document through those same artifact and
+archived-revision download routes, so a signing officer needs REG/restricted
+EXPORT alongside the family visibility and the bank's ceremony authority to see
+the page they certify. There is no ceremony-preview byte exception: an officer
+holding only review/approve (the `approver` bundle) can open the ceremony but is
+not served the document, and the workspace says which grant is missing instead
+of attempting a refused read or a dead export. The action permissions
+themselves are unchanged.
+
+The downtime email bundle deserves its own warning: it is the fallback channel
+the Validator uses when ORASS is unreachable, and the `validator` bundle carries
+`view` + `submit` only. After this cutover a bank that relies on email fallback
+needs its Validator to hold an export-capable binding as well (today that means
+an `analyst` REG/restricted row, which also confers preparation). That is a
+real tension with the approved three-role design and is recorded as a gap for a
+dedicated read-only exporter bundle, not resolved by inferring `export` from
+`view` or `submit`.
+
+The permission verbs the older matrix names are reconciled here, not changed:
+ordinary package generation and regeneration remain `RUN`, and a resubmission
+request remains `EDIT`, because that is the later approved filing contract.
+`CREATE` is not reintroduced for either act.
 
 Executable evidence: `tests/reporting/api/test_narrowed_institution_figures_integration.py` probes the
 shared HTTP feeds, every engine's snapshots, Liquidity dependencies and

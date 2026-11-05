@@ -1,20 +1,25 @@
 """Every return needs whole-institution scoped authority.
 
 Regulatory Reporting/restricted governs ordinary returns; ICAAP keeps
-Capital/confidential. Missing visibility hides the return, while visible returns
+Capital/confidential visibility; every return artifact requires REG/restricted
+EXPORT. Missing visibility hides the return, while visible returns
 require their own action permission. Scalar roles cannot satisfy either gate.
 """
 
 from __future__ import annotations
 
+import hashlib
+import io
 from datetime import UTC, date, datetime
 from typing import Any
+from unittest.mock import Mock
 from uuid import UUID, uuid4
 
 import pytest
 from fastapi import HTTPException
 from fastapi.testclient import TestClient
-from sqlalchemy import delete
+from sqlalchemy import delete, select
+from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
 from app.attestation.service import digests, register_state
@@ -28,17 +33,23 @@ from app.core.authorization import (
     SensitivityScope,
 )
 from app.core.config import get_settings
+from app.data_engine.service.ingestion import bank_slug
 from app.db.session import get_sessionmaker
 from app.identity.service import authorization
 from app.models import (
+    AuditEvent,
     AuthorizationBinding,
     Bank,
     PackageSignatureRecipient,
+    RegulatoryArtifactVersion,
     RegulatoryPackage,
+    RegulatoryPackageArtifact,
     User,
 )
 from app.policy.service.institution_types import FALLBACK_TYPE_CODE
 from app.reporting.service import version_chain
+from app.reporting.service import workflow as reporting_workflow
+from app.storage.client import ObjectMetadata, StorageLocation
 from tests.fixtures.canonical_bank_fixture import (
     SAMPLE_BANK_ID,
     materialize_canonical_test_book,
@@ -51,6 +62,7 @@ from tests.support.helpers import (
     headers,
     integration_key_headers,
 )
+from tests.support.inmemory_storage import InMemoryStorageClient
 
 OTHER_ORG_BANK_ID = "BK-PKOTH001"
 REPORTING_DATE = date(2026, 3, 31)
@@ -1268,3 +1280,439 @@ def test_comparison_target_is_scoped_to_the_path_bank(
     unknown = db_client.get(endpoint, headers=auth, params={"against": str(uuid4())})
     assert foreign.status_code == unknown.status_code == 404
     assert error_envelope(foreign) == error_envelope(unknown)
+
+
+# --- export authority: export, download and the email fallback ---------------
+
+
+def _artifact(  # noqa: PLR0913 - the seeded row and its stored bytes are explicit
+    package_id: UUID,
+    storage_engine: InMemoryStorageClient,
+    *,
+    organization_id: str = ORG_1,
+    bank_id: str = SAMPLE_BANK_ID,
+) -> tuple[UUID, UUID]:
+    """One artifact row plus the archived revision that proves its bytes."""
+    session = get_sessionmaker()()
+    session.info["organization_id"] = organization_id
+    try:
+        package = session.get(RegulatoryPackage, package_id)
+        assert package is not None
+        bank = session.get(Bank, bank_id)
+        assert bank is not None
+        slug = bank_slug(session, bank)
+        content = f"{package.return_code}:pdf:{package.id}".encode()
+        object_path = (
+            f"bog_returns/{package.reporting_date.isoformat()}/"
+            f"{package.id}/{package.return_code}.pdf"
+        )
+        checksum = hashlib.sha256(content).hexdigest()
+        stored = storage_engine.write(
+            StorageLocation(institution_slug=slug, tier="outputs", object_path=object_path),
+            io.BytesIO(content),
+            ObjectMetadata(
+                institution_slug=slug,
+                tier="outputs",
+                checksum_sha256=checksum,
+                written_at=datetime.now(UTC),
+                written_by="package-authorization-test",
+            ),
+        )
+        artifact = RegulatoryPackageArtifact(
+            organization_id=organization_id,
+            package_id=package.id,
+            kind="pdf",
+            object_path=object_path,
+            checksum_sha256=checksum,
+            size_bytes=len(content),
+        )
+        version = RegulatoryArtifactVersion(
+            organization_id=organization_id,
+            package_id=package.id,
+            kind="pdf",
+            object_path=object_path,
+            storage_version_id=stored.version_id,
+            checksum_sha256=checksum,
+            size_bytes=len(content),
+            created_by=USER_1,
+        )
+        session.add_all([artifact, version])
+        session.commit()
+        return artifact.id, version.id
+    finally:
+        session.close()
+
+
+def _audit_events(entity_id: str, event_type: str) -> list[UUID]:
+    with get_sessionmaker()() as session:
+        session.info["organization_id"] = ORG_1
+        return list(
+            session.scalars(
+                select(AuditEvent.id).where(
+                    AuditEvent.organization_id == ORG_1,
+                    AuditEvent.entity_id == entity_id,
+                    AuditEvent.event_type == event_type,
+                )
+            )
+        )
+
+
+@pytest.mark.parametrize(
+    ("family", "capital_export"), [("liquidity", False), ("icaap", False), ("icaap", True)]
+)
+def test_view_authority_does_not_export_download_or_email_the_return(
+    db_client: TestClient,
+    storage_engine: InMemoryStorageClient,
+    monkeypatch: pytest.MonkeyPatch,
+    family: str,
+    capital_export: bool,
+) -> None:
+    """Export is its own permission: reading a return never hands over its file.
+
+    Every refusal lands before the effect: no exporter runs, no artifact is
+    minted or written, and no export/download audit event is recorded.
+    """
+    code = "ICAAP-REPORT" if family == "icaap" else "LCR-NSFR"
+    package_id = _package(family=family, return_code=code)
+    artifact_id, version_id = _artifact(package_id, storage_engine)
+    invoked: list[str] = []
+
+    def _spy_export(
+        db: Session, ctx: TenantContext, package: RegulatoryPackage, kind: str
+    ) -> RegulatoryPackageArtifact:
+        _ = (db, ctx, package)
+        invoked.append(kind)
+        pytest.fail("an unauthorized principal reached the exporter")
+
+    monkeypatch.setattr(reporting_workflow, "_resolve_exporter", lambda: _spy_export)
+    authv = _grant(
+        role_bundle=RoleBundle.ANALYST if capital_export else RoleBundle.VIEWER,
+        module_scope=ModuleScope.CAPITAL if family == "icaap" else ModuleScope.REGULATORY,
+        sensitivity_scope=(
+            SensitivityScope.CONFIDENTIAL if family == "icaap" else SensitivityScope.RESTRICTED
+        ),
+    )
+    monkeypatch.setattr(
+        storage_engine, "write", Mock(side_effect=AssertionError("unauthorized storage write"))
+    )
+    auth = headers(roles=("viewer",), authorization_version=authv)
+    base = f"/api/v1/banks/{SAMPLE_BANK_ID}/regulatory-packages/{package_id}"
+    assert db_client.get(base, headers=auth).status_code == 200
+
+    assert db_client.post(f"{base}/export", headers=auth, params={"kind": "pdf"}).status_code == 403
+    # The service repeats the gate, so a caller that reaches it without the
+    # route dependency still cannot mint an artifact. The session carries the
+    # tenant like every other one here: the bank and package lookups run before
+    # the export decision, so an unset organization would let row-level
+    # security answer 404 for a reason this test does not mean to exercise.
+    with get_sessionmaker()() as session:
+        session.info["organization_id"] = ORG_1
+        ctx = TenantContext(
+            organization_id=ORG_1, actor_user_id=USER_1, authorization_version=authv
+        )
+        with pytest.raises(HTTPException) as refusal:
+            reporting_workflow.export_package_artifact(
+                session, ctx, SAMPLE_BANK_ID, package_id, "pdf"
+            )
+        assert refusal.value.status_code == 403
+    assert invoked == []
+    assert (
+        db_client.get(
+            f"/api/v1/banks/{SAMPLE_BANK_ID}/regulatory-artifacts/{artifact_id}/download",
+            headers=auth,
+        ).status_code
+        == 403
+    )
+    assert (
+        db_client.get(
+            f"/api/v1/banks/{SAMPLE_BANK_ID}/regulatory-artifact-versions/{version_id}/download",
+            headers=auth,
+        ).status_code
+        == 403
+    )
+    assert db_client.get(f"{base}/email-fallback-instructions", headers=auth).status_code == 403
+    assert db_client.get(f"{base}/email-fallback.eml", headers=auth).status_code == 403
+
+    with get_sessionmaker()() as session:
+        session.info["organization_id"] = ORG_1
+        minted = session.scalars(
+            select(RegulatoryPackageArtifact.id).where(
+                RegulatoryPackageArtifact.package_id == package_id
+            )
+        ).all()
+        assert list(minted) == [artifact_id]
+    assert _audit_events(str(package_id), "regulatory_package.exported") == []
+    assert _audit_events(str(version_id), "regulatory_artifact_version.downloaded") == []
+
+
+@pytest.mark.parametrize("family", ["liquidity", "icaap"])
+def test_export_authority_generates_downloads_and_email_fallback(
+    db_client: TestClient,
+    storage_engine: InMemoryStorageClient,
+    monkeypatch: pytest.MonkeyPatch,
+    family: str,
+) -> None:
+    """The same principal gains every export surface through one REG EXPORT row."""
+    code = "ICAAP-REPORT" if family == "icaap" else "LCR-NSFR"
+    package_id = _package(family=family, return_code=code)
+    artifact_id, version_id = _artifact(package_id, storage_engine)
+
+    def _fake_export(
+        db: Session, ctx: TenantContext, package: RegulatoryPackage, kind: str
+    ) -> RegulatoryPackageArtifact:
+        _ = ctx
+        row = RegulatoryPackageArtifact(
+            organization_id=package.organization_id,
+            package_id=package.id,
+            kind=kind,
+            object_path=f"fixture/{package.id}/{package.return_code}.{kind}",
+            checksum_sha256="0" * 64,
+            size_bytes=1,
+        )
+        db.add(row)
+        db.flush()
+        return row
+
+    monkeypatch.setattr(reporting_workflow, "_resolve_exporter", lambda: _fake_export)
+    _grant(
+        role_bundle=RoleBundle.VIEWER,
+        module_scope=ModuleScope.CAPITAL if family == "icaap" else ModuleScope.REGULATORY,
+        sensitivity_scope=(
+            SensitivityScope.CONFIDENTIAL if family == "icaap" else SensitivityScope.RESTRICTED
+        ),
+    )
+    authv = _grant(
+        role_bundle=RoleBundle.ANALYST,
+        module_scope=ModuleScope.REGULATORY,
+        sensitivity_scope=SensitivityScope.RESTRICTED,
+    )
+    auth = headers(roles=("analyst",), authorization_version=authv)
+    base = f"/api/v1/banks/{SAMPLE_BANK_ID}/regulatory-packages/{package_id}"
+
+    generated = db_client.post(f"{base}/export", headers=auth, params={"kind": "xlsx"})
+    assert generated.status_code == 201, generated.text
+    # The fake seam mints no archived revision; leave only the seeded PDF so the
+    # email bundle resolves every document it lists.
+    with get_sessionmaker()() as session:
+        session.info["organization_id"] = ORG_1
+        session.execute(
+            delete(RegulatoryPackageArtifact).where(
+                RegulatoryPackageArtifact.package_id == package_id,
+                RegulatoryPackageArtifact.kind == "xlsx",
+            )
+        )
+        session.commit()
+
+    download = db_client.get(
+        f"/api/v1/banks/{SAMPLE_BANK_ID}/regulatory-artifacts/{artifact_id}/download",
+        headers=auth,
+    )
+    assert download.status_code == 200, download.text
+    assert download.content.startswith(f"{code}:pdf:".encode())
+
+    version = db_client.get(
+        f"/api/v1/banks/{SAMPLE_BANK_ID}/regulatory-artifact-versions/{version_id}/download",
+        headers=auth,
+    )
+    assert version.status_code == 200, version.text
+    assert version.content == download.content
+
+    instructions = db_client.get(f"{base}/email-fallback-instructions", headers=auth)
+    assert instructions.status_code == 200, instructions.text
+    assert db_client.get(f"{base}/email-fallback.eml", headers=auth).status_code == 200
+
+
+def test_an_approver_without_export_cannot_read_the_document_they_certify(
+    db_client: TestClient,
+    storage_engine: InMemoryStorageClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The ceremony's page is the return's file, and reading it is EXPORT.
+
+    A signing officer holds REG/restricted VIEW, REVIEW and APPROVE but not
+    EXPORT. Every read that describes the ceremony still answers, because
+    reading the return is not taking its file; the two document byte routes
+    refuse, and they refuse before the store is touched. One exact
+    REG/restricted EXPORT row is what admits the same officer to the bytes.
+    """
+    package_id = _package(family="liquidity", return_code="LCR-NSFR")
+    artifact_id, version_id = _artifact(package_id, storage_engine)
+    approver = _grant(
+        role_bundle=RoleBundle.APPROVER,
+        module_scope=ModuleScope.REGULATORY,
+        sensitivity_scope=SensitivityScope.RESTRICTED,
+    )
+    base = f"/api/v1/banks/{SAMPLE_BANK_ID}"
+    preview_auth = headers(roles=("approver",), authorization_version=approver)
+
+    # The ceremony itself is readable: the officer can still see the package,
+    # the figures preview and the attestation state.
+    package = db_client.get(f"{base}/regulatory-packages/{package_id}", headers=preview_auth)
+    assert package.status_code == 200, package.text
+    assert (
+        db_client.get(
+            f"{base}/regulatory-packages/{package_id}/artifact-versions",
+            headers=preview_auth,
+        ).status_code
+        == 200
+    )
+
+    read = storage_engine.read
+    monkeypatch.setattr(
+        storage_engine,
+        "read",
+        Mock(side_effect=AssertionError("a denied document read reached the store")),
+    )
+    for path in (
+        f"regulatory-artifacts/{artifact_id}/download",
+        f"regulatory-artifact-versions/{version_id}/download",
+    ):
+        refused = db_client.get(f"{base}/{path}", headers=preview_auth)
+        assert refused.status_code == 403, path
+        assert b"LCR-NSFR:pdf:" not in refused.content
+    assert _audit_events(str(version_id), "regulatory_artifact_version.downloaded") == []
+
+    # One exact REG/restricted EXPORT row is the grant a signing officer needs
+    # in addition to the ceremony authority; nothing else is inferred.
+    monkeypatch.setattr(storage_engine, "read", read)
+    authorized = _grant(
+        role_bundle=RoleBundle.ANALYST,
+        module_scope=ModuleScope.REGULATORY,
+        sensitivity_scope=SensitivityScope.RESTRICTED,
+    )
+    export_auth = headers(roles=("approver",), authorization_version=authorized)
+    for path in (
+        f"regulatory-artifacts/{artifact_id}/download",
+        f"regulatory-artifact-versions/{version_id}/download",
+    ):
+        served = db_client.get(f"{base}/{path}", headers=export_auth)
+        assert served.status_code == 200, path
+        assert served.content.startswith(b"LCR-NSFR:pdf:")
+
+
+def test_icaap_signing_officer_needs_export_beside_capital_approval(
+    db_client: TestClient,
+    storage_engine: InMemoryStorageClient,
+) -> None:
+    """ICAAP keeps Capital/confidential visibility; its document is still EXPORT.
+
+    The ICAAP approver holds exactly the Capital/confidential APPROVE binding the
+    ceremony asks for. The package, its figures and its revisions remain
+    readable, but the document bytes require the same REG/restricted EXPORT as
+    every other return family. Adding that row — not extending the Capital
+    binding — is what serves the page they sign.
+    """
+    package_id = _package()
+    artifact_id, version_id = _artifact(package_id, storage_engine)
+    capital_approver = _grant(
+        role_bundle=RoleBundle.APPROVER,
+        module_scope=ModuleScope.CAPITAL,
+        sensitivity_scope=SensitivityScope.CONFIDENTIAL,
+    )
+    base = f"/api/v1/banks/{SAMPLE_BANK_ID}"
+    approval_auth = headers(roles=("approver",), authorization_version=capital_approver)
+
+    assert (
+        db_client.get(f"{base}/regulatory-packages/{package_id}", headers=approval_auth).status_code
+        == 200
+    )
+    for path in (
+        f"regulatory-artifacts/{artifact_id}/download",
+        f"regulatory-artifact-versions/{version_id}/download",
+    ):
+        assert db_client.get(f"{base}/{path}", headers=approval_auth).status_code == 403, path
+
+    exported = _grant(
+        role_bundle=RoleBundle.ANALYST,
+        module_scope=ModuleScope.REGULATORY,
+        sensitivity_scope=SensitivityScope.RESTRICTED,
+    )
+    export_auth = headers(roles=("approver",), authorization_version=exported)
+    for path in (
+        f"regulatory-artifacts/{artifact_id}/download",
+        f"regulatory-artifact-versions/{version_id}/download",
+    ):
+        served = db_client.get(f"{base}/{path}", headers=export_auth)
+        assert served.status_code == 200, path
+        assert served.content.startswith(b"ICAAP-REPORT:pdf:")
+
+
+def test_artifact_download_hides_a_package_from_a_sibling_bank(
+    db_client: TestClient, storage_engine: InMemoryStorageClient
+) -> None:
+    """A grant for one bank never downloads its sibling's artifact."""
+    _add_bank(OTHER_ORG_BANK_ID, organization_id=ORG_1)
+    foreign_package = _package(
+        family="liquidity",
+        return_code="LCR-NSFR",
+        bank_id=OTHER_ORG_BANK_ID,
+    )
+    artifact_id, version_id = _artifact(foreign_package, storage_engine, bank_id=OTHER_ORG_BANK_ID)
+    authv = _grant(
+        role_bundle=RoleBundle.ANALYST,
+        module_scope=ModuleScope.REGULATORY,
+        sensitivity_scope=SensitivityScope.RESTRICTED,
+    )
+    auth = headers(roles=("analyst",), authorization_version=authv)
+    for url in (
+        f"/api/v1/banks/{SAMPLE_BANK_ID}/regulatory-artifacts/{artifact_id}/download",
+        f"/api/v1/banks/{SAMPLE_BANK_ID}/regulatory-artifact-versions/{version_id}/download",
+        f"/api/v1/banks/{OTHER_ORG_BANK_ID}/regulatory-artifacts/{artifact_id}/download",
+    ):
+        assert db_client.get(url, headers=auth).status_code == 404
+
+
+def test_icaap_export_requires_visibility_before_regulatory_authority(
+    db_client: TestClient,
+    storage_engine: InMemoryStorageClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    package_id = _package()
+    artifact_id, version_id = _artifact(package_id, storage_engine)
+    authv = _grant(
+        module_scope=ModuleScope.REGULATORY,
+        sensitivity_scope=SensitivityScope.RESTRICTED,
+    )
+    auth = headers(roles=("analyst",), authorization_version=authv)
+    monkeypatch.setattr(
+        reporting_workflow,
+        "_resolve_exporter",
+        Mock(side_effect=AssertionError("invisible exporter")),
+    )
+    monkeypatch.setattr(
+        storage_engine, "write", Mock(side_effect=AssertionError("invisible storage write"))
+    )
+    base = f"/api/v1/banks/{SAMPLE_BANK_ID}"
+    surfaces = [
+        (
+            "post",
+            f"regulatory-packages/{package_id}/export?kind=pdf",
+            f"regulatory-packages/{uuid4()}/export?kind=pdf",
+        ),
+        (
+            "get",
+            f"regulatory-artifacts/{artifact_id}/download",
+            f"regulatory-artifacts/{uuid4()}/download",
+        ),
+        (
+            "get",
+            f"regulatory-artifact-versions/{version_id}/download",
+            f"regulatory-artifact-versions/{uuid4()}/download",
+        ),
+        (
+            "get",
+            f"regulatory-packages/{package_id}/email-fallback.eml",
+            f"regulatory-packages/{uuid4()}/email-fallback.eml",
+        ),
+        (
+            "get",
+            f"regulatory-packages/{package_id}/email-fallback-instructions",
+            f"regulatory-packages/{uuid4()}/email-fallback-instructions",
+        ),
+    ]
+    for method, visible, unknown in surfaces:
+        refused = db_client.request(method, f"{base}/{visible}", headers=auth)
+        missing = db_client.request(method, f"{base}/{unknown}", headers=auth)
+        assert refused.status_code == missing.status_code == 404
+    assert _audit_events(str(package_id), "regulatory_package.exported") == []
+    assert _audit_events(str(version_id), "regulatory_artifact_version.downloaded") == []

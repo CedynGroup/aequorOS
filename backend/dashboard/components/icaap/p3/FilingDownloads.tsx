@@ -115,6 +115,17 @@ export default function FilingDownloads({
             </p>
           )}
 
+          {/* The files stay visible without export authority: knowing which
+              documents exist is part of reading the return. Taking one away is
+              its own act, so the row keeps its metadata and the control is
+              withdrawn rather than offered and then refused by the server. */}
+          {!canExport && (files.length > 0 || signed.length > 0) && (
+            <p className="text-caption text-slate">
+              Downloading a return file requires Regulatory Reporting ·
+              Restricted · Export.
+            </p>
+          )}
+
           {files.length === 0 ? (
             <EmptyState
               title="No files yet"
@@ -139,19 +150,21 @@ export default function FilingDownloads({
                       {moment(artifact.createdAt)}
                     </p>
                   </div>
-                  <button
-                    type="button"
-                    className="inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-2 text-caption font-medium text-slate hover:bg-surface hover:text-navy"
-                    onClick={() => {
-                      setFailure(null);
-                      void downloadArtifact(bankId, artifact).catch(
-                        (error: Error) => setFailure(error.message),
-                      );
-                    }}
-                  >
-                    <Download size={ICON_SM} aria-hidden />
-                    Download
-                  </button>
+                  {canExport && (
+                    <button
+                      type="button"
+                      className="inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-2 text-caption font-medium text-slate hover:bg-surface hover:text-navy"
+                      onClick={() => {
+                        setFailure(null);
+                        void downloadArtifact(bankId, artifact).catch(
+                          (error: Error) => setFailure(error.message),
+                        );
+                      }}
+                    >
+                      <Download size={ICON_SM} aria-hidden />
+                      Download
+                    </button>
+                  )}
                 </li>
               ))}
             </ul>
@@ -190,19 +203,21 @@ export default function FilingDownloads({
                           The filed document
                         </StatusPill>
                       )}
-                      <button
-                        type="button"
-                        className="inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-2 text-caption font-medium text-slate hover:bg-surface hover:text-navy"
-                        onClick={() => {
-                          setFailure(null);
-                          void downloadArtifactVersion(bankId, version).catch(
-                            (error: Error) => setFailure(error.message),
-                          );
-                        }}
-                      >
-                        <Download size={ICON_SM} aria-hidden />
-                        Download
-                      </button>
+                      {canExport && (
+                        <button
+                          type="button"
+                          className="inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-2 text-caption font-medium text-slate hover:bg-surface hover:text-navy"
+                          onClick={() => {
+                            setFailure(null);
+                            void downloadArtifactVersion(bankId, version).catch(
+                              (error: Error) => setFailure(error.message),
+                            );
+                          }}
+                        >
+                          <Download size={ICON_SM} aria-hidden />
+                          Download
+                        </button>
+                      )}
                     </div>
                   </li>
                 ))}

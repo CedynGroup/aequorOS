@@ -37,6 +37,16 @@ from app.stress.service import macro_scenarios
 SOURCE_ORG = "OR-DEM00001"
 SOURCE_BANK = "BK-SAMP0001"
 SOURCE_ADMIN = UUID("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa")
+#: The story officers who must take a return away: the Approver reads the page
+#: they sign, and the Validator sends the downtime email bundle. Both are
+#: refused REG/restricted EXPORT by the 2026-11-03 export cutover, and only the
+#: ``analyst`` bundle carries it for a human (there is no read-only exporter
+#: bundle for returns yet), so a signing story grants it rather than run the
+#: ceremony against an officer the backend would refuse. This is the documented
+#: remediation, not a fixture relaxation: the exports it enables are exactly the
+#: ones the policy requires those officers to hold
+#: (backend/docs/authorization_foundation.md, "Export cutover").
+RETURN_EXPORT_ROLES = frozenset({"approver", "validator"})
 BASELINE_ROLES = frozenset(
     {
         "viewer",
@@ -93,20 +103,31 @@ class StoryRead(BaseModel):
     actors: list[ActorRead]
 
 
-def _grant(
+def _grant(  # noqa: PLR0913 - the scope tuple is explicit, as in the service
     db: Session,
     user: User,
     bundle: RoleBundle,
     module: ModuleScope = ModuleScope.ALL,
     sensitivity: SensitivityScope = SensitivityScope.ALL,
+    institution_id: str | None = None,
 ) -> None:
+    # An ORGANIZATION-scoped binding matches EVERY institution in the tenant
+    # (``app/core/authorization.py::_institution_matches``), so a grant that must
+    # stop at one bank names it.
+    scope = (
+        authorization.BindingScope(InstitutionScope.ORGANIZATION, None, module, sensitivity)
+        if institution_id is None
+        else authorization.BindingScope(
+            InstitutionScope.INSTITUTION, institution_id, module, sensitivity
+        )
+    )
     _ = authorization.create_role_binding(
         db,
         organization_id=user.organization_id,
         principal_user_id=user.id,
         principal_type=PrincipalType.HUMAN,
         role_bundle=bundle,
-        scope=authorization.BindingScope(InstitutionScope.ORGANIZATION, None, module, sensitivity),
+        scope=scope,
         grantor=authorization.GrantorRef(GrantorType.SYSTEM, "e2e-story"),
         reason="Explicit authority for one synthetic dashboard story",
         commit=False,
@@ -270,6 +291,21 @@ def provision(db: Session, request: StoryRequest) -> StoryRead:
     by_role = {spec.role: user for spec, user in users}
     _apply_scoped_bindings(db, request, by_role)
     _configure_owner_read(db, request, by_role)
+    if request.signing:
+        for spec, user in users:
+            if spec.role in RETURN_EXPORT_ROLES:
+                # Return export on the story's own bank, on top of the
+                # officer's own bundle, which the ceremony keeps requiring for
+                # the action. Institution-scoped so it cannot reach a sibling
+                # bank of the same tenant.
+                _grant(
+                    db,
+                    user,
+                    RoleBundle.ANALYST,
+                    ModuleScope.REGULATORY,
+                    SensitivityScope.RESTRICTED,
+                    institution_id=request.bank_id,
+                )
     db.commit()
     if request.signing:
         ctx = TenantContext(organization_id=request.organization_id)

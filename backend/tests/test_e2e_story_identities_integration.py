@@ -1,5 +1,6 @@
 """Story principals retain real authority and end access even after a failed story."""
 
+from typing import NamedTuple
 from uuid import UUID, uuid4
 
 import pytest
@@ -7,7 +8,14 @@ from fastapi.testclient import TestClient
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.core.authorization import BindingStatus, ModuleScope, RoleBundle, SensitivityScope
+from app.core.authorization import (
+    BindingStatus,
+    InstitutionScope,
+    ModuleScope,
+    RoleBundle,
+    SensitivityScope,
+)
+from app.core.config import get_settings
 from app.core.security import hash_password
 from app.identity.models.authorization import AuthorizationBinding
 from app.identity.schemas.auth import MeResponse, TokenResponse
@@ -15,6 +23,7 @@ from app.identity.service import authorization
 from app.models import BankFinancialFact, MacroScenario, User
 from app.stress.schemas.stress import MacroScenarioListRead, MacroScenarioRead
 from scripts.e2e_story_identities import (
+    RETURN_EXPORT_ROLES,
     SOURCE_ADMIN,
     SOURCE_BANK,
     SOURCE_ORG,
@@ -26,6 +35,18 @@ from scripts.e2e_story_identities import (
 )
 
 PASSWORD = "synthetic-story-step-up-not-production"
+VAULT_KEY = "story-export-vault-key-not-production-0001"
+
+
+class StoryAuthority(NamedTuple):
+    """One story actor's projected authority, read back from ``/auth/me``."""
+
+    #: institution id -> (module, sensitivity, permission) it is granted.
+    capabilities: dict[str, set[tuple[str, str, str]]]
+    #: every bundle held, whatever its scope.
+    bundles: set[str]
+    #: (bundle, institution_scope, institution_id) for the export bundle only.
+    export_rows: set[tuple[str, str, str | None]]
 
 
 def test_scoped_story_credentials_enforce_real_backend_permission_boundaries(
@@ -96,6 +117,136 @@ def prepare_source(db: Session) -> User:
     )
     db.commit()
     return source
+
+
+def test_signing_story_officers_hold_return_export_and_other_stories_do_not(
+    db_session: Session,
+    db_client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Only a signing story grants the export its ceremony requires.
+
+    The 2026-11-03 cutover serves a return's files only to a REG/restricted
+    EXPORT holder, and the signing workspace refuses to certify a page the
+    officer was never served, so the officers who sign a story must hold it.
+    Every other story keeps exactly the grants it always had: an approver-only
+    identity stays denied, which is the production rule the fixture may not
+    paper over. ``_grant`` binds at organization scope, so the extra binding
+    covers the story's institution without narrowing the officer's own bundle.
+    """
+    _ = prepare_source(db_session)
+    # A signing story also issues each officer a signer identity, so the suite's
+    # blanked signing configuration is switched on for this story alone.
+    monkeypatch.setenv("SIGNER_ID_PEPPER", "story-export-test-pepper-not-production")
+    monkeypatch.setenv("ATTESTATION_SIGNING_ENABLED", "1")
+    monkeypatch.setenv("CREDENTIAL_VAULT_MASTER_KEY", VAULT_KEY)
+    get_settings.cache_clear()
+
+    def story_authority(signing: bool, tag: str) -> dict[str, StoryAuthority]:
+        # A story's own tenant is what gives ``/auth/me`` an institution to
+        # project over; the shared sample tenant carries no bank rows here.
+        request = StoryRequest(
+            organization_id=f"OR-{tag}",
+            bank_id=f"BK-{tag}",
+            owned_tenant=True,
+            signing=signing,
+            actors=[
+                ActorSpec(role="approver", user_id=uuid4()),
+                ActorSpec(role="validator", user_id=uuid4()),
+                ActorSpec(role="viewer", user_id=uuid4()),
+            ],
+        )
+        try:
+            actors = provision(db_session, request).actors
+            authority: dict[str, StoryAuthority] = {}
+            for actor in actors:
+                bindings = list(
+                    db_session.scalars(
+                        select(AuthorizationBinding).where(
+                            AuthorizationBinding.principal_user_id == actor.user_id,
+                            AuthorizationBinding.status == BindingStatus.ACTIVE.value,
+                        )
+                    )
+                )
+                login = db_client.post(
+                    "/api/v1/auth/login",
+                    json={"email": actor.email, "password": PASSWORD},
+                )
+                assert login.status_code == 200, login.text
+                token = TokenResponse.model_validate_json(login.text)
+                me = db_client.get(
+                    "/api/v1/auth/me",
+                    headers={"Authorization": f"Bearer {token.access_token}"},
+                )
+                assert me.status_code == 200, me.text
+                effective = MeResponse.model_validate_json(me.text).effective_authority
+                capabilities = {
+                    institution.institution_id: {
+                        (
+                            capability.module.value,
+                            capability.sensitivity.value,
+                            capability.permission.value,
+                        )
+                        for capability in institution.capabilities
+                    }
+                    for institution in effective.institution_capabilities
+                }
+                authority[actor.role] = StoryAuthority(
+                    capabilities,
+                    {binding.role_bundle for binding in bindings},
+                    {
+                        (
+                            binding.role_bundle,
+                            binding.institution_scope,
+                            binding.institution_id,
+                        )
+                        for binding in bindings
+                        if binding.role_bundle == RoleBundle.ANALYST.value
+                    },
+                )
+            return authority
+        finally:
+            retire(db_session, request)
+
+    signed = story_authority(True, "SGN00001")
+    unsigned = story_authority(False, "PLN00001")
+    signed_bank = "BK-SGN00001"
+    unsigned_bank = "BK-PLN00001"
+
+    # The officers the ceremony and the downtime bundle depend on hold exactly
+    # the return export the policy requires, and the backend actually serves it.
+    for role in RETURN_EXPORT_ROLES:
+        held = signed[role]
+        capabilities, bundles, export_rows = held.capabilities, held.bundles, held.export_rows
+        assert ("reg", "restricted", "export") in capabilities[signed_bank], role
+        assert RoleBundle.ANALYST.value in bundles, role
+        # Confined to the story's own bank: an organization-scoped binding
+        # matches every institution in the tenant, so the grant names one.
+        assert export_rows == {("analyst", InstitutionScope.INSTITUTION.value, signed_bank)}, role
+        assert set(capabilities) == {signed_bank}, role
+    # A plain approver keeps its own bundle and stays refused: no analyst row,
+    # and no export the ceremony could read a page with.
+    assert signed["approver"].bundles == {
+        RoleBundle.MEMBER.value,
+        RoleBundle.APPROVER.value,
+        RoleBundle.ANALYST.value,
+    }
+    assert ("reg", "restricted", "export") not in unsigned["approver"].capabilities.get(
+        unsigned_bank, set()
+    )
+    assert unsigned["approver"].bundles == {RoleBundle.MEMBER.value, RoleBundle.APPROVER.value}
+    assert unsigned["validator"].bundles == {
+        RoleBundle.MEMBER.value,
+        RoleBundle.VIEWER.value,
+        RoleBundle.VALIDATOR.value,
+    }
+    assert ("reg", "restricted", "export") not in unsigned["validator"].capabilities.get(
+        unsigned_bank, set()
+    )
+    # No story role outside the signing set receives an analyst row at all.
+    assert unsigned["approver"].export_rows == unsigned["validator"].export_rows == set()
+    # An unrelated story role is untouched by the signing rule.
+    assert unsigned["viewer"].bundles == signed["viewer"].bundles == {RoleBundle.MEMBER.value}
 
 
 def test_failed_story_retires_fresh_actors_and_real_refresh_families(

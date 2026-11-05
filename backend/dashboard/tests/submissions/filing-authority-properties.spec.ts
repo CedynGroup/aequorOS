@@ -46,7 +46,7 @@ it("offers filing acts only from the selected institution's exact regulatory cap
         const gates = [
           ["mayPrepare", "create", false],
           ["mayRunChecks", "validate", false],
-          ["mayExport", "export", false],
+          ["mayExport", "export", true],
           ["mayApprove", "approve", true],
           ["mayTransmit", "submit", true],
         ] as const;
