@@ -9,7 +9,6 @@ import json
 import os
 import subprocess
 import sys
-from collections.abc import Mapping
 from pathlib import Path
 from typing import cast
 
@@ -18,87 +17,111 @@ import pytest
 BACKEND = Path(__file__).parents[2]
 
 
-def _assert_module_suite_filenames(cases: Mapping[str, str]) -> None:
-    suites_by_module: dict[str, set[str]] = {}
-    for nodeid, suite in cases.items():
-        suites_by_module.setdefault(nodeid.split("::", 1)[0], set()).add(suite)
+def _collect_with_filename_guard(
+    root: Path, arguments: list[str]
+) -> subprocess.CompletedProcess[str]:
+    """Run the real collection hook, retaining the repository's suite assignment."""
+    program = (
+        "import sys, pytest\n"
+        "from tests.architecture._suite_filenames import SuiteFilenameGuard\n"
+        "sys.exit(pytest.main(['--collect-only', '-q', *sys.argv[1:]], "
+        "plugins=[SuiteFilenameGuard()]))\n"
+    )
+    environment = {
+        **os.environ,
+        "PYTHONPATH": str(BACKEND),
+        "PYTEST_ADDOPTS": "",
+        "PYTEST_DISABLE_PLUGIN_AUTOLOAD": "1",
+        "TEST_DATABASE_URL": "postgresql+psycopg://unit:unit@127.0.0.1:1/unit_tests",
+    }
+    for name in (
+        "CI_UNIT_REPORT_DIR",
+        "CI_E2E_REPORT_DIR",
+        "CI_DATABASE_CENSUS",
+        "CI_POSTGRES_REPORT_DIR",
+        "CI_POSTGRES_SHARD",
+        "CI_POSTGRES_FILES",
+    ):
+        _ = environment.pop(name, None)
+    return subprocess.run(
+        [sys.executable, "-c", program, *arguments],
+        cwd=root,
+        env=environment,
+        capture_output=True,
+        text=True,
+        timeout=120,
+        check=False,
+    )
+
+
+def _assert_filename_guard_collection_controls(tmp_path: Path) -> None:
+    """Drive matching, mismatched and mixed suite assignments through real Items."""
+    valid: list[str] = []
     violations: list[str] = []
-    for module, suites in sorted(suites_by_module.items()):
-        expected = (
-            "integration"
-            if module.endswith("_integration.py")
-            else "e2e"
-            if module.endswith("_e2e.py")
-            else "unit"
-        )
-        if suites != {expected} or module.endswith("_unit.py"):
-            violations.append(
-                f"{module}: expected exactly one {expected} suite"
-                + (" with a suffix-free filename" if expected == "unit" else "")
-                + f"; actual suites: {', '.join(sorted(suites))}"
+    for expected, filename in (
+        ("unit", "test_probe.py"),
+        ("integration", "test_probe_integration.py"),
+        ("e2e", "test_probe_e2e.py"),
+    ):
+        for actual in ("unit", "integration", "e2e"):
+            module = f"{expected}-{actual}/{filename}"
+            path = tmp_path / module
+            path.parent.mkdir()
+            _ = path.write_text(
+                "import pytest\n"
+                + f"pytestmark = pytest.mark.{actual}\n"
+                + "class TestProbe:\n"
+                + "    @pytest.mark.parametrize('value', ['first::value', 'second'])\n"
+                + "    def test_probe(self, value): pass\n"
             )
-    if violations:
-        raise AssertionError("\n".join(violations))
-
-
-def test_test_filenames_match_their_single_suite() -> None:
-    from scripts.test_suites import catalogue  # noqa: PLC0415
-
-    _assert_module_suite_filenames(catalogue()[1])
-
-
-@pytest.mark.parametrize(
-    ("module", "expected_suite"),
-    [
-        ("tests/feature/test_probe.py", "unit"),
-        ("tests/feature/test_probe_integration.py", "integration"),
-        ("tests/feature/test_probe_e2e.py", "e2e"),
-    ],
-    ids=["unit", "integration", "e2e"],
-)
-@pytest.mark.parametrize("actual_suite", ["unit", "integration", "e2e"])
-def test_filename_guard_checks_every_suite_pair(
-    module: str, expected_suite: str, actual_suite: str
-) -> None:
-    cases = {
-        f"{module}::TestProbe::test_probe[first::value]": actual_suite,
-        f"{module}::TestProbe::test_probe[second]": actual_suite,
-    }
-    if expected_suite == actual_suite:
-        _assert_module_suite_filenames(cases)
-    else:
-        with pytest.raises(AssertionError) as error:
-            _assert_module_suite_filenames(cases)
-        assert str(error.value) == (
-            f"{module}: expected exactly one {expected_suite} suite"
-            + (" with a suffix-free filename" if expected_suite == "unit" else "")
-            + f"; actual suites: {actual_suite}"
+            if expected == actual:
+                valid.append(module)
+            else:
+                violations.append(
+                    f"{module}: expected exactly one {expected} suite"
+                    + (" with a suffix-free filename" if expected == "unit" else "")
+                    + f"; actual suites: {actual}"
+                )
+    for other in ("unit", "e2e"):
+        module = f"mixed-{other}/test_probe_integration.py"
+        path = tmp_path / module
+        path.parent.mkdir()
+        _ = path.write_text(
+            "import pytest\n"
+            "@pytest.mark.parametrize('value', [\n"
+            "    pytest.param('first', marks=pytest.mark.integration),\n"
+            + f"    pytest.param('second::value', marks=pytest.mark.{other}),\n"
+            + "])\n"
+            "def test_probe(value): pass\n"
         )
-
-
-@pytest.mark.parametrize("other_suite", ["unit", "e2e"])
-def test_filename_guard_rejects_mixed_suites(other_suite: str) -> None:
-    module = "tests/feature/test_probe_integration.py"
-    cases = {
-        f"{module}::test_probe[first]": "integration",
-        f"{module}::test_probe[second::value]": other_suite,
-    }
-    with pytest.raises(AssertionError) as error:
-        _assert_module_suite_filenames(cases)
-    assert str(error.value) == (
-        f"{module}: expected exactly one integration suite; "
-        + f"actual suites: {', '.join(sorted(set(cases.values())))}"
-    )
-
-
-def test_filename_guard_rejects_unit_suffix() -> None:
-    module = "tests/feature/test_probe_unit.py"
-    with pytest.raises(AssertionError) as error:
-        _assert_module_suite_filenames({f"{module}::test_probe": "unit"})
-    assert str(error.value) == (
-        f"{module}: expected exactly one unit suite with a suffix-free filename; "
-        "actual suites: unit"
-    )
+        violations.append(
+            f"{module}: expected exactly one integration suite; "
+            + f"actual suites: {', '.join(sorted({'integration', other}))}"
+        )
+    for directory, filename, prefix, actual in (
+        (
+            "unit-suffix",
+            "test_probe_unit.py",
+            "import pytest\npytestmark = pytest.mark.unit\n",
+            "unit",
+        ),
+        ("unassigned", "test_probe.py", "", "<unassigned>"),
+    ):
+        module = f"{directory}/{filename}"
+        path = tmp_path / module
+        path.parent.mkdir()
+        _ = path.write_text(prefix + "def test_probe(): pass\n")
+        violations.append(
+            f"{module}: expected exactly one unit suite with a suffix-free filename; "
+            + f"actual suites: {actual}"
+        )
+    arguments = ["--noconftest", "--import-mode=importlib"]
+    result = _collect_with_filename_guard(tmp_path, [*arguments, *valid])
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "Suite filenames verified for 6 collected tests" in result.stdout
+    result = _collect_with_filename_guard(tmp_path, [*arguments, "."])
+    assert result.returncode == pytest.ExitCode.USAGE_ERROR, result.stdout + result.stderr
+    assert result.stderr.strip() == "ERROR: " + "\n".join(sorted(violations))
 
 
 def standalone_contracts(tmp_path: Path) -> str:
@@ -210,7 +233,7 @@ def test_affected_partition_omits_only_explicitly_unselected_suite_cases(
 
 
 def test_mixed_module_overrides_assign_one_suite_at_node_boundaries(
-    monkeypatch: pytest.MonkeyPatch,
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     from scripts import test_suites  # noqa: PLC0415
 
@@ -228,6 +251,10 @@ def test_mixed_module_overrides_assign_one_suite_at_node_boundaries(
         test_suites.owner("tests/test_new.py::test_new")
     with pytest.raises(ValueError, match="Unclassified"):
         test_suites.owner("tests/test_mixed.py::test_db[new-parameter]")
+    _assert_filename_guard_collection_controls(tmp_path)
+    result = _collect_with_filename_guard(BACKEND, ["tests"])
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "Suite filenames verified for " in result.stdout
 
 
 def test_every_catalogue_key_resolves_to_a_test_file(tmp_path: Path) -> None:
