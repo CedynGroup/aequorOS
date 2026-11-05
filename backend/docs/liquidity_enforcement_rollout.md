@@ -248,7 +248,14 @@ authority AS (
                 AND b.sensitivity_scope IN ('confidential', 'all')
             ) FILTER (WHERE b.principal_type = 'human'),
             FALSE
-        ) AS may_approve
+        ) AS may_approve,
+        COALESCE(
+            bool_or(
+                b.role_bundle = 'configurator'
+                AND b.sensitivity_scope IN ('restricted', 'all')
+            ) FILTER (WHERE b.principal_type = 'human'),
+            FALSE
+        ) AS may_configure
     FROM principal_institutions AS p
     LEFT JOIN active_bindings AS b
       ON b.organization_id = p.organization_id
@@ -282,11 +289,12 @@ SELECT
     may_view_confidential,
     may_run_create_edit,
     may_approve,
+    may_configure,
     CASE
         WHEN principal_type = 'machine' THEN
             'denied: interactive human binding required'
         WHEN may_view_aggregated OR may_view_confidential
-             OR may_run_create_edit OR may_approve THEN
+             OR may_run_create_edit OR may_approve OR may_configure THEN
             'partially or fully allowed: compare flags with actual duties'
         ELSE
             'denied: no active exact LIQ binding'
