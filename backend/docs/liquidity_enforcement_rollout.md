@@ -82,8 +82,11 @@ registers, for every caller, including callers with separate read authority.
 `LiquidityThresholdWriteAcknowledgement` and
 `LiquidityHaircutWriteAcknowledgement` contain the acting `bank_id`, submitted
 `effective_from`, `approved_by`, `notes`, server `approval_timestamp`, and
-`written` entries containing only the newly created row `id` and submitted
-code/value (haircut asset classes are normalized). Threshold acknowledgements
+`written` entries containing only the newly created row `id` and stored
+code/value for this write (haircut asset classes are normalized). Percentages
+are refreshed from the database, not necessarily exact echoes of the input:
+PostgreSQL stores and returns both percentages rounded to six decimal places
+(for example, `95.1234567` becomes `95.123457`). Threshold acknowledgements
 also contain the submitted `institution_class`. Build these before commit from
 the request and newly written rows; return them only after commit succeeds.
 Never resolve the register or invoke a read function to construct a PUT response.
@@ -101,6 +104,10 @@ inferred or added. LIQ browser Edit controls require the selected bank's
 restricted `configure` capability. The threshold Edit control appears only
 after the register loads, so browser editing also needs separate read access;
 a configure-only grant permits API writes, not browser register editing.
+
+Generation-order conflicts still return HTTP 409, but their messages never
+include the stored generation's effective date or other read-protected policy
+metadata. This applies equally with and without a separate read grant.
 
 ## Bank-local register deployment
 

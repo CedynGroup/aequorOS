@@ -327,8 +327,8 @@ def update_register(
                 raise HTTPException(
                     status_code=status.HTTP_409_CONFLICT,
                     detail=(
-                        f"{code}: an open generation effective {row.effective_from} "
-                        "already starts on or after the requested effective date."
+                        f"{code}: an open generation already starts on or after "
+                        "the requested effective date."
                     ),
                 )
             previous_thresholds[row.threshold_code] = str(row.threshold_pct)
@@ -489,8 +489,8 @@ def update_haircut_schedule(
                 raise HTTPException(
                     status_code=status.HTTP_409_CONFLICT,
                     detail=(
-                        f"{normalized}: an open generation effective {row.effective_from} "
-                        "already starts on or after the requested effective date."
+                        f"{normalized}: an open generation already starts on or after "
+                        "the requested effective date."
                     ),
                 )
             previous_haircuts[row.asset_class] = str(row.haircut_pct)
