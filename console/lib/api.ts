@@ -2294,6 +2294,7 @@ export interface TenantMappingConfig {
 export interface TenantLiquidityThreshold {
   /** Threshold record id (UUID) — the fix/config `target_id` for this threshold. */
   id: string;
+  bank_id: string;
   institution_class: string;
   threshold_code: string;
   threshold_pct: number;

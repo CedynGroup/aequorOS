@@ -22,6 +22,7 @@ import {
   type TenantIngestionBatch,
 } from '@/lib/api';
 import { backfillWindowProblem, biBackfillRequest, oldestAsOfDate } from '@/lib/bi-backfill';
+import { liquidityThresholdOption } from '@/lib/threshold-options';
 import { useInspector } from '@/lib/inspector';
 import { useMutation } from '@/lib/use-api';
 import { fmtDate, shortId } from '@/lib/format';
@@ -395,11 +396,7 @@ function FixConfigAction({
     current: m.status,
   }));
   const thresholdOptions: TargetOption[] = [
-    ...(config?.threshold_register?.liquidity ?? []).map((t) => ({
-      id: t.id,
-      label: `${t.threshold_code} · ${t.institution_class} (liquidity) · ${pct(t.threshold_pct)}`,
-      current: pct(t.threshold_pct),
-    })),
+    ...(config?.threshold_register?.liquidity ?? []).map(liquidityThresholdOption),
     ...(config?.threshold_register?.capital ?? []).map((t) => ({
       id: t.id,
       label: `${t.threshold_code} (capital) · ${pct(t.value_pct)}`,

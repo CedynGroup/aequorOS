@@ -97,7 +97,10 @@ acknowledgement and invalidates its existing authority-scoped read queries;
 displayed register values and history come only from the separately authorized
 GET, never the submitted value (which can differ from the resolved floor).
 Configure-only grants still permit writes but never GETs. No read grant is
-inferred or added. Existing browser eligibility and save behaviour are unchanged.
+inferred or added. LIQ browser Edit controls require the selected bank's
+restricted `configure` capability. The threshold Edit control appears only
+after the register loads, so browser editing also needs separate read access;
+a configure-only grant permits API writes, not browser register editing.
 
 ## Bank-local register deployment
 
