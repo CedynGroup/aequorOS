@@ -45,6 +45,7 @@ import {
   useSubmissionEvents,
 } from "@/lib/api/hooks";
 import { hasAccountDirectoryAuthority } from "@/lib/api/accountAdministration";
+import { filingAuthorityFor } from "@/lib/submissions/filingAuthority";
 import {
   fmtDateUTC,
   fmtTimestamp,
@@ -371,7 +372,15 @@ function PackageRecord({
   bankId: string;
   summary: RegulatoryPackageSummaryRead;
 }) {
-  const { effectiveAuthority } = useUserProfile();
+  const { effectiveAuthority, isLoading: profileLoading } = useUserProfile();
+  // History is a read; taking a file away is a separate authority. Both
+  // downloads below go through export-gated routes, so the control is
+  // withdrawn rather than offered and then refused by the server.
+  // `filingAuthorityFor` already answers UNRESOLVED while the projection is
+  // absent, so the loading flag is the whole condition here.
+  const authority = filingAuthorityFor(effectiveAuthority, bankId, {
+    resolved: !profileLoading,
+  });
   const detail = useRegulatoryPackage(bankId, summary.id);
   const events = useSubmissionEvents(bankId, summary.id);
   const artifacts = usePackageArtifacts(bankId, summary.id);
@@ -589,30 +598,36 @@ function PackageRecord({
                       <span className="font-mono text-micro text-slate tnum">
                         {fmtBytes(artifact.sizeBytes)}
                       </span>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setDownloadError(null);
-                          downloadArtifact(bankId, artifact).catch(
-                            (error: unknown) =>
-                              setDownloadError(
-                                error instanceof Error
-                                  ? error.message
-                                  : "Download failed.",
-                              ),
-                          );
-                        }}
-                        className="ml-auto inline-flex items-center gap-1 rounded-sm border border-border px-2 py-0.5 text-micro font-medium text-slate hover:text-navy hover:border-slate"
-                      >
-                        <Download size={11} aria-hidden />
-                        Download
-                      </button>
+                      {authority.mayExport ? (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setDownloadError(null);
+                            downloadArtifact(bankId, artifact).catch(
+                              (error: unknown) =>
+                                setDownloadError(
+                                  error instanceof Error
+                                    ? error.message
+                                    : "Download failed.",
+                                ),
+                            );
+                          }}
+                          className="ml-auto inline-flex items-center gap-1 rounded-sm border border-border px-2 py-0.5 text-micro font-medium text-slate hover:text-navy hover:border-slate"
+                        >
+                          <Download size={11} aria-hidden />
+                          Download
+                        </button>
+                      ) : (
+                        <span className="ml-auto text-micro text-slate">
+                          Export authority required
+                        </span>
+                      )}
                     </li>
                   ))}
                 </ul>
               )}
 
-              {emailChannel && (
+              {emailChannel && authority.mayExport && (
                 <button
                   type="button"
                   onClick={() => {
@@ -631,6 +646,12 @@ function PackageRecord({
                   <Mail size={11} aria-hidden />
                   Download .eml
                 </button>
+              )}
+              {emailChannel && !authority.mayExport && (
+                <p className="mt-2 text-micro text-slate">
+                  Downloading the downtime email bundle requires Regulatory
+                  Reporting · Restricted · Export.
+                </p>
               )}
 
               <p className="text-micro font-medium text-slate uppercase tracking-wider mt-4 mb-1.5">

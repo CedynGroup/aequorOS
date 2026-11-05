@@ -763,10 +763,14 @@ function PackageWorkspace({
   // The portal's structured refusal, read through the filing surface's own
   // helper: this module deliberately cannot spell that vocabulary.
   const filingRefusal = filingRefusalMessage(submit.error);
+  // The instructions preview is part of the export surface, not the filing act:
+  // asking for it without EXPORT is a guaranteed 403, so it is not requested.
   const instructionsQuery = useEmailFallbackInstructions(
     bankId,
     summary.id,
-    authority.mayTransmit && (Boolean(filingRefusal) || channel === "email"),
+    authority.mayExport &&
+      authority.mayTransmit &&
+      (Boolean(filingRefusal) || channel === "email"),
   );
 
   const attestation = attestationQuery.data ?? null;
@@ -1172,6 +1176,7 @@ function PackageWorkspace({
               submit.mutate({ packageId: summary.id, channel: "email" })
             }
             onDownloadEml={handleEmlDownload}
+            canExport={authority.mayExport}
             emlError={emlError}
             submitError={submit.error}
             pollStatus={poll.data?.pollStatus ?? null}
@@ -1250,7 +1255,11 @@ function PackageWorkspace({
             priorVersions.length === 1 ? "version" : "versions"
           }, kept unchanged as history.`}
         >
-          <PriorVersionsCard bankId={bankId} packageId={summary.id} />
+          <PriorVersionsCard
+            bankId={bankId}
+            packageId={summary.id}
+            canExport={authority.mayExport}
+          />
         </DisclosureRow>
       )}
     </div>

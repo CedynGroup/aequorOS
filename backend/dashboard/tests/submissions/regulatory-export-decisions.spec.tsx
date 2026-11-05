@@ -19,6 +19,8 @@ import { setActiveJurisdiction } from "@/lib/format";
 const state = vi.hoisted(() => ({
   snapshots: {} as Record<string, Record<string, unknown> | undefined>,
   canExport: true,
+  /** Whether this officer holds Regulatory Reporting / Restricted / Export. */
+  exportAuthority: true,
   downloadDraft: vi.fn().mockResolvedValue(undefined),
   downloadArtifact: vi.fn().mockResolvedValue(undefined),
   downloadRevision: vi.fn().mockResolvedValue(undefined),
@@ -80,7 +82,27 @@ vi.mock("@/components/shell/BankContext", () => ({
   useModuleScope: () => ({ capitalExport: state.canExport }),
 }));
 vi.mock("@/components/profile/ProfileProvider", () => ({
-  useUserProfile: () => ({ effectiveAuthority: undefined }),
+  // History renders through a real officer: both download controls behind
+  // export-gated routes are only offered to one holding the grant.
+  useUserProfile: () => ({
+    isLoading: false,
+    effectiveAuthority: {
+      institutionCapabilities: [
+        {
+          institutionId: bankId,
+          capabilities: state.exportAuthority
+            ? [
+                {
+                  module: "reg",
+                  sensitivity: "restricted",
+                  permission: "export",
+                },
+              ]
+            : [],
+        },
+      ],
+    },
+  }),
 }));
 vi.mock("@/lib/api/icaap", () => ({
   downloadIcaapDraft: (...args: unknown[]) => state.downloadDraft(...args),
@@ -174,6 +196,7 @@ vi.mock("@/components/submissions/shared", async (importOriginal) => ({
 beforeEach(() => {
   vi.clearAllMocks();
   state.canExport = true;
+  state.exportAuthority = true;
   state.snapshots = {
     archived: snapshot("exposure_draft"),
     current: snapshot("in_force"),
@@ -314,10 +337,42 @@ it("uses the selected history package's basis for artifact and email downloads",
   expect(state.downloadEmail).toHaveBeenCalledWith(bankId, "archived");
 });
 
+it("withdraws the history page's downloads without export authority", async () => {
+  state.exportAuthority = false;
+  render(<HistoryPage />);
+  fireEvent.click(screen.getByText("SYNTH-RETURN").closest("tr")!);
+  expect(screen.queryByRole("button", { name: "Download" })).toBeNull();
+  expect(screen.queryByRole("button", { name: "Download .eml" })).toBeNull();
+  // Both routes are export-gated, so neither was even attempted.
+  expect(state.downloadArtifact).not.toHaveBeenCalled();
+  expect(state.downloadEmail).not.toHaveBeenCalled();
+});
+
+it("withdraws historical downloads without export authority but keeps the history readable", async () => {
+  const user = userEvent.setup();
+  render(
+    <PriorVersionsCard bankId={bankId} packageId="current" canExport={false} />,
+  );
+  await user.click(screen.getByRole("button", { expanded: false }));
+  // The chain itself is a read: versions, checksums and signers stay on screen.
+  expect(
+    screen.getByText(/requires Regulatory Reporting · Restricted · Export/),
+  ).toBeInTheDocument();
+  expect(
+    screen.queryByRole("button", { name: "Download v1 pdf revision" }),
+  ).toBeNull();
+  expect(
+    screen.queryByRole("button", { name: "Download v1 pdf export" }),
+  ).toBeNull();
+  // Nothing was attempted, so no refused request reaches the gated routes.
+  expect(state.downloadRevision).not.toHaveBeenCalled();
+  expect(state.downloadArtifact).not.toHaveBeenCalled();
+});
+
 it("keeps historical file warnings independent of the current package in both directions", async () => {
   const user = userEvent.setup();
   const { rerender } = render(
-    <PriorVersionsCard bankId={bankId} packageId="current" />,
+    <PriorVersionsCard bankId={bankId} packageId="current" canExport />,
   );
   await user.click(screen.getByRole("button", { expanded: false }));
   expect(screen.getByRole("note")).toHaveTextContent("not law yet");
@@ -333,10 +388,10 @@ it("keeps historical file warnings independent of the current package in both di
     archived: snapshot("in_force"),
     current: snapshot("exposure_draft"),
   };
-  rerender(<PriorVersionsCard bankId={bankId} packageId="current" />);
+  rerender(<PriorVersionsCard bankId={bankId} packageId="current" canExport />);
   expect(screen.queryByRole("note")).toBeNull();
   state.snapshots.archived = undefined;
-  rerender(<PriorVersionsCard bankId={bankId} packageId="current" />);
+  rerender(<PriorVersionsCard bankId={bankId} packageId="current" canExport />);
   expect(screen.getByRole("note")).toHaveTextContent(
     "has not been established",
   );

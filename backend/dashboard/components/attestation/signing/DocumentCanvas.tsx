@@ -31,6 +31,8 @@ export default function DocumentCanvas({
   scale,
   onDocumentLoaded,
   onPageSpace,
+  onPageDrawn,
+  onPageFailed,
   children,
 }: {
   bytes: ArrayBuffer | null;
@@ -40,6 +42,21 @@ export default function DocumentCanvas({
   onDocumentLoaded: (pageCount: number) => void;
   /** Fires whenever the page or the zoom changes the pixel↔point transform. */
   onPageSpace: (space: PageSpace) => void;
+  /**
+   * Fires once a page has actually painted, after the render promise resolves.
+   *
+   * Deliberately distinct from `onDocumentLoaded`, which fires when the PDF
+   * has merely parsed: a document that opens and then fails to draw has shown
+   * the signer nothing, so a caller gating a signature on sight has to watch
+   * this one. Cancelled renders never report success.
+   */
+  onPageDrawn?: () => void;
+  /**
+   * Fires when a page render fails for a real reason — not a cancellation from
+   * paging or zooming, which is routine. Lets the caller withdraw an earlier
+   * success so a page that has stopped being drawable cannot be certified.
+   */
+  onPageFailed?: () => void;
   /** The placement overlay, positioned over the rendered page. */
   children?: ReactNode;
 }) {
@@ -56,8 +73,12 @@ export default function DocumentCanvas({
   // and the zoom alone.
   const loadedRef = useRef(onDocumentLoaded);
   const spaceRef = useRef(onPageSpace);
+  const drawnRef = useRef(onPageDrawn);
+  const failedRef = useRef(onPageFailed);
   loadedRef.current = onDocumentLoaded;
   spaceRef.current = onPageSpace;
+  drawnRef.current = onPageDrawn;
+  failedRef.current = onPageFailed;
 
   useEffect(() => {
     if (!bytes) return;
@@ -116,6 +137,9 @@ export default function DocumentCanvas({
         });
         task = render;
         await render.promise;
+        // The page is on screen now, and only now. A signer certifying what
+        // they can see is entitled to this being the moment the signal fires.
+        if (!cancelled) drawnRef.current?.();
       } catch (cause: unknown) {
         // A cancelled render is the expected outcome of paging or zooming
         // quickly; it is not a failure to report to a signer.
@@ -123,6 +147,9 @@ export default function DocumentCanvas({
           !cancelled &&
           (cause as { name?: string })?.name !== "RenderingCancelledException"
         ) {
+          // Withdraw any earlier paint: a page that has stopped drawing is not
+          // one the signer is looking at any more.
+          failedRef.current?.();
           setError(
             cause instanceof Error
               ? `Page ${pageIndex + 1} could not be drawn: ${cause.message}`

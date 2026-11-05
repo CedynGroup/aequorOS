@@ -135,6 +135,7 @@ function VersionFileRow({
   sizeBytes,
   onDownload,
   ariaLabel,
+  canExport,
 }: {
   label: string;
   detail?: string;
@@ -142,6 +143,9 @@ function VersionFileRow({
   sizeBytes: number;
   onDownload: () => void;
   ariaLabel: string;
+  /** Taking a historical file away is its own authority, not part of reading
+   * the chain: without it the row keeps its metadata and loses the control. */
+  canExport: boolean;
 }) {
   return (
     <li className="flex items-center gap-2 rounded-sm border border-border-light bg-surface px-3 py-2">
@@ -158,15 +162,21 @@ function VersionFileRow({
       <span className="ml-auto font-mono text-micro text-slate tnum whitespace-nowrap">
         {fmtBytes(sizeBytes)}
       </span>
-      <button
-        type="button"
-        onClick={onDownload}
-        aria-label={ariaLabel}
-        className="inline-flex items-center gap-1 rounded-sm border border-border px-2 py-1 text-micro font-medium text-slate hover:text-navy hover:border-slate"
-      >
-        <Download size={11} aria-hidden />
-        Download
-      </button>
+      {canExport ? (
+        <button
+          type="button"
+          onClick={onDownload}
+          aria-label={ariaLabel}
+          className="inline-flex items-center gap-1 rounded-sm border border-border px-2 py-1 text-micro font-medium text-slate hover:text-navy hover:border-slate"
+        >
+          <Download size={11} aria-hidden />
+          Download
+        </button>
+      ) : (
+        <span className="text-micro text-slate whitespace-nowrap">
+          Export authority required
+        </span>
+      )}
     </li>
   );
 }
@@ -301,11 +311,13 @@ function PriorVersionRow({
   entry,
   currentPackageId,
   currentVersion,
+  canExport,
 }: {
   bankId: string;
   entry: PackageVersionChainEntryRead;
   currentPackageId: string | null;
   currentVersion: number | null;
+  canExport: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const detail = useRegulatoryPackage(
@@ -401,6 +413,13 @@ function PriorVersionRow({
             {entry.hasRetrievableFiles && (
               <RegulatoryExportWarning snapshot={detail.data?.snapshot} />
             )}
+            {entry.hasRetrievableFiles && !canExport && (
+              <p className="mt-1.5 text-caption text-slate">
+                Downloading a historical return file requires Regulatory
+                Reporting · Restricted · Export. The list, its checksums and its
+                signers stay readable without it.
+              </p>
+            )}
             {entry.hasRetrievableFiles ? (
               <ul className="mt-1.5 space-y-2">
                 {entry.artifactVersions.map((version) => (
@@ -411,6 +430,7 @@ function PriorVersionRow({
                     checksum={version.checksumSha256}
                     sizeBytes={version.sizeBytes}
                     ariaLabel={`Download v${entry.version} ${version.kind} revision`}
+                    canExport={canExport}
                     onDownload={() => {
                       setDownloadError(null);
                       downloadArtifactVersion(bankId, version).catch(failed);
@@ -425,6 +445,7 @@ function PriorVersionRow({
                     checksum={artifact.checksumSha256}
                     sizeBytes={artifact.sizeBytes}
                     ariaLabel={`Download v${entry.version} ${artifact.kind} export`}
+                    canExport={canExport}
                     onDownload={() => {
                       setDownloadError(null);
                       downloadArtifact(bankId, artifact).catch(failed);
@@ -492,11 +513,17 @@ function PriorVersionRow({
 export default function PriorVersionsCard({
   bankId,
   packageId,
+  canExport,
 }: {
   bankId: string;
   /** Any version of the chain; the endpoint resolves the whole supersession
    * chain from it. */
   packageId: string;
+  /** Regulatory Reporting / Restricted / Export for this bank. Required, not
+   * defaulted: every download below goes through an export-gated route, so a
+   * caller that forgets to resolve authority must fail to compile rather than
+   * quietly offer a button the server refuses. */
+  canExport: boolean;
 }) {
   const chainQuery = usePackageVersionChain(bankId, packageId);
   const chain = chainQuery.data;
@@ -521,6 +548,7 @@ export default function PriorVersionsCard({
             entry={entry}
             currentPackageId={chain?.currentPackageId ?? null}
             currentVersion={currentEntry?.version ?? null}
+            canExport={canExport}
           />
         ))}
       </ul>
