@@ -664,9 +664,7 @@
         "app/identity/api/auth.py:logout"
       ],
       "authentication": null,
-      "dependencies": [
-        "app.identity.api.auth:_system_session"
-      ],
+      "dependencies": ["app.identity.api.auth:_system_session"],
       "routes": [
         {
           "application": "tenant",
@@ -685,9 +683,7 @@
         "app/identity/api/auth.py:sso_status"
       ],
       "authentication": null,
-      "dependencies": [
-        "app.identity.api.auth:_system_session"
-      ],
+      "dependencies": ["app.identity.api.auth:_system_session"],
       "routes": [
         {
           "application": "tenant",
@@ -6282,9 +6278,7 @@
         "tests/identity/api/test_auth_integration.py"
       ],
       "authentication": null,
-      "dependencies": [
-        "app.identity.api.auth:_system_session"
-      ],
+      "dependencies": ["app.identity.api.auth:_system_session"],
       "routes": [
         {
           "application": "tenant",
@@ -6304,9 +6298,7 @@
         "tests/identity/api/test_auth_integration.py"
       ],
       "authentication": null,
-      "dependencies": [
-        "app.identity.api.auth:_system_session"
-      ],
+      "dependencies": ["app.identity.api.auth:_system_session"],
       "routes": [
         {
           "application": "tenant",
@@ -6326,9 +6318,7 @@
         "tests/identity/api/test_auth_integration.py"
       ],
       "authentication": null,
-      "dependencies": [
-        "app.identity.api.auth:_system_session"
-      ],
+      "dependencies": ["app.identity.api.auth:_system_session"],
       "routes": [
         {
           "application": "tenant",
@@ -6348,9 +6338,7 @@
         "tests/storage/test_bank_encryption_integration.py"
       ],
       "authentication": null,
-      "dependencies": [
-        "functools:_lru_cache_wrapper"
-      ],
+      "dependencies": ["functools:_lru_cache_wrapper"],
       "routes": [
         {
           "application": "tenant",
@@ -6364,13 +6352,9 @@
       "name": "tenant-sso-internal-key",
       "kind": "handler",
       "basis": "NOT PUBLIC: handler requires a configured SSO_INTERNAL_KEY and constant-time header comparison before resolving server-to-server OIDC client configuration. Unconfigured returns 404; missing/invalid internal key returns 401.",
-      "references": [
-        "app/identity/api/auth.py:sso_client_config"
-      ],
+      "references": ["app/identity/api/auth.py:sso_client_config"],
       "authentication": null,
-      "dependencies": [
-        "app.identity.api.auth:_system_session"
-      ],
+      "dependencies": ["app.identity.api.auth:_system_session"],
       "routes": [
         {
           "application": "tenant",
