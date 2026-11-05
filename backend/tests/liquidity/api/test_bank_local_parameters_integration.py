@@ -33,14 +33,14 @@ from app.reporting.service.le_generation import (
     _haircut_schedule,  # pyright: ignore[reportPrivateUsage] - pin Table 9 resolution
     _table1_thresholds,  # pyright: ignore[reportPrivateUsage] - pin Table 1 resolution
 )
-from tests.data_engine.api.test_ingestion import seed_bank
+from tests.data_engine.api.test_ingestion_integration import seed_bank
 from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID, materialize_canonical_test_book
 from tests.liquidity.configure_helpers import configure_headers, grant_configure
-from tests.liquidity.service.test_liquidity_currency_gaps import (
+from tests.liquidity.service.test_liquidity_currency_gaps_integration import (
     _run,  # pyright: ignore[reportPrivateUsage] - reuse the real-engine fixture
     _seed_fx_book,  # pyright: ignore[reportPrivateUsage] - reuse the canonical fixture
 )
-from tests.services.test_le_and_lmt import (
+from tests.services.test_le_and_lmt_integration import (
     _CanonicalSeeder,  # pyright: ignore[reportPrivateUsage] - reuse the canonical fixture
     _generate,  # pyright: ignore[reportPrivateUsage] - reuse the real-return fixture
     _seed_table1_book,  # pyright: ignore[reportPrivateUsage] - reuse the canonical fixture

@@ -141,7 +141,7 @@ and maintenance-window verification.
 | `core/audit_attribution.py`, `operator/services/operator_views.py`, migration `202611040110` | New `bank_liquidity_threshold` / `bank_liquidity_haircut` audit subjects use the exact bank ID and reject contradictory scope details. Tenant audit readers, staff attribution, chain linkage and inspection context follow that owner. Historical `param_liquidity_*` audit types keep their original shared-history interpretation; no old audit record is rewritten. |
 
 Stored historical runs, input hashes and results remain immutable. Focused
-coverage in `tests/liquidity/api/test_bank_local_parameters.py` proves sibling
+coverage in `tests/liquidity/api/test_bank_local_parameters_integration.py` proves sibling
 register/history, refresh, currency-policy and actual LMT result isolation;
 the database migration tests cover copy fidelity, RLS/ACLs, archive immutability,
 audit-reader ownership and guarded rollback. Real HTTP/browser evidence is
