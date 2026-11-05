@@ -89,6 +89,13 @@ const bankColumns: Column<TenantConfigBank>[] = [
 
 const liquidityColumns: Column<TenantLiquidityThreshold>[] = [
   {
+    key: "bank",
+    header: "Institution",
+    render: (t) => (
+      <span className="font-mono text-caption text-navy">{t.bank_id}</span>
+    ),
+  },
+  {
     key: "code",
     header: "Threshold",
     render: (t) => (

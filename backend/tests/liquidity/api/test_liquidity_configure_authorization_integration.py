@@ -257,7 +257,14 @@ def _assert_write_acknowledgement(path: str, content: bytes, effective_from: dat
     assert ack.approved_by == "Board minute"
     assert ack.notes is None
     with get_sessionmaker()() as db:
-        row = db.get(model, ack.written[0].id)
+        db.info["organization_id"] = ORG_1
+        row = db.scalar(
+            select(model).where(
+                model.id == ack.written[0].id,
+                model.organization_id == ORG_1,
+                model.bank_id == BANK,
+            )
+        )
         assert row is not None
         assert row.bank_id == BANK
         assert row.effective_from == effective_from
