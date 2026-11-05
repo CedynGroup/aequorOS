@@ -9,12 +9,96 @@ import json
 import os
 import subprocess
 import sys
+from collections.abc import Mapping
 from pathlib import Path
 from typing import cast
 
 import pytest
 
 BACKEND = Path(__file__).parents[2]
+
+
+def _assert_module_suite_filenames(cases: Mapping[str, str]) -> None:
+    suites_by_module: dict[str, set[str]] = {}
+    for nodeid, suite in cases.items():
+        suites_by_module.setdefault(nodeid.split("::", 1)[0], set()).add(suite)
+    violations: list[str] = []
+    for module, suites in sorted(suites_by_module.items()):
+        expected = (
+            "integration"
+            if module.endswith("_integration.py")
+            else "e2e"
+            if module.endswith("_e2e.py")
+            else "unit"
+        )
+        if suites != {expected} or module.endswith("_unit.py"):
+            violations.append(
+                f"{module}: expected exactly one {expected} suite"
+                + (" with a suffix-free filename" if expected == "unit" else "")
+                + f"; actual suites: {', '.join(sorted(suites))}"
+            )
+    if violations:
+        raise AssertionError("\n".join(violations))
+
+
+def test_test_filenames_match_their_single_suite() -> None:
+    from scripts.test_suites import catalogue  # noqa: PLC0415
+
+    _assert_module_suite_filenames(catalogue()[1])
+
+
+@pytest.mark.parametrize(
+    ("module", "expected_suite"),
+    [
+        ("tests/feature/test_probe.py", "unit"),
+        ("tests/feature/test_probe_integration.py", "integration"),
+        ("tests/feature/test_probe_e2e.py", "e2e"),
+    ],
+    ids=["unit", "integration", "e2e"],
+)
+@pytest.mark.parametrize("actual_suite", ["unit", "integration", "e2e"])
+def test_filename_guard_checks_every_suite_pair(
+    module: str, expected_suite: str, actual_suite: str
+) -> None:
+    cases = {
+        f"{module}::TestProbe::test_probe[first::value]": actual_suite,
+        f"{module}::TestProbe::test_probe[second]": actual_suite,
+    }
+    if expected_suite == actual_suite:
+        _assert_module_suite_filenames(cases)
+    else:
+        with pytest.raises(AssertionError) as error:
+            _assert_module_suite_filenames(cases)
+        assert str(error.value) == (
+            f"{module}: expected exactly one {expected_suite} suite"
+            + (" with a suffix-free filename" if expected_suite == "unit" else "")
+            + f"; actual suites: {actual_suite}"
+        )
+
+
+@pytest.mark.parametrize("other_suite", ["unit", "e2e"])
+def test_filename_guard_rejects_mixed_suites(other_suite: str) -> None:
+    module = "tests/feature/test_probe_integration.py"
+    cases = {
+        f"{module}::test_probe[first]": "integration",
+        f"{module}::test_probe[second::value]": other_suite,
+    }
+    with pytest.raises(AssertionError) as error:
+        _assert_module_suite_filenames(cases)
+    assert str(error.value) == (
+        f"{module}: expected exactly one integration suite; "
+        + f"actual suites: {', '.join(sorted(set(cases.values())))}"
+    )
+
+
+def test_filename_guard_rejects_unit_suffix() -> None:
+    module = "tests/feature/test_probe_unit.py"
+    with pytest.raises(AssertionError) as error:
+        _assert_module_suite_filenames({f"{module}::test_probe": "unit"})
+    assert str(error.value) == (
+        f"{module}: expected exactly one unit suite with a suffix-free filename; "
+        "actual suites: unit"
+    )
 
 
 def standalone_contracts(tmp_path: Path) -> str:
