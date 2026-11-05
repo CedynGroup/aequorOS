@@ -581,6 +581,57 @@ owned by `integration_key_machine_principal_rollout.md`.
 
 ## Executable verification
 
+### Registered endpoint declarations
+
+`tests/architecture/test_route_authorization_coverage.py` inventories the tenant
+and separate operator applications' actual registered routes, including
+schema/docs routes, hidden routes, each HTTP method (HEAD included where
+registered), WebSockets and recursively mounted routers. It creates no service
+or database and does not run application lifespan. Opaque/empty mounts,
+unsupported route shapes, empty populations and duplicate registrations fail
+closed rather than disappear from the census. CORS preflight and slash redirects
+are middleware/router behavior, not separately registered resource endpoints.
+
+`tests/fixtures/route_authorization.json` is the bounded declaration inventory.
+Each exact application/method/path/handler names a rule with source provenance.
+Dependency rules record the complete recursive **set of dependency callable
+names**, including current scoped and legacy gates, and require the actual
+tenant or staff authenticator callable by identity. Reusing a dependency
+profile does not enroll another route: every method/path needs its own entry.
+Handler-enforced password/OIDC exchanges, refresh credentials, the internal SSO
+key and signed download capabilities have narrow separate declarations, not
+public exemptions. Unsupported financial-entity fallbacks declare rejection
+only, preserving their no-op 404 contract.
+
+Intentionally anonymous surfaces additionally require an exact entry in
+`tests/fixtures/public_routes.py`, with handler identity, reason and provenance.
+These are existing framework docs, availability probes, the public SSO status
+boolean and explicitly unauthenticated logout. There are no public path
+prefixes, wildcard rules or inferred defaults. A catalog edit alone cannot
+make another route public. A new method, sibling/child path, handler replacement,
+missing gate or stale declaration fails. Extending the public allowlist is an
+explicit access-policy review, never a mechanical census update.
+
+This is **default-deny declaration coverage, not runtime default-deny middleware
+or proof of authorization correctness**. It does not inspect function bodies,
+closure arguments, callable configuration, dependency order/multiplicity,
+middleware policy or service calls. A callable can retain its name while its
+policy changes. Bare authenticated legacy routes are characterized as such,
+not certified as scoped-binding migrations. Keep the domain-specific dependency,
+permission-matrix, IDOR, invalidation and behavioral API tests: those own the
+actual allow/deny decisions, bank/assignment constraints and export authority.
+
+When a route changes, inspect its registered dependency tree and actual handler/
+service checks before editing the catalog. Preserve current access unless a
+separate access decision authorizes a change. An unknown or ambiguous rule is a
+policy decision to escalate, not a reason to add authentication, a public entry
+or a known-gap suppression. Never generate permissive declarations from absent
+dependencies. Source changes to filing/attestation, examiner evidence, encrypted
+storage or legacy configuration gates remain regulated or migration-sensitive
+work; this inventory grants no new authority and requires no schema migration.
+
+### Behavioral and object-reference verification
+
 The fixed evaluator, service, refresh-token, and Postgres migration suites pin
 the binding semantics, database constraints, FORCE RLS, cross-tenant refusal,
 and atomic version-bump/session-revocation contract. The fixed tests also prove
