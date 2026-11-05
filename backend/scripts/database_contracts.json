@@ -1,6 +1,30 @@
 {
   "contracts": [
     {
+      "category": "bank-local liquidity policy and audit ownership",
+      "reason": "Sibling-bank configuration, effective history, engine/reporting consumption and direct bank audit ownership require real persisted isolation.",
+      "cases": [
+        "tests/db/test_bank_liquidity_parameters_migration_integration.py::test_all_generations_are_copied_only_to_matching_existing_banks",
+        "tests/db/test_bank_liquidity_parameters_migration_integration.py::test_audit_reader_attributes_new_subjects_directly_but_keeps_shared_history",
+        "tests/db/test_bank_liquidity_parameters_migration_integration.py::test_bank_local_integrity_rls_retention_and_archive_freeze",
+        "tests/db/test_bank_liquidity_parameters_migration_integration.py::test_clean_rollback_replays_without_consulting_application_ownership",
+        "tests/db/test_bank_liquidity_parameters_migration_integration.py::test_downgrade_refuses_bank_local_divergence[new_generation-bank_liquidity_haircut]",
+        "tests/db/test_bank_liquidity_parameters_migration_integration.py::test_downgrade_refuses_bank_local_divergence[new_generation-bank_liquidity_threshold]",
+        "tests/db/test_bank_liquidity_parameters_migration_integration.py::test_downgrade_refuses_bank_local_divergence[retire-bank_liquidity_haircut]",
+        "tests/db/test_bank_liquidity_parameters_migration_integration.py::test_downgrade_refuses_bank_local_divergence[retire-bank_liquidity_threshold]",
+        "tests/identity/api/test_audit_log_integration.py::test_shared_register_visibility_redaction_and_integrity[bank_liquidity_haircut-liquidity_haircuts.updated-change7-False]",
+        "tests/identity/api/test_audit_log_integration.py::test_shared_register_visibility_redaction_and_integrity[bank_liquidity_haircut-liquidity_haircuts.updated-change7-True]",
+        "tests/identity/api/test_audit_log_integration.py::test_shared_register_visibility_redaction_and_integrity[bank_liquidity_threshold-liquidity_thresholds.updated-change6-False]",
+        "tests/identity/api/test_audit_log_integration.py::test_shared_register_visibility_redaction_and_integrity[bank_liquidity_threshold-liquidity_thresholds.updated-change6-True]",
+        "tests/liquidity/api/test_bank_local_parameters_integration.py::test_bank_a_write_leaves_sibling_registers_and_engine_policy_unchanged",
+        "tests/liquidity/api/test_bank_local_parameters_integration.py::test_policy_resolver_requires_complete_bank_scope[OR-1S000002-GH-universal_bank]",
+        "tests/liquidity/api/test_bank_local_parameters_integration.py::test_policy_resolver_requires_complete_bank_scope[OR-DEM00001-GH-savings_and_loans]",
+        "tests/liquidity/api/test_bank_local_parameters_integration.py::test_policy_resolver_requires_complete_bank_scope[OR-DEM00001-GH-universal_bank]",
+        "tests/liquidity/api/test_bank_local_parameters_integration.py::test_policy_resolver_requires_complete_bank_scope[OR-DEM00001-NG-universal_bank]",
+        "tests/liquidity/api/test_bank_local_parameters_integration.py::test_sibling_write_preserves_computed_lmt_and_currency_results"
+      ]
+    },
+    {
       "cases": [
         "tests/db/test_append_only_sweep_integration.py::test_every_retained_table_refuses_truncate[owner-bank_liquidity_threshold]",
         "tests/db/test_append_only_sweep_integration.py::test_every_retained_table_refuses_truncate[runtime-bank_liquidity_haircut]",
