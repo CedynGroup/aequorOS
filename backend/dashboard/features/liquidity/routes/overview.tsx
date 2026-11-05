@@ -21,11 +21,11 @@ import DataTable, { type Column } from "@/components/ui/DataTable";
 import RatioTrendChart from "@/features/liquidity/components/charts/RatioTrendChart";
 import NetOutflowChart from "@/features/liquidity/components/charts/NetOutflowChart";
 import SdiLiquidityView from "@/features/liquidity/components/SdiLiquidityView";
+import { LandingInsightStrip, useKpiExplain } from "@/features/bi/public";
 import {
-  LandingInsightStrip,
-  useKpiExplain,
-} from "@/features/bi/public";
-import { runComputedAt, runThresholds } from "@/features/liquidity/components/runData";
+  runComputedAt,
+  runThresholds,
+} from "@/features/liquidity/components/runData";
 import { useBankContext } from "@/components/shell/BankContext";
 import { LiveEngineNote } from "@/features/live/public";
 import {

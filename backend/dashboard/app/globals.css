@@ -43,6 +43,7 @@
   --ok: 53 194 141; /* #35C28D */
   --ok-soft: 21 46 52; /* rgba(53,194,141,.13) flattened */
   --warn: 245 166 35; /* #F5A623 */
+  --warn-strong: 245 166 35; /* #F5A623 — warning text on a surface */
   --warn-soft: 46 42 38; /* rgba(245,166,35,.13) flattened */
   --crit: 242 109 109; /* #F26D6D */
   --crit-soft: 45 35 48; /* rgba(242,109,109,.13) flattened */
@@ -89,13 +90,14 @@
   --text-muted: 90 103 118; /* #5A6776 */
   --text-faint: 122 134 147; /* #7A8693 */
 
-  --accent: 45 127 249; /* #2D7FF9 */
-  --accent-hover: 31 108 224; /* #1F6CE0 */
+  --accent: 28 103 196; /* #1C67C4 — 5.35:1 on #FAFBFC, 4.84:1 on action-soft */
+  --accent-hover: 20 88 166; /* #1458A6 */
   --accent-soft: 232 240 254; /* #E8F0FE */
 
   --ok: 14 138 79; /* #0E8A4F */
   --ok-soft: 229 244 236; /* #E5F4EC */
   --warn: 201 124 0; /* #C97C00 */
+  --warn-strong: 150 90 0; /* #965A00 — 5.4:1 on #FAFBFC for warning text */
   --warn-soft: 251 241 223; /* #FBF1DF */
   --crit: 179 38 30; /* #B3261E */
   --crit-soft: 251 233 231; /* #FBE9E7 */
@@ -155,6 +157,7 @@
   --color-success-light: rgb(var(--ok-soft));
 
   --color-warning: rgb(var(--warn));
+  --color-warning-strong: rgb(var(--warn-strong));
   --color-warning-light: rgb(var(--warn-soft));
 
   --color-critical: rgb(var(--crit));

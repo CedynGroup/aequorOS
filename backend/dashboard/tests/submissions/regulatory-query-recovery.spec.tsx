@@ -261,7 +261,7 @@ it.each([
     expect(badge).toBeVisible();
     expect(title).toHaveAccessibleName("Board threshold register");
     fireEvent.click(badge);
-    expect(screen.getByRole("tooltip")).toBeVisible();
+    expect(screen.getByTestId("instrument-status-disclosure")).toBeVisible();
     expect(
       screen.getByRole("link", {
         name: "Source details in the instruments register",

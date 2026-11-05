@@ -53,10 +53,14 @@ pre-paint boot. System mode follows OS theme changes live.
 | `text-navy`                                       | headings              | `#EDF2F9`                        | `#0A2540`                     |
 | `text-ink` / `text-slate` / `text-slate-light`    | body / muted / faint  | `#C6D0DE / #8494A9 / #5C6B80`    | `#33415C / #5A6776 / #7A8693` |
 | `border-border` / `border-light`                  | hairlines             | `#2E3E58 / #223047`              | `#D0D7DE / #E4E8EC`           |
-| `action` (+hover/soft)                            | accent / links / CTAs | `#4D9FFF`                        | `#2D7FF9`                     |
+| `action` (+hover/soft)                            | accent / links / CTAs | See CSS token source below       | See CSS token source below    |
 | `success / warning / critical` (+soft)            | risk semantics        | `#35C28D / #F5A623 / #F26D6D`    | `#0E8A4F / #C97C00 / #B3261E` |
 | `bg-nav`                                          | always-dark rail/hero | `#070C15`                        | `#0A2540`                     |
 | `--chart-1..6`                                    | data-viz categorical  | blue/teal/violet/amber/rose/cyan | deepened variants             |
+
+The [CSS token source](../backend/dashboard/app/globals.css) owns action colors
+(`--accent`, `--accent-hover`, `--accent-soft`) and the contrasting warning-text
+token (`--warn-strong`, exposed as `text-warning-strong`).
 
 Utilities: `.card` (10px radius; shadow only in light), `.btn-primary`, `.tnum`
 (tabular numerals — global on tables), `text-kpi`/`text-kpi-lg` (28/36px numerics),

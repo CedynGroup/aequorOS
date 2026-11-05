@@ -341,7 +341,7 @@ function RegisterContents({ upcoming = false }: { upcoming?: boolean }) {
                     </h2>
                     {item.instrumentStatus === "in_force" &&
                       /draft/i.test(item.directiveCitation ?? "") && (
-                        <p className="mt-1 text-caption text-warning">
+                        <p className="mt-1 text-caption text-warning-strong">
                           Provisional citation
                         </p>
                       )}
@@ -376,7 +376,7 @@ function RegisterContents({ upcoming = false }: { upcoming?: boolean }) {
                   <div className="mt-3 space-y-3">
                     {item.instrumentStatus === "in_force" &&
                       /draft/i.test(item.directiveCitation ?? "") && (
-                        <p className="text-warning">
+                        <p className="text-warning-strong">
                           Provisional citation: the registered evidence is a
                           draft. The recorded legal status remains in force;
                           final source confirmation is needed.

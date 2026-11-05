@@ -100,14 +100,15 @@ test("register exposes every status, dates, source and calculation dependencies"
   }
   const draft = page.locator('section[id="LMT"]');
   await draft.locator("summary").first().click();
-  await expect(draft.getByRole("tooltip")).toContainText(
+  const disclosure = draft.getByTestId("instrument-status-disclosure");
+  await expect(disclosure).toContainText(
     /Proposed by BoG, not law yet. Prepare if useful, no deadline or penalty./i,
   );
-  await expect(draft.getByRole("tooltip")).toContainText(
+  await expect(disclosure).toContainText(
     "Expected from 2027-01-01 if made final.",
   );
   await expect(
-    draft.getByRole("tooltip").getByRole("link", { name: "Read the source" }),
+    disclosure.getByRole("link", { name: "Read the source" }),
   ).toHaveAttribute("href", /^https:/);
   if (evidence) {
     mkdirSync(evidence, { recursive: true });
@@ -486,12 +487,9 @@ test("foreign active regulators do not relabel instrument evidence and final fra
       await page.goto("/submissions/instruments");
       const draft = page.locator('section[id="LMT"]');
       await draft.locator("summary").first().click();
-      await expect(draft.getByRole("tooltip")).toContainText(
-        /Proposed by BoG/i,
-      );
-      await expect(draft.getByRole("tooltip")).not.toContainText(
-        `Proposed by ${regulator}`,
-      );
+      const disclosure = draft.getByTestId("instrument-status-disclosure");
+      await expect(disclosure).toContainText(/Proposed by BoG/i);
+      await expect(disclosure).not.toContainText(`Proposed by ${regulator}`);
       if (evidence)
         await draft.screenshot({
           path: path.join(evidence, `${jurisdiction}-active-bog-draft.png`),
@@ -686,7 +684,7 @@ test("ICAAP preparation preserves context and its own draft evidence at alternat
   await expect(page.getByRole("button", { name: "New cycle" })).toBeVisible();
 });
 
-test("status tooltip and source stay readable inside the viewport", async ({
+test("status disclosure and source stay readable inside the viewport", async ({
   page,
 }) => {
   for (const width of [1440, 768, 390]) {
@@ -695,18 +693,26 @@ test("status tooltip and source stay readable inside the viewport", async ({
     await page.goto("/submissions/instruments");
     const draft = page.locator('section[id="LMT"]');
     await draft.locator("summary").first().click();
-    const tooltip = draft.getByRole("tooltip");
-    await expect(tooltip).toBeVisible();
-    await expect(tooltip).toContainText(/Proposed by BoG, not law yet\./i);
-    const source = tooltip.getByRole("link", { name: "Read the source" });
+    const disclosure = draft.getByTestId("instrument-status-disclosure");
+    await expect(disclosure).toBeVisible();
+    await expect(disclosure).toContainText(/Proposed by BoG, not law yet\./i);
+    const source = disclosure.getByRole("link", { name: "Read the source" });
     await expect(source).toHaveAttribute("href", /^https:/);
     await expect(async () => {
-      for (const element of [tooltip, source]) {
+      for (const element of [disclosure, source]) {
         const bounds = await element.boundingBox();
         expect(bounds).not.toBeNull();
         expect(bounds!.x).toBeGreaterThanOrEqual(0);
         expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(width);
       }
+    }).toPass();
+    // The panel is fixed, so its bottom edge must already be on screen: it
+    // cannot be reached by scrolling further once it has run past the fold.
+    await expect(async () => {
+      const bounds = await disclosure.boundingBox();
+      expect(bounds).not.toBeNull();
+      expect(bounds!.y).toBeGreaterThanOrEqual(0);
+      expect(bounds!.y + bounds!.height).toBeLessThanOrEqual(1000);
     }).toPass();
 
     // Every status badge stays on one line and inside the viewport.
@@ -746,14 +752,14 @@ test("status tooltip and source stay readable inside the viewport", async ({
 
     if (evidence) {
       await page.screenshot({
-        path: path.join(evidence, `status-tooltip-viewport-${width}.png`),
+        path: path.join(evidence, `status-disclosure-viewport-${width}.png`),
       });
       writeFileSync(
-        path.join(evidence, `status-tooltip-bounds-${width}.json`),
+        path.join(evidence, `status-disclosure-bounds-${width}.json`),
         JSON.stringify(
           {
             viewport: page.viewportSize(),
-            tooltip: await tooltip.boundingBox(),
+            disclosure: await disclosure.boundingBox(),
           },
           null,
           2,
@@ -888,4 +894,223 @@ test("a 16% SDI exposure uses the statutory 25% ceiling until the 15% directive 
       path.join(evidence, "sdi-exposure-commencement.json"),
       JSON.stringify({ before, after }, null, 2),
     );
+});
+
+test("light-theme instrument links meet AA and disclosures dismiss without losing full labels", async ({
+  page,
+}) => {
+  await page.goto("/submissions/instruments");
+  await expect(page.locator('section[id="LMT"]')).toBeVisible();
+  const lightToggle = page.getByRole("button", {
+    name: "Switch to light theme",
+  });
+  if (await lightToggle.isVisible()) {
+    // The provider applies `data-theme` optimistically and restores the
+    // canonical theme if persisting the preference fails, so measuring before
+    // that PATCH settles could read dark-theme colours. Wait for the saved
+    // preference instead of trusting the attribute alone.
+    const savedTheme = page.waitForResponse(
+      (response) =>
+        response.url().endsWith("/auth/me") &&
+        response.request().method() === "PATCH",
+    );
+    await lightToggle.click();
+    const response = await savedTheme;
+    expect(response.status()).toBe(200);
+    expect((await response.json()).theme).toBe("light");
+  }
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
+
+  const draft = page.locator('section[id="LMT"]');
+  const badge = draft.locator("summary").first();
+  const disclosure = draft.getByTestId("instrument-status-disclosure");
+  await badge.click();
+  await expect(disclosure).toBeVisible();
+  const links = [
+    draft.getByRole("heading").getByRole("link"),
+    disclosure.getByRole("link", { name: "Read the source" }),
+    page.getByRole("link", { name: "Prepare", exact: true }),
+  ];
+  const measurements = [];
+  for (const link of links) {
+    await expect(link).toBeVisible();
+    const measurement = await link.evaluate((element) => {
+      // Resolve the browser's rendered colors, including modern CSS color
+      // syntax and translucent notice surfaces, rather than inspecting CSS.
+      const canvas = document.createElement("canvas");
+      canvas.width = canvas.height = 1;
+      const context = canvas.getContext("2d")!;
+      const rgba = (color: string) => {
+        context.clearRect(0, 0, 1, 1);
+        context.fillStyle = color;
+        context.fillRect(0, 0, 1, 1);
+        return Array.from(context.getImageData(0, 0, 1, 1).data);
+      };
+      const over = (front: number[], back: number[]) =>
+        front
+          .slice(0, 3)
+          .map(
+            (value, index) =>
+              (value * front[3]) / 255 + back[index] * (1 - front[3] / 255),
+          );
+      const ancestors = [];
+      for (let node: Element | null = element; node; node = node.parentElement)
+        ancestors.unshift(node);
+      let background = [255, 255, 255];
+      for (const node of ancestors)
+        background = over(
+          rgba(getComputedStyle(node).backgroundColor),
+          background,
+        );
+      const foreground = over(
+        rgba(getComputedStyle(element).color),
+        background,
+      );
+      const luminance = (color: number[]) =>
+        color
+          .map((value) => {
+            const channel = value / 255;
+            return channel <= 0.04045
+              ? channel / 12.92
+              : ((channel + 0.055) / 1.055) ** 2.4;
+          })
+          .reduce(
+            (sum, value, index) =>
+              sum + value * [0.2126, 0.7152, 0.0722][index],
+            0,
+          );
+      const values = [luminance(foreground), luminance(background)].sort(
+        (a, b) => b - a,
+      );
+      return {
+        text: element.textContent,
+        foreground,
+        background,
+        ratio: (values[0] + 0.05) / (values[1] + 0.05),
+      };
+    });
+    expect(
+      measurement.ratio,
+      JSON.stringify(measurement),
+    ).toBeGreaterThanOrEqual(4.5);
+    measurements.push(measurement);
+  }
+  if (evidence) {
+    await page.screenshot({
+      path: path.join(evidence, "light-theme-link-contrast.png"),
+    });
+    writeFileSync(
+      path.join(evidence, "rendered-link-contrast.json"),
+      JSON.stringify(measurements, null, 2),
+    );
+  }
+
+  // A pointer press inside the panel must leave it open for source navigation.
+  await disclosure.locator("p").first().click();
+  await expect(disclosure).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(disclosure).toBeHidden();
+  await badge.focus();
+  await page.keyboard.press("Enter");
+  await expect(disclosure).toBeVisible();
+  await page
+    .getByRole("heading", { name: "Regulatory instruments", exact: true })
+    .click();
+  await expect(disclosure).toBeHidden();
+
+  // Exercise a cramped screen: full text is available in the title and panel,
+  // while the longest status label remains contained in its register cell.
+  await page.setViewportSize({ width: 390, height: 360 });
+  await page.goto("/submissions/instruments");
+  const finalBadge = page
+    .locator('section[id="LE-MONTHLY"]')
+    .locator("summary")
+    .first();
+  await expect(finalBadge).toHaveText("Not yet in force");
+  await expect(finalBadge).toHaveAttribute("title", /.+/);
+  const contained = await finalBadge.evaluate((element) => {
+    const bounds = element.getBoundingClientRect();
+    const cell = element.parentElement!.parentElement!.getBoundingClientRect();
+    return (
+      bounds.width <= cell.width &&
+      element.scrollWidth <= element.clientWidth + 1
+    );
+  });
+  expect(contained).toBe(true);
+  await finalBadge.click();
+  const finalPanel = page
+    .locator('section[id="LE-MONTHLY"]')
+    .getByTestId("instrument-status-disclosure");
+  await expect(finalPanel).toHaveText(
+    new RegExp(
+      (await finalBadge.getAttribute("title"))!.replace(
+        /[.*+?^${}()|[\]\\]/g,
+        "\\$&",
+      ),
+    ),
+  );
+  await expect(async () => {
+    const bounds = (await finalPanel.boundingBox())!;
+    expect(bounds.y).toBeGreaterThanOrEqual(0);
+    expect(bounds.y + bounds.height).toBeLessThanOrEqual(360);
+  }).toPass();
+  const source = finalPanel.getByRole("link", { name: "Read the source" });
+  await source.scrollIntoViewIfNeeded();
+  await expect(source).toBeInViewport();
+  if (evidence)
+    await page.screenshot({
+      path: path.join(evidence, "short-screen-full-status.png"),
+    });
+});
+
+test("status disclosure remains reachable when its badge scrolls out of view", async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 390, height: 360 });
+  await page.goto("/submissions/instruments");
+  const section = page.locator('section[id="LMT"]');
+  const badge = section.locator("summary").first();
+  const panel = section.getByTestId("instrument-status-disclosure");
+  await badge.click();
+  await expect(panel).toBeVisible();
+  // Scroll the real containing page without touching the floating panel.
+  for (const edge of ["above", "below"] as const) {
+    await badge.evaluate((element, edge) => {
+      for (
+        let parent = element.parentElement;
+        parent;
+        parent = parent.parentElement
+      ) {
+        if (
+          parent.scrollHeight > parent.clientHeight &&
+          /auto|scroll/.test(getComputedStyle(parent).overflowY)
+        ) {
+          const offset = element.getBoundingClientRect().top;
+          parent.scrollTop +=
+            edge === "above" ? offset + 100 : offset - window.innerHeight - 100;
+          return;
+        }
+      }
+      const offset = element.getBoundingClientRect().top;
+      window.scrollBy(
+        0,
+        edge === "above" ? offset + 100 : offset - window.innerHeight - 100,
+      );
+    }, edge);
+    await expect(async () => {
+      const anchor = (await badge.boundingBox())!;
+      if (edge === "above") expect(anchor.y + anchor.height).toBeLessThan(0);
+      else expect(anchor.y).toBeGreaterThan(360);
+      const bounds = await panel.boundingBox();
+      expect(bounds).not.toBeNull();
+      expect(bounds!.y).toBeGreaterThanOrEqual(0);
+      expect(bounds!.y + bounds!.height).toBeLessThanOrEqual(360);
+    }).toPass();
+    if (evidence)
+      await page.screenshot({
+        path: path.join(evidence, `status-scrolled-${edge}.png`),
+      });
+  }
+  await page.keyboard.press("Escape");
+  await expect(panel).toBeHidden();
 });
