@@ -760,7 +760,6 @@ def _renamed_catalogue(text: str, renames: dict[str, str]) -> str:
 def plan_catalogue_rewrites(backend: Path, rename: Renamer) -> dict[Path, str]:
     """The test-catalogue JSON files whose node-id keys a move renames."""
     planned: dict[Path, str] = {}
-    split = split_modules(rename.moves)
     for relative, sections in _CATALOGUE_SECTIONS.items():
         path = backend / relative
         if not path.is_file():
@@ -774,11 +773,6 @@ def plan_catalogue_rewrites(backend: Path, rename: Renamer) -> dict[Path, str]:
                 # A frozen file keeps its old names on purpose, so the node ids it
                 # generates (old module paths inside parametrized ids) never move.
                 if node_id.partition("::")[0] in _FROZEN_FILES:
-                    continue
-                # A split module's keys are already final: both parts were written
-                # under their own names, so a prefix rename would file every case
-                # under the sibling.
-                if node_id.partition("::")[0].removesuffix(".py").replace("/", ".") in split:
                     continue
                 if (new := _renamed_node_id(node_id, rename)) != node_id:
                     renames[node_id] = new

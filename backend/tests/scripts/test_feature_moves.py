@@ -18,6 +18,7 @@ import subprocess
 import sys
 from collections.abc import Sequence
 from pathlib import Path
+from typing import cast
 
 import pytest
 
@@ -390,6 +391,78 @@ def test_a_split_module_keeps_its_name_for_the_partition_only() -> None:
         )
     )
     assert rename("tests.test_health") == "tests.test_health"
+
+
+def test_the_catalogue_of_a_split_module_follows_a_later_move(tmp_path: Path) -> None:
+    """A later move re-files a split module's keys, instead of leaving them at the old path."""
+    backend = tmp_path / "backend"
+    (backend / "scripts").mkdir(parents=True)
+    (backend / "scripts/test_suites.json").write_text(
+        json.dumps(
+            {
+                "cases": {
+                    "tests/test_health.py::test_probe": "unit",
+                    "tests/test_health.py::test_probe[tests.test_health]": "unit",
+                    "tests/other/test_keep.py::test_keep": "unit",
+                },
+                "services": {"tests/test_health.py": ["postgres"]},
+            },
+            indent=2,
+        )
+        + "\n"
+    )
+    (backend / "scripts/ci_postgres_durations.json").write_text(
+        json.dumps({"source_run": "run", "durations": {"tests/test_health.py": 0.5}}, indent=2)
+        + "\n"
+    )
+    rename = Renamer(
+        (
+            ("tests.services.test_health", "tests.test_health"),
+            ("tests.test_health", "tests.test_health"),
+            ("tests.test_health", "tests.test_health_integration"),
+            ("tests.test_health", "tests.test_readiness"),
+        )
+    )
+    planned = feature_moves.plan_catalogue_rewrites(backend, rename)
+    suites = cast("dict[str, object]", json.loads(planned[backend / "scripts/test_suites.json"]))
+    assert suites["cases"] == {
+        "tests/test_readiness.py::test_probe": "unit",
+        "tests/test_readiness.py::test_probe[tests.test_readiness]": "unit",
+        "tests/other/test_keep.py::test_keep": "unit",
+    }
+    assert suites["services"] == {"tests/test_readiness.py": ["postgres"]}
+    durations = cast(
+        "dict[str, object]",
+        json.loads(planned[backend / "scripts/ci_postgres_durations.json"]),
+    )
+    assert durations == {"source_run": "run", "durations": {"tests/test_readiness.py": 0.5}}
+
+
+def test_the_catalogue_of_a_split_module_keeps_its_partition_keys(tmp_path: Path) -> None:
+    """The partition edge still leaves every surviving file's keys at their own names."""
+    backend = tmp_path / "backend"
+    (backend / "scripts").mkdir(parents=True)
+    (backend / "scripts/test_suites.json").write_text(
+        json.dumps(
+            {
+                "cases": {
+                    "tests/test_health.py::test_probe": "unit",
+                    "tests/test_health_integration.py::test_probe": "integration",
+                },
+                "services": {},
+            },
+            indent=2,
+        )
+        + "\n"
+    )
+    rename = Renamer(
+        (
+            ("tests.services.test_health", "tests.test_health"),
+            ("tests.test_health", "tests.test_health"),
+            ("tests.test_health", "tests.test_health_integration"),
+        )
+    )
+    assert feature_moves.plan_catalogue_rewrites(backend, rename) == {}
 
 
 def test_a_wrapped_rewritten_import_keeps_its_noqa_on_the_first_line(tmp_path: Path) -> None:

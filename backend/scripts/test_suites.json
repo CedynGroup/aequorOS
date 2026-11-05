@@ -17633,6 +17633,8 @@
     "tests/scripts/test_feature_moves.py::test_stale_bytecode_beside_a_module_does_not_hide_its_source": "unit",
     "tests/scripts/test_feature_moves.py::test_strings_paths_guards_and_docs_follow_the_move": "unit",
     "tests/scripts/test_feature_moves.py::test_test_catalogue_node_ids_follow_the_move": "unit",
+    "tests/scripts/test_feature_moves.py::test_the_catalogue_of_a_split_module_follows_a_later_move": "unit",
+    "tests/scripts/test_feature_moves.py::test_the_catalogue_of_a_split_module_keeps_its_partition_keys": "unit",
     "tests/scripts/test_feature_moves.py::test_the_repository_uses_no_old_module_name": "unit",
     "tests/scripts/test_feature_moves.py::test_the_rewrite_is_idempotent_and_check_passes_after_a_move": "unit",
     "tests/scripts/test_feature_moves.py::test_unresolved_relative_imports_refuse_all_commands[ambiguous]": "unit",
