@@ -1,5 +1,7 @@
 """Configurator authority is complete, active, and independent of read authority."""
 
+from __future__ import annotations
+
 from datetime import UTC, date, timedelta
 from decimal import Decimal
 from uuid import UUID
