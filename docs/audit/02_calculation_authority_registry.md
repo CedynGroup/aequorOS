@@ -108,8 +108,8 @@ than engineered away.
 > standardised weights."_
 
 The inequality is proved by
-`tests/reporting/service/bog_forms/test_bsd5.py::test_bsd5a_reconciles_to_the_capital_run_and_bog_arithmetic`.
-The reporting-equivalence suite (`tests/reporting/service/test_reporting_equivalence.py`)
+`tests/reporting/service/bog_forms/test_bsd5_integration.py::test_bsd5a_reconciles_to_the_capital_run_and_bog_arithmetic`.
+The reporting-equivalence suite (`tests/reporting/service/test_reporting_equivalence_integration.py`)
 checks engine-backed resolvers; it excludes this declared alternate methodology.
 
 ### 5.2 `lcr_pct` via `lmtd_table11_capped` (`CF-1`)

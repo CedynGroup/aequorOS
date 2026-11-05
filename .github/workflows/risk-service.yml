@@ -40,7 +40,7 @@ name: Risk Service CI
 #   postgres    — aggregate of schema shards and the lock job: migration chain,
 #                 RLS policies, schema defaults, row/advisory locks.
 #                 `risk-service:test-postgres-schema` covers integration cases in tests/db,
-#                 including tests/db/test_tenant_rls_completeness.py — the structural
+#                 including tests/db/test_tenant_rls_completeness_integration.py — the structural
 #                 guard on tenant isolation.
 #   postgres-suite — the integration aggregate, including exact cross-owner
 #                 coverage and observed database-ownership checks. Suite ownership,
@@ -102,7 +102,7 @@ name: Risk Service CI
 #                              skipif), so it costs the full-suite run nothing.
 #   25 `requires_real_data`  — see the real-data job above.
 #     modules
-#   tests/data_engine/etl/test_training_on_data.py — needs the untracked Sample Bank CSVs
+#   tests/data_engine/etl/test_training_on_data_integration.py — needs the untracked Sample Bank CSVs
 #                              under backend/data/, deliberately not in the repo.
 #   tests/scripts/test_dr_tooling.py DR-drill cases — need DR_DRILL_CLUSTER_URL,
 #                              i.e. a disposable cluster the drill may destroy.
@@ -394,8 +394,8 @@ jobs:
       #     assertion, because the superuser bypasses the policy and the "other
       #     tenant's rows are invisible" checks see them;
       #   * as this NOBYPASSRLS role — 0 RLS failures; all of
-      #     tests/db/test_tenant_rls_completeness.py and
-      #     tests/db/test_governance_append_only.py pass.
+      #     tests/db/test_tenant_rls_completeness_integration.py and
+      #     tests/db/test_governance_append_only_integration.py pass.
       # So a superuser does not merely weaken the gate, it INVERTS it: the tests
       # that exist to prove tenant isolation are the ones that go red, which
       # invites "fix" by relaxing the assertion. Never point this job at a

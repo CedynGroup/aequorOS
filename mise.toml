@@ -1,3 +1,6 @@
+[settings]
+auto_install = false
+
 [tools]
 node = "24"
 pnpm = "11.2.2"
@@ -40,11 +43,30 @@ uv = "0.11.18"
 # ---------------------------------------------------------------------------
 
 [tasks.setup]
-description = "Install all workspace dependencies (JS and backend Python)"
+description = "Prepare a fresh checkout: pinned tools, dependencies, env files, and hooks"
+# Locked syncs keep a fresh checkout reproducible: UV_LOCKED asserts that uv.lock
+# matches pyproject.toml, so a stale lockfile fails loudly instead of being used
+# silently. Env copies never overwrite a local file, and an existing managed
+# core.hooksPath chain is preserved.
+env = { UV_LOCKED = "1" }
 run = [
-  "pnpm install",
-  "cd backend && uv sync",
+  "mise install",
+  # ``mise`` computes this task's PATH before running any entry, so a tool it
+  # installs here is not yet visible to the rest of the array. ``mise exec``
+  # re-resolves the tool environment, which is what makes setup reliable on a
+  # machine where the pinned tools were absent.
+  "mise exec -- python3 backend/scripts/bootstrap.py env",
+  "mise exec -- pnpm install --frozen-lockfile",
+  "mise run risk-service:sync",
+  "mise run risk-service:hooks",
+  "mise exec -- python3 backend/scripts/bootstrap.py report",
 ]
+
+[tasks.verify]
+description = "Prove core checkout readiness without Docker, a database, or a service"
+# Deliberately no dependencies: verify uses what setup installed and must never
+# sync, install, or start anything on its own.
+run = "python3 backend/scripts/bootstrap.py verify"
 
 [tasks."risk-service:sync"]
 description = "Install risk service dependencies with uv"

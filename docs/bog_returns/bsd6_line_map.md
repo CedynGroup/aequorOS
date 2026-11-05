@@ -202,7 +202,7 @@ Band arithmetic (Guide, BSD6 "Maturity"): calendar months from the reporting dat
 
 ## Cross-form dependencies
 
-- `BSD6A!B*` = `BSD2!B*` (Domestic column) and `BSD6B!B*` = `BSD2!C*` (Foreign column) of the same reporting date — resolved from the computed BSD2 (`depends_on=("BSD2",)`; the generator computes BSD2 first). Every fully sourced Total equals its FROM BSD2 cell by construction; `tests/reporting/service/bog_forms/test_bsd6.py` pins the fixture's sourced rows.
+- `BSD6A!B*` = `BSD2!B*` (Domestic column) and `BSD6B!B*` = `BSD2!C*` (Foreign column) of the same reporting date — resolved from the computed BSD2 (`depends_on=("BSD2",)`; the generator computes BSD2 first). Every fully sourced Total equals its FROM BSD2 cell by construction; `tests/reporting/service/bog_forms/test_bsd6_integration.py` pins the fixture's sourced rows.
 - Because the map imports BSD2's line map, a BSD2 correction (filters, signs, new sources) flows into BSD6 automatically.
 - BSD2 lines with no BSD6 row (template design, recorded not fixed): BSD2 A.3–A.5 (other claims on / loans to / equity in non-residents) and, on BSD6B, the Foreign column of the DOMESTIC borrowing/deposit sections (BSD2 21–27) — BSD6B's borrowing/deposit rows read only the FOREIGN LIABILITIES section (BSD2 18–20).
 - BSD6A row 27 "(e) Others" (loans) has no BSD2 counterpart and stays blank so the loans Sub-total equals BSD2's.
@@ -220,8 +220,8 @@ FROM BSD2 and Total, and when non-zero the row's band cells stay blank for the b
 places nothing and leaves the positions' bands intact); an absent `refs.sum` accrual component contributes
 nothing. Missing official facts and wholly unresolved rows follow the
 [official BSD engine rules](00_full_return_registry.md#6-as-built-engine-rules). Row tables above are not regenerated
-for this; `tests/reporting/service/bog_forms/test_bsd6.py` carries the new counts and
-`tests/services/data_gaps/test_interest_accruals.py` proves the flow-through (BSD6A `B11 = C11 =` the domestic
+for this; `tests/reporting/service/bog_forms/test_bsd6_integration.py` carries the new counts and
+`tests/services/data_gaps/test_interest_accruals_integration.py` proves the flow-through (BSD6A `B11 = C11 =` the domestic
 accruals of BSD2 rows 20+29+32; bands blank). Open (owner BSD2/BSD6): BSD6A rows 8–10 anchor BSD2 subtotals
 that already include the accrual lines while row 11 lists them again — the official BSD6 has (e) Accrued
 Interest as its own line, so the section total double-counts accruals once the sub-ledger is ingested; the

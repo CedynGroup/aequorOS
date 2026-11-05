@@ -116,7 +116,7 @@ def _scoped_modules(db: Session, bank: Bank) -> tuple[tuple[str, _ComputeLive], 
     filing tier (``data_activation``), so the two tiers cannot disagree about
     which modules an institution runs. The entitlement, metric-authority and
     engine-substitution rules that used to live inline here now live there,
-    unchanged in behaviour and pinned by ``tests/policy/service/test_module_scope.py``.
+    unchanged in behaviour and pinned by ``tests/policy/service/test_module_scope_integration.py``.
     """
     return tuple(
         (module, compute)

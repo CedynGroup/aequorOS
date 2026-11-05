@@ -45,14 +45,14 @@ Binding: cell (row, column) = `refs.sum {kind: capital_expenditure, value_field:
 
 None as line-map gaps. Every cell reads the register; what remains bank-supplied is the register itself — the bank pushes its fixed-asset sub-ledger's half-year figures per class (a class with no row reads `0`; a bank whose sub-ledger does not track commitments / authorisations / forecasts leaves those optional fields blank and they read `0` — state them, or the form says nil).
 
-## 5. Critical totals proven by `tests/reporting/service/bog_forms/test_bsd10_11_16_17.py`
+## 5. Critical totals proven by `tests/reporting/service/bog_forms/test_bsd10_11_16_17_integration.py`
 
 1. every one of the 50 official leaf cells is declared (`test_every_data_cell_is_declared_and_split_matches_doc`), none is a label/formula cell, and the split is 50 mapped / 0 input_required as stated above;
 2. the form generates through the real package pipeline with 0 unmapped cells and no engine errors;
 3. BoG's own arithmetic over blank inputs: `H7…H17 = SUM(C:G) = 0` and `C18…H18 = row16 + row17 = 0` — no figure is invented when the register is absent (at runtime the cells are `input_required` until ingestion);
 4. the leaf labels are the Guide items ("A. Purchased", "B. On finance-lease", "C. On Hire-Purchase", …, "3 - 6 months").
 
-…and by `tests/services/data_gaps/test_capital_expenditure.py` (data-gap closure): the Sample Bank register pushed through the real API lands with lineage; every cell carries Σ of its field over the column's classes; `H = SUM(C:G)` per row and row 18 = 16 + 17 are BoG's formulas over the register; the export writes ¢'Million values and no live formula; an earlier half-year pushed later leaves the later period untouched; without a register the 50 cells stay blank.
+…and by `tests/services/data_gaps/test_capital_expenditure_integration.py` (data-gap closure): the Sample Bank register pushed through the real API lands with lineage; every cell carries Σ of its field over the column's classes; `H = SUM(C:G)` per row and row 18 = 16 + 17 are BoG's formulas over the register; the export writes ¢'Million values and no live formula; an earlier half-year pushed later leaves the later period untouched; without a register the 50 cells stay blank.
 
 ## 6. Cross-form dependencies
 

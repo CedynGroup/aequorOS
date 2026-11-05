@@ -92,7 +92,7 @@ snapshot panel.
 
 ```sh
 .venv/bin/pytest tests/storage/test_demo_key.py \
-  tests/core/test_bank_field_encryption.py tests/storage/test_key_providers.py -q
+  tests/core/test_bank_field_encryption_integration.py tests/storage/test_key_providers.py -q
 ```
 
 The tests exercise repeated revoke/outage/restore loops across fresh provider

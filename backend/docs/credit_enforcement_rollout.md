@@ -169,7 +169,7 @@ cd backend && uv run python scripts/authorization_access_impact.py --organizatio
 
 The script has no hermetic mode; it takes a database URL (`WORKER_DATABASE_URL`
 then `DATABASE_URL`) and is run by the release operator against the target
-deployment only. Its hermetic coverage is `tests/scripts/test_authorization_access_impact.py`.
+deployment only. Its hermetic coverage is `tests/scripts/test_authorization_access_impact_integration.py`.
 
 The read-only SQL below is the deployment inventory for the shared surfaces.
 Run it as a role that can see every tenant user, institution and binding. It
@@ -568,26 +568,26 @@ section of this document said so; there is now.
 
 ### Executable verification
 
-| Property                                                                                       | Pinned by                                                                                                                   |
-| ---------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------- |
-| Each route names its dependency and carries no scalar gate                                     | `tests/architecture/test_credit_route_authorization.py`                                                                     |
-| **Every** `/credit/` route is in the authority table (a new one cannot ship ungated)           | the same file, `test_every_credit_route_is_in_the_authority_table`                                                          |
-| `require_credit_run` is a recognized mutation gate (impersonation boundary)                    | the same file                                                                                                               |
-| The correct sentence is admitted, per route                                                    | `tests/credit/api/test_credit_route_authorization.py`                                                                       |
-| A scalar role alone is refused, per route, for five roles                                      | the same file, `test_a_scalar_role_alone_is_refused`                                                                        |
-| A `risk`, `liquidity` or `capital` binding is refused, per route                               | the same file                                                                                                               |
-| Every OTHER sensitivity is refused, per route; `all` admits every route                        | the same file                                                                                                               |
-| A sibling institution's sentence does not reach this one, and vice versa                       | the same file (both directions, 403)                                                                                        |
-| A bank of another tenant is 404, even with an organization-wide sentence                       | the same file (plus the real cross-tenant case)                                                                             |
-| Institution-grain routes refuse a `branch` and a `region` scope                                | the same file, `test_an_institution_figure_refuses_a_narrowed_scope`                                                        |
-| A branch-scoped reader sees only their branch, and `total` is scoped                           | the same file                                                                                                               |
-| An out-of-scope `branch` answers the intersection, byte-identically to a nonexistent one       | the same file                                                                                                               |
-| Pagination, facet counts and activity counts run over the scoped set                           | the same file                                                                                                               |
-| A region resolves through the register, follows it forward, and discloses an unresolved region | the same file                                                                                                               |
-| `mixed` unions branches and regions; one `all` row beside a branch row wins                    | the same file                                                                                                               |
-| Activity attribution follows D-018 and refuses a cross-system or pre-book event                | the same file                                                                                                               |
-| The blotter's pre-existing filter, date and refusal contract is unchanged                      | `tests/credit/service/test_regulatory_credit.py`, `tests/credit/api/test_regulatory_credit.py`                              |
-| Object references under `/credit/*` are catalogued and refuse a foreign object                 | `tests/fixtures/object_reference_routes.py` (auto-discovered) + `tests/api/test_authorization_object_reference_coverage.py` |
+| Property                                                                                       | Pinned by                                                                                                                               |
+| ---------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| Each route names its dependency and carries no scalar gate                                     | `tests/architecture/test_credit_route_authorization.py`                                                                                 |
+| **Every** `/credit/` route is in the authority table (a new one cannot ship ungated)           | the same file, `test_every_credit_route_is_in_the_authority_table`                                                                      |
+| `require_credit_run` is a recognized mutation gate (impersonation boundary)                    | the same file                                                                                                                           |
+| The correct sentence is admitted, per route                                                    | `tests/credit/api/test_credit_route_authorization_integration.py`                                                                       |
+| A scalar role alone is refused, per route, for five roles                                      | the same file, `test_a_scalar_role_alone_is_refused`                                                                                    |
+| A `risk`, `liquidity` or `capital` binding is refused, per route                               | the same file                                                                                                                           |
+| Every OTHER sensitivity is refused, per route; `all` admits every route                        | the same file                                                                                                                           |
+| A sibling institution's sentence does not reach this one, and vice versa                       | the same file (both directions, 403)                                                                                                    |
+| A bank of another tenant is 404, even with an organization-wide sentence                       | the same file (plus the real cross-tenant case)                                                                                         |
+| Institution-grain routes refuse a `branch` and a `region` scope                                | the same file, `test_an_institution_figure_refuses_a_narrowed_scope`                                                                    |
+| A branch-scoped reader sees only their branch, and `total` is scoped                           | the same file                                                                                                                           |
+| An out-of-scope `branch` answers the intersection, byte-identically to a nonexistent one       | the same file                                                                                                                           |
+| Pagination, facet counts and activity counts run over the scoped set                           | the same file                                                                                                                           |
+| A region resolves through the register, follows it forward, and discloses an unresolved region | the same file                                                                                                                           |
+| `mixed` unions branches and regions; one `all` row beside a branch row wins                    | the same file                                                                                                                           |
+| Activity attribution follows D-018 and refuses a cross-system or pre-book event                | the same file                                                                                                                           |
+| The blotter's pre-existing filter, date and refusal contract is unchanged                      | `tests/credit/service/test_regulatory_credit_integration.py`, `tests/credit/api/test_regulatory_credit_integration.py`                  |
+| Object references under `/credit/*` are catalogued and refuse a foreign object                 | `tests/fixtures/object_reference_routes.py` (auto-discovered) + `tests/api/test_authorization_object_reference_coverage_integration.py` |
 
 ### Deployment order and release record (Phase 4)
 

@@ -20,6 +20,9 @@ disjointness across all five catalogues is pinned in
 Also pinned: every seeded value matches its declared shape (D-037), every
 REPRESENTATIVE calibration ships ``pending`` (D-039), every citation fits the
 column, and the ``202609190056`` migration's pinned rows equal the catalogue's.
+
+This module's other-suite cases live in
+``test_regulatory_parameters_icaap_p2_integration.py``.
 """
 
 from __future__ import annotations
@@ -32,11 +35,8 @@ from types import ModuleType
 from typing import Any
 
 import pytest
-from sqlalchemy import select
-from sqlalchemy.orm import Session
 
 from app.icaap.service import parameters as workspace_parameters
-from app.models import RegulatoryParameter
 from app.policy.domain import parameter_shapes
 from app.policy.service import regulatory_parameters
 
@@ -64,9 +64,6 @@ def _seed_key(row: dict[str, Any]) -> tuple[str, str, str, str]:
     )
 
 
-# --- the disjointness rule ------------------------------------------------
-
-
 def test_no_icaap_code_is_seeded_twice() -> None:
     """P1's eight and P2's twenty are disjoint, and neither repeats itself."""
     workspace = workspace_parameters.ICAAP_PARAM_CODES
@@ -89,38 +86,6 @@ def test_the_whole_seed_catalogue_has_no_duplicate_generation() -> None:
     assert duplicates == []
     codes = {str(row["param_code"]) for row in rows}
     assert codes >= regulatory_parameters.P2_PARAMETER_CODES
-
-
-def test_the_hermetic_fixture_seeds_every_icaap_code_exactly_once(db_session: Session) -> None:
-    """``create_all`` runs no migration, so the fixture is the only seeder here.
-
-    Partitioned by jurisdiction since ``202609200063``: these codes now also
-    govern Nigeria and Kenya, where it is the JURISDICTION that is new and not
-    the code. Every assertion this test made about the Ghanaian rows still
-    holds of them, and the rows beside them must belong to a jurisdiction the
-    catalogue declares rather than to one that arrived by accident.
-    """
-    expected = workspace_parameters.ICAAP_PARAM_CODES | regulatory_parameters.P2_PARAMETER_CODES
-    rows = list(
-        db_session.scalars(
-            select(RegulatoryParameter).where(RegulatoryParameter.param_code.in_(expected))
-        )
-    )
-    counts = Counter(
-        (row.scope_type, row.scope_key, row.param_code, row.jurisdiction_code) for row in rows
-    )
-    assert [key for key, count in counts.items() if count > 1] == []
-    assert {code for _st, _sk, code, j in counts if j == "GH"} == expected
-    allowed = {"GH", *workspace_parameters.ICAAP_SEEDED_JURISDICTIONS}
-    for row in rows:
-        assert row.status == "approved"
-        assert row.effective_to is None
-        assert row.scope_type == "institution_class"
-        assert row.scope_key == "bank"
-        assert row.jurisdiction_code in allowed
-
-
-# --- the P2 catalogue itself ----------------------------------------------
 
 
 @pytest.mark.parametrize(
@@ -188,9 +153,6 @@ def test_no_parameter_direction_entry_was_added_for_the_p2_codes() -> None:
         regulatory_parameters.P2_PARAMETER_CODES & set(regulatory_parameters.PARAMETER_DIRECTION)
         == frozenset()
     )
-
-
-# --- the migration agrees with the catalogue ------------------------------
 
 
 def test_the_catalogue_and_the_migration_agree() -> None:

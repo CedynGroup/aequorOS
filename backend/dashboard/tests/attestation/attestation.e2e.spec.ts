@@ -594,7 +594,7 @@ test.describe("the signing workspace", () => {
  * regardless, that an UNSIGNED return offers exactly the base export and claims
  * nothing more, and that the version chain the card reads agrees with it. The
  * signed resolution itself is proved against a real ceremony in
- * tests/attestation/service/test_attestation_artifact_signing.py.
+ * tests/attestation/service/test_attestation_artifact_signing_integration.py.
  */
 test.describe("the filed document", () => {
   test.use({ storageState: analystState });

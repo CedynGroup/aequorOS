@@ -35,6 +35,8 @@ Use the [pull request description template](.github/PULL_REQUEST_TEMPLATE.md) fo
 ## Commands
 
 ```bash
+mise run setup                          # fresh checkout: pinned tools, locked deps, env templates, hooks
+mise run verify                         # prove core readiness (no Docker or database required)
 mise run risk-service:check            # backend lint, typecheck and hermetic tests
 mise run risk-service:test-postgres    # Postgres-gated tests (TEST_DATABASE_URL or an isolated local service)
 mise run risk-service:openapi-client   # regenerate packages/risk-service-api after an API change
@@ -60,7 +62,7 @@ Each rule is stated in full in the document the index names.
   creates tenant setup records (organization, bank, administrator, ownership,
   membership, SSO, storage, and required parameter register), but no bank financial
   data. There is no seeding route; never add one to the UI
-  or re-add seed CLI scripts. `tests/identity/api/test_banks.py::test_seed_route_is_retired`
+  or re-add seed CLI scripts. `tests/identity/api/test_banks_integration.py::test_seed_route_is_retired`
   pins it.
 - **Institution identity is the platform ID.** `organizations.id` (`OR-…`) and
   `banks.id` (`BK-…`) are the primary key, API path token, `org` claim, RLS GUC

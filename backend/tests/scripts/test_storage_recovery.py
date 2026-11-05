@@ -296,12 +296,33 @@ def test_restore_replays_every_revision_oldest_first(
     _ = local_settings
     bucket = "aequoros-dev-synthetic-outputs"
     entries = [
-        _revision(tmp_path, key="LCR.pdf", bucket=bucket, version_id="v3",
-                  payload=b"third", latest=True, when="2026-10-03"),
-        _revision(tmp_path, key="LCR.pdf", bucket=bucket, version_id="v2",
-                  payload=b"second", latest=False, when="2026-10-02"),
-        _revision(tmp_path, key="LCR.pdf", bucket=bucket, version_id="v1",
-                  payload=b"first", latest=False, when="2026-10-01"),
+        _revision(
+            tmp_path,
+            key="LCR.pdf",
+            bucket=bucket,
+            version_id="v3",
+            payload=b"third",
+            latest=True,
+            when="2026-10-03",
+        ),
+        _revision(
+            tmp_path,
+            key="LCR.pdf",
+            bucket=bucket,
+            version_id="v2",
+            payload=b"second",
+            latest=False,
+            when="2026-10-02",
+        ),
+        _revision(
+            tmp_path,
+            key="LCR.pdf",
+            bucket=bucket,
+            version_id="v1",
+            payload=b"first",
+            latest=False,
+            when="2026-10-01",
+        ),
     ]
     manifest = _manifest(tmp_path, bucket=bucket, entries=entries)
     client = RecoveryClient()
@@ -327,10 +348,24 @@ def test_restore_records_which_new_version_replaced_which_old_one(
     _ = local_settings
     bucket = "aequoros-dev-synthetic-outputs"
     entries = [
-        _revision(tmp_path, key="LCR.pdf", bucket=bucket, version_id="signed-rev",
-                  payload=b"signed", latest=False, when="2026-10-01"),
-        _revision(tmp_path, key="LCR.pdf", bucket=bucket, version_id="current-rev",
-                  payload=b"current", latest=True, when="2026-10-02"),
+        _revision(
+            tmp_path,
+            key="LCR.pdf",
+            bucket=bucket,
+            version_id="signed-rev",
+            payload=b"signed",
+            latest=False,
+            when="2026-10-01",
+        ),
+        _revision(
+            tmp_path,
+            key="LCR.pdf",
+            bucket=bucket,
+            version_id="current-rev",
+            payload=b"current",
+            latest=True,
+            when="2026-10-02",
+        ),
     ]
     manifest = _manifest(tmp_path, bucket=bucket, entries=entries)
 
@@ -358,8 +393,15 @@ def test_restore_reproduces_a_delete_marker_instead_of_resurrecting(
     _ = local_settings
     bucket = "aequoros-dev-synthetic-outputs"
     entries = [
-        _revision(tmp_path, key="withdrawn.pdf", bucket=bucket, version_id="v1",
-                  payload=b"withdrawn", latest=False, when="2026-10-01"),
+        _revision(
+            tmp_path,
+            key="withdrawn.pdf",
+            bucket=bucket,
+            version_id="v1",
+            payload=b"withdrawn",
+            latest=False,
+            when="2026-10-01",
+        ),
     ]
     marker = ObjectRecord(
         "withdrawn.pdf", 0, "", "2026-10-02", version_id="dm1", is_latest=True, delete_marker=True

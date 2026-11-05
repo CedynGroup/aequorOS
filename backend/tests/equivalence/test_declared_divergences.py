@@ -67,7 +67,7 @@ _BSD5 = f"{_FORMS}/test_bsd5.py::test_bsd5a_reconciles_to_the_capital_run_and_bo
 #: WS-D's sibling gate: every BoG form CELL bound to an engine-backed resolver,
 #: compared against the source run's persisted line items — the form-cell half
 #: of the equivalence problem, where this file covers the package half.
-_WSD_GATE = "tests/reporting/service/test_reporting_equivalence.py"
+_WSD_GATE = "tests/reporting/service/test_reporting_equivalence_integration.py"
 
 _CAPITAL = "crd_basel_capital_run"
 _LIQUIDITY = "basel_bog_liquidity_run"
@@ -80,7 +80,7 @@ _TABLE1 = "lmtd_table1_ratio"
 _GRADES = "bog_five_grade_classification"
 _GRADES4 = "nbfi_four_grade_classification"
 _NPL_MONTHLY_TEST = (
-    "tests/credit/service/test_regulatory_credit.py::"
+    "tests/credit/service/test_regulatory_credit_integration.py::"
     "test_npl_monthly_return_generates_from_the_sealed_run"
 )
 
