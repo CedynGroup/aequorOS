@@ -276,6 +276,40 @@ def _assert_write_acknowledgement(path: str, content: bytes, effective_from: dat
     return ack.written[0].id
 
 
+def _assert_private_conflicts(
+    db_client: TestClient, path: str, auth: dict[str, str], stored_date: date
+) -> None:
+    if path == "liquidity/ewis":
+        return
+    for effective_from in (stored_date - timedelta(days=1), stored_date):
+        payload = _payload(path)
+        payload["effective_from"] = effective_from.isoformat()
+        before = _state()
+        response = db_client.put(f"/api/v1/banks/{BANK}/{path}", headers=auth, json=payload)
+        assert response.status_code == 409, response.text
+        code = "narrow_to_volatile" if path == "liquidity-thresholds" else "CASH"
+        assert (
+            f"{code}: an open generation already starts on or after the requested effective date."
+            in response.text
+        )
+        assert stored_date.isoformat() not in response.text
+        assert "Private prior Board evidence" not in response.text
+        assert "Read-protected prior policy" not in response.text
+        assert _state() == before
+        model = ParamLiquidityThreshold if path == "liquidity-thresholds" else ParamLiquidityHaircut
+        with get_sessionmaker()() as db:
+            db.info["organization_id"] = ORG_1
+            row = db.scalar(
+                select(model).where(
+                    model.organization_id == ORG_1,
+                    model.bank_id == BANK,
+                    model.effective_from == stored_date,
+                )
+            )
+            assert row is not None
+            assert row.effective_to is None
+
+
 @pytest.mark.parametrize("path", PATHS)
 def test_configure_only_put_succeeds_but_read_needs_separate_viewer(
     db_client: TestClient, path: str, monkeypatch: pytest.MonkeyPatch
@@ -284,6 +318,7 @@ def test_configure_only_put_succeeds_but_read_needs_separate_viewer(
     auth = headers(roles=("viewer",), authorization_version=version)
     if path != "liquidity/ewis":
         _private_policy(path)
+        _assert_private_conflicts(db_client, path, auth, date(2026, 1, 1))
 
     def unexpected_read(*args: object, **kwargs: object) -> None:
         pytest.fail("PUT must not resolve a read-protected register")
@@ -294,6 +329,7 @@ def test_configure_only_put_succeeds_but_read_needs_separate_viewer(
         response = db_client.put(f"/api/v1/banks/{BANK}/{path}", headers=auth, json=_payload(path))
     assert response.status_code == (204 if path == "liquidity/ewis" else 200), response.text
     first_id = _assert_write_acknowledgement(path, response.content, date(2026, 4, 1))
+    _assert_private_conflicts(db_client, path, auth, date(2026, 4, 1))
     assert db_client.get(f"/api/v1/banks/{BANK}/{path}", headers=auth).status_code == 403
     _, version = _grant(RoleBundle.VIEWER, sensitivity=SensitivityScope.CONFIDENTIAL)
     response = db_client.get(
@@ -313,6 +349,9 @@ def test_configure_only_put_succeeds_but_read_needs_separate_viewer(
     )
     assert response.status_code == (204 if path == "liquidity/ewis" else 200), response.text
     second_id = _assert_write_acknowledgement(path, response.content, date(2026, 6, 1))
+    _assert_private_conflicts(
+        db_client, path, headers(authorization_version=version), date(2026, 6, 1)
+    )
     if path != "liquidity/ewis":
         assert second_id != first_id
         read = db_client.get(
