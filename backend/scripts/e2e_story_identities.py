@@ -103,20 +103,31 @@ class StoryRead(BaseModel):
     actors: list[ActorRead]
 
 
-def _grant(
+def _grant(  # noqa: PLR0913 - the scope tuple is explicit, as in the service
     db: Session,
     user: User,
     bundle: RoleBundle,
     module: ModuleScope = ModuleScope.ALL,
     sensitivity: SensitivityScope = SensitivityScope.ALL,
+    institution_id: str | None = None,
 ) -> None:
+    # An ORGANIZATION-scoped binding matches EVERY institution in the tenant
+    # (``app/core/authorization.py::_institution_matches``), so a grant that must
+    # stop at one bank names it.
+    scope = (
+        authorization.BindingScope(InstitutionScope.ORGANIZATION, None, module, sensitivity)
+        if institution_id is None
+        else authorization.BindingScope(
+            InstitutionScope.INSTITUTION, institution_id, module, sensitivity
+        )
+    )
     _ = authorization.create_role_binding(
         db,
         organization_id=user.organization_id,
         principal_user_id=user.id,
         principal_type=PrincipalType.HUMAN,
         role_bundle=bundle,
-        scope=authorization.BindingScope(InstitutionScope.ORGANIZATION, None, module, sensitivity),
+        scope=scope,
         grantor=authorization.GrantorRef(GrantorType.SYSTEM, "e2e-story"),
         reason="Explicit authority for one synthetic dashboard story",
         commit=False,
@@ -283,14 +294,17 @@ def provision(db: Session, request: StoryRequest) -> StoryRead:
     if request.signing:
         for spec, user in users:
             if spec.role in RETURN_EXPORT_ROLES:
-                # Whole-institution return export on top of the officer's own
-                # bundle, which the ceremony keeps requiring for the action.
+                # Return export on the story's own bank, on top of the
+                # officer's own bundle, which the ceremony keeps requiring for
+                # the action. Institution-scoped so it cannot reach a sibling
+                # bank of the same tenant.
                 _grant(
                     db,
                     user,
                     RoleBundle.ANALYST,
                     ModuleScope.REGULATORY,
                     SensitivityScope.RESTRICTED,
+                    institution_id=request.bank_id,
                 )
     db.commit()
     if request.signing:
