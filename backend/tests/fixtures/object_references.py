@@ -4,8 +4,8 @@ Every identifier family a tenant route accepts — a ``{package_id}`` path
 segment, a ``reporting_period_id`` body field, a ``scenario_id`` query value —
 is one :class:`ObjectKind`: where the identifier appears, and a factory that
 persists one referenced object for a tenant.  Both the deterministic coverage
-test (`tests/api/test_authorization_object_reference_coverage.py`) and the
-generative property (`tests/db/test_authorization_object_reference_properties.py`)
+test (`tests/api/test_authorization_object_reference_coverage_integration.py`) and the
+generative property (`tests/db/test_authorization_object_reference_properties_integration.py`)
 seed the catalogue from here and share the route census in
 `tests/fixtures/object_reference_routes.py`.
 
@@ -1868,7 +1868,7 @@ OBJECT_KINDS: Final[tuple[ObjectKind, ...]] = (
     # which these suites leave unset, so the refusal they currently observe is the
     # deployment flag's 404 rather than the tenancy check's. The ownership and
     # cross-tenant refusals are proven directly, with the flag ON, in
-    # tests/bi/api/test_bi_content_routes.py; the catalogue entries are here so the
+    # tests/bi/api/test_bi_content_routes_integration.py; the catalogue entries are here so the
     # sweep covers them the moment the flag is part of its fixture.
     ObjectKind("bi_dashboard", _bi_dashboard, (f"{_BANK_PREFIX}/bi/dashboards/{{dashboard_id}}",)),
     ObjectKind("bi_measure", _bi_measure, (f"{_BANK_PREFIX}/bi/measures/{{measure_id}}",)),

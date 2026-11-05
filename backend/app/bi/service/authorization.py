@@ -296,7 +296,7 @@ def combine_pair_scopes(
 
 #: The column a fact carries when its rows can be attributed to one branch, and
 #: the key the compiler joins ``bi_dim_branch`` on
-#: (``compiler._DIM_JOIN_KEYS``; ``tests/bi/service/test_data_scope.py`` pins
+#: (``compiler._DIM_JOIN_KEYS``; ``tests/bi/service/test_data_scope_integration.py`` pins
 #: the two together so the restatement cannot drift).
 BRANCH_FACT_KEY = "branch_code"
 
@@ -736,7 +736,7 @@ def authorize_query_conjunctive(  # noqa: PLR0913 - the complete authorization s
     authority, and the only honest decision is the denied one.
 
     Every surface that authorizes more than one permission over one query goes
-    through here; ``tests/bi/service/test_bi_authorization.py`` pins that
+    through here; ``tests/bi/service/test_bi_authorization_integration.py`` pins that
     ``read_bi`` and ``subscriptions`` reach ``authorize_query`` only this way.
     Raises exactly what :func:`authorize_query` raises.
     """

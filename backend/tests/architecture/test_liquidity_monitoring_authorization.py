@@ -1,7 +1,7 @@
 """Liquidity Monitoring must remain on the scoped-binding enforcement gate.
 
 BSD-3 is a regulatory return; its shared-reader authority is exercised by
-tests/api/test_return_preview_authorization.py, not a Liquidity route dependency.
+tests/api/test_return_preview_authorization_integration.py, not a Liquidity route dependency.
 """
 
 from __future__ import annotations

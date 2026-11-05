@@ -1,0 +1,360 @@
+/**
+ * Submission-pipeline e2e journeys (plan W7.5).
+ *
+ * These prove the dashboard is really wired to the backend end to end —
+ * authenticated navigation, the returns workspace driving generation against
+ * the live API, and the role gates. The exhaustive lifecycle state machine
+ * (checks → approve → file → acknowledge/reject/decline, corrections,
+ * revisions) is covered by the backend test suites; here we confirm the UI
+ * surfaces reach those endpoints under real per-role sessions.
+ *
+ * The workspace no longer draws a six-status stepper. Statuses are not people,
+ * and one of them was labelled "Validated", which a bank reads as "the Validator
+ * signed off" when it means the rules engine found no errors. What replaced it
+ * is the chain: who holds the return, and what has been decided on it
+ * (docs/filing_workflow_redesign.md §4b.4).
+ */
+
+import { test, expect } from "@playwright/test";
+import path from "path";
+import { E2E_API_ORIGIN, E2E_TMP } from "../../playwright.config";
+import { requireObjectStorage } from "../../e2e/support/object-storage";
+import { generateCurrentVersion } from "../../e2e/support/generate";
+import { biApi, fixtureAsOf, SAMPLE_BANK_ID } from "../../e2e/support/bi";
+import { E2E_PASSWORD } from "../../e2e/support/mint";
+
+const RETURN_CODE = "BSD2";
+const RETURNS = `/submissions/returns?code=${RETURN_CODE}`;
+const analystState = path.join(E2E_TMP, "analyst.json");
+const viewerState = path.join(E2E_TMP, "viewer.json");
+// Set E2E_EVIDENCE_DIR to write reviewer-visible screenshots outside version control.
+const evidenceDir = process.env.E2E_EVIDENCE_DIR;
+
+test.beforeAll(() => requireObjectStorage());
+
+test.describe("submission pipeline", () => {
+  // The preparer's session: generating a return is the preparer's act, and an
+  // approver's workspace offers no Generate control at all
+  // (docs/filing_workflow_redesign.md §4b.1).
+  test.use({ storageState: analystState });
+
+  test("journey 1: authenticated returns workspace generates a package", async ({
+    page,
+  }) => {
+    await page.goto(RETURNS);
+    // Authenticated navigation lands on the workspace (not /login).
+    await expect(page).toHaveURL(/\/submissions\/returns/);
+    await expect(
+      page.getByRole("heading", { name: /returns workspace/i }),
+    ).toBeVisible();
+
+    // Generate a package against the live backend — the UI round-tripped
+    // createRegulatoryPackage, and the checks ran with it.
+    await generateCurrentVersion(page);
+    await expect(page.getByText("Checks passed").first()).toBeVisible({
+      timeout: 60_000,
+    });
+
+    // The chain names PEOPLE, in order, and says who holds the return now.
+    // A status is not a person, which is what the old stepper kept implying.
+    const chain = page.getByTestId("filing-chain");
+    await expect(chain).toBeVisible();
+    await expect(chain.getByText("Preparer", { exact: true })).toBeVisible();
+    await expect(chain.getByText("Approver", { exact: true })).toBeVisible();
+    await expect(chain.getByText("Validator", { exact: true })).toBeVisible();
+    // This session IS the preparer, so the chain says so in the second person
+    // rather than naming the stage back to the officer who holds it.
+    await expect(chain).toContainText(/held by you/i);
+
+    // And nothing anywhere calls the machine check a person's decision.
+    await expect(page.getByText(/\bValidated\b/)).toHaveCount(0);
+    await expect(page.getByRole("button", { name: /^validate$/i })).toHaveCount(
+      0,
+    );
+    await expect(
+      page.getByRole("button", { name: "Re-run checks" }),
+    ).toBeVisible();
+    if (evidenceDir) {
+      await page.screenshot({
+        path: path.join(evidenceDir, "returns-workspace-generated.png"),
+        fullPage: true,
+      });
+    }
+  });
+
+  test("journey 2: calendar deadline board loads with obligations", async ({
+    page,
+  }) => {
+    // The deadline board moved to its own route when /submissions became a
+    // redirect to the Returns workspace; the obligation table lives here.
+    await page.goto("/submissions/calendar");
+    await expect(page).toHaveURL(/\/submissions\/calendar/);
+    await expect(page.getByRole("table")).toBeVisible();
+    await expect(
+      page.getByRole("link", { name: "Preparing for upcoming rules" }),
+    ).toBeVisible();
+    // These instruments are drafts or unpublished. None may become an
+    // obligation or acquire an indicative statutory penalty on any page.
+    const preparationCodes = [
+      "LMT",
+      "LCR-NSFR",
+      "IRRBB-PILOT",
+      "ICAAP-REPORT",
+      "ICAAP-UPDATE",
+      "ICAAP-DISCLOSURE",
+      "ICAAP-STRESS",
+      "ICAAP-STRESS-APPENDIX2",
+      "LAS-QUARTERLY",
+      "STRESS-PACK",
+    ];
+    const pager = page.getByRole("navigation", {
+      name: "Reporting obligations pages",
+    });
+    const nextPage = pager.getByRole("button", { name: "Next" });
+    const table = page.getByRole("table");
+    const firstObligation = table.getByRole("row").nth(1);
+    while (true) {
+      for (const code of preparationCodes) {
+        await expect(table.getByText(code, { exact: true })).toHaveCount(0);
+      }
+      if (await nextPage.isDisabled()) break;
+      const previousFirstObligation = await firstObligation.textContent();
+      const nextPageResponse = page.waitForResponse((response) => {
+        const url = new URL(response.url());
+        return (
+          url.pathname.endsWith("/reporting-obligations") &&
+          response.request().method() === "GET" &&
+          response.ok()
+        );
+      });
+      await nextPage.click();
+      await nextPageResponse;
+      await expect(firstObligation).not.toHaveText(
+        previousFirstObligation ?? "",
+      );
+    }
+    if (evidenceDir) {
+      await page.screenshot({
+        path: path.join(evidenceDir, "calendar-deadlines.png"),
+        fullPage: true,
+      });
+    }
+  });
+
+  test("journey 3: history renders the package/version ledger", async ({
+    page,
+  }) => {
+    test.info().annotations.push({
+      type: "critical-outcome",
+      description: "returns.ledger-identity",
+    });
+    // Generate at least one package first so history is non-empty.
+    await page.goto(RETURNS);
+    const minted = page.waitForResponse(
+      (response) =>
+        response.request().method() === "POST" &&
+        new URL(response.url()).pathname.endsWith("/regulatory-packages") &&
+        response.ok(),
+    );
+    const version = await generateCurrentVersion(page);
+    const { id, return_code: returnCode } = (await (await minted).json()) as {
+      id: string;
+      return_code: string;
+    };
+    expect(returnCode).toBe(RETURN_CODE);
+
+    await page.goto("/submissions/history");
+    await expect(page).toHaveURL(/\/submissions\/history/);
+    const row = page
+      .getByRole("row")
+      .filter({
+        has: page.getByRole("cell", { name: RETURN_CODE, exact: true }),
+      })
+      .filter({
+        has: page.getByRole("cell", { name: `v${version}`, exact: true }),
+      });
+    await expect(row).toHaveCount(1);
+    await expect(
+      row.getByRole("cell", { name: "Passed", exact: true }),
+    ).toBeVisible();
+    await row.click();
+    await expect(
+      page.getByText(`Package ${id.slice(0, 8)} ·`, { exact: false }),
+    ).toBeVisible();
+    if (evidenceDir) {
+      await page.screenshot({
+        path: path.join(evidenceDir, "history-ledger.png"),
+        fullPage: true,
+      });
+    }
+  });
+
+  test("journey 4: a prior version yields its files, its signers, and a diff", async ({
+    page,
+  }) => {
+    // Two generations, so a superseded version exists whatever earlier
+    // journeys left behind.
+    await page.goto(RETURNS);
+    await generateCurrentVersion(page);
+    const current = await generateCurrentVersion(page);
+    await expect(page.getByText("Checks passed").first()).toBeVisible({
+      timeout: 60_000,
+    });
+
+    // Earlier versions are one collapsed row now: provenance, not a card
+    // competing with the figures an officer is about to attest to.
+    const card = page.getByTestId("versions-row");
+    await expect(card).toBeVisible();
+    await card.getByRole("button").first().click();
+
+    // The row is a disclosure, not a dead line of text. Address the version
+    // this journey just superseded by name rather than by position: it is
+    // the one known to be unsigned and never exported, whatever earlier
+    // journeys left on the chain.
+    const row = card.locator("li", {
+      has: page.getByText(`v${current - 1}`, { exact: true }),
+    });
+    await row.getByRole("button").first().click();
+
+    // Nothing was exported on this chain, so the card says so rather than
+    // offering a download that cannot resolve.
+    await expect(row.getByText(/Never exported/).first()).toBeVisible();
+    await expect(
+      row.getByText(/No signature was ever recorded/).first(),
+    ).toBeVisible();
+
+    // The figures comparison is available even with no file to retrieve — the
+    // snapshot is immutable and always present.
+    await row.getByRole("button", { name: /compare with current/i }).click();
+    // Regeneration off unchanged canonical data reproduces the figures, so the
+    // honest verdict is that nothing moved.
+    await expect(row.getByText(/No figure differs from v\d+/)).toBeVisible();
+    if (evidenceDir) {
+      await page.screenshot({
+        path: path.join(evidenceDir, "prior-version-diff.png"),
+        fullPage: true,
+      });
+    }
+  });
+
+  test("journey 5: analyst cannot approve; viewer cannot generate", async ({
+    browser,
+  }) => {
+    test.info().annotations.push({
+      type: "critical-outcome",
+      description: "returns.authority-denials",
+    });
+    const analyst = await browser.newContext({ storageState: analystState });
+    const viewer = await browser.newContext({ storageState: viewerState });
+    try {
+      const analystPage = await analyst.newPage();
+      await analystPage.goto(RETURNS);
+      const minted = analystPage.waitForResponse(
+        (response) =>
+          response.request().method() === "POST" &&
+          new URL(response.url()).pathname.endsWith("/regulatory-packages") &&
+          response.ok(),
+      );
+      await generateCurrentVersion(analystPage);
+      const { id } = (await (await minted).json()) as { id: string };
+      const decision = await biApi(
+        analyst.request,
+        "analyst",
+        `/banks/${SAMPLE_BANK_ID}/regulatory-packages/${id}/decide-approval`,
+        {
+          method: "POST",
+          data: { action: "approved", reason: "Not my authority" },
+        },
+      );
+      expect(decision.status).toBe(403);
+
+      // Credit access journeys advance this shared viewer's authorization
+      // version. Sign in again so both denials exercise current authority.
+      await viewer.clearCookies();
+      const viewerPage = await viewer.newPage();
+      await viewerPage.goto(
+        `/login?callbackUrl=${encodeURIComponent(RETURNS)}`,
+      );
+      await viewerPage.getByLabel("Email").fill("e2e.viewer@aequoros.example");
+      await viewerPage.getByLabel("Password").fill(E2E_PASSWORD);
+      await viewerPage
+        .getByRole("button", { name: "Sign in", exact: true })
+        .click();
+      await expect(viewerPage).toHaveURL(/\/submissions\/returns/);
+      await expect(
+        viewerPage.getByRole("heading", {
+          name: "Access required",
+          exact: true,
+        }),
+      ).toBeVisible();
+      await expect(
+        viewerPage.getByText(
+          "You can see that this page exists, but your current access does not include it.",
+        ),
+      ).toBeVisible();
+      await expect(
+        viewerPage.getByRole("button", {
+          name: /generate the return|^regenerate$/i,
+        }),
+      ).toHaveCount(0);
+      const { accessToken } = (await (
+        await viewer.request.get("/api/auth/session")
+      ).json()) as { accessToken: string };
+      const generation = await viewer.request.post(
+        `${E2E_API_ORIGIN}/api/v1/banks/${SAMPLE_BANK_ID}/regulatory-packages`,
+        {
+          headers: { Authorization: `Bearer ${accessToken}` },
+          data: {
+            return_code: RETURN_CODE,
+            reporting_date: await fixtureAsOf(analyst.request),
+          },
+        },
+      );
+      expect(generation.status()).toBe(403);
+    } finally {
+      await analyst.close();
+      await viewer.close();
+    }
+  });
+});
+
+/**
+ * The login screen must not blame the operator for an outage.
+ *
+ * On 2026-07-26 the production API crash-looped and every sign-in attempt read
+ * "Invalid email or password" — the operator was told their password was wrong
+ * while the backend was not running. `backendTokens` collapsed a 5xx, a refused
+ * connection and a genuine 401 into one null.
+ *
+ * NextAuth distinguishes them: a rejected credential is `CredentialsSignin`, an
+ * unreachable backend is `Configuration` (verified against a dev server pointed
+ * at a closed port). This asserts the credential branch — the half that can be
+ * driven hermetically — so a change that reverts to one message for both is
+ * caught here rather than in production.
+ */
+test.describe("sign-in failures", () => {
+  test.use({ storageState: { cookies: [], origins: [] } });
+
+  test("a rejected password says so, and does not claim an outage", async ({
+    page,
+  }) => {
+    await page.goto("/login");
+    await page.getByLabel("Email").fill("e2e.analyst@aequoros.example");
+    await page
+      .getByLabel("Password")
+      .fill("deliberately-wrong-not-the-fixture-password");
+    await page.getByRole("button", { name: "Sign in", exact: true }).click();
+
+    // Scoped to the form: Next's route announcer also carries role="alert"
+    // and is empty, which silently swallows a bare getByRole('alert').
+    await expect(page.locator('form p[role="alert"]')).toHaveText(
+      "Invalid email or password.",
+    );
+    // The outage copy must NOT appear for a credential rejection: the backend
+    // answered, so telling the operator the service is unreachable would be the
+    // same defect in the opposite direction.
+    await expect(
+      page.getByText(/could not reach the aequoros service/i),
+    ).toHaveCount(0);
+  });
+});

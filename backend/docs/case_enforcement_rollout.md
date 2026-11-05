@@ -166,7 +166,7 @@ for the target demo inventory. No real identifiers are published here.
 
 ## Verification and release boundary
 
-`tests/case/api/test_case_authorization.py` exercises zero grants despite scalar
+`tests/case/api/test_case_authorization_integration.py` exercises zero grants despite scalar
 claims, complete rows, partial-row refusal, institution-vs-organization separation,
 wrong principal/module/sensitivity, binding lifecycle, cross-tenant counts and
 object hiding, permission-specific review/export, machine refusal, global demo

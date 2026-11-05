@@ -48,7 +48,7 @@ are therefore proven only in the Postgres-gated suite (``tests/db/``), never
 mocked as passing on SQLite.
 
 Row-level security lives in the migration too, like every other tenant
-table; the Postgres census ``tests/db/test_tenant_rls_completeness.py``
+table; the Postgres census ``tests/db/test_tenant_rls_completeness_integration.py``
 enumerates partitioned parents and their children alike.
 """
 

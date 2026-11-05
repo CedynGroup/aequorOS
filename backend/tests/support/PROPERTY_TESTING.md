@@ -1,7 +1,7 @@
 # Feature-owned property inputs and assertions
 
 The backend helpers live in `tests/<feature>/testing/{generators,assertions}.py`.
-Dashboard helpers live in `unit/<feature>/testing/{generators,assertions}.ts`.
+Dashboard helpers live in `tests/<feature>/testing/{generators,assertions}.ts`.
 They belong to the feature test package so Hypothesis, fast-check and assertion
 libraries stay out of production imports. Cross-feature mechanics belong in
 `tests/support`; keep financial assumptions and tolerances with their owner.
@@ -13,19 +13,19 @@ live in the package's `test_generators.py`; dashboard validity properties live i
 the feature suites under `unit`. Filing, ICAAP and approval models also validate
 generated initializer histories through public service commands.
 
-| Domain                                 | Backend test package                   | Dashboard test package                                                           |
-| -------------------------------------- | -------------------------------------- | -------------------------------------------------------------------------------- |
-| Filing and reporting calendars         | [reporting](../reporting/testing/)     | [submissions](../../dashboard/unit/submissions/testing/)                         |
-| ICAAP workflow and freeze              | [icaap](../icaap/testing/)             | Shared [submissions](../../dashboard/unit/submissions/testing/) authority inputs |
-| Governed approvals and access requests | [identity](../identity/testing/)       | Shared [submissions](../../dashboard/unit/submissions/testing/) authority inputs |
-| Liquidity                              | [liquidity](../liquidity/testing/)     | [liquidity](../../dashboard/unit/liquidity/testing/)                             |
-| Capital                                | [capital](../capital/testing/)         | [capital](../../dashboard/unit/capital/testing/)                                 |
-| Credit                                 | [credit](../credit/testing/)           | [credit](../../dashboard/unit/credit/testing/)                                   |
-| FX                                     | [fx](../fx/testing/)                   | [fx](../../dashboard/unit/fx/testing/)                                           |
-| FTP                                    | [ftp](../ftp/testing/)                 | [ftp](../../dashboard/unit/ftp/testing/)                                         |
-| IRRBB                                  | [irrbb](../irrbb/testing/)             | [irrbb](../../dashboard/unit/irrbb/testing/)                                     |
-| Case workspace authority               | [case](../case/testing/)               | DATA loading regressions in `unit/data-engine-surfaces.spec.tsx`                 |
-| Canonical data                         | [data_engine](../data_engine/testing/) | [data-engine](../../dashboard/unit/data-engine/testing/)                         |
+| Domain                                 | Backend test package                   | Dashboard test package                                                            |
+| -------------------------------------- | -------------------------------------- | --------------------------------------------------------------------------------- |
+| Filing and reporting calendars         | [reporting](../reporting/testing/)     | [submissions](../../dashboard/tests/submissions/testing/)                         |
+| ICAAP workflow and freeze              | [icaap](../icaap/testing/)             | Shared [submissions](../../dashboard/tests/submissions/testing/) authority inputs |
+| Governed approvals and access requests | [identity](../identity/testing/)       | Shared [submissions](../../dashboard/tests/submissions/testing/) authority inputs |
+| Liquidity                              | [liquidity](../liquidity/testing/)     | [liquidity](../../dashboard/tests/liquidity/testing/)                             |
+| Capital                                | [capital](../capital/testing/)         | [capital](../../dashboard/tests/capital/testing/)                                 |
+| Credit                                 | [credit](../credit/testing/)           | [credit](../../dashboard/tests/credit/testing/)                                   |
+| FX                                     | [fx](../fx/testing/)                   | [fx](../../dashboard/tests/fx/testing/)                                           |
+| FTP                                    | [ftp](../ftp/testing/)                 | [ftp](../../dashboard/tests/ftp/testing/)                                         |
+| IRRBB                                  | [irrbb](../irrbb/testing/)             | [irrbb](../../dashboard/tests/irr/testing/)                                       |
+| Case workspace authority               | [case](../case/testing/)               | DATA loading regressions in `tests/data-engine/data-engine-surfaces.spec.tsx`     |
+| Canonical data                         | [data_engine](../data_engine/testing/) | [data-engine](../../dashboard/tests/data-engine/testing/)                         |
 
 ## Generator contract
 
@@ -78,7 +78,7 @@ scaling, zero-exposure and currency round trips belong with the financial domain
    than changing a tolerance to conceal it.
 
 See the [backend capital validity properties](../capital/testing/test_generators.py)
-and [dashboard financial validity properties](../../dashboard/unit/financial-generators.spec.ts)
+and [dashboard financial validity properties](../../dashboard/tests/liquidity/financial-generators.spec.ts)
 for executable examples. The source notes below explain each domain's assumptions.
 
 ## Bounded validation
@@ -171,7 +171,7 @@ outlier-set measure membership is derived from the corresponding scenario flags
 and checked exactly before and after normalization; stored figures remain exact.
 
 Canonical helpers live under `tests/data_engine/testing` and dashboard
-`unit/data-engine/testing`. Synthetic UUIDs, source references and one bank scope
+`tests/data-engine/testing`. Synthetic UUIDs, source references and one bank scope
 link batches, lineage, products, borrowers, positions and their snapshots. Amounts
 use the canonical six-place storage precision and fractional rates ten places.
 Validity properties run the public ingestion validator and API conversions;

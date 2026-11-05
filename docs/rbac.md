@@ -199,7 +199,7 @@ Every access check answers: **who (role) → may do what (permission) → on wha
   organization. Mount bank routers with `BANK_ROUTE_DEPENDENCIES`, defined in
   `app/api/deps.py`; permission dependencies there consume the resolved bank as
   `TenantBank` rather than re-resolving it. The OpenAPI-enumerated regression in
-  `backend/tests/api/test_cross_tenant_bank_routes.py` checks dependency coverage
+  `backend/tests/api/test_cross_tenant_bank_routes_integration.py` checks dependency coverage
   and sibling-bank 404 responses for reads and mutations on Postgres.
 - **Platform plane** — the cross-tenant surface for AequorOS staff. Its database
   access and the separate worker cutover follow
@@ -619,8 +619,8 @@ landing/workspace deep links on the explicit `PUBLIC_MODULE_ROUTES` allow-list i
 `backend/dashboard/lib/modules.ts` render the denied page, except for Forecasting,
 whose workspace behavior is owned by the linked rollout contract above. Object-detail paths (including
 cross-tenant and unknown objects), structurally excluded paths, and non-existent
-routes remain 404. `backend/dashboard/lib/modules.test.ts` and
-`backend/dashboard/e2e/baseline-membership.spec.ts` pin this boundary.
+routes remain 404. `backend/dashboard/tests/shell/modules.test.ts` and
+`backend/dashboard/tests/session/baseline-membership.e2e.spec.ts` pin this boundary.
 
 Remaining rollout work:
 

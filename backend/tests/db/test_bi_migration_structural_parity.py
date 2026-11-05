@@ -22,32 +22,27 @@ Derived from the model rather than restated, so a new table joins these checks b
 being declared. Partition children are excluded: Postgres names a child's own
 constraints and indexes after the child, and the parent is the thing the model
 declares.
+
+This module's other-suite cases live in
+``test_bi_migration_structural_parity_integration.py``.
 """
 
 from __future__ import annotations
 
+from tests.db.test_bi_migration_structural_parity_integration import ALL_BI_TABLES
+
+__all__ = ["catalog_postgres_schema", "forward_migrated_postgres_schema", "postgres_schema_url"]
 import os
-from typing import TypedDict, cast
 
 import pytest
-import sqlalchemy as sa
-from pydantic import TypeAdapter
-from sqlalchemy import inspect
-from sqlalchemy.engine.reflection import Inspector
 
 from app.bi.models.commentary import BI_COMMENTARY_TABLES
-from app.bi.models.content import BI_CONTENT_TABLES
-from app.bi.models.marts import BI_TABLES, MONTHLY_PARTITIONED_TABLES, YEARLY_PARTITIONED_TABLES
-from app.bi.models.notifications import BI_NOTIFICATION_TABLES
 from app.db.base import Base
-from tests.db.test_postgres_migrations import (
-    MigratedPostgresSchema,
+from tests.db.test_postgres_migrations_integration import (
     catalog_postgres_schema,
     forward_migrated_postgres_schema,
     postgres_schema_url,
 )
-
-__all__ = ["catalog_postgres_schema", "forward_migrated_postgres_schema", "postgres_schema_url"]
 
 pytestmark = [
     pytest.mark.committing_db,
@@ -56,80 +51,9 @@ pytestmark = [
         reason="TEST_DATABASE_URL is required for Postgres migration tests.",
     ),
 ]
-
-#: Every tenant table of the BI plane. ``BI_COMMENTARY_TABLES`` is listed
-#: separately from the rest because it is the one that is NOT ``bi_``-prefixed
-#: (see that constant's own comment for why the name is correct), and a subject
-#: derived from the prefix therefore left ``ai_commentary_drafts`` — its RLS, its
-#: composite parent key and its indexes — unverified against the migrated schema
-#: (audit A9-08).
-ALL_BI_TABLES: tuple[str, ...] = (
-    *BI_TABLES,
-    *BI_CONTENT_TABLES,
-    *BI_NOTIFICATION_TABLES,
-    *BI_COMMENTARY_TABLES,
-)
-
 #: The half of the subject the prefix rule governs. Kept separate so the
 #: completeness check below stays exact instead of becoming a ``>=``.
 PREFIXED_BI_TABLES: frozenset[str] = frozenset(ALL_BI_TABLES) - frozenset(BI_COMMENTARY_TABLES)
-PARTITIONED: frozenset[str] = frozenset((*MONTHLY_PARTITIONED_TABLES, *YEARLY_PARTITIONED_TABLES))
-
-
-type ForeignKeySignature = tuple[
-    tuple[str, ...], str, str, tuple[str, ...], str | None, str | None, bool | None, str | None
-]
-
-
-class _ForeignKeyOptions(TypedDict, total=False):
-    ondelete: str
-    onupdate: str
-    deferrable: bool
-    initially: str
-
-
-_FK_OPTIONS = TypeAdapter(_ForeignKeyOptions)
-
-
-def _action(value: str | None) -> str | None:
-    return None if value is None or value.upper() == "NO ACTION" else value.upper()
-
-
-def _model_foreign_keys(table: sa.Table, schema: str) -> set[ForeignKeySignature]:
-    return {
-        (
-            tuple(element.parent.name for element in fk.elements),
-            fk.referred_table.schema or schema,
-            fk.referred_table.name,
-            tuple(element.column.name for element in fk.elements),
-            _action(fk.ondelete),
-            _action(fk.onupdate),
-            fk.deferrable,
-            fk.initially,
-        )
-        for fk in table.foreign_key_constraints
-    }
-
-
-def _migrated_foreign_keys(
-    inspector: Inspector, table: str, schema: str
-) -> set[ForeignKeySignature]:
-    signatures: set[ForeignKeySignature] = set()
-    for fk in inspector.get_foreign_keys(table, schema=schema):
-        options = _FK_OPTIONS.validate_python(cast(object, fk.get("options", {})))
-        signatures.add(
-            (
-                tuple(fk["constrained_columns"]),
-                fk["referred_schema"] or schema,
-                fk["referred_table"],
-                tuple(fk["referred_columns"]),
-                _action(options.get("ondelete")),
-                _action(options.get("onupdate")),
-                options.get("deferrable"),
-                options.get("initially"),
-            )
-        )
-    return signatures
 
 
 def test_the_subject_is_every_registered_bi_table() -> None:
@@ -159,130 +83,6 @@ def test_the_subject_is_not_derived_from_the_bi_prefix_alone() -> None:
             "if that is intended, move it out of BI_COMMENTARY_TABLES deliberately"
         )
         assert name in Base.metadata.tables, f"{name} is not a mapped table"
-
-
-def test_primary_key_columns_and_their_ORDER_match_the_model(
-    catalog_postgres_schema: MigratedPostgresSchema,
-) -> None:
-    inspector = inspect(catalog_postgres_schema.app_engine)
-    drift: list[str] = []
-    for table_name in ALL_BI_TABLES:
-        model = [column.name for column in Base.metadata.tables[table_name].primary_key]
-        migrated = list(
-            inspector.get_pk_constraint(table_name, schema=catalog_postgres_schema.schema_name).get(
-                "constrained_columns"
-            )
-            or []
-        )
-        if model != migrated:
-            drift.append(f"{table_name}: model {model} != migrated {migrated}")
-    assert not drift, (
-        "the primary key ORDER differs between the model and the migration. For a "
-        "partitioned table the range column must LEAD the key or it prunes nothing, "
-        "and for every table the leading columns are the access path: " + "; ".join(drift)
-    )
-    for table_name in PARTITIONED:
-        key = [column.name for column in Base.metadata.tables[table_name].primary_key]
-        range_column = {**MONTHLY_PARTITIONED_TABLES, **YEARLY_PARTITIONED_TABLES}[table_name]
-        assert key[0] == range_column, f"{table_name}: {range_column} must lead {key}"
-
-
-def test_every_foreign_key_is_the_composite_that_pins_the_tenant(
-    catalog_postgres_schema: MigratedPostgresSchema,
-) -> None:
-    """Compare ordered local/parent columns and the complete FK behavior."""
-    inspector = inspect(catalog_postgres_schema.app_engine)
-    drift: list[str] = []
-    for table_name in ALL_BI_TABLES:
-        table = Base.metadata.tables[table_name]
-        model = _model_foreign_keys(table, catalog_postgres_schema.schema_name)
-        migrated = _migrated_foreign_keys(
-            inspector, table_name, catalog_postgres_schema.schema_name
-        )
-        if model != migrated:
-            drift.append(f"{table_name}: model {model} != migrated {migrated}")
-        for columns, _, _, referred, *_ in model:
-            if len(columns) > 1:
-                assert "organization_id" in columns, f"{table_name}: {columns} omits the tenant"
-                assert referred[columns.index("organization_id")] == "organization_id", (
-                    f"{table_name}: {columns} does not reference the parent tenant"
-                )
-    assert not drift, "foreign keys differ between the model and migration: " + "; ".join(drift)
-
-
-def test_foreign_key_parity_detects_reversed_referenced_columns(
-    forward_migrated_postgres_schema: MigratedPostgresSchema,
-) -> None:
-    schema = forward_migrated_postgres_schema
-    metadata = sa.MetaData()
-    _ = sa.Table(
-        "fk_parity_parent",
-        metadata,
-        sa.Column("id", sa.Integer, primary_key=True),
-        sa.Column("organization_id", sa.Integer, primary_key=True),
-        sa.UniqueConstraint("organization_id", "id"),
-    )
-    child = sa.Table(
-        "fk_parity_child",
-        metadata,
-        sa.Column("parent_id", sa.Integer),
-        sa.Column("organization_id", sa.Integer),
-        sa.ForeignKeyConstraint(
-            ["parent_id", "organization_id"],
-            ["fk_parity_parent.id", "fk_parity_parent.organization_id"],
-            name="fk_parity_subject",
-            ondelete="CASCADE",
-            deferrable=True,
-            initially="DEFERRED",
-        ),
-    )
-    metadata.create_all(schema.app_engine)
-    expected = _model_foreign_keys(child, schema.schema_name)
-    assert expected == _migrated_foreign_keys(
-        inspect(schema.app_engine), child.name, schema.schema_name
-    )
-    with schema.app_engine.begin() as connection:
-        connection.execute(sa.text("ALTER TABLE fk_parity_child DROP CONSTRAINT fk_parity_subject"))
-        connection.execute(
-            sa.text(
-                "ALTER TABLE fk_parity_child ADD CONSTRAINT fk_parity_subject "
-                "FOREIGN KEY (parent_id, organization_id) "
-                "REFERENCES fk_parity_parent (organization_id, id) "
-                "ON DELETE CASCADE DEFERRABLE INITIALLY DEFERRED"
-            )
-        )
-    assert expected != _migrated_foreign_keys(
-        inspect(schema.app_engine), child.name, schema.schema_name
-    )
-
-
-def test_every_declared_index_exists_in_the_migration(
-    catalog_postgres_schema: MigratedPostgresSchema,
-) -> None:
-    """A missing index fails nothing and costs everything.
-
-    It is not a correctness defect, so no test fails and no query errors — the
-    planner simply does more work, which is how a twelve-month question came to
-    scan sixty partitions this week.
-    """
-    inspector = inspect(catalog_postgres_schema.app_engine)
-    missing: list[str] = []
-    for table_name in ALL_BI_TABLES:
-        declared = {index.name for index in Base.metadata.tables[table_name].indexes if index.name}
-        if not declared:
-            continue
-        migrated = {
-            index["name"]
-            for index in inspector.get_indexes(
-                table_name, schema=catalog_postgres_schema.schema_name
-            )
-            if index.get("name")
-        }
-        missing.extend(f"{table_name}.{name}" for name in sorted(declared - migrated))
-    assert not missing, (
-        "these indexes are declared on the model and absent from the migration, so "
-        "the query path pays for them without having them: " + ", ".join(missing)
-    )
 
 
 def test_the_index_check_has_a_non_empty_subject() -> None:

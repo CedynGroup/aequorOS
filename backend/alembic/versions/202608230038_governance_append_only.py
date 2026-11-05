@@ -94,7 +94,7 @@ above rather than using this revision's permissions as the deployment policy.
 Postgres-only. The hermetic suite builds its schema with
 ``Base.metadata.create_all`` and runs no migration; SQLite has neither triggers
 of this shape nor role privileges. The Postgres-gated suites exercise the real
-thing (``tests/db/test_governance_append_only.py``).
+thing (``tests/db/test_governance_append_only_integration.py``).
 
 No column is added and no row is rewritten, so no calculation input, hash or
 output changes.

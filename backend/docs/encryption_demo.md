@@ -92,13 +92,13 @@ snapshot panel.
 
 ```sh
 .venv/bin/pytest tests/storage/test_demo_key.py \
-  tests/core/test_bank_field_encryption.py tests/storage/test_key_providers.py -q
+  tests/core/test_bank_field_encryption_integration.py tests/storage/test_key_providers.py -q
 ```
 
 The tests exercise repeated revoke/outage/restore loops across fresh provider
 instances, key-material preservation, production refusal, bank scoping, locked
 HTTP reads, write refusal, recovery and numeric BI while keys are disabled or
-unreachable. The dashboard's `unit/protected-data.spec.tsx` checks the visible
+unreachable. The dashboard's `tests/access/protected-data.spec.tsx` checks the visible
 messages, Retry, recovery polling and removal of previously decrypted cache data.
 Capture readable, revoked, outage and recovered screenshots in the throwaway
 proof directory; attach them to the review, never commit them.

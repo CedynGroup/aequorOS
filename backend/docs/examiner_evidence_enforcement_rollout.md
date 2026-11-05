@@ -189,7 +189,7 @@ requires a code change to correct — only an approved binding.
 
 ## Verification and release boundary
 
-- `tests/reporting/api/test_examiner_authorization.py` exercises the scalar-role
+- `tests/reporting/api/test_examiner_authorization_integration.py` exercises the scalar-role
   refusal (including `examiner`), partial-row non-composition, wrong
   module/sensitivity, sibling-institution separation, binding lifecycle
   (future/expired/suspended/revoked), an `account_admin` bundle without `view`,
@@ -213,7 +213,7 @@ requires a code change to correct — only an approved binding.
   tenant isolation), now acting as a principal that explicitly holds the entry
   and source rows alongside stored evidence inside the disposable fixture
   transaction. It does not use the primary database.
-- `tests/scripts/test_authorization_access_impact.py` pins the new `examiner`
+- `tests/scripts/test_authorization_access_impact_integration.py` pins the new `examiner`
   column, and `scripts/authorization_access_impact.py` documents it.
 - The two new test modules are classified in `scripts/test_suites.json`
   (`integration` for the HTTP matrix, `unit` for the architecture ratchet).

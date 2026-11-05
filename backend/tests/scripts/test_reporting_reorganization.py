@@ -69,6 +69,6 @@ def test_coverage_matrix_reports_relocated_form_tests(capsys: pytest.CaptureFixt
     }
     assert len(rows) == 23
     assert all(coverage.startswith("✓ test_") for coverage in rows.values())
-    assert rows["BSD1"] == "✓ test_bsd1.py"
-    assert rows["BSD10"] == rows["BSD17"] == "✓ test_bsd10_11_16_17.py"
-    assert rows["BSD5A"] == rows["BSD5B"] == "✓ test_bsd5.py"
+    assert rows["BSD1"] == "✓ test_bsd1_integration.py"
+    assert rows["BSD10"] == rows["BSD17"] == "✓ test_bsd10_11_16_17_integration.py"
+    assert rows["BSD5A"] == rows["BSD5B"] == "✓ test_bsd5_integration.py"

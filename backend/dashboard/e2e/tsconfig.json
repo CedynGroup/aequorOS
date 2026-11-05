@@ -7,9 +7,9 @@
   "include": [
     "**/*.ts",
     "../playwright.config.ts",
-    "../visual/**/*.ts",
+    "../tests/**/*.integration.spec.ts",
+    "../tests/**/*.e2e.spec.ts",
     "../playwright.visual.config.ts",
-    "../contracts/**/*.ts",
     "../playwright.contracts.config.ts"
   ],
   "exclude": []

@@ -268,7 +268,7 @@ frozen decision to determine the closed round for approval validity. Stored
 decisions and their displayed rounds remain unchanged, as do sealed snapshots.
 Migration `202610110092` admits same-stage returns with a package reference;
 downgrade refuses while such history exists. The
-[freeze regressions](../tests/icaap/service/test_freeze_state_machine.py) cover
+[freeze regressions](../tests/icaap/service/test_freeze_state_machine_integration.py) cover
 all return targets and legacy-history refreeze without rewriting evidence.
 
 **The Board resolution is required by the FRAMEWORK, not by the signing

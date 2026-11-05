@@ -1,22 +1,24 @@
-"""SimulatedSessionProvider behavior: §6.1 shape validation, no vendor leaks."""
+"""SimulatedSessionProvider behavior: §6.1 shape validation, no vendor leaks.
+
+This module's other-suite cases live in ``test_auth_integration.py``.
+"""
 
 from __future__ import annotations
 
-from datetime import UTC, date, datetime
+__all__ = ["_credentials"]
+from datetime import UTC, datetime
 from typing import Any
 
 import pytest
 
 from app.market_data.adapters.base import CredentialSet
 from app.market_data.adapters.bloomberg import (
-    BloombergAdapter,
     BloombergSession,
     SimulatedSessionProvider,
     ensure_scope_permitted,
 )
 from app.market_data.adapters.errors import BankFacingErrorCode, MarketDataError
 from app.market_data.adapters.scope_taxonomy import DataScope
-from app.models import Bank
 from tests.market_data.adapters.bloomberg.conftest import VALID_CREDENTIAL_PAYLOAD
 from tests.market_data.adapters.contract import VENDOR_INTERNAL_MARKER
 
@@ -98,25 +100,3 @@ def test_ensure_scope_permitted_passes_for_permitted_session() -> None:
         subscription_tier=None,
     )
     ensure_scope_permitted(session, DataScope.YIELD_CURVE_GHS)  # does not raise
-
-
-def test_not_permitted_credentials_surface_per_scope_pull_errors(
-    adapter: BloombergAdapter,
-    bank: Bank,
-) -> None:
-    """SCOPE_NOT_PERMITTED fires at pull time: auth succeeds, scopes fail."""
-    payload = dict(VALID_CREDENTIAL_PAYLOAD)
-    payload["simulate"] = "not_permitted"
-    credentials = _credentials(payload)
-    assert adapter.authenticate(credentials).success
-
-    result = adapter.pull(
-        credentials,
-        [DataScope.YIELD_CURVE_GHS, DataScope.FX_SPOT_USD_GHS],
-        date(2026, 7, 15),
-        str(bank.id),
-        "auth-test-batch",
-    )
-    assert result.canonical_records_produced == 0
-    assert len(result.errors) == 2
-    assert all("does not include access" in message for message in result.errors)

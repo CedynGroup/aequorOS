@@ -167,8 +167,8 @@ def test_uncertain_changes_run_every_shard(
                 "openbao": index == module_shards().get(BAO_MODULE, shard_for(BAO_MODULE)),
                 "minio": index
                 == module_shards().get(
-                    "tests/scripts/test_local_services.py",
-                    shard_for("tests/scripts/test_local_services.py"),
+                    "tests/scripts/test_local_services_integration.py",
+                    shard_for("tests/scripts/test_local_services_integration.py"),
                 ),
             }
             for index in range(1, SHARDS + 1)
