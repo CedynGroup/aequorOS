@@ -9,6 +9,7 @@ import json
 import os
 import subprocess
 import sys
+import xml.etree.ElementTree as ET
 from pathlib import Path
 from typing import cast
 
@@ -351,6 +352,71 @@ def test_caught_unit_attempt_is_a_failure_in_parallel_combined_runs(
     assert (result.returncode != 0) == caught, result.stdout + result.stderr
     if caught:
         assert "Unit database connection guard failed" in result.stdout + result.stderr
+
+
+@pytest.mark.parametrize("ignore", ["--ignore", "--ignore-glob", "collect_ignore"])
+@pytest.mark.parametrize(
+    ("suite", "suffix"), [("unit", ""), ("integration", "_integration"), ("e2e", "_e2e")]
+)
+def test_suite_only_preserves_pytest_ignore_before_imports(
+    tmp_path: Path, suite: str, suffix: str, ignore: str
+) -> None:
+    tests = tmp_path / "tests"
+    tests.mkdir()
+    _ = (tmp_path / "pytest.ini").write_text("[pytest]\ntestpaths=tests\n")
+    ignored = f"tests/test_ignored{suffix}.py"
+    conftest = "from pathlib import Path\n" + standalone_contracts(tmp_path)
+    arguments: list[str] = []
+    if ignore == "collect_ignore":
+        conftest += f"collect_ignore = [{ignored!r}]\n"
+    elif ignore == "--ignore-glob":
+        arguments = ["--ignore-glob=**/test_ignored*.py"]
+    else:
+        arguments = [f"--ignore={ignored}"]
+    _ = (tmp_path / "conftest.py").write_text(conftest)
+    _ = (tests / f"test_kept{suffix}.py").write_text("def test_kept(): assert True\n")
+    _ = (tmp_path / ignored).write_text(
+        "raise RuntimeError('Explicitly ignored module was imported')\n"
+    )
+    for other in ("", "_integration", "_e2e"):
+        if other != suffix:
+            _ = (tests / f"test_other{other}.py").write_text(
+                "raise RuntimeError('Another suite was imported')\n"
+            )
+    report = tmp_path / "report.xml"
+    environment = {
+        **os.environ,
+        "PYTHONPATH": str(BACKEND),
+        "PYTEST_ADDOPTS": "",
+        "PYTEST_DISABLE_PLUGIN_AUTOLOAD": "1",
+    }
+    for name in ("CI_UNIT_REPORT_DIR", "CI_E2E_REPORT_DIR", "TEST_DATABASE_URL"):
+        _ = environment.pop(name, None)
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "pytest",
+            "-p",
+            "scripts.test_suites_plugin",
+            "-q",
+            "-m",
+            suite,
+            "--suite-only",
+            f"--junitxml={report}",
+            *arguments,
+        ],
+        cwd=tmp_path,
+        env=environment,
+        capture_output=True,
+        text=True,
+        timeout=60,
+        check=False,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert [
+        (case.get("classname"), case.get("name")) for case in ET.parse(report).iter("testcase")
+    ] == [(f"tests.test_kept{suffix}", "test_kept")]
 
 
 @pytest.mark.parametrize("selection", ["full", "filtered", "ignored", "suite-only"])

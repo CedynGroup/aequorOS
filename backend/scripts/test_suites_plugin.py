@@ -193,7 +193,9 @@ def pytest_ignore_collect(collection_path: Path, config: pytest.Config) -> bool 
         for pattern in cast(list[str], config.getini("python_files"))
     ):
         return None
-    return owner(str(collection_path)) != cast(object, config.getoption("markexpr"))
+    if owner(str(collection_path)) != cast(object, config.getoption("markexpr")):
+        return True
+    return None
 
 
 def _check_module_inventory(
