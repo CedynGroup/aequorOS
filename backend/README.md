@@ -4,6 +4,10 @@ The risk service is the backend API for AequorOS risk workflows. It owns the ser
 
 The service is built with FastAPI, Pydantic settings, SQLAlchemy, Alembic, and Postgres. It is designed to keep route handlers thin, isolate database setup, centralize configuration, and provide consistent request tracing and error responses.
 
+For contributor commands and operator utilities, start with the
+[backend script index](scripts/README.md), including each tool's data requirements,
+write effects and output-handling warnings.
+
 ## Current Surface
 
 The service owns the server-side contracts and persistence for the six
