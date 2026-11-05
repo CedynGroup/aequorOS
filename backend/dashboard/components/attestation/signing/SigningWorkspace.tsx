@@ -90,6 +90,7 @@ import {
   useUpsertSignaturePlacementTemplate,
 } from "@/lib/api/hooks";
 import { useUserProfile } from "@/components/profile/ProfileProvider";
+import { filingAuthorityFor } from "@/lib/submissions/filingAuthority";
 import { hasAccountDirectoryAuthority } from "@/lib/api/accountAdministration";
 import {
   fetchArtifactBytes,
@@ -180,7 +181,16 @@ export default function SigningWorkspace({
   const placementsQuery = usePackageSignaturePlacements(bankId, packageId);
   const appearanceQuery = useMyAdoptedSignature();
   const identityQuery = useMySignerIdentity();
-  const { effectiveAuthority } = useUserProfile();
+  const { effectiveAuthority, isLoading: authorityLoading } = useUserProfile();
+  /**
+   * The document bytes are the return's own file, so they follow the export
+   * authority rather than the signing authority. An officer who may certify a
+   * return but may not take it away gets no copy of it — including this
+   * render, which cannot promise the browser will not keep what it draws.
+   */
+  const mayReadDocument = filingAuthorityFor(effectiveAuthority, bankId, {
+    resolved: !authorityLoading,
+  }).mayExport;
   const usersQuery = useOrganizationUsers(
     hasAccountDirectoryAuthority(effectiveAuthority),
   );
@@ -216,6 +226,17 @@ export default function SigningWorkspace({
   const [scale, setScale] = useState(1);
   const [space, setSpace] = useState<PageSpace | null>(null);
   const [pageSizes, setPageSizes] = useState<Record<number, PageSpace>>({});
+  /**
+   * The document bytes the canvas has actually drawn a page from.
+   *
+   * Bytes arriving is not the page being on screen: the PDF still has to parse
+   * and paint, and it may fail to. Identity is the comparison because a new
+   * upload is a new buffer, so a swap resets this to the previous document and
+   * the ceremony waits again rather than certifying a page nobody has seen.
+   */
+  const [renderedDocument, setRenderedDocument] = useState<ArrayBuffer | null>(
+    null,
+  );
   /** The rendered page's own box, so a drop can be resolved to page pixels. */
   const pageRef = useRef<HTMLDivElement>(null);
 
@@ -292,7 +313,26 @@ export default function SigningWorkspace({
     setPageSizes((sizes) => ({ ...sizes, [next.pageIndex]: next }));
   }, []);
 
-  const bytes = usePackageDocument(bankId, packageId);
+  const bytes = usePackageDocument(bankId, packageId, mayReadDocument);
+
+  /**
+   * A page actually painted. The canvas reports this only once its render
+   * promise resolves, which is later than the PDF parsing — so a document that
+   * opens and then fails to draw never reaches here. The buffer is recorded
+   * alongside it so the blocker can tell which document is on screen.
+   */
+  const onPageDrawn = useCallback(() => {
+    setRenderedDocument(bytes.data);
+  }, [bytes.data]);
+
+  /**
+   * A real render failure, not a cancellation from paging or zooming. Any
+   * earlier success is withdrawn, so the ceremony closes again rather than
+   * standing on a page that has stopped drawing.
+   */
+  const onPageFailed = useCallback(() => {
+    setRenderedDocument(null);
+  }, []);
 
   const violations = useMemo(
     () =>
@@ -477,20 +517,48 @@ export default function SigningWorkspace({
         (role) => !signatureRolesPlaced(placements ?? []).has(role),
       )
     : [];
-  const blockedReason = offending
-    ? `The ${offending.ownerLabel.toLowerCase()} ${FIELD_TYPE_LABELS[
-        fieldTypeOf(offending.placement)
-      ].toLowerCase()} field cannot be filed: ${offending.violation}`
-    : unplaced.length > 0
-      ? `Place a signature field for ${unplaced.map(roleNoun).join(" and ")}. ` +
-        "Every field has to exist before the first signature — the certification " +
-        "permits only form filling afterwards, so one left unplaced can never be added."
-      : missingNominee
-        ? "Name who signs next before certifying. The signature and the routing land in " +
-          "one transaction, so a return cannot be certified into nobody’s queue."
-        : reason.trim().length === 0
-          ? "A reason is recorded against the placement and the routing. Say why in a line."
-          : null;
+  /**
+   * The ceremony certifies the page on screen, so it cannot start before that
+   * page exists. Without this the officer who may not take the return away
+   * could still sign it unseen, and the export requirement would only hide a
+   * document that was certified anyway.
+   */
+  const documentBlockedReason = authorityLoading
+    ? "Checking your authority for this return. Certification opens once the " +
+      "document is on screen."
+    : !mayReadDocument
+      ? "Viewing the return needs Regulatory Reporting · Restricted · Export, and " +
+        "you certify the page you can see. Ask an Organization Owner for it under " +
+        "Access → Members. Nothing has been signed."
+      : bytes.error
+        ? "The return document could not be loaded, so there is nothing here to " +
+          "certify. Reload the workspace, and ask an Organization Owner for " +
+          "Regulatory Reporting · Restricted · Export if the refusal repeats."
+        : !bytes.data
+          ? "The return document is still loading. You certify the page you can " +
+            "see, so it has to be on screen before the signature starts."
+          : renderedDocument !== bytes.data
+            ? "The return document is not on screen yet. You certify the page you " +
+              "can see, so the signature starts once it has drawn — reload the " +
+              "workspace if it never appears."
+            : null;
+
+  const blockedReason =
+    documentBlockedReason ??
+    (offending
+      ? `The ${offending.ownerLabel.toLowerCase()} ${FIELD_TYPE_LABELS[
+          fieldTypeOf(offending.placement)
+        ].toLowerCase()} field cannot be filed: ${offending.violation}`
+      : unplaced.length > 0
+        ? `Place a signature field for ${unplaced.map(roleNoun).join(" and ")}. ` +
+          "Every field has to exist before the first signature — the certification " +
+          "permits only form filling afterwards, so one left unplaced can never be added."
+        : missingNominee
+          ? "Name who signs next before certifying. The signature and the routing land in " +
+            "one transaction, so a return cannot be certified into nobody’s queue."
+          : reason.trim().length === 0
+            ? "A reason is recorded against the placement and the routing. Say why in a line."
+            : null);
 
   /**
    * The placement to send: only when it is still ours to set, and only the
@@ -523,7 +591,10 @@ export default function SigningWorkspace({
 
   const onPasswordSubmit = (event: React.FormEvent) => {
     event.preventDefault();
-    if (!preview) return;
+    // The buttons are disabled by the same reason, but a submit can still be
+    // reached by a keyboard gesture or a stale click while the document is
+    // swapping. Certifying here would sign a page the officer never saw.
+    if (!preview || blockedReason) return;
     void (async () => {
       const granted = await stepUp.mutateAsync({
         packageId,
@@ -547,7 +618,7 @@ export default function SigningWorkspace({
 
   const onHeldAuthorizationSubmit = (event: React.FormEvent) => {
     event.preventDefault();
-    if (!preview) return;
+    if (!preview || blockedReason) return;
     void certifyWithHeld
       .mutateAsync({
         packageId,
@@ -697,7 +768,13 @@ export default function SigningWorkspace({
             onScale={setScale}
           />
           <div className="flex-1 min-h-0 overflow-auto p-6 flex justify-center">
-            {bytes.error ? (
+            {authorityLoading ? (
+              <DocumentPending exporting={false} />
+            ) : !mayReadDocument ? (
+              <div className="max-w-xl self-center">
+                <DocumentExportRequired />
+              </div>
+            ) : bytes.error ? (
               <div className="max-w-xl">
                 <ErrorPanel
                   error={bytes.error}
@@ -710,6 +787,8 @@ export default function SigningWorkspace({
                 pageIndex={pageIndex}
                 scale={scale}
                 onDocumentLoaded={setPageCount}
+                onPageDrawn={onPageDrawn}
+                onPageFailed={onPageFailed}
                 onPageSpace={onPageSpace}
               >
                 {space && (
@@ -981,8 +1060,18 @@ function SendBackPanel({
  * preparer places boxes on is what gets signed. When no PDF exists at all one is
  * minted — once per mount, tracked by a ref rather than by query state, because
  * an export is a write and a re-render must not repeat it.
+ *
+ * The document is served by the artifact and archived-revision download routes,
+ * which require Regulatory Reporting/restricted EXPORT as well as the signing
+ * authority. `allowed` is that answer: without it this hook asks for no bytes
+ * and mints nothing, so a signing officer who may not export never triggers a
+ * refused read or a dead export attempt.
  */
-function usePackageDocument(bankId: string, packageId: string) {
+function usePackageDocument(
+  bankId: string,
+  packageId: string,
+  allowed: boolean,
+) {
   const artifactsQuery = usePackageArtifacts(bankId, packageId);
   const versionsQuery = usePackageArtifactVersions(bankId, packageId);
   const exportPackage = useExportRegulatoryPackage(bankId);
@@ -1008,7 +1097,7 @@ function usePackageDocument(bankId: string, packageId: string) {
     // The versions query decides which document this is, so wait for it rather
     // than showing the unsigned base for a beat and swapping it underneath a
     // signer mid-review.
-    if (!versionsQuery.isSuccess) return;
+    if (!allowed || !versionsQuery.isSuccess) return;
     const source = signed
       ? { id: signed.id, fetch: fetchArtifactVersionBytes }
       : pdf
@@ -1021,23 +1110,79 @@ function usePackageDocument(bankId: string, packageId: string) {
       .fetch(bankId, source.id)
       .then(setData)
       .catch((cause: unknown) => setError(cause));
-  }, [bankId, pdf, signed, versionsQuery.isSuccess]);
+  }, [allowed, bankId, pdf, signed, versionsQuery.isSuccess]);
 
   useEffect(() => {
-    if (pdf || signed || !artifactsQuery.isSuccess || requestedExport.current)
+    // `signed` is null while the versions query is in flight, so without this
+    // guard a package whose filed revision is a beat away from arriving would
+    // mint an unsigned export it never uses: a write and an audit entry for a
+    // document the signer then does not see.
+    if (
+      !allowed ||
+      pdf ||
+      signed ||
+      !artifactsQuery.isSuccess ||
+      !versionsQuery.isSuccess ||
+      requestedExport.current
+    )
       return;
     requestedExport.current = true;
     exportPackage.mutate(
       { packageId, kind: "pdf" },
       { onError: (cause) => setError(cause) },
     );
-  }, [pdf, signed, artifactsQuery.isSuccess, exportPackage, packageId]);
+  }, [
+    allowed,
+    pdf,
+    signed,
+    artifactsQuery.isSuccess,
+    versionsQuery.isSuccess,
+    exportPackage,
+    packageId,
+  ]);
 
   return {
     data,
     error: error ?? artifactsQuery.error ?? versionsQuery.error,
-    exporting: exportPackage.isPending,
+    exporting: allowed && exportPackage.isPending,
   };
+}
+
+/**
+ * The ceremony is the officer's, the document is the return's file.
+ *
+ * Rendering the PDF here serves its bytes, so the same export authority that
+ * governs a download governs this screen. There is deliberately no preview
+ * exception: a document drawn in a browser can be saved, and a second path
+ * would be a byte-access hole with a friendlier label. The officer is told the
+ * exact grant rather than shown an empty page or a bare 403.
+ */
+function DocumentExportRequired() {
+  return (
+    <div
+      role="status"
+      data-testid="document-export-required"
+      className="rounded-sm border border-border bg-surface-raised p-5"
+    >
+      <div className="flex items-start gap-2.5">
+        <FileWarning
+          size={18}
+          className="text-slate shrink-0 mt-0.5"
+          aria-hidden
+        />
+        <div>
+          <p className="text-body font-medium text-navy">
+            The return document is not available to you
+          </p>
+          <p className="mt-1 text-caption text-slate leading-relaxed">
+            Viewing it requires Regulatory Reporting · Restricted · Export in
+            addition to your signing authority for this return. An Organization
+            Owner grants it under Access → Members. Nothing has been signed.
+          </p>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 function DocumentPending({ exporting }: { exporting: boolean }) {

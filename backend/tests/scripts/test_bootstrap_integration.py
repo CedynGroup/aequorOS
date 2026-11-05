@@ -1,7 +1,7 @@
 """Bootstrap contracts that drive real ``git``, ``mise`` and ``uv`` processes.
 
-These are the cases the observation census records as integration-owned; the
-hermetic remainder lives in the suffix-free ``test_bootstrap.py`` sibling.
+The integration suffix selects these cases; the hermetic remainder lives in
+its suffix-free ``test_bootstrap.py`` sibling.
 """
 
 from __future__ import annotations

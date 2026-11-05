@@ -18,9 +18,9 @@ from pathlib import Path
 from typing import cast
 
 if __package__:
-    from scripts.test_suites import case_key, unit_modules
+    from scripts.test_suites import case_key, owner
 else:
-    from test_suites import case_key, unit_modules
+    from test_suites import case_key, owner
 
 SHARDS = 4
 SCHEMA_SHARDS = 2
@@ -53,7 +53,7 @@ def module_shards(suite: str = "suite") -> dict[str, int]:
             raise ValueError(f"Invalid duration for {module}")
         if not math.isfinite(value) or value < 0:
             raise ValueError(f"Invalid duration for {module}")
-        if module not in unit_modules():
+        if owner(module) == "integration":
             durations[module] = max(float(value), 0.001)
     totals = [0.0] * SHARDS
     assignments: dict[str, int] = {}
@@ -138,7 +138,8 @@ def affected_files(root: Path, event: str, base: str, *, worktree: bool = False)
             module = Path(path)
             if (
                 status != "M"
-                or not path.startswith("backend/tests/domain/")
+                or not path.startswith("backend/tests/")
+                or "domain" not in module.parts[2:-1]
                 or not module.name.startswith("test_")
                 or module.suffix != ".py"
             ):
@@ -152,7 +153,7 @@ def affected_files(root: Path, event: str, base: str, *, worktree: bool = False)
             if any(module.stem in (root / other).read_text() for other in tracked if other != path):
                 raise ValueError("Change is outside leaf test bodies")
             relative = module.relative_to("backend").as_posix()
-            if relative in unit_modules():
+            if owner(relative) != "integration":
                 raise ValueError("Non-Postgres owner always runs these tests")
             selected.append(relative)
         return sorted(selected)

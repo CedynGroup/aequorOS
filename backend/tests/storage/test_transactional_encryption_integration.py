@@ -575,7 +575,10 @@ def test_package_download_siblings_wait_for_rotation(
             package=row,
         )
 
+    # The attachment route reads under VIEW; the downtime email bundle is an
+    # EXPORT surface and takes that dependency instead.
     app.dependency_overrides[deps.require_package_view] = package_access
+    app.dependency_overrides[deps.require_package_export] = package_access
 
     def rotate() -> None:
         assert loaded.wait(10)

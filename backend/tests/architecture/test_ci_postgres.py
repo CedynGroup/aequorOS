@@ -33,7 +33,7 @@ def selection_repo(tmp_path: Path) -> tuple[Path, str, Path]:
     _ = run_git(root, "init", "-q", "-b", "main")
     _ = run_git(root, "config", "user.email", "ci@example.invalid")
     _ = run_git(root, "config", "user.name", "CI fixture")
-    test = root / "backend/tests/domain/test_leaf_example.py"
+    test = root / "backend/tests/credit/domain/test_leaf_example_integration.py"
     test.parent.mkdir(parents=True)
     test.write_text("def test_leaf():\n    assert 1 == 1\n")
     _ = run_git(root, "add", ".")
@@ -48,11 +48,11 @@ def test_leaf_body_change_selects_only_its_module(selection_repo: tuple[Path, st
     _ = run_git(root, "commit", "-qm", "test change")
     selected = plan(root, "pull_request", base)
     assert selected["mode"] == "affected"
-    assert selected["files"] == ["tests/domain/test_leaf_example.py"]
+    assert selected["files"] == ["tests/credit/domain/test_leaf_example_integration.py"]
     assert selected["matrix"] == {
         "include": [
             {
-                "shard": shard_for("tests/domain/test_leaf_example.py"),
+                "shard": shard_for("tests/credit/domain/test_leaf_example_integration.py"),
                 "openbao": False,
                 "minio": False,
             }
@@ -71,11 +71,13 @@ def test_local_selection_includes_worktree_changes(
     if state == "committed":
         _ = run_git(root, "commit", "-qm", "test change")
     if state == "untracked":
-        (root / "backend/tests/domain/test_new.py").write_text("def test_new():\n    pass\n")
+        (root / "backend/tests/credit/domain/test_new.py").write_text("def test_new():\n    pass\n")
     if state == "fixture":
         test.write_text("VALUE = 2\ndef test_leaf():\n    assert VALUE == 2\n")
     assert ci_postgres.affected_files(root, "pull_request", base, worktree=True) == (
-        [] if state in {"untracked", "fixture"} else ["tests/domain/test_leaf_example.py"]
+        []
+        if state in {"untracked", "fixture"}
+        else ["tests/credit/domain/test_leaf_example_integration.py"]
     )
 
 
@@ -149,7 +151,9 @@ def test_uncertain_changes_run_every_shard(
         test.unlink()
     elif kind == "imported":
         consumer = root / "backend/tests/consumer.py"
-        consumer.write_text("from tests.domain.test_leaf_example import test_leaf\n")
+        consumer.write_text(
+            "from tests.credit.domain.test_leaf_example_integration import test_leaf\n"
+        )
         _ = run_git(root, "add", "-A")
         _ = run_git(root, "commit", "-qm", "existing consumer")
         base = run_git(root, "rev-parse", "HEAD")
@@ -183,8 +187,8 @@ def built_reports(tmp_path_factory: pytest.TempPathFactory) -> tuple[Path, list[
     # The files deliberately hash to different shards.
     modules: list[str] = []
     for index in range(1, SHARDS + 1):
-        suffix = next(n for n in range(100) if shard_for(f"tests/test_{n}.py") == index)
-        module = f"tests/test_{suffix}.py"
+        suffix = next(n for n in range(100) if shard_for(f"tests/test_{n}_integration.py") == index)
+        module = f"tests/test_{suffix}_integration.py"
         path = tmp_path / module
         path.parent.mkdir(exist_ok=True)
         path.write_text(
@@ -325,21 +329,25 @@ def test_recorded_durations_balance_modules_and_break_ties_deterministically(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     baseline = tmp_path / "durations.json"
-    baseline.write_text(json.dumps({"durations": {f"tests/test_{n}.py": n for n in range(1, 9)}}))
+    baseline.write_text(
+        json.dumps({"durations": {f"tests/test_{n}_integration.py": n for n in range(1, 9)}})
+    )
     monkeypatch.setattr(ci_postgres, "DURATIONS", baseline)
     assignments = module_shards()
     totals = [
-        sum(n for n in range(1, 9) if assignments[f"tests/test_{n}.py"] == index)
+        sum(n for n in range(1, 9) if assignments[f"tests/test_{n}_integration.py"] == index)
         for index in range(1, SHARDS + 1)
     ]
     assert totals == [9, 9, 9, 9]
-    assert assignments["tests/test_8.py"] == 1
-    collected = [f"tests/test_{n}.py::test_example" for n in range(1, 10)]
+    assert assignments["tests/test_8_integration.py"] == 1
+    collected = [f"tests/test_{n}_integration.py::test_example" for n in range(1, 10)]
     partitions = [
         ci_postgres.selected_tests(collected, [], index, "suite") for index in range(1, SHARDS + 1)
     ]
     assert sorted(node for partition in partitions for node in partition) == sorted(collected)
-    assert ci_postgres.selected_tests(collected, ["tests/test_8.py"], 1, "suite") == [collected[7]]
+    assert ci_postgres.selected_tests(collected, ["tests/test_8_integration.py"], 1, "suite") == [
+        collected[7]
+    ]
     assert ci_postgres.shard_count("schema") == 2
     assert ci_postgres.selected_tests(collected, [], 1, "schema") == [
         node for node in collected if shard_for(node.split("::")[0], 2) == 1
@@ -363,9 +371,9 @@ def test_full_suite_floor_and_refresh_use_verified_execution_evidence(
 ) -> None:
     modules = [
         next(
-            f"tests/test_duration_{n}.py"
+            f"tests/test_duration_{n}_integration.py"
             for n in range(100)
-            if shard_for(f"tests/test_duration_{n}.py") == index
+            if shard_for(f"tests/test_duration_{n}_integration.py") == index
         )
         for index in range(1, SHARDS + 1)
     ]
@@ -414,7 +422,7 @@ def test_pure_owner_change_does_not_select_an_empty_postgres_shard(
 ) -> None:
     root, _, test = selection_repo
     pure = root / "backend/tests/credit/domain/test_credit_pd.py"
-    pure.parent.mkdir(parents=True)
+    pure.parent.mkdir(parents=True, exist_ok=True)
     test.rename(pure)
     _ = run_git(root, "add", "-A")
     _ = run_git(root, "commit", "-qm", "pure owner baseline")

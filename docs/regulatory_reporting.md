@@ -370,7 +370,15 @@ listReportingObligations (calendar; `horizon_months` 1–24, optional `limit` 1�
 listReturnAnchors (per-return reporting dates + data coverage), listRegulatoryPackages,
 createRegulatoryPackage (generate),
 getRegulatoryPackage, validateRegulatoryPackage, requestPackageApproval, decidePackageApproval,
-exportRegulatoryPackage (kind → artifact download), submitRegulatoryPackage (channel),
+exportRegulatoryPackage (kind → artifact generation; it creates the artifact and returns
+artifact metadata, and the routes below are what serve the bytes),
+downloadRegulatoryArtifact / downloadRegulatoryArtifactVersion / downloadEmailFallbackEml
+and getEmailFallbackInstructions (authority follows the
+[returns authorization contract](../backend/docs/authorization_foundation.md#whole-institution-figures-and-credit-only-narrowing);
+the signing workspace renders the document through the two artifact download
+routes, so a signing officer also needs REG/restricted EXPORT and there is no
+ceremony-preview byte exception),
+submitRegulatoryPackage (channel),
 listSubmissionEvents, listReturnTemplates (registry + fidelity + instrument disclosure;
 optional `bank_id` resolves governed commencement after institution-coverage authorization), get/putChannelConfig
 (credentials write-only). Conventions: manage_live_engine.py patterns, tenant 404s, audit events.

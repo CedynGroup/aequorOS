@@ -50,6 +50,9 @@ type Renderable = Parameters<typeof React.createElement>[0];
 // Stubs for everything that is not the component under test
 // ---------------------------------------------------------------------------
 
+let exportModule = "reg";
+let exportSensitivity = "restricted";
+
 const hookStubs: Record<string, () => unknown> = {};
 const idleMutation = () => ({
   mutate: () => {},
@@ -78,6 +81,26 @@ function settledStub(data: unknown) {
 
 function stubFor(specifier: string): unknown | undefined {
   switch (specifier) {
+    case "@/components/profile/ProfileProvider":
+      return {
+        useUserProfile: () => ({
+          isLoading: false,
+          effectiveAuthority: {
+            institutionCapabilities: [
+              {
+                institutionId: "BK-SAMP0001",
+                capabilities: [
+                  {
+                    module: exportModule,
+                    sensitivity: exportSensitivity,
+                    permission: "export",
+                  },
+                ],
+              },
+            ],
+          },
+        }),
+      };
     case "@/lib/api/icaapFiling":
       return hooksModule;
     case "@/lib/api/hooks":
@@ -120,7 +143,13 @@ function stubFor(specifier: string): unknown | undefined {
     case "@/components/ui/QueryBoundary":
       return {
         __esModule: true,
-        default: ({ error, children }: { error?: unknown; children?: unknown }) =>
+        default: ({
+          error,
+          children,
+        }: {
+          error?: unknown;
+          children?: unknown;
+        }) =>
           error
             ? el("div", null, "QUERY_BOUNDARY_ERROR")
             : el("div", null, children as never),
@@ -180,7 +209,10 @@ function stubFor(specifier: string): unknown | undefined {
     // one checks is that the review tab mounts them.
     case "@/components/icaap/p2/AuditReview":
     case "@/components/icaap/p2/ChallengeLog":
-      return { __esModule: true, default: () => el("div", null, "REUSED_PANEL") };
+      return {
+        __esModule: true,
+        default: () => el("div", null, "REUSED_PANEL"),
+      };
     case "@/components/submissions/shared":
       return {
         fmtBytes: () => "1.0 KB",
@@ -224,7 +256,11 @@ const APP_ROOT = resolve(HERE, "../../..");
 
 function resolveAliased(specifier: string): string | null {
   const base = join(APP_ROOT, specifier.slice("@/".length));
-  for (const candidate of [`${base}.tsx`, `${base}.ts`, join(base, "index.ts")]) {
+  for (const candidate of [
+    `${base}.tsx`,
+    `${base}.ts`,
+    join(base, "index.ts"),
+  ]) {
     if (existsSync(candidate)) return candidate;
   }
   return null;
@@ -363,9 +399,9 @@ function render(target: Renderable, props: Props = {}): string {
 const normalize = loadModule(
   resolve(HERE, "../../../lib/api/icaapFilingNormalize.ts"),
 ) as Record<string, (value: unknown) => unknown>;
-const availability = loadModule(
-  resolve(HERE, "../p2/availability.tsx"),
-) as { NOT_AVAILABLE_YET: string };
+const availability = loadModule(resolve(HERE, "../p2/availability.tsx")) as {
+  NOT_AVAILABLE_YET: string;
+};
 const labels = loadModule(join(HERE, "labels.ts")) as Record<string, string>;
 
 /** The chain a bank with no template of its own starts a composition from. */
@@ -389,51 +425,52 @@ const PROPS = {
 };
 
 /** Hook-driven panels: [name, component, the read it depends on, normaliser]. */
-const PANELS: [string, Renderable, string, (v: unknown) => unknown, Props?][] = [
+const PANELS: [string, Renderable, string, (v: unknown) => unknown, Props?][] =
   [
-    "ReviewWorkspace",
-    component("ReviewWorkspace.tsx"),
-    "useIcaapStages",
-    normalize.normalizeStages,
-  ],
-  [
-    "FreezeCard",
-    component("FreezeCard.tsx"),
-    "useIcaapFreezePreflight",
-    normalize.normalizePreflight,
-    { stages: normalize.normalizeStages({}) },
-  ],
-  [
-    "FilingWorkspace",
-    component("FilingWorkspace.tsx"),
-    "useIcaapFiling",
-    normalize.normalizeFiling,
-  ],
-  [
-    "PackageAttachmentsCard",
-    component("PackageAttachmentsCard.tsx"),
-    "usePackageAttachments",
-    normalize.normalizePackageAttachments,
-  ],
-  [
-    "FilingDownloads",
-    component("FilingDownloads.tsx"),
-    "useIcaapPackageArtifacts",
-    normalize.normalizeArtifacts,
-  ],
-  [
-    "DisclosurePanel",
-    component("DisclosurePanel.tsx"),
-    "useIcaapDisclosure",
-    normalize.normalizeDisclosure,
-  ],
-  [
-    "WorkflowTemplates",
-    component("WorkflowTemplates.tsx"),
-    "useIcaapWorkflowTemplates",
-    normalize.normalizeWorkflowTemplates,
-  ],
-];
+    [
+      "ReviewWorkspace",
+      component("ReviewWorkspace.tsx"),
+      "useIcaapStages",
+      normalize.normalizeStages,
+    ],
+    [
+      "FreezeCard",
+      component("FreezeCard.tsx"),
+      "useIcaapFreezePreflight",
+      normalize.normalizePreflight,
+      { stages: normalize.normalizeStages({}) },
+    ],
+    [
+      "FilingWorkspace",
+      component("FilingWorkspace.tsx"),
+      "useIcaapFiling",
+      normalize.normalizeFiling,
+    ],
+    [
+      "PackageAttachmentsCard",
+      component("PackageAttachmentsCard.tsx"),
+      "usePackageAttachments",
+      normalize.normalizePackageAttachments,
+    ],
+    [
+      "FilingDownloads",
+      component("FilingDownloads.tsx"),
+      "useIcaapPackageArtifacts",
+      normalize.normalizeArtifacts,
+    ],
+    [
+      "DisclosurePanel",
+      component("DisclosurePanel.tsx"),
+      "useIcaapDisclosure",
+      normalize.normalizeDisclosure,
+    ],
+    [
+      "WorkflowTemplates",
+      component("WorkflowTemplates.tsx"),
+      "useIcaapWorkflowTemplates",
+      normalize.normalizeWorkflowTemplates,
+    ],
+  ];
 
 /** Presentational panels, given their data as a prop. */
 const PRESENTATIONAL: [string, Renderable, Props][] = [
@@ -461,7 +498,11 @@ const PRESENTATIONAL: [string, Renderable, Props][] = [
   [
     "BlockerList",
     component("BlockerList.tsx"),
-    { items: [], emptyTitle: "Clear", emptyDescription: "Nothing outstanding." },
+    {
+      items: [],
+      emptyTitle: "Clear",
+      emptyDescription: "Nothing outstanding.",
+    },
   ],
   ["RehearsalNotice", component("RehearsalNotice.tsx"), {}],
   [
@@ -597,6 +638,32 @@ test("an annual cycle carries no rehearsal notice", () => {
   assert.ok(!text.includes(labels.REHEARSAL_HEADLINE));
 });
 
+test("ICAAP return working copies require Regulatory Reporting restricted export", () => {
+  for (const [module, sensitivity, offered] of [
+    ["capital", "confidential", false],
+    ["reg", "confidential", false],
+    ["reg", "restricted", true],
+  ] as const) {
+    exportModule = module;
+    exportSensitivity = sensitivity;
+    stubRead(
+      "useIcaapFiling",
+      settled(
+        normalize.normalizeFiling({
+          _package: { id: "p", status: "generated" },
+        }),
+      ),
+    );
+    const text = render(component("FilingWorkspace.tsx"), {
+      ...PROPS,
+      bankId: "BK-SAMP0001",
+    });
+    assert.equal(text.includes("Produce a Word working copy"), offered);
+  }
+  exportModule = "reg";
+  exportSensitivity = "restricted";
+});
+
 test("a cycle with no sealed report says there is nothing to file", () => {
   stubRead("useIcaapFiling", settled(normalize.normalizeFiling({})));
   const text = render(component("FilingWorkspace.tsx"), PROPS);
@@ -646,10 +713,7 @@ test("a signature slot waiting its turn says why, and names no raw role token", 
   assert.ok(text.includes("signs first"));
   // No raw enum on screen. The English word "approver" is fine; an underscored
   // token from the wire is not.
-  assert.ok(
-    !/\b[a-z]+_[a-z_]+\b/.test(text),
-    "a raw token reached the screen",
-  );
+  assert.ok(!/\b[a-z]+_[a-z_]+\b/.test(text), "a raw token reached the screen");
 });
 
 test("the exposure-draft reality is stated on the freeze card, not hidden", () => {
@@ -666,7 +730,8 @@ test("the exposure-draft reality is stated on the freeze card, not hidden", () =
             code: "framework_pending_primary_text",
             severity: "blocking",
             scope: "cycle",
-            message: "Sections d-q are awaiting the regulator's published text.",
+            message:
+              "Sections d-q are awaiting the regulator's published text.",
           },
         ],
       }),
@@ -795,7 +860,10 @@ test("reordering IS the numbering, and titles become the wire references", () =>
   assert.deepEqual(payload[1].officerTitles, []);
   assert.equal(payload[1].decisionKind, "attest");
 
-  assert.equal(builder.referenceFor("Board Risk Committee"), "board_risk_committee");
+  assert.equal(
+    builder.referenceFor("Board Risk Committee"),
+    "board_risk_committee",
+  );
   assert.equal(builder.referenceFor("  CEO / CFO  "), "ceo_cfo");
 });
 

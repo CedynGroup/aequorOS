@@ -52,7 +52,12 @@ from app.reporting.schemas.packages import (
     SubmissionEventRead,
     SubmissionPollRead,
 )
-from app.reporting.service import artifact_versions, family_hooks, filing_reconciliation
+from app.reporting.service import (
+    artifact_versions,
+    family_access,
+    family_hooks,
+    filing_reconciliation,
+)
 from app.reporting.service.channel_config import (
     channel_config_row,
     decrypt_channel_credentials,
@@ -1694,10 +1699,19 @@ def export_package_artifact(
     package_id: UUID,
     kind: ArtifactKind,
 ) -> RegulatoryArtifactRead:
-    """Mint one artifact through the lazy exporter seam and audit it."""
+    """Mint one artifact through the lazy exporter seam and audit it.
+
+    The export gate is repeated HERE rather than trusted to the route
+    dependency: this is the only generic mint site, and a future caller that
+    reaches it without the dependency must still hold ``EXPORT`` before an
+    exporter writes bytes or this function audits them. The denial lands before
+    both effects, and before the superseded-package refusal so an unauthorized
+    caller learns nothing about the package's state.
+    """
     require_actor(ctx)
-    get_bank_or_404(db, ctx, bank_id)
+    bank = get_bank_or_404(db, ctx, bank_id)
     package = get_package_or_404(db, ctx, bank_id, package_id)
+    family_access.require_export_authority(db, ctx, bank, package)
     if package.status == "superseded":
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,

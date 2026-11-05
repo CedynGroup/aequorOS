@@ -572,11 +572,10 @@ feature. New code goes in the target layout; existing code moves one feature per
   paths and generated Python in Python, JavaScript and TypeScript strings; generated
   `packages/` files and the codemod's own source and tests are excluded. Schema class and
   routed function docstrings are preserved because Pydantic and FastAPI publish them as OpenAPI
-  descriptions; a move must not churn the generated client. The two test-catalogue JSON files
-  are rewritten too — `backend/scripts/test_suites.json` and
-  `backend/scripts/ci_postgres_durations.json`: node-id keys follow the moved test module's
-  file path, including module paths embedded in parametrized ids, with each file's own
-  formatting preserved. Other JSON keys keep their historical names (`app/db/flush_order.json`
+  descriptions; a move must not churn the generated client. Module keys in
+  `backend/scripts/ci_postgres_durations.json` follow the moved test file, preserving
+  the measured seconds and formatting. Suite membership follows filenames, not a
+  catalogue. Other JSON keys keep their historical names (`app/db/flush_order.json`
   pins pre-move modules; the boundary baseline and `feature_boundary_split_origins.json` are
   described above).
   It validates a batch before changing files; overlapping moves run as separate commands.

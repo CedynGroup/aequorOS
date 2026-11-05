@@ -14,6 +14,7 @@ import pytest
 from scripts import local_services
 
 
+@pytest.mark.requires_service("minio")
 @pytest.mark.skipif(not shutil.which("minio"), reason="Native MinIO binary not installed")
 @pytest.mark.parametrize("wait_for_exit", [False, True])
 def test_native_minio_bind_collision_never_provisions_the_existing_server(

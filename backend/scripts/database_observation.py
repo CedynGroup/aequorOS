@@ -126,7 +126,6 @@ def _observe_python_children() -> None:
     def observed_popen(*args: object, **kwargs: object) -> None:
         supplied = kwargs.get("env")
         environment = dict(os.environ if supplied is None else cast(Mapping[str, str], supplied))
-        _ = environment.pop("CI_DATABASE_CENSUS", None)
         environment[DIRECTORY_ENV] = os.environ[DIRECTORY_ENV]
         environment[CONTEXT_ENV] = json.dumps(context())
         environment[RUN_ENV] = os.environ[RUN_ENV]

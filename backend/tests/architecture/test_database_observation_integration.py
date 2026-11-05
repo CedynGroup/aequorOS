@@ -1,4 +1,4 @@
-"""Behavioral controls for evidence-based suite ownership.
+"""Behavioral controls for independent runtime resource observation.
 
 This module's other-suite cases live in ``test_database_observation.py``.
 """
@@ -10,17 +10,14 @@ import os
 import subprocess
 import sys
 from pathlib import Path
-from typing import cast
 
-import pytest
-
-from scripts.test_suite_census import check, classify, generate
+from scripts.database_observation_check import check, observations
 from tests.support.database import isolated_database
 
 BACKEND = Path(__file__).parents[2]
 
 
-def test_census_attributes_shared_setup_teardown_and_fresh_environment_children(
+def test_observer_attributes_shared_setup_teardown_and_fresh_environment_children(
     tmp_path: Path,
 ) -> None:
     _ = (tmp_path / "pytest.ini").write_text("[pytest]\n")
@@ -64,7 +61,6 @@ def test_census_attributes_shared_setup_teardown_and_fresh_environment_children(
         f"os.environ['CI_DATABASE_OBSERVATIONS']={str(evidence)!r}; "
         "os.environ['CI_DATABASE_CONTEXT']='{}'; "
         "os.environ.pop('CI_UNIT_REPORT_DIR',None); "
-        "os.environ.pop('CI_DATABASE_CENSUS',None); "
         "import pytest; sys.exit(pytest.main(['--rootdir=.', '-p', "
         "'scripts.database_observation_plugin', 'test_probe.py']))"
     )
@@ -83,31 +79,16 @@ def test_census_attributes_shared_setup_teardown_and_fresh_environment_children(
         check=False,
     )
     assert result.returncode == 0, result.stdout + result.stderr
-    cases, inconclusive = classify(evidence)
-    assert cases == {
-        **{
-            f"test_probe.py::test_{name}": "integration"
-            for name in ("a", "b", "c", "d", "child", "skipped")
-        },
-        "test_probe.py::test_pure[1]": "unit",
-        "test_probe.py::test_pure[2]": "unit",
-        "test_probe.py::test_transition[0]": "integration",
-        "test_probe.py::test_transition[1]": "unit",
+    cases = observations(evidence)
+    assert {nodeid: item.database for nodeid, item in cases.items()} == {
+        **{f"test_probe.py::test_{name}": True for name in ("a", "b", "c", "d", "child")},
+        "test_probe.py::test_pure[1]": False,
+        "test_probe.py::test_pure[2]": False,
+        "test_probe.py::test_transition[0]": True,
+        "test_probe.py::test_transition[1]": False,
+        "test_probe.py::test_skipped": False,
     }
-    assert set(inconclusive) == {"test_probe.py::test_skipped"}
-    catalogue = tmp_path / "suites.json"
-    generate(evidence, catalogue)
-    check(evidence, catalogue)
-    raw = cast(dict[str, dict[str, str]], json.loads(catalogue.read_text()))
-    raw["cases"]["test_probe.py::test_pure[1]"] = "integration"
-    catalogue.write_text(json.dumps(raw))
-    with pytest.raises(ValueError, match="ownership drift"):
-        check(evidence, catalogue)
-    raw["cases"].update({"test_probe.py::test_pure[1]": "unit", "test_probe.py::test_a": "unit"})
-    catalogue.write_text(json.dumps(raw))
-    with pytest.raises(ValueError, match="ownership drift"):
-        check(evidence, catalogue)
-
+    assert not cases["test_probe.py::test_skipped"].passed
     isolated = tmp_path / "isolated_guard.py"
     _ = isolated.write_text(
         "import os, subprocess, sys\n"
@@ -154,27 +135,10 @@ def test_census_attributes_shared_setup_teardown_and_fresh_environment_children(
         _ = (job_dir / "events-1.jsonl").write_text(
             "\n".join(json.dumps(event) for event in events) + "\n"
         )
-    assert classify(jobs)[0] == {
-        "test_unit.py::test_case": "unit",
-        "test_integration.py::test_case": "integration",
+    assert {node: item.database for node, item in observations(jobs).items()} == {
+        "test_unit.py::test_case": False,
+        "test_integration.py::test_case": True,
     }
-    supplement = tmp_path / "supplement"
-    supplement.mkdir()
-    node = "test_probe.py::test_skipped"
-    events = [
-        {"kind": "session_start", "pid": 1},
-        {"kind": "selected", "pid": 1, "nodeids": [node]},
-        *[
-            {"kind": "report", "pid": 1, "nodeid": node, "when": when, "outcome": "passed"}
-            for when in ("setup", "call", "teardown")
-        ],
-        {"kind": "session_finish", "pid": 1},
-    ]
-    _ = (supplement / "events-1.jsonl").write_text(
-        "\n".join(json.dumps(event) for event in events) + "\n"
-    )
-    generate(evidence, catalogue, supplement)
-    assert json.loads(catalogue.read_text())["cases"][node] == "unit"
 
 
 def _assert_deferred_thread_ownership(tmp_path: Path) -> None:
@@ -210,7 +174,6 @@ def _assert_deferred_thread_ownership(tmp_path: Path) -> None:
         + f"os.environ['CI_DATABASE_OBSERVATIONS']={str(evidence)!r}; "
         + "os.environ['CI_DATABASE_CONTEXT']='{}'; "
         + "os.environ.pop('CI_UNIT_REPORT_DIR',None); "
-        + "os.environ.pop('CI_DATABASE_CENSUS',None); "
         + "import pytest; result=pytest.main(['--rootdir=.', '-p', "
         + "'scripts.database_observation_plugin', 'test_probe.py']); "
         + "import test_probe; worker=test_probe.workers[1]; worker.release.set(); "
@@ -233,17 +196,13 @@ def _assert_deferred_thread_ownership(tmp_path: Path) -> None:
         check=False,
     )
     assert result.returncode == 0, result.stdout + result.stderr
-    assert classify(evidence) == (
-        {
-            "test_probe.py::test_origin": "integration",
-            "test_probe.py::test_unrelated": "unit",
-        },
-        {},
-    )
+    assert {node: item.database for node, item in observations(evidence).items()} == {
+        "test_probe.py::test_origin": True,
+        "test_probe.py::test_unrelated": False,
+    }
 
 
 def _assert_failed_fixture_consumers(tmp_path: Path) -> None:
-    profiles: dict[str, Path] = {}
     scopes = ("function", "class", "module", "package", "session")
     for mode in ("unit", "connect", "refused", "finalizer"):
         root = tmp_path / f"failed-fixtures-{mode}"
@@ -273,14 +232,13 @@ def _assert_failed_fixture_consumers(tmp_path: Path) -> None:
                 + "    def test_nested(self, outer): pass\n"
                 + "    def test_dynamic(self, request): request.getfixturevalue('outer')\n"
             )
-        observations = root / "observations"
+        evidence_dir = root / "observations"
         program = (
             "import os,sys; "
-            + f"os.environ['CI_DATABASE_OBSERVATIONS']={str(observations)!r}; "
+            + f"os.environ['CI_DATABASE_OBSERVATIONS']={str(evidence_dir)!r}; "
             + "os.environ['CI_DATABASE_CONTEXT']='{}'; "
             + f"os.environ['FIXTURE_PROFILE']={mode!r}; "
             + "os.environ.pop('CI_UNIT_REPORT_DIR',None); "
-            + "os.environ.pop('CI_DATABASE_CENSUS',None); "
             + "import pytest; sys.exit(pytest.main(['--rootdir=.', '-p', "
             + "'scripts.database_observation_plugin', '.']))"
         )
@@ -304,25 +262,15 @@ def _assert_failed_fixture_consumers(tmp_path: Path) -> None:
             for scope in scopes
             for name in ("first", "nested", "dynamic")
         ]
-        cases, inconclusive = classify(observations)
-        assert cases == dict.fromkeys(nodes, "unit" if mode == "unit" else "integration")
-        assert inconclusive == {}
+        cases = observations(evidence_dir)
+        assert {node: item.database for node, item in cases.items()} == dict.fromkeys(
+            nodes, mode != "unit"
+        )
+        assert all(item.confirmed_children for item in cases.values())
         if mode != "unit":
             for scope in scopes:
                 count = len((root / f"setups-{scope}").read_text().splitlines())
                 assert count == (3 if scope == "function" else 1)
-        profiles[mode] = observations
-    output = tmp_path / "failed-fixtures-catalogue.json"
-    generate(profiles["unit"], output)
-    for mode in ("connect", "refused", "finalizer"):
-        with pytest.raises(ValueError, match="ownership drift"):
-            check(profiles[mode], output)
-        for full, supplement in (
-            (profiles[mode], profiles["unit"]),
-            (profiles["unit"], profiles[mode]),
-        ):
-            with pytest.raises(ValueError, match="Conflicting database evidence"):
-                generate(full, output, supplement)
 
 
 def _assert_combined_fixture_ownership(tmp_path: Path) -> None:
@@ -339,21 +287,12 @@ def _assert_combined_fixture_ownership(tmp_path: Path) -> None:
         tests.mkdir(parents=True)
         _ = (root / "pytest.ini").write_text("[pytest]\n")
         _ = (tests / "__init__.py").write_text("")
-        cases: dict[str, str] = {}
+        fixtures = "import pytest, sqlite3\nfrom pathlib import Path\n"
         for scope in ("function", "class", "module", "package", "session"):
-            path = tests / f"test_{scope}.py"
             marker = root / f"cleaned-{scope}"
             cleanup = "sqlite3.connect(':memory:').close()"
             if scenario.endswith("caught") or scenario == "shared":
                 cleanup = "try: " + cleanup + "\n    except AssertionError: return"
-            integration = "    def test_integration(self, resource): pass\n"
-            unit = "    def test_unit(self): pass\n"
-            if scenario == "shared":
-                unit = "    def test_unit(self, request): request.getfixturevalue('resource')\n"
-            elif scenario.startswith("unit"):
-                integration = "    def test_integration(self): pass\n"
-                unit = "    def test_unit(self, resource): pass\n"
-            methods = unit + integration if scenario.startswith("unit") else integration + unit
             resource = "    yield\n    " + cleanup + f"\n    Path({str(marker)!r}).touch()\n"
             if scenario.startswith("unit-setup"):
                 resource = "    sqlite3.connect(':memory:').close()\n    yield\n"
@@ -362,46 +301,37 @@ def _assert_combined_fixture_ownership(tmp_path: Path) -> None:
                         "    try: sqlite3.connect(':memory:').close()\n"
                         "    except AssertionError: pass\n    yield\n"
                     )
-            _ = path.write_text(
-                "import pytest, sqlite3\nfrom pathlib import Path\n"
-                + f"@pytest.fixture(scope={scope!r})\n"
-                + "def resource():\n"
-                + resource
-                + "class TestProbe:\n"
-                + methods
-            )
+            fixture = f"resource_{scope}"
+            fixtures += f"@pytest.fixture(scope={scope!r})\ndef {fixture}():\n" + resource
             for suite in ("unit", "integration"):
-                cases[f"tests/test_{scope}.py::TestProbe::test_{suite}"] = suite
-        if scenario == "integration":
-            _ = (tests / "test_transition.py").write_text(
-                "import pytest, sqlite3\n"
-                "@pytest.fixture(scope='module', params=[0, 1])\n"
-                "def resource(request):\n    yield request.param\n"
-                "    if request.param == 0: sqlite3.connect(':memory:').close()\n"
-                "def test_transition(resource): assert resource in (0, 1)\n"
-            )
-            cases.update(
-                {
-                    "tests/test_transition.py::test_transition[0]": "integration",
-                    "tests/test_transition.py::test_transition[1]": "unit",
-                }
-            )
-        catalogue = root / "suites.json"
-        _ = catalogue.write_text(json.dumps({"cases": cases}))
-        _ = (root / "conftest.py").write_text(
-            "from pathlib import Path\nfrom scripts import test_suites\n"
-            + f"test_suites.CATALOGUE = Path({str(catalogue)!r})\n"
-            + "test_suites.catalogue.cache_clear()\n"
-        )
-        observations = root / "observations"
+                consumes = (suite == "integration" and not scenario.startswith("unit")) or (
+                    suite == "unit" and scenario != "integration"
+                )
+                argument = fixture if consumes else ""
+                body = "pass"
+                if scenario == "shared" and suite == "unit":
+                    argument = "request"
+                    body = f"request.getfixturevalue({fixture!r})"
+                order = (
+                    "a"
+                    if (suite == "unit" if scenario.startswith("unit") else suite == "integration")
+                    else "b"
+                )
+                suffix = "_integration" if suite == "integration" else ""
+                _ = (tests / f"test_{order}_{scope}{suffix}.py").write_text(
+                    "class TestProbe:\n"
+                    + f"    def test_{suite}(self{', ' if argument else ''}{argument}): {body}\n"
+                )
+        _ = (root / "conftest.py").write_text(fixtures)
+        observations_dir = root / "observations"
         program = (
             "import os,sys; "
-            + f"os.environ['CI_DATABASE_OBSERVATIONS']={str(observations)!r}; "
+            + f"os.environ['CI_DATABASE_OBSERVATIONS']={str(observations_dir)!r}; "
             + "os.environ['CI_DATABASE_CONTEXT']='{}'; "
-            "os.environ.pop('CI_UNIT_REPORT_DIR',None); "
-            "os.environ.pop('CI_DATABASE_CENSUS',None); "
-            "import pytest; sys.exit(pytest.main(['--rootdir=.', '-p', "
-            "'scripts.test_suites_plugin', '-p', 'scripts.database_observation_plugin', 'tests']))"
+            + "os.environ.pop('CI_UNIT_REPORT_DIR',None); "
+            + "import pytest; sys.exit(pytest.main(['--rootdir=.', '-p', "
+            + "'scripts.test_suites_plugin', '-p', "
+            + "'scripts.database_observation_plugin', 'tests']))"
         )
         result = subprocess.run(
             [sys.executable, "-c", program],
@@ -411,7 +341,7 @@ def _assert_combined_fixture_ownership(tmp_path: Path) -> None:
                 "PYTHONPATH": str(BACKEND),
                 "PYTEST_ADDOPTS": "",
                 "PYTEST_DISABLE_PLUGIN_AUTOLOAD": "1",
-                "CI_DATABASE_OBSERVATIONS": str(observations),
+                "CI_DATABASE_OBSERVATIONS": str(observations_dir),
                 "TMPDIR": str(root),
             },
             capture_output=True,
@@ -430,13 +360,13 @@ def _assert_combined_fixture_ownership(tmp_path: Path) -> None:
         expected = (
             {"function", "class", "module", "package", "session"}
             if scenario == "integration"
-            else {"function"}
+            else {"function", "class", "module"}
             if scenario == "shared"
             else set[str]()
         )
         assert cleaned == expected, result.stdout + result.stderr
         if scenario == "integration":
-            assert classify(observations)[0] == cases
+            check(observations_dir)
         else:
             assert "Unit database connection guard failed" in result.stdout + result.stderr
 
@@ -526,13 +456,13 @@ def _assert_managed_service_scope(tmp_path: Path) -> None:
     _ = (scope_root / "tests/test_baseline.py").write_text(
         "import os\ndef test_baseline(): assert os.getenv('S3_ENDPOINT') is None\n"
     )
-    _ = (scope_root / "tests/storage/test_contract.py").write_text(
+    _ = (scope_root / "tests/storage/test_contract_integration.py").write_text(
         "import os\ndef test_contract(): assert os.environ['S3_ENDPOINT'] == 'http://managed.test'\n"
     )
     scope_program = (
         "import os,sys; "
         + f"os.environ['CI_DATABASE_OBSERVATIONS']={str(scope_root / 'observations')!r}; "
-        + "os.environ['CI_DATABASE_CONTEXT']='{}'; os.environ['CI_DATABASE_CENSUS']='1'; "
+        + "os.environ['CI_DATABASE_CONTEXT']='{}'; "
         + "os.environ['S3_ENDPOINT']='http://managed.test'; "
         + "os.environ.pop('CI_UNIT_REPORT_DIR',None); "
         + "import pytest; sys.exit(pytest.main(['--rootdir=.', '-p', "

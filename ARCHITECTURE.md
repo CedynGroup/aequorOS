@@ -1205,7 +1205,7 @@ add a step.
 
 The combined SQLite compatibility run remains available as `mise run risk-service:test`.
 The [backend test guide](backend/README.md#run-tests) owns unit/integration/e2e
-classification, census regeneration, service prerequisites and CI execution ownership.
+classification, service prerequisites and CI execution ownership.
 
 ### Public ECR pulls in CI
 

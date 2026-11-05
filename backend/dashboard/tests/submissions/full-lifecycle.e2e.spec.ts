@@ -264,6 +264,13 @@ type FilingSession = { page: Page; close: () => Promise<void> };
  * The Validator's stage is itself two acts: they approve the figures from the
  * queue, and only then release them to the regulator. The session approves
  * first and opens the return's workspace, where the release is offered.
+ *
+ * Both non-preparer officers also hold the story's return-export binding: the
+ * Approver must see the page the ceremony asks them to sign, and the Validator
+ * sends the downtime email bundle. Under the 2026-11-03 export cutover neither
+ * is served a file from a `view`-only binding, and the ceremony refuses to
+ * certify a page the officer cannot read (e2e/support/story-identities.ts,
+ * `RETURN_EXPORT_ROLES`).
  */
 async function openFilingSession(
   browser: Browser,

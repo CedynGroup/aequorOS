@@ -1,7 +1,8 @@
 """Whole-institution authority for regulatory returns.
 
 Ordinary returns require Regulatory Reporting/restricted authority. ICAAP keeps
-its Capital/confidential authority. Visibility is checked first, with 404 hiding
+its Capital/confidential visibility. Every family exports under Regulatory
+Reporting/restricted authority. Visibility is checked first, with 404 hiding
 packages a principal cannot read; every action then requires its own permission.
 Scalar roles never authorize a return, and narrowed grants never serve snapshots.
 """
@@ -45,6 +46,11 @@ _DETAIL = "This return requires an active scoped binding for the institution."
 #: codebase loses gates at seams (D-069). The exact institution is still
 #: required: covering one bank never covers its sibling.
 TRANSMISSION_GATE: Final[FamilyGate] = FamilyGate(
+    module=Module.REGULATORY, sensitivity=Sensitivity.RESTRICTED
+)
+
+# Taking a return away is a Regulatory Reporting act for every family, exactly as transmission is.
+EXPORT_GATE: Final[FamilyGate] = FamilyGate(
     module=Module.REGULATORY, sensitivity=Sensitivity.RESTRICTED
 )
 
@@ -331,6 +337,30 @@ def require_permission(  # noqa: PLR0913 - the complete policy tuple is explicit
         permission,
         surface=surface,
         conditions=conditions,
+    ):
+        raise _forbidden()
+
+
+def require_export_authority(
+    db: Session,
+    ctx: TenantContext,
+    bank: Bank,
+    package: RegulatoryPackage,
+    *,
+    surface: str = "package_export",
+) -> None:
+    """Taking the return away requires ``EXPORT``, never merely ``VIEW``.
+
+    Reading a filed return and receiving its file are separate acts. A bank
+    grants a supervisor the first without the second, and the artifact, the
+    archived revision and the downtime email bundle are all copies of the same
+    restricted document. Visibility is still decided first: the caller who
+    cannot see the return is told nothing (404), while one who can see it and
+    may not take it receives a forbidden response (403).
+    """
+    require_view(db, ctx, bank, package)
+    if ctx.impersonation_context is not None or not _evaluate(
+        db, ctx, bank, EXPORT_GATE, Permission.EXPORT, surface=surface
     ):
         raise _forbidden()
 
@@ -623,6 +653,7 @@ __all__ = [
     "hidden_families",
     "nominee_may_sign",
     "require_certify_authority",
+    "require_export_authority",
     "require_generation_authority",
     "require_permission",
     "require_transmission_authority",
