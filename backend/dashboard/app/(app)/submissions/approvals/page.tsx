@@ -348,9 +348,13 @@ function DecidePanel({
     stageError.errorCode === "channel_downtime"
       ? stageError.message
       : null;
+  // The bundle preview is part of the export surface. Without EXPORT it is a
+  // guaranteed 403, so it is not requested and the panel explains the grant
+  // instead of showing blank instructions.
   const fallbackQuery = useEmailFallbackInstructions(
     bankId,
     downtime ? pkg.id : null,
+    filingAuthority.mayExport,
   );
   const latestSubmitted = [...filedEvents]
     .reverse()
@@ -573,6 +577,7 @@ function DecidePanel({
                 }),
               )}
               instructions={fallbackQuery.data?.instructions ?? null}
+              canExport={filingAuthority.mayExport}
               onDownloadEml={() => {
                 void downloadEmailFallbackEml(bankId!, pkg.id);
               }}

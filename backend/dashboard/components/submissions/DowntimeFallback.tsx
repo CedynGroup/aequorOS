@@ -52,6 +52,7 @@ export default function DowntimeFallback({
   recording,
   error,
   pendingReupload,
+  canExport,
 }: {
   returnCode: string;
   reportingDate: string;
@@ -70,6 +71,12 @@ export default function DowntimeFallback({
   error: unknown;
   /** Already filed by email and waiting for the portal to come back. */
   pendingReupload: boolean;
+  /** Regulatory Reporting / Restricted / Export. The bundle and its
+   * instructions are the export surface; the downtime narrative, the
+   * attachments list and the recovery steps are ordinary reads and stay.
+   * Required, not defaulted: a caller that forgets to resolve authority must
+   * fail to compile rather than offer a bundle the server refuses. */
+  canExport: boolean;
 }) {
   const portal = submissionPortal() ?? `${regShort()}'s portal`;
   const regulator = centralBankName();
@@ -170,7 +177,7 @@ export default function DowntimeFallback({
             recalculates when opened.
           </p>
 
-          {instructions && (
+          {canExport && instructions && (
             <details className="mt-3 text-caption text-navy/80">
               <summary className="cursor-pointer font-medium text-navy">
                 Read the send-ready instructions
@@ -186,15 +193,25 @@ export default function DowntimeFallback({
               AequorOS does not send this email. You send it, so it comes from
               the bank&apos;s own mailbox and lands in your sent items.
             </p>
-            <button
-              type="button"
-              data-testid="download-eml"
-              onClick={onDownloadEml}
-              className="ml-auto inline-flex shrink-0 items-center gap-1.5 px-3 py-2 text-caption font-medium btn-primary"
-            >
-              <Download size={13} aria-hidden />
-              Download .eml
-            </button>
+            {canExport ? (
+              <button
+                type="button"
+                data-testid="download-eml"
+                onClick={onDownloadEml}
+                className="ml-auto inline-flex shrink-0 items-center gap-1.5 px-3 py-2 text-caption font-medium btn-primary"
+              >
+                <Download size={13} aria-hidden />
+                Download .eml
+              </button>
+            ) : (
+              <p
+                className="ml-auto shrink-0 text-caption text-slate"
+                data-testid="download-eml-export-required"
+              >
+                Export authority required to download the bundle or read its
+                instructions.
+              </p>
+            )}
           </div>
         </SectionCard>
 
