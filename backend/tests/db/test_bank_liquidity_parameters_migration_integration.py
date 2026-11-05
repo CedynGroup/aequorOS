@@ -30,7 +30,7 @@ from app.core.authorization import (
 )
 from app.identity.service import authentication, authorization
 from app.models import Organization, User
-from tests.db.test_postgres_migrations import (
+from tests.db.test_postgres_migrations_integration import (
     MigratedPostgresSchema,
     alembic_config_for_app,
     forward_migrated_postgres_schema,
