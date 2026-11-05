@@ -42,16 +42,6 @@ _LINE_LENGTH = 100
 #: The frozen calculation-engine identifiers: the keys of this module's table.
 _ENGINE_TABLE = "app.domain.authority.engines"
 _ENGINE_TABLE_NAME = "ENGINE_LOCATIONS"
-#: Node-id catalogues whose keys follow a moved test module, and the sections that
-#: map node ids to suites. Every other JSON file keeps its keys: ``app/db/flush_order.json``
-#: pins pre-move modules (``tests/architecture/test_model_flush_order.py``), the boundary
-#: baseline is canonicalized by the move ledger, and
-#: ``feature_boundary_split_origins.json`` is documented as outside rewrite scope.
-_CATALOGUE_SECTIONS = {
-    "scripts/test_suites.json": ("cases", "services"),
-    "scripts/ci_postgres_durations.json": ("durations",),
-}
-
 #: Suffixes a split writes its other-suite parts under (see ``split_modules``).
 _PARTITION_SUFFIXES = ("_integration", "_e2e")
 
@@ -710,8 +700,8 @@ def tracked_text_files(backend: Path) -> list[Path]:
     return files
 
 
-def _renamed_node_path(path: str, rename: Renamer) -> str:
-    """A node id's ``tests/.../test_x.py`` file-path prefix, renamed through the ledger."""
+def _renamed_module_path(path: str, rename: Renamer) -> str:
+    """A test module path renamed through the feature ledger."""
     if not path.endswith(".py"):
         return path
     dotted = path.removesuffix(".py").replace("/", ".")
@@ -721,23 +711,8 @@ def _renamed_node_path(path: str, rename: Renamer) -> str:
     return renamed.replace(".", "/") + ".py"
 
 
-def _renamed_node_id(node_id: str, rename: Renamer) -> str:
-    """The node id a move renames a catalogue key to, or the key itself.
-
-    The file-path prefix follows the moved test module; parametrized ids that embed
-    a moved module path inside their brackets (``[app.services.x]`` and the
-    ``[app.services.x-...]`` prefix form) follow it through ``rewrite_dotted``.
-    """
-    path, separator, tail = node_id.partition("::")
-    renamed_path = _renamed_node_path(path, rename)
-    renamed_tail = rewrite_dotted(tail, rename)
-    if renamed_path == path and renamed_tail == tail:
-        return node_id
-    return f"{renamed_path}{separator}{renamed_tail}"
-
-
-def _renamed_catalogue(text: str, renames: dict[str, str]) -> str:
-    """Rename catalogue keys in place, preserving the file's formatting exactly."""
+def _renamed_duration_keys(text: str, renames: dict[str, str]) -> str:
+    """Rename duration keys in place, preserving formatting exactly."""
     decoder = json.JSONDecoder()
     lines: list[str] = []
     for line in text.splitlines(keepends=True):
@@ -745,8 +720,7 @@ def _renamed_catalogue(text: str, renames: dict[str, str]) -> str:
         if not stripped.startswith('"'):
             lines.append(line)
             continue
-        # Decode the key the way the file stores it: a parametrized id may embed
-        # quotation marks, which JSON escapes inside the key's source span.
+        # Decode the stored key before replacing its exact JSON source span.
         key, end = cast("tuple[str, int]", decoder.raw_decode(stripped))
         if key not in renames:
             lines.append(line)
@@ -757,28 +731,20 @@ def _renamed_catalogue(text: str, renames: dict[str, str]) -> str:
     return "".join(lines)
 
 
-def plan_catalogue_rewrites(backend: Path, rename: Renamer) -> dict[Path, str]:
-    """The test-catalogue JSON files whose node-id keys a move renames."""
-    planned: dict[Path, str] = {}
-    for relative, sections in _CATALOGUE_SECTIONS.items():
-        path = backend / relative
-        if not path.is_file():
-            continue
-        text = path.read_text(encoding="utf-8")
-        data = cast("dict[str, object]", json.loads(text))
-        renames: dict[str, str] = {}
-        for section in sections:
-            nodes = cast("dict[str, object]", data.get(section, {}))
-            for node_id in nodes:
-                # A frozen file keeps its old names on purpose, so the node ids it
-                # generates (old module paths inside parametrized ids) never move.
-                if node_id.partition("::")[0] in _FROZEN_FILES:
-                    continue
-                if (new := _renamed_node_id(node_id, rename)) != node_id:
-                    renames[node_id] = new
-        if renames and (updated := _renamed_catalogue(text, renames)) != text:
-            planned[path] = updated
-    return planned
+def plan_duration_rewrites(backend: Path, rename: Renamer) -> dict[Path, str]:
+    """Move module-to-seconds keys without changing their measured weights."""
+    path = backend / "scripts/ci_postgres_durations.json"
+    if not path.is_file():
+        return {}
+    text = path.read_text(encoding="utf-8")
+    data = cast("dict[str, dict[str, object]]", json.loads(text))
+    renames = {
+        module: new
+        for module in data["durations"]
+        if module not in _FROZEN_FILES and (new := _renamed_module_path(module, rename)) != module
+    }
+    updated = _renamed_duration_keys(text, renames)
+    return {path: updated} if updated != text else {}
 
 
 def plan_rewrites(backend: Path, rename: Renamer) -> dict[Path, str]:
@@ -799,7 +765,7 @@ def plan_rewrites(backend: Path, rename: Renamer) -> dict[Path, str]:
         updated = rewrite_text(relative, original, rename, backend, frozen)
         if updated != original:
             planned[path] = updated
-    planned |= plan_catalogue_rewrites(backend, rename)
+    planned |= plan_duration_rewrites(backend, rename)
     return planned
 
 

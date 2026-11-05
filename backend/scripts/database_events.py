@@ -64,7 +64,7 @@ def service_connection(address: object) -> None:
             if host in hosts and port == (
                 endpoint.port or (443 if endpoint.scheme == "https" else 80)
             ):
-                emit("service", service=name, suite="integration")
+                emit("service", service=name)
 
 
 def service_command(command: object) -> None:
@@ -72,8 +72,8 @@ def service_command(command: object) -> None:
         words = [str(word) for word in cast(list[object], command)]
         executable = Path(words[0]).name
         if executable in {"minio", "bao"}:
-            emit("service", service=executable, suite="integration")
+            emit("service", service=executable)
         if executable in {"node", "pnpm", "npm", "npx", "playwright"} and any(
             "playwright" in word for word in words
         ):
-            emit("service", service="playwright", suite="e2e")
+            emit("service", service="playwright")

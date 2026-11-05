@@ -20,8 +20,8 @@ are always welcome.
   `CASHFLOW_FAST_TEST=1 pytest` must be green; tests are hermetic (no ambient
   database) and Postgres-gated tests opt in via `TEST_DATABASE_URL`.
 - After changing backend tests or their dependency requirements, follow the
-  [suite selection and census guide](backend/README.md#run-tests) to refresh the
-  generated exact-test catalogue.
+  [filename suite selection guide](backend/README.md#run-tests). Split mixed modules;
+  new cases and parametrizations need no membership registration.
 - Backend database fixture isolation and parallel execution are documented in the
   [backend test database guide](backend/README.md#test-databases-and-the-primary-database).
   `db_client` and `db_session` are the defaults.

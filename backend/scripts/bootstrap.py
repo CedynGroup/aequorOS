@@ -655,14 +655,12 @@ def _openbao_check(values: Mapping[str, str]) -> Check:
         return Check(
             "OpenBao",
             "info",
-            "bao binary present; suite-census and bank-key flows can start their own "
-            "throwaway server",
+            "bao binary present; disposable OpenBao integration flows are available",
         )
     return Check(
         "OpenBao",
         "skip",
-        "unavailable: skipped bank-key/OpenBao flows and the "
-        "risk-service:refresh-test-suites census",
+        "unavailable: skipped bank-key/OpenBao integration flows",
         "install OpenBao or set AQS_OPENBAO_BIN",
     )
 

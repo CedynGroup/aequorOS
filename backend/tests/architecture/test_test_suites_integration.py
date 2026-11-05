@@ -1,4 +1,4 @@
-"""Failure controls for explicit suite ownership and the unit execution boundary.
+"""Failure controls for filename suite ownership and the unit execution boundary.
 
 This module's other-suite cases live in ``test_test_suites.py``.
 """
@@ -53,24 +53,10 @@ from tests.architecture.test_test_suites import BACKEND, standalone_contracts
 def test_suite_execution_boundary(
     tmp_path: Path, suite: str, body: str, passes: bool, attempts: bool
 ) -> None:
-    catalogue = tmp_path / "suites.json"
-    _ = catalogue.write_text(
-        json.dumps(
-            {
-                "cases": {"test_probe.py::test_probe": suite, "test_probe.py::test_other": suite}
-                if body == "__deselect__"
-                else {"test_probe.py::test_probe": suite}
-            }
-        )
-    )
     _ = (tmp_path / "conftest.py").write_text(
-        "from pathlib import Path\nfrom scripts import test_suites\n"
-        + f"test_suites.CATALOGUE = Path({str(catalogue)!r})\n"
-        + "test_suites.catalogue.cache_clear()\n"
-        + standalone_contracts(tmp_path)
+        "from pathlib import Path\n" + standalone_contracts(tmp_path)
     )
     if body == "__unclassified__":
-        _ = catalogue.write_text(json.dumps({"cases": {}}))
         body = "assert True"
     arguments: list[str] = []
     suffix = ""
@@ -83,16 +69,7 @@ def test_suite_execution_boundary(
         arguments = ["--keep-duplicates", "test_probe.py"]
     if body == "__stale__":
         body = "assert True"
-        _ = catalogue.write_text(
-            json.dumps(
-                {
-                    "cases": {
-                        "test_probe.py::test_probe": suite,
-                        "test_probe.py::test_absent": "unit",
-                    },
-                }
-            )
-        )
+        suffix = "\ndef test_new_parameter(): pass\n"
     prefix = ""
     if suite == "unit" and passes:
         prefix = (
@@ -103,9 +80,8 @@ def test_suite_execution_boundary(
     if body == "__double__":
         prefix = "import pytest\npytestmark = [pytest.mark.unit, pytest.mark.integration]\n"
         body = "assert True"
-    _ = (tmp_path / "test_probe.py").write_text(
-        prefix + f"def test_probe():\n    {body}\n" + suffix
-    )
+    module = "test_probe_integration.py" if suite == "integration" else "test_probe.py"
+    _ = (tmp_path / module).write_text(prefix + f"def test_probe():\n    {body}\n" + suffix)
     environment = {
         **os.environ,
         "PYTHONPATH": str(BACKEND),
@@ -113,7 +89,6 @@ def test_suite_execution_boundary(
         "PYTEST_DISABLE_PLUGIN_AUTOLOAD": "1",
     }
     _ = environment.pop("CI_UNIT_REPORT_DIR", None)
-    _ = environment.pop("CI_DATABASE_CENSUS", None)
     _ = environment.pop("TEST_DATABASE_URL", None)
     if suite == "unit":
         environment["CI_UNIT_REPORT_DIR"] = str(tmp_path / "evidence")
@@ -123,7 +98,7 @@ def test_suite_execution_boundary(
             "-m",
             "pytest",
             "--rootdir=.",
-            "test_probe.py",
+            module,
             "-p",
             "scripts.test_suites_plugin",
             "-m",
@@ -142,7 +117,10 @@ def test_suite_execution_boundary(
     assert any(path.read_text() for path in logs) == attempts, result.stdout + result.stderr
     if suite == "unit" and passes:
         manifest = tmp_path / "evidence" / "collection.json"
-        assert json.loads(manifest.read_text()) == {"test_probe.py::test_probe": "unit"}
+        assert json.loads(manifest.read_text()) == {
+            "test_probe.py::test_probe": "unit",
+            **({"test_probe.py::test_new_parameter": "unit"} if suffix else {}),
+        }
 
 
 @pytest.mark.parametrize("caught", [True])
@@ -150,13 +128,8 @@ def test_suite_execution_boundary(
 def test_caught_unit_attempt_is_a_failure_in_parallel_combined_runs(
     tmp_path: Path, caught: bool, ci: bool
 ) -> None:
-    catalogue = tmp_path / "suites.json"
-    _ = catalogue.write_text(json.dumps({"cases": {"test_probe.py::test_probe": "unit"}}))
     _ = (tmp_path / "conftest.py").write_text(
-        "from pathlib import Path\nfrom scripts import test_suites\n"
-        + f"test_suites.CATALOGUE = Path({str(catalogue)!r})\n"
-        + "test_suites.catalogue.cache_clear()\n"
-        + standalone_contracts(tmp_path)
+        "from pathlib import Path\n" + standalone_contracts(tmp_path)
     )
     body = "pass"
     if caught:
@@ -171,7 +144,6 @@ def test_caught_unit_attempt_is_a_failure_in_parallel_combined_runs(
         "PYTEST_DISABLE_PLUGIN_AUTOLOAD": "1",
     }
     _ = environment.pop("CI_UNIT_REPORT_DIR", None)
-    _ = environment.pop("CI_DATABASE_CENSUS", None)
     _ = environment.pop("TEST_DATABASE_URL", None)
     arguments = []
     if ci:
