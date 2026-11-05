@@ -43,7 +43,7 @@ name: Risk Service CI
 #                 including tests/db/test_tenant_rls_completeness_integration.py — the structural
 #                 guard on tenant isolation.
 #   postgres-suite — the integration aggregate, including exact cross-owner
-#                 coverage and observed database-ownership checks. Suite ownership,
+#                 coverage and runtime resource-boundary checks. Filename ownership,
 #                 sharding, selection and coverage guards are documented in
 #                 backend/README.md#run-tests.
 #                 Parallel execution and schema isolation are documented in
@@ -319,6 +319,11 @@ jobs:
           CI_DATABASE_OBSERVATIONS: ${{ runner.temp }}/unit-tests/database-observations
           PYTEST_ADDOPTS: --junitxml=${{ runner.temp }}/unit-tests/report.xml
         run: mise run risk-service:test-unit
+      - name: Collect the complete tree for cross-suite coverage
+        working-directory: backend
+        env:
+          CASHFLOW_FAST_TEST: "1"
+        run: uv run pytest --collect-only -q --collection-output="${{ runner.temp }}/unit-tests/all-tests.json"
       - name: Upload unit execution and classification evidence
         if: always()
         uses: actions/upload-artifact@v7
@@ -681,7 +686,7 @@ jobs:
           CI_POSTGRES_FILES: ${{ needs.preflight.outputs.postgres_files }}
         run: |
           python3 backend/scripts/test_suites.py "$RUNNER_TEMP/postgres-reports"
-          python3 backend/scripts/test_suite_census.py check "$RUNNER_TEMP/postgres-reports"
+          python3 backend/scripts/database_observation_check.py "$RUNNER_TEMP/postgres-reports"
 
   storage:
     name: Storage contract
