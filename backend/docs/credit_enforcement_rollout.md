@@ -660,8 +660,11 @@ Seven read routes still asked only whether the caller belonged to the tenant:
 | `GET /banks/{id}/sdi/loan-classification` | `Tenant`    | The same response on the compatibility path                               |
 | `GET /banks/{id}/sdi/large-exposures`     | `Tenant`    | One row per connected counterparty with `counterparty_name`               |
 
-`require_module_access("credit")` still runs on these routers; it is a licence
-entitlement question and is orthogonal to authority.
+These two routers are mounted with `BANK_ROUTE_DEPENDENCIES` alone, so
+`require_module_access("credit")` does NOT run on these routes — that licence
+entitlement gate sits on `run_regulatory_credit`'s router, not here. What decides
+each read is the required active, whole-institution Credit binding, enforced by
+`require_credit_aggregated_view` or `require_credit_restricted_view`.
 
 ### The authority table (enforced)
 
@@ -774,9 +777,39 @@ do not admit these reads.
 Run the same read-only inventory as Phase 4 and add these columns to identify the
 affected population before release:
 
+`targets` and `active_bindings` come from the Phase 1 inventory and CTEs do not
+persist between statements, so the block below restates them: it runs on its own.
+
 ```sql
 -- Per active human principal and institution: do they hold the Phase 5
 -- sentences?  Same active/lifecycle filters as the Phase 1 inventory.
+WITH active_principals AS (
+    SELECT
+        u.organization_id,
+        u.id AS principal_user_id,
+        CASE
+            WHEN u.auth_provider = 'service' THEN 'machine'
+            ELSE 'human'
+        END AS principal_type,
+        u.email
+    FROM users AS u
+    WHERE u.is_active IS TRUE
+),
+targets AS (
+    SELECT
+        p.*,
+        b.id AS institution_id
+    FROM active_principals AS p
+    JOIN banks AS b ON b.organization_id = p.organization_id
+),
+active_bindings AS (
+    SELECT *
+    FROM authorization_bindings
+    WHERE status = 'active'
+      AND revoked_at IS NULL
+      AND valid_from <= CURRENT_TIMESTAMP
+      AND (valid_until IS NULL OR valid_until > CURRENT_TIMESTAMP)
+)
 SELECT
     t.organization_id,
     t.institution_id,
@@ -809,7 +842,6 @@ GROUP BY t.organization_id, t.institution_id, t.principal_user_id, t.email
 ORDER BY t.organization_id, t.institution_id, t.email;
 ```
 
-`targets` and `active_bindings` are the CTEs defined in the Phase 1 inventory.
 Every affected principal is listed by name; no row is created by this change.
 
 ### Exact binding rows operators must create

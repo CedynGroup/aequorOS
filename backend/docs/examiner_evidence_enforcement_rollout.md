@@ -143,10 +143,22 @@ replaced their tenancy-only gate, the liquidity half for longer.
   principal gains nothing from any of it, because its own exact binding sentence
   is what decides.
 - **One copy of the list.** The bundle's `SOURCE_REGISTERS` is derived from the
-  kernel table, so the catalogue it discloses cannot name a register the session
-  cannot open. `tests/architecture/test_examiner_register_routes.py` pins the
-  table, its routes, the gates behind them and that derivation;
+  kernel table, so the module and sensitivity the catalogue advertises for a
+  register are the ones its gate enforces, and the two cannot drift.
+  `tests/architecture/test_examiner_register_routes.py` pins the table, its
+  routes, the gates behind them and that derivation;
   `tests/api/test_examiner_register_reads_integration.py` pins the behaviour.
+
+The bank claim is a **register-read** guarantee, not an entry-gate one, and the
+difference shows up in exactly one place. The bundle's entry gate
+(`staff_inspection`) and its per-source sentences admit a verified read-only
+inspection on the AUDIT entry sentence; neither consults `bank_id`. A session
+opened before the binding landed therefore still receives the bundle and still
+sees the six citations disclosed under its held authority — it just cannot open
+any of them, because the register gate is where the claim is compared with the
+bank in the path. The console records the examined bank on every session it opens,
+so this is a legacy-row shape rather than a live one, and it fails closed: the
+citations `403`, and nothing widens to the organization.
 
 ## Operation matrix
 
