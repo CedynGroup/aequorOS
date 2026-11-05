@@ -79,7 +79,6 @@ def pytest_collection_finish(session: pytest.Session) -> None:
                     "service",
                     nodeid=item.nodeid,
                     service=service,
-                    suite="e2e" if service == "playwright" else "integration",
                 )
 
 

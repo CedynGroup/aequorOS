@@ -1,8 +1,7 @@
-"""Explicit unit/integration/e2e ownership without moving feature-local test files.
+"""Filename-owned suites and runtime CI collection/execution coverage.
 
-The generated catalogue declares every parametrized test by its exact node ID.
-There is no module default or implicit fallback for new tests.
-This module is stdlib-only so CI planning and aggregation share the same owner.
+Feature folders locate tests; only the filename suffix assigns their suite.
+This module stays stdlib-only for CI planning and report aggregation.
 """
 
 from __future__ import annotations
@@ -12,8 +11,7 @@ import json
 import os
 import xml.etree.ElementTree as ET
 from collections import Counter
-from collections.abc import Mapping
-from functools import cache
+from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Literal, cast
 
@@ -23,76 +21,34 @@ else:
     from database_contracts import check_classification, verify_execution
 
 Suite = Literal["unit", "integration", "e2e"]
-CATALOGUE = Path(__file__).with_name("test_suites.json")
-
-
-def _unique_object(pairs: list[tuple[str, object]]) -> dict[str, object]:
-    result = dict(pairs)
-    if len(result) != len(pairs):
-        raise ValueError("Double-classified catalogue entry")
-    return result
-
-
-@cache
-def catalogue() -> tuple[dict[str, Suite], dict[str, Suite]]:
-    raw = cast(
-        dict[str, dict[str, str]],
-        json.loads(CATALOGUE.read_text(), object_pairs_hook=_unique_object),
-    )
-    cases = raw["cases"]
-    if not cases or any(value not in ("unit", "integration", "e2e") for value in cases.values()):
-        raise ValueError("Test suite must be unit, integration or e2e")
-    modules: dict[str, Suite] = {}
-    for nodeid, suite in cases.items():
-        if "::" not in nodeid:
-            raise ValueError("Generated catalogue requires exact test node IDs")
-        module = nodeid.split("::", 1)[0]
-        previous = modules.get(module, "unit")
-        modules[module] = (
-            "integration"
-            if "integration" in (previous, suite)
-            else "e2e"
-            if "e2e" in (previous, suite)
-            else "unit"
-        )
-    return modules, cast(dict[str, Suite], cases)
+BACKEND = Path(__file__).resolve().parents[1]
 
 
 def owner(nodeid: str) -> Suite:
-    _, cases = catalogue()
-    try:
-        return cases[nodeid]
-    except KeyError as error:
-        raise ValueError(f"Unclassified test: {nodeid}; refresh the database census") from error
+    """Assign every case, including new parametrizations, from its module name."""
+    filename = Path(nodeid.split("::", 1)[0]).name
+    if filename.endswith("_integration.py"):
+        return "integration"
+    if filename.endswith("_e2e.py"):
+        return "e2e"
+    return "unit"
 
 
-def unit_modules() -> frozenset[str]:
-    modules, _ = catalogue()
-    return frozenset(module for module, suite in modules.items() if suite == "unit")
-
-
-def selected_modules(suite: str) -> list[str]:
+def selected_modules(
+    suite: str,
+    root: Path = BACKEND,
+    paths: Sequence[str] = ("tests",),
+    patterns: Sequence[str] = ("test_*.py", "*_test.py"),
+) -> list[str]:
     return sorted(
-        {nodeid.split("::")[0] for nodeid, assigned in catalogue()[1].items() if assigned == suite}
+        {
+            path.relative_to(root).as_posix()
+            for directory in paths
+            for pattern in patterns
+            for path in (root / directory).rglob(pattern)
+            if "__pycache__" not in path.parts and path.is_file() and owner(str(path)) == suite
+        }
     )
-
-
-def verify_module_inventory(root: Path, paths: list[str], patterns: list[str]) -> None:
-    """Inventory files without importing integration-only test modules.
-
-    Actual collection checks every case in selected modules. The aggregate joins
-    the other owners' collected identities, so a new, empty, deleted or excluded
-    module cannot be hidden by the optimized unit selection.
-    """
-    discovered = {
-        path.relative_to(root).as_posix()
-        for directory in paths
-        for pattern in patterns
-        for path in (root / directory).rglob(pattern)
-        if "__pycache__" not in path.parts
-    }
-    if discovered != set(catalogue()[0]):
-        raise ValueError("Test modules on disk differ from the generated catalogue")
 
 
 def case_key(nodeid: str) -> tuple[str, str]:
@@ -102,10 +58,7 @@ def case_key(nodeid: str) -> tuple[str, str]:
     return ".".join([module.removesuffix(".py").replace("/", "."), *names[:-1]]), names[-1]
 
 
-def _verify_service_execution(reports: list[Path]) -> None:
-    service_nodes = cast(dict[str, dict[str, str]], json.loads(CATALOGUE.read_text())).get(
-        "services", {}
-    )
+def _verify_service_execution(reports: list[Path], service_nodes: list[str]) -> None:
     service_keys = {case_key(nodeid) for nodeid in service_nodes}
     if any(
         case.find("skipped") is not None
@@ -116,17 +69,26 @@ def _verify_service_execution(reports: list[Path]) -> None:
         raise ValueError("External service contract skipped across CI owners")
 
 
-def verify_partition(directory: Path, *, protected: Mapping[str, str] | None = None) -> None:
-    """Join unit, e2e, schema, suite, lock and storage reports against full collection."""
-    classified = cast(
-        dict[str, str], json.loads((directory / "unit-tests" / "collection.json").read_text())
+def _collection(directory: Path) -> tuple[dict[str, object], dict[str, str]]:
+    evidence = cast(
+        dict[str, object],
+        json.loads((directory / "unit-tests" / "all-tests.json").read_text()),
     )
+    classified = cast(dict[str, str], evidence["collected"])
     if not classified or not {"unit", "integration"} <= set(classified.values()) <= {
         "unit",
         "integration",
         "e2e",
     }:
         raise ValueError("Missing unit/integration/e2e classification evidence")
+    if any(owner(nodeid) != suite for nodeid, suite in classified.items()):
+        raise ValueError("Collection disagrees with filename suite")
+    return evidence, classified
+
+
+def verify_partition(directory: Path, *, protected: Mapping[str, str] | None = None) -> None:
+    """Join every CI report against this run's independent full-tree collection."""
+    evidence, classified = _collection(directory)
     check_classification(classified, protected=protected)
     files = cast(list[str], json.loads(os.getenv("CI_POSTGRES_FILES", "[]")))
     indices = set(range(1, 5))
@@ -163,7 +125,7 @@ def verify_partition(directory: Path, *, protected: Mapping[str, str] | None = N
         if any(case.find(tag) is not None for case in cases for tag in ("error", "failure")):
             raise ValueError(f"Failed CI execution in {report}")
         actual.update(identities)
-    _verify_service_execution(reports)
+    _verify_service_execution(reports, cast(list[str], evidence["services"]))
     omitted: set[str] = set()
     if files:
         for manifest in directory.glob("pg-suite-*/collection-*.json"):
@@ -181,12 +143,7 @@ def verify_partition(directory: Path, *, protected: Mapping[str, str] | None = N
     bao_keys = {
         case_key(nodeid)
         for nodeid in classified
-        if nodeid.startswith(
-            (
-                "tests/attestation/service/test_attestation_openbao.py::",
-                "tests/attestation/service/test_attestation_openbao_integration.py::",
-            )
-        )
+        if nodeid.startswith("tests/attestation/service/test_attestation_openbao_integration.py::")
         and nodeid not in omitted
     }
     bao_cases = [
@@ -198,9 +155,7 @@ def verify_partition(directory: Path, *, protected: Mapping[str, str] | None = N
     if any(case.find("skipped") is not None for case in bao_cases):
         raise ValueError("OpenBao tests skipped across unit/integration owners")
 
-    print(
-        f"{sum(expected.values())} selected tests: exactly one unit/integration CI owner verified"
-    )
+    print(f"{sum(expected.values())} selected tests: exactly one unit/integration/e2e CI owner")
 
 
 if __name__ == "__main__":

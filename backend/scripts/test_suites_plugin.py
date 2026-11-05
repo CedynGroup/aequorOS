@@ -9,24 +9,18 @@ import xml.etree.ElementTree as ET
 from collections import Counter
 from collections.abc import Callable, Generator, Iterator
 from contextlib import contextmanager
+from fnmatch import fnmatch
 from pathlib import Path
-from typing import cast
+from typing import TypedDict, cast
 
 import pytest
 from _pytest.fixtures import FixtureDef, SubRequest
-from _pytest.python import PyCollector
 from _pytest.terminal import TerminalReporter
 
 from scripts import database_contracts
 from scripts.ci_database_children import python_path
 from scripts.ci_no_database import install
-from scripts.test_suites import (
-    case_key,
-    catalogue,
-    owner,
-    selected_modules,
-    verify_module_inventory,
-)
+from scripts.test_suites import case_key, owner, selected_modules
 
 _PATCHES = pytest.StashKey[pytest.MonkeyPatch]()
 _DIRECTORY = pytest.StashKey[Path]()
@@ -34,22 +28,19 @@ _ATTEMPTS = pytest.StashKey[Path]()
 _EXPECTED = pytest.StashKey[list[str]]()
 _FIXTURE_PATCHES = pytest.StashKey[pytest.MonkeyPatch]()
 _ATTEMPT_START = pytest.StashKey[int]()
-_COLLECTION_OWNERS = pytest.StashKey[dict[str, set[str]]]()
+
+
+class CollectionEvidence(TypedDict):
+    collected: dict[str, str]
+    services: list[str]
+
+
+_COLLECTION = pytest.StashKey[CollectionEvidence]()
 
 
 def _worker(config: pytest.Config) -> str:
     worker = cast(dict[str, object] | None, getattr(config, "workerinput", None))
     return cast(str, worker["workerid"]) if worker is not None else "main"
-
-
-def _dump_census_diagnostics(config: pytest.Config, payload: dict[str, list[str]]) -> None:
-    # A worker that fails a census guard dies before the controller explains
-    # why; land the evidence in the uploaded report directory instead.
-    directory = config.stash.get(_DIRECTORY, None)
-    if directory is None:
-        return
-    path = directory / f"census-debug-{_worker(config)}.json"
-    _ = path.write_text(json.dumps(payload, indent=2))
 
 
 def pytest_report_header(config: pytest.Config) -> str | None:
@@ -69,8 +60,7 @@ def _install(config: pytest.Config) -> None:
         _ = attempts.write_text("")
     patches = pytest.MonkeyPatch()
     patches.setenv("CI_NO_DATABASE_ATTEMPTS", str(attempts.resolve()))
-    # Mixed migration modules gate even model-only checks on this setting.
-    # Enable their collection with a refused sentinel, never a live endpoint.
+    # A refused sentinel enables database-gated collection without a live endpoint.
     patches.setenv("TEST_DATABASE_URL", "postgresql+psycopg://unit:unit@127.0.0.1:1/unit_tests")
     patches.setenv("PYTHONPATH", python_path(os.environ.get("PYTHONPATH", "")))
     install(patches.setattr)
@@ -131,7 +121,11 @@ def pytest_addoption(parser: pytest.Parser) -> None:
     parser.addoption(
         "--suite-only",
         action="store_true",
-        help="Collect only modules containing the selected generated suite",
+        help="Collect only modules in the filename-selected suite",
+    )
+    parser.addoption(
+        "--collection-output",
+        help="Write complete, unfiltered collection evidence for CI aggregation",
     )
 
 
@@ -145,18 +139,20 @@ def pytest_xdist_make_scheduler(config: pytest.Config, log: object) -> object | 
 
 
 def pytest_load_initial_conftests(early_config: pytest.Config, args: list[str]) -> None:
-    if (
-        os.getenv("CI_DATABASE_CENSUS") != "1"
-        and cast(object, early_config.known_args_namespace.markexpr) == "unit"
+    if getattr(early_config.known_args_namespace, "collection_output", None) and not getattr(
+        early_config.known_args_namespace, "collectonly", False
+    ):
+        raise pytest.UsageError("--collection-output requires --collect-only")
+    if cast(object, early_config.known_args_namespace.markexpr) == "unit" or getattr(
+        early_config.known_args_namespace, "collection_output", None
     ):
         _install(early_config)
     if getattr(early_config.known_args_namespace, "suite_only", False):
         suite = cast(str, early_config.known_args_namespace.markexpr)
         if suite not in {"unit", "integration", "e2e"}:
-            raise pytest.UsageError("--suite-only requires exactly one generated suite selector")
+            raise pytest.UsageError("--suite-only requires exactly one filename suite selector")
         if cast(list[str], early_config.known_args_namespace.file_or_dir):
-            raise pytest.UsageError("--suite-only owns its generated module selection")
-        args.extend(selected_modules(suite))
+            raise pytest.UsageError("--suite-only owns its filename module selection")
 
 
 def pytest_configure(config: pytest.Config) -> None:
@@ -173,8 +169,7 @@ def pytest_configure(config: pytest.Config) -> None:
             raise pytest.UsageError("E2E CI owner requires the e2e selector")
         config.stash[_DIRECTORY] = Path(e2e_directory)
         config.stash[_DIRECTORY].mkdir(parents=True, exist_ok=True)
-    if os.getenv("CI_DATABASE_CENSUS") != "1":
-        _guard_fixture_finalization(config)
+    _guard_fixture_finalization(config)
     if os.getenv("CI_UNIT_REPORT_DIR") and not config.getoption("collectonly"):
         if config.getoption("markexpr") != "unit" or _DIRECTORY not in config.stash:
             raise pytest.UsageError("Unit CI owner requires the unit selector and connection guard")
@@ -190,56 +185,42 @@ def pytest_configure(config: pytest.Config) -> None:
             config.option.xmlpath = str(config.stash[_DIRECTORY] / "report.xml")
 
 
-@pytest.hookimpl(tryfirst=True)
-def pytest_pycollect_makeitem(
-    collector: PyCollector, name: str, obj: object
-) -> list[pytest.Item] | None:
-    if not collector.config.getoption("suite_only"):
+def pytest_ignore_collect(collection_path: Path, config: pytest.Config) -> bool | None:
+    if not config.getoption("suite_only"):
         return None
-    if not (collector.istestfunction(obj, name) or collector.istestclass(obj, name)):
+    if collection_path.suffix != ".py" or not any(
+        fnmatch(collection_path.name, pattern)
+        for pattern in cast(list[str], config.getini("python_files"))
+    ):
         return None
-    prefix = f"{collector.nodeid}::{name}"
-    if _COLLECTION_OWNERS not in collector.config.stash:
-        prefixes: dict[str, set[str]] = {}
-        for nodeid, suite in catalogue()[1].items():
-            names = nodeid.partition("[")[0].split("::")
-            for length in range(2, len(names) + 1):
-                prefixes.setdefault("::".join(names[:length]), set()).add(suite)
-        collector.config.stash[_COLLECTION_OWNERS] = prefixes
-    owners = collector.config.stash[_COLLECTION_OWNERS].get(prefix, set())
-    if not owners:
-        # Pytest first considers imported classes such as TestClient, then
-        # rejects their constructors. Let it decide whether an unknown class
-        # is collectible; any actual new test method is checked below it.
-        if collector.istestclass(obj, name):
-            return None
-        raise pytest.UsageError(f"Unclassified test: {prefix}; refresh the census")
-    return [] if collector.config.getoption("markexpr") not in owners else None
+    return owner(str(collection_path)) != cast(object, config.getoption("markexpr"))
+
+
+def _check_module_inventory(
+    config: pytest.Config, nodeids: list[str], suites: tuple[str, ...]
+) -> None:
+    paths = cast(list[str], config.getini("testpaths")) or ["."]
+    expected = {
+        module
+        for suite in suites
+        for module in selected_modules(
+            suite, config.rootpath, paths, cast(list[str], config.getini("python_files"))
+        )
+    }
+    if expected != {nodeid.split("::", 1)[0] for nodeid in nodeids}:
+        raise pytest.UsageError("CI must collect every module in its filename suite")
 
 
 @pytest.hookimpl(tryfirst=True)
 def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item]) -> None:
-    if os.getenv("CI_DATABASE_CENSUS") == "1":
-        for item in items:
-            database_contracts.check_collection(
-                item.nodeid,
-                None,
-                item.fixturenames if isinstance(item, pytest.Function) else [],
-                marked=item.get_closest_marker("database_contract") is not None,
-            )
-        return
     nodeids = [item.nodeid for item in items]
     if len(set(nodeids)) != len(nodeids):
         counts = Counter(nodeids)
         duplicates = sorted(nodeid for nodeid, count in counts.items() if count > 1)
-        _dump_census_diagnostics(config, {"duplicate_nodeids": duplicates[:25]})
         raise pytest.UsageError("Duplicate test collection: " + ", ".join(duplicates[:10]))
     classified: dict[str, str] = {}
     for item in items:
-        try:
-            suite = owner(item.nodeid)
-        except ValueError as error:
-            raise pytest.UsageError(str(error)) from error
+        suite = owner(item.nodeid)
         markers = [
             mark.name for mark in item.iter_markers() if mark.name in ("unit", "integration", "e2e")
         ]
@@ -257,61 +238,30 @@ def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item
         except ValueError as error:
             raise pytest.UsageError(str(error)) from error
         classified[item.nodeid] = suite
+    if config.getoption("collection_output"):
+        _check_module_inventory(config, nodeids, ("unit", "integration", "e2e"))
+        try:
+            database_contracts.check_classification(classified)
+        except ValueError as error:
+            raise pytest.UsageError(str(error)) from error
+        evidence: CollectionEvidence = {
+            "collected": classified,
+            "services": [
+                item.nodeid for item in items if item.get_closest_marker("requires_service")
+            ],
+        }
+        config.stash[_COLLECTION] = evidence
     if (os.getenv("CI_UNIT_REPORT_DIR") or os.getenv("CI_E2E_REPORT_DIR")) and not config.getoption(
         "collectonly"
     ):
-        modules, overrides = catalogue()
-        actual_modules = {nodeid.split("::")[0] for nodeid in nodeids}
         suite = cast(str, config.getoption("markexpr"))
-        expected_modules = (
-            set(selected_modules(suite)) if config.getoption("suite_only") else set(modules)
-        )
-        if expected_modules != actual_modules:
-            _dump_census_diagnostics(
-                config,
-                {
-                    "census_modules_missing_from_collection": sorted(
-                        expected_modules - actual_modules
-                    )[:25],
-                    "collected_modules_missing_from_census": sorted(
-                        actual_modules - expected_modules
-                    )[:25],
-                },
-            )
-            raise pytest.UsageError("CI must collect every module containing its selected suite")
-        expected_nodeids = {nodeid for nodeid, assigned in overrides.items() if assigned == suite}
-        classified_nodeids = {
-            nodeid for nodeid, assigned in classified.items() if assigned == suite
-        }
-        if expected_nodeids != classified_nodeids:
-            _dump_census_diagnostics(
-                config,
-                {
-                    "census_nodeids_not_collected": sorted(expected_nodeids - classified_nodeids)[
-                        :25
-                    ],
-                    "collected_nodeids_not_in_census": sorted(
-                        classified_nodeids - expected_nodeids
-                    )[:25],
-                },
-            )
-            raise pytest.UsageError("Stale or incomplete generated test suite catalogue")
-        paths = cast(list[str], config.getini("testpaths")) or ["."]
-        try:
-            database_contracts.check_classification(overrides)
-            verify_module_inventory(
-                config.rootpath, paths, cast(list[str], config.getini("python_files"))
-            )
-        except ValueError as error:
-            raise pytest.UsageError(str(error)) from error
+        if config.getoption("suite_only"):
+            _check_module_inventory(config, nodeids, (suite,))
         config.stash[_EXPECTED] = [
-            nodeid for nodeid, assigned in overrides.items() if assigned == suite
+            nodeid for nodeid, assigned in classified.items() if assigned == suite
         ]
         path = config.stash[_DIRECTORY] / f"collection-{_worker(config)}.json"
-        _ = path.write_text(json.dumps(overrides))
-        _ = (config.stash[_DIRECTORY] / f"collected-{_worker(config)}.json").write_text(
-            json.dumps(classified)
-        )
+        _ = path.write_text(json.dumps(classified))
 
 
 def pytest_collection_finish(session: pytest.Session) -> None:
@@ -319,6 +269,13 @@ def pytest_collection_finish(session: pytest.Session) -> None:
         item.nodeid for item in session.items
     ) != Counter(session.config.stash[_EXPECTED]):
         raise pytest.UsageError("CI owner dropped or duplicated selected tests")
+    if _COLLECTION in session.config.stash:
+        collected = session.config.stash[_COLLECTION]["collected"]
+        if Counter(item.nodeid for item in session.items) != Counter(list(collected)):
+            raise pytest.UsageError("Full-tree collection must not filter or duplicate cases")
+        path = Path(cast(str, session.config.getoption("collection_output")))
+        path.parent.mkdir(parents=True, exist_ok=True)
+        _ = path.write_text(json.dumps(session.config.stash[_COLLECTION]))
 
 
 @contextmanager
@@ -327,7 +284,7 @@ def _managed_storage_environment(item: pytest.Item) -> Generator[None]:
     # must not become ambient application configuration for production-TLS or
     # mocked AWS provisioning tests elsewhere in the tree.
     patches = pytest.MonkeyPatch()
-    managed = os.getenv("CI_DATABASE_CENSUS") == "1" or bool(os.getenv("CI_UNIT_REPORT_DIR"))
+    managed = bool(os.getenv("CI_DATABASE_OBSERVATIONS") or os.getenv("CI_UNIT_REPORT_DIR"))
     if managed and not item.nodeid.startswith(("tests/storage/", "tests/db/")):
         patches.delenv("S3_ENDPOINT", raising=False)
     try:
@@ -342,11 +299,7 @@ def pytest_runtest_protocol(item: pytest.Item) -> Iterator[None]:
     with _managed_storage_environment(item):
         path = item.config.stash.get(_ATTEMPTS, None)
         item.stash[_ATTEMPT_START] = path.stat().st_size if path is not None else 0
-        if (
-            os.getenv("CI_DATABASE_CENSUS") == "1"
-            or item.get_closest_marker("unit") is None
-            or _PATCHES in item.config.stash
-        ):
+        if item.get_closest_marker("unit") is None or _PATCHES in item.config.stash:
             yield
             return
         _install(item.config)
@@ -418,7 +371,7 @@ def _verify_execution(config: pytest.Config, directory: Path) -> None:
         raise ValueError("Unit JUnit coverage dropped, duplicated, skipped or failed tests")
     observations = os.getenv("CI_DATABASE_OBSERVATIONS")
     if observations and Path(observations).resolve().is_relative_to(directory.resolve()):
-        from scripts.test_suite_census import check  # noqa: PLC0415
+        from scripts.database_observation_check import check  # noqa: PLC0415
 
         check(Path(observations))
 

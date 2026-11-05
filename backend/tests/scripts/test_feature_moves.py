@@ -305,22 +305,7 @@ def test_strings_paths_guards_and_docs_follow_the_move(repository: Path) -> None
         assert _read(repository, relative) == FILES[relative]
 
 
-def test_test_catalogue_node_ids_follow_the_move(repository: Path) -> None:
-    quoted = 'tests/live/test_imports.py::test_composes["app.services.regulatory_fx"]'
-    renamed_quoted = 'tests/live/test_imports.py::test_composes["app.fx.service"]'
-    suites = repository / "backend/scripts/test_suites.json"
-    suites.write_text(
-        "{\n"
-        '  "cases": {\n'
-        '    "tests/test_fx.py::test_run": "unit",\n'
-        '    "tests/other/test_keep.py::test_keep": "unit",\n'
-        '    "tests/live/test_imports.py::test_composes[app.services.regulatory_fx]": "unit",\n'
-        '    "tests/live/test_imports.py::test_composes[app.services.regulatory_fx-c]": "unit",\n'
-        f'    {json.dumps(quoted)}: "unit"\n'
-        "  },\n"
-        '  "services": {}\n'
-        "}\n"
-    )
+def test_duration_module_keys_follow_the_move(repository: Path) -> None:
     durations = repository / "backend/scripts/ci_postgres_durations.json"
     durations.write_text(
         "{\n"
@@ -336,18 +321,6 @@ def test_test_catalogue_node_ids_follow_the_move(repository: Path) -> None:
     flush.write_text('{"app.services.regulatory_fx": []}\n')
     _git(repository, "add", ".")
     _run(repository, "move", [MOVES[0], ("tests.test_fx", "tests.fx.api.test_fx")])
-    assert suites.read_text() == (
-        "{\n"
-        '  "cases": {\n'
-        '    "tests/fx/api/test_fx.py::test_run": "unit",\n'
-        '    "tests/other/test_keep.py::test_keep": "unit",\n'
-        '    "tests/live/test_imports.py::test_composes[app.fx.service]": "unit",\n'
-        '    "tests/live/test_imports.py::test_composes[app.fx.service-c]": "unit",\n'
-        f'    {json.dumps(renamed_quoted)}: "unit"\n'
-        "  },\n"
-        '  "services": {}\n'
-        "}\n"
-    )
     assert durations.read_text() == (
         "{\n"
         '  "source_run": "run",\n'
@@ -360,13 +333,6 @@ def test_test_catalogue_node_ids_follow_the_move(repository: Path) -> None:
     assert flush.read_text() == '{"app.services.regulatory_fx": []}\n'
     assert _run(repository, "rewrite") == ["exit 0"]
     assert _run(repository, "check") == ["exit 0"]
-    assert json.loads(suites.read_text())["cases"] == {
-        "tests/fx/api/test_fx.py::test_run": "unit",
-        "tests/other/test_keep.py::test_keep": "unit",
-        "tests/live/test_imports.py::test_composes[app.fx.service]": "unit",
-        "tests/live/test_imports.py::test_composes[app.fx.service-c]": "unit",
-        renamed_quoted: "unit",
-    }
 
 
 def test_a_split_module_still_follows_a_later_move_of_the_surviving_file() -> None:
@@ -393,24 +359,10 @@ def test_a_split_module_keeps_its_name_for_the_partition_only() -> None:
     assert rename("tests.test_health") == "tests.test_health"
 
 
-def test_the_catalogue_of_a_split_module_follows_a_later_move(tmp_path: Path) -> None:
+def test_the_durations_of_a_split_module_follows_a_later_move(tmp_path: Path) -> None:
     """A later move re-files a split module's keys, instead of leaving them at the old path."""
     backend = tmp_path / "backend"
     (backend / "scripts").mkdir(parents=True)
-    (backend / "scripts/test_suites.json").write_text(
-        json.dumps(
-            {
-                "cases": {
-                    "tests/test_health.py::test_probe": "unit",
-                    "tests/test_health.py::test_probe[tests.test_health]": "unit",
-                    "tests/other/test_keep.py::test_keep": "unit",
-                },
-                "services": {"tests/test_health.py": ["postgres"]},
-            },
-            indent=2,
-        )
-        + "\n"
-    )
     (backend / "scripts/ci_postgres_durations.json").write_text(
         json.dumps({"source_run": "run", "durations": {"tests/test_health.py": 0.5}}, indent=2)
         + "\n"
@@ -423,14 +375,7 @@ def test_the_catalogue_of_a_split_module_follows_a_later_move(tmp_path: Path) ->
             ("tests.test_health", "tests.test_readiness"),
         )
     )
-    planned = feature_moves.plan_catalogue_rewrites(backend, rename)
-    suites = cast("dict[str, object]", json.loads(planned[backend / "scripts/test_suites.json"]))
-    assert suites["cases"] == {
-        "tests/test_readiness.py::test_probe": "unit",
-        "tests/test_readiness.py::test_probe[tests.test_readiness]": "unit",
-        "tests/other/test_keep.py::test_keep": "unit",
-    }
-    assert suites["services"] == {"tests/test_readiness.py": ["postgres"]}
+    planned = feature_moves.plan_duration_rewrites(backend, rename)
     durations = cast(
         "dict[str, object]",
         json.loads(planned[backend / "scripts/ci_postgres_durations.json"]),
@@ -438,22 +383,20 @@ def test_the_catalogue_of_a_split_module_follows_a_later_move(tmp_path: Path) ->
     assert durations == {"source_run": "run", "durations": {"tests/test_readiness.py": 0.5}}
 
 
-def test_the_catalogue_of_a_split_module_keeps_its_partition_keys(tmp_path: Path) -> None:
+def test_the_durations_of_a_split_module_keeps_its_partition_keys(tmp_path: Path) -> None:
     """The partition edge still leaves every surviving file's keys at their own names."""
     backend = tmp_path / "backend"
     (backend / "scripts").mkdir(parents=True)
-    (backend / "scripts/test_suites.json").write_text(
+    (backend / "scripts/ci_postgres_durations.json").write_text(
         json.dumps(
             {
-                "cases": {
-                    "tests/test_health.py::test_probe": "unit",
-                    "tests/test_health_integration.py::test_probe": "integration",
+                "source_run": "run",
+                "durations": {
+                    "tests/test_health.py": 0.5,
+                    "tests/test_health_integration.py": 1.5,
                 },
-                "services": {},
-            },
-            indent=2,
+            }
         )
-        + "\n"
     )
     rename = Renamer(
         (
@@ -462,7 +405,7 @@ def test_the_catalogue_of_a_split_module_keeps_its_partition_keys(tmp_path: Path
             ("tests.test_health", "tests.test_health_integration"),
         )
     )
-    assert feature_moves.plan_catalogue_rewrites(backend, rename) == {}
+    assert feature_moves.plan_duration_rewrites(backend, rename) == {}
 
 
 def test_a_wrapped_rewritten_import_keeps_its_noqa_on_the_first_line(tmp_path: Path) -> None:

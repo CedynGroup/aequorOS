@@ -588,22 +588,20 @@ def test_the_full_suite_ignores_exactly_what_its_sibling_tasks_run() -> None:
 
 
 def test_the_hermetic_run_still_proves_it_collected_every_module(tmp_path: Path) -> None:
-    """Selective collection rejects drift without importing integration-only files."""
+    """Filename selection discovers new cases without importing other suites."""
     tests = tmp_path / "tests"
     tests.mkdir()
     _ = (tmp_path / "pytest.ini").write_text("[pytest]\ntestpaths=tests\n")
-    nodes = {"tests/test_unit.py::test_unit": "unit", "tests/test_db.py::test_db": "integration"}
     _ = (tests / "test_unit.py").write_text(
         "class TestClient:\n    def __init__(self): pass\ndef test_unit(): assert True\n"
     )
-    _ = (tests / "test_db.py").write_text("raise RuntimeError('integration module imported')\n")
-    catalogue = tmp_path / "suites.json"
+    _ = (tests / "test_db_integration.py").write_text(
+        "raise RuntimeError('integration module imported')\n"
+    )
     contracts = tmp_path / "contracts.json"
     _ = contracts.write_text(json.dumps({"contracts": []}))
-    _ = (tmp_path / "probe_catalogue.py").write_text(
-        "from pathlib import Path\nfrom scripts import database_contracts, test_suites\n"
-        + f"test_suites.CATALOGUE = Path({str(catalogue)!r})\n"
-        + "test_suites.catalogue.cache_clear()\n"
+    _ = (tmp_path / "probe_contracts.py").write_text(
+        "from pathlib import Path\nfrom scripts import database_contracts\n"
         + f"database_contracts.CATALOGUE = Path({str(contracts)!r})\n"
     )
     environment = {
@@ -614,21 +612,16 @@ def test_the_hermetic_run_still_proves_it_collected_every_module(tmp_path: Path)
         "PYTEST_PLUGINS": "",
         "CI_UNIT_REPORT_DIR": str(tmp_path / "evidence"),
     }
-    _ = environment.pop("CI_DATABASE_CENSUS", None)
-    for extra_module, source, declared, succeeds in (
-        ("test_extra.py", "def test_extra(): assert True\n", True, True),
-        ("test_extra.py", "VALUE = 1\n", False, False),
-        ("extra_test.py", "VALUE = 1\n", False, False),
-        ("test_extra.py", "raise RuntimeError('collection failure')\n", True, False),
-        ("test_extra.py", "def test_extra(): pass\ndef test_new(): pass\n", True, False),
-        ("test_extra.py", "VALUE = 1\n", True, False),
+    for extra_module, source, succeeds in (
+        ("test_extra.py", "def test_extra(): assert True\n", True),
+        ("test_extra.py", "VALUE = 1\n", False),
+        ("extra_test.py", "VALUE = 1\n", False),
+        ("test_extra.py", "raise RuntimeError('collection failure')\n", False),
+        ("test_extra.py", "def test_extra(): pass\ndef test_new(): pass\n", True),
+        ("test_extra.py", "VALUE = 1\n", False),
     ):
         extra = tests / extra_module
         _ = extra.write_text(source)
-        owners = dict(nodes)
-        if declared:
-            owners[f"tests/{extra_module}::test_extra"] = "unit"
-        _ = catalogue.write_text(json.dumps({"cases": owners}))
         result = subprocess.run(
             [
                 sys.executable,
@@ -638,7 +631,7 @@ def test_the_hermetic_run_still_proves_it_collected_every_module(tmp_path: Path)
                 "-p",
                 "scripts.test_suites_plugin",
                 "-p",
-                "probe_catalogue",
+                "probe_contracts",
                 "-m",
                 "unit",
                 "--suite-only",
