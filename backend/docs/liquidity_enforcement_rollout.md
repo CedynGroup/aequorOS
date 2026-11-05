@@ -63,8 +63,8 @@ Liquidity haircut PUTs with service-enforced scoped configuration authority.
 Analyst, Approver, Account Admin, and Owner bindings do not convey `configure`;
 no existing principal receives a compatibility grant. A Configurator can PUT
 without `view`. GET still requires a separate LIQ/confidential view grant.
-The existing effective-dated history, Board evidence, audit, refresh triggers,
-and response shapes are preserved. Denial precedes register reads, generation
+The existing effective-dated history, Board evidence, audit and refresh triggers
+are preserved. Denial precedes register reads, generation
 closure, parameter writes, success audit, and job enqueue. Threshold and haircut
 storage and effect scope are now the exact bank named by the request, including
 all history and generation closure. No shared-register fallback exists.
@@ -74,6 +74,30 @@ checks tenant-facing entry points. Scheduled official-run authority is owned by
 the [FX queued-run contract](fx_enforcement_rollout.md#queued-and-scheduled-official-runs).
 Capital, Credit, and RISK-owned enterprise-stress backend
 enforcement remain outside this cutover.
+
+### Configuration response contract (D3)
+
+Threshold and haircut PUTs return HTTP 200 write acknowledgements, **not**
+registers, for every caller, including callers with separate read authority.
+`LiquidityThresholdWriteAcknowledgement` and
+`LiquidityHaircutWriteAcknowledgement` contain the acting `bank_id`, submitted
+`effective_from`, `approved_by`, `notes`, server `approval_timestamp`, and
+`written` entries containing only the newly created row `id` and submitted
+code/value (haircut asset classes are normalized). Threshold acknowledgements
+also contain the submitted `institution_class`. Build these before commit from
+the request and newly written rows; return them only after commit succeeds.
+Never resolve the register or invoke a read function to construct a PUT response.
+No active register, defaults, untouched codes, prior generations, history,
+jurisdiction metadata or sibling-bank data is returned. EWI PUT already returns
+an empty HTTP 204 and retains that contract.
+
+This intentionally changes the two PUT response schemas. Regenerate the API
+client and deploy API/client consumers together. The dashboard ignores the
+acknowledgement and invalidates its existing authority-scoped read queries;
+displayed register values and history come only from the separately authorized
+GET, never the submitted value (which can differ from the resolved floor).
+Configure-only grants still permit writes but never GETs. No read grant is
+inferred or added. Existing browser eligibility and save behaviour are unchanged.
 
 ## Bank-local register deployment
 

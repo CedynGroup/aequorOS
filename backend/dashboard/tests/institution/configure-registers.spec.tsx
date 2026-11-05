@@ -102,7 +102,19 @@ beforeEach(() => {
   setAccessToken("synthetic-session");
   vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const path = new URL(input instanceof Request ? input.url : String(input)).pathname;
-    if (init?.method === "PUT") writes.push({ path, body: JSON.parse(String(init.body)) });
+    if (init?.method === "PUT") {
+      writes.push({ path, body: JSON.parse(String(init.body)) });
+      if (path.endsWith("/liquidity/ewis")) return new Response(null, { status: 204 });
+      return Response.json({
+        bank_id: "BK-SAMP0001", institution_class: "bank",
+        effective_from: "2026-09-30", approved_by: "Board minute",
+        approval_timestamp: "2026-09-30T12:00:00Z", notes: null,
+        written: [{
+          id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+          threshold_code: "narrow_to_volatile", threshold_pct: "45",
+        }],
+      });
+    }
     if (path.endsWith("/templates")) return Response.json({ templates: [] });
     return Response.json(path.endsWith("/credit-thresholds")
       ? { as_of: "2026-09-30", thresholds: [] } : register);
@@ -249,6 +261,54 @@ it("saves a changed threshold through the generated client with Board evidence",
     path: "/api/v1/banks/BK-SAMP0001/liquidity-thresholds",
     body: { thresholds: { narrow_to_volatile: "45" }, approved_by: "Board minute", reason: "Record approved threshold" },
   });
+});
+it.each([false, true])("refetches the register after acknowledgement (read denied: %s)", async (readDenied) => {
+  authority.capabilities = [
+    capability("liq"),
+    capability("liq", { permission: "view", sensitivity: "confidential" }),
+  ];
+  let written = false;
+  let reads = 0;
+  vi.stubGlobal("fetch", vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+    if (init?.method === "PUT") {
+      written = true;
+      return Response.json({
+        bank_id: "BK-SAMP0001", institution_class: "bank",
+        effective_from: "2026-09-30", approved_by: "Board minute",
+        approval_timestamp: "2026-09-30T12:00:00Z", notes: null,
+        written: [{
+          id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+          threshold_code: "narrow_to_volatile", threshold_pct: "45",
+        }],
+      });
+    }
+    reads += 1;
+    if (written && readDenied) {
+      return Response.json({
+        error: { code: "forbidden", message: "Register read grant revoked" },
+      }, { status: 403 });
+    }
+    return Response.json(written ? {
+      ...register,
+      // A stored Board value can resolve to a stricter regulatory floor.
+      thresholds: [{
+        ...register.thresholds[0], threshold_pct: "80",
+        source: "board_register", approved_by: "Read-authorized Board evidence",
+      }],
+    } : register);
+  }));
+  render(<ThresholdRegisterCard bankId="BK-SAMP0001" />, { wrapper: Providers });
+  await submitThreshold();
+  await waitFor(() => expect(reads).toBeGreaterThan(1));
+  await waitFor(() => expect(screen.queryByRole("button", { name: "Record generation" })).toBeNull());
+  if (readDenied) {
+    expect(await screen.findByText("Register read grant revoked")).toBeVisible();
+    expect(screen.queryByText("80.00%")).toBeNull();
+  } else {
+    expect(await screen.findByText("80.00%")).toBeVisible();
+    expect(screen.getByText("Read-authorized Board evidence")).toBeVisible();
+  }
+  expect(screen.queryByText("45.00%")).toBeNull();
 });
 it("retains the editor and displays the backend denial if authority changes before save", async () => {
   authority.capabilities = [capability("liq")];

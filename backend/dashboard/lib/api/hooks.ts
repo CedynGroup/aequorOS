@@ -4722,13 +4722,15 @@ export function useUpdateLiquidityThresholdRegister(
   const queryClient = useQueryClient();
   const scope = useQueryAuthorityScope();
   return useMutation({
-    mutationFn: (payload: LiquidityThresholdUpdate) =>
-      apiCall(() =>
+    mutationFn: async (payload: LiquidityThresholdUpdate) => {
+      // The PUT acknowledges this write only. Display comes from the read hook.
+      await apiCall(() =>
         liquidityThresholdsApi.updateLiquidityThresholdRegister({
           bankId: bankId!,
           liquidityThresholdUpdate: payload,
         }),
-      ),
+      );
+    },
     onSuccess: () => {
       void invalidateScopedPrefixes(
         queryClient,
