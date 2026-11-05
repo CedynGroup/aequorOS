@@ -45,7 +45,11 @@ def test_board_generations_supersede_and_keep_history(db_client: TestClient) -> 
         },
     )
     assert first.status_code == 200, first.text
-    by_code = {row["threshold_code"]: row for row in first.json()["thresholds"]}
+    first_read = db_client.get(
+        URL.format(bank_id=bank_id) + "?as_of=2026-04-30", headers=headers()
+    )
+    assert first_read.status_code == 200, first_read.text
+    by_code = {row["threshold_code"]: row for row in first_read.json()["thresholds"]}
     assert by_code["narrow_to_volatile"]["source"] == "board_register"
     assert Decimal(by_code["narrow_to_volatile"]["threshold_pct"]) == Decimal("85")
     assert by_code["narrow_to_volatile"]["approved_by"] == "Board minute 2026-14"
@@ -63,7 +67,11 @@ def test_board_generations_supersede_and_keep_history(db_client: TestClient) -> 
         },
     )
     assert second.status_code == 200, second.text
-    history = second.json()["history"]
+    second_read = db_client.get(
+        URL.format(bank_id=bank_id) + "?as_of=2026-06-30", headers=headers()
+    )
+    assert second_read.status_code == 200, second_read.text
+    history = second_read.json()["history"]
     assert len(history) == 2
     generations = {row["effective_from"]: row for row in history}
     assert generations["2026-04-01"]["effective_to"] == "2026-06-01"  # closed
@@ -149,7 +157,11 @@ def test_haircut_schedule_lifecycle(db_client: TestClient) -> None:
         },
     )
     assert first.status_code == 200, first.text
-    active = {row["asset_class"]: row for row in first.json()["haircuts"]}
+    first_read = db_client.get(
+        HAIRCUT_URL.format(bank_id=bank_id) + "?as_of=2026-04-30", headers=headers()
+    )
+    assert first_read.status_code == 200, first_read.text
+    active = {row["asset_class"]: row for row in first_read.json()["haircuts"]}
     assert set(active) == {"SOVEREIGN", "EQUITY_GSE"}  # classes normalize upper
     assert Decimal(active["SOVEREIGN"]["haircut_pct"]) == Decimal("10")
     assert active["SOVEREIGN"]["approved_by"] == "ALCO review 2026-04"
@@ -165,7 +177,11 @@ def test_haircut_schedule_lifecycle(db_client: TestClient) -> None:
         },
     )
     assert revised.status_code == 200, revised.text
-    history = revised.json()["history"]
+    revised_read = db_client.get(
+        HAIRCUT_URL.format(bank_id=bank_id) + "?as_of=2026-07-31", headers=headers()
+    )
+    assert revised_read.status_code == 200, revised_read.text
+    history = revised_read.json()["history"]
     sovereign_rows = [row for row in history if row["asset_class"] == "SOVEREIGN"]
     assert len(sovereign_rows) == 2
     assert {row["effective_to"] for row in sovereign_rows} == {"2026-07-01", None}

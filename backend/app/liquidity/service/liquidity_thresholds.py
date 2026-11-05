@@ -35,10 +35,14 @@ from app.liquidity.schemas.liquidity_thresholds import (
     LiquidityHaircutRead,
     LiquidityHaircutScheduleRead,
     LiquidityHaircutUpdate,
+    LiquidityHaircutWriteAcknowledgement,
+    LiquidityHaircutWritten,
     LiquidityThresholdHistoryRead,
     LiquidityThresholdRead,
     LiquidityThresholdRegisterRead,
     LiquidityThresholdUpdate,
+    LiquidityThresholdWriteAcknowledgement,
+    LiquidityThresholdWritten,
 )
 from app.live.public import live_refresh_triggers
 from app.policy.public import (
@@ -250,7 +254,7 @@ def get_register(
 
 def update_register(
     db: Session, ctx: TenantContext, bank_id: str, payload: LiquidityThresholdUpdate
-) -> LiquidityThresholdRegisterRead:
+) -> LiquidityThresholdWriteAcknowledgement:
     """Record a Board-approved threshold generation.
 
     Effective-dated, never destructive: open generations for the updated
@@ -370,8 +374,24 @@ def update_register(
         bank_id=bank.id,
         reason="liquidity threshold register updated",
     )
+    acknowledgement = LiquidityThresholdWriteAcknowledgement(
+        bank_id=bank.id,
+        institution_class=payload.institution_class,
+        effective_from=payload.effective_from,
+        approved_by=payload.approved_by,
+        approval_timestamp=now,
+        notes=payload.notes,
+        written=[
+            LiquidityThresholdWritten(
+                id=row.id,
+                threshold_code=row.threshold_code,
+                threshold_pct=row.threshold_pct,
+            )
+            for row in written
+        ],
+    )
     db.commit()
-    return get_register(db, ctx, bank_id, payload.effective_from)
+    return acknowledgement
 
 
 def get_haircut_schedule(
@@ -426,7 +446,7 @@ def get_haircut_schedule(
 
 def update_haircut_schedule(
     db: Session, ctx: TenantContext, bank_id: str, payload: LiquidityHaircutUpdate
-) -> LiquidityHaircutScheduleRead:
+) -> LiquidityHaircutWriteAcknowledgement:
     """Record a reviewed liquidity-value generation (LRMD ¶62(b) evidence)."""
     bank = _get_bank_or_404(db, ctx, bank_id)
     scoped_authorization.require_resolved_bank_permission(
@@ -512,5 +532,20 @@ def update_haircut_schedule(
         bank_id=bank.id,
         reason="liquidity haircut schedule updated",
     )
+    acknowledgement = LiquidityHaircutWriteAcknowledgement(
+        bank_id=bank.id,
+        effective_from=payload.effective_from,
+        approved_by=payload.approved_by,
+        approval_timestamp=now,
+        notes=payload.notes,
+        written=[
+            LiquidityHaircutWritten(
+                id=row.id,
+                asset_class=row.asset_class,
+                haircut_pct=row.haircut_pct,
+            )
+            for row in written
+        ],
+    )
     db.commit()
-    return get_haircut_schedule(db, ctx, bank_id, payload.effective_from)
+    return acknowledgement

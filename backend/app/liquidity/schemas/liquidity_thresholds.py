@@ -5,6 +5,7 @@ from __future__ import annotations
 from datetime import date, datetime
 from decimal import Decimal
 from typing import Literal
+from uuid import UUID
 
 from pydantic import BaseModel, Field
 
@@ -91,3 +92,42 @@ class LiquidityHaircutUpdate(BaseModel):
     haircuts: dict[str, Decimal] = Field(min_length=1)
     reason: str = Field(min_length=1)
     notes: str | None = None
+
+
+class LiquidityThresholdWritten(BaseModel):
+    """Only a threshold generation created by this request, never a resolved row."""
+
+    id: UUID
+    threshold_code: str
+    threshold_pct: Decimal
+
+
+class LiquidityThresholdWriteAcknowledgement(BaseModel):
+    """Write evidence only. Read the register/history through its authorized GET."""
+
+    bank_id: str
+    institution_class: InstitutionClass
+    effective_from: date
+    approved_by: str
+    approval_timestamp: datetime
+    notes: str | None
+    written: list[LiquidityThresholdWritten]
+
+
+class LiquidityHaircutWritten(BaseModel):
+    """Only a normalized haircut generation created by this request."""
+
+    id: UUID
+    asset_class: str
+    haircut_pct: Decimal
+
+
+class LiquidityHaircutWriteAcknowledgement(BaseModel):
+    """Write evidence only, without active schedule or prior generations."""
+
+    bank_id: str
+    effective_from: date
+    approved_by: str
+    approval_timestamp: datetime
+    notes: str | None
+    written: list[LiquidityHaircutWritten]

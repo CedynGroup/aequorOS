@@ -1,11 +1,12 @@
 """Configurator authority is complete, active, and independent of read authority."""
 
-from datetime import timedelta
+from datetime import date, timedelta
+from decimal import Decimal
 from uuid import UUID
 
 import pytest
 from fastapi.testclient import TestClient
-from pydantic import JsonValue
+from pydantic import JsonValue, TypeAdapter
 from sqlalchemy import delete, func, select
 
 from app.core.authorization import (
@@ -19,6 +20,11 @@ from app.core.authorization import (
 from app.db.base import utc_now
 from app.db.session import get_sessionmaker
 from app.identity.service import authorization
+from app.liquidity.schemas.liquidity_thresholds import (
+    LiquidityHaircutWriteAcknowledgement,
+    LiquidityThresholdWriteAcknowledgement,
+)
+from app.liquidity.service import liquidity_thresholds
 from app.models import (
     AuditEvent,
     AuthorizationBinding,
@@ -181,14 +187,102 @@ def test_incomplete_or_inactive_configuration_binding_denies(
     assert _state() == before
 
 
+def _private_policy(path: str) -> None:
+    """A prior generation, untouched code and sibling policy must stay private."""
+    with get_sessionmaker()() as db:
+        for bank_id in (BANK, OTHER):
+            common = {
+                "organization_id": ORG_1,
+                "bank_id": bank_id,
+                "jurisdiction_code": "GH",
+                "effective_from": date(2026, 1, 1),
+                "approved_by": "Private prior Board evidence",
+                "approval_timestamp": utc_now(),
+                "notes": "Read-protected prior policy",
+            }
+            if path == "liquidity-thresholds":
+                for code in ("narrow_to_volatile", "broad_to_volatile"):
+                    db.add(
+                        ParamLiquidityThreshold(
+                            **common,
+                            institution_class="bank",
+                            threshold_code=code,
+                            threshold_pct=Decimal("111"),
+                        )
+                    )
+            else:
+                for asset_class in ("CASH", "PRIVATE_ASSET"):
+                    db.add(
+                        ParamLiquidityHaircut(
+                            **common,
+                            asset_class=asset_class,
+                            haircut_pct=Decimal("11"),
+                        )
+                    )
+        db.commit()
+
+
+def _assert_write_acknowledgement(path: str, content: bytes, effective_from: date) -> UUID | None:
+    if path == "liquidity/ewis":
+        assert content == b""
+        return None
+    body = TypeAdapter(dict[str, JsonValue]).validate_json(content)
+    assert set(body) == {
+        "bank_id",
+        "effective_from",
+        "approved_by",
+        "approval_timestamp",
+        "notes",
+        "written",
+    } | ({"institution_class"} if path == "liquidity-thresholds" else set())
+    raw_written = body["written"]
+    assert isinstance(raw_written, list) and len(raw_written) == 1
+    raw_row = raw_written[0]
+    assert isinstance(raw_row, dict)
+    if path == "liquidity-thresholds":
+        ack = LiquidityThresholdWriteAcknowledgement.model_validate_json(content)
+        assert ack.institution_class == "bank"
+        assert set(raw_row) == {"id", "threshold_code", "threshold_pct"}
+        assert ack.written[0].threshold_code == "narrow_to_volatile"
+        assert ack.written[0].threshold_pct == Decimal("85")
+        model = ParamLiquidityThreshold
+    else:
+        ack = LiquidityHaircutWriteAcknowledgement.model_validate_json(content)
+        assert set(raw_row) == {"id", "asset_class", "haircut_pct"}
+        assert ack.written[0].asset_class == "CASH"
+        assert ack.written[0].haircut_pct == Decimal("5")
+        model = ParamLiquidityHaircut
+    assert ack.bank_id == BANK
+    assert ack.effective_from == effective_from
+    assert ack.approved_by == "Board minute"
+    assert ack.notes is None
+    with get_sessionmaker()() as db:
+        row = db.get(model, ack.written[0].id)
+        assert row is not None
+        assert row.bank_id == BANK
+        assert row.effective_from == effective_from
+        assert row.approval_timestamp == ack.approval_timestamp
+    return ack.written[0].id
+
+
 @pytest.mark.parametrize("path", PATHS)
 def test_configure_only_put_succeeds_but_read_needs_separate_viewer(
-    db_client: TestClient, path: str
+    db_client: TestClient, path: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     _, version = _grant()
     auth = headers(roles=("viewer",), authorization_version=version)
-    response = db_client.put(f"/api/v1/banks/{BANK}/{path}", headers=auth, json=_payload(path))
+    if path != "liquidity/ewis":
+        _private_policy(path)
+
+    def unexpected_read(*args: object, **kwargs: object) -> None:
+        pytest.fail("PUT must not resolve a read-protected register")
+
+    with monkeypatch.context() as patch:
+        patch.setattr(liquidity_thresholds, "get_register", unexpected_read)
+        patch.setattr(liquidity_thresholds, "get_haircut_schedule", unexpected_read)
+        response = db_client.put(f"/api/v1/banks/{BANK}/{path}", headers=auth, json=_payload(path))
     assert response.status_code == (204 if path == "liquidity/ewis" else 200), response.text
+    first_id = _assert_write_acknowledgement(path, response.content, date(2026, 4, 1))
     assert db_client.get(f"/api/v1/banks/{BANK}/{path}", headers=auth).status_code == 403
     _, version = _grant(RoleBundle.VIEWER, sensitivity=SensitivityScope.CONFIDENTIAL)
     response = db_client.get(
@@ -196,6 +290,28 @@ def test_configure_only_put_succeeds_but_read_needs_separate_viewer(
         headers=headers(authorization_version=version),
     )
     assert response.status_code == 200, response.text
+    # The same acknowledgement contract applies with separate read authority;
+    # registers/history remain available only via GET.
+    payload = _payload(path)
+    if path != "liquidity/ewis":
+        payload["effective_from"] = "2026-06-01"
+    response = db_client.put(
+        f"/api/v1/banks/{BANK}/{path}",
+        headers=headers(authorization_version=version),
+        json=payload,
+    )
+    assert response.status_code == (204 if path == "liquidity/ewis" else 200), response.text
+    second_id = _assert_write_acknowledgement(path, response.content, date(2026, 6, 1))
+    if path != "liquidity/ewis":
+        assert second_id != first_id
+        read = db_client.get(
+            f"/api/v1/banks/{BANK}/{path}?as_of=2026-06-30",
+            headers=headers(authorization_version=version),
+        )
+        assert read.status_code == 200, read.text
+        register = TypeAdapter(dict[str, JsonValue]).validate_json(read.content)
+        history = register["history"]
+        assert isinstance(history, list) and len(history) == 4
 
 
 @pytest.mark.parametrize("path", PATHS)

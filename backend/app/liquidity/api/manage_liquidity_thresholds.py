@@ -18,8 +18,10 @@ from app.api.deps import DbSession, LiquidityConfidentialResource, ScopedMutatio
 from app.liquidity.schemas.liquidity_thresholds import (
     LiquidityHaircutScheduleRead,
     LiquidityHaircutUpdate,
+    LiquidityHaircutWriteAcknowledgement,
     LiquidityThresholdRegisterRead,
     LiquidityThresholdUpdate,
+    LiquidityThresholdWriteAcknowledgement,
 )
 from app.liquidity.service import liquidity_thresholds
 
@@ -48,7 +50,7 @@ def get_liquidity_threshold_register(
 
 @router.put(
     "/banks/{bank_id}/liquidity-thresholds",
-    response_model=LiquidityThresholdRegisterRead,
+    response_model=LiquidityThresholdWriteAcknowledgement,
     operation_id="updateLiquidityThresholdRegister",
 )
 def update_liquidity_threshold_register(
@@ -56,7 +58,7 @@ def update_liquidity_threshold_register(
     payload: LiquidityThresholdUpdate,
     db: DbSession,
     ctx: ScopedMutationTenant,
-) -> LiquidityThresholdRegisterRead:
+) -> LiquidityThresholdWriteAcknowledgement:
     return liquidity_thresholds.update_register(db, ctx, bank_id, payload)
 
 
@@ -82,7 +84,7 @@ def get_liquidity_haircut_schedule(
 
 @router.put(
     "/banks/{bank_id}/liquidity-haircuts",
-    response_model=LiquidityHaircutScheduleRead,
+    response_model=LiquidityHaircutWriteAcknowledgement,
     operation_id="updateLiquidityHaircutSchedule",
 )
 def update_liquidity_haircut_schedule(
@@ -90,5 +92,5 @@ def update_liquidity_haircut_schedule(
     payload: LiquidityHaircutUpdate,
     db: DbSession,
     ctx: ScopedMutationTenant,
-) -> LiquidityHaircutScheduleRead:
+) -> LiquidityHaircutWriteAcknowledgement:
     return liquidity_thresholds.update_haircut_schedule(db, ctx, bank_id, payload)
