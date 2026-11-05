@@ -13,7 +13,7 @@
  */
 import "@testing-library/jest-dom/vitest";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { cleanup, render, screen } from "@testing-library/react";
+import { cleanup, render, screen, within } from "@testing-library/react";
 import type { LoanGradeBucket } from "../../components/basel/sdiHooks";
 
 const scope = vi.hoisted(() => ({
@@ -115,13 +115,18 @@ describe("an SDI capital screen without the Credit sentence", () => {
     renderView();
     expect(screen.getByText(DENIED)).toBeVisible();
     expect(screen.queryByRole("columnheader", { name: "Grade" })).toBeNull();
-    // Both KPIs read the requirement, and neither invents a figure.
-    expect(screen.getByText("NPL ratio")).toBeVisible();
-    expect(screen.getByText("NPL ratio").closest("*")).not.toBeNull();
-    expect(
-      screen.getAllByText("Requires Credit · Aggregated · View").length,
-    ).toBe(2);
-    expect(screen.getByText("Provisions required").closest("*")).not.toBeNull();
+    // Both KPIs read the requirement, and neither invents a figure: the value
+    // stays the em dash, and the mocked book's own numbers (6.25%, GHS 135)
+    // never reach the screen because no request was made for them.
+    for (const label of ["NPL ratio", "Provisions required"]) {
+      const kpi = within(screen.getByText(label).closest(".card")!);
+      expect(
+        kpi.getByText("Requires Credit · Aggregated · View"),
+      ).toBeVisible();
+      expect(kpi.getByText("—")).toBeVisible();
+      expect(kpi.queryByText(/6\.25/)).toBeNull();
+      expect(kpi.queryByText(/135/)).toBeNull();
+    }
     // The hook was called with no bank: no request is possible.
     expect(classificationCalls).toEqual([undefined]);
   });
