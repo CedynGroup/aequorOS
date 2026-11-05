@@ -1,5 +1,7 @@
 """Bank-local authority cannot change a sibling's policy, history or outputs."""
 
+from __future__ import annotations
+
 from datetime import date
 from decimal import Decimal
 
