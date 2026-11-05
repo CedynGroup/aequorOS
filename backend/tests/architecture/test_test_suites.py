@@ -18,6 +18,127 @@ import pytest
 BACKEND = Path(__file__).parents[2]
 
 
+def _collect_with_filename_guard(
+    root: Path, arguments: list[str]
+) -> subprocess.CompletedProcess[str]:
+    """Run the real collection hook, retaining the repository's suite assignment."""
+    program = (
+        "import sys, pytest\n"
+        "from tests.architecture._suite_filenames import SuiteFilenameGuard\n"
+        "sys.exit(pytest.main(['--collect-only', '-q', *sys.argv[1:]], "
+        "plugins=[SuiteFilenameGuard()]))\n"
+    )
+    environment = {
+        **os.environ,
+        "PYTHONPATH": str(BACKEND),
+        "PYTEST_ADDOPTS": "",
+        "PYTEST_DISABLE_PLUGIN_AUTOLOAD": "1",
+        "TEST_DATABASE_URL": "postgresql+psycopg://unit:unit@127.0.0.1:1/unit_tests",
+    }
+    for name in (
+        "CI_UNIT_REPORT_DIR",
+        "CI_E2E_REPORT_DIR",
+        "CI_DATABASE_OBSERVATIONS",
+        "CI_POSTGRES_REPORT_DIR",
+        "CI_POSTGRES_SHARD",
+        "CI_POSTGRES_FILES",
+    ):
+        _ = environment.pop(name, None)
+    return subprocess.run(
+        [sys.executable, "-c", program, *arguments],
+        cwd=root,
+        env=environment,
+        capture_output=True,
+        text=True,
+        timeout=120,
+        check=False,
+    )
+
+
+def _assert_filename_guard_collection_controls(tmp_path: Path) -> None:
+    """Drive matching, mismatched and mixed suite assignments through real Items."""
+    valid: list[str] = []
+    violations: list[str] = []
+    for expected, filename in (
+        ("unit", "test_probe.py"),
+        ("integration", "test_probe_integration.py"),
+        ("e2e", "test_probe_e2e.py"),
+    ):
+        for actual in ("unit", "integration", "e2e"):
+            module = f"{expected}-{actual}/{filename}"
+            path = tmp_path / module
+            path.parent.mkdir()
+            _ = path.write_text(
+                "import pytest\n"
+                + f"pytestmark = pytest.mark.{actual}\n"
+                + "class TestProbe:\n"
+                + "    @pytest.mark.parametrize('value', ['first::value', 'second'])\n"
+                + "    def test_probe(self, value): pass\n"
+            )
+            if expected == actual:
+                valid.append(module)
+            else:
+                violations.append(
+                    f"{module}: expected exactly one {expected} suite"
+                    + (" with a suffix-free filename" if expected == "unit" else "")
+                    + f"; actual suites: {actual}"
+                )
+    for other in ("unit", "e2e"):
+        module = f"mixed-{other}/test_probe_integration.py"
+        path = tmp_path / module
+        path.parent.mkdir()
+        _ = path.write_text(
+            "import pytest\n"
+            "@pytest.mark.parametrize('value', [\n"
+            "    pytest.param('first', marks=pytest.mark.integration),\n"
+            + f"    pytest.param('second::value', marks=pytest.mark.{other}),\n"
+            + "])\n"
+            "def test_probe(value): pass\n"
+        )
+        violations.append(
+            f"{module}: expected exactly one integration suite; "
+            + f"actual suites: {', '.join(sorted({'integration', other}))}"
+        )
+    for directory, filename, prefix, actual in (
+        (
+            "unit-suffix",
+            "test_probe_unit.py",
+            "import pytest\npytestmark = pytest.mark.unit\n",
+            "unit",
+        ),
+        ("unassigned", "test_probe.py", "", "<unassigned>"),
+    ):
+        module = f"{directory}/{filename}"
+        path = tmp_path / module
+        path.parent.mkdir()
+        _ = path.write_text(prefix + "def test_probe(): pass\n")
+        violations.append(
+            f"{module}: expected exactly one unit suite with a suffix-free filename; "
+            + f"actual suites: {actual}"
+        )
+    arguments = ["--noconftest", "--import-mode=importlib"]
+    result = _collect_with_filename_guard(tmp_path, [*arguments, *valid])
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "Suite filenames verified for 6 collected tests" in result.stdout
+    result = _collect_with_filename_guard(tmp_path, [*arguments, "."])
+    assert result.returncode == pytest.ExitCode.USAGE_ERROR, result.stdout + result.stderr
+    assert result.stderr.strip() == "ERROR: " + "\n".join(sorted(violations))
+    assigned = tmp_path / "assigned"
+    assigned.mkdir()
+    for suffix in ("", "_integration", "_e2e"):
+        _ = (assigned / f"test_assigned{suffix}.py").write_text("def test_probe(): pass\n")
+    arguments.extend(["-p", "scripts.test_suites_plugin"])
+    result = _collect_with_filename_guard(tmp_path, [*arguments, str(assigned)])
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "Suite filenames verified for 3 collected tests" in result.stdout
+    result = _collect_with_filename_guard(tmp_path, [*arguments, "unit-suffix/test_probe_unit.py"])
+    assert result.returncode == pytest.ExitCode.USAGE_ERROR, result.stdout + result.stderr
+    assert result.stderr.strip() == (
+        "ERROR: unit-suffix/test_probe_unit.py: expected exactly one unit suite "
+        "with a suffix-free filename; actual suites: unit"
+    )
+
+
 def standalone_contracts(tmp_path: Path) -> str:
     """Standalone probes isolate the reviewed behavioral-contract catalogue."""
     path = tmp_path / "contracts.json"
@@ -147,6 +268,16 @@ def test_filename_alone_assigns_every_case(nodeid: str, suite: str) -> None:
     from scripts.test_suites import owner  # noqa: PLC0415
 
     assert owner(nodeid) == suite
+
+
+def test_collected_test_filenames_match_their_single_suite(tmp_path: Path) -> None:
+    """Validate the complete repository and adversarial real-collection controls."""
+    _assert_filename_guard_collection_controls(tmp_path)
+    result = _collect_with_filename_guard(
+        BACKEND, ["tests", f"--collection-output={tmp_path / 'collected.json'}"]
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "Suite filenames verified for " in result.stdout
 
 
 def test_every_duration_key_resolves_to_a_test_file(tmp_path: Path) -> None:

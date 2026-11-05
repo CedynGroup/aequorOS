@@ -61759,6 +61759,11 @@
             "description": "Unexpected server error."
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "Assessment Types",
         "tags": [
           "taxonomy"
@@ -124581,6 +124586,11 @@
             "description": "Unexpected server error."
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "Risk Types",
         "tags": [
           "taxonomy"
@@ -124749,6 +124759,11 @@
             "description": "Unexpected server error."
           }
         },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
         "summary": "Case Taxonomy Resource",
         "tags": [
           "taxonomy"
