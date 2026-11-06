@@ -431,6 +431,21 @@ class ChannelConfigRead(ClosedModel):
     updated_at: datetime
 
 
+class ChannelConfigWriteAcknowledgement(ClosedModel):
+    """Write-only evidence of a channel-config write (D27/D34).
+
+    Carries the bank, the channel, whether THIS request rotated the credentials,
+    and whether it created the row. The stored configuration, credential
+    fingerprint and ``has_credentials`` flag are never echoed: read the channel
+    through its tenant-gated GET.
+    """
+
+    bank_id: str
+    channel: ChannelCode
+    credentials_rotated: bool
+    created: bool
+
+
 class ReportingSettingsPut(ClosedModel):
     """Per-bank deadline overrides: ``{return_code: day_of_month}``.
 
@@ -458,6 +473,19 @@ class ReportingSettingsRead(ClosedModel):
     deadline_overrides: dict[str, int]
     created_at: datetime
     updated_at: datetime
+
+
+class ReportingSettingsWriteAcknowledgement(ClosedModel):
+    """Write-only evidence of a reporting-settings write (D27/D34).
+
+    Echoes the bank and exactly the submitted override map, plus whether this
+    request created the row. The stored row's timestamps are never echoed:
+    read the settings through their tenant-gated GET.
+    """
+
+    bank_id: str
+    deadline_overrides: dict[str, int]
+    created: bool
 
 
 class PackageSubmitCreate(ClosedModel):

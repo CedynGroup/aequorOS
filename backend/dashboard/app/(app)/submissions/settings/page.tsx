@@ -629,17 +629,13 @@ function ChannelForm({
 
       <div className="space-y-6">
         <SectionCard title="Credential status">
-          {config?.hasCredentials || save.data?.hasCredentials ? (
+          {/* The save response is a write-only acknowledgement; the stored
+              status and fingerprint come from the refetched read. */}
+          {config?.hasCredentials ? (
             <div className="space-y-2">
               <StatusPill tone="success">Credentials stored</StatusPill>
               <p className="font-mono text-caption text-slate tnum">
-                fingerprint{" "}
-                {shortId(
-                  save.data?.credentialFingerprint ??
-                    config?.credentialFingerprint ??
-                    "",
-                  16,
-                )}
+                fingerprint {shortId(config.credentialFingerprint ?? "", 16)}
               </p>
             </div>
           ) : (

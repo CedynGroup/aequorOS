@@ -3226,7 +3226,8 @@ export function useChannelConfig(
   });
 }
 
-/** Upsert one channel config; `credentials` is write-only (fingerprint back). */
+/** Upsert one channel config; `credentials` are write-only, the response is a
+ * write-only acknowledgement (D34) — the stored read comes from the GET. */
 export function useSaveChannelConfig(bankId: string | undefined) {
   const queryClient = useQueryClient();
   return useMutation({
@@ -3249,11 +3250,12 @@ export function useSaveChannelConfig(bankId: string | undefined) {
           },
         }),
       ),
-    onSuccess: (config) => {
-      queryClient.setQueryData(
-        ["rr-channel-config", bankId, config.channel],
-        config,
-      );
+    // Discard the acknowledgement and refetch through the authorized read;
+    // the ack carries nothing stored (no fingerprint, no has_credentials).
+    onSuccess: (_ack, { channel }) => {
+      void queryClient.invalidateQueries({
+        queryKey: ["rr-channel-config", bankId, channel],
+      });
     },
   });
 }

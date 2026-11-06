@@ -67,9 +67,13 @@ from app.attestation.service.identity import (
 )
 from app.attestation.service.typed_fonts import available_face_keys
 from app.attestation.service.workflow import AttestationConflict
-from app.core.authorization import Permission
+from app.core.authorization import Module, Permission, Sensitivity
 from app.core.config import get_settings
-from app.identity.public import Bank, resolve_bank_reference
+from app.identity.public import (
+    Bank,
+    require_organization_permission,
+    resolve_bank_reference,
+)
 from app.reporting.models.packages import RegulatoryPackage
 from app.reporting.service.registry import get_definition
 from app.services.audit import record_event
@@ -78,6 +82,12 @@ if TYPE_CHECKING:
     from pyhanko.sign.timestamps import TimeStamper
 
 SIGNING_ROLES = ("preparer", "approver", "board", "witness")
+
+#: Refusal for the organization-scoped configuration writes (signing policies,
+#: placement templates). A bank-scoped binding is deliberately insufficient.
+ORG_CONFIG_DENIAL_DETAIL = (
+    "This action requires an organization-scoped Regulatory Reporting binding."
+)
 #: Roles that additionally require the approver gate. A preparer certification
 #: is an analyst act; everything downstream is a checker act.
 CHECKER_ROLES = frozenset({"approver", "board"})
@@ -488,7 +498,22 @@ def upsert_policy(db: Session, ctx: TenantContext, payload: PolicyUpsertRequest)
     Policies are versioned by effective date rather than edited in place, so a
     return filed under an earlier policy can always be shown to have satisfied
     the rules that were actually in force at its reporting date.
+
+    The gate is an ORGANIZATION-scope ``reg/configure/restricted`` binding
+    (VAL-CFG-008): a signing policy governs how every bank's returns are
+    attested, so one bank's Configurator grant never covers it, and no scalar
+    role substitutes. Denied BEFORE the open policy is closed or any row is
+    written.
     """
+    require_organization_permission(
+        db,
+        ctx,
+        permission=Permission.CONFIGURE,
+        module=Module.REGULATORY,
+        sensitivity=Sensitivity.RESTRICTED,
+        surface="signing_policy_configuration",
+        denial_detail=ORG_CONFIG_DENIAL_DETAIL,
+    )
     actor = _require_actor(ctx)
     if not payload.return_code and not payload.return_family:
         raise HTTPException(
@@ -731,6 +756,22 @@ def list_placement_templates(
 def upsert_placement_template(
     db: Session, ctx: TenantContext, payload: SignaturePlacementTemplateUpsertRequest
 ) -> SignaturePlacementTemplateRead:
+    """Author the reusable placement template for a return (optionally per bank).
+
+    Organization-scope ``reg/configure/restricted`` authority and
+    reason-required (VAL-CFG-008), mirroring the signing-policy endpoints: this
+    is the default every future filing of that return inherits. Denied BEFORE
+    any template row is replaced.
+    """
+    require_organization_permission(
+        db,
+        ctx,
+        permission=Permission.CONFIGURE,
+        module=Module.REGULATORY,
+        sensitivity=Sensitivity.RESTRICTED,
+        surface="signature_placement_template_configuration",
+        denial_detail=ORG_CONFIG_DENIAL_DETAIL,
+    )
     _require_actor(ctx)
     if payload.bank_id is not None:
         resolve_bank_reference(db, ctx, payload.bank_id)

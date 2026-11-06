@@ -15,6 +15,7 @@ import type {
   BasisFilter,
   ChannelConfigPut,
   ChannelConfigRead,
+  ChannelConfigWriteAcknowledgement,
   EmailFallbackInstructionsRead,
   ErrorResponse,
   FilingSetPreviewRead,
@@ -46,6 +47,7 @@ import type {
   ReportingObligationListRead,
   ReportingSettingsPut,
   ReportingSettingsRead,
+  ReportingSettingsWriteAcknowledgement,
   ResubmissionDecisionCreate,
   ResubmissionRequestCreate,
   ResubmissionRequestListRead,
@@ -62,6 +64,8 @@ import {
   ChannelConfigPutToJSON,
   ChannelConfigReadFromJSON,
   ChannelConfigReadToJSON,
+  ChannelConfigWriteAcknowledgementFromJSON,
+  ChannelConfigWriteAcknowledgementToJSON,
   EmailFallbackInstructionsReadFromJSON,
   EmailFallbackInstructionsReadToJSON,
   ErrorResponseFromJSON,
@@ -124,6 +128,8 @@ import {
   ReportingSettingsPutToJSON,
   ReportingSettingsReadFromJSON,
   ReportingSettingsReadToJSON,
+  ReportingSettingsWriteAcknowledgementFromJSON,
+  ReportingSettingsWriteAcknowledgementToJSON,
   ResubmissionDecisionCreateFromJSON,
   ResubmissionDecisionCreateToJSON,
   ResubmissionRequestCreateFromJSON,
@@ -2809,12 +2815,13 @@ export class RegulatoryReportingApi extends runtime.BaseAPI {
   }
 
   /**
+   * Configure one channel; credentials are write-only (fingerprint stored).  Service-enforced exact reg/configure/restricted authority for this bank (VAL-CFG-007); the response is a write-only acknowledgement, so a configure-only caller reads nothing stored through the write.
    * Put Channel Config
    */
   async putChannelConfigRaw(
     requestParameters: PutChannelConfigRequest,
     initOverrides?: RequestInit | runtime.InitOverrideFunction,
-  ): Promise<runtime.ApiResponse<ChannelConfigRead>> {
+  ): Promise<runtime.ApiResponse<ChannelConfigWriteAcknowledgement>> {
     if (requestParameters["bankId"] == null) {
       throw new runtime.RequiredError(
         "bankId",
@@ -2870,17 +2877,18 @@ export class RegulatoryReportingApi extends runtime.BaseAPI {
     );
 
     return new runtime.JSONApiResponse(response, (jsonValue) =>
-      ChannelConfigReadFromJSON(jsonValue),
+      ChannelConfigWriteAcknowledgementFromJSON(jsonValue),
     );
   }
 
   /**
+   * Configure one channel; credentials are write-only (fingerprint stored).  Service-enforced exact reg/configure/restricted authority for this bank (VAL-CFG-007); the response is a write-only acknowledgement, so a configure-only caller reads nothing stored through the write.
    * Put Channel Config
    */
   async putChannelConfig(
     requestParameters: PutChannelConfigRequest,
     initOverrides?: RequestInit | runtime.InitOverrideFunction,
-  ): Promise<ChannelConfigRead> {
+  ): Promise<ChannelConfigWriteAcknowledgement> {
     const response = await this.putChannelConfigRaw(
       requestParameters,
       initOverrides,
@@ -2889,13 +2897,13 @@ export class RegulatoryReportingApi extends runtime.BaseAPI {
   }
 
   /**
-   * Set per-bank monthly-deadline overrides ({return_code: day_of_month}).
+   * Set per-bank monthly-deadline overrides ({return_code: day_of_month}).  Service-enforced exact reg/configure/restricted authority for this bank (VAL-CFG-007); the response is a write-only acknowledgement.
    * Put Reporting Settings
    */
   async putReportingSettingsRaw(
     requestParameters: PutReportingSettingsRequest,
     initOverrides?: RequestInit | runtime.InitOverrideFunction,
-  ): Promise<runtime.ApiResponse<ReportingSettingsRead>> {
+  ): Promise<runtime.ApiResponse<ReportingSettingsWriteAcknowledgement>> {
     if (requestParameters["bankId"] == null) {
       throw new runtime.RequiredError(
         "bankId",
@@ -2941,18 +2949,18 @@ export class RegulatoryReportingApi extends runtime.BaseAPI {
     );
 
     return new runtime.JSONApiResponse(response, (jsonValue) =>
-      ReportingSettingsReadFromJSON(jsonValue),
+      ReportingSettingsWriteAcknowledgementFromJSON(jsonValue),
     );
   }
 
   /**
-   * Set per-bank monthly-deadline overrides ({return_code: day_of_month}).
+   * Set per-bank monthly-deadline overrides ({return_code: day_of_month}).  Service-enforced exact reg/configure/restricted authority for this bank (VAL-CFG-007); the response is a write-only acknowledgement.
    * Put Reporting Settings
    */
   async putReportingSettings(
     requestParameters: PutReportingSettingsRequest,
     initOverrides?: RequestInit | runtime.InitOverrideFunction,
-  ): Promise<ReportingSettingsRead> {
+  ): Promise<ReportingSettingsWriteAcknowledgement> {
     const response = await this.putReportingSettingsRaw(
       requestParameters,
       initOverrides,
