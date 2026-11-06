@@ -18,8 +18,9 @@ What it covers today:
 - **Regulatory reporting:** Bank of Ghana BSD returns prepared from the official
   templates, which is the only return family built so far, and a workspace for the
   bank's ICAAP (internal capital adequacy assessment).
-- **Data and market data:** loading the bank's own data by upload or connection, plus
-  market data from vendors.
+- **Data and market data:** loading the bank's own data by upload or connection, and
+  working with market data. Live Bloomberg and LSEG connections are not built yet, so
+  those integrations run on recorded fixtures.
 
 ## Repository layout
 
