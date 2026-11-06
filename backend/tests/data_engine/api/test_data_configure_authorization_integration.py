@@ -12,12 +12,16 @@ VALIDATE/RUN gates and gain nothing from Configurator (no broadening).
 from __future__ import annotations
 
 from collections.abc import Callable
+from dataclasses import dataclass
 from datetime import timedelta
-from typing import Any
+from typing import Any, Protocol, cast
 from uuid import UUID, uuid4
 
 import pytest
 from fastapi.testclient import TestClient
+from httpx2 import Response
+from hypothesis import settings, stateful
+from hypothesis.stateful import RuleBasedStateMachine, invariant, rule
 from sqlalchemy import delete, func, select
 
 from app.core import outbound
@@ -65,6 +69,7 @@ from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID, materialize_ca
 from tests.support.factories.outbound import stub_public_dns
 from tests.support.helpers import ORG_1, USER_1, error_envelope, headers
 from tests.support.inmemory_storage import InMemoryStorageClient
+from tests.support.stateful import workflow_settings
 
 BASE = f"/api/v1/banks/{SAMPLE_BANK_ID}"
 SIBLING = "BK-DATA0003"
@@ -450,6 +455,263 @@ def test_temenos_lifecycle_and_validation_succeed_with_configurator_binding(
     revoked = db_client.delete(f"{T24_BASE}/{connection_id}", headers=_auth())
     revoked_ack = TemenosConnectionWriteAcknowledgement.model_validate_json(revoked.text)
     assert revoked_ack.status == "REVOKED"
+
+
+# --- Lifecycle transition model (state machine) -------------------------------
+
+REVOKED_EDIT_MESSAGE = "This connection has been revoked; create a new one."
+DISABLED_VALIDATE_MESSAGE = "This connection is disabled; enable it first."
+ENABLE_CONFLICT_MESSAGE = "Only a disabled connection can be enabled."
+
+
+@dataclass(frozen=True)
+class _Written:
+    """A successful command: the acknowledgement's written status (None for a
+    no-rotation patch) and the audit event it appends (None for an idempotent
+    replay such as disabling an already-disabled connection)."""
+
+    status: str | None
+    event: str | None
+
+
+@dataclass(frozen=True)
+class _Conflict:
+    """A rejected command: a 409 whose message never gains stored content.
+    The stored status and the success-event trail stay untouched."""
+
+    message: str
+
+
+type _Outcome = _Written | _Conflict
+
+
+def _connection_transitions(
+    revoked_message: str, disabled_message: str
+) -> dict[tuple[str, str], _Outcome]:
+    """The reviewed lifecycle contract shared by both DATA connection families."""
+    enable_conflict = _Conflict(ENABLE_CONFLICT_MESSAGE)
+    return {
+        ("ACTIVE", "patch"): _Written(None, "updated"),
+        ("DISABLED", "patch"): _Written(None, "updated"),
+        ("REVOKED", "patch"): _Conflict(revoked_message),
+        ("ACTIVE", "disable"): _Written("DISABLED", "disabled"),
+        ("DISABLED", "disable"): _Written("DISABLED", None),
+        ("REVOKED", "disable"): _Conflict(revoked_message),
+        ("ACTIVE", "enable"): enable_conflict,
+        ("DISABLED", "enable"): _Written("ACTIVE", "enabled"),
+        ("REVOKED", "enable"): enable_conflict,
+        ("ACTIVE", "revoke"): _Written("REVOKED", "revoked"),
+        ("DISABLED", "revoke"): _Written("REVOKED", "revoked"),
+        ("REVOKED", "revoke"): _Written("REVOKED", None),
+        ("ACTIVE", "validate"): _Written("ACTIVE", "validated"),
+        ("DISABLED", "validate"): _Conflict(disabled_message),
+        ("REVOKED", "validate"): _Conflict(revoked_message),
+    }
+
+
+@dataclass(frozen=True)
+class _Family:
+    """Everything that differs between the two DATA connection lifecycles."""
+
+    base: str
+    model: type[DatabaseDirectConnection | TemenosConnection]
+    payload: Callable[[], dict[str, Any]]
+    ack_model: type[DatabaseConnectionWriteAcknowledgement | TemenosConnectionWriteAcknowledgement]
+    event_prefix: str
+    revoked_message: str
+    disabled_message: str
+    duplicate_message: Callable[[str], str]
+
+
+class _StateMachineRunner(Protocol):
+    """The hypothesis runner's own signature, which ships unannotated."""
+
+    def __call__(
+        self, factory: Callable[[], ConnectionLifecycleMachine], *, settings: settings
+    ) -> None: ...
+
+
+def _run_lifecycle_machine(factory: Callable[[], ConnectionLifecycleMachine]) -> None:
+    # Boundary: hypothesis's runner arguments are unannotated upstream.
+    runner = cast(
+        _StateMachineRunner,
+        stateful.run_state_machine_as_test,  # pyright: ignore[reportUnknownMemberType]
+    )
+    runner(factory, settings=workflow_settings())
+
+
+class ConnectionLifecycleMachine(RuleBasedStateMachine):
+    """Arbitrary command sequences against one real connection row: every
+    acknowledgement is checked against the transition table, and the stored
+    status plus success-event trail are re-read after every step."""
+
+    def __init__(self, client: TestClient, family: _Family) -> None:
+        super().__init__()
+        self.client = client
+        self.family = family
+        self.transitions = _connection_transitions(family.revoked_message, family.disabled_message)
+        self.display_name = f"State machine connection [{uuid4().hex[:8]}]"
+        self.create_body = family.payload()
+        self.create_body["display_name"] = self.display_name
+        self.connection_id: UUID | None = None
+        self.status = "ACTIVE"
+        self.events = [family.event_prefix + "created"]
+        created = client.post(family.base, headers=_auth(), json=self.create_body)
+        assert created.status_code == 201, created.text
+        assert SECRET not in created.text
+        ack = family.ack_model.model_validate_json(created.text)
+        assert set(ack.model_dump()) == ACK_FIELDS
+        assert ack.status == "ACTIVE"
+        self.connection_id = ack.id
+
+    @invariant()
+    def persisted_state_matches_the_model(self) -> None:
+        connection_id = self.connection_id
+        assert connection_id is not None
+        with get_sessionmaker()() as db:
+            row = db.get(self.family.model, connection_id)
+            assert row is not None
+            assert row.status == self.status
+            events = db.scalars(
+                select(AuditEvent.event_type).where(AuditEvent.entity_id == str(connection_id))
+            ).all()
+        assert sorted(events) == sorted(self.events)
+
+    def _apply(
+        self, command: str, response: Response
+    ) -> DatabaseConnectionWriteAcknowledgement | TemenosConnectionWriteAcknowledgement | None:
+        """Check one command's response against the transition table and update
+        the model. Returns the parsed acknowledgement, or None on a conflict."""
+        outcome = self.transitions[(self.status, command)]
+        if isinstance(outcome, _Conflict):
+            assert response.status_code == 409, response.text
+            assert error_envelope(response)["message"] == outcome.message
+            return None
+        assert response.status_code in {200, 201}, response.text
+        assert SECRET not in response.text
+        ack = self.family.ack_model.model_validate_json(response.text)
+        assert set(ack.model_dump()) == ACK_FIELDS
+        assert ack.bank_id == SAMPLE_BANK_ID
+        assert ack.status == outcome.status
+        assert ack.validation_error is None
+        if outcome.status is not None:
+            self.status = outcome.status
+        if outcome.event is not None:
+            self.events.append(self.family.event_prefix + outcome.event)
+        return ack
+
+    @rule()
+    def patch_display_name(self) -> None:
+        # Replaces rather than appends: repeated appends would exceed the
+        # 120-character display-name limit and turn the patch into a 422.
+        renamed = f"State machine connection [{uuid4().hex[:8]}]"
+        response = self.client.request(
+            "PATCH",
+            f"{self.family.base}/{self.connection_id}",
+            headers=_auth(),
+            json={"display_name": renamed},
+        )
+        ack = self._apply("patch", response)
+        if ack is not None:
+            self.display_name = renamed
+
+    @rule()
+    def disable(self) -> None:
+        response = self.client.post(
+            f"{self.family.base}/{self.connection_id}/disable", headers=_auth()
+        )
+        self._apply("disable", response)
+
+    @rule()
+    def enable(self) -> None:
+        response = self.client.post(
+            f"{self.family.base}/{self.connection_id}/enable", headers=_auth()
+        )
+        self._apply("enable", response)
+
+    @rule()
+    def revoke(self) -> None:
+        response = self.client.delete(f"{self.family.base}/{self.connection_id}", headers=_auth())
+        self._apply("revoke", response)
+
+    @rule()
+    def recreate_with_same_identity(self) -> None:
+        """A second create under the row's current identity: 409 while a live
+        row holds it; the retained revoked row is reused with fresh credentials
+        after revocation (same row id, never a second row)."""
+        body = dict(self.create_body)
+        body["display_name"] = self.display_name
+        response = self.client.post(self.family.base, headers=_auth(), json=body)
+        if self.status != "REVOKED":
+            assert response.status_code == 409, response.text
+            assert error_envelope(response)["message"] == self.family.duplicate_message(
+                self.display_name
+            )
+            return
+        assert response.status_code == 201, response.text
+        assert SECRET not in response.text
+        ack = self.family.ack_model.model_validate_json(response.text)
+        assert set(ack.model_dump()) == ACK_FIELDS
+        assert ack.status == "ACTIVE"
+        assert ack.id == self.connection_id
+        self.status = "ACTIVE"
+        self.events.append(self.family.event_prefix + "created")
+
+
+class _ValidatingLifecycleMachine(ConnectionLifecycleMachine):
+    """Adds the credential-validation command: Temenos validates stored
+    credentials as a configure duty; database-direct has no such route."""
+
+    @rule()
+    def validate(self) -> None:
+        response = self.client.post(
+            f"{self.family.base}/{self.connection_id}/validate", headers=_auth()
+        )
+        self._apply("validate", response)
+
+
+@pytest.mark.usefixtures("vault_key")
+def test_database_direct_lifecycle_state_machine(db_client: TestClient) -> None:
+    _grant(RoleBundle.CONFIGURATOR)
+    _run_lifecycle_machine(
+        lambda: ConnectionLifecycleMachine(
+            db_client,
+            _Family(
+                base=DB_BASE,
+                model=DatabaseDirectConnection,
+                payload=_db_create_payload,
+                ack_model=DatabaseConnectionWriteAcknowledgement,
+                event_prefix="database_direct_connection.",
+                revoked_message=REVOKED_EDIT_MESSAGE,
+                disabled_message=DISABLED_VALIDATE_MESSAGE,
+                duplicate_message=lambda name: (
+                    f"A connection named {name!r} already exists for this bank."
+                ),
+            ),
+        )
+    )
+
+
+@pytest.mark.usefixtures("vault_key")
+def test_temenos_lifecycle_state_machine(db_client: TestClient) -> None:
+    _grant(RoleBundle.CONFIGURATOR)
+    _run_lifecycle_machine(
+        lambda: _ValidatingLifecycleMachine(
+            db_client,
+            _Family(
+                base=T24_BASE,
+                model=TemenosConnection,
+                payload=_temenos_create_payload,
+                ack_model=TemenosConnectionWriteAcknowledgement,
+                event_prefix="temenos_connection.",
+                revoked_message=REVOKED_EDIT_MESSAGE,
+                disabled_message=DISABLED_VALIDATE_MESSAGE,
+                duplicate_message=lambda name: (
+                    f"A connection named {name!r} already exists for this bank."
+                ),
+            ),
+        )
+    )
 
 
 # --- Mutation responses are write-only acknowledgements (D34) -----------------
