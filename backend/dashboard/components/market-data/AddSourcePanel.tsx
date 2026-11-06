@@ -19,7 +19,7 @@ import {
   XCircle,
 } from "lucide-react";
 import type {
-  MarketDataConnectionRead,
+  MarketDataConnectionWriteAcknowledgement,
   ScopeInfoRead,
   TestPullRead,
 } from "@aequoros/risk-service-api";
@@ -97,7 +97,11 @@ export default function AddSourcePanel({
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [schedule, setSchedule] = useState<Record<string, string>>({});
   const [stepIndex, setStepIndex] = useState(0);
-  const [created, setCreated] = useState<MarketDataConnectionRead | null>(null);
+  // Write-only lifecycle acknowledgement (D27/D34): the stored row is read
+  // back through the view-gated connection list, never from this response.
+  const [created, setCreated] = useState<
+    MarketDataConnectionWriteAcknowledgement | null
+  >(null);
   const [testResult, setTestResult] = useState<TestPullRead | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [running, setRunning] = useState(false);
@@ -451,13 +455,15 @@ export default function AddSourcePanel({
           {created && (
             <div className="space-y-3">
               <div className="flex items-center gap-2">
-                <ConnectionStatusPill status={created.status} />
+                {/* A create acknowledgement always carries the written status;
+                    an absent one only means "not yet activated". */}
+                <ConnectionStatusPill status={created.status ?? "TESTING"} />
                 <p className="text-body text-navy">
-                  {created.status === "TESTING"
+                  {created.status === "TESTING" || created.status == null
                     ? "Connection stored, but credential validation failed — fix the credentials from the source card (Rotate credentials)."
-                    : created.vendor === "manual_upload"
+                    : vendor === "manual_upload"
                       ? "Manual upload source active."
-                      : `${vendorName(created.vendor)} configuration saved. Live vendor transport remains unavailable.`}
+                      : `${vendorName(vendor ?? "manual_upload")} configuration saved. Live vendor transport remains unavailable.`}
                 </p>
               </div>
               {created.validationError && (
@@ -468,7 +474,7 @@ export default function AddSourcePanel({
                 </div>
               )}
               {!canTestPull &&
-                created.vendor !== "manual_upload" &&
+                vendor !== "manual_upload" &&
                 !created.validationError && (
                   <p role="status" className="text-caption text-slate">
                     Configuration saved. Automatic test pull omitted: it
