@@ -10,18 +10,19 @@ complete stored bindings and the production evaluator.
 
 The file owns three independent sets of expected outcomes:
 
-- **156 bundle/resource/action cells:** all 12 current bundles, each on its
+- **169 bundle/resource/action cells:** all 13 current bundles, each on its
   named resource, with an explicit allow or deny for every one of 13 actions.
   Resource tuples distinguish organization-wide Account/restricted from
   exact-bank LIQ/confidential, REG/restricted, Audit/restricted,
-  Data/restricted and Credit/restricted. This is **not** every bundle crossed
-  with every module, sensitivity or endpoint.
-- **28 scoped service scenarios:** exact and sibling banks, foreign tenants,
+  Data/restricted, Credit/restricted and Markets/restricted. This is **not**
+  every bundle crossed with every module, sensitivity or endpoint.
+- **33 scoped service scenarios:** exact and sibling banks, foreign tenants,
   nonexistent banks, exact sensitivity (not a hierarchy), wrong modules,
   explicit broad scopes, no grants despite scalar Admin, Owner with and
   without a separate read sentence, non-composition of incomplete bindings,
-  approval/submission context, inactive identity, demo-mode veto and Credit
-  branch/region permission semantics.
+  approval/submission context, inactive identity, demo-mode veto, Credit
+  branch/region permission semantics, and Configurator configure-only
+  authority on Data and Markets (view, run and sibling-bank writes refused).
 - **Seven real HTTP bank-detail probes:** explicitly granted reads succeed;
   sibling/foreign/no-grant/Owner-only reads remain hidden with 404.
   Credentials are issued after grants at the real authorization version.
@@ -86,7 +87,7 @@ These are evidence-backed boundaries, not new product decisions:
 
 | Seam               | Current characterization / held work                                                                                                                                                                                                                                                                                    |
 | ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Configuration      | No current bundle grants `configure`. The separate [Configurator foundation](https://github.com/CedynGroup/aequorOS/pull/776) and [LIQ cutover](https://github.com/CedynGroup/aequorOS/pull/781) own the proposed vocabulary and migration-sensitive register changes. This matrix does not import their future policy. |
+| Configuration      | The Configurator bundle grants exactly `configure` and nothing else: Data and Markets connection configuration denies view, run and sibling-bank writes in the same matrix (the [foundation](https://github.com/CedynGroup/aequorOS/pull/776), [LIQ cutover](https://github.com/CedynGroup/aequorOS/pull/781) and [DATA/MARKETS cutover](https://github.com/CedynGroup/aequorOS/pull/798) own the vocabulary, migrations and register changes). REG, BEH and Credit configure cutovers remain future work; their absence here is not authorization evidence. |
 | Signing            | `sign_off` is absent from current bundles. [Signer work](https://github.com/CedynGroup/aequorOS/issues/185) owns routed recipient, digest, step-up and signing authority. Evaluator denial is not a characterization of every existing attestation workflow.                                                            |
 | REG export         | Viewer and Validator lack EXPORT; view/submit never imply export. A read-only regulatory exporter requires a separate decision, not a matrix correction.                                                                                                                                                                |
 | Owner reads        | Owner carries Account administration, not product view. Only an explicit separate read binding enables the represented bank-detail read. No automatic grant or backfill is added.                                                                                                                                       |

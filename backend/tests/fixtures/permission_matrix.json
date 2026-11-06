@@ -80,6 +80,12 @@
       "bank": "primary",
       "module": "liq",
       "sensitivity": "restricted"
+    },
+    "markets": {
+      "scope": "institution",
+      "bank": "primary",
+      "module": "markets",
+      "sensitivity": "restricted"
     }
   },
   "roles": [
@@ -373,6 +379,31 @@
         "administer",
         "ingest"
       ]
+    },
+    {
+      "bundle": "configurator",
+      "principal_type": "human",
+      "resource": "data",
+      "scope": "institution",
+      "bank": "primary",
+      "module": "data",
+      "sensitivity": "restricted",
+      "data_scope": "all",
+      "allowed": ["configure"],
+      "denied": [
+        "view",
+        "create",
+        "edit",
+        "run",
+        "review",
+        "approve",
+        "export",
+        "validate",
+        "sign_off",
+        "submit",
+        "administer",
+        "ingest"
+      ]
     }
   ],
   "grants": {
@@ -489,6 +520,22 @@
       "sensitivity": "restricted",
       "data_scope": "region",
       "values": ["synthetic-region"]
+    },
+    "configurator_data": {
+      "bundle": "configurator",
+      "scope": "institution",
+      "bank": "primary",
+      "module": "data",
+      "sensitivity": "restricted",
+      "data_scope": "all"
+    },
+    "configurator_markets": {
+      "bundle": "configurator",
+      "scope": "institution",
+      "bank": "primary",
+      "module": "markets",
+      "sensitivity": "restricted",
+      "data_scope": "all"
     }
   },
   "scenarios": [
@@ -736,6 +783,46 @@
       "grants": ["admin_bank"],
       "resource": "account",
       "action": "administer",
+      "allowed": false,
+      "reason": "no_active_exact_binding"
+    },
+    {
+      "id": "configurator_data_exact",
+      "grants": ["configurator_data"],
+      "resource": "data",
+      "action": "configure",
+      "allowed": true,
+      "reason": "allowed"
+    },
+    {
+      "id": "configurator_data_view_refused",
+      "grants": ["configurator_data"],
+      "resource": "data",
+      "action": "view",
+      "allowed": false,
+      "reason": "no_active_exact_binding"
+    },
+    {
+      "id": "configurator_data_run_refused",
+      "grants": ["configurator_data"],
+      "resource": "data",
+      "action": "run",
+      "allowed": false,
+      "reason": "no_active_exact_binding"
+    },
+    {
+      "id": "configurator_markets_exact",
+      "grants": ["configurator_markets"],
+      "resource": "markets",
+      "action": "configure",
+      "allowed": true,
+      "reason": "allowed"
+    },
+    {
+      "id": "configurator_data_wrong_bank",
+      "grants": ["configurator_data"],
+      "resource": "sibling",
+      "action": "configure",
       "allowed": false,
       "reason": "no_active_exact_binding"
     }
