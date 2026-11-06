@@ -59,15 +59,12 @@ unreadable source, malformed syntax and malformed baselines fail closed,
 including during `--update`. External packages, unresolved targets and nonliteral
 runtime module names are outside this static scan.
 
-The shared-origin rule initially records 14 reviewed existing pairs, separately
-from the unchanged 14 feature-origin exceptions: ten from five shared charts to
-BI's `EChart` and `echartsTheme`, one from `UnifiedBell` to live's `moduleDisplay`,
-and three from `lib/api/bi.ts` to BI notification types, expression digest and
-refusal helpers. The notification-types edge is type-only boundary debt, not a
-runtime bundle edge. These are exact pairs, not prefix exemptions or a total-count
-budget. Moving the generic chart entrance into shared charts must retire the ten
-chart pairs; leaving them in the baseline will fail as stale. This guard change
-does not move runtime code or alter the chart SSR/lazy-loading boundary.
+The current exceptions live in `feature_boundary_baseline.json`: exact pairs,
+not prefix exemptions or a total-count budget. Type-only exceptions represent
+boundary debt without implying a runtime bundle edge. Moving the generic chart
+entrance into shared charts must retire the corresponding chart pairs; leaving
+them in the baseline will fail as stale. This guard change does not move runtime
+code or alter the chart SSR/lazy-loading boundary.
 
 The guard runs as the `Guard dashboard feature boundaries` CI step and is
 wired into the `test:legacy` suite via `scripts/check_feature_boundaries.test.mjs`.

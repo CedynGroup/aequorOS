@@ -31,9 +31,8 @@ const SKIP_DIRS = new Set([
   "playwright-report",
 ]);
 const SOURCE_EXTS = new Set([".ts", ".tsx"]);
-// The shared layer every feature may import (the kernel analog): the generated
-// API client, shared UI primitives and shared charts. Root-level lib modules
-// are shared until a feature owns them.
+// Always-shared prefixes take precedence over feature-name ownership.
+// FEATURE_LAYOUT.md owns the shared-layer contract.
 const SHARED_PREFIXES = [
   "lib/api/",
   "components/ui/",
