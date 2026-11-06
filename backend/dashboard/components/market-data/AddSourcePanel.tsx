@@ -54,6 +54,9 @@ const PULLS_PER_MONTH: Record<string, number> = {
   MONTHLY: 1,
 };
 
+/** Read-only scalar roles: the backend mutation gate refuses them outright. */
+const READ_ONLY_ROLES = new Set(["viewer", "examiner"]);
+
 type Step = "vendor" | "credentials" | "scopes" | "schedule" | "activate";
 
 function stepsFor(vendor: VendorKey | null): Step[] {
