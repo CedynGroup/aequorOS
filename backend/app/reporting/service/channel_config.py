@@ -26,6 +26,7 @@ from app.market_data.public import (
 )
 from app.reporting.models.packages import RegulatoryChannelConfig
 from app.reporting.schemas.packages import (
+    ChannelCode,
     ChannelConfigPut,
     ChannelConfigRead,
     ChannelConfigWriteAcknowledgement,
@@ -74,7 +75,7 @@ def get_channel_config(
 
 
 def put_channel_config(
-    db: Session, ctx: TenantContext, bank_id: str, channel: str, payload: ChannelConfigPut
+    db: Session, ctx: TenantContext, bank_id: str, channel: ChannelCode, payload: ChannelConfigPut
 ) -> ChannelConfigWriteAcknowledgement:
     # Configuration duty (VAL-CFG-007): exact reg/configure/restricted authority
     # for this bank BEFORE any encryption, mutation or audit row. The write-only
@@ -114,7 +115,7 @@ def put_channel_config(
     db.commit()
     return ChannelConfigWriteAcknowledgement(
         bank_id=bank.id,
-        channel=channel,  # type: ignore[arg-type]
+        channel=channel,
         credentials_rotated=payload.credentials is not None,
         created=created,
     )

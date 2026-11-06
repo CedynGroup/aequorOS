@@ -5,9 +5,10 @@ duty of its own (VAL-CFG-007): a complete active ``reg/configure/restricted``
 exact-bank binding, evaluated BEFORE any credential encryption, row mutation
 or audit row. Machine principals and impersonated sessions never hold a human
 configuration duty and are refused outright. Denial statuses follow the module
-split the DATA/MARKETS cutovers established: a covered principal without the
-configure right is refused (403), and a principal with no REGULATORY coverage
-at all is told nothing about the bank (opaque 404).
+split the DATA/MARKETS cutovers established: a principal who can see the bank
+but holds no reg configure right is refused (403), and a principal with no
+effective coverage for the bank in ANY module is told nothing about it
+(opaque 404).
 """
 
 from __future__ import annotations
