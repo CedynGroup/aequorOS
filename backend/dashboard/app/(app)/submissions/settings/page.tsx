@@ -10,12 +10,13 @@
  * write-only ORASS credentials (the API returns only the fingerprint —
  * mirroring the market-data vault pattern).
  *
- * Plus the Org Owner-only signing-policy section (who must sign which return —
- * docs/attestation_esignature.md §4.5), which renders nothing for non-owners.
+ * Plus the signing-policy section (who must sign which return —
+ * docs/attestation_esignature.md §4.5), whose save is gated on
+ * organization-scope REG configure authority (VAL-CFG-008).
  */
 
 import PageContainer from "@/components/ui/PageContainer";
-import { useEffect, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import { FlaskConical, KeyRound, Loader2, Save } from "lucide-react";
 import type {
   ChannelCode,
@@ -35,6 +36,7 @@ import {
 import { fmtTimestamp, shortId } from "@/lib/api/values";
 import { CHANNEL_LABELS } from "@/components/submissions/shared";
 import SigningPolicyPanel from "@/components/attestation/SigningPolicyPanel";
+import { useConfigureEligibility } from "@/lib/api/configureAccess";
 import { regShort } from "@/lib/format";
 
 const CHANNELS: ChannelCode[] = [
@@ -185,6 +187,11 @@ function ChannelForm({
 }) {
   const configQuery = useChannelConfig(bankId, channel);
   const save = useSaveChannelConfig(bankId);
+  // The PUT demands an exact reg / configure / restricted binding for this
+  // bank (the read stays available to every viewer of the page).
+  const { allowed: canConfigure, reason: configureReason } =
+    useConfigureEligibility(bankId, "reg");
+  const configureReasonId = useId();
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
   const [hydrated, setHydrated] = useState(false);
 
@@ -219,6 +226,7 @@ function ChannelForm({
     setForm((prev) => ({ ...prev, [key]: value }));
 
   const handleSave = () => {
+    if (!canConfigure) return; // denied before any side effect, as the server denies
     const configPayload: Record<string, unknown> = {
       institution_code: form.institutionCode.trim(),
       contact_name: form.contactName.trim(),
@@ -294,19 +302,32 @@ function ChannelForm({
                 : undefined
           }
           actions={
-            <button
-              type="button"
-              disabled={save.isPending}
-              onClick={handleSave}
-              className="inline-flex items-center gap-1.5 px-3 py-2 text-caption font-medium btn-primary disabled:opacity-60"
-            >
-              {save.isPending ? (
-                <Loader2 size={13} className="animate-spin" aria-hidden />
-              ) : (
-                <Save size={13} aria-hidden />
+            <span className="inline-flex flex-wrap items-center justify-end gap-2 max-w-56 sm:max-w-64">
+              {!canConfigure && (
+                <span
+                  id={configureReasonId}
+                  className="text-micro text-slate text-right"
+                >
+                  {configureReason}
+                </span>
               )}
-              Save configuration
-            </button>
+              <button
+                type="button"
+                disabled={!canConfigure || save.isPending}
+                aria-describedby={
+                  !canConfigure ? configureReasonId : undefined
+                }
+                onClick={handleSave}
+                className="inline-flex items-center gap-1.5 px-3 py-2 text-caption font-medium btn-primary disabled:opacity-60"
+              >
+                {save.isPending ? (
+                  <Loader2 size={13} className="animate-spin" aria-hidden />
+                ) : (
+                  <Save size={13} aria-hidden />
+                )}
+                Save configuration
+              </button>
+            </span>
           }
         >
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-3xl">
