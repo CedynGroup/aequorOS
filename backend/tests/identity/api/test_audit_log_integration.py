@@ -1128,6 +1128,19 @@ def test_real_connection_and_template_writers_are_visible(
     db_client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     grant(RoleBundle.SECURITY_OFFICER)
+    # Connection lifecycle is a configure duty; the fixture officer holds it
+    # explicitly, never through the security-officer bundle.
+    with _session() as db:
+        grant_institution_authority(
+            db,
+            organization_id=ORG_1,
+            bank_id=BANK,
+            user_id=USER_1,
+            bundle=RoleBundle.CONFIGURATOR,
+            module=ModuleScope.DATA,
+            sensitivity=SensitivityScope.RESTRICTED,
+        )
+        db.commit()
     monkeypatch.setenv("CREDENTIAL_VAULT_MASTER_KEY", "audit-fixture-vault-key")
     get_settings.cache_clear()
     stub_public_dns(monkeypatch, "core-db.example.test")
