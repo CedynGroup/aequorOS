@@ -572,7 +572,7 @@ parametrizations, and rejects missing or duplicate cases and wrong-suite owners.
 Local feedback is fast by default; CI remains the complete-suite authority:
 
 ```bash
-mise run risk-service:check      # lint, typecheck, then fast local test feedback
+mise run risk-service:check      # lint, typecheck, and fast local test feedback
 mise run risk-service:test       # affected modules or guarded unit-only fallback
 mise run risk-service:test-fast  # alias for the same local feedback profile
 mise run risk-service:test-lf    # serial pytest --lf fix loop, never a full fallback

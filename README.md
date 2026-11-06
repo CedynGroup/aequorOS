@@ -243,7 +243,7 @@ risk-service:dev` defaults to `:8001`; pass `PORT=8000`.
 Backend, from the repository root or `backend/`:
 
 ```bash
-mise run risk-service:check          # ruff, basedpyright strict baseline, then fast local feedback
+mise run risk-service:check          # ruff, basedpyright strict baseline, and fast local feedback
 mise run risk-service:test-full      # explicit complete hermetic compatibility run, serial
 mise run risk-service:test-lf        # serial pytest --lf; empty failure cache runs no tests
 mise run unit                        # database-free tests; any database connection fails
