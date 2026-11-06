@@ -258,7 +258,12 @@ it("withholds confidential history and mapping metadata from restricted readers"
 it.each(["authority", "request"] as const)(
   "keeps starter actions disabled during %s loading",
   async (loading) => {
-    state.capabilities = [capability("view", "confidential")];
+    // Starter activation is a DATA configure duty (#184) plus the
+    // confidential read for mapping status.
+    state.capabilities = [
+      capability("view", "confidential"),
+      capability("configure"),
+    ];
     state.loading = loading === "authority";
     let release!: () => void;
     const pending = new Promise<void>((resolve) => {
@@ -292,7 +297,10 @@ it.each(["authority", "request"] as const)(
 );
 
 it("keeps starter activation disabled after a failed read and supports retry", async () => {
-  state.capabilities = [capability("view", "confidential")];
+  state.capabilities = [
+    capability("view", "confidential"),
+    capability("configure"),
+  ];
   server.use(
     http.get(`${base}/mapping-configs`, () =>
       HttpResponse.json({}, { status: 503 }),
@@ -320,7 +328,11 @@ it.each([
 ])(
   "preserves starter creation and loaded active status in $name",
   async ({ Surface, action }) => {
-    state.capabilities = [capability("view", "confidential")];
+    // Starter creation is a DATA configure duty (#184).
+    state.capabilities = [
+      capability("view", "confidential"),
+      capability("configure"),
+    ];
     let active: object | undefined;
     let submitted:
       { name: string; activate: boolean; source_system: string } | undefined;
@@ -508,10 +520,13 @@ it.each(["run", "validate"] as const)(
 );
 
 it.each([false, true])(
-  "gates T24 live tests with VALIDATE=%s while retaining credential validation",
+  "gates T24 live tests with VALIDATE=%s and credential validation with CONFIGURE",
   async (allowed) => {
+    // Credential validation is a DATA configure duty (#184); the live
+    // availability check keeps its separate VALIDATE gate.
     state.capabilities = [
       capability("view"),
+      capability("configure"),
       ...(allowed ? [capability("validate")] : []),
     ];
     let tests = 0;
@@ -733,7 +748,11 @@ it("keeps template downloads while confidential mapping status is unavailable", 
 it.each(["loading", "failed", "empty", "active"] as const)(
   "distinguishes %s mapping metadata before offering replacement",
   async (status) => {
-    state.capabilities = [capability("view", "confidential")];
+    // The replacement offer activates a starter mapping: DATA configure (#184).
+    state.capabilities = [
+      capability("view", "confidential"),
+      capability("configure"),
+    ];
     state.loading = status === "loading";
     server.use(
       http.get(`${base}/mapping-configs`, () => {
@@ -872,8 +891,11 @@ it.each(["loading", "failed", "empty", "accepted"] as const)(
 it.each([false, true])(
   "saves database credentials independently of VALIDATE=%s",
   async (allowed) => {
+    // Connection creation is a DATA configure duty (#184); the live test
+    // keeps its separate VALIDATE gate.
     state.capabilities = [
       capability("view"),
+      capability("configure"),
       ...(allowed ? [capability("validate")] : []),
     ];
     let saves = 0;
@@ -920,8 +942,11 @@ it.each([false, true])(
 it.each([false, true])(
   "saves Temenos credentials independently of VALIDATE=%s",
   async (allowed) => {
+    // Core connection creation is a DATA configure duty (#184); the live
+    // test keeps its separate VALIDATE gate.
     state.capabilities = [
       capability("view"),
+      capability("configure"),
       ...(allowed ? [capability("validate")] : []),
     ];
     let saves = 0;

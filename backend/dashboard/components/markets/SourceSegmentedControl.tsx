@@ -19,11 +19,13 @@ export default function SourceSegmentedControl({
   available,
   onChange,
   disabled = false,
+  descriptionId,
 }: {
   value: MarketDataSource;
   available: Record<MarketDataSource, boolean>;
   onChange: (source: MarketDataSource) => void;
   disabled?: boolean;
+  descriptionId?: string;
 }) {
   return (
     <div
@@ -41,6 +43,7 @@ export default function SourceSegmentedControl({
             type="button"
             disabled={isDisabled}
             aria-pressed={isActive}
+            aria-describedby={descriptionId}
             onClick={() => onChange(source)}
             title={isAvailable ? undefined : 'No data on this plane at the as-of date'}
             className={`px-3 py-1.5 rounded text-caption font-medium whitespace-nowrap transition-colors ${

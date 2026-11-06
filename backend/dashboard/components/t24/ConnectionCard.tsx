@@ -25,6 +25,7 @@ import type {
 } from "@aequoros/risk-service-api";
 import { isApiError } from "@/lib/api/client";
 import { useDataPermission } from "@/lib/api/dataAccess";
+import { useConfigureEligibility } from "@/lib/api/configureAccess";
 import {
   useDisableTemenosConnection,
   useEnableTemenosConnection,
@@ -91,6 +92,12 @@ export default function ConnectionCard({
   const test = useTestTemenosConnection(bankId);
   const validationRequirementId = useId();
   const canValidate = useDataPermission(bankId, "validate", "restricted");
+  // Credential validation and lifecycle (rotate/disable/enable/revoke) are
+  // configuration duties server-side (#184): these actions mirror the exact
+  // DATA configure gate, while the live availability check keeps VALIDATE.
+  const { allowed: canConfigure, reason: configureReason } =
+    useConfigureEligibility(bankId, "data");
+  const configureRequirementId = useId();
   const update = useUpdateTemenosConnection(bankId);
   const disable = useDisableTemenosConnection(bankId);
   const enable = useEnableTemenosConnection(bankId);
@@ -256,7 +263,8 @@ export default function ConnectionCard({
                 "Credential health check completed.",
               )
             }
-            disabled={busy || isDisabled}
+            disabled={!canConfigure || busy || isDisabled}
+            descriptionId={!canConfigure ? configureRequirementId : undefined}
             icon={<CheckCircle2 size={13} aria-hidden />}
           >
             Validate stored credentials
@@ -267,7 +275,8 @@ export default function ConnectionCard({
               setActionError(null);
               setNotice(null);
             }}
-            disabled={busy}
+            disabled={!canConfigure || busy}
+            descriptionId={!canConfigure ? configureRequirementId : undefined}
             icon={<KeyRound size={13} aria-hidden />}
           >
             {rotating ? "Cancel rotation" : "Rotate credentials"}
@@ -280,7 +289,10 @@ export default function ConnectionCard({
                   "Connection re-validated and enabled.",
                 )
               }
-              disabled={busy}
+              disabled={!canConfigure || busy}
+              descriptionId={
+                !canConfigure ? configureRequirementId : undefined
+              }
               icon={<PlayCircle size={13} aria-hidden />}
             >
               Enable
@@ -293,7 +305,10 @@ export default function ConnectionCard({
                   "Connection disabled. Scheduled pulls are paused; credentials stay stored.",
                 )
               }
-              disabled={busy}
+              disabled={!canConfigure || busy}
+              descriptionId={
+                !canConfigure ? configureRequirementId : undefined
+              }
               icon={<PauseCircle size={13} aria-hidden />}
             >
               Disable
@@ -311,13 +326,19 @@ export default function ConnectionCard({
                 void run(() => revoke.mutateAsync(connection.id));
               }
             }}
-            disabled={busy}
+            disabled={!canConfigure || busy}
+            descriptionId={!canConfigure ? configureRequirementId : undefined}
             tone="danger"
             icon={<ShieldAlert size={13} aria-hidden />}
           >
             Revoke
           </ActionButton>
         </div>
+      )}
+      {!isRevoked && !canConfigure && (
+        <p id={configureRequirementId} className="text-caption text-warning">
+          {configureReason}
+        </p>
       )}
 
       {rotating && !isRevoked && (
@@ -339,8 +360,10 @@ export default function ConnectionCard({
             onClick={() => void submitRotation()}
             disabled={
               busy ||
+              !canConfigure ||
               Object.values(rotateValues).every((value) => !value.trim())
             }
+            aria-describedby={!canConfigure ? configureRequirementId : undefined}
             className="inline-flex items-center gap-2 px-4 py-2 rounded-sm text-body font-medium bg-action text-white hover:bg-action-hover disabled:opacity-40 disabled:cursor-not-allowed"
           >
             {update.isPending ? (

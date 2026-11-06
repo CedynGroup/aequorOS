@@ -9,7 +9,7 @@
  */
 
 import PageContainer from "@/components/ui/PageContainer";
-import { useState } from "react";
+import { useId, useState } from "react";
 import Link from "next/link";
 import { ArrowRight, Database, Loader2, Plus } from "lucide-react";
 import PageHeader from "@/components/ui/PageHeader";
@@ -21,6 +21,7 @@ import ConnectionCard from "@/components/t24/ConnectionCard";
 import DomainCoverage from "@/components/t24/DomainCoverage";
 import TransportModes from "@/components/t24/TransportModes";
 import { useDataPermissionState } from "@/lib/api/dataAccess";
+import { useConfigureEligibility } from "@/lib/api/configureAccess";
 import { PageSkeleton } from "@/components/ui/QueryBoundary";
 import DataAccessNotice from "@/components/ui/DataAccessNotice";
 
@@ -42,6 +43,24 @@ export default function T24Page() {
     "view",
     "restricted",
     authorityPending,
+  );
+  // Core connection lifecycle is a configuration duty server-side (#184): the
+  // Configure action mirrors the exact DATA configure gate.
+  const { allowed: canConfigure, reason: configureReason } =
+    useConfigureEligibility(bank?.id, "data");
+  const configureRequirementId = useId();
+
+  const configureButton = (onClick: () => void) => (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={!canConfigure}
+      aria-describedby={!canConfigure ? configureRequirementId : undefined}
+      className="inline-flex items-center gap-1.5 px-3 py-2 text-caption font-medium btn-primary disabled:opacity-40 disabled:cursor-not-allowed"
+    >
+      <Plus size={13} aria-hidden />
+      Configure a core
+    </button>
   );
 
   const rows = connections.data?.connections ?? [];
@@ -105,15 +124,14 @@ export default function T24Page() {
                   </p>
                 )}
               </div>
-              {!adding && (
-                <button
-                  type="button"
-                  onClick={() => setAdding(true)}
-                  className="inline-flex items-center gap-1.5 px-3 py-2 text-caption font-medium btn-primary"
+              {!adding && configureButton(() => setAdding(true))}
+              {!adding && !canConfigure && (
+                <p
+                  id={configureRequirementId}
+                  className="text-caption text-warning"
                 >
-                  <Plus size={13} aria-hidden />
-                  Configure a core
-                </button>
+                  {configureReason}
+                </p>
               )}
             </div>
 
@@ -127,16 +145,7 @@ export default function T24Page() {
                 Icon={Database}
                 title="No Temenos core configured yet"
                 description="Save T24 connection details and mappings for onboarding. Live transport is not available in this deployment, so ingest through file upload or the Push API."
-                action={
-                  <button
-                    type="button"
-                    onClick={() => setAdding(true)}
-                    className="inline-flex items-center gap-1.5 px-3 py-2 text-caption font-medium btn-primary"
-                  >
-                    <Plus size={13} aria-hidden />
-                    Configure a core
-                  </button>
-                }
+                action={configureButton(() => setAdding(true))}
               />
             ) : (
               <div className="grid grid-cols-1 gap-4">

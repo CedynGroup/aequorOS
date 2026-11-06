@@ -8,7 +8,7 @@
  * the only stored representation shown is the fingerprint on the connection card.
  */
 
-import { useMemo, useState } from "react";
+import { useId, useMemo, useState } from "react";
 import {
   ArrowLeft,
   ArrowRight,
@@ -23,6 +23,7 @@ import type {
   TemenosTestPullRead,
 } from "@aequoros/risk-service-api";
 import { useDataPermission } from "@/lib/api/dataAccess";
+import { useConfigureEligibility } from "@/lib/api/configureAccess";
 import { isApiError } from "@/lib/api/client";
 import {
   useCreateTemenosConnection,
@@ -78,6 +79,11 @@ export default function AddConnectionPanel({
   const [running, setRunning] = useState(false);
 
   const canValidate = useDataPermission(bankId, "validate", "restricted");
+  // Creating a core connection is a configuration duty server-side (#184):
+  // the save mirrors the exact DATA configure gate.
+  const { allowed: canConfigure, reason: configureReason } =
+    useConfigureEligibility(bankId, "data");
+  const configureRequirementId = useId();
   const create = useCreateTemenosConnection(bankId);
   const test = useTestTemenosConnection(bankId);
   const domainsQuery = useTemenosDomains(bankId, mode ?? "OFS");
@@ -450,8 +456,13 @@ export default function AddConnectionPanel({
                 type="button"
                 onClick={() => void createAndTest()}
                 disabled={
-                  running || !mode || !endpoint.trim() || credentialsIncomplete
+                  running ||
+                  !canConfigure ||
+                  !mode ||
+                  !endpoint.trim() ||
+                  credentialsIncomplete
                 }
+                aria-describedby={!canConfigure ? configureRequirementId : undefined}
                 className="inline-flex items-center gap-2 px-4 py-2 rounded-sm text-body font-medium bg-action text-white hover:bg-action-hover disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 {running ? (
@@ -461,6 +472,14 @@ export default function AddConnectionPanel({
                 )}
                 Save configuration
               </button>
+              {!canConfigure && (
+                <p
+                  id={configureRequirementId}
+                  className="text-caption text-warning"
+                >
+                  {configureReason}
+                </p>
+              )}
             </>
           )}
 
