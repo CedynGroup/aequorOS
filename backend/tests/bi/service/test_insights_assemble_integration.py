@@ -48,14 +48,8 @@ from app.bi.service.insights.assemble import (
 from app.bi.service.insights.facts import MovementFact, ObservedFact
 from app.core.authorization import InstitutionScope, ModuleScope, SensitivityScope
 from app.models import Bank
-from tests.bi.api.test_bi_routes_integration import (
-    AS_OF,
-    BUILT_AT,
-    FINGERPRINT,
-    Grant,
-    grant_only,
-    seed_bi_mart,
-)
+from tests.bi.route_data import AS_OF, BUILT_AT, FINGERPRINT
+from tests.bi.route_support import Grant, grant_only, seed_bi_mart
 from tests.support.helpers import ORG_1, USER_1
 
 

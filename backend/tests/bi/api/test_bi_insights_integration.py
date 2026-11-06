@@ -43,15 +43,8 @@ from app.bi.service.insights import default_compare_to, headline_measures
 from app.core.authorization import InstitutionScope, ModuleScope, SensitivityScope
 from app.core.config import get_settings
 from app.models import Bank
-from tests.bi.api.test_bi_routes_integration import (
-    AS_OF,
-    BASE,
-    BUILT_AT,
-    FINGERPRINT,
-    Grant,
-    grant_only,
-    seed_bi_mart,
-)
+from tests.bi.route_data import AS_OF, BASE, BUILT_AT, FINGERPRINT
+from tests.bi.route_support import Grant, grant_only, seed_bi_mart
 from tests.support.helpers import ORG_1, headers
 
 PRIOR = default_compare_to(AS_OF)

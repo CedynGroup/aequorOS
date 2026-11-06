@@ -52,15 +52,8 @@ from app.storage.client import (
     StorageLocation,
     StorageObject,
 )
-from tests.bi.api.test_bi_routes_integration import (
-    AGGREGATE_ONLY,
-    AS_OF,
-    BANK_ID,
-    BASE,
-    Grant,
-    grant_only,
-    seed_bi_mart,
-)
+from tests.bi.route_data import AS_OF, BANK_ID, BASE
+from tests.bi.route_support import AGGREGATE_ONLY, Grant, grant_only, seed_bi_mart
 from tests.conftest import ApiTestApp
 from tests.support.helpers import ORG_1, USER_1, headers
 
