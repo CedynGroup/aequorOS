@@ -13,7 +13,7 @@ in both directions:
   cursor would pass it once and never return, and the report server would then
   disagree with the platform for as long as the model lived, silently.
 
-The mart is the read surface's own fixture (``tests/bi/api/test_bi_routes``) plus a
+The mart is the shared fixture in ``tests.bi.route_support`` plus a
 SECOND reporting date added here, because a cursor cannot be tested over one
 date. Every figure below is derivable by reading the two.
 
@@ -70,14 +70,8 @@ from app.core.config import get_settings
 from app.db.session import get_sessionmaker
 from app.identity.service import authorization, integration_keys
 from app.models import AuditEvent, AuthorizationBinding, Bank, IntegrationKey, User
-from tests.bi.api.test_bi_routes_integration import (
-    AS_OF,
-    BANK_ID,
-    BUILT_AT,
-    SAME_TENANT_BANK_ID,
-    SIBLING_BANK_ID,
-    seed_bi_mart,
-)
+from tests.bi.route_data import AS_OF, BANK_ID, BUILT_AT, SAME_TENANT_BANK_ID, SIBLING_BANK_ID
+from tests.bi.route_support import seed_bi_mart
 from tests.support.helpers import ORG_1, USER_1, error_envelope, headers, integration_key_headers
 
 #: A SECOND reporting date, built BEFORE August, so the walk order is derivable.

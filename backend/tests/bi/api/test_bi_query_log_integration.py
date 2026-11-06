@@ -29,14 +29,16 @@ from app.bi.schemas.query import BiQuery
 from app.bi.service import query_log
 from app.core.authorization import ModuleScope, PrincipalType, SensitivityScope
 from app.models import Bank
-from tests.bi.api.test_bi_routes_integration import (
-    AGGREGATE_ONLY,
+from tests.bi.route_data import (
     AS_OF,
     BALANCE_BY_BRANCH_QUERY,
     BANK_ID,
     BASE,
     FINGERPRINT,
     OBLIGOR_QUERY,
+)
+from tests.bi.route_support import (
+    AGGREGATE_ONLY,
     Grant,
     call,
     grant_only,
