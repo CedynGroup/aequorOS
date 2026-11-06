@@ -8,13 +8,14 @@
  * fingerprint on the connection card.
  */
 
-import { useState } from "react";
+import { useId, useState } from "react";
 import { CheckCircle2, Loader2, Plug, XCircle } from "lucide-react";
 import type {
   DatabaseConnectionRead,
   DatabaseConnectionTestResult,
 } from "@aequoros/risk-service-api";
 import { useDataPermission } from "@/lib/api/dataAccess";
+import { useConfigureEligibility } from "@/lib/api/configureAccess";
 import { isApiError } from "@/lib/api/client";
 import {
   useCreateDatabaseConnection,
@@ -38,6 +39,11 @@ export default function AddConnectionPanel({
   onDone: () => void;
 }) {
   const canValidate = useDataPermission(bankId, "validate", "restricted");
+  // Creating a connection is a configuration duty server-side (#184): the
+  // submit mirrors the exact DATA configure gate.
+  const { allowed: canConfigure, reason: configureReason } =
+    useConfigureEligibility(bankId, "data");
+  const configureRequirementId = useId();
   const create = useCreateDatabaseConnection(bankId);
   const test = useTestDatabaseConnection(bankId);
 
@@ -132,11 +138,14 @@ export default function AddConnectionPanel({
             </p>
           )}
 
-          <div className="flex items-center gap-3 pt-1">
+          <div className="flex items-center gap-3 pt-1 flex-wrap">
             <button
               type="button"
               onClick={() => void createAndTest()}
-              disabled={!canSubmit}
+              disabled={!canSubmit || !canConfigure}
+              aria-describedby={
+                !canConfigure ? configureRequirementId : undefined
+              }
               className="inline-flex items-center gap-2 px-4 py-2 rounded-sm text-body font-medium bg-action text-white hover:bg-action-hover disabled:opacity-40 disabled:cursor-not-allowed"
             >
               {running ? (
@@ -148,7 +157,14 @@ export default function AddConnectionPanel({
                 ? "Create, validate & test connection"
                 : "Create connection"}
             </button>
-            {(credentialsIncomplete || snowflakeConfigIncomplete) && (
+            {!canConfigure ? (
+              <span
+                id={configureRequirementId}
+                className="text-caption text-warning"
+              >
+                {configureReason}
+              </span>
+            ) : (credentialsIncomplete || snowflakeConfigIncomplete) && (
               <span className="text-caption text-slate">
                 {isSnowflake
                   ? "A service user, private key, account, and warehouse are required to create the connection."

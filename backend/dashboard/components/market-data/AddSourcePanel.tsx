@@ -9,7 +9,7 @@
  * stored representation shown is the fingerprint on the source card.
  */
 
-import { useMemo, useState } from "react";
+import { useId, useMemo, useState } from "react";
 import {
   ArrowLeft,
   ArrowRight,
@@ -24,6 +24,7 @@ import type {
   TestPullRead,
 } from "@aequoros/risk-service-api";
 import { isApiError } from "@/lib/api/client";
+import { useConfigureEligibility } from "@/lib/api/configureAccess";
 import {
   useCreateMarketDataConnection,
   useMarketDataScopes,
@@ -70,6 +71,11 @@ export default function AddSourcePanel({
   const scopesQuery = useMarketDataScopes(bankId);
   const create = useCreateMarketDataConnection(bankId);
   const test = useTestMarketDataConnection(bankId);
+  // Creating a source connection is a configuration duty server-side (#184):
+  // the save mirrors the exact MARKETS configure gate.
+  const { allowed: canConfigure, reason: configureReason } =
+    useConfigureEligibility(bankId, "markets");
+  const configureRequirementId = useId();
 
   const [vendor, setVendor] = useState<VendorKey | null>(null);
   const [displayName, setDisplayName] = useState("");
@@ -397,7 +403,12 @@ export default function AddSourcePanel({
               <button
                 type="button"
                 onClick={() => void createAndTest()}
-                disabled={running || !vendor || selected.size === 0}
+                disabled={
+                  running || !canConfigure || !vendor || selected.size === 0
+                }
+                aria-describedby={
+                  !canConfigure ? configureRequirementId : undefined
+                }
                 className="inline-flex items-center gap-2 px-4 py-2 rounded-sm text-body font-medium bg-action text-white hover:bg-action-hover disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 {running ? (
@@ -409,6 +420,14 @@ export default function AddSourcePanel({
                   ? "Create manual upload source"
                   : "Save vendor configuration"}
               </button>
+              {!canConfigure && (
+                <p
+                  id={configureRequirementId}
+                  className="text-caption text-warning"
+                >
+                  {configureReason}
+                </p>
+              )}
             </>
           )}
 

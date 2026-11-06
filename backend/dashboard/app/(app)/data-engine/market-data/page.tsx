@@ -17,7 +17,7 @@
  */
 
 import PageContainer from "@/components/ui/PageContainer";
-import { useState } from "react";
+import { useId, useState } from "react";
 import {
   LineChart,
   Plus,
@@ -30,6 +30,7 @@ import PageHeader from "@/components/ui/PageHeader";
 import EmptyState from "@/components/ui/EmptyState";
 import { useBankContext } from "@/components/shell/BankContext";
 import PermissionAction from "@/components/markets/PermissionAction";
+import { useConfigureEligibility } from "@/lib/api/configureAccess";
 import { isApiError } from "@/lib/api/client";
 import {
   MARKETS_PUBLISHED_CREATE_REASON,
@@ -58,6 +59,24 @@ export default function MarketDataPage() {
     moduleScope.marketsPublishedView ? bank?.id : undefined,
   );
   const [adding, setAdding] = useState(false);
+  // Connection lifecycle is a configuration duty server-side (#184): the
+  // Connect action mirrors the exact MARKETS configure gate.
+  const { allowed: canConfigure, reason: configureReason } =
+    useConfigureEligibility(bank?.id, "markets");
+  const configureRequirementId = useId();
+
+  const connectButton = (onClick: () => void) => (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={!canConfigure}
+      aria-describedby={!canConfigure ? configureRequirementId : undefined}
+      className="inline-flex items-center gap-1.5 px-3 py-2 text-caption font-medium btn-primary disabled:opacity-40 disabled:cursor-not-allowed"
+    >
+      <Plus size={13} aria-hidden />
+      Connect a source
+    </button>
+  );
 
   const rows = connections.data?.connections ?? [];
   const quotaByVendor = new Map(
@@ -71,15 +90,14 @@ export default function MarketDataPage() {
         <section className="space-y-4">
           <div className="flex items-center justify-between">
             <h2 className="text-h3 text-navy">Configured sources</h2>
-            {!adding && (
-              <button
-                type="button"
-                onClick={() => setAdding(true)}
-                className="inline-flex items-center gap-1.5 px-3 py-2 text-caption font-medium btn-primary"
+            {!adding && connectButton(() => setAdding(true))}
+            {!adding && !canConfigure && (
+              <p
+                id={configureRequirementId}
+                className="text-caption text-warning"
               >
-                <Plus size={13} aria-hidden />
-                Connect a source
-              </button>
+                {configureReason}
+              </p>
             )}
           </div>
           {!canViewConnections ? (
@@ -99,16 +117,7 @@ export default function MarketDataPage() {
               Icon={LineChart}
               title="No market data sources configured yet"
               description="Configure Bloomberg or LSEG for onboarding, or use the available manual upload path below. Calculations consume the same canonical scopes either way."
-              action={
-                <button
-                  type="button"
-                  onClick={() => setAdding(true)}
-                  className="inline-flex items-center gap-1.5 px-3 py-2 text-caption font-medium btn-primary"
-                >
-                  <Plus size={13} aria-hidden />
-                  Connect a source
-                </button>
-              }
+              action={connectButton(() => setAdding(true))}
             />
           ) : (
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">

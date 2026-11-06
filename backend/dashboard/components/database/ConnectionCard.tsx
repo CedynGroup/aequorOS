@@ -45,6 +45,7 @@ import SyncPanel from "./SyncPanel";
 import { ConnectionStatusPill, backendName, fmtWhen } from "./shared";
 import { fmtLocale } from "@/lib/format";
 import { useDataPermission } from "@/lib/api/dataAccess";
+import { useConfigureEligibility } from "@/lib/api/configureAccess";
 
 function errorMessage(error: unknown): string {
   if (isApiError(error)) return error.message;
@@ -107,6 +108,11 @@ export default function ConnectionCard({
   const validationRequirementId = useId();
   const canValidate = useDataPermission(bankId, "validate", "restricted");
   const canRun = useDataPermission(bankId, "run", "restricted");
+  // Connection lifecycle (edit/disable/enable/revoke) is a configuration duty
+  // server-side (#184): these actions mirror the exact DATA configure gate.
+  const { allowed: canConfigure, reason: configureReason } =
+    useConfigureEligibility(bankId, "data");
+  const configureRequirementId = useId();
 
   const [panel, setPanel] = useState<OpenPanel>(null);
   const [testResult, setTestResult] =
@@ -340,7 +346,8 @@ export default function ConnectionCard({
           </ActionButton>
           <ActionButton
             onClick={() => togglePanel("edit")}
-            disabled={busy}
+            disabled={!canConfigure || busy}
+            descriptionId={!canConfigure ? configureRequirementId : undefined}
             active={panel === "edit"}
             icon={<KeyRound size={13} aria-hidden />}
           >
@@ -354,7 +361,10 @@ export default function ConnectionCard({
                   "Connection re-validated and enabled.",
                 )
               }
-              disabled={busy}
+              disabled={!canConfigure || busy}
+              descriptionId={
+                !canConfigure ? configureRequirementId : undefined
+              }
               icon={<PlayCircle size={13} aria-hidden />}
             >
               Enable
@@ -367,7 +377,10 @@ export default function ConnectionCard({
                   "Connection disabled. Scheduled syncs are paused; credentials stay stored.",
                 )
               }
-              disabled={busy}
+              disabled={!canConfigure || busy}
+              descriptionId={
+                !canConfigure ? configureRequirementId : undefined
+              }
               icon={<PauseCircle size={13} aria-hidden />}
             >
               Disable
@@ -385,13 +398,19 @@ export default function ConnectionCard({
                 void run(() => revoke.mutateAsync(connection.id));
               }
             }}
-            disabled={busy}
+            disabled={!canConfigure || busy}
+            descriptionId={!canConfigure ? configureRequirementId : undefined}
             tone="danger"
             icon={<ShieldAlert size={13} aria-hidden />}
           >
             Revoke
           </ActionButton>
         </div>
+      )}
+      {!isRevoked && !canConfigure && (
+        <p id={configureRequirementId} className="text-caption text-warning">
+          {configureReason}
+        </p>
       )}
       {(!canValidate || !canRun) && (
         <p className="text-caption text-slate">
@@ -479,7 +498,10 @@ export default function ConnectionCard({
           <button
             type="button"
             onClick={() => void submitEdit()}
-            disabled={busy || !editForm.displayName.trim()}
+            disabled={busy || !canConfigure || !editForm.displayName.trim()}
+            aria-describedby={
+              !canConfigure ? configureRequirementId : undefined
+            }
             className="inline-flex items-center gap-2 px-4 py-2 rounded-sm text-body font-medium bg-action text-white hover:bg-action-hover disabled:opacity-40 disabled:cursor-not-allowed"
           >
             {update.isPending ? (
