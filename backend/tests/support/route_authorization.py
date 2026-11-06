@@ -75,6 +75,8 @@ def callable_name(call: object) -> str:
         if call.__name__ != call.__qualname__.rsplit(".", 1)[-1]:
             name += f"[{call.__name__}]"
         return name
+    if isinstance(call, type):
+        return f"{call.__module__}:{call.__qualname__}"
     return f"{type(call).__module__}:{type(call).__qualname__}"
 
 

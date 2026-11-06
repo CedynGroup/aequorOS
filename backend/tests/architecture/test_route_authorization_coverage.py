@@ -6,7 +6,7 @@ negative controls. This guard checks declarations, not permission semantics.
 
 from __future__ import annotations
 
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from pathlib import Path
 from typing import Annotated
 
@@ -81,6 +81,26 @@ def _scoped_gate(principal: Annotated[str, Depends(_authenticate)]) -> None:
         raise HTTPException(status_code=403)
 
 
+class _ClassGate:
+    def __init__(self, principal: Annotated[str, Depends(_authenticate)]) -> None:
+        _scoped_gate(principal)
+
+
+class _ReplacementClassGate(_ClassGate):
+    pass
+
+
+class _CallableGate:
+    def __call__(self, principal: Annotated[str, Depends(_authenticate)]) -> None:
+        _scoped_gate(principal)
+
+    def method(self, principal: Annotated[str, Depends(_authenticate)]) -> None:
+        _scoped_gate(principal)
+
+
+_CALLABLE_GATE = _CallableGate()
+
+
 def _endpoint() -> dict[str, bool]:
     return {"ok": True}
 
@@ -95,14 +115,16 @@ def _declaration(path: str, method: str = "GET") -> EndpointDeclaration:
     )
 
 
-def _protected_rule(*routes: EndpointDeclaration) -> RuleDeclaration:
+def _protected_rule(
+    *routes: EndpointDeclaration, gate: Callable[..., object] = _scoped_gate
+) -> RuleDeclaration:
     return RuleDeclaration(
         name="fixture-scoped",
         kind="dependency",
         basis="Fixture scope gate contains a nested authentication dependency.",
         references=("test_route_authorization_coverage.py:_scoped_gate",),
         authentication="tenant",
-        dependencies=tuple(sorted((callable_name(_authenticate), callable_name(_scoped_gate)))),
+        dependencies=tuple(sorted((callable_name(_authenticate), callable_name(gate)))),
         routes=routes,
     )
 
@@ -155,6 +177,56 @@ def test_inherited_and_nested_dependency_declaration_passes() -> None:
     assert client.get("/protected", headers={"Authorization": "Bearer fixture"}).json() == {
         "ok": True
     }
+
+
+@pytest.mark.parametrize(
+    ("gate", "name"),
+    [
+        (_scoped_gate, f"{_scoped_gate.__module__}:{_scoped_gate.__qualname__}"),
+        (_ClassGate, f"{_ClassGate.__module__}:{_ClassGate.__qualname__}"),
+        (_CALLABLE_GATE, f"{_CallableGate.__module__}:{_CallableGate.__qualname__}"),
+        (
+            _CALLABLE_GATE.method,
+            f"{_CallableGate.method.__module__}:{_CallableGate.method.__qualname__}",
+        ),
+    ],
+    ids=["function", "class", "callable-instance", "bound-method"],
+)
+def test_dependency_callable_provenance(gate: Callable[..., object], name: str) -> None:
+    assert callable_name(gate) == name
+    app = _app()
+    app.add_api_route("/protected", _endpoint, dependencies=[Depends(gate)])
+    assert (
+        coverage_errors(
+            {"tenant": app},
+            _catalog(_protected_rule(_declaration("/protected"), gate=gate)),
+            {"tenant": _authenticate},
+            {},
+        )
+        == []
+    )
+    client = TestClient(app)
+    assert client.get("/protected").status_code == 401
+    assert client.get("/protected", headers={"Authorization": "Bearer fixture"}).json() == {
+        "ok": True
+    }
+
+
+def test_replacing_class_gate_fails_even_when_authentication_remains() -> None:
+    catalog = _catalog(_protected_rule(_declaration("/protected"), gate=_ClassGate))
+    app = _app()
+    app.add_api_route("/protected", _endpoint, dependencies=[Depends(_ClassGate)])
+    assert coverage_errors({"tenant": app}, catalog, {"tenant": _authenticate}, {}) == []
+
+    replacement = _app()
+    replacement.add_api_route(
+        "/protected", _endpoint, dependencies=[Depends(_ReplacementClassGate)]
+    )
+    errors = coverage_errors({"tenant": replacement}, catalog, {"tenant": _authenticate}, {})
+    assert len(errors) == 1
+    assert "dependency declaration drift" in errors[0]
+    assert _ClassGate.__qualname__ in errors[0]
+    assert _ReplacementClassGate.__qualname__ in errors[0]
 
 
 @pytest.mark.parametrize("protected", [False, True])
