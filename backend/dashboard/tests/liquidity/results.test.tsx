@@ -135,8 +135,10 @@ loader._load = (request, parent, isMain) => {
 
 const Page = require("../../app/(app)/liquidity/nsfr/page")
   .default as typeof import("../../app/(app)/liquidity/nsfr/page").default;
-const Trend = require("../../features/liquidity/components/charts/RatioTrendChart").default;
-const Outflow = require("../../features/liquidity/components/charts/NetOutflowChart").default;
+const Trend =
+  require("../../features/liquidity/components/charts/RatioTrendChart").default;
+const Outflow =
+  require("../../features/liquidity/components/charts/NetOutflowChart").default;
 const LimitWall = require("@/features/risk/public")
   .LimitWall as typeof import("@/features/risk/public").LimitWall;
 const { liquidityLimits } =
