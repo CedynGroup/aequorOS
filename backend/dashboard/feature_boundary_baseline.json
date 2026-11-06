@@ -1,5 +1,16 @@
 {
   "violations": [
+    "components/charts/BalanceSheetProjectionChart.tsx -> features/bi/components/EChart",
+    "components/charts/BalanceSheetProjectionChart.tsx -> features/bi/components/echartsTheme",
+    "components/charts/CashFlowForecastChart.tsx -> features/bi/components/EChart",
+    "components/charts/CashFlowForecastChart.tsx -> features/bi/components/echartsTheme",
+    "components/charts/DonutChart.tsx -> features/bi/components/EChart",
+    "components/charts/DonutChart.tsx -> features/bi/components/echartsTheme",
+    "components/charts/HQLAStackChart.tsx -> features/bi/components/EChart",
+    "components/charts/HQLAStackChart.tsx -> features/bi/components/echartsTheme",
+    "components/charts/PrepaymentCurveChart.tsx -> features/bi/components/EChart",
+    "components/charts/PrepaymentCurveChart.tsx -> features/bi/components/echartsTheme",
+    "components/shell/UnifiedBell.tsx -> features/live/components/moduleDisplay",
     "features/bi/components/CertifiedPackScreen.tsx -> components/access/CoverageNotice",
     "features/bi/components/NeedsDataWidget.tsx -> components/access/CoverageNotice",
     "features/bi/components/SavedDashboardScreen.tsx -> components/access/CoverageNotice",
@@ -13,6 +24,9 @@
     "features/liquidity/components/SdiLiquidityView.tsx -> components/submissions/RegulatoryRuleStatus",
     "features/risk/routes/alerts.tsx -> components/basel/sdiHooks",
     "features/risk/routes/overview.tsx -> components/basel/sdiHooks",
-    "features/workbench/components/ScenarioWorkbench.tsx -> components/ftp/FtpWhatIf"
+    "features/workbench/components/ScenarioWorkbench.tsx -> components/ftp/FtpWhatIf",
+    "lib/api/bi.ts -> features/bi/components/expressionDigest",
+    "lib/api/bi.ts -> features/bi/components/notifications",
+    "lib/api/bi.ts -> features/bi/components/refusal"
   ]
 }
