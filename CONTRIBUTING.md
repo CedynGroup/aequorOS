@@ -7,10 +7,13 @@ are always welcome.
 ## Reporting
 
 - **Bugs/ideas**: open a GitHub issue with reproduction steps or context.
-- **Security**: never a public issue — see [SECURITY.md](SECURITY.md).
+- **Security**: never a public issue. Email security@aequoros.com (see
+  [License & security](README.md#license--security)).
 
 ## Development conventions (for invited contributors)
 
+- Set up a checkout with `mise run setup` and confirm it with `mise run verify`
+  (see the [README](README.md#set-up-a-fresh-checkout)).
 - Read [ARCHITECTURE.md](ARCHITECTURE.md) and
   [CODEBASE_CONVENTIONS.md](CODEBASE_CONVENTIONS.md) first — they are the law of
   the repo (tenancy/RLS patterns, immutable calculation runs, adapter

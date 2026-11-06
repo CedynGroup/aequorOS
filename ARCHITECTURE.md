@@ -1337,7 +1337,7 @@ remains architectural debt; the Command Center contract and polling policy are u
 
 The shared migration `202607170001_irr_fx_ftp_foundation` widened the run-module, fact-group,
 and line-section CHECK constraints for IRR/FX/FTP. Bank stress-default provisioning and
-backfill are described in the [quick start](README.md#quick-start).
+backfill are described in the [local setup guide](README.md#run-it-locally).
 
 ### Liquidity, stress and capital extensions
 
