@@ -36,6 +36,11 @@ from tests.support.helpers import ORG_1, USER_1, error_envelope, headers
 POLICY_URL = "/api/v1/attestation/signing-policies"
 PLACEMENT_URL = "/api/v1/attestation/signature-placements"
 
+# ``_grant`` and the ``book`` fixture commit through independent sessions, so
+# this module needs the committing database: its schema resets between tests
+# and one test's binding can never authorize (or deny) the next one.
+pytestmark = pytest.mark.committing_db
+
 POLICY_PAYLOAD: dict[str, Any] = {
     "return_code": "LCR-NSFR",
     "required_signatures": [],
