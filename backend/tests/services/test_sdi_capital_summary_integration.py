@@ -10,7 +10,7 @@ from __future__ import annotations
 from datetime import date
 from decimal import Decimal
 
-from sqlalchemy import select
+import sqlalchemy as sa
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
@@ -194,7 +194,7 @@ def test_capital_assurance_reconciles_explicitly_mapped_gl_components(
     sdi = create_sdi_bank(db_session)
     seed_sdi_capital(db_session, sdi, [("paid_up_capital", "20000000", "CET1")])
     capital_row = db_session.scalar(
-        select(CanonicalReferenceRow).where(
+        sa.select(CanonicalReferenceRow).where(
             CanonicalReferenceRow.organization_id == ORG_1,
             CanonicalReferenceRow.bank_id == sdi.id,
             CanonicalReferenceRow.dataset_kind == "capital_structure",
