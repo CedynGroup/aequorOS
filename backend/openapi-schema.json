@@ -15819,6 +15819,35 @@
         "title": "ChannelConfigRead",
         "type": "object"
       },
+      "ChannelConfigWriteAcknowledgement": {
+        "additionalProperties": false,
+        "description": "Write-only evidence of a channel-config write (D27/D34).\n\nCarries the bank, the channel, whether THIS request rotated the credentials,\nand whether it created the row. The stored configuration, credential\nfingerprint and ``has_credentials`` flag are never echoed: read the channel\nthrough its tenant-gated GET.",
+        "properties": {
+          "bank_id": {
+            "title": "Bank Id",
+            "type": "string"
+          },
+          "channel": {
+            "$ref": "#/components/schemas/ChannelCode"
+          },
+          "created": {
+            "title": "Created",
+            "type": "boolean"
+          },
+          "credentials_rotated": {
+            "title": "Credentials Rotated",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "bank_id",
+          "channel",
+          "credentials_rotated",
+          "created"
+        ],
+        "title": "ChannelConfigWriteAcknowledgement",
+        "type": "object"
+      },
       "ComparisonGroupRead": {
         "additionalProperties": false,
         "description": "Lines grouped by return section for the UI (e.g. 'Risk-weighted assets').",
@@ -53941,6 +53970,34 @@
         "title": "ReportingSettingsRead",
         "type": "object"
       },
+      "ReportingSettingsWriteAcknowledgement": {
+        "additionalProperties": false,
+        "description": "Write-only evidence of a reporting-settings write (D27/D34).\n\nEchoes the bank and exactly the submitted override map, plus whether this\nrequest created the row. The stored row's timestamps are never echoed:\nread the settings through their tenant-gated GET.",
+        "properties": {
+          "bank_id": {
+            "title": "Bank Id",
+            "type": "string"
+          },
+          "created": {
+            "title": "Created",
+            "type": "boolean"
+          },
+          "deadline_overrides": {
+            "additionalProperties": {
+              "type": "integer"
+            },
+            "title": "Deadline Overrides",
+            "type": "object"
+          }
+        },
+        "required": [
+          "bank_id",
+          "deadline_overrides",
+          "created"
+        ],
+        "title": "ReportingSettingsWriteAcknowledgement",
+        "type": "object"
+      },
       "ResolvedSignaturePlacementsRead": {
         "additionalProperties": false,
         "description": "The placements this package's fields will actually be created from.",
@@ -63125,7 +63182,7 @@
         ]
       },
       "put": {
-        "description": "Author the reusable placement template for a return (optionally per bank).\n\nOrg Owner-only and reason-required, matching the signing-policy endpoints\nand scoped grant administration: this is the default every future filing of\nthat return inherits.",
+        "description": "Author the reusable placement template for a return (optionally per bank).\n\nOrganization-scope reg/configure authority and reason-required, matching the\nsigning-policy endpoints: this is the default every future filing of that\nreturn inherits.",
         "operationId": "upsertSignaturePlacementTemplate",
         "requestBody": {
           "content": {
@@ -63393,7 +63450,7 @@
         ]
       },
       "put": {
-        "description": "Configure who must sign which return.\n\nOrg Owner-only and reason-required: this is the control that decides whether\na filed return is properly attested, so changing it is itself an audited\nact, administered on the same binding as scoped grant administration.",
+        "description": "Configure who must sign which return.\n\nOrganization-scope reg/configure authority and reason-required: this is the\ncontrol that decides whether a filed return is properly attested, so\nchanging it is itself an audited act. A bank-scoped Configurator binding is\ndeliberately insufficient \u2014 the policy governs every bank in the\norganization.",
         "operationId": "upsertSigningPolicy",
         "requestBody": {
           "content": {
@@ -107912,6 +107969,7 @@
         ]
       },
       "put": {
+        "description": "Configure one channel; credentials are write-only (fingerprint stored).\n\nService-enforced exact reg/configure/restricted authority for this bank\n(VAL-CFG-007); the response is a write-only acknowledgement, so a\nconfigure-only caller reads nothing stored through the write.",
         "operationId": "putChannelConfig",
         "parameters": [
           {
@@ -107954,7 +108012,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ChannelConfigRead"
+                  "$ref": "#/components/schemas/ChannelConfigWriteAcknowledgement"
                 }
               }
             },
@@ -108130,7 +108188,7 @@
         ]
       },
       "put": {
-        "description": "Set per-bank monthly-deadline overrides ({return_code: day_of_month}).",
+        "description": "Set per-bank monthly-deadline overrides ({return_code: day_of_month}).\n\nService-enforced exact reg/configure/restricted authority for this bank\n(VAL-CFG-007); the response is a write-only acknowledgement.",
         "operationId": "putReportingSettings",
         "parameters": [
           {
@@ -108158,7 +108216,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ReportingSettingsRead"
+                  "$ref": "#/components/schemas/ReportingSettingsWriteAcknowledgement"
                 }
               }
             },
