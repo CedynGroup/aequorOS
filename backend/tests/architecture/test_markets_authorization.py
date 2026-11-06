@@ -104,10 +104,6 @@ def test_markets_routes_carry_exactly_one_scoped_gate(method: str, path: str, ga
         ),
         (
             "POST",
-            "/api/v1/banks/{bank_id}/market-data/connections/{connection_id}/test",
-        ),
-        (
-            "POST",
             "/api/v1/banks/{bank_id}/market-data/connections/{connection_id}/disable",
         ),
         (
@@ -118,9 +114,26 @@ def test_markets_routes_carry_exactly_one_scoped_gate(method: str, path: str, ga
         ("DELETE", "/api/v1/banks/{bank_id}/market-data/connections/{connection_id}"),
     ],
 )
-def test_configuration_writes_are_held_on_the_legacy_gate(method: str, path: str) -> None:
-    """Connection lifecycle and source-preference writes await configuration authority."""
+def test_configuration_writes_use_the_scoped_mutation_boundary(method: str, path: str) -> None:
+    """Connection lifecycle and source-preference writes are configuration duties.
+
+    The route carries the interactive-human scoped-mutation boundary only; the
+    exact ``markets/configure/restricted`` binding is enforced in the service
+    layer before any vault write, vendor call, or status mutation.
+    """
     dependencies = _dependency_names(_route(path, method))
 
-    assert "get_mutation_tenant_context" in dependencies
+    assert "get_scoped_mutation_tenant_context" in dependencies
+    assert "get_mutation_tenant_context" not in dependencies
     assert not any(name.startswith("require_markets_") for name in dependencies)
+
+
+def test_test_pull_keeps_the_legacy_operational_gate() -> None:
+    """The representative test pull stays an operational RUN duty (D2), not a
+    configuration duty: a Configurator binding gains no test-pull authority."""
+    dependencies = _dependency_names(
+        _route("/api/v1/banks/{bank_id}/market-data/connections/{connection_id}/test", "POST")
+    )
+
+    assert "get_mutation_tenant_context" in dependencies
+    assert "get_scoped_mutation_tenant_context" not in dependencies

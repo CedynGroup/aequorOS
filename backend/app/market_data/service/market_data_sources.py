@@ -30,6 +30,7 @@ from uuid import UUID
 from fastapi import HTTPException, status
 from sqlalchemy import func, or_, select, union_all
 
+from app.core.authorization import Permission, Sensitivity
 from app.data_engine.public import (
     CanonicalFxRate,
     CanonicalMarketIndex,
@@ -59,6 +60,7 @@ from app.market_data.schemas.market_data_sources import (
     SourcePreferencesUpdate,
 )
 from app.market_data.service import market_data, market_data_overlays
+from app.market_data.service.access import require_markets_access
 from app.market_data.service.market_data import (
     CurveView,
     FxRateView,
@@ -176,6 +178,9 @@ def set_preference(
     db: Session, ctx: TenantContext, bank_id: str, patch: SourcePreferencesUpdate
 ) -> SourcePreferencesRead:
     """API upsert: apply a partial patch, audit it, return the resolved row (spec §4 PUT)."""
+    # Configuration duty: exact markets/configure/restricted authority BEFORE any
+    # preference mutation or audit row.
+    require_markets_access(db, ctx, bank_id, Permission.CONFIGURE, Sensitivity.RESTRICTED)
     _get_bank_or_404(db, ctx, bank_id)
     row = _load_preference_row(db, ctx.organization_id, bank_id)
     created = row is None

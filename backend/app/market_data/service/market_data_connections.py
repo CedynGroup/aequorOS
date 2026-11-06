@@ -31,6 +31,7 @@ from fastapi import HTTPException, status
 from sqlalchemy import select
 
 import app.market_data.adapters  # noqa: F401 - registers shipped vendor adapters
+from app.core.authorization import Permission, Sensitivity
 from app.data_engine.public import bank_slug
 from app.db.base import utc_now
 from app.identity.public import Bank
@@ -67,6 +68,7 @@ from app.market_data.schemas.market_data_connections import (
     ScopeInfoRead,
     TestPullRead,
 )
+from app.market_data.service.access import require_markets_access
 from app.services.audit import record_event
 
 if TYPE_CHECKING:
@@ -190,6 +192,9 @@ def create_connection(
     encrypted vault and are validated inline: success activates them, failure
     leaves them TESTING with the bank-facing error on the response.
     """
+    # Configuration duty: exact markets/configure/restricted authority BEFORE any
+    # vault write, credential check or vendor call.
+    require_markets_access(db, ctx, bank_id, Permission.CONFIGURE, Sensitivity.RESTRICTED)
     bank = _get_bank_or_404(db, ctx, bank_id)
     slug = bank_slug(db, bank)
     scopes = _validated_scopes(db, bank, slug, payload.vendor, payload.scopes)
@@ -287,6 +292,11 @@ def validate_connection(
     db: Session, ctx: TenantContext, bank_id: str, connection_id: UUID
 ) -> MarketDataConnectionRead:
     """Re-run the §10.3 credential health check on demand."""
+    # Credential validation is a configuration duty (D2): deny before the
+    # stored-credential check or any status mutation.
+    require_markets_access(
+        db, ctx, bank_id, Permission.CONFIGURE, Sensitivity.RESTRICTED, opaque=True
+    )
     bank = _get_bank_or_404(db, ctx, bank_id)
     connection = _get_connection_or_404(db, ctx, bank_id, connection_id)
     _ensure_not_revoked(connection)
@@ -359,6 +369,10 @@ def update_connection(  # noqa: PLR0913
     payload: MarketDataConnectionUpdate,
 ) -> MarketDataConnectionRead:
     """Post-onboarding edits (§9.3) and credential rotation (§10.4)."""
+    # Configuration duty (incl. credential rotation): deny before any vault write.
+    require_markets_access(
+        db, ctx, bank_id, Permission.CONFIGURE, Sensitivity.RESTRICTED, opaque=True
+    )
     bank = _get_bank_or_404(db, ctx, bank_id)
     connection = _get_connection_or_404(db, ctx, bank_id, connection_id)
     _ensure_not_revoked(connection)
@@ -439,6 +453,9 @@ def disable_connection(
     db: Session, ctx: TenantContext, bank_id: str, connection_id: UUID
 ) -> MarketDataConnectionRead:
     """Temporarily disable a source (§9.3): scheduled pulls stop, credentials stay."""
+    require_markets_access(
+        db, ctx, bank_id, Permission.CONFIGURE, Sensitivity.RESTRICTED, opaque=True
+    )
     _get_bank_or_404(db, ctx, bank_id)
     connection = _get_connection_or_404(db, ctx, bank_id, connection_id)
     _ensure_not_revoked(connection)
@@ -461,6 +478,9 @@ def enable_connection(
     db: Session, ctx: TenantContext, bank_id: str, connection_id: UUID
 ) -> MarketDataConnectionRead:
     """Re-enable a disabled source: credentials are re-validated before pulls resume."""
+    require_markets_access(
+        db, ctx, bank_id, Permission.CONFIGURE, Sensitivity.RESTRICTED, opaque=True
+    )
     bank = _get_bank_or_404(db, ctx, bank_id)
     connection = _get_connection_or_404(db, ctx, bank_id, connection_id)
     if connection.status != "DISABLED":
@@ -504,6 +524,9 @@ def revoke_connection(
     Historical canonical data pulled with the credential remains valid; the
     connection is simply no longer usable for new pulls. Idempotent.
     """
+    require_markets_access(
+        db, ctx, bank_id, Permission.CONFIGURE, Sensitivity.RESTRICTED, opaque=True
+    )
     _get_bank_or_404(db, ctx, bank_id)
     connection = _get_connection_or_404(db, ctx, bank_id, connection_id)
     if connection.status == "REVOKED":
