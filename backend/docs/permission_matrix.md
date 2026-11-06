@@ -84,15 +84,15 @@ grant/session state machines, RLS, migration DDL or financial computations.
 
 These are evidence-backed boundaries, not new product decisions:
 
-| Seam | Current characterization / held work |
-| --- | --- |
-| Configuration | No current bundle grants `configure`. The separate [Configurator foundation](https://github.com/CedynGroup/aequorOS/pull/776) and [LIQ cutover](https://github.com/CedynGroup/aequorOS/pull/781) own the proposed vocabulary and migration-sensitive register changes. This matrix does not import their future policy. |
-| Signing | `sign_off` is absent from current bundles. [Signer work](https://github.com/CedynGroup/aequorOS/issues/185) owns routed recipient, digest, step-up and signing authority. Evaluator denial is not a characterization of every existing attestation workflow. |
-| REG export | Viewer and Validator lack EXPORT; view/submit never imply export. A read-only regulatory exporter requires a separate decision, not a matrix correction. |
-| Owner reads | Owner carries Account administration, not product view. Only an explicit separate read binding enables the represented bank-detail read. No automatic grant or backfill is added. |
-| Notifications/jobs | [Provenance work](https://github.com/CedynGroup/aequorOS/issues/186) owns stored source attributes and visibility; no expectations are inferred from labels or links here. |
-| Filing and audit | REG approve/submit and Audit/restricted resources are regulated seams. These tests consume verdicts but never approve, file, sign, export or mutate real records. |
-| Persistence | New bundle/module vocabulary requires CHECK-widening migrations. This slice changes no enums, schema, migrations, production policy, key custody or logging. |
+| Seam               | Current characterization / held work                                                                                                                                                                                                                                                                                    |
+| ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Configuration      | No current bundle grants `configure`. The separate [Configurator foundation](https://github.com/CedynGroup/aequorOS/pull/776) and [LIQ cutover](https://github.com/CedynGroup/aequorOS/pull/781) own the proposed vocabulary and migration-sensitive register changes. This matrix does not import their future policy. |
+| Signing            | `sign_off` is absent from current bundles. [Signer work](https://github.com/CedynGroup/aequorOS/issues/185) owns routed recipient, digest, step-up and signing authority. Evaluator denial is not a characterization of every existing attestation workflow.                                                            |
+| REG export         | Viewer and Validator lack EXPORT; view/submit never imply export. A read-only regulatory exporter requires a separate decision, not a matrix correction.                                                                                                                                                                |
+| Owner reads        | Owner carries Account administration, not product view. Only an explicit separate read binding enables the represented bank-detail read. No automatic grant or backfill is added.                                                                                                                                       |
+| Notifications/jobs | [Provenance work](https://github.com/CedynGroup/aequorOS/issues/186) owns stored source attributes and visibility; no expectations are inferred from labels or links here.                                                                                                                                              |
+| Filing and audit   | REG approve/submit and Audit/restricted resources are regulated seams. These tests consume verdicts but never approve, file, sign, export or mutate real records.                                                                                                                                                       |
+| Persistence        | New bundle/module vocabulary requires CHECK-widening migrations. This slice changes no enums, schema, migrations, production policy, key custody or logging.                                                                                                                                                            |
 
 ## Running and extending
 

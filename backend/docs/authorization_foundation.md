@@ -581,6 +581,10 @@ owned by `integration_key_machine_principal_rollout.md`.
 
 ## Executable verification
 
+The [permission-matrix guide](permission_matrix.md) owns the test-only
+role/resource/action characterization, its scope, held decisions and extension
+workflow.
+
 ### Registered endpoint declarations
 
 `tests/architecture/test_route_authorization_coverage.py` inventories the tenant
