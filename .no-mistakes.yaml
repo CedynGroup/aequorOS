@@ -1,0 +1,147 @@
+# Schema: no-mistakes v1.106.1, internal/config/config.go (commit 5732d1e).
+# Run commands from the repository root. Install the mise-pinned tools first;
+# preparation materializes locked dependencies in each isolated run worktree.
+# Command values are shell strings, not objects. timeout uses coreutils duration
+# units (m = minutes); v1.106.1 has no repository command-timeout/typecheck keys.
+commands:
+  prepare: |
+    timeout --kill-after=30s 30m mise exec -- sh -eu -c '
+      pnpm install --frozen-lockfile
+      UV_LOCKED=1 mise run risk-service:sync
+    '
+  # CI: risk-service.yml static, dashboard.yml dashboard, web.yml frontend/console.
+  # Preserve the backend type-debt ratchet, not plain basedpyright. Console lint
+  # and a tree-wide Ruff format check are not current CI gates.
+  lint: |
+    timeout --kill-after=30s 60m mise exec -- sh -eu -c '
+      python3 .github/scripts/mise_wiring_preflight.py
+      mise run risk-service:lint
+      mise run risk-service:typecheck
+      pnpm --filter @aequoros/risk-service-api exec tsc --noEmit
+      pnpm --filter dashboard exec tsc --noEmit
+      pnpm --filter @aequoros/console typecheck
+      pnpm --filter dashboard lint
+      pnpm --filter dashboard guard:features
+      pnpm --filter @aequoros/frontend lint
+    '
+  # Local affected/unit validation, not a replacement for CI's complete owners.
+  # Keep headroom for cold collection and the measured slow risk-service cases.
+  # Requires the fast default from https://github.com/CedynGroup/aequorOS/pull/808.
+  test: timeout --kill-after=30s 60m mise run risk-service:test
+
+# The path and template bytes are trusted-default-branch settings in v1.106.1.
+# A first config/template PR cannot activate its own publication policy.
+pr:
+  template: .github/PULL_REQUEST_TEMPLATE.md
+  appendix: collapsed
+
+# Additive to the normal review, never a replacement for it. CodeRabbit 0.9.2's
+# native --gate critical exits 2 for critical findings; do not parse review prose.
+# Optional availability/auth/review failures are disclosed, not claimed clean.
+gates:
+  - name: coderabbit-critical
+    after: review
+    command: |
+      result=0
+      timeout --kill-after=30s 20m mise exec -- python3 - <<'PY' || result=$?
+      import json
+      import shutil
+      import subprocess
+      import sys
+      from pathlib import Path
+
+      def skip(reason):
+          print(f"CodeRabbit skipped (not verified): {reason}", flush=True)
+          raise SystemExit(0)
+
+      candidate = shutil.which("coderabbit")
+      if candidate is None:
+          skip("CLI is not installed")
+      try:
+          cli = Path(candidate).resolve()
+          trusted = {Path.home() / ".local/bin", Path("/usr/local/bin"), Path("/usr/bin")}
+          if cli.parent not in trusted or cli.stat().st_mode & 0o022:
+              skip("CLI is not in a trusted, non-writable installation location")
+          auth = subprocess.run(
+              [str(cli), "auth", "status", "--agent"],
+              capture_output=True, text=True, timeout=15,
+          )
+          if auth.returncode != 0:
+              skip("authentication could not be checked")
+          status = json.loads(auth.stdout)
+          if not isinstance(status, dict) or status.get("authenticated") is not True:
+              skip("CLI is not authenticated")
+          review = subprocess.run(
+              [str(cli), "review", "--agent", "--committed", "--gate", "critical"],
+              timeout=900,
+          )
+      except (OSError, ValueError, subprocess.TimeoutExpired) as error:
+          skip(f"review unavailable ({type(error).__name__})")
+      if review.returncode == 2:
+          print("CodeRabbit reported critical findings.", flush=True)
+          sys.exit(42)
+      if review.returncode != 0:
+          skip(f"review command exited {review.returncode}")
+      print("CodeRabbit command completed; see its output for review or skip status.")
+      PY
+      case "$result" in
+        0) ;;
+        42) exit 1 ;;
+        *) printf 'CodeRabbit skipped (not verified): runner exited %s\n' "$result" ;;
+      esac
+
+review:
+  path_instructions:
+    - path: "*"
+      instructions: |
+        Tie every actionable finding to a requirement in the supplied intent or
+        an existing contract affected by the change. Explain the concrete failure
+        and the smallest necessary correction. Do not expand test coverage,
+        invent edge-case requirements, or request unrelated improvements beyond
+        that intent. Do not reopen a theme explicitly settled in the intent or
+        recorded decisions.
+        Missing credentials, an unavailable device, or inaccessible live services
+        are validation limits to disclose, not product decisions to ask for.
+        Never claim a live scenario passed without executing it.
+
+test:
+  instructions: |
+    Validate the supplied intent with focused checks through the real consumer or
+    entry point. CI is the full-suite authority; do not run a full local suite at
+    milestone end or reproduce every CI job locally. Report exactly what ran,
+    failures, skips, and missing evidence. Missing credentials or a device are
+    disclosed limits, not decisions or permission to fabricate live proof.
+
+    commands.test uses the canonical fast local default. Describe its actual
+    selection and any no-change result honestly, not as full-suite coverage.
+    Use risk-service:test-lf for focused fix loops; its no-failures case must not
+    fall back to a full run. risk-service:test-full is explicit full hermetic
+    validation, not a required local milestone check. Do not add testmon or
+    weaken the unit database guard to make selection work.
+
+    CI ownership stays unchanged in .github/workflows/risk-service.yml:
+    risk-service:test-unit uses -m unit --suite-only -n auto --dist load with one
+    BLAS thread. Integration uses risk-service:test-postgres-suite, four
+    duration-balanced CI_POSTGRES_SHARD selections via scripts.ci_postgres_plugin,
+    CI_POSTGRES_FILES, and four workers with --dist loadfile. Schema/RLS has two
+    hash shards, each serial; locks and storage have separate serial owners.
+    Never replace those owners with whole-tree -n auto, a serial whole-tree
+    fallback, or an affected-only command presented as full CI coverage.
+    Keep the existing collection manifests, JUnit execution/skip guards, exact
+    shard and cross-owner coverage, and database-observation checks authoritative.
+
+    Backend Postgres tasks use backend/scripts/local_services.py and disposable
+    schemas, never the primary database. Cold service runs need PostgreSQL 17 and
+    MinIO (or isolated supplied endpoints); schema/lock infrastructure needs the
+    CI restricted-role privileges. Full CI also supplies native OpenBao for its
+    integration shard and local KMS for storage/key-provider contracts. Do not
+    silently count missing-service skips as equivalent execution.
+    Dashboard CI uses test:coverage (including its legacy and Vitest suites),
+    not test alone, plus build and the bundle guard. Journey CI owns four browser
+    shards with one worker each, separate browser contracts and regulatory
+    journeys; Chromium/system dependencies, disposable Postgres, MinIO, KMS and
+    the fixture OIDC issuer are prerequisites. Client and console tests, web
+    builds, generated-client freshness and secret scanning remain CI checks.
+    Real-data, live-data, untracked bank files and DR-cluster scenarios retain
+    their existing opt-in requirements and must be reported as unverified when
+    those inputs are unavailable.
