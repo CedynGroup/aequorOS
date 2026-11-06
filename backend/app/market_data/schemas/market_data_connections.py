@@ -84,6 +84,23 @@ class MarketDataConnectionListRead(ClosedModel):
     total: int
 
 
+class MarketDataConnectionWriteAcknowledgement(ClosedModel):
+    """Write-only evidence of a connection lifecycle mutation (D27/D34).
+
+    Carries the mutated row's id, the bank, the status value this request wrote
+    (``None`` when the request wrote no status, e.g. a no-rotation patch), and —
+    only where the check consumed credentials submitted in this request — the
+    bank-facing validation error. Stored configuration (scopes, schedule,
+    credential fingerprint/expiry, pull history) is never echoed: read the
+    connection through its view-gated GET.
+    """
+
+    id: UUID
+    bank_id: str
+    status: str | None = Field(default=None, title="Connection Written Status")
+    validation_error: str | None = Field(default=None, title="Connection Validation Error")
+
+
 class ScopeInfoRead(ClosedModel):
     """One taxonomy scope with its category, default pull frequency, the
     vendors whose catalogs serve it, and the per-pull quota impact (§9.2

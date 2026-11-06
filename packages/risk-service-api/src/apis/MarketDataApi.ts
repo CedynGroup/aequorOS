@@ -15,8 +15,8 @@ import type {
   ErrorResponse,
   MarketDataConnectionCreate,
   MarketDataConnectionListRead,
-  MarketDataConnectionRead,
   MarketDataConnectionUpdate,
+  MarketDataConnectionWriteAcknowledgement,
   MarketDataOverlayCreate,
   MarketDataOverlayEnd,
   MarketDataOverlayListRead,
@@ -34,10 +34,10 @@ import {
   MarketDataConnectionCreateToJSON,
   MarketDataConnectionListReadFromJSON,
   MarketDataConnectionListReadToJSON,
-  MarketDataConnectionReadFromJSON,
-  MarketDataConnectionReadToJSON,
   MarketDataConnectionUpdateFromJSON,
   MarketDataConnectionUpdateToJSON,
+  MarketDataConnectionWriteAcknowledgementFromJSON,
+  MarketDataConnectionWriteAcknowledgementToJSON,
   MarketDataOverlayCreateFromJSON,
   MarketDataOverlayCreateToJSON,
   MarketDataOverlayEndFromJSON,
@@ -150,7 +150,7 @@ export class MarketDataApi extends runtime.BaseAPI {
   async createMarketDataConnectionRaw(
     requestParameters: CreateMarketDataConnectionRequest,
     initOverrides?: RequestInit | runtime.InitOverrideFunction,
-  ): Promise<runtime.ApiResponse<MarketDataConnectionRead>> {
+  ): Promise<runtime.ApiResponse<MarketDataConnectionWriteAcknowledgement>> {
     if (requestParameters["bankId"] == null) {
       throw new runtime.RequiredError(
         "bankId",
@@ -196,7 +196,7 @@ export class MarketDataApi extends runtime.BaseAPI {
     );
 
     return new runtime.JSONApiResponse(response, (jsonValue) =>
-      MarketDataConnectionReadFromJSON(jsonValue),
+      MarketDataConnectionWriteAcknowledgementFromJSON(jsonValue),
     );
   }
 
@@ -206,7 +206,7 @@ export class MarketDataApi extends runtime.BaseAPI {
   async createMarketDataConnection(
     requestParameters: CreateMarketDataConnectionRequest,
     initOverrides?: RequestInit | runtime.InitOverrideFunction,
-  ): Promise<MarketDataConnectionRead> {
+  ): Promise<MarketDataConnectionWriteAcknowledgement> {
     const response = await this.createMarketDataConnectionRaw(
       requestParameters,
       initOverrides,
@@ -290,7 +290,7 @@ export class MarketDataApi extends runtime.BaseAPI {
   async disableMarketDataConnectionRaw(
     requestParameters: DisableMarketDataConnectionRequest,
     initOverrides?: RequestInit | runtime.InitOverrideFunction,
-  ): Promise<runtime.ApiResponse<MarketDataConnectionRead>> {
+  ): Promise<runtime.ApiResponse<MarketDataConnectionWriteAcknowledgement>> {
     if (requestParameters["bankId"] == null) {
       throw new runtime.RequiredError(
         "bankId",
@@ -336,7 +336,7 @@ export class MarketDataApi extends runtime.BaseAPI {
     );
 
     return new runtime.JSONApiResponse(response, (jsonValue) =>
-      MarketDataConnectionReadFromJSON(jsonValue),
+      MarketDataConnectionWriteAcknowledgementFromJSON(jsonValue),
     );
   }
 
@@ -346,7 +346,7 @@ export class MarketDataApi extends runtime.BaseAPI {
   async disableMarketDataConnection(
     requestParameters: DisableMarketDataConnectionRequest,
     initOverrides?: RequestInit | runtime.InitOverrideFunction,
-  ): Promise<MarketDataConnectionRead> {
+  ): Promise<MarketDataConnectionWriteAcknowledgement> {
     const response = await this.disableMarketDataConnectionRaw(
       requestParameters,
       initOverrides,
@@ -360,7 +360,7 @@ export class MarketDataApi extends runtime.BaseAPI {
   async enableMarketDataConnectionRaw(
     requestParameters: EnableMarketDataConnectionRequest,
     initOverrides?: RequestInit | runtime.InitOverrideFunction,
-  ): Promise<runtime.ApiResponse<MarketDataConnectionRead>> {
+  ): Promise<runtime.ApiResponse<MarketDataConnectionWriteAcknowledgement>> {
     if (requestParameters["bankId"] == null) {
       throw new runtime.RequiredError(
         "bankId",
@@ -406,7 +406,7 @@ export class MarketDataApi extends runtime.BaseAPI {
     );
 
     return new runtime.JSONApiResponse(response, (jsonValue) =>
-      MarketDataConnectionReadFromJSON(jsonValue),
+      MarketDataConnectionWriteAcknowledgementFromJSON(jsonValue),
     );
   }
 
@@ -416,7 +416,7 @@ export class MarketDataApi extends runtime.BaseAPI {
   async enableMarketDataConnection(
     requestParameters: EnableMarketDataConnectionRequest,
     initOverrides?: RequestInit | runtime.InitOverrideFunction,
-  ): Promise<MarketDataConnectionRead> {
+  ): Promise<MarketDataConnectionWriteAcknowledgement> {
     const response = await this.enableMarketDataConnectionRaw(
       requestParameters,
       initOverrides,
@@ -887,7 +887,7 @@ export class MarketDataApi extends runtime.BaseAPI {
   async revokeMarketDataConnectionRaw(
     requestParameters: RevokeMarketDataConnectionRequest,
     initOverrides?: RequestInit | runtime.InitOverrideFunction,
-  ): Promise<runtime.ApiResponse<MarketDataConnectionRead>> {
+  ): Promise<runtime.ApiResponse<MarketDataConnectionWriteAcknowledgement>> {
     if (requestParameters["bankId"] == null) {
       throw new runtime.RequiredError(
         "bankId",
@@ -933,7 +933,7 @@ export class MarketDataApi extends runtime.BaseAPI {
     );
 
     return new runtime.JSONApiResponse(response, (jsonValue) =>
-      MarketDataConnectionReadFromJSON(jsonValue),
+      MarketDataConnectionWriteAcknowledgementFromJSON(jsonValue),
     );
   }
 
@@ -943,7 +943,7 @@ export class MarketDataApi extends runtime.BaseAPI {
   async revokeMarketDataConnection(
     requestParameters: RevokeMarketDataConnectionRequest,
     initOverrides?: RequestInit | runtime.InitOverrideFunction,
-  ): Promise<MarketDataConnectionRead> {
+  ): Promise<MarketDataConnectionWriteAcknowledgement> {
     const response = await this.revokeMarketDataConnectionRaw(
       requestParameters,
       initOverrides,
@@ -1027,7 +1027,7 @@ export class MarketDataApi extends runtime.BaseAPI {
   async updateMarketDataConnectionRaw(
     requestParameters: UpdateMarketDataConnectionRequest,
     initOverrides?: RequestInit | runtime.InitOverrideFunction,
-  ): Promise<runtime.ApiResponse<MarketDataConnectionRead>> {
+  ): Promise<runtime.ApiResponse<MarketDataConnectionWriteAcknowledgement>> {
     if (requestParameters["bankId"] == null) {
       throw new runtime.RequiredError(
         "bankId",
@@ -1085,7 +1085,7 @@ export class MarketDataApi extends runtime.BaseAPI {
     );
 
     return new runtime.JSONApiResponse(response, (jsonValue) =>
-      MarketDataConnectionReadFromJSON(jsonValue),
+      MarketDataConnectionWriteAcknowledgementFromJSON(jsonValue),
     );
   }
 
@@ -1095,7 +1095,7 @@ export class MarketDataApi extends runtime.BaseAPI {
   async updateMarketDataConnection(
     requestParameters: UpdateMarketDataConnectionRequest,
     initOverrides?: RequestInit | runtime.InitOverrideFunction,
-  ): Promise<MarketDataConnectionRead> {
+  ): Promise<MarketDataConnectionWriteAcknowledgement> {
     const response = await this.updateMarketDataConnectionRaw(
       requestParameters,
       initOverrides,
@@ -1211,7 +1211,7 @@ export class MarketDataApi extends runtime.BaseAPI {
   async validateMarketDataConnectionRaw(
     requestParameters: ValidateMarketDataConnectionRequest,
     initOverrides?: RequestInit | runtime.InitOverrideFunction,
-  ): Promise<runtime.ApiResponse<MarketDataConnectionRead>> {
+  ): Promise<runtime.ApiResponse<MarketDataConnectionWriteAcknowledgement>> {
     if (requestParameters["bankId"] == null) {
       throw new runtime.RequiredError(
         "bankId",
@@ -1257,7 +1257,7 @@ export class MarketDataApi extends runtime.BaseAPI {
     );
 
     return new runtime.JSONApiResponse(response, (jsonValue) =>
-      MarketDataConnectionReadFromJSON(jsonValue),
+      MarketDataConnectionWriteAcknowledgementFromJSON(jsonValue),
     );
   }
 
@@ -1267,7 +1267,7 @@ export class MarketDataApi extends runtime.BaseAPI {
   async validateMarketDataConnection(
     requestParameters: ValidateMarketDataConnectionRequest,
     initOverrides?: RequestInit | runtime.InitOverrideFunction,
-  ): Promise<MarketDataConnectionRead> {
+  ): Promise<MarketDataConnectionWriteAcknowledgement> {
     const response = await this.validateMarketDataConnectionRaw(
       requestParameters,
       initOverrides,

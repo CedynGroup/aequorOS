@@ -27,6 +27,7 @@ from app.market_data.schemas.market_data_sources import (
     CategoryPreferenceUpdate,
     PlaneCurveItemRead,
     PlaneIndexItemRead,
+    SourcePreferenceCategoryWritten,
     SourcePreferencesUpdate,
 )
 from app.market_data.service import market_data, market_data_overlays, market_data_sources
@@ -238,12 +239,17 @@ def test_set_preference_upsert_and_audit(db_session: Session) -> None:
         reason="switch curves to the licensed vendor feed",
     )
     result = market_data_sources.set_preference(db_session, CTX, bank_id, patch)
-    assert result.curves.source == "vendor"
-    assert result.curves.overlay is False
-    # Untouched categories fall to the defaults on first write.
-    assert result.fx.source == "aequor"
-    assert result.fx.overlay is True
-    assert result.updated_by == USER_1
+    # The acknowledgement echoes only the submitted patch (D34 write-only ack).
+    assert result.curves == SourcePreferenceCategoryWritten(source="vendor", overlay=False)
+    assert result.fx is None
+    assert result.rates is None
+
+    # Untouched categories fall to the defaults on first write; read the
+    # resolved row through the authorized read path.
+    resolved = market_data_sources.load_preference(db_session, ORG_1, bank_id)
+    assert resolved.fx.source == "aequor"
+    assert resolved.fx.overlay is True
+    assert resolved.updated_by == USER_1
 
     row = db_session.scalar(
         select(MarketDataSourcePreference).where(
@@ -274,9 +280,14 @@ def test_set_preference_partial_patch_preserves_other_categories(db_session: Ses
         bank_id,
         SourcePreferencesUpdate(rates=CategoryPreferenceUpdate(overlay=False)),
     )
-    assert result.fx.source == "bank"  # kept from the first write
-    assert result.rates.overlay is False
-    assert result.curves.source == "aequor"
+    # The partial acknowledgement carries only the patch it submitted (D34).
+    assert result.rates == SourcePreferenceCategoryWritten(source=None, overlay=False)
+    assert result.curves is None
+    assert result.fx is None
+    resolved = market_data_sources.load_preference(db_session, ORG_1, bank_id)
+    assert resolved.fx.source == "bank"  # kept from the first write
+    assert resolved.rates.overlay is False
+    assert resolved.curves.source == "aequor"
 
 
 def test_preferred_projection_curve_honours_source_selection(db_session: Session) -> None:

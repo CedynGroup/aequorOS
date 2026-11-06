@@ -31,8 +31,8 @@ from app.api.deps import (
 from app.market_data.schemas.market_data_connections import (
     MarketDataConnectionCreate,
     MarketDataConnectionListRead,
-    MarketDataConnectionRead,
     MarketDataConnectionUpdate,
+    MarketDataConnectionWriteAcknowledgement,
     MarketDataQuotaListRead,
     MarketDataScopeListRead,
     TestPullRead,
@@ -55,7 +55,7 @@ def list_market_data_connections(
 
 @router.post(
     "/banks/{bank_id}/market-data/connections",
-    response_model=MarketDataConnectionRead,
+    response_model=MarketDataConnectionWriteAcknowledgement,
     status_code=status.HTTP_201_CREATED,
     operation_id="createMarketDataConnection",
 )
@@ -64,13 +64,13 @@ def create_market_data_connection(
     payload: MarketDataConnectionCreate,
     db: DbSession,
     ctx: ScopedMutationTenant,
-) -> MarketDataConnectionRead:
+) -> MarketDataConnectionWriteAcknowledgement:
     return market_data_connections.create_connection(db, ctx, bank_id, payload)
 
 
 @router.post(
     "/banks/{bank_id}/market-data/connections/{connection_id}/validate",
-    response_model=MarketDataConnectionRead,
+    response_model=MarketDataConnectionWriteAcknowledgement,
     operation_id="validateMarketDataConnection",
 )
 def validate_market_data_connection(
@@ -78,7 +78,7 @@ def validate_market_data_connection(
     connection_id: UUID,
     db: DbSession,
     ctx: ScopedMutationTenant,
-) -> MarketDataConnectionRead:
+) -> MarketDataConnectionWriteAcknowledgement:
     return market_data_connections.validate_connection(db, ctx, bank_id, connection_id)
 
 
@@ -98,7 +98,7 @@ def test_market_data_connection(
 
 @router.patch(
     "/banks/{bank_id}/market-data/connections/{connection_id}",
-    response_model=MarketDataConnectionRead,
+    response_model=MarketDataConnectionWriteAcknowledgement,
     operation_id="updateMarketDataConnection",
 )
 def update_market_data_connection(
@@ -107,13 +107,13 @@ def update_market_data_connection(
     payload: MarketDataConnectionUpdate,
     db: DbSession,
     ctx: ScopedMutationTenant,
-) -> MarketDataConnectionRead:
+) -> MarketDataConnectionWriteAcknowledgement:
     return market_data_connections.update_connection(db, ctx, bank_id, connection_id, payload)
 
 
 @router.post(
     "/banks/{bank_id}/market-data/connections/{connection_id}/disable",
-    response_model=MarketDataConnectionRead,
+    response_model=MarketDataConnectionWriteAcknowledgement,
     operation_id="disableMarketDataConnection",
 )
 def disable_market_data_connection(
@@ -121,13 +121,13 @@ def disable_market_data_connection(
     connection_id: UUID,
     db: DbSession,
     ctx: ScopedMutationTenant,
-) -> MarketDataConnectionRead:
+) -> MarketDataConnectionWriteAcknowledgement:
     return market_data_connections.disable_connection(db, ctx, bank_id, connection_id)
 
 
 @router.post(
     "/banks/{bank_id}/market-data/connections/{connection_id}/enable",
-    response_model=MarketDataConnectionRead,
+    response_model=MarketDataConnectionWriteAcknowledgement,
     operation_id="enableMarketDataConnection",
 )
 def enable_market_data_connection(
@@ -135,13 +135,13 @@ def enable_market_data_connection(
     connection_id: UUID,
     db: DbSession,
     ctx: ScopedMutationTenant,
-) -> MarketDataConnectionRead:
+) -> MarketDataConnectionWriteAcknowledgement:
     return market_data_connections.enable_connection(db, ctx, bank_id, connection_id)
 
 
 @router.delete(
     "/banks/{bank_id}/market-data/connections/{connection_id}",
-    response_model=MarketDataConnectionRead,
+    response_model=MarketDataConnectionWriteAcknowledgement,
     operation_id="revokeMarketDataConnection",
 )
 def revoke_market_data_connection(
@@ -149,7 +149,7 @@ def revoke_market_data_connection(
     connection_id: UUID,
     db: DbSession,
     ctx: ScopedMutationTenant,
-) -> MarketDataConnectionRead:
+) -> MarketDataConnectionWriteAcknowledgement:
     return market_data_connections.revoke_connection(db, ctx, bank_id, connection_id)
 
 

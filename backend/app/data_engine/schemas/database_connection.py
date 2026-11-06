@@ -165,6 +165,23 @@ class DatabaseConnectionListRead(ClosedModel):
     total: int
 
 
+class DatabaseConnectionWriteAcknowledgement(ClosedModel):
+    """Write-only evidence of a connection lifecycle mutation (D27/D34).
+
+    Carries the mutated row's id, the bank, the status value this request wrote
+    (``None`` when the request wrote no status, e.g. a no-rotation patch), and —
+    only where the check consumed credentials submitted in this request — the
+    bank-facing validation error. Stored configuration (host, schemas,
+    extraction spec, sync history, stored-credential state) is never echoed:
+    read the connection through its view-gated GET.
+    """
+
+    id: UUID
+    bank_id: str
+    status: str | None = Field(default=None, title="Connection Written Status")
+    validation_error: str | None = Field(default=None, title="Connection Validation Error")
+
+
 class DatabaseConnectionTestResult(ClosedModel):
     """Result of a live connection test: whether the core was reachable, the
     round-trip latency, and a bank-safe classified error otherwise. The error is

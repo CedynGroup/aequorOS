@@ -16,8 +16,8 @@ import type {
   TemenosBackfillRequest,
   TemenosConnectionCreate,
   TemenosConnectionListRead,
-  TemenosConnectionRead,
   TemenosConnectionUpdate,
+  TemenosConnectionWriteAcknowledgement,
   TemenosDomainListRead,
   TemenosPullTriggerRead,
   TemenosPullTriggerRequest,
@@ -32,10 +32,10 @@ import {
   TemenosConnectionCreateToJSON,
   TemenosConnectionListReadFromJSON,
   TemenosConnectionListReadToJSON,
-  TemenosConnectionReadFromJSON,
-  TemenosConnectionReadToJSON,
   TemenosConnectionUpdateFromJSON,
   TemenosConnectionUpdateToJSON,
+  TemenosConnectionWriteAcknowledgementFromJSON,
+  TemenosConnectionWriteAcknowledgementToJSON,
   TemenosDomainListReadFromJSON,
   TemenosDomainListReadToJSON,
   TemenosPullTriggerReadFromJSON,
@@ -113,7 +113,7 @@ export class TemenosApi extends runtime.BaseAPI {
   async createTemenosConnectionRaw(
     requestParameters: CreateTemenosConnectionRequest,
     initOverrides?: RequestInit | runtime.InitOverrideFunction,
-  ): Promise<runtime.ApiResponse<TemenosConnectionRead>> {
+  ): Promise<runtime.ApiResponse<TemenosConnectionWriteAcknowledgement>> {
     if (requestParameters["bankId"] == null) {
       throw new runtime.RequiredError(
         "bankId",
@@ -159,7 +159,7 @@ export class TemenosApi extends runtime.BaseAPI {
     );
 
     return new runtime.JSONApiResponse(response, (jsonValue) =>
-      TemenosConnectionReadFromJSON(jsonValue),
+      TemenosConnectionWriteAcknowledgementFromJSON(jsonValue),
     );
   }
 
@@ -169,7 +169,7 @@ export class TemenosApi extends runtime.BaseAPI {
   async createTemenosConnection(
     requestParameters: CreateTemenosConnectionRequest,
     initOverrides?: RequestInit | runtime.InitOverrideFunction,
-  ): Promise<TemenosConnectionRead> {
+  ): Promise<TemenosConnectionWriteAcknowledgement> {
     const response = await this.createTemenosConnectionRaw(
       requestParameters,
       initOverrides,
@@ -183,7 +183,7 @@ export class TemenosApi extends runtime.BaseAPI {
   async disableTemenosConnectionRaw(
     requestParameters: DisableTemenosConnectionRequest,
     initOverrides?: RequestInit | runtime.InitOverrideFunction,
-  ): Promise<runtime.ApiResponse<TemenosConnectionRead>> {
+  ): Promise<runtime.ApiResponse<TemenosConnectionWriteAcknowledgement>> {
     if (requestParameters["bankId"] == null) {
       throw new runtime.RequiredError(
         "bankId",
@@ -229,7 +229,7 @@ export class TemenosApi extends runtime.BaseAPI {
     );
 
     return new runtime.JSONApiResponse(response, (jsonValue) =>
-      TemenosConnectionReadFromJSON(jsonValue),
+      TemenosConnectionWriteAcknowledgementFromJSON(jsonValue),
     );
   }
 
@@ -239,7 +239,7 @@ export class TemenosApi extends runtime.BaseAPI {
   async disableTemenosConnection(
     requestParameters: DisableTemenosConnectionRequest,
     initOverrides?: RequestInit | runtime.InitOverrideFunction,
-  ): Promise<TemenosConnectionRead> {
+  ): Promise<TemenosConnectionWriteAcknowledgement> {
     const response = await this.disableTemenosConnectionRaw(
       requestParameters,
       initOverrides,
@@ -253,7 +253,7 @@ export class TemenosApi extends runtime.BaseAPI {
   async enableTemenosConnectionRaw(
     requestParameters: EnableTemenosConnectionRequest,
     initOverrides?: RequestInit | runtime.InitOverrideFunction,
-  ): Promise<runtime.ApiResponse<TemenosConnectionRead>> {
+  ): Promise<runtime.ApiResponse<TemenosConnectionWriteAcknowledgement>> {
     if (requestParameters["bankId"] == null) {
       throw new runtime.RequiredError(
         "bankId",
@@ -299,7 +299,7 @@ export class TemenosApi extends runtime.BaseAPI {
     );
 
     return new runtime.JSONApiResponse(response, (jsonValue) =>
-      TemenosConnectionReadFromJSON(jsonValue),
+      TemenosConnectionWriteAcknowledgementFromJSON(jsonValue),
     );
   }
 
@@ -309,7 +309,7 @@ export class TemenosApi extends runtime.BaseAPI {
   async enableTemenosConnection(
     requestParameters: EnableTemenosConnectionRequest,
     initOverrides?: RequestInit | runtime.InitOverrideFunction,
-  ): Promise<TemenosConnectionRead> {
+  ): Promise<TemenosConnectionWriteAcknowledgement> {
     const response = await this.enableTemenosConnectionRaw(
       requestParameters,
       initOverrides,
@@ -443,7 +443,7 @@ export class TemenosApi extends runtime.BaseAPI {
   async revokeTemenosConnectionRaw(
     requestParameters: RevokeTemenosConnectionRequest,
     initOverrides?: RequestInit | runtime.InitOverrideFunction,
-  ): Promise<runtime.ApiResponse<TemenosConnectionRead>> {
+  ): Promise<runtime.ApiResponse<TemenosConnectionWriteAcknowledgement>> {
     if (requestParameters["bankId"] == null) {
       throw new runtime.RequiredError(
         "bankId",
@@ -489,7 +489,7 @@ export class TemenosApi extends runtime.BaseAPI {
     );
 
     return new runtime.JSONApiResponse(response, (jsonValue) =>
-      TemenosConnectionReadFromJSON(jsonValue),
+      TemenosConnectionWriteAcknowledgementFromJSON(jsonValue),
     );
   }
 
@@ -499,7 +499,7 @@ export class TemenosApi extends runtime.BaseAPI {
   async revokeTemenosConnection(
     requestParameters: RevokeTemenosConnectionRequest,
     initOverrides?: RequestInit | runtime.InitOverrideFunction,
-  ): Promise<TemenosConnectionRead> {
+  ): Promise<TemenosConnectionWriteAcknowledgement> {
     const response = await this.revokeTemenosConnectionRaw(
       requestParameters,
       initOverrides,
@@ -747,7 +747,7 @@ export class TemenosApi extends runtime.BaseAPI {
   async updateTemenosConnectionRaw(
     requestParameters: UpdateTemenosConnectionRequest,
     initOverrides?: RequestInit | runtime.InitOverrideFunction,
-  ): Promise<runtime.ApiResponse<TemenosConnectionRead>> {
+  ): Promise<runtime.ApiResponse<TemenosConnectionWriteAcknowledgement>> {
     if (requestParameters["bankId"] == null) {
       throw new runtime.RequiredError(
         "bankId",
@@ -805,7 +805,7 @@ export class TemenosApi extends runtime.BaseAPI {
     );
 
     return new runtime.JSONApiResponse(response, (jsonValue) =>
-      TemenosConnectionReadFromJSON(jsonValue),
+      TemenosConnectionWriteAcknowledgementFromJSON(jsonValue),
     );
   }
 
@@ -815,7 +815,7 @@ export class TemenosApi extends runtime.BaseAPI {
   async updateTemenosConnection(
     requestParameters: UpdateTemenosConnectionRequest,
     initOverrides?: RequestInit | runtime.InitOverrideFunction,
-  ): Promise<TemenosConnectionRead> {
+  ): Promise<TemenosConnectionWriteAcknowledgement> {
     const response = await this.updateTemenosConnectionRaw(
       requestParameters,
       initOverrides,
@@ -829,7 +829,7 @@ export class TemenosApi extends runtime.BaseAPI {
   async validateTemenosConnectionRaw(
     requestParameters: ValidateTemenosConnectionRequest,
     initOverrides?: RequestInit | runtime.InitOverrideFunction,
-  ): Promise<runtime.ApiResponse<TemenosConnectionRead>> {
+  ): Promise<runtime.ApiResponse<TemenosConnectionWriteAcknowledgement>> {
     if (requestParameters["bankId"] == null) {
       throw new runtime.RequiredError(
         "bankId",
@@ -875,7 +875,7 @@ export class TemenosApi extends runtime.BaseAPI {
     );
 
     return new runtime.JSONApiResponse(response, (jsonValue) =>
-      TemenosConnectionReadFromJSON(jsonValue),
+      TemenosConnectionWriteAcknowledgementFromJSON(jsonValue),
     );
   }
 
@@ -885,7 +885,7 @@ export class TemenosApi extends runtime.BaseAPI {
   async validateTemenosConnection(
     requestParameters: ValidateTemenosConnectionRequest,
     initOverrides?: RequestInit | runtime.InitOverrideFunction,
-  ): Promise<TemenosConnectionRead> {
+  ): Promise<TemenosConnectionWriteAcknowledgement> {
     const response = await this.validateTemenosConnectionRaw(
       requestParameters,
       initOverrides,

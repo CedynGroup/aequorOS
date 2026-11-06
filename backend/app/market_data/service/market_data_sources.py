@@ -41,6 +41,7 @@ from app.identity.public import Bank
 from app.market_data.schemas.market_data_sources import (
     Category,
     CategoryPreferenceRead,
+    CategoryPreferenceUpdate,
     ForwardGridAssumptionsRead,
     ForwardGridPillarRead,
     ForwardGridRead,
@@ -56,8 +57,10 @@ from app.market_data.schemas.market_data_sources import (
     PlaneRead,
     PlanesRead,
     Source,
+    SourcePreferenceCategoryWritten,
     SourcePreferencesRead,
     SourcePreferencesUpdate,
+    SourcePreferenceWriteAcknowledgement,
 )
 from app.market_data.service import market_data, market_data_overlays
 from app.market_data.service.access import require_markets_access
@@ -176,8 +179,14 @@ def get_preference(db: Session, ctx: TenantContext, bank_id: str) -> SourcePrefe
 
 def set_preference(
     db: Session, ctx: TenantContext, bank_id: str, patch: SourcePreferencesUpdate
-) -> SourcePreferencesRead:
-    """API upsert: apply a partial patch, audit it, return the resolved row (spec §4 PUT)."""
+) -> SourcePreferenceWriteAcknowledgement:
+    """API upsert: apply a partial patch, audit it, acknowledge the write (spec §4 PUT).
+
+    The acknowledgement echoes only the categories and fields the submitted patch
+    carried (D34): a caller denied the published-view GET must not be able to
+    read the stored preference through a partial PUT. The full resolved row is
+    read through the view-gated GET.
+    """
     # Configuration duty: exact markets/configure/restricted authority BEFORE any
     # preference mutation or audit row.
     require_markets_access(db, ctx, bank_id, Permission.CONFIGURE, Sensitivity.RESTRICTED)
@@ -189,14 +198,17 @@ def set_preference(
             organization_id=ctx.organization_id, bank_id=bank_id
         )  # source/overlay columns fall to their aequor/on defaults on insert
         db.add(row)
-    for category in CATEGORIES:
-        cat_patch = getattr(patch, category)
-        if cat_patch is None:
+    for category_patch, source_field, overlay_field in (
+        (patch.curves, "curves_source", "curves_overlay"),
+        (patch.fx, "fx_source", "fx_overlay"),
+        (patch.rates, "rates_source", "rates_overlay"),
+    ):
+        if category_patch is None:
             continue
-        if cat_patch.source is not None:
-            setattr(row, f"{category}_source", cat_patch.source)
-        if cat_patch.overlay is not None:
-            setattr(row, f"{category}_overlay", cat_patch.overlay)
+        if category_patch.source is not None:
+            setattr(row, source_field, category_patch.source)
+        if category_patch.overlay is not None:
+            setattr(row, overlay_field, category_patch.overlay)
     row.updated_by = ctx.actor_user_id
     db.flush()
     record_event(
@@ -218,7 +230,24 @@ def set_preference(
         },
     )
     db.commit()
-    return _to_read(bank_id, _resolve_row(row))
+    # Write-only acknowledgement (D34): only the categories and fields the
+    # submitted patch carried. Untouched stored categories and the resolved
+    # defaults are read through the view-gated GET.
+    return SourcePreferenceWriteAcknowledgement(
+        bank_id=bank_id,
+        curves=_written_patch(patch.curves),
+        fx=_written_patch(patch.fx),
+        rates=_written_patch(patch.rates),
+    )
+
+
+def _written_patch(
+    patch: CategoryPreferenceUpdate | None,
+) -> SourcePreferenceCategoryWritten | None:
+    """Echo only the fields the submitted patch carried (D34 write-only ack)."""
+    if patch is None:
+        return None
+    return SourcePreferenceCategoryWritten(source=patch.source, overlay=patch.overlay)
 
 
 def _to_read(bank_id: str, resolved: ResolvedPreference) -> SourcePreferencesRead:
