@@ -11,7 +11,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, status
 
-from app.api.deps import DbSession, MutationTenant, ScopedMutationTenant, Tenant
+from app.api.deps import DbSession, ScopedMutationTenant, Tenant
 from app.data_engine.schemas.temenos_connections import (
     TemenosBackfillRequest,
     TemenosConnectionCreate,
@@ -47,7 +47,7 @@ def create_temenos_connection(
     bank_id: str,
     payload: TemenosConnectionCreate,
     db: DbSession,
-    ctx: MutationTenant,
+    ctx: ScopedMutationTenant,
 ) -> TemenosConnectionRead:
     return temenos_connections.create_connection(db, ctx, bank_id, payload)
 
@@ -61,7 +61,7 @@ def validate_temenos_connection(
     bank_id: str,
     connection_id: UUID,
     db: DbSession,
-    ctx: MutationTenant,
+    ctx: ScopedMutationTenant,
 ) -> TemenosConnectionRead:
     return temenos_connections.validate_connection(db, ctx, bank_id, connection_id)
 
@@ -90,7 +90,7 @@ def update_temenos_connection(
     connection_id: UUID,
     payload: TemenosConnectionUpdate,
     db: DbSession,
-    ctx: MutationTenant,
+    ctx: ScopedMutationTenant,
 ) -> TemenosConnectionRead:
     return temenos_connections.update_connection(db, ctx, bank_id, connection_id, payload)
 
@@ -104,7 +104,7 @@ def disable_temenos_connection(
     bank_id: str,
     connection_id: UUID,
     db: DbSession,
-    ctx: MutationTenant,
+    ctx: ScopedMutationTenant,
 ) -> TemenosConnectionRead:
     return temenos_connections.disable_connection(db, ctx, bank_id, connection_id)
 
@@ -118,7 +118,7 @@ def enable_temenos_connection(
     bank_id: str,
     connection_id: UUID,
     db: DbSession,
-    ctx: MutationTenant,
+    ctx: ScopedMutationTenant,
 ) -> TemenosConnectionRead:
     return temenos_connections.enable_connection(db, ctx, bank_id, connection_id)
 
@@ -132,7 +132,7 @@ def revoke_temenos_connection(
     bank_id: str,
     connection_id: UUID,
     db: DbSession,
-    ctx: MutationTenant,
+    ctx: ScopedMutationTenant,
 ) -> TemenosConnectionRead:
     return temenos_connections.revoke_connection(db, ctx, bank_id, connection_id)
 

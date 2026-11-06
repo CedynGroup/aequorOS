@@ -14,7 +14,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, status
 
-from app.api.deps import DbSession, MutationTenant, ScopedMutationTenant, Tenant
+from app.api.deps import DbSession, ScopedMutationTenant, Tenant
 from app.data_engine.schemas.database_connection import (
     DatabaseConnectionCreate,
     DatabaseConnectionDiscoverResult,
@@ -76,7 +76,7 @@ def create_database_connection(
     bank_id: str,
     payload: DatabaseConnectionCreate,
     db: DbSession,
-    ctx: MutationTenant,
+    ctx: ScopedMutationTenant,
 ) -> DatabaseConnectionRead:
     return database_connections.create_connection(db, ctx, bank_id, payload)
 
@@ -102,7 +102,7 @@ def update_database_connection(
     connection_id: UUID,
     payload: DatabaseConnectionUpdate,
     db: DbSession,
-    ctx: MutationTenant,
+    ctx: ScopedMutationTenant,
 ) -> DatabaseConnectionRead:
     return database_connections.update_connection(db, ctx, bank_id, connection_id, payload)
 
@@ -116,7 +116,7 @@ def disable_database_connection(
     bank_id: str,
     connection_id: UUID,
     db: DbSession,
-    ctx: MutationTenant,
+    ctx: ScopedMutationTenant,
 ) -> DatabaseConnectionRead:
     return database_connections.disable_connection(db, ctx, bank_id, connection_id)
 
@@ -130,7 +130,7 @@ def enable_database_connection(
     bank_id: str,
     connection_id: UUID,
     db: DbSession,
-    ctx: MutationTenant,
+    ctx: ScopedMutationTenant,
 ) -> DatabaseConnectionRead:
     return database_connections.enable_connection(db, ctx, bank_id, connection_id)
 
@@ -144,7 +144,7 @@ def revoke_database_connection(
     bank_id: str,
     connection_id: UUID,
     db: DbSession,
-    ctx: MutationTenant,
+    ctx: ScopedMutationTenant,
 ) -> DatabaseConnectionRead:
     return database_connections.revoke_connection(db, ctx, bank_id, connection_id)
 

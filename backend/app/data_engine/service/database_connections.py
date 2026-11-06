@@ -148,6 +148,9 @@ def create_connection(
     credentials are sealed into the vault, and a successful credential-shape
     check activates the row; a failed one leaves it TESTING with a bank-facing
     error on the response."""
+    # Configuration duty: exact data/configure/restricted authority BEFORE any
+    # vault write or credential check.
+    require_data_access(db, ctx, bank_id, Permission.CONFIGURE, Sensitivity.RESTRICTED)
     _get_bank_or_404(db, ctx, bank_id)
     backend = payload.backend
     if not payload.credentials:
@@ -229,6 +232,8 @@ def update_connection(
     payload: DatabaseConnectionUpdate,
 ) -> DatabaseConnectionRead:
     """Post-onboarding edits and credential rotation (validate new first)."""
+    # Configuration duty (incl. credential rotation): deny before any vault write.
+    require_data_access(db, ctx, bank_id, Permission.CONFIGURE, Sensitivity.RESTRICTED, opaque=True)
     _get_bank_or_404(db, ctx, bank_id)
     connection = _get_connection_or_404(db, ctx, bank_id, connection_id)
     _ensure_not_revoked(connection)
@@ -284,6 +289,7 @@ def update_connection(
 def disable_connection(
     db: Session, ctx: TenantContext, bank_id: str, connection_id: UUID
 ) -> DatabaseConnectionRead:
+    require_data_access(db, ctx, bank_id, Permission.CONFIGURE, Sensitivity.RESTRICTED, opaque=True)
     _get_bank_or_404(db, ctx, bank_id)
     connection = _get_connection_or_404(db, ctx, bank_id, connection_id)
     _ensure_not_revoked(connection)
@@ -305,6 +311,7 @@ def disable_connection(
 def enable_connection(
     db: Session, ctx: TenantContext, bank_id: str, connection_id: UUID
 ) -> DatabaseConnectionRead:
+    require_data_access(db, ctx, bank_id, Permission.CONFIGURE, Sensitivity.RESTRICTED, opaque=True)
     _get_bank_or_404(db, ctx, bank_id)
     connection = _get_connection_or_404(db, ctx, bank_id, connection_id)
     if connection.status != "DISABLED":
@@ -329,6 +336,7 @@ def enable_connection(
 def revoke_connection(
     db: Session, ctx: TenantContext, bank_id: str, connection_id: UUID
 ) -> DatabaseConnectionRead:
+    require_data_access(db, ctx, bank_id, Permission.CONFIGURE, Sensitivity.RESTRICTED, opaque=True)
     _get_bank_or_404(db, ctx, bank_id)
     connection = _get_connection_or_404(db, ctx, bank_id, connection_id)
     if connection.status == "REVOKED":
