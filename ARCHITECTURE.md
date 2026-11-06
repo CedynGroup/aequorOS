@@ -14,12 +14,14 @@ Companion document: [CODEBASE_CONVENTIONS.md](CODEBASE_CONVENTIONS.md).
 | Risk service                   | `backend`                    | FastAPI, Python 3.13, uv, SQLAlchemy 2.0, Alembic, Pydantic v2, Loguru, boto3                                                 | The backend. Owns all persistence, calculation engines, findings, audit, and the OpenAPI contract.           |
 | Generated API client           | `packages/risk-service-api`  | typescript-fetch output of openapi-generator 7.13                                                                             | Generated from the risk-service OpenAPI schema. Source-consumed (`main: ./src/index.ts`), never hand-edited. |
 | Marketing site                 | `frontend`                   | [Marketing stack](frontend/README.md#stack)                                                                                   | Static marketing site. **Out of scope for this build. Do not touch.**                                        |
-| Product UI                     | `dashboard`                  | [Dashboard stack](backend/dashboard/README.md#stack)                                                                          | The Treasury Workbench — consumes the risk service exclusively through `packages/risk-service-api`.          |
+| Product UI                     | `backend/dashboard`          | [Dashboard stack](backend/dashboard/README.md#stack)                                                                          | The Treasury Workbench — consumes the risk service exclusively through `packages/risk-service-api`.          |
 | Database                       | PostgreSQL                   | Application connection configured by `backend/.env`; [test database policy](backend/README.md#run-tests)                      | Schema kept at Alembic head; worker role requirements are defined in §3b.                                    |
 | Local infra (offline fallback) | `backend/docker-compose.yml` | `postgres:17` on host port **15432**, MinIO on **9000** (console 9001), `risk-minio-init` creates private bucket `risk-local` | Started with `docker compose up -d` from `backend`.                                                          |
 
 Tooling: `mise` (root `mise.toml` proxies every `risk-service:*` task into `backend/mise.toml`),
-`uv` for Python deps, `pnpm` workspaces (`pnpm-workspace.yaml` includes `packages/*`, `frontend`, `dashboard`). Pre-commit config is at the repo root
+`uv` for Python deps, `pnpm` workspaces ([pnpm-workspace.yaml](pnpm-workspace.yaml)
+includes `packages/*`, `frontend`, `backend/dashboard`, `backend`, and `console`).
+Pre-commit config is at the repo root
 (`.pre-commit-config.yaml`): ruff check/format scoped to `^backend/`, Conventional
 Commits enforcement, and a pre-push hook that runs `mise run risk-service:api-fresh`.
 
@@ -1291,7 +1293,7 @@ as the in-process `app/forecasting/ml` module. Moving a Python/uv/alembic servic
 would break the workspace, migrations, RLS, the OpenAPI client-gen pipeline, and the test
 suite. The monorepo was kept intact; nothing was moved or deleted.
 
-**`dashboard` is the primary product surface** — the Bank Treasurer console, wired
+**`backend/dashboard` is the primary product surface** — the Bank Treasurer console, wired
 end-to-end to the risk-service via the generated `@aequoros/risk-service-api` client, with
 zero hardcoded financial data. `frontend` (marketing) is the other independent
 deliverable; `apps/aequoros-web` (the case-based SPA) was **removed** — see git history.
