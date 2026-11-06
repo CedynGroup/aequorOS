@@ -3,9 +3,15 @@
 # preparation materializes locked dependencies in each isolated run worktree.
 # Command values are shell strings, not objects. timeout uses coreutils duration
 # units (m = minutes); v1.106.1 has no repository command-timeout/typecheck keys.
+# Requires an existing coreutils-compatible timeout or gtimeout on PATH;
+# mise setup does not provide it, including on macOS.
 commands:
   prepare: |
-    timeout --kill-after=30s 30m mise exec -- sh -eu -c '
+    deadline=$(command -v timeout || command -v gtimeout) || {
+      printf '%s\n' 'Validation requires coreutils-compatible timeout or gtimeout on PATH.' >&2
+      exit 127
+    }
+    "$deadline" --kill-after=30s 30m mise exec -- sh -eu -c '
       pnpm install --frozen-lockfile
       UV_LOCKED=1 mise run risk-service:sync
     '
@@ -13,7 +19,11 @@ commands:
   # Preserve the backend type-debt ratchet, not plain basedpyright. Console lint
   # and a tree-wide Ruff format check are not current CI gates.
   lint: |
-    timeout --kill-after=30s 60m mise exec -- sh -eu -c '
+    deadline=$(command -v timeout || command -v gtimeout) || {
+      printf '%s\n' 'Validation requires coreutils-compatible timeout or gtimeout on PATH.' >&2
+      exit 127
+    }
+    "$deadline" --kill-after=30s 60m mise exec -- sh -eu -c '
       python3 .github/scripts/mise_wiring_preflight.py
       mise run risk-service:lint
       mise run risk-service:typecheck
@@ -27,7 +37,12 @@ commands:
   # Local affected/unit validation, not a replacement for CI's complete owners.
   # Keep headroom for cold collection and the measured slow risk-service cases.
   # Requires the fast default from https://github.com/CedynGroup/aequorOS/pull/808.
-  test: timeout --kill-after=30s 60m mise run risk-service:test
+  test: |
+    deadline=$(command -v timeout || command -v gtimeout) || {
+      printf '%s\n' 'Validation requires coreutils-compatible timeout or gtimeout on PATH.' >&2
+      exit 127
+    }
+    "$deadline" --kill-after=30s 60m mise run risk-service:test
 
 # The path and template bytes are trusted-default-branch settings in v1.106.1.
 # A first config/template PR cannot activate its own publication policy.
@@ -42,8 +57,12 @@ gates:
   - name: coderabbit-critical
     after: review
     command: |
+      deadline=$(command -v timeout || command -v gtimeout) || {
+        printf '%s\n' 'CodeRabbit skipped (not verified): timeout/gtimeout is unavailable'
+        exit 0
+      }
       result=0
-      timeout --kill-after=30s 20m mise exec -- python3 - <<'PY' || result=$?
+      "$deadline" --kill-after=30s 20m mise exec -- python3 - <<'PY' || result=$?
       import json
       import shutil
       import subprocess

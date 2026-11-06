@@ -29,7 +29,7 @@
 
 ## How it was tested
 
-<!-- Briefly list checks, counts, and scenarios actually exercised, plus failures or limits. Keep detailed evidence below. For non-UI changes include: no user-visible change - screenshots not applicable -->
+<!-- Briefly list checks, counts, and scenarios actually exercised, plus failures or limits. Keep detailed evidence below. For changes without UI changes, include: screenshots not applicable - no UI changes. Report user-visible impact separately; say no user-visible change only when accurate. -->
 
 ## Risk
 
