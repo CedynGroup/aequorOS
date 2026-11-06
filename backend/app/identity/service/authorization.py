@@ -421,7 +421,12 @@ def record_binding_revoke_audit(
     )
 
 
-_ORGANIZATION_MODULES = (Module.ACCOUNT, Module.AUDIT, Module.RISK)
+# REGULATORY projects organization-wide too: signing policies and placement
+# templates configure how EVERY bank's returns are attested, so an explicit
+# organization-scope reg binding is the authority (and is projected so the
+# dashboard can offer the control). A bank-scoped reg binding never projects
+# here — one bank's grant is not organization-wide authority.
+_ORGANIZATION_MODULES = (Module.ACCOUNT, Module.AUDIT, Module.REGULATORY, Module.RISK)
 _INSTITUTION_MODULES = tuple(module for module in Module if module is not Module.ACCOUNT)
 _REQUIRED_RUNTIME_CONDITIONS: dict[Permission, tuple[ConditionKind, ...]] = {
     Permission.APPROVE: (ConditionKind.MAKER_CHECKER,),
