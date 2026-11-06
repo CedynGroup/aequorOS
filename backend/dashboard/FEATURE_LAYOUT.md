@@ -25,17 +25,23 @@ move PR.
   `public` module, never its internals.
 - **The shared layer** every feature may import: `lib/api/**` (generated
   client, query hooks, fail-closed value presentation), `components/ui/**`,
-  `components/charts/**` and root-level `lib/*.ts` modules. Ownership of
+  `components/charts/**`, `components/shell/**` and other `lib` source modules
+  not owned by a feature. Ownership of
   `lib/<name>/` and `components/<name>/` follows the feature of the same name
-  once it exists; until then those modules are unowned legacy, and a feature
-  importing one records a baseline violation.
+  once it exists; other component directories remain unowned legacy, and a
+  feature importing one records a baseline violation. Shared code never imports
+  a feature, not even through its public interface.
 - `app/` is the composition root: route files and shims may import any feature.
+  Features must not import `app/`.
 
 ## The ratchet
 
-`scripts/check_feature_boundaries.mjs` scans files under `features/` and
-compares every cross-feature or unowned import against
-`feature_boundary_baseline.json`:
+`scripts/check_feature_boundaries.mjs` scans `.ts`/`.tsx` files under `features/`
+and the shared origins under `components/` and `lib/`. It compares cross-feature
+private imports, feature-to-unowned imports, shared-to-feature imports and
+feature-to-`app` imports against exact importer/target pairs in
+`feature_boundary_baseline.json`. Unowned legacy components and feature-owned
+code still outside `features/` are not newly governed origins:
 
 - a violation that is not in the baseline fails CI;
 - a baseline entry that no longer occurs also fails, so the baseline only
@@ -43,6 +49,22 @@ compares every cross-feature or unowned import against
   entries. A move PR may add entries for imports that were internal to the
   moved code before it gained an owner; such additions are reviewed in the
   move PR and retire as the imported modules gain owners of their own.
+
+The guard uses the installed TypeScript parser, without executing source.
+Static imports, re-exports, literal dynamic imports, `require`, import-equals and
+import-type expressions count, including type-only edges. It resolves `@/` and
+relative paths to source files or directory indexes; comments, strings and JSX
+prose are not dependencies. Missing or empty governed origin populations,
+unreadable source, malformed syntax and malformed baselines fail closed,
+including during `--update`. External packages, unresolved targets and nonliteral
+runtime module names are outside this static scan.
+
+The current exceptions live in `feature_boundary_baseline.json`: exact pairs,
+not prefix exemptions or a total-count budget. Type-only exceptions represent
+boundary debt without implying a runtime bundle edge. Moving the generic chart
+entrance into shared charts must retire the corresponding chart pairs; leaving
+them in the baseline will fail as stale. This guard change does not move runtime
+code or alter the chart SSR/lazy-loading boundary.
 
 The guard runs as the `Guard dashboard feature boundaries` CI step and is
 wired into the `test:legacy` suite via `scripts/check_feature_boundaries.test.mjs`.

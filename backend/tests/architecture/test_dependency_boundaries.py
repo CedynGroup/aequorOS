@@ -34,6 +34,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from tests.architecture import test_case_plane_boundary as case_plane
+from tests.architecture._domain_purity import domain_state_imports
 from tests.architecture._planes import (
     APP,
     CASE_PLANE_MEMBERS,
@@ -160,118 +161,7 @@ def test_the_official_bank_run_never_reads_case_financial_records() -> None:
 def test_the_pure_domain_layer_imports_no_application_state() -> None:
     """Shared and feature domain engines are pure — they are what the golden
     suites pin and what a second product segment will reuse."""
-    impure: dict[str, set[str]] = {}
-    for path in (
-        _python_files("domain")
-        + _python_files("capital/domain")
-        + _python_files("bi/domain")
-        + _python_files("icaap/domain")
-        + _python_files("reporting/domain")
-        + _python_files("policy/domain")
-        + _python_files("live/domain")
-        + _python_files("irrbb/domain")
-        + _python_files("credit/domain")
-        + _python_files("fx/domain")
-        + _python_files("ftp/domain")
-        + _python_files("rating/domain")
-        + _python_files("stress/domain")
-        + _python_files("forecasting/domain")
-        + _python_files("ai/domain")
-    ):
-        module = _module_name(path)
-        # Module-aware: `app/domain/**` carries relative imports, and a purity
-        # check that cannot see them is a purity check with a hole in it.
-        modules = imported_modules(path.read_text(), module=module)
-        stateful = {
-            module
-            for module in modules
-            if module.startswith(
-                (
-                    "app.bi.service",
-                    "app.bi.models",
-                    "app.bi.api",
-                    "app.bi.jobs",
-                    "app.bi.public",
-                    "app.services",
-                    "app.models",
-                    "app.api",
-                    "app.features",
-                    "app.identity.api",
-                    "app.identity.models",
-                    "app.identity.service",
-                    "app.identity.public",
-                    "app.icaap.api",
-                    "app.icaap.models",
-                    "app.icaap.service",
-                    "app.icaap.public",
-                    "app.reporting.api",
-                    "app.reporting.models",
-                    "app.reporting.service",
-                    "app.reporting.public",
-                    "app.capital.api",
-                    "app.capital.service",
-                    "app.capital.models",
-                    "app.capital.schemas",
-                    "app.capital.public",
-                    "app.credit.api",
-                    "app.credit.service",
-                    "app.credit.schemas",
-                    "app.credit.public",
-                    "app.fx.api",
-                    "app.fx.service",
-                    "app.fx.schemas",
-                    "app.fx.public",
-                    "app.ftp.api",
-                    "app.ftp.service",
-                    "app.ftp.schemas",
-                    "app.ftp.public",
-                    "app.rating.api",
-                    "app.rating.models",
-                    "app.rating.service",
-                    "app.rating.schemas",
-                    "app.rating.public",
-                    "app.stress.api",
-                    "app.stress.service",
-                    "app.stress.models",
-                    "app.stress.schemas",
-                    "app.stress.public",
-                    "app.forecasting.api",
-                    "app.forecasting.service",
-                    "app.forecasting.models",
-                    "app.forecasting.schemas",
-                    "app.forecasting.ml",
-                    "app.forecasting.public",
-                    "app.ai.api",
-                    "app.ai.service",
-                    "app.ai.models",
-                    "app.ai.schemas",
-                    "app.ai.public",
-                    "app.case.api",
-                    "app.case.service",
-                    "app.case.models",
-                    "app.case.schemas",
-                    "app.case.public",
-                    "app.operator.models",
-                    "app.operator.schemas",
-                    "app.operator.public",
-                    "app.irrbb.api",
-                    "app.irrbb.service",
-                    "app.irrbb.schemas",
-                    "app.irrbb.public",
-                    "app.policy.api",
-                    "app.policy.models",
-                    "app.policy.service",
-                    "app.policy.public",
-                    "app.live.api",
-                    "app.live.models",
-                    "app.live.service",
-                    "app.live.public",
-                )
-            )
-        }
-        if stateful:
-            impure[module] = stateful
-
+    impure = domain_state_imports(APP)
     assert impure == {}, f"Domain engines must stay pure: {impure}"
 
 

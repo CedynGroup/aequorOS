@@ -15,9 +15,14 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models import OperatorAuditLog, OperatorInspectorSession
-from app.operator.schemas import InspectorSessionRead, ProvisioningResultRead
+from app.operator.schemas import (
+    InspectorSessionCreate,
+    InspectorSessionRead,
+    ProvisioningResultRead,
+)
 from tests.operator.conftest import bank_id_for, operator_headers, provision_payload
 from tests.operator.test_operator_auth_integration import PASSWORD, bearer, login, make_operator
+from tests.support.factories.inspections import examiner_assignment
 
 SESSIONS = "/operator/v1/inspector/sessions"
 
@@ -307,19 +312,17 @@ def test_session_is_bound_to_one_examined_bank(
     mint, is where an examination acquires its scope."""
     organization_id = _provision(operator_client)
     bank_id = bank_id_for(operator_client, organization_id)
-    response = operator_client.post(
-        SESSIONS,
-        json={
-            "support_reference": "SUP-TEST",
-            "organization_id": organization_id,
-            "bank_id": bank_id,
-            "reason": "examination",
-            "mode": "consent",
-        },
+    body = examiner_assignment(
+        operator_client,
+        payload=InspectorSessionCreate(
+            support_reference="SUP-TEST",
+            organization_id=organization_id,
+            bank_id=bank_id,
+            reason="examination",
+            mode="consent",
+        ),
         headers=operator_headers(),
     )
-    assert response.status_code == 201, response.text
-    body = InspectorSessionRead.model_validate_json(response.text)
     assert body.bank_id == bank_id
     retained = operator_db.get(OperatorInspectorSession, uuid.UUID(body.session_id))
     assert retained is not None and retained.bank_id == bank_id

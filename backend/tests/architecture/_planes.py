@@ -40,6 +40,7 @@ from __future__ import annotations
 import ast
 import re
 from functools import lru_cache
+from importlib.util import resolve_name
 from pathlib import Path
 
 APP = Path(__file__).parents[2] / "app"
@@ -208,10 +209,6 @@ BANK_PLANE_TABLES: frozenset[str] = _declared_tables(_BANK_MODEL_FILES)
 # Scanning
 # --------------------------------------------------------------------------
 
-#: Callables that import by name at runtime. Only a LITERAL first argument is
-#: resolvable; see ``imported_modules``.
-_DYNAMIC_IMPORTERS: frozenset[str] = frozenset({"import_module", "__import__"})
-
 #: A table named as the object of a SQL clause. Deliberately narrow: it must
 #: follow FROM / JOIN / UPDATE / INTO, so prose that merely mentions a table
 #: name is not a match.
@@ -249,11 +246,43 @@ def _call_name(node: ast.Call) -> str | None:
     return None
 
 
-def _keyword(node: ast.Call, name: str) -> str | None:
+def _argument(node: ast.Call, name: str, position: int) -> ast.expr | None:
     for keyword in node.keywords:
         if keyword.arg == name:
-            return string_value(keyword.value)
-    return None
+            return keyword.value
+    return node.args[position] if len(node.args) > position else None
+
+
+def _literal_string(node: ast.expr | None) -> str | None:
+    # SQL's string_value deliberately retains f-string placeholders. An import
+    # target must instead be concrete, never a purported "{name}" module.
+    if node is None or any(isinstance(part, ast.FormattedValue) for part in ast.walk(node)):
+        return None
+    return string_value(node)
+
+
+def _importer_aliases(tree: ast.AST) -> dict[str, str]:
+    aliases = {
+        "__import__": "__import__",
+        "import_module": "import_module",
+        "importlib.import_module": "import_module",
+        "builtins.__import__": "__import__",
+    }
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                if alias.name == "importlib":
+                    aliases[f"{alias.asname or alias.name}.import_module"] = "import_module"
+                elif alias.name == "builtins":
+                    aliases[f"{alias.asname or alias.name}.__import__"] = "__import__"
+        elif isinstance(node, ast.ImportFrom) and node.level == 0:
+            for alias in node.names:
+                if (node.module, alias.name) in {
+                    ("importlib", "import_module"),
+                    ("builtins", "__import__"),
+                }:
+                    aliases[alias.asname or alias.name] = alias.name
+    return aliases
 
 
 def _dynamic_import_targets(tree: ast.AST) -> set[str]:
@@ -262,22 +291,41 @@ def _dynamic_import_targets(tree: ast.AST) -> set[str]:
     LIMIT: only a literal (or literal-concatenated) name is resolvable. A name
     assembled at runtime — from a variable, a config value, or ``".".join(...)``
     — is invisible here and by construction cannot be caught by AST inspection.
+    Simple imported aliases are recognized, without scope/rebinding analysis.
+    Relative ``__import__`` calls requiring a runtime globals mapping are not
+    resolved; relative importlib targets require a literal package argument.
     """
     targets: set[str] = set()
+    aliases = _importer_aliases(tree)
     for node in ast.walk(tree):
-        if not isinstance(node, ast.Call) or _call_name(node) not in _DYNAMIC_IMPORTERS:
+        if not isinstance(node, ast.Call):
             continue
-        if not node.args or (name := string_value(node.args[0])) is None:
+        callable_name = ast.unparse(node.func)
+        if (kind := aliases.get(callable_name)) is None:
             continue
-        if name.startswith("."):
-            package = _keyword(node, "package")
+        if (name := _literal_string(_argument(node, "name", 0))) is None:
+            continue
+        if kind == "__import__":
+            level = _argument(node, "level", 4)
+            if level is not None and not (isinstance(level, ast.Constant) and level.value == 0):
+                continue
+        elif name.startswith("."):
+            package = _literal_string(_argument(node, "package", 1))
             if package is None:
                 continue
-            level = len(name) - len(name.lstrip("."))
-            parts = package.split(".")
-            base = parts[: len(parts) - (level - 1)] if level > 1 else parts
-            name = ".".join([*base, *([name.lstrip(".")] if name.lstrip(".") else [])])
+            try:
+                name = resolve_name(name, package)
+            except (ImportError, ValueError):
+                continue
         targets.add(name)
+        if kind == "__import__" and isinstance(
+            fromlist := _argument(node, "fromlist", 3), (ast.List, ast.Tuple)
+        ):
+            targets.update(
+                f"{name}.{member}"
+                for item in fromlist.elts
+                if (member := _literal_string(item)) is not None and member != "*"
+            )
     return targets
 
 
@@ -295,6 +343,8 @@ def imported_modules(source: str, *, module: str | None = None) -> set[str]:
     * relative imports are resolved only when ``module`` is supplied — callers
       that pass bare source (the negative-control tests) get absolute-only
       resolution;
+    * simple dynamic-import aliases are recognized without scope/rebinding
+      analysis; relative ``__import__`` globals mappings are not evaluated;
     * this is per-file. Reachability through a chain of modules is covered by
       the CLOSURE rule in `test_case_plane_boundary.py`, not here.
     """
@@ -315,9 +365,10 @@ def _imported_modules(source: str, module: str | None) -> frozenset[str]:
             elif package is None:
                 continue  # unresolvable without the importing module's identity
             else:
-                parts = package.split(".")
-                anchor = parts[: len(parts) - (node.level - 1)]
-                base = ".".join([*anchor, *([node.module] if node.module else [])])
+                try:
+                    base = resolve_name("." * node.level + (node.module or ""), package)
+                except (ImportError, ValueError):
+                    continue
             if not base:
                 continue
             modules.add(base)

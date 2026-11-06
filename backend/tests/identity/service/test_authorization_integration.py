@@ -16,6 +16,7 @@ from app.core.authorization import (
     BindingStatus,
     ConditionCheck,
     ConditionKind,
+    DataScope,
     InstitutionScope,
     Module,
     ModuleScope,
@@ -31,6 +32,7 @@ from app.db.base import utc_now
 from app.identity.service import authentication, authorization
 from app.models import AuthorizationBinding, Bank, RefreshToken, User
 from app.policy.service.institution_types import FALLBACK_TYPE_CODE
+from tests.support.factories import role_scope as actors
 from tests.support.helpers import ORG_1, ORG_2, USER_1
 
 BANK_1 = "BK-AUTH0001"
@@ -519,28 +521,25 @@ def test_binding_creation_bumps_version_and_revokes_refresh_families_atomically(
     _banks(db_session)
     user = db_session.get(User, USER_1)
     assert user is not None
-    issued = authentication.issue_tokens(db_session, user)
+    issued = actors.tenant_session(db_session, user=user)
     old_claims = jwt.decode(issued.access_token, options={"verify_signature": False})
     assert old_claims["authv"] == 1
 
-    binding = authorization.create_role_binding(
+    binding = actors.RoleBindingFactory(
         db_session,
-        organization_id=ORG_1,
-        principal_user_id=user.id,
-        principal_type=PrincipalType.HUMAN,
-        role_bundle=RoleBundle.ANALYST,
-        scope=authorization.BindingScope(
-            InstitutionScope.INSTITUTION,
-            BANK_1,
-            ModuleScope.LIQUIDITY,
-            SensitivityScope.CONFIDENTIAL,
-        ),
-        grantor=authorization.GrantorRef(
-            authorization.GrantorType.SYSTEM,
-            "test-suite",
+        authorization.GrantorRef(authorization.GrantorType.SYSTEM, "test-suite"),
+    ).create(
+        principal=PrincipalLocator(ORG_1, user.id, PrincipalType.HUMAN),
+        bundle=RoleBundle.ANALYST,
+        scope=actors.institution_scope(
+            bank_id=BANK_1,
+            module=ModuleScope.LIQUIDITY,
+            sensitivity=SensitivityScope.CONFIDENTIAL,
+            data_scope=DataScope.ALL,
         ),
         reason="assign the first shadow binding",
     )
+    db_session.commit()
 
     db_session.refresh(user)
     refresh_rows = list(
@@ -569,24 +568,21 @@ def test_institution_binding_allows_one_institution_and_denies_its_sibling(
     _banks(db_session)
     user = db_session.get(User, USER_1)
     assert user is not None
-    binding = authorization.create_role_binding(
+    binding = actors.RoleBindingFactory(
         db_session,
-        organization_id=ORG_1,
-        principal_user_id=user.id,
-        principal_type=PrincipalType.HUMAN,
-        role_bundle=RoleBundle.VIEWER,
-        scope=authorization.BindingScope(
-            InstitutionScope.INSTITUTION,
-            BANK_1,
-            ModuleScope.LIQUIDITY,
-            SensitivityScope.CONFIDENTIAL,
-        ),
-        grantor=authorization.GrantorRef(
-            authorization.GrantorType.SYSTEM,
-            "test-suite",
+        authorization.GrantorRef(authorization.GrantorType.SYSTEM, "test-suite"),
+    ).create(
+        principal=PrincipalLocator(ORG_1, user.id, PrincipalType.HUMAN),
+        bundle=RoleBundle.VIEWER,
+        scope=actors.institution_scope(
+            bank_id=BANK_1,
+            module=ModuleScope.LIQUIDITY,
+            sensitivity=SensitivityScope.CONFIDENTIAL,
+            data_scope=DataScope.ALL,
         ),
         reason="institution-specific liquidity visibility",
     )
+    db_session.commit()
     principal = PrincipalLocator(ORG_1, user.id, PrincipalType.HUMAN)
 
     allowed = authorization.evaluate_permission(
@@ -622,24 +618,19 @@ def test_explicit_organization_binding_covers_sibling_institutions(
     _banks(db_session)
     user = db_session.get(User, USER_1)
     assert user is not None
-    binding = authorization.create_role_binding(
+    binding = actors.RoleBindingFactory(
         db_session,
-        organization_id=ORG_1,
-        principal_user_id=user.id,
-        principal_type=PrincipalType.HUMAN,
-        role_bundle=RoleBundle.VIEWER,
-        scope=authorization.BindingScope(
-            InstitutionScope.ORGANIZATION,
-            None,
-            ModuleScope.LIQUIDITY,
-            SensitivityScope.CONFIDENTIAL,
-        ),
-        grantor=authorization.GrantorRef(
-            authorization.GrantorType.SYSTEM,
-            "test-suite",
+        authorization.GrantorRef(authorization.GrantorType.SYSTEM, "test-suite"),
+    ).create(
+        principal=PrincipalLocator(ORG_1, user.id, PrincipalType.HUMAN),
+        bundle=RoleBundle.VIEWER,
+        scope=actors.organization_scope(
+            module=ModuleScope.LIQUIDITY,
+            sensitivity=SensitivityScope.CONFIDENTIAL,
         ),
         reason="explicit organization-wide liquidity visibility",
     )
+    db_session.commit()
     principal = PrincipalLocator(ORG_1, user.id, PrincipalType.HUMAN)
 
     for institution_id in (BANK_1, BANK_1_SIBLING):
