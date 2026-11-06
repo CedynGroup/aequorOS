@@ -543,6 +543,14 @@ feature. New code goes in the target layout; existing code moves one feature per
   `PEER_EDGES` direction), and only another feature's `public` module or pure `domain`
   engines. The kernel imports no feature. Feature code never imports through the `app.models`
   aggregator; it is a registry, not an API.
+- **Public-module syntax.** `tests/architecture/test_public_interfaces.py` parses every
+  `app/**/public.py` without importing it. Only imports (including future imports), a leading
+  module docstring, comments, and literal `__all__` lists/tuples of strings are allowed.
+  `__all__` may be annotated with `list[str]` or `tuple[str, ...]`; computed annotations,
+  export-list mutation, other assignments, definitions and control flow are rejected.
+  The coverage floor fails if an established public root disappears; new public modules
+  are discovered recursively. Preserve deliberate import order: the guard neither sorts
+  imports nor claims their dependencies are side-effect-free.
 - **Target test layout mirrors the source**: `app/<feature>/service.py` is tested under
   `tests/<feature>/service/`. Cross-cutting guards stay in `tests/architecture/` and shared
   helpers in `tests/support/`. `tests/conftest.py` keeps only the fixtures every feature shares
