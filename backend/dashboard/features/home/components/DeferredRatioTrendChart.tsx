@@ -3,6 +3,8 @@
 import dynamic from "next/dynamic";
 import { useEffect, useRef, useState } from "react";
 import ChartFrame from "@/components/ui/ChartFrame";
+// Keep the shared entrance's deferred canvas in the home's two-stage manifest.
+import "@/components/charts/EChart";
 
 const RatioTrendChart = dynamic(() => import("./RatioTrendChart"), {
   ssr: false,
