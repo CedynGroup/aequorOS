@@ -201,7 +201,8 @@ default deployment image. See `backend/README.md`.
 
 - **Wrong port.** The dashboard looks for the API on `:8000`. `mise run
 risk-service:dev` defaults to `:8001`; pass `PORT=8000`.
-- **Empty Treasury/ALM pages.** The worker is not running.
+- **Empty Treasury/ALM pages.** Check that the bank has loaded financial data
+  through the Data Engine and that the worker is running to compute it.
 - **`/api/health/ready` returns 503.** It needs a reachable database and object
   storage. Overdue jobs (often a stopped worker) show as `degraded` in the response
   body instead. `/api/health/live` only proves the process is up.

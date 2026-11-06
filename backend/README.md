@@ -111,7 +111,7 @@ cp -n .env.example .env
 The same `risk-service:*` tasks are also available from the repository root.
 
 Install the repo hooks after syncing dependencies (see the root
-[setup guide](../README.md#prerequisites) for externally managed hooks):
+[setup guide](../README.md#set-up-a-fresh-checkout) for externally managed hooks):
 
 ```bash
 mise run risk-service:hooks
