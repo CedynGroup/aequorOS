@@ -20,6 +20,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.core.authorization import (
+    BindingStatus,
     GrantorType,
     InstitutionScope,
     ModuleScope,
@@ -177,6 +178,27 @@ def _suspend_all() -> None:
             user_id=USER_1,
             reason="suspend every active fixture binding",
         )
+
+
+def _suspend_all() -> None:
+    """Suspend EVERY active binding for the fixture actor (the hermetic demo
+    tenant seeds an organization-scope viewer binding that would otherwise
+    keep the bank covered)."""
+    with get_sessionmaker()() as db:
+        bindings = list(
+            db.scalars(
+                select(AuthorizationBinding).where(
+                    AuthorizationBinding.principal_user_id == USER_1,
+                    AuthorizationBinding.status == BindingStatus.ACTIVE.value,
+                )
+            )
+        )
+        for binding in bindings:
+            binding.status = BindingStatus.SUSPENDED.value
+        user = db.get(User, USER_1)
+        assert user is not None
+        user.authorization_version += 1
+        db.commit()
 
 
 @pytest.fixture
