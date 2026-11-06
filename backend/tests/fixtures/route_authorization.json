@@ -1629,7 +1629,7 @@
         "app/api/deps.py:get_tenant_db_session",
         "app/api/deps.py:require_package_edit",
         "app/api/deps.py:resolve_tenant_bank",
-        "app/icaap/api/manage_icaap_attachments.py:get_icaap_storage"
+        "app/storage/deps.py:get_http_storage"
       ],
       "authentication": "tenant",
       "dependencies": [
@@ -1638,7 +1638,7 @@
         "app.api.deps:get_tenant_db_session",
         "app.api.deps:require_package_edit",
         "app.api.deps:resolve_tenant_bank",
-        "app.icaap.api.manage_icaap_attachments:get_icaap_storage",
+        "app.storage.deps:get_http_storage",
         "fastapi.security.http:HTTPBearer"
       ],
       "routes": [
@@ -2774,7 +2774,7 @@
         "app/api/deps.py:get_tenant_db_session",
         "app/api/deps.py:require_icaap_edit",
         "app/api/deps.py:resolve_tenant_bank",
-        "app/icaap/api/manage_icaap_attachments.py:get_icaap_storage"
+        "app/storage/deps.py:get_http_storage"
       ],
       "authentication": "tenant",
       "dependencies": [
@@ -2783,7 +2783,7 @@
         "app.api.deps:get_tenant_db_session",
         "app.api.deps:require_icaap_edit",
         "app.api.deps:resolve_tenant_bank",
-        "app.icaap.api.manage_icaap_attachments:get_icaap_storage",
+        "app.storage.deps:get_http_storage",
         "fastapi.security.http:HTTPBearer"
       ],
       "routes": [
@@ -3094,7 +3094,7 @@
         "app/api/deps.py:get_tenant_db_session",
         "app/api/deps.py:require_icaap_view",
         "app/api/deps.py:resolve_tenant_bank",
-        "app/icaap/api/manage_icaap_attachments.py:get_icaap_storage"
+        "app/storage/deps.py:get_http_storage"
       ],
       "authentication": "tenant",
       "dependencies": [
@@ -3103,7 +3103,7 @@
         "app.api.deps:get_tenant_db_session",
         "app.api.deps:require_icaap_view",
         "app.api.deps:resolve_tenant_bank",
-        "app.icaap.api.manage_icaap_attachments:get_icaap_storage",
+        "app.storage.deps:get_http_storage",
         "fastapi.security.http:HTTPBearer"
       ],
       "routes": [
@@ -3158,7 +3158,7 @@
         "app/api/deps.py:get_tenant_db_session",
         "app/api/deps.py:require_icaap_view",
         "app/api/deps.py:resolve_tenant_bank",
-        "app/icaap/api/manage_icaap_supervisory_addons.py:get_icaap_storage"
+        "app/storage/deps.py:get_http_storage"
       ],
       "authentication": "tenant",
       "dependencies": [
@@ -3167,7 +3167,7 @@
         "app.api.deps:get_tenant_db_session",
         "app.api.deps:require_icaap_view",
         "app.api.deps:resolve_tenant_bank",
-        "app.icaap.api.manage_icaap_supervisory_addons:get_icaap_storage",
+        "app.storage.deps:get_http_storage",
         "fastapi.security.http:HTTPBearer"
       ],
       "routes": [
@@ -5532,7 +5532,7 @@
         "app/api/deps.py:get_tenant_db_session",
         "app/api/deps.py:require_icaap_create",
         "app/api/deps.py:resolve_tenant_bank",
-        "app/icaap/api/manage_icaap_supervisory_addons.py:get_icaap_storage"
+        "app/storage/deps.py:get_http_storage"
       ],
       "authentication": "tenant",
       "dependencies": [
@@ -5541,7 +5541,7 @@
         "app.api.deps:get_tenant_db_session",
         "app.api.deps:require_icaap_create",
         "app.api.deps:resolve_tenant_bank",
-        "app.icaap.api.manage_icaap_supervisory_addons:get_icaap_storage",
+        "app.storage.deps:get_http_storage",
         "fastapi.security.http:HTTPBearer"
       ],
       "routes": [
