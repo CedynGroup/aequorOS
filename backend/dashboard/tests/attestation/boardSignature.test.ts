@@ -188,6 +188,16 @@ function stubFor(specifier: string): unknown | undefined {
       return hooksModule;
     case "@/lib/api/grantAdministration":
       return { useGrantAdministrationAccess: () => true };
+    // The configure gates live in this hook module; these panels are exercised
+    // for their copy and Board control, with the authority fixtures above.
+    case "@/lib/api/configureAccess":
+      return {
+        useConfigureEligibility: () => ({ allowed: true, reason: "" }),
+        useOrganizationConfigureEligibility: () => ({
+          allowed: true,
+          reason: "",
+        }),
+      };
     case "@/lib/api/client":
       return {
         isApiError: (value: unknown) =>

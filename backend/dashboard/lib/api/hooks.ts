@@ -4237,7 +4237,8 @@ export function useSigningPolicies(enabled = true) {
 }
 
 /**
- * Create or supersede a signing policy. Reason-required and Org Owner-only: this is
+ * Create or supersede a signing policy. Reason-required and gated on an
+ * organization-scope reg/configure/restricted binding (VAL-CFG-008): this is
  * the control that decides whether a filed return is properly attested, so
  * changing it is itself an audited act. Policies are versioned by effective
  * date rather than edited in place, so every attestation read invalidates too.

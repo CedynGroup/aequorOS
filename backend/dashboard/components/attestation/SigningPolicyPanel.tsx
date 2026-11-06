@@ -13,15 +13,19 @@
  *
  * Two behaviours are deliberate rather than incidental:
  *
- * - **Org Owner-only**: this is the
- *   control that decides whether a filed return is properly attested.
+ * - **Organization-scope configure authority**: a signing policy governs how
+ *   EVERY bank's returns are attested, so the save is offered only to a
+ *   holder of an organization-scope reg/configure/restricted binding
+ *   (VAL-CFG-008) — one bank's Configurator grant is deliberately not enough,
+ *   and no scalar role substitutes. Readers keep the list; the save explains
+ *   itself when it is disabled.
  * - **Reason-required, versioned by effective date.** Saving does not edit a
  *   policy in place; it end-dates the identically scoped one and inserts a new
  *   row, so a return filed earlier can always be shown to have satisfied the
  *   rules that were actually in force at its reporting date.
  */
 
-import { useState } from "react";
+import { useId, useState } from "react";
 import { Loader2, Save, ShieldCheck } from "lucide-react";
 import type {
   PolicyRead,
@@ -39,7 +43,7 @@ import {
   useSigningPolicies,
   useUpsertSigningPolicy,
 } from "@/lib/api/hooks";
-import { useGrantAdministrationAccess } from "@/lib/api/grantAdministration";
+import { useOrganizationConfigureEligibility } from "@/lib/api/configureAccess";
 import { fmtDateUTC, fmtTimestamp, isoDate } from "@/lib/api/values";
 import { SIGNING_ROLE_LABELS, roleNoun } from "./shared";
 
@@ -111,10 +115,9 @@ function emptyForm(): FormState {
 }
 
 export default function SigningPolicyPanel() {
-  const canAdministerGrants = useGrantAdministrationAccess();
-  // Non-owners see nothing rather than a disabled form: the API refuses the
-  // write anyway, and a dead control invites support tickets.
-  if (!canAdministerGrants) return null;
+  // The policy list is a tenant read; only the save is configure-gated, and it
+  // explains itself rather than hiding — a reader who can see the policies can
+  // also be told why they cannot change them.
   return <SigningPolicyPanelInner />;
 }
 
@@ -123,6 +126,11 @@ function SigningPolicyPanelInner() {
   const policiesQuery = useSigningPolicies();
   const templatesQuery = useReturnTemplates();
   const upsert = useUpsertSigningPolicy();
+  // Organization-scope authority: the backend refuses a bank-scoped grant here
+  // (VAL-CFG-008), so the offer mirrors exactly that projection.
+  const { allowed: canConfigure, reason: configureReason } =
+    useOrganizationConfigureEligibility("reg");
+  const configureReasonId = useId();
 
   const [form, setForm] = useState<FormState>(emptyForm);
   const [notice, setNotice] = useState<string | null>(null);
@@ -187,6 +195,7 @@ function SigningPolicyPanelInner() {
   };
 
   const handleSave = () => {
+    if (!canConfigure) return; // denied before any side effect, as the server denies
     const requiredSignatures: SignatureSlotRead[] = form.slots.map((slot) => ({
       role: slot.role,
       minCount: Math.max(Number.parseInt(slot.minCount, 10) || 1, 1),
@@ -283,30 +292,47 @@ function SigningPolicyPanelInner() {
         title="Add or supersede a policy"
         subtitle="Reason-required and versioned by effective date — never edited in place"
         actions={
-          <button
-            type="button"
-            disabled={
-              upsert.isPending || scopeMissing || reasonMissing || slotsMissing
-            }
-            onClick={handleSave}
-            title={
-              scopeMissing
-                ? "Scope the policy to a return code or a return family."
-                : reasonMissing
-                  ? "A reason is required."
-                  : slotsMissing
-                    ? "Add at least one required signature."
-                    : undefined
-            }
-            className="inline-flex items-center gap-1.5 px-3 py-2 text-caption font-medium btn-primary disabled:opacity-60"
-          >
-            {upsert.isPending ? (
-              <Loader2 size={13} className="animate-spin" aria-hidden />
-            ) : (
-              <Save size={13} aria-hidden />
+          <span className="inline-flex flex-wrap items-center justify-end gap-2 max-w-56 sm:max-w-64">
+            {!canConfigure && (
+              <span
+                id={configureReasonId}
+                className="text-micro text-slate text-right"
+              >
+                {configureReason}
+              </span>
             )}
-            Save policy
-          </button>
+            <button
+              type="button"
+              disabled={
+                !canConfigure ||
+                upsert.isPending ||
+                scopeMissing ||
+                reasonMissing ||
+                slotsMissing
+              }
+              onClick={handleSave}
+              aria-describedby={!canConfigure ? configureReasonId : undefined}
+              title={
+                !canConfigure
+                  ? configureReason
+                  : scopeMissing
+                    ? "Scope the policy to a return code or a return family."
+                    : reasonMissing
+                      ? "A reason is required."
+                      : slotsMissing
+                        ? "Add at least one required signature."
+                        : undefined
+              }
+              className="inline-flex items-center gap-1.5 px-3 py-2 text-caption font-medium btn-primary disabled:opacity-60"
+            >
+              {upsert.isPending ? (
+                <Loader2 size={13} className="animate-spin" aria-hidden />
+              ) : (
+                <Save size={13} aria-hidden />
+              )}
+              Save policy
+            </button>
+          </span>
         }
       >
         <div className="space-y-5 max-w-3xl">
