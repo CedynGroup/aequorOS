@@ -34,6 +34,15 @@ move PR.
 - `app/` is the composition root: route files and shims may import any feature.
   Features must not import `app/`.
 
+The dashboard-wide ECharts entrance (`EChart.tsx`), deferred canvas
+(`EChartCanvas.tsx`) and resolved theme (`echartsTheme.ts`) live in
+`components/charts/`. Import the entrance and theme directly, not through BI's
+public interface. Only the entrance loads the canvas, with
+`dynamic(..., { ssr: false })`. The home deferred loader explicitly imports that
+entrance to retain its two-stage manifest without eagerly importing the canvas.
+`scripts/assert-home-route-bundle.mjs` enforces both deferred stages and keeps the
+chart runtime out of the home entry graph.
+
 ## The ratchet
 
 `scripts/check_feature_boundaries.mjs` scans `.ts`/`.tsx` files under `features/`
@@ -61,10 +70,10 @@ runtime module names are outside this static scan.
 
 The current exceptions live in `feature_boundary_baseline.json`: exact pairs,
 not prefix exemptions or a total-count budget. Type-only exceptions represent
-boundary debt without implying a runtime bundle edge. Moving the generic chart
-entrance into shared charts must retire the corresponding chart pairs; leaving
-them in the baseline will fail as stale. This guard change does not move runtime
-code or alter the chart SSR/lazy-loading boundary.
+boundary debt without implying a runtime bundle edge. The generic chart move
+retires the shared-chart-to-BI pairs; other exact exceptions remain independently
+tracked. Retired pairs must not remain in the baseline; the guard rejects them
+as stale.
 
 The guard runs as the `Guard dashboard feature boundaries` CI step and is
 wired into the `test:legacy` suite via `scripts/check_feature_boundaries.test.mjs`.
