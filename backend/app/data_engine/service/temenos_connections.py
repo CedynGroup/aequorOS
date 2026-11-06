@@ -183,6 +183,9 @@ def create_connection(
     """Onboard a connection. Credentials are stored through the encrypted vault
     and validated inline: success activates it, failure leaves it TESTING with
     the bank-facing error on the response."""
+    # Configuration duty: exact data/configure/restricted authority BEFORE any
+    # vault write, credential check or default-mapping seed.
+    require_data_access(db, ctx, bank_id, Permission.CONFIGURE, Sensitivity.RESTRICTED)
     _get_bank_or_404(db, ctx, bank_id)
     mode = payload.connection_mode
     domains = _validated_domains(mode, payload.domains)
@@ -298,6 +301,9 @@ def _seed_default_mapping(db: Session, ctx: TenantContext, bank_id: str, mode: s
 def validate_connection(
     db: Session, ctx: TenantContext, bank_id: str, connection_id: UUID
 ) -> TemenosConnectionRead:
+    # Credential validation is a configuration duty (D2): deny before the
+    # stored-credential check or any status mutation.
+    require_data_access(db, ctx, bank_id, Permission.CONFIGURE, Sensitivity.RESTRICTED, opaque=True)
     _get_bank_or_404(db, ctx, bank_id)
     connection = _get_connection_or_404(db, ctx, bank_id, connection_id)
     _ensure_not_revoked(connection)
@@ -358,6 +364,8 @@ def update_connection(
     payload: TemenosConnectionUpdate,
 ) -> TemenosConnectionRead:
     """Post-onboarding edits and credential rotation (validate new first)."""
+    # Configuration duty (incl. credential rotation): deny before any vault write.
+    require_data_access(db, ctx, bank_id, Permission.CONFIGURE, Sensitivity.RESTRICTED, opaque=True)
     _get_bank_or_404(db, ctx, bank_id)
     connection = _get_connection_or_404(db, ctx, bank_id, connection_id)
     _ensure_not_revoked(connection)
@@ -438,6 +446,7 @@ def update_connection(
 def disable_connection(
     db: Session, ctx: TenantContext, bank_id: str, connection_id: UUID
 ) -> TemenosConnectionRead:
+    require_data_access(db, ctx, bank_id, Permission.CONFIGURE, Sensitivity.RESTRICTED, opaque=True)
     _get_bank_or_404(db, ctx, bank_id)
     connection = _get_connection_or_404(db, ctx, bank_id, connection_id)
     _ensure_not_revoked(connection)
@@ -459,6 +468,7 @@ def disable_connection(
 def enable_connection(
     db: Session, ctx: TenantContext, bank_id: str, connection_id: UUID
 ) -> TemenosConnectionRead:
+    require_data_access(db, ctx, bank_id, Permission.CONFIGURE, Sensitivity.RESTRICTED, opaque=True)
     _get_bank_or_404(db, ctx, bank_id)
     connection = _get_connection_or_404(db, ctx, bank_id, connection_id)
     if connection.status != "DISABLED":
@@ -542,6 +552,7 @@ def trigger_backfill(
 def revoke_connection(
     db: Session, ctx: TenantContext, bank_id: str, connection_id: UUID
 ) -> TemenosConnectionRead:
+    require_data_access(db, ctx, bank_id, Permission.CONFIGURE, Sensitivity.RESTRICTED, opaque=True)
     _get_bank_or_404(db, ctx, bank_id)
     connection = _get_connection_or_404(db, ctx, bank_id, connection_id)
     if connection.status == "REVOKED":
