@@ -1,13 +1,25 @@
 # AequorOS
 
 AequorOS is treasury, asset-liability management and regulatory-reporting software
-for banks in Africa. A bank loads its own data, and AequorOS calculates six
-things on the server: liquidity, Basel capital, interest-rate risk in the banking
-book (IRRBB), foreign exchange, funds transfer pricing (FTP) and balance-sheet
-forecasts. Each organization's data is isolated from every other's, and each
-official calculation is saved as an immutable run pinned to a hash of its inputs.
-Country rules are stored as data, not code. The only return family built today is
-the Bank of Ghana BSD set, generated from the official workbook templates.
+for banks in Africa. It gives a bank's finance and risk teams one place to see where
+the balance sheet stands and to prepare what the regulator asks for. A bank brings
+its own data, AequorOS works out the figures, and every official result is saved so
+it can be checked later. Each bank's data is kept separate from every other's.
+
+What it covers today:
+
+- **Liquidity:** whether the bank can meet its short-term obligations.
+- **Capital:** the capital the bank holds against Basel requirements.
+- **Interest-rate risk (IRRBB):** how changes in interest rates affect the banking book.
+- **Foreign exchange:** the bank's currency exposure.
+- **Funds transfer pricing (FTP):** the internal cost of funds charged to products and
+  business lines.
+- **Balance-sheet forecasts:** where the balance sheet is heading.
+- **Regulatory reporting:** Bank of Ghana BSD returns prepared from the official
+  templates, which is the only return family built so far, and a workspace for the
+  bank's ICAAP (internal capital adequacy assessment).
+- **Data and market data:** loading the bank's own data by upload or connection, plus
+  market data from vendors.
 
 ## Repository layout
 
