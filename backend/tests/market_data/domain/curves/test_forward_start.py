@@ -37,7 +37,7 @@ from app.market_data.domain.curves.multicurve import (
     forward_grid,
 )
 
-FIXTURE_DIR = Path(__file__).parents[2] / "fixtures" / "market_desk" / "eikon_v3"
+FIXTURE_DIR = Path(__file__).parents[3] / "fixtures" / "market_desk" / "eikon_v3"
 
 AS_OF = date(2023, 12, 29)
 IMM = next_imm_date(AS_OF)  # 2024-03-20 (third Wednesday of March 2024)

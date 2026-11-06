@@ -8,7 +8,7 @@ Covers the two leg-resolution paths the service supports:
   forward grid (read layer only) and compose the same way.
 
 Plus tenor-grid resolution and the error contract. The CIP maths itself is pinned
-in ``tests/domain/curves/test_fx_forward.py``; here the focus is orchestration.
+in ``tests/market_data/domain/curves/test_fx_forward.py``; here the focus is orchestration.
 
 This module's other-suite cases live in ``test_fx_forward.py``.
 """

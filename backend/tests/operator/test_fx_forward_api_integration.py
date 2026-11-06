@@ -2,7 +2,8 @@
 
 Preview only — the endpoint writes no curve state, just a staff audit row. The CIP
 maths + leg resolution are proven at the domain/service layers
-(``tests/domain/curves/test_fx_forward.py``, ``tests/market_data/service/test_fx_forward.py``);
+(``tests/market_data/domain/curves/test_fx_forward.py``,
+``tests/market_data/service/test_fx_forward.py``);
 here the focus is the operator wiring, auth, and the request/response contract.
 """
 
