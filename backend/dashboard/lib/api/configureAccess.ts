@@ -39,6 +39,8 @@ export function useConfigureEligibility(
     );
   const reason = profile.isLoading
     ? "Checking configuration access…"
-    : `Requires ${MODULE_LABELS[module]} configure access with Restricted data for this institution.`;
+    : profile.error
+      ? "Could not verify configuration access. Reload the page to retry."
+      : `Requires ${MODULE_LABELS[module]} configure access with Restricted data for this institution.`;
   return { allowed, reason };
 }

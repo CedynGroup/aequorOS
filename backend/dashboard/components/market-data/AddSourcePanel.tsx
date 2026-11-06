@@ -25,6 +25,7 @@ import type {
 } from "@aequoros/risk-service-api";
 import { isApiError } from "@/lib/api/client";
 import { useConfigureEligibility } from "@/lib/api/configureAccess";
+import { useUserProfile } from "@/components/profile/ProfileProvider";
 import {
   useCreateMarketDataConnection,
   useMarketDataScopes,
@@ -51,6 +52,9 @@ const PULLS_PER_MONTH: Record<string, number> = {
   MONTHLY: 1,
 };
 
+/** Read-only scalar roles: the backend mutation gate refuses them outright. */
+const READ_ONLY_ROLES = new Set(["viewer", "examiner"]);
+
 type Step = "vendor" | "credentials" | "scopes" | "schedule" | "activate";
 
 function stepsFor(vendor: VendorKey | null): Step[] {
@@ -75,6 +79,13 @@ export default function AddSourcePanel({
   // the save mirrors the exact MARKETS configure gate.
   const { allowed: canConfigure, reason: configureReason } =
     useConfigureEligibility(bankId, "markets");
+  // The representative /test pull keeps its legacy operational gate (a scalar
+  // analyst-or-higher role), separate from the configure duty: skip the
+  // automatic pull for a read-only principal instead of failing after the
+  // save succeeded.
+  const { profile } = useUserProfile();
+  const canTestPull =
+    profile !== undefined && !READ_ONLY_ROLES.has(profile.role);
   const configureRequirementId = useId();
 
   const [vendor, setVendor] = useState<VendorKey | null>(null);
@@ -153,7 +164,11 @@ export default function AddSourcePanel({
         schedule: Object.keys(schedule).length ? schedule : undefined,
       });
       setCreated(connection);
-      if (vendor !== "manual_upload" && !connection.validationError) {
+      if (
+        canTestPull &&
+        vendor !== "manual_upload" &&
+        !connection.validationError
+      ) {
         setTestResult(await test.mutateAsync(connection.id));
       }
     } catch (caught) {
@@ -450,6 +465,14 @@ export default function AddSourcePanel({
                   </p>
                 </div>
               )}
+              {!canTestPull &&
+                created.vendor !== "manual_upload" &&
+                !created.validationError && (
+                  <p role="status" className="text-caption text-slate">
+                    Configuration saved. Automatic test pull omitted: it
+                    requires an operational role beyond the configure duty.
+                  </p>
+                )}
               {testResult && (
                 <div
                   className={`rounded border px-4 py-3 space-y-2 ${
