@@ -144,7 +144,6 @@
  "layer notifications->reporting: app.services.reporting_deadline_scan -> app.services.regulatory_reporting.workflow",
  "layer policy->irrbb: app.domain.policy.parameter_shapes -> app.domain.irr.standardised_params",
  "layer rating->credit: app.services.sdi_rating -> app.services.loan_classification",
- "layer reporting->icaap: app.features.manage_package_attachments -> app.features.manage_icaap_attachments",
  "layer reporting->icaap: app.services.examiner_mode -> app.models.icaap",
  "layer reporting->icaap: app.services.examiner_mode -> app.services.icaap.guards",
  "layer reporting->icaap: app.services.regulatory_reporting.attachments -> app.models.icaap",
