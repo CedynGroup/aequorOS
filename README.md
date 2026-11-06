@@ -29,7 +29,7 @@ aequorOS/
 │   ├── app/                  #   FastAPI tenant API: the six engines, app/forecasting/ml (LSTM),
 │   │                         #   Data Engine, BoG return generation, attestation,
 │   │                         #   Postgres + row-level-security tenancy
-│   ├── app/operator/         #   staff control plane — a SEPARATE ASGI app (:8100),
+│   ├── app/operator/         #   staff control plane: a SEPARATE ASGI app (:8100),
 │   │                         #   never mounted on the tenant API
 │   ├── app/worker.py         #   background worker: live-plane refresh + official runs
 │   ├── dashboard/            #   the product UI (Next.js) → bank.aequoros.com
@@ -45,16 +45,16 @@ aequorOS/
 
 Specs, runbooks and the internal audit register live in `docs/`, which is private
 by default; `.gitignore` publishes only explicitly allow-listed files. Anything
-cited below that you cannot find here is held privately — ask for it.
+cited below that you cannot find here is held privately, so ask for it.
 
 ### Deployables
 
-| App                 | Production build                                                                                                                             | Domain                                |
-| ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------- |
-| `frontend`          | Vercel (see `frontend/README.md`)                                                                                                            | `aequoros.com`                        |
-| `backend/dashboard` | `docker-compose.dashboard.yml` — Docker Compose build pack, **repo root** as build context                                                   | `bank.aequoros.com`                   |
-| `backend`           | `backend/docker-compose.prod.yml` — `risk-migrate` (one-shot `alembic upgrade head`), `risk-api` :8000, `risk-worker`, `risk-operator` :8100 | `api.aequoros.com` on `risk-api` only |
-| `console`           | `docker-compose.console.yml` — Docker Compose build pack, **repo root** as build context                                                     | intended `console.aequoros.com`       |
+| App                 | Production build                                                                                                                            | Domain                                |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------- |
+| `frontend`          | Vercel (see `frontend/README.md`)                                                                                                           | `aequoros.com`                        |
+| `backend/dashboard` | `docker-compose.dashboard.yml`, Docker Compose build pack, **repo root** as build context                                                   | `bank.aequoros.com`                   |
+| `backend`           | `backend/docker-compose.prod.yml`: `risk-migrate` (one-shot `alembic upgrade head`), `risk-api` :8000, `risk-worker`, `risk-operator` :8100 | `api.aequoros.com` on `risk-api` only |
+| `console`           | `docker-compose.console.yml`, Docker Compose build pack, **repo root** as build context                                                     | intended `console.aequoros.com`       |
 
 `backend/.dockerignore` excludes `dashboard/`, so the API image never carries the UI.
 
@@ -300,7 +300,7 @@ CI coverage and the full gate list: [Architecture §8](ARCHITECTURE.md#8-validat
 
 ## License & security
 
-Proprietary source-available — see [LICENSE](LICENSE). Public visibility is for
+Proprietary source-available. See [LICENSE](LICENSE). Public visibility is for
 evaluation and due diligence; production or competing use requires a commercial
 license. Report vulnerabilities to security@aequoros.com.
 
@@ -323,5 +323,5 @@ is not an audit; see Status below):
 bank in production and no return yet filed with the Bank of Ghana. There is no
 SOC 2, ISO or other third-party certification, no regulatory approval or
 accreditation of any kind, and none is claimed. "Built" means computed
-server-side from ingested data behind an immutable run — it does not mean any
+server-side from ingested data behind an immutable run. It does not mean any
 figure has been filed with, or accepted by, a regulator.
