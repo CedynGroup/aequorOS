@@ -409,11 +409,15 @@ def test_configurator_gains_no_read_or_test_pull_authority(db_client: TestClient
 
     denied_list = db_client.get(CONNECTIONS, headers=auth)
     assert denied_list.status_code == 403, denied_list.text
-    assert error_envelope(denied_list)["message"].endswith("requires an active scoped binding.")
+    assert error_envelope(denied_list)["message"] == (
+        "Market data connection access requires an active scoped binding."
+    )
 
     denied_test = db_client.post(f"{CONNECTIONS}/{connection_id}/test", headers=auth)
     assert denied_test.status_code == 403, denied_test.text
-    assert "analyst" in error_envelope(denied_test)["message"]
+    assert error_envelope(denied_test)["message"] == (
+        "This action requires the 'analyst' role or higher."
+    )
 
 
 def test_restricted_viewer_keeps_test_pull_through_the_operational_gate(
@@ -429,4 +433,7 @@ def test_restricted_viewer_keeps_test_pull_through_the_operational_gate(
         headers=headers(roles=("analyst",), authorization_version=_current_version()),
     )
     assert response.status_code == 400, response.text
-    assert error_envelope(response)["message"].startswith("Manual upload connections")
+    assert error_envelope(response)["message"] == (
+        "Manual upload connections are tested by uploading a file; "
+        "use the upload endpoint."
+    )
