@@ -42,8 +42,12 @@ from app.data_engine.adapters.database_direct.drivers.base import (
 )
 from app.data_engine.adapters.database_direct.fixtures import Dump, OfflineDumpDriver
 from app.data_engine.adapters.temenos_t24.credential_vault import TemenosCredentialVault
-from app.data_engine.schemas.database_connection import DatabaseConnectionRead
+from app.data_engine.schemas.database_connection import (
+    DatabaseConnectionRead,
+    DatabaseConnectionWriteAcknowledgement,
+)
 from app.data_engine.schemas.ingestion import MappingConfigRead
+from app.data_engine.schemas.temenos_connections import TemenosConnectionWriteAcknowledgement
 from app.data_engine.service import database_connections as database_connections_service
 from app.db.base import utc_now
 from app.db.session import get_sessionmaker
@@ -69,6 +73,8 @@ T24_BASE = f"{BASE}/temenos/connections"
 
 MASTER_KEY = "data-configure-test-master-key"
 SECRET = "svc-password-that-must-never-leak"
+
+ACK_FIELDS = {"id", "bank_id", "status", "validation_error"}
 
 MAPPING_PAYLOAD: dict[str, Any] = {
     "source_system": "EXCEL_CSV",
@@ -342,10 +348,10 @@ def test_database_direct_lifecycle_succeeds_with_configurator_binding(
     assert created.status_code == 201, created.text
     assert SECRET not in created.text
     # Write-only acknowledgement (D34): the stored configuration is never echoed.
-    body = created.json()
-    assert set(body) == {"id", "bank_id", "status", "validation_error"}
-    assert body["status"] == "ACTIVE"
-    connection_id = body["id"]
+    created_ack = DatabaseConnectionWriteAcknowledgement.model_validate_json(created.text)
+    assert set(created_ack.model_dump()) == ACK_FIELDS
+    assert created_ack.status == "ACTIVE"
+    connection_id = created_ack.id
 
     # Read the stored row back through the view-gated GET (the ambient fixture
     # viewer binding covers the read; configure alone would not).
@@ -359,16 +365,20 @@ def test_database_direct_lifecycle_succeeds_with_configurator_binding(
         "PATCH", f"{DB_BASE}/{connection_id}", headers=_auth(), json={"display_name": "Renamed"}
     )
     assert patched.status_code == 200, patched.text
-    assert set(patched.json()) == {"id", "bank_id", "status", "validation_error"}
-    assert patched.json()["status"] is None  # a no-rotation patch writes no status
+    patched_ack = DatabaseConnectionWriteAcknowledgement.model_validate_json(patched.text)
+    assert set(patched_ack.model_dump()) == ACK_FIELDS
+    assert patched_ack.status is None  # a no-rotation patch writes no status
     disabled = db_client.post(f"{DB_BASE}/{connection_id}/disable", headers=_auth())
-    assert disabled.json()["status"] == "DISABLED"
+    disabled_ack = DatabaseConnectionWriteAcknowledgement.model_validate_json(disabled.text)
+    assert disabled_ack.status == "DISABLED"
     assert stored().status == "DISABLED"
     enabled = db_client.post(f"{DB_BASE}/{connection_id}/enable", headers=_auth())
-    assert enabled.json()["status"] == "ACTIVE"
+    enabled_ack = DatabaseConnectionWriteAcknowledgement.model_validate_json(enabled.text)
+    assert enabled_ack.status == "ACTIVE"
     assert stored().status == "ACTIVE"
     revoked = db_client.delete(f"{DB_BASE}/{connection_id}", headers=_auth())
-    assert revoked.json()["status"] == "REVOKED"
+    revoked_ack = DatabaseConnectionWriteAcknowledgement.model_validate_json(revoked.text)
+    assert revoked_ack.status == "REVOKED"
     assert stored().status == "REVOKED"
 
 
@@ -414,27 +424,32 @@ def test_temenos_lifecycle_and_validation_succeed_with_configurator_binding(
     assert created.status_code == 201, created.text
     assert SECRET not in created.text
     # Write-only acknowledgement (D34): the stored configuration is never echoed.
-    body = created.json()
-    assert set(body) == {"id", "bank_id", "status", "validation_error"}
-    assert body["status"] == "ACTIVE"
-    connection_id = body["id"]
+    created_ack = TemenosConnectionWriteAcknowledgement.model_validate_json(created.text)
+    assert set(created_ack.model_dump()) == ACK_FIELDS
+    assert created_ack.status == "ACTIVE"
+    connection_id = created_ack.id
 
     validated = db_client.post(f"{T24_BASE}/{connection_id}/validate", headers=_auth())
     assert validated.status_code == 200, validated.text
-    assert set(validated.json()) == {"id", "bank_id", "status", "validation_error"}
-    assert validated.json()["status"] == "ACTIVE"
+    validated_ack = TemenosConnectionWriteAcknowledgement.model_validate_json(validated.text)
+    assert set(validated_ack.model_dump()) == ACK_FIELDS
+    assert validated_ack.status == "ACTIVE"
 
     patched = db_client.request(
         "PATCH", f"{T24_BASE}/{connection_id}", headers=_auth(), json={"display_name": "Renamed"}
     )
     assert patched.status_code == 200, patched.text
-    assert patched.json()["status"] is None
+    patched_ack = TemenosConnectionWriteAcknowledgement.model_validate_json(patched.text)
+    assert patched_ack.status is None
     disabled = db_client.post(f"{T24_BASE}/{connection_id}/disable", headers=_auth())
-    assert disabled.json()["status"] == "DISABLED"
+    disabled_ack = TemenosConnectionWriteAcknowledgement.model_validate_json(disabled.text)
+    assert disabled_ack.status == "DISABLED"
     enabled = db_client.post(f"{T24_BASE}/{connection_id}/enable", headers=_auth())
-    assert enabled.json()["status"] == "ACTIVE"
+    enabled_ack = TemenosConnectionWriteAcknowledgement.model_validate_json(enabled.text)
+    assert enabled_ack.status == "ACTIVE"
     revoked = db_client.delete(f"{T24_BASE}/{connection_id}", headers=_auth())
-    assert revoked.json()["status"] == "REVOKED"
+    revoked_ack = TemenosConnectionWriteAcknowledgement.model_validate_json(revoked.text)
+    assert revoked_ack.status == "REVOKED"
 
 
 # --- Mutation responses are write-only acknowledgements (D34) -----------------
@@ -455,9 +470,6 @@ def _configure_only_auth() -> dict[str, str]:
         return headers(roles=("viewer",), authorization_version=user.authorization_version)
 
 
-ACK_FIELDS = {"id", "bank_id", "status", "validation_error"}
-
-
 @pytest.mark.usefixtures("vault_key")
 def test_database_direct_configure_only_responses_are_write_only(
     db_client: TestClient,
@@ -468,11 +480,11 @@ def test_database_direct_configure_only_responses_are_write_only(
     auth = _configure_only_auth()
     created = db_client.post(DB_BASE, headers=auth, json=_db_create_payload())
     assert created.status_code == 201, created.text
-    body = created.json()
-    assert set(body) == ACK_FIELDS
-    connection_id = body["id"]
-    assert body["status"] == "ACTIVE"
-    assert body["validation_error"] is None
+    created_ack = DatabaseConnectionWriteAcknowledgement.model_validate_json(created.text)
+    assert set(created_ack.model_dump()) == ACK_FIELDS
+    connection_id = created_ack.id
+    assert created_ack.status == "ACTIVE"
+    assert created_ack.validation_error is None
     assert "core-db.internal" not in created.text
     assert "COREBANK" not in created.text
     assert SECRET not in created.text
@@ -481,33 +493,38 @@ def test_database_direct_configure_only_responses_are_write_only(
         "PATCH", f"{DB_BASE}/{connection_id}", headers=auth, json={"display_name": "Renamed"}
     )
     assert patched.status_code == 200, patched.text
-    assert set(patched.json()) == ACK_FIELDS
-    assert patched.json()["status"] is None  # a no-rotation patch writes no status
+    patched_ack = DatabaseConnectionWriteAcknowledgement.model_validate_json(patched.text)
+    assert set(patched_ack.model_dump()) == ACK_FIELDS
+    assert patched_ack.status is None  # a no-rotation patch writes no status
     assert "Renamed" not in patched.text
 
     disabled = db_client.post(f"{DB_BASE}/{connection_id}/disable", headers=auth)
-    assert disabled.json()["status"] == "DISABLED"
+    disabled_ack = DatabaseConnectionWriteAcknowledgement.model_validate_json(disabled.text)
+    assert disabled_ack.status == "DISABLED"
     assert "core-db.internal" not in disabled.text
 
     # No-op disable of an already-disabled connection: still a bare write ack.
     again = db_client.post(f"{DB_BASE}/{connection_id}/disable", headers=auth)
     assert again.status_code == 200, again.text
-    assert set(again.json()) == ACK_FIELDS
-    assert again.json()["status"] == "DISABLED"
+    again_ack = DatabaseConnectionWriteAcknowledgement.model_validate_json(again.text)
+    assert set(again_ack.model_dump()) == ACK_FIELDS
+    assert again_ack.status == "DISABLED"
     assert "core-db.internal" not in again.text
 
     enabled = db_client.post(f"{DB_BASE}/{connection_id}/enable", headers=auth)
-    assert enabled.json()["status"] == "ACTIVE"
+    enabled_ack = DatabaseConnectionWriteAcknowledgement.model_validate_json(enabled.text)
+    assert enabled_ack.status == "ACTIVE"
     assert "core-db.internal" not in enabled.text
     revoked = db_client.delete(f"{DB_BASE}/{connection_id}", headers=auth)
-    assert revoked.json()["status"] == "REVOKED"
+    revoked_ack = DatabaseConnectionWriteAcknowledgement.model_validate_json(revoked.text)
+    assert revoked_ack.status == "REVOKED"
     assert "core-db.internal" not in revoked.text
 
     # The configure-only read boundary is intact: no read-back of the stored row.
     denied = db_client.get(f"{DB_BASE}/{connection_id}", headers=auth)
     assert denied.status_code in {403, 404}, denied.text
     with get_sessionmaker()() as db:
-        row = db.get(DatabaseDirectConnection, UUID(connection_id))
+        row = db.get(DatabaseDirectConnection, connection_id)
         assert row is not None
         assert row.display_name == "Renamed"
         assert row.status == "REVOKED"
@@ -520,41 +537,47 @@ def test_temenos_configure_only_responses_are_write_only(db_client: TestClient) 
     auth = _configure_only_auth()
     created = db_client.post(T24_BASE, headers=auth, json=_temenos_create_payload())
     assert created.status_code == 201, created.text
-    body = created.json()
-    assert set(body) == ACK_FIELDS
-    connection_id = body["id"]
-    assert body["status"] == "ACTIVE"
+    created_ack = TemenosConnectionWriteAcknowledgement.model_validate_json(created.text)
+    assert set(created_ack.model_dump()) == ACK_FIELDS
+    connection_id = created_ack.id
+    assert created_ack.status == "ACTIVE"
     assert "ofs://sample-bank" not in created.text
     assert SECRET not in created.text
 
     validated = db_client.post(f"{T24_BASE}/{connection_id}/validate", headers=auth)
     assert validated.status_code == 200, validated.text
-    assert set(validated.json()) == ACK_FIELDS
-    assert validated.json()["status"] == "ACTIVE"
+    validated_ack = TemenosConnectionWriteAcknowledgement.model_validate_json(validated.text)
+    assert set(validated_ack.model_dump()) == ACK_FIELDS
+    assert validated_ack.status == "ACTIVE"
 
     patched = db_client.request(
         "PATCH", f"{T24_BASE}/{connection_id}", headers=auth, json={"display_name": "Renamed"}
     )
     assert patched.status_code == 200, patched.text
-    assert patched.json()["status"] is None
+    patched_ack = TemenosConnectionWriteAcknowledgement.model_validate_json(patched.text)
+    assert patched_ack.status is None
     assert "Renamed" not in patched.text
 
     disabled = db_client.post(f"{T24_BASE}/{connection_id}/disable", headers=auth)
-    assert disabled.json()["status"] == "DISABLED"
+    disabled_ack = TemenosConnectionWriteAcknowledgement.model_validate_json(disabled.text)
+    assert disabled_ack.status == "DISABLED"
     assert "ofs://sample-bank" not in disabled.text
 
     # No-op disable of an already-disabled seeded connection.
     disabled_id = _seed_temenos_connection(status="DISABLED")
     again = db_client.post(f"{T24_BASE}/{disabled_id}/disable", headers=auth)
     assert again.status_code == 200, again.text
-    assert set(again.json()) == ACK_FIELDS
-    assert again.json()["status"] == "DISABLED"
+    again_ack = TemenosConnectionWriteAcknowledgement.model_validate_json(again.text)
+    assert set(again_ack.model_dump()) == ACK_FIELDS
+    assert again_ack.status == "DISABLED"
     assert "ofs://sample-bank" not in again.text
 
     enabled = db_client.post(f"{T24_BASE}/{connection_id}/enable", headers=auth)
-    assert enabled.json()["status"] == "ACTIVE"
+    enabled_ack = TemenosConnectionWriteAcknowledgement.model_validate_json(enabled.text)
+    assert enabled_ack.status == "ACTIVE"
     revoked = db_client.delete(f"{T24_BASE}/{connection_id}", headers=auth)
-    assert revoked.json()["status"] == "REVOKED"
+    revoked_ack = TemenosConnectionWriteAcknowledgement.model_validate_json(revoked.text)
+    assert revoked_ack.status == "REVOKED"
 
     # The configure-only read boundary is intact (list is view-gated; there is
     # deliberately no single-connection GET route).
@@ -572,8 +595,9 @@ def test_configure_plus_view_reads_back_through_authorized_reads(
     payload = _db_create_payload()
     created = db_client.post(DB_BASE, headers=_auth(), json=payload)
     assert created.status_code == 201, created.text
-    assert set(created.json()) == ACK_FIELDS
-    read = db_client.get(f"{DB_BASE}/{created.json()['id']}", headers=_auth())
+    created_ack = DatabaseConnectionWriteAcknowledgement.model_validate_json(created.text)
+    assert set(created_ack.model_dump()) == ACK_FIELDS
+    read = db_client.get(f"{DB_BASE}/{created_ack.id}", headers=_auth())
     assert read.status_code == 200, read.text
     stored = DatabaseConnectionRead.model_validate_json(read.text)
     assert stored.host == "core-db.internal"
