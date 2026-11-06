@@ -13,7 +13,7 @@ in both directions:
   cursor would pass it once and never return, and the report server would then
   disagree with the platform for as long as the model lived, silently.
 
-The mart is the read surface's own fixture (``tests/bi/api/test_bi_routes``) plus a
+The mart is the shared fixture in ``tests.bi.route_support`` plus a
 SECOND reporting date added here, because a cursor cannot be tested over one
 date. Every figure below is derivable by reading the two.
 

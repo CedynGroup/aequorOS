@@ -8,11 +8,7 @@ a denial names the members and carries no rows; the catalogue advertises exactly
 what the query path will serve; and neither the row cap, the page size nor the
 grid's paging can be widened from the request.
 
-The mart below is hand-built (four positions, two branches, two obligors, one
-engine copy) for the same reason the compiler's own fixture is: every expected
-number is derivable by reading it, so a failure names a broken rule instead of a
-drifted golden. It is written directly rather than through the builder because
-what is under test here is the ROUTE — the builder has its own suites.
+Shared mart construction and its rationale live in ``tests.bi.route_support``.
 
 This module's other-suite cases live in ``test_bi_routes_integration.py``.
 """

@@ -2,7 +2,7 @@
 
 Fixtures are registered explicitly by their consuming test modules, not as a
 global plugin. The shared mart is hand-built so route expectations remain
-independent of the mart builder.
+independent of the mart builder; expected figures can be derived from its rows.
 """
 
 from __future__ import annotations
@@ -363,8 +363,8 @@ def bi_on(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("BI_ENABLED", "1")
     # Every surface these sweeps cover has to be ON, or a sweep silently stops
     # exercising the route it names: the natural-language routes answer 409 for the
-    # flag before they reach authority, so with it off the zero-binding sweep below
-    # would prove nothing about them.
+    # flag before they reach authority. With it off, the zero-binding sweep in
+    # tests.bi.api.test_bi_routes_integration would prove nothing about them.
     monkeypatch.setenv("BI_NLQ_ENABLED", "1")
     get_settings.cache_clear()
 
