@@ -34,6 +34,13 @@ from app.db.base import utc_now
 from app.db.session import get_sessionmaker
 from app.identity.service import authorization
 from app.market_data.adapters.credential_manager import EncryptedDbVault
+from app.market_data.schemas.market_data_connections import (
+    MarketDataConnectionWriteAcknowledgement,
+)
+from app.market_data.schemas.market_data_sources import (
+    SourcePreferencesRead,
+    SourcePreferenceWriteAcknowledgement,
+)
 from app.models import (
     AuditEvent,
     AuthorizationBinding,
@@ -52,6 +59,8 @@ PREFERENCES = f"{BASE}/market-data/source-preferences"
 
 MASTER_KEY = "markets-configure-test-master-key"
 SECRET = "terminal-secret-that-must-never-leak"
+
+MARKETS_ACK_FIELDS = {"id", "bank_id", "status", "validation_error"}
 
 REFINITIV_CREDENTIALS: dict[str, Any] = {
     "client_id": "aequoros-app-001",
@@ -123,9 +132,7 @@ def _current_version() -> int:
 def _auth() -> dict[str, str]:
     # Scalar roles ("admin", "approver") must grant nothing by themselves:
     # only the explicit scoped binding may authorize these routes.
-    return headers(
-        roles=("admin", "approver"), authorization_version=_current_version()
-    )
+    return headers(roles=("admin", "approver"), authorization_version=_current_version())
 
 
 def _counts() -> tuple[int, int, int]:
@@ -187,9 +194,7 @@ def test_zero_grants_denied_on_connection_create(
     before = _counts()
     denied = db_client.post(CONNECTIONS, headers=_auth(), json=_vendor_payload())
     assert denied.status_code == 403, denied.text
-    assert (
-        error_envelope(denied)["message"] == "This action requires an active MARKETS binding."
-    )
+    assert error_envelope(denied)["message"] == "This action requires an active MARKETS binding."
     assert _counts() == before
 
 
@@ -241,9 +246,7 @@ def test_source_preference_put_denied_without_configure(
         json={"curves": {"source": "vendor"}, "reason": "configure-cutover denial"},
     )
     assert denied.status_code == 403, denied.text
-    assert (
-        error_envelope(denied)["message"] == "This action requires an active MARKETS binding."
-    )
+    assert error_envelope(denied)["message"] == "This action requires an active MARKETS binding."
     assert _counts() == before
 
 
@@ -265,15 +268,18 @@ def test_source_preference_put_succeeds_with_configurator_binding(
     )
     assert put.status_code == 200, put.text
     # Write-only acknowledgement (D34): only the submitted fields come back.
-    body = put.json()
-    assert body["curves"] == {"source": "vendor", "overlay": False}
-    assert body["fx"] == {"source": "bank", "overlay": None}
-    assert body["rates"] is None
+    body = SourcePreferenceWriteAcknowledgement.model_validate_json(put.text)
+    assert body.curves is not None
+    assert (body.curves.source, body.curves.overlay) == ("vendor", False)
+    assert body.fx is not None
+    assert (body.fx.source, body.fx.overlay) == ("bank", None)
+    assert body.rates is None
     # The resolved row is read through the view-gated GET (ambient viewer binding).
     again = db_client.get(PREFERENCES, headers=_auth())
     assert again.status_code == 200, again.text
-    assert again.json()["curves"] == {"source": "vendor", "overlay": False}
-    assert again.json()["fx"]["source"] == "bank"
+    resolved = SourcePreferencesRead.model_validate_json(again.text)
+    assert (resolved.curves.source, resolved.curves.overlay) == ("vendor", False)
+    assert resolved.fx.source == "bank"
 
 
 def test_connection_lifecycle_and_validation_succeed_with_configurator_binding(
@@ -284,27 +290,32 @@ def test_connection_lifecycle_and_validation_succeed_with_configurator_binding(
     assert created.status_code == 201, created.text
     assert SECRET not in created.text
     # Write-only acknowledgement (D34): the stored configuration is never echoed.
-    body = created.json()
-    assert set(body) == {"id", "bank_id", "status", "validation_error"}
-    assert body["status"] == "ACTIVE"
-    connection_id = body["id"]
+    created_ack = MarketDataConnectionWriteAcknowledgement.model_validate_json(created.text)
+    assert set(created_ack.model_dump()) == MARKETS_ACK_FIELDS
+    assert created_ack.status == "ACTIVE"
+    connection_id = created_ack.id
 
     validated = db_client.post(f"{CONNECTIONS}/{connection_id}/validate", headers=_auth())
     assert validated.status_code == 200, validated.text
-    assert set(validated.json()) == {"id", "bank_id", "status", "validation_error"}
-    assert validated.json()["status"] == "ACTIVE"
+    validated_ack = MarketDataConnectionWriteAcknowledgement.model_validate_json(validated.text)
+    assert set(validated_ack.model_dump()) == MARKETS_ACK_FIELDS
+    assert validated_ack.status == "ACTIVE"
 
     patched = db_client.request(
         "PATCH", f"{CONNECTIONS}/{connection_id}", headers=_auth(), json={"display_name": "Renamed"}
     )
     assert patched.status_code == 200, patched.text
-    assert patched.json()["status"] is None  # a no-rotation patch writes no status
+    patched_ack = MarketDataConnectionWriteAcknowledgement.model_validate_json(patched.text)
+    assert patched_ack.status is None  # a no-rotation patch writes no status
     disabled = db_client.post(f"{CONNECTIONS}/{connection_id}/disable", headers=_auth())
-    assert disabled.json()["status"] == "DISABLED"
+    disabled_ack = MarketDataConnectionWriteAcknowledgement.model_validate_json(disabled.text)
+    assert disabled_ack.status == "DISABLED"
     enabled = db_client.post(f"{CONNECTIONS}/{connection_id}/enable", headers=_auth())
-    assert enabled.json()["status"] == "ACTIVE"
+    enabled_ack = MarketDataConnectionWriteAcknowledgement.model_validate_json(enabled.text)
+    assert enabled_ack.status == "ACTIVE"
     revoked = db_client.delete(f"{CONNECTIONS}/{connection_id}", headers=_auth())
-    assert revoked.json()["status"] == "REVOKED"
+    revoked_ack = MarketDataConnectionWriteAcknowledgement.model_validate_json(revoked.text)
+    assert revoked_ack.status == "REVOKED"
 
 
 def test_manual_upload_connection_onboards_with_configurator_binding(
@@ -321,9 +332,9 @@ def test_manual_upload_connection_onboards_with_configurator_binding(
         },
     )
     assert created.status_code == 201, created.text
-    body = created.json()
-    assert set(body) == {"id", "bank_id", "status", "validation_error"}
-    assert body["status"] == "ACTIVE"
+    created_ack = MarketDataConnectionWriteAcknowledgement.model_validate_json(created.text)
+    assert set(created_ack.model_dump()) == MARKETS_ACK_FIELDS
+    assert created_ack.status == "ACTIVE"
 
 
 # --- Mutation responses are write-only acknowledgements (D34) -----------------
@@ -341,9 +352,6 @@ def _configure_only_auth() -> dict[str, str]:
     return headers(roles=("viewer",), authorization_version=_current_version())
 
 
-MARKETS_ACK_FIELDS = {"id", "bank_id", "status", "validation_error"}
-
-
 @pytest.mark.usefixtures("vault_key")
 def test_configure_only_connection_responses_are_write_only(
     db_client: TestClient,
@@ -354,29 +362,32 @@ def test_configure_only_connection_responses_are_write_only(
     auth = _configure_only_auth()
     created = db_client.post(CONNECTIONS, headers=auth, json=_vendor_payload())
     assert created.status_code == 201, created.text
-    body = created.json()
-    assert set(body) == MARKETS_ACK_FIELDS
-    connection_id = body["id"]
-    assert body["status"] == "ACTIVE"
+    created_ack = MarketDataConnectionWriteAcknowledgement.model_validate_json(created.text)
+    assert set(created_ack.model_dump()) == MARKETS_ACK_FIELDS
+    connection_id = created_ack.id
+    assert created_ack.status == "ACTIVE"
     # Not even the credential material this payload carried is echoed.
     assert "aequoros-app-001" not in created.text
     assert SECRET not in created.text
 
     validated = db_client.post(f"{CONNECTIONS}/{connection_id}/validate", headers=auth)
     assert validated.status_code == 200, validated.text
-    assert set(validated.json()) == MARKETS_ACK_FIELDS
-    assert validated.json()["status"] == "ACTIVE"
+    validated_ack = MarketDataConnectionWriteAcknowledgement.model_validate_json(validated.text)
+    assert set(validated_ack.model_dump()) == MARKETS_ACK_FIELDS
+    assert validated_ack.status == "ACTIVE"
 
     patched = db_client.request(
         "PATCH", f"{CONNECTIONS}/{connection_id}", headers=auth, json={"display_name": "Renamed"}
     )
     assert patched.status_code == 200, patched.text
-    assert set(patched.json()) == MARKETS_ACK_FIELDS
-    assert patched.json()["status"] is None  # a no-rotation patch writes no status
+    patched_ack = MarketDataConnectionWriteAcknowledgement.model_validate_json(patched.text)
+    assert set(patched_ack.model_dump()) == MARKETS_ACK_FIELDS
+    assert patched_ack.status is None  # a no-rotation patch writes no status
     assert "Renamed" not in patched.text
 
     disabled = db_client.post(f"{CONNECTIONS}/{connection_id}/disable", headers=auth)
-    assert disabled.json()["status"] == "DISABLED"
+    disabled_ack = MarketDataConnectionWriteAcknowledgement.model_validate_json(disabled.text)
+    assert disabled_ack.status == "DISABLED"
     assert "YIELD_CURVE_GHS" not in disabled.text
 
     # No-op disable of an already-disabled seeded connection (a different vendor:
@@ -384,20 +395,23 @@ def test_configure_only_connection_responses_are_write_only(
     disabled_id = _seed_connection(vendor="bloomberg", status="DISABLED")
     again = db_client.post(f"{CONNECTIONS}/{disabled_id}/disable", headers=auth)
     assert again.status_code == 200, again.text
-    assert set(again.json()) == MARKETS_ACK_FIELDS
-    assert again.json()["status"] == "DISABLED"
+    again_ack = MarketDataConnectionWriteAcknowledgement.model_validate_json(again.text)
+    assert set(again_ack.model_dump()) == MARKETS_ACK_FIELDS
+    assert again_ack.status == "DISABLED"
     assert "YIELD_CURVE_GHS" not in again.text
 
     enabled = db_client.post(f"{CONNECTIONS}/{connection_id}/enable", headers=auth)
-    assert enabled.json()["status"] == "ACTIVE"
+    enabled_ack = MarketDataConnectionWriteAcknowledgement.model_validate_json(enabled.text)
+    assert enabled_ack.status == "ACTIVE"
     revoked = db_client.delete(f"{CONNECTIONS}/{connection_id}", headers=auth)
-    assert revoked.json()["status"] == "REVOKED"
+    revoked_ack = MarketDataConnectionWriteAcknowledgement.model_validate_json(revoked.text)
+    assert revoked_ack.status == "REVOKED"
 
     # The configure-only read boundary is intact: no read-back of the stored row.
     denied_list = db_client.get(CONNECTIONS, headers=auth)
     assert denied_list.status_code in {403, 404}, denied_list.text
     with get_sessionmaker()() as db:
-        row = db.get(MarketDataConnection, UUID(connection_id))
+        row = db.get(MarketDataConnection, connection_id)
         assert row is not None
         assert row.display_name == "Renamed"
         assert row.status == "REVOKED"
@@ -430,12 +444,13 @@ def test_source_preference_partial_put_returns_only_submitted_fields(
         json={"curves": {"source": "aequor"}, "reason": "write-only ack regression"},
     )
     assert put.status_code == 200, put.text
-    body = put.json()
-    assert set(body) == {"bank_id", "curves", "fx", "rates"}
+    body = SourcePreferenceWriteAcknowledgement.model_validate_json(put.text)
+    assert set(body.model_dump()) == {"bank_id", "curves", "fx", "rates"}
     # Only the submitted field is echoed; the stored fx/rates rows stay hidden.
-    assert body["curves"] == {"source": "aequor", "overlay": None}
-    assert body["fx"] is None
-    assert body["rates"] is None
+    assert body.curves is not None
+    assert (body.curves.source, body.curves.overlay) == ("aequor", None)
+    assert body.fx is None
+    assert body.rates is None
 
     # The configure-only read boundary is intact.
     denied = db_client.get(PREFERENCES, headers=auth)
@@ -452,12 +467,14 @@ def test_source_preference_put_read_back_for_configure_plus_view(
         PREFERENCES, headers=_auth(), json={"fx": {"overlay": False}, "reason": "overlay off"}
     )
     assert put.status_code == 200, put.text
-    body = put.json()
-    assert body["fx"] == {"source": None, "overlay": False}
-    assert body["curves"] is None and body["rates"] is None
+    body = SourcePreferenceWriteAcknowledgement.model_validate_json(put.text)
+    assert body.fx is not None
+    assert (body.fx.source, body.fx.overlay) == (None, False)
+    assert body.curves is None and body.rates is None
     again = db_client.get(PREFERENCES, headers=_auth())
     assert again.status_code == 200, again.text
-    assert again.json()["fx"]["overlay"] is False
+    resolved = SourcePreferencesRead.model_validate_json(again.text)
+    assert resolved.fx.overlay is False
 
 
 # --- Exact binding dimensions ------------------------------------------------
@@ -575,6 +592,5 @@ def test_restricted_viewer_keeps_test_pull_through_the_operational_gate(
     )
     assert response.status_code == 400, response.text
     assert error_envelope(response)["message"] == (
-        "Manual upload connections are tested by uploading a file; "
-        "use the upload endpoint."
+        "Manual upload connections are tested by uploading a file; use the upload endpoint."
     )
