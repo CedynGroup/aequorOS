@@ -89,6 +89,17 @@ def _bank(db: Session) -> Bank:
         module=ModuleScope.DATA,
         sensitivity=SensitivityScope.RESTRICTED,
     )
+    # Connection lifecycle is a configure duty; the fixture officer holds it
+    # explicitly, never through the analyst bundle.
+    grant_institution_authority(
+        db,
+        organization_id=ORG_1,
+        bank_id=bank.id,
+        user_id=USER_1,
+        bundle=RoleBundle.CONFIGURATOR,
+        module=ModuleScope.DATA,
+        sensitivity=SensitivityScope.RESTRICTED,
+    )
     return bank
 
 

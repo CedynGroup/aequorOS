@@ -14,7 +14,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from datetime import timedelta
 from typing import Any
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import pytest
 from fastapi.testclient import TestClient
@@ -190,7 +190,7 @@ def _counts() -> tuple[int, int, int, int]:
         )
 
 
-def _seed_db_connection() -> str:
+def _seed_db_connection() -> UUID:
     with get_sessionmaker()() as db:
         row = DatabaseDirectConnection(
             organization_id=ORG_1,
@@ -204,10 +204,10 @@ def _seed_db_connection() -> str:
         )
         db.add(row)
         db.commit()
-        return str(row.id)
+        return row.id
 
 
-def _seed_temenos_connection() -> str:
+def _seed_temenos_connection() -> UUID:
     with get_sessionmaker()() as db:
         row = TemenosConnection(
             organization_id=ORG_1,
@@ -221,7 +221,7 @@ def _seed_temenos_connection() -> str:
         )
         db.add(row)
         db.commit()
-        return str(row.id)
+        return row.id
 
 
 def _db_create_payload() -> dict[str, Any]:
