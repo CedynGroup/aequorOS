@@ -20,6 +20,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.core.authorization import (
+    BindingStatus,
     GrantorType,
     InstitutionScope,
     ModuleScope,
@@ -29,7 +30,13 @@ from app.core.authorization import (
 )
 from app.db.session import get_sessionmaker
 from app.identity.service import authorization
-from app.models import AuditEvent, ReturnSigningPolicy, User
+from app.models import (
+    AuditEvent,
+    AuthorizationBinding,
+    ReturnSignaturePlacement,
+    ReturnSigningPolicy,
+    User,
+)
 from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID, materialize_canonical_test_book
 from tests.support.helpers import ORG_1, USER_1, error_envelope, headers
 
@@ -139,12 +146,34 @@ def book(db_client: TestClient) -> None:
         db.commit()
 
 
-def _counts() -> tuple[int, int]:
+def _counts() -> tuple[int, int, int]:
     with _session() as db:
         return (
             db.scalar(select(func.count()).select_from(AuditEvent)) or 0,
             db.scalar(select(func.count()).select_from(ReturnSigningPolicy)) or 0,
+            db.scalar(select(func.count()).select_from(ReturnSignaturePlacement)) or 0,
         )
+
+
+def _suspend_all() -> None:
+    """Suspend EVERY active binding for the fixture actor (the hermetic demo
+    tenant seeds an organization-scope viewer binding that would otherwise
+    keep the bank covered)."""
+    with get_sessionmaker()() as db:
+        bindings = list(
+            db.scalars(
+                select(AuthorizationBinding).where(
+                    AuthorizationBinding.principal_user_id == USER_1,
+                    AuthorizationBinding.status == BindingStatus.ACTIVE.value,
+                )
+            )
+        )
+        for binding in bindings:
+            binding.status = BindingStatus.SUSPENDED.value
+        user = db.get(User, USER_1)
+        assert user is not None
+        user.authorization_version += 1
+        db.commit()
 
 
 @pytest.fixture
@@ -227,7 +256,17 @@ def test_reg_configurator_without_capital_reads_still_signs_off_icaap_policies(
     org_reg_configurator: TestClient,
 ) -> None:
     """Configuration authority over an ICAAP return's signing policy needs no
-    Capital read — the two acts stay independent."""
+    Capital read — the two acts stay independent. The hermetic fixture's
+    seeded all-module viewer binding is suspended so the principal genuinely
+    holds no Capital view while configuring."""
+    _suspend_all()
+    _grant(RoleBundle.CONFIGURATOR, scope=_org_scope())
+
+    capital = org_reg_configurator.get(
+        f"/api/v1/banks/{SAMPLE_BANK_ID}/capital/dashboard", headers=_auth()
+    )
+    assert capital.status_code == 403, capital.text
+
     policy = org_reg_configurator.put(
         POLICY_URL, headers=_auth(), json={**POLICY_PAYLOAD, "return_code": "ICAAP-REPORT"}
     )
