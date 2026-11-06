@@ -246,7 +246,7 @@ Backend, from the repository root or `backend/`:
 mise run risk-service:check          # ruff, basedpyright strict baseline, then the combined hermetic pytest run
 mise run unit                        # database-free tests; any database connection fails
 mise run risk-service:test-postgres  # pytest against a disposable local Postgres, or your TEST_DATABASE_URL
-mise run integration                 # database and storage tests on disposable local services
+mise run integration                 # database and storage tests on local or supplied test services
 mise run risk-service:test-e2e       # backend Playwright contracts
 ```
 
@@ -259,10 +259,13 @@ dedicated test database. See the backend's
 for schema isolation and parallel execution. Task definitions are in
 `backend/mise.toml`.
 
-Without Docker, the Postgres and storage tasks start worktree-local PostgreSQL 17
-and MinIO on free loopback ports, with data in the git-ignored `.local-services/`.
-They never touch an existing PostgreSQL service. Force this with
-`AQS_LOCAL_SERVICES=native`:
+In default `auto` mode outside CI, the Postgres and storage tasks provision local
+services unless `TEST_DATABASE_URL` or `S3_ENDPOINT` supplies the respective
+service. Supplied URLs are reused even without Docker and must point to dedicated
+test services; CI bypasses automatic provisioning. Without Docker, provisioned
+services use native PostgreSQL 17 and MinIO on free loopback ports, with data in
+the git-ignored `.local-services/`. Set `AQS_LOCAL_SERVICES=native` to force
+worktree-local services and override supplied URLs:
 
 ```bash
 # macOS
