@@ -526,6 +526,41 @@ def test_connection_lifecycle_state_machine(db_client: TestClient) -> None:
     _run_lifecycle_machine(lambda: ConnectionLifecycleMachine(db_client))
 
 
+@pytest.mark.usefixtures("vault_key")
+def test_revoke_replay_after_failure_revocation_wipes_sealed_credential(
+    db_client: TestClient,
+) -> None:
+    """A pull failure can set REVOKED without a vault delete; a later revoke
+    replay must still wipe the sealed credential instead of returning an
+    acknowledgement over live ciphertext."""
+    with get_sessionmaker()() as db:
+        row = MarketDataConnection(
+            organization_id=ORG_1,
+            bank_id=SAMPLE_BANK_ID,
+            vendor="refinitiv",
+            display_name=f"Failure-revoked [{uuid4().hex[:8]}]",
+            status="REVOKED",
+            vault_path="vault://fixture/refinitiv",
+            scopes=["YIELD_CURVE_GHS"],
+            credential_ciphertext="sealed-ciphertext",
+            credential_fingerprint="sealed-fingerprint",
+        )
+        db.add(row)
+        db.commit()
+        connection_id = row.id
+    _grant(RoleBundle.CONFIGURATOR)
+    revoked = db_client.delete(f"{CONNECTIONS}/{connection_id}", headers=_auth())
+    assert revoked.status_code == 200, revoked.text
+    ack = MarketDataConnectionWriteAcknowledgement.model_validate_json(revoked.text)
+    assert set(ack.model_dump()) == MARKETS_ACK_FIELDS
+    assert ack.status == "REVOKED"
+    with get_sessionmaker()() as db:
+        wiped = db.get(MarketDataConnection, connection_id)
+        assert wiped is not None
+        assert wiped.credential_ciphertext is None
+        assert wiped.credential_fingerprint is None
+
+
 def test_manual_upload_connection_onboards_with_configurator_binding(
     db_client: TestClient,
 ) -> None:

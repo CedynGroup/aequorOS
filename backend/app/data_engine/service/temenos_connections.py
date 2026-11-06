@@ -572,7 +572,9 @@ def revoke_connection(
     require_data_access(db, ctx, bank_id, Permission.CONFIGURE, Sensitivity.RESTRICTED, opaque=True)
     _get_bank_or_404(db, ctx, bank_id)
     connection = _get_connection_or_404(db, ctx, bank_id, connection_id)
-    if connection.status == "REVOKED":
+    if connection.status == "REVOKED" and connection.credential_ciphertext is None:
+        # Already revoked and wiped (a pull/validation failure can set REVOKED
+        # without a vault delete): the replay is a pure acknowledgement (D34).
         return _write_ack(connection, written_status="REVOKED")
     _vault(db).delete(connection)
     connection.status = "REVOKED"
