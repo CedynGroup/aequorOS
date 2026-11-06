@@ -281,6 +281,41 @@ def test_ci_actually_runs_every_required_gate() -> None:
     assert required <= invoked, f"Not gated in CI: {sorted(required - invoked)}"
 
 
+def test_release_verification_runs_the_full_hermetic_suite() -> None:
+    """Release publication must depend on an unconditional full-suite command."""
+    document = cast(
+        dict[str, dict[str, dict[str, object]]],
+        yaml.load((WORKFLOWS / "release.yml").read_text(), Loader=yaml.BaseLoader),
+    )
+    assert document["on"]["push"]["tags"] == ["v*"]
+    jobs = document["jobs"]
+    assert "verify" in _needs(jobs["publish-risk-service"])
+    verify = jobs["verify"]
+    assert "if" not in verify
+    assert verify.get("continue-on-error", "false") == "false"
+    steps = cast(list[dict[str, object]], verify["steps"])
+    suite = next(step for step in steps if step.get("name") == "Verify hermetic test suite")
+    assert "if" not in suite
+    assert suite.get("continue-on-error", "false") == "false"
+    assert shlex.split(cast(str, suite["run"])) == ["mise", "run", "risk-service:test-full"]
+
+
+def test_local_feedback_cannot_satisfy_release_full_suite_verification(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    document = cast(
+        dict[str, dict[str, dict[str, object]]],
+        yaml.load((WORKFLOWS / "release.yml").read_text(), Loader=yaml.BaseLoader),
+    )
+    steps = cast(list[dict[str, object]], document["jobs"]["verify"]["steps"])
+    suite = next(step for step in steps if step.get("name") == "Verify hermetic test suite")
+    suite["run"] = "mise run risk-service:test"
+    _ = (tmp_path / "release.yml").write_text(yaml.safe_dump(document))
+    monkeypatch.setitem(globals(), "WORKFLOWS", tmp_path)
+    with pytest.raises(AssertionError):
+        test_release_verification_runs_the_full_hermetic_suite()
+
+
 @pytest.mark.parametrize(
     ("script", "expected"),
     [

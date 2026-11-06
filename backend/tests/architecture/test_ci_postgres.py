@@ -28,7 +28,12 @@ def run_git(root: Path, *args: str) -> str:
 
 
 @pytest.fixture
-def selection_repo(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> tuple[Path, str, Path]:
+def selection_repo(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, request: pytest.FixtureRequest
+) -> tuple[Path, str, Path]:
+    report_context = cast(str | None, getattr(request, "param", None))
+    if report_context is not None:
+        monkeypatch.setenv(report_context, str(tmp_path / "outer-ci-reports"))
     # Synthetic local runs own their reports, independently of the outer CI job.
     for variable in ("CI_UNIT_REPORT_DIR", "CI_E2E_REPORT_DIR"):
         monkeypatch.delenv(variable, raising=False)
@@ -105,12 +110,25 @@ def test_local_unchanged_requires_a_known_clean_merge_base(
     assert local_unchanged(root) == (state == "unchanged")
 
 
+@pytest.mark.parametrize("auto_workers", [1, 8])
+@pytest.mark.parametrize(
+    "selection_repo", [None, "CI_UNIT_REPORT_DIR", "CI_E2E_REPORT_DIR"], indirect=True
+)
 def test_local_profile_executes_selected_modules_and_guarded_unit_fallback(
     selection_repo: tuple[Path, str, Path],
     capfd: pytest.CaptureFixture[str],
     monkeypatch: pytest.MonkeyPatch,
+    auto_workers: int,
 ) -> None:
     root, base, test = selection_repo
+    leaf_body = (
+        "def test_leaf():\n"
+        "    import os\n"
+        "    from pathlib import Path\n"
+        "    _ = Path('worker-count.txt').write_text(os.environ['PYTEST_XDIST_WORKER_COUNT'])\n"
+        "    assert {value} == {value}\n"
+    )
+    test.write_text(leaf_body.format(value=1))
     other = test.with_name("test_other.py")
     other.write_text("def test_other():\n    assert True\n")
     _ = run_git(root, "add", "-A")
@@ -120,10 +138,11 @@ def test_local_profile_executes_selected_modules_and_guarded_unit_fallback(
     report = root / "result.xml"
     monkeypatch.setenv("PYTEST_ADDOPTS", f"-p scripts.test_suites_plugin --junitxml={report}")
     monkeypatch.setenv("PYTHONPATH", str(BACKEND))
-    test.write_text("def test_leaf():\n    assert 2 == 2\n")
+    monkeypatch.setenv("PYTEST_XDIST_AUTO_NUM_WORKERS", str(auto_workers))
+    test.write_text(leaf_body.format(value=2))
     assert run_fast(root) == 0
     assert [case.get("name") for case in ET.parse(report).iter("testcase")] == ["test_leaf"]
-    assert "2 workers" in capfd.readouterr().out
+    assert int((root / "backend/worker-count.txt").read_text()) == min(auto_workers, 2)
     report.unlink()
     # The local fallback must not turn a production edit into the complete suite.
     (root / "backend/app.py").write_text("VALUE = 2\n")
@@ -182,6 +201,9 @@ def test_serial_owner_edits_use_guarded_unit_fallback(
     ]
 
 
+@pytest.mark.parametrize(
+    "selection_repo", [None, "CI_UNIT_REPORT_DIR", "CI_E2E_REPORT_DIR"], indirect=True
+)
 def test_local_full_and_last_failed_use_real_pytest_cache_without_full_fallback(
     selection_repo: tuple[Path, str, Path],
     monkeypatch: pytest.MonkeyPatch,
