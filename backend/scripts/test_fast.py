@@ -42,15 +42,7 @@ def run(root: Path, *, full: bool = False, last_failed: bool = False) -> int:
         arguments = ["-n", "0", "--lf", "--last-failed-no-failures=none"]
     else:
         files = affected_files(root, "pull_request", "origin/main", worktree=True)
-        # CI's separate owners keep schema, cluster roles, locks and storage serial.
-        serial = (
-            "tests/db/",
-            "tests/storage/",
-            "tests/case/api/test_calculations_integration.py",
-            "tests/case/api/test_liquidity_integration.py",
-            "tests/case/api/test_scenarios_integration.py",
-        )
-        if files and not any(path.startswith(serial) for path in files):
+        if files:
             print(
                 f"Affected integration modules (at most two workers): {', '.join(files)}. "
                 "Not complete coverage; CI remains authoritative.",

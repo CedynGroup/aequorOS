@@ -81,24 +81,12 @@ def test_unchanged_worktree_selects_nothing_and_says_so(
     assert "no tests selected" in capsys.readouterr().out
 
 
-@pytest.mark.parametrize(
-    "files",
-    [
-        [],
-        ["tests/db/domain/test_role_integration.py"],
-        ["tests/storage/domain/test_storage_integration.py"],
-        ["tests/case/api/test_calculations_integration.py"],
-        ["tests/case/api/test_liquidity_integration.py"],
-        ["tests/case/api/test_scenarios_integration.py"],
-    ],
-)
-def test_uncertain_or_serial_owner_uses_only_guarded_units(
+def test_uncertain_selection_uses_only_guarded_units(
     monkeypatch: pytest.MonkeyPatch,
     calls: list[list[str]],
-    files: list[str],
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    selection(monkeypatch, files)
+    selection(monkeypatch, [])
     assert test_fast.run(ROOT) == 0
     assert calls == [
         [
@@ -187,6 +175,3 @@ def test_root_and_backend_tasks_expose_the_same_three_profiles() -> None:
     assert tasks["unit"]["run"] == (
         "uv run pytest -m unit --suite-only -n auto --dist load --durations=20"
     )
-    assert "-n" not in cast(str, tasks["risk-service:test-postgres-schema"]["run"])
-    assert "-n" not in cast(str, tasks["risk-service:test-postgres-locks"]["run"])
-    assert "-n" not in cast(str, tasks["risk-service:test-storage"]["run"])

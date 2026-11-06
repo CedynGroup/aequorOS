@@ -600,9 +600,21 @@ hermetic coverage, use `test-full`; Postgres/service confidence still comes from
 the dedicated owners. No full local milestone run is required. CI commands and
 coverage gates are unchanged.
 
+The profiling trial on frozen revision `8a11cc46` passed the same 509 cases
+serially in 99.808s and with four actual workers in 57.387s: 42.50% lower
+wall time for that cohort, with higher CPU and RSS. This is not a full-suite
+speedup prediction or a current reproduction of the reported 40-minute run.
+The local two-worker cap limits resource use; it is not a measured optimum.
+CI already runs parallel/sharded owners and remains the full-suite authority.
+
+The ranked recommendations are: (1) distinguish fast local feedback from explicit
+full runs, using conservative affected selection and bounded parallelism as above;
+(2) investigate application and fixture costs separately; (3) investigate collection
+costs separately. The latter two are future work, not optimizations delivered here.
+
 Testmon is not a dependency of this profile: its coverage SQLite connections
-conflict with the intentional unit database guard, and complete backend parallel
-cache training was not established. No guard bypass or new dependency selector
+conflict with the intentional unit database guard, and backend parallel
+cache training was interrupted, so whole-tree adoption was not established. No guard bypass or new dependency selector
 is introduced.
 
 To reuse an existing Postgres service for the gated tests (migrations, RLS),

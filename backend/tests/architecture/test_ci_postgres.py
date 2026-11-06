@@ -132,6 +132,53 @@ def test_local_profile_executes_selected_modules_and_guarded_unit_fallback(
     assert "guarded unit suite ONLY" in capfd.readouterr().out
 
 
+@pytest.mark.parametrize(
+    "module",
+    [
+        "tests/db/test_roles_integration.py",
+        "tests/storage/test_storage_integration.py",
+        "tests/case/api/test_calculations_integration.py",
+        "tests/case/api/test_liquidity_integration.py",
+        "tests/case/api/test_scenarios_integration.py",
+    ],
+)
+def test_serial_owner_edits_use_guarded_unit_fallback(
+    selection_repo: tuple[Path, str, Path],
+    monkeypatch: pytest.MonkeyPatch,
+    module: str,
+) -> None:
+    root, _base, _test = selection_repo
+    target = root / "backend" / module
+    target.parent.mkdir(parents=True, exist_ok=True)
+    target.write_text("def test_owner():\n    assert True\n")
+    _ = run_git(root, "add", "-A")
+    _ = run_git(root, "commit", "-qm", "serial owner baseline")
+    base = run_git(root, "rev-parse", "HEAD")
+    _ = run_git(root, "update-ref", "refs/remotes/origin/main", base)
+    target.write_text("def test_owner():\n    assert False\n")
+    commands: list[list[str]] = []
+
+    def execute(command: list[str], *, cwd: Path, env: dict[str, str]) -> int:
+        commands.append(command)
+        return 0
+
+    monkeypatch.setattr(subprocess, "call", execute)
+    assert run_fast(root) == 0
+    assert len(commands) == 1
+    arguments = commands[0][3:]
+    assert arguments == [
+        "-n",
+        "auto",
+        "--maxprocesses=2",
+        "--max-worker-restart=0",
+        "--dist",
+        "load",
+        "-m",
+        "unit",
+        "--suite-only",
+    ]
+
+
 def test_local_full_and_last_failed_use_real_pytest_cache_without_full_fallback(
     selection_repo: tuple[Path, str, Path],
     monkeypatch: pytest.MonkeyPatch,
