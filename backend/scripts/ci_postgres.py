@@ -108,8 +108,9 @@ def affected_files(root: Path, event: str, base: str, *, worktree: bool = False)
     """Only body or AST-neutral edits to unreferenced domain tests can narrow a run.
 
     Production, fixture, decorator, collection, config, addition/deletion and
-    uncertain changes all run the full suite. No inferred application dependency
-    graph can quietly miss an indirect consumer.
+    uncertain changes return no narrowed selection. Callers choose the fallback:
+    full coverage in CI, guarded units for local feedback. No inferred application
+    dependency graph can quietly miss an indirect consumer.
     """
     try:
         if event != "pull_request" or not base:
