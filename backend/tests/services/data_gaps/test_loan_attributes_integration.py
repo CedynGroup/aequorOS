@@ -497,6 +497,16 @@ def test_uploaded_loans_csv_in_template_shape_lands_attributes(
             module=ModuleScope.DATA,
             sensitivity=SensitivityScope.RESTRICTED,
         )
+        # Mapping onboarding is a configure duty; grant it explicitly.
+        grant_institution_authority(
+            db,
+            organization_id=ORG_1,
+            bank_id=SAMPLE_BANK_ID,
+            user_id=USER_1,
+            bundle=RoleBundle.CONFIGURATOR,
+            module=ModuleScope.DATA,
+            sensitivity=SensitivityScope.RESTRICTED,
+        )
         db.commit()
     _push(
         db_client,
