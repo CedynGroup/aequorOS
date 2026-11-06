@@ -18,7 +18,7 @@ import {
   XCircle,
 } from "lucide-react";
 import type {
-  TemenosConnectionRead,
+  TemenosConnectionWriteAcknowledgement,
   TemenosDomainInfoRead,
   TemenosTestPullRead,
 } from "@aequoros/risk-service-api";
@@ -71,7 +71,11 @@ export default function AddConnectionPanel({
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [touchedDomains, setTouchedDomains] = useState(false);
   const [stepIndex, setStepIndex] = useState(0);
-  const [created, setCreated] = useState<TemenosConnectionRead | null>(null);
+  // Write-only lifecycle acknowledgement (D27/D34): the stored row is read
+  // back through the view-gated connection list, never from this response.
+  const [created, setCreated] = useState<
+    TemenosConnectionWriteAcknowledgement | null
+  >(null);
   const [testResult, setTestResult] = useState<TemenosTestPullRead | null>(
     null,
   );
@@ -486,11 +490,13 @@ export default function AddConnectionPanel({
           {created && (
             <div className="space-y-3">
               <div className="flex items-center gap-2">
-                <ConnectionStatusPill status={created.status} />
+                {/* A create acknowledgement always carries the written status;
+                    an absent one only means "not yet activated". */}
+                <ConnectionStatusPill status={created.status ?? "TESTING"} />
                 <p className="text-body text-navy">
-                  {created.status === "TESTING"
+                  {created.status === "TESTING" || created.status == null
                     ? "Connection stored, but credential validation failed — fix it from the connection card (Rotate credentials)."
-                    : `${modeName(created.connectionMode)} configuration saved. Live transport remains unavailable.`}
+                    : `${modeName(mode ?? "OFS")} configuration saved. Live transport remains unavailable.`}
                 </p>
               </div>
               {created.validationError && (

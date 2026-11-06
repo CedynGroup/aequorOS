@@ -11,8 +11,8 @@
 import { useId, useState } from "react";
 import { CheckCircle2, Loader2, Plug, XCircle } from "lucide-react";
 import type {
-  DatabaseConnectionRead,
   DatabaseConnectionTestResult,
+  DatabaseConnectionWriteAcknowledgement,
 } from "@aequoros/risk-service-api";
 import { useDataPermission } from "@/lib/api/dataAccess";
 import { useConfigureEligibility } from "@/lib/api/configureAccess";
@@ -48,7 +48,11 @@ export default function AddConnectionPanel({
   const test = useTestDatabaseConnection(bankId);
 
   const [form, setForm] = useState<DbFormState>(() => emptyFormState("oracle"));
-  const [created, setCreated] = useState<DatabaseConnectionRead | null>(null);
+  // Write-only lifecycle acknowledgement (D27/D34): the stored row is read
+  // back through the view-gated connection list, never from this response.
+  const [created, setCreated] = useState<
+    DatabaseConnectionWriteAcknowledgement | null
+  >(null);
   const [testResult, setTestResult] =
     useState<DatabaseConnectionTestResult | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -176,11 +180,13 @@ export default function AddConnectionPanel({
       ) : (
         <div className="space-y-3">
           <div className="flex items-center gap-2">
-            <ConnectionStatusPill status={created.status} />
+            {/* A create acknowledgement always carries the written status; an
+                absent one only means "not yet activated". */}
+            <ConnectionStatusPill status={created.status ?? "TESTING"} />
             <p className="text-body text-navy">
-              {created.status === "TESTING"
+              {created.status === "TESTING" || created.status == null
                 ? "Connection stored, but credential validation failed — fix it from the connection card (Edit)."
-                : `${created.displayName} created.`}
+                : `${form.displayName.trim()} created.`}
             </p>
           </div>
 
