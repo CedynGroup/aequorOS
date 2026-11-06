@@ -1,0 +1,156 @@
+{
+  "schema_version": 1,
+  "baseline": "71fce713",
+  "sources": [
+    "app/core/authorization.py:ROLE_PERMISSIONS, evaluate_permission",
+    "app/identity/service/authorization.py:create_role_binding, evaluate_permission, runtime_condition_checks",
+    "tests/core/test_authorization.py:ROLE_EXPECTATIONS",
+    "tests/identity/service/test_role_scope_factories_integration.py",
+    "docs/authorization_foundation.md:Standing rules at a glance, Authority model"
+  ],
+  "action_preconditions": [
+    {"kind": "maker_checker", "passed": true, "reason": "Caller explicitly supplies a passing workflow verdict for bundle characterization"},
+    {"kind": "step_up", "passed": true, "reason": "Caller explicitly supplies a passing step-up verdict for bundle characterization"}
+  ],
+  "resources": {
+    "account": {"scope": "organization", "bank": null, "module": "account", "sensitivity": "restricted"},
+    "liquidity": {"scope": "institution", "bank": "primary", "module": "liq", "sensitivity": "confidential"},
+    "regulatory": {"scope": "institution", "bank": "primary", "module": "reg", "sensitivity": "restricted"},
+    "audit": {"scope": "institution", "bank": "primary", "module": "audit", "sensitivity": "restricted"},
+    "data": {"scope": "institution", "bank": "primary", "module": "data", "sensitivity": "restricted"},
+    "credit": {"scope": "institution", "bank": "primary", "module": "credit", "sensitivity": "restricted"},
+    "sibling": {"scope": "institution", "bank": "sibling", "module": "liq", "sensitivity": "confidential"},
+    "foreign": {"scope": "institution", "bank": "foreign", "module": "liq", "sensitivity": "confidential"},
+    "missing": {"scope": "institution", "bank": "missing", "module": "liq", "sensitivity": "confidential"},
+    "restricted_liquidity": {"scope": "institution", "bank": "primary", "module": "liq", "sensitivity": "restricted"}
+  },
+  "roles": [
+    {
+      "bundle": "member", "principal_type": "human", "resource": "account",
+      "scope": "organization", "bank": null, "module": "account", "sensitivity": "restricted", "data_scope": "all",
+      "allowed": [],
+      "denied": ["view", "create", "edit", "run", "review", "approve", "configure", "export", "validate", "sign_off", "submit", "administer", "ingest"]
+    },
+    {
+      "bundle": "viewer", "principal_type": "human", "resource": "liquidity",
+      "scope": "institution", "bank": "primary", "module": "liq", "sensitivity": "confidential", "data_scope": "all",
+      "allowed": ["view"],
+      "denied": ["create", "edit", "run", "review", "approve", "configure", "export", "validate", "sign_off", "submit", "administer", "ingest"]
+    },
+    {
+      "bundle": "auditor", "principal_type": "human", "resource": "audit",
+      "scope": "institution", "bank": "primary", "module": "audit", "sensitivity": "restricted", "data_scope": "all",
+      "allowed": ["view"],
+      "denied": ["create", "edit", "run", "review", "approve", "configure", "export", "validate", "sign_off", "submit", "administer", "ingest"]
+    },
+    {
+      "bundle": "security_officer", "principal_type": "human", "resource": "audit",
+      "scope": "institution", "bank": "primary", "module": "audit", "sensitivity": "restricted", "data_scope": "all",
+      "allowed": ["view", "export"],
+      "denied": ["create", "edit", "run", "review", "approve", "configure", "validate", "sign_off", "submit", "administer", "ingest"]
+    },
+    {
+      "bundle": "compliance_officer", "principal_type": "human", "resource": "audit",
+      "scope": "institution", "bank": "primary", "module": "audit", "sensitivity": "restricted", "data_scope": "all",
+      "allowed": ["view", "export"],
+      "denied": ["create", "edit", "run", "review", "approve", "configure", "validate", "sign_off", "submit", "administer", "ingest"]
+    },
+    {
+      "bundle": "analyst", "principal_type": "human", "resource": "liquidity",
+      "scope": "institution", "bank": "primary", "module": "liq", "sensitivity": "confidential", "data_scope": "all",
+      "allowed": ["view", "create", "edit", "run", "validate", "export"],
+      "denied": ["review", "approve", "configure", "sign_off", "submit", "administer", "ingest"]
+    },
+    {
+      "bundle": "approver", "principal_type": "human", "resource": "regulatory",
+      "scope": "institution", "bank": "primary", "module": "reg", "sensitivity": "restricted", "data_scope": "all",
+      "allowed": ["view", "review", "approve"],
+      "denied": ["create", "edit", "run", "configure", "export", "validate", "sign_off", "submit", "administer", "ingest"]
+    },
+    {
+      "bundle": "validator", "principal_type": "human", "resource": "regulatory",
+      "scope": "institution", "bank": "primary", "module": "reg", "sensitivity": "restricted", "data_scope": "all",
+      "allowed": ["view", "submit"],
+      "denied": ["create", "edit", "run", "review", "approve", "configure", "export", "validate", "sign_off", "administer", "ingest"]
+    },
+    {
+      "bundle": "account_admin", "principal_type": "human", "resource": "account",
+      "scope": "organization", "bank": null, "module": "account", "sensitivity": "restricted", "data_scope": "all",
+      "allowed": ["administer"],
+      "denied": ["view", "create", "edit", "run", "review", "approve", "configure", "export", "validate", "sign_off", "submit", "ingest"]
+    },
+    {
+      "bundle": "org_owner", "principal_type": "human", "resource": "account",
+      "scope": "organization", "bank": null, "module": "account", "sensitivity": "restricted", "data_scope": "all",
+      "allowed": ["administer"],
+      "denied": ["view", "create", "edit", "run", "review", "approve", "configure", "export", "validate", "sign_off", "submit", "ingest"]
+    },
+    {
+      "bundle": "integration_writer", "principal_type": "machine", "resource": "data",
+      "scope": "institution", "bank": "primary", "module": "data", "sensitivity": "restricted", "data_scope": "all",
+      "allowed": ["ingest"],
+      "denied": ["view", "create", "edit", "run", "review", "approve", "configure", "export", "validate", "sign_off", "submit", "administer"]
+    },
+    {
+      "bundle": "bi_reader", "principal_type": "machine", "resource": "credit",
+      "scope": "institution", "bank": "primary", "module": "credit", "sensitivity": "restricted", "data_scope": "all",
+      "allowed": ["view"],
+      "denied": ["create", "edit", "run", "review", "approve", "configure", "export", "validate", "sign_off", "submit", "administer", "ingest"]
+    }
+  ],
+  "grants": {
+    "viewer_liq": {"bundle": "viewer", "scope": "institution", "bank": "primary", "module": "liq", "sensitivity": "confidential", "data_scope": "all"},
+    "viewer_reg": {"bundle": "viewer", "scope": "institution", "bank": "primary", "module": "reg", "sensitivity": "restricted", "data_scope": "all"},
+    "viewer_data": {"bundle": "viewer", "scope": "institution", "bank": "primary", "module": "data", "sensitivity": "confidential", "data_scope": "all"},
+    "viewer_restricted": {"bundle": "viewer", "scope": "institution", "bank": "primary", "module": "liq", "sensitivity": "restricted", "data_scope": "all"},
+    "viewer_all": {"bundle": "viewer", "scope": "institution", "bank": "primary", "module": "all", "sensitivity": "all", "data_scope": "all"},
+    "viewer_org": {"bundle": "viewer", "scope": "organization", "bank": null, "module": "liq", "sensitivity": "confidential", "data_scope": "all"},
+    "analyst_aggregated": {"bundle": "analyst", "scope": "institution", "bank": "primary", "module": "liq", "sensitivity": "aggregated", "data_scope": "all"},
+    "analyst_reg": {"bundle": "analyst", "scope": "institution", "bank": "primary", "module": "reg", "sensitivity": "confidential", "data_scope": "all"},
+    "approver_reg": {"bundle": "approver", "scope": "institution", "bank": "primary", "module": "reg", "sensitivity": "restricted", "data_scope": "all"},
+    "validator_reg": {"bundle": "validator", "scope": "institution", "bank": "primary", "module": "reg", "sensitivity": "restricted", "data_scope": "all"},
+    "owner_account": {"bundle": "org_owner", "scope": "organization", "bank": null, "module": "account", "sensitivity": "restricted", "data_scope": "all"},
+    "admin_bank": {"bundle": "account_admin", "scope": "institution", "bank": "primary", "module": "account", "sensitivity": "restricted", "data_scope": "all"},
+    "credit_branch": {"bundle": "viewer", "scope": "institution", "bank": "primary", "module": "credit", "sensitivity": "restricted", "data_scope": "branch", "values": ["synthetic-branch"]},
+    "credit_region": {"bundle": "viewer", "scope": "institution", "bank": "primary", "module": "credit", "sensitivity": "restricted", "data_scope": "region", "values": ["synthetic-region"]}
+  },
+  "scenarios": [
+    {"id": "viewer_exact", "grants": ["viewer_liq"], "resource": "liquidity", "action": "view", "allowed": true, "reason": "allowed"},
+    {"id": "viewer_sibling", "grants": ["viewer_liq"], "resource": "sibling", "action": "view", "allowed": false, "reason": "no_active_exact_binding"},
+    {"id": "viewer_foreign", "grants": ["viewer_liq"], "resource": "foreign", "action": "view", "allowed": false, "reason": "resource_tenant_mismatch"},
+    {"id": "missing_bank", "grants": ["viewer_liq"], "resource": "missing", "action": "view", "allowed": false, "reason": "resource_institution_not_in_tenant"},
+    {"id": "wrong_module", "grants": ["viewer_data"], "resource": "liquidity", "action": "view", "allowed": false, "reason": "no_active_exact_binding"},
+    {"id": "confidential_is_not_restricted", "grants": ["viewer_liq"], "resource": "restricted_liquidity", "action": "view", "allowed": false, "reason": "no_active_exact_binding"},
+    {"id": "restricted_is_not_a_hierarchy", "grants": ["viewer_restricted"], "resource": "liquidity", "action": "view", "allowed": false, "reason": "no_active_exact_binding"},
+    {"id": "explicit_all", "grants": ["viewer_all"], "resource": "restricted_liquidity", "action": "view", "allowed": true, "reason": "allowed"},
+    {"id": "explicit_organization_covers_sibling", "grants": ["viewer_org"], "resource": "sibling", "action": "view", "allowed": true, "reason": "allowed"},
+    {"id": "organization_never_covers_foreign", "grants": ["viewer_org"], "resource": "foreign", "action": "view", "allowed": false, "reason": "resource_tenant_mismatch"},
+    {"id": "scalar_admin_has_no_grants", "grants": [], "resource": "liquidity", "action": "view", "allowed": false, "reason": "no_active_exact_binding"},
+    {"id": "owner_has_no_product_read", "grants": ["owner_account"], "resource": "liquidity", "action": "view", "allowed": false, "reason": "no_active_exact_binding"},
+    {"id": "owner_with_separate_read", "grants": ["owner_account", "viewer_liq"], "resource": "liquidity", "action": "view", "allowed": true, "reason": "allowed"},
+    {"id": "partial_scope_rows_do_not_compose", "grants": ["analyst_aggregated", "analyst_reg"], "resource": "liquidity", "action": "run", "allowed": false, "reason": "no_active_exact_binding"},
+    {"id": "partial_role_rows_do_not_compose", "grants": ["viewer_liq", "analyst_reg"], "resource": "liquidity", "action": "run", "allowed": false, "reason": "no_active_exact_binding"},
+    {"id": "approve_requires_context", "grants": ["approver_reg"], "resource": "regulatory", "action": "approve", "allowed": false, "reason": "condition_denied:maker_checker"},
+    {"id": "approve_context_passes", "grants": ["approver_reg"], "resource": "regulatory", "action": "approve", "conditions": [{"kind": "maker_checker", "passed": true, "reason": "Explicit passing workflow verdict"}], "allowed": true, "reason": "allowed"},
+    {"id": "approve_context_veto", "grants": ["approver_reg"], "resource": "regulatory", "action": "approve", "conditions": [{"kind": "maker_checker", "passed": false, "reason": "Explicit failed workflow verdict"}], "allowed": false, "reason": "condition_denied:maker_checker"},
+    {"id": "submit_requires_context", "grants": ["validator_reg"], "resource": "regulatory", "action": "submit", "allowed": false, "reason": "condition_denied:maker_checker"},
+    {"id": "submit_context_passes", "grants": ["validator_reg"], "resource": "regulatory", "action": "submit", "conditions": [{"kind": "maker_checker", "passed": true, "reason": "Explicit passing workflow verdict"}], "allowed": true, "reason": "allowed"},
+    {"id": "viewer_reg_export_is_denied", "grants": ["viewer_reg"], "resource": "regulatory", "action": "export", "allowed": false, "reason": "no_active_exact_binding"},
+    {"id": "validator_reg_export_is_denied", "grants": ["validator_reg"], "resource": "regulatory", "action": "export", "allowed": false, "reason": "no_active_exact_binding"},
+    {"id": "inactive_identity", "grants": ["viewer_liq"], "resource": "liquidity", "action": "view", "principal_active": false, "allowed": false, "reason": "principal_not_active"},
+    {"id": "demo_mode_veto", "grants": ["viewer_liq"], "resource": "liquidity", "action": "view", "demo_mode": true, "allowed": false, "reason": "condition_denied:demo_mode"},
+    {"id": "credit_branch_grants_permission_not_rows", "grants": ["credit_branch"], "resource": "credit", "action": "view", "allowed": true, "reason": "allowed"},
+    {"id": "credit_region_grants_permission_not_rows", "grants": ["credit_region"], "resource": "credit", "action": "view", "allowed": true, "reason": "allowed"},
+    {"id": "owner_administers_account", "grants": ["owner_account"], "resource": "account", "action": "administer", "allowed": true, "reason": "allowed"},
+    {"id": "bank_admin_does_not_cover_organization", "grants": ["admin_bank"], "resource": "account", "action": "administer", "allowed": false, "reason": "no_active_exact_binding"}
+  ],
+  "bank_detail": [
+    {"scenario": "viewer_exact", "bank": "primary", "status": 200},
+    {"scenario": "viewer_sibling", "bank": "sibling", "status": 404},
+    {"scenario": "viewer_foreign", "bank": "foreign", "status": 404},
+    {"scenario": "scalar_admin_has_no_grants", "bank": "primary", "status": 404},
+    {"scenario": "owner_has_no_product_read", "bank": "primary", "status": 404},
+    {"scenario": "owner_with_separate_read", "bank": "primary", "status": 200},
+    {"scenario": "explicit_organization_covers_sibling", "bank": "sibling", "status": 200}
+  ]
+}
