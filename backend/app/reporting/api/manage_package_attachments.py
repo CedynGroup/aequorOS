@@ -25,7 +25,6 @@ from app.api.deps import DbSession, PackageEdit, PackageView
 from app.core.config import get_settings
 from app.core.content_disposition import attachment_headers
 from app.data_engine.public import IngestionStorage
-from app.icaap.api.manage_icaap_attachments import IcaapStorage
 from app.reporting.schemas.packages import (
     PackageAttachmentListRead,
     PackageAttachmentRead,
@@ -34,6 +33,7 @@ from app.reporting.schemas.packages import (
 from app.reporting.service import attachments as package_attachments
 from app.schemas.common import ErrorResponse
 from app.storage import StorageError, StorageLocation, Tier
+from app.storage.deps import HttpStorage
 from app.storage.public import (
     DocumentBinding,
     DocumentFamily,
@@ -114,7 +114,7 @@ async def upload_package_attachment(  # noqa: PLR0913 - a multipart upload is it
     package_id: UUID,
     db: DbSession,
     access: PackageEdit,
-    storage: IcaapStorage,
+    storage: HttpStorage,
     file: UploadFile,
     kind: Annotated[str, Form(max_length=40)],
     title: Annotated[str, Form(max_length=200)],
