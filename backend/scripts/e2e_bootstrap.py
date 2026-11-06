@@ -233,6 +233,60 @@ def _create_sod_owner(session: Session, password_hash: str) -> None:
     )
 
 
+def _grant_bootstrap_configure(session: Session, users: dict[str, User]) -> None:
+    """Mapping and connection onboarding are configure duties.
+
+    The shared bootstrap officers hold the explicit exact-bank DATA
+    Configurator sentence. Configure still grants no read.
+    """
+    for role in ("admin", "analyst"):
+        authorization.create_role_binding(
+            session,
+            organization_id=DEMO_ORG_ID,
+            principal_user_id=users[role].id,
+            principal_type=PrincipalType.HUMAN,
+            role_bundle=RoleBundle.CONFIGURATOR,
+            scope=authorization.BindingScope(
+                InstitutionScope.INSTITUTION,
+                SAMPLE_BANK_ID,
+                ModuleScope.DATA,
+                SensitivityScope.RESTRICTED,
+                data_scope=DataScope.ALL,
+                data_scope_values=(),
+            ),
+            grantor=authorization.GrantorRef(
+                GrantorType.SYSTEM,
+                "e2e-bootstrap",
+            ),
+            reason="exercise the dashboard through explicit effective authority",
+        )
+
+
+def _create_legacy_integration_key(session: Session, users: dict[str, User]) -> None:
+    """A legacy unscoped integration principal for key-custody journeys."""
+    service_user = User(
+        organization_id=DEMO_ORG_ID,
+        email="e2e.legacy.integration@service.aequoros.invalid",
+        display_name="E2E legacy unscoped integration",
+        role="viewer",
+        auth_provider="service",
+        is_active=True,
+    )
+    session.add(service_user)
+    session.flush()
+    session.add(
+        IntegrationKey(
+            organization_id=DEMO_ORG_ID,
+            bank_id=None,
+            service_user_id=service_user.id,
+            label="Legacy core banking feed",
+            key_prefix="aeq_live_LEGY…",
+            key_hash=hashlib.sha256(b"e2e legacy unscoped integration key").hexdigest(),
+            created_by=users["admin"].id,
+        )
+    )
+
+
 def main() -> None:
     database_url = os.environ["DATABASE_URL"]
     if "sqlite" not in database_url:
@@ -341,27 +395,7 @@ def main() -> None:
         _materialize_book(session)
         session.flush()
         _seed_canonical_positions(session)
-        legacy_service_user = User(
-            organization_id=DEMO_ORG_ID,
-            email="e2e.legacy.integration@service.aequoros.invalid",
-            display_name="E2E legacy unscoped integration",
-            role="viewer",
-            auth_provider="service",
-            is_active=True,
-        )
-        session.add(legacy_service_user)
-        session.flush()
-        session.add(
-            IntegrationKey(
-                organization_id=DEMO_ORG_ID,
-                bank_id=None,
-                service_user_id=legacy_service_user.id,
-                label="Legacy core banking feed",
-                key_prefix="aeq_live_LEGY…",
-                key_hash=hashlib.sha256(b"e2e legacy unscoped integration key").hexdigest(),
-                created_by=users["admin"].id,
-            )
-        )
+        _create_legacy_integration_key(session, users)
         for role, bundle in (
             ("admin", RoleBundle.ANALYST),
             ("approver", RoleBundle.APPROVER),
@@ -389,6 +423,7 @@ def main() -> None:
                 ),
                 reason="exercise the dashboard through explicit effective authority",
             )
+        _grant_bootstrap_configure(session, users)
         authorization.create_role_binding(
             session,
             organization_id=DEMO_ORG_ID,
