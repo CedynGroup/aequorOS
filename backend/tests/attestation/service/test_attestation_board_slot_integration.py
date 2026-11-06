@@ -53,7 +53,9 @@ from tests.fixtures.canonical_bank_fixture import (
     materialize_canonical_test_book,
 )
 
-pytestmark = pytest.mark.usefixtures("return_generation_authority")
+pytestmark = pytest.mark.usefixtures(
+    "return_generation_authority", "reporting_configure_authority"
+)
 
 CTX = TenantContext(
     organization_id=DEMO_ORG_ID, actor_user_id=DEMO_USER_ID, authorization_version=1
