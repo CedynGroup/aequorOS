@@ -114,7 +114,7 @@ your own instances.
 # Postgres :15432 and MinIO :9000 (console :9001). Name the services: a bare
 # `docker compose up -d` also builds and starts the API and worker containers,
 # and the API container listens on :8000.
-cd backend && docker compose up -d risk-postgres risk-minio risk-minio-init
+(cd backend && docker compose up -d risk-postgres risk-minio risk-minio-init)
 ```
 
 Then, in `backend/.env`, set
@@ -135,6 +135,9 @@ DATABASE_URL=postgresql+psycopg://postgres:postgres@127.0.0.1:15432/risk_service
 #    For a database whose roles are already prepared, apply migrations alone:
 #    mise run risk-service:migrate
 
+# Steps 2-4 each run in the foreground. Start each one in its own terminal,
+# from backend/.
+#
 # 2. Tenant API on :8000, the port the dashboard expects
 #    (NEXT_PUBLIC_RISK_API_BASE_URL=http://127.0.0.1:8000/api/v1). It includes the
 #    LSTM cash-flow module, which trains on the first forecast call or reuses
@@ -166,8 +169,10 @@ pnpm --filter @aequoros/frontend  dev   # marketing site     http://localhost:30
 ```
 
 Check the backend with `GET /api/health/live` (process is up) and
-`GET /api/health/ready` (database, storage and worker are reachable). The dashboard
-answers `GET /api/health/live` on its own port.
+`GET /api/health/ready` (the database and object storage are reachable, and no
+queued jobs are overdue). Readiness does not probe the worker process itself, so a
+stopped worker with no overdue jobs can still report ready, and overdue jobs show as
+`degraded` in the response body. Check the worker terminal separately. The dashboard answers `GET /api/health/live` on its own port.
 
 **There is no seed step.** Create the first staff account with
 `uv run python scripts/create_operator.py --email <you> --display-name <name> --role operator_admin`
@@ -197,8 +202,9 @@ default deployment image. See `backend/README.md`.
 - **Wrong port.** The dashboard looks for the API on `:8000`. `mise run
 risk-service:dev` defaults to `:8001`; pass `PORT=8000`.
 - **Empty Treasury/ALM pages.** The worker is not running.
-- **`/api/health/ready` returns 503.** It needs the database, object storage and
-  worker. `/api/health/live` only proves the process is up.
+- **`/api/health/ready` returns 503.** It needs a reachable database and object
+  storage. Overdue jobs (often a stopped worker) show as `degraded` in the response
+  body instead. `/api/health/live` only proves the process is up.
 - **Sign-in fails.** The backend refuses to issue tokens without `AUTH_JWT_SECRET`,
   and the dashboard needs its own `AUTH_SECRET`. Replace both template placeholders.
 - **Signed out after a restart or host change.** `localhost` and `127.0.0.1` have
@@ -263,8 +269,10 @@ pnpm --filter @aequoros/frontend typecheck && pnpm --filter @aequoros/frontend l
   && pnpm --filter @aequoros/frontend build
 pnpm --filter @aequoros/risk-service-api test
 
-# After an API change, regenerate the client and prove it is fresh. The second
-# command must leave git clean; it is also the pre-push hook.
+# After an API change, regenerate the client, then commit the regenerated
+# backend/openapi-schema.json and packages/risk-service-api changes. The freshness
+# check reads their git status, so it fails while they are modified, staged or
+# untracked. It does not clean them, and it is also the pre-push hook.
 mise run risk-service:openapi-client
 mise run risk-service:api-fresh
 ```
