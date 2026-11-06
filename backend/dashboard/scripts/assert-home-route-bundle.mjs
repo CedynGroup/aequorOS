@@ -170,7 +170,8 @@ const loadableManifestPath = resolve(routeDir, "react-loadable-manifest.json");
 const loadableManifest = JSON.parse(readFileSync(loadableManifestPath, "utf8"));
 const routeEntries = Object.values(loadableManifest);
 
-const entryChunks = (entry) => entry.files.filter((file) => file.endsWith(".js"));
+const entryChunks = (entry) =>
+  entry.files.filter((file) => file.endsWith(".js"));
 const entryTexts = (entry) =>
   entryChunks(entry).map((chunk) => ({
     chunk,

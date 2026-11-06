@@ -37,11 +37,8 @@ move PR.
 The dashboard-wide ECharts entrance (`EChart.tsx`), deferred canvas
 (`EChartCanvas.tsx`) and resolved theme (`echartsTheme.ts`) live in
 `components/charts/`. Import the entrance and theme directly, not through BI's
-public interface. Only the entrance loads the canvas, with
-`dynamic(..., { ssr: false })`. The home deferred loader explicitly imports that
-entrance to retain its two-stage manifest without eagerly importing the canvas.
-`scripts/assert-home-route-bundle.mjs` enforces both deferred stages and keeps the
-chart runtime out of the home entry graph.
+public interface. See the [dashboard runtime guide](README.md#query-cache-and-refresh-policy)
+for canvas deferral and the home bundle guard contract.
 
 ## The ratchet
 

@@ -245,7 +245,10 @@ export default function WidgetRenderer({
   const refusal = biRefusalSentence(error);
   if (refusal !== null) {
     return (
-      <RefusedWidget sentence={refusal} height={height + WIDGET_CHROME_HEIGHT} />
+      <RefusedWidget
+        sentence={refusal}
+        height={height + WIDGET_CHROME_HEIGHT}
+      />
     );
   }
 
