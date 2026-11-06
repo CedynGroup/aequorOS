@@ -286,9 +286,14 @@ mise run risk-service:api-fresh
 
 CI coverage and the full gate list: [Architecture §8](ARCHITECTURE.md#8-validation-commands).
 
-## Security features
+## License & security
 
-A few of the protections the platform has today:
+Proprietary source-available — see [LICENSE](LICENSE). Public visibility is for
+evaluation and due diligence; production or competing use requires a commercial
+license. Report vulnerabilities to security@aequoros.com.
+
+Protections the code supports today, beyond the data isolation described above (this
+is not an audit; see Status below):
 
 - **Fine-grained access control.** Access comes from explicit role bindings scoped to
   an organization or bank, and anything not granted is denied. Enforcement is rolled
@@ -296,22 +301,11 @@ A few of the protections the platform has today:
 - **Encrypted connections.** Outside local and test environments, services require
   TLS and refuse plaintext connections and unverified certificates, including to the
   database.
-- **Tenant isolation.** Each bank organization's data is separated with PostgreSQL
-  row-level security.
 - **Sign-in protection.** Passwords are stored as Argon2id hashes, repeated failed
   attempts lock the account, and organizations can sign in through their own OIDC
   identity provider.
 - **Bank-held encryption keys.** A bank can connect its own AWS KMS key to encrypt its
   stored files and sensitive fields. This is optional.
-
-This list describes what the code does. It is not a security audit or a
-certification (see [Status](#license--security)).
-
-## License & security
-
-Proprietary source-available — see [LICENSE](LICENSE). Public visibility is for
-evaluation and due diligence; production or competing use requires a commercial
-license. Report vulnerabilities to security@aequoros.com.
 
 **Status.** The platform is built and running against a live database, with no
 bank in production and no return yet filed with the Bank of Ghana. There is no
