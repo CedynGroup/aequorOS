@@ -21,6 +21,7 @@ from sqlalchemy import event, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
+from app.core.authorization import ModuleScope, RoleBundle, SensitivityScope
 from app.market_data.schemas.market_data_overlays import MarketDataOverlayCreate
 from app.market_data.schemas.market_data_sources import (
     CategoryPreferenceUpdate,
@@ -41,12 +42,17 @@ from app.models import (
     LineageRecord,
     MarketDataSourcePreference,
 )
+from tests.support.factories.authorization import grant_institution_authority
 from tests.support.helpers import ORG_1, ORG_2, USER_1, USER_2
 
 AS_OF = date(2026, 7, 15)
 NOW = datetime(2026, 7, 15, 12, 0, tzinfo=UTC)
-CTX = TenantContext(organization_id=ORG_1, actor_user_id=USER_1)
-CTX_2 = TenantContext(organization_id=ORG_2, actor_user_id=USER_2)
+CTX = TenantContext(
+    organization_id=ORG_1, actor_user_id=USER_1, authorization_version=1
+)
+CTX_2 = TenantContext(
+    organization_id=ORG_2, actor_user_id=USER_2, authorization_version=1
+)
 
 
 def _seed_bank(db: Session, organization_id: str = ORG_1) -> str:
@@ -61,6 +67,18 @@ def _seed_bank(db: Session, organization_id: str = ORG_1) -> str:
     )
     db.add(bank)
     db.flush()
+    if organization_id == ORG_1:
+        # The preference PUT is a configure duty; the fixture officer holds the
+        # exact markets/configure/restricted binding explicitly, never a scalar role.
+        grant_institution_authority(
+            db,
+            organization_id=organization_id,
+            bank_id=bank.id,
+            user_id=USER_1,
+            bundle=RoleBundle.CONFIGURATOR,
+            module=ModuleScope.MARKETS,
+            sensitivity=SensitivityScope.RESTRICTED,
+        )
     return bank.id
 
 

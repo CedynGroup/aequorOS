@@ -3,8 +3,10 @@
 Under ``/banks/{bank_id}/market-data``:
 
 - ``GET/PUT /source-preferences`` — read / upsert the per-category base-plane
-  + overlay selection (defaults synthesised when no row; PUT keeps the legacy
-  analyst gate until configuration authority lands, and is audited).
+  + overlay selection (defaults synthesised when no row; the PUT is a
+  configuration duty carrying the interactive-human scoped-mutation boundary
+  while the service requires an exact markets/configure/restricted binding,
+  and is audited).
 - ``GET /planes`` — the same scope resolved under each base plane, side by
   side, so the bank sees what each choice would feed the engines.
 - ``GET /curves/{curve_name}/forward-grid`` — the published forward grid for a
@@ -20,7 +22,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Query
 
-from app.api.deps import DbSession, MarketsPublishedView, MutationTenant
+from app.api.deps import DbSession, MarketsPublishedView, ScopedMutationTenant
 from app.core.authorization import Module, Permission, Sensitivity
 from app.identity import public as scoped_authorization
 from app.market_data.schemas.market_data_sources import (
@@ -56,7 +58,7 @@ def update_source_preferences(
     bank_id: str,
     payload: SourcePreferencesUpdate,
     db: DbSession,
-    ctx: MutationTenant,
+    ctx: ScopedMutationTenant,
 ) -> SourcePreferencesRead:
     return market_data_sources.set_preference(db, ctx, bank_id, payload)
 
