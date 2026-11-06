@@ -74,13 +74,8 @@ from app.core.config import get_settings
 from app.db.base import utc_now
 from app.identity.service import authorization
 from app.models import AuditEvent, AuthorizationBinding, Bank, Job, User
-from tests.bi.api.test_bi_routes_integration import (
-    AS_OF,
-    BANK_ID,
-    BUILT_AT,
-    FINGERPRINT,
-    seed_bi_mart,
-)
+from tests.bi.route_data import AS_OF, BANK_ID, BUILT_AT, FINGERPRINT
+from tests.bi.route_support import seed_bi_mart
 from tests.support.helpers import ORG_1, headers
 
 PRIOR = default_compare_to(AS_OF)

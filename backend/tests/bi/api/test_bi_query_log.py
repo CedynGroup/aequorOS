@@ -19,9 +19,7 @@ from __future__ import annotations
 
 from app.bi.schemas.query import BiQuery
 from app.bi.service import query_log
-from tests.bi.api.test_bi_routes_integration import (
-    BALANCE_BY_BRANCH_QUERY,
-)
+from tests.bi.route_data import BALANCE_BY_BRANCH_QUERY
 
 
 def test_the_digest_is_stable_and_question_specific() -> None:

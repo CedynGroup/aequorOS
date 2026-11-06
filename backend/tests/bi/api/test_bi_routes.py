@@ -26,7 +26,7 @@ import pytest
 from app.bi.api import read_bi
 from app.bi.schemas.query import BiDateRange, BiTime
 from app.bi.service import compiler
-from tests.bi.api.test_bi_routes_integration import AS_OF
+from tests.bi.route_data import AS_OF
 
 
 @pytest.mark.parametrize(

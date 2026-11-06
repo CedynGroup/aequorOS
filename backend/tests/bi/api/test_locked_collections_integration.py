@@ -30,7 +30,7 @@ from app.core.key_management.presentation import SESSION_STATE
 from app.core.key_management.types import KeyReference, KeyStatus, KeyUnavailableError
 from app.identity.public import Bank
 from app.models import Job
-from tests.bi.api import test_bi_routes_integration as routes
+from tests.bi import route_support as routes
 from tests.support.helpers import ORG_1, USER_1, headers
 
 mart = routes.mart

@@ -27,13 +27,8 @@ from app.core.config import get_settings
 from app.db.session import get_bi_engine
 from app.models import AuditEvent, Bank, Job, User
 from tests.bi.api.test_bi_exports_integration import SUMMARY_QUERY
-from tests.bi.api.test_bi_routes_integration import (
-    AGGREGATE_ONLY,
-    BANK_ID,
-    BASE,
-    grant_only,
-    seed_bi_mart,
-)
+from tests.bi.route_data import BANK_ID, BASE
+from tests.bi.route_support import AGGREGATE_ONLY, grant_only, seed_bi_mart
 from tests.db import test_database_roles_integration as role_tests
 from tests.support.database import managed_engine
 from tests.support.helpers import ORG_1, USER_1
