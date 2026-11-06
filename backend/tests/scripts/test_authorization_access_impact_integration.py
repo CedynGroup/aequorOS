@@ -47,6 +47,57 @@ from tests.support.database import isolated_database
 
 ORG = "OR-IMPCT001"
 BANK = "BK-IMPCT001"
+OTHER_BANK = "BK-IMPCT002"
+
+
+def _configure_mismatch_cases() -> list[tuple[str, dict[str, object]]]:
+    """Each single-dimension corruption of an exact configurator credit binding."""
+    now = datetime.now(UTC)
+    return [
+        ("wrong-module", {"module_scope": "data"}),
+        ("wrong-sensitivity", {"sensitivity_scope": "confidential"}),
+        ("wrong-role", {"role_bundle": "viewer"}),
+        ("wrong-institution", {"institution_id": OTHER_BANK}),
+        ("expired", {"valid_until": now - timedelta(days=1)}),
+        ("not-yet-valid", {"valid_from": now + timedelta(days=1)}),
+        ("suspended", {"status": "suspended"}),
+        (
+            "revoked",
+            {
+                "status": "revoked",
+                "revoked_at": now,
+                "revoked_by_type": "system",
+                "revoked_by_id": "test",
+                "revoked_reason": "test",
+            },
+        ),
+        (
+            "branch-scoped",
+            {"data_scope_kind": DataScope.BRANCH.value, "data_scope_values": ["B1"]},
+        ),
+    ]
+
+
+CONFIGURE_MISMATCH_CASES = _configure_mismatch_cases()
+
+
+def _mismatched_binding_values(user: User, now: datetime, case: str) -> dict[str, object]:
+    """The exact configurator credit binding each mismatch case corrupts in one dimension."""
+    return {
+        "id": uuid4(),
+        "organization_id": ORG,
+        "principal_user_id": user.id,
+        "principal_type": "human",
+        "role_bundle": "configurator",
+        "institution_scope": "institution",
+        "institution_id": BANK,
+        "module_scope": "credit",
+        "sensitivity_scope": "restricted",
+        "granted_by_type": "system",
+        "granted_by_id": f"test:{case}",
+        "grant_reason": "impact matrix",
+        "valid_from": now - timedelta(days=2),
+    }
 
 
 def _rendered_cells(rows: list[UserAccess]) -> dict[str, dict[str, str]]:
@@ -326,10 +377,9 @@ def _assert_configure_lifecycle(db: Session) -> None:
     """Wrong dimensions, incomplete rows and ineffective lifecycle never compose."""
     now = datetime.now(UTC)
     user = _user(db, "matrix@impact.example", role="approver")
-    other_bank = "BK-IMPCT002"
     db.add(
         Bank(
-            id=other_bank,
+            id=OTHER_BANK,
             organization_id=ORG,
             name="Other bank",
             short_name="Other",
@@ -340,41 +390,12 @@ def _assert_configure_lifecycle(db: Session) -> None:
         )
     )
     db.commit()
-    for index, overrides in enumerate(
-        [
-            {"module_scope": "data"},
-            {"sensitivity_scope": "confidential"},
-            {"role_bundle": "viewer"},
-            {"institution_id": other_bank},
-            {"valid_until": now - timedelta(days=1)},
-            {"valid_from": now + timedelta(days=1)},
-            {"status": "suspended"},
-            {
-                "status": "revoked",
-                "revoked_at": now,
-                "revoked_by_type": "system",
-                "revoked_by_id": "test",
-                "revoked_reason": "test",
-            },
-            {"data_scope_kind": DataScope.BRANCH.value, "data_scope_values": ["B1"]},
-        ]
-    ):
-        values: dict[str, object] = {
-            "id": uuid4(),
-            "organization_id": ORG,
-            "principal_user_id": user.id,
-            "principal_type": "human",
-            "role_bundle": "configurator",
-            "institution_scope": "institution",
-            "institution_id": BANK,
-            "module_scope": "credit",
-            "sensitivity_scope": "restricted",
-            "granted_by_type": "system",
-            "granted_by_id": f"test:{index}",
-            "grant_reason": "impact matrix",
-            "valid_from": now - timedelta(days=2),
-        }
-        db.add(AuthorizationBinding(**(values | overrides)))
+    # Insert every mismatch case as pooled evidence; each case is asserted on its
+    # own by test_one_mismatched_dimension_denies_configure_credit below.
+    db.add_all(
+        AuthorizationBinding(**(_mismatched_binding_values(user, now, case) | overrides))
+        for case, overrides in CONFIGURE_MISMATCH_CASES
+    )
     db.commit()
     report = build_configure_report(db, organization_id=ORG, now=now)
     rows = [
@@ -395,7 +416,49 @@ def _assert_configure_lifecycle(db: Session) -> None:
     )
     # The fixture's other tenants and banks never enter this tenant's inventory.
     assert {row.organization_id for row in report.principals} == {ORG}
-    assert {row.institution_id for row in report.impacts} == {BANK, other_bank, None}
+    assert {row.institution_id for row in report.impacts} == {BANK, OTHER_BANK, None}
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    [pytest.param(overrides, id=case) for case, overrides in CONFIGURE_MISMATCH_CASES],
+)
+def test_one_mismatched_dimension_denies_configure_credit(
+    db_session: Session,
+    overrides: dict[str, object],
+) -> None:
+    """Each mismatch is its own reported case and never composes into configure authority."""
+    now = datetime.now(UTC)
+    db_session.add(Organization(id=ORG, name="Impact matrix"))
+    user = _user(db_session, "matrix@impact.example", role="approver")
+    db_session.add_all(
+        Bank(
+            id=bank_id,
+            organization_id=ORG,
+            name=name,
+            short_name=name,
+            currency="GHS",
+            jurisdiction_code="GH",
+            license_type="universal_bank",
+            institution_type=FALLBACK_TYPE_CODE,
+        )
+        for bank_id, name in ((BANK, "Impact Bank"), (OTHER_BANK, "Other bank"))
+    )
+    db_session.commit()
+    db_session.add(
+        AuthorizationBinding(**(_mismatched_binding_values(user, now, "case") | overrides))
+    )
+    db_session.commit()
+    report = build_configure_report(db_session, organization_id=ORG, now=now)
+    rows = [
+        row
+        for row in report.impacts
+        if row.principal_id == str(user.id)
+        and row.module == "credit"
+        and row.institution_id == BANK
+    ]
+    assert rows and all(not row.after.allowed for row in rows)
+    assert all(row.required_grant is not None for row in rows)
 
 
 def _read_json(path: Path) -> dict[str, object]:
@@ -432,7 +495,7 @@ def _assert_configure_artifacts(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    """Exercise successful CLI output, collision refusal and empty-inventory failure."""
+    """Exercise successful CLI output and collision refusal."""
     report = build_configure_report(db, organization_id=ORG)
     destination = tmp_path / "configure"
     write_artifacts(report, destination)
@@ -491,10 +554,18 @@ def _assert_configure_artifacts(
             == 2
         )
         assert "no complete assessment" in capsys.readouterr().err
-    _assert_configure_empty_inventory(tmp_path, capsys)
 
 
-def _assert_configure_empty_inventory(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+@pytest.mark.parametrize(
+    "explicit_output",
+    [False, True],
+    ids=["default-output-dir", "explicit-output-dir"],
+)
+def test_configure_empty_inventory_publishes_no_evidence(
+    tmp_path: Path,
+    capsys: pytest.CaptureFixture[str],
+    explicit_output: bool,
+) -> None:
     """An invisible tenant inventory must not publish successful evidence in either mode."""
     url = f"sqlite:///{tmp_path / 'empty-organizations.sqlite'}"
     with isolated_database(url) as database:
@@ -502,12 +573,12 @@ def _assert_configure_empty_inventory(tmp_path: Path, capsys: pytest.CaptureFixt
         assert isinstance(table, Table)
         table.create(database.engine())
     destination = tmp_path / "empty-inventory"
-    for output_args in ([], ["--output-dir", str(destination)]):
-        assert configure_impact.main(["--database-url", url, *output_args]) == 2
-        output = capsys.readouterr()
-        assert not output.out
-        assert "no complete assessment" in output.err
-        assert not destination.exists()
+    output_args = ["--output-dir", str(destination)] if explicit_output else []
+    assert configure_impact.main(["--database-url", url, *output_args]) == 2
+    output = capsys.readouterr()
+    assert not output.out
+    assert "no complete assessment" in output.err
+    assert not destination.exists()
 
 
 def _assert_configure_evaluator_failure(db: Session, monkeypatch: pytest.MonkeyPatch) -> None:
