@@ -53,6 +53,7 @@ pr:
 # Additive to the normal review, never a replacement for it. CodeRabbit 0.9.2's
 # native --gate critical exits 2 for critical findings; do not parse review prose.
 # Optional availability/auth/review failures are disclosed, not claimed clean.
+# Allow 20 minutes for review; the outer deadline includes auth/setup overhead.
 gates:
   - name: coderabbit-critical
     after: review
@@ -62,7 +63,7 @@ gates:
         exit 0
       }
       result=0
-      "$deadline" --kill-after=30s 20m mise exec -- python3 - <<'PY' || result=$?
+      "$deadline" --kill-after=30s 25m mise exec -- python3 - <<'PY' || result=$?
       import json
       import shutil
       import subprocess
@@ -92,7 +93,7 @@ gates:
               skip("CLI is not authenticated")
           review = subprocess.run(
               [str(cli), "review", "--agent", "--committed", "--gate", "critical"],
-              timeout=900,
+              timeout=1200,
           )
       except (OSError, ValueError, subprocess.TimeoutExpired) as error:
           skip(f"review unavailable ({type(error).__name__})")
