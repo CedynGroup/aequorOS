@@ -168,11 +168,16 @@ pnpm --filter @aequoros/console   dev   # operator console   http://localhost:30
 pnpm --filter @aequoros/frontend  dev   # marketing site     http://localhost:3000
 ```
 
-Check the backend with `GET /api/health/live` (process is up) and
-`GET /api/health/ready` (the database and object storage are reachable, and no
-queued jobs are overdue). Readiness does not probe the worker process itself, so a
-stopped worker with no overdue jobs can still report ready, and overdue jobs show as
-`degraded` in the response body. Check the worker terminal separately. The dashboard answers `GET /api/health/live` on its own port.
+Check the backend with `GET /api/health/live` (the process is up) and
+`GET /api/health/ready`. In the readiness response, read `checks.database.status`,
+`checks.storage.status` and `checks.worker.status`, not only the top-level `status`.
+With `APP_ENV=local` and `DATABASE_URL` unset, the database and worker checks are
+`skipped` and the top-level `status` can still be `ok`, so confirm
+`checks.database.status` is `ok`. A worker check of `ok` only means no queued core job
+is more than `WORKER_STALE_JOB_SECONDS` (default 900 seconds, 15 minutes) past its run
+time. It does not prove the worker process is running, or that no job is running late
+by less than that. A longer delay shows as `degraded`. Check the worker terminal
+separately. The dashboard answers `GET /api/health/live` on its own port.
 
 **There is no seed step.** Create the first staff account with
 `uv run python scripts/create_operator.py --email <you> --display-name <name> --role operator_admin`
@@ -204,8 +209,9 @@ risk-service:dev` defaults to `:8001`; pass `PORT=8000`.
 - **Empty Treasury/ALM pages.** Check that the bank has loaded financial data
   through the Data Engine and that the worker is running to compute it.
 - **`/api/health/ready` returns 503.** It needs a reachable database and object
-  storage. Overdue jobs (often a stopped worker) show as `degraded` in the response
-  body instead. `/api/health/live` only proves the process is up.
+  storage (with `DATABASE_URL` unset in local mode, the database check is skipped
+  instead). Core jobs more than `WORKER_STALE_JOB_SECONDS` (default 900 seconds)
+  overdue, often a stopped worker, show as `degraded` in the response body instead. `/api/health/live` only proves the process is up.
 - **Sign-in fails.** The backend refuses to issue tokens without `AUTH_JWT_SECRET`,
   and the dashboard needs its own `AUTH_SECRET`. Replace both template placeholders.
 - **Signed out after a restart or host change.** `localhost` and `127.0.0.1` have
