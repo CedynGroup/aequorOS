@@ -135,7 +135,10 @@ risk-service:dev` (or the `uv run fastapi dev app/main.py --port 8000` command i
 
 Database: configure `backend/.env` and apply the migration chain before starting the API.
 On a local database, `mise run risk-service:bootstrap-db` prepares the development
-roles and applies the chain; see [Run Migrations](#run-migrations).
+roles and applies the chain. It does not read `backend/.env`: export the intended
+administrator `DATABASE_URL` or pass it as an environment assignment; otherwise it
+defaults to the bundled compose database on `127.0.0.1:15432`. See
+[Run Migrations](#run-migrations).
 
 Authentication uses the API `DATABASE_URL` sessionmaker. Operator sessions use
 `OPERATOR_DATABASE_URL`, falling back only to `DATABASE_URL`. Neither uses
@@ -822,7 +825,9 @@ mise run risk-service:migrate
 
 On a disposable local database where you hold the administrator credential,
 `mise run risk-service:bootstrap-db` first prepares the development roles and then
-applies the same chain. It requires `APP_ENV=local` and a `localhost`, `127.0.0.1` or
+applies the same chain. It does not read `backend/.env`: export the intended
+administrator `DATABASE_URL` or pass it as an environment assignment; otherwise it
+defaults to the bundled compose database on `127.0.0.1:15432`. It requires `APP_ENV=local` and a `localhost`, `127.0.0.1` or
 `risk-postgres` host, and refuses anything else. See the
 [database role handoff](../docs/ops/database-roles.md#migration-and-local-development-order).
 
