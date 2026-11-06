@@ -1,7 +1,7 @@
 """Public modules declare re-exports, never local implementations or initialization.
 
 This is a syntax contract, not a claim that importing a dependency has no side
-effects. Parse files without importing them, preserving deliberate import order.
+effects. Parse and compile without executing files, preserving deliberate import order.
 """
 
 from __future__ import annotations
@@ -80,6 +80,7 @@ def _violations(app: Path) -> list[str]:
         relative = path.relative_to(app)
         try:
             tree = ast.parse(path.read_text(encoding="utf-8"), filename=str(path))
+            _ = compile(tree, str(path), "exec", dont_inherit=True)
         except SyntaxError as error:
             failures.append(f"{relative}:{error.lineno}: invalid syntax")
             continue
@@ -132,6 +133,12 @@ def public_app(tmp_path: Path) -> Path:
             "# isort: split\n"
             "from .service import late  # noqa: E402 - deliberate order\n"
             '__all__ = ["late"]\n'
+        ),
+        (
+            '"""Interface."""\n'
+            "from __future__ import annotations\n"
+            "from .service import Result as Result\n"
+            '__all__: tuple[str, ...] = ("Result",)\n'
         ),
     ],
 )
@@ -197,3 +204,24 @@ def test_public_interface_guard_rejects_missing_tree(tmp_path: Path) -> None:
 def test_public_interface_guard_rejects_invalid_syntax(public_app: Path) -> None:
     (public_app / "capital" / "public.py").write_text("from .service import (\n", encoding="utf-8")
     assert _violations(public_app) == ["capital/public.py:1: invalid syntax"]
+
+
+@pytest.mark.parametrize(
+    "source,line",
+    [
+        ("import os\nfrom __future__ import annotations\n", 2),
+        ("from __future__ import nonexistent_feature\n", 1),
+        ("from __future__ import *\n", 1),
+    ],
+)
+def test_public_interface_guard_rejects_compile_invalid_imports(
+    public_app: Path, source: str, line: int
+) -> None:
+    path = public_app / "capital" / "public.py"
+    path.write_text(source, encoding="utf-8")
+    # CPython's source compiler is the independent validity oracle; neither
+    # compiling nor scanning may execute the fixture's imports.
+    with pytest.raises(SyntaxError) as error:
+        _ = compile(source, str(path), "exec", dont_inherit=True)
+    assert error.value.lineno == line
+    assert _violations(public_app) == [f"capital/public.py:{line}: invalid syntax"]
