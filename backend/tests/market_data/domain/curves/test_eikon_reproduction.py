@@ -32,7 +32,7 @@ Findings (verified by these tests):
   observances and is thus not that calendar; the generator-based :data:`USA`
   calendar reproduces every fixture date.
 
-Run ``pytest tests/domain/curves/test_eikon_reproduction.py -s`` to print the
+Run ``pytest tests/market_data/domain/curves/test_eikon_reproduction.py -s`` to print the
 benchmark table.
 """
 
@@ -55,7 +55,7 @@ from app.market_data.domain.curves.multicurve import (
     forward_grid,
 )
 
-FIXTURE_DIR = Path(__file__).parents[2] / "fixtures" / "market_desk" / "eikon_v3"
+FIXTURE_DIR = Path(__file__).parents[3] / "fixtures" / "market_desk" / "eikon_v3"
 
 AS_OF = date(2023, 12, 29)
 GRID_SPOT = date(2023, 12, 31)  # the grid tab's anchor (quarter-end on/after as-of)
