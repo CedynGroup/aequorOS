@@ -44,6 +44,7 @@ from tests.fixtures.canonical_bank_fixture import (
 pytestmark = [
     pytest.mark.usefixtures("fx_run_authority"),
     pytest.mark.usefixtures("return_generation_authority"),
+    pytest.mark.usefixtures("reporting_configure_authority"),
 ]
 
 MAKER = TenantContext(
