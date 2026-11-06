@@ -9,8 +9,9 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
  *
  * Saving a vendor connection is a MARKETS configure duty; the representative
  * /test pull keeps its separate legacy operational gate (a scalar
- * analyst-or-higher role). A read-only principal must finish the wizard with
- * the configuration saved and the automatic pull omitted — not save first and
+ * admin/approver/analyst role — ``account_admin`` sits outside the ladder).
+ * A principal without that role must finish the wizard with the
+ * configuration saved and the automatic pull omitted — not save first and
  * then watch the pull fail with a 403.
  */
 
@@ -128,8 +129,17 @@ it("omits the automatic test pull for a read-only principal", async () => {
 });
 
 it("runs the automatic test pull for an operational principal", async () => {
-  fixture.role = "account_admin";
+  fixture.role = "analyst";
   await saveVendorConnection();
   await waitFor(() => expect(testPull).toHaveBeenCalledWith("md-conn"));
   expect(screen.queryByText(/Automatic test pull omitted/i)).toBeNull();
+});
+
+it("omits the automatic test pull for an account-only administrator", async () => {
+  // ``account_admin`` sits outside the operational role ladder the backend
+  // mutation gate enforces, so the pull would 403 after a successful save.
+  fixture.role = "account_admin";
+  await saveVendorConnection();
+  expect(testPull).not.toHaveBeenCalled();
+  expect(screen.getByText(/Automatic test pull omitted/i)).toBeVisible();
 });
