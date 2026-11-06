@@ -423,7 +423,10 @@ pnpm --filter @aequoros/dashboard dev
 # http://localhost:3001  (marketing site runs on 3000)
 ```
 
-The backend API must be running (`cd backend && fastapi dev app/main.py --port 8003`).
+The backend API must be running on port 8000, the default in `.env.example`
+(`cd backend && uv run fastapi dev app/main.py --port 8000`). Set
+`NEXT_PUBLIC_RISK_API_BASE_URL` if it listens elsewhere. Checkout setup and the
+other local services are in the [root README](../../README.md#set-up-a-fresh-checkout).
 
 Configure authentication using [.env.example](.env.example), including its
 production-only `AUTH_URL` guidance. Use one browser host consistently:
@@ -831,8 +834,9 @@ PostgreSQL 17 matches CI; PostgreSQL 18 is refused. Native ownership checks use
 health, storage or database requests; an occupied port fails without provisioning
 the existing service. The Homebrew core bottles work even when the MinIO tap's
 upstream download URLs have been removed.
-On other Unix hosts, install MinIO and `lsof` on `PATH` and point `AQS_POSTGRES_BIN` at
-the PostgreSQL 17 `bin` directory.
+On Linux and other Unix hosts, install the PostgreSQL 17 server binaries, MinIO and
+`lsof`, put MinIO and `lsof` on `PATH` and point `AQS_POSTGRES_BIN` at the PostgreSQL 17
+`bin` directory (for example `/usr/lib/postgresql/17/bin`).
 
 ```bash
 # From the repository root, force native services even if Docker is running:

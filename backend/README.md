@@ -87,40 +87,40 @@ market-data transports (Bloomberg, LSEG) are fixture-driven only. See
 
 ## Requirements
 
-- Python 3.13
-- uv
+- Python 3.13 (`>=3.13,<3.14`)
+- uv 0.11.18
 - mise
-- Postgres for migrations and database-backed readiness checks
+- PostgreSQL 17 for migrations and database-backed readiness checks
+- S3-compatible storage (MinIO locally) for uploads, exports and the readiness check
+
+The root [setup guide](../README.md#prerequisites) lists every pinned version.
 
 ## Local Setup
 
-From `backend`:
+From the repository root, `mise run setup` installs the pinned tools, syncs the
+locked dependencies and creates `backend/.env` from `.env.example` when it is
+absent (see the [setup guide](../README.md#set-up-a-fresh-checkout)). To work from
+`backend` alone:
 
 ```bash
 mise trust
-uv sync
-cp .env.example .env
-```
-
-Or use the task runner:
-
-```bash
 mise run risk-service:sync
+cp -n .env.example .env
 ```
 
 The same `risk-service:*` tasks are also available from the repository root.
 
 Install the repo hooks after syncing dependencies (see the root
-[setup guide](../README.md#prerequisites) for externally managed hooks):
+[setup guide](../README.md#set-up-a-fresh-checkout) for externally managed hooks):
 
 ```bash
 mise run risk-service:hooks
 ```
 
-The service runs against the **shared remote Postgres** (`<postgres-host>:<port>/<database>`) —
-`DATABASE_URL` comes from `backend/.env` (untracked; see `.env.example` for the shape).
+The API reads `DATABASE_URL` from `backend/.env` (untracked; see `.env.example` for
+the shape). Point it at a PostgreSQL 17 database, such as your team's shared instance
+or the bundled Docker Compose service below.
 Test commands and database prerequisites are documented under [Run Tests](#run-tests).
-The bundled Docker Compose remains available for fully-local/offline work.
 
 ## Run The API
 
@@ -128,7 +128,17 @@ The bundled Docker Compose remains available for fully-local/offline work.
 mise run risk-service:dev
 ```
 
+This starts the worker and the API together. The API listens on port **8001** unless
+you set `PORT`; the dashboard expects **8000**, so run `PORT=8000 mise run
+risk-service:dev` (or the `uv run fastapi dev app/main.py --port 8000` command in the
+[root guide](../README.md#run-it-locally)).
+
 Database: configure `backend/.env` and apply the migration chain before starting the API.
+On a local database, `mise run risk-service:bootstrap-db` prepares the development
+roles and applies the chain. It does not read `backend/.env`: export the intended
+administrator `DATABASE_URL` or pass it as an environment assignment; otherwise it
+defaults to the bundled compose database on `127.0.0.1:15432`. See
+[Run Migrations](#run-migrations).
 
 Authentication uses the API `DATABASE_URL` sessionmaker. Operator sessions use
 `OPERATOR_DATABASE_URL`, falling back only to `DATABASE_URL`. Neither uses
@@ -150,9 +160,14 @@ Two operational notes for a remote database:
 Fully-local alternative (offline work):
 
 ```bash
-docker compose up -d
+docker compose up -d risk-postgres risk-minio risk-minio-init
 export DATABASE_URL=postgresql+psycopg://postgres:postgres@localhost:15432/risk_service
 ```
+
+Name the services. A bare `docker compose up -d` also builds and starts the API
+(`:8000`) and worker containers. The init container creates a bucket named
+`risk-local`, so set `S3_BUCKET=risk-local` in `backend/.env` when using the bundled
+MinIO; `.env.example` says `aequoros`.
 
 The bundled compose uses local superuser credentials and does not demonstrate
 production credential separation. Local role preparation and the staged deployment
@@ -807,6 +822,14 @@ Alembic connection selection and role requirements are governed by the
 ```bash
 mise run risk-service:migrate
 ```
+
+On a disposable local database where you hold the administrator credential,
+`mise run risk-service:bootstrap-db` first prepares the development roles and then
+applies the same chain. It does not read `backend/.env`: export the intended
+administrator `DATABASE_URL` or pass it as an environment assignment; otherwise it
+defaults to the bundled compose database on `127.0.0.1:15432`. It requires `APP_ENV=local` and a `localhost`, `127.0.0.1` or
+`risk-postgres` host, and refuses anything else. See the
+[database role handoff](../docs/ops/database-roles.md#migration-and-local-development-order).
 
 To create a migration revision:
 
