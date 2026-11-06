@@ -37,7 +37,8 @@ Use the [pull request description template](.github/PULL_REQUEST_TEMPLATE.md) fo
 ```bash
 mise run setup                          # fresh checkout: pinned tools, locked deps, env templates, hooks
 mise run verify                         # prove core readiness (no Docker or database required)
-mise run risk-service:check            # backend lint, typecheck and hermetic tests
+mise run risk-service:check            # backend lint, typecheck and fast local test feedback
+mise run risk-service:test-full        # explicit complete hermetic suite; CI owns full coverage
 mise run risk-service:test-postgres    # Postgres-gated tests (TEST_DATABASE_URL or an isolated local service)
 mise run risk-service:openapi-client   # regenerate packages/risk-service-api after an API change
 mise run risk-service:api-fresh        # prove the generated client is fresh (also the pre-push hook)
@@ -167,7 +168,7 @@ new topic, add a row here.
 | TLS enforcement and bank-reviewable transport evidence             | [backend/docs/transport_security.md](backend/docs/transport_security.md)                                                                 |
 | Bank-held keys, onboarding, rotation and backup recovery           | [backend/docs/bank_encryption.md](backend/docs/bank_encryption.md)                                                                       |
 | Database institution ownership and deliberate reference exclusions | [backend/docs/database_integrity.md](backend/docs/database_integrity.md)                                                                 |
-| Database role matrix and droplet deployment runbook           | [docs/ops/database-roles.md](docs/ops/database-roles.md)                                                                                 |
+| Database role matrix and droplet deployment runbook                | [docs/ops/database-roles.md](docs/ops/database-roles.md)                                                                                 |
 | Audit chains, filed-input seals and compliance retention           | [backend/docs/tamper_evident_records.md](backend/docs/tamper_evident_records.md)                                                         |
 | Coolify deployment rules                                           | [deploy/README.md](deploy/README.md#coolify-compose-rules)                                                                               |
 | Host change to `bank.aequoros.com`                                 | [backend/dashboard/README.md](backend/dashboard/README.md#deploy-to-bankaequoroscom)                                                     |

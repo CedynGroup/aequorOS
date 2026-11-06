@@ -42,12 +42,20 @@ description = "Run the BI mart worker (the bi lane only — mart refresh, backfi
 run = "WORKER_JOB_TYPES=lane:bi RUN_INPROCESS_WORKER=0 uv run python -m app.worker"
 
 [tasks."risk-service:test"]
-description = "Run pytest"
-run = "uv run pytest"
+description = "Fast local feedback: affected modules or guarded units; full coverage stays in CI"
+run = "uv run python -m scripts.test_fast"
 
 [tasks."risk-service:test-fast"]
-description = "Run conservative affected-module tests locally with four workers"
+description = "Run the default local feedback profile, with at most two workers"
 run = "uv run python -m scripts.test_fast"
+
+[tasks."risk-service:test-full"]
+description = "Explicitly run the complete hermetic pytest suite serially"
+run = "uv run python -m scripts.test_fast --full"
+
+[tasks."risk-service:test-lf"]
+description = "Serial pytest --lf fix loop; never run the full suite for an empty failure cache"
+run = "uv run python -m scripts.test_fast --lf"
 
 [tasks."risk-service:test-postgres"]
 description = "Run pytest against local Postgres (native fallback or Docker)"
@@ -164,7 +172,7 @@ description = "Run the BasedPyright strict type-check baseline"
 run = "uv run python scripts/type_check_baseline.py check"
 
 [tasks."risk-service:check"]
-description = "Run lint, typecheck, and tests"
+description = "Run lint, typecheck, and fast local test feedback; CI owns full coverage"
 depends = ["risk-service:lint", "risk-service:typecheck", "risk-service:test"]
 
 [tasks."risk-service:openapi-schema"]

@@ -569,24 +569,41 @@ membership input, is the expected identity set for the cross-suite aggregate.
 The aggregate compares every execution report against it, including all
 parametrizations, and rejects missing or duplicate cases and wrong-suite owners.
 
-`mise run risk-service:test` remains the combined compatibility run:
+Local feedback is fast by default; CI remains the complete-suite authority:
 
 ```bash
-mise run risk-service:test
+mise run risk-service:check      # lint, typecheck, then fast local test feedback
+mise run risk-service:test       # affected modules or guarded unit-only fallback
+mise run risk-service:test-fast  # alias for the same local feedback profile
+mise run risk-service:test-lf    # serial pytest --lf fix loop, never a full fallback
+mise run risk-service:test-full  # explicit complete hermetic compatibility run, serial
 ```
 
-The default test run uses isolated SQLite databases and never touches Postgres —
+The explicit full hermetic run uses isolated SQLite databases —
 the suite explicitly neutralizes any `DATABASE_URL` from `.env` (empty env value =
 unconfigured), so a configured remote database cannot leak into tests implicitly.
-For a local feedback loop, run `mise run risk-service:test-fast`. It compares the
-current branch and staged/unstaged edits with the merge base of `origin/main`.
-It reuses CI's conservative affected-module rules described below. When those
-rules cannot narrow the selection, it runs the complete hermetic suite instead.
-Untracked files, a missing base and an empty diff also force this fallback, with
-an explicit message.
-Both modes use four workers and `--dist loadfile` to keep each module's fixtures
-together.
-This profile is local and opt-in; the default test tasks and full main CI stay unchanged.
+The default compares the branch plus staged/unstaged edits with the merge base
+of `origin/main`, reusing CI's conservative affected-module rules below. Safe
+leaf integration-test edits run their modules with `-n auto --maxprocesses=2
+--dist loadfile`. Unknown, production, fixture, untracked or missing-base changes
+fall back visibly to **database-free units only**, with the existing refusal guard
+and unit scheduler (`-m unit --suite-only --dist load`, at most two workers).
+An unchanged worktree selects nothing and says so. Neither outcome claims full
+coverage or silently launches the combined suite. Numeric thread counts are one.
+Schema/role, lock and storage owners are never added to parallel local selection.
+
+The full and last-failed profiles are serial to preserve those owner boundaries.
+The last-failed command delegates to pytest's worktree-local failure cache using
+`--lf --last-failed-no-failures=none`: an absent or empty cache runs no tests
+(pytest exit5), rather than accidentally running everything. To request complete
+hermetic coverage, use `test-full`; Postgres/service confidence still comes from
+the dedicated owners. No full local milestone run is required. CI commands and
+coverage gates are unchanged.
+
+Testmon is not a dependency of this profile: its coverage SQLite connections
+conflict with the intentional unit database guard, and complete backend parallel
+cache training was not established. No guard bypass or new dependency selector
+is introduced.
 
 To reuse an existing Postgres service for the gated tests (migrations, RLS),
 provide `TEST_DATABASE_URL` for a dedicated test database, never the primary database.
@@ -671,9 +688,9 @@ comments and formatting in those modules, select their affected modules. Changes
 tests, configuration or an uncertain diff select the full suite. Schema/RLS,
 locks, unit and storage gates keep their coverage. The stdlib planner/coverage verifier is
 [`scripts/ci_postgres.py`](scripts/ci_postgres.py); pytest selection is opt-in via
-[`scripts/ci_postgres_plugin.py`](scripts/ci_postgres_plugin.py). Default local test
-tasks continue to run their complete suites; `risk-service:test-fast` uses the
-local profile described above.
+[`scripts/ci_postgres_plugin.py`](scripts/ci_postgres_plugin.py). Dedicated CI
+owners keep their coverage; default local feedback follows the limited profile
+above, and `risk-service:test-full` explicitly requests the combined hermetic run.
 
 Architecture guards still scan every module and run every check. Their shared
 scanner memoizes immutable facts by source text and import/table context within

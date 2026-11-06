@@ -99,7 +99,7 @@ dir = "backend"
 run = "mise run risk-service:worker-ai"
 
 [tasks."risk-service:test"]
-description = "Run risk service pytest"
+description = "Run fast local risk service feedback; CI owns full coverage"
 dir = "backend"
 run = "mise run risk-service:test"
 
@@ -129,9 +129,19 @@ dir = "backend"
 run = "mise run risk-service:test-integration"
 
 [tasks."risk-service:test-fast"]
-description = "Run local affected risk service tests with four workers"
+description = "Run local affected risk service feedback with at most two workers"
 dir = "backend"
 run = "mise run risk-service:test-fast"
+
+[tasks."risk-service:test-full"]
+description = "Explicitly run the complete hermetic risk service suite serially"
+dir = "backend"
+run = "mise run risk-service:test-full"
+
+[tasks."risk-service:test-lf"]
+description = "Rerun cached risk service failures with pytest --lf, serially"
+dir = "backend"
+run = "mise run risk-service:test-lf"
 
 [tasks."risk-service:test-postgres"]
 description = "Run risk service pytest against local Postgres"
@@ -189,7 +199,7 @@ dir = "backend"
 run = "mise run risk-service:typecheck"
 
 [tasks."risk-service:check"]
-description = "Run risk service lint, typecheck, and tests"
+description = "Run risk service lint, typecheck, and fast local test feedback"
 dir = "backend"
 run = "mise run risk-service:check"
 

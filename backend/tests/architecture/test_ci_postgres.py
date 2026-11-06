@@ -17,6 +17,7 @@ import yaml
 from scripts import ci_postgres
 from scripts.ci_postgres import BAO_MODULE, SHARDS, module_shards, plan, shard_for, verify
 from scripts.test_fast import run as run_fast
+from scripts.test_fast import unchanged as local_unchanged
 
 BACKEND = Path(__file__).parents[2]
 REPO = BACKEND.parent
@@ -81,7 +82,27 @@ def test_local_selection_includes_worktree_changes(
     )
 
 
-def test_local_profile_executes_selected_modules_and_full_fallback(
+@pytest.mark.parametrize(
+    "state", ["unchanged", "unstaged", "staged", "committed", "untracked", "missing-base"]
+)
+def test_local_unchanged_requires_a_known_clean_merge_base(
+    selection_repo: tuple[Path, str, Path], state: str
+) -> None:
+    root, base, test = selection_repo
+    if state != "missing-base":
+        _ = run_git(root, "update-ref", "refs/remotes/origin/main", base)
+    if state in {"unstaged", "staged", "committed"}:
+        test.write_text("def test_leaf():\n    assert 2 == 2\n")
+    if state in {"staged", "committed"}:
+        _ = run_git(root, "add", "-A")
+    if state == "committed":
+        _ = run_git(root, "commit", "-qm", "test change")
+    if state == "untracked":
+        test.with_name("test_new.py").write_text("def test_new():\n    assert True\n")
+    assert local_unchanged(root) == (state == "unchanged")
+
+
+def test_local_profile_executes_selected_modules_and_guarded_unit_fallback(
     selection_repo: tuple[Path, str, Path],
     capfd: pytest.CaptureFixture[str],
     monkeypatch: pytest.MonkeyPatch,
@@ -94,20 +115,45 @@ def test_local_profile_executes_selected_modules_and_full_fallback(
     base = run_git(root, "rev-parse", "HEAD")
     _ = run_git(root, "update-ref", "refs/remotes/origin/main", base)
     report = root / "result.xml"
-    monkeypatch.setenv("PYTEST_ADDOPTS", f"--junitxml={report}")
+    monkeypatch.setenv("PYTEST_ADDOPTS", f"-p scripts.test_suites_plugin --junitxml={report}")
+    monkeypatch.setenv("PYTHONPATH", str(BACKEND))
     test.write_text("def test_leaf():\n    assert 2 == 2\n")
     assert run_fast(root) == 0
     assert [case.get("name") for case in ET.parse(report).iter("testcase")] == ["test_leaf"]
-    assert "4 workers" in capfd.readouterr().out
+    assert "2 workers" in capfd.readouterr().out
     report.unlink()
-    # A production change requires all modules; pytest failure must reach the caller.
+    # The local fallback must not turn a production edit into the complete suite.
     (root / "backend/app.py").write_text("VALUE = 2\n")
     other.write_text("def test_other():\n    assert False\n")
     assert run_fast(root) == 1
     cases = list(ET.parse(report).iter("testcase"))
-    assert {case.get("name") for case in cases} == {"test_leaf", "test_other"}
+    assert {case.get("name") for case in cases} == {"test_other"}
     assert sum(case.find("failure") is not None for case in cases) == 1
-    assert "complete hermetic suite" in capfd.readouterr().out
+    assert "guarded unit suite ONLY" in capfd.readouterr().out
+
+
+def test_local_full_and_last_failed_use_real_pytest_cache_without_full_fallback(
+    selection_repo: tuple[Path, str, Path],
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    root, _base, test = selection_repo
+    report = root / "result.xml"
+    monkeypatch.setenv("PYTEST_ADDOPTS", f"-p scripts.test_suites_plugin --junitxml={report}")
+    monkeypatch.setenv("PYTHONPATH", str(BACKEND))
+    assert run_fast(root, last_failed=True) == 5
+    assert list(ET.parse(report).iter("testcase")) == []
+    other = test.with_name("test_other.py")
+    other.write_text("def test_other():\n    assert False\n")
+    assert run_fast(root, full=True) == 1
+    assert {case.get("name") for case in ET.parse(report).iter("testcase")} == {
+        "test_leaf",
+        "test_other",
+    }
+    other.write_text("def test_other():\n    assert True\n")
+    assert run_fast(root, last_failed=True) == 0
+    assert [case.get("name") for case in ET.parse(report).iter("testcase")] == ["test_other"]
+    assert run_fast(root, last_failed=True) == 5
+    assert list(ET.parse(report).iter("testcase")) == []
 
 
 @pytest.mark.parametrize(
