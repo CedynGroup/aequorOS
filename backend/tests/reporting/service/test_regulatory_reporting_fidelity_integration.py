@@ -45,7 +45,9 @@ from tests.fixtures.canonical_bank_fixture import (
 from tests.support.factories.attestation import relax_signing
 from tests.support.factories.filing_chain import complete_chain
 
-pytestmark = pytest.mark.usefixtures("return_generation_authority")
+pytestmark = pytest.mark.usefixtures(
+    "return_generation_authority", "reporting_configure_authority"
+)
 
 MAKER = TenantContext(
     organization_id=DEMO_ORG_ID, actor_user_id=DEMO_USER_ID, authorization_version=1

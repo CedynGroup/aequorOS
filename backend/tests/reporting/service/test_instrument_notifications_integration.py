@@ -122,6 +122,7 @@ def test_scan_emits_once_and_detects_finalisation(
     assert scan_instrument_statuses(db_session, ctx, bank, TODAY) == 0
 
 
+@pytest.mark.usefixtures("reporting_configure_authority")
 @pytest.mark.parametrize("scan_first", [True, False])
 def test_settings_and_scan_preserve_each_others_state(
     db_session: Session, scan_first: bool
@@ -129,7 +130,9 @@ def test_settings_and_scan_preserve_each_others_state(
     materialize_canonical_test_book(db_session)
     bank = db_session.get(Bank, SAMPLE_BANK_ID)
     assert bank is not None
-    ctx = TenantContext(organization_id=DEMO_ORG_ID, actor_user_id=DEMO_USER_ID)
+    ctx = TenantContext(
+        organization_id=DEMO_ORG_ID, actor_user_id=DEMO_USER_ID, authorization_version=1
+    )
     if scan_first:
         scan_instrument_statuses(db_session, ctx, bank, TODAY)
     put_reporting_settings(
@@ -156,6 +159,7 @@ def test_settings_and_scan_preserve_each_others_state(
 
 
 @pytest.mark.committing_db
+@pytest.mark.usefixtures("reporting_configure_authority")
 @pytest.mark.parametrize("scan_first", [True, False])
 def test_concurrent_settings_initialization_preserves_scan_and_overrides(
     db_session: Session, scan_first: bool
@@ -166,7 +170,9 @@ def test_concurrent_settings_initialization_preserves_scan_and_overrides(
     assert isinstance(bind, Engine)
     materialize_canonical_test_book(db_session)
     db_session.commit()
-    ctx = TenantContext(organization_id=DEMO_ORG_ID, actor_user_id=DEMO_USER_ID)
+    ctx = TenantContext(
+        organization_id=DEMO_ORG_ID, actor_user_id=DEMO_USER_ID, authorization_version=1
+    )
     held, release = Event(), Event()
     waiting_pid: Queue[int] = Queue()
 
