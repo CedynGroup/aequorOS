@@ -233,6 +233,37 @@ def test_channel_config_put_succeeds_with_configurator_binding(db_client: TestCl
     assert read_back.json()["has_credentials"] is True
 
 
+def test_configure_only_authority_writes_and_reads_nothing(db_client: TestClient) -> None:
+    """With the seeded viewer coverage suspended and ONLY the exact-bank
+    configurator binding active, both configuration PUTs still succeed with
+    their write-only acknowledgements — the write path never borrows view
+    authority. (The channel-config read-back is a plain tenant read by design:
+    it follows bank visibility, not a module view gate.)"""
+    _suspend_all()
+    _grant(RoleBundle.CONFIGURATOR)
+
+    stored = db_client.put(
+        CHANNEL_URL,
+        headers=_auth(),
+        json={"config": {"institution_code": "SBL-001"}, "credentials": {"api_key": "secret"}},
+    )
+    assert stored.status_code == 200, stored.text
+    assert "credential_fingerprint" not in stored.text
+    assert "has_credentials" not in stored.text
+    body = ChannelConfigWriteAcknowledgement.model_validate_json(stored.text)
+    assert set(body.model_dump()) == CHANNEL_ACK_FIELDS
+    assert body.channel == "orass_sandbox"
+    assert body.credentials_rotated is True
+    assert body.created is True
+
+    settings = db_client.put(
+        SETTINGS_URL, headers=_auth(), json={"deadline_overrides": {"BSD2": 14}}
+    )
+    assert settings.status_code == 200, settings.text
+    settings_ack = ReportingSettingsWriteAcknowledgement.model_validate_json(settings.text)
+    assert set(settings_ack.model_dump()) == SETTINGS_ACK_FIELDS
+
+
 def test_settings_put_succeeds_with_configurator_binding(db_client: TestClient) -> None:
     _grant(RoleBundle.CONFIGURATOR)
     stored = db_client.put(
