@@ -28,7 +28,10 @@ def run_git(root: Path, *args: str) -> str:
 
 
 @pytest.fixture
-def selection_repo(tmp_path: Path) -> tuple[Path, str, Path]:
+def selection_repo(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> tuple[Path, str, Path]:
+    # Synthetic local runs own their reports, independently of the outer CI job.
+    for variable in ("CI_UNIT_REPORT_DIR", "CI_E2E_REPORT_DIR"):
+        monkeypatch.delenv(variable, raising=False)
     root = tmp_path / "repo"
     root.mkdir()
     _ = run_git(root, "init", "-q", "-b", "main")
