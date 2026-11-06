@@ -169,9 +169,9 @@ export default function SettingsPage() {
         {bankId && (
           <ChannelForm key={channel} bankId={bankId} channel={channel} />
         )}
-        {/* Org Owner-only, and renders nothing for everyone else. Who must sign is a
-            separate control from how a return is transmitted, but both belong to
-            the same "how this institution files" settings surface. */}
+        {/* Who must sign is a separate control from how a return is
+            transmitted, but both belong to the same "how this institution
+            files" settings surface; its save carries the org-scope gate. */}
         <SigningPolicyPanel />
       </PageContainer>
     </>
