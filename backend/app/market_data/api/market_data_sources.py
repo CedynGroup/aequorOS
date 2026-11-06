@@ -30,6 +30,7 @@ from app.market_data.schemas.market_data_sources import (
     PlanesRead,
     SourcePreferencesRead,
     SourcePreferencesUpdate,
+    SourcePreferenceWriteAcknowledgement,
 )
 from app.market_data.service import market_data_sources
 
@@ -51,7 +52,7 @@ def get_source_preferences(
 
 @router.put(
     "/banks/{bank_id}/market-data/source-preferences",
-    response_model=SourcePreferencesRead,
+    response_model=SourcePreferenceWriteAcknowledgement,
     operation_id="updateMarketDataSourcePreferences",
 )
 def update_source_preferences(
@@ -59,7 +60,7 @@ def update_source_preferences(
     payload: SourcePreferencesUpdate,
     db: DbSession,
     ctx: ScopedMutationTenant,
-) -> SourcePreferencesRead:
+) -> SourcePreferenceWriteAcknowledgement:
     return market_data_sources.set_preference(db, ctx, bank_id, payload)
 
 

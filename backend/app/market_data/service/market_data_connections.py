@@ -62,6 +62,7 @@ from app.market_data.schemas.market_data_connections import (
     MarketDataConnectionListRead,
     MarketDataConnectionRead,
     MarketDataConnectionUpdate,
+    MarketDataConnectionWriteAcknowledgement,
     MarketDataQuotaListRead,
     MarketDataScopeListRead,
     QuotaSummaryRead,
@@ -184,7 +185,7 @@ def get_quota(db: Session, ctx: TenantContext, bank_id: str) -> MarketDataQuotaL
 
 def create_connection(
     db: Session, ctx: TenantContext, bank_id: str, payload: MarketDataConnectionCreate
-) -> MarketDataConnectionRead:
+) -> MarketDataConnectionWriteAcknowledgement:
     """Onboard a connection (§9.2 step 7).
 
     ``manual_upload`` takes no credentials and is ACTIVE immediately (§8:
@@ -285,12 +286,14 @@ def create_connection(
         },
     )
     db.commit()
-    return _read_model(connection, validation_error=validation_error)
+    return _write_ack(
+        connection, written_status=connection.status, validation_error=validation_error
+    )
 
 
 def validate_connection(
     db: Session, ctx: TenantContext, bank_id: str, connection_id: UUID
-) -> MarketDataConnectionRead:
+) -> MarketDataConnectionWriteAcknowledgement:
     """Re-run the §10.3 credential health check on demand."""
     # Credential validation is a configuration duty (D2): deny before the
     # stored-credential check or any status mutation.
@@ -334,7 +337,10 @@ def validate_connection(
         },
     )
     db.commit()
-    return _read_model(connection, validation_error=validation_error)
+    # The stored-credential failure message is derived from stored secret
+    # material, so it never crosses a mutation response (D34); the status this
+    # request wrote does.
+    return _write_ack(connection, written_status=connection.status)
 
 
 def test_connection(
@@ -367,7 +373,7 @@ def update_connection(  # noqa: PLR0913
     bank_id: str,
     connection_id: UUID,
     payload: MarketDataConnectionUpdate,
-) -> MarketDataConnectionRead:
+) -> MarketDataConnectionWriteAcknowledgement:
     """Post-onboarding edits (§9.3) and credential rotation (§10.4)."""
     # Configuration duty (incl. credential rotation): deny before any vault write.
     require_markets_access(
@@ -446,12 +452,14 @@ def update_connection(  # noqa: PLR0913
             details={"vendor": connection.vendor, "changed": changed},
         )
     db.commit()
-    return _read_model(connection)
+    # A patch without rotation writes no status; stored fields are never echoed.
+    written_status = connection.status if rotated else None
+    return _write_ack(connection, written_status=written_status)
 
 
 def disable_connection(
     db: Session, ctx: TenantContext, bank_id: str, connection_id: UUID
-) -> MarketDataConnectionRead:
+) -> MarketDataConnectionWriteAcknowledgement:
     """Temporarily disable a source (§9.3): scheduled pulls stop, credentials stay."""
     require_markets_access(
         db, ctx, bank_id, Permission.CONFIGURE, Sensitivity.RESTRICTED, opaque=True
@@ -471,12 +479,14 @@ def disable_connection(
             details={"vendor": connection.vendor, "from": previous},
         )
     db.commit()
-    return _read_model(connection)
+    # The requested end state, also when the connection was already disabled —
+    # never the stored view model (D34).
+    return _write_ack(connection, written_status="DISABLED")
 
 
 def enable_connection(
     db: Session, ctx: TenantContext, bank_id: str, connection_id: UUID
-) -> MarketDataConnectionRead:
+) -> MarketDataConnectionWriteAcknowledgement:
     """Re-enable a disabled source: credentials are re-validated before pulls resume."""
     require_markets_access(
         db, ctx, bank_id, Permission.CONFIGURE, Sensitivity.RESTRICTED, opaque=True
@@ -513,12 +523,15 @@ def enable_connection(
         },
     )
     db.commit()
-    return _read_model(connection, validation_error=validation_error)
+    # The stored-credential failure message is derived from stored secret
+    # material, so it never crosses a mutation response (D34); the status this
+    # request wrote does.
+    return _write_ack(connection, written_status=connection.status)
 
 
 def revoke_connection(
     db: Session, ctx: TenantContext, bank_id: str, connection_id: UUID
-) -> MarketDataConnectionRead:
+) -> MarketDataConnectionWriteAcknowledgement:
     """Revoke a connection (§10.5): wipe the stored credential, keep the row.
 
     Historical canonical data pulled with the credential remains valid; the
@@ -530,7 +543,7 @@ def revoke_connection(
     _get_bank_or_404(db, ctx, bank_id)
     connection = _get_connection_or_404(db, ctx, bank_id, connection_id)
     if connection.status == "REVOKED":
-        return _read_model(connection)
+        return _write_ack(connection, written_status="REVOKED")
     if connection.vendor != MANUAL_UPLOAD_VENDOR:
         _vault(db).delete(
             organization_id=ctx.organization_id,
@@ -547,7 +560,7 @@ def revoke_connection(
         details={"vendor": connection.vendor},
     )
     db.commit()
-    return _read_model(connection)
+    return _write_ack(connection, written_status="REVOKED")
 
 
 # ---------------------------------------------------------------------------
@@ -701,6 +714,23 @@ def _aware(value: datetime | None) -> datetime | None:
     if value is not None and value.tzinfo is None:
         return value.replace(tzinfo=utc_now().tzinfo)
     return value
+
+
+def _write_ack(
+    connection: MarketDataConnection,
+    *,
+    written_status: str | None = None,
+    validation_error: str | None = None,
+) -> MarketDataConnectionWriteAcknowledgement:
+    """Write-only lifecycle evidence (D34): the mutated row's id, the status this
+    request wrote, and — only for checks of credentials submitted in this
+    request — the validation error. Never the stored view model."""
+    return MarketDataConnectionWriteAcknowledgement(
+        id=connection.id,
+        bank_id=connection.bank_id,
+        status=written_status,
+        validation_error=validation_error,
+    )
 
 
 def _read_model(

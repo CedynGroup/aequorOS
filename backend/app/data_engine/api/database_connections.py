@@ -24,6 +24,7 @@ from app.data_engine.schemas.database_connection import (
     DatabaseConnectionSyncResult,
     DatabaseConnectionTestResult,
     DatabaseConnectionUpdate,
+    DatabaseConnectionWriteAcknowledgement,
 )
 from app.data_engine.service import database_connections
 from app.storage.client import StorageClient
@@ -68,7 +69,7 @@ def list_database_connections(
 
 @router.post(
     _BASE,
-    response_model=DatabaseConnectionRead,
+    response_model=DatabaseConnectionWriteAcknowledgement,
     status_code=status.HTTP_201_CREATED,
     operation_id="createDatabaseDirectConnection",
 )
@@ -77,7 +78,7 @@ def create_database_connection(
     payload: DatabaseConnectionCreate,
     db: DbSession,
     ctx: ScopedMutationTenant,
-) -> DatabaseConnectionRead:
+) -> DatabaseConnectionWriteAcknowledgement:
     return database_connections.create_connection(db, ctx, bank_id, payload)
 
 
@@ -94,7 +95,7 @@ def get_database_connection(
 
 @router.patch(
     _BASE + "/{connection_id}",
-    response_model=DatabaseConnectionRead,
+    response_model=DatabaseConnectionWriteAcknowledgement,
     operation_id="updateDatabaseDirectConnection",
 )
 def update_database_connection(
@@ -103,13 +104,13 @@ def update_database_connection(
     payload: DatabaseConnectionUpdate,
     db: DbSession,
     ctx: ScopedMutationTenant,
-) -> DatabaseConnectionRead:
+) -> DatabaseConnectionWriteAcknowledgement:
     return database_connections.update_connection(db, ctx, bank_id, connection_id, payload)
 
 
 @router.post(
     _BASE + "/{connection_id}/disable",
-    response_model=DatabaseConnectionRead,
+    response_model=DatabaseConnectionWriteAcknowledgement,
     operation_id="disableDatabaseDirectConnection",
 )
 def disable_database_connection(
@@ -117,13 +118,13 @@ def disable_database_connection(
     connection_id: UUID,
     db: DbSession,
     ctx: ScopedMutationTenant,
-) -> DatabaseConnectionRead:
+) -> DatabaseConnectionWriteAcknowledgement:
     return database_connections.disable_connection(db, ctx, bank_id, connection_id)
 
 
 @router.post(
     _BASE + "/{connection_id}/enable",
-    response_model=DatabaseConnectionRead,
+    response_model=DatabaseConnectionWriteAcknowledgement,
     operation_id="enableDatabaseDirectConnection",
 )
 def enable_database_connection(
@@ -131,13 +132,13 @@ def enable_database_connection(
     connection_id: UUID,
     db: DbSession,
     ctx: ScopedMutationTenant,
-) -> DatabaseConnectionRead:
+) -> DatabaseConnectionWriteAcknowledgement:
     return database_connections.enable_connection(db, ctx, bank_id, connection_id)
 
 
 @router.delete(
     _BASE + "/{connection_id}",
-    response_model=DatabaseConnectionRead,
+    response_model=DatabaseConnectionWriteAcknowledgement,
     operation_id="revokeDatabaseDirectConnection",
 )
 def revoke_database_connection(
@@ -145,7 +146,7 @@ def revoke_database_connection(
     connection_id: UUID,
     db: DbSession,
     ctx: ScopedMutationTenant,
-) -> DatabaseConnectionRead:
+) -> DatabaseConnectionWriteAcknowledgement:
     return database_connections.revoke_connection(db, ctx, bank_id, connection_id)
 
 

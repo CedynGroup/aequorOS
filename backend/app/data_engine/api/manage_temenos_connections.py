@@ -16,8 +16,8 @@ from app.data_engine.schemas.temenos_connections import (
     TemenosBackfillRequest,
     TemenosConnectionCreate,
     TemenosConnectionListRead,
-    TemenosConnectionRead,
     TemenosConnectionUpdate,
+    TemenosConnectionWriteAcknowledgement,
     TemenosDomainListRead,
     TemenosPullTriggerRead,
     TemenosPullTriggerRequest,
@@ -39,7 +39,7 @@ def list_temenos_connections(bank_id: str, db: DbSession, ctx: Tenant) -> Temeno
 
 @router.post(
     "/banks/{bank_id}/temenos/connections",
-    response_model=TemenosConnectionRead,
+    response_model=TemenosConnectionWriteAcknowledgement,
     status_code=status.HTTP_201_CREATED,
     operation_id="createTemenosConnection",
 )
@@ -48,13 +48,13 @@ def create_temenos_connection(
     payload: TemenosConnectionCreate,
     db: DbSession,
     ctx: ScopedMutationTenant,
-) -> TemenosConnectionRead:
+) -> TemenosConnectionWriteAcknowledgement:
     return temenos_connections.create_connection(db, ctx, bank_id, payload)
 
 
 @router.post(
     "/banks/{bank_id}/temenos/connections/{connection_id}/validate",
-    response_model=TemenosConnectionRead,
+    response_model=TemenosConnectionWriteAcknowledgement,
     operation_id="validateTemenosConnection",
 )
 def validate_temenos_connection(
@@ -62,7 +62,7 @@ def validate_temenos_connection(
     connection_id: UUID,
     db: DbSession,
     ctx: ScopedMutationTenant,
-) -> TemenosConnectionRead:
+) -> TemenosConnectionWriteAcknowledgement:
     return temenos_connections.validate_connection(db, ctx, bank_id, connection_id)
 
 
@@ -82,7 +82,7 @@ def test_temenos_connection(
 
 @router.patch(
     "/banks/{bank_id}/temenos/connections/{connection_id}",
-    response_model=TemenosConnectionRead,
+    response_model=TemenosConnectionWriteAcknowledgement,
     operation_id="updateTemenosConnection",
 )
 def update_temenos_connection(
@@ -91,13 +91,13 @@ def update_temenos_connection(
     payload: TemenosConnectionUpdate,
     db: DbSession,
     ctx: ScopedMutationTenant,
-) -> TemenosConnectionRead:
+) -> TemenosConnectionWriteAcknowledgement:
     return temenos_connections.update_connection(db, ctx, bank_id, connection_id, payload)
 
 
 @router.post(
     "/banks/{bank_id}/temenos/connections/{connection_id}/disable",
-    response_model=TemenosConnectionRead,
+    response_model=TemenosConnectionWriteAcknowledgement,
     operation_id="disableTemenosConnection",
 )
 def disable_temenos_connection(
@@ -105,13 +105,13 @@ def disable_temenos_connection(
     connection_id: UUID,
     db: DbSession,
     ctx: ScopedMutationTenant,
-) -> TemenosConnectionRead:
+) -> TemenosConnectionWriteAcknowledgement:
     return temenos_connections.disable_connection(db, ctx, bank_id, connection_id)
 
 
 @router.post(
     "/banks/{bank_id}/temenos/connections/{connection_id}/enable",
-    response_model=TemenosConnectionRead,
+    response_model=TemenosConnectionWriteAcknowledgement,
     operation_id="enableTemenosConnection",
 )
 def enable_temenos_connection(
@@ -119,13 +119,13 @@ def enable_temenos_connection(
     connection_id: UUID,
     db: DbSession,
     ctx: ScopedMutationTenant,
-) -> TemenosConnectionRead:
+) -> TemenosConnectionWriteAcknowledgement:
     return temenos_connections.enable_connection(db, ctx, bank_id, connection_id)
 
 
 @router.delete(
     "/banks/{bank_id}/temenos/connections/{connection_id}",
-    response_model=TemenosConnectionRead,
+    response_model=TemenosConnectionWriteAcknowledgement,
     operation_id="revokeTemenosConnection",
 )
 def revoke_temenos_connection(
@@ -133,7 +133,7 @@ def revoke_temenos_connection(
     connection_id: UUID,
     db: DbSession,
     ctx: ScopedMutationTenant,
-) -> TemenosConnectionRead:
+) -> TemenosConnectionWriteAcknowledgement:
     return temenos_connections.revoke_connection(db, ctx, bank_id, connection_id)
 
 

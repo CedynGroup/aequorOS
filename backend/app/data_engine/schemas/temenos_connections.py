@@ -135,6 +135,23 @@ class TemenosConnectionListRead(ClosedModel):
     total: int
 
 
+class TemenosConnectionWriteAcknowledgement(ClosedModel):
+    """Write-only evidence of a connection lifecycle mutation (D27/D34).
+
+    Carries the mutated row's id, the bank, the status value this request wrote
+    (``None`` when the request wrote no status, e.g. a no-rotation patch), and —
+    only where the check consumed credentials submitted in this request — the
+    bank-facing validation error. Stored configuration (endpoint, companies,
+    schedule, catalog overrides, pull history, stored-credential state) is never
+    echoed: read the connection through its view-gated GET.
+    """
+
+    id: UUID
+    bank_id: str
+    status: str | None = Field(default=None, title="Connection Written Status")
+    validation_error: str | None = Field(default=None, title="Connection Validation Error")
+
+
 class TemenosDomainInfoRead(ClosedModel):
     """One core-banking domain with its category, canonical entity type, default
     pull cadence, and whether the connection's mode catalog supports it."""

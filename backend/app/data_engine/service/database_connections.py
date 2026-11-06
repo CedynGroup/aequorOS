@@ -80,6 +80,7 @@ from app.data_engine.schemas.database_connection import (
     DatabaseConnectionSyncResult,
     DatabaseConnectionTestResult,
     DatabaseConnectionUpdate,
+    DatabaseConnectionWriteAcknowledgement,
     DiscoveredColumn,
     DiscoveredTable,
 )
@@ -143,7 +144,7 @@ def get_connection(
 
 def create_connection(
     db: Session, ctx: TenantContext, bank_id: str, payload: DatabaseConnectionCreate
-) -> DatabaseConnectionRead:
+) -> DatabaseConnectionWriteAcknowledgement:
     """Onboard a connection. The adapter config blocks are validated for shape,
     credentials are sealed into the vault, and a successful credential-shape
     check activates the row; a failed one leaves it TESTING with a bank-facing
@@ -221,7 +222,9 @@ def create_connection(
         },
     )
     db.commit()
-    return _read_model(connection, validation_error=validation_error)
+    return _write_ack(
+        connection, written_status=connection.status, validation_error=validation_error
+    )
 
 
 def update_connection(
@@ -230,7 +233,7 @@ def update_connection(
     bank_id: str,
     connection_id: UUID,
     payload: DatabaseConnectionUpdate,
-) -> DatabaseConnectionRead:
+) -> DatabaseConnectionWriteAcknowledgement:
     """Post-onboarding edits and credential rotation (validate new first)."""
     # Configuration duty (incl. credential rotation): deny before any vault write.
     require_data_access(db, ctx, bank_id, Permission.CONFIGURE, Sensitivity.RESTRICTED, opaque=True)
@@ -283,12 +286,14 @@ def update_connection(
             details={"backend": connection.backend, "changed": sorted(changed)},
         )
     db.commit()
-    return _read_model(connection)
+    # A patch without rotation writes no status; stored fields are never echoed.
+    written_status = connection.status if rotated else None
+    return _write_ack(connection, written_status=written_status)
 
 
 def disable_connection(
     db: Session, ctx: TenantContext, bank_id: str, connection_id: UUID
-) -> DatabaseConnectionRead:
+) -> DatabaseConnectionWriteAcknowledgement:
     require_data_access(db, ctx, bank_id, Permission.CONFIGURE, Sensitivity.RESTRICTED, opaque=True)
     _get_bank_or_404(db, ctx, bank_id)
     connection = _get_connection_or_404(db, ctx, bank_id, connection_id)
@@ -305,12 +310,14 @@ def disable_connection(
             details={"backend": connection.backend, "from": previous},
         )
     db.commit()
-    return _read_model(connection)
+    # The requested end state, also when the connection was already disabled —
+    # never the stored view model (D34).
+    return _write_ack(connection, written_status="DISABLED")
 
 
 def enable_connection(
     db: Session, ctx: TenantContext, bank_id: str, connection_id: UUID
-) -> DatabaseConnectionRead:
+) -> DatabaseConnectionWriteAcknowledgement:
     require_data_access(db, ctx, bank_id, Permission.CONFIGURE, Sensitivity.RESTRICTED, opaque=True)
     _get_bank_or_404(db, ctx, bank_id)
     connection = _get_connection_or_404(db, ctx, bank_id, connection_id)
@@ -330,17 +337,17 @@ def enable_connection(
         details={"backend": connection.backend, "status": connection.status},
     )
     db.commit()
-    return _read_model(connection)
+    return _write_ack(connection, written_status=connection.status)
 
 
 def revoke_connection(
     db: Session, ctx: TenantContext, bank_id: str, connection_id: UUID
-) -> DatabaseConnectionRead:
+) -> DatabaseConnectionWriteAcknowledgement:
     require_data_access(db, ctx, bank_id, Permission.CONFIGURE, Sensitivity.RESTRICTED, opaque=True)
     _get_bank_or_404(db, ctx, bank_id)
     connection = _get_connection_or_404(db, ctx, bank_id, connection_id)
     if connection.status == "REVOKED":
-        return _read_model(connection)
+        return _write_ack(connection, written_status="REVOKED")
     connection.credential_ciphertext = None
     connection.credential_fingerprint = None
     connection.credential_expires_at = None
@@ -354,7 +361,7 @@ def revoke_connection(
         details={"backend": connection.backend},
     )
     db.commit()
-    return _read_model(connection)
+    return _write_ack(connection, written_status="REVOKED")
 
 
 # --- Live test / discover / sync -------------------------------------------
@@ -1143,6 +1150,23 @@ def _aware(value: datetime | None) -> datetime | None:
     if value.tzinfo is None:
         return value.replace(tzinfo=utc_now().tzinfo)
     return value
+
+
+def _write_ack(
+    connection: DatabaseDirectConnection,
+    *,
+    written_status: str | None = None,
+    validation_error: str | None = None,
+) -> DatabaseConnectionWriteAcknowledgement:
+    """Write-only lifecycle evidence (D34): the mutated row's id, the status this
+    request wrote, and — only for checks of credentials submitted in this
+    request — the validation error. Never the stored view model."""
+    return DatabaseConnectionWriteAcknowledgement(
+        id=connection.id,
+        bank_id=connection.bank_id,
+        status=written_status,
+        validation_error=validation_error,
+    )
 
 
 def _read_model(

@@ -177,19 +177,22 @@ def test_put_source_preferences_upserts_and_persists(db_client: TestClient) -> N
         },
     )
     assert put.status_code == 200, put.text
+    # Write-only acknowledgement (D34): only the submitted patch fields come back.
     body = put.json()
     assert body["curves"] == {"source": "vendor", "overlay": False}
-    assert body["fx"] == {"source": "bank", "overlay": True}
-    assert body["rates"] == {"source": "aequor", "overlay": True}
-    assert body["updated_at"] is not None
-    assert body["updated_by"] is not None
+    assert body["fx"] == {"source": "bank", "overlay": None}
+    assert body["rates"] is None
 
-    # Re-read persists the selection.
+    # Re-read the resolved row through the view-gated GET.
     again = db_client.get(
         f"{_base(bank_id)}/source-preferences", headers=headers(authorization_version=version)
     )
     assert again.status_code == 200, again.text
     assert again.json()["curves"] == {"source": "vendor", "overlay": False}
+    assert again.json()["fx"] == {"source": "bank", "overlay": True}
+    assert again.json()["rates"] == {"source": "aequor", "overlay": True}
+    assert again.json()["updated_at"] is not None
+    assert again.json()["updated_by"] is not None
 
 
 def test_put_source_preferences_requires_markets_configure(db_client: TestClient) -> None:
