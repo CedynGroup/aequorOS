@@ -714,6 +714,56 @@ def test_temenos_lifecycle_state_machine(db_client: TestClient) -> None:
     )
 
 
+@pytest.mark.usefixtures("vault_key")
+def test_revoke_replay_after_failure_revocation_wipes_sealed_credentials(
+    db_client: TestClient,
+) -> None:
+    """A test/sync failure can set REVOKED without a vault delete; a later
+    revoke replay must still wipe the sealed credential instead of returning
+    an acknowledgement over live ciphertext."""
+    with get_sessionmaker()() as db:
+        direct = DatabaseDirectConnection(
+            organization_id=ORG_1,
+            bank_id=SAMPLE_BANK_ID,
+            backend="sqlserver",
+            display_name=f"Failure-revoked db [{uuid4().hex[:8]}]",
+            host="core-db.internal",
+            database="COREBANK",
+            vault_path="vault://fixture/database",
+            status="REVOKED",
+            credential_ciphertext="sealed-ciphertext",
+            credential_fingerprint="sealed-fingerprint",
+        )
+        t24 = TemenosConnection(
+            organization_id=ORG_1,
+            bank_id=SAMPLE_BANK_ID,
+            connection_mode="OFS",
+            display_name=f"Failure-revoked T24 [{uuid4().hex[:8]}]",
+            endpoint="ofs://sample-bank",
+            default_currency="GHS",
+            vault_path="",
+            status="REVOKED",
+            credential_ciphertext="sealed-t24-ciphertext",
+            credential_fingerprint="sealed-t24-fingerprint",
+        )
+        db.add_all([direct, t24])
+        db.commit()
+        direct_id, t24_id = direct.id, t24.id
+    _grant(RoleBundle.CONFIGURATOR)
+    for base, connection_id in ((DB_BASE, direct_id), (T24_BASE, t24_id)):
+        revoked = db_client.delete(f"{base}/{connection_id}", headers=_auth())
+        assert revoked.status_code == 200, revoked.text
+    with get_sessionmaker()() as db:
+        wiped_direct = db.get(DatabaseDirectConnection, direct_id)
+        assert wiped_direct is not None
+        assert wiped_direct.credential_ciphertext is None
+        assert wiped_direct.credential_fingerprint is None
+        wiped_t24 = db.get(TemenosConnection, t24_id)
+        assert wiped_t24 is not None
+        assert wiped_t24.credential_ciphertext is None
+        assert wiped_t24.credential_fingerprint is None
+
+
 # --- Mutation responses are write-only acknowledgements (D34) -----------------
 
 
