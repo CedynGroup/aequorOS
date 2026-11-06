@@ -16,7 +16,7 @@ import PivotGrid from "../../features/bi/components/PivotGrid";
 import PivotGridCanvas from "../../features/bi/components/PivotGridCanvas";
 import BuilderGrid from "../../features/bi/components/BuilderGrid";
 import { formatCell } from "../../features/bi/components/gridCells";
-import { readChartTokens } from "../../features/bi/components/echartsTheme";
+import { readChartTokens } from "../../components/charts/echartsTheme";
 import { providers, json, query, queryWire, columns } from "./testing/support";
 
 const boundary = vi.hoisted(() => ({

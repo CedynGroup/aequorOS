@@ -84,7 +84,7 @@ const EDITOR_MARKERS = ["ProseMirror-hideselection", "ProseMirror-focused"];
  * whole library in `/dashboards/new`'s initial bundle — deferred in name only.
  *
  * The home insight strip uses the lightweight SVG `components/ui/Sparkline`.
- * Any BI chart must be reached through `features/bi/components/EChart.tsx`, the BI grid
+ * Any BI chart must be reached through `components/charts/EChart.tsx`, the BI grid
  * through `features/bi/components/PivotGrid.tsx`, and the builder's canvas through
  * `features/bi/components/BuilderGrid.tsx`; all three load with
  * `dynamic(..., { ssr: false })`.
@@ -137,7 +137,7 @@ if (offendingBiChunks.length > 0) {
   throw new Error(
     "Command Center initial entry graph contains a BI charting or grid " +
       `runtime: ${offendingBiChunks.join(", ")}. Charts must be reached only ` +
-      "through features/bi/components/EChart.tsx, which imports the canvas with " +
+      "through components/charts/EChart.tsx, which imports the canvas with " +
       "dynamic(..., { ssr: false }); the home insight strip uses the SVG " +
       "components/ui/Sparkline.",
   );
@@ -209,7 +209,7 @@ const chartBodyCarryingRuntime = chartBodyEntries.flatMap((entry) =>
 if (chartBodyCarryingRuntime.length > 0) {
   throw new Error(
     "The Command Center's deferred chart body carries a charting runtime: " +
-      `${chartBodyCarryingRuntime.join(", ")}. features/bi/components/EChart.tsx must ` +
+      `${chartBodyCarryingRuntime.join(", ")}. components/charts/EChart.tsx must ` +
       "load the canvas with dynamic(..., { ssr: false }) so the home route pays " +
       "for the runtime only when it draws.",
   );
@@ -271,7 +271,7 @@ const exploreEntries = Object.values(
 
 if (exploreEntries.length === 0) {
   throw new Error(
-    `Expected a deferred BI chart entry in ${exploreLoadableManifestPath}; found none. features/bi/components/EChart.tsx must load the canvas with next/dynamic.`,
+    `Expected a deferred BI chart entry in ${exploreLoadableManifestPath}; found none. components/charts/EChart.tsx must load the canvas with next/dynamic.`,
   );
 }
 

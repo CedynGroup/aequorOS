@@ -910,5 +910,17 @@
   [
     "visual/visual-tour.spec.ts",
     "tests/shell/visual-tour.e2e.spec.ts"
+  ],
+  [
+    "features/bi/components/EChart.tsx",
+    "components/charts/EChart.tsx"
+  ],
+  [
+    "features/bi/components/EChartCanvas.tsx",
+    "components/charts/EChartCanvas.tsx"
+  ],
+  [
+    "features/bi/components/echartsTheme.ts",
+    "components/charts/echartsTheme.ts"
   ]
 ]

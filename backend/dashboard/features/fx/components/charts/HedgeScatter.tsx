@@ -1,7 +1,7 @@
 "use client";
 
-import { EChart, type BiEChartsOption } from "@/features/bi/public";
-import { useChartTokens } from "@/features/bi/public";
+import EChart, { type BiEChartsOption } from "@/components/charts/EChart";
+import { useChartTokens } from "@/components/charts/echartsTheme";
 import { thresholdMarkLine, tooltipHtml } from "@/lib/echartsOptions";
 import { fmtCurrencySigned, fmtPct } from "@/lib/format";
 
@@ -22,7 +22,7 @@ export type HedgePoint = {
  * snapshot when available.
  *
  * The pass region was a Recharts `<ReferenceArea>`; it is now a `markArea`, which
- * is why `MarkAreaComponent` is registered in `features/bi/components/EChartCanvas.tsx`.
+ * is why `MarkAreaComponent` is registered in `components/charts/EChartCanvas.tsx`.
  */
 export default function HedgeScatter({
   data,

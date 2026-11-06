@@ -73,7 +73,7 @@ import type { ReaderCoverage } from "@/lib/api/dataScope";
 import NeedsDataWidget from "./NeedsDataWidget";
 import RefusedWidget from "./RefusedWidget";
 import RestrictedWidget from "./RestrictedWidget";
-import { useChartTheme } from "./echartsTheme";
+import { useChartTheme } from "@/components/charts/echartsTheme";
 import { legalSorts } from "./exploreQuery";
 import {
   columnUnit,

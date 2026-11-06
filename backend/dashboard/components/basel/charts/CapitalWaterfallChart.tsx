@@ -7,8 +7,8 @@
  * legible. All step values come from the stored capital structure — display only.
  */
 
-import EChart, { type BiEChartsOption } from "@/features/bi/components/EChart";
-import { seriesColor, useChartTokens } from "@/features/bi/components/echartsTheme";
+import EChart, { type BiEChartsOption } from "@/components/charts/EChart";
+import { seriesColor, useChartTokens } from "@/components/charts/echartsTheme";
 import {
   BAR_SERIES_BASE,
   itemTooltip,
