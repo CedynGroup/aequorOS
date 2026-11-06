@@ -1,22 +1,26 @@
-"""Attestation policy administration rides the Org Owner binding.
+"""Attestation policy administration is an organization-scoped REG configure duty.
 
 ``PUT /attestation/signing-policies`` and ``PUT /attestation/signature-placements``
-decide how a filed return is produced and who must sign it, so they sit in the
-same authority that create/revoke scoped grants: the persisted, explicit
-``org_owner`` binding (``GrantAdminTenant``). A scalar ``admin``/``account_admin``
-role claim is deliberately ignored — that is the post-PR #150 RBAC finding this
-suite pins, and the reason the gate is the binding rather than the ladder.
+decide how a filed return is produced and who must sign it for EVERY bank in the
+organization, so they require one explicit organization-scope
+``reg/configure/restricted`` binding (VAL-CFG-008). A bank-scoped Configurator
+binding is deliberately insufficient — authority over every future filing of a
+return is not a single-institution act — and scalar ``admin``/``account_admin``
+role claims are ignored, the post-PR #150 RBAC finding this suite pins. Denial
+writes nothing: no policy row, no template row, no audit event.
 """
 
 from __future__ import annotations
 
+from typing import Any
+
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from app.attestation.schemas import PolicyRead
 from app.core.authorization import (
+    GrantorType,
     InstitutionScope,
     ModuleScope,
     PrincipalType,
@@ -24,17 +28,15 @@ from app.core.authorization import (
     SensitivityScope,
 )
 from app.db.session import get_sessionmaker
-from app.identity.service import authorization, grant_administration
-from app.models import AuditEvent, AuthorizationBinding, User
-from app.reporting.schemas.packages import ReturnTemplateListRead
+from app.identity.service import authorization
+from app.models import AuditEvent, ReturnSigningPolicy, User
 from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID, materialize_canonical_test_book
-from tests.support.factories.authorization import grant_institution_authority
-from tests.support.helpers import ORG_1, USER_1, headers
+from tests.support.helpers import ORG_1, USER_1, error_envelope, headers
 
 POLICY_URL = "/api/v1/attestation/signing-policies"
 PLACEMENT_URL = "/api/v1/attestation/signature-placements"
 
-POLICY_PAYLOAD = {
+POLICY_PAYLOAD: dict[str, Any] = {
     "return_code": "LCR-NSFR",
     "required_signatures": [],
     "require_signature": False,
@@ -42,7 +44,7 @@ POLICY_PAYLOAD = {
     "reason": "aligned with the BoG attestation runbook",
 }
 
-PLACEMENT_PAYLOAD = {
+PLACEMENT_PAYLOAD: dict[str, Any] = {
     "return_code": "LCR-NSFR",
     "placements": [
         {
@@ -67,7 +69,7 @@ PLACEMENT_PAYLOAD = {
     "reason": "BoG LCR/NSFR signature block",
 }
 
-_OWNER_DENIAL = "This action requires Organization Owner authority."
+ORG_DENIAL = "This action requires an organization-scoped Regulatory Reporting binding."
 
 
 def _session() -> Session:
@@ -76,48 +78,87 @@ def _session() -> Session:
     return session
 
 
-def _owner_headers() -> dict[str, str]:
-    """The role claim is irrelevant to the gate: the binding decides. Mirrors
-    ``test_grant_administration._owner_headers``."""
-    return headers(roles=("account_admin",), authorization_version=2)
+def _grant(
+    bundle: RoleBundle,
+    *,
+    scope: authorization.BindingScope,
+) -> None:
+    with _session() as db:
+        authorization.create_role_binding(
+            db,
+            organization_id=ORG_1,
+            principal_user_id=USER_1,
+            principal_type=PrincipalType.HUMAN,
+            role_bundle=bundle,
+            scope=scope,
+            grantor=authorization.GrantorRef(GrantorType.SYSTEM, "attestation-policy-test"),
+            reason="Attestation policy configuration regression authority",
+        )
+        db.commit()
 
 
-def _bind(db: Session, *, role_bundle: RoleBundle = RoleBundle.ORG_OWNER) -> None:
-    owner = db.get(User, USER_1)
-    assert owner is not None, "the hermetic demo tenant must seed the actor"
-    authorization.create_role_binding(
-        db,
-        organization_id=ORG_1,
-        principal_user_id=USER_1,
-        principal_type=PrincipalType.HUMAN,
-        role_bundle=role_bundle,
-        scope=authorization.BindingScope(
-            InstitutionScope.ORGANIZATION,
-            None,
-            ModuleScope.ACCOUNT,
-            SensitivityScope.ALL,
-        ),
-        grantor=authorization.GrantorRef(authorization.GrantorType.SYSTEM, "test-suite"),
-        reason="binding-based authority for attestation policy tests",
+def _org_scope(
+    module: ModuleScope = ModuleScope.REGULATORY,
+    sensitivity: SensitivityScope = SensitivityScope.RESTRICTED,
+) -> authorization.BindingScope:
+    return authorization.BindingScope(InstitutionScope.ORGANIZATION, None, module, sensitivity)
+
+
+def _bank_scope() -> authorization.BindingScope:
+    return authorization.BindingScope(
+        InstitutionScope.INSTITUTION,
+        SAMPLE_BANK_ID,
+        ModuleScope.REGULATORY,
+        SensitivityScope.RESTRICTED,
     )
 
 
-@pytest.fixture
-def owner_client(db_client: TestClient) -> TestClient:
-    """A hermetic API client whose actor holds an explicit Org Owner binding."""
+def _current_version() -> int:
     with _session() as db:
-        _bind(db)
+        user = db.get(User, USER_1)
+        assert user is not None
+        return user.authorization_version
+
+
+def _auth() -> dict[str, str]:
+    # Scalar roles ("admin", "approver") grant nothing by themselves: only the
+    # explicit scoped binding may authorize these routes.
+    return headers(roles=("admin", "approver"), authorization_version=_current_version())
+
+
+@pytest.fixture(autouse=True)
+def book(db_client: TestClient) -> None:
+    _ = db_client
+    with _session() as db:
+        materialize_canonical_test_book(db)
+        db.commit()
+
+
+def _counts() -> tuple[int, int]:
+    with _session() as db:
+        return (
+            db.scalar(select(func.count()).select_from(AuditEvent)) or 0,
+            db.scalar(select(func.count()).select_from(ReturnSigningPolicy)) or 0,
+        )
+
+
+@pytest.fixture
+def org_reg_configurator(db_client: TestClient) -> TestClient:
+    _ = db_client
+    _grant(RoleBundle.CONFIGURATOR, scope=_org_scope())
     return db_client
 
 
-def test_org_owner_can_configure_placements_and_signing_policies(
-    owner_client: TestClient,
+def test_organization_scoped_reg_configurator_configures_placements_and_signing_policies(
+    org_reg_configurator: TestClient,
 ) -> None:
-    placed = owner_client.put(PLACEMENT_URL, headers=_owner_headers(), json=PLACEMENT_PAYLOAD)
+    placed = org_reg_configurator.put(
+        PLACEMENT_URL, headers=_auth(), json=PLACEMENT_PAYLOAD
+    )
     assert placed.status_code == 200, placed.text
     assert placed.json()["return_code"] == "LCR-NSFR"
 
-    policy = owner_client.put(POLICY_URL, headers=_owner_headers(), json=POLICY_PAYLOAD)
+    policy = org_reg_configurator.put(POLICY_URL, headers=_auth(), json=POLICY_PAYLOAD)
     assert policy.status_code == 200, policy.text
     assert policy.json()["return_code"] == "LCR-NSFR"
     assert policy.json()["require_signature"] is False
@@ -130,117 +171,60 @@ def test_org_owner_can_configure_placements_and_signing_policies(
         assert "attestation.signing_policy_updated" in events
 
 
-@pytest.mark.parametrize("role", ("account_admin", "analyst", "approver", "viewer", "examiner"))
 def test_no_scalar_role_configures_either_resource_without_the_binding(
     db_client: TestClient,
-    role: str,
 ) -> None:
+    before = _counts()
     for url, payload in ((POLICY_URL, POLICY_PAYLOAD), (PLACEMENT_URL, PLACEMENT_PAYLOAD)):
-        response = db_client.put(url, headers=headers(roles=(role,)), json=payload)
+        response = db_client.put(url, headers=headers(roles=("account_admin",)), json=payload)
         assert response.status_code == 403, (url, response.text)
-        assert _OWNER_DENIAL in response.json()["error"]["message"], url
+        assert error_envelope(response)["message"] == ORG_DENIAL
+    assert _counts() == before
 
 
-def test_an_account_admin_binding_does_not_open_attestation_configuration(
+def test_a_bank_scoped_reg_binding_is_insufficient(
     db_client: TestClient,
 ) -> None:
-    """The binding vocabulary has no account-administration tier for this control."""
-    with _session() as db:
-        _bind(db, role_bundle=RoleBundle.ACCOUNT_ADMIN)
+    """VAL-CFG-008: configuring a policy for EVERY bank is not a single-bank act."""
+    before = _counts()
+    _grant(RoleBundle.CONFIGURATOR, scope=_bank_scope())
 
     for url, payload in ((POLICY_URL, POLICY_PAYLOAD), (PLACEMENT_URL, PLACEMENT_PAYLOAD)):
-        response = db_client.put(url, headers=_owner_headers(), json=payload)
-        assert response.status_code == 403, (url, response.text)
-        assert _OWNER_DENIAL in response.json()["error"]["message"], url
+        denied = db_client.put(url, headers=_auth(), json=payload)
+        assert denied.status_code == 403, (url, denied.text)
+        assert error_envelope(denied)["message"] == ORG_DENIAL
+    assert _counts() == before
 
 
-def test_reason_validation_survives_the_gate(owner_client: TestClient) -> None:
-    without_reason = {**POLICY_PAYLOAD, "reason": ""}
-    response = owner_client.put(POLICY_URL, headers=_owner_headers(), json=without_reason)
+def test_wrong_module_and_admin_bundles_never_open_attestation_configuration(
+    db_client: TestClient,
+) -> None:
+    """A Configurator binding over the WRONG module, and Account administration
+    itself, are both outside this control's authority."""
+    _grant(RoleBundle.CONFIGURATOR, scope=_org_scope(module=ModuleScope.ACCOUNT))
+    _grant(RoleBundle.ACCOUNT_ADMIN, scope=_org_scope(module=ModuleScope.ACCOUNT))
+
+    for url, payload in ((POLICY_URL, POLICY_PAYLOAD), (PLACEMENT_URL, PLACEMENT_PAYLOAD)):
+        denied = db_client.put(url, headers=_auth(), json=payload)
+        assert denied.status_code == 403, (url, denied.text)
+        assert error_envelope(denied)["message"] == ORG_DENIAL
+
+
+def test_reason_validation_survives_the_gate(org_reg_configurator: TestClient) -> None:
+    without_reason: dict[str, Any] = {**POLICY_PAYLOAD, "reason": ""}
+    response = org_reg_configurator.put(
+        POLICY_URL, headers=_auth(), json=without_reason
+    )
     assert response.status_code == 422, response.text
 
 
-def test_owner_can_administer_icaap_codes_after_capital_read_is_revoked(
-    owner_client: TestClient,
+def test_reg_configurator_without_capital_reads_still_signs_off_icaap_policies(
+    org_reg_configurator: TestClient,
 ) -> None:
-    with _session() as db:
-        materialize_canonical_test_book(db)
-        for binding in db.scalars(
-            select(AuthorizationBinding).where(
-                AuthorizationBinding.organization_id == ORG_1,
-                AuthorizationBinding.principal_user_id == USER_1,
-                AuthorizationBinding.module_scope == ModuleScope.ALL.value,
-                AuthorizationBinding.role_bundle == RoleBundle.VIEWER.value,
-                AuthorizationBinding.status == "active",
-            )
-        ):
-            grant_administration.revoke_scoped_grant(
-                db,
-                organization_id=ORG_1,
-                binding_id=binding.id,
-                actor_user_id=USER_1,
-                reason="Replace broad fixture reads with independently revocable module grants",
-                commit=False,
-            )
-        for module, sensitivity in (
-            (ModuleScope.REGULATORY, SensitivityScope.RESTRICTED),
-            (ModuleScope.CAPITAL, SensitivityScope.CONFIDENTIAL),
-        ):
-            grant_institution_authority(
-                db,
-                organization_id=ORG_1,
-                bank_id=SAMPLE_BANK_ID,
-                user_id=USER_1,
-                bundle=RoleBundle.VIEWER,
-                module=module,
-                sensitivity=sensitivity,
-            )
-        db.commit()
-        capital = db.scalar(
-            select(AuthorizationBinding).where(
-                AuthorizationBinding.principal_user_id == USER_1,
-                AuthorizationBinding.module_scope == ModuleScope.CAPITAL.value,
-            )
-        )
-        assert capital is not None
-        capital_id = capital.id
-
-    catalogue_url = "/api/v1/regulatory-reporting/templates"
-    before = owner_client.get(catalogue_url, params={"bank_id": SAMPLE_BANK_ID}, headers=headers())
-    assert before.status_code == 200, before.text
-    assert any(
-        t.family == "icaap"
-        for t in ReturnTemplateListRead.model_validate_json(before.text).templates
-    )
-
-    with _session() as db:
-        grant_administration.revoke_scoped_grant(
-            db,
-            organization_id=ORG_1,
-            binding_id=capital_id,
-            actor_user_id=USER_1,
-            reason="Owner retains policy administration but relinquishes Capital reads",
-        )
-        user = db.get(User, USER_1)
-        assert user is not None
-        auth = headers(authorization_version=user.authorization_version)
-
-    reporting = owner_client.get(catalogue_url, params={"bank_id": SAMPLE_BANK_ID}, headers=auth)
-    assert reporting.status_code == 200, reporting.text
-    # Legal metadata remains public when Capital calculation access is revoked.
-    assert any(
-        t.code == "ICAAP-REPORT"
-        for t in ReturnTemplateListRead.model_validate_json(reporting.text).templates
-    )
-
-    registry = owner_client.get(catalogue_url, headers=auth)
-    assert registry.status_code == 200, registry.text
-    assert any(
-        t.code == "ICAAP-REPORT"
-        for t in ReturnTemplateListRead.model_validate_json(registry.text).templates
-    )
-    policy = owner_client.put(
-        POLICY_URL, headers=auth, json={**POLICY_PAYLOAD, "return_code": "ICAAP-REPORT"}
+    """Configuration authority over an ICAAP return's signing policy needs no
+    Capital read — the two acts stay independent."""
+    policy = org_reg_configurator.put(
+        POLICY_URL, headers=_auth(), json={**POLICY_PAYLOAD, "return_code": "ICAAP-REPORT"}
     )
     assert policy.status_code == 200, policy.text
-    assert PolicyRead.model_validate_json(policy.text).return_code == "ICAAP-REPORT"
+    assert policy.json()["return_code"] == "ICAAP-REPORT"

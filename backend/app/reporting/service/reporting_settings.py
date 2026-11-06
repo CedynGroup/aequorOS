@@ -17,8 +17,13 @@ from sqlalchemy.orm import Session
 from app.api.deps import TenantContext
 from app.identity.public import Bank
 from app.reporting.models.packages import RegulatoryReportingSettings
-from app.reporting.schemas.packages import ReportingSettingsPut, ReportingSettingsRead
+from app.reporting.schemas.packages import (
+    ReportingSettingsPut,
+    ReportingSettingsRead,
+    ReportingSettingsWriteAcknowledgement,
+)
 from app.reporting.service.common import get_bank_or_404, require_actor
+from app.reporting.service.configure_access import require_reporting_configure_access
 from app.services.audit import record_event
 
 
@@ -81,9 +86,13 @@ def get_reporting_settings(db: Session, ctx: TenantContext, bank_id: str) -> Rep
 
 def put_reporting_settings(
     db: Session, ctx: TenantContext, bank_id: str, payload: ReportingSettingsPut
-) -> ReportingSettingsRead:
+) -> ReportingSettingsWriteAcknowledgement:
+    # Configuration duty (VAL-CFG-007): exact reg/configure/restricted authority
+    # for this bank BEFORE any mutation or audit row. The write-only
+    # acknowledgement (D27/D34) echoes the submitted map only — the stored row's
+    # timestamps are read through the tenant-gated GET.
+    bank = require_reporting_configure_access(db, ctx, bank_id)
     require_actor(ctx)
-    bank = get_bank_or_404(db, ctx, bank_id)
     settings, created = get_or_create_reporting_settings(db, ctx, bank.id)
     settings.deadline_overrides = dict(payload.deadline_overrides)
     db.flush()
@@ -100,4 +109,8 @@ def put_reporting_settings(
         },
     )
     db.commit()
-    return _read(settings)
+    return ReportingSettingsWriteAcknowledgement(
+        bank_id=bank.id,
+        deadline_overrides=dict(payload.deadline_overrides),
+        created=created,
+    )

@@ -25,8 +25,13 @@ from app.market_data.public import (
     encrypt_credential_envelope,
 )
 from app.reporting.models.packages import RegulatoryChannelConfig
-from app.reporting.schemas.packages import ChannelConfigPut, ChannelConfigRead
+from app.reporting.schemas.packages import (
+    ChannelConfigPut,
+    ChannelConfigRead,
+    ChannelConfigWriteAcknowledgement,
+)
 from app.reporting.service.common import get_bank_or_404, require_actor
+from app.reporting.service.configure_access import require_reporting_configure_access
 from app.services.audit import record_event
 
 CHANNEL_CODES = ("orass_api", "orass_sandbox", "email", "manual")
@@ -70,9 +75,13 @@ def get_channel_config(
 
 def put_channel_config(
     db: Session, ctx: TenantContext, bank_id: str, channel: str, payload: ChannelConfigPut
-) -> ChannelConfigRead:
+) -> ChannelConfigWriteAcknowledgement:
+    # Configuration duty (VAL-CFG-007): exact reg/configure/restricted authority
+    # for this bank BEFORE any encryption, mutation or audit row. The write-only
+    # acknowledgement (D27/D34) never echoes the stored fingerprint or the
+    # has_credentials flag — those are read through the tenant-gated GET.
+    bank = require_reporting_configure_access(db, ctx, bank_id)
     require_actor(ctx)
-    bank = get_bank_or_404(db, ctx, bank_id)
     config = _config_row(db, ctx, bank.id, channel)
     created = config is None
     if config is None:
@@ -103,7 +112,12 @@ def put_channel_config(
         },
     )
     db.commit()
-    return _read(config)
+    return ChannelConfigWriteAcknowledgement(
+        bank_id=bank.id,
+        channel=channel,  # type: ignore[arg-type]
+        credentials_rotated=payload.credentials is not None,
+        created=created,
+    )
 
 
 def channel_config_row(

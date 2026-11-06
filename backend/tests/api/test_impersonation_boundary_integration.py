@@ -304,13 +304,22 @@ def test_account_admin_is_limited_to_account_administration(db_client: TestClien
     integration_keys = db_client.get("/api/v1/integration-keys", headers=account_headers)
     assert integration_keys.status_code == 200, integration_keys.text
 
+    # A valid payload is required so the request reaches the service-level
+    # organization-scope REG configure gate (the dependency no longer denies).
     attestation_templates = db_client.put(
         "/api/v1/attestation/signature-placements",
         headers=account_headers,
-        json={},
+        json={
+            "return_code": "LCR-NSFR",
+            "placements": [],
+            "reason": "account-admin must not author placement templates",
+        },
     )
     assert attestation_templates.status_code == 403
-    assert "Organization Owner" in attestation_templates.json()["error"]["message"]
+    assert (
+        "organization-scoped Regulatory Reporting"
+        in attestation_templates.json()["error"]["message"]
+    )
 
 
 # --- 2. impersonation cannot mutate ANYTHING ----------------------------------
