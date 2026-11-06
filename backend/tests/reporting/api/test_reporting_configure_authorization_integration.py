@@ -14,6 +14,8 @@ response.
 
 from __future__ import annotations
 
+from typing import Any
+
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import func, select
@@ -194,11 +196,16 @@ def test_principal_without_any_coverage_is_hidden(db_client: TestClient) -> None
 def test_cross_tenant_configurator_is_hidden(db_client: TestClient) -> None:
     _grant(RoleBundle.CONFIGURATOR)
     other = headers(org_id="OR-1S000002", roles=("admin",))
-    assert db_client.put(CHANNEL_URL, headers=other, json={"config": {}}).status_code == 404
-    settings_hidden = db_client.put(
-        SETTINGS_URL, headers=other, json={"deadline_overrides": {}}
-    )
-    assert settings_hidden.status_code == 404
+    before = _counts()
+    attempts: list[tuple[str, dict[str, Any]]] = [
+        (CHANNEL_URL, {"config": {}}),
+        (SETTINGS_URL, {"deadline_overrides": {}}),
+    ]
+    for url, payload in attempts:
+        hidden = db_client.put(url, headers=other, json=payload)
+        assert hidden.status_code == 404, (url, hidden.text)
+        assert error_envelope(hidden)["message"] == "Bank not found."
+    assert _counts() == before
 
 
 def test_channel_config_put_succeeds_with_configurator_binding(db_client: TestClient) -> None:
