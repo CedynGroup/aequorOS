@@ -262,21 +262,6 @@ def test_configurator_is_explicit_exact_and_invalidates_sign_ins(grant_client: T
         principal = PrincipalLocator(ORG_1, GRANTEE, PrincipalType.HUMAN)
         exact = _resource(BANK_A, Module.LIQUIDITY, Sensitivity.RESTRICTED)
         assert authorization.evaluate_permission(db, principal, Permission.CONFIGURE, exact).allowed
-        for permission in (
-            Permission.VIEW,
-            Permission.RUN,
-            Permission.APPROVE,
-            Permission.ADMINISTER,
-        ):
-            assert not authorization.evaluate_permission(db, principal, permission, exact).allowed
-        for other in (
-            _resource(BANK_B, Module.LIQUIDITY, Sensitivity.RESTRICTED),
-            _resource(BANK_A, Module.REGULATORY, Sensitivity.RESTRICTED),
-            _resource(BANK_A, Module.LIQUIDITY, Sensitivity.CONFIDENTIAL),
-        ):
-            assert not authorization.evaluate_permission(
-                db, principal, Permission.CONFIGURE, other
-            ).allowed
         current = authentication.issue_tokens(db, user)
     assert (
         grant_client.get(
@@ -312,6 +297,67 @@ def test_configurator_is_explicit_exact_and_invalidates_sign_ins(grant_client: T
         refresh_rows = list(db.scalars(select(RefreshToken).where(RefreshToken.user_id == GRANTEE)))
         assert refresh_rows
         assert all(row.revoked_reason == "authorization_changed" for row in refresh_rows)
+
+
+@pytest.fixture
+def configurator_grant(grant_client: TestClient) -> None:
+    """One exact Configurator grant: Aequor Bank Ghana, Liquidity Monitoring, Restricted."""
+    created = grant_client.post(
+        "/api/v1/authorization/bindings",
+        headers=_owner_headers(),
+        json=_reviewed_payload(
+            grant_client, _payload(role="configurator", sensitivity="restricted")
+        ),
+    )
+    assert created.status_code == 201, created.text
+
+
+@pytest.mark.parametrize(
+    "permission",
+    [
+        pytest.param(Permission.VIEW, id="view-denied"),
+        pytest.param(Permission.RUN, id="run-denied"),
+        pytest.param(Permission.APPROVE, id="approve-denied"),
+        pytest.param(Permission.ADMINISTER, id="administer-denied"),
+    ],
+)
+def test_configurator_grant_denies_every_other_permission(
+    grant_client: TestClient,
+    configurator_grant: None,
+    permission: Permission,
+) -> None:
+    """The Configurator bundle carries CONFIGURE alone, reported per permission."""
+    with _session() as db:
+        principal = PrincipalLocator(ORG_1, GRANTEE, PrincipalType.HUMAN)
+        exact = _resource(BANK_A, Module.LIQUIDITY, Sensitivity.RESTRICTED)
+        assert not authorization.evaluate_permission(db, principal, permission, exact).allowed
+
+
+@pytest.mark.parametrize(
+    "resource",
+    [
+        pytest.param(
+            _resource(BANK_B, Module.LIQUIDITY, Sensitivity.RESTRICTED), id="other-institution"
+        ),
+        pytest.param(
+            _resource(BANK_A, Module.REGULATORY, Sensitivity.RESTRICTED), id="other-module"
+        ),
+        pytest.param(
+            _resource(BANK_A, Module.LIQUIDITY, Sensitivity.CONFIDENTIAL), id="other-sensitivity"
+        ),
+    ],
+)
+def test_configurator_grant_is_exact_to_its_dimensions(
+    grant_client: TestClient,
+    configurator_grant: None,
+    resource: ResourceLocator,
+) -> None:
+    """Configure authority never leaks across dimensions, reported per adjacent resource."""
+    with _session() as db:
+        principal = PrincipalLocator(ORG_1, GRANTEE, PrincipalType.HUMAN)
+        assert not authorization.evaluate_permission(
+            db, principal, Permission.CONFIGURE, resource
+        ).allowed
 
 
 def test_create_and_list_keep_every_scalar_dimension_exact(

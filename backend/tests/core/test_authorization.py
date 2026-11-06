@@ -190,6 +190,38 @@ def test_only_configurator_carries_configure() -> None:
     } == {RoleBundle.CONFIGURATOR}
 
 
+def _configurator_mismatch_cases() -> list[tuple[str, BindingGrant]]:
+    """Each single-dimension corruption of the one complete configure binding."""
+    exact = _binding(
+        role=RoleBundle.CONFIGURATOR,
+        module=ModuleScope.LIQUIDITY,
+        sensitivity=SensitivityScope.RESTRICTED,
+    )
+    return [
+        ("wrong-institution", replace(exact, institution_id=BANK_B)),
+        ("wrong-module", replace(exact, module_scope=ModuleScope.REGULATORY)),
+        ("wrong-sensitivity", replace(exact, sensitivity_scope=SensitivityScope.CONFIDENTIAL)),
+        ("suspended", replace(exact, status=BindingStatus.SUSPENDED)),
+        ("revoked", replace(exact, status=BindingStatus.REVOKED, revoked_at=NOW)),
+        ("not-yet-valid", replace(exact, valid_from=NOW + dt.timedelta(seconds=1))),
+        ("expired", replace(exact, valid_until=NOW)),
+    ]
+
+
+CONFIGURATOR_MISMATCH_CASES = _configurator_mismatch_cases()
+
+
+@pytest.mark.parametrize(
+    "binding",
+    [pytest.param(binding, id=case) for case, binding in CONFIGURATOR_MISMATCH_CASES],
+)
+def test_a_single_broken_dimension_denies_configure(binding: BindingGrant) -> None:
+    """Each mismatch is its own reported case: one broken dimension denies configure."""
+    assert not _evaluate(
+        Permission.CONFIGURE, _resource(sensitivity=Sensitivity.RESTRICTED), [binding]
+    ).allowed
+
+
 def test_configurator_requires_one_complete_active_binding() -> None:
     """Mismatched or ineffective grants cannot compose into configure authority."""
     exact = _binding(
@@ -200,17 +232,7 @@ def test_configurator_requires_one_complete_active_binding() -> None:
     resource = _resource(sensitivity=Sensitivity.RESTRICTED)
     assert _evaluate(Permission.CONFIGURE, resource, [exact]).allowed
     assert not _evaluate(Permission.CONFIGURE, resource, []).allowed
-    mismatches = [
-        replace(exact, institution_id=BANK_B),
-        replace(exact, module_scope=ModuleScope.REGULATORY),
-        replace(exact, sensitivity_scope=SensitivityScope.CONFIDENTIAL),
-        replace(exact, status=BindingStatus.SUSPENDED),
-        replace(exact, status=BindingStatus.REVOKED, revoked_at=NOW),
-        replace(exact, valid_from=NOW + dt.timedelta(seconds=1)),
-        replace(exact, valid_until=NOW),
-    ]
-    for binding in mismatches:
-        assert not _evaluate(Permission.CONFIGURE, resource, [binding]).allowed
+    mismatches = [binding for _, binding in CONFIGURATOR_MISMATCH_CASES]
     assert not _evaluate(Permission.CONFIGURE, resource, mismatches).allowed
     veto = ConditionCheck(ConditionKind.DEMO_MODE, False, "demo mode")
     assert not _evaluate(Permission.CONFIGURE, resource, [exact], conditions=(veto,)).allowed
