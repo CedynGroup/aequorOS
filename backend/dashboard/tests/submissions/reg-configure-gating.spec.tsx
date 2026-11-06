@@ -404,6 +404,12 @@ it("enables the channel save exactly for a whole-institution reg/configure/restr
       async (dims, holderBank) => {
         cleanup();
         resetState();
+        // A fresh client per iteration: ProfileProvider caches /auth/me, and
+        // reusing this iteration's authority for the next one would test the
+        // wrong capability rows.
+        client = new QueryClient({
+          defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+        });
         const row = dims.map(toCapability);
         if (holderBank === BANK) state.bankCapabilities = row;
         else state.otherBankCapabilities = row;
@@ -424,11 +430,14 @@ it("enables the channel save exactly for a whole-institution reg/configure/restr
 it("enables the policy save exactly for an organization-scope reg configure row, never a bank's", async () => {
   await fc.assert(
     fc.asyncProperty(
-      fc.array(dimsArb(), { maxLength: 4, minLength: 1 }),
+      fc.array(orgDimsArb(), { maxLength: 4, minLength: 1 }),
       fc.array(dimsArb(), { maxLength: 4 }),
       async (orgDims, bankDims) => {
         cleanup();
         resetState();
+        client = new QueryClient({
+          defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
+        });
         state.orgCapabilities = orgDims.map(toCapability);
         state.bankCapabilities = bankDims.map(toCapability);
         const expected = orgDims.some(
@@ -436,8 +445,7 @@ it("enables the policy save exactly for an organization-scope reg configure row,
             !r.requiresContextualAuthorization &&
             r.module === "reg" &&
             r.sensitivity === "restricted" &&
-            r.permission === "configure" &&
-            r.scope.kind === "all",
+            r.permission === "configure",
         );
         mountPage();
         const save = await screen.findByRole("button", { name: "Save policy" });
@@ -479,6 +487,25 @@ const dimsArb = (): fc.Arbitrary<CapabilityDims> =>
       branches: fc.constant([]),
       regions: fc.constant([]),
     }),
+  }) as fc.Arbitrary<CapabilityDims>;
+
+/**
+ * Organization-scope capability rows, as the system can actually produce them:
+ * `validate_public_grant` refuses branch/region narrowing for every module
+ * except Credit, and grant administration is the only writer of bindings, so
+ * an organization capability row always carries the whole-institution scope.
+ */
+const orgDimsArb = (): fc.Arbitrary<CapabilityDims> =>
+  fc.record({
+    module: fc.constantFrom("reg", "liq", "credit", "data", "markets"),
+    permission: fc.constantFrom("view", "configure"),
+    sensitivity: fc.constantFrom("all", "confidential", "restricted"),
+    requiresContextualAuthorization: fc.boolean(),
+    scope: fc.constant({
+      kind: "all",
+      branches: [],
+      regions: [],
+    } as EffectiveCapabilityRead["dataScope"]),
   }) as fc.Arbitrary<CapabilityDims>;
 
 function toCapability(dims: CapabilityDims): EffectiveCapabilityRead {
