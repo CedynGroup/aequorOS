@@ -651,8 +651,20 @@ function ChannelForm({
       <div className="space-y-6">
         <SectionCard title="Credential status">
           {/* The save response is a write-only acknowledgement; the stored
-              status and fingerprint come from the refetched read. */}
-          {config?.hasCredentials ? (
+              status and fingerprint come from the refetched read. The read is
+              invalidated, not awaited, so never claim a stored/absent state
+              from data that is not current. */}
+          {configQuery.isPending ? (
+            <StatusPill tone="slate">Checking credential status…</StatusPill>
+          ) : configQuery.isError ? (
+            <>
+              <StatusPill tone="amber">Credential status unavailable</StatusPill>
+              <p className="text-caption text-slate leading-relaxed">
+                The stored status could not be read. Reload the page to retry;
+                nothing about the saved configuration is claimed either way.
+              </p>
+            </>
+          ) : config?.hasCredentials ? (
             <div className="space-y-2">
               <StatusPill tone="success">Credentials stored</StatusPill>
               <p className="font-mono text-caption text-slate tnum">
