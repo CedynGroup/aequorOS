@@ -273,6 +273,51 @@ test("new feature roots and index targets are discovered; duplicate syntax count
   ]);
 });
 
+for (const modulePath of ["collision", "nested/collision"]) {
+  for (const extension of [".ts", ".tsx"]) {
+    test(`same-named lib file and directory keep ${modulePath}${extension} in shared-origin coverage`, (t) => {
+      const root = baselinedFixture(t);
+      put(root, `lib/${modulePath}/index.ts`);
+      put(
+        root,
+        `lib/${modulePath}${extension}`,
+        'import "@/features/liquidity/internal";',
+      );
+      const result = run(root, []);
+      assert.equal(result.status, 1, result.stdout);
+      assert.deepEqual(freshPairs(result), [
+        `lib/${modulePath}${extension} -> features/liquidity/internal`,
+      ]);
+    });
+
+    test(`feature imports resolve shared ${modulePath}${extension} before its same-named directory`, (t) => {
+      const root = baselinedFixture(t);
+      put(root, `lib/${modulePath}/index.ts`);
+      put(root, `lib/${modulePath}${extension}`);
+      put(
+        root,
+        "features/fx/routes/probe.tsx",
+        `import "@/lib/${modulePath}";`,
+      );
+      const result = run(root, []);
+      assert.equal(result.status, 0, result.stderr);
+      assert.deepEqual(freshPairs(result), []);
+    });
+  }
+}
+
+test("feature-owned lib prefixes stay private even when a module shadows their directory", (t) => {
+  const root = baselinedFixture(t);
+  put(root, "lib/liquidity/index.ts");
+  put(root, "lib/liquidity.ts");
+  put(root, "features/fx/routes/probe.tsx", 'import "@/lib/liquidity";');
+  const result = run(root, []);
+  assert.equal(result.status, 1, result.stdout);
+  assert.deepEqual(freshPairs(result), [
+    "features/fx/routes/probe.tsx -> lib/liquidity",
+  ]);
+});
+
 test("a feature public interface does not exempt nested private targets", (t) => {
   const root = baselinedFixture(t);
   put(root, "features/liquidity/public/private.ts");

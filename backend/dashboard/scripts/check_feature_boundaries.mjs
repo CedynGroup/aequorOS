@@ -107,7 +107,12 @@ export function ownerOf(relModule, features, root) {
   if (first === "lib" && second === undefined) return "shared";
   // Resolved lib source modules are shared; a bare directory is not a module.
   if (first === "lib" && second !== undefined) {
+    const moduleFile = [...SOURCE_EXTS].some((extension) => {
+      const file = path.posix.join(root, `${relModule}${extension}`);
+      return existsSync(file) && statSync(file).isFile();
+    });
     const dir =
+      !moduleFile &&
       existsSync(path.posix.join(root, relModule)) &&
       statSync(path.posix.join(root, relModule)).isDirectory();
     return dir ? null : "shared";
