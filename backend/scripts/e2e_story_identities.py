@@ -138,17 +138,25 @@ def _grant_story_configure(db: Session, request: StoryRequest, user: User, role:
     """Stories declare their institution hierarchy through the Data Engine.
 
     That is a configure duty, so the provisioning officer holds the explicit
-    exact-bank Configurator sentence; configure still grants no read.
+    Configurator sentence; configure still grants no read. Bind it to the
+    story's bank when that row exists in the story's tenant (the real e2e
+    bootstrap); the shared sample tenant carries no bank rows in the
+    unit-test database, so fall back to organization scope, exactly like the
+    other story grants.
     """
     if role not in {"admin", "analyst"}:
         return
+    bank = db.get(Bank, request.bank_id) if request.bank_id else None
+    institution = (
+        bank.id if bank is not None and bank.organization_id == user.organization_id else None
+    )
     _grant(
         db,
         user,
         RoleBundle.CONFIGURATOR,
         ModuleScope.DATA,
         SensitivityScope.RESTRICTED,
-        institution_id=request.bank_id,
+        institution_id=institution,
     )
 
 
