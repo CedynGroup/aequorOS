@@ -7,8 +7,8 @@
  * colors only — the blobs carry no statuses, so the chart asserts none.
  */
 
-import { EChart, type BiEChartsOption } from "@/features/bi/public";
-import { seriesColor, useChartTokens } from "@/features/bi/public";
+import EChart, { type BiEChartsOption } from "@/components/charts/EChart";
+import { seriesColor, useChartTokens } from "@/components/charts/echartsTheme";
 import {
   axisTooltip,
   BAR_SERIES_BASE,

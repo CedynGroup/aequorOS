@@ -118,7 +118,7 @@ const RULES: readonly PatternRule[] = [
       'import PivotGridCanvas from "../../features/bi/components/PivotGridCanvas";',
     acquits: [
       'import PivotGrid from "@/features/bi/components/PivotGrid";',
-      'import EChart from "../../features/bi/components/EChart";',
+      'import EChart from "../../components/charts/EChart";',
     ],
   },
 ];
@@ -227,7 +227,7 @@ function writeDistFixture(
     chartCanvasDeferred?: boolean;
     /**
      * The Command Center's deferred chart chunk also carries the ECharts runtime
-     * — i.e. `features/bi/components/EChart.tsx` stopped deferring the canvas, so the home
+     * — i.e. `components/charts/EChart.tsx` stopped deferring the canvas, so the home
      * route pays for the whole library as soon as it scrolls the chart into view.
      */
     chartRuntimeInChartChunk?: boolean;
@@ -505,7 +505,7 @@ test("the bundle guard's Command Center chart rule rejects missing stages and a 
   );
 
   // The chart chunk carries the ECharts runtime, i.e. the SECOND
-  // deferral inside features/bi/components/EChart.tsx stopped happening. The Command
+  // deferral inside components/charts/EChart.tsx stopped happening. The Command
   // Center's entry graph is still clean, so nothing else in the guard notices.
   const runtimeInChart = join(base, "runtime-in-chart");
   writeDistFixture(runtimeInChart, {

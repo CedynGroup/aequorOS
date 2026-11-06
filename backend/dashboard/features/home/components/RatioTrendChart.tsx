@@ -15,8 +15,8 @@
  */
 
 import { useMemo, useState } from "react";
-import { EChart, type BiEChartsOption } from "@/features/bi/public";
-import { seriesColor, useChartTokens } from "@/features/bi/public";
+import EChart, { type BiEChartsOption } from "@/components/charts/EChart";
+import { seriesColor, useChartTokens } from "@/components/charts/echartsTheme";
 import {
   gapAwareData,
   LINE_SERIES_BASE,

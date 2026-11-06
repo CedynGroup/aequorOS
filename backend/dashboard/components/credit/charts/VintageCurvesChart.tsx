@@ -9,8 +9,8 @@
  */
 
 import type { VintageCohortRead } from "@aequoros/risk-service-api";
-import EChart, { type BiEChartsOption } from "@/features/bi/components/EChart";
-import { seriesColor, useChartTokens } from "@/features/bi/components/echartsTheme";
+import EChart, { type BiEChartsOption } from "@/components/charts/EChart";
+import { seriesColor, useChartTokens } from "@/components/charts/echartsTheme";
 import {
   axisTooltip,
   gapAwareData,

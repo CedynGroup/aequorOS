@@ -46,7 +46,7 @@ import {
   useInForceAlerts,
   useInForceLiveSummary,
 } from "@/lib/api/regulatoryRules";
-import type { BiEChartsOption } from "@/features/bi/public";
+import type { BiEChartsOption } from "@/components/charts/EChart";
 
 beforeAll(() =>
   vi.stubGlobal("matchMedia", () => ({
@@ -134,7 +134,7 @@ vi.mock("@/features/bi/components/InsightStrip", () => ({
   LandingInsightStrip: () => null,
   useKpiExplain: () => ({ explainFor: () => undefined, drawer: null }),
 }));
-vi.mock("@/features/bi/components/EChart", () => ({
+vi.mock("@/components/charts/EChart", () => ({
   default: ({
     option,
     ariaLabel,

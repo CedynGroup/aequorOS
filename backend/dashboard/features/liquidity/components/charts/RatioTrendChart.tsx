@@ -8,8 +8,8 @@
  * `itemStyle` — a canvas has no element per point for a custom dot renderer.
  */
 
-import { EChart, type BiEChartsOption } from "@/features/bi/public";
-import { seriesColor, useChartTokens } from "@/features/bi/public";
+import EChart, { type BiEChartsOption } from "@/components/charts/EChart";
+import { seriesColor, useChartTokens } from "@/components/charts/echartsTheme";
 import {
   axisTooltip,
   LINE_SERIES_BASE,

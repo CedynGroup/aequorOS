@@ -1,15 +1,5 @@
 {
   "violations": [
-    "components/charts/BalanceSheetProjectionChart.tsx -> features/bi/components/EChart",
-    "components/charts/BalanceSheetProjectionChart.tsx -> features/bi/components/echartsTheme",
-    "components/charts/CashFlowForecastChart.tsx -> features/bi/components/EChart",
-    "components/charts/CashFlowForecastChart.tsx -> features/bi/components/echartsTheme",
-    "components/charts/DonutChart.tsx -> features/bi/components/EChart",
-    "components/charts/DonutChart.tsx -> features/bi/components/echartsTheme",
-    "components/charts/HQLAStackChart.tsx -> features/bi/components/EChart",
-    "components/charts/HQLAStackChart.tsx -> features/bi/components/echartsTheme",
-    "components/charts/PrepaymentCurveChart.tsx -> features/bi/components/EChart",
-    "components/charts/PrepaymentCurveChart.tsx -> features/bi/components/echartsTheme",
     "components/shell/UnifiedBell.tsx -> features/live/components/moduleDisplay",
     "features/bi/components/CertifiedPackScreen.tsx -> components/access/CoverageNotice",
     "features/bi/components/NeedsDataWidget.tsx -> components/access/CoverageNotice",

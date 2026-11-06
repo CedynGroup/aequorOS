@@ -7,8 +7,8 @@
  * dashboard line items — no client-side regulatory math.
  */
 
-import { EChart, type BiEChartsOption } from "@/features/bi/public";
-import { seriesColor, useChartTokens } from "@/features/bi/public";
+import EChart, { type BiEChartsOption } from "@/components/charts/EChart";
+import { seriesColor, useChartTokens } from "@/components/charts/echartsTheme";
 import {
   axisTooltip,
   BAR_SERIES_BASE,

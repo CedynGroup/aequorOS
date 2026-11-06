@@ -29,7 +29,7 @@ import DataTable, { type Column } from "@/components/ui/DataTable";
 import KpiStat from "@/components/ui/KpiStat";
 import { ErrorPanel } from "@/components/ui/QueryBoundary";
 import DrillAction from "./DrillAction";
-import EChart, { type BiEChartsOption } from "./EChart";
+import EChart, { type BiEChartsOption } from "@/components/charts/EChart";
 import NeedsDataWidget from "./NeedsDataWidget";
 import RefusedWidget from "./RefusedWidget";
 import RestrictedWidget from "./RestrictedWidget";
@@ -245,7 +245,10 @@ export default function WidgetRenderer({
   const refusal = biRefusalSentence(error);
   if (refusal !== null) {
     return (
-      <RefusedWidget sentence={refusal} height={height + WIDGET_CHROME_HEIGHT} />
+      <RefusedWidget
+        sentence={refusal}
+        height={height + WIDGET_CHROME_HEIGHT}
+      />
     );
   }
 

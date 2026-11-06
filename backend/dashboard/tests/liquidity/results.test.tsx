@@ -97,7 +97,7 @@ loader._load = (request, parent, isMain) => {
       LandingInsightStrip: () => null,
       useKpiExplain: () => ({ explainFor: () => undefined, drawer: null }),
     };
-  if (request === "@/features/bi/components/EChart")
+  if (request === "@/components/charts/EChart")
     return {
       __esModule: true,
       default: ({ option }: { option: typeof chartOption }) => {
@@ -105,26 +105,14 @@ loader._load = (request, parent, isMain) => {
         return <div />;
       },
     };
-  // The feature interface aggregates BI modules. Theme helpers are pure and
-  // load for real; the strip and chart stay mocked exactly as above.
-  if (request === "@/features/bi/public") {
-    const theme = originalLoad(
-      path.resolve(__dirname, "../..", "features/bi/components/echartsTheme"),
-      parent,
-      isMain,
-    ) as typeof import("../../features/bi/components/echartsTheme");
+  // The BI interface owns the insight strip; shared chart theme helpers load
+  // for real through the alias resolver below.
+  if (request === "@/features/bi/public")
     return {
       __esModule: true,
-      EChart: ({ option }: { option: typeof chartOption }) => {
-        chartOption = option;
-        return <div />;
-      },
       LandingInsightStrip: () => null,
       useKpiExplain: () => ({ explainFor: () => undefined, drawer: null }),
-      seriesColor: theme.seriesColor,
-      useChartTokens: theme.useChartTokens,
     };
-  }
   // The feature interface aggregates workbench modules; the workbench is a
   // UI orchestrator over runs, not part of what this test asserts.
   if (request === "@/features/workbench/public")
@@ -147,8 +135,10 @@ loader._load = (request, parent, isMain) => {
 
 const Page = require("../../app/(app)/liquidity/nsfr/page")
   .default as typeof import("../../app/(app)/liquidity/nsfr/page").default;
-const Trend = require("../../features/liquidity/components/charts/RatioTrendChart").default;
-const Outflow = require("../../features/liquidity/components/charts/NetOutflowChart").default;
+const Trend =
+  require("../../features/liquidity/components/charts/RatioTrendChart").default;
+const Outflow =
+  require("../../features/liquidity/components/charts/NetOutflowChart").default;
 const LimitWall = require("@/features/risk/public")
   .LimitWall as typeof import("@/features/risk/public").LimitWall;
 const { liquidityLimits } =

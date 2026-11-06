@@ -88,7 +88,7 @@ vi.mock("@/features/bi/components/InsightStrip", () => ({
   LandingInsightStrip: () => null,
   useKpiExplain: () => ({}),
 }));
-vi.mock("@/features/bi/components/EChart", () => ({
+vi.mock("@/components/charts/EChart", () => ({
   default: () => <div>Chart</div>,
 }));
 beforeEach(() => {

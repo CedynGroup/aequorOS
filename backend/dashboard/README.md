@@ -335,7 +335,7 @@ Three rules, all enforced by `tests/access/fail-open-guard.test.ts`:
 
 - Next.js 16 (App Router, Turbopack) · React 19 · TypeScript · Tailwind CSS
 - TanStack Query over the generated OpenAPI client
-- Recharts for visualization
+- ECharts for visualization
 - NextAuth for password and OIDC SSO sign-in
 - Inter (UI) + IBM Plex Mono (numerical data) via `next/font/local`
 
@@ -351,7 +351,7 @@ Three rules, all enforced by `tests/access/fail-open-guard.test.ts`:
   request-rendered with `cache: "no-store"`, while product data keeps using the
   explicit TanStack Query policy documented below.
 - Production builds use Turbopack's per-route client manifests. The Command
-  Center bundle guard (`scripts/assert-home-route-bundle.mjs`) requires Recharts
+  Center bundle guard (`scripts/assert-home-route-bundle.mjs`) requires ECharts
   and the ICAAP ProseMirror editor to stay out of the initial route graph, and
   verifies their runtime markers in the deferred chart and section-editor chunks.
 
@@ -402,14 +402,18 @@ row focus, Tab traversal, Enter activation, and labelled keyboard pager when
 changing this surface.
 
 Because that panel is below the fold, `DeferredRatioTrendChart` keeps its
-Recharts implementation out of the Command Center's initial JavaScript graph.
+ECharts implementation out of the Command Center's initial JavaScript graph.
 It preserves the panel's fixed geometry with a loading frame, then requests the
 chart when the panel enters a 320 px viewport margin (immediately only when
 `IntersectionObserver` is unavailable). Other chart-heavy routes are not
 deferred by this boundary. The production `build` command runs
 `scripts/assert-home-route-bundle.mjs` after `next build`; the guard fails if a
-Recharts chunk returns to the home entry graph or the deferred chart chunk can
-no longer be identified.
+chart runtime returns to the home entry graph, either deferred chart stage can
+no longer be identified, or the chart body eagerly carries the canvas runtime.
+The shared `components/charts/EChart.tsx` entrance defers the canvas with
+`dynamic(..., { ssr: false })`; the home loader explicitly imports that entrance
+to retain the second stage in the manifest. See [the feature layout](FEATURE_LAYOUT.md#target-shape)
+for shared chart ownership and import paths.
 
 ## Run locally
 

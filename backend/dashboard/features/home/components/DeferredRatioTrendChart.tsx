@@ -3,6 +3,8 @@
 import dynamic from "next/dynamic";
 import { useEffect, useRef, useState } from "react";
 import ChartFrame from "@/components/ui/ChartFrame";
+// Keep the shared entrance's deferred canvas in the home's two-stage manifest.
+import "@/components/charts/EChart";
 
 const RatioTrendChart = dynamic(() => import("./RatioTrendChart"), {
   ssr: false,
@@ -10,7 +12,7 @@ const RatioTrendChart = dynamic(() => import("./RatioTrendChart"), {
 });
 
 /**
- * Keep Recharts out of the Command Center entry graph until its below-the-fold
+ * Keep ECharts out of the Command Center entry graph until its below-the-fold
  * panel approaches the viewport. The generous margin starts the request before
  * the user reaches the panel without competing with the primary cockpit load.
  */

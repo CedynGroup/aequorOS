@@ -20,8 +20,8 @@ import ChartFrame from "@/components/ui/ChartFrame";
 import SectionCard from "@/components/ui/SectionCard";
 import SubTabs from "@/components/ui/SubTabs";
 import DataTable, { type Column } from "@/components/ui/DataTable";
-import EChart, { type BiEChartsOption } from "@/features/bi/components/EChart";
-import { seriesColor, useChartTokens } from "@/features/bi/components/echartsTheme";
+import EChart, { type BiEChartsOption } from "@/components/charts/EChart";
+import { seriesColor, useChartTokens } from "@/components/charts/echartsTheme";
 import {
   axisTooltip,
   gapAwareData,
