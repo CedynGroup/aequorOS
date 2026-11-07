@@ -21,7 +21,7 @@ from __future__ import annotations
 
 import itertools
 import os
-from collections.abc import Generator, Sequence
+from collections.abc import Generator, Mapping, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass, replace
 from datetime import date
@@ -144,6 +144,22 @@ def _public_id(prefix: str, slot: int) -> str:
     """A well-formed synthetic ``OR-``/``BK-`` platform id, unique per example."""
     body = "".join(_CROCKFORD[(slot // 32**index) % 32] for index in range(8))
     return f"{prefix}-{body}"
+
+
+def _slot_pick(entries: Mapping[UUID, object], slot: int) -> UUID:
+    """Return the key at ``slot % len(entries)`` in dict insertion order.
+
+    Insertion order equals rule-execution order, so a rule's victim is fully
+    determined by the drawn choices. Ordering by uuid-string instead (the
+    previous form, over server-generated ``uuid4`` keys) made state evolution
+    depend on unseeded randomness outside the choice sequence: Hypothesis's
+    engine replays recorded choice prefixes across examples, and a replayed
+    prefix whose precondition emptiness diverged drew a feature-flag boolean
+    where an integer rule index was recorded, raising
+    ``FlakyStrategyDefinition`` under deep budgets. See
+    ``docs/state_machine_testing.md``.
+    """
+    return list(entries)[slot % len(entries)]
 
 
 def _body(response: httpx.Response | httpx2.Response) -> dict[str, object]:
@@ -526,7 +542,9 @@ def test_scoped_grant_lifecycle_never_exceeds_current_bindings(
             self.client = client
             self.tenant = _seed_tenant()
             self.grants: dict[UUID, tuple[UUID, _GrantSpec]] = {}
-            self.revoked: set[UUID] = set()
+            # Ordered by revocation time (insertion order), so rule selection
+            # stays a function of the drawn choices; see _slot_pick.
+            self.revoked: dict[UUID, None] = {}
             self.version = _authorization_version(self.tenant, self.tenant.target)
             # One real starting grant so revocation and role/scope change always
             # have a target; every further grant is generated.
@@ -572,7 +590,7 @@ def test_scoped_grant_lifecycle_never_exceeds_current_bindings(
             previous = self.version
             assert _revoke_grant(self.client, self.tenant, binding_id) == 200
             del self.grants[binding_id]
-            self.revoked.add(binding_id)
+            self.revoked[binding_id] = None
             self.version = previous + 1
             _assert_version_bumped(
                 self.client,
@@ -643,7 +661,7 @@ def test_scoped_grant_lifecycle_never_exceeds_current_bindings(
         @precondition(_has_grants)
         @rule(slot=st.integers(min_value=0, max_value=31))
         def revoke_one_grant(self, slot: int) -> None:
-            self._revoke(sorted(self.grants, key=str)[slot % len(self.grants)])
+            self._revoke(_slot_pick(self.grants, slot))
 
         @precondition(_has_grants)
         @rule(
@@ -651,7 +669,7 @@ def test_scoped_grant_lifecycle_never_exceeds_current_bindings(
             role=st.sampled_from(_GRANTABLE_ROLES),
         )
         def change_role(self, slot: int, role: RoleBundle) -> None:
-            binding_id = sorted(self.grants, key=str)[slot % len(self.grants)]
+            binding_id = _slot_pick(self.grants, slot)
             current = self.grants[binding_id][1]
             replacement = replace(current, role=role)
             if replacement == current or replacement in (spec for _, spec in self.grants.values()):
@@ -673,7 +691,7 @@ def test_scoped_grant_lifecycle_never_exceeds_current_bindings(
             module: Module,
             sensitivity: Sensitivity,
         ) -> None:
-            binding_id = sorted(self.grants, key=str)[slot % len(self.grants)]
+            binding_id = _slot_pick(self.grants, slot)
             current = self.grants[binding_id][1]
             replacement = _GrantSpec(
                 current.role,
@@ -693,9 +711,7 @@ def test_scoped_grant_lifecycle_never_exceeds_current_bindings(
 
         @rule(slot=st.integers(min_value=0, max_value=31))
         def revoked_and_unknown_grants_stay_unusable(self, slot: int) -> None:
-            binding_id = (
-                sorted(self.revoked, key=str)[slot % len(self.revoked)] if self.revoked else uuid4()
-            )
+            binding_id = _slot_pick(self.revoked, slot) if self.revoked else uuid4()
             assert _revoke_grant(self.client, self.tenant, binding_id) == 409
             _assert_authority_unchanged(
                 self.client, self.tenant, self.tenant.target, version=self.version
@@ -774,7 +790,9 @@ def test_reconciliation_approval_never_skips_the_second_officer(
             self.client = client
             self.tenant = _seed_tenant()
             self.grants: dict[UUID, tuple[UUID, _GrantSpec]] = {}
-            self.revoked: set[UUID] = set()
+            # Ordered by revocation time (insertion order), so rule selection
+            # stays a function of the drawn choices; see _slot_pick.
+            self.revoked: dict[UUID, None] = {}
             self.exceptions: dict[UUID, _ExceptionSpec] = {}
             self.versions = {
                 user_id: _authorization_version(self.tenant, user_id)
@@ -857,7 +875,7 @@ def test_reconciliation_approval_never_skips_the_second_officer(
             previous = self.versions[user_id]
             assert _revoke_grant(self.client, self.tenant, binding_id) == 200
             del self.grants[binding_id]
-            self.revoked.add(binding_id)
+            self.revoked[binding_id] = None
             self.versions[user_id] = previous + 1
             _assert_version_bumped(
                 self.client,
@@ -938,12 +956,12 @@ def test_reconciliation_approval_never_skips_the_second_officer(
         @precondition(_has_grants)
         @rule(slot=st.integers(min_value=0, max_value=31))
         def revoke_authority(self, slot: int) -> None:
-            self._revoke(sorted(self.grants, key=str)[slot % len(self.grants)])
+            self._revoke(_slot_pick(self.grants, slot))
 
         @precondition(_has_revoked)
         @rule(slot=st.integers(min_value=0, max_value=31))
         def revoke_revoked_authority(self, slot: int) -> None:
-            binding_id = sorted(self.revoked, key=str)[slot % len(self.revoked)]
+            binding_id = _slot_pick(self.revoked, slot)
             before = self._evidence()
             assert _revoke_grant(self.client, self.tenant, binding_id) == 409
             assert self._evidence() == before
@@ -988,7 +1006,7 @@ def test_reconciliation_approval_never_skips_the_second_officer(
         def approve_exception(self, slot: int, actor: int, path_bank: int) -> None:
             user_id = (self.tenant.maker, self.tenant.checker, self.tenant.reader)[actor]
             bank_id = self.tenant.banks[path_bank]
-            exception_id = sorted(self.exceptions, key=str)[slot % len(self.exceptions)]
+            exception_id = _slot_pick(self.exceptions, slot)
             expected = self.exceptions[exception_id]
             before = self._evidence()
             response = self.client.post(
@@ -1040,7 +1058,7 @@ def test_reconciliation_approval_never_skips_the_second_officer(
         def revoke_exception(self, slot: int, actor: int, path_bank: int) -> None:
             user_id = (self.tenant.maker, self.tenant.checker, self.tenant.reader)[actor]
             bank_id = self.tenant.banks[path_bank]
-            exception_id = sorted(self.exceptions, key=str)[slot % len(self.exceptions)]
+            exception_id = _slot_pick(self.exceptions, slot)
             expected = self.exceptions[exception_id]
             before = self._evidence()
             response = self.client.post(

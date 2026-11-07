@@ -231,6 +231,22 @@ Setup runs in a Hypothesis initializer so failures still receive teardown. Refus
 commands roll back the request transaction before comparing persisted evidence,
 matching the API session boundary without discarding earlier committed actions.
 
+### Rule selection must be a function of the drawn choices
+
+A stateful rule's victim (which binding to revoke, which exception to decide)
+must be selected in dict insertion order — rule-execution order — as
+`_slot_pick` does for the effective-access and reconciliation machines. Selecting
+by uuid-string order over server-generated `uuid4` keys makes state evolution
+depend on unseeded randomness outside the choice sequence: Hypothesis's engine
+replays recorded choice prefixes across examples, and a replayed prefix whose
+precondition emptiness diverged draws a feature-flag boolean where an integer
+rule index was recorded, raising `FlakyStrategyDefinition`. That failure is
+invisible at per-PR budgets and grows steeper with example count (a
+no-database counterfactual machine showed 0/40 flakes at 10 examples versus
+15/40 at 200 with uuid ordering, and 0/40 with insertion ordering at every
+budget). `tests/db/test_machine_slot_selection.py` pins the selection
+semantics.
+
 ## Defects retained as regression examples
 
 - Filing: `test_repeated_manual_submission_cannot_add_a_second_receipt`
