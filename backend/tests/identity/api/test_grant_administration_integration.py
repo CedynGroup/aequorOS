@@ -1512,10 +1512,12 @@ def test_owner_account_admin_conflict_names_only_the_revocable_grant(
         (("account_admin", "account_admin"), "approver", "Organization Administrator"),
         (("account_admin", "account_admin"), "validator", "Organization Administrator"),
         (("account_admin", "account_admin"), "configurator", "Organization Administrator"),
+        (("account_admin", "account_admin"), "signer", "Organization Administrator"),
         (("analyst", "analyst"), "account_admin", "Analyst"),
         (("approver", "approver"), "account_admin", "Approver"),
         (("validator", "validator"), "account_admin", "Validator"),
         (("configurator", "configurator"), "account_admin", "Configurator"),
+        (("signer", "signer"), "account_admin", "Signer"),
         (("analyst", "approver"), "account_admin", "Analyst and Approver"),
         (("analyst", "validator"), "account_admin", "Analyst and Validator"),
         # Signer cases stay last so the positional held_rolesN ids of the
