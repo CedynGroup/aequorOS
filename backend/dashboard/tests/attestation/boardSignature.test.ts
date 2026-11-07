@@ -184,7 +184,11 @@ function stubFor(specifier: string): unknown | undefined {
       };
     case "@/components/profile/ProfileProvider":
       return {
-        useUserProfile: () => ({ effectiveAuthority, isLoading: false }),
+        useUserProfile: () => ({
+          effectiveAuthority,
+          isLoading: false,
+          profile: { userId: "user-checker" },
+        }),
       };
     case "@/lib/api/hooks":
       return hooksModule;
@@ -571,7 +575,11 @@ test("ICAAP signing uses Regulatory Reporting approval without Capital approval"
   }).text();
   assert.ok(
     text.includes("Approve and certify") || text.includes("Approve and sign"),
-    "the named Signer holding Regulatory Reporting approval was offered nothing",
+    "the Signer holding Regulatory Reporting approval was offered nothing",
+  );
+  assert.ok(
+    text.includes("No pending current-cycle recipient names you"),
+    "the disabled checker did not explain its missing named route",
   );
 });
 
@@ -597,6 +605,15 @@ test("a scalar approver without signing approval is offered no ICAAP checker act
   resetSwitches();
   moduleScope = { capitalApprove: true };
   sessionRoles = ["approver", "admin"];
+  attestationStatus = status({
+    recipients: [
+      {
+        signingRole: "approver",
+        recipientUserId: "user-checker",
+        status: "pending",
+      },
+    ],
+  });
   const text = mount(component("AttestationPanel.tsx"), {
     ...PANEL_PROPS,
     returnFamily: "icaap",

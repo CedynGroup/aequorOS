@@ -716,14 +716,13 @@ function Actions({
       <p className="text-caption text-slate leading-relaxed">
         {!signerAllowed
           ? signerReason
-          : mayApproveSigning &&
-              (((state === "unsigned" || state === "void") &&
+          : ((state === "unsigned" || state === "void") &&
                 preparerOutstanding &&
                 !isNamedFor("preparer")) ||
               (state === "preparer_certified" &&
-                isApprover &&
+                mayApproveSigning &&
                 checkerRole != null &&
-                !isNamedFor(checkerRole)))
+                !isNamedFor(checkerRole))
             ? "No pending current-cycle recipient names you for this signature. Ask an authorized approver to route it to you."
           : state === "fully_certified"
           ? "Fully certified — nothing further is required before submission."
