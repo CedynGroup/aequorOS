@@ -410,6 +410,31 @@
         "administer",
         "ingest"
       ]
+    },
+    {
+      "bundle": "signer",
+      "principal_type": "human",
+      "resource": "regulatory",
+      "scope": "institution",
+      "bank": "primary",
+      "module": "reg",
+      "sensitivity": "restricted",
+      "data_scope": "all",
+      "allowed": ["sign_off"],
+      "denied": [
+        "view",
+        "create",
+        "edit",
+        "run",
+        "review",
+        "approve",
+        "configure",
+        "export",
+        "validate",
+        "submit",
+        "administer",
+        "ingest"
+      ]
     }
   ],
   "grants": {

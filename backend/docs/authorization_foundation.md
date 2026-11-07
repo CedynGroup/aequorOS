@@ -136,9 +136,17 @@ analysis: delegated Account Admin conflicts block in either assignment order;
 the documented Owner exception remains a warning with audit evidence.
 Configuration route enforcement ships in separate module cutovers.
 
-`sign_off` remains reserved, absent from every bundle. Workflow-specific authority
-must be designed explicitly rather than inferred from a nearby role.
-`submit` left that reserved set on 2026-09-20:
+`signer` carries exactly `sign_off`, with no read, preparation, approval,
+configuration, submission or account-administration authority. Migration
+`202611070112` widens only the bundle CHECK; it creates no grants and changes no
+existing identities or sessions. Owners must explicitly assign complete scoped
+bindings. Signer participates in the existing C9 operational-duty analysis:
+delegated Account Admin conflicts block in either assignment order; the
+documented Owner exception remains a warning with audit evidence. An ordinary
+Approver binding never supplies signing authority, and a Signer-only binding
+never supplies approval. Signing route enforcement ships in separate cutovers.
+
+`submit` left the reserved action set on 2026-09-20:
 it is carried by the `validator` bundle alone and enforced on the filing surface
 ([filing submit authority rollout](filing_submit_authority_rollout.md)). It is
 the worked example of the rule — the authority was designed, given its own
@@ -448,9 +456,10 @@ target member in the current browser tab. Returning to Members after signing
 in again restores the draft, including after a self-revocation ends the session.
 Successful submission or cancellation clears the saved draft.
 
-The Members composer offers Viewer, Auditor, Analyst, Approver, Validator, or
-Account Admin. The additional API-only audit officer grants and their staged UI
-delivery are governed by [the bank audit contract](tamper_evident_records.md#bank-audit-read-api). Org
+The Members composer offers Viewer, Auditor, Analyst, Configurator, Signer,
+Approver, Validator, or Account Admin. The additional API-only audit officer
+grants and their staged UI delivery are governed by
+[the bank audit contract](tamper_evident_records.md#bank-audit-read-api). Org
 Owner, Member, and Integration Writer are not tenant-grantable; Account Admin is valid
 only as organization-wide Account Administration at all sensitivity levels.
 

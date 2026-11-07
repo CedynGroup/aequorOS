@@ -42,6 +42,8 @@ GrantableRoleBundle = Literal[
     # backfilled it and no scalar role produces it.
     "validator",
     "configurator",
+    # Formal signing only; reading and approval remain separate explicit grants.
+    "signer",
     "account_admin",
 ]
 # ``bi_reader`` must stay absent: machine authority must not be assigned through

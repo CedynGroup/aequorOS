@@ -10,7 +10,7 @@ complete stored bindings and the production evaluator.
 
 The file owns three independent sets of expected outcomes:
 
-- **169 bundle/resource/action cells:** all 13 current bundles, each on its
+- **182 bundle/resource/action cells:** all 14 current bundles, each on its
   named resource, with an explicit allow or deny for every one of 13 actions.
   Resource tuples distinguish organization-wide Account/restricted from
   exact-bank LIQ/confidential, REG/restricted, Audit/restricted,
@@ -88,7 +88,7 @@ These are evidence-backed boundaries, not new product decisions:
 | Seam               | Current characterization / held work                                                                                                                                                                                                                                                                                    |
 | ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Configuration      | The Configurator bundle grants exactly `configure` and nothing else: Data and Markets connection configuration denies view, run and sibling-bank writes in the same matrix (the [foundation](https://github.com/CedynGroup/aequorOS/pull/776), [LIQ cutover](https://github.com/CedynGroup/aequorOS/pull/781) and [DATA/MARKETS cutover](https://github.com/CedynGroup/aequorOS/pull/798) own the vocabulary, migrations and register changes). REG, BEH and Credit configure cutovers remain future work; their absence here is not authorization evidence. |
-| Signing            | `sign_off` is absent from current bundles. [Signer work](https://github.com/CedynGroup/aequorOS/issues/185) owns routed recipient, digest, step-up and signing authority. Evaluator denial is not a characterization of every existing attestation workflow.                                                            |
+| Signing            | The Signer bundle grants exactly `sign_off` and nothing else; Approver remains denied signing and Signer remains denied approval. [Signer work](https://github.com/CedynGroup/aequorOS/issues/185) owns routed recipient, digest, step-up and route enforcement. Bundle characterization is not proof of those workflow controls.                              |
 | REG export         | Viewer and Validator lack EXPORT; view/submit never imply export. A read-only regulatory exporter requires a separate decision, not a matrix correction.                                                                                                                                                                |
 | Owner reads        | Owner carries Account administration, not product view. Only an explicit separate read binding enables the represented bank-detail read. No automatic grant or backfill is added.                                                                                                                                       |
 | Notifications/jobs | [Provenance work](https://github.com/CedynGroup/aequorOS/issues/186) owns stored source attributes and visibility; no expectations are inferred from labels or links here.                                                                                                                                              |
