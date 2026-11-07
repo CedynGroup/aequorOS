@@ -200,9 +200,8 @@ env:
   POSTGRES_ADMIN_URL: postgresql+psycopg://postgres:postgres@localhost:5432/risk_service
   POSTGRES_TEST_URL: postgresql+psycopg://risk_service_test:risk_service_test@localhost:5432/risk_service
 
-# Merge groups run every gate on the exact queue head — the tree that will
-# actually land — except real-data, which cannot execute without the primary
-# database. See ARCHITECTURE.md §8 for the verified issue #818 chronology.
+# See ARCHITECTURE.md §8, CI enforcement, for merge-queue execution policy
+# and the verified issue #818 chronology.
 jobs:
   # Runs on EVERY pull request, needs nothing, installs nothing, and every other
   # job depends on it. Two responsibilities, both cheap:
