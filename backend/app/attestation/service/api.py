@@ -968,7 +968,7 @@ def certify_and_send(
         # own words belong on that record rather than a platform paraphrase.
         reason=payload.reason,
     )
-    routing.route(
+    routing.reconcile(
         db,
         ctx,
         package,

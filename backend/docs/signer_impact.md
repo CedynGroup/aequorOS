@@ -3,7 +3,13 @@
 `scripts/authorization_signoff_impact.py` inventories the people who need the
 new signing authority before enabling or expanding Signer enforcement. It does
 not create grants, approve grant requests, change routes, or exercise a signing
-ceremony.
+ceremony. Use this inventory for operator grant review: its candidates are tied
+to legacy signing eligibility or a current named recipient.
+
+The sibling `authorization_signing_impact.py` is a broader structural
+route-policy analysis. It can recommend grants for an active user outside those
+legacy/named cohorts; that recommendation is diagnostic, not a grant decision.
+Operators reviewing proposed grants should use `authorization_signoff_impact.py`.
 
 Run from `backend/` with an explicitly authorized, read-only connection:
 

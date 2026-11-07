@@ -29,10 +29,13 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   const bankId = params.get('bankId');
   const packageId = params.get('packageId');
   const signingRole = params.get('signingRole');
+  const signoffId = params.get('signoffId');
   const returnTo = params.get('returnTo') ?? '/submissions/returns';
-  if (!bankId || !packageId || !signingRole) {
+  const packageCeremony = Boolean(packageId && signingRole && !signoffId);
+  const stressCeremony = Boolean(signoffId && !packageId && !signingRole);
+  if (!bankId || (!packageCeremony && !stressCeremony)) {
     return NextResponse.json(
-      { error: 'bankId, packageId and signingRole are required' },
+      { error: 'bankId and either packageId/signingRole or signoffId are required' },
       { status: 400 },
     );
   }
@@ -68,8 +71,9 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     nonce,
     codeVerifier: verifier,
     bankId,
-    packageId,
-    signingRole,
+    packageId: packageId ?? undefined,
+    signingRole: signingRole ?? undefined,
+    signoffId: signoffId ?? undefined,
     returnTo,
   });
 

@@ -579,6 +579,53 @@ def test_routing_records_the_nominee_and_notifies_them(db_session: Session) -> N
     assert "awaits your signature" in addressed[0].title
 
 
+def test_certify_and_send_reuses_matching_pending_recipients(db_session: Session) -> None:
+    """An existing route is evidence to reuse, not a row to insert again."""
+    package = _seed(db_session)
+    _certify(db_session, MAKER, package, role="preparer", commit=False)
+    db_session.refresh(package)
+    routed = _route(db_session, package, _nominate("approver", APPROVER_USER_ID))
+    notification_count = len(list(db_session.scalars(select(Notification.id))))
+
+    reconciled = routing.reconcile(
+        db_session,
+        MAKER,
+        package,
+        policy=workflow.package_policy(db_session, MAKER, package),
+        nominations=[_nominate("approver", APPROVER_USER_ID)],
+        signatures=workflow.current_signatures(db_session, MAKER, package),
+        reason="certify against the existing route",
+    )
+
+    assert [row.id for row in reconciled] == [row.id for row in routed]
+    assert len(list(db_session.scalars(select(PackageSignatureRecipient.id)))) == 2
+    assert len(list(db_session.scalars(select(Notification.id)))) == notification_count
+
+
+def test_certify_and_send_requires_reroute_to_replace_a_pending_recipient(
+    db_session: Session,
+) -> None:
+    package = _seed(db_session)
+    _certify(db_session, MAKER, package, role="preparer", commit=False)
+    db_session.refresh(package)
+    routed = _route(db_session, package, _nominate("approver", APPROVER_USER_ID))
+
+    with pytest.raises(AttestationConflict) as raised:
+        routing.reconcile(
+            db_session,
+            MAKER,
+            package,
+            policy=workflow.package_policy(db_session, MAKER, package),
+            nominations=[_nominate("approver", OTHER_APPROVER_USER_ID)],
+            signatures=workflow.current_signatures(db_session, MAKER, package),
+            reason="attempt an unauthorized route replacement",
+        )
+
+    assert raised.value.error_code == "routing_change_requires_reroute"
+    assert [row.recipient_user_id for row in routed] == [APPROVER_USER_ID]
+    assert len(list(db_session.scalars(select(PackageSignatureRecipient.id)))) == 2
+
+
 def test_the_preparer_cannot_nominate_themselves(db_session: Session) -> None:
     """Maker-checker, reached through routing rather than reimplemented.
 

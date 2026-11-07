@@ -14,6 +14,7 @@ vi.mock("@/lib/attestation/stepUp", () => ({
 
 import { POST as certify } from "../../app/api/attestation/certify/route";
 import { POST as certifyAndSend } from "../../app/api/attestation/certify-and-send/route";
+import { POST as attestStressSignoff } from "../../app/api/stress/signoff/attest/route";
 
 const cases = [
   {
@@ -41,12 +42,26 @@ const cases = [
       reason: "Synthetic route test",
     },
   },
+  {
+    name: "stress sign-off with server-held SSO authorization",
+    post: attestStressSignoff,
+    path: "/api/stress/signoff/attest",
+    body: {
+      bankId: "BK-SAMPLE",
+      signoffId: "22222222-2222-4222-8222-222222222222",
+      expectedSigningDigest: "digest-stress",
+      credibilityRationale: "Synthetic credibility rationale",
+      boardChallenge: null,
+      reason: "Synthetic Board attestation",
+    },
+  },
 ] as const;
 
 describe("signing server routes", () => {
   beforeEach(() => backendRequest.mockReset());
 
   it.each(cases)("passes the backend status and body through for $name", async ({
+    name,
     post,
     path,
     body,
@@ -69,5 +84,20 @@ describe("signing server routes", () => {
     expect(response.status).toBe(403);
     expect(response.headers.get("content-type")).toBe("text/plain");
     await expect(response.text()).resolves.toBe("named Signer binding required");
+    if (name === "stress sign-off with server-held SSO authorization") {
+      expect(backendRequest).toHaveBeenCalledWith(
+        "http://risk-service.test/api/v1/banks/BK-SAMPLE/enterprise-stress/signoffs/22222222-2222-4222-8222-222222222222/attest",
+        expect.objectContaining({
+          method: "POST",
+          body: JSON.stringify({
+            authorization_token: "synthetic-step-up-token",
+            expected_signing_digest: "digest-stress",
+            credibility_rationale: "Synthetic credibility rationale",
+            board_challenge: null,
+            reason: "Synthetic Board attestation",
+          }),
+        }),
+      );
+    }
   });
 });

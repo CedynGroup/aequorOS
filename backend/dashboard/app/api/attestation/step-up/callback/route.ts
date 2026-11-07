@@ -79,23 +79,31 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 
     // The risk service is the verifier: it checks the signature against the
     // issuer's JWKS, that the subject matches the signed-in user, and that
-    // auth_time is recent enough to count as step-up.
-    const stepUp = await backendRequest(
-      `${apiBase()}/banks/${context.bankId}/regulatory-packages/${context.packageId}` +
-        `/attestation/step-up`,
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${session.accessToken}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          signing_role: context.signingRole,
-          id_token: tokens.id_token,
-        }),
-        cache: "no-store",
+    // auth_time is recent enough to count as step-up. Both ceremonies use the
+    // same server-held token flow, but the target comes only from our cookie.
+    let path: string;
+    let stepUpBody: Record<string, string>;
+    if (context.signoffId) {
+      path = `/banks/${context.bankId}/enterprise-stress/signoffs/${context.signoffId}/step-up`;
+      stepUpBody = { id_token: tokens.id_token };
+    } else if (context.packageId && context.signingRole) {
+      path = `/banks/${context.bankId}/regulatory-packages/${context.packageId}/attestation/step-up`;
+      stepUpBody = {
+        signing_role: context.signingRole,
+        id_token: tokens.id_token,
+      };
+    } else {
+      return back(origin, context.returnTo, "expired");
+    }
+    const stepUp = await backendRequest(`${apiBase()}${path}`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${session.accessToken}`,
+        "Content-Type": "application/json",
       },
-    );
+      body: JSON.stringify(stepUpBody),
+      cache: "no-store",
+    });
     if (!stepUp.ok) {
       return back(origin, context.returnTo, "rejected");
     }

@@ -171,10 +171,20 @@ def _ensure_pending_attestation(signoff: EnterpriseStressSignoff) -> None:
         )
 
 
-def _ensure_maker_checker(signoff: EnterpriseStressSignoff, actor: UUID | None) -> None:
+def _ensure_maker_checker(
+    signoff: EnterpriseStressSignoff,
+    actor: UUID | None,
+    *,
+    submitter: UUID | None = None,
+) -> None:
     # Maker ≠ checker (¶16, ¶20): the Board attester must differ from the
     # preparer and submitter. This guard is also applied to the named nominee.
-    if actor is not None and actor in {signoff.created_by, signoff.submitted_by}:
+    # During submission the current actor is not yet stored in submitted_by.
+    if actor is not None and actor in {
+        signoff.created_by,
+        signoff.submitted_by,
+        submitter,
+    }:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail={
@@ -463,7 +473,11 @@ def submit_signoff(
                 ),
             },
         )
-    _ensure_maker_checker(signoff, payload.attestation_recipient_user_id)
+    _ensure_maker_checker(
+        signoff,
+        payload.attestation_recipient_user_id,
+        submitter=ctx.actor_user_id,
+    )
     _require_recipient_eligibility(db, ctx, signoff, payload.attestation_recipient_user_id)
     signoff.status = "pending_attestation"
     signoff.submitted_by = ctx.actor_user_id
