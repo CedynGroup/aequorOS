@@ -189,6 +189,7 @@ def _suspend_all() -> None:
             db.scalars(
                 select(AuthorizationBinding).where(
                     AuthorizationBinding.principal_user_id == USER_1,
+                    AuthorizationBinding.organization_id == ORG_1,
                     AuthorizationBinding.status == BindingStatus.ACTIVE.value,
                 )
             )
