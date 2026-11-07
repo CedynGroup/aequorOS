@@ -28,7 +28,7 @@ from app.core.authorization import (
 from app.db.session import get_sessionmaker
 from app.identity.service import authorization
 from app.live.service import pipeline
-from app.models import User
+from app.models import Bank, User
 from app.services import job_queue
 from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID, materialize_canonical_test_book
 from tests.support.factories.canonical import FIXTURE_AS_OF, seed_canonical_fixture
@@ -72,7 +72,7 @@ def _org_user_without_bindings(email: str) -> UUID:
                 id=user_id,
                 organization_id=ORG_1,
                 email=email,
-                display_name=email.split("@")[0],
+                display_name=email.split("@", maxsplit=1)[0],
             )
         )
         session.commit()
@@ -91,7 +91,7 @@ def _user_with_module_view(module_scope: ModuleScope, email: str) -> tuple[UUID,
                 id=user_id,
                 organization_id=ORG_1,
                 email=email,
-                display_name=email.split("@")[0],
+                display_name=email.split("@", maxsplit=1)[0],
             )
         )
         session.flush()
@@ -167,8 +167,6 @@ def test_freshness_binding_is_bank_scoped(db_client: TestClient) -> None:
     _seed_and_refresh(db_client)
     session = get_sessionmaker()()
     try:
-        from app.models import Bank
-
         other_bank = Bank(
             organization_id=ORG_1,
             name="Other Bank Ltd",
