@@ -141,21 +141,9 @@ export default function AttestationPanel({
         : "",
   };
   /**
-   * Whether to OFFER the checker act — never whether to permit it. The server
-   * decides that, and decides it differently per family
-   * (`app.attestation.service.api._ensure_certify_authority`).
-   *
-   * For the prudential returns the scalar ladder is the right and unchanged
-   * question: a bank's approvers approve its returns. An ICAAP report is a
-   * scoped surface, so the server asks for an exact Capital/confidential
-   * APPROVE binding for this institution and refuses a scalar approver who
-   * holds none. Asking the scalar question here got both halves wrong: a board
-   * member whose whole authority is over capital was never SHOWN the
-   * approve-and-sign control, and a reporting approver with no capital
-   * standing was shown one the server would refuse.
-   *
-   * The projection is the active institution's, which is the institution every
-   * surface that mounts this panel is already looking at.
+   * Routing and voiding keep the source family's approval authority. Signing
+   * is a Regulatory Reporting act for every family, so the checker button uses
+   * filingAuthority.mayApprove independently; the server remains authoritative.
    */
   const filingAuthority = filingAuthorityFor(effectiveAuthority, bankId, {
     resolved: !authorityLoading,
@@ -286,10 +274,10 @@ export default function AttestationPanel({
                 packageStatus={packageStatus}
                 validationClean={validationClean}
                 isApprover={isApprover}
+                mayApproveSigning={filingAuthority.mayApprove}
                 signerAllowed={signing.allowed}
                 signerReason={signing.reason}
                 currentUserId={profile?.userId}
-                returnFamily={returnFamily}
                 showCertifyButtons={showInlineCertifyActions}
                 onCertify={setCertifyRole}
                 onVoid={() => setVoidOpen(true)}
@@ -618,10 +606,10 @@ function Actions({
   packageStatus,
   validationClean,
   isApprover,
+  mayApproveSigning,
   signerAllowed,
   signerReason,
   currentUserId,
-  returnFamily,
   showCertifyButtons,
   onCertify,
   onVoid,
@@ -630,10 +618,10 @@ function Actions({
   packageStatus: PackageStatus;
   validationClean: boolean;
   isApprover: boolean;
+  mayApproveSigning: boolean;
   signerAllowed: boolean;
   signerReason: string;
   currentUserId: string | undefined;
-  returnFamily: string;
   /**
    * False when the surface has lifted the certify act to its own command bar.
    * The sentence below stays either way — it is what tells an officer why the
@@ -670,7 +658,7 @@ function Actions({
     signerAllowed &&
     state === "preparer_certified" &&
     checkerRole != null &&
-    isApprover &&
+    mayApproveSigning &&
     isNamedFor(checkerRole);
   const canVoid =
     (state === "preparer_certified" || state === "fully_certified") &&
@@ -700,7 +688,7 @@ function Actions({
             names the authority the server asks for. */}
         {showCertifyButtons &&
           signerAllowed &&
-          isApprover &&
+          mayApproveSigning &&
           state === "preparer_certified" &&
           checkerRole && (
             <button
@@ -728,7 +716,8 @@ function Actions({
       <p className="text-caption text-slate leading-relaxed">
         {!signerAllowed
           ? signerReason
-          : (((state === "unsigned" || state === "void") &&
+          : mayApproveSigning &&
+              (((state === "unsigned" || state === "void") &&
                 preparerOutstanding &&
                 !isNamedFor("preparer")) ||
               (state === "preparer_certified" &&
@@ -738,10 +727,8 @@ function Actions({
             ? "No pending current-cycle recipient names you for this signature. Ask an authorized approver to route it to you."
           : state === "fully_certified"
           ? "Fully certified — nothing further is required before submission."
-          : state === "preparer_certified" && !isApprover
-            ? returnFamily === "icaap"
-              ? "Awaiting a checker signature. Approving this assessment requires capital approval authority for this institution — maker-checker cannot be satisfied by a preparer."
-              : "Awaiting a checker signature. Approving requires the approver role — maker-checker cannot be satisfied by a preparer."
+          : state === "preparer_certified" && !mayApproveSigning
+            ? "Awaiting a checker signature. Approving requires Regulatory Reporting approval with Restricted data and exact-institution scope — maker-checker cannot be satisfied by a preparer."
             : state === "preparer_certified"
               ? "You are certifying the identical frozen figures shown above; the server refuses the signature on any difference."
               : !CERTIFIABLE_STATUSES.includes(packageStatus)

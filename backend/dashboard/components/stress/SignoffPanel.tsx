@@ -207,8 +207,16 @@ function AttestForm({ signoff }: { signoff: StressSignoffRead }) {
     signing.allowed;
 
   useEffect(() => {
-    const outcome = new URLSearchParams(window.location.search).get("stepUp");
+    const params = new URLSearchParams(window.location.search);
+    const outcome = params.get("stepUp");
     if (!outcome) return;
+    params.delete("stepUp");
+    const query = params.toString();
+    window.history.replaceState(
+      null,
+      "",
+      `${window.location.pathname}${query ? `?${query}` : ""}`,
+    );
     if (outcome !== "ready") {
       setSsoError(
         "Single sign-on did not confirm this signature. Try again or use your password.",

@@ -353,7 +353,7 @@ def _legacy_reg(  # noqa: PLR0913 - evaluation shares one session and scope
             matching.update(decisions[Permission.APPROVE].matching_binding_ids)
     named_families = [family for family in sorted(named.source_families) if family not in families]
     families.extend(named_families)
-    allowed = bool(cohorts)
+    allowed = bool(cohorts) and not failed
     reason = (
         "evaluation_failed"
         if failed
