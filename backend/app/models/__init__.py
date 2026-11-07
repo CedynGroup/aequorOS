@@ -11,6 +11,7 @@ from app.attestation.models import (
     SignerKey,
     SigningAuthorization,
 )
+from app.behavioral.models import BehavioralModelProposal
 
 # ``AiCommentaryDraft`` is imported for its SIDE EFFECT as much as for the name:
 # without it ``ai_commentary_drafts`` is absent from ``Base.metadata`` for any
@@ -272,6 +273,7 @@ __all__ = [
     "Bank",
     "BankFinancialFact",
     "BankSupervisoryAddon",
+    "BehavioralModelProposal",
     "BiAggPositionDaily",
     "BiAlert",
     "BiAlertEvent",

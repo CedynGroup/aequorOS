@@ -86,7 +86,7 @@ with Session(create_engine(f"sqlite+pysqlite:///{database}")) as session:
     id: USER_ID,
     organizationId: WORKER_ORG,
     roles: ["analyst"],
-    authv: 3,
+    authv: 4,
   };
   E2E_USERS[WORKER_APPROVER_ROLE] = {
     id: APPROVER_ID,
