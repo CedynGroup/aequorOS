@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from dataclasses import replace
+
 from fastapi import HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
@@ -9,6 +11,7 @@ from sqlalchemy.orm import Session
 from app.core.authorization import (
     AuthorizationDecision,
     ConditionCheck,
+    ConditionKind,
     InstitutionScope,
     Module,
     Permission,
@@ -115,6 +118,114 @@ def require_permission(  # noqa: PLR0913 - complete policy tuple plus refusal mo
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND if opaque else status.HTTP_403_FORBIDDEN,
             detail=RESOURCE_NOT_FOUND_DETAIL if opaque else authorization.DEFAULT_DENIAL_DETAIL,
+        )
+
+
+def require_signer(  # noqa: PLR0913 - the complete ceremony tuple is explicit
+    db: Session,
+    ctx: TenantContext,
+    bank_id: str,
+    *,
+    structural: bool,
+    maker_checker_established: bool = False,
+    step_up_established: bool = False,
+) -> None:
+    """Require an exact-bank RISK/restricted Signer, never an Approver fallback.
+
+    Structural evaluation is only for routing and preflight. The execution call
+    supplies the maker/checker and consumed step-up evidence as real vetoes.
+    """
+    if ctx.actor_user_id is None or ctx.authorization_version is None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=authorization.DEFAULT_DENIAL_DETAIL,
+        )
+    bank = authorization.resolve_bank(db, ctx, bank_id, module=Module.RISK)
+    principal = authorization.principal_locator(ctx)
+    resource = ResourceLocator(
+        ctx.organization_id,
+        InstitutionScope.INSTITUTION,
+        bank.id,
+        Module.RISK,
+        Sensitivity.RESTRICTED,
+    )
+    surface = "enterprise_stress_signoff_attest"
+    conditions = (
+        ()
+        if structural
+        else (
+            ConditionCheck(
+                ConditionKind.MAKER_CHECKER,
+                maker_checker_established,
+                "The locked stress ceremony must establish maker/checker separation.",
+            ),
+            ConditionCheck(
+                ConditionKind.STEP_UP,
+                step_up_established,
+                "The stress ceremony must consume a genuine recent step-up.",
+            ),
+        )
+    )
+    try:
+        decision = (
+            authorization.evaluate_structural_permission(
+                db, principal, Permission.SIGN_OFF, resource
+            )
+            if structural
+            else authorization.evaluate_permission(
+                db,
+                principal,
+                Permission.SIGN_OFF,
+                resource,
+                conditions=conditions,
+            )
+        )
+        if decision.allowed:
+            data_scope = authorization.effective_data_scope(
+                db,
+                organization_id=ctx.organization_id,
+                binding_ids=decision.matching_binding_ids,
+            )
+            decision = authorization.institution_grain_decision(
+                decision, whole_institution=data_scope.whole_institution
+            )
+        if decision.allowed:
+            matched = authorization.load_effective_grants(
+                db,
+                organization_id=ctx.organization_id,
+                binding_ids=decision.matching_binding_ids,
+            )
+            if not any(
+                grant.institution_scope is InstitutionScope.INSTITUTION
+                and grant.institution_id == bank.id
+                for grant in matched.values()
+            ):
+                decision = replace(
+                    decision,
+                    allowed=False,
+                    reason="signing_requires_exact_institution_binding",
+                )
+    except Exception as exc:  # noqa: BLE001 - evaluator failures deny closed
+        authorization.record_binding_evaluation_failure(
+            principal,
+            Permission.SIGN_OFF,
+            resource,
+            surface=surface,
+            error=exc,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=authorization.DEFAULT_DENIAL_DETAIL,
+        ) from exc
+    authorization.record_binding_decision(
+        decision,
+        surface=surface,
+        severity="info" if decision.allowed else "warning",
+    )
+    if not decision.allowed:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=authorization.DEFAULT_DENIAL_DETAIL,
         )
 
 

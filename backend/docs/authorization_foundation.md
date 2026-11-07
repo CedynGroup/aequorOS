@@ -159,6 +159,21 @@ token consumption, with the evidence those guards established. Revocation,
 suspension, expiry, wrong bank, wrong module and wrong sensitivity therefore
 close the ceremony before signature writes.
 
+Enterprise-stress final attestation uses the same Signer ceremony with one
+active, institution-scoped exact-bank RISK/restricted `sign_off` binding,
+independent confidential VIEW of the source sign-off, and whole-institution data
+coverage. Organization-wide Signer grants and ordinary Approver grants do not
+qualify. Submission names an eligible signer who is not the preparer, freezes the
+recipient and a value-based signing digest, and records both in the submission
+audit. Stress step-up verifies a genuine password or fresh OIDC identity through
+the shared attestation service and mints a one-shot token bound to the signer,
+sign-off, `board` role and digest. Attestation re-evaluates execution authority
+with maker/checker and step-up evidence established, atomically consumes the
+token, and persists its authorization ID. Recipient mismatch, content drift,
+forged tokens and replay deny without attesting the row. Existing rows keep NULL
+ceremony fields; an old pending row without a recipient/digest requires a new
+run and sign-off rather than implicit routing or signing.
+
 `submit` left the reserved action set on 2026-09-20:
 it is carried by the `validator` bundle alone and enforced on the filing surface
 ([filing submit authority rollout](filing_submit_authority_rollout.md)). It is
@@ -842,9 +857,8 @@ projection, optimizer, what-if and reverse-stress routes, their rows in shared
 projections and the run registry, and the capital-plan projection they feed —
 is owned by the [Forecasting rollout contract](forecasting_enforcement_rollout.md).
 Stress scenario and management-action governance, sign-off preparation, and
-enterprise execution are owned by the
-[Stress rollout contract](stress_enforcement_rollout.md); final attestation
-remains with the dedicated Signer cutover.
+enterprise execution and the final Signer attestation ceremony are owned by the
+[Stress rollout contract](stress_enforcement_rollout.md).
 Behavioral model estimates, liquidity behavior, and retraining are owned by the
 [Behavioral rollout contract](behavioral_enforcement_rollout.md); model
 application stays with the governed model-application cutover. Markets views,

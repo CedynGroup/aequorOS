@@ -34,6 +34,7 @@ from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from uuid import UUID
 
+from fastapi import HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
@@ -43,7 +44,7 @@ from app.attestation.service import workflow
 from app.attestation.service.identity import ensure_signer_identity
 from app.attestation.service.policy import SigningPolicy
 from app.attestation.service.workflow import AttestationConflict
-from app.identity.public import User
+from app.identity.public import Bank, User
 from app.notifications.public import notifications
 from app.reporting.models.packages import RegulatoryPackage
 from app.services.audit import record_event
@@ -281,6 +282,57 @@ def awaiting_signature(
         if visible[key]:
             result.append((recipient, package))
     return result
+
+
+def _certification_bank(db: Session, ctx: TenantContext, package: RegulatoryPackage) -> Bank:
+    bank = db.scalar(
+        select(Bank).where(
+            Bank.organization_id == ctx.organization_id,
+            Bank.id == package.bank_id,
+        )
+    )
+    if bank is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not Found")
+    return bank
+
+
+def require_certification_access(
+    db: Session,
+    ctx: TenantContext,
+    package: RegulatoryPackage,
+    role: str,
+) -> None:
+    """Preflight exact-bank Signer authority and a named route, without writes."""
+    if ctx.actor_user_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Authentication required."
+        )
+    from app.reporting.service import family_access  # noqa: PLC0415 - family policy owner
+
+    family_access.require_certify_authority(
+        db, ctx, _certification_bank(db, ctx, package), package, role
+    )
+    ensure_routed_signer(db, ctx, package, role=role, user_id=ctx.actor_user_id)
+
+
+def require_certification_execution_authority(
+    db: Session,
+    ctx: TenantContext,
+    package: RegulatoryPackage,
+    role: str,
+) -> None:
+    """Re-evaluate authority with the ceremony's now-established runtime evidence."""
+    from app.reporting.service import family_access  # noqa: PLC0415 - family policy owner
+
+    family_access.require_certify_authority(
+        db,
+        ctx,
+        _certification_bank(db, ctx, package),
+        package,
+        role,
+        step_up_established=True,
+        maker_checker_established=True,
+    )
 
 
 # --- internals --------------------------------------------------------------

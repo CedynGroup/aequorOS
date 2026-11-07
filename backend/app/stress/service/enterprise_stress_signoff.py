@@ -28,14 +28,15 @@ from __future__ import annotations
 from typing import Any
 from uuid import UUID
 
-from fastapi import HTTPException, status
+from fastapi import HTTPException, Request, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
+from app.attestation.public import digest_of, identity, stepup
 from app.core.authorization import Permission
 from app.db.base import utc_now
-from app.identity.public import Bank
+from app.identity.public import Bank, User
 from app.live.public import RegulatoryRun
 from app.models import EnterpriseStressSignoff
 from app.services.audit import record_event
@@ -44,6 +45,9 @@ from app.stress.schemas.enterprise_stress_signoff import (
     StressSignoffCreate,
     StressSignoffListRead,
     StressSignoffRead,
+    StressSignoffStepUpGranted,
+    StressSignoffStepUpRequest,
+    StressSignoffSubmission,
     StressSignoffSummary,
     StressSignoffTransition,
     StressSignoffUpdate,
@@ -126,6 +130,146 @@ def _headline_flags(run: RegulatoryRun) -> tuple[bool | None, bool | None]:
     )
 
 
+def _signing_digest(signoff: EnterpriseStressSignoff) -> str:
+    """Commit to the immutable run identity and every value the Board reviews."""
+    return digest_of(
+        {
+            "schema": "enterprise-stress-signing-digest-v1",
+            "organization_id": signoff.organization_id,
+            "bank_id": signoff.bank_id,
+            "signoff_id": str(signoff.id),
+            "run_id": str(signoff.run_id),
+            "reporting_period_id": str(signoff.reporting_period_id),
+            "scenario_code": signoff.scenario_code,
+            "scenario_narrative": signoff.scenario_narrative,
+            "assumptions_rationale": signoff.assumptions_rationale,
+            "methodology_summary": signoff.methodology_summary,
+            # Credibility rationale and Board challenge are outputs of the signing
+            # act, not mutable source content that can be reviewed beforehand.
+            "stays_above_all_minima": signoff.stays_above_all_minima,
+            "with_actions_stays_above_all_minima": signoff.with_actions_stays_above_all_minima,
+            "attestation_recipient_user_id": (
+                str(signoff.attestation_recipient_user_id)
+                if signoff.attestation_recipient_user_id is not None
+                else None
+            ),
+        }
+    )
+
+
+def _ensure_pending_attestation(signoff: EnterpriseStressSignoff) -> None:
+    if signoff.status != "pending_attestation":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={
+                "error_code": "not_pending_attestation",
+                "message": (
+                    "Only a sign-off pending attestation can be attested; this one is "
+                    f"'{signoff.status}'."
+                ),
+            },
+        )
+
+
+def _ensure_maker_checker(signoff: EnterpriseStressSignoff, actor: UUID | None) -> None:
+    # Maker ≠ checker (¶16, ¶20): the Board attester must differ from the
+    # preparer and submitter. This guard is also applied to the named nominee.
+    if actor is not None and actor in {signoff.created_by, signoff.submitted_by}:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={
+                "error_code": "maker_is_checker",
+                "message": (
+                    "The sign-off's preparer/submitter cannot attest it (maker ≠ checker)."
+                ),
+            },
+        )
+
+
+def _ensure_named_recipient(signoff: EnterpriseStressSignoff, actor: UUID) -> None:
+    if signoff.attestation_recipient_user_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={
+                "error_code": "signer_not_routed",
+                "message": "Submit the sign-off to a named Board signer before attestation.",
+            },
+        )
+    if signoff.attestation_recipient_user_id != actor:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={
+                "error_code": "not_the_named_signer",
+                "message": "This sign-off is routed to a different named Board signer.",
+            },
+        )
+
+
+def _current_signing_digest(signoff: EnterpriseStressSignoff) -> str:
+    current = _signing_digest(signoff)
+    if signoff.signing_digest is None or signoff.signing_digest != current:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={
+                "error_code": "signing_digest_changed",
+                "message": "The sign-off changed after routing. Review and route it again.",
+            },
+        )
+    return current
+
+
+def _require_recipient_eligibility(
+    db: Session, ctx: TenantContext, signoff: EnterpriseStressSignoff, recipient: UUID
+) -> None:
+    user = db.scalar(
+        select(User).where(
+            User.id == recipient,
+            User.organization_id == ctx.organization_id,
+            User.is_active.is_(True),
+        )
+    )
+    if user is None or not scope_authorization.allowed(
+        db,
+        TenantContext(
+            organization_id=ctx.organization_id,
+            actor_user_id=recipient,
+            authorization_version=user.authorization_version,
+        ),
+        signoff.bank_id,
+        Permission.VIEW,
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="The named recipient needs stress READ and exact-bank Signer authority.",
+        )
+    scope_authorization.require_signer(
+        db,
+        TenantContext(
+            organization_id=ctx.organization_id,
+            actor_user_id=recipient,
+            authorization_version=user.authorization_version,
+        ),
+        signoff.bank_id,
+        structural=True,
+    )
+
+
+def _attestation_preflight(
+    db: Session, ctx: TenantContext, signoff: EnterpriseStressSignoff
+) -> str:
+    _ensure_pending_attestation(signoff)
+    if ctx.actor_user_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Authentication required."
+        )
+    # Stored binding eligibility comes first; routing and workflow guards never
+    # substitute for it and no token or identity proof is created on denial.
+    scope_authorization.require_signer(db, ctx, signoff.bank_id, structural=True)
+    _ensure_named_recipient(signoff, ctx.actor_user_id)
+    _ensure_maker_checker(signoff, ctx.actor_user_id)
+    return _current_signing_digest(signoff)
+
+
 def _read(signoff: EnterpriseStressSignoff) -> StressSignoffRead:
     return StressSignoffRead(
         id=signoff.id,
@@ -146,6 +290,9 @@ def _read(signoff: EnterpriseStressSignoff) -> StressSignoffRead:
         created_by=signoff.created_by,
         submitted_by=signoff.submitted_by,
         submitted_at=signoff.submitted_at,
+        attestation_recipient_user_id=signoff.attestation_recipient_user_id,
+        signing_digest=signoff.signing_digest or _signing_digest(signoff),
+        signing_authorization_id=signoff.signing_authorization_id,
         attested_by=signoff.attested_by,
         attested_at=signoff.attested_at,
         created_at=signoff.created_at,
@@ -301,7 +448,7 @@ def submit_signoff(
     ctx: TenantContext,
     bank_id: str,
     signoff_id: UUID,
-    payload: StressSignoffTransition,
+    payload: StressSignoffSubmission,
 ) -> StressSignoffRead:
     signoff = _get_signoff_or_404(db, ctx, bank_id, signoff_id)
     scope_authorization.require_permission(db, ctx, signoff.bank_id, Permission.EDIT, opaque=True)
@@ -316,19 +463,75 @@ def submit_signoff(
                 ),
             },
         )
+    _ensure_maker_checker(signoff, payload.attestation_recipient_user_id)
+    _require_recipient_eligibility(db, ctx, signoff, payload.attestation_recipient_user_id)
     signoff.status = "pending_attestation"
     signoff.submitted_by = ctx.actor_user_id
     signoff.submitted_at = utc_now()
+    signoff.attestation_recipient_user_id = payload.attestation_recipient_user_id
+    signoff.signing_digest = _signing_digest(signoff)
     record_event(
         db,
         ctx,
         event_type="enterprise_stress_signoff.submitted",
         entity_type="enterprise_stress_signoff",
         entity_id=signoff.id,
-        details={"run_id": str(signoff.run_id), "reason": payload.reason},
+        details={
+            "run_id": str(signoff.run_id),
+            "reason": payload.reason,
+            "attestation_recipient_user_id": str(payload.attestation_recipient_user_id),
+            "signing_digest": signoff.signing_digest,
+        },
     )
     db.commit()
     return _read(signoff)
+
+
+def step_up_signoff(  # noqa: PLR0913 - request metadata is part of fresh-auth evidence
+    db: Session,
+    ctx: TenantContext,
+    bank_id: str,
+    signoff_id: UUID,
+    payload: StressSignoffStepUpRequest,
+    request: Request,
+) -> StressSignoffStepUpGranted:
+    """Re-authenticate the named signer and bind one token to this exact digest."""
+    signoff = _get_signoff_or_404(db, ctx, bank_id, signoff_id)
+    signing_digest = _attestation_preflight(db, ctx, signoff)
+    assert ctx.actor_user_id is not None  # established by the preflight
+    signer_identity = identity.require_signer_identity(db, ctx, ctx.actor_user_id)
+    client = request.client
+    evidence = stepup.verify_step_up(
+        db,
+        ctx,
+        ctx.actor_user_id,
+        id_token=payload.id_token,
+        password=payload.password,
+        request_metadata={
+            "ip": client.host if client else None,
+            "user_agent": request.headers.get("user-agent"),
+        },
+    )
+    # Re-check everything after the authentication transaction commits. A fresh
+    # password is not execution authority and never substitutes for a grant.
+    signing_digest = _attestation_preflight(db, ctx, signoff)
+    token, authorization = stepup.mint_authorization(
+        db,
+        ctx,
+        user_id=ctx.actor_user_id,
+        signer_id=signer_identity.signer_id,
+        package_id=signoff.id,
+        signing_role="board",
+        certification_digest=signing_digest,
+        auth_evidence=evidence,
+        audit_entity_type="enterprise_stress_signoff",
+    )
+    return StressSignoffStepUpGranted(
+        authorization_token=token,
+        expires_at=authorization.expires_at,
+        signing_digest=signing_digest,
+        method=evidence.get("method"),  # pyright: ignore[reportArgumentType] - verifier-owned literal
+    )
 
 
 def attest_signoff(
@@ -339,37 +542,43 @@ def attest_signoff(
     payload: StressSignoffAttestation,
 ) -> StressSignoffRead:
     signoff = _get_signoff_or_404(db, ctx, bank_id, signoff_id)
-    if signoff.status != "pending_attestation":
+    signing_digest = _attestation_preflight(db, ctx, signoff)
+    assert ctx.actor_user_id is not None  # established by the preflight
+    if payload.expected_signing_digest != signing_digest:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail={
-                "error_code": "not_pending_attestation",
-                "message": (
-                    "Only a sign-off pending attestation can be attested; this one is "
-                    f"'{signoff.status}'."
-                ),
+                "error_code": "signing_digest_changed",
+                "message": "The reviewed signing digest is stale. Review the sign-off again.",
             },
         )
-    # Maker ≠ checker (¶16, ¶20): the Board attester must differ from the preparer
-    # and from the submitter — the officer who challenges the results cannot be the
-    # officer who produced the narrative.
-    preparers = {signoff.created_by, signoff.submitted_by}
-    if ctx.actor_user_id in preparers and ctx.actor_user_id is not None:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail={
-                "error_code": "maker_is_checker",
-                "message": (
-                    "The sign-off's preparer/submitter cannot attest it (maker ≠ checker)."
-                ),
-            },
-        )
+    authorization = stepup.consume_authorization(
+        db,
+        ctx,
+        token=payload.authorization_token,
+        user_id=ctx.actor_user_id,
+        package_id=signoff.id,
+        signing_role="board",
+        certification_digest=signing_digest,
+    )
+    # Structural preflight is not execution authority. Re-evaluate the current
+    # binding with the maker/checker and genuine consumed step-up now established.
+    scope_authorization.require_signer(
+        db,
+        ctx,
+        signoff.bank_id,
+        structural=False,
+        maker_checker_established=True,
+        step_up_established=True,
+    )
     signoff.status = "attested"
     signoff.credibility_rationale = payload.credibility_rationale
     if payload.board_challenge is not None:
         signoff.board_challenge = payload.board_challenge
     signoff.attested_by = ctx.actor_user_id
     signoff.attested_at = utc_now()
+    signoff.signing_digest = signing_digest
+    signoff.signing_authorization_id = authorization.id
     signoff.version = signoff.version + 1
     record_event(
         db,
@@ -382,6 +591,10 @@ def attest_signoff(
             "scenario_code": signoff.scenario_code,
             "version": signoff.version,
             "reason": payload.reason,
+            "attestation_recipient_user_id": str(signoff.attestation_recipient_user_id),
+            "signing_digest": signing_digest,
+            "signing_authorization_id": str(authorization.id),
+            "step_up_method": authorization.auth_evidence.get("method"),
         },
     )
     db.commit()

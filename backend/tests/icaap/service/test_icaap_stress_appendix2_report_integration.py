@@ -28,9 +28,9 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
-from app.attestation.service import digests
+from app.attestation.service import digests, stepup
 from app.attestation.service import workflow as attestation
-from app.core.authorization import RoleBundle
+from app.core.authorization import RoleBundle, SensitivityScope
 from app.models import (
     Bank,
     BankReportingPeriod,
@@ -51,7 +51,7 @@ from app.stress.schemas.enterprise_stress import EnterpriseStressRunCreate
 from app.stress.schemas.enterprise_stress_signoff import (
     StressSignoffAttestation,
     StressSignoffCreate,
-    StressSignoffTransition,
+    StressSignoffSubmission,
 )
 from app.stress.schemas.management_actions import (
     ManagementActionPlanApproval,
@@ -131,6 +131,13 @@ def _seed_checker(db: Session) -> None:
         )
     db.flush()
     grant(db, RoleBundle.APPROVER, user_id=CHECKER_ID)
+    grant(
+        db,
+        RoleBundle.SIGNER,
+        user_id=CHECKER_ID,
+        bank_id=SAMPLE_BANK_ID,
+        sensitivity=SensitivityScope.RESTRICTED,
+    )
 
 
 def _severe_paths() -> list[dict[str, str | int]]:
@@ -310,8 +317,29 @@ def _attested_signoff(  # noqa: PLR0913 - one keyword per narrative element
             reason="Prepare the stress-run sign-off.",
         ),
     )
-    enterprise_stress_signoff.submit_signoff(
-        db, MAKER, SAMPLE_BANK_ID, signoff.id, StressSignoffTransition(reason="submit")
+    recipient_id = checker.actor_user_id
+    assert recipient_id is not None
+    submitted = enterprise_stress_signoff.submit_signoff(
+        db,
+        MAKER,
+        SAMPLE_BANK_ID,
+        signoff.id,
+        StressSignoffSubmission(
+            attestation_recipient_user_id=recipient_id,
+            reason="submit",
+        ),
+    )
+    assert submitted.signing_digest is not None
+    token, _ = stepup.mint_authorization(
+        db,
+        checker,
+        user_id=recipient_id,
+        signer_id="SGN-STRESS-FIXTURE",
+        package_id=signoff.id,
+        signing_role="board",
+        certification_digest=submitted.signing_digest,
+        auth_evidence={"method": "password_reauth"},
+        audit_entity_type="enterprise_stress_signoff",
     )
     enterprise_stress_signoff.attest_signoff(
         db,
@@ -321,6 +349,8 @@ def _attested_signoff(  # noqa: PLR0913 - one keyword per narrative element
         StressSignoffAttestation(
             credibility_rationale=clean["credibility_rationale"],  # type: ignore[arg-type]
             board_challenge=clean["board_challenge"],
+            authorization_token=token,
+            expected_signing_digest=submitted.signing_digest,
             reason="Board attestation.",
         ),
     )
@@ -513,7 +543,11 @@ def test_refuses_without_an_attested_stress_run(db_session: Session) -> None:
         ),
     )
     enterprise_stress_signoff.submit_signoff(
-        db_session, MAKER, SAMPLE_BANK_ID, signoff.id, StressSignoffTransition(reason="submit")
+        db_session,
+        MAKER,
+        SAMPLE_BANK_ID,
+        signoff.id,
+        StressSignoffSubmission(attestation_recipient_user_id=CHECKER_ID, reason="submit"),
     )
     with pytest.raises(HTTPException) as pending:
         _generate(db_session)
@@ -555,16 +589,36 @@ def test_maker_cannot_attest_own_signoff(db_session: Session) -> None:
         ),
     )
     enterprise_stress_signoff.submit_signoff(
-        db_session, MAKER, SAMPLE_BANK_ID, signoff.id, StressSignoffTransition(reason="submit")
+        db_session,
+        MAKER,
+        SAMPLE_BANK_ID,
+        signoff.id,
+        StressSignoffSubmission(attestation_recipient_user_id=CHECKER_ID, reason="submit"),
     )
-    # Maker ≠ checker (¶16, ¶20): the preparer/submitter cannot attest.
+    # Maker ≠ checker (¶16, ¶20): authority and a named route cannot bypass it.
+    row = db_session.get(EnterpriseStressSignoff, signoff.id)
+    assert row is not None
+    row.attestation_recipient_user_id = DEMO_USER_ID
+    grant(
+        db_session,
+        RoleBundle.SIGNER,
+        user_id=DEMO_USER_ID,
+        bank_id=SAMPLE_BANK_ID,
+        sensitivity=SensitivityScope.RESTRICTED,
+    )
+    db_session.commit()
     with pytest.raises(HTTPException) as maker_exc:
         enterprise_stress_signoff.attest_signoff(
             db_session,
             MAKER,
             SAMPLE_BANK_ID,
             signoff.id,
-            StressSignoffAttestation(credibility_rationale="c", reason="self-attest"),
+            StressSignoffAttestation(
+                credibility_rationale="c",
+                authorization_token="not-consumed-before-maker-checker",
+                expected_signing_digest="0" * 64,
+                reason="self-attest",
+            ),
         )
     assert maker_exc.value.detail["error_code"] == "maker_is_checker"  # type: ignore[index]
 
@@ -770,6 +824,13 @@ def _seed_board_chair(db: Session) -> None:
     )
     db.flush()
     grant(db, RoleBundle.VIEWER, user_id=BOARD_CHAIR_ID)
+    grant(
+        db,
+        RoleBundle.SIGNER,
+        user_id=BOARD_CHAIR_ID,
+        bank_id=SAMPLE_BANK_ID,
+        sensitivity=SensitivityScope.RESTRICTED,
+    )
 
 
 def test_attested_narratives_render_in_the_pdf(

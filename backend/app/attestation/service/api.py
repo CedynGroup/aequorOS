@@ -114,7 +114,7 @@ def _ensure_certify_authority(
 ) -> None:
     """Require Signer authority and a named route before any ceremony write."""
     _require_actor(ctx)
-    signing.require_certification_access(db, ctx, package, role)
+    routing.require_certification_access(db, ctx, package, role)
 
 
 def _require_package_action(

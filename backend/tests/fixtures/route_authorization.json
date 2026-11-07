@@ -1285,12 +1285,6 @@
         {
           "application": "tenant",
           "method": "POST",
-          "path": "/api/v1/banks/{bank_id}/enterprise-stress/signoffs/{signoff_id}/attest",
-          "endpoint": "app.stress.api.manage_enterprise_stress_signoff:attest_signoff"
-        },
-        {
-          "application": "tenant",
-          "method": "POST",
           "path": "/api/v1/banks/{bank_id}/filing-workflow-templates/{template_id}/decision",
           "endpoint": "app.reporting.api.manage_filing_workflow:decide_filing_workflow_template"
         },
@@ -3292,6 +3286,18 @@
           "method": "PATCH",
           "path": "/api/v1/banks/{bank_id}/enterprise-stress/signoffs/{signoff_id}",
           "endpoint": "app.stress.api.manage_enterprise_stress_signoff:update_signoff"
+        },
+        {
+          "application": "tenant",
+          "method": "POST",
+          "path": "/api/v1/banks/{bank_id}/enterprise-stress/signoffs/{signoff_id}/attest",
+          "endpoint": "app.stress.api.manage_enterprise_stress_signoff:attest_signoff"
+        },
+        {
+          "application": "tenant",
+          "method": "POST",
+          "path": "/api/v1/banks/{bank_id}/enterprise-stress/signoffs/{signoff_id}/step-up",
+          "endpoint": "app.stress.api.manage_enterprise_stress_signoff:step_up_signoff"
         },
         {
           "application": "tenant",
