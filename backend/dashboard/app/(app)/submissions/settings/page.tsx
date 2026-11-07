@@ -34,7 +34,6 @@ import {
   useSaveChannelConfig,
 } from "@/lib/api/hooks";
 import { fmtTimestamp, shortId } from "@/lib/api/values";
-import { isApiError } from "@/lib/api/client";
 import { CHANNEL_LABELS } from "@/components/submissions/shared";
 import SigningPolicyPanel from "@/components/attestation/SigningPolicyPanel";
 import { useConfigureEligibility } from "@/lib/api/configureAccess";
