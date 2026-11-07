@@ -959,7 +959,8 @@
         "tests/db/test_worker_database_access_integration.py::test_worker_query_log_partition_after_owner_handoff_without_audit_inheritance",
         "tests/db/test_worker_database_access_integration.py::test_worker_records_bi_export_queries_without_unrestricted_partition_access",
         "tests/db/test_worker_database_access_integration.py::test_worker_visibility_accepts_claim_capability_and_refuses_api_role[aqs_api]",
-        "tests/db/test_worker_database_access_integration.py::test_worker_visibility_accepts_claim_capability_and_refuses_api_role[aqs_worker]"
+        "tests/db/test_worker_database_access_integration.py::test_worker_visibility_accepts_claim_capability_and_refuses_api_role[aqs_worker]",
+        "tests/db/test_bindings_constraint_migrations_integration.py::test_signer_migration_grants_nothing_and_preserves_existing_authority"
       ],
       "category": "schema, migrations, RLS, roles and timeouts",
       "reason": "Server catalogs, migrations, policies, grants and independent database sessions cannot be replaced by resolved inputs."
@@ -1409,7 +1410,11 @@
         "tests/identity/service/test_sso_tenant_binding_integration.py::test_single_audience_rejects_mismatched_authorized_party_before_account_lookup[wrong]",
         "tests/identity/service/test_sso_tenant_binding_integration.py::test_unknown_identity_with_cross_tenant_collisions_never_uses_other_tenant[jit-disabled]",
         "tests/identity/service/test_sso_tenant_binding_integration.py::test_unknown_identity_with_cross_tenant_collisions_never_uses_other_tenant[jit-enabled]",
-        "tests/identity/service/test_sso_tenant_binding_integration.py::test_verified_connection_cannot_link_user_from_caller_selected_other_tenant"
+        "tests/identity/service/test_sso_tenant_binding_integration.py::test_verified_connection_cannot_link_user_from_caller_selected_other_tenant",
+        "tests/identity/api/test_grant_administration_integration.py::test_signer_is_explicit_exact_and_invalidates_sign_ins",
+        "tests/identity/api/test_grant_administration_integration.py::test_owner_account_admin_conflict_names_only_the_revocable_grant[signer]",
+        "tests/identity/api/test_grant_administration_integration.py::test_multiple_conflicting_bindings_must_all_be_removed[held_roles12-signer-Organization Administrator]",
+        "tests/identity/api/test_grant_administration_integration.py::test_multiple_conflicting_bindings_must_all_be_removed[held_roles13-account_admin-Signer]"
       ],
       "category": "authority state",
       "reason": "Persisted bindings, grants, security state and invalidation require real database outcomes."

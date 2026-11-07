@@ -27,7 +27,6 @@ from app.identity.models.user import User
 from app.models import EnterpriseStressSignoff
 from app.models.audit_event import AuditEvent
 from app.stress.service import enterprise_stress_signoff
-from tests.data_engine.api.test_ingestion_integration import seed_bank
 from tests.stress.api.test_enterprise_stress_integration import (
     _approve_scenario,
     _create_scenario,
@@ -36,6 +35,7 @@ from tests.stress.api.test_enterprise_stress_integration import (
 )
 from tests.stress.api.test_enterprise_stress_signoff_integration import _create_signoff
 from tests.stress.authority import grant
+from tests.support.bank_seeding import seed_bank
 from tests.support.helpers import ORG_1, USER_1, headers
 
 pytestmark = pytest.mark.usefixtures(
