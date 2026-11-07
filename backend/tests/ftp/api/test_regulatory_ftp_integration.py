@@ -508,20 +508,7 @@ def test_ftp_input_hash_is_scoped_to_ftp_facts(
     assert _baseline_total(real_client) == before + 4
 
 
-def test_ftp_dashboard_computes_inline_then_prefers_stored_runs(real_client: TestClient) -> None:
-    latest = _latest_period(real_client)
-    period = _period_without_stored_baseline(real_client)
-
-    inline = real_client.get(
-        f"/api/v1/banks/{REAL_BANK_ID}/ftp/dashboard",
-        headers=real_headers(),
-        params={"reporting_period_id": period["id"]},
-    )
-    assert inline.status_code == 200, inline.text
-    body = inline.json()
-    assert body["stored"] is False
-    assert body["latest_run_id"] is None
-    assert body["period"]["id"] == period["id"]
+def _assert_dashboard_details(body: dict[str, Any]) -> None:
     metrics = body["metrics"]
     assert metrics["nmd_core_status"] == _core_status(
         _dec(metrics["nmd_core_pct"]),
@@ -539,6 +526,23 @@ def test_ftp_dashboard_computes_inline_then_prefers_stored_runs(real_client: Tes
     )
     assert body["nmd_segments"]
     assert {item["rule_code"] for item in body["validations"]} == FTP_VALIDATION_RULES
+
+
+def test_ftp_dashboard_computes_inline_then_prefers_stored_runs(real_client: TestClient) -> None:
+    latest = _latest_period(real_client)
+    period = _period_without_stored_baseline(real_client)
+
+    inline = real_client.get(
+        f"/api/v1/banks/{REAL_BANK_ID}/ftp/dashboard",
+        headers=real_headers(),
+        params={"reporting_period_id": period["id"]},
+    )
+    assert inline.status_code == 200, inline.text
+    body = inline.json()
+    assert body["stored"] is False
+    assert body["latest_run_id"] is None
+    assert body["period"]["id"] == period["id"]
+    _assert_dashboard_details(body)
 
     trend = body["trend"]
     assert trend
@@ -578,7 +582,7 @@ def test_ftp_dashboard_computes_inline_then_prefers_stored_runs(real_client: Tes
         total_balance += balance
     assert total_balance > 0
     expected_nim = str(_ratio_pct(weighted_margin / total_balance))
-    assert metrics["portfolio_nim_pct"] == expected_nim
+    assert body["metrics"]["portfolio_nim_pct"] == expected_nim
     assert by_period[period["id"]]["portfolio_nim_pct"] == expected_nim
     stored = real_client.get(
         f"/api/v1/banks/{REAL_BANK_ID}/ftp/dashboard",
