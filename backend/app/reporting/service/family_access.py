@@ -9,7 +9,7 @@ Scalar roles never authorize a return, and narrowed grants never serve snapshots
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import TYPE_CHECKING, Final
 
 from fastapi import HTTPException, status
@@ -51,6 +51,13 @@ TRANSMISSION_GATE: Final[FamilyGate] = FamilyGate(
 
 # Taking a return away is a Regulatory Reporting act for every family, exactly as transmission is.
 EXPORT_GATE: Final[FamilyGate] = FamilyGate(
+    module=Module.REGULATORY, sensitivity=Sensitivity.RESTRICTED
+)
+
+#: Formal certification is a REG/restricted Signer act for every return family.
+#: ICAAP keeps CAPITAL/confidential SOURCE READ, but that visibility never
+#: supplies signing authority and must not change the signing grant's module.
+SIGNING_GATE: Final[FamilyGate] = FamilyGate(
     module=Module.REGULATORY, sensitivity=Sensitivity.RESTRICTED
 )
 
@@ -98,6 +105,8 @@ def _evaluate(  # noqa: PLR0913 - the complete decision tuple is explicit
     surface: str,
     conditions: tuple[ConditionCheck, ...] = (),
     prefetched_bindings: tuple[bool, list[AuthorizationBinding]] | None = None,
+    structural: bool = False,
+    exact_institution: bool = False,
 ) -> bool:
     """One complete active binding for this exact institution, or False.
 
@@ -118,9 +127,14 @@ def _evaluate(  # noqa: PLR0913 - the complete decision tuple is explicit
     )
     try:
         if prefetched_bindings is None:
-            decision = authorization_service.evaluate_permission(
-                db, principal, permission, resource, conditions=conditions
-            )
+            if structural:
+                decision = authorization_service.evaluate_structural_permission(
+                    db, principal, permission, resource
+                )
+            else:
+                decision = authorization_service.evaluate_permission(
+                    db, principal, permission, resource, conditions=conditions
+                )
             whole_institution = False
             if decision.allowed:
                 whole_institution = authorization_service.effective_data_scope(
@@ -148,6 +162,20 @@ def _evaluate(  # noqa: PLR0913 - the complete decision tuple is explicit
             decision = authorization_service.institution_grain_decision(
                 decision, whole_institution=whole_institution
             )
+        if decision.allowed and exact_institution:
+            matched_grants = authorization_service.load_effective_grants(
+                db,
+                organization_id=ctx.organization_id,
+                binding_ids=decision.matching_binding_ids,
+            )
+            if not any(
+                grant.institution_scope is InstitutionScope.INSTITUTION
+                and grant.institution_id == bank.id
+                for grant in matched_grants.values()
+            ):
+                decision = replace(
+                    decision, allowed=False, reason="signing_requires_exact_institution_binding"
+                )
     except Exception as exc:  # noqa: BLE001 - enforcement must deny on evaluator failure
         authorization_service.record_binding_evaluation_failure(
             principal, permission, resource, surface=surface, error=exc
@@ -566,17 +594,14 @@ def chain_decision_allowed(  # noqa: PLR0913 - the complete decision tuple is ex
     ).allowed
 
 
-#: Which permission a signing role's certification is an exercise of, on a
-#: return family. The preparer's certification is the act of finishing the
-#: document (EDIT); a checker's certification IS the approval of the filing
-#: (APPROVE) — the attestation spine already treats it that way, writing the
-#: approval decision on the final required signature.
-CERTIFY_PERMISSIONS: Final[dict[str, Permission]] = {
-    "preparer": Permission.EDIT,
-    "approver": Permission.APPROVE,
-    "board": Permission.APPROVE,
-    "witness": Permission.VIEW,
-}
+#: Formal signing requires the fixed REG/restricted SIGN_OFF binding for every
+#: slot. Source READ remains an independent family-specific gate. Checkers
+#: additionally need APPROVE; signer-only is not checker approval (D8).
+CERTIFY_PERMISSIONS: Final[dict[str, Permission]] = dict.fromkeys(
+    ("preparer", "approver", "board", "witness"), Permission.SIGN_OFF
+)
+
+CHECKER_ROLES: Final[frozenset[str]] = frozenset({"approver", "board"})
 
 
 def certification_conditions(
@@ -598,24 +623,75 @@ def certification_conditions(
     )
 
 
-def require_certify_authority(
+def require_certify_authority(  # noqa: PLR0913 - complete ceremony evidence tuple
     db: Session,
     ctx: TenantContext,
     bank: Bank,
     package: RegulatoryPackage,
     role: str,
+    *,
+    step_up_established: bool = False,
+    maker_checker_established: bool = False,
 ) -> bool:
-    """Require the family's scoped certification authority for every return."""
-    permission = CERTIFY_PERMISSIONS.get(role, Permission.APPROVE)
-    require_permission(
+    """Require source READ, SIGN_OFF, and any distinct checker APPROVE duty.
+
+    Preflight deliberately evaluates stored bindings structurally. Only the
+    locked signing ceremony may set both execution-evidence flags after its
+    workflow checks and one-shot step-up consumption.
+    """
+    require_view(db, ctx, bank, package)
+    if ctx.impersonation_context is not None:
+        raise _forbidden()
+    execution = step_up_established or maker_checker_established
+    sign_off_conditions = (
+        (
+            ConditionCheck(
+                ConditionKind.MAKER_CHECKER,
+                maker_checker_established,
+                "The signing ceremony must establish maker/checker separation.",
+            ),
+            ConditionCheck(
+                ConditionKind.STEP_UP,
+                step_up_established,
+                "The signing ceremony must establish a genuine recent step-up.",
+            ),
+        )
+        if execution
+        else ()
+    )
+    if not _evaluate(
         db,
         ctx,
         bank,
-        package,
-        permission,
+        SIGNING_GATE,
+        CERTIFY_PERMISSIONS.get(role, Permission.SIGN_OFF),
         surface=f"{package.return_family}_package_certify",
-        conditions=certification_conditions(ctx, package, permission),
-    )
+        conditions=sign_off_conditions,
+        structural=not execution,
+        exact_institution=True,
+    ):
+        raise _forbidden()
+    if (
+        execution
+        and role in CHECKER_ROLES
+        and not _evaluate(
+            db,
+            ctx,
+            bank,
+            SIGNING_GATE,
+            Permission.APPROVE,
+            surface=f"{package.return_family}_package_certify_approval",
+            conditions=(
+                ConditionCheck(
+                    ConditionKind.MAKER_CHECKER,
+                    maker_checker_established,
+                    "The locked checker guard must precede approval authority.",
+                ),
+            ),
+            exact_institution=True,
+        )
+    ):
+        raise _forbidden()
     return True
 
 
@@ -627,19 +703,29 @@ def nominee_may_sign(  # noqa: PLR0913 - the complete decision tuple is explicit
     nominee: TenantContext,
     role: str,
 ) -> bool:
-    """Evaluate a nominee on the same whole-institution authority as certification."""
-    gate = gate_for(package.return_family)
-    permission = CERTIFY_PERMISSIONS.get(role, Permission.APPROVE)
+    """Evaluate structural nominee authority without inventing step-up proof."""
     if not can_view(db, ctx, bank, package.return_family):
         return False
-    return _evaluate(
+    if not _evaluate(
         db,
         nominee,
         bank,
-        gate,
-        permission,
+        SIGNING_GATE,
+        CERTIFY_PERMISSIONS.get(role, Permission.SIGN_OFF),
         surface=f"{package.return_family}_package_nominee",
-        conditions=certification_conditions(nominee, package, permission),
+        structural=True,
+        exact_institution=True,
+    ):
+        return False
+    return role not in CHECKER_ROLES or _evaluate(
+        db,
+        nominee,
+        bank,
+        SIGNING_GATE,
+        Permission.APPROVE,
+        surface=f"{package.return_family}_package_nominee_approval",
+        conditions=certification_conditions(nominee, package, Permission.APPROVE),
+        exact_institution=True,
     )
 
 

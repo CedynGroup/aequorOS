@@ -80,14 +80,13 @@ def test_every_icaap_entry_pairs_with_its_own_template() -> None:
     assert len(ids) == 3
 
 
-def test_each_signing_role_maps_to_the_permission_it_actually_exercises() -> None:
-    """A preparer FINISHES the document; a checker APPROVES the filing."""
+def test_every_signing_role_needs_sign_off_and_checkers_separately_approve() -> None:
+    """SIGN_OFF never implies the checker slot's additional APPROVE duty."""
     from app.core.authorization import Permission  # noqa: PLC0415
     from app.reporting.service import family_access  # noqa: PLC0415
 
-    assert family_access.CERTIFY_PERMISSIONS["preparer"] is Permission.EDIT
-    assert family_access.CERTIFY_PERMISSIONS["approver"] is Permission.APPROVE
-    assert family_access.CERTIFY_PERMISSIONS["board"] is Permission.APPROVE
+    assert set(family_access.CERTIFY_PERMISSIONS.values()) == {Permission.SIGN_OFF}
+    assert {"approver", "board"} == family_access.CHECKER_ROLES
 
 
 def test_every_family_names_whole_institution_authority() -> None:

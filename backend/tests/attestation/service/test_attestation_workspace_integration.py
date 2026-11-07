@@ -163,9 +163,13 @@ def _users(db: Session) -> None:
     for user_id, bundle in (
         (DEMO_USER_ID, RoleBundle.ANALYST),
         (DEMO_USER_ID, RoleBundle.APPROVER),
+        (DEMO_USER_ID, RoleBundle.SIGNER),
         (APPROVER_USER_ID, RoleBundle.APPROVER),
+        (APPROVER_USER_ID, RoleBundle.SIGNER),
         (ANALYST_USER_ID, RoleBundle.ANALYST),
+        (ANALYST_USER_ID, RoleBundle.SIGNER),
         (OTHER_APPROVER_USER_ID, RoleBundle.APPROVER),
+        (OTHER_APPROVER_USER_ID, RoleBundle.SIGNER),
     ):
         authorization.create_role_binding(
             db,
@@ -245,6 +249,39 @@ def _seed(
     return package
 
 
+def _name_certifier(
+    db: Session, package: RegulatoryPackage, *, role: str, user_id: UUID, signer_id: str
+) -> None:
+    """Give a successful legacy ceremony fixture its now-mandatory named route."""
+    existing = db.scalar(
+        select(PackageSignatureRecipient.id).where(
+            PackageSignatureRecipient.organization_id == package.organization_id,
+            PackageSignatureRecipient.package_id == package.id,
+            PackageSignatureRecipient.attestation_cycle == package.attestation_cycle,
+            PackageSignatureRecipient.signing_role == role,
+        )
+    )
+    if existing is not None:
+        return
+    user = db.get(User, user_id)
+    assert user is not None
+    db.add(
+        PackageSignatureRecipient(
+            organization_id=package.organization_id,
+            package_id=package.id,
+            attestation_cycle=package.attestation_cycle,
+            signing_role=role,
+            recipient_user_id=user_id,
+            recipient_signer_id=signer_id,
+            recipient_display_name=user.display_name,
+            recipient_job_title=user.job_title,
+            routing_order=1,
+            status="pending",
+        )
+    )
+    db.flush()
+
+
 def _certify(  # noqa: PLR0913 - mirrors signing.certify's own irreducible inputs
     db: Session,
     ctx: TenantContext,
@@ -256,6 +293,7 @@ def _certify(  # noqa: PLR0913 - mirrors signing.certify's own irreducible input
 ) -> AttestationSignature:
     assert ctx.actor_user_id is not None
     identity = ensure_signer_identity(db, ctx, ctx.actor_user_id)
+    _name_certifier(db, package, role=role, user_id=ctx.actor_user_id, signer_id=identity.signer_id)
     service = SignerKeyService(db, ctx)
     if service.active_key(identity.signer_id) is None:
         service.issue(
@@ -628,8 +666,7 @@ def test_a_deactivated_nominee_is_refused(db_session: Session) -> None:
 def test_only_the_named_signer_may_fill_a_routed_slot(db_session: Session) -> None:
     """A nomination the audit trail cannot rely on would be decoration.
 
-    The gate exists only where somebody created it: an unrouted return is
-    unaffected (every other attestation test proves that by passing).
+    Every certification has a current-cycle route; only the named person may fill it.
     """
     package = _seed(db_session)
     _certify(db_session, MAKER, package, role="preparer")
@@ -649,7 +686,11 @@ def test_only_the_named_signer_may_fill_a_routed_slot(db_session: Session) -> No
     _certify(db_session, APPROVER, package, role="approver")
     db_session.refresh(package)
     assert package.attestation_state == "fully_certified"
-    closed = routing.current_recipients(db_session, MAKER, package)
+    closed = [
+        row
+        for row in routing.current_recipients(db_session, MAKER, package)
+        if row.signing_role == "approver"
+    ]
     assert [row.status for row in closed] == ["signed"]
     assert closed[0].signed_at is not None
     assert closed[0].signature_id is not None
@@ -676,7 +717,11 @@ def test_rerouting_frees_a_return_whose_nominee_is_unavailable(
     )
     db_session.commit()
 
-    rerouted = routing.current_recipients(db_session, MAKER, package)
+    rerouted = [
+        row
+        for row in routing.current_recipients(db_session, MAKER, package)
+        if row.status == "pending"
+    ]
     assert [row.recipient_user_id for row in rerouted] == [OTHER_APPROVER_USER_ID]
     other = TenantContext(
         organization_id=DEMO_ORG_ID, actor_user_id=OTHER_APPROVER_USER_ID, authorization_version=1
@@ -751,7 +796,8 @@ def test_a_rejected_nominee_takes_the_certification_with_it(db_session: Session)
     db_session.refresh(package)
     assert package.attestation_state == "unsigned"
     assert package.status == "validated"
-    assert db_session.scalars(select(PackageSignatureRecipient.id)).all() == []
+    remaining_routes = db_session.scalars(select(PackageSignatureRecipient)).all()
+    assert [(row.signing_role, row.status) for row in remaining_routes] == [("preparer", "pending")]
 
 
 # --- the approver's one act: review, sign, approve ---------------------------

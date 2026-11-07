@@ -88,8 +88,7 @@ SIGNING_ROLES = ("preparer", "approver", "board", "witness")
 ORG_CONFIG_DENIAL_DETAIL = (
     "This action requires an organization-scoped Regulatory Reporting binding."
 )
-#: Roles that additionally require the approver gate. A preparer certification
-#: is an analyst act; everything downstream is a checker act.
+#: Checker slots require their distinct approval ceremony in addition to Signer.
 CHECKER_ROLES = frozenset({"approver", "board"})
 
 
@@ -113,13 +112,9 @@ def _validate_role(role: str) -> str:
 def _ensure_certify_authority(
     db: Session, ctx: TenantContext, package: RegulatoryPackage, role: str
 ) -> None:
-    """Certification requires the family's whole-institution scoped authority."""
-    from app.reporting.service import family_access  # noqa: PLC0415
-
-    bank = db.get(Bank, package.bank_id)
-    if bank is None:  # pragma: no cover - the package's own FK guarantees it
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Bank not found.")
-    family_access.require_certify_authority(db, ctx, bank, package, role)
+    """Require Signer authority and a named route before any ceremony write."""
+    _require_actor(ctx)
+    signing.require_certification_access(db, ctx, package, role)
 
 
 def _require_package_action(
@@ -284,6 +279,7 @@ def preview(
 ) -> CertificationPreviewRead:
     role = _validate_role(signing_role)
     package = _get_package(db, ctx, bank_reference, package_id)
+    _ensure_certify_authority(db, ctx, package, role)
     return CertificationPreviewRead.model_validate(
         signing.preview_certification(db, ctx, package, role=role)
     )

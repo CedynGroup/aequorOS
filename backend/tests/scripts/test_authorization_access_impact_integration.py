@@ -601,14 +601,11 @@ def _assert_configure_artifacts(
         )
         collision = capsys.readouterr()
         assert (
-            "failed: impact artifacts already exist; choose a new dated directory"
-            in collision.err
+            "failed: impact artifacts already exist; choose a new dated directory" in collision.err
         )
         assert "no complete assessment" not in collision.err
         assert (
-            configure_impact.main(
-                ["--database-url", "sqlite://", "--organization", "OR-UNKNOWN01"]
-            )
+            configure_impact.main(["--database-url", "sqlite://", "--organization", "OR-UNKNOWN01"])
             == 2
         )
         missing = capsys.readouterr()
@@ -784,6 +781,60 @@ def test_configure_inventory_uses_one_read_only_snapshot(
         _read_json(tmp_path / "snapshot" / "configure-after.json")["outcomes"]
         != _read_json(tmp_path / "fresh" / "configure-after.json")["outcomes"]
     )
+
+
+def test_the_report_names_exact_bank_signoff_grant_holders(db_session: Session) -> None:
+    """The signing inventory never substitutes an org-wide or wrong-module grant."""
+    db_session.add(Organization(id=ORG, name="Impact proof"))
+    db_session.add(
+        Bank(
+            id=BANK,
+            organization_id=ORG,
+            name="Impact Bank",
+            short_name="Impact",
+            currency="GHS",
+            jurisdiction_code="GH",
+            license_type="universal_bank",
+            institution_type=FALLBACK_TYPE_CODE,
+        )
+    )
+    exact = _user(db_session, "signer@impact.example")
+    organization_wide = _user(db_session, "organization-signer@impact.example")
+    wrong_module = _user(db_session, "risk-signer@impact.example")
+    db_session.flush()
+    _grant(
+        db_session,
+        exact,
+        RoleBundle.SIGNER,
+        institution_scope=InstitutionScope.INSTITUTION,
+        institution_id=BANK,
+        module_scope=ModuleScope.REGULATORY,
+        sensitivity_scope=SensitivityScope.RESTRICTED,
+    )
+    _grant(
+        db_session,
+        organization_wide,
+        RoleBundle.SIGNER,
+        module_scope=ModuleScope.REGULATORY,
+        sensitivity_scope=SensitivityScope.RESTRICTED,
+    )
+    _grant(
+        db_session,
+        wrong_module,
+        RoleBundle.SIGNER,
+        institution_scope=InstitutionScope.INSTITUTION,
+        institution_id=BANK,
+        module_scope=ModuleScope.RISK,
+        sensitivity_scope=SensitivityScope.RESTRICTED,
+    )
+    db_session.commit()
+
+    rows = {row.email: row for row in build_report(db_session, organization_id=ORG)}
+
+    assert rows["signer@impact.example"].signing_institutions == [BANK]
+    assert rows["organization-signer@impact.example"].signing_institutions == []
+    assert rows["risk-signer@impact.example"].signing_institutions == []
+    assert _rendered_cells(list(rows.values()))["signer@impact.example"]["signing"] == BANK
 
 
 def test_the_report_names_who_may_transmit_a_return(db_session: Session) -> None:

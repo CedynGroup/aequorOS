@@ -69,6 +69,7 @@ from app.reporting.service import artifact_versions, generation, validation
 from app.reporting.service import workflow as reporting_workflow
 from app.reporting.service.filing_workflow import chain as filing_chain
 from app.storage.client import StorageLocation
+from tests.attestation.service.test_attestation_workspace_integration import _name_certifier
 from tests.fixtures.canonical_bank_fixture import (
     DEMO_ORG_ID,
     DEMO_USER_ID,
@@ -178,7 +179,9 @@ def _seed(db: Session, *, require_signed_pdf: bool = True, roles: Any = None) ->
     db.commit()
     for user_id, bundle in (
         (DEMO_USER_ID, RoleBundle.ANALYST),
+        (DEMO_USER_ID, RoleBundle.SIGNER),
         (CHECKER_USER_ID, RoleBundle.APPROVER),
+        (CHECKER_USER_ID, RoleBundle.SIGNER),
         (VALIDATOR_USER_ID, RoleBundle.VALIDATOR),
     ):
         assert user_id is not None
@@ -247,6 +250,7 @@ def _certify(  # noqa: PLR0913 - mirrors signing.certify's own irreducible input
     """Drive the real ceremony, minting the step-up authorisation directly."""
     assert ctx.actor_user_id is not None
     signer_id = _enrol(db, ctx, display_name)
+    _name_certifier(db, package, role=role, user_id=ctx.actor_user_id, signer_id=signer_id)
     binding = workflow.compute_binding(package)
     token, _row = stepup.mint_authorization(
         db,
@@ -722,6 +726,7 @@ def test_a_supplied_artifact_version_must_belong_to_the_package(
 def _authorization(db: Session, ctx: TenantContext, package: RegulatoryPackage, role: str) -> str:
     assert ctx.actor_user_id is not None
     signer_id = _enrol(db, ctx, "Kwesi Owusu")
+    _name_certifier(db, package, role=role, user_id=ctx.actor_user_id, signer_id=signer_id)
     token, _row = stepup.mint_authorization(
         db,
         ctx,

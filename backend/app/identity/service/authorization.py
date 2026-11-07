@@ -1043,20 +1043,23 @@ def prefetch_principal_bindings(
     return True, [binding for _, binding in rows if binding is not None]
 
 
-def evaluate_permission(  # noqa: PLR0913 - the complete decision tuple is explicit
+def _evaluate_permission(  # noqa: PLR0913 - the complete decision tuple is explicit
     db: Session,
     principal: PrincipalLocator,
     permission: Permission,
     resource: ResourceLocator,
     *,
-    conditions: tuple[ConditionCheck, ...] = (),
-    now: datetime | None = None,
+    conditions: tuple[ConditionCheck, ...],
+    now: datetime | None,
+    enforce_runtime_conditions: bool,
 ) -> AuthorizationDecision:
-    """Check permissions using only stored bindings, returning a trace for audit."""
-
     conditions = (
         *request_wide_condition_checks(),
-        *runtime_condition_checks(permission, resource, conditions),
+        *(
+            runtime_condition_checks(permission, resource, conditions)
+            if enforce_runtime_conditions
+            else conditions
+        ),
     )
     principal_active, bindings = _load_principal_grants(db, principal)
     if not principal_active:
@@ -1088,6 +1091,56 @@ def evaluate_permission(  # noqa: PLR0913 - the complete decision tuple is expli
         bindings,
         conditions=conditions,
         now=now,
+    )
+
+
+def evaluate_permission(  # noqa: PLR0913 - the complete decision tuple is explicit
+    db: Session,
+    principal: PrincipalLocator,
+    permission: Permission,
+    resource: ResourceLocator,
+    *,
+    conditions: tuple[ConditionCheck, ...] = (),
+    now: datetime | None = None,
+) -> AuthorizationDecision:
+    """Evaluate one executable authority, including every required runtime veto."""
+
+    return _evaluate_permission(
+        db,
+        principal,
+        permission,
+        resource,
+        conditions=conditions,
+        now=now,
+        enforce_runtime_conditions=True,
+    )
+
+
+def evaluate_structural_permission(  # noqa: PLR0913 - explicit preflight tuple
+    db: Session,
+    principal: PrincipalLocator,
+    permission: Permission,
+    resource: ResourceLocator,
+    *,
+    now: datetime | None = None,
+) -> AuthorizationDecision:
+    """Evaluate stored authority without claiming transaction evidence exists.
+
+    This is ONLY for a ceremony's preflight, such as a preview or recipient
+    nomination. The execution path must call :func:`evaluate_permission` again
+    with its real maker/checker, step-up, or other workflow evidence. Omitting
+    those not-yet-established conditions here never turns this result into
+    execution authority.
+    """
+
+    return _evaluate_permission(
+        db,
+        principal,
+        permission,
+        resource,
+        conditions=(),
+        now=now,
+        enforce_runtime_conditions=False,
     )
 
 

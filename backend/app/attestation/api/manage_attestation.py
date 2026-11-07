@@ -1,8 +1,9 @@
 """Attestation & e-signature API (docs/attestation_esignature.md §4.6).
 
 Role gating mirrors the capability's meaning rather than inventing a new
-hierarchy: preparing is an analyst act, approving is an approver act, and
-policy administration is an Org Owner act. pyHanko and ``cryptography`` are
+hierarchy: signing requires an exact-bank Signer grant and named route, checker
+slots keep their separate approval duty, and policy administration is an Org
+Owner act. pyHanko and ``cryptography`` are
 invoked server-side only — nothing in this module is user-facing crypto.
 
 The signing flow is deliberately two calls, not one:

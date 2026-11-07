@@ -144,7 +144,20 @@ bindings. Signer participates in the existing C9 operational-duty analysis:
 delegated Account Admin conflicts block in either assignment order; the
 documented Owner exception remains a warning with audit evidence. An ordinary
 Approver binding never supplies signing authority, and a Signer-only binding
-never supplies approval. Signing route enforcement ships in separate cutovers.
+never supplies approval. Attestation preview, step-up, certification and
+combined certification/routing require an active, exact-bank
+REG/restricted Signer binding, independent family source READ, and a pending
+current-cycle route naming the actor. The first signature has no unrouted
+fallback. Checker slots additionally evaluate exact-bank REG/restricted
+APPROVE after their workflow guards; Signer does not imply that duty.
+
+Ceremony preflight uses `evaluate_structural_permission` only to inspect stored
+binding eligibility without fabricating step-up or maker/checker evidence. It
+never authorizes execution by itself. `signing.certify` repeats ordinary
+`evaluate_permission` after the locked ceremony guards and genuine one-shot
+token consumption, with the evidence those guards established. Revocation,
+suspension, expiry, wrong bank, wrong module and wrong sensitivity therefore
+close the ceremony before signature writes.
 
 `submit` left the reserved action set on 2026-09-20:
 it is carried by the `validator` bundle alone and enforced on the filing surface

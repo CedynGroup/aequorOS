@@ -43,6 +43,7 @@ from app.attestation.service.identity import require_signer_identity, resolve_si
 from app.attestation.service.policy import SigningPolicy
 from app.attestation.service.workflow import AttestationConflict
 from app.core.config import get_settings
+from app.identity.public import Bank
 from app.reporting.models.packages import RegulatoryPackage
 from app.reporting.service import filing_reconciliation
 
@@ -298,6 +299,57 @@ def _signed_document(  # noqa: PLR0913 - the ceremony's full identity context
     return version.id
 
 
+def _certification_bank(db: Session, ctx: TenantContext, package: RegulatoryPackage) -> Bank:
+    bank = db.scalar(
+        select(Bank).where(
+            Bank.organization_id == ctx.organization_id,
+            Bank.id == package.bank_id,
+        )
+    )
+    if bank is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Not Found")
+    return bank
+
+
+def require_certification_access(
+    db: Session,
+    ctx: TenantContext,
+    package: RegulatoryPackage,
+    role: str,
+) -> None:
+    """Preflight exact-bank Signer authority and a named route, without writes."""
+    if ctx.actor_user_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, detail="Authentication required."
+        )
+    from app.reporting.service import family_access  # noqa: PLC0415 - family policy owner
+
+    family_access.require_certify_authority(
+        db, ctx, _certification_bank(db, ctx, package), package, role
+    )
+    routing.ensure_routed_signer(db, ctx, package, role=role, user_id=ctx.actor_user_id)
+
+
+def _require_certification_execution_authority(
+    db: Session,
+    ctx: TenantContext,
+    package: RegulatoryPackage,
+    role: str,
+) -> None:
+    """Re-evaluate authority with the ceremony's now-established runtime evidence."""
+    from app.reporting.service import family_access  # noqa: PLC0415 - family policy owner
+
+    family_access.require_certify_authority(
+        db,
+        ctx,
+        _certification_bank(db, ctx, package),
+        package,
+        role,
+        step_up_established=True,
+        maker_checker_established=True,
+    )
+
+
 def certify(  # noqa: PLR0913 - one transactional act with irreducible inputs
     db: Session,
     ctx: TenantContext,
@@ -327,6 +379,7 @@ def certify(  # noqa: PLR0913 - one transactional act with irreducible inputs
     into the approval decision a checker's certification writes, so the recorded
     decision quotes the approver rather than the platform.
     """
+    require_certification_access(db, ctx, package, role)
     settings = get_settings()
     if not settings.attestation.signing_enabled:
         raise HTTPException(
@@ -364,9 +417,8 @@ def certify(  # noqa: PLR0913 - one transactional act with irreducible inputs
         signer_id=identity.signer_id,
         job_title=job_title,
     )
-    # Additive to the guards above, and silent unless somebody routed this slot
-    # to named people: the policy decides whether a signature is acceptable, the
-    # routing decides whose turn it is.
+    # Re-check the current-cycle route under the same ceremony guards. The
+    # public preflight and this service entry point use the identical gate.
     routing.ensure_routed_signer(db, ctx, package, role=role, user_id=actor_user_id)
     # Data-integrity gate (audit 2026-08-22 D-2): an officer certifies that the
     # figures are true, so the platform must not accept that certification over
@@ -385,6 +437,9 @@ def certify(  # noqa: PLR0913 - one transactional act with irreducible inputs
         signing_role=role,
         certification_digest=binding.certification_digest,
     )
+    # Structural preflight is not execution authority. Re-evaluate the stored
+    # bindings only after the locked workflow guards and genuine token consume.
+    _require_certification_execution_authority(db, ctx, package, role)
 
     if backends.raw_signer is None:
         raise HTTPException(
