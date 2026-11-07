@@ -41,6 +41,7 @@ from scripts.authorization_access_impact import (
 )
 from scripts.authorization_configure_impact import (
     ConfigureReport,
+    ImpactInputError,
     build_configure_report,
     write_artifacts,
 )
@@ -486,7 +487,7 @@ def _assert_artifact_content(report: ConfigureReport, directory: Path) -> None:
         content = path.read_text()
         assert "@impact.example" not in content
         assert "password_hash" not in content and "grant_reason" not in content
-    with pytest.raises(FileExistsError):
+    with pytest.raises(ImpactInputError, match="choose a new dated directory"):
         write_artifacts(report, directory)
     assert _read_json(directory / "configure-after.json") == after
 
@@ -555,7 +556,21 @@ def _assert_configure_artifacts(
             )
             == 2
         )
-        assert "no complete assessment" in capsys.readouterr().err
+        collision = capsys.readouterr()
+        assert (
+            "failed: impact artifacts already exist; choose a new dated directory"
+            in collision.err
+        )
+        assert "no complete assessment" not in collision.err
+        assert (
+            configure_impact.main(
+                ["--database-url", "sqlite://", "--organization", "OR-UNKNOWN01"]
+            )
+            == 2
+        )
+        missing = capsys.readouterr()
+        assert missing.err.strip() == "configure impact failed: organization not found"
+        assert not missing.out
 
 
 def test_configure_standalone_import_registers_tenant_rls_handling() -> None:
@@ -599,7 +614,9 @@ def test_configure_empty_inventory_publishes_no_evidence(
     assert configure_impact.main(["--database-url", url, *output_args]) == 2
     output = capsys.readouterr()
     assert not output.out
-    assert "no complete assessment" in output.err
+    assert output.err.strip() == (
+        "configure impact failed: no organizations visible to this database role"
+    )
     assert not destination.exists()
 
 

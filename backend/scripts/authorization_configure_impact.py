@@ -40,6 +40,10 @@ from app.models import AuthorizationBinding, Bank, Organization, User
 from scripts.authorization_configure_routes import CONFIGURE_ROUTES, ConfigureRoute
 
 
+class ImpactInputError(Exception):
+    """Operator-correctable failure whose fixed message is safe to print."""
+
+
 def _date(value: datetime | None) -> str | None:
     """Serialize optional validity timestamps consistently in UTC."""
     if value is None:
@@ -271,7 +275,7 @@ def build_configure_report(
     report = ConfigureReport(generated_at=_date(moment) or "")
     with db.no_autoflush:
         if db.scalar(select(Organization.id).where(Organization.id == organization_id)) is None:
-            raise ValueError("organization not found")
+            raise ImpactInputError("organization not found")
         banks = list(
             db.scalars(
                 select(Bank.id).where(Bank.organization_id == organization_id).order_by(Bank.id)
@@ -339,7 +343,7 @@ def write_artifacts(report: ConfigureReport, directory: Path) -> None:
     common = {key: value for key, value in report.to_dict().items() if key != "impacts"}
     paths = [directory / f"configure-{stage}.json" for stage in ("before", "after", "exact-grants")]
     if any(path.exists() for path in paths):
-        raise FileExistsError("impact artifacts already exist; choose a new dated directory")
+        raise ImpactInputError("impact artifacts already exist; choose a new dated directory")
     for stage in ("before", "after"):
         payload = {
             **common,
@@ -403,7 +407,7 @@ def _organizations(engine: Engine, organization_id: str | None) -> list[str]:
     with Session(engine, autoflush=False) as db:
         organizations = list(db.scalars(select(Organization.id).order_by(Organization.id)))
     if not organizations:
-        raise ValueError("no organizations visible to this database role")
+        raise ImpactInputError("no organizations visible to this database role")
     return organizations
 
 
@@ -441,6 +445,9 @@ def main(argv: list[str] | None = None) -> int:
         else:
             write_artifacts(report, args.output_dir)
         return 2 if report.evaluation_failed else 0
+    except ImpactInputError as exc:
+        print(f"configure impact failed: {exc}", file=sys.stderr)
+        return 2
     except Exception:
         # Driver exceptions can contain credentials. Never print their message or URL.
         print("configure impact failed; no complete assessment produced", file=sys.stderr)
