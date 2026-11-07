@@ -73,8 +73,12 @@ export default function BehavioralProposalQueue({
                 access.reviewReason,
                 profile.profile?.userId,
               )}
-              isPending={review.isPending}
-              error={review.error}
+              isPending={
+                review.isPending && review.variables === proposal.proposalId
+              }
+              error={
+                review.variables === proposal.proposalId ? review.error : null
+              }
               onReview={() => {
                 if (
                   !access.canReview ||

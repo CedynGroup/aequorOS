@@ -7,6 +7,7 @@ Revises: 202611040110
 from __future__ import annotations
 
 import sqlalchemy as sa
+from sqlalchemy.dialects import postgresql
 
 from alembic import op
 
@@ -22,19 +23,19 @@ _TENANT_ID_EXPR = "NULLIF(current_setting('app.organization_id', true), '')"
 def upgrade() -> None:
     op.create_table(
         _TABLE,
-        sa.Column("id", sa.Uuid(as_uuid=True), primary_key=True),
+        sa.Column("id", postgresql.UUID(as_uuid=True), primary_key=True),
         sa.Column("organization_id", sa.String(16), nullable=False),
         sa.Column("bank_id", sa.String(16), nullable=False),
         sa.Column("model", sa.String(40), nullable=False),
         sa.Column("model_version", sa.String(120), nullable=False),
         sa.Column("as_of_date", sa.Date(), nullable=False),
-        sa.Column("values", sa.JSON(), nullable=False),
+        sa.Column("values", postgresql.JSONB(astext_type=sa.Text()), nullable=False),
         sa.Column("status", sa.String(16), nullable=False),
-        sa.Column("proposed_by_user_id", sa.Uuid(as_uuid=True), nullable=False),
+        sa.Column("proposed_by_user_id", postgresql.UUID(as_uuid=True), nullable=False),
         sa.Column("proposed_at", sa.DateTime(timezone=True), nullable=False),
-        sa.Column("reviewed_by_user_id", sa.Uuid(as_uuid=True), nullable=True),
+        sa.Column("reviewed_by_user_id", postgresql.UUID(as_uuid=True), nullable=True),
         sa.Column("reviewed_at", sa.DateTime(timezone=True), nullable=True),
-        sa.Column("ingestion_batch_id", sa.Uuid(as_uuid=True), nullable=True),
+        sa.Column("ingestion_batch_id", postgresql.UUID(as_uuid=True), nullable=True),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False),
         sa.CheckConstraint(
@@ -94,6 +95,7 @@ def upgrade() -> None:
     if op.get_bind().dialect.name == "postgresql":
         op.execute(f"ALTER TABLE {_TABLE} ENABLE ROW LEVEL SECURITY")
         op.execute(f"ALTER TABLE {_TABLE} FORCE ROW LEVEL SECURITY")
+        op.execute(f"GRANT SELECT, INSERT, UPDATE ON {_TABLE} TO aqs_api, aqs_worker")
         op.execute(
             f"""
             CREATE POLICY {_TABLE}_tenant_isolation ON {_TABLE}
