@@ -2,11 +2,12 @@
 
 import { useUserProfile } from "@/components/profile/ProfileProvider";
 import { useImpersonation } from "@/components/impersonation/useImpersonation";
-import { hasEffectiveCapability } from "@/lib/modules";
+import { hasEffectiveCapability, hasStructuralCapability } from "@/lib/modules";
 import { wholeInstitutionCapabilities } from "./dataScope";
 
 /** The backend RoleBundle modules with a configure permission (#184). */
-export type ConfigureModule = "liq" | "credit" | "data" | "markets" | "reg";
+export type ConfigureModule =
+  "liq" | "credit" | "data" | "markets" | "reg" | "beh";
 
 const MODULE_LABELS: Record<ConfigureModule, string> = {
   liq: "Liquidity",
@@ -14,6 +15,7 @@ const MODULE_LABELS: Record<ConfigureModule, string> = {
   data: "Data",
   markets: "Markets",
   reg: "Regulatory Reporting",
+  beh: "Behavioral Models",
 };
 
 function useEligibilityGuard(
@@ -53,6 +55,46 @@ export function useConfigureEligibility(
     guard ??
     `Requires ${MODULE_LABELS[module]} configure access with Restricted data for this institution.`;
   return { allowed, reason };
+}
+
+/**
+ * The BEH proposal queue contains restricted estimate evidence and provenance.
+ * Viewing that queue and offering its contextual approval control are separate
+ * exact-bank capabilities; neither follows from the aggregated model read or
+ * Configurator's propose grant. The selected proposal's maker-checker actor
+ * comparison is applied by the queue because it needs the persisted proposer.
+ */
+export function useBehavioralProposalAccess(bankId: string | undefined) {
+  const profile = useUserProfile();
+  const inspection = useImpersonation();
+  const capabilities =
+    profile.effectiveAuthority?.institutionCapabilities.find(
+      (entry) => entry.institutionId === bankId,
+    )?.capabilities ?? [];
+  const wholeInstitution = wholeInstitutionCapabilities(capabilities);
+  const guard = useEligibilityGuard(profile, inspection.impersonating);
+  const canView =
+    !guard &&
+    Boolean(bankId) &&
+    hasEffectiveCapability(wholeInstitution, "beh", "restricted", "view");
+  const canApprove =
+    !guard &&
+    Boolean(bankId) &&
+    hasStructuralCapability(wholeInstitution, "beh", "restricted", "approve");
+  const viewReason =
+    guard ??
+    "Behavioral Models Restricted data view access is required to load proposal evidence for this institution.";
+  const approveReason =
+    guard ??
+    (!canView
+      ? viewReason
+      : "Requires Behavioral Models approve access with Restricted data for this institution.");
+  return {
+    canView,
+    viewReason,
+    canReview: canView && canApprove,
+    reviewReason: approveReason,
+  };
 }
 
 /**

@@ -1418,6 +1418,20 @@ export function useBehavioralModel(
   });
 }
 
+/** Restricted proposal evidence. Callers must pass a bank only with BEH view. */
+export function useBehavioralModelProposals(bankId: string | undefined) {
+  return useQuery({
+    queryKey: ["behavioral-proposals", bankId],
+    queryFn: () =>
+      apiCall(() =>
+        behavioralModelsApi.listBehavioralModelProposals({ bankId: bankId! }),
+      ),
+    enabled: Boolean(bankId),
+    retry: false,
+    staleTime: 0,
+  });
+}
+
 /** Observed deposit behavior by product, segment, connected group, and branch. */
 export function useBehavioralLiquidity(bankId: string | undefined) {
   return useQuery({
@@ -1464,7 +1478,7 @@ export const behavioralApplyInvalidationPrefixes: readonly string[] = [
   "live-summary",
 ];
 
-/** The refresh `useApplyBehavioralModel` performs on success (unit-tested). */
+/** The refresh performed after an independent reviewer accepts a proposal. */
 export function invalidateBehavioralApply(
   queryClient: QueryClient,
   scope: QueryAuthorityScope,
@@ -1478,13 +1492,12 @@ export function invalidateBehavioralApply(
   );
 }
 
-/** Apply reviewed estimates as accepted behavioral assumptions the engines consume. */
+/** Propose the displayed estimates for an independent maker-checker review. */
 export function useApplyBehavioralModel(
   bankId: string | undefined,
   model: BehavioralModelSlug,
 ) {
   const queryClient = useQueryClient();
-  const scope = useQueryAuthorityScope();
   return useMutation({
     mutationFn: (products: BehavioralApplyProduct[]) =>
       apiCall(() =>
@@ -1495,9 +1508,34 @@ export function useApplyBehavioralModel(
         }),
       ),
     onSuccess: () => {
-      // Downstream ALM facts change once assumptions are applied — refresh
-      // only this tenant/authority/bank's copies of the affected surfaces.
-      void invalidateBehavioralApply(queryClient, scope, bankId);
+      // A proposal does not change accepted assumptions or downstream facts.
+      // Only a restricted-view queue can expose the acknowledged proposal.
+      void queryClient.invalidateQueries({
+        queryKey: ["behavioral-proposals", bankId],
+      });
+    },
+  });
+}
+
+/** Accept a reviewed proposal, then refresh the queue and consuming engines. */
+export function useReviewBehavioralModelProposal(bankId: string | undefined) {
+  const queryClient = useQueryClient();
+  const scope = useQueryAuthorityScope();
+  return useMutation({
+    mutationFn: (proposalId: string) =>
+      apiCall(() =>
+        behavioralModelsApi.reviewBehavioralModelProposal({
+          bankId: bankId!,
+          proposalId,
+        }),
+      ),
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: ["behavioral-proposals", bankId],
+        }),
+        invalidateBehavioralApply(queryClient, scope, bankId),
+      ]);
     },
   });
 }
