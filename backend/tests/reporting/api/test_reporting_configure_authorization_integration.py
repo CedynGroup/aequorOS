@@ -125,9 +125,24 @@ def _auth() -> dict[str, str]:
 def _counts() -> tuple[int, int, int]:
     with get_sessionmaker()() as db:
         return (
-            db.scalar(select(func.count()).select_from(AuditEvent)) or 0,
-            db.scalar(select(func.count()).select_from(RegulatoryChannelConfig)) or 0,
-            db.scalar(select(func.count()).select_from(RegulatoryReportingSettings)) or 0,
+            db.scalar(
+                select(func.count()).select_from(AuditEvent).where(
+                    AuditEvent.organization_id == ORG_1
+                )
+            )
+            or 0,
+            db.scalar(
+                select(func.count())
+                .select_from(RegulatoryChannelConfig)
+                .where(RegulatoryChannelConfig.organization_id == ORG_1)
+            )
+            or 0,
+            db.scalar(
+                select(func.count())
+                .select_from(RegulatoryReportingSettings)
+                .where(RegulatoryReportingSettings.organization_id == ORG_1)
+            )
+            or 0,
         )
 
 
@@ -332,6 +347,7 @@ def _suspend_all(db: Session | None = None) -> None:
         session.scalars(
             select(AuthorizationBinding).where(
                 AuthorizationBinding.principal_user_id == USER_1,
+                AuthorizationBinding.organization_id == ORG_1,
                 AuthorizationBinding.status == BindingStatus.ACTIVE.value,
             )
         )

@@ -149,9 +149,24 @@ def book(db_client: TestClient) -> None:
 def _counts() -> tuple[int, int, int]:
     with _session() as db:
         return (
-            db.scalar(select(func.count()).select_from(AuditEvent)) or 0,
-            db.scalar(select(func.count()).select_from(ReturnSigningPolicy)) or 0,
-            db.scalar(select(func.count()).select_from(ReturnSignaturePlacement)) or 0,
+            db.scalar(
+                select(func.count()).select_from(AuditEvent).where(
+                    AuditEvent.organization_id == ORG_1
+                )
+            )
+            or 0,
+            db.scalar(
+                select(func.count())
+                .select_from(ReturnSigningPolicy)
+                .where(ReturnSigningPolicy.organization_id == ORG_1)
+            )
+            or 0,
+            db.scalar(
+                select(func.count())
+                .select_from(ReturnSignaturePlacement)
+                .where(ReturnSignaturePlacement.organization_id == ORG_1)
+            )
+            or 0,
         )
 
 
@@ -164,6 +179,7 @@ def _suspend_all() -> None:
             db.scalars(
                 select(AuthorizationBinding).where(
                     AuthorizationBinding.principal_user_id == USER_1,
+                    AuthorizationBinding.organization_id == ORG_1,
                     AuthorizationBinding.status == BindingStatus.ACTIVE.value,
                 )
             )
