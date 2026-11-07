@@ -736,8 +736,9 @@ binding lifecycle state, together with object placement (cross-organization,
 sibling bank or a single foreign child). It excludes the `KNOWN_DEFECTS` cases
 pinned by the deterministic layer. Each example sweeps the applicable census
 and checks that the content digest of every table in both organizations
-is unchanged. The bounded sample (`max_examples=15`) checks the isolation
-invariant across generated authority combinations. Its committed negative
+is unchanged. The bounded sample checks the isolation invariant across generated
+authority combinations; [bounded execution](state_machine_testing.md#bounded-reproducible-execution)
+describes the per-run budget override and scheduled depth run. Its committed negative
 control weakens both package bank guards — the route dependency's path resolver
 and the service lookup — under a rolled-back `monkeypatch` and confirms the
 sweep then reports the sibling-bank leak.
