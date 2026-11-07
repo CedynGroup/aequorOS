@@ -329,7 +329,8 @@ def test_denial_leaves_existing_rows_untouched(db_client: TestClient) -> None:
     with get_sessionmaker()() as db:
         row = db.scalar(
             select(RegulatoryChannelConfig).where(
-                RegulatoryChannelConfig.bank_id == SAMPLE_BANK_ID
+                RegulatoryChannelConfig.organization_id == ORG_1,
+                RegulatoryChannelConfig.bank_id == SAMPLE_BANK_ID,
             )
         )
         assert row is not None
