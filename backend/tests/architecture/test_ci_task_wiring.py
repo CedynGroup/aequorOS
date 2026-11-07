@@ -359,8 +359,8 @@ def _assert_serial_ci_owner(job: str) -> None:
         [
             sys.executable,
             "-c",
-            "import json, pytest, sys; "
-            "config = pytest.Config.fromdictargs({}, sys.argv[1:]); "
+            "import json, sys; from _pytest.config import _prepareconfig; "
+            "config = _prepareconfig(sys.argv[1:]); "
             "print(json.dumps(config.getoption('numprocesses')))",
             "-p",
             "xdist.plugin",
@@ -383,9 +383,10 @@ def test_ci_serial_owners_resolve_to_no_workers(job: str) -> None:
 
 
 @pytest.mark.parametrize("job", ["postgres-schema", "postgres-locks", "storage"])
-@pytest.mark.parametrize("source", ["command", "environment"])
+@pytest.mark.parametrize("source", ["command", "environment", "configuration"])
+@pytest.mark.parametrize("option", ["--numprocesses=4", "--numprocesses 4"])
 def test_serial_owner_guard_rejects_parallel_configuration(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, job: str, source: str
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, job: str, source: str, option: str
 ) -> None:
     document = cast(
         dict[str, dict[str, dict[str, object]]],
@@ -395,10 +396,12 @@ def test_serial_owner_guard_rejects_parallel_configuration(
     steps = cast(list[dict[str, object]], document["jobs"][job]["steps"])
     step = next(step for step in steps if step == target)
     if source == "command":
-        step["run"] = cast(str, step["run"]) + " --numprocesses=4"
+        step["run"] = cast(str, step["run"]) + " " + option
+    elif source == "configuration":
+        step["run"] = cast(str, step["run"]) + " -o " + shlex.quote("addopts=" + option)
     else:
         environment = cast(dict[str, str], step["env"])
-        environment["PYTEST_ADDOPTS"] += " --numprocesses=4"
+        environment["PYTEST_ADDOPTS"] += " " + option
     _ = (tmp_path / "risk-service.yml").write_text(yaml.safe_dump(document))
     monkeypatch.setitem(globals(), "WORKFLOWS", tmp_path)
     with pytest.raises(AssertionError, match=job):
