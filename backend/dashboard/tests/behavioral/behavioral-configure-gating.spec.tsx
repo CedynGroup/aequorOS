@@ -9,6 +9,7 @@ import {
   within,
 } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { act, create, type ReactTestRenderer } from "react-test-renderer";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import type {
   BehavioralApplyProduct,
@@ -18,6 +19,7 @@ import type {
   EffectiveCapabilityRead,
 } from "@aequoros/risk-service-api";
 import BehavioralModelPage from "../../components/behavioral/BehavioralModelPage";
+import BehavioralProposalQueue from "../../components/behavioral/BehavioralProposalQueue";
 
 const BANK = "BK-SAMP0001";
 const PROPOSAL_ID = "11111111-1111-4111-8111-111111111111";
@@ -26,7 +28,7 @@ const PROPOSER = "proposer";
 const REVIEWER = "reviewer";
 
 type Fixture = {
-  actor: string;
+  actor: string | undefined;
   loading: boolean;
   error: Error | null;
   inspecting: boolean;
@@ -34,6 +36,8 @@ type Fixture = {
   otherBankCapabilities: EffectiveCapabilityRead[];
   proposals: BehavioralProposalRead[];
   proposalReads: number;
+  proposalError: Error | null;
+  proposalRefetches: number;
   applyCalls: BehavioralApplyProduct[][];
   reviewCalls: string[];
   reviewPending: boolean;
@@ -50,6 +54,8 @@ const fixture = vi.hoisted((): Fixture => ({
   otherBankCapabilities: [],
   proposals: [],
   proposalReads: 0,
+  proposalError: null,
+  proposalRefetches: 0,
   applyCalls: [],
   reviewCalls: [],
   reviewPending: false,
@@ -108,8 +114,11 @@ vi.mock("../../lib/api/hooks", () => ({
     if (bankId) fixture.proposalReads += 1;
     return {
       data: bankId ? { proposals: fixture.proposals } : undefined,
-      error: null,
+      error: fixture.proposalError,
       isLoading: false,
+      refetch: () => {
+        fixture.proposalRefetches += 1;
+      },
     };
   },
   useReviewBehavioralModelProposal: () => ({
@@ -204,6 +213,8 @@ beforeEach(() => {
   fixture.otherBankCapabilities = [];
   fixture.proposals = [];
   fixture.proposalReads = 0;
+  fixture.proposalError = null;
+  fixture.proposalRefetches = 0;
   fixture.applyCalls = [];
   fixture.reviewCalls = [];
   fixture.reviewPending = false;
@@ -285,6 +296,16 @@ it("uses restricted view to show immutable proposal evidence but denies review w
   expect(fixture.reviewCalls).toEqual([]);
 });
 
+it("retries proposal evidence after a restricted queue read failure", async () => {
+  fixture.bankCapabilities.push(capability("view"));
+  fixture.proposalError = new Error("synthetic proposal read failure");
+  mountPage();
+
+  expect(screen.getByText("synthetic proposal read failure")).toBeVisible();
+  await userEvent.setup().click(screen.getByRole("button", { name: "Retry" }));
+  expect(fixture.proposalRefetches).toBe(1);
+});
+
 it("does not load evidence or offer review to an approver without restricted view", () => {
   fixture.bankCapabilities.push(capability("approve"));
   fixture.proposals = [pendingProposal()];
@@ -347,6 +368,50 @@ it("explains the maker-checker refusal when the approver is also the proposer", 
   );
   await userEvent.setup().click(review);
   expect(fixture.reviewCalls).toEqual([]);
+});
+
+it("explains why review is unavailable when reviewer identity is missing", async () => {
+  fixture.actor = undefined;
+  fixture.bankCapabilities.push(capability("view"), capability("approve"));
+  fixture.proposals = [pendingProposal()];
+  mountPage();
+
+  const review = await screen.findByRole("button", {
+    name: "Review and accept",
+  });
+  expect(review).toBeDisabled();
+  review.parentElement?.focus();
+  await waitFor(() =>
+    expect(review).toHaveAccessibleDescription(
+      /Could not verify the reviewer identity\. Reload the page to retry/i,
+    ),
+  );
+});
+
+it("defensively refuses a stale review handler when reviewer identity is missing", async () => {
+  vi.stubGlobal("IS_REACT_ACT_ENVIRONMENT", true);
+  fixture.actor = undefined;
+  fixture.bankCapabilities.push(capability("view"), capability("approve"));
+  fixture.proposals = [pendingProposal()];
+  let renderer: ReactTestRenderer | undefined;
+  try {
+    await act(async () => {
+      renderer = create(
+        <BehavioralProposalQueue bankId={BANK} model="nmd-duration" />,
+      );
+    });
+    const review = renderer?.root.findByType("button");
+    if (!review) throw new Error("review button did not render");
+    expect(review.props.disabled).toBe(true);
+
+    // DOM clicks cannot reach this guard while the control is disabled. Invoke
+    // the stale handler directly to preserve its defensive no-mutation contract.
+    await act(async () => review.props.onClick());
+    expect(fixture.reviewCalls).toEqual([]);
+  } finally {
+    await act(async () => renderer?.unmount());
+    vi.unstubAllGlobals();
+  }
 });
 
 it("does not borrow another institution's configure capability", () => {
