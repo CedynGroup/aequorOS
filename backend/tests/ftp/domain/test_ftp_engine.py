@@ -151,6 +151,10 @@ def test_curve_arithmetic_and_interpolation() -> None:
     assert curve.rate_at(Decimal("3.0")) == Decimal("29.25")
     # 28.50 + (2.5 - 2)/(3 - 2) * (29.25 - 28.50) = 28.50 + 0.375 = 28.875.
     assert curve.rate_at(Decimal("2.5")) == Decimal("28.875000")
+    # A quarter of the way up the 1y..2y bracket: the weight is asymmetric, so
+    # a midpoint assertion alone could not tell interpolation direction.
+    # 27.60 + (1.25 - 1)/(2 - 1) * (28.50 - 27.60) = 27.60 + 0.225 = 27.825.
+    assert curve.rate_at(Decimal("1.25")) == Decimal("27.825000")
     # Below the first / above the last point clamps to the endpoint rate.
     assert curve.rate_at(Decimal("0.001")) == Decimal("25.40")
     assert curve.rate_at(Decimal("20")) == Decimal("30.60")
