@@ -35,8 +35,9 @@ export interface StepUpContext {
   nonce: string;
   codeVerifier: string;
   bankId: string;
-  packageId: string;
-  signingRole: string;
+  packageId?: string;
+  signingRole?: string;
+  signoffId?: string;
   returnTo: string;
 }
 

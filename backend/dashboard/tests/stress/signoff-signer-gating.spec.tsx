@@ -18,6 +18,7 @@ const state = vi.hoisted(() => ({
   attestationRecipientUserId: "",
   stepUp: vi.fn(),
   attest: vi.fn(),
+  attestWithHeld: vi.fn(),
   submit: vi.fn(),
 }));
 
@@ -148,6 +149,10 @@ vi.mock("@/components/stress/hooks", () => {
       ...idle(),
       mutateAsync: state.attest,
     }),
+    useAttestStressSignoffWithHeldAuthorization: () => ({
+      ...idle(),
+      mutateAsync: state.attestWithHeld,
+    }),
     useStressSignoffStepUp: () => ({
       ...idle(),
       mutateAsync: state.stepUp,
@@ -192,7 +197,11 @@ beforeEach(() => {
   });
   state.attest.mockReset();
   state.attest.mockResolvedValue({});
+  state.attestWithHeld.mockReset();
+  state.attestWithHeld.mockResolvedValue({});
   state.submit.mockReset();
+  window.history.replaceState({}, "", "/stress?run=run-1");
+  window.sessionStorage.clear();
 });
 
 afterEach(cleanup);
@@ -272,6 +281,39 @@ it("steps up and attests against the frozen digest as the named Signer", async (
       },
     }),
   );
+});
+
+it("attests with the server-held authorization after SSO step-up", async () => {
+  state.permissions = ["view", "sign_off"];
+  window.history.replaceState({}, "", "/stress?run=run-1&stepUp=ready");
+  renderPanel();
+
+  fireEvent.change(screen.getByLabelText(/^Credibility rationale/), {
+    target: { value: "The synthetic SSO framework is credible." },
+  });
+  const ceremony = within(
+    screen.getByRole("group", { name: "Board attestation" }),
+  );
+  fireEvent.change(ceremony.getByPlaceholderText("Reason (audit)"), {
+    target: { value: "Synthetic SSO attestation" },
+  });
+  fireEvent.click(
+    await screen.findByRole("button", { name: "Attest with single sign-on" }),
+  );
+
+  await waitFor(() =>
+    expect(state.attestWithHeld).toHaveBeenCalledWith({
+      signoffId: "signoff-1",
+      body: {
+        expectedSigningDigest: "digest-1",
+        credibilityRationale: "The synthetic SSO framework is credible.",
+        boardChallenge: null,
+        reason: "Synthetic SSO attestation",
+      },
+    }),
+  );
+  expect(state.stepUp).not.toHaveBeenCalled();
+  expect(state.attest).not.toHaveBeenCalled();
 });
 
 it("routes a draft submission to a named recipient", () => {

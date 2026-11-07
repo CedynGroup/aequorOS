@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import os
+
+import pytest
 from sqlalchemy import inspect
 
 from alembic import command
@@ -13,6 +16,8 @@ from tests.support.postgres_migrations import (
 )
 
 __all__ = ["forward_migrated_postgres_schema"]
+
+pytestmark = pytest.mark.skipif(not os.getenv("TEST_DATABASE_URL"), reason="PostgreSQL required")
 
 _TABLE = "enterprise_stress_signoffs"
 _COLUMNS = {

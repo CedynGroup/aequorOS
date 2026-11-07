@@ -9,7 +9,7 @@
  * run may be filed as the ICAAP Appendix II stress return.
  */
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ShieldCheck, Send, PenLine } from "lucide-react";
 import SectionCard from "@/components/ui/SectionCard";
 import StatusPill, { type StatusTone } from "@/components/ui/StatusPill";
@@ -33,6 +33,7 @@ import {
   useUpdateStressSignoff,
   useSubmitStressSignoff,
   useAttestStressSignoff,
+  useAttestStressSignoffWithHeldAuthorization,
   useStressSignoffStepUp,
   useWithdrawStressSignoff,
 } from "./hooks";
@@ -189,12 +190,53 @@ function AttestForm({ signoff }: { signoff: StressSignoffRead }) {
   );
   const stepUp = useStressSignoffStepUp(signoff.bankId);
   const attest = useAttestStressSignoff(signoff.bankId);
+  const attestWithHeld = useAttestStressSignoffWithHeldAuthorization(
+    signoff.bankId,
+  );
   const [credibility, setCredibility] = useState("");
   const [challenge, setChallenge] = useState("");
   const [reason, setReason] = useState("");
   const [password, setPassword] = useState("");
+  const [ssoReady, setSsoReady] = useState(false);
+  const [ssoError, setSsoError] = useState("");
+  const stashKey = `stress-signoff-step-up:${signoff.id}`;
+  const hasRationale = Boolean(credibility.trim() && reason.trim());
   const canAttest =
-    credibility.trim() && reason.trim() && password.trim() && signing.allowed;
+    hasRationale &&
+    Boolean(password.trim() || ssoReady) &&
+    signing.allowed;
+
+  useEffect(() => {
+    const outcome = new URLSearchParams(window.location.search).get("stepUp");
+    if (!outcome) return;
+    if (outcome !== "ready") {
+      setSsoError(
+        "Single sign-on did not confirm this signature. Try again or use your password.",
+      );
+      return;
+    }
+    setSsoReady(true);
+    try {
+      const saved = window.sessionStorage.getItem(stashKey);
+      if (saved) {
+        const values: unknown = JSON.parse(saved);
+        if (values && typeof values === "object") {
+          if ("credibility" in values && typeof values.credibility === "string") {
+            setCredibility(values.credibility);
+          }
+          if ("challenge" in values && typeof values.challenge === "string") {
+            setChallenge(values.challenge);
+          }
+          if ("reason" in values && typeof values.reason === "string") {
+            setReason(values.reason);
+          }
+        }
+        window.sessionStorage.removeItem(stashKey);
+      }
+    } catch {
+      // Storage is only a convenience across the redirect; the signer can retype.
+    }
+  }, [stashKey]);
 
   if (!signing.allowed) {
     return (
@@ -207,26 +249,53 @@ function AttestForm({ signoff }: { signoff: StressSignoffRead }) {
     );
   }
 
-  const pending = stepUp.isPending || attest.isPending;
+  const pending =
+    stepUp.isPending || attest.isPending || attestWithHeld.isPending;
+  const attestation = {
+    expectedSigningDigest: signoff.signingDigest,
+    credibilityRationale: credibility,
+    boardChallenge: challenge || null,
+    reason,
+  };
   const onSubmit = () => {
     if (!canAttest || pending) return;
     void (async () => {
-      const granted = await stepUp.mutateAsync({
-        signoffId: signoff.id,
-        body: { password },
-      });
-      await attest.mutateAsync({
-        signoffId: signoff.id,
-        body: {
-          authorizationToken: granted.authorizationToken,
-          expectedSigningDigest: signoff.signingDigest,
-          credibilityRationale: credibility,
-          boardChallenge: challenge || null,
-          reason,
-        },
-      });
+      if (ssoReady) {
+        await attestWithHeld.mutateAsync({ signoffId: signoff.id, body: attestation });
+      } else {
+        const granted = await stepUp.mutateAsync({
+          signoffId: signoff.id,
+          body: { password },
+        });
+        await attest.mutateAsync({
+          signoffId: signoff.id,
+          body: { authorizationToken: granted.authorizationToken, ...attestation },
+        });
+      }
       setPassword("");
+      setSsoReady(false);
     })().catch(() => undefined);
+  };
+  const onSsoStepUp = () => {
+    if (!hasRationale || pending) return;
+    try {
+      window.sessionStorage.setItem(
+        stashKey,
+        JSON.stringify({ credibility, challenge, reason }),
+      );
+    } catch {
+      // The form remains usable after SSO even when browser storage is blocked.
+    }
+    const returnTo = new URL(window.location.href);
+    returnTo.searchParams.delete("stepUp");
+    const start = new URL("/api/attestation/step-up/start", window.location.origin);
+    start.searchParams.set("bankId", signoff.bankId);
+    start.searchParams.set("signoffId", signoff.id);
+    start.searchParams.set(
+      "returnTo",
+      `${returnTo.pathname}${returnTo.search}`,
+    );
+    window.location.assign(start);
   };
 
   return (
@@ -275,24 +344,43 @@ function AttestForm({ signoff }: { signoff: StressSignoffRead }) {
           onChange={(e) => setPassword(e.target.value)}
         />
       </label>
-      {stepUp.error || attest.error ? (
-        <p className="text-caption text-critical">
-          {errText(stepUp.error ?? attest.error)}
+      {ssoReady ? (
+        <p role="status" className="text-caption text-success">
+          Single sign-on confirmed this signature. Review your rationale and attest.
         </p>
       ) : null}
-      <button
-        type="button"
-        className={btnCls}
-        disabled={!canAttest || pending}
-        onClick={onSubmit}
-      >
-        <ShieldCheck size={14} />
-        {stepUp.isPending
-          ? "Confirming identity…"
-          : attest.isPending
-            ? "Attesting…"
-            : "Confirm identity and attest"}
-      </button>
+      {ssoError || stepUp.error || attest.error || attestWithHeld.error ? (
+        <p className="text-caption text-critical">
+          {ssoError || errText(stepUp.error ?? attest.error ?? attestWithHeld.error)}
+        </p>
+      ) : null}
+      <div className="flex flex-wrap gap-2">
+        <button
+          type="button"
+          className={btnCls}
+          disabled={!canAttest || pending}
+          onClick={onSubmit}
+        >
+          <ShieldCheck size={14} />
+          {stepUp.isPending
+            ? "Confirming identity…"
+            : attest.isPending || attestWithHeld.isPending
+              ? "Attesting…"
+              : ssoReady
+                ? "Attest with single sign-on"
+                : "Confirm identity and attest"}
+        </button>
+        {!ssoReady ? (
+          <button
+            type="button"
+            className={btnGhost}
+            disabled={!hasRationale || !signing.allowed || pending}
+            onClick={onSsoStepUp}
+          >
+            Use single sign-on
+          </button>
+        ) : null}
+      </div>
     </div>
   );
 }
@@ -366,9 +454,8 @@ function SignoffBody({
 }) {
   const authority = useStressAuthority();
   const { effectiveAuthority } = useUserProfile();
-  const usersQuery = useOrganizationUsers(
-    hasAccountDirectoryAuthority(effectiveAuthority),
-  );
+  const canReadDirectory = hasAccountDirectoryAuthority(effectiveAuthority);
+  const usersQuery = useOrganizationUsers(canReadDirectory);
   const canEdit = authority.can("edit", s.bankId);
   const isDraft = s.status === "draft";
   const [narrative, setNarrative] = useState(s.scenarioNarrative);
@@ -429,21 +516,34 @@ function SignoffBody({
           <span className="text-micro font-medium uppercase tracking-wide text-slate">
             Board sign-off recipient
           </span>
-          <select
-            aria-label="Board sign-off recipient"
-            className={inputCls}
-            value={recipientUserId}
-            onChange={(event) => setRecipientUserId(event.target.value)}
-          >
-            <option value="">Select a named Signer…</option>
-            {users.map((user) => (
-              <option key={user.id} value={user.id}>
-                {user.displayName ?? user.email}
-                {user.jobTitle ? ` — ${user.jobTitle}` : ""}
-              </option>
-            ))}
-          </select>
+          {canReadDirectory ? (
+            <select
+              aria-label="Board sign-off recipient"
+              className={inputCls}
+              value={recipientUserId}
+              onChange={(event) => setRecipientUserId(event.target.value)}
+            >
+              <option value="">Select a named Signer…</option>
+              {users.map((user) => (
+                <option key={user.id} value={user.id}>
+                  {user.displayName ?? user.email}
+                  {user.jobTitle ? ` — ${user.jobTitle}` : ""}
+                </option>
+              ))}
+            </select>
+          ) : (
+            <input
+              aria-label="Board sign-off recipient"
+              className={inputCls}
+              placeholder="Recipient user ID"
+              value={recipientUserId}
+              onChange={(event) => setRecipientUserId(event.target.value.trim())}
+            />
+          )}
           <span className="block text-micro text-slate-light">
+            {canReadDirectory
+              ? "Select the named Signer. "
+              : "Enter the recipient's user ID; directory read authority is not required. "}
             The server checks the recipient&apos;s exact-bank Signer and source
             read grants, and refuses self-attestation by the preparer.
           </span>

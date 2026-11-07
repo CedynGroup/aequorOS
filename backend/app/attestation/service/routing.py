@@ -102,57 +102,45 @@ def route(  # noqa: PLR0913 - one act over the full nomination context
     preparer nominating themselves without this module knowing anything about
     segregation of duties.
     """
-    outstanding = dict(workflow.outstanding_slots(policy, list(signatures)))
-    _require_covers_outstanding(nominations, outstanding)
-
-    rows: list[PackageSignatureRecipient] = []
-    seen: set[UUID] = set()
-    for order, nomination in enumerate(nominations, start=1):
-        if nomination.user_id in seen:
-            # Not delegated to ensure_maker_checker: that function compares a
-            # candidate against SIGNATURES, and neither of two nominees has one
-            # yet. Distinctness within the list is this module's own invariant.
-            raise AttestationConflict(
-                "recipient_duplicated",
-                "The same person is nominated for more than one outstanding signature. "
-                "Each required signature must come from a different person.",
-            )
-        seen.add(nomination.user_id)
-        rows.append(
-            _nominate(
-                db,
-                ctx,
-                package,
-                policy=policy,
-                nomination=nomination,
-                signatures=signatures,
-                order=order,
-            )
-        )
-
-    record_event(
+    return _route(
         db,
         ctx,
-        event_type="attestation.routed_for_signature",
-        entity_type="regulatory_package",
-        entity_id=package.id,
-        details={
-            "reason": reason,
-            "attestation_cycle": package.attestation_cycle,
-            "recipients": [
-                {
-                    "signing_role": row.signing_role,
-                    "recipient_signer_id": row.recipient_signer_id,
-                    "routing_order": row.routing_order,
-                }
-                for row in rows
-            ],
-        },
+        package,
+        policy=policy,
+        nominations=nominations,
+        signatures=signatures,
+        reason=reason,
+        reuse_existing=False,
     )
-    for row in rows:
-        _notify(db, ctx, package, row)
-    db.flush()
-    return rows
+
+
+def reconcile(  # noqa: PLR0913 - one act over the full nomination context
+    db: Session,
+    ctx: TenantContext,
+    package: RegulatoryPackage,
+    *,
+    policy: SigningPolicy,
+    nominations: Sequence[Nomination],
+    signatures: Sequence[AttestationSignature],
+    reason: str,
+) -> list[PackageSignatureRecipient]:
+    """Reuse matching routes during certification; changes need ``update_routing``.
+
+    Certifying an already-routed package must neither violate the nomination
+    uniqueness rule nor leave a second pending signer for the same slot. New
+    routes may fill genuinely unrouted slots, but replacing a pending nominee
+    is a separate approver-authorized, reason-required reroute.
+    """
+    return _route(
+        db,
+        ctx,
+        package,
+        policy=policy,
+        nominations=nominations,
+        signatures=signatures,
+        reason=reason,
+        reuse_existing=True,
+    )
 
 
 def reroute(  # noqa: PLR0913 - replaces a routing, so needs the full context
@@ -338,6 +326,112 @@ def require_certification_execution_authority(
 # --- internals --------------------------------------------------------------
 
 
+def _route(  # noqa: PLR0913 - shared implementation for route and reconcile
+    db: Session,
+    ctx: TenantContext,
+    package: RegulatoryPackage,
+    *,
+    policy: SigningPolicy,
+    nominations: Sequence[Nomination],
+    signatures: Sequence[AttestationSignature],
+    reason: str,
+    reuse_existing: bool,
+) -> list[PackageSignatureRecipient]:
+    outstanding = dict(workflow.outstanding_slots(policy, list(signatures)))
+    _require_covers_outstanding(nominations, outstanding)
+    existing = (
+        [row for row in current_recipients(db, ctx, package) if row.status == "pending"]
+        if reuse_existing
+        else []
+    )
+
+    # Reconcile the complete plan before creating or notifying anybody. A
+    # changed nominee fails before any new route or success side effect exists.
+    planned: list[PackageSignatureRecipient | Nomination] = []
+    seen: set[UUID] = set()
+    for nomination in nominations:
+        if nomination.user_id in seen:
+            # Not delegated to ensure_maker_checker: that function compares a
+            # candidate against SIGNATURES, and neither of two nominees has one
+            # yet. Distinctness within the list is this module's own invariant.
+            raise AttestationConflict(
+                "recipient_duplicated",
+                "The same person is nominated for more than one outstanding signature. "
+                "Each required signature must come from a different person.",
+            )
+        seen.add(nomination.user_id)
+        same_role = [row for row in existing if row.signing_role == nomination.signing_role]
+        match = next(
+            (row for row in same_role if row.recipient_user_id == nomination.user_id),
+            None,
+        )
+        if match is not None:
+            planned.append(match)
+        elif same_role:
+            raise AttestationConflict(
+                "routing_change_requires_reroute",
+                "A pending recipient already names a different signer for the "
+                f"'{nomination.signing_role}' slot. Use the authorized reroute action "
+                "with a recorded reason before certifying.",
+            )
+        else:
+            planned.append(nomination)
+
+    for row in existing:
+        if not any(
+            isinstance(entry, PackageSignatureRecipient) and entry.id == row.id
+            for entry in planned
+        ):
+            raise AttestationConflict(
+                "routing_change_requires_reroute",
+                "The request omits a pending recipient. Use the authorized reroute "
+                "action to change the route before certifying.",
+            )
+
+    rows: list[PackageSignatureRecipient] = []
+    created: list[PackageSignatureRecipient] = []
+    for order, entry in enumerate(planned, start=1):
+        if isinstance(entry, PackageSignatureRecipient):
+            rows.append(entry)
+            continue
+        row = _nominate(
+            db,
+            ctx,
+            package,
+            policy=policy,
+            nomination=entry,
+            signatures=signatures,
+            order=order,
+        )
+        rows.append(row)
+        created.append(row)
+
+    if created or not reuse_existing:
+        record_event(
+            db,
+            ctx,
+            event_type="attestation.routed_for_signature",
+            entity_type="regulatory_package",
+            entity_id=package.id,
+            details={
+                "reason": reason,
+                "attestation_cycle": package.attestation_cycle,
+                "recipients": [
+                    {
+                        "signing_role": row.signing_role,
+                        "recipient_signer_id": row.recipient_signer_id,
+                        "routing_order": row.routing_order,
+                    }
+                    for row in rows
+                ],
+            },
+        )
+    for row in created:
+        _notify(db, ctx, package, row)
+    db.flush()
+    return rows
+
+
 def _require_covers_outstanding(
     nominations: Sequence[Nomination], outstanding: dict[str, int]
 ) -> None:
@@ -490,6 +584,7 @@ __all__ = [
     "current_recipients",
     "ensure_routed_signer",
     "mark_signed",
+    "reconcile",
     "reroute",
     "route",
 ]

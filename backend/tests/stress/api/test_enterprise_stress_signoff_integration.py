@@ -9,6 +9,7 @@ isolation — against the deterministic canonical seeded book.
 
 from __future__ import annotations
 
+from collections.abc import Iterator
 from uuid import UUID, uuid4
 
 import pytest
@@ -101,11 +102,16 @@ def _create_signoff(client: TestClient, bank_id: str, run_id: str) -> str:
     return response.json()["id"]
 
 
-def test_signoff_maker_checker_lifecycle(
-    db_client: TestClient, monkeypatch: pytest.MonkeyPatch
-) -> None:
+@pytest.fixture
+def signer_identity_pepper(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     monkeypatch.setenv("SIGNER_ID_PEPPER", "stress-signoff-test-pepper-not-production")
     get_settings.cache_clear()
+    yield
+    get_settings.cache_clear()
+
+
+@pytest.mark.usefixtures("signer_identity_pepper")
+def test_signoff_maker_checker_lifecycle(db_client: TestClient) -> None:
     bank_id = seed_bank(db_client)
     run_id, _ = _run_enterprise_stress(db_client, bank_id)
     board = _seed_board(db_client, bank_id)
@@ -146,7 +152,6 @@ def test_signoff_maker_checker_lifecycle(
             "expected_signing_digest": step_up.json()["signing_digest"],
         },
     )
-    get_settings.cache_clear()
     assert attest.status_code == 200, attest.text
     body = attest.json()
     assert body["status"] == "attested"

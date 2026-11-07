@@ -213,9 +213,8 @@ export default function SigningWorkspace({
     filingAuthorityFor(effectiveAuthority, bankId, {
       resolved: !authorityLoading,
     }).mayExport;
-  const usersQuery = useOrganizationUsers(
-    hasAccountDirectoryAuthority(effectiveAuthority),
-  );
+  const directoryAvailable = hasAccountDirectoryAuthority(effectiveAuthority);
+  const usersQuery = useOrganizationUsers(directoryAvailable);
   const stepUp = useStepUpForSigning(bankId);
   const certifyAndSend = useCertifyAndSend(bankId);
   const certifyWithHeld = useCertifyAndSendWithHeldAuthorization(bankId);
@@ -282,6 +281,26 @@ export default function SigningWorkspace({
     resolved && resolved.placeableRoles && resolved.placeableRoles.length > 0
       ? resolved.placeableRoles
       : DOCUMENT_SIGNING_ROLES;
+
+  // Pre-routing is mandatory. Carry the server's current-cycle nominees into
+  // the combined certification so reconcile reuses them instead of inserting
+  // duplicate recipient rows or silently replacing a named signer.
+  useEffect(() => {
+    if (!status) return;
+    setNominations((current) => {
+      if (current.length > 0) return current;
+      return status.recipients
+        .filter(
+          (recipient) =>
+            recipient.status === "pending" &&
+            recipient.signingRole !== signingRole,
+        )
+        .map((recipient) => ({
+          signingRole: recipient.signingRole,
+          userId: recipient.recipientUserId,
+        }));
+    });
+  }, [status, signingRole]);
 
   // Seed ONLY from a layout somebody saved. The platform default is two boxes in
   // a clear band near the attestation block, not on its ruled lines — seeding
@@ -528,7 +547,9 @@ export default function SigningWorkspace({
     savePlacements.isPending;
 
   const offending = slots.find((slot) => slot.violation);
-  const missingNominee = nominationSlots.length !== nominations.length;
+  const missingNominee =
+    nominationSlots.length !== nominations.length ||
+    nominations.some((nomination) => !nomination.userId.trim());
   // Both signature fields, or none: the workspace starts empty on purpose, and
   // certifying with nothing placed would silently fall back to the platform
   // default layout — the guess this screen exists to replace.
@@ -940,6 +961,7 @@ export default function SigningWorkspace({
               users={usersQuery.data?.users ?? []}
               nominations={nominations}
               onChange={setNominations}
+              directoryAvailable={directoryAvailable}
             />
           </div>
 

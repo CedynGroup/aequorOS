@@ -4142,6 +4142,37 @@ export function useAdoptMySignature() {
   });
 }
 
+/** Name or re-assign every outstanding signature before certification starts. */
+export function useUpdatePackageSignatureRouting(bankId: string | undefined) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      packageId,
+      recipients,
+      reason,
+    }: {
+      packageId: string;
+      recipients: CertifyAndSendRequest["recipients"];
+      reason: string;
+    }) =>
+      apiCall(() =>
+        attestationApi.updatePackageSignatureRouting({
+          bankId: bankId!,
+          packageId,
+          signatureRoutingUpdateRequest: { recipients, reason },
+        }),
+      ),
+    onSuccess: (status) => {
+      queryClient.setQueryData(
+        ["attn-status", bankId, status.packageId],
+        status,
+      );
+      void queryClient.invalidateQueries({ queryKey: ["attn-preview"] });
+      void queryClient.invalidateQueries({ queryKey: ["attn-awaiting"] });
+    },
+  });
+}
+
 /**
  * Certify AND name the remaining signers, in one transaction. A nominee the
  * policy cannot accept takes the certification down with it — the alternative

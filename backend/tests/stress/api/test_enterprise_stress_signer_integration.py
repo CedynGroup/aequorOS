@@ -519,3 +519,36 @@ def test_submission_rejects_self_routing_and_leaves_draft(
     assert response.status_code == 409
     assert response.json()["error"]["details"]["error_code"] == "maker_is_checker"
     assert _stored_signoff(db_session, signoff_id).status == "draft"
+
+
+def test_submission_rejects_self_routing_by_a_non_creator(
+    db_client: TestClient, db_session: Session
+) -> None:
+    """The current submitter is a maker before submitted_by is persisted."""
+    bank_id = seed_bank(db_client)
+    run_id = _run(db_client, bank_id)
+    signoff_id = _create_signoff(db_client, bank_id, run_id)
+    submitter, _, _ = _seed_officer(db_session, bank_id)
+    grant(
+        db_session,
+        RoleBundle.ANALYST,
+        user_id=submitter,
+        bank_id=bank_id,
+        sensitivity=SensitivityScope.CONFIDENTIAL,
+    )
+
+    response = db_client.post(
+        SIGNOFF_URL.format(bank_id=bank_id) + f"/{signoff_id}/submit",
+        headers=headers(user_id=submitter, roles=("approver",)),
+        json={
+            "attestation_recipient_user_id": str(submitter),
+            "reason": "Attempt to submit and attest as the same officer.",
+        },
+    )
+
+    assert response.status_code == 409
+    assert response.json()["error"]["details"]["error_code"] == "maker_is_checker"
+    stored = _stored_signoff(db_session, signoff_id)
+    assert stored.status == "draft"
+    assert stored.submitted_by is None
+    assert stored.attestation_recipient_user_id is None

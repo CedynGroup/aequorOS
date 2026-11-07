@@ -69,6 +69,7 @@ import {
 } from "@/lib/api/hooks";
 import { fmtTimestamp } from "@/lib/api/values";
 import CertifyDialog from "./CertifyDialog";
+import SignatureRoutingForm from "./SignatureRoutingForm";
 import SigningWorkspace, { isPlaceableRole } from "./signing/SigningWorkspace";
 import VerificationPanel from "./VerificationPanel";
 import {
@@ -273,6 +274,13 @@ export default function AttestationPanel({
             <>
               <Signatures signatures={status.signatures} />
               <Routing status={status} />
+              {isApprover && status.outstanding.length > 0 ? (
+                <SignatureRoutingForm
+                  bankId={bankId}
+                  packageId={packageId}
+                  status={status}
+                />
+              ) : null}
               <Actions
                 status={status}
                 packageStatus={packageStatus}
@@ -720,6 +728,14 @@ function Actions({
       <p className="text-caption text-slate leading-relaxed">
         {!signerAllowed
           ? signerReason
+          : (((state === "unsigned" || state === "void") &&
+                preparerOutstanding &&
+                !isNamedFor("preparer")) ||
+              (state === "preparer_certified" &&
+                isApprover &&
+                checkerRole != null &&
+                !isNamedFor(checkerRole)))
+            ? "No pending current-cycle recipient names you for this signature. Ask an authorized approver to route it to you."
           : state === "fully_certified"
           ? "Fully certified — nothing further is required before submission."
           : state === "preparer_certified" && !isApprover

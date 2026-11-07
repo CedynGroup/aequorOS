@@ -58,12 +58,16 @@ type FetchInit = {
   method?: string;
   body?: unknown;
   query?: Record<string, string | number | boolean | undefined>;
+  /** Same-origin server proxy; authentication stays in its HttpOnly cookie. */
+  proxy?: boolean;
 };
 
 /** Authenticated JSON fetch that raises the shared `ApiError` on failure. */
 async function authFetch<T>(path: string, init: FetchInit = {}): Promise<T> {
-  const token = await bearer();
-  const url = new URL(`${apiBaseUrl}${path}`);
+  const token = init.proxy ? "" : await bearer();
+  const url = init.proxy
+    ? new URL(path, window.location.origin)
+    : new URL(`${apiBaseUrl}${path}`);
   for (const [key, value] of Object.entries(init.query ?? {})) {
     if (value !== undefined) url.searchParams.set(key, String(value));
   }
@@ -538,6 +542,29 @@ export const useAttestStressSignoff = (bankId: string | undefined) =>
       stressSignoffAttestation: body,
     }),
   );
+
+/** SSO variant: the single-use authorization is read and spent server-side. */
+export function useAttestStressSignoffWithHeldAuthorization(
+  bankId: string | undefined,
+) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      signoffId,
+      body,
+    }: {
+      signoffId: string;
+      body: Omit<StressSignoffAttestation, "authorizationToken">;
+    }) =>
+      authFetch<StressSignoffRead>("/api/stress/signoff/attest", {
+        method: "POST",
+        proxy: true,
+        body: { bankId, signoffId, ...body },
+      }),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: [SIGNOFF_KEY] }),
+  });
+}
+
 export const useWithdrawStressSignoff = (bankId: string | undefined) =>
   useSignoffMutation<StressSignoffTransition>(bankId, (bank, signoffId, body) =>
     enterpriseStressSignoffApi.withdrawEnterpriseStressSignoff({

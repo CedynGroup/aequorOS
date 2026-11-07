@@ -6,6 +6,8 @@ Run from backend: uv run python -m scripts.authorization_signing_impact
 Uses WORKER_DATABASE_URL then DATABASE_URL, or --database-url. Without
 --output-dir prints combined JSON. No email, display name, grant reason or secret
 is exported. Reserved synthetic E2E namespaces are reduced to role labels.
+This broader route-policy analysis may include active users outside the legacy
+or named-recipient cohorts. Operators review grants with authorization_signoff_impact.
 See docs/signer_impact.md for baseline and eligibility limitations.
 """
 
