@@ -18,8 +18,13 @@ Paths below describe the existing layered tree; new feature code follows
   `# noqa: PLR0913` (and `PLR0915` for long orchestration functions) rather than restructuring.
 - **basedpyright**: `typeCheckingMode = "strict"`, `pythonVersion = "3.13"`, with included paths
   defined in `backend/pyproject.toml`; `reportAny` and the `reportUnknown*` family are errors, and
-  `reportExplicitAny` is off so the JSON-column type below stands. The
-  [type-check baseline](#type-check-baseline) enforces it.
+  `reportExplicitAny` is off so the JSON-column type below stands. `app`, `alembic`, `scripts` and
+  the shared test helpers in `tests/support` run that full strict rule set; test files under
+  `tests/` (but outside `tests/support`) relax only the noisy unknown-type and missing-annotation
+  rules (`reportAny`, `reportUnknown*`, `reportMissingParameterType`,
+  `reportMissingTypeArgument`, `reportPrivateUsage`) through `executionEnvironments` —
+  real-error checks (wrong argument types, missing attributes, return types) stay enabled.
+  The [type-check baseline](#type-check-baseline) enforces it.
 - Every module starts with `from __future__ import annotations`.
 - Python 3.13 syntax is used freely: `type X = Literal[...]` aliases, `X | None`, `StrEnum`.
 
@@ -30,6 +35,16 @@ New code is strict; legacy code may only get stricter.
 - `mise run risk-service:typecheck` runs `backend/scripts/type_check_baseline.py check`. It
   type-checks the backend once and counts each module's errors and warnings per rule against
   `backend/scripts/type_check_baseline.json`.
+- **Source and test-helper tiers.** The strict rule set (and every statement below) applies
+  unchanged to `app`, `alembic`, `scripts` and `tests/support`; the relaxed profile applies only
+  to test files under `tests/` outside `tests/support`. As of 2026-11-07 the strict census was
+  10,295 source errors (all baselined legacy), 7 in `tests/support`, and 373 in test files — the
+  relaxation removed 12,655 test-file diagnostics, all of the nine relaxed rules, and the
+  baseline dropped the 1,312 `(module, rule)` entries that covered them (12,853 charged
+  allowances, including pre-existing drift). Test files still report real defects: 217 wrong
+  argument types, missing-attribute, unused-code and deprecated-use findings remain baselined,
+  and reportArgumentType, reportAttributeAccessIssue, return-type and every other real-error
+  rule stays at strict strength in all tiers.
 - **Strict modules** may have no errors and never take a baseline entry: every new module, every
   module that passed when the baseline was recorded, and the packages and modules listed in
   `STRICT_MODULES` in the script, except the exact-file migration allowances described below.

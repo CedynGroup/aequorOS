@@ -48,9 +48,10 @@ This file is the starting point for agents working in `backend`.
 - Generate liquidity metrics and findings in the successful calculation transaction. Persist
   evidence through the shared tenant-scoped finding tables, and bind every evidence locator to the
   calculation run and immutable input hash.
-- New code passes basedpyright strict, `reportAny` and `reportUnknown*` included; legacy errors
-  live in `scripts/type_check_baseline.json`, which only shrinks. The gate is
-  `mise run risk-service:typecheck`. Baseline maintenance rules:
+- New code passes basedpyright strict, `reportAny` and `reportUnknown*` included; test files
+  under `tests/` (outside `tests/support`) relax only the noisy unknown-type and
+  missing-annotation rules. Legacy errors live in `scripts/type_check_baseline.json`, which only
+  shrinks. The gate is `mise run risk-service:typecheck`. Baseline maintenance rules:
   [the type-check baseline](../CODEBASE_CONVENTIONS.md#type-check-baseline).
 
 ## Legacy case vertical

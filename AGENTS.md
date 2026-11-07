@@ -73,8 +73,10 @@ Each rule is stated in full in the document the index names.
   cross features only through `public.py` or pure `domain/`.
   `backend/tests/architecture/test_feature_boundaries.py` ratchets the import graph; its
   baseline only shrinks.
-- **New backend code is basedpyright strict** (`reportAny` and `reportUnknown*` included).
-  Legacy errors are counted in `backend/scripts/type_check_baseline.json`, which only shrinks;
+- **New backend code is basedpyright strict** (`reportAny` and `reportUnknown*` included); test
+  files under `tests/` (outside `tests/support`) relax only the noisy unknown-type and
+  missing-annotation rules while real-error checks stay enabled. Legacy errors are counted in
+  `backend/scripts/type_check_baseline.json`, which only shrinks;
   `mise run risk-service:typecheck` is the gate, not plain `basedpyright`.
 - **`app/domain/*` stays pure.** A future corporate entity is a sibling of `banks`
   (`CO-` platform id), never a nullable-heavy `banks` row.

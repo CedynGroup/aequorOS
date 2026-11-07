@@ -121,6 +121,31 @@ exclude = [".venv"]
 reportAny = "error"
 reportExplicitAny = false
 
+# Shared test helpers stay on the full strict rule set (execution environments
+# resolve in declaration order, so this root must precede the "tests" root).
+[[tool.basedpyright.executionEnvironments]]
+root = "tests/support"
+# An execution environment resolves first-party imports from its root, so the
+# backend root is re-added to keep `tests.*` and `app.*` imports resolvable.
+extraPaths = ["."]
+
+# Test files keep every real-error check (wrong argument types, missing
+# attributes, return types, ...) but drop the unknown-type and
+# missing-annotation noise: tests exercise typed production code and mock
+# boundaries, where those rules flag test plumbing rather than defects.
+[[tool.basedpyright.executionEnvironments]]
+root = "tests"
+extraPaths = ["."]
+reportAny = false
+reportMissingParameterType = false
+reportMissingTypeArgument = false
+reportPrivateUsage = false
+reportUnknownArgumentType = false
+reportUnknownLambdaType = false
+reportUnknownMemberType = false
+reportUnknownParameterType = false
+reportUnknownVariableType = false
+
 # --- torch: CPU-only wheels on Linux -----------------------------------------
 # On Linux the default PyPI torch wheel drags the full NVIDIA CUDA stack
 # (~2.5GB download / ~8GB installed: cublas, cudnn, cufft, nccl, triton, ...).

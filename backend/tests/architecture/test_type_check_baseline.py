@@ -32,6 +32,24 @@ BACKEND = type_check.BACKEND
 #: still flags every use of such a value.
 RELAXED_RULES = frozenset({"reportExplicitAny"})
 
+#: The noisy unknown-type and missing-annotation rules test files may drop: tests
+#: exercise typed production code and mock boundaries, where these flag test plumbing
+#: rather than defects. Real-error checks (wrong argument types, missing attributes,
+#: return types, ...) stay at full strength — the config test below pins the exact set.
+RELAXED_TEST_RULES = frozenset(
+    {
+        "reportAny",
+        "reportMissingParameterType",
+        "reportMissingTypeArgument",
+        "reportPrivateUsage",
+        "reportUnknownArgumentType",
+        "reportUnknownLambdaType",
+        "reportUnknownMemberType",
+        "reportUnknownParameterType",
+        "reportUnknownVariableType",
+    }
+)
+
 #: Diagnostic levels strict mode leaves at full strength.
 _STRICT_LEVELS = frozenset({"error", True})
 
@@ -76,6 +94,28 @@ def test_basedpyright_is_configured_strict() -> None:
     )
     assert "ignore" not in config, "An ignored path escapes the baseline check entirely."
     assert config["exclude"] == [".venv"]
+
+
+def test_basedpyright_relaxes_only_test_file_noise() -> None:
+    """Test files drop only the approved noisy rules; shared helpers stay strict.
+
+    Execution environments resolve in declaration order, so ``tests/support`` must
+    precede ``tests`` or its helpers would inherit the relaxed profile.
+    """
+    environments = _basedpyright_config()["executionEnvironments"]
+    assert isinstance(environments, list)
+    assert [environment["root"] for environment in environments] == ["tests/support", "tests"]
+    helpers = environments[0]
+    assert not [key for key in helpers if key.startswith("report")], (
+        "Shared test helpers (tests/support) stay on the full strict rule set"
+    )
+    test_files = environments[1]
+    relaxed = {key for key in test_files if key.startswith("report")}
+    assert relaxed == RELAXED_TEST_RULES, (
+        "Test files may drop only the noisy unknown-type and missing-annotation rules; "
+        f"real-error checks must stay enabled. Got: {sorted(relaxed)}"
+    )
+    assert all(test_files[rule] is False for rule in relaxed)
 
 
 @pytest.mark.parametrize("check_exit", [0, 1])
