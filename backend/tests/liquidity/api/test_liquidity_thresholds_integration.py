@@ -12,8 +12,8 @@ from decimal import Decimal
 from fastapi.testclient import TestClient
 
 from app.liquidity.service.liquidity_thresholds import BANK_MINIMUM_PCT
-from tests.data_engine.api.test_ingestion_integration import seed_bank
 from tests.support.helpers import ORG_2, headers
+from tests.support.ingestion_seeding import seed_bank
 
 URL = "/api/v1/banks/{bank_id}/liquidity-thresholds"
 

@@ -34,16 +34,16 @@ from app.live.service import live_refresh_triggers
 from app.models import BiFactPositionEom, CurrentFinancialFact, Job
 from app.services import job_queue
 from tests.data_engine.adapters.excel_csv import fixtures
-from tests.data_engine.api.test_ingestion_integration import (
+from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID, materialize_canonical_test_book
+from tests.support.factories.canonical import FIXTURE_AS_OF
+from tests.support.helpers import ORG_1
+from tests.support.ingestion_seeding import (
     FULL_MAPPING,
     RECON_MAPPING,
     activate_mapping,
     seed_bank,
     start_batch,
 )
-from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID, materialize_canonical_test_book
-from tests.support.factories.canonical import FIXTURE_AS_OF
-from tests.support.helpers import ORG_1
 
 AS_OF = date(2026, 6, 30)
 OTHER_AS_OF = date(2026, 5, 31)

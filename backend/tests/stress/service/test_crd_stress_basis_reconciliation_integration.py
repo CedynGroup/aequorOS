@@ -49,7 +49,6 @@ from tests.capital.domain.test_capital_engine import bog_capital_params
 from tests.credit.service.test_crd_credit_exposures import (
     _stress_row,  # pyright: ignore[reportPrivateUsage]
 )
-from tests.data_engine.api.test_ingestion_integration import seed_bank
 from tests.fixtures.capital_structure import MAKER
 from tests.services.test_crd_review_repairs_integration import (
     _ErrorResponse,  # pyright: ignore[reportPrivateUsage]
@@ -79,6 +78,7 @@ from tests.stress.service.test_crd_credit_stress_repairs import (
 )
 from tests.support.factories.authorization import grant_institution_authority
 from tests.support.helpers import headers
+from tests.support.ingestion_seeding import seed_bank
 
 pytestmark = [
     pytest.mark.requirement("BoG CRD (June 2018) ¶98, ¶123–124, ¶138–139"),

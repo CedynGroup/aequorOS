@@ -13,8 +13,8 @@ from decimal import Decimal
 import pytest
 from fastapi.testclient import TestClient
 
-from tests.data_engine.api.test_ingestion_integration import seed_bank
 from tests.support.helpers import ORG_2, headers
+from tests.support.ingestion_seeding import seed_bank
 
 pytestmark = pytest.mark.usefixtures("forecasting_run_authority")
 

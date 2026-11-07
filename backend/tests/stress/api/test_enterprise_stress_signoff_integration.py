@@ -17,7 +17,6 @@ from fastapi.testclient import TestClient
 from app.core.authorization import RoleBundle
 from app.db.session import get_sessionmaker
 from app.models import User
-from tests.data_engine.api.test_ingestion_integration import seed_bank
 from tests.stress.api.test_enterprise_stress_integration import (
     _approve_scenario,
     _create_scenario,
@@ -26,6 +25,7 @@ from tests.stress.api.test_enterprise_stress_integration import (
 )
 from tests.stress.authority import grant
 from tests.support.helpers import ORG_1, ORG_2, USER_1, headers
+from tests.support.ingestion_seeding import seed_bank
 
 pytestmark = pytest.mark.usefixtures(
     "fx_run_authority", "irrbb_run_authority", "stress_run_authority"

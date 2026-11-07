@@ -39,10 +39,10 @@ from app.models import (
     User,
 )
 from app.stress.service import default_macro_scenarios
-from tests.data_engine.api.test_ingestion_integration import seed_bank
 from tests.fx.api.test_fx_authorization_integration import _grant
 from tests.stress.authority import grant
 from tests.support.helpers import ORG_1, ORG_2, USER_1, headers
+from tests.support.ingestion_seeding import seed_bank
 
 pytestmark = pytest.mark.usefixtures("irrbb_run_authority", "stress_run_authority")
 
