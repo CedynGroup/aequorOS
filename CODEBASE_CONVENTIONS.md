@@ -19,17 +19,15 @@ Paths below describe the existing layered tree; new feature code follows
 - **basedpyright**: `typeCheckingMode = "strict"`, `pythonVersion = "3.13"`, with included paths
   defined in `backend/pyproject.toml`; `reportAny` and the `reportUnknown*` family are errors, and
   `reportExplicitAny` is off so the JSON-column type below stands. `app`, `alembic` and `scripts`
-  run that full strict rule set. The shared test helpers in `tests/support` and the test files
-  under `tests/` run the checker's actual **standard** preset through `executionEnvironments`
-  (expressed as explicit per-rule levels, since an environment cannot set `typeCheckingMode`);
-  real-error checks (wrong argument types, missing attributes, return types) are error in both
-  presets and keep full strength there. The [type-check baseline](#type-check-baseline) enforces it.
+  run that full strict rule set. Test profiles and enforcement are defined in the
+  [type-check baseline](#type-check-baseline).
 - Every module starts with `from __future__ import annotations`.
 - Python 3.13 syntax is used freely: `type X = Literal[...]` aliases, `X | None`, `StrEnum`.
 
 ### Type-check baseline
 
-New code is strict; legacy code may only get stricter.
+New source code is strict; tests use the standard profile described below.
+Legacy diagnostic allowances may only shrink.
 
 - `mise run risk-service:typecheck` runs `backend/scripts/type_check_baseline.py check`. It
   type-checks the backend once and counts each module's errors and warnings per rule against
@@ -63,7 +61,8 @@ New code is strict; legacy code may only get stricter.
   at published head `b941f84f` typechecks with **0 errors under strict** and
   **0 errors under the final tiered profile**, reproduced from the immutable
   published git object. PR811 need not wait for this separate profile change.
-- **Strict modules** may have no errors and never take a baseline entry: every new module, every
+- **Unbaselined modules** may have no errors under their configured profile and never take a
+  baseline entry: every new module, every
   module that passed when the baseline was recorded, and the packages and modules listed in
   `STRICT_MODULES` in the script, except the exact-file migration allowances described below.
 - **A legacy module may not add errors.** A rule's count above its baseline fails, even when
@@ -87,7 +86,8 @@ New code is strict; legacy code may only get stricter.
   errors, run `update` so the baseline holds no entry for them (moved modules' entries sit under
   their pre-move names), then add the package to `STRICT_MODULES`.
   `tests/architecture/test_type_check_baseline.py` then rejects any baseline entry for it.
-- Plain `uv run basedpyright <files>` shows a file's strict errors, legacy ones included, and is
+- Plain `uv run basedpyright <files>` shows diagnostics under the file's configured profile,
+  legacy ones included, and is
   not a gate. Narrow `Any` with `isinstance`, a pydantic `TypeAdapter` or a typed SQLAlchemy result
   (`.tuples()`, `.scalars()`) rather than silencing it.
 
