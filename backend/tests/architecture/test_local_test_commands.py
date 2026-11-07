@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import shlex
 import subprocess
 import sys
 import tomllib
@@ -15,9 +16,25 @@ from scripts import test_fast
 ROOT = Path(__file__).resolve().parents[3]
 
 
+def test_check_has_only_static_owners() -> None:
+    tasks = cast(
+        dict[str, dict[str, object]],
+        tomllib.loads((ROOT / "backend/mise.toml").read_text())["tasks"],
+    )
+    check = tasks["risk-service:check"]
+    assert check["depends"] == ["risk-service:lint", "risk-service:typecheck"]
+    assert shlex.split(cast(str, check["run"])) == [
+        "python3",
+        "../.github/scripts/mise_wiring_preflight.py",
+    ]
+
+
 def selection(monkeypatch: pytest.MonkeyPatch, files: list[str], *, clean: bool = False) -> None:
-    def affected(_root: Path, _event: str, _base: str, *, worktree: bool = False) -> list[str]:
+    def affected(
+        _root: Path, _event: str, _base: str, *, worktree: bool = False, suite: str = ""
+    ) -> list[str]:
         assert worktree
+        assert suite == "unit"
         return files
 
     def unchanged(_root: Path) -> bool:
@@ -49,10 +66,10 @@ def calls(monkeypatch: pytest.MonkeyPatch) -> list[list[str]]:
     return commands
 
 
-def test_affected_integration_modules_keep_fixture_affinity_and_worker_cap(
+def test_affected_unit_modules_keep_guarded_scheduler_and_worker_cap(
     monkeypatch: pytest.MonkeyPatch, calls: list[list[str]], capsys: pytest.CaptureFixture[str]
 ) -> None:
-    files = ["tests/credit/domain/test_leaf_integration.py"]
+    files = ["tests/credit/domain/test_leaf.py"]
     selection(monkeypatch, files)
     assert test_fast.run(ROOT) == 0
     assert calls == [
@@ -65,7 +82,9 @@ def test_affected_integration_modules_keep_fixture_affinity_and_worker_cap(
             "--maxprocesses=2",
             "--max-worker-restart=0",
             "--dist",
-            "loadfile",
+            "load",
+            "-m",
+            "unit",
             *files,
         ]
     ]
@@ -107,19 +126,29 @@ def test_uncertain_selection_uses_only_guarded_units(
     assert "guarded unit suite ONLY" in capsys.readouterr().out
 
 
-@pytest.mark.parametrize("mode", ["--full", "--lf"])
-def test_explicit_modes_never_use_selection_or_parallel_workers(
-    monkeypatch: pytest.MonkeyPatch, calls: list[list[str]], mode: str
+def test_last_failed_never_uses_selection_or_parallel_workers(
+    monkeypatch: pytest.MonkeyPatch, calls: list[list[str]]
 ) -> None:
     def forbidden(*_args: object, **_kwargs: object) -> list[str]:
         raise AssertionError("Explicit modes must not depend on Git selection")
 
     monkeypatch.setattr(test_fast, "affected_files", forbidden)
-    monkeypatch.setattr(sys, "argv", ["test_fast", mode])
+    monkeypatch.setattr(sys, "argv", ["test_fast", "--lf"])
     assert test_fast.main() == 0
-    expected = [sys.executable, "-m", "pytest", "-n", "0"]
-    if mode == "--lf":
-        expected += ["--lf", "--last-failed-no-failures=none"]
+    expected = [
+        sys.executable,
+        "-m",
+        "pytest",
+        "-n",
+        "0",
+        "-m",
+        "unit",
+        "--suite-only",
+        "-p",
+        "scripts.test_fast",
+        "--lf",
+        "--last-failed-no-failures=none",
+    ]
     assert calls == [expected]
 
 
@@ -128,13 +157,13 @@ def test_pytest_failures_reach_the_task(monkeypatch: pytest.MonkeyPatch) -> None
         return 1
 
     monkeypatch.setattr(test_fast.subprocess, "call", fail)
-    assert test_fast.run(ROOT, full=True) == 1
+    assert test_fast.run(ROOT, last_failed=True) == 1
 
 
-def test_full_and_last_failed_cannot_be_combined(
+def test_removed_full_mode_is_rejected(
     monkeypatch: pytest.MonkeyPatch, calls: list[list[str]]
 ) -> None:
-    monkeypatch.setattr(sys, "argv", ["test_fast", "--full", "--lf"])
+    monkeypatch.setattr(sys, "argv", ["test_fast", "--full"])
     with pytest.raises(SystemExit) as error:
         _ = test_fast.main()
     assert error.value.code == 2
@@ -149,7 +178,7 @@ def test_unknown_git_base_is_not_an_unchanged_worktree(monkeypatch: pytest.Monke
     assert not test_fast.unchanged(ROOT)
 
 
-def test_root_and_backend_tasks_expose_the_same_three_profiles() -> None:
+def test_root_and_backend_tasks_expose_only_check_and_test() -> None:
     root_tasks = cast(
         dict[str, dict[str, object]], tomllib.loads((ROOT / "mise.toml").read_text())["tasks"]
     )
@@ -157,21 +186,35 @@ def test_root_and_backend_tasks_expose_the_same_three_profiles() -> None:
         dict[str, dict[str, object]],
         tomllib.loads((ROOT / "backend/mise.toml").read_text())["tasks"],
     )
-    for name in ("test", "test-fast", "test-full", "test-lf"):
+    for name in ("check", "test"):
         key = f"risk-service:{name}"
         assert root_tasks[key]["dir"] == "backend"
         assert root_tasks[key]["run"] == f"mise run {key}"
-        expected = "uv run python -m scripts.test_fast"
-        if name == "test-full":
-            expected += " --full"
-        elif name == "test-lf":
-            expected += " --lf"
-        assert tasks[key]["run"] == expected
-    assert tasks["risk-service:check"]["depends"] == [
-        "risk-service:lint",
-        "risk-service:typecheck",
-        "risk-service:test",
-    ]
-    assert tasks["unit"]["run"] == (
-        "uv run pytest -m unit --suite-only -n auto --dist load --durations=20"
-    )
+    assert tasks["risk-service:test"]["run"] == "uv run python -m scripts.test_fast"
+    retired = {
+        "unit",
+        "integration",
+        "risk-service:smoke",
+        *(
+            f"risk-service:test-{name}"
+            for name in (
+                "fast",
+                "full",
+                "lf",
+                "postgres",
+                "postgres-migrations",
+                "postgres-locks",
+                "postgres-schema",
+                "postgres-suite",
+                "unit",
+                "integration",
+                "e2e",
+                "architecture",
+                "real-data",
+                "storage",
+            )
+        ),
+    }
+    assert len(retired) == 17
+    assert not retired.intersection(root_tasks)
+    assert not retired.intersection(tasks)

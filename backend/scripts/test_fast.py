@@ -1,4 +1,4 @@
-"""Local feedback only: affected modules or guarded units; CI owns full coverage."""
+"""Unit-only local feedback; CI owns integration and service coverage."""
 
 from __future__ import annotations
 
@@ -7,13 +7,31 @@ import os
 import subprocess
 import sys
 from pathlib import Path
+from typing import Protocol, cast
+
+import pytest
 
 from scripts.ci_postgres import affected_files, git
 
 
 class Arguments(argparse.Namespace):
-    full: bool = False
     lf: bool = False
+
+
+class _FailureCache(Protocol):
+    def get(self, key: str, default: dict[str, bool]) -> dict[str, bool]: ...
+
+
+@pytest.hookimpl(trylast=True)
+def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item]) -> None:
+    # Pytest otherwise reruns every selected unit when only non-selected failures remain.
+    # This plugin is loaded only for --lf, leaving its real failure cache untouched.
+    assert config.cache is not None
+    cache = cast(_FailureCache, config.cache)
+    failed = cache.get("cache/lastfailed", {})
+    deselected = [item for item in items if item.nodeid not in failed]
+    items[:] = [item for item in items if item.nodeid in failed]
+    config.hook.pytest_deselected(items=deselected)
 
 
 def unchanged(root: Path) -> bool:
@@ -27,32 +45,37 @@ def unchanged(root: Path) -> bool:
         return False
 
 
-def run(root: Path, *, full: bool = False, last_failed: bool = False) -> int:
+def run(root: Path, *, last_failed: bool = False) -> int:
     parallel = ["-n", "auto", "--maxprocesses=2", "--max-worker-restart=0"]
-    if full:
+    if last_failed:
         print(
-            "Explicit full hermetic suite, serial. CI owns PostgreSQL/service coverage.", flush=True
-        )
-        arguments = ["-n", "0"]
-    elif last_failed:
-        print(
-            "Last-failed fix loop, serial; no cached failures means no tests, not a full run.",
+            "Unit-only last-failed fix loop, serial; no cached failures means no tests.",
             flush=True,
         )
-        arguments = ["-n", "0", "--lf", "--last-failed-no-failures=none"]
+        arguments = [
+            "-n",
+            "0",
+            "-m",
+            "unit",
+            "--suite-only",
+            "-p",
+            "scripts.test_fast",
+            "--lf",
+            "--last-failed-no-failures=none",
+        ]
     else:
-        files = affected_files(root, "pull_request", "origin/main", worktree=True)
+        files = affected_files(root, "pull_request", "origin/main", worktree=True, suite="unit")
         if files:
             print(
-                f"Affected integration modules (at most two workers): {', '.join(files)}. "
-                "Not complete coverage; CI remains authoritative.",
+                f"Affected unit modules (at most two workers): {', '.join(files)}. "
+                "Not complete coverage; integration and service tests stay in CI.",
                 flush=True,
             )
-            arguments = [*parallel, "--dist", "loadfile", *files]
+            arguments = [*parallel, "--dist", "load", "-m", "unit", *files]
         elif unchanged(root):
             print(
                 "No changes against origin/main's merge base; no tests selected. "
-                "This is not full validation. Use risk-service:test-full explicitly.",
+                "This is not full validation; CI owns integration and service coverage.",
                 flush=True,
             )
             return 0
@@ -60,7 +83,7 @@ def run(root: Path, *, full: bool = False, last_failed: bool = False) -> int:
             print(
                 "No safe affected-only selection (unknown, production, fixture or shared changes). "
                 "Fallback: guarded unit suite ONLY, at most two workers. "
-                "Integration/service coverage stays in CI; use risk-service:test-full explicitly.",
+                "Integration/service coverage stays in CI.",
                 flush=True,
             )
             arguments = [*parallel, "--dist", "load", "-m", "unit", "--suite-only"]
@@ -82,15 +105,11 @@ def run(root: Path, *, full: bool = False, last_failed: bool = False) -> int:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    modes = parser.add_mutually_exclusive_group()
-    modes.add_argument(
-        "--full", action="store_true", help="Run the complete hermetic suite serially"
-    )
-    modes.add_argument(
-        "--lf", action="store_true", help="Rerun only pytest's cached failures, serially"
+    parser.add_argument(
+        "--lf", action="store_true", help="Rerun only cached unit failures, serially"
     )
     args = parser.parse_args(namespace=Arguments())
-    return run(Path(__file__).resolve().parents[2], full=args.full, last_failed=args.lf)
+    return run(Path(__file__).resolve().parents[2], last_failed=args.lf)
 
 
 if __name__ == "__main__":

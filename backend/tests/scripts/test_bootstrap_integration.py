@@ -53,7 +53,7 @@ class BootstrapIntegrationTests(BootstrapFixture):
                 self.assertEqual(bootstrap.install_hooks(root), 1)
 
     def test_backend_smoke_never_bootstraps_an_environment(self) -> None:
-        test = self.root / "backend/tests/architecture/test_ci_task_wiring.py"
+        test = self.root / ".github/scripts/mise_wiring_preflight.py"
         test.parent.mkdir(parents=True)
         test.write_text("")
         with patch.object(bootstrap, "_stream") as stream:
@@ -67,15 +67,15 @@ class BootstrapIntegrationTests(BootstrapFixture):
         self.assertEqual(bootstrap.backend_smoke(self.root).state, "ok")
         self.assertEqual(
             (self.root / "backend/smoke-args").read_text().splitlines(),
-            ["-m", "pytest", "-q", "tests/architecture/test_ci_task_wiring.py"],
+            [str(test)],
         )
-        test.rename(test.with_name("test_ci_task_wiring_alternate.py"))
-        relocated = self.root / "backend/tests/test_ci_task_wiring.py"
+        test.rename(test.with_name("mise_wiring_preflight_alternate.py"))
+        relocated = self.root / "backend/mise_wiring_preflight.py"
         relocated.write_text("")
         with patch.object(bootstrap, "_stream") as stream:
             result = bootstrap.backend_smoke(self.root)
             self.assertEqual(result.state, "missing")
-            self.assertIn("backend/tests/architecture/test_ci_task_wiring.py", result.detail)
+            self.assertIn(".github/scripts/mise_wiring_preflight.py", result.detail)
             stream.assert_not_called()
 
     def test_setup_refuses_a_lockfile_that_trails_project_metadata(self) -> None:

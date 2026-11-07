@@ -75,6 +75,6 @@ reason to do otherwise. Put the ticket reference in the commit body or footer.
 
 ```bash
 mise run risk-service:test
-mise run risk-service:test-postgres
+mise run risk-service:test --lf
 mise run risk-service:check
 ```

@@ -37,9 +37,9 @@ Use the [pull request description template](.github/PULL_REQUEST_TEMPLATE.md) fo
 ```bash
 mise run setup                          # fresh checkout: pinned tools, locked deps, env templates, hooks
 mise run verify                         # prove core readiness (no Docker or database required)
-mise run risk-service:check            # backend lint, typecheck and fast local test feedback
-mise run risk-service:test-full        # explicit complete hermetic suite; CI owns full coverage
-mise run risk-service:test-postgres    # Postgres-gated tests (TEST_DATABASE_URL or an isolated local service)
+mise run risk-service:check            # static backend lint, typecheck and task wiring; no tests
+mise run risk-service:test             # bounded unit-only feedback; CI owns service coverage
+mise run risk-service:test --lf        # serial cached unit failures only
 mise run risk-service:openapi-client   # regenerate packages/risk-service-api after an API change
 mise run risk-service:api-fresh        # prove the generated client is fresh (also the pre-push hook)
 pnpm --filter @aequoros/dashboard typecheck   # also: lint, test, build, e2e
@@ -47,7 +47,7 @@ pnpm --filter @aequoros/console typecheck     # also: lint, test, build
 ```
 
 `backend/scripts/local_services.py` owns native PostgreSQL 17 / MinIO lifecycle and
-per-worktree isolation; the test tasks and dashboard `e2e` use it. Native setup,
+per-worktree isolation; CI test commands and dashboard `e2e` use it. Native setup,
 overrides and shutdown are documented in
 [the dashboard guide](backend/dashboard/README.md#local-services-without-docker-or-orbstack).
 

@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """Prove the mise task wiring is intact BEFORE anything tries to use it.
 
-Backend CI is driven entirely through `mise run risk-service:<task>` from the
-repository root. Each root task is a proxy: `dir = "backend"` plus
+Static backend CI tools use `mise run risk-service:<task>` from the repository
+root; runtime suite commands live directly in their workflow steps.
+Each delegating root task is a proxy: `dir = "backend"` plus
 `run = "mise run risk-service:<the same name>"`, which lands in
 `backend/mise.toml` where the real command lives.
 

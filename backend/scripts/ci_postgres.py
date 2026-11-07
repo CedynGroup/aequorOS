@@ -15,7 +15,7 @@ import subprocess
 import xml.etree.ElementTree as ET
 from collections import Counter
 from pathlib import Path
-from typing import cast
+from typing import Literal, cast
 
 if __package__:
     from scripts.test_suites import case_key, owner
@@ -104,7 +104,14 @@ def git(root: Path, *args: str) -> str:
     return subprocess.check_output(["git", "-C", str(root), *args], text=True)
 
 
-def affected_files(root: Path, event: str, base: str, *, worktree: bool = False) -> list[str]:
+def affected_files(
+    root: Path,
+    event: str,
+    base: str,
+    *,
+    worktree: bool = False,
+    suite: Literal["unit", "integration"] = "integration",
+) -> list[str]:
     """Only body or AST-neutral edits to unreferenced domain tests can narrow a run.
 
     Production, fixture, decorator, collection, config, addition/deletion and
@@ -154,8 +161,8 @@ def affected_files(root: Path, event: str, base: str, *, worktree: bool = False)
             if any(module.stem in (root / other).read_text() for other in tracked if other != path):
                 raise ValueError("Change is outside leaf test bodies")
             relative = module.relative_to("backend").as_posix()
-            if owner(relative) != "integration":
-                raise ValueError("Non-Postgres owner always runs these tests")
+            if owner(relative) != suite:
+                raise ValueError("Change belongs to another suite owner")
             selected.append(relative)
         return sorted(selected)
     except (OSError, subprocess.CalledProcessError, SyntaxError, ValueError):

@@ -4,9 +4,11 @@ from __future__ import annotations
 
 import json
 import os
+import shlex
 import shutil
 import subprocess
 import sys
+import tomllib
 import xml.etree.ElementTree as ET
 from pathlib import Path
 from typing import cast
@@ -110,6 +112,295 @@ def test_local_unchanged_requires_a_known_clean_merge_base(
     assert local_unchanged(root) == (state == "unchanged")
 
 
+@pytest.mark.parametrize(
+    "module",
+    [
+        "tests/credit/domain/test_changed_integration.py",
+        "tests/db/test_contract_integration.py",
+        "tests/storage/test_contract_integration.py",
+        "tests/credit/domain/test_browser_e2e.py",
+    ],
+)
+def test_default_never_imports_non_unit_modules(
+    selection_repo: tuple[Path, str, Path],
+    monkeypatch: pytest.MonkeyPatch,
+    module: str,
+) -> None:
+    root, _base, _test = selection_repo
+    target = root / "backend" / module
+    target.parent.mkdir(parents=True, exist_ok=True)
+    body = (
+        "from pathlib import Path\n"
+        "Path('non-unit-import').write_text('imported')\n"
+        "def test_changed():\n    assert {value} == {value}\n"
+    )
+    target.write_text(body.format(value=1))
+    unit = root / "backend/tests/credit/domain/test_ordinary.py"
+    unit.write_text("def test_unit():\n    assert True\n")
+    _ = run_git(root, "add", "-A")
+    _ = run_git(root, "commit", "-qm", "mixed suite baseline")
+    base = run_git(root, "rev-parse", "HEAD")
+    _ = run_git(root, "update-ref", "refs/remotes/origin/main", base)
+    target.write_text(body.format(value=2))
+    _ = run_git(root, "add", "-A")
+    _ = run_git(root, "commit", "-qm", "non-unit body edit")
+    ci = plan(root, "pull_request", base)
+    if module == "tests/credit/domain/test_changed_integration.py":
+        assert ci["files"] == [module]
+        assert ci["mode"] == "affected"
+    else:
+        assert ci["mode"] == "full"
+    report = root / "result.xml"
+    monkeypatch.setenv("PYTEST_ADDOPTS", f"-p scripts.test_suites_plugin --junitxml={report}")
+    monkeypatch.setenv("PYTHONPATH", str(BACKEND))
+    monkeypatch.setenv("PYTEST_XDIST_AUTO_NUM_WORKERS", "1")
+    assert run_fast(root) == 0
+    assert [case.get("name") for case in ET.parse(report).iter("testcase")] == ["test_unit"]
+    assert not (root / "backend/non-unit-import").exists()
+
+
+@pytest.fixture
+def task_checkout(
+    selection_repo: tuple[Path, str, Path], tmp_path: Path
+) -> tuple[Path, dict[str, str], Path]:
+    """Use the real mise tasks and runner; replace only external static tools."""
+    root, _base, leaf = selection_repo
+    shutil.copytree(
+        BACKEND / "scripts", root / "backend/scripts", ignore=shutil.ignore_patterns("__pycache__")
+    )
+    for relative in ("mise.toml", "backend/mise.toml"):
+        tasks = cast(
+            dict[str, dict[str, object]], tomllib.loads((REPO / relative).read_text())["tasks"]
+        )
+        lines = ["[settings]", "auto_install = false"]
+        for name, body in tasks.items():
+            lines.append(f"[tasks.{json.dumps(name)}]")
+            for key in ("dir", "depends", "run"):
+                if key in body:
+                    lines.append(f"{key} = {json.dumps(body[key])}")
+            for key, value in cast(dict[str, str], body.get("env", {})).items():
+                lines.append(f"env.{key} = {json.dumps(value)}")
+        (root / relative).write_text("\n".join(lines) + "\n")
+    preflight = root / ".github/scripts/mise_wiring_preflight.py"
+    preflight.parent.mkdir(parents=True)
+    shutil.copyfile(REPO / ".github/scripts/mise_wiring_preflight.py", preflight)
+    (root / ".gitignore").write_text("__pycache__/\n.pytest_cache/\n*.call\n")
+    (root / "backend/pytest.ini").write_text(
+        "[pytest]\ntestpaths=tests\naddopts=-p scripts.test_suites_plugin\n"
+    )
+    (leaf.parent / "test_unit_probe.py").write_text(
+        "from pathlib import Path\n"
+        "def test_unit_probe():\n    Path('unit.call').write_text('ran')\n    assert True\n"
+    )
+    _ = run_git(root, "add", "-A")
+    _ = run_git(root, "commit", "-qm", "public task baseline")
+    _ = run_git(root, "update-ref", "refs/remotes/origin/main", "HEAD")
+    leaf.write_text("def test_leaf():\n    assert 2 == 2\n")
+    tools = tmp_path / "tools"
+    tools.mkdir()
+    trace = tmp_path / "commands.jsonl"
+    for name in ("uv", "pnpm"):
+        tool = tools / name
+        tool.write_text(
+            f"#!{sys.executable}\n"
+            "import json, os, subprocess, sys\nfrom pathlib import Path\n"
+            "with Path(os.environ['TASK_TRACE']).open('a') as log:\n"
+            "    log.write(json.dumps(sys.argv) + '\\n')\n"
+            "if sys.argv[1:5] == ['run','python','-m','scripts.test_fast']:\n"
+            "    raise SystemExit(subprocess.call([sys.executable, *sys.argv[3:]]))\n"
+        )
+        tool.chmod(0o755)
+    environment = {key: value for key, value in os.environ.items() if not key.startswith("MISE_")}
+    environment.update(
+        {
+            "PATH": str(tools) + os.pathsep + os.environ["PATH"],
+            "MISE_TRUSTED_CONFIG_PATHS": str(root),
+            "MISE_GLOBAL_CONFIG_FILE": str(tmp_path / "empty.toml"),
+            "MISE_SYSTEM_CONFIG_DIR": str(tmp_path / "system"),
+            "MISE_CONFIG_DIR": str(tmp_path / "config"),
+            "MISE_DATA_DIR": str(tmp_path / "data"),
+            "MISE_STATE_DIR": str(tmp_path / "state"),
+            "MISE_CACHE_DIR": str(tmp_path / "cache"),
+            "PYTHONPATH": str(root / "backend"),
+            "PYTEST_XDIST_AUTO_NUM_WORKERS": "1",
+            "PYTEST_ADDOPTS": "",
+            "TASK_TRACE": str(trace),
+        }
+    )
+    return root, environment, trace
+
+
+@pytest.mark.parametrize("directory", ["", "backend"])
+def test_public_check_executes_only_static_tools(
+    task_checkout: tuple[Path, dict[str, str], Path], directory: str
+) -> None:
+    root, environment, trace = task_checkout
+    mise = shutil.which("mise")
+    assert mise is not None
+    result = subprocess.run(
+        [mise, "run", "risk-service:check"],
+        cwd=root / directory,
+        env=environment,
+        capture_output=True,
+        text=True,
+        timeout=60,
+        check=False,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+    commands = [cast(list[str], json.loads(line))[1:] for line in trace.read_text().splitlines()]
+    assert ["run", "ruff", "check", "."] in commands
+    assert ["run", "python", "scripts/type_check_baseline.py", "check"] in commands
+    assert ["run", "python", "-m", "scripts.test_fast"] not in commands
+    assert not (root / "backend/unit.call").exists()
+
+
+@pytest.mark.parametrize("directory", ["", "backend"])
+def test_public_test_forwards_last_failed_and_never_runs_cached_non_units(
+    task_checkout: tuple[Path, dict[str, str], Path], directory: str
+) -> None:
+    root, environment, trace = task_checkout
+    mise = shutil.which("mise")
+    assert mise is not None
+    unit = root / "backend/tests/credit/domain/test_unit_probe.py"
+    unit.write_text(unit.read_text().replace("assert True", "assert False"))
+    report = root.parent / "public-result.xml"
+    environment["PYTEST_ADDOPTS"] = f"--junitxml={report}"
+
+    def dispatch(*arguments: str) -> subprocess.CompletedProcess[str]:
+        return subprocess.run(
+            [mise, "run", "risk-service:test", *arguments],
+            cwd=root / directory,
+            env=environment,
+            capture_output=True,
+            text=True,
+            timeout=60,
+            check=False,
+        )
+
+    first = dispatch()
+    assert first.returncode == 1, first.stdout + first.stderr
+    assert {case.get("name") for case in ET.parse(report).iter("testcase")} == {"test_unit_probe"}
+    integration = root / "backend/tests/credit/domain/test_leaf_example_integration.py"
+    integration.write_text(
+        "from pathlib import Path\n"
+        "Path('non-unit.call').write_text('imported')\n"
+        "def test_leaf():\n    assert False\n"
+    )
+    seeded = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "pytest",
+            "-n",
+            "0",
+            "-m",
+            "integration",
+            str(integration.relative_to(root / "backend")),
+        ],
+        cwd=root / "backend",
+        env=environment,
+        capture_output=True,
+        text=True,
+        timeout=60,
+        check=False,
+    )
+    assert seeded.returncode == 1, seeded.stdout + seeded.stderr
+    cache = root / "backend/.pytest_cache/v/cache/lastfailed"
+    assert len(cast(dict[str, bool], json.loads(cache.read_text()))) == 2
+    (root / "backend/non-unit.call").unlink()
+    unit.write_text(unit.read_text().replace("assert False", "assert True"))
+    fixed = dispatch("--lf")
+    assert fixed.returncode == 0, fixed.stdout + fixed.stderr
+    assert [case.get("name") for case in ET.parse(report).iter("testcase")] == ["test_unit_probe"]
+    assert not (root / "backend/non-unit.call").exists()
+    commands = [cast(list[str], json.loads(line))[1:] for line in trace.read_text().splitlines()]
+    assert ["run", "python", "-m", "scripts.test_fast", "--lf"] in commands
+    empty = dispatch("--lf")
+    assert empty.returncode == 5, empty.stdout + empty.stderr
+    assert list(ET.parse(report).iter("testcase")) == []
+    assert not (root / "backend/non-unit.call").exists()
+    unit.write_text(unit.read_text().replace("assert True", "assert False"))
+    assert dispatch().returncode == 1
+    (root / "backend/unit.call").unlink()
+    unit.write_text(
+        unit.read_text()
+        .replace("test_unit_probe", "test_replacement")
+        .replace(
+            "assert False",
+            "assert True",
+        )
+    )
+    stale = dispatch("--lf")
+    assert stale.returncode == 5, stale.stdout + stale.stderr
+    assert list(ET.parse(report).iter("testcase")) == []
+    assert not (root / "backend/unit.call").exists()
+    assert not (root / "backend/non-unit.call").exists()
+
+
+@pytest.mark.parametrize("route", ["api-fresh", "pre-push"])
+@pytest.mark.parametrize("inject_test", [False, True])
+def test_api_freshness_and_pre_push_remain_static(
+    task_checkout: tuple[Path, dict[str, str], Path], route: str, inject_test: bool
+) -> None:
+    root, environment, trace = task_checkout
+    document = cast(
+        dict[str, list[dict[str, object]]],
+        yaml.safe_load((REPO / ".pre-commit-config.yaml").read_text()),
+    )
+    hook = next(
+        hook
+        for repo in document["repos"]
+        for hook in cast(list[dict[str, object]], repo["hooks"])
+        if hook["id"] == "risk-service-api-client-fresh"
+    )
+    assert hook["language"] == "system"
+    assert hook["pass_filenames"] is False
+    assert hook["stages"] == ["pre-push"]
+    if inject_test:
+        if route == "pre-push":
+            hook["entry"] = "mise run risk-service:test"
+        else:
+            config = root / "mise.toml"
+            original = "pnpm --filter @aequoros/risk-service-api run type-check"
+            replacement = "mise run risk-service:test"
+            assert json.dumps(original) in config.read_text()
+            config.write_text(
+                config.read_text().replace(json.dumps(original), json.dumps(replacement))
+            )
+    command = (
+        shlex.split(cast(str, hook["entry"]))
+        if route == "pre-push"
+        else ["mise", "run", "risk-service:api-fresh"]
+    )
+    result = subprocess.run(
+        command,
+        cwd=root,
+        env=environment,
+        capture_output=True,
+        text=True,
+        timeout=60,
+        check=False,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+
+    def assert_static() -> None:
+        commands = [
+            cast(list[str], json.loads(line))[1:] for line in trace.read_text().splitlines()
+        ]
+        assert not any(
+            "pytest" in command or "scripts.test_fast" in command for command in commands
+        )
+        assert ["--filter", "@aequoros/risk-service-api", "run", "type-check"] in commands
+        assert not (root / "backend/unit.call").exists()
+
+    if inject_test:
+        assert (root / "backend/unit.call").exists()
+        with pytest.raises(AssertionError):
+            assert_static()
+    else:
+        assert_static()
+
+
 @pytest.mark.parametrize("auto_workers", [1, 8])
 @pytest.mark.parametrize(
     "selection_repo", [None, "CI_UNIT_REPORT_DIR", "CI_E2E_REPORT_DIR"], indirect=True
@@ -121,6 +412,7 @@ def test_local_profile_executes_selected_modules_and_guarded_unit_fallback(
     auto_workers: int,
 ) -> None:
     root, base, test = selection_repo
+    test = test.with_name("test_leaf_example.py")
     leaf_body = (
         "def test_leaf():\n"
         "    import os\n"
@@ -149,7 +441,7 @@ def test_local_profile_executes_selected_modules_and_guarded_unit_fallback(
     other.write_text("def test_other():\n    assert False\n")
     assert run_fast(root) == 1
     cases = list(ET.parse(report).iter("testcase"))
-    assert {case.get("name") for case in cases} == {"test_other"}
+    assert {case.get("name") for case in cases} == {"test_leaf", "test_other"}
     assert sum(case.find("failure") is not None for case in cases) == 1
     assert "guarded unit suite ONLY" in capfd.readouterr().out
 
@@ -204,7 +496,7 @@ def test_serial_owner_edits_use_guarded_unit_fallback(
 @pytest.mark.parametrize(
     "selection_repo", [None, "CI_UNIT_REPORT_DIR", "CI_E2E_REPORT_DIR"], indirect=True
 )
-def test_local_full_and_last_failed_use_real_pytest_cache_without_full_fallback(
+def test_unit_last_failed_uses_real_pytest_cache_without_non_unit_imports(
     selection_repo: tuple[Path, str, Path],
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -216,11 +508,10 @@ def test_local_full_and_last_failed_use_real_pytest_cache_without_full_fallback(
     assert list(ET.parse(report).iter("testcase")) == []
     other = test.with_name("test_other.py")
     other.write_text("def test_other():\n    assert False\n")
-    assert run_fast(root, full=True) == 1
-    assert {case.get("name") for case in ET.parse(report).iter("testcase")} == {
-        "test_leaf",
-        "test_other",
-    }
+    test.write_text("raise RuntimeError('integration imported')\n")
+    monkeypatch.setenv("PYTEST_XDIST_AUTO_NUM_WORKERS", "1")
+    assert run_fast(root) == 1
+    assert {case.get("name") for case in ET.parse(report).iter("testcase")} == {"test_other"}
     other.write_text("def test_other():\n    assert True\n")
     assert run_fast(root, last_failed=True) == 0
     assert [case.get("name") for case in ET.parse(report).iter("testcase")] == ["test_other"]

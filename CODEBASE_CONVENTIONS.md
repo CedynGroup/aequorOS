@@ -391,7 +391,7 @@ run_state_machine_as_test(
 - **Database fixtures**: see [CONTRIBUTING.md](CONTRIBUTING.md) for fixture selection and
   the [backend test database guide](backend/README.md#test-databases-and-the-primary-database)
   for isolation and application reuse.
-  Use `mise run risk-service:test-postgres` to exercise the same suite against Postgres;
+  CI's PostgreSQL integration jobs exercise database guarantees against Postgres;
   Postgres-only behavior (RLS, advisory locks) is written to no-op on SQLite.
 - **Fixtures** (conftest): `client` (no DB), `db_client`, `db_session`, `api_factories`,
   `fake_storage`, `tenant_ctx`, `test_settings`/`db_settings`.
