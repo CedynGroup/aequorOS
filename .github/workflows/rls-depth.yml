@@ -57,10 +57,6 @@ on:
     # against hosted-runner measurements, not local extrapolation.
     - cron: "0 4 * * 1"
   workflow_dispatch:
-    inputs:
-      examples:
-        description: "Hypothesis examples per property (empty = adopted budget)"
-        default: "200"
 
 permissions:
   contents: read
@@ -106,7 +102,7 @@ jobs:
       - name: Larger-budget RLS property run
         env:
           TEST_DATABASE_URL: ${{ env.POSTGRES_TEST_URL }}
-          AQS_RLS_PROPERTY_EXAMPLES: ${{ inputs.examples || '200' }}
+          AQS_RLS_PROPERTY_EXAMPLES: '200'
           OMP_NUM_THREADS: "1"
           OPENBLAS_NUM_THREADS: "1"
           MKL_NUM_THREADS: "1"
