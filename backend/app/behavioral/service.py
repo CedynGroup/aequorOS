@@ -270,7 +270,26 @@ def review_estimates(
     commit: bool = True,
 ) -> AcceptedBatchSummary:
     """Accept a pending snapshot as a different officer, in one transaction."""
-    bank = scoped_authorization.resolve_bank(db, ctx, bank_id, module=Module.BEHAVIORAL)
+    # Authorize before acquiring a bank lock or revealing whether a proposal exists.
+    bank = scoped_authorization.require_bank_permission(
+        db,
+        ctx,
+        bank_id,
+        permission=Permission.APPROVE,
+        module=Module.BEHAVIORAL,
+        sensitivity=Sensitivity.RESTRICTED,
+        surface="behavioral_review",
+        conditions=(
+            *scoped_authorization.request_wide_condition_checks(),
+            # The object-dependent maker-checker decision follows the proposal lock below.
+            ConditionCheck(
+                ConditionKind.MAKER_CHECKER,
+                ctx.actor_user_id is not None,
+                "An authenticated reviewer is required before proposal lookup.",
+            ),
+        ),
+        denial_detail="Behavioral proposal review requires an active scoped binding.",
+    )
     # Serialize acceptance for one bank so every accepted snapshot preserves the
     # latest peer-model rows, not a concurrently superseded register image.
     locked_bank = db.scalar(
@@ -342,9 +361,7 @@ def review_estimates(
     if latest_accepted_as_of is not None and latest_accepted_as_of > proposal.as_of_date:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
-            detail=(
-                "An older proposal cannot relabel assumptions from a newer accepted batch."
-            ),
+            detail=("An older proposal cannot relabel assumptions from a newer accepted batch."),
         )
     if ctx.actor_user_id is None:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="A reviewer is required.")

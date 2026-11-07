@@ -234,9 +234,7 @@ def _proposal(proposal_id: str | UUID) -> BehavioralModelProposal:
         return row
 
 
-def _seed_accepted_assumptions(
-    *, as_of_date: date = date(2026, 2, 28)
-) -> UUID:
+def _seed_accepted_assumptions(*, as_of_date: date = date(2026, 2, 28)) -> UUID:
     batch_id = new_uuid7()
     lineage_id = new_uuid7()
     payloads = [
@@ -457,9 +455,7 @@ def test_superseded_same_model_proposal_cannot_be_accepted(
     newer_id = _ack(_propose(db_client, proposer_version)).proposal_id
     _, reviewer_version = _grant(FORECAST_APPROVER_ID, RoleBundle.APPROVER)
 
-    assert _review(
-        db_client, newer_id, FORECAST_APPROVER_ID, reviewer_version
-    ).status_code == 200
+    assert _review(db_client, newer_id, FORECAST_APPROVER_ID, reviewer_version).status_code == 200
     before = _counts()
     stale = _review(db_client, older_id, FORECAST_APPROVER_ID, reviewer_version)
 
@@ -508,8 +504,7 @@ def test_older_proposal_cannot_relabel_newer_peer_assumptions(
             session.scalars(
                 select(CanonicalReferenceRow).where(
                     CanonicalReferenceRow.organization_id == ORG_1,
-                    CanonicalReferenceRow.ingestion_batch_id
-                    == UUID(accepted.ingestion_batch_id),
+                    CanonicalReferenceRow.ingestion_batch_id == UUID(accepted.ingestion_batch_id),
                 )
             ).all()
         )
@@ -528,9 +523,7 @@ def test_older_proposal_cannot_relabel_newer_ingested_assumptions(
     _, reviewer_version = _grant(FORECAST_APPROVER_ID, RoleBundle.APPROVER)
 
     before = _counts()
-    denied = _review(
-        db_client, proposal_id, FORECAST_APPROVER_ID, reviewer_version
-    )
+    denied = _review(db_client, proposal_id, FORECAST_APPROVER_ID, reviewer_version)
 
     assert denied.status_code == 409, denied.text
     assert "older proposal" in denied.text
@@ -547,7 +540,16 @@ def test_self_review_and_configurator_only_review_are_denied_without_acceptance(
 
     before = _counts()
     configurator_review = _review(db_client, proposal_id, USER_1, proposer_version)
+    unknown_review = _review(db_client, new_uuid7(), USER_1, proposer_version)
     assert configurator_review.status_code == 403
+    assert unknown_review.status_code == configurator_review.status_code
+    for response in (unknown_review, configurator_review):
+        error = response.json()["error"]
+        error.pop("request_id")
+        assert error == {
+            "code": "forbidden",
+            "message": "Behavioral proposal review requires an active scoped binding.",
+        }
     assert _counts() == before
 
     _, both_version = _grant(USER_1, RoleBundle.APPROVER)

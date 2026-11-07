@@ -33,6 +33,8 @@ type Fixture = {
   error: Error | null;
   inspecting: boolean;
   restrictedOnly: boolean;
+  canRun: boolean;
+  trainCalls: number;
   bankCapabilities: EffectiveCapabilityRead[];
   otherBankCapabilities: EffectiveCapabilityRead[];
   proposals: BehavioralProposalRead[];
@@ -52,6 +54,8 @@ const fixture = vi.hoisted((): Fixture => ({
   error: null,
   inspecting: false,
   restrictedOnly: false,
+  canRun: false,
+  trainCalls: 0,
   bankCapabilities: [],
   otherBankCapabilities: [],
   proposals: [],
@@ -72,7 +76,7 @@ vi.mock("../../components/shell/BankContext", () => ({
     moduleScope: {
       behavioralAggregatedView: !fixture.restrictedOnly,
       behavioralRestrictedView: true,
-      behavioralRun: false,
+      behavioralRun: fixture.canRun,
     },
   }),
 }));
@@ -104,7 +108,10 @@ vi.mock("../../lib/api/hooks", () => ({
     isLoading: false,
   }),
   useTrainBehavioralModel: () => ({
-    mutate: vi.fn(),
+    mutate: (_variables: undefined, options?: { onSuccess: () => void }) => {
+      fixture.trainCalls += 1;
+      options?.onSuccess();
+    },
     isPending: false,
   }),
   useApplyBehavioralModel: () => ({
@@ -218,6 +225,8 @@ beforeEach(() => {
   fixture.error = null;
   fixture.inspecting = false;
   fixture.restrictedOnly = false;
+  fixture.canRun = false;
+  fixture.trainCalls = 0;
   fixture.bankCapabilities = [
     capability("view", { sensitivity: "aggregated" }),
   ];
@@ -278,6 +287,24 @@ it("stores only the proposal acknowledgement and does not read protected evidenc
   ).toBeVisible();
   expect(screen.queryByText(/Applied 1 estimate/i)).toBeNull();
   expect(fixture.proposalReads).toBe(0);
+});
+
+it("clears a completed proposal after retrain so new estimates can be proposed", async () => {
+  fixture.canRun = true;
+  fixture.bankCapabilities.push(capability("configure"));
+  mountPage();
+  const user = userEvent.setup();
+  await user.click(screen.getByRole("button", { name: "Propose 1 estimate" }));
+  expect(await screen.findByText(/is pending independent review/i)).toBeVisible();
+
+  const retrain = screen.getAllByRole("button", { name: "Retrain" })[0];
+  if (!retrain) throw new Error("retrain button did not render");
+  await user.click(retrain);
+
+  expect(fixture.trainCalls).toBe(1);
+  await waitFor(() => expect(screen.queryByText(/is pending independent review/i)).toBeNull());
+  expect(screen.getByRole("button", { name: "Propose 1 estimate" })).toBeEnabled();
+  expect(fixture.applyCalls).toHaveLength(1);
 });
 
 it("opens the independent queue for a restricted reviewer without aggregated model access", async () => {
