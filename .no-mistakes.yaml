@@ -154,10 +154,14 @@ test:
     runner, not by a local shell: never apply `env:` values from
     .github/workflows/*.yml that contain `${{ ... }}` literally on a local run.
     In particular, when a local database-observation or report environment is
-    justified, point CI_DATABASE_OBSERVATIONS, CI_*_REPORT_DIR and PYTEST_ADDOPTS
-    at a private directory outside the repository (for example `mktemp -d`), or
-    leave them unset; a literal `backend/${{ runner.temp }}` path inside the
-    project is a byproduct leak, not an accepted artifact location.
+    justified, point the directory-valued CI_DATABASE_OBSERVATIONS and
+    CI_*_REPORT_DIR at a private directory outside the repository (for example
+    `mktemp -d`). PYTEST_ADDOPTS is an options string, not a directory: leave it
+    unset, or append a real pytest option whose file path lives inside that
+    private directory (such as `--junitxml=$dir/junit.xml`) — never set the
+    entire options string to a directory. A literal
+    `backend/${{ runner.temp }}` path inside the project is a byproduct leak,
+    not an accepted artifact location.
 
     Postgres validation uses disposable schemas, never the primary database.
     Native service infrastructure is owned by backend/scripts/local_services.py;
