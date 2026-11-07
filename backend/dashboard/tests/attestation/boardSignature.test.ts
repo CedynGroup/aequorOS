@@ -78,6 +78,9 @@ let policyList: Record<string, unknown> = {
 };
 /** The projected capabilities for the active institution. */
 let moduleScope: Record<string, unknown> = { capitalApprove: false };
+/** Signing eligibility is tested in the workspace suite, not conflated with
+ * the filing authority whose checker offer this file characterizes. */
+let signingAccessAllowed = true;
 /** The scalar session roles. Kept as a fixture precisely so the tests can
  * prove they no longer decide anything on a return. */
 let sessionRoles: string[] = [];
@@ -188,6 +191,16 @@ function stubFor(specifier: string): unknown | undefined {
       return hooksModule;
     case "@/lib/api/grantAdministration":
       return { useGrantAdministrationAccess: () => true };
+    case "@/lib/api/signingAccess":
+      return {
+        useSignoffEligibility: () => ({
+          allowed: signingAccessAllowed,
+          reason: signingAccessAllowed
+            ? ""
+            : "Requires an exact-institution Signer grant.",
+        }),
+        useSigningSourceEligibility: () => ({ allowed: true, reason: "" }),
+      };
     // The configure gates live in this hook module; these panels are exercised
     // for their copy and Board control, with the authority fixtures above.
     case "@/lib/api/configureAccess":
@@ -418,6 +431,7 @@ function resetSwitches(): void {
     icaapSigningSuspended: false,
   };
   moduleScope = { capitalApprove: false };
+  signingAccessAllowed = true;
   sessionRoles = [];
   effectiveAuthority = reportingAuthority(["view"]);
   attestationStatus = status();
@@ -558,6 +572,24 @@ test("an ICAAP checker is offered the act on capital authority alone", () => {
   assert.ok(
     text.includes("Approve and certify") || text.includes("Approve and sign"),
     "a board member holding capital approval authority was offered nothing",
+  );
+});
+
+test("capital approval alone cannot open ICAAP signing without Signer", () => {
+  resetSwitches();
+  moduleScope = { capitalApprove: true };
+  signingAccessAllowed = false;
+  const text = mount(component("AttestationPanel.tsx"), {
+    ...PANEL_PROPS,
+    returnFamily: "icaap",
+  }).text();
+  assert.ok(
+    !text.includes("Approve and certify") && !text.includes("Approve and sign"),
+    "approval authority bypassed the signing grant gate",
+  );
+  assert.ok(
+    text.includes("Requires an exact-institution Signer grant"),
+    "the withheld signing action did not explain its missing grant",
   );
 });
 

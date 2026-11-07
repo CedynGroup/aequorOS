@@ -54,6 +54,12 @@ export interface EffectiveCapabilityRead {
   dataScope: DataScopeRead;
   /**
    *
+   * @type {boolean}
+   * @memberof EffectiveCapabilityRead
+   */
+  exactInstitution?: boolean;
+  /**
+   *
    * @type {Module}
    * @memberof EffectiveCapabilityRead
    */
@@ -114,6 +120,8 @@ export function EffectiveCapabilityReadFromJSONTyped(
   return {
     ...json,
     dataScope: DataScopeReadFromJSON(json["data_scope"]),
+    exactInstitution:
+      json["exact_institution"] == null ? undefined : json["exact_institution"],
     module: ModuleFromJSON(json["module"]),
     permission: PermissionFromJSON(json["permission"]),
     requiresContextualAuthorization: json["requires_contextual_authorization"],
@@ -137,6 +145,7 @@ export function EffectiveCapabilityReadToJSONTyped(
 
   return {
     data_scope: DataScopeReadToJSON(value["dataScope"]),
+    exact_institution: value["exactInstitution"],
     module: ModuleToJSON(value["module"]),
     permission: PermissionToJSON(value["permission"]),
     requires_contextual_authorization: value["requiresContextualAuthorization"],

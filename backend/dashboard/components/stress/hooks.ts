@@ -16,7 +16,13 @@ import { getSession } from "next-auth/react";
 import { scopedQueryKey } from "@/lib/api/queryPolicy";
 import { useQueryAuthorityScope } from "@/lib/api/useQueryScope";
 import { useStressAuthority } from "./useStressAuthority";
-import { ApiError, apiBaseUrl } from "@/lib/api/client";
+import {
+  ApiError,
+  apiBaseUrl,
+  apiCall,
+  enterpriseStressSignoffApi,
+} from "@/lib/api/client";
+import type { StressSignoffStepUpRequest } from "@aequoros/risk-service-api";
 import { getAccessToken, setAccessToken } from "@/lib/api/token";
 import type {
   AppendixIITables,
@@ -33,7 +39,9 @@ import type {
   StressSignoffCreate,
   StressSignoffListRead,
   StressSignoffRead,
-  StressSignoffSummary,
+  StressSignoffSubmission,
+  StressSignoffTransition,
+  StressSignoffUpdate,
 } from "./types";
 import type { ScenarioStatus, ScenarioType } from "./macro";
 
@@ -446,10 +454,12 @@ export function useBankStressSignoffs(bankId: string | undefined) {
   return useQuery({
     queryKey: scopedQueryKey(SIGNOFF_KEY, scope, bankId),
     queryFn: () =>
-      authFetch<StressSignoffListRead>(
-        `/banks/${bankId}/enterprise-stress/signoffs`,
+      apiCall(() =>
+        enterpriseStressSignoffApi.listEnterpriseStressSignoffs({
+          bankId: bankId!,
+        }),
       ),
-    select: (data): StressSignoffSummary[] => data.signoffs,
+    select: (data: StressSignoffListRead) => data.signoffs,
     enabled: Boolean(bankId) && authority.can("view", bankId),
   });
 }
@@ -464,8 +474,11 @@ export function useStressSignoff(
   return useQuery({
     queryKey: scopedQueryKey(SIGNOFF_KEY, scope, bankId, signoffId),
     queryFn: () =>
-      authFetch<StressSignoffRead>(
-        `/banks/${bankId}/enterprise-stress/signoffs/${signoffId}`,
+      apiCall(() =>
+        enterpriseStressSignoffApi.getEnterpriseStressSignoff({
+          bankId: bankId!,
+          signoffId: signoffId!,
+        }),
       ),
     enabled: Boolean(bankId && signoffId) && authority.can("view", bankId),
   });
@@ -473,16 +486,16 @@ export function useStressSignoff(
 
 function useSignoffMutation<TBody>(
   bankId: string | undefined,
-  path: (id: string) => string,
-  method: string,
+  execute: (
+    bankId: string,
+    signoffId: string,
+    body: TBody,
+  ) => Promise<StressSignoffRead>,
 ) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ signoffId, body }: { signoffId: string; body: TBody }) =>
-      authFetch<StressSignoffRead>(`/banks/${bankId}${path(signoffId)}`, {
-        method,
-        body,
-      }),
+      apiCall(() => execute(bankId!, signoffId, body)),
     onSuccess: () => void qc.invalidateQueries({ queryKey: [SIGNOFF_KEY] }),
   });
 }
@@ -491,40 +504,66 @@ export function useCreateStressSignoff(bankId: string | undefined) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: (body: StressSignoffCreate) =>
-      authFetch<StressSignoffRead>(
-        `/banks/${bankId}/enterprise-stress/signoffs`,
-        {
-          method: "POST",
-          body,
-        },
+      apiCall(() =>
+        enterpriseStressSignoffApi.createEnterpriseStressSignoff({
+          bankId: bankId!,
+          stressSignoffCreate: body,
+        }),
       ),
     onSuccess: () => void qc.invalidateQueries({ queryKey: [SIGNOFF_KEY] }),
   });
 }
 
 export const useUpdateStressSignoff = (bankId: string | undefined) =>
-  useSignoffMutation<Partial<StressSignoffCreate>>(
-    bankId,
-    (id) => `/enterprise-stress/signoffs/${id}`,
-    "PATCH",
+  useSignoffMutation<StressSignoffUpdate>(bankId, (bank, signoffId, body) =>
+    enterpriseStressSignoffApi.updateEnterpriseStressSignoff({
+      bankId: bank,
+      signoffId,
+      stressSignoffUpdate: body,
+    }),
   );
 export const useSubmitStressSignoff = (bankId: string | undefined) =>
-  useSignoffMutation<{ reason: string }>(
-    bankId,
-    (id) => `/enterprise-stress/signoffs/${id}/submit`,
-    "POST",
+  useSignoffMutation<StressSignoffSubmission>(bankId, (bank, signoffId, body) =>
+    enterpriseStressSignoffApi.submitEnterpriseStressSignoff({
+      bankId: bank,
+      signoffId,
+      stressSignoffSubmission: body,
+    }),
   );
 export const useAttestStressSignoff = (bankId: string | undefined) =>
-  useSignoffMutation<StressSignoffAttestation>(
-    bankId,
-    (id) => `/enterprise-stress/signoffs/${id}/attest`,
-    "POST",
+  useSignoffMutation<StressSignoffAttestation>(bankId, (bank, signoffId, body) =>
+    enterpriseStressSignoffApi.attestEnterpriseStressSignoff({
+      bankId: bank,
+      signoffId,
+      stressSignoffAttestation: body,
+    }),
   );
 export const useWithdrawStressSignoff = (bankId: string | undefined) =>
-  useSignoffMutation<{ reason: string }>(
-    bankId,
-    (id) => `/enterprise-stress/signoffs/${id}/withdraw`,
-    "POST",
+  useSignoffMutation<StressSignoffTransition>(bankId, (bank, signoffId, body) =>
+    enterpriseStressSignoffApi.withdrawEnterpriseStressSignoff({
+      bankId: bank,
+      signoffId,
+      stressSignoffTransition: body,
+    }),
   );
+
+export function useStressSignoffStepUp(bankId: string | undefined) {
+  return useMutation({
+    mutationFn: ({
+      signoffId,
+      body,
+    }: {
+      signoffId: string;
+      body: StressSignoffStepUpRequest;
+    }) =>
+      apiCall(() =>
+        enterpriseStressSignoffApi.stepUpEnterpriseStressSignoff({
+          bankId: bankId!,
+          signoffId,
+          stressSignoffStepUpRequest: body,
+        }),
+      ),
+  });
+}
 
 export type { AppendixIITables, EnterpriseProjection, EnterpriseStressRead };

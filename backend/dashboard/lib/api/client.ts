@@ -8,6 +8,7 @@
 
 import {
   CreditParamsApi,
+  EnterpriseStressSignoffApi,
   RegulatoryCreditApi,
   IntegrationKeysApi,
   LiquidityCfpApi,
@@ -149,6 +150,9 @@ function autobound<T extends object>(api: T): T {
 export const authApi = new AuthApi(configuration);
 export const authorizationApi = new AuthorizationApi(configuration);
 export const attestationApi = new AttestationApi(configuration);
+export const enterpriseStressSignoffApi = new EnterpriseStressSignoffApi(
+  configuration,
+);
 export const banksApi = new BanksApi(configuration);
 export const behavioralModelsApi = new BehavioralModelsApi(configuration);
 export const regulatoryLiquidityApi = new RegulatoryLiquidityApi(configuration);

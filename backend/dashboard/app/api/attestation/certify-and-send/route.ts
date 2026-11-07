@@ -45,7 +45,7 @@ interface CertifyAndSendBody {
   reason?: string;
 }
 
-export async function POST(request: NextRequest): Promise<NextResponse> {
+export async function POST(request: NextRequest): Promise<Response> {
   const session = await auth();
   if (!session?.accessToken) {
     return NextResponse.json({ error: "not_authenticated" }, { status: 401 });
@@ -124,11 +124,11 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     },
   );
 
-  // Pass the risk service's own verdict through unchanged — the workspace
+  // Preserve the backend's exact status, bytes and media type. The workspace
   // branches on its error codes (maker_checker, recipient_role_insufficient,
   // placement_too_small, figures_changed_since_certification, …).
-  const payload: unknown = await response.json().catch(() => null);
-  return NextResponse.json(payload ?? { error: "certify_failed" }, {
+  return new Response(response.body, {
     status: response.status,
+    headers: response.headers,
   });
 }

@@ -539,6 +539,16 @@ def _effective_capabilities(  # noqa: PLR0913 - projection requires the complete
                             requires_contextual_authorization=bool(
                                 _REQUIRED_RUNTIME_CONDITIONS.get(permission)
                             ),
+                            exact_institution=(
+                                resource_scope is InstitutionScope.INSTITUTION
+                                and any(
+                                    binding_id in by_id
+                                    and by_id[binding_id].institution_scope
+                                    is InstitutionScope.INSTITUTION
+                                    and by_id[binding_id].institution_id == institution_id
+                                    for binding_id in decision.matching_binding_ids
+                                )
+                            ),
                             data_scope=data_scope_read(
                                 reduce_data_scope(
                                     [

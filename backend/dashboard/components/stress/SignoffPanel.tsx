@@ -18,6 +18,10 @@ import QueryBoundary from "@/components/ui/QueryBoundary";
 import { fmtDateUTC } from "@/lib/api/values";
 import { ApiError } from "@/lib/api/client";
 import { PermissionButton } from "@/components/ui/PermissionButton";
+import { useStressSigningEligibility } from "@/lib/api/signingAccess";
+import { useOrganizationUsers } from "@/lib/api/hooks";
+import { useUserProfile } from "@/components/profile/ProfileProvider";
+import { hasAccountDirectoryAuthority } from "@/lib/api/accountAdministration";
 import {
   useStressAuthority,
   stressPermissionReason,
@@ -29,6 +33,7 @@ import {
   useUpdateStressSignoff,
   useSubmitStressSignoff,
   useAttestStressSignoff,
+  useStressSignoffStepUp,
   useWithdrawStressSignoff,
 } from "./hooks";
 import type {
@@ -163,10 +168,10 @@ function CreateForm({
         }
         onClick={() =>
           create.mutate({
-            run_id: runId,
-            scenario_narrative: narrative,
-            assumptions_rationale: rationale,
-            methodology_summary: methodology || null,
+            runId,
+            scenarioNarrative: narrative,
+            assumptionsRationale: rationale,
+            methodologySummary: methodology || null,
             reason,
           })
         }
@@ -177,27 +182,68 @@ function CreateForm({
   );
 }
 
-function AttestForm({
-  bankId,
-  signoffId,
-}: {
-  bankId: string | undefined;
-  signoffId: string;
-}) {
-  const attest = useAttestStressSignoff(bankId);
+function AttestForm({ signoff }: { signoff: StressSignoffRead }) {
+  const signing = useStressSigningEligibility(
+    signoff.bankId,
+    signoff.attestationRecipientUserId,
+  );
+  const stepUp = useStressSignoffStepUp(signoff.bankId);
+  const attest = useAttestStressSignoff(signoff.bankId);
   const [credibility, setCredibility] = useState("");
   const [challenge, setChallenge] = useState("");
   const [reason, setReason] = useState("");
-  const canAttest = credibility.trim() && reason.trim();
+  const [password, setPassword] = useState("");
+  const canAttest =
+    credibility.trim() && reason.trim() && password.trim() && signing.allowed;
+
+  if (!signing.allowed) {
+    return (
+      <p
+        role="status"
+        className="rounded-md border border-border-light bg-slate-50 p-4 text-caption text-warning"
+      >
+        {signing.reason}
+      </p>
+    );
+  }
+
+  const pending = stepUp.isPending || attest.isPending;
+  const onSubmit = () => {
+    if (!canAttest || pending) return;
+    void (async () => {
+      const granted = await stepUp.mutateAsync({
+        signoffId: signoff.id,
+        body: { password },
+      });
+      await attest.mutateAsync({
+        signoffId: signoff.id,
+        body: {
+          authorizationToken: granted.authorizationToken,
+          expectedSigningDigest: signoff.signingDigest,
+          credibilityRationale: credibility,
+          boardChallenge: challenge || null,
+          reason,
+        },
+      });
+      setPassword("");
+    })().catch(() => undefined);
+  };
+
   return (
-    <div className="space-y-3 rounded-md border border-border-light bg-slate-50 p-4">
+    <div
+      role="group"
+      aria-label="Board attestation"
+      className="space-y-3 rounded-md border border-border-light bg-slate-50 p-4"
+    >
       <p className="text-caption font-medium text-navy">
         Board attestation (¶20)
       </p>
       <p className="text-micro text-slate">
-        A different user from the preparer must attest — the Board&apos;s
-        rationale for the credibility of the framework and results, and its
-        challenge record.
+        The named Signer must differ from the preparer. Re-authentication mints
+        a one-shot authorization for this exact frozen signing digest.
+      </p>
+      <p className="text-micro text-slate">
+        Signing digest: <code>{signoff.signingDigest}</code>
       </p>
       <Field
         label="Credibility rationale"
@@ -217,25 +263,35 @@ function AttestForm({
         value={reason}
         onChange={(e) => setReason(e.target.value)}
       />
-      {attest.error ? (
-        <p className="text-caption text-critical">{errText(attest.error)}</p>
+      <label className="block space-y-1">
+        <span className="text-micro font-medium uppercase tracking-wide text-slate">
+          Your password
+        </span>
+        <input
+          type="password"
+          autoComplete="current-password"
+          className={inputCls}
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+        />
+      </label>
+      {stepUp.error || attest.error ? (
+        <p className="text-caption text-critical">
+          {errText(stepUp.error ?? attest.error)}
+        </p>
       ) : null}
       <button
         type="button"
         className={btnCls}
-        disabled={!canAttest || attest.isPending}
-        onClick={() =>
-          attest.mutate({
-            signoffId,
-            body: {
-              credibility_rationale: credibility,
-              board_challenge: challenge || null,
-              reason,
-            },
-          })
-        }
+        disabled={!canAttest || pending}
+        onClick={onSubmit}
       >
-        <ShieldCheck size={14} /> Attest as Board
+        <ShieldCheck size={14} />
+        {stepUp.isPending
+          ? "Confirming identity…"
+          : attest.isPending
+            ? "Attesting…"
+            : "Confirm identity and attest"}
       </button>
     </div>
   );
@@ -265,7 +321,12 @@ function SignoffDetail({
           s={detail.data}
           reason={reason}
           setReason={setReason}
-          onSubmit={() => submit.mutate({ signoffId, body: { reason } })}
+          onSubmit={(attestationRecipientUserId) =>
+            submit.mutate({
+              signoffId,
+              body: { attestationRecipientUserId, reason },
+            })
+          }
           onWithdraw={() => withdraw.mutate({ signoffId, body: { reason } })}
           onSaveDraft={(body) =>
             update.mutate({ signoffId, body: { ...body, reason } })
@@ -293,22 +354,29 @@ function SignoffBody({
   s: StressSignoffRead;
   reason: string;
   setReason: (v: string) => void;
-  onSubmit: () => void;
+  onSubmit: (attestationRecipientUserId: string) => void;
   onWithdraw: () => void;
   onSaveDraft: (body: {
-    scenario_narrative?: string;
-    assumptions_rationale?: string;
-    methodology_summary?: string | null;
+    scenarioNarrative?: string;
+    assumptionsRationale?: string;
+    methodologySummary?: string | null;
   }) => void;
   busy: boolean;
   actionError: string;
 }) {
   const authority = useStressAuthority();
-  const canEdit = authority.can("edit", s.bank_id);
+  const { effectiveAuthority } = useUserProfile();
+  const usersQuery = useOrganizationUsers(
+    hasAccountDirectoryAuthority(effectiveAuthority),
+  );
+  const canEdit = authority.can("edit", s.bankId);
   const isDraft = s.status === "draft";
-  const [narrative, setNarrative] = useState(s.scenario_narrative);
-  const [rationale, setRationale] = useState(s.assumptions_rationale);
-  const [methodology, setMethodology] = useState(s.methodology_summary ?? "");
+  const [narrative, setNarrative] = useState(s.scenarioNarrative);
+  const [rationale, setRationale] = useState(s.assumptionsRationale);
+  const [methodology, setMethodology] = useState(s.methodologySummary ?? "");
+  const [recipientUserId, setRecipientUserId] = useState("");
+  const users = (usersQuery.data?.users ?? []).filter((user) => user.isActive);
+  const canSubmit = Boolean(canEdit && reason.trim() && recipientUserId);
 
   return (
     <div className="space-y-4 p-5">
@@ -318,12 +386,12 @@ function SignoffBody({
             {STATUS_LABEL[s.status]}
           </StatusPill>
           <span className="text-micro text-slate-light">
-            v{s.version} · {s.scenario_code}
+            v{s.version} · {s.scenarioCode}
           </span>
         </div>
-        {s.attested_at ? (
+        {s.attestedAt ? (
           <span className="text-micro text-slate-light">
-            attested {fmtDateUTC(new Date(s.attested_at))}
+            attested {fmtDateUTC(new Date(s.attestedAt))}
           </span>
         ) : null}
       </div>
@@ -338,36 +406,68 @@ function SignoffBody({
 
       <Field
         label="Scenario narrative"
-        value={isDraft ? narrative : s.scenario_narrative}
+        value={isDraft ? narrative : s.scenarioNarrative}
         onChange={isDraft ? setNarrative : undefined}
         readOnly={!isDraft || !canEdit}
       />
       <Field
         label="Assumptions rationale"
-        value={isDraft ? rationale : s.assumptions_rationale}
+        value={isDraft ? rationale : s.assumptionsRationale}
         onChange={isDraft ? setRationale : undefined}
         readOnly={!isDraft || !canEdit}
       />
       <Field
         label="Methodology summary"
-        value={isDraft ? methodology : (s.methodology_summary ?? "—")}
+        value={isDraft ? methodology : (s.methodologySummary ?? "—")}
         onChange={isDraft ? setMethodology : undefined}
         readOnly={!isDraft || !canEdit}
         rows={2}
       />
 
+      {isDraft ? (
+        <label className="block space-y-1">
+          <span className="text-micro font-medium uppercase tracking-wide text-slate">
+            Board sign-off recipient
+          </span>
+          <select
+            aria-label="Board sign-off recipient"
+            className={inputCls}
+            value={recipientUserId}
+            onChange={(event) => setRecipientUserId(event.target.value)}
+          >
+            <option value="">Select a named Signer…</option>
+            {users.map((user) => (
+              <option key={user.id} value={user.id}>
+                {user.displayName ?? user.email}
+                {user.jobTitle ? ` — ${user.jobTitle}` : ""}
+              </option>
+            ))}
+          </select>
+          <span className="block text-micro text-slate-light">
+            The server checks the recipient&apos;s exact-bank Signer and source
+            read grants, and refuses self-attestation by the preparer.
+          </span>
+        </label>
+      ) : s.attestationRecipientUserId ? (
+        <p className="text-caption text-slate">
+          Named recipient: {users.find(
+            (user) => user.id === s.attestationRecipientUserId,
+          )?.displayName ?? s.attestationRecipientUserId}
+        </p>
+      ) : null}
+
       {s.status === "attested" || s.status === "pending_attestation" ? (
         <>
           <Field
             label="Board credibility rationale"
-            value={s.credibility_rationale ?? "—"}
+            value={s.credibilityRationale ?? "—"}
             readOnly
             rows={2}
           />
-          {s.board_challenge ? (
+          {s.boardChallenge ? (
             <Field
               label="Board challenge"
-              value={s.board_challenge}
+              value={s.boardChallenge}
               readOnly
               rows={2}
             />
@@ -397,9 +497,9 @@ function SignoffBody({
               reason={canEdit ? undefined : stressPermissionReason("edit")}
               onClick={() =>
                 onSaveDraft({
-                  scenario_narrative: narrative,
-                  assumptions_rationale: rationale,
-                  methodology_summary: methodology || null,
+                  scenarioNarrative: narrative,
+                  assumptionsRationale: rationale,
+                  methodologySummary: methodology || null,
                 })
               }
             >
@@ -408,9 +508,15 @@ function SignoffBody({
             <PermissionButton
               type="button"
               className={btnCls}
-              disabled={busy || !reason.trim() || !canEdit}
-              reason={canEdit ? undefined : stressPermissionReason("edit")}
-              onClick={onSubmit}
+              disabled={busy || !canSubmit}
+              reason={
+                canEdit
+                  ? recipientUserId
+                    ? undefined
+                    : "Choose the named Signer who must attest."
+                  : stressPermissionReason("edit")
+              }
+              onClick={() => onSubmit(recipientUserId)}
             >
               <Send size={14} /> Submit for Board attestation
             </PermissionButton>
@@ -430,7 +536,7 @@ function SignoffBody({
       </div>
 
       {s.status === "pending_attestation" ? (
-        <AttestForm bankId={s.bank_id} signoffId={s.id} />
+        <AttestForm signoff={s} />
       ) : null}
     </div>
   );
@@ -440,7 +546,7 @@ export default function SignoffPanel({
   run,
   bankId,
 }: {
-  run: EnterpriseStressRead | null;
+  run: Pick<EnterpriseStressRead, "run_id"> | null;
   bankId: string | undefined;
 }) {
   const signoffs = useBankStressSignoffs(bankId);
@@ -462,7 +568,7 @@ export default function SignoffPanel({
     );
   }
 
-  const existing = (signoffs.data ?? []).find((x) => x.run_id === run.run_id);
+  const existing = (signoffs.data ?? []).find((x) => x.runId === run.run_id);
 
   return (
     <SectionCard

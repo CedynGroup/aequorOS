@@ -192,6 +192,53 @@ def test_effective_authority_projects_only_exact_binding_dimensions(
     assert BANK_1_SIBLING not in by_bank
 
 
+@pytest.mark.parametrize(
+    ("institution_scope", "institution_id", "expected_exact"),
+    [
+        (InstitutionScope.INSTITUTION, BANK_1, True),
+        (InstitutionScope.ORGANIZATION, None, False),
+    ],
+)
+def test_signing_projection_distinguishes_exact_institution_authority(
+    db_session: Session,
+    institution_scope: InstitutionScope,
+    institution_id: str | None,
+    expected_exact: bool,
+) -> None:
+    """Only an institution-scoped Signer row can satisfy exact-bank signing."""
+    _banks(db_session)
+    user = db_session.get(User, USER_1)
+    bank = db_session.get(Bank, BANK_1)
+    assert user is not None
+    assert bank is not None
+    db_session.add(
+        _raw_binding(
+            organization_id=ORG_1,
+            institution_id=institution_id,
+            institution_scope=institution_scope,
+            module_scope=ModuleScope.REGULATORY,
+            sensitivity_scope=SensitivityScope.RESTRICTED,
+            role_bundle=RoleBundle.SIGNER,
+        )
+    )
+    db_session.commit()
+
+    projection = authorization.project_effective_authority(
+        db_session,
+        TenantContext(
+            organization_id=ORG_1,
+            actor_user_id=user.id,
+            authorization_version=user.authorization_version,
+        ),
+        [bank],
+        failure_surface="test_exact_institution_signing_projection",
+    )
+
+    capabilities = projection.institution_capabilities[0].capabilities
+    sign_off = next(cap for cap in capabilities if cap.permission is Permission.SIGN_OFF)
+    assert sign_off.exact_institution is expected_exact
+
+
 @pytest.mark.parametrize("module", [Module.CREDIT, Module.INSTITUTION])
 def test_credit_and_institution_project_per_institution_like_every_product_module(
     db_session: Session, module: Module

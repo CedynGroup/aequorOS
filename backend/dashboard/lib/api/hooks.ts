@@ -4045,6 +4045,7 @@ export function useVerifyPackageAttestation(
 export function usePackageSignaturePlacements(
   bankId: string | undefined,
   packageId: string | null | undefined,
+  enabled = true,
 ) {
   return useQuery({
     queryKey: ["attn-placements", bankId, packageId],
@@ -4055,7 +4056,7 @@ export function usePackageSignaturePlacements(
           packageId: packageId!,
         }),
       ),
-    enabled: Boolean(bankId && packageId),
+    enabled: enabled && Boolean(bankId && packageId),
   });
 }
 
