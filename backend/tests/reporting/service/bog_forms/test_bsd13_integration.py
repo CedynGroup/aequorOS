@@ -741,12 +741,12 @@ def _seed_oracle_book(session: Any, period_id: str) -> None:
 def test_bsd13_generated_cells_match_the_bog_crd_worked_example_oracle(
     db_client: TestClient,
 ) -> None:
-    """The generated BSD13 return reproduces BoG's published FX-shorthand oracle.
+    """Check BSD13 against a currency-only adaptation of BoG's worked example.
 
     The book is the CRD (June 2018) paragraph 398 worked table, converted at
     explicit spot rates; every expected value below is an independent
     literal, never the run's own output. The gold leg of the published
-    example is excluded by declared scope (see the section docstring above).
+    example is excluded by declared scope (see the provenance comments above).
     """
     period_id, reporting_date = _prepare(db_client)
     session = get_sessionmaker()()
