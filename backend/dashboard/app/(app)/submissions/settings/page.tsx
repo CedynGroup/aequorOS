@@ -34,7 +34,6 @@ import {
   useSaveChannelConfig,
 } from "@/lib/api/hooks";
 import { fmtTimestamp, shortId } from "@/lib/api/values";
-import { isApiError } from "@/lib/api/client";
 import { CHANNEL_LABELS } from "@/components/submissions/shared";
 import SigningPolicyPanel from "@/components/attestation/SigningPolicyPanel";
 import { useConfigureEligibility } from "@/lib/api/configureAccess";
@@ -181,13 +180,10 @@ export default function SettingsPage() {
 
 /**
  * The channel read answers 404 while the bank has never configured it — the
- * unconfigured state, not an outage. The settings page sits behind the shell's
- * bank context, so a bank-missing 404 never reaches this query.
+ * unconfigured state, not an outage (isChannelConfigMissingError). The
+ * settings page sits behind the shell's bank context, so a bank-missing 404
+ * never reaches this query.
  */
-function isMissingChannelConfig(error: unknown): boolean {
-  return isApiError(error) && error.status === 404;
-}
-
 function UnconfiguredStatus() {
   return (
     <div className="space-y-2">
@@ -676,20 +672,13 @@ function ChannelForm({
               status and fingerprint come from the refetched read. The read is
               invalidated, not awaited, so never claim a stored/absent state
               from data that is not current. A missing channel reads 404 —
-              that is the unconfigured state, not an outage; any other failure
-              leaves the status unknown. */}
+              that is the unconfigured state, not an outage. Any other read
+              failure renders the form-level error panel above and never
+              reaches this card. */}
           {configQuery.isPending ? (
             <StatusPill tone="slate">Checking credential status…</StatusPill>
-          ) : isMissingChannelConfig(configQuery.error) ? (
+          ) : unconfigured ? (
             <UnconfiguredStatus />
-          ) : configQuery.isError ? (
-            <>
-              <StatusPill tone="amber">Credential status unavailable</StatusPill>
-              <p className="text-caption text-slate leading-relaxed">
-                The stored status could not be read. Reload the page to retry;
-                nothing about the saved configuration is claimed either way.
-              </p>
-            </>
           ) : config?.hasCredentials ? (
             <div className="space-y-2">
               <StatusPill tone="success">Credentials stored</StatusPill>
