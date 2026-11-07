@@ -12,6 +12,7 @@ from app.core.authorization import (
     AuthorizationDecision,
     ConditionCheck,
     ConditionKind,
+    DataScope,
     InstitutionScope,
     Module,
     Permission,
@@ -181,15 +182,11 @@ def require_signer(  # noqa: PLR0913 - the complete ceremony tuple is explicit
             )
         )
         if decision.allowed:
-            data_scope = authorization.effective_data_scope(
-                db,
-                organization_id=ctx.organization_id,
-                binding_ids=decision.matching_binding_ids,
-            )
-            decision = authorization.institution_grain_decision(
-                decision, whole_institution=data_scope.whole_institution
-            )
-        if decision.allowed:
+            # One complete active binding must match every dimension; partial
+            # rows never compose. The exact-bank SIGN_OFF binding itself must
+            # carry the whole-institution data scope, so an organization-scope
+            # grant can never lend its breadth to a separate branch-restricted
+            # exact-bank grant.
             matched = authorization.load_effective_grants(
                 db,
                 organization_id=ctx.organization_id,
@@ -198,6 +195,7 @@ def require_signer(  # noqa: PLR0913 - the complete ceremony tuple is explicit
             if not any(
                 grant.institution_scope is InstitutionScope.INSTITUTION
                 and grant.institution_id == bank.id
+                and grant.data_scope is DataScope.ALL
                 for grant in matched.values()
             ):
                 decision = replace(
