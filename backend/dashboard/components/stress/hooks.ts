@@ -22,7 +22,10 @@ import {
   apiCall,
   enterpriseStressSignoffApi,
 } from "@/lib/api/client";
-import type { StressSignoffStepUpRequest } from "@aequoros/risk-service-api";
+import {
+  StressSignoffReadFromJSON,
+  type StressSignoffStepUpRequest,
+} from "@aequoros/risk-service-api";
 import { getAccessToken, setAccessToken } from "@/lib/api/token";
 import type {
   AppendixIITables,
@@ -556,11 +559,11 @@ export function useAttestStressSignoffWithHeldAuthorization(
       signoffId: string;
       body: Omit<StressSignoffAttestation, "authorizationToken">;
     }) =>
-      authFetch<StressSignoffRead>("/api/stress/signoff/attest", {
+      authFetch<unknown>("/api/stress/signoff/attest", {
         method: "POST",
         proxy: true,
         body: { bankId, signoffId, ...body },
-      }),
+      }).then(StressSignoffReadFromJSON),
     onSuccess: () => void qc.invalidateQueries({ queryKey: [SIGNOFF_KEY] }),
   });
 }
