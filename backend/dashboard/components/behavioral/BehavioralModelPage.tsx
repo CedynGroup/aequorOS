@@ -11,7 +11,7 @@ import {
   RotateCw,
 } from "lucide-react";
 import type {
-  BehavioralApplyRead,
+  BehavioralProposalAcknowledgement,
   BehavioralProductEstimate,
 } from "@aequoros/risk-service-api";
 import PageHeader from "@/components/ui/PageHeader";
@@ -26,6 +26,7 @@ import { ErrorPanel } from "@/components/ui/QueryBoundary";
 import PrepaymentCurveChart from "@/components/charts/PrepaymentCurveChart";
 import FeedsChip, { type Feed } from "@/components/behavioral/FeedsChip";
 import ModelProvenanceCard from "@/components/behavioral/ModelProvenanceCard";
+import BehavioralProposalQueue from "@/components/behavioral/BehavioralProposalQueue";
 import { useBankContext } from "@/components/shell/BankContext";
 import {
   isServiceUnavailableError,
@@ -36,6 +37,7 @@ import {
 } from "@/lib/api/hooks";
 import { fmtDateUTC } from "@/lib/api/values";
 import { BEHAVIORAL_CONFIDENTIAL_RUN_REASON } from "@/lib/modules";
+import { useConfigureEligibility } from "@/lib/api/configureAccess";
 
 export type BehavioralPageConfig = {
   title: string;
@@ -70,6 +72,7 @@ export default function BehavioralModelPage({
   const { bank, period, moduleScope } = useBankContext();
   const bankId = bank?.id;
   const canRun = moduleScope.behavioralRun === true;
+  const configure = useConfigureEligibility(bankId, "beh");
 
   const query = useBehavioralModel(
     moduleScope.behavioralAggregatedView ? bankId : undefined,
@@ -82,7 +85,10 @@ export default function BehavioralModelPage({
   const products = result?.products ?? [];
   const offline = isServiceUnavailableError(query.error);
 
-  const [applied, setApplied] = useState<BehavioralApplyRead | null>(null);
+  const [proposal, setProposal] = useState<Pick<
+    BehavioralProposalAcknowledgement,
+    "proposalId" | "status"
+  > | null>(null);
   const curveProducts = products.filter((p) => p.incentiveCurve?.length);
   const [curveCode, setCurveCode] = useState<string | null>(null);
   const activeCurve =
@@ -156,6 +162,7 @@ export default function BehavioralModelPage({
   ];
 
   const onApply = () => {
+    if (!configure.allowed || !bankId || products.length === 0) return;
     apply.mutate(
       products.map((p) => ({
         productCode: p.productCode,
@@ -163,9 +170,27 @@ export default function BehavioralModelPage({
         unit: p.unit,
         confidence: p.confidence,
       })),
-      { onSuccess: (r) => setApplied(r) },
+      {
+        onSuccess: ({ proposalId, status }) =>
+          setProposal({ proposalId, status }),
+      },
     );
   };
+
+  const proposeButton = (descriptionId?: string) => (
+    <button
+      type="button"
+      onClick={onApply}
+      disabled={!configure.allowed || !bankId || apply.isPending}
+      aria-describedby={descriptionId}
+      className="inline-flex items-center gap-2 px-4 py-2 text-caption font-medium btn-primary disabled:cursor-not-allowed disabled:opacity-40"
+    >
+      {apply.isPending && (
+        <Loader2 size={14} className="animate-spin" aria-hidden />
+      )}
+      Propose {products.length} estimate{products.length === 1 ? "" : "s"}
+    </button>
+  );
 
   const retrainButton = (descriptionId?: string) => (
     <button
@@ -376,60 +401,49 @@ export default function BehavioralModelPage({
 
             {products.length > 0 && (
               <SectionCard
-                title="Apply as reviewed assumptions"
-                subtitle="Writes these estimates through the acceptance workflow; the ALM engines consume them on the next recompute"
+                title="Propose for independent review"
+                subtitle="Configure authority records an immutable proposal; only a different restricted approver can accept it"
               >
                 <div className="space-y-4">
                   <p className="text-body text-navy/85 leading-relaxed">
-                    Review the estimates above. Applying records them as a new
-                    accepted behavioral-assumptions batch with model provenance
-                    (SR 11-7), preserving the other models&apos; current
-                    assumptions.
+                    Proposing preserves these estimates and model provenance (SR
+                    11-7) without changing accepted assumptions. The ALM engines
+                    consume them only after independent review.
                   </p>
-                  {applied ? (
-                    <div className="flex items-start gap-3 rounded-sm border border-success/30 bg-success-light/40 p-3">
+                  {proposal ? (
+                    <div className="flex items-start gap-3 rounded-sm border border-action/30 bg-action-light/40 p-3">
                       <CheckCircle2
                         size={18}
-                        className="text-success shrink-0 mt-0.5"
+                        className="text-action shrink-0 mt-0.5"
                         aria-hidden
                       />
-                      <div className="text-body text-navy">
-                        Applied {applied.appliedRows} estimate
-                        {applied.appliedRows === 1 ? "" : "s"} as of{" "}
+                      <p className="text-body text-navy">
+                        Proposal{" "}
                         <span className="font-mono">
-                          {fmtDateUTC(applied.asOfDate)}
+                          {proposal.proposalId.slice(0, 8)}…
                         </span>{" "}
-                        ({applied.totalRows} total assumption rows).
-                        <span className="block text-caption text-slate mt-0.5 font-mono">
-                          batch {applied.ingestionBatchId.slice(0, 8)}…
-                        </span>
-                      </div>
+                        is {proposal.status ?? "pending"} independent review. No
+                        estimates or accepted batch details are returned by this
+                        write.
+                      </p>
                     </div>
+                  ) : configure.allowed ? (
+                    proposeButton()
                   ) : (
-                    <button
-                      type="button"
-                      onClick={onApply}
-                      disabled={apply.isPending}
-                      className="inline-flex items-center gap-2 px-4 py-2 text-caption font-medium btn-primary disabled:opacity-40"
-                    >
-                      {apply.isPending && (
-                        <Loader2
-                          size={14}
-                          className="animate-spin"
-                          aria-hidden
-                        />
-                      )}
-                      Apply {products.length} estimates
-                    </button>
+                    <DisabledWithReason reason={configure.reason}>
+                      {(descriptionId) => proposeButton(descriptionId)}
+                    </DisabledWithReason>
                   )}
                   {apply.error ? (
                     <p className="text-caption text-critical">
-                      Could not apply — {String((apply.error as Error).message)}
+                      Could not propose — {apply.error.message}
                     </p>
                   ) : null}
                 </div>
               </SectionCard>
             )}
+
+            <BehavioralProposalQueue bankId={bankId} model={slug} />
           </>
         ) : null}
       </PageContainer>
