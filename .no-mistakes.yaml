@@ -24,9 +24,7 @@ commands:
       exit 127
     }
     "$deadline" --kill-after=30s 60m mise exec -- sh -eu -c '
-      python3 .github/scripts/mise_wiring_preflight.py
-      mise run risk-service:lint
-      mise run risk-service:typecheck
+      mise run risk-service:check
       pnpm --filter @aequoros/risk-service-api exec tsc --noEmit
       pnpm --filter dashboard exec tsc --noEmit
       pnpm --filter @aequoros/console typecheck
@@ -132,30 +130,34 @@ test:
     failures, skips, and missing evidence. Missing credentials or a device are
     disclosed limits, not decisions or permission to fabricate live proof.
 
-    commands.test uses the canonical fast local default. Describe its actual
-    selection and any no-change result honestly, not as full-suite coverage.
-    Use risk-service:test-lf for focused fix loops; its no-failures case must not
-    fall back to a full run. risk-service:test-full is explicit full hermetic
-    validation, not a required local milestone check. Do not add testmon or
-    weaken the unit database guard to make selection work.
+    commands.test uses the canonical unit-only affected local default, with at
+    most two workers and one numeric/BLAS thread. Describe its actual selection
+    and any no-change result honestly, not as full-suite coverage. Use
+    risk-service:test --lf for focused fix loops; its no-failures case must not
+    fall back to a full run. There is no local full-suite command. Integration,
+    database, storage and end-to-end coverage belongs to CI/release workflows.
+    Do not add testmon or weaken the unit database guard to make selection work.
 
-    CI ownership stays unchanged in .github/workflows/risk-service.yml:
-    risk-service:test-unit uses -m unit --suite-only -n auto --dist load with one
-    BLAS thread. Integration uses risk-service:test-postgres-suite, four
-    duration-balanced CI_POSTGRES_SHARD selections via scripts.ci_postgres_plugin,
-    CI_POSTGRES_FILES, and four workers with --dist loadfile. Schema/RLS has two
-    hash shards, each serial; locks and storage have separate serial owners.
+    CI/release use workflow-owned direct runtime invocations, not removed local
+    task aliases. In .github/workflows/risk-service.yml, the unit owner keeps
+    -m unit --suite-only -n auto --dist load with one BLAS thread.
+    Integration keeps four duration-balanced CI_POSTGRES_SHARD selections via
+    scripts.ci_postgres_plugin, CI_POSTGRES_FILES, and four workers with
+    --dist loadfile. Schema/RLS has two hash shards, each serial; locks and
+    storage have separate serial owners.
     Never replace those owners with whole-tree -n auto, a serial whole-tree
     fallback, or an affected-only command presented as full CI coverage.
     Keep the existing collection manifests, JUnit execution/skip guards, exact
     shard and cross-owner coverage, and database-observation checks authoritative.
 
-    Backend Postgres tasks use backend/scripts/local_services.py and disposable
-    schemas, never the primary database. Cold service runs need PostgreSQL 17 and
-    MinIO (or isolated supplied endpoints); schema/lock infrastructure needs the
-    CI restricted-role privileges. Full CI also supplies native OpenBao for its
-    integration shard and local KMS for storage/key-provider contracts. Do not
-    silently count missing-service skips as equivalent execution.
+    Postgres validation uses disposable schemas, never the primary database.
+    Native service infrastructure is owned by backend/scripts/local_services.py;
+    workflow-provided CI endpoints and roles remain authoritative.
+    Cold service runs need PostgreSQL 17 and MinIO (or isolated supplied endpoints);
+    schema/lock infrastructure needs the CI restricted-role privileges.
+    Full CI also supplies native OpenBao for its integration shard and local KMS
+    for storage/key-provider contracts. Do not silently count missing-service
+    skips as equivalent execution.
     Dashboard CI uses test:coverage (including its legacy and Vitest suites),
     not test alone, plus build and the bundle guard. Journey CI owns four browser
     shards with one worker each, separate browser contracts and regulatory
