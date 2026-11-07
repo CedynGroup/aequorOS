@@ -195,7 +195,7 @@ export default function BehavioralModelPage({
   const retrainButton = (descriptionId?: string) => (
     <button
       type="button"
-      onClick={() => train.mutate()}
+      onClick={() => train.mutate(undefined, { onSuccess: () => setProposal(null) })}
       disabled={!canRun || !bankId || train.isPending}
       aria-describedby={descriptionId}
       className="inline-flex items-center gap-1.5 px-3 py-2 text-caption font-medium text-slate border border-border rounded-md hover:bg-surface disabled:cursor-not-allowed disabled:opacity-40"
