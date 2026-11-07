@@ -928,8 +928,16 @@ def test_channel_config_credentials_are_write_only(
         json={"config": {"institution_code": "SBL-001", "basis": "solo"}},
     )
     assert created.status_code == 200, created.text
-    assert created.json()["has_credentials"] is False
-    assert created.json()["config"]["institution_code"] == "SBL-001"
+    assert created.json() == {
+        "bank_id": REAL_BANK_ID,
+        "channel": "orass_sandbox",
+        "credentials_rotated": False,
+        "created": True,
+    }
+    initial = real_client.get(url, headers=real_headers())
+    assert initial.status_code == 200
+    assert initial.json()["has_credentials"] is False
+    assert initial.json()["config"]["institution_code"] == "SBL-001"
 
     # Without a vault master key, credential material is refused, not stored.
     refused = real_client.put(
@@ -942,21 +950,29 @@ def test_channel_config_credentials_are_write_only(
 
     monkeypatch.setenv("CREDENTIAL_VAULT_MASTER_KEY", "test-master-key-material")
     get_settings.cache_clear()
-    stored = real_client.put(
-        url,
-        headers=real_headers(),
-        json={"config": {"institution_code": "SBL-001"}, "credentials": {"api_key": "secret"}},
-    )
-    assert stored.status_code == 200, stored.text
-    body = stored.json()
-    assert body["has_credentials"] is True
-    assert len(body["credential_fingerprint"]) == 64
-    assert "credentials" not in body
-    assert "secret" not in stored.text
+    try:
+        stored = real_client.put(
+            url,
+            headers=real_headers(),
+            json={"config": {"institution_code": "SBL-001"}, "credentials": {"api_key": "secret"}},
+        )
+        assert stored.status_code == 200, stored.text
+        assert stored.json() == {
+            "bank_id": REAL_BANK_ID,
+            "channel": "orass_sandbox",
+            "credentials_rotated": True,
+            "created": False,
+        }
+        assert "credentials" not in stored.json()
+        assert "secret" not in stored.text
+    finally:
+        monkeypatch.undo()
+        get_settings.cache_clear()
 
     fetched = real_client.get(url, headers=real_headers())
     assert fetched.status_code == 200
     assert fetched.json()["has_credentials"] is True
+    assert len(fetched.json()["credential_fingerprint"]) == 64
     assert "secret" not in fetched.text
 
 
