@@ -19,6 +19,11 @@ work.
   --min-executed N   at least N tests actually ran (total minus skipped)
   --max-skipped N    at most N tests skipped; use where the environment is
                      supposed to satisfy the whole suite
+  --required-suite PATTERN   at least one EXECUTED test whose JUnit classname
+                     contains PATTERN, repeatable. Totals cannot see a module
+                     vanish: a promised file whose tests hold the difference
+                     between the collected count and the floor can disappear
+                     and the floor still holds. Name each promised module.
 """
 
 from __future__ import annotations
@@ -34,6 +39,14 @@ def main() -> int:
     parser.add_argument("report", type=Path)
     parser.add_argument("--min-executed", type=int, default=1)
     parser.add_argument("--max-skipped", type=int, default=None)
+    parser.add_argument(
+        "--required-suite",
+        action="append",
+        default=None,
+        metavar="PATTERN",
+        help="require at least one executed test whose JUnit classname contains "
+        "PATTERN; repeat once per promised module (default: none)",
+    )
     args = parser.parse_args()
 
     if not args.report.is_file():
@@ -44,11 +57,15 @@ def main() -> int:
     suites = root.iter("testsuite") if root.tag == "testsuites" else [root]
 
     total = skipped = errors = failures = 0
+    executed_classnames: list[str] = []
     for suite in suites:
         total += int(suite.get("tests", 0))
         skipped += int(suite.get("skipped", 0))
         errors += int(suite.get("errors", 0))
         failures += int(suite.get("failures", 0))
+        for case in suite.iter("testcase"):
+            if case.find("skipped") is None:
+                executed_classnames.append(case.get("classname", ""))
     executed = total - skipped
 
     print(
@@ -70,6 +87,13 @@ def main() -> int:
             "The environment this job stands up is supposed to satisfy them; a "
             "skip here means the job is green without exercising what it names"
         )
+    for pattern in args.required_suite or []:
+        if not any(pattern in name for name in executed_classnames):
+            problems.append(
+                f"no executed test matches the promised module pattern "
+                f"'{pattern}' — totals cannot see a module vanish, so every "
+                "promised suite must appear in the report with a test that ran"
+            )
 
     for problem in problems:
         print(f"::error::{problem}")

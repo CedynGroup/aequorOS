@@ -126,12 +126,19 @@ jobs:
           tests/db/test_authorization_tenant_isolation_properties_integration.py
           tests/db/test_authorization_effective_access_properties_integration.py
           tests/db/test_authorization_object_reference_properties_integration.py
-      # The three suites hold 8 tests; the floor is collected minus the largest
-      # module, so a whole file vanishing trips it. Zero skips: the restricted
+      # The three suites hold 8 tests and the largest module holds 3, so the
+      # floor (8 - 3 = 5) CANNOT catch a module vanishing — totals alone would
+      # stay at 5. The --required-suite flags therefore demand an EXECUTED test
+      # from each promised module by JUnit classname. Zero skips: the restricted
       # role above must satisfy the RLS guard, and a role that cannot is a
       # finding, not a skip.
       - name: The property suites must have executed, not skipped
-        run: python3 .github/scripts/assert_pytest_ran.py "$RUNNER_TEMP/rls-depth/report.xml" --min-executed 5 --max-skipped 0
+        run: >-
+          python3 .github/scripts/assert_pytest_ran.py "$RUNNER_TEMP/rls-depth/report.xml"
+          --min-executed 5 --max-skipped 0
+          --required-suite test_authorization_tenant_isolation_properties_integration
+          --required-suite test_authorization_effective_access_properties_integration
+          --required-suite test_authorization_object_reference_properties_integration
       - name: Upload depth-run evidence
         if: always()
         uses: actions/upload-artifact@v7
