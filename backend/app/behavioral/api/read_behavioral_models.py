@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 from datetime import date
+from uuid import UUID
 
 from fastapi import APIRouter
 
-from app.api.deps import DbSession, MutationTenant, ScopedMutationTenant, Tenant
+from app.api.deps import DbSession, ScopedMutationTenant, Tenant
 from app.behavioral import service as behavioral_models
 from app.behavioral.ml.config import ModelResult
+from app.behavioral.models import BehavioralModelProposal
 from app.behavioral.schemas import (
     BehavioralAccuracyRead,
     BehavioralApplyRead,
@@ -17,6 +19,9 @@ from app.behavioral.schemas import (
     BehavioralModelRead,
     BehavioralModelSlug,
     BehavioralProductEstimate,
+    BehavioralProposalAcknowledgement,
+    BehavioralProposalListRead,
+    BehavioralProposalRead,
     IncentivePoint,
 )
 from app.core.authorization import Module, Permission, Sensitivity
@@ -95,6 +100,43 @@ def get_behavioral_liquidity(
     )
 
 
+def _proposal_to_read(proposal: BehavioralModelProposal) -> BehavioralProposalRead:
+    return BehavioralProposalRead.model_validate(
+        {
+            "proposal_id": proposal.id,
+            "bank_id": proposal.bank_id,
+            "model": proposal.model,
+            "model_version": proposal.model_version,
+            "as_of_date": proposal.as_of_date,
+            "values": proposal.values,
+            "status": proposal.status,
+            "proposed_by_user_id": proposal.proposed_by_user_id,
+            "proposed_at": proposal.proposed_at,
+            "reviewed_by_user_id": proposal.reviewed_by_user_id,
+            "reviewed_at": proposal.reviewed_at,
+            "ingestion_batch_id": proposal.ingestion_batch_id,
+        }
+    )
+
+
+@router.get(
+    "/banks/{bank_id}/behavioral/proposals",
+    response_model=BehavioralProposalListRead,
+    operation_id="listBehavioralModelProposals",
+)
+def list_behavioral_model_proposals(
+    bank_id: str,
+    db: DbSession,
+    ctx: Tenant,
+) -> BehavioralProposalListRead:
+    return BehavioralProposalListRead(
+        proposals=[
+            _proposal_to_read(proposal)
+            for proposal in behavioral_models.list_proposals(db, ctx, bank_id)
+        ]
+    )
+
+
 @router.get(
     "/banks/{bank_id}/behavioral/{model}",
     response_model=BehavioralModelRead,
@@ -147,26 +189,41 @@ def train_behavioral_model(
 
 @router.post(
     "/banks/{bank_id}/behavioral/{model}/apply",
-    response_model=BehavioralApplyRead,
+    response_model=BehavioralProposalAcknowledgement,
     operation_id="applyBehavioralModel",
 )
 def apply_behavioral_model(
-    bank_id,
+    bank_id: str,
     model: BehavioralModelSlug,
     request: BehavioralApplyRequest,
     db: DbSession,
-    ctx: MutationTenant,
-) -> BehavioralApplyRead:
-    rows = [
+    ctx: ScopedMutationTenant,
+) -> BehavioralProposalAcknowledgement:
+    rows: list[dict[str, object]] = [
         {
-            "product_code": p.product_code,
-            "value": p.value,
-            "unit": p.unit or "",
-            "confidence": p.confidence,
+            "product_code": product.product_code,
+            "value": product.value,
+            "unit": product.unit or "",
+            "confidence": product.confidence,
         }
-        for p in request.products
+        for product in request.products
     ]
-    summary = behavioral_models.apply_estimates(db, ctx, bank_id, model, rows)
+    proposal = behavioral_models.propose_estimates(db, ctx, bank_id, model, rows)
+    return BehavioralProposalAcknowledgement(proposal_id=proposal.id)
+
+
+@router.post(
+    "/banks/{bank_id}/behavioral/proposals/{proposal_id}/review",
+    response_model=BehavioralApplyRead,
+    operation_id="reviewBehavioralModelProposal",
+)
+def review_behavioral_model_proposal(
+    bank_id: str,
+    proposal_id: UUID,
+    db: DbSession,
+    ctx: ScopedMutationTenant,
+) -> BehavioralApplyRead:
+    summary = behavioral_models.review_estimates(db, ctx, bank_id, proposal_id)
     return BehavioralApplyRead(
         ingestion_batch_id=summary["ingestion_batch_id"],
         as_of_date=date.fromisoformat(summary["as_of_date"]),

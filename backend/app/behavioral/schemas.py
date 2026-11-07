@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime
 from typing import Literal
+from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict
 from pydantic.alias_generators import to_camel
@@ -74,6 +75,30 @@ class BehavioralApplyRead(CamelClosedModel):
     as_of_date: date
     applied_rows: int
     total_rows: int
+
+
+class BehavioralProposalAcknowledgement(CamelClosedModel):
+    proposal_id: UUID
+    status: Literal["pending"] = "pending"
+
+
+class BehavioralProposalRead(CamelClosedModel):
+    proposal_id: UUID
+    bank_id: str
+    model: BehavioralModelSlug
+    model_version: str
+    as_of_date: date
+    values: list[BehavioralApplyProduct]
+    status: Literal["pending", "accepted"]
+    proposed_by_user_id: UUID
+    proposed_at: datetime
+    reviewed_by_user_id: UUID | None = None
+    reviewed_at: datetime | None = None
+    ingestion_batch_id: UUID | None = None
+
+
+class BehavioralProposalListRead(CamelClosedModel):
+    proposals: list[BehavioralProposalRead]
 
 
 class BehavioralLiquiditySegmentRead(CamelClosedModel):

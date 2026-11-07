@@ -42,6 +42,7 @@ from app.models import (
     BankProduct,
     BankReportingPeriod,
     BankSupervisoryAddon,
+    BehavioralModelProposal,
     CalculationRun,
     CanonicalPosition,
     CanonicalPositionSnapshot,
@@ -663,6 +664,30 @@ def _declaration(session: Session, tenant: TenantSeed, _objects: ObjectSet) -> s
             source_citation=tenant.marker,
             rationale=tenant.marker,
             proposed_by=tenant.marker,
+            proposed_by_user_id=tenant.maker_id,
+            proposed_at=_NOW,
+        ),
+    )
+
+
+def _behavioral_proposal(session: Session, tenant: TenantSeed, _objects: ObjectSet) -> str:
+    return _uuid(
+        session,
+        BehavioralModelProposal(
+            organization_id=tenant.organization_id,
+            bank_id=tenant.bank_id,
+            model="nmd-duration",
+            model_version="nmd-gbm-v1.0.0",
+            as_of_date=AS_OF,
+            values=[
+                {
+                    "product_code": "object-reference-probe",
+                    "value": 12.0,
+                    "unit": "months",
+                    "confidence": 0.5,
+                }
+            ],
+            status="pending",
             proposed_by_user_id=tenant.maker_id,
             proposed_at=_NOW,
         ),
@@ -1653,6 +1678,11 @@ OBJECT_KINDS: Final[tuple[ObjectKind, ...]] = (
         "declaration", _declaration, (f"{_BANK_PREFIX}/system-of-record/{{declaration_id}}",)
     ),
     ObjectKind(
+        "behavioral_proposal",
+        _behavioral_proposal,
+        (f"{_BANK_PREFIX}/behavioral/proposals/{{proposal_id}}",),
+    ),
+    ObjectKind(
         "forecast_assumption_version",
         _forecast_assumption_version,
         (f"{_BANK_PREFIX}/forecast/assumption-versions/{{version_id}}",),
@@ -1929,6 +1959,7 @@ MODEL_BY_KIND: Final[Mapping[str, type]] = {
     "stress_scenario": StressScenario,
     "withdrawal": CanonicalWithdrawal,
     "declaration": SystemOfRecordDeclaration,
+    "behavioral_proposal": BehavioralModelProposal,
     "forecast_assumption_version": ForecastAssumptionVersion,
     "macro_scenario": MacroScenario,
     "management_action_plan": ManagementActionPlan,

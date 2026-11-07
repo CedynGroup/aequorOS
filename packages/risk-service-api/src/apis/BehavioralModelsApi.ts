@@ -16,6 +16,8 @@ import type {
   BehavioralApplyRequest,
   BehavioralLiquidityRead,
   BehavioralModelRead,
+  BehavioralProposalAcknowledgement,
+  BehavioralProposalListRead,
   ErrorResponse,
 } from "../models/index";
 import {
@@ -27,12 +29,16 @@ import {
   BehavioralLiquidityReadToJSON,
   BehavioralModelReadFromJSON,
   BehavioralModelReadToJSON,
+  BehavioralProposalAcknowledgementFromJSON,
+  BehavioralProposalAcknowledgementToJSON,
+  BehavioralProposalListReadFromJSON,
+  BehavioralProposalListReadToJSON,
   ErrorResponseFromJSON,
   ErrorResponseToJSON,
 } from "../models/index";
 
 export interface ApplyBehavioralModelRequest {
-  bankId: any;
+  bankId: string;
   model: ApplyBehavioralModelModelEnum;
   behavioralApplyRequest: BehavioralApplyRequest;
 }
@@ -44,6 +50,15 @@ export interface GetBehavioralLiquidityRequest {
 export interface GetBehavioralModelRequest {
   bankId: string;
   model: GetBehavioralModelModelEnum;
+}
+
+export interface ListBehavioralModelProposalsRequest {
+  bankId: string;
+}
+
+export interface ReviewBehavioralModelProposalRequest {
+  bankId: string;
+  proposalId: string;
 }
 
 export interface TrainBehavioralModelRequest {
@@ -61,7 +76,7 @@ export class BehavioralModelsApi extends runtime.BaseAPI {
   async applyBehavioralModelRaw(
     requestParameters: ApplyBehavioralModelRequest,
     initOverrides?: RequestInit | runtime.InitOverrideFunction,
-  ): Promise<runtime.ApiResponse<BehavioralApplyRead>> {
+  ): Promise<runtime.ApiResponse<BehavioralProposalAcknowledgement>> {
     if (requestParameters["bankId"] == null) {
       throw new runtime.RequiredError(
         "bankId",
@@ -119,7 +134,7 @@ export class BehavioralModelsApi extends runtime.BaseAPI {
     );
 
     return new runtime.JSONApiResponse(response, (jsonValue) =>
-      BehavioralApplyReadFromJSON(jsonValue),
+      BehavioralProposalAcknowledgementFromJSON(jsonValue),
     );
   }
 
@@ -129,7 +144,7 @@ export class BehavioralModelsApi extends runtime.BaseAPI {
   async applyBehavioralModel(
     requestParameters: ApplyBehavioralModelRequest,
     initOverrides?: RequestInit | runtime.InitOverrideFunction,
-  ): Promise<BehavioralApplyRead> {
+  ): Promise<BehavioralProposalAcknowledgement> {
     const response = await this.applyBehavioralModelRaw(
       requestParameters,
       initOverrides,
@@ -259,6 +274,134 @@ export class BehavioralModelsApi extends runtime.BaseAPI {
     initOverrides?: RequestInit | runtime.InitOverrideFunction,
   ): Promise<BehavioralModelRead> {
     const response = await this.getBehavioralModelRaw(
+      requestParameters,
+      initOverrides,
+    );
+    return await response.value();
+  }
+
+  /**
+   * List Behavioral Model Proposals
+   */
+  async listBehavioralModelProposalsRaw(
+    requestParameters: ListBehavioralModelProposalsRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<runtime.ApiResponse<BehavioralProposalListRead>> {
+    if (requestParameters["bankId"] == null) {
+      throw new runtime.RequiredError(
+        "bankId",
+        'Required parameter "bankId" was null or undefined when calling listBehavioralModelProposals().',
+      );
+    }
+
+    const queryParameters: any = {};
+
+    const headerParameters: runtime.HTTPHeaders = {};
+
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
+
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
+    }
+    const response = await this.request(
+      {
+        path: `/api/v1/banks/{bank_id}/behavioral/proposals`.replace(
+          `{${"bank_id"}}`,
+          encodeURIComponent(String(requestParameters["bankId"])),
+        ),
+        method: "GET",
+        headers: headerParameters,
+        query: queryParameters,
+      },
+      initOverrides,
+    );
+
+    return new runtime.JSONApiResponse(response, (jsonValue) =>
+      BehavioralProposalListReadFromJSON(jsonValue),
+    );
+  }
+
+  /**
+   * List Behavioral Model Proposals
+   */
+  async listBehavioralModelProposals(
+    requestParameters: ListBehavioralModelProposalsRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<BehavioralProposalListRead> {
+    const response = await this.listBehavioralModelProposalsRaw(
+      requestParameters,
+      initOverrides,
+    );
+    return await response.value();
+  }
+
+  /**
+   * Review Behavioral Model Proposal
+   */
+  async reviewBehavioralModelProposalRaw(
+    requestParameters: ReviewBehavioralModelProposalRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<runtime.ApiResponse<BehavioralApplyRead>> {
+    if (requestParameters["bankId"] == null) {
+      throw new runtime.RequiredError(
+        "bankId",
+        'Required parameter "bankId" was null or undefined when calling reviewBehavioralModelProposal().',
+      );
+    }
+
+    if (requestParameters["proposalId"] == null) {
+      throw new runtime.RequiredError(
+        "proposalId",
+        'Required parameter "proposalId" was null or undefined when calling reviewBehavioralModelProposal().',
+      );
+    }
+
+    const queryParameters: any = {};
+
+    const headerParameters: runtime.HTTPHeaders = {};
+
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
+
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
+    }
+    const response = await this.request(
+      {
+        path: `/api/v1/banks/{bank_id}/behavioral/proposals/{proposal_id}/review`
+          .replace(
+            `{${"bank_id"}}`,
+            encodeURIComponent(String(requestParameters["bankId"])),
+          )
+          .replace(
+            `{${"proposal_id"}}`,
+            encodeURIComponent(String(requestParameters["proposalId"])),
+          ),
+        method: "POST",
+        headers: headerParameters,
+        query: queryParameters,
+      },
+      initOverrides,
+    );
+
+    return new runtime.JSONApiResponse(response, (jsonValue) =>
+      BehavioralApplyReadFromJSON(jsonValue),
+    );
+  }
+
+  /**
+   * Review Behavioral Model Proposal
+   */
+  async reviewBehavioralModelProposal(
+    requestParameters: ReviewBehavioralModelProposalRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<BehavioralApplyRead> {
+    const response = await this.reviewBehavioralModelProposalRaw(
       requestParameters,
       initOverrides,
     );

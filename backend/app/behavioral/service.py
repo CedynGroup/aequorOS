@@ -3,10 +3,10 @@
 Mirrors ``cashflow_forecast`` but keyed by ``(org, bank, model)``: each model
 trains on the bank's own canonical history on first request, caches the result
 in memory (and as ``estimates.json`` for restart reuse), and can be re-run on
-demand. ``apply_estimates`` writes reviewed estimates as a new accepted
-``behavioral_assumptions`` batch — preserving the OTHER models' current rows,
-since all three share that one reference dataset — which the ALM engines then
-consume unchanged on the next recompute.
+demand. Applying estimates stores an immutable proposal first. A different
+authorized reviewer atomically turns its snapshot into an accepted
+``behavioral_assumptions`` batch, preserving the OTHER models' current rows,
+which the ALM engines then consume unchanged on the next recompute.
 """
 
 from __future__ import annotations
@@ -14,7 +14,10 @@ from __future__ import annotations
 import dataclasses
 import json
 import threading
+from datetime import date, datetime
 from pathlib import Path
+from typing import TypedDict
+from uuid import UUID
 
 from fastapi import HTTPException, status
 from sqlalchemy import func, select
@@ -29,7 +32,8 @@ from app.behavioral.ml.config import (
     ModelResult,
 )
 from app.behavioral.ml.history import available_as_of_dates
-from app.core.authorization import Module, Permission, Sensitivity
+from app.behavioral.models import BehavioralModelProposal
+from app.core.authorization import ConditionCheck, ConditionKind, Module, Permission, Sensitivity
 from app.core.config import get_settings
 from app.core.ids import new_uuid7
 from app.data_engine.public import CanonicalReferenceRow, IngestionBatch, LineageRecord
@@ -159,55 +163,199 @@ def _compute(db: Session, ctx: TenantContext, bank_id: str, model: str) -> Model
 
 
 # --------------------------------------------------------------------------
-# Apply-as-assumptions
+# Durable propose / independent review / atomic acceptance
 # --------------------------------------------------------------------------
 
 
-def apply_estimates(  # noqa: PLR0913
+class AcceptedBatchSummary(TypedDict):
+    ingestion_batch_id: str
+    as_of_date: str
+    applied_rows: int
+    total_rows: int
+
+
+def propose_estimates(  # noqa: PLR0913 - explicit tenant, model, values and commit boundary
     db: Session,
     ctx: TenantContext,
     bank_id: str,
     model: str,
-    rows: list[dict],
+    rows: list[dict[str, object]],
     *,
     commit: bool = True,
-) -> dict:
-    """Write reviewed estimates as a new accepted ``behavioral_assumptions`` batch.
-
-    Preserves the current rows of the OTHER assumption types (shared dataset) and
-    replaces only THIS model's assumption_type. Returns the applied-batch summary.
-    """
+) -> BehavioralModelProposal:
+    """Persist an immutable proposal without writing accepted assumptions."""
     _validate_model(model)
-    bank = _get_bank_or_404(db, ctx, bank_id)
-    this_type = ASSUMPTION_TYPE[model]
-    actor = ctx.actor_user_id
-    dates = available_as_of_dates(db, ctx, bank_id)
-    as_of_date = dates[-1] if dates else utc_now().date()
+    bank = scoped_authorization.require_bank_permission(
+        db,
+        ctx,
+        bank_id,
+        permission=Permission.CONFIGURE,
+        module=Module.BEHAVIORAL,
+        sensitivity=Sensitivity.RESTRICTED,
+        surface="behavioral_apply",
+        denial_detail="Applying behavioral models requires an active scoped binding.",
+    )
+    result = get_estimates(db, ctx, bank.id, model, resolved_bank=bank)
+    if ctx.actor_user_id is None:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="A proposer is required.")
+    proposal = BehavioralModelProposal(
+        organization_id=ctx.organization_id,
+        bank_id=bank.id,
+        model=model,
+        model_version=result.model_version,
+        as_of_date=date.fromisoformat(result.as_of_date) if result.as_of_date else utc_now().date(),
+        values=rows,
+        status="pending",
+        proposed_by_user_id=ctx.actor_user_id,
+        proposed_at=utc_now(),
+    )
+    db.add(proposal)
+    if commit:
+        db.commit()
+    else:
+        db.flush()
+    return proposal
 
-    from app.behavioral.ml.config import MODEL_VERSIONS  # noqa: PLC0415
 
+def list_proposals(
+    db: Session,
+    ctx: TenantContext,
+    bank_id: str,
+) -> list[BehavioralModelProposal]:
+    """List only this bank's proposals for an independently authorized reviewer."""
+    bank = scoped_authorization.require_bank_permission(
+        db,
+        ctx,
+        bank_id,
+        permission=Permission.VIEW,
+        module=Module.BEHAVIORAL,
+        sensitivity=Sensitivity.RESTRICTED,
+        surface="behavioral_proposals",
+        denial_detail="Behavioral proposal access requires an active scoped binding.",
+    )
+    return list(
+        db.scalars(
+            select(BehavioralModelProposal)
+            .where(
+                BehavioralModelProposal.organization_id == ctx.organization_id,
+                BehavioralModelProposal.bank_id == bank.id,
+            )
+            .order_by(BehavioralModelProposal.created_at.desc())
+        ).all()
+    )
+
+
+def review_estimates(
+    db: Session,
+    ctx: TenantContext,
+    bank_id: str,
+    proposal_id: UUID,
+    *,
+    commit: bool = True,
+) -> AcceptedBatchSummary:
+    """Accept a pending snapshot as a different officer, in one transaction."""
+    bank = scoped_authorization.resolve_bank(db, ctx, bank_id, module=Module.BEHAVIORAL)
+    # Serialize acceptance for one bank so every accepted snapshot preserves the
+    # latest peer-model rows, not a concurrently superseded register image.
+    locked_bank = db.scalar(
+        select(Bank)
+        .where(Bank.id == bank.id, Bank.organization_id == ctx.organization_id)
+        .with_for_update()
+    )
+    assert locked_bank is not None
+    proposal = db.scalar(
+        select(BehavioralModelProposal)
+        .where(
+            BehavioralModelProposal.id == proposal_id,
+            BehavioralModelProposal.organization_id == ctx.organization_id,
+            BehavioralModelProposal.bank_id == bank.id,
+        )
+        .with_for_update()
+    )
+    if proposal is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Behavioral model proposal not found.",
+        )
+    scoped_authorization.require_resolved_bank_permission(
+        db,
+        ctx,
+        bank,
+        permission=Permission.APPROVE,
+        module=Module.BEHAVIORAL,
+        sensitivity=Sensitivity.RESTRICTED,
+        surface="behavioral_review",
+        conditions=(
+            ConditionCheck(
+                ConditionKind.MAKER_CHECKER,
+                ctx.actor_user_id is not None and ctx.actor_user_id != proposal.proposed_by_user_id,
+                "A different authorized reviewer is required.",
+            ),
+        ),
+        denial_detail=(
+            "Reviewing behavioral model proposals requires an active scoped binding "
+            "and a different reviewer."
+        ),
+    )
+    if proposal.status != "pending":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Only a pending behavioral model proposal can be reviewed.",
+        )
+    if ctx.actor_user_id is None:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="A reviewer is required.")
+    reviewed_at = utc_now()
+    summary = _write_accepted_batch(db, proposal, ctx.actor_user_id, reviewed_at)
+    proposal.status = "accepted"
+    proposal.reviewed_by_user_id = ctx.actor_user_id
+    proposal.reviewed_at = reviewed_at
+    proposal.ingestion_batch_id = UUID(summary["ingestion_batch_id"])
+    if commit:
+        db.commit()
+    else:
+        db.flush()
+    return summary
+
+
+def _write_accepted_batch(
+    db: Session,
+    proposal: BehavioralModelProposal,
+    reviewer_id: UUID,
+    reviewed_at: datetime,
+) -> AcceptedBatchSummary:
+    """Write exactly the locked proposal snapshot and the current peer-model rows."""
+    this_type = ASSUMPTION_TYPE[proposal.model]
     kept = [
-        p
-        for p in _latest_behavioral_payloads(db, ctx, bank_id)
-        if str(p.get("assumption_type")) != this_type
+        payload
+        for payload in _latest_behavioral_payloads(
+            db,
+            TenantContext(
+                organization_id=proposal.organization_id,
+                actor_user_id=reviewer_id,
+            ),
+            proposal.bank_id,
+        )
+        if str(payload.get("assumption_type")) != this_type
     ]
-    reviewed_at = utc_now().isoformat()
-    new_rows = [
+    new_rows: list[dict[str, object]] = [
         {
             "assumption_type": this_type,
-            "product_code": r["product_code"],
-            "value": r["value"],
-            "unit": r.get("unit", ""),
+            "product_code": row["product_code"],
+            "value": row["value"],
+            "unit": row.get("unit", ""),
             "provenance": {
                 "source": "ML_MODEL",
-                "model_id": model,
-                "model_version": MODEL_VERSIONS[model],
-                "confidence": r.get("confidence"),
-                "reviewed_by": str(actor) if actor else None,
-                "reviewed_at": reviewed_at,
+                "model_id": proposal.model,
+                "model_version": proposal.model_version,
+                "confidence": row.get("confidence"),
+                "proposal_id": str(proposal.id),
+                "proposed_by": str(proposal.proposed_by_user_id),
+                "proposed_at": proposal.proposed_at.isoformat(),
+                "reviewed_by": str(reviewer_id),
+                "reviewed_at": reviewed_at.isoformat(),
             },
         }
-        for r in rows
+        for row in proposal.values
     ]
 
     batch_id = new_uuid7()
@@ -215,50 +363,53 @@ def apply_estimates(  # noqa: PLR0913
     db.add(
         IngestionBatch(
             id=batch_id,
-            organization_id=ctx.organization_id,
-            bank_id=bank.id,
+            organization_id=proposal.organization_id,
+            bank_id=proposal.bank_id,
             source_system="API_PUSH",
             adapter_version="behavioral_ml_v1",
             extraction_mode="full",
             status="accepted",
-            as_of_date=as_of_date,
-            created_by=actor,
+            as_of_date=proposal.as_of_date,
+            created_by=reviewer_id,
         )
     )
     db.add(
         LineageRecord(
             id=lineage_id,
-            organization_id=ctx.organization_id,
-            bank_id=bank.id,
+            organization_id=proposal.organization_id,
+            bank_id=proposal.bank_id,
             ingestion_batch_id=batch_id,
             operation_type="ENRICHMENT",
-            operation_ref=f"behavioral_ml/{model}/{as_of_date.isoformat()}",
+            operation_ref=f"behavioral_ml/{proposal.model}/{proposal.as_of_date.isoformat()}",
+            details={
+                "proposal_id": str(proposal.id),
+                "model_version": proposal.model_version,
+            },
         )
     )
     db.flush()  # batch + lineage must exist before their reference rows (composite FK)
-    all_payloads = kept + new_rows
-    for idx, payload in enumerate(all_payloads, start=1):
+    all_payloads = [*kept, *new_rows]
+    for index, payload in enumerate(all_payloads, start=1):
         db.add(
             CanonicalReferenceRow(
                 id=new_uuid7(),
-                organization_id=ctx.organization_id,
-                bank_id=bank.id,
+                organization_id=proposal.organization_id,
+                bank_id=proposal.bank_id,
                 ingestion_batch_id=batch_id,
-                as_of_date=as_of_date,
+                as_of_date=proposal.as_of_date,
                 dataset_kind=_DATASET_KIND,
-                row_index=idx,
+                row_index=index,
                 payload=payload,
-                source_reference=f"behavioral_ml/{model}/{as_of_date.isoformat()}#{idx}",
+                source_reference=(
+                    f"behavioral_ml/{proposal.model}/{proposal.as_of_date.isoformat()}#{index}"
+                ),
                 lineage_id=lineage_id,
             )
         )
-    if commit:
-        db.commit()
-    else:
-        db.flush()
+    db.flush()
     return {
         "ingestion_batch_id": str(batch_id),
-        "as_of_date": as_of_date.isoformat(),
+        "as_of_date": proposal.as_of_date.isoformat(),
         "applied_rows": len(new_rows),
         "total_rows": len(all_payloads),
     }
