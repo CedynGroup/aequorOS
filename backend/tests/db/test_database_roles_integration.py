@@ -39,10 +39,10 @@ from tests.case.factories import ServiceFactories
 from tests.conftest import FakeStorage
 from tests.core.test_bank_reencryption_integration import EmptyStorage
 from tests.data_engine.adapters.excel_csv import fixtures as workbooks
-from tests.data_engine.api.test_ingestion_integration import FULL_MAPPING
 from tests.support import postgres_migrations as migrations
 from tests.support.database import managed_engine
 from tests.support.helpers import ORG_1, ORG_2
+from tests.support.ingestion_seeding import FULL_MAPPING
 from tests.support.inmemory_storage import InMemoryStorageClient
 from tests.support.reencryption import drain
 

@@ -33,10 +33,10 @@ from app.stress.schemas.management_actions import ManagementActionPlanRead
 from app.stress.schemas.stress import MacroScenarioListRead, MacroScenarioRead
 from app.stress.service import macro_scenarios
 from app.stress.service.default_macro_scenarios import DEFAULT_MACRO_SCENARIOS
-from tests.data_engine.api.test_ingestion_integration import seed_bank
 from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID, materialize_canonical_test_book
 from tests.stress.authority import grant
 from tests.support.helpers import ORG_1, USER_1, headers
+from tests.support.ingestion_seeding import seed_bank
 
 URL = "/api/v1/macro-scenarios"
 

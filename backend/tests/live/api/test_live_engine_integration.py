@@ -25,12 +25,6 @@ from app.models import Bank, BankReportingPeriod, CurrentFinancialFact, Job, Liv
 from app.policy.service import module_scope
 from app.services import job_queue
 from tests.data_engine.adapters.excel_csv import fixtures
-from tests.data_engine.api.test_ingestion_integration import (
-    FULL_MAPPING,
-    activate_mapping,
-    seed_bank,
-    start_batch,
-)
 from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID, materialize_canonical_test_book
 from tests.support.factories.canonical import (
     FIXTURE_AS_OF,
@@ -38,6 +32,12 @@ from tests.support.factories.canonical import (
     seed_hedge_and_swap_positions,
 )
 from tests.support.helpers import ORG_1, ORG_2, USER_1, headers
+from tests.support.ingestion_seeding import (
+    FULL_MAPPING,
+    activate_mapping,
+    seed_bank,
+    start_batch,
+)
 
 AS_OF = FIXTURE_AS_OF.isoformat()
 _BASE = f"/api/v1/banks/{SAMPLE_BANK_ID}"

@@ -32,9 +32,9 @@ from app.identity.service import authentication, authorization
 from app.identity.service.integration_keys import hash_key
 from app.models import AuditEvent, AuthorizationBinding, Bank, IntegrationKey, RefreshToken, User
 from app.policy.service.institution_types import FALLBACK_TYPE_CODE
-from tests.data_engine.api.test_ingestion_integration import seed_bank
 from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID
 from tests.support.helpers import ORG_1, ORG_2, USER_1, USER_2, headers
+from tests.support.ingestion_seeding import seed_bank
 from tests.support.inmemory_storage import InMemoryStorageClient
 
 pytestmark = pytest.mark.committing_db

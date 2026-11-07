@@ -35,7 +35,6 @@ from app.models import (
     IngestionBatch,
     LineageRecord,
 )
-from tests.data_engine.api.test_ingestion_integration import seed_bank
 from tests.fixtures.capital_structure import MAKER
 from tests.stress.api.test_enterprise_stress_integration import (
     RUNS_URL,
@@ -45,6 +44,7 @@ from tests.stress.api.test_enterprise_stress_integration import (
     _seed_checker,
 )
 from tests.support.helpers import ORG_1, headers
+from tests.support.ingestion_seeding import seed_bank
 
 pytestmark = pytest.mark.usefixtures(
     "fx_run_authority", "irrbb_run_authority", "stress_run_authority"
