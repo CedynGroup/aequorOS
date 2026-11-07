@@ -611,19 +611,27 @@ def test_acceptance_rolls_back_proposal_and_batch_when_row_persistence_fails(
     proposal_id = _ack(_propose(db_client, proposer_version)).proposal_id
     _, reviewer_version = _grant(FORECAST_APPROVER_ID, RoleBundle.APPROVER)
     before = _counts()
+    with get_sessionmaker()() as session:
+        lineages_before = session.scalar(select(func.count()).select_from(LineageRecord)) or 0
+    observed: list[tuple[int, int]] = []
 
     def fail_write(_mapper: object, connection: Connection, _target: object) -> None:
-        assert connection.scalar(select(func.count()).select_from(IngestionBatch)) == before[1] + 1
-        assert connection.scalar(select(func.count()).select_from(LineageRecord)) == 1
+        observed.append(
+            (
+                connection.scalar(select(func.count()).select_from(IngestionBatch)) or 0,
+                connection.scalar(select(func.count()).select_from(LineageRecord)) or 0,
+            )
+        )
         raise RuntimeError("reference row persistence failed")
 
     event.listen(CanonicalReferenceRow, "before_insert", fail_write)
     try:
-        # The batch and lineage are flushed before the reference-row failure.
         failed = _review(db_client, proposal_id, FORECAST_APPROVER_ID, reviewer_version)
     finally:
         event.remove(CanonicalReferenceRow, "before_insert", fail_write)
 
+    # Assertions cannot be masked by the expected 500 outside the event listener.
+    assert observed == [(before[1] + 1, lineages_before + 1)]
     assert failed.status_code == 500
     assert _counts() == before
     row = _proposal(proposal_id)
