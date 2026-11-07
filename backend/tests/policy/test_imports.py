@@ -9,6 +9,8 @@ from pathlib import Path
 import pytest
 
 
+# The app-wide entrypoints below are guarded only here, at the strictest
+# existing 60 s bound; live's feature entrypoints stay in tests/live/test_imports.py.
 @pytest.mark.parametrize(
     "entrypoint", ["app.policy.public", "app.main", "app.worker", "app.operator.main"]
 )

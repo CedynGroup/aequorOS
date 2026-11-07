@@ -13,9 +13,8 @@ import pytest
     "entrypoint",
     [
         "app.live.public",
-        "app.main",
-        "app.worker",
-        "app.operator.main",
+        # The app-wide entrypoints (app.main, app.worker, app.operator.main) are
+        # guarded once, in tests/policy/test_imports.py, at the stricter 60 s bound.
         "app.capital.service.regulatory_capital",
         "app.liquidity.service.regulatory_liquidity",
         "app.bi.service.enqueue",
