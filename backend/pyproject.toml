@@ -121,64 +121,18 @@ exclude = [".venv"]
 reportAny = "error"
 reportExplicitAny = false
 
-# Shared test helpers run basedpyright's actual STANDARD preset. An execution
-# environment cannot set `typeCheckingMode`, so the standard rule set is expressed
-# as explicit per-rule levels: every rule where the installed checker's
-# getStandardDiagnosticRuleSet() differs from strict, at its standard value, plus
-# `reportAny = "none"` countering the repo override above. The one standard
-# difference that cannot be expressed per path is `omitUnannotatedParamType`
-# (standard true, strict false) — a diagnostic type-printing flag consumed
-# globally, not a check; the tier probe proves the emitted diagnostics match a
-# true standard-preset run anyway. Environments resolve in declaration order, so
-# this root must precede the "tests" root.
-[[tool.basedpyright.executionEnvironments]]
-root = "tests/support"
-extraPaths = ["."]
-reportAny = "none"
-reportAssertAlwaysTrue = "warning"
-reportConstantRedefinition = "none"
-reportDeprecated = "hint"
-reportDuplicateImport = "none"
-reportIncompleteStub = "none"
-reportInconsistentConstructor = "none"
-reportInvalidStringEscapeSequence = "warning"
-reportInvalidStubStatement = "none"
-reportInvalidTypeVarUse = "warning"
-reportMatchNotExhaustive = "none"
-reportMissingParameterType = "none"
-reportMissingTypeArgument = "none"
-reportMissingTypeStubs = "none"
-reportPrivateUsage = "none"
-reportSelfClsParameterName = "warning"
-reportTypeCommentUsage = "hint"
-reportUnknownArgumentType = "none"
-reportUnknownLambdaType = "none"
-reportUnknownMemberType = "none"
-reportUnknownParameterType = "none"
-reportUnknownVariableType = "none"
-reportUnnecessaryCast = "none"
-reportUnnecessaryComparison = "none"
-reportUnnecessaryContains = "none"
-reportUnnecessaryIsInstance = "none"
-reportUnsupportedDunderAll = "warning"
-reportUntypedBaseClass = "none"
-reportUntypedClassDecorator = "none"
-reportUntypedFunctionDecorator = "none"
-reportUntypedNamedTuple = "none"
-reportUnusedClass = "hint"
-reportUnusedExpression = "warning"
-reportUnusedFunction = "hint"
-reportUnusedImport = "hint"
-reportUnusedVariable = "hint"
-reportWildcardImportFromLibrary = "warning"
-strictDictionaryInference = false
-strictListInference = false
-strictSetInference = false
-
-# Test files run the same STANDARD preset (which already silences the noisy
-# unknown-type and missing-annotation category) while every real-error check —
-# wrong argument types, missing attributes, return types, call issues — stays at
-# its standard strength, which for these rules is error in both presets.
+# Test helpers and test files run basedpyright's actual STANDARD preset. An
+# execution environment cannot set `typeCheckingMode`, so every rule where
+# getStandardDiagnosticRuleSet() differs from strict is set to its standard value,
+# plus `reportAny = "none"` countering the repo override above. The standard
+# defaults silence reportUnknown*, reportMissingParameterType,
+# reportMissingTypeArgument, reportPrivateUsage and reportAny. Real-error checks
+# (wrong argument types, missing attributes, return types, call issues) remain
+# error in both presets. The `tests` root also matches `tests/support` helpers.
+# The one standard difference that cannot be expressed per path is
+# `omitUnannotatedParamType` (standard true, strict false), a globally consumed
+# diagnostic type-printing flag, not a check; the tier probe confirms this
+# limitation changes no emitted diagnostic.
 [[tool.basedpyright.executionEnvironments]]
 root = "tests"
 extraPaths = ["."]

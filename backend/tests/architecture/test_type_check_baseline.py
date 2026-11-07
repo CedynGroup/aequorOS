@@ -142,15 +142,13 @@ def test_basedpyright_is_configured_strict() -> None:
 def test_basedpyright_relaxes_only_test_file_noise() -> None:
     """Test tiers run the checker's actual standard preset; source stays strict.
 
-    Execution environments resolve in declaration order, so ``tests/support`` must
-    precede ``tests`` or its helpers would fall to the default (strict) profile.
-    The standard preset already silences the noisy unknown-type and
-    missing-annotation rules; both tiers carry the same explicit standard map
-    because an execution environment cannot set ``typeCheckingMode``.
+    The ``tests`` environment covers helpers and test files with the same
+    standard map, whose defaults silence noisy unknown-type and missing-annotation
+    rules. An execution environment cannot set ``typeCheckingMode``.
     """
     environments = _basedpyright_config()["executionEnvironments"]
     assert isinstance(environments, list)
-    assert [environment["root"] for environment in environments] == ["tests/support", "tests"]
+    assert [environment["root"] for environment in environments] == ["tests"]
     for environment in environments:
         overridden = {
             key: level

@@ -40,14 +40,29 @@ New code is strict; legacy code may only get stricter.
   explicit per-rule levels in `executionEnvironments` because an environment cannot set
   `typeCheckingMode` (the one preset key that cannot be expressed per path is
   `omitUnannotatedParamType`, a diagnostic type-printing flag, not a check; an A/B scan
-  confirms the emitted diagnostics match a true standard-preset run exactly). As of
-  2026-11-07 the strict census was 10,295 source errors (all baselined legacy); under the
-  standard preset both test tiers report zero errors and warnings — every strict-only
-  finding (unknown types, missing annotations, private usage, unused code) vanishes, and
-  even wrong-argument findings that strict's stronger inference exposed do not fire. The
+  confirms the emitted diagnostics match a true standard-preset run exactly). The
   standard preset still catches real defects on concretely typed values (wrong argument
-  types, missing attributes, bad returns), and the baseline dropped every test-tier entry
-  the standard profile no longer measures.
+  types, missing attributes, bad returns).
+
+  The 2026-11-07 census used `cd backend && uv run basedpyright --outputjson`
+  (basedpyright 1.39.6, error and warning severities, 2,725 files):
+
+  | Tier | Before (strict everywhere) | After (tiered profile) | Removed |
+  | --- | ---: | ---: | ---: |
+  | Source (`app`, `alembic`, `scripts`) | 10,295 | 10,295 (set-identical) | 0 |
+  | Shared helpers (`tests/support`) | 7 | 0 | 7 |
+  | Test files (remaining `tests/`) | 13,028 | 0 | 13,028 |
+
+  These are measured diagnostics, including the after counts. The baseline stores
+  per-(module, rule) allowances instead: it now contains source modules only, with
+  512 modules, 1,227 entries and 10,295 charged allowances (before: 1,064 modules,
+  2,664 entries and 23,530 charged allowances). Source allowances are unchanged;
+  every test-tier entry was removed.
+
+  As the concrete PR811 case, the new `backend/tests/support/postgres_migrations.py`
+  at published head `b941f84f` typechecks with **0 errors under strict** and
+  **0 errors under the final tiered profile**, reproduced from the immutable
+  published git object. PR811 need not wait for this separate profile change.
 - **Strict modules** may have no errors and never take a baseline entry: every new module, every
   module that passed when the baseline was recorded, and the packages and modules listed in
   `STRICT_MODULES` in the script, except the exact-file migration allowances described below.
