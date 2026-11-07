@@ -26,20 +26,24 @@ def _route(path: str, method: str) -> APIRoute:
     return routes[0]
 
 
-def test_behavioral_train_uses_scoped_mutation_principal_without_role_fallback() -> None:
-    dependencies = _dependency_names(
-        _route("/api/v1/banks/{bank_id}/behavioral/{model}/train", "POST")
-    )
+def test_behavioral_writes_use_scoped_mutation_principal_without_role_fallback() -> None:
+    for path in (
+        "/api/v1/banks/{bank_id}/behavioral/{model}/apply",
+        "/api/v1/banks/{bank_id}/behavioral/{model}/train",
+        "/api/v1/banks/{bank_id}/behavioral/proposals/{proposal_id}/review",
+    ):
+        dependencies = _dependency_names(_route(path, "POST"))
 
-    assert "get_scoped_mutation_tenant_context" in dependencies
-    assert "get_mutation_tenant_context" not in dependencies
-    assert "get_approver_tenant_context" not in dependencies
-    assert not any(name.startswith("require_role_") for name in dependencies)
+        assert "get_scoped_mutation_tenant_context" in dependencies
+        assert "get_mutation_tenant_context" not in dependencies
+        assert "get_approver_tenant_context" not in dependencies
+        assert not any(name.startswith("require_role_") for name in dependencies)
 
 
 def test_behavioral_reads_leave_authority_to_the_exact_service_gate() -> None:
     for path in (
         "/api/v1/banks/{bank_id}/behavioral/liquidity",
+        "/api/v1/banks/{bank_id}/behavioral/proposals",
         "/api/v1/banks/{bank_id}/behavioral/{model}",
     ):
         dependencies = _dependency_names(_route(path, "GET"))

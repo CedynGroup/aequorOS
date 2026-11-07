@@ -7,17 +7,30 @@ deployment.
 
 ## Affected surfaces
 
-| Surface                                                                             | Required complete binding    |
-| ----------------------------------------------------------------------------------- | ---------------------------- |
-| Model estimates (`GET /banks/{id}/behavioral/{model}`) and the `/behavioral` pages  | BEH / `aggregated` / `view`  |
-| Observed deposit behavior and CFP overlays (`GET /banks/{id}/behavioral/liquidity`) | BEH / `aggregated` / `view`  |
-| Retrain a model (`POST /banks/{id}/behavioral/{model}/train`)                       | BEH / `confidential` / `run` |
+| Surface                                                                             | Required complete binding                       |
+| ----------------------------------------------------------------------------------- | ----------------------------------------------- |
+| Model estimates (`GET /banks/{id}/behavioral/{model}`) and the `/behavioral` pages  | BEH / `aggregated` / `view`                     |
+| Observed deposit behavior and CFP overlays (`GET /banks/{id}/behavioral/liquidity`) | BEH / `aggregated` / `view`                     |
+| Retrain a model (`POST /banks/{id}/behavioral/{model}/train`)                       | BEH / `confidential` / `run`                    |
+| Propose model application (`POST /banks/{id}/behavioral/{model}/apply`)              | BEH / `restricted` / `configure`                |
+| Inspect the proposal queue (`GET /banks/{id}/behavioral/proposals`)                  | BEH / `restricted` / `view`                     |
+| Accept a proposal (`POST /banks/{id}/behavioral/proposals/{proposal_id}/review`)     | BEH / `restricted` / `approve` + distinct actor |
 
-Applying estimates as reviewed assumptions
-(`POST /banks/{id}/behavioral/{model}/apply`) is outside this cutover. It
-writes an accepted `behavioral_assumptions` ingestion batch, so it moves with
-the governed model-application work; until then it keeps its existing
-mutation check.
+Application is a durable two-stage transition, required by GitHub issue #184.
+`apply` persists the model, model version, as-of date, values, proposer and
+proposal timestamp as an immutable pending proposal. It returns only
+`proposalId` and `status`; a Configurator without restricted `view` cannot use
+that write response to read back the stored proposal values or provenance. No
+accepted assumptions batch is written at this stage.
+
+A different principal with the exact restricted `approve` binding reviews the
+pending snapshot. Acceptance writes the accepted assumptions batch, links it
+to the proposal, and records both actors and their timestamps in one
+transaction. A failed write rolls back both acceptance and the batch. The new
+batch replaces only the proposed model's assumption rows and carries the other
+models' current accepted rows forward. Replaying an accepted proposal is
+refused. Configurator grants no `approve`, and a proposer cannot approve their
+own proposal even when they also hold Approver.
 
 A model estimate is read lazily: the first authorized read of a model fits it
 on the bank's canonical history and persists the result for reuse. That fill
@@ -27,7 +40,9 @@ service re-decides the same binding before it trains or rewrites the artifact,
 so a call that reaches the service by another path still cannot train.
 
 A denied request cannot train a model, write or replace an artifact, warm the
-cache, write an ingestion batch, or write an audit event. Unknown model names
+cache, create or accept a proposal, write an ingestion batch, or write an
+audit event. Proposal identifiers are bank-scoped at lookup: a foreign or
+cross-bank proposal is indistinguishable from an unknown one. Unknown model names
 are rejected by the route's closed schema for every caller, authorized or not,
 before any binding is evaluated. A bank the caller's organization does not own
 returns 404 in the same shape as every other bank route. A stale session
@@ -37,7 +52,10 @@ Behavioral evaluation.
 No scalar role, token role, tenant membership, or binding for another module or
 sensitivity grants Behavioral authority. Aggregated view does not imply
 confidential run, and confidential run does not imply aggregated view: an
-analyst who retrains also needs the view row to see the result.
+analyst who retrains also needs the view row to see the result. Aggregated view
+also does not expose restricted proposal values, and restricted configure does
+not imply restricted view or approve. Proposal display and acceptance each use
+their own complete row; duties are never inferred from combined partial rows.
 
 Integration keys are refused at the credential boundary on every Behavioral
 route; machine principals receive no interactive Behavioral grant in this
@@ -123,13 +141,19 @@ Follow the foundation's
 | ------------------------------------------- | ---------------- | --------------------------------------------- | ------------------- | ---------------- | -------------- | ------------------- |
 | Read model estimates and liquidity behavior | `human`          | `viewer`, `auditor`, `analyst`, or `approver` | `institution`       | exact `BK-*`     | `beh`          | `aggregated`        |
 | Retrain models                              | `human`          | `analyst`                                     | `institution`       | exact `BK-*`     | `beh`          | `confidential`      |
+| Propose a model application                 | `human`          | `configurator`                                | `institution`       | exact `BK-*`     | `beh`          | `restricted`        |
+| Inspect restricted proposal evidence        | `human`          | `viewer` or `approver`                        | `institution`       | exact `BK-*`     | `beh`          | `restricted`        |
+| Accept a proposal as the distinct reviewer  | `human`          | `approver`                                    | `institution`       | exact `BK-*`     | `beh`          | `restricted`        |
 
 If the institution explicitly approves coverage across all its banks, replace
 only `institution_scope` with `organization` and `institution_id` with `NULL`.
 Do not widen module or sensitivity scope to compensate for a missing row.
-Aggregated and confidential access are separate rows unless the institution
-explicitly approves the broad `all` sensitivity; an analyst who retrains needs
-both.
+Aggregated, confidential and restricted access are separate rows unless the
+institution explicitly approves the broad `all` sensitivity; an analyst who
+retrains needs both aggregated view and confidential run. Application needs a
+Configurator proposer and at least one different Approver reviewer. Granting a
+Configurator an additional Approver bundle does not permit self-review: the
+reviewer must be a different principal for every acceptance.
 
 Example least-privilege request for a model trainer:
 
