@@ -319,6 +319,8 @@ function AttestForm({ signoff }: { signoff: StressSignoffRead }) {
     }
     const returnTo = new URL(window.location.href);
     returnTo.searchParams.delete("stepUp");
+    returnTo.searchParams.set("runId", signoff.runId);
+    returnTo.searchParams.set("tab", "governance");
     const start = new URL("/api/attestation/step-up/start", window.location.origin);
     start.searchParams.set("bankId", signoff.bankId);
     start.searchParams.set("signoffId", signoff.id);
