@@ -268,7 +268,7 @@ def test_current_cycle_named_board_recipient_is_inventoried_without_legacy_autho
             status="pending",
         )
     )
-    for family in ("ordinary", "liquidity"):
+    for family in ("capital", "liquidity"):
         routed_package = RegulatoryPackage(
             organization_id=ORG,
             bank_id=BANK,
@@ -305,12 +305,13 @@ def test_current_cycle_named_board_recipient_is_inventoried_without_legacy_autho
     assert not impact.before.allowed
     assert impact.named_or_legacy_signer
     assert impact.named_roles == ["board"]
-    assert impact.source_families == ["icaap", "liquidity", "ordinary"]
+    assert impact.source_families == ["capital", "icaap", "liquidity"]
     viewer_grants = [row for row in impact.required_grants if row.permission == "view"]
     assert len(viewer_grants) == 2
     assert {(row.role_bundle, row.module_scope) for row in impact.required_grants} == {
         (RoleBundle.SIGNER.value, Module.REGULATORY.value),
         (RoleBundle.VIEWER.value, Module.CAPITAL.value),
+        (RoleBundle.VIEWER.value, Module.REGULATORY.value),
         (RoleBundle.APPROVER.value, Module.REGULATORY.value),
     }
 
