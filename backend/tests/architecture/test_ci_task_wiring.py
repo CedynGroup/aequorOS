@@ -439,16 +439,17 @@ _GIT_LOCATION_OVERRIDES = frozenset(
 )
 
 
+def _git_child_environment() -> dict[str, str]:
+    # A caller's GIT_DIR/GIT_WORK_TREE overrides would redirect a cwd-based Git
+    # child away from this repository; the parent environment stays untouched.
+    return {key: value for key, value in os.environ.items() if key not in _GIT_LOCATION_OVERRIDES}
+
+
 def _untracked_repository_paths() -> list[str]:
-    # A caller's GIT_DIR/GIT_WORK_TREE overrides would redirect this child's
-    # cwd-based repository selection; the parent environment stays untouched.
-    environment = {
-        key: value for key, value in os.environ.items() if key not in _GIT_LOCATION_OVERRIDES
-    }
     result = subprocess.run(
         ["git", "ls-files", "--others", "--exclude-standard"],
         cwd=REPO_ROOT,
-        env=environment,
+        env=_git_child_environment(),
         text=True,
         capture_output=True,
         check=True,
@@ -461,7 +462,11 @@ def test_untracked_repository_paths_ignores_caller_git_location(
 ) -> None:
     """A stray caller's Git location must not redirect this repository guard."""
     stray = tmp_path / "stray-repo"
-    subprocess.run(["git", "init", "-q", str(stray)], check=True)
+    # A hostile GIT_DIR must not relocate the fixture's own metadata either.
+    monkeypatch.setenv("GIT_DIR", str(tmp_path / "caller-metadata"))
+    subprocess.run(["git", "init", "-q", str(stray)], env=_git_child_environment(), check=True)
+    assert (stray / ".git").is_dir()
+    assert not (tmp_path / "caller-metadata").exists()
     baseline = _untracked_repository_paths()
     monkeypatch.setenv("GIT_DIR", str(stray / ".git"))
     monkeypatch.setenv("GIT_WORK_TREE", str(stray))
