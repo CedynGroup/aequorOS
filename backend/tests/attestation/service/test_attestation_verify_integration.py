@@ -609,7 +609,10 @@ def test_step_up_rechecks_rotation_after_committed_authentication(
         RegulatoryPackageCreate(return_code="LCR-NSFR", reporting_date=REPORTING_DATE),
     )
     validation.validate_package(db, MAKER, SAMPLE_BANK_ID, read.id)
-    _enrol(db, MAKER, pki, "softkey:preparer")
+    signer_id = _enrol(db, MAKER, pki, "softkey:preparer")
+    package = db.get(RegulatoryPackage, read.id)
+    assert package is not None
+    _name_certifier(db, package, role="preparer", user_id=DEMO_USER_ID, signer_id=signer_id)
     user = db.get(User, DEMO_USER_ID)
     assert user is not None
     password = "synthetic-authentication-rotation-proof"
