@@ -198,13 +198,29 @@ def propose_estimates(  # noqa: PLR0913 - explicit tenant, model, values and com
     result = get_estimates(db, ctx, bank.id, model, resolved_bank=bank)
     if ctx.actor_user_id is None:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="A proposer is required.")
+    estimates = {product.product_code: product for product in result.products}
+    selected = {str(row["product_code"]) for row in rows}
+    if not selected or not selected <= estimates.keys():
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_CONTENT,
+            detail="A proposal must select products estimated by the current model.",
+        )
+    snapshot: list[dict[str, object]] = [
+        {
+            "product_code": product_code,
+            "value": estimates[product_code].value,
+            "unit": estimates[product_code].unit,
+            "confidence": estimates[product_code].confidence,
+        }
+        for product_code in sorted(selected)
+    ]
     proposal = BehavioralModelProposal(
         organization_id=ctx.organization_id,
         bank_id=bank.id,
         model=model,
         model_version=result.model_version,
         as_of_date=date.fromisoformat(result.as_of_date) if result.as_of_date else utc_now().date(),
-        values=rows,
+        values=snapshot,
         status="pending",
         proposed_by_user_id=ctx.actor_user_id,
         proposed_at=utc_now(),
