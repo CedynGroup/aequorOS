@@ -200,8 +200,8 @@ env:
   POSTGRES_ADMIN_URL: postgresql+psycopg://postgres:postgres@localhost:5432/risk_service
   POSTGRES_TEST_URL: postgresql+psycopg://risk_service_test:risk_service_test@localhost:5432/risk_service
 
-# Merge groups keep preflight, architecture, migration/schema and full Postgres
-# suites (including locks and storage). Other per-PR checks skip; the aggregate still reports.
+# See ARCHITECTURE.md §8, CI enforcement, for merge-queue execution policy
+# and the verified issue #818 chronology.
 jobs:
   # Runs on EVERY pull request, needs nothing, installs nothing, and every other
   # job depends on it. Two responsibilities, both cheap:
@@ -271,7 +271,7 @@ jobs:
     name: Lint and typecheck
     runs-on: ubuntu-24.04
     needs: preflight
-    if: github.event_name != 'merge_group' && needs.preflight.outputs.backend == 'true'
+    if: needs.preflight.outputs.backend == 'true'
     # No job may outlive this. P0-15's outage was a task that recursed instead of
     # running anything; unbounded, GitHub would have let it burn the 360-minute
     # default. Values are ~3x the measured local wall clock, not tight.
@@ -784,7 +784,7 @@ jobs:
     name: Generated API client freshness
     runs-on: ubuntu-24.04
     needs: preflight
-    if: github.event_name != 'merge_group' && needs.preflight.outputs.api_client == 'true'
+    if: needs.preflight.outputs.api_client == 'true'
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4

@@ -147,6 +147,9 @@ BANK_FTP_SHOCKS: dict[str, dict[str, str]] = {
 #: fixture imports these rather than keeping a second copy — the catalogue is
 #: defined ONCE, per the convention ``institution_types.seed_rows`` and
 #: ``regulatory_parameters.seed_rows`` already follow.
+#: FX and VaR limits, board starting values. For the distinction between
+#: the symmetric Tier-1-based NOP limits and the as-issued 2026 notice,
+#: see the methodology disclosure in ``app/fx/domain/engine.py``.
 BANK_FX_THRESHOLDS: dict[str, str] = {
     "fx_nop_single_limit_pct": "10",
     "fx_nop_aggregate_limit_pct": "20",
@@ -178,6 +181,9 @@ BANK_CAPITAL_THRESHOLDS: dict[str, str] = {
     "rwa_multiplier": "1250",
     "tier2_gp_cap_pct_credit_rwa": "1.25",
     "bia_alpha_pct": "15",
+    # FX capital charge, a board starting value like every other row here.
+    # The default is not a regulatory claim; see the June 2018 CRD charge
+    # and unresolved gold disclosure in ``app/capital/domain/engine.py``.
     "fx_charge_pct": "8",
     # Liquidity — internal floors. BoG publishes no LCR/NSFR requirement, so
     # these are the institution's own targets, not a supervisory minimum.
