@@ -282,26 +282,6 @@ export default function SigningWorkspace({
       ? resolved.placeableRoles
       : DOCUMENT_SIGNING_ROLES;
 
-  // Pre-routing is mandatory. Carry the server's current-cycle nominees into
-  // the combined certification so reconcile reuses them instead of inserting
-  // duplicate recipient rows or silently replacing a named signer.
-  useEffect(() => {
-    if (!status) return;
-    setNominations((current) => {
-      if (current.length > 0) return current;
-      return status.recipients
-        .filter(
-          (recipient) =>
-            recipient.status === "pending" &&
-            recipient.signingRole !== signingRole,
-        )
-        .map((recipient) => ({
-          signingRole: recipient.signingRole,
-          userId: recipient.recipientUserId,
-        }));
-    });
-  }, [status, signingRole]);
-
   // Seed ONLY from a layout somebody saved. The platform default is two boxes in
   // a clear band near the attestation block, not on its ruled lines — seeding
   // from it opens the workspace with fields in the wrong place that the signer
