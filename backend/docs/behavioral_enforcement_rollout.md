@@ -9,7 +9,8 @@ deployment.
 
 | Surface                                                                             | Required complete binding                       |
 | ----------------------------------------------------------------------------------- | ----------------------------------------------- |
-| Model estimates (`GET /banks/{id}/behavioral/{model}`) and the `/behavioral` pages  | BEH / `aggregated` / `view`                     |
+| Model estimates (`GET /banks/{id}/behavioral/{model}`)                              | BEH / `aggregated` / `view`                     |
+| `/behavioral` review pages (model figures stay aggregated-only)                    | BEH / `aggregated` / `view` for the model, or BEH / `restricted` / `view` for the proposal queue |
 | Observed deposit behavior and CFP overlays (`GET /banks/{id}/behavioral/liquidity`) | BEH / `aggregated` / `view`                     |
 | Retrain a model (`POST /banks/{id}/behavioral/{model}/train`)                       | BEH / `confidential` / `run`                    |
 | Propose model application (`POST /banks/{id}/behavioral/{model}/apply`)              | BEH / `restricted` / `configure`                |
@@ -28,8 +29,9 @@ pending snapshot. Acceptance writes the accepted assumptions batch, links it
 to the proposal, and records both actors and their timestamps in one
 transaction. A failed write rolls back both acceptance and the batch. The new
 batch replaces only the proposed model's assumption rows and carries the other
-models' current accepted rows forward. Replaying an accepted proposal is
-refused. Configurator grants no `approve`, and a proposer cannot approve their
+models' current accepted rows forward. Replaying an accepted proposal, accepting
+a proposal superseded by a newer same-model acceptance, or backdating across a
+newer behavioral-assumptions batch is refused. Configurator grants no `approve`, and a proposer cannot approve their
 own proposal even when they also hold Approver.
 
 A model estimate is read lazily: the first authorized read of a model fits it
@@ -63,11 +65,11 @@ cutover.
 
 ## Dashboard controls
 
-Every `/behavioral` page requires aggregated view. Without it the Behavioral
-navigation entry stays visible but disabled with “Requires Behavioral Models ·
-Aggregated · View. Ask your organization owner or admin to grant it.” Deep links
-show the access-denied page naming that grant, and no Behavioral request is
-issued. The Retrain control on each model page consumes the exact confidential
+A `/behavioral` page opens with aggregated view or restricted view. Restricted
+view alone renders only the independently gated proposal queue; it never issues
+the aggregated model-estimate read or displays those figures. A caller with
+neither view sees “Requires Behavioral Models · Aggregated · View. Ask your
+organization owner or admin to grant it.” The Retrain control on each model page consumes the exact confidential
 run capability from effective authority. Without it the control remains visible
 and disabled with “Requires Behavioral Models · Confidential · Run. Ask your
 organization owner or admin to grant it.” The shared permission-only

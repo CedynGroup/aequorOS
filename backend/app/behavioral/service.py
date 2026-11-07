@@ -333,10 +333,10 @@ def review_estimates(
             detail="A newer proposal for this model has already been accepted.",
         )
     latest_accepted_as_of = db.scalar(
-        select(func.max(IngestionBatch.as_of_date)).where(
-            IngestionBatch.organization_id == proposal.organization_id,
-            IngestionBatch.bank_id == proposal.bank_id,
-            IngestionBatch.adapter_version == "behavioral_ml_v1",
+        select(func.max(CanonicalReferenceRow.as_of_date)).where(
+            CanonicalReferenceRow.organization_id == proposal.organization_id,
+            CanonicalReferenceRow.bank_id == proposal.bank_id,
+            CanonicalReferenceRow.dataset_kind == _DATASET_KIND,
         )
     )
     if latest_accepted_as_of is not None and latest_accepted_as_of > proposal.as_of_date:
