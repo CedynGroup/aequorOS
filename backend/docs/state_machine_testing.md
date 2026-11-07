@@ -203,9 +203,14 @@ do not infer legal transitions solely from a column CHECK constraint.
 
 `tests/conftest.py` registers and loads Hypothesis profile `ci`: 25 examples,
 20 stateful steps, no wall-clock deadline, `derandomize=True`, `print_blob=True`.
-`HYPOTHESIS_PROFILE` may select an explicitly registered profile. There is no
-scheduled property-test CI job, so no unbounded or larger nightly profile is added.
-The filing, freeze, template and access-request database machines lower examples
+`HYPOTHESIS_PROFILE` may select an explicitly registered profile. Per-PR and
+local runs keep bounded, reproducible budgets; the scheduled RLS-depth job
+(`.github/workflows/rls-depth.yml`) re-runs the three Postgres
+row-level-security property files at a larger budget by setting
+`AQS_RLS_PROPERTY_EXAMPLES` (per-PR budgets are unchanged, and no larger
+Hypothesis profile exists — an explicit `@settings(max_examples=...)` always
+beats a profile). The filing, freeze, template and access-request database
+machines lower examples
 to 12 to bound persisted workflow setup and HTTP requests. The filing/freeze machines additionally build real computed
 positions and/or frozen reports. These retain 20 generated steps. The Postgres effective-access and reconciliation
 approval machines use 10 examples and 12 generated steps. Failure output

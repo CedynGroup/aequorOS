@@ -87,6 +87,12 @@ pytestmark = pytest.mark.skipif(
     reason="TEST_DATABASE_URL is required for Postgres RLS authorization properties.",
 )
 
+# Per-run machine exploration depth. Local and per-PR runs keep the default;
+# the scheduled RLS-depth job (`.github/workflows/rls-depth.yml`) raises it
+# through ``AQS_RLS_PROPERTY_EXAMPLES``. A malformed override fails at import
+# instead of silently shrinking the budget.
+_PROPERTY_EXAMPLES = int(os.environ.get("AQS_RLS_PROPERTY_EXAMPLES", "10"))
+
 _ROLE_PERMISSIONS: dict[RoleBundle, frozenset[Permission]] = {
     RoleBundle.VIEWER: frozenset({Permission.VIEW}),
     RoleBundle.AUDITOR: frozenset({Permission.VIEW}),
@@ -718,7 +724,7 @@ def test_scoped_grant_lifecycle_never_exceeds_current_bindings(
         run_state_machine_as_test(
             lambda: EffectiveAccessMachine(client),
             settings=settings(
-                max_examples=10,
+                max_examples=_PROPERTY_EXAMPLES,
                 stateful_step_count=12,
                 deadline=None,
                 print_blob=True,
@@ -1119,7 +1125,7 @@ def test_reconciliation_approval_never_skips_the_second_officer(
         run_state_machine_as_test(
             lambda: ApprovalMachine(client),
             settings=settings(
-                max_examples=10,
+                max_examples=_PROPERTY_EXAMPLES,
                 stateful_step_count=12,
                 deadline=None,
                 print_blob=True,
