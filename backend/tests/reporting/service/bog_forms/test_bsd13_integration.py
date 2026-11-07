@@ -23,6 +23,7 @@ top of it:
 
 from __future__ import annotations
 
+from copy import deepcopy
 from datetime import date, timedelta
 from decimal import Decimal
 from typing import Any
@@ -596,3 +597,205 @@ def test_unconverted_amounts_are_counted_by_currency_not_dropped() -> None:
     assert unconverted.count == 3  # noqa: PLR2004 - two JPY + one CHF
     assert unconverted.currencies == ("CHF", "JPY")
     assert bool(unconverted)
+
+
+# ---------------------------------------------------------------------------
+# 7. Independent numeric oracle — BoG Capital Requirements Directive (June 2018)
+# ---------------------------------------------------------------------------
+
+#: Provenance (evergreen): Bank of Ghana, "Capital Requirements Directive",
+#: June 2018, issued under s.92(1) of the Banks and Specialised Deposit-taking
+#: Institutions Act 2016 (Act 930) and s.4(d) of the Bank of Ghana Act 2002
+#: (Act 612). Worked example: Part 4.B paragraphs 397-398, printed p. 94 (the
+#: shorthand aggregation and the 10% charge); the directive's own return
+#: schedule for the same computation is Appendix to Part 4, Table 4D, printed
+#: p. 104. Official source:
+#: https://www.bog.gov.gh/wp-content/uploads/2022/05/Basel-II-BOG-CRD-Final-27-June-2018-Basel-Committee-BSD.pdf
+#: (SHA-256 367896e2dc9dad15d026cd7185d614e7cbb2732b759a5f7a50e4b9dcb4334370).
+#:
+#: The published table's positions (+50, +100, +150, -20, -180, gold -35) are
+#: relative cedi-equivalent values and the printed page labels NO unit. The
+#: gold leg (paragraph 397(b), Table 4D rows 3c/5e/6f) has no representation
+#: in the platform's FX book, so this test is the explicitly declared
+#: currency-only adaptation: it does NOT reproduce the published
+#: gold-inclusive totals (335 and 33.5), and it establishes nothing about
+#: which framework version currently governs.
+
+#: Declared synthetic scaling (ours, not the source's): 1 source unit =
+#: GH¢ 1,000,000. The rule is linear (the sums, the max and the 10% charge
+#: are homogeneous of degree 1), so every cedi expectation below derives
+#: from this choice and scales with it. The published currency half alone:
+#: long 50 + 100 + 150 = 300; short 20 + 180 = 200; max = 300.
+ORACLE_SOURCE_UNIT_GHS = Decimal("1000000")
+
+#: (currency, published net in source units, explicit spot GH¢ per unit).
+#: Every net_ccy below is exact at these rates — no rounding is exercised.
+ORACLE_POSITIONS = (
+    ("JPY", Decimal("50"), Decimal("0.08")),
+    ("EUR", Decimal("100"), Decimal("12.5")),
+    ("GBP", Decimal("150"), Decimal("15.0")),
+    ("CAD", Decimal("-20"), Decimal("12.5")),
+    ("USD", Decimal("-180"), Decimal("12.5")),
+)
+
+#: NOF seeded explicitly (a single paid-up CET1 component): 3,000 source units.
+ORACLE_NOF_SOURCE_UNITS = Decimal("3000")
+
+
+def _seed_oracle_book(session: Any, period_id: str) -> None:
+    """Replace the scaffold's fx_position facts with the CRD mini-book.
+
+    Fixture mechanics are scaffolding only: the canonical book keeps the
+    run machinery working (its USD return history is cloned for JPY/CAD so
+    the VaR scenarios find shared intervals), but no expected value in the
+    test below is read from the fixture, from the run, or from any SUT
+    helper — every asserted figure is an independent literal whose
+    arithmetic is shown in the assertions' comments.
+    """
+    for fact in session.scalars(
+        select(BankFinancialFact).where(
+            BankFinancialFact.organization_id == ORG_1,
+            BankFinancialFact.bank_id == SAMPLE_BANK_ID,
+            BankFinancialFact.reporting_period_id == UUID(period_id),
+            BankFinancialFact.fact_group == "fx_position",
+        )
+    ):
+        session.delete(fact)
+    session.flush()
+
+    usd_returns = session.scalars(
+        select(BankFinancialFact).where(
+            BankFinancialFact.organization_id == ORG_1,
+            BankFinancialFact.bank_id == SAMPLE_BANK_ID,
+            BankFinancialFact.reporting_period_id == UUID(period_id),
+            BankFinancialFact.fact_group == "fx_return_history",
+            BankFinancialFact.category == "USD",
+        )
+    ).all()
+    for currency in ("JPY", "CAD"):
+        for source in usd_returns:
+            session.add(
+                BankFinancialFact(
+                    organization_id=source.organization_id,
+                    bank_id=source.bank_id,
+                    reporting_period_id=source.reporting_period_id,
+                    fact_group=source.fact_group,
+                    category=currency,
+                    amount=source.amount,
+                    currency=source.currency,
+                    attributes=deepcopy(source.attributes) | {"currency": currency},
+                )
+            )
+
+    for fact in session.scalars(
+        select(BankFinancialFact).where(
+            BankFinancialFact.organization_id == ORG_1,
+            BankFinancialFact.bank_id == SAMPLE_BANK_ID,
+            BankFinancialFact.reporting_period_id == UUID(period_id),
+            BankFinancialFact.fact_group == "capital_component",
+        )
+    ):
+        session.delete(fact)
+    session.flush()
+    session.add(
+        BankFinancialFact(
+            organization_id=ORG_1,
+            bank_id=SAMPLE_BANK_ID,
+            reporting_period_id=UUID(period_id),
+            fact_group="capital_component",
+            category="paid_up_capital",
+            amount=ORACLE_NOF_SOURCE_UNITS * ORACLE_SOURCE_UNIT_GHS,
+            currency="GHS",
+            capital_tier="CET1",
+            is_deduction=False,
+        )
+    )
+
+    for currency, source_units, spot in ORACLE_POSITIONS:
+        net_ghs = source_units * ORACLE_SOURCE_UNIT_GHS
+        net_ccy = (net_ghs / spot).quantize(Decimal("0.0001"))
+        session.add(
+            BankFinancialFact(
+                organization_id=ORG_1,
+                bank_id=SAMPLE_BANK_ID,
+                reporting_period_id=UUID(period_id),
+                fact_group="fx_position",
+                category=currency,
+                amount=net_ghs,
+                currency="GHS",
+                attributes={
+                    "currency": currency,
+                    "side": "long" if net_ghs >= 0 else "short",
+                    "spot_ghs": str(spot),
+                    "net_ccy": str(net_ccy),
+                    "assets_ccy": str(net_ccy if net_ccy >= 0 else Decimal("0")),
+                    "liabilities_ccy": str(-net_ccy if net_ccy < 0 else Decimal("0")),
+                    "net_derivatives_ccy": "0",
+                    "net_ghs": str(net_ghs),
+                },
+            )
+        )
+    session.flush()
+
+
+def test_bsd13_generated_cells_match_the_bog_crd_worked_example_oracle(
+    db_client: TestClient,
+) -> None:
+    """Check BSD13 against a currency-only adaptation of BoG's worked example.
+
+    The book is the CRD (June 2018) paragraph 398 worked table, converted at
+    explicit spot rates; every expected value below is an independent
+    literal, never the run's own output. The gold leg of the published
+    example is excluded by declared scope (see the provenance comments above).
+    """
+    period_id, reporting_date = _prepare(db_client)
+    session = get_sessionmaker()()
+    try:
+        session.info["organization_id"] = ORG_1
+        _seed_oracle_book(session, period_id)
+        session.commit()
+    finally:
+        session.close()
+
+    _run_fx(db_client, period_id)
+
+    snapshot = _generate(db_client, reporting_date)
+    payload = snapshot["bog_form"]
+    assert not payload["errors"], payload["errors"]
+    cells = payload["cells"][MAIN]
+    rows = _rows(snapshot, MAIN)
+
+    # Per-currency NOP (Table 4D row 6 = BSD13 row 29): currency units on
+    # the named columns; the Other Currencies column carries cedis
+    # (JPY 50M + EUR 100M + CAD -20M = 130M).
+    assert _num(cells, "E29") == -14_400_000.0  # USD: -180M cedis / 12.5
+    assert _num(cells, "H29") == 10_000_000.0  # GBP: 150M cedis / 15.0
+    assert _num(cells, "N29") == 130_000_000.0
+
+    # Cedi equivalents (Table 4D row 7 = BSD13 row 32) in base units, and
+    # the exported GH¢ '000 values preserving the template's unit.
+    assert _num(cells, "E32") == -180_000_000.0
+    assert _num(cells, "H32") == 150_000_000.0
+    assert _num(cells, "N32") == 130_000_000.0
+    assert float(rows["E32"]["value"]) == -180_000.0
+    assert float(rows["H32"]["value"]) == 150_000.0
+    assert float(rows["N32"]["value"]) == 130_000.0
+
+    # The aggregate shorthand (paragraph 397(a), Table 4D row 4d):
+    # max(300, 200) = 300 source units = GH¢ 300,000,000 under the declared
+    # scaling, exported in GH¢ '000 as 300,000. The published gold-inclusive
+    # total (335 -> 33.5) is deliberately NOT reproduced here.
+    assert _num(cells, "C50") == 300_000_000.0
+    assert float(rows["C50"]["value"]) == 300_000.0
+
+    # NOF was seeded explicitly (3,000 source units = GH¢ 3,000,000,000);
+    # AFOP as % of NOF: 300/3,000 x 100 = 10.000000 (6 dp, half-up).
+    assert _num(cells, "C52") == 3_000_000_000.0
+    assert _num(cells, "C53") == 10.0
+
+    # The template's identity holds on the named columns: NOP (row 29) =
+    # (A) Net Assets (row 19) + (C) Net Trading (row 24, zero derivatives).
+    assert _num(cells, "E19") + _num(cells, "E24") == _num(cells, "E29")
+
+    # A column with no currency in the book (DEM) stays honestly blank.
+    assert _statuses(snapshot, MAIN)["K29"] == "input_required"
