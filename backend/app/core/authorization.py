@@ -197,6 +197,7 @@ class RoleBundle(StrEnum):
     #: it deliberately does NOT carry ``Permission.VALIDATE`` — that verb is the
     #: machine rules check the Preparer re-runs, not this person's act.
     VALIDATOR = "validator"
+    CONFIGURATOR = "configurator"
     ACCOUNT_ADMIN = "account_admin"
     ORG_OWNER = "org_owner"
     INTEGRATION_WRITER = "integration_writer"
@@ -255,6 +256,8 @@ ROLE_PERMISSIONS: Final[Mapping[RoleBundle, frozenset[Permission]]] = MappingPro
         # the stage engine's per-object condition lands
         # (docs/filing_workflow_redesign.md §3.3).
         RoleBundle.VALIDATOR: frozenset({Permission.VIEW, Permission.SUBMIT}),
+        # Configuration is separate from read, operations and approval.
+        RoleBundle.CONFIGURATOR: frozenset({Permission.CONFIGURE}),
         # Account administration is intentionally outside operational bundles.
         RoleBundle.ACCOUNT_ADMIN: frozenset({Permission.ADMINISTER}),
         # Ownership is a distinct authority even though its first bounded
