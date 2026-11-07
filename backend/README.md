@@ -568,13 +568,8 @@ membership input, is the expected identity set for the cross-suite aggregate.
 The aggregate compares every execution report against it, including all
 parametrizations, and rejects missing or duplicate cases and wrong-suite owners.
 
-Local feedback is fast by default; CI remains the complete-suite authority:
-
-```bash
-mise run risk-service:check      # static lint, type baseline and task wiring; no tests
-mise run risk-service:test       # affected units or guarded full-unit fallback
-mise run risk-service:test --lf  # serial cached unit failures, never a full fallback
-```
+Local feedback uses the [commands above](#run-tests); CI remains the
+complete-suite authority.
 
 Check's existing stdlib wiring preflight verifies root/backend proxy resolution,
 backend task file placement, workflow-invoked task existence and nonempty tasks.

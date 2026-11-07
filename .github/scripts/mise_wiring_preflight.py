@@ -67,7 +67,6 @@ def _without_comments(path: Path) -> str:
     return _COMMENT_LINE.sub("", path.read_text(encoding="utf-8"))
 
 
-
 def fail(message: str) -> None:
     failures.append(message)
     print(f"::error::{message}")
@@ -92,7 +91,9 @@ def run_commands(body: dict[str, object]) -> list[str]:
 
 def main() -> int:
     if not ROOT_CONFIG.is_file():
-        fail(f"{ROOT_CONFIG.relative_to(REPO_ROOT)} is missing; CI has no tasks to run.")
+        fail(
+            f"{ROOT_CONFIG.relative_to(REPO_ROOT)} is missing; CI has no tasks to run."
+        )
         return 1
 
     if not BACKEND_CONFIG.is_file():
@@ -131,7 +132,9 @@ def main() -> int:
                 )
                 continue
             for inner in run_commands(backend_tasks[target]):
-                if _DELEGATION.match(inner.strip()) and inner.strip().split()[2:3] == [target]:
+                if _DELEGATION.match(inner.strip()) and inner.strip().split()[2:3] == [
+                    target
+                ]:
                     fail(
                         f"backend/mise.toml's `{target}` delegates to itself; "
                         "the proxy chain has no real command at the end of it."
@@ -141,7 +144,9 @@ def main() -> int:
     #    `mise run` from the repository root, so a task defined only in the
     #    backend file is "task not found" there while working locally.
     for workflow in sorted(WORKFLOWS.glob("*.yml")):
-        for task in sorted(set(_WORKFLOW_INVOCATION.findall(_without_comments(workflow)))):
+        for task in sorted(
+            set(_WORKFLOW_INVOCATION.findall(_without_comments(workflow)))
+        ):
             if task not in root_tasks:
                 fail(
                     f"{workflow.name} invokes `mise run {task}`, which the root "
@@ -151,7 +156,9 @@ def main() -> int:
     # 3. A backend task must not be a bare proxy with nothing behind it.
     for name, body in sorted(backend_tasks.items()):
         if not run_commands(body) and not body.get("depends"):
-            fail(f"backend/mise.toml's `{name}` has neither a command nor dependencies.")
+            fail(
+                f"backend/mise.toml's `{name}` has neither a command nor dependencies."
+            )
 
     if failures:
         print(f"\nmise wiring preflight FAILED with {len(failures)} defect(s).")
