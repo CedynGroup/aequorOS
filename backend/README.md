@@ -491,16 +491,15 @@ The [workflow inventory and stateful-test guide](docs/state_machine_testing.md)
 records transition guards, coverage boundaries, and bounded Hypothesis profiles.
 
 ```bash
-mise run unit         # database-free tests; any database connection fails
-mise run integration  # database/external-service tests on disposable Postgres
-mise run risk-service:test-e2e  # backend Playwright contracts
+mise run risk-service:check      # static lint, type baseline and task wiring; no tests
+mise run risk-service:test       # bounded unit-only local feedback
+mise run risk-service:test --lf  # serial cached unit failures only
 ```
 
-These commands work at the repository root or in `backend/`. Their explicit
-pytest selectors are `-m unit`, `-m integration` and `-m e2e`; unit and integration
-also have `risk-service:test-unit` and `risk-service:test-integration` aliases.
-Install dashboard dependencies with `pnpm install --frozen-lockfile` at the repository
-root before running the e2e suite.
+These commands work at the repository root or in `backend/`. There is no local
+full-suite command or separate suite alias. CI owns the direct pytest commands
+for units, PostgreSQL integration, storage and backend e2e, using `-m unit`,
+`-m integration` and `-m e2e`. Its e2e job installs dashboard dependencies first.
 
 Test placement and suite filename conventions follow the
 [testing standard](../CODEBASE_CONVENTIONS.md#behavior-properties-and-state-machines-backend-and-dashboard).
@@ -543,7 +542,7 @@ contracts. OpenBao runs in its integration shard. Backend Playwright contracts
 have an explicit e2e job beside dashboard journeys. Their runtime and
 zero-skip guards remain independent of filename selection.
 
-A dedicated unit run uses pytest's normal discovery and configured file patterns,
+CI's dedicated unit run uses pytest's normal discovery and configured file patterns,
 excluding integration/e2e filenames before imports. Every selected unit module
 must collect cases; new functions and parameter identities need no catalogue.
 Numeric libraries use one thread per worker to avoid nested OpenMP/BLAS pools.
@@ -569,36 +568,59 @@ membership input, is the expected identity set for the cross-suite aggregate.
 The aggregate compares every execution report against it, including all
 parametrizations, and rejects missing or duplicate cases and wrong-suite owners.
 
-`mise run risk-service:test` remains the combined compatibility run:
+Local feedback uses the [commands above](#run-tests); CI remains the
+complete-suite authority.
 
-```bash
-mise run risk-service:test
-```
+Check's existing stdlib wiring preflight verifies root/backend proxy resolution,
+backend task file placement, workflow-invoked task existence and nonempty tasks.
+It does not execute the architecture tests or claim their coverage; those remain
+runtime units in `test` and CI.
 
-The default test run uses isolated SQLite databases and never touches Postgres —
+Release's workflow-owned unfiltered serial hermetic run uses isolated SQLite databases —
 the suite explicitly neutralizes any `DATABASE_URL` from `.env` (empty env value =
 unconfigured), so a configured remote database cannot leak into tests implicitly.
-For a local feedback loop, run `mise run risk-service:test-fast`. It compares the
-current branch and staged/unstaged edits with the merge base of `origin/main`.
-It reuses CI's conservative affected-module rules described below. When those
-rules cannot narrow the selection, it runs the complete hermetic suite instead.
-Untracked files, a missing base and an empty diff also force this fallback, with
-an explicit message.
-Both modes use four workers and `--dist loadfile` to keep each module's fixtures
-together.
-This profile is local and opt-in; the default test tasks and full main CI stay unchanged.
+The default compares the branch plus staged/unstaged edits with the merge base
+of `origin/main`, reusing CI's conservative affected-module rules below. Safe
+leaf unit-test edits run their modules with `-m unit -n auto --maxprocesses=2
+--dist load`. Unknown, mixed-suite, production, fixture, untracked or missing-base changes
+fall back visibly to **database-free units only**, with the existing refusal guard
+and unit scheduler (`-m unit --suite-only --dist load`, at most two workers).
+An unchanged worktree selects nothing and says so. Neither outcome claims full
+coverage or silently launches the combined suite. Numeric thread counts are one.
+Schema/role, lock and storage owners are never added to parallel local selection.
+
+The same test command accepts `--lf` and runs serially against pytest's actual
+worktree-local failure cache. It intersects the selected units with cached failures:
+an absent cache or only non-selected failures runs no tests (pytest exit5), never
+all units. Integration/e2e modules are excluded before import. CI commands live
+directly in their workflow steps, retaining their service, role and coverage gates.
+No full local milestone run is required; PostgreSQL/service confidence comes from CI.
+
+The profiling trial on frozen revision `8a11cc46` passed the same 509 cases
+serially in 99.808s and with four actual workers in 57.387s: 42.50% lower
+wall time for that cohort, with higher CPU and RSS. This is not a full-suite
+speedup prediction or a current reproduction of the reported 40-minute run.
+The local two-worker cap limits resource use; it is not a measured optimum.
+CI already runs parallel/sharded owners and remains the full-suite authority.
+
+The ranked recommendations are: (1) separate local unit feedback from workflow-owned
+full coverage, using conservative affected selection and bounded parallelism as above;
+(2) investigate application and fixture costs separately; (3) investigate collection
+costs separately. The latter two are future work, not optimizations delivered here.
+
+Testmon is not a dependency of this profile: its coverage SQLite connections
+conflict with the intentional unit database guard, and backend parallel
+cache training was interrupted, so whole-tree adoption was not established. No guard bypass or new dependency selector
+is introduced.
 
 To reuse an existing Postgres service for the gated tests (migrations, RLS),
 provide `TEST_DATABASE_URL` for a dedicated test database, never the primary database.
 Fixtures create disposable `risk_service_test_<hex>` schemas and drop them afterward.
-Schema isolation does not authorize running mutating tests against the primary:
+Schema isolation does not authorize running mutating tests against the primary.
 
-```bash
-TEST_DATABASE_URL=postgresql+psycopg://<test-user>:<password>@<test-host>:<port>/<test-database> \
-  mise run risk-service:test-postgres
-```
-
-Without a supplied URL, the task provisions worktree-local Postgres, using
+CI's direct pytest/native-wrapper commands live in
+[`risk-service.yml`](../.github/workflows/risk-service.yml), not local suite tasks.
+Without a supplied URL outside CI, the wrapper provisions worktree-local Postgres, using
 native PostgreSQL 17 when Docker is unavailable. Set `AQS_LOCAL_SERVICES=native`
 to force that mode. Native MinIO setup, isolation and shutdown are documented
 in the dashboard's [local service guide](dashboard/README.md#local-services-without-docker-or-orbstack).
@@ -614,13 +636,13 @@ The migration chain requires no extensions: `gen_random_uuid()` is built into
 PostgreSQL 17. If a migration adds an extension dependency, install its PostgreSQL
 17 package in that action and verify availability before running migrations.
 
-Run the storage contract suite with `mise run risk-service:test-storage`. Its
-wrapper supplies disposable PostgreSQL for storage integration cases and MinIO
+The workflow-owned storage command uses the native wrapper, which supplies
+disposable PostgreSQL for storage integration cases and MinIO
 for the object-store contract unless `TEST_DATABASE_URL` and `S3_*` settings
 already supply those services. The dedicated CI storage job supplies both and
 rejects any skipped test.
 
-The schema task also supplies MinIO for the document cleanup regression. Each
+The schema workflow command also supplies MinIO for the document cleanup regression. Each
 CI schema shard starts it and creates the document test bucket before pytest;
 the schema aggregate continues to reject every skip.
 
@@ -645,7 +667,7 @@ except key-rotation concurrency, which belongs to locks. The storage job also
 runs for merge groups. A conservative affected-module run excludes only the
 explicitly unselected suite cases from this cross-owner comparison.
 
-The **Unit tests** job runs `risk-service:test-unit`, including database-free
+The **Unit tests** job directly runs `uv run pytest -m unit --suite-only`, including database-free
 architecture guards. Database-using architecture cases run in the integration
 shards.
 
@@ -671,9 +693,10 @@ comments and formatting in those modules, select their affected modules. Changes
 tests, configuration or an uncertain diff select the full suite. Schema/RLS,
 locks, unit and storage gates keep their coverage. The stdlib planner/coverage verifier is
 [`scripts/ci_postgres.py`](scripts/ci_postgres.py); pytest selection is opt-in via
-[`scripts/ci_postgres_plugin.py`](scripts/ci_postgres_plugin.py). Default local test
-tasks continue to run their complete suites; `risk-service:test-fast` uses the
-local profile described above.
+[`scripts/ci_postgres_plugin.py`](scripts/ci_postgres_plugin.py). Dedicated CI
+owners keep their coverage; default local feedback follows the limited profile
+above. Release retains its separate unfiltered serial hermetic verification;
+real PostgreSQL and service coverage remains with CI.
 
 Architecture guards still scan every module and run every check. Their shared
 scanner memoizes immutable facts by source text and import/table context within
@@ -784,14 +807,14 @@ e2e job durations after validation; do not infer wall time from duration weights
   mutating migration tests retain isolated schemas, and `migrated_postgres_schema`
   still verifies the upgrade/downgrade round trip. A test that needs a fresh schema
   is the exception to justify, not the default to reach for.
-  `risk-service:test-postgres-suite` runs under pytest-xdist (`-n 4 --dist loadfile`),
+  CI's remaining-integration command runs under pytest-xdist (`-n 4 --dist loadfile`),
   using at most four workers. Each worker lazily builds its own rollback and
   committing schemas as needed, and a module's tests stay on one worker. CI's
   `--junitxml` output remains a single combined report for the execution-floor guard.
   Two consequences: test ids must be deterministic (xdist refuses to start when workers
   collect different ids, so never put `uuid4()` or set order into a parametrize id), and
   a test may not depend on another module having run first. The separate `tests/db`
-  schema/migration task stays serial to avoid exhausting Postgres' shared DDL lock
+  schema/migration owner stays serial within each shard to avoid exhausting Postgres' shared DDL lock
   table (`max_locks_per_transaction`).
 
 ## Lint And Type Check

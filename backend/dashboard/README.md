@@ -840,12 +840,11 @@ On Linux and other Unix hosts, install the PostgreSQL 17 server binaries, MinIO 
 
 ```bash
 # From the repository root, force native services even if Docker is running:
-AQS_LOCAL_SERVICES=native mise run risk-service:test-postgres-suite
-AQS_LOCAL_SERVICES=native mise run risk-service:test-postgres-schema
-AQS_LOCAL_SERVICES=native mise run risk-service:test-postgres-locks
-AQS_LOCAL_SERVICES=native mise run risk-service:test-storage
 AQS_LOCAL_SERVICES=native pnpm --filter @aequoros/dashboard e2e
 ```
+
+Backend PostgreSQL/schema/lock/storage suites are workflow-owned direct commands
+in [Risk Service CI](../../.github/workflows/risk-service.yml), not local mise aliases.
 
 The default `auto` mode uses Docker when its daemon responds, and falls back
 to native binaries when Docker is absent, stopped, or unreachable. Use

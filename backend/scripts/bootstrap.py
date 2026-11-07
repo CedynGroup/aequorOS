@@ -624,8 +624,7 @@ def _postgres_check(values: Mapping[str, str]) -> Check:
     return Check(
         "PostgreSQL",
         "skip",
-        "unavailable: skipped risk-service:test-postgres*, "
-        "risk-service:test-integration, risk-service:test-storage and dashboard e2e",
+        "unavailable: PostgreSQL-backed CI reproductions and dashboard e2e need a service",
         "start a service with backend/scripts/local_services.py or Docker",
     )
 
@@ -642,7 +641,7 @@ def _storage_check(values: Mapping[str, str]) -> Check:
     return Check(
         "S3/MinIO",
         "skip",
-        "unavailable: skipped risk-service:test-storage and dashboard e2e/e2e:contracts",
+        "unavailable: storage-backed CI reproductions and dashboard e2e/e2e:contracts need MinIO",
         "start MinIO with backend/scripts/local_services.py or Docker",
     )
 
@@ -694,39 +693,33 @@ def capability_checks(root: Path) -> list[Check]:
 
 
 def backend_smoke(root: Path) -> Check:
-    test_path = root / "backend/tests/architecture/test_ci_task_wiring.py"
-    if not test_path.is_file():
+    check_path = root / ".github/scripts/mise_wiring_preflight.py"
+    if not check_path.is_file():
         return Check(
-            "Backend smoke",
+            "Backend wiring",
             "missing",
-            "backend/tests/architecture/test_ci_task_wiring.py is missing",
-            "restore backend/tests/architecture/test_ci_task_wiring.py",
+            ".github/scripts/mise_wiring_preflight.py is missing",
+            "restore .github/scripts/mise_wiring_preflight.py",
         )
     backend = root / "backend"
     python = _installed_python(root)
     if not python.is_file() or not os.access(python, os.X_OK):
         return Check(
-            "Backend smoke", "missing", "installed backend Python unavailable", "mise run setup"
+            "Backend wiring", "missing", "installed backend Python unavailable", "mise run setup"
         )
     code = _stream(
-        [
-            str(python),
-            "-m",
-            "pytest",
-            "-q",
-            test_path.relative_to(backend).as_posix(),
-        ],
+        [str(python), str(check_path)],
         cwd=backend,
         timeout=300,
     )
     if code != 0:
         return Check(
-            "Backend smoke",
+            "Backend wiring",
             "missing",
-            f"{test_path.relative_to(root)} failed (exit {code})",
-            "read the pytest output above; fix the wiring or reinstall dependencies",
+            f"{check_path.relative_to(root)} failed (exit {code})",
+            "read the static preflight output above and fix the task wiring",
         )
-    return Check("Backend smoke", "ok", f"{test_path.relative_to(root)} passed")
+    return Check("Backend wiring", "ok", f"{check_path.relative_to(root)} passed")
 
 
 def frontend_check(root: Path) -> Check:

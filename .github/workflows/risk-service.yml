@@ -39,7 +39,7 @@ name: Risk Service CI
 #   backend-e2e — Backend Playwright contracts; backend/README.md#run-tests
 #   postgres    — aggregate of schema shards and the lock job: migration chain,
 #                 RLS policies, schema defaults, row/advisory locks.
-#                 `risk-service:test-postgres-schema` covers integration cases in tests/db,
+#                 The schema workflow command covers integration cases in tests/db,
 #                 including tests/db/test_tenant_rls_completeness_integration.py — the structural
 #                 guard on tenant isolation.
 #   postgres-suite — the integration aggregate, including exact cross-owner
@@ -315,10 +315,16 @@ jobs:
         run: mise run risk-service:sync
       - name: Unit tests (database connections forbidden)
         env:
+          OMP_NUM_THREADS: "1"
+          OPENBLAS_NUM_THREADS: "1"
+          MKL_NUM_THREADS: "1"
+          NUMEXPR_NUM_THREADS: "1"
+          VECLIB_MAXIMUM_THREADS: "1"
           CI_UNIT_REPORT_DIR: ${{ runner.temp }}/unit-tests
           CI_DATABASE_OBSERVATIONS: ${{ runner.temp }}/unit-tests/database-observations
           PYTEST_ADDOPTS: --junitxml=${{ runner.temp }}/unit-tests/report.xml
-        run: mise run risk-service:test-unit
+        working-directory: backend
+        run: uv run pytest -m unit --suite-only -n auto --dist load --durations=20
       - name: Collect the complete tree for cross-suite coverage
         working-directory: backend
         env:
@@ -353,7 +359,8 @@ jobs:
           CI_E2E_REPORT_DIR: ${{ runner.temp }}/e2e-tests
           CI_DATABASE_OBSERVATIONS: ${{ runner.temp }}/e2e-tests/database-observations
           PYTEST_ADDOPTS: --junitxml=${{ runner.temp }}/e2e-tests/report.xml
-        run: mise run risk-service:test-e2e
+        working-directory: backend
+        run: uv run pytest -m e2e --suite-only
       - name: Upload e2e execution and classification evidence
         if: always()
         uses: actions/upload-artifact@v7
@@ -449,7 +456,8 @@ jobs:
           CI_POSTGRES_REPORT_DIR: ${{ runner.temp }}/pg-schema
           CI_DATABASE_OBSERVATIONS: ${{ runner.temp }}/pg-schema/database-observations
           PYTEST_ADDOPTS: -p scripts.ci_postgres_plugin --junitxml=${{ runner.temp }}/pg-schema/report.xml
-        run: mise run risk-service:test-postgres-schema
+        working-directory: backend
+        run: uv run python scripts/local_services.py run --postgres --storage --role-admin -- uv run pytest -m integration tests/db
       - name: Upload failed schema shard PostgreSQL log
         if: failure()
         uses: actions/upload-artifact@v7
@@ -509,7 +517,8 @@ jobs:
           TEST_DATABASE_URL: ${{ env.POSTGRES_TEST_URL }}
           CI_DATABASE_OBSERVATIONS: ${{ runner.temp }}/pg-locks/database-observations
           PYTEST_ADDOPTS: --junitxml=${{ runner.temp }}/pg-locks/report.xml
-        run: mise run risk-service:test-postgres-locks
+        working-directory: backend
+        run: uv run python scripts/local_services.py run --postgres -- uv run pytest -m integration tests/case/api/test_liquidity_integration.py tests/case/api/test_scenarios_integration.py tests/case/api/test_calculations_integration.py tests/storage/test_key_rotation_concurrency_integration.py
       # Retain the execution floor and require zero skips for the lock owner.
       # The integration aggregate also checks exact cross-owner coverage;
       # ownership and service requirements: backend/README.md#run-tests.
@@ -577,7 +586,8 @@ jobs:
           CI_POSTGRES_REPORT_DIR: ${{ runner.temp }}/pg-suite
           CI_DATABASE_OBSERVATIONS: ${{ runner.temp }}/pg-suite/database-observations
           PYTEST_ADDOPTS: -p scripts.ci_postgres_plugin --junitxml=${{ runner.temp }}/pg-suite/report.xml
-        run: mise run risk-service:test-postgres-suite
+        working-directory: backend
+        run: uv run python scripts/local_services.py run --postgres -- uv run pytest -m integration -n 4 --dist loadfile --ignore=tests/db --ignore=tests/case/api/test_calculations_integration.py --ignore=tests/case/api/test_liquidity_integration.py --ignore=tests/case/api/test_scenarios_integration.py --ignore=tests/storage
       - name: Upload failed suite shard PostgreSQL log
         if: failure()
         uses: actions/upload-artifact@v7
@@ -750,7 +760,8 @@ jobs:
           STORAGE_KMS_KEY_ID: aequoros-key
           CI_DATABASE_OBSERVATIONS: ${{ runner.temp }}/storage-tests/database-observations
           PYTEST_ADDOPTS: --junitxml=${{ runner.temp }}/storage-tests/report.xml
-        run: mise run risk-service:test-storage
+        working-directory: backend
+        run: uv run python scripts/local_services.py run --postgres --storage -- uv run pytest -m integration tests/storage --ignore=tests/storage/test_key_rotation_concurrency_integration.py
       # `--max-skipped 0`: MinIO exercises the object-store contract, and
       # Postgres exercises key-rotation database contracts; locks own concurrency.
       # Missing either dependency must not silently leave its tests unexercised.
@@ -814,7 +825,8 @@ jobs:
         env:
           REAL_DATA_DATABASE_URL: ${{ secrets.REAL_DATA_DATABASE_URL }}
           PYTEST_ADDOPTS: --junitxml=${{ runner.temp }}/real-data.xml
-        run: mise run risk-service:test-real-data
+        working-directory: backend
+        run: uv run pytest tests/market_data tests/api tests/data_engine tests/equivalence tests/features tests/identity tests/icaap tests/irrbb tests/liquidity tests/fx tests/ftp tests/forecasting tests/reporting tests/attestation tests/bi tests/live tests/services
       # Every test in this tier self-skips when REAL_DATA_DATABASE_URL does not
       # resolve, so switching `REAL_DATA_CI_ENABLED` on with a URL that cannot
       # reach the primary would produce a green job covering nothing — the exact

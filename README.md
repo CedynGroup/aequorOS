@@ -243,23 +243,22 @@ risk-service:dev` defaults to `:8001`; pass `PORT=8000`.
 Backend, from the repository root or `backend/`:
 
 ```bash
-mise run risk-service:check          # ruff, basedpyright strict baseline, then the combined hermetic pytest run
-mise run unit                        # database-free tests; any database connection fails
-mise run risk-service:test-postgres  # pytest against a disposable local Postgres, or your TEST_DATABASE_URL
-mise run integration                 # database and storage tests on local or supplied test services
-mise run risk-service:test-e2e       # backend Playwright contracts
+mise run risk-service:check       # static Ruff, strict type baseline and task wiring; no tests
+mise run risk-service:test        # bounded unit-only feedback; any database connection fails
+mise run risk-service:test --lf   # serial cached unit failures; no full-unit fallback
 ```
 
-The hermetic default runs on SQLite with row-level security switched off, so a
-green run is **not** evidence about Postgres. Boolean server defaults, String-vs-UUID
-comparisons, row locks and RLS policies all behave differently there. The
-Postgres-gated suites opt in through `TEST_DATABASE_URL`, which must name a
-dedicated test database. See the backend's
+Local unit feedback refuses all database connections, including SQLite. CI owns
+the full unit, PostgreSQL integration, storage and backend e2e suites directly in
+its workflow steps. Release verification retains its unfiltered serial hermetic
+run, not a newly provisioned service stack. SQLite compatibility is **not**
+evidence about Postgres: server defaults, locks and RLS differ. The service suites
+use `TEST_DATABASE_URL`, which must name a dedicated test database. See the backend's
 [test database guide](backend/README.md#test-databases-and-the-primary-database)
 for schema isolation and parallel execution. Task definitions are in
 `backend/mise.toml`.
 
-In default `auto` mode outside CI, the Postgres and storage tasks provision local
+In default `auto` mode outside CI, the service wrapper provisions local
 services unless `TEST_DATABASE_URL` or `S3_ENDPOINT` supplies the respective
 service. Supplied URLs are reused even without Docker and must point to dedicated
 test services; CI bypasses automatic provisioning. Without Docker, provisioned
@@ -273,7 +272,6 @@ brew install postgresql@17 homebrew/core/minio
 # Linux: install the PostgreSQL 17 server binaries, MinIO and lsof, then point at them
 export AQS_POSTGRES_BIN=/usr/lib/postgresql/17/bin   # adjust to your PostgreSQL 17 bin directory
 
-AQS_LOCAL_SERVICES=native mise run risk-service:test-postgres-suite
 AQS_LOCAL_SERVICES=native pnpm --filter @aequoros/dashboard e2e
 ```
 

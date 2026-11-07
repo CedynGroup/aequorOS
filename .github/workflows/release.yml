@@ -33,7 +33,14 @@ jobs:
       - name: Verify source quality
         run: mise run risk-service:lint && mise run risk-service:typecheck
       - name: Verify hermetic test suite
-        run: mise run risk-service:test
+        working-directory: backend
+        env:
+          OMP_NUM_THREADS: "1"
+          OPENBLAS_NUM_THREADS: "1"
+          MKL_NUM_THREADS: "1"
+          NUMEXPR_NUM_THREADS: "1"
+          VECLIB_MAXIMUM_THREADS: "1"
+        run: uv run pytest -n 0
       - name: Verify generated API client freshness
         run: mise run risk-service:api-fresh
 

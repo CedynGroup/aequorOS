@@ -933,7 +933,7 @@ handler marks a newer job succeeded with `progress={"status":"skipped",...}`.
   green Postgres run is not evidence of this** — an RLS test self-skips at exit 0 when the
   `TEST_DATABASE_URL` role bypasses RLS or when `TEST_DATABASE_URL` is not exported, and
   privilege proofs need `CREATEROLE`. Check that the intended RLS and privilege proofs
-  actually ran. `risk-service:test-postgres-schema` requires the privilege proofs to run;
+  actually ran. The CI schema command requires the privilege proofs to run;
   local and supplied-service role preparation is owned by the
   [database role handoff](docs/ops/database-roles.md#migration-and-local-development-order).
   See [test database setup](backend/README.md#run-tests).
@@ -1175,18 +1175,18 @@ sidecar; merged 2026-07 so all seven capability modules live in one deployable).
 
 ## 8. Validation commands
 
-| Target                   | Commands                                                                                                                                                                                                                                                                                                                          |
-| ------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| risk-service (all)       | `cd backend && uv run pytest` · `uv run ruff check .` · `uv run python scripts/type_check_baseline.py check` — or one shot: `mise run risk-service:check`                                                                                                                                                                         |
-| risk-service unit        | `mise run unit` — database connections refused; explicit `-m unit` selector                                                                                                                                                                                                                                                       |
-| risk-service integration | `mise run integration` — disposable Postgres and local service prerequisites; explicit `-m integration` selector                                                                                                                                                                                                                  |
-| risk-service vs Postgres | `mise run risk-service:test-postgres` (reuses `TEST_DATABASE_URL` or provisions an isolated local service); see the [local-service guide](backend/dashboard/README.md#local-services-without-docker-or-orbstack)                                                                                                                  |
-| risk-service migrations  | `mise run risk-service:migrate` (needs `DATABASE_URL`); new revision: `mise run risk-service:revision "message"`                                                                                                                                                                                                                  |
-| dashboard                | `pnpm --filter @aequoros/dashboard typecheck` · `lint` · `test` · `build` · `e2e` · `e2e:contracts` (production build includes the [bundle deferral guard](backend/dashboard/README.md#nextjs-16-runtime-conventions); see [dashboard E2E guidance](backend/dashboard/README.md#end-to-end-playwright) for storage prerequisites) |
-| marketing                | `pnpm --filter @aequoros/frontend lint` · `build`                                                                                                                                                                                                                                                                                 |
-| operator console         | `pnpm --filter @aequoros/console typecheck` · `lint` · `test` · `build`                                                                                                                                                                                                                                                           |
-| generated client         | `pnpm --filter @aequoros/risk-service-api test` (and `type-check`)                                                                                                                                                                                                                                                                |
-| client regen + freshness | `mise run risk-service:openapi-client` then `mise run risk-service:api-fresh` (must leave git clean)                                                                                                                                                                                                                              |
+| Target                        | Commands                                                                                                                                                                                                                                                                                                                          |
+| ----------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| risk-service static           | `mise run risk-service:check` — Ruff, strict type baseline and stdlib task wiring; no test execution                                                                                                                                                                                                                              |
+| risk-service unit feedback    | `mise run risk-service:test` — conservative affected units or guarded full-unit fallback, max2 workers; `mise run risk-service:test --lf` for serial cached unit failures                                                                                                                                                         |
+| risk-service service coverage | Direct workflow-owned unit, PostgreSQL integration, storage and backend e2e commands in `.github/workflows/risk-service.yml`                                                                                                                                                                                                      |
+| risk-service release          | Unfiltered serial hermetic verification in `.github/workflows/release.yml`; PostgreSQL/service authority stays in CI                                                                                                                                                                                                              |
+| risk-service migrations       | `mise run risk-service:migrate` (needs `DATABASE_URL`); new revision: `mise run risk-service:revision "message"`                                                                                                                                                                                                                  |
+| dashboard                     | `pnpm --filter @aequoros/dashboard typecheck` · `lint` · `test` · `build` · `e2e` · `e2e:contracts` (production build includes the [bundle deferral guard](backend/dashboard/README.md#nextjs-16-runtime-conventions); see [dashboard E2E guidance](backend/dashboard/README.md#end-to-end-playwright) for storage prerequisites) |
+| marketing                     | `pnpm --filter @aequoros/frontend lint` · `build`                                                                                                                                                                                                                                                                                 |
+| operator console              | `pnpm --filter @aequoros/console typecheck` · `lint` · `test` · `build`                                                                                                                                                                                                                                                           |
+| generated client              | `pnpm --filter @aequoros/risk-service-api test` (and `type-check`)                                                                                                                                                                                                                                                                |
+| client regen + freshness      | `mise run risk-service:openapi-client` then `mise run risk-service:api-fresh` (must leave git clean)                                                                                                                                                                                                                              |
 
 All `mise run risk-service:*` tasks work from the repo root or from `backend`.
 
@@ -1205,7 +1205,10 @@ the regulatory fail-open guard and the browser-runtime SSRF guard were unenforce
 Each workflow carries its own gate inventory in a header comment; keep it accurate when you
 add a step.
 
-The combined SQLite compatibility run remains available as `mise run risk-service:test`.
+`risk-service:check` is static-only; its wiring preflight checks task resolution,
+not runtime architecture behavior. `risk-service:test` is unit-only, including `--lf`.
+There is no local full-suite command. CI and release own their direct suite commands,
+with the existing service, role, report and coverage gates retained.
 The [backend test guide](backend/README.md#run-tests) owns unit/integration/e2e
 classification, service prerequisites and CI execution ownership.
 

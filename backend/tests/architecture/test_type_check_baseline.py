@@ -78,16 +78,13 @@ def test_basedpyright_is_configured_strict() -> None:
     assert config["exclude"] == [".venv"]
 
 
-@pytest.mark.parametrize("task_name", ["risk-service:typecheck", "risk-service:smoke"])
 @pytest.mark.parametrize("check_exit", [0, 1])
-def test_the_typecheck_gate_runs_the_baseline_check(
-    tmp_path: Path, task_name: str, check_exit: int
-) -> None:
+def test_the_typecheck_gate_runs_the_baseline_check(tmp_path: Path, check_exit: int) -> None:
     """Execute the configured task bodies and observe invocation and failure propagation."""
     tasks = TypeAdapter(_MiseFile).validate_python(
         tomllib.loads((BACKEND / "mise.toml").read_text(encoding="utf-8"))
     )["tasks"]
-    run = tasks[task_name].get("run")
+    run = tasks["risk-service:typecheck"].get("run")
     assert run is not None
     commands = [run] if isinstance(run, str) else run
     invocations = tmp_path / "invocations.jsonl"

@@ -7,13 +7,57 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import subprocess
 import sys
 from pathlib import Path
 
 import pytest
 
+from tests.architecture import test_ci_postgres as ci_commands
 from tests.architecture.test_test_suites import BACKEND, standalone_contracts
+
+selection_repo = ci_commands.selection_repo
+task_checkout = ci_commands.task_checkout
+
+
+@pytest.mark.parametrize("last_failed", [False, True])
+def test_public_unit_command_refuses_database_access_before_module_import(
+    task_checkout: tuple[Path, dict[str, str], Path], last_failed: bool
+) -> None:
+    root, environment, _trace = task_checkout
+    mise = shutil.which("mise")
+    assert mise is not None
+    command = [mise, "run", "risk-service:test"]
+    unit = root / "backend/tests/credit/domain/test_unit_probe.py"
+    if last_failed:
+        unit.write_text(unit.read_text().replace("assert True", "assert False"))
+        seeded = subprocess.run(
+            command,
+            cwd=root,
+            env=environment,
+            capture_output=True,
+            text=True,
+            timeout=60,
+            check=False,
+        )
+        assert seeded.returncode == 1, seeded.stdout + seeded.stderr
+        command.append("--lf")
+    unit.write_text(
+        "import sqlite3\nsqlite3.connect('forbidden.db')\ndef test_unit_probe():\n    assert True\n"
+    )
+    result = subprocess.run(
+        command,
+        cwd=root,
+        env=environment,
+        capture_output=True,
+        text=True,
+        timeout=60,
+        check=False,
+    )
+    assert result.returncode != 0, result.stdout + result.stderr
+    assert "Database connections are forbidden in unit tests" in result.stdout + result.stderr
+    assert not (root / "backend/forbidden.db").exists()
 
 
 @pytest.mark.parametrize(

@@ -42,111 +42,8 @@ description = "Run the BI mart worker (the bi lane only — mart refresh, backfi
 run = "WORKER_JOB_TYPES=lane:bi RUN_INPROCESS_WORKER=0 uv run python -m app.worker"
 
 [tasks."risk-service:test"]
-description = "Run pytest"
-run = "uv run pytest"
-
-[tasks."risk-service:test-fast"]
-description = "Run conservative affected-module tests locally with four workers"
+description = "Run bounded unit-only feedback; add --lf for cached unit failures"
 run = "uv run python -m scripts.test_fast"
-
-[tasks."risk-service:test-postgres"]
-description = "Run pytest against local Postgres (native fallback or Docker)"
-run = "uv run python scripts/local_services.py run --postgres --role-admin -- uv run pytest"
-
-[tasks."risk-service:test-postgres-migrations"]
-description = "Run Postgres-backed Alembic migration tests (local or supplied TEST_DATABASE_URL)"
-run = "uv run python scripts/local_services.py run --postgres --role-admin -- uv run pytest tests/db/test_postgres_migrations.py tests/db/test_postgres_migrations_integration.py tests/db/test_integration_key_migration_integration.py"
-
-# The concurrency tests guard row locks and advisory locks, which SQLite cannot
-# express — they self-skip ("PostgreSQL row locks are required for concurrency
-# coverage") on the hermetic run. Until 2026-07-31 CI passed TEST_DATABASE_URL
-# only to the migrations task, so these ran in NO environment: green locally
-# because skipped, green in CI because never invoked. Running them found a
-# Boolean column with an integer server_default that made CREATE TABLE fail on
-# Postgres outright, plus four tests comparing the String(40) audit_events.
-# entity_id against UUID objects. The task wrapper supplies TEST_DATABASE_URL
-# locally when one is not already exported.
-[tasks."risk-service:test-postgres-locks"]
-description = "Run the Postgres-only concurrency tests (local or supplied TEST_DATABASE_URL)"
-run = "uv run python scripts/local_services.py run --postgres -- uv run pytest -m integration tests/case/api/test_liquidity_integration.py tests/case/api/test_scenarios_integration.py tests/case/api/test_calculations_integration.py tests/storage/test_key_rotation_concurrency_integration.py"
-
-[tasks.unit]
-description = "Run database-free unit tests with database connections refused"
-run = "uv run pytest -m unit --suite-only -n auto --dist load --durations=20"
-# Independent pytest workers own parallelism; numeric libraries must not each
-# create another runner-wide pool while several ML cases fit concurrently.
-env = { OMP_NUM_THREADS = "1", OPENBLAS_NUM_THREADS = "1", MKL_NUM_THREADS = "1", NUMEXPR_NUM_THREADS = "1", VECLIB_MAXIMUM_THREADS = "1" }
-
-[tasks.integration]
-description = "Run integration tests against disposable local Postgres"
-run = "uv run python scripts/local_services.py run --postgres --storage --role-admin -- uv run pytest -m integration"
-
-[tasks."risk-service:test-unit"]
-description = "Run the unit suite"
-depends = ["unit"]
-
-[tasks."risk-service:test-e2e"]
-description = "Run backend Playwright e2e contracts"
-run = "uv run pytest -m e2e --suite-only"
-
-[tasks."risk-service:test-integration"]
-description = "Run the integration suite"
-depends = ["integration"]
-
-# Compatibility path selector, including explicit SQLite contract checks.
-# Use unit for database-free guards; integration owns database-using cases.
-[tasks."risk-service:test-architecture"]
-description = "Run the architecture, dependency-boundary and migration-guard tests"
-run = "uv run pytest tests/architecture tests/db/test_bog_return_recode_migration.py tests/db/test_bog_return_recode_migration_integration.py"
-
-# Schema-level truth: the migration chain, the RLS policies it installs, and the
-# server defaults. RLS exists ONLY in migrations (the hermetic suite builds its
-# schema with Base.metadata.create_all), so this is the only place row-level
-# security is exercised at all. The task wrapper supplies TEST_DATABASE_URL
-# locally when one is not already exported.
-[tasks."risk-service:test-postgres-schema"]
-description = "Run the Postgres schema, migration and RLS suites (local or supplied TEST_DATABASE_URL)"
-run = "uv run python scripts/local_services.py run --postgres --storage --role-admin -- uv run pytest -m integration tests/db"
-
-# Integration siblings own schema, lock and storage cases; markers exclude unit cases.
-# Keep loadfile: OpenBao tests reconfigure shared AppRoles on one worker.
-[tasks."risk-service:test-postgres-suite"]
-description = "Run the remaining integration suite in four Postgres workers"
-run = "uv run python scripts/local_services.py run --postgres -- uv run pytest -m integration -n 4 --dist loadfile --ignore=tests/db --ignore=tests/case/api/test_calculations_integration.py --ignore=tests/case/api/test_liquidity_integration.py --ignore=tests/case/api/test_scenarios_integration.py --ignore=tests/storage"
-
-# The legacy opt-in regulatory/attestation/auth/vendor API surface requires
-# REAL_DATA_DATABASE_URL; without it these tests skip. Database selection and
-# primary access follow README.md#test-databases-and-the-primary-database.
-#
-# The path list omitted tests/adapters and tests/equivalence until 2026-08-22,
-# so three modules — including the regulatory report/forecast run-parity suites
-# — were unreachable even WITH the URL set, and their 23 tests could never run
-# anywhere. `tests/architecture/test_ci_task_wiring.py` now derives the required
-# paths from the `requires_real_data` marker, so the list cannot fall behind a
-# new module again.
-#
-# `-m 'not slow'` was removed in the same change: the repository defines no
-# `slow` marker and nothing is marked with one, so the filter selected
-# everything while implying a tier that does not exist.
-[tasks."risk-service:test-real-data"]
-description = "Run the opt-in real-data API suite; requires REAL_DATA_DATABASE_URL"
-run = "uv run pytest tests/market_data tests/api tests/data_engine tests/equivalence tests/features tests/identity tests/icaap tests/irrbb tests/liquidity tests/fx tests/ftp tests/forecasting tests/reporting tests/attestation tests/bi tests/live tests/services"
-
-# Storage suite execution and CI service setup: README.md#run-tests.
-#
-# Two sharp edges, both found by running it:
-#   * the KMS key MUST be named `aequoros-key` — the SSE-KMS assertion pins that
-#     literal against the returned `SSEKMSKeyId`;
-#   * export STORAGE_RETIRE_AFTER for the configured MVP client. The pure config
-#     test deletes it before asserting that a missing date is refused.
-#
-# The task wrapper supplies a disposable Postgres database for storage integration
-# cases, plus S3_ENDPOINT, credentials and STORAGE_KMS_KEY_ID from local
-# MinIO when the corresponding test services are not already supplied outside CI.
-# Key-rotation concurrency belongs to risk-service:test-postgres-locks.
-[tasks."risk-service:test-storage"]
-description = "Run the storage contract suite against Postgres and S3-compatible storage"
-run = "uv run python scripts/local_services.py run --postgres --storage -- uv run pytest -m integration tests/storage --ignore=tests/storage/test_key_rotation_concurrency_integration.py"
 
 [tasks."risk-service:lint"]
 description = "Run Ruff checks"
@@ -164,8 +61,9 @@ description = "Run the BasedPyright strict type-check baseline"
 run = "uv run python scripts/type_check_baseline.py check"
 
 [tasks."risk-service:check"]
-description = "Run lint, typecheck, and tests"
-depends = ["risk-service:lint", "risk-service:typecheck", "risk-service:test"]
+description = "Run static lint, types and task-wiring contracts; no tests"
+depends = ["risk-service:lint", "risk-service:typecheck"]
+run = "python3 ../.github/scripts/mise_wiring_preflight.py"
 
 [tasks."risk-service:openapi-schema"]
 description = "Generate OpenAPI schema"
@@ -226,12 +124,3 @@ run = '''
 #!/usr/bin/env bash
 uv run alembic revision --autogenerate -m "${usage_message?}"
 '''
-
-[tasks."risk-service:smoke"]
-description = "Run local smoke checks that do not require Postgres"
-depends = ["risk-service:sync"]
-run = [
-  "uv run ruff check .",
-  "uv run python scripts/type_check_baseline.py check",
-  "uv run pytest",
-]

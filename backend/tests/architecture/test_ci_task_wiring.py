@@ -14,7 +14,6 @@ convention.
 
 from __future__ import annotations
 
-import ast
 import json
 import os
 import re
@@ -159,7 +158,7 @@ def test_every_backend_task_ends_in_something_runnable() -> None:
 def test_the_wiring_is_also_guarded_outside_the_task_system() -> None:
     """This module cannot be the only guard, because reaching it needs a proxy.
 
-    `risk-service:test-architecture` is one of the tasks that recurses when
+    `risk-service:test` is one of the tasks that recurses when
     `backend/mise.toml` goes missing, so on the day the file moved this file was
     unreachable — a guard that only runs when the thing it guards is healthy.
     `.github/scripts/mise_wiring_preflight.py` asserts the same invariant in
@@ -251,13 +250,38 @@ def test_the_backend_gates_ci_must_run_are_all_defined() -> None:
         "risk-service:lint",
         "risk-service:typecheck",
         "risk-service:test",
-        "risk-service:test-postgres",
-        "risk-service:test-postgres-migrations",
-        "risk-service:test-postgres-locks",
+        "risk-service:check",
         "risk-service:api-fresh",
     }
 
     assert required <= set(_tasks(ROOT_TASKS))
+
+
+def _ci_pytest(job_name: str) -> tuple[list[str], dict[str, object]]:
+    """Read executable direct commands, not labels, comments or echoed strings."""
+    document = cast(
+        dict[str, dict[str, dict[str, object]]],
+        yaml.safe_load((WORKFLOWS / "risk-service.yml").read_text()),
+    )
+    matches: list[tuple[list[str], dict[str, object]]] = []
+    for step in cast(list[dict[str, object]], document["jobs"][job_name]["steps"]):
+        script = step.get("run")
+        if not isinstance(script, str):
+            continue
+        tokens = shlex.split(script, comments=True)
+        direct = tokens[:3] == ["uv", "run", "pytest"]
+        native = tokens[:5] == ["uv", "run", "python", "scripts/local_services.py", "run"]
+        if native and "--" in tokens:
+            index = tokens.index("--") + 1
+            direct = tokens[index : index + 3] == ["uv", "run", "pytest"]
+        if not direct or "--collect-only" in tokens:
+            continue
+        assert step.get("working-directory") == "backend"
+        assert "if" not in step and not step.get("continue-on-error", False)
+        assert not any(token in {";", "&&", "||", "|"} for token in tokens)
+        matches.append((tokens, step))
+    assert len(matches) == 1, f"{job_name} must execute exactly one direct pytest suite"
+    return matches[0]
 
 
 def test_ci_actually_runs_every_required_gate() -> None:
@@ -265,35 +289,211 @@ def test_ci_actually_runs_every_required_gate() -> None:
     required = {
         "risk-service:lint",
         "risk-service:typecheck",
-        "risk-service:test-unit",
-        # Supersedes test-postgres-migrations: the same chain plus the RLS
-        # policies and server defaults it installs.
-        "risk-service:test-postgres-schema",
-        "risk-service:test-postgres-locks",
-        # The duplicate hermetic SQLite suite was retired from CI; the full
-        # suite runs on Postgres, while risk-service:test remains local-only.
-        # SQLite is not production confidence: the hermetic schema is built by
-        # Base.metadata.create_all and has no row-level security at all.
-        "risk-service:test-postgres-suite",
         "risk-service:api-fresh",
     }
-
     assert required <= invoked, f"Not gated in CI: {sorted(required - invoked)}"
+    for job, marker in (
+        ("architecture", "unit"),
+        ("backend-e2e", "e2e"),
+        ("postgres-schema", "integration"),
+        ("postgres-locks", "integration"),
+        ("postgres-shard", "integration"),
+        ("storage", "integration"),
+    ):
+        tokens, _step = _ci_pytest(job)
+        assert tokens[tokens.index("-m") + 1] == marker, job
+    _ = _ci_pytest("real-data")
+
+
+@pytest.mark.parametrize(
+    ("job", "services"),
+    [
+        ("postgres-schema", ["--postgres", "--storage", "--role-admin"]),
+        ("postgres-locks", ["--postgres"]),
+        ("postgres-shard", ["--postgres"]),
+        ("storage", ["--postgres", "--storage"]),
+    ],
+)
+def test_direct_ci_commands_preserve_service_and_report_owners(
+    job: str, services: list[str]
+) -> None:
+    tokens, step = _ci_pytest(job)
+    separator = tokens.index("--")
+    assert tokens[:separator] == [
+        "uv",
+        "run",
+        "python",
+        "scripts/local_services.py",
+        "run",
+        *services,
+    ]
+    assert tokens[separator + 1 : separator + 4] == ["uv", "run", "pytest"]
+    assert not {"--lf", "--suite-only", "--collect-only"}.intersection(tokens)
+    environment = cast(dict[str, str], step["env"])
+    assert environment["TEST_DATABASE_URL"] == "${{ env.POSTGRES_TEST_URL }}"
+    assert "CI_DATABASE_OBSERVATIONS" in environment
+    assert "--junitxml=" in environment["PYTEST_ADDOPTS"]
+    if job in {"postgres-schema", "postgres-shard"}:
+        assert shlex.split(environment["PYTEST_ADDOPTS"])[:2] == [
+            "-p",
+            "scripts.ci_postgres_plugin",
+        ]
+        assert environment["CI_POSTGRES_SHARD"] == "${{ matrix.shard }}"
+        assert "CI_POSTGRES_FILES" in environment
+        assert "CI_POSTGRES_REPORT_DIR" in environment
+    if job == "postgres-schema":
+        assert environment["POSTGRES_PRIVILEGE_TESTS_REQUIRED"] == "1"
+        assert environment["CI_POSTGRES_SUITE"] == "schema"
+        assert environment["CI_POSTGRES_FILES"] == "[]"
+
+
+def _assert_serial_ci_owner(job: str) -> None:
+    tokens, step = _ci_pytest(job)
+    arguments = tokens[tokens.index("pytest") + 1 :]
+    environment = {
+        **os.environ,
+        "PYTEST_DISABLE_PLUGIN_AUTOLOAD": "1",
+        **cast(dict[str, str], step["env"]),
+    }
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            "import json, sys; from _pytest.config import _prepareconfig; "
+            "config = _prepareconfig(sys.argv[1:]); "
+            "print(json.dumps(config.getoption('numprocesses')))",
+            "-p",
+            "xdist.plugin",
+            "--noconftest",
+            *arguments,
+        ],
+        cwd=REPO_ROOT / "backend",
+        env=environment,
+        text=True,
+        capture_output=True,
+        check=True,
+    )
+    assert json.loads(result.stdout) in (None, 0), job
+
+
+@pytest.mark.parametrize("job", ["postgres-schema", "postgres-locks", "storage"])
+def test_ci_serial_owners_resolve_to_no_workers(job: str) -> None:
+    """Schema, lock and storage owners require serial execution."""
+    _assert_serial_ci_owner(job)
+
+
+@pytest.mark.parametrize("job", ["postgres-schema", "postgres-locks", "storage"])
+@pytest.mark.parametrize("source", ["command", "environment", "configuration"])
+@pytest.mark.parametrize("option", ["--numprocesses=4", "--numprocesses 4"])
+def test_serial_owner_guard_rejects_parallel_configuration(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, job: str, source: str, option: str
+) -> None:
+    document = cast(
+        dict[str, dict[str, dict[str, object]]],
+        yaml.safe_load((WORKFLOWS / "risk-service.yml").read_text()),
+    )
+    _tokens, target = _ci_pytest(job)
+    steps = cast(list[dict[str, object]], document["jobs"][job]["steps"])
+    step = next(step for step in steps if step == target)
+    if source == "command":
+        step["run"] = cast(str, step["run"]) + " " + option
+    elif source == "configuration":
+        step["run"] = cast(str, step["run"]) + " -o " + shlex.quote("addopts=" + option)
+    else:
+        environment = cast(dict[str, str], step["env"])
+        environment["PYTEST_ADDOPTS"] += " " + option
+    _ = (tmp_path / "risk-service.yml").write_text(yaml.safe_dump(document))
+    monkeypatch.setitem(globals(), "WORKFLOWS", tmp_path)
+    with pytest.raises(AssertionError, match=job):
+        _assert_serial_ci_owner(job)
+
+
+@pytest.mark.parametrize(
+    "job",
+    [
+        "architecture",
+        "backend-e2e",
+        "postgres-schema",
+        "postgres-locks",
+        "postgres-shard",
+        "storage",
+        "real-data",
+    ],
+)
+def test_removing_a_ci_suite_fails_the_gate(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, job: str
+) -> None:
+    document = cast(
+        dict[str, dict[str, dict[str, object]]],
+        yaml.safe_load((WORKFLOWS / "risk-service.yml").read_text()),
+    )
+    _tokens, target = _ci_pytest(job)
+    steps = cast(list[dict[str, object]], document["jobs"][job]["steps"])
+    steps[:] = [step for step in steps if step != target]
+    _ = (tmp_path / "risk-service.yml").write_text(yaml.safe_dump(document))
+    monkeypatch.setitem(globals(), "WORKFLOWS", tmp_path)
+    with pytest.raises(AssertionError, match=job):
+        test_ci_actually_runs_every_required_gate()
+
+
+def test_release_verification_runs_the_full_hermetic_suite() -> None:
+    """Release publication must depend on an unconditional full-suite command."""
+    document = cast(
+        dict[str, dict[str, dict[str, object]]],
+        yaml.load((WORKFLOWS / "release.yml").read_text(), Loader=yaml.BaseLoader),
+    )
+    assert document["on"]["push"]["tags"] == ["v*"]
+    jobs = document["jobs"]
+    assert "verify" in _needs(jobs["publish-risk-service"])
+    verify = jobs["verify"]
+    assert "if" not in verify
+    assert verify.get("continue-on-error", "false") == "false"
+    steps = cast(list[dict[str, object]], verify["steps"])
+    suite = next(step for step in steps if step.get("name") == "Verify hermetic test suite")
+    assert "if" not in suite
+    assert suite.get("continue-on-error", "false") == "false"
+    assert suite["working-directory"] == "backend"
+    assert shlex.split(cast(str, suite["run"])) == ["uv", "run", "pytest", "-n", "0"]
+    environment = cast(dict[str, str], suite["env"])
+    for variable in (
+        "OMP_NUM_THREADS",
+        "OPENBLAS_NUM_THREADS",
+        "MKL_NUM_THREADS",
+        "NUMEXPR_NUM_THREADS",
+        "VECLIB_MAXIMUM_THREADS",
+    ):
+        assert environment[variable] == "1"
+
+
+def test_local_feedback_cannot_satisfy_release_full_suite_verification(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    document = cast(
+        dict[str, dict[str, dict[str, object]]],
+        yaml.load((WORKFLOWS / "release.yml").read_text(), Loader=yaml.BaseLoader),
+    )
+    steps = cast(list[dict[str, object]], document["jobs"]["verify"]["steps"])
+    suite = next(step for step in steps if step.get("name") == "Verify hermetic test suite")
+    suite["run"] = "uv run pytest -n 0 -m unit"
+    _ = (tmp_path / "release.yml").write_text(yaml.safe_dump(document))
+    monkeypatch.setitem(globals(), "WORKFLOWS", tmp_path)
+    with pytest.raises(AssertionError):
+        test_release_verification_runs_the_full_hermetic_suite()
 
 
 @pytest.mark.parametrize(
     ("script", "expected"),
     [
-        ("mise run risk-service:test-unit", {"risk-service:test-unit"}),
-        ('mise run "risk-service:test-unit" # gate', {"risk-service:test-unit"}),
+        ("mise run risk-service:test", {"risk-service:test"}),
+        ('mise run "risk-service:test" # gate', {"risk-service:test"}),
         (
             "mise run risk-service:lint && mise run risk-service:typecheck",
             {"risk-service:lint", "risk-service:typecheck"},
         ),
-        ('echo "mise run risk-service:test-unit"', set[str]()),
-        ("# mise run risk-service:test-unit", set[str]()),
-        ("mise run risk-service:lint && echo mise run risk-service:test-unit", set[str]()),
-        ("mise run risk-service:lint '&&' mise run risk-service:test-unit", set[str]()),
+        ('echo "mise run risk-service:test"', set[str]()),
+        ("# mise run risk-service:test", set[str]()),
+        ("mise run risk-service:lint && echo mise run risk-service:test", set[str]()),
+        ("mise run risk-service:lint '&&' mise run risk-service:test", set[str]()),
     ],
 )
 def test_workflow_task_invocations_follow_executable_commands(
@@ -313,18 +513,19 @@ def test_echoing_the_unit_command_does_not_satisfy_the_gate(
         dict[str, dict[str, dict[str, object]]],
         yaml.safe_load((WORKFLOWS / "risk-service.yml").read_text()),
     )
+    _tokens, target = _ci_pytest("architecture")
     for step in cast(list[dict[str, object]], document["jobs"]["architecture"]["steps"]):
-        if step.get("run") == "mise run risk-service:test-unit":
-            step["run"] = 'echo "mise run risk-service:test-unit"'
+        if step == target:
+            step["run"] = "echo " + shlex.quote(cast(str, step["run"]))
     _ = (tmp_path / "risk-service.yml").write_text(yaml.safe_dump(document))
     monkeypatch.setitem(globals(), "WORKFLOWS", tmp_path)
-    with pytest.raises(AssertionError, match="risk-service:test-unit"):
+    with pytest.raises(AssertionError, match="architecture"):
         test_ci_actually_runs_every_required_gate()
 
 
-def test_unit_suite_task_and_ci_job_are_explicit() -> None:
-    tasks = _tasks(BACKEND_TASKS)
-    assert shlex.split(cast(str, tasks["unit"]["run"])) == [
+def test_unit_suite_command_and_ci_job_are_explicit() -> None:
+    tokens, unit = _ci_pytest("architecture")
+    assert tokens == [
         "uv",
         "run",
         "pytest",
@@ -344,8 +545,16 @@ def test_unit_suite_task_and_ci_job_are_explicit() -> None:
     job = document["jobs"]["architecture"]
     assert job["name"] == "Unit tests"
     steps = cast(list[dict[str, object]], job["steps"])
-    unit = next(step for step in steps if step.get("run") == "mise run risk-service:test-unit")
-    assert "CI_UNIT_REPORT_DIR" in cast(dict[str, str], unit["env"])
+    environment = cast(dict[str, str], unit["env"])
+    assert "CI_UNIT_REPORT_DIR" in environment
+    for variable in (
+        "OMP_NUM_THREADS",
+        "OPENBLAS_NUM_THREADS",
+        "MKL_NUM_THREADS",
+        "NUMEXPR_NUM_THREADS",
+        "VECLIB_MAXIMUM_THREADS",
+    ):
+        assert environment[variable] == "1"
     assert not any("setup-postgres" in str(step.get("uses", "")) for step in steps)
     assert job["if"] == "needs.preflight.outputs.guards == 'true'"
     assert document["jobs"]["postgres-suite"]["name"] == "Integration tests"
@@ -358,89 +567,12 @@ def test_unit_suite_task_and_ci_job_are_explicit() -> None:
 # --------------------------------------------------------------------------
 
 TESTS = Path(__file__).parents[1]
-_REAL_DATA_TASK = "risk-service:test-real-data"
 _PYTEST_PATHS = re.compile(r"(?:^|\s)(tests/[A-Za-z0-9_./-]*)")
 
 
-def _real_data_modules() -> set[Path]:
-    """Test modules gated on ``requires_real_data``.
-
-    By IMPORT, not by substring: a file that merely mentions the marker — this
-    one names it in order to look for it — is not gated on it. The same
-    distinction the boundary and RLS guards had to learn.
-    """
-    found: set[Path] = set()
-    for path in sorted(TESTS.rglob("test_*.py")):
-        if "__pycache__" in path.parts:
-            continue
-        tree = ast.parse(path.read_text())
-        imports_marker = any(
-            isinstance(node, ast.ImportFrom)
-            and any(alias.name == "requires_real_data" for alias in node.names)
-            for node in ast.walk(tree)
-        )
-        if imports_marker:
-            found.add(path.relative_to(TESTS.parent))
-    return found
-
-
-def _task_paths(name: str) -> list[str]:
-    body = _tasks(BACKEND_TASKS)[name]
-    return [match for command in _run_commands(body) for match in _PYTEST_PATHS.findall(command)]
-
-
-def test_the_real_data_task_can_actually_reach_every_real_data_test() -> None:
-    """Audit finding D3 (2026-08-22).
-
-    `risk-service:test-real-data` ran `tests/api tests/features tests/services`
-    while three opt-in modules lived elsewhere:
-    `tests/market_data/adapters/manual_upload/test_api_integration.py` and both
-    `tests/equivalence/` run-parity suites. Twenty-three tests — including the
-    regulatory report and forecast parity checks — were unreachable even with
-    `REAL_DATA_DATABASE_URL` set. They did not fail and did not skip; the task
-    simply never collected them, which is the quietest way for a gate to be
-    dead.
-
-    Deriving the requirement from the marker means a new opt-in module in a new
-    directory turns this red instead of silently going ungated.
-    """
-    selected = [Path(path) for path in _task_paths(_REAL_DATA_TASK)]
-    unreachable = sorted(
-        str(module)
-        for module in _real_data_modules()
-        if not any(module == path or path in module.parents for path in selected)
-    )
-
-    assert unreachable == [], (
-        f"`{_REAL_DATA_TASK}` collects {[str(p) for p in selected]}, which cannot reach these "
-        f"opt-in modules: {unreachable}. They would never run, in CI or locally. "
-        "Add the containing directory to the task's pytest paths."
-    )
-
-
-def test_the_real_data_task_selects_no_marker_that_does_not_exist() -> None:
-    """`-m 'not slow'` filtered on a marker no test carries and pytest does not
-    register — inert, and it implied a tier of excluded tests that was empty.
-
-    A filter naming a real marker is fine; one naming a marker nothing uses is
-    either a leftover or a mistake, and both should be visible.
-    """
-    body = _tasks(BACKEND_TASKS)[_REAL_DATA_TASK]
-    selectors = re.findall(r"-m\s+'([^']+)'", " ".join(_run_commands(body)))
-    marked = {
-        marker
-        for path in TESTS.rglob("test_*.py")
-        if "__pycache__" not in path.parts
-        for marker in re.findall(r"@pytest\.mark\.([a-z_]+)", path.read_text())
-    }
-    phantom = [
-        name
-        for selector in selectors
-        for name in re.findall(r"[a-z_]+", selector)
-        if name not in {"not", "and", "or"} and name not in marked
-    ]
-
-    assert phantom == [], f"`{_REAL_DATA_TASK}` filters on markers no test carries: {phantom}"
+def _ci_paths(job: str) -> list[str]:
+    tokens, _step = _ci_pytest(job)
+    return [token for token in tokens if token.startswith("tests/")]
 
 
 # --------------------------------------------------------------------------
@@ -560,6 +692,18 @@ def test_every_pytest_path_a_task_names_exists() -> None:
                 for path in _PYTEST_PATHS.findall(command):
                     if not (TESTS.parent / path).exists():
                         missing.append(f"{config.name}:{name} -> {path}")
+    for job in (
+        "architecture",
+        "backend-e2e",
+        "postgres-schema",
+        "postgres-locks",
+        "postgres-shard",
+        "storage",
+        "real-data",
+    ):
+        for path in _ci_paths(job):
+            if not (TESTS.parent / path).exists():
+                missing.append(f"risk-service.yml:{job} -> {path}")
 
     assert missing == [], (
         "These tasks name pytest paths that do not exist. pytest exits 4 having "
@@ -567,19 +711,14 @@ def test_every_pytest_path_a_task_names_exists() -> None:
     )
 
 
-def test_the_full_suite_ignores_exactly_what_its_sibling_tasks_run() -> None:
+def test_the_remaining_suite_ignores_exactly_what_its_sibling_steps_run() -> None:
     """Only integration siblings are ignored; markers own unit selection."""
-    tasks = _tasks(BACKEND_TASKS)
-    suite = shlex.split(_run_commands(tasks["risk-service:test-postgres-suite"])[0])
+    suite, _step = _ci_pytest("postgres-shard")
     assert suite[suite.index("-m") + 1] == "integration"
     ignored = {token.partition("=")[2] for token in suite if token.startswith("--ignore=")}
     owned: set[str] = set()
-    for task in (
-        "risk-service:test-postgres-schema",
-        "risk-service:test-postgres-locks",
-        "risk-service:test-storage",
-    ):
-        tokens = shlex.split(_run_commands(tasks[task])[0])
+    for job in ("postgres-schema", "postgres-locks", "storage"):
+        tokens, _step = _ci_pytest(job)
         assert tokens[tokens.index("-m") + 1] == "integration"
         owned.update(token for token in tokens if token.startswith("tests/"))
     owned = {path for path in owned if not any(path.startswith(other + "/") for other in owned)}
@@ -648,8 +787,7 @@ def test_the_hermetic_run_still_proves_it_collected_every_module(tmp_path: Path)
 
 
 def test_duration_shards_preserve_worker_limit_and_schema_configuration() -> None:
-    command = _run_commands(_tasks(BACKEND_TASKS)["risk-service:test-postgres-suite"])[0]
-    tokens = shlex.split(command)
+    tokens, _step = _ci_pytest("postgres-shard")
     assert tokens[tokens.index("-n") + 1] == "4"
     assert tokens[tokens.index("--dist") + 1] == "loadfile"
     document = cast(
@@ -657,10 +795,7 @@ def test_duration_shards_preserve_worker_limit_and_schema_configuration() -> Non
         yaml.safe_load((WORKFLOWS / "risk-service.yml").read_text()),
     )
     schema = document["jobs"]["postgres-schema"]
-    steps = cast(list[dict[str, object]], schema["steps"])
-    step = next(
-        step for step in steps if step.get("run") == "mise run risk-service:test-postgres-schema"
-    )
+    _tokens, step = _ci_pytest("postgres-schema")
     assert cast(dict[str, object], step["env"])["CI_POSTGRES_SUITE"] == "schema"
     strategy = cast(dict[str, object], schema["strategy"])
     assert cast(dict[str, object], strategy["matrix"])["shard"] == [1, 2]
