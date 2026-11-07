@@ -427,15 +427,46 @@ def test_serial_owner_guard_rejects_parallel_configuration(
         _assert_serial_ci_owner(job)
 
 
+_GIT_LOCATION_OVERRIDES = frozenset(
+    {
+        "GIT_DIR",
+        "GIT_WORK_TREE",
+        "GIT_INDEX_FILE",
+        "GIT_OBJECT_DIRECTORY",
+        "GIT_ALTERNATE_OBJECT_DIRECTORIES",
+        "GIT_COMMON_DIR",
+    }
+)
+
+
 def _untracked_repository_paths() -> list[str]:
+    # A caller's GIT_DIR/GIT_WORK_TREE overrides would redirect this child's
+    # cwd-based repository selection; the parent environment stays untouched.
+    environment = {
+        key: value for key, value in os.environ.items() if key not in _GIT_LOCATION_OVERRIDES
+    }
     result = subprocess.run(
         ["git", "ls-files", "--others", "--exclude-standard"],
         cwd=REPO_ROOT,
+        env=environment,
         text=True,
         capture_output=True,
         check=True,
     )
     return result.stdout.splitlines()
+
+
+def test_untracked_repository_paths_ignores_caller_git_location(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A stray caller's Git location must not redirect this repository guard."""
+    stray = tmp_path / "stray-repo"
+    subprocess.run(["git", "init", "-q", str(stray)], check=True)
+    baseline = _untracked_repository_paths()
+    monkeypatch.setenv("GIT_DIR", str(stray / ".git"))
+    monkeypatch.setenv("GIT_WORK_TREE", str(stray))
+    monkeypatch.setenv("GIT_INDEX_FILE", str(stray / ".git" / "index"))
+    assert _untracked_repository_paths() == baseline
 
 
 def test_serial_owner_validation_leaves_no_repository_byproducts(
