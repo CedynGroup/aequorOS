@@ -41,7 +41,7 @@ from tests.core.test_bank_field_readers_integration import (
     GroupAxis,
     assert_long_concentration_tokens,
 )
-from tests.db import test_postgres_migrations_integration as migrations
+from tests.support import postgres_migrations as migrations
 from tests.support.authority import grant_organization_analyst
 from tests.support.helpers import ORG_1, USER_1
 

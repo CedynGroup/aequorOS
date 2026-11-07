@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from tests.db.test_postgres_migrations_integration import postgres_administrator_url
+from tests.support.postgres_migrations import postgres_administrator_url
 
 
 @pytest.mark.parametrize("required", [False, True])

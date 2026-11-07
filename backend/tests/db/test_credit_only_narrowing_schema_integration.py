@@ -9,7 +9,7 @@ from sqlalchemy import text
 
 from alembic import command
 from app.core.authorization import DataScope, ModuleScope
-from tests.db.test_postgres_migrations_integration import (
+from tests.support.postgres_migrations import (
     MigratedPostgresSchema,
     alembic_config_for_app,
     forward_migrated_postgres_schema,

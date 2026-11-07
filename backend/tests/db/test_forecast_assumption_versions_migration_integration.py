@@ -16,13 +16,13 @@ from sqlalchemy.exc import IntegrityError
 
 from alembic import command
 from tests.db.test_initial_owner_migration_integration import _insert_organization
-from tests.db.test_postgres_migrations_integration import (
+from tests.support.database import managed_engine
+from tests.support.postgres_migrations import (
     MigratedPostgresSchema,
     alembic_config_for_app,
     clear_database_caches,
     migrated_postgres_schema,
 )
-from tests.support.database import managed_engine
 
 __all__ = ["migrated_postgres_schema"]
 

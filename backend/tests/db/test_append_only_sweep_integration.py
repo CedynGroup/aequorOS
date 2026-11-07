@@ -16,8 +16,8 @@ from tests.db.test_governance_append_only_integration import (
 from tests.db.test_governance_append_only_integration import (
     governance_schema as governance_schema,  # noqa: PLC0414 - register shared pytest fixture
 )
-from tests.db.test_postgres_migrations_integration import MigratedPostgresSchema
 from tests.support.helpers import ORG_1
+from tests.support.postgres_migrations import MigratedPostgresSchema
 
 pytestmark = pytest.mark.skipif(not os.getenv("TEST_DATABASE_URL"), reason="PostgreSQL required")
 

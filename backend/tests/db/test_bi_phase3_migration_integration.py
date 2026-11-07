@@ -17,7 +17,7 @@ from sqlalchemy import text
 from sqlalchemy.exc import DBAPIError
 
 from app.bi.models.content import BI_CONTENT_UNALTERABLE_TABLES
-from tests.db.test_postgres_migrations_integration import (
+from tests.support.postgres_migrations import (
     MigratedPostgresSchema,
     migrated_postgres_schema,
     postgres_schema_url,

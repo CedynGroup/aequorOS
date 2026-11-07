@@ -9,7 +9,7 @@ from sqlalchemy.types import TypeDecorator
 from app.db.base import Base
 from tests.db.test_bank_organization_integrity_integration import pytestmark
 from tests.db.test_canonical_migration_structural_parity_integration import bank_integrity_schema
-from tests.db.test_postgres_migrations_integration import MigratedPostgresSchema
+from tests.support.postgres_migrations import MigratedPostgresSchema
 
 __all__ = ["bank_integrity_schema", "pytestmark"]
 

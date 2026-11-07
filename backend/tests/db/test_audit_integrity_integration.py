@@ -22,9 +22,9 @@ from app.core.audit_integrity import AuditIntegrityTask, scheduled_verification,
 from app.core.config import get_settings
 from app.db.session import force_rls_suspended
 from tests.db import test_governance_append_only_integration as governance_fixtures
-from tests.db import test_postgres_migrations_integration as migration_fixtures
-from tests.db.test_postgres_migrations_integration import MigratedPostgresSchema
+from tests.support import postgres_migrations as migration_fixtures
 from tests.support.helpers import ORG_1
+from tests.support.postgres_migrations import MigratedPostgresSchema
 
 governance_schema = governance_fixtures.governance_schema
 tenant_connection = governance_fixtures.connection

@@ -37,7 +37,6 @@ from app.storage.client import (
     sealed_object_key,
 )
 from app.storage.encryption import ENCRYPTION_FORMAT, object_context
-from tests.db.test_postgres_migrations_integration import alembic_config_for_app
 from tests.storage.contract import metadata_for
 from tests.storage.test_bank_encryption_integration import (
     KEY,
@@ -47,6 +46,7 @@ from tests.storage.test_bank_encryption_integration import (
     bank_storage,
 )
 from tests.support.helpers import ORG_1
+from tests.support.postgres_migrations import alembic_config_for_app
 from tests.support.reencryption import drain
 
 __all__ = ["bank_storage"]
