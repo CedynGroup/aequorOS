@@ -76,6 +76,38 @@ afterEach(() => {
   submitted = undefined;
 });
 
+it("keeps typed recipient IDs when equivalent status refetches return new objects", async () => {
+  const view = render(
+    <QueryClientProvider client={client}>
+      <SignatureRoutingForm
+        bankId={bankId}
+        packageId={packageId}
+        status={AttestationStatusReadFromJSON(rawStatus)}
+      />
+    </QueryClientProvider>,
+  );
+  await userEvent.type(
+    screen.getByLabelText("Preparer recipient"),
+    "user-preparer",
+  );
+
+  view.rerender(
+    <QueryClientProvider client={client}>
+      <SignatureRoutingForm
+        bankId={bankId}
+        packageId={packageId}
+        status={AttestationStatusReadFromJSON(rawStatus)}
+      />
+    </QueryClientProvider>,
+  );
+
+  await waitFor(() =>
+    expect(screen.getByLabelText("Preparer recipient")).toHaveValue(
+      "user-preparer",
+    ),
+  );
+});
+
 it("routes every outstanding signer without organization-directory authority", async () => {
   setAccessToken("synthetic-access-token");
   const user = userEvent.setup();

@@ -31,6 +31,7 @@ const state = vi.hoisted(() => ({
   placementCalls: 0,
   adoptedSignatureCalls: 0,
   signerIdentityCalls: 0,
+  routedNominations: [] as { signingRole: string; userId: string }[],
   status: undefined as unknown,
   stepUpBlockedReason: null as string | null,
   /** Whether the mocked canvas reports a drawn page, as a real one would. */
@@ -167,7 +168,14 @@ vi.mock("@/components/attestation/signing/AdoptSignaturePanel", () => ({
   default: () => null,
 }));
 vi.mock("@/components/attestation/signing/RecipientPicker", () => ({
-  default: () => null,
+  default: ({
+    nominations,
+  }: {
+    nominations: { signingRole: string; userId: string }[];
+  }) => {
+    state.routedNominations = nominations;
+    return null;
+  },
 }));
 vi.mock("@/components/attestation/review", () => ({
   CertificationFailure: () => null,
@@ -224,6 +232,7 @@ beforeEach(() => {
   state.placementCalls = 0;
   state.adoptedSignatureCalls = 0;
   state.signerIdentityCalls = 0;
+  state.routedNominations = [];
   state.status = {
     signatures: [],
     recipients: [
@@ -257,6 +266,46 @@ function renderWorkspace() {
     />,
   );
 }
+
+it("aligns routed recipients to outstanding role order", async () => {
+  state.permissions = ["view", "review", "approve", "sign_off"];
+  state.status = {
+    signatures: [],
+    recipients: [
+      {
+        signingRole: "approver",
+        recipientUserId: "user-signer",
+        status: "pending",
+      },
+      {
+        signingRole: "board",
+        recipientUserId: "user-board",
+        status: "pending",
+      },
+      {
+        signingRole: "preparer",
+        recipientUserId: "user-preparer",
+        status: "pending",
+      },
+    ],
+  };
+  state.preview = {
+    ...READY_PREVIEW,
+    outstanding: [
+      { role: "preparer", count: 1 },
+      { role: "board", count: 1 },
+      { role: "approver", count: 1 },
+    ],
+  };
+  renderWorkspace();
+
+  await waitFor(() =>
+    expect(state.routedNominations).toEqual([
+      { signingRole: "preparer", userId: "user-preparer" },
+      { signingRole: "board", userId: "user-board" },
+    ]),
+  );
+});
 
 it("tells an approver without export which grant the document needs", async () => {
   state.permissions = ["view", "review", "approve", "sign_off"];

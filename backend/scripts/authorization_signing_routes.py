@@ -16,7 +16,9 @@ from app.core.authorization import Module, Permission, Sensitivity
 SigningAction = Literal["preview", "step-up", "certify", "certify-and-send", "attest"]
 SigningRole = Literal["preparer", "approver", "board", "witness"]
 SourceFamily = Literal["ordinary", "icaap", "enterprise_stress"]
-Baseline = Literal["source_view", "legacy_role", "route_not_present"]
+Baseline = Literal[
+    "source_view", "legacy_role", "legacy_scalar_approver", "route_not_present"
+]
 
 _BANK_PACKAGE = "/api/v1/banks/{bank_id}/regulatory-packages/{package_id}/attestation"
 _STRESS = "/api/v1/banks/{bank_id}/enterprise-stress/signoffs/{signoff_id}"
@@ -111,6 +113,6 @@ SIGNING_ROUTES: tuple[SigningRoute, ...] = (
         module=Module.RISK,
         source_module=Module.RISK,
         source_sensitivity=Sensitivity.CONFIDENTIAL,
-        baseline="source_view",
+        baseline="legacy_scalar_approver",
     ),
 )

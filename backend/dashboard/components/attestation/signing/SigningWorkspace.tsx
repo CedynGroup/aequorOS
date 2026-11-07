@@ -282,26 +282,6 @@ export default function SigningWorkspace({
       ? resolved.placeableRoles
       : DOCUMENT_SIGNING_ROLES;
 
-  // Pre-routing is mandatory. Carry the server's current-cycle nominees into
-  // the combined certification so reconcile reuses them instead of inserting
-  // duplicate recipient rows or silently replacing a named signer.
-  useEffect(() => {
-    if (!status) return;
-    setNominations((current) => {
-      if (current.length > 0) return current;
-      return status.recipients
-        .filter(
-          (recipient) =>
-            recipient.status === "pending" &&
-            recipient.signingRole !== signingRole,
-        )
-        .map((recipient) => ({
-          signingRole: recipient.signingRole,
-          userId: recipient.recipientUserId,
-        }));
-    });
-  }, [status, signingRole]);
-
   // Seed ONLY from a layout somebody saved. The platform default is two boxes in
   // a clear band near the attestation block, not on its ruled lines — seeding
   // from it opens the workspace with fields in the wrong place that the signer
@@ -395,6 +375,26 @@ export default function SigningWorkspace({
     }
     return slots;
   }, [preview, signingRole]);
+
+  // Reuse current-cycle nominees in outstanding-slot order, so the combined
+  // certification cannot exchange an approver and Board recipient by row order.
+  useEffect(() => {
+    if (!status || nominationSlots.length === 0) return;
+    setNominations((current) => {
+      if (current.length > 0) return current;
+      const pending = status.recipients.filter(
+        (recipient) =>
+          recipient.status === "pending" && recipient.signingRole !== signingRole,
+      );
+      return nominationSlots.map((role) => {
+        const at = pending.findIndex(
+          (recipient) => recipient.signingRole === role,
+        );
+        const match = at >= 0 ? pending.splice(at, 1)[0] : undefined;
+        return { signingRole: role, userId: match?.recipientUserId ?? "" };
+      });
+    });
+  }, [status, signingRole, nominationSlots]);
 
   /**
    * Who each role's boxes belong to, and the identity they will print.

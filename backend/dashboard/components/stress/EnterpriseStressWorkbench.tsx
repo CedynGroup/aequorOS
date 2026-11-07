@@ -21,7 +21,7 @@ import {
 
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { Suspense, useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { Activity, FileBarChart, Play } from "lucide-react";
 import SectionCard from "@/components/ui/SectionCard";
 import SubTabs from "@/components/ui/SubTabs";
@@ -251,20 +251,34 @@ function ScopedEnterpriseStressWorkbench({
   );
 
   const reopenRun = reopen.mutateAsync;
+  const resumeStarted = useRef(false);
   useEffect(() => {
-    if (!resumeRunId || focusedRun?.run_id === resumeRunId) return;
+    if (!resumeRunId || resumeStarted.current) return;
+    resumeStarted.current = true;
     let active = true;
     void reopenRun(resumeRunId)
       .then((run) => {
-        if (active) setFocusedRun(run);
+        if (!active) return;
+        setFocusedRun(run);
+        const query = new URLSearchParams(window.location.search);
+        query.delete("runId");
+        query.delete("tab");
+        const remaining = query.toString();
+        window.history.replaceState(
+          window.history.state,
+          "",
+          `${window.location.pathname}${remaining ? `?${remaining}` : ""}`,
+        );
       })
       .catch(() => {
         if (active) setRunError("The selected stress run could not be reopened.");
       });
     return () => {
       active = false;
+      // React StrictMode replays effects; the live attempt owns this guard.
+      resumeStarted.current = false;
     };
-  }, [focusedRun?.run_id, reopenRun, resumeRunId]);
+  }, [reopenRun, resumeRunId]);
 
   useEffect(() => {
     if (isSdiTenant) {

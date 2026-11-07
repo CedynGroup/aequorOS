@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 
 import "@testing-library/jest-dom/vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, expect, it, vi } from "vitest";
 import EnterpriseStressWorkbench from "@/components/stress/EnterpriseStressWorkbench";
 import type { EnterpriseStressRead } from "@/components/stress/types";
@@ -12,13 +12,16 @@ const { oldRun, returnedRun, reopen } = vi.hoisted(() => ({
   reopen: vi.fn(),
   oldRun: {
     run_id: "run-before-redirect",
-    summary: { car_erosion_pp: 1 },
+    summary: { car_erosion_pp: 1, binding_minima: [] },
+    outcome: { coupling: undefined },
   },
   returnedRun: {
     run_id: "run-authorized-for-signoff",
-    summary: { car_erosion_pp: 0 },
+    summary: { car_erosion_pp: 0, binding_minima: [] },
+    outcome: { coupling: undefined },
   },
 }));
+const otherRun = { ...returnedRun, run_id: "run-selected-after-return" };
 
 vi.mock("next/navigation", () => ({
   useSearchParams: () => new URLSearchParams(window.location.search),
@@ -70,12 +73,20 @@ vi.mock("@/components/stress/SignoffPanel", () => ({
 
 vi.mock("@/components/stress/ScenarioLibrary", () => ({ default: () => null }));
 vi.mock("@/components/stress/ScenarioBuilder", () => ({ default: () => null }));
-vi.mock("@/components/stress/charts/ProjectionPaths", () => ({ default: () => null }));
+vi.mock("@/components/stress/charts/ProjectionPaths", () => ({
+  default: () => null,
+}));
 vi.mock("@/components/stress/charts/DriverWaterfall", () => ({ default: () => null }));
 vi.mock("@/components/stress/ScenarioComparison", () => ({ default: () => null }));
 vi.mock("@/components/stress/AppendixIITables", () => ({ default: () => null }));
 vi.mock("@/components/stress/ManagementActionsPanel", () => ({ default: () => null }));
-vi.mock("@/components/stress/RunRegistry", () => ({ default: () => null }));
+vi.mock("@/components/stress/RunRegistry", () => ({
+  default: ({ onOpen }: { onOpen: (run: SelectedRun) => void }) => (
+    <button type="button" onClick={() => onOpen(otherRun)}>
+      Choose another run
+    </button>
+  ),
+}));
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -98,4 +109,10 @@ it("reopens the authorized run and restores governance after SSO", async () => {
     screen.getByRole("button", { name: "Governance & sign-off" }),
   ).toHaveClass("border-action", "text-navy");
   await waitFor(() => expect(reopen).toHaveBeenCalledTimes(1));
+  expect(window.location.search).toBe("?stepUp=ready");
+
+  fireEvent.click(screen.getByRole("button", { name: "Run registry" }));
+  fireEvent.click(screen.getByRole("button", { name: "Choose another run" }));
+  expect(await screen.findByText("CAR — base vs stress")).toBeVisible();
+  expect(reopen).toHaveBeenCalledTimes(1);
 });
