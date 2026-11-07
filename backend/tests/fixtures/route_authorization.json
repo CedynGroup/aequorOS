@@ -3737,24 +3737,6 @@
           "method": "PUT",
           "path": "/api/v1/banks/{bank_id}/market-data/source-preferences",
           "endpoint": "app.market_data.api.market_data_sources:update_source_preferences"
-        },
-        {
-          "application": "tenant",
-          "method": "PUT",
-          "path": "/api/v1/banks/{bank_id}/liquidity-haircuts",
-          "endpoint": "app.liquidity.api.manage_liquidity_thresholds:update_liquidity_haircut_schedule"
-        },
-        {
-          "application": "tenant",
-          "method": "PUT",
-          "path": "/api/v1/banks/{bank_id}/liquidity-thresholds",
-          "endpoint": "app.liquidity.api.manage_liquidity_thresholds:update_liquidity_threshold_register"
-        },
-        {
-          "application": "tenant",
-          "method": "PUT",
-          "path": "/api/v1/banks/{bank_id}/liquidity/ewis",
-          "endpoint": "app.liquidity.api.manage_liquidity_cfp:update_ewi_register"
         }
       ]
     },
