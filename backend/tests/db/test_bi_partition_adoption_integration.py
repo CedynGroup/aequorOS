@@ -56,14 +56,14 @@ from tests.db.test_bi_foundation_migration_integration import (
     _require_or_skip_privileges,
     _temporary_non_owner_role,
 )
-from tests.db.test_postgres_migrations_integration import (
+from tests.support.database import install_migration_engines, managed_engine
+from tests.support.helpers import ORG_1, ORG_2
+from tests.support.postgres_migrations import (
     MigratedPostgresSchema,
     alembic_config_for_app,
     clear_database_caches,
     postgres_schema_url,
 )
-from tests.support.database import install_migration_engines, managed_engine
-from tests.support.helpers import ORG_1, ORG_2
 
 _ = set_tenant_rls_context
 

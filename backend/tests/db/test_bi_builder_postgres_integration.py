@@ -41,16 +41,16 @@ from app.models import (
     RegulatoryRun,
     User,
 )
-from tests.db.test_postgres_migrations_integration import (
+from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID
+from tests.support.database import install_migration_engines, managed_engine
+from tests.support.factories.canonical import FIXTURE_AS_OF, seed_canonical_fixture
+from tests.support.helpers import ORG_1, USER_1
+from tests.support.postgres_migrations import (
     MigratedPostgresSchema,
     alembic_config_for_app,
     clear_database_caches,
     postgres_schema_url,
 )
-from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID
-from tests.support.database import install_migration_engines, managed_engine
-from tests.support.factories.canonical import FIXTURE_AS_OF, seed_canonical_fixture
-from tests.support.helpers import ORG_1, USER_1
 
 _ = set_tenant_rls_context  # the after_begin hook that sets the tenant GUC
 

@@ -32,7 +32,7 @@ from tests.db.test_initial_owner_migration_integration import (
     _insert_refresh_token,
     _insert_user,
 )
-from tests.db.test_postgres_migrations_integration import (
+from tests.support.postgres_migrations import (
     MigratedPostgresSchema,
     alembic_config_for_app,
     clear_database_caches,

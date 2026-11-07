@@ -9,7 +9,7 @@ import sqlalchemy as sa
 
 from app.db.base import Base
 from tests.db.test_bank_organization_integrity_integration import pytestmark
-from tests.db.test_postgres_migrations_integration import (
+from tests.support.postgres_migrations import (
     MigratedPostgresSchema,
     migrate_isolated_postgres_schema,
 )

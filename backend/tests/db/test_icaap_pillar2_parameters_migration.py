@@ -29,7 +29,7 @@ from app.policy.service.regulatory_parameters import (
     P2_PARAMETER_CODES,
     SEED_EFFECTIVE_FROM,
 )
-from tests.db.test_postgres_migrations_integration import (
+from tests.support.postgres_migrations import (
     migrated_postgres_schema,
 )
 

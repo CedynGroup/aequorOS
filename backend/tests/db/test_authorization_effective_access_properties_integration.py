@@ -72,13 +72,13 @@ from app.models import (
     ReconciliationException,
     User,
 )
-from tests.db.test_postgres_migrations_integration import (
+from tests.support.helpers import error_envelope, headers
+from tests.support.postgres_migrations import (
     MigratedPostgresSchema,
     clear_database_caches,
     forward_migrated_postgres_schema,
     migrated_postgres_schema,
 )
-from tests.support.helpers import error_envelope, headers
 
 __all__ = ["forward_migrated_postgres_schema", "migrated_postgres_schema"]
 

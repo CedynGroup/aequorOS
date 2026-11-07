@@ -36,7 +36,7 @@ from sqlalchemy.exc import IntegrityError
 
 from app.core.authorization import MACHINE_ROLE_BUNDLES, DataScope, RoleBundle
 from app.db.base import Base
-from tests.db.test_postgres_migrations_integration import (
+from tests.support.postgres_migrations import (
     MigratedPostgresSchema,
     forward_migrated_postgres_schema,
 )

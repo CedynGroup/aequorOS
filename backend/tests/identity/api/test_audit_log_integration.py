@@ -111,7 +111,7 @@ from tests.conftest import (
     rollback_sessionmaker_lifecycle,
     seed_demo_tenants,
 )
-from tests.db import test_postgres_migrations_integration as migrations
+from tests.support import postgres_migrations as migrations
 from tests.support.database import database_connections as managed_database_connections
 from tests.support.factories.authorization import grant_institution_authority
 from tests.support.factories.outbound import stub_public_dns

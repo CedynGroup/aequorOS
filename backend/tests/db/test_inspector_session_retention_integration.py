@@ -7,13 +7,13 @@ import pytest
 from sqlalchemy import text
 from sqlalchemy.exc import DatabaseError
 
-from tests.db.test_postgres_migrations_integration import (
+from tests.support.helpers import ORG_1
+from tests.support.postgres_migrations import (
     MigratedPostgresSchema,
 )
-from tests.db.test_postgres_migrations_integration import (
+from tests.support.postgres_migrations import (
     migrated_postgres_schema as migrated_postgres_schema,  # noqa: PLC0414 - shared fixture
 )
-from tests.support.helpers import ORG_1
 
 
 @pytest.mark.skipif(not os.getenv("TEST_DATABASE_URL"), reason="PostgreSQL required")

@@ -26,12 +26,12 @@ from alembic.operations import Operations
 from sqlalchemy import text
 
 from alembic import command
-from tests.db.test_postgres_migrations_integration import (
+from tests.support.database import install_migration_engines, managed_engine
+from tests.support.postgres_migrations import (
     alembic_config_for_app,
     clear_database_caches,
     postgres_schema_url,
 )
-from tests.support.database import install_migration_engines, managed_engine
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
