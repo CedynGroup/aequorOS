@@ -1263,8 +1263,8 @@ and [public ECR authentication](https://docs.aws.amazon.com/AmazonECR/latest/pub
   migration/schema/RLS shards, the full Postgres suite, storage contracts and concurrency locks,
   and dashboard journeys/browser contracts run without PR path filtering;
   [Postgres suite selection](backend/README.md#run-tests) governs shard coverage.
-  Backend lint/typecheck, generated-client freshness and the
-  conditional real-data job skip in the queue, as do the dashboard checks and
+  Backend lint/typecheck and generated-client freshness also run on the queue
+  head. The conditional real-data job skips in the queue, as do the dashboard checks and
   marketing/console jobs. Secret scanning reports the required `gitleaks`
   context successfully without repeating its PR scans. The Risk service,
   Dashboard and Web aggregate gates still report, accepting intentional skips
@@ -1273,6 +1273,38 @@ and [public ECR authentication](https://docs.aws.amazon.com/AmazonECR/latest/pub
   [The merge-queue guard](backend/tests/architecture/test_merge_queue.py) pins
   the triggers and required-check names. Enabling the queue and configuring
   required checks on `main` remain repository-settings work.
+- **Issue #818 evidence (verified 2026-11-07).** Times below are UTC;
+  run links identify the source check records and logs.
+  - PR #774 head `db5cfaa5abb8773955d3f0d98e82e35e5fb5b8e7` passed
+    [PR CI 42091582655](https://github.com/CedynGroup/aequorOS/actions/runs/42091582655)
+    on November 5 (19:11:56–19:24:43; typecheck passed at 19:14:23).
+    [Queue CI 42097444200](https://github.com/CedynGroup/aequorOS/actions/runs/42097444200)
+    checked `fb626ee3307ab694a77a937b441332223226c8ae` at
+    19:48:45–20:01:51: integration passed, typecheck and client freshness skipped.
+    PR #774 merged that exact SHA at 20:11:10.
+    [Push CI 42100999228](https://github.com/CedynGroup/aequorOS/actions/runs/42100999228)
+    started at 20:11:12; typecheck failed at 20:13:49 with one new
+    `reportUnknownVariableType` in `tests.storage.test_sealed_documents`
+    against a baseline of zero. The diagnostic mechanism is unproven;
+    these records do not establish a merged-tree interaction as its cause.
+  - PR #773 head `1b067fda9953c58fb522cc25a191320f5569974e` passed
+    [PR CI 41767826583](https://github.com/CedynGroup/aequorOS/actions/runs/41767826583)
+    on November 4 (03:33:12–03:57:01).
+    [Queue CI 41770736554](https://github.com/CedynGroup/aequorOS/actions/runs/41770736554)
+    checked `e6ffa76a87934b689318359ce1ca2096108e7316` at
+    04:02:22–04:17:40: integration passed, typecheck skipped.
+    PR #773 merged that exact SHA at 04:27:53.
+    [Push CI 41773361805](https://github.com/CedynGroup/aequorOS/actions/runs/41773361805)
+    ran at 04:27:55–04:40:12. Schema shard 2 failed
+    `test_every_retained_table_refuses_truncate[owner-regulatory_parameter]`:
+    `TRUNCATE regulatory_parameter CASCADE` raised `DeadlockDetected` instead
+    of the expected append-only refusal. All integration shards passed;
+    the Integration tests aggregate failed through its schema dependency.
+    The other deadlock session's identity remains unknown.
+  Both exact landing heads received integration checks before merge. The proven
+  gap was skipped queue type/client checks, now enabled by their preflight
+  outputs. This does not explain the separate deadlock or establish a general
+  failure rate from two observations.
 - **CI enforces every surface.** `risk-service.yml` gates the backend; `dashboard.yml`
   enforces the dashboard gates listed above; `web.yml` gates `frontend` lint+build
   and `console` typecheck+test+build, and `dashboard-journeys.yml` gates browser

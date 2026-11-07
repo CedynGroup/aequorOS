@@ -202,9 +202,7 @@ env:
 
 # Merge groups run every gate on the exact queue head — the tree that will
 # actually land — except real-data, which cannot execute without the primary
-# database. The type gate and the API-client freshness check used to skip here,
-# so a merged-tree-only violation was first caught only by the post-merge push
-# run (issue #818: the 2026-11-05 red main at fb626ee3).
+# database. See ARCHITECTURE.md §8 for the verified issue #818 chronology.
 jobs:
   # Runs on EVERY pull request, needs nothing, installs nothing, and every other
   # job depends on it. Two responsibilities, both cheap:
