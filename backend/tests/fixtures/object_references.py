@@ -2011,6 +2011,7 @@ REFERENCE_FIELDS: Final[tuple[tuple[str, str, str], ...]] = (
     ("/enterprise-stress/runs", "scenario_id", "macro_scenario"),
     ("/enterprise-stress/latest", "scenario_id", "macro_scenario"),
     ("/enterprise-stress/signoffs", "run_id", "enterprise_stress_run"),
+    ("/enterprise-stress/signoffs", "attestation_recipient_user_id", "user"),
     ("/scenario-workbench/", "scenario_id", "stress_scenario"),
     ("/authorization/bindings", "institution_id", "bank"),
     ("/auth/sso/access-requests", "institution_id", "bank"),

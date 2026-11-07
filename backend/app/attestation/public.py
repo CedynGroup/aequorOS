@@ -9,6 +9,7 @@ from app.attestation.service import (
     pdf_signing,
     policy,
     register_state,
+    stepup,
     workflow,
 )
 from app.attestation.service.digests import (
@@ -42,5 +43,6 @@ __all__ = [
     "register_state",
     "register_state_digest",
     "sha256_hex",
+    "stepup",
     "workflow",
 ]

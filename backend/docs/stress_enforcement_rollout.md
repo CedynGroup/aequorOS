@@ -1,9 +1,9 @@
 # Stress governance scoped-authorization rollout
 
 This cutover completes the scenario, management-action and sign-off preparation
-boundaries tracked by #178. Reverse-stress Forecasting authority and existing
-engine-specific scenario workbench permissions are unchanged. Final stress
-attestation remains a separate Signer cutover (#185).
+boundaries tracked by #178. Final stress attestation is the Signer cutover
+tracked by #185. Reverse-stress Forecasting authority and existing
+engine-specific scenario workbench permissions are unchanged.
 
 The [authorization foundation](authorization_foundation.md#standing-rules-at-a-glance)
 owns complete binding matching, invalidation, source-module access and the
@@ -31,8 +31,15 @@ executable verification contract.
   for them. Approval eligibility remains contextual: the server checks the maker
   against the checker. Risk capabilities do not confer Account administration.
 - Sign-off preparation requires RISK/confidential CREATE for a new sign-off and
-  EDIT to update, submit or withdraw it. Reads require VIEW. Final attestation
-  retains its legacy `ApproverTenant` floor pending #185.
+  EDIT to update, submit or withdraw it. Reads require VIEW. Submission names an
+  eligible exact-bank signer other than the preparer and freezes the recipient
+  and value-based signing digest.
+- Final attestation requires one active institution-scoped exact-bank
+  RISK/restricted SIGN_OFF binding, independent confidential source READ, the
+  frozen named recipient, unchanged signing digest, maker-checker separation and
+  genuine fresh password/OIDC step-up. Approver or organization-wide Signer
+  authority alone is insufficient. The shared one-shot token is bound to signer,
+  sign-off, `board` role and digest, and replay is refused.
 
 Disabled controls explain the missing permission on hover and keyboard focus.
 These boundaries require whole-institution data coverage. Lists filter authorized
@@ -47,9 +54,16 @@ Before enabling this code, run `backend/scripts/authorization_access_impact.py`
 against the target deployment and retain dated output outside this repository.
 Inventory active human and machine principals and the exact replacement grants:
 authors need Analyst RISK/confidential; checkers need Approver RISK/confidential;
-readers need Viewer RISK/confidential. Explicitly choose organization-wide versus
-one exact institution for each grant. Translation readers also need the matching
+readers need Viewer RISK/confidential. Each final stress signer additionally needs
+one independent Viewer RISK/confidential binding and one institution-scoped
+Signer RISK/restricted binding naming that exact bank. Do not substitute an
+organization-wide Signer grant. Translation readers also need the matching
 source-module view. Machine credentials gain no interactive authority.
+
+Migration `202611070113` adds nullable recipient, digest and consumed-authorization
+fields without backfilling identity or authority. Existing pending rows retain
+NULL ceremony fields and cannot be attested; a new governed run and sign-off are
+required because the one-sign-off-per-run record remains immutable.
 
 Release acceptance requires real-binding allowed/denied browser journeys,
 permission-disabled action explanations, no forbidden companion queries and
