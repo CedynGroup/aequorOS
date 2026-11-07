@@ -21,6 +21,7 @@ from app.fx.domain.engine import (
     FxReturn,
     MissingParameterError,
     assess_hedges,
+    classify_limit,
     compute_nop,
     compute_stressed_var,
     compute_var,
@@ -83,6 +84,39 @@ def test_nop_tie_out_golden() -> None:
     assert by_ccy["EUR"].abs_pct_tier1 == Decimal("2.500000")
     assert [item.line_code for item in nop.line_items] == ["EUR", "GBP", "NGN", "USD", "XOF", "ZAR"]
     assert all(item.section == "fx_position" for item in nop.line_items)
+
+
+@pytest.mark.parametrize(
+    ("ratio_pct", "limit_pct", "expected_status"),
+    [
+        # Against the 20% aggregate limit: 20 * 0.75 = 15 is the buffer floor.
+        pytest.param("0", "20", "green", id="no_open_position_is_green"),
+        pytest.param("14.999999", "20", "green", id="just_below_buffer_floor_is_green"),
+        pytest.param("15", "20", "green", id="buffer_floor_is_exclusive_green"),
+        pytest.param("15.000001", "20", "amber", id="first_step_into_buffer_is_amber"),
+        pytest.param("19.999999", "20", "amber", id="just_below_limit_is_amber"),
+        pytest.param("20", "20", "amber", id="at_the_limit_is_amber_not_red"),
+        pytest.param("20.000001", "20", "red", id="first_step_past_limit_is_red"),
+        # Against the 10% single-currency limit: 10 * 0.75 = 7.5 is the buffer floor.
+        pytest.param("7.5", "10", "green", id="buffer_floor_exclusive_single_limit"),
+        pytest.param("7.500001", "10", "amber", id="inside_buffer_single_limit"),
+        pytest.param("10", "10", "amber", id="at_single_limit_is_amber"),
+        pytest.param("10.000001", "10", "red", id="past_single_limit_is_red"),
+    ],
+)
+def test_classify_limit_decision_table(
+    ratio_pct: str, limit_pct: str, expected_status: str
+) -> None:
+    """Independent decision table for the supervisory limit classification.
+
+    ``classify_limit`` produces the API's ``nop_status`` / ``single_ccy_status``
+    and the filed metric-result statuses; its only other check was a transcribed
+    mirror inside the real-data-gated API tests. The expected statuses here are
+    hand-derived from the documented rule (red strictly above the limit, amber
+    strictly above the 75% buffer floor, green otherwise) without calling the
+    production helper or importing its 0.75 constant.
+    """
+    assert classify_limit(Decimal(ratio_pct), Decimal(limit_pct)) == expected_status
 
 
 def test_var_golden_five_day_hand_check() -> None:
