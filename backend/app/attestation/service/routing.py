@@ -195,11 +195,10 @@ def ensure_routed_signer(
     role: str,
     user_id: UUID,
 ) -> None:
-    """When a role has been routed, only a named recipient may fill it.
+    """Require a pending current-cycle route naming this exact signer (D7).
 
-    Silent when nothing was routed, so every pre-existing ceremony (and every
-    return whose institution does not use routing) behaves exactly as before.
-    This is a gate that only exists where somebody chose to create it.
+    The first signature is not an exception. Nomination is structural authority
+    only: final certification still requires a genuine step-up token.
     """
     routed = [
         row
@@ -207,7 +206,11 @@ def ensure_routed_signer(
         if row.signing_role == role and row.status == "pending"
     ]
     if not routed:
-        return
+        raise AttestationConflict(
+            "signer_not_routed",
+            f"No pending current-cycle recipient names this actor for the '{role}' "
+            "signature. Route the signature before preview, step-up, or certification.",
+        )
     if any(row.recipient_user_id == user_id for row in routed):
         return
     named = ", ".join(row.recipient_display_name or row.recipient_signer_id for row in routed)

@@ -508,7 +508,7 @@ def _http_request() -> Any:
     )
 
 
-def _enrol(db: Session, ctx: TenantContext, password: str) -> None:
+def _enrol(db: Session, ctx: TenantContext, password: str) -> str:
     """Give a user a password, a signer identity, and an active signing key."""
     assert ctx.actor_user_id is not None
     user = db.scalar(select(User).where(User.id == ctx.actor_user_id))
@@ -524,6 +524,7 @@ def _enrol(db: Session, ctx: TenantContext, password: str) -> None:
             organization_name="Sample Bank",
         )
     db.commit()
+    return identity.signer_id
 
 
 def _ceremony(  # noqa: PLR0913 - mirrors the two API calls' own inputs
@@ -566,6 +567,7 @@ def test_the_preparer_then_approver_ceremony_still_completes(
         APPROVER,
         MAKER,
         SAMPLE_BANK_ID,
+        _name_certifier,  # pyright: ignore[reportPrivateUsage]
         _seed,  # pyright: ignore[reportPrivateUsage]
     )
     from tests.support.inmemory_storage import InMemoryStorageClient  # noqa: PLC0415
@@ -589,8 +591,25 @@ def test_the_preparer_then_approver_ceremony_still_completes(
         roles=("approver",),
         authorization_version=1,
     )
-    _enrol(db_session, maker, PASSWORD)
-    _enrol(db_session, checker, APPROVER_PASSWORD)
+    assert maker.actor_user_id is not None
+    assert checker.actor_user_id is not None
+    maker_signer_id = _enrol(db_session, maker, PASSWORD)
+    checker_signer_id = _enrol(db_session, checker, APPROVER_PASSWORD)
+    _name_certifier(
+        db_session,
+        package,
+        role="preparer",
+        user_id=maker.actor_user_id,
+        signer_id=maker_signer_id,
+    )
+    _name_certifier(
+        db_session,
+        package,
+        role="approver",
+        user_id=checker.actor_user_id,
+        signer_id=checker_signer_id,
+    )
+    db_session.commit()
 
     _ceremony(
         db_session,
