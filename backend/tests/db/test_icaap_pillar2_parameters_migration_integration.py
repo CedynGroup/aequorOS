@@ -35,7 +35,7 @@ from app.policy.service.regulatory_parameters import (
     ICAAP_P2_SEED_PARAMETERS,
     P2_PARAMETER_CODES,
 )
-from tests.db.test_postgres_migrations_integration import (
+from tests.support.postgres_migrations import (
     MigratedPostgresSchema,
     alembic_config_for_app,
     migrated_postgres_schema,

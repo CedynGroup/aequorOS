@@ -23,7 +23,7 @@ from tests.db.test_bank_organization_integrity_integration import (
     pytestmark,
 )
 from tests.db.test_canonical_bank_integrity_integration import SIBLING_BANK
-from tests.db.test_postgres_migrations_integration import (
+from tests.support.postgres_migrations import (
     MigratedPostgresSchema,
     alembic_config_for_app,
     migrate_isolated_postgres_schema,

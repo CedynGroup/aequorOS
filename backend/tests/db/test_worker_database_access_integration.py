@@ -62,8 +62,8 @@ from app.storage.client import StorageLocation
 from app.storage.encryption import ObjectEncryption
 from scripts import create_operator
 from tests.db import test_database_roles_integration as foundation
-from tests.db import test_postgres_migrations_integration as migrations
 from tests.live_data import conftest as live_data
+from tests.support import postgres_migrations as migrations
 from tests.support.database import managed_engine, managed_session_factory
 from tests.support.helpers import ORG_1, ORG_2
 from tests.support.stateful import run_database_machine

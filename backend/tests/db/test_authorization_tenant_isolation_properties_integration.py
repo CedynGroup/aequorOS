@@ -41,12 +41,12 @@ from app.db.session import get_engine
 from app.identity.public import AuthorizationBinding
 from app.integrations.storage.s3 import get_object_storage
 from app.main import create_app
-from tests.db.test_postgres_migrations_integration import (
+from tests.support.helpers import headers
+from tests.support.postgres_migrations import (
     MigratedPostgresSchema,
     clear_database_caches,
     migrated_postgres_schema,
 )
-from tests.support.helpers import headers
 
 __all__ = ["migrated_postgres_schema"]
 

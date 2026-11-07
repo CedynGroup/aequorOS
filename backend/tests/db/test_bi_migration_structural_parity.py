@@ -38,7 +38,7 @@ import pytest
 
 from app.bi.models.commentary import BI_COMMENTARY_TABLES
 from app.db.base import Base
-from tests.db.test_postgres_migrations_integration import (
+from tests.support.postgres_migrations import (
     catalog_postgres_schema,
     forward_migrated_postgres_schema,
     postgres_schema_url,

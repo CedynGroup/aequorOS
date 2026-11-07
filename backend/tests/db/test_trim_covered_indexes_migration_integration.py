@@ -29,7 +29,7 @@ from sqlalchemy.exc import OperationalError
 
 import app.models
 from alembic import command
-from tests.db.test_postgres_migrations_integration import (
+from tests.support.postgres_migrations import (
     MigratedPostgresSchema,
     alembic_config_for_app,
     clear_database_caches,

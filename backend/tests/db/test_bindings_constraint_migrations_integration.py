@@ -33,7 +33,7 @@ import pytest
 from sqlalchemy import text
 
 from app.core.authorization import ModuleScope, RoleBundle
-from tests.db.test_postgres_migrations_integration import (
+from tests.support.postgres_migrations import (
     MigratedPostgresSchema,
     migrated_postgres_schema,
 )

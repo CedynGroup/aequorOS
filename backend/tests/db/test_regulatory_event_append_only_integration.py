@@ -11,12 +11,12 @@ from sqlalchemy.engine import make_url
 from sqlalchemy.exc import DBAPIError
 
 from alembic import command
-from tests.db.test_postgres_migrations_integration import (
+from tests.support.database import install_migration_engines, managed_engine
+from tests.support.postgres_migrations import (
     alembic_config_for_app,
     clear_database_caches,
     postgres_schema_url,
 )
-from tests.support.database import install_migration_engines, managed_engine
 
 
 @pytest.mark.skipif(

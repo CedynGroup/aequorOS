@@ -23,8 +23,8 @@ from tests.core.test_bank_field_encryption_integration import (
     counterparty,
     provider,
 )
-from tests.db.test_postgres_migrations_integration import alembic_config_for_app
 from tests.support.helpers import ORG_1
+from tests.support.postgres_migrations import alembic_config_for_app
 
 __all__ = ["provider"]
 
