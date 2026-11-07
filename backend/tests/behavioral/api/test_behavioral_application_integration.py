@@ -234,7 +234,9 @@ def _proposal(proposal_id: str | UUID) -> BehavioralModelProposal:
         return row
 
 
-def _seed_accepted_assumptions() -> UUID:
+def _seed_accepted_assumptions(
+    *, as_of_date: date = date(2026, 2, 28)
+) -> UUID:
     batch_id = new_uuid7()
     lineage_id = new_uuid7()
     payloads = [
@@ -268,7 +270,7 @@ def _seed_accepted_assumptions() -> UUID:
                 adapter_version="behavioral_test_fixture",
                 extraction_mode="full",
                 status="accepted",
-                as_of_date=date(2026, 2, 28),
+                as_of_date=as_of_date,
                 created_by=USER_1,
             )
         )
@@ -290,7 +292,7 @@ def _seed_accepted_assumptions() -> UUID:
                     organization_id=ORG_1,
                     bank_id=SAMPLE_BANK_ID,
                     ingestion_batch_id=batch_id,
-                    as_of_date=date(2026, 2, 28),
+                    as_of_date=as_of_date,
                     dataset_kind="behavioral_assumptions",
                     row_index=index,
                     payload=payload,
@@ -514,6 +516,26 @@ def test_older_proposal_cannot_relabel_newer_peer_assumptions(
     assert rows
     assert all(row.as_of_date == date(2026, 4, 30) for row in rows)
     assert rows[0].payload["assumption_type"] == "PREPAYMENT_RATE"
+
+
+def test_older_proposal_cannot_relabel_newer_ingested_assumptions(
+    db_client: TestClient,
+) -> None:
+    _seed_book()
+    _seed_accepted_assumptions(as_of_date=date(2026, 4, 30))
+    _, proposer_version = _grant()
+    proposal_id = _ack(_propose(db_client, proposer_version)).proposal_id
+    _, reviewer_version = _grant(FORECAST_APPROVER_ID, RoleBundle.APPROVER)
+
+    before = _counts()
+    denied = _review(
+        db_client, proposal_id, FORECAST_APPROVER_ID, reviewer_version
+    )
+
+    assert denied.status_code == 409, denied.text
+    assert "older proposal" in denied.text
+    assert _counts() == before
+    assert _proposal(proposal_id).status == "pending"
 
 
 def test_self_review_and_configurator_only_review_are_denied_without_acceptance(
