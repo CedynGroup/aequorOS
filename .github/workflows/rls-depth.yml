@@ -25,20 +25,31 @@ name: RLS property depth
 #   this job's budget (200):    2851 s  (7 nodes passed, 1 failed) 2026-11-07
 #
 # `max_examples` is a CONFIGURED UPPER BUDGET, not proof that many examples
-# executed: Hypothesis may stop, exhaust, or be interrupted, and no per-example
-# statistics were captured. The configured-200 run's one failure was raised by
-# Hypothesis's data-generation consistency checker (`FlakyStrategyDefinition`
-# in stateful rule selection, matching the failure family documented in
-# HypothesisWorks/hypothesis#4206) during the reconciliation state machine.
-# No assertion and no authorization check failed; the interruption preceded
-# any assertion, so it is evidence about nothing except itself. MECHANISM
-# UNKNOWN: an isolated replay of the nodeid at the same budget passed, which
-# shows only non-determinism, not a root cause; a product-correctness
-# contribution is not excluded by the available evidence. Triage: re-run the
-# failed test by nodeid with the same budget, preserve the report and the
-# Hypothesis example database, and treat any recurrence as a finding requiring
-# root-cause analysis BEFORE any product conclusion. Record the failure either
-# way.
+# executed: Hypothesis may stop, exhaust, or be interrupted. Statistics from
+# the verification runs below (captured with an observation-only collector
+# adapter, because the pinned Hypothesis pytest plugin wires statistics only
+# for @given-decorated tests, not for tests calling run_state_machine_as_test)
+# distinguish the two.
+#
+# CHRONOLOGY (kept distinct): the 2026-11-07 configured-200 run's one failure
+# was raised by Hypothesis's data-generation consistency checker
+# (`FlakyStrategyDefinition` in stateful rule selection, the failure family of
+# HypothesisWorks/hypothesis#4206) during the reconciliation state machine —
+# no assertion and no authorization check failed. Its executed-example count
+# is unknown (the flaky path bypasses statistics), and an isolated replay at
+# the same budget passed, showing non-determinism only. Root cause (diagnosed
+# 2026-11-07, `no-mistakes` evidence bundle for this branch): the machines
+# picked rule victims by uuid-string order over server-generated uuid4 keys,
+# making state evolution a non-function of the drawn choices; replayed choice
+# prefixes then drew a feature-flag boolean where an integer rule index was
+# recorded. FIX: rule victims are now selected in dict insertion order
+# (`_slot_pick`), pinned by `tests/db/test_machine_slot_selection.py`. After
+# the fix, three independent local runs of the exact node at configured-200
+# each executed 200 valid examples (stopped at max_examples=200; 9 invalid /
+# 10 overrun / 0 interesting) with zero failures. Triage for any future red
+# run here: preserve the report, capture statistics with an observation-only
+# adapter, and treat any recurrence as a finding requiring root-cause analysis
+# BEFORE any product conclusion. Record the failure either way.
 #
 # COST: measured minutes above are LOCAL pytest wall time. Hosted billing is
 # arithmetic on UNMEASURED hosted minutes until this workflow's first
