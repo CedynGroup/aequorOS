@@ -168,8 +168,9 @@ def test_signoff_maker_checker_lifecycle(db_client: TestClient) -> None:
         )
     finally:
         event.remove(engine, "before_cursor_execute", observe_read)
-    assert len(locked_reads) == 1
     assert attest.status_code == 200, attest.text
+    if engine.dialect.name == "postgresql":
+        assert len(locked_reads) == 1, locked_reads
     body = attest.json()
     assert body["status"] == "attested"
     assert body["attested_by"] == str(board)

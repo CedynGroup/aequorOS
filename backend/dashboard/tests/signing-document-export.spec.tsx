@@ -33,6 +33,8 @@ const state = vi.hoisted(() => ({
   signerIdentityCalls: 0,
   routedNominations: [] as { signingRole: string; userId: string }[],
   status: undefined as unknown,
+  statusLoading: false,
+  statusError: null as Error | null,
   stepUpBlockedReason: null as string | null,
   /** Whether the mocked canvas reports a drawn page, as a real one would. */
   rendersPage: true,
@@ -72,6 +74,9 @@ vi.mock("@/components/submissions/shared", () => ({
 
 vi.mock("@/lib/api/grantAdministration", () => ({
   useGrantAdministrationAccess: () => false,
+}));
+vi.mock("@/components/impersonation/useImpersonation", () => ({
+  useImpersonation: () => ({ impersonating: false }),
 }));
 
 vi.mock("@/lib/api/hooks", () => {
@@ -117,10 +122,16 @@ vi.mock("@/lib/api/hooks", () => {
       return settled(undefined);
     },
     useOrganizationUsers: () => settled({ users: [] }),
-    usePackageAttestation: () => settled(state.status),
+    usePackageAttestation: () => ({
+      ...settled(state.status),
+      isLoading: state.statusLoading,
+      error: state.statusError,
+    }),
     usePackageArtifacts: () => settled({ artifacts: state.artifacts }),
     usePackageArtifactVersions: () => settled({ versions: state.versions }),
     useStepUpForSigning: idle,
+    useCertifyPackage: idle,
+    useCertifyWithHeldAuthorization: idle,
     useCertifyAndSend: idle,
     useCertifyAndSendWithHeldAuthorization: idle,
     useSetPackageSignaturePlacements: idle,
@@ -203,6 +214,7 @@ vi.mock("@/components/ui/StatusPill", () => ({ default: () => null }));
 vi.mock("@/components/ui/Skeleton", () => ({ SkeletonCard: () => null }));
 
 import SigningWorkspace from "../components/attestation/signing/SigningWorkspace";
+import CertifyDialog from "../components/attestation/CertifyDialog";
 
 const PDF_ARTIFACT = {
   id: "artifact-1",
@@ -243,6 +255,8 @@ beforeEach(() => {
       },
     ],
   };
+  state.statusLoading = false;
+  state.statusError = null;
   state.stepUpBlockedReason = null;
   state.rendersPage = true;
   state.renderFails = false;
@@ -306,6 +320,49 @@ it("aligns routed recipients to outstanding role order", async () => {
     ]),
   );
 });
+
+it.each([
+  {
+    failed: false,
+    loading: true,
+    message: "Checking who this signature is routed to…",
+  },
+  {
+    failed: true,
+    loading: false,
+    message: "Could not load the current-cycle signing route. Reload the page to retry.",
+  },
+])(
+  "keeps signing route status distinct from denial: $message",
+  ({ failed, loading, message }) => {
+    state.permissions = ["view", "review", "approve", "sign_off"];
+    state.status = undefined;
+    state.statusLoading = loading;
+    state.statusError = failed ? new Error("synthetic status failure") : null;
+
+    for (const kind of ["workspace", "dialog"] as const) {
+      if (kind === "workspace") {
+        renderWorkspace();
+      } else {
+        render(
+          <CertifyDialog
+            bankId="BK-A"
+            packageId="package-1"
+            signingRole="approver"
+            returnLabel="ICAAP · 31 Mar 2026"
+            onClose={() => undefined}
+          />,
+        );
+      }
+      expect(screen.getByRole("status")).toHaveTextContent(message);
+      expect(
+        screen.queryByText(/No pending current-cycle recipient names you/),
+      ).toBeNull();
+      expect(state.previewCalls).toBe(0);
+      cleanup();
+    }
+  },
+);
 
 it("tells an approver without export which grant the document needs", async () => {
   state.permissions = ["view", "review", "approve", "sign_off"];
