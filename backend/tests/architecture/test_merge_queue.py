@@ -36,7 +36,6 @@ def test_required_checks_run_for_merge_groups(workflow: str, checks: set[str]) -
     assert checks <= names
 
 
-
 def _condition_runs(condition: str, values: dict[str, str]) -> bool:
     expression = condition.removeprefix("${{").removesuffix("}}").strip()
     for field, value in values.items():
@@ -48,10 +47,8 @@ def _condition_runs(condition: str, values: dict[str, str]) -> bool:
         match node:
             case ast.Constant(value=value) if isinstance(value, (str, bool)):
                 return value
-            case ast.Name(id="true"):
-                return True
-            case ast.Name(id="false"):
-                return False
+            case ast.Name(id=name) if name in {"true", "false"}:
+                return name == "true"
             case ast.BoolOp(op=ast.And(), values=operands):
                 return all(evaluate(operand) for operand in operands)
             case ast.BoolOp(op=ast.Or(), values=operands):
@@ -68,9 +65,10 @@ def _condition_runs(condition: str, values: dict[str, str]) -> bool:
     return result
 
 
-@pytest.mark.parametrize("event,preflight,enabled", product(
-    ["merge_group", "pull_request", "push"], ["true", "false"], ["true", "false"]
-))
+@pytest.mark.parametrize(
+    "event,preflight,enabled",
+    product(["merge_group", "pull_request", "push"], ["true", "false"], ["true", "false"]),
+)
 def test_queue_head_execution_policy(event: str, preflight: str, enabled: str) -> None:
     """Issue 818 requires selected queue gates and excludes primary-data access."""
     document = cast(
