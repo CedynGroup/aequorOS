@@ -314,6 +314,7 @@ it("attests with the server-held authorization after SSO step-up", async () => {
   );
   expect(state.stepUp).not.toHaveBeenCalled();
   expect(state.attest).not.toHaveBeenCalled();
+  expect(window.location.search).toBe("?run=run-1");
 });
 
 it("routes a draft submission to a named recipient", () => {
