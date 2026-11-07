@@ -78,7 +78,7 @@ Legacy diagnostic allowances may only shrink.
   promoted, so a move PR stays a pure rename (§5). The check counts it under the name it had
   before its moves in `backend/scripts/feature_module_moves.json`. A module whose new location is
   already in `STRICT_MODULES` gets no allowance: fix its errors in the move PR, and `update` then
-  removes its old entry. The live layout migration has nine exact-file exceptions listed in
+  removes its old entry. The live layout migration has exact-file exceptions listed in
   `TRANSITIONAL_LEGACY_MODULES`, with their existing per-rule counts moved to their current
   names. All other live modules remain strict. Retire each exception when its errors are fixed
   and its baseline entry is removed; do not extend the exception set to new files.
