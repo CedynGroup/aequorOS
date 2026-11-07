@@ -1,8 +1,8 @@
 # Live READ enforcement rollout — freshness (issue #177 backend slice)
 
-Status: planned (PR-A of the #177 backend pilot). This document records the
-contract the freshness read surface follows once its module filter ships, and
-the rollout evidence still owed before any deployment.
+Status: implemented in this slice (PR-A of the #177 backend pilot). This
+document owns the freshness read authorization contract and records the
+rollout evidence still owed before deployment.
 
 ## Surface and decision
 
@@ -20,23 +20,15 @@ The API dependency stays the plain tenant dependency; narrowing at the service
 layer is explicitly permitted by the route-authorization census basis
 ("handler and service checks can narrow this access further").
 
-## Mapping (existing authority; nothing invented)
+## Mapping authority
 
-| Freshness module | Authorization module |
-| --- | --- |
-| liquidity | `Module.LIQUIDITY` |
-| capital | `Module.CAPITAL` |
-| credit | `Module.CREDIT` |
-| irr | `Module.IRRBB` |
-| fx | `Module.FX` |
-| ftp | `Module.FTP` |
-| rating | `Module.MARKETS` |
-| forecast | `Module.FORECASTING` |
-
-The `rating → MARKETS` pairing is the live summary's existing authority for
-implied-rating figures. Any future mint/read work reuses this mapping rather
-than inventing a RATING enum value; a genuine new module vocabulary is a
-CHECK-widening migration decision that belongs to root, not to a surface PR.
+`FRESHNESS_VIEW_MODULES` in `app/live/service/live_access.py` owns the exact
+freshness-to-authorization module mapping. It matches the live summary's
+`_GATED_ENGINE_MODULES`, including MARKETS authority for implied ratings.
+`test_mapping_covers_every_freshness_module` in
+`backend/tests/live/service/test_live_authorization.py` checks coverage of the
+freshness module vocabulary. A new authorization enum value requires a
+CHECK-widening migration, not just a surface mapping change.
 
 ## Semantics
 
@@ -46,16 +38,18 @@ CHECK-widening migration decision that belongs to root, not to a surface PR.
 - **Default deny, closed map.** Unknown or unmapped module names are omitted,
   never surfaced with empty fields. Responses omit unauthorized modules rather
   than labeling them; no hash, timestamp or staleness byte leaks for them.
-- **Denial before protected reads.** Unauthorized modules never trigger engine
-  hash computations or official-run lookups.
+- **Denial before per-module computation and official reads.** Unauthorized
+  modules never trigger engine hash computations or official-run lookups. The
+  service still loads bank-scoped live rows before filtering the response.
 - **Aggregate honesty.** `is_stale` aggregates only the served (authorized)
   modules; a restricted viewer's flag describes exactly the payload served.
+  With no permitted modules, `modules` is empty and `is_stale` is false.
 - **Opaque bank denial unchanged.** Unknown or other-tenant banks still 404
   before any module decision.
 
 ## Scope of this slice (and what it is not)
 
-This slice covers the freshness read only. The official-snapshot read loop,
+This slice changes the freshness read only. Further pilot work on the official-snapshot read loop,
 alerts and board-pack window predicates (PR-C), the refresh/mint mutation
 gates (PR-B — mint authority already decided: the existing per-module RUN loop
 plus the `Module.CAPITAL` entry) and the impact-evidence tooling (PR-D) are
