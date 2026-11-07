@@ -111,7 +111,10 @@ def _grant(
 
 def _current_version() -> int:
     with get_sessionmaker()() as db:
-        user = db.get(User, USER_1)
+        db.info["organization_id"] = ORG_1
+        user = db.scalar(
+            select(User).where(User.id == USER_1, User.organization_id == ORG_1)
+        )
         assert user is not None
         return user.authorization_version
 
@@ -344,6 +347,7 @@ def _suspend_all(db: Session | None = None) -> None:
     owned = db is not None
     session = db if owned else get_sessionmaker()()
     assert session is not None
+    session.info["organization_id"] = ORG_1
     bindings = list(
         session.scalars(
             select(AuthorizationBinding).where(
@@ -355,7 +359,9 @@ def _suspend_all(db: Session | None = None) -> None:
     )
     for binding in bindings:
         binding.status = BindingStatus.SUSPENDED.value
-    user = session.get(User, USER_1)
+    user = session.scalar(
+        select(User).where(User.id == USER_1, User.organization_id == ORG_1)
+    )
     assert user is not None
     user.authorization_version += 1
     session.commit()
