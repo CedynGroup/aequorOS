@@ -17,7 +17,8 @@ name: RLS property depth
 #
 # MEASURED RUNTIME (local, not hosted-runner, evidence): disposable native
 # PostgreSQL 17 on 4 CPUs / 31 GiB, serial, numeric threads pinned to 1,
-# Hypothesis profile `ci` (derandomize, stateful_step_count=20). Times are
+# Hypothesis profile `ci` (derandomize, default stateful_step_count=20;
+# effective-access and reconciliation machines override steps to 12). Times are
 # pytest's own wall clock (JUnit); PostgreSQL init/teardown happen outside it:
 #
 #   per-PR defaults (15/10/15):  248 s  (8 test nodes passed)   2026-11-07
