@@ -5,6 +5,8 @@ from __future__ import annotations
 import json
 import os
 import re
+import subprocess
+import sys
 from collections.abc import Generator
 from contextlib import contextmanager
 from datetime import UTC, datetime, timedelta
@@ -554,6 +556,26 @@ def _assert_configure_artifacts(
             == 2
         )
         assert "no complete assessment" in capsys.readouterr().err
+
+
+def test_configure_standalone_import_registers_tenant_rls_handling() -> None:
+    """A fresh CLI interpreter must not depend on an incidental app.main import."""
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            "from sqlalchemy import event\n"
+            "from sqlalchemy.orm import Session\n"
+            "import scripts.authorization_configure_impact\n"
+            "from app.db.session import set_tenant_rls_context\n"
+            "assert event.contains(Session, 'after_begin', set_tenant_rls_context)\n",
+        ],
+        cwd=Path(__file__).parents[2],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
 
 
 @pytest.mark.parametrize(
