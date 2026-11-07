@@ -385,6 +385,47 @@ def test_run_scenarios_golden() -> None:
     assert len(result.line_items) == 7
 
 
+def test_non_parallel_scenario_eve_goldens() -> None:
+    # Independent hand arithmetic for the four non-parallel scenarios the
+    # scenario runner accepts. Short shocks decay with tenor as
+    # short_bp · e^(−t/decay_years); the Basel rotational blend is
+    # shift = short·s(t) + long·(1 − s(t)) with s(t) = e^(−t/4). Per-bucket
+    # curve shifts (percentage points, midpoints 0.003/0.014/0.06/0.17/0.38/
+    # 0.75/1.9/4.0/7.0 years) re-price every position as
+    # PV = amount / (1 + (z + shift)/100)^t against the base EVE of
+    # −100,562,865.7068:
+    #   short_up_250   +2.4975 +2.4884 +2.4505 +2.3623 +2.2026 +1.9470 +1.3270 +0.6590 +0.2424
+    #   short_down_250 (the same table negated)
+    #   steepener      −0.6488 −0.6446 −0.6269 −0.5855 −0.5095 −0.3850 −0.0639 +0.3298 +0.6307
+    #   flattener      +0.7990 +0.7951 +0.7792 +0.7417 +0.6731 +0.5606 +0.2706 −0.0850 −0.3567
+    result = run_irr_scenarios(_positions(), BASE_CURVE, SCENARIO_SHOCKS, TIER1, EVE_LIMIT)
+    scenarios = {scenario.scenario_code: scenario for scenario in result.scenarios}
+    assert scenarios["short_up_250"].delta_eve == Decimal("-4970180.7726")
+    assert scenarios["short_up_250"].delta_eve_pct_tier1 == Decimal("-1.775065")
+    assert scenarios["short_down_250"].delta_eve == Decimal("5108858.2962")
+    assert scenarios["short_down_250"].delta_eve_pct_tier1 == Decimal("1.824592")
+    assert scenarios["steepener"].delta_eve == Decimal("-2231497.5564")
+    assert scenarios["steepener"].delta_eve_pct_tier1 == Decimal("-0.796963")
+    assert scenarios["flattener"].delta_eve == Decimal("513623.2506")
+    assert scenarios["flattener"].delta_eve_pct_tier1 == Decimal("0.183437")
+    # Convexity: the down-shocked EVE gain exceeds the up-shocked loss of the
+    # same magnitude short shock (PV falls less than it rises back).
+    assert abs(scenarios["short_down_250"].delta_eve) > abs(scenarios["short_up_250"].delta_eve)
+
+    # In-test re-derivation of both non-trivial shift builders from their
+    # documented formulas, priced through the independent PV implementation
+    # (shifts in percentage points, the convention _independent_eve uses).
+    decay_shifts = {mid: Decimal("2.5") * (-mid / Decimal("3")).exp() for mid in BASE_CURVE}
+    assert scenarios["short_up_250"].eve == _independent_eve(_positions(), decay_shifts)
+    short_weight = {mid: (-mid / Decimal("4")).exp() for mid in BASE_CURVE}
+    steepener_shifts = {
+        mid: Decimal("-0.65") * short_weight[mid]
+        + Decimal("0.90") * (Decimal("1") - short_weight[mid])
+        for mid in BASE_CURVE
+    }
+    assert scenarios["steepener"].eve == _independent_eve(_positions(), steepener_shifts)
+
+
 def test_eve_limit_breach_when_tier1_is_thin() -> None:
     # A thin Tier 1 base forces the worst |ΔEVE| above the 15% limit.
     thin_tier1 = Decimal("60") * M
