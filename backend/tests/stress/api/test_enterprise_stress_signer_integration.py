@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterator
+from collections.abc import Iterator, Sequence
 from datetime import UTC, datetime, timedelta
 from uuid import UUID, uuid4
 
 import pytest
+from fastapi import HTTPException
 from fastapi.testclient import TestClient
 from httpx2 import Response
 from sqlalchemy import func, select
@@ -15,18 +16,23 @@ from sqlalchemy.orm import Session
 from app.attestation.models import SigningAuthorization
 from app.core import security
 from app.core.authorization import (
+    BindingGrant,
     BindingStatus,
+    DataScope,
+    InstitutionScope,
     ModuleScope,
+    PrincipalType,
     RoleBundle,
     SensitivityScope,
 )
 from app.core.config import get_settings
+from app.core.tenancy import TenantContext
 from app.identity.models.authorization import AuthorizationBinding
 from app.identity.models.bank import Bank
 from app.identity.models.user import User
 from app.models import EnterpriseStressSignoff
 from app.models.audit_event import AuditEvent
-from app.stress.service import enterprise_stress_signoff
+from app.stress.service import enterprise_stress_signoff, scope_authorization
 from tests.stress.api.test_enterprise_stress_integration import (
     _approve_scenario,
     _create_scenario,
@@ -552,3 +558,164 @@ def test_submission_rejects_self_routing_by_a_non_creator(
     assert stored.status == "draft"
     assert stored.submitted_by is None
     assert stored.attestation_recipient_user_id is None
+
+
+def _composing_partial_signer_grants(
+    db_session: Session,
+    bank_id: str,
+    recipient: UUID,
+    monkeypatch: pytest.MonkeyPatch,
+) -> UUID:
+    """Store the org-scope leg and inject the branch-restricted leg the DB refuses.
+
+    ``ck_authorization_bindings_narrowed_module`` and the grant service both
+    refuse a branch-restricted RISK row, so a composing pair exists only as
+    imported or historical data. The evaluator must not treat that storage guard
+    as authority (the same input the signing-impact report defends explicitly):
+    the effective-grant loader is patched to answer exactly as a database
+    holding the historical pair would.
+    """
+    org_binding_id = grant(
+        db_session,
+        RoleBundle.SIGNER,
+        user_id=recipient,
+        bank_id=None,
+        module=ModuleScope.RISK,
+        sensitivity=SensitivityScope.RESTRICTED,
+    )
+    org_scope_grant = BindingGrant(
+        binding_id=org_binding_id,
+        organization_id=ORG_1,
+        principal_id=recipient,
+        principal_type=PrincipalType.HUMAN,
+        role_bundle=RoleBundle.SIGNER,
+        institution_scope=InstitutionScope.ORGANIZATION,
+        institution_id=None,
+        module_scope=ModuleScope.RISK,
+        sensitivity_scope=SensitivityScope.RESTRICTED,
+        status=BindingStatus.ACTIVE,
+        valid_from=datetime.now(UTC),
+        valid_until=None,
+        revoked_at=None,
+    )
+    branch_restricted_grant = BindingGrant(
+        binding_id=uuid4(),
+        organization_id=ORG_1,
+        principal_id=recipient,
+        principal_type=PrincipalType.HUMAN,
+        role_bundle=RoleBundle.SIGNER,
+        institution_scope=InstitutionScope.INSTITUTION,
+        institution_id=bank_id,
+        module_scope=ModuleScope.RISK,
+        sensitivity_scope=SensitivityScope.RESTRICTED,
+        status=BindingStatus.ACTIVE,
+        valid_from=datetime.now(UTC),
+        valid_until=None,
+        revoked_at=None,
+        data_scope=DataScope.BRANCH,
+        data_scope_values=("Head office",),
+    )
+    composing = {
+        org_binding_id: org_scope_grant,
+        branch_restricted_grant.binding_id: branch_restricted_grant,
+    }
+    real_load_effective_grants = scope_authorization.authorization.load_effective_grants
+
+    def historical_pair(
+        db: Session, *, organization_id: str, binding_ids: Sequence[UUID]
+    ) -> dict[UUID, BindingGrant]:
+        if org_binding_id in binding_ids:
+            return dict(composing)
+        return real_load_effective_grants(
+            db, organization_id=organization_id, binding_ids=binding_ids
+        )
+
+    monkeypatch.setattr(
+        scope_authorization.authorization, "load_effective_grants", historical_pair
+    )
+    return org_binding_id
+
+
+def test_composing_partial_signer_rows_are_denied_at_routing(
+    db_client: TestClient, db_session: Session, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """An org-scope grant and a separate branch-restricted grant never combine."""
+    bank_id = seed_bank(db_client)
+    run_id = _run(db_client, bank_id)
+    signoff_id = _create_signoff(db_client, bank_id, run_id)
+    recipient, _, _ = _seed_officer(db_session, bank_id, signer=False)
+    _composing_partial_signer_grants(db_session, bank_id, recipient, monkeypatch)
+
+    response = db_client.post(
+        SIGNOFF_URL.format(bank_id=bank_id) + f"/{signoff_id}/submit",
+        headers=headers(user_id=USER_1, roles=("analyst",)),
+        json={
+            "attestation_recipient_user_id": str(recipient),
+            "reason": "Route to an officer whose grants only compose partially.",
+        },
+    )
+
+    assert response.status_code == 403, response.text
+    stored = _stored_signoff(db_session, signoff_id)
+    assert stored.status == "draft"
+    assert stored.attestation_recipient_user_id is None
+    assert stored.submitted_by is None
+
+
+def test_composing_partial_signer_rows_are_denied_at_execution(
+    db_client: TestClient, db_session: Session, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The execution re-evaluation also refuses the composing partial pair."""
+    bank_id, signoff_id, signer, signer_binding_id, _ = _pending(db_client, db_session)
+    binding = db_session.get(AuthorizationBinding, signer_binding_id)
+    assert binding is not None
+    binding.status = BindingStatus.SUSPENDED.value
+    db_session.commit()
+    _composing_partial_signer_grants(db_session, bank_id, signer, monkeypatch)
+    officer = db_session.get(User, signer)
+    assert officer is not None
+    ctx = TenantContext(
+        organization_id=ORG_1,
+        actor_user_id=signer,
+        authorization_version=officer.authorization_version,
+    )
+
+    with pytest.raises(HTTPException) as preflight:
+        scope_authorization.require_signer(db_session, ctx, bank_id, structural=True)
+    assert preflight.value.status_code == 403
+    with pytest.raises(HTTPException) as execution:
+        scope_authorization.require_signer(
+            db_session,
+            ctx,
+            bank_id,
+            structural=False,
+            maker_checker_established=True,
+            step_up_established=True,
+        )
+    assert execution.value.status_code == 403
+    assert _stored_signoff(db_session, signoff_id).status == "pending_attestation"
+
+
+def test_single_complete_exact_bank_binding_allows_routing_and_execution(
+    db_client: TestClient, db_session: Session
+) -> None:
+    """One exact-bank restricted RISK grant with whole-institution data suffices."""
+    bank_id, signoff_id, signer, _, _ = _pending(db_client, db_session)
+    officer = db_session.get(User, signer)
+    assert officer is not None
+    ctx = TenantContext(
+        organization_id=ORG_1,
+        actor_user_id=signer,
+        authorization_version=officer.authorization_version,
+    )
+
+    scope_authorization.require_signer(db_session, ctx, bank_id, structural=True)
+    scope_authorization.require_signer(
+        db_session,
+        ctx,
+        bank_id,
+        structural=False,
+        maker_checker_established=True,
+        step_up_established=True,
+    )
+    assert _stored_signoff(db_session, signoff_id).status == "pending_attestation"
