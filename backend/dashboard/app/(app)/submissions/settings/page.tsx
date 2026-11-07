@@ -10,12 +10,13 @@
  * write-only ORASS credentials (the API returns only the fingerprint —
  * mirroring the market-data vault pattern).
  *
- * Plus the Org Owner-only signing-policy section (who must sign which return —
- * docs/attestation_esignature.md §4.5), which renders nothing for non-owners.
+ * Plus the signing-policy section (who must sign which return —
+ * docs/attestation_esignature.md §4.5), whose save is gated on
+ * organization-scope REG configure authority (VAL-CFG-008).
  */
 
 import PageContainer from "@/components/ui/PageContainer";
-import { useEffect, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import { FlaskConical, KeyRound, Loader2, Save } from "lucide-react";
 import type {
   ChannelCode,
@@ -35,6 +36,7 @@ import {
 import { fmtTimestamp, shortId } from "@/lib/api/values";
 import { CHANNEL_LABELS } from "@/components/submissions/shared";
 import SigningPolicyPanel from "@/components/attestation/SigningPolicyPanel";
+import { useConfigureEligibility } from "@/lib/api/configureAccess";
 import { regShort } from "@/lib/format";
 
 const CHANNELS: ChannelCode[] = [
@@ -167,12 +169,30 @@ export default function SettingsPage() {
         {bankId && (
           <ChannelForm key={channel} bankId={bankId} channel={channel} />
         )}
-        {/* Org Owner-only, and renders nothing for everyone else. Who must sign is a
-            separate control from how a return is transmitted, but both belong to
-            the same "how this institution files" settings surface. */}
+        {/* Who must sign is a separate control from how a return is
+            transmitted, but both belong to the same "how this institution
+            files" settings surface; its save carries the org-scope gate. */}
         <SigningPolicyPanel />
       </PageContainer>
     </>
+  );
+}
+
+/**
+ * The channel read answers 404 while the bank has never configured it — the
+ * unconfigured state, not an outage (isChannelConfigMissingError). The
+ * settings page sits behind the shell's bank context, so a bank-missing 404
+ * never reaches this query.
+ */
+function UnconfiguredStatus() {
+  return (
+    <div className="space-y-2">
+      <StatusPill tone="slate">No credentials stored</StatusPill>
+      <p className="text-caption text-slate leading-relaxed">
+        The ORASS sandbox works credential-less; storing credentials exercises
+        the vault seam that real ORASS onboarding will use.
+      </p>
+    </div>
   );
 }
 
@@ -185,6 +205,11 @@ function ChannelForm({
 }) {
   const configQuery = useChannelConfig(bankId, channel);
   const save = useSaveChannelConfig(bankId);
+  // The PUT demands an exact reg / configure / restricted binding for this
+  // bank (the read stays available to every viewer of the page).
+  const { allowed: canConfigure, reason: configureReason } =
+    useConfigureEligibility(bankId, "reg");
+  const configureReasonId = useId();
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
   const [hydrated, setHydrated] = useState(false);
 
@@ -219,6 +244,7 @@ function ChannelForm({
     setForm((prev) => ({ ...prev, [key]: value }));
 
   const handleSave = () => {
+    if (!canConfigure) return; // denied before any side effect, as the server denies
     const configPayload: Record<string, unknown> = {
       institution_code: form.institutionCode.trim(),
       contact_name: form.contactName.trim(),
@@ -294,19 +320,32 @@ function ChannelForm({
                 : undefined
           }
           actions={
-            <button
-              type="button"
-              disabled={save.isPending}
-              onClick={handleSave}
-              className="inline-flex items-center gap-1.5 px-3 py-2 text-caption font-medium btn-primary disabled:opacity-60"
-            >
-              {save.isPending ? (
-                <Loader2 size={13} className="animate-spin" aria-hidden />
-              ) : (
-                <Save size={13} aria-hidden />
+            <span className="inline-flex flex-wrap items-center justify-end gap-2 max-w-56 sm:max-w-64">
+              {!canConfigure && (
+                <span
+                  id={configureReasonId}
+                  className="text-micro text-slate text-right"
+                >
+                  {configureReason}
+                </span>
               )}
-              Save configuration
-            </button>
+              <button
+                type="button"
+                disabled={!canConfigure || save.isPending}
+                aria-describedby={
+                  !canConfigure ? configureReasonId : undefined
+                }
+                onClick={handleSave}
+                className="inline-flex items-center gap-1.5 px-3 py-2 text-caption font-medium btn-primary disabled:opacity-60"
+              >
+                {save.isPending ? (
+                  <Loader2 size={13} className="animate-spin" aria-hidden />
+                ) : (
+                  <Save size={13} aria-hidden />
+                )}
+                Save configuration
+              </button>
+            </span>
           }
         >
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 max-w-3xl">
@@ -629,27 +668,26 @@ function ChannelForm({
 
       <div className="space-y-6">
         <SectionCard title="Credential status">
-          {config?.hasCredentials || save.data?.hasCredentials ? (
+          {/* The save response is a write-only acknowledgement; the stored
+              status and fingerprint come from the refetched read. The read is
+              invalidated, not awaited, so never claim a stored/absent state
+              from data that is not current. A missing channel reads 404 —
+              that is the unconfigured state, not an outage. Any other read
+              failure renders the form-level error panel above and never
+              reaches this card. */}
+          {configQuery.isPending ? (
+            <StatusPill tone="slate">Checking credential status…</StatusPill>
+          ) : unconfigured ? (
+            <UnconfiguredStatus />
+          ) : config?.hasCredentials ? (
             <div className="space-y-2">
               <StatusPill tone="success">Credentials stored</StatusPill>
               <p className="font-mono text-caption text-slate tnum">
-                fingerprint{" "}
-                {shortId(
-                  save.data?.credentialFingerprint ??
-                    config?.credentialFingerprint ??
-                    "",
-                  16,
-                )}
+                fingerprint {shortId(config.credentialFingerprint ?? "", 16)}
               </p>
             </div>
           ) : (
-            <div className="space-y-2">
-              <StatusPill tone="slate">No credentials stored</StatusPill>
-              <p className="text-caption text-slate leading-relaxed">
-                The ORASS sandbox works credential-less; storing credentials
-                exercises the vault seam that real ORASS onboarding will use.
-              </p>
-            </div>
+            <UnconfiguredStatus />
           )}
         </SectionCard>
 

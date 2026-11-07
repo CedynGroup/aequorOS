@@ -28,7 +28,6 @@ from fastapi.responses import StreamingResponse
 
 from app.api.deps import (
     DbSession,
-    MutationTenant,
     PackageApprove,
     PackageEdit,
     PackageExport,
@@ -43,6 +42,7 @@ from app.data_engine.public import IngestionStorage
 from app.reporting.schemas.packages import (
     ChannelConfigPut,
     ChannelConfigRead,
+    ChannelConfigWriteAcknowledgement,
     EmailFallbackInstructionsRead,
     FilingSetEntryRead,
     FilingSetPreviewRead,
@@ -60,6 +60,7 @@ from app.reporting.schemas.packages import (
     ReportingObligationListRead,
     ReportingSettingsPut,
     ReportingSettingsRead,
+    ReportingSettingsWriteAcknowledgement,
     ResubmissionDecisionCreate,
     ResubmissionRequestCreate,
     ResubmissionRequestListRead,
@@ -786,7 +787,7 @@ def get_channel_config(
 
 @router.put(
     "/banks/{bank_id}/regulatory-reporting/channel-configs/{channel}",
-    response_model=ChannelConfigRead,
+    response_model=ChannelConfigWriteAcknowledgement,
     operation_id="putChannelConfig",
 )
 def put_channel_config(
@@ -794,8 +795,14 @@ def put_channel_config(
     channel: ChannelPath,
     payload: ChannelConfigPut,
     db: DbSession,
-    ctx: MutationTenant,
-) -> ChannelConfigRead:
+    ctx: ScopedMutationTenant,
+) -> ChannelConfigWriteAcknowledgement:
+    """Configure one channel; credentials are write-only (fingerprint stored).
+
+    Service-enforced exact reg/configure/restricted authority for this bank
+    (VAL-CFG-007); the response is a write-only acknowledgement, so a
+    configure-only caller reads nothing stored through the write.
+    """
     return regulatory_reporting.put_channel_config(db, ctx, bank_id, channel, payload)
 
 
@@ -811,14 +818,18 @@ def get_reporting_settings(bank_id: str, db: DbSession, ctx: Tenant) -> Reportin
 
 @router.put(
     "/banks/{bank_id}/regulatory-reporting/settings",
-    response_model=ReportingSettingsRead,
+    response_model=ReportingSettingsWriteAcknowledgement,
     operation_id="putReportingSettings",
 )
 def put_reporting_settings(
     bank_id: str,
     payload: ReportingSettingsPut,
     db: DbSession,
-    ctx: MutationTenant,
-) -> ReportingSettingsRead:
-    """Set per-bank monthly-deadline overrides ({return_code: day_of_month})."""
+    ctx: ScopedMutationTenant,
+) -> ReportingSettingsWriteAcknowledgement:
+    """Set per-bank monthly-deadline overrides ({return_code: day_of_month}).
+
+    Service-enforced exact reg/configure/restricted authority for this bank
+    (VAL-CFG-007); the response is a write-only acknowledgement.
+    """
     return regulatory_reporting.put_reporting_settings(db, ctx, bank_id, payload)

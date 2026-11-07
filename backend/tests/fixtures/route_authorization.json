@@ -1159,18 +1159,6 @@
           "method": "POST",
           "path": "/api/v1/banks/{bank_id}/refresh",
           "endpoint": "app.live.api.manage_live_engine:refresh_bank_data"
-        },
-        {
-          "application": "tenant",
-          "method": "PUT",
-          "path": "/api/v1/banks/{bank_id}/regulatory-reporting/channel-configs/{channel}",
-          "endpoint": "app.reporting.api.manage_regulatory_reporting:put_channel_config"
-        },
-        {
-          "application": "tenant",
-          "method": "PUT",
-          "path": "/api/v1/banks/{bank_id}/regulatory-reporting/settings",
-          "endpoint": "app.reporting.api.manage_regulatory_reporting:put_reporting_settings"
         }
       ]
     },
@@ -3218,12 +3206,6 @@
       "routes": [
         {
           "application": "tenant",
-          "method": "DELETE",
-          "path": "/api/v1/banks/{bank_id}/scenario-workbench/{module}/analyses/{analysis_id}",
-          "endpoint": "app.stress.api.run_scenario_analysis:delete_scenario_analysis"
-        },
-        {
-          "application": "tenant",
           "method": "GET",
           "path": "/api/v1/attestation/awaiting-my-signature",
           "endpoint": "app.attestation.api.manage_attestation:list_returns_awaiting_my_signature"
@@ -3236,45 +3218,27 @@
         },
         {
           "application": "tenant",
+          "method": "PUT",
+          "path": "/api/v1/attestation/my-signature-appearance",
+          "endpoint": "app.attestation.api.manage_attestation:adopt_my_signature"
+        },
+        {
+          "application": "tenant",
+          "method": "PUT",
+          "path": "/api/v1/attestation/signature-placements",
+          "endpoint": "app.attestation.api.manage_attestation:upsert_signature_placement_template"
+        },
+        {
+          "application": "tenant",
           "method": "GET",
           "path": "/api/v1/attestation/signer-identity",
           "endpoint": "app.attestation.api.manage_attestation:get_my_signer_identity"
         },
         {
           "application": "tenant",
-          "method": "GET",
-          "path": "/api/v1/banks/{bank_id}/database-direct/connections/{connection_id}/schema",
-          "endpoint": "app.data_engine.api.database_connections:discover_database_schema"
-        },
-        {
-          "application": "tenant",
-          "method": "GET",
-          "path": "/api/v1/banks/{bank_id}/regulatory-packages/{package_id}/attestation/preview",
-          "endpoint": "app.attestation.api.manage_attestation:preview_certification"
-        },
-        {
-          "application": "tenant",
-          "method": "PATCH",
-          "path": "/api/v1/banks/{bank_id}/enterprise-stress/signoffs/{signoff_id}",
-          "endpoint": "app.stress.api.manage_enterprise_stress_signoff:update_signoff"
-        },
-        {
-          "application": "tenant",
-          "method": "PATCH",
-          "path": "/api/v1/banks/{bank_id}/scenario-workbench/{module}/scenarios/{scenario_id}",
-          "endpoint": "app.stress.api.manage_stress_scenarios:update_stress_scenario"
-        },
-        {
-          "application": "tenant",
-          "method": "PATCH",
-          "path": "/api/v1/macro-scenarios/{scenario_id}",
-          "endpoint": "app.stress.api.manage_macro_scenarios:update_macro_scenario"
-        },
-        {
-          "application": "tenant",
-          "method": "PATCH",
-          "path": "/api/v1/management-action-plans/{plan_id}",
-          "endpoint": "app.stress.api.manage_management_actions:update_management_action_plan"
+          "method": "PUT",
+          "path": "/api/v1/attestation/signing-policies",
+          "endpoint": "app.attestation.api.manage_attestation:upsert_signing_policy"
         },
         {
           "application": "tenant",
@@ -3303,6 +3267,42 @@
         {
           "application": "tenant",
           "method": "POST",
+          "path": "/api/v1/banks/{bank_id}/database-direct/connections",
+          "endpoint": "app.data_engine.api.database_connections:create_database_connection"
+        },
+        {
+          "application": "tenant",
+          "method": "DELETE",
+          "path": "/api/v1/banks/{bank_id}/database-direct/connections/{connection_id}",
+          "endpoint": "app.data_engine.api.database_connections:revoke_database_connection"
+        },
+        {
+          "application": "tenant",
+          "method": "PATCH",
+          "path": "/api/v1/banks/{bank_id}/database-direct/connections/{connection_id}",
+          "endpoint": "app.data_engine.api.database_connections:update_database_connection"
+        },
+        {
+          "application": "tenant",
+          "method": "POST",
+          "path": "/api/v1/banks/{bank_id}/database-direct/connections/{connection_id}/disable",
+          "endpoint": "app.data_engine.api.database_connections:disable_database_connection"
+        },
+        {
+          "application": "tenant",
+          "method": "POST",
+          "path": "/api/v1/banks/{bank_id}/database-direct/connections/{connection_id}/enable",
+          "endpoint": "app.data_engine.api.database_connections:enable_database_connection"
+        },
+        {
+          "application": "tenant",
+          "method": "GET",
+          "path": "/api/v1/banks/{bank_id}/database-direct/connections/{connection_id}/schema",
+          "endpoint": "app.data_engine.api.database_connections:discover_database_schema"
+        },
+        {
+          "application": "tenant",
+          "method": "POST",
           "path": "/api/v1/banks/{bank_id}/database-direct/connections/{connection_id}/test",
           "endpoint": "app.data_engine.api.database_connections:test_database_connection"
         },
@@ -3320,6 +3320,12 @@
         },
         {
           "application": "tenant",
+          "method": "PATCH",
+          "path": "/api/v1/banks/{bank_id}/enterprise-stress/signoffs/{signoff_id}",
+          "endpoint": "app.stress.api.manage_enterprise_stress_signoff:update_signoff"
+        },
+        {
+          "application": "tenant",
           "method": "POST",
           "path": "/api/v1/banks/{bank_id}/enterprise-stress/signoffs/{signoff_id}/submit",
           "endpoint": "app.stress.api.manage_enterprise_stress_signoff:submit_signoff"
@@ -3332,9 +3338,27 @@
         },
         {
           "application": "tenant",
+          "method": "PUT",
+          "path": "/api/v1/banks/{bank_id}/institution-profile",
+          "endpoint": "app.identity.api.manage_institution_profile:put_institution_profile"
+        },
+        {
+          "application": "tenant",
           "method": "POST",
           "path": "/api/v1/banks/{bank_id}/licenses",
           "endpoint": "app.identity.api.manage_institution_profile:create_bank_license"
+        },
+        {
+          "application": "tenant",
+          "method": "PUT",
+          "path": "/api/v1/banks/{bank_id}/licenses/{license_id}",
+          "endpoint": "app.identity.api.manage_institution_profile:update_bank_license"
+        },
+        {
+          "application": "tenant",
+          "method": "PUT",
+          "path": "/api/v1/banks/{bank_id}/liquidity/cfp",
+          "endpoint": "app.liquidity.api.manage_liquidity_cfp:put_cfp"
         },
         {
           "application": "tenant",
@@ -3363,14 +3387,68 @@
         {
           "application": "tenant",
           "method": "POST",
+          "path": "/api/v1/banks/{bank_id}/market-data/connections",
+          "endpoint": "app.market_data.api.manage_market_data_connections:create_market_data_connection"
+        },
+        {
+          "application": "tenant",
+          "method": "DELETE",
+          "path": "/api/v1/banks/{bank_id}/market-data/connections/{connection_id}",
+          "endpoint": "app.market_data.api.manage_market_data_connections:revoke_market_data_connection"
+        },
+        {
+          "application": "tenant",
+          "method": "PATCH",
+          "path": "/api/v1/banks/{bank_id}/market-data/connections/{connection_id}",
+          "endpoint": "app.market_data.api.manage_market_data_connections:update_market_data_connection"
+        },
+        {
+          "application": "tenant",
+          "method": "POST",
+          "path": "/api/v1/banks/{bank_id}/market-data/connections/{connection_id}/disable",
+          "endpoint": "app.market_data.api.manage_market_data_connections:disable_market_data_connection"
+        },
+        {
+          "application": "tenant",
+          "method": "POST",
+          "path": "/api/v1/banks/{bank_id}/market-data/connections/{connection_id}/enable",
+          "endpoint": "app.market_data.api.manage_market_data_connections:enable_market_data_connection"
+        },
+        {
+          "application": "tenant",
+          "method": "POST",
+          "path": "/api/v1/banks/{bank_id}/market-data/connections/{connection_id}/validate",
+          "endpoint": "app.market_data.api.manage_market_data_connections:validate_market_data_connection"
+        },
+        {
+          "application": "tenant",
+          "method": "PUT",
+          "path": "/api/v1/banks/{bank_id}/market-data/source-preferences",
+          "endpoint": "app.market_data.api.market_data_sources:update_source_preferences"
+        },
+        {
+          "application": "tenant",
+          "method": "POST",
           "path": "/api/v1/banks/{bank_id}/name-history",
           "endpoint": "app.identity.api.manage_institution_profile:create_name_history_entry"
+        },
+        {
+          "application": "tenant",
+          "method": "PUT",
+          "path": "/api/v1/banks/{bank_id}/name-history/{entry_id}",
+          "endpoint": "app.identity.api.manage_institution_profile:update_name_history_entry"
         },
         {
           "application": "tenant",
           "method": "POST",
           "path": "/api/v1/banks/{bank_id}/outlets",
           "endpoint": "app.identity.api.manage_institution_profile:create_outlet"
+        },
+        {
+          "application": "tenant",
+          "method": "PUT",
+          "path": "/api/v1/banks/{bank_id}/outlets/{outlet_id}",
+          "endpoint": "app.identity.api.manage_institution_profile:update_outlet"
         },
         {
           "application": "tenant",
@@ -3383,6 +3461,12 @@
           "method": "POST",
           "path": "/api/v1/banks/{bank_id}/products",
           "endpoint": "app.identity.api.manage_institution_profile:create_bank_product"
+        },
+        {
+          "application": "tenant",
+          "method": "PUT",
+          "path": "/api/v1/banks/{bank_id}/products/{product_id}",
+          "endpoint": "app.identity.api.manage_institution_profile:update_bank_product"
         },
         {
           "application": "tenant",
@@ -3422,6 +3506,24 @@
         },
         {
           "application": "tenant",
+          "method": "PUT",
+          "path": "/api/v1/banks/{bank_id}/regulatory-packages/{package_id}/attestation/placements",
+          "endpoint": "app.attestation.api.manage_attestation:set_package_signature_placements"
+        },
+        {
+          "application": "tenant",
+          "method": "GET",
+          "path": "/api/v1/banks/{bank_id}/regulatory-packages/{package_id}/attestation/preview",
+          "endpoint": "app.attestation.api.manage_attestation:preview_certification"
+        },
+        {
+          "application": "tenant",
+          "method": "PUT",
+          "path": "/api/v1/banks/{bank_id}/regulatory-packages/{package_id}/attestation/recipients",
+          "endpoint": "app.attestation.api.manage_attestation:update_package_signature_routing"
+        },
+        {
+          "application": "tenant",
           "method": "POST",
           "path": "/api/v1/banks/{bank_id}/regulatory-packages/{package_id}/attestation/send-back",
           "endpoint": "app.attestation.api.manage_attestation:send_package_back_for_corrections"
@@ -3440,6 +3542,18 @@
         },
         {
           "application": "tenant",
+          "method": "PUT",
+          "path": "/api/v1/banks/{bank_id}/regulatory-reporting/channel-configs/{channel}",
+          "endpoint": "app.reporting.api.manage_regulatory_reporting:put_channel_config"
+        },
+        {
+          "application": "tenant",
+          "method": "PUT",
+          "path": "/api/v1/banks/{bank_id}/regulatory-reporting/settings",
+          "endpoint": "app.reporting.api.manage_regulatory_reporting:put_reporting_settings"
+        },
+        {
+          "application": "tenant",
           "method": "POST",
           "path": "/api/v1/banks/{bank_id}/regulatory-runs",
           "endpoint": "app.liquidity.api.run_regulatory_liquidity:create_regulatory_run"
@@ -3452,9 +3566,21 @@
         },
         {
           "application": "tenant",
+          "method": "PUT",
+          "path": "/api/v1/banks/{bank_id}/related-parties/{party_id}",
+          "endpoint": "app.identity.api.manage_institution_profile:update_related_party"
+        },
+        {
+          "application": "tenant",
           "method": "POST",
           "path": "/api/v1/banks/{bank_id}/related-parties/{party_id}/shareholdings",
           "endpoint": "app.identity.api.manage_institution_profile:create_shareholding"
+        },
+        {
+          "application": "tenant",
+          "method": "PUT",
+          "path": "/api/v1/banks/{bank_id}/related-parties/{party_id}/shareholdings/{shareholding_id}",
+          "endpoint": "app.identity.api.manage_institution_profile:update_shareholding"
         },
         {
           "application": "tenant",
@@ -3464,9 +3590,21 @@
         },
         {
           "application": "tenant",
+          "method": "DELETE",
+          "path": "/api/v1/banks/{bank_id}/scenario-workbench/{module}/analyses/{analysis_id}",
+          "endpoint": "app.stress.api.run_scenario_analysis:delete_scenario_analysis"
+        },
+        {
+          "application": "tenant",
           "method": "POST",
           "path": "/api/v1/banks/{bank_id}/scenario-workbench/{module}/scenarios",
           "endpoint": "app.stress.api.manage_stress_scenarios:create_stress_scenario"
+        },
+        {
+          "application": "tenant",
+          "method": "PATCH",
+          "path": "/api/v1/banks/{bank_id}/scenario-workbench/{module}/scenarios/{scenario_id}",
+          "endpoint": "app.stress.api.manage_stress_scenarios:update_stress_scenario"
         },
         {
           "application": "tenant",
@@ -3495,8 +3633,38 @@
         {
           "application": "tenant",
           "method": "POST",
+          "path": "/api/v1/banks/{bank_id}/temenos/connections",
+          "endpoint": "app.data_engine.api.manage_temenos_connections:create_temenos_connection"
+        },
+        {
+          "application": "tenant",
+          "method": "DELETE",
+          "path": "/api/v1/banks/{bank_id}/temenos/connections/{connection_id}",
+          "endpoint": "app.data_engine.api.manage_temenos_connections:revoke_temenos_connection"
+        },
+        {
+          "application": "tenant",
+          "method": "PATCH",
+          "path": "/api/v1/banks/{bank_id}/temenos/connections/{connection_id}",
+          "endpoint": "app.data_engine.api.manage_temenos_connections:update_temenos_connection"
+        },
+        {
+          "application": "tenant",
+          "method": "POST",
           "path": "/api/v1/banks/{bank_id}/temenos/connections/{connection_id}/backfill",
           "endpoint": "app.data_engine.api.manage_temenos_connections:trigger_temenos_backfill"
+        },
+        {
+          "application": "tenant",
+          "method": "POST",
+          "path": "/api/v1/banks/{bank_id}/temenos/connections/{connection_id}/disable",
+          "endpoint": "app.data_engine.api.manage_temenos_connections:disable_temenos_connection"
+        },
+        {
+          "application": "tenant",
+          "method": "POST",
+          "path": "/api/v1/banks/{bank_id}/temenos/connections/{connection_id}/enable",
+          "endpoint": "app.data_engine.api.manage_temenos_connections:enable_temenos_connection"
         },
         {
           "application": "tenant",
@@ -3513,8 +3681,20 @@
         {
           "application": "tenant",
           "method": "POST",
+          "path": "/api/v1/banks/{bank_id}/temenos/connections/{connection_id}/validate",
+          "endpoint": "app.data_engine.api.manage_temenos_connections:validate_temenos_connection"
+        },
+        {
+          "application": "tenant",
+          "method": "POST",
           "path": "/api/v1/macro-scenarios",
           "endpoint": "app.stress.api.manage_macro_scenarios:create_macro_scenario"
+        },
+        {
+          "application": "tenant",
+          "method": "PATCH",
+          "path": "/api/v1/macro-scenarios/{scenario_id}",
+          "endpoint": "app.stress.api.manage_macro_scenarios:update_macro_scenario"
         },
         {
           "application": "tenant",
@@ -3548,6 +3728,12 @@
         },
         {
           "application": "tenant",
+          "method": "PATCH",
+          "path": "/api/v1/management-action-plans/{plan_id}",
+          "endpoint": "app.stress.api.manage_management_actions:update_management_action_plan"
+        },
+        {
+          "application": "tenant",
           "method": "POST",
           "path": "/api/v1/management-action-plans/{plan_id}/approve",
           "endpoint": "app.stress.api.manage_management_actions:approve_management_action_plan"
@@ -3563,180 +3749,6 @@
           "method": "POST",
           "path": "/api/v1/management-action-plans/{plan_id}/submit",
           "endpoint": "app.stress.api.manage_management_actions:submit_management_action_plan"
-        },
-        {
-          "application": "tenant",
-          "method": "PUT",
-          "path": "/api/v1/attestation/my-signature-appearance",
-          "endpoint": "app.attestation.api.manage_attestation:adopt_my_signature"
-        },
-        {
-          "application": "tenant",
-          "method": "PUT",
-          "path": "/api/v1/banks/{bank_id}/institution-profile",
-          "endpoint": "app.identity.api.manage_institution_profile:put_institution_profile"
-        },
-        {
-          "application": "tenant",
-          "method": "PUT",
-          "path": "/api/v1/banks/{bank_id}/licenses/{license_id}",
-          "endpoint": "app.identity.api.manage_institution_profile:update_bank_license"
-        },
-        {
-          "application": "tenant",
-          "method": "PUT",
-          "path": "/api/v1/banks/{bank_id}/liquidity/cfp",
-          "endpoint": "app.liquidity.api.manage_liquidity_cfp:put_cfp"
-        },
-        {
-          "application": "tenant",
-          "method": "PUT",
-          "path": "/api/v1/banks/{bank_id}/name-history/{entry_id}",
-          "endpoint": "app.identity.api.manage_institution_profile:update_name_history_entry"
-        },
-        {
-          "application": "tenant",
-          "method": "PUT",
-          "path": "/api/v1/banks/{bank_id}/outlets/{outlet_id}",
-          "endpoint": "app.identity.api.manage_institution_profile:update_outlet"
-        },
-        {
-          "application": "tenant",
-          "method": "PUT",
-          "path": "/api/v1/banks/{bank_id}/products/{product_id}",
-          "endpoint": "app.identity.api.manage_institution_profile:update_bank_product"
-        },
-        {
-          "application": "tenant",
-          "method": "PUT",
-          "path": "/api/v1/banks/{bank_id}/regulatory-packages/{package_id}/attestation/placements",
-          "endpoint": "app.attestation.api.manage_attestation:set_package_signature_placements"
-        },
-        {
-          "application": "tenant",
-          "method": "PUT",
-          "path": "/api/v1/banks/{bank_id}/regulatory-packages/{package_id}/attestation/recipients",
-          "endpoint": "app.attestation.api.manage_attestation:update_package_signature_routing"
-        },
-        {
-          "application": "tenant",
-          "method": "PUT",
-          "path": "/api/v1/banks/{bank_id}/related-parties/{party_id}",
-          "endpoint": "app.identity.api.manage_institution_profile:update_related_party"
-        },
-        {
-          "application": "tenant",
-          "method": "PUT",
-          "path": "/api/v1/banks/{bank_id}/related-parties/{party_id}/shareholdings/{shareholding_id}",
-          "endpoint": "app.identity.api.manage_institution_profile:update_shareholding"
-        },
-        {
-          "application": "tenant",
-          "method": "DELETE",
-          "path": "/api/v1/banks/{bank_id}/database-direct/connections/{connection_id}",
-          "endpoint": "app.data_engine.api.database_connections:revoke_database_connection"
-        },
-        {
-          "application": "tenant",
-          "method": "DELETE",
-          "path": "/api/v1/banks/{bank_id}/market-data/connections/{connection_id}",
-          "endpoint": "app.market_data.api.manage_market_data_connections:revoke_market_data_connection"
-        },
-        {
-          "application": "tenant",
-          "method": "DELETE",
-          "path": "/api/v1/banks/{bank_id}/temenos/connections/{connection_id}",
-          "endpoint": "app.data_engine.api.manage_temenos_connections:revoke_temenos_connection"
-        },
-        {
-          "application": "tenant",
-          "method": "PATCH",
-          "path": "/api/v1/banks/{bank_id}/database-direct/connections/{connection_id}",
-          "endpoint": "app.data_engine.api.database_connections:update_database_connection"
-        },
-        {
-          "application": "tenant",
-          "method": "PATCH",
-          "path": "/api/v1/banks/{bank_id}/market-data/connections/{connection_id}",
-          "endpoint": "app.market_data.api.manage_market_data_connections:update_market_data_connection"
-        },
-        {
-          "application": "tenant",
-          "method": "PATCH",
-          "path": "/api/v1/banks/{bank_id}/temenos/connections/{connection_id}",
-          "endpoint": "app.data_engine.api.manage_temenos_connections:update_temenos_connection"
-        },
-        {
-          "application": "tenant",
-          "method": "POST",
-          "path": "/api/v1/banks/{bank_id}/database-direct/connections",
-          "endpoint": "app.data_engine.api.database_connections:create_database_connection"
-        },
-        {
-          "application": "tenant",
-          "method": "POST",
-          "path": "/api/v1/banks/{bank_id}/database-direct/connections/{connection_id}/disable",
-          "endpoint": "app.data_engine.api.database_connections:disable_database_connection"
-        },
-        {
-          "application": "tenant",
-          "method": "POST",
-          "path": "/api/v1/banks/{bank_id}/database-direct/connections/{connection_id}/enable",
-          "endpoint": "app.data_engine.api.database_connections:enable_database_connection"
-        },
-        {
-          "application": "tenant",
-          "method": "POST",
-          "path": "/api/v1/banks/{bank_id}/market-data/connections",
-          "endpoint": "app.market_data.api.manage_market_data_connections:create_market_data_connection"
-        },
-        {
-          "application": "tenant",
-          "method": "POST",
-          "path": "/api/v1/banks/{bank_id}/market-data/connections/{connection_id}/disable",
-          "endpoint": "app.market_data.api.manage_market_data_connections:disable_market_data_connection"
-        },
-        {
-          "application": "tenant",
-          "method": "POST",
-          "path": "/api/v1/banks/{bank_id}/market-data/connections/{connection_id}/enable",
-          "endpoint": "app.market_data.api.manage_market_data_connections:enable_market_data_connection"
-        },
-        {
-          "application": "tenant",
-          "method": "POST",
-          "path": "/api/v1/banks/{bank_id}/market-data/connections/{connection_id}/validate",
-          "endpoint": "app.market_data.api.manage_market_data_connections:validate_market_data_connection"
-        },
-        {
-          "application": "tenant",
-          "method": "POST",
-          "path": "/api/v1/banks/{bank_id}/temenos/connections",
-          "endpoint": "app.data_engine.api.manage_temenos_connections:create_temenos_connection"
-        },
-        {
-          "application": "tenant",
-          "method": "POST",
-          "path": "/api/v1/banks/{bank_id}/temenos/connections/{connection_id}/disable",
-          "endpoint": "app.data_engine.api.manage_temenos_connections:disable_temenos_connection"
-        },
-        {
-          "application": "tenant",
-          "method": "POST",
-          "path": "/api/v1/banks/{bank_id}/temenos/connections/{connection_id}/enable",
-          "endpoint": "app.data_engine.api.manage_temenos_connections:enable_temenos_connection"
-        },
-        {
-          "application": "tenant",
-          "method": "POST",
-          "path": "/api/v1/banks/{bank_id}/temenos/connections/{connection_id}/validate",
-          "endpoint": "app.data_engine.api.manage_temenos_connections:validate_temenos_connection"
-        },
-        {
-          "application": "tenant",
-          "method": "PUT",
-          "path": "/api/v1/banks/{bank_id}/market-data/source-preferences",
-          "endpoint": "app.market_data.api.market_data_sources:update_source_preferences"
         }
       ]
     },
@@ -5038,41 +5050,6 @@
           "method": "GET",
           "path": "/api/v1/banks/{bank_id}/credit/concentration",
           "endpoint": "app.credit.api.run_regulatory_credit:get_credit_concentration"
-        }
-      ]
-    },
-    {
-      "name": "tenant-dependencies-d45d30e551e5",
-      "kind": "dependency",
-      "basis": "Existing tenant authentication boundary and exact registered dependency calls listed here. Named scoped/legacy gates remain unchanged; handler and service checks can narrow this access further. Presence is not policy correctness.",
-      "references": [
-        "app/api/deps.py:get_current_principal",
-        "app/api/deps.py:get_tenant_context",
-        "app/api/deps.py:get_tenant_db_session",
-        "app/api/deps.py:require_grant_administration",
-        "app/api/deps.py:resolve_tenant_bank"
-      ],
-      "authentication": "tenant",
-      "dependencies": [
-        "app.api.deps:get_current_principal",
-        "app.api.deps:get_tenant_context",
-        "app.api.deps:get_tenant_db_session",
-        "app.api.deps:require_grant_administration",
-        "app.api.deps:resolve_tenant_bank",
-        "fastapi.security.http:HTTPBearer"
-      ],
-      "routes": [
-        {
-          "application": "tenant",
-          "method": "PUT",
-          "path": "/api/v1/attestation/signature-placements",
-          "endpoint": "app.attestation.api.manage_attestation:upsert_signature_placement_template"
-        },
-        {
-          "application": "tenant",
-          "method": "PUT",
-          "path": "/api/v1/attestation/signing-policies",
-          "endpoint": "app.attestation.api.manage_attestation:upsert_signing_policy"
         }
       ]
     },

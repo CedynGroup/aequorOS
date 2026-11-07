@@ -22,7 +22,6 @@ from fastapi import APIRouter, Request
 
 from app.api.deps import (
     DbSession,
-    GrantAdminTenant,
     ScopedMutationTenant,
     Tenant,
 )
@@ -283,13 +282,13 @@ def list_signature_placement_templates(
     operation_id="upsertSignaturePlacementTemplate",
 )
 def upsert_signature_placement_template(
-    payload: SignaturePlacementTemplateUpsertRequest, db: DbSession, ctx: GrantAdminTenant
+    payload: SignaturePlacementTemplateUpsertRequest, db: DbSession, ctx: ScopedMutationTenant
 ) -> SignaturePlacementTemplateRead:
     """Author the reusable placement template for a return (optionally per bank).
 
-    Org Owner-only and reason-required, matching the signing-policy endpoints
-    and scoped grant administration: this is the default every future filing of
-    that return inherits.
+    Organization-scope reg/configure authority and reason-required, matching the
+    signing-policy endpoints: this is the default every future filing of that
+    return inherits.
     """
     return attestation_api.upsert_placement_template(db, ctx, payload)
 
@@ -337,12 +336,14 @@ def list_signing_policies(db: DbSession, ctx: Tenant) -> PolicyListRead:
     operation_id="upsertSigningPolicy",
 )
 def upsert_signing_policy(
-    payload: PolicyUpsertRequest, db: DbSession, ctx: GrantAdminTenant
+    payload: PolicyUpsertRequest, db: DbSession, ctx: ScopedMutationTenant
 ) -> PolicyRead:
     """Configure who must sign which return.
 
-    Org Owner-only and reason-required: this is the control that decides whether
-    a filed return is properly attested, so changing it is itself an audited
-    act, administered on the same binding as scoped grant administration.
+    Organization-scope reg/configure authority and reason-required: this is the
+    control that decides whether a filed return is properly attested, so
+    changing it is itself an audited act. A bank-scoped Configurator binding is
+    deliberately insufficient — the policy governs every bank in the
+    organization.
     """
     return attestation_api.upsert_policy(db, ctx, payload)
