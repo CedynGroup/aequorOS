@@ -1,11 +1,11 @@
-"""Cross-suite test imports: one test module never imports another's module.
+"""Cross-suite test imports: reject new dependencies between suites.
 
 A **test module** is any ``test_*.py`` under ``tests/``. Its **suite** is the
 top-level directory it lives in (``tests/db/``, ``tests/identity/``, ...), with
 the root-level test files forming one more suite of their own.
 Importing a test module from another suite couples
-the suites' execution and re-collects the imported module's cases on both
-suites' runs; shared helpers belong in ``tests/support`` (where the migration
+the suites' execution and can expose imported test functions to collection
+again; shared helpers belong in ``tests/support`` (where the migration
 fixtures landed once the migration test module stopped being one) or in the
 owning suite. Importing a non-test module — ``tests/support`` helpers,
 ``tests/conftest.py``, a suite's ``fixtures.py`` — is not a cross-suite test

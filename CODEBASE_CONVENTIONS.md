@@ -591,6 +591,9 @@ feature. New code goes in the target layout; existing code moves one feature per
   `tests/<feature>/fixtures.py`, registered by the root `pytest_plugins`.
   `tests/architecture/test_test_layout.py` guards new top-level directory names and
   registered fixture ownership; its legacy layer-directory list shrinks as tests move.
+  Cross-suite test-module imports have a separate shrinking baseline; see
+  [`test_cross_suite_imports.py`](backend/tests/architecture/test_cross_suite_imports.py)
+  for the suite boundary, scanner limits and baseline maintenance command.
 - **The ratchet.** `test_feature_boundaries.py` assigns every `app/` module an owner and
   records today's violations in `feature_boundary_baseline.json`. A new violation fails, and so
   does a baseline entry that no longer occurs, so the baseline only shrinks.
