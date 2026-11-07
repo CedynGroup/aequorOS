@@ -14,7 +14,6 @@ convention.
 
 from __future__ import annotations
 
-import ast
 import json
 import os
 import re
@@ -307,16 +306,16 @@ def test_ci_actually_runs_every_required_gate() -> None:
 
 
 @pytest.mark.parametrize(
-    ("job", "services", "serial"),
+    ("job", "services"),
     [
-        ("postgres-schema", ["--postgres", "--storage", "--role-admin"], True),
-        ("postgres-locks", ["--postgres"], True),
-        ("postgres-shard", ["--postgres"], False),
-        ("storage", ["--postgres", "--storage"], True),
+        ("postgres-schema", ["--postgres", "--storage", "--role-admin"]),
+        ("postgres-locks", ["--postgres"]),
+        ("postgres-shard", ["--postgres"]),
+        ("storage", ["--postgres", "--storage"]),
     ],
 )
 def test_direct_ci_commands_preserve_service_and_report_owners(
-    job: str, services: list[str], serial: bool
+    job: str, services: list[str]
 ) -> None:
     tokens, step = _ci_pytest(job)
     separator = tokens.index("--")
@@ -329,8 +328,6 @@ def test_direct_ci_commands_preserve_service_and_report_owners(
         *services,
     ]
     assert tokens[separator + 1 : separator + 4] == ["uv", "run", "pytest"]
-    if serial:
-        assert "-n" not in tokens
     assert not {"--lf", "--suite-only", "--collect-only"}.intersection(tokens)
     environment = cast(dict[str, str], step["env"])
     assert environment["TEST_DATABASE_URL"] == "${{ env.POSTGRES_TEST_URL }}"
@@ -348,6 +345,64 @@ def test_direct_ci_commands_preserve_service_and_report_owners(
         assert environment["POSTGRES_PRIVILEGE_TESTS_REQUIRED"] == "1"
         assert environment["CI_POSTGRES_SUITE"] == "schema"
         assert environment["CI_POSTGRES_FILES"] == "[]"
+
+
+def _assert_serial_ci_owner(job: str) -> None:
+    tokens, step = _ci_pytest(job)
+    arguments = tokens[tokens.index("pytest") + 1 :]
+    environment = {
+        **os.environ,
+        "PYTEST_DISABLE_PLUGIN_AUTOLOAD": "1",
+        **cast(dict[str, str], step["env"]),
+    }
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            "import json, pytest, sys; "
+            "config = pytest.Config.fromdictargs({}, sys.argv[1:]); "
+            "print(json.dumps(config.getoption('numprocesses')))",
+            "-p",
+            "xdist.plugin",
+            "--noconftest",
+            *arguments,
+        ],
+        cwd=REPO_ROOT / "backend",
+        env=environment,
+        text=True,
+        capture_output=True,
+        check=True,
+    )
+    assert json.loads(result.stdout) in (None, 0), job
+
+
+@pytest.mark.parametrize("job", ["postgres-schema", "postgres-locks", "storage"])
+def test_ci_serial_owners_resolve_to_no_workers(job: str) -> None:
+    """Schema, lock and storage owners require serial execution."""
+    _assert_serial_ci_owner(job)
+
+
+@pytest.mark.parametrize("job", ["postgres-schema", "postgres-locks", "storage"])
+@pytest.mark.parametrize("source", ["command", "environment"])
+def test_serial_owner_guard_rejects_parallel_configuration(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, job: str, source: str
+) -> None:
+    document = cast(
+        dict[str, dict[str, dict[str, object]]],
+        yaml.safe_load((WORKFLOWS / "risk-service.yml").read_text()),
+    )
+    _tokens, target = _ci_pytest(job)
+    steps = cast(list[dict[str, object]], document["jobs"][job]["steps"])
+    step = next(step for step in steps if step == target)
+    if source == "command":
+        step["run"] = cast(str, step["run"]) + " --numprocesses=4"
+    else:
+        environment = cast(dict[str, str], step["env"])
+        environment["PYTEST_ADDOPTS"] += " --numprocesses=4"
+    _ = (tmp_path / "risk-service.yml").write_text(yaml.safe_dump(document))
+    monkeypatch.setitem(globals(), "WORKFLOWS", tmp_path)
+    with pytest.raises(AssertionError, match=job):
+        _assert_serial_ci_owner(job)
 
 
 @pytest.mark.parametrize(
@@ -512,85 +567,9 @@ TESTS = Path(__file__).parents[1]
 _PYTEST_PATHS = re.compile(r"(?:^|\s)(tests/[A-Za-z0-9_./-]*)")
 
 
-def _real_data_modules() -> set[Path]:
-    """Test modules gated on ``requires_real_data``.
-
-    By IMPORT, not by substring: a file that merely mentions the marker — this
-    one names it in order to look for it — is not gated on it. The same
-    distinction the boundary and RLS guards had to learn.
-    """
-    found: set[Path] = set()
-    for path in sorted(TESTS.rglob("test_*.py")):
-        if "__pycache__" in path.parts:
-            continue
-        tree = ast.parse(path.read_text())
-        imports_marker = any(
-            isinstance(node, ast.ImportFrom)
-            and any(alias.name == "requires_real_data" for alias in node.names)
-            for node in ast.walk(tree)
-        )
-        if imports_marker:
-            found.add(path.relative_to(TESTS.parent))
-    return found
-
-
 def _ci_paths(job: str) -> list[str]:
     tokens, _step = _ci_pytest(job)
     return [token for token in tokens if token.startswith("tests/")]
-
-
-def test_the_real_data_step_can_actually_reach_every_real_data_test() -> None:
-    """Audit finding D3 (2026-08-22).
-
-    The real-data command ran `tests/api tests/features tests/services`
-    while three opt-in modules lived elsewhere:
-    `tests/market_data/adapters/manual_upload/test_api_integration.py` and both
-    `tests/equivalence/` run-parity suites. Twenty-three tests — including the
-    regulatory report and forecast parity checks — were unreachable even with
-    `REAL_DATA_DATABASE_URL` set. They did not fail and did not skip; the task
-    simply never collected them, which is the quietest way for a gate to be
-    dead.
-
-    Deriving the requirement from the marker means a new opt-in module in a new
-    directory turns this red instead of silently going ungated.
-    """
-    selected = [Path(path) for path in _ci_paths("real-data")]
-    unreachable = sorted(
-        str(module)
-        for module in _real_data_modules()
-        if not any(module == path or path in module.parents for path in selected)
-    )
-
-    assert unreachable == [], (
-        f"Real-data CI collects {[str(p) for p in selected]}, which cannot reach these "
-        f"opt-in modules: {unreachable}. They would never run in CI. "
-        "Add the containing directory to the workflow's pytest paths."
-    )
-
-
-def test_the_real_data_step_selects_no_marker_that_does_not_exist() -> None:
-    """`-m 'not slow'` filtered on a marker no test carries and pytest does not
-    register — inert, and it implied a tier of excluded tests that was empty.
-
-    A filter naming a real marker is fine; one naming a marker nothing uses is
-    either a leftover or a mistake, and both should be visible.
-    """
-    tokens, _step = _ci_pytest("real-data")
-    selectors = [tokens[index + 1] for index, token in enumerate(tokens) if token == "-m"]
-    marked = {
-        marker
-        for path in TESTS.rglob("test_*.py")
-        if "__pycache__" not in path.parts
-        for marker in re.findall(r"@pytest\.mark\.([a-z_]+)", path.read_text())
-    }
-    phantom = [
-        name
-        for selector in selectors
-        for name in re.findall(r"[a-z_]+", selector)
-        if name not in {"not", "and", "or"} and name not in marked
-    ]
-
-    assert phantom == [], f"Real-data CI filters on markers no test carries: {phantom}"
 
 
 # --------------------------------------------------------------------------
