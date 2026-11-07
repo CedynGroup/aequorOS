@@ -184,7 +184,7 @@ def _suspend_all() -> None:
     """Suspend EVERY active binding for the fixture actor (the hermetic demo
     tenant seeds an organization-scope viewer binding that would otherwise
     keep the bank covered)."""
-    with get_sessionmaker()() as db:
+    with _session() as db:
         bindings = list(
             db.scalars(
                 select(AuthorizationBinding).where(
