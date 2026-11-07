@@ -21,6 +21,8 @@ from pathlib import Path
 from sqlalchemy import Engine, create_engine, select
 from sqlalchemy.orm import Session
 
+# Standalone execution must register the same tenant RLS listener as the API.
+import app.db.session  # noqa: F401  # pyright: ignore[reportUnusedImport]
 from app.core.authorization import (
     DataScope,
     InstitutionScope,
