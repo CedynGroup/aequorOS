@@ -27,6 +27,12 @@ import {
 export interface StressSignoffAttestation {
   /**
    *
+   * @type {string}
+   * @memberof StressSignoffAttestation
+   */
+  authorizationToken: string;
+  /**
+   *
    * @type {BoardChallenge}
    * @memberof StressSignoffAttestation
    */
@@ -42,6 +48,12 @@ export interface StressSignoffAttestation {
    * @type {string}
    * @memberof StressSignoffAttestation
    */
+  expectedSigningDigest: string;
+  /**
+   *
+   * @type {string}
+   * @memberof StressSignoffAttestation
+   */
   reason: string;
 }
 
@@ -52,8 +64,18 @@ export function instanceOfStressSignoffAttestation(
   value: object,
 ): value is StressSignoffAttestation {
   if (
+    !("authorizationToken" in value) ||
+    value["authorizationToken"] === undefined
+  )
+    return false;
+  if (
     !("credibilityRationale" in value) ||
     value["credibilityRationale"] === undefined
+  )
+    return false;
+  if (
+    !("expectedSigningDigest" in value) ||
+    value["expectedSigningDigest"] === undefined
   )
     return false;
   if (!("reason" in value) || value["reason"] === undefined) return false;
@@ -75,11 +97,13 @@ export function StressSignoffAttestationFromJSONTyped(
   }
   return {
     ...json,
+    authorizationToken: json["authorization_token"],
     boardChallenge:
       json["board_challenge"] == null
         ? undefined
         : BoardChallengeFromJSON(json["board_challenge"]),
     credibilityRationale: json["credibility_rationale"],
+    expectedSigningDigest: json["expected_signing_digest"],
     reason: json["reason"],
   };
 }
@@ -99,8 +123,10 @@ export function StressSignoffAttestationToJSONTyped(
   }
 
   return {
+    authorization_token: value["authorizationToken"],
     board_challenge: BoardChallengeToJSON(value["boardChallenge"]),
     credibility_rationale: value["credibilityRationale"],
+    expected_signing_digest: value["expectedSigningDigest"],
     reason: value["reason"],
   };
 }

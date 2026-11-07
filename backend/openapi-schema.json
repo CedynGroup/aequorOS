@@ -59212,6 +59212,12 @@
       "StressSignoffAttestation": {
         "additionalProperties": false,
         "properties": {
+          "authorization_token": {
+            "maxLength": 512,
+            "minLength": 1,
+            "title": "Authorization Token",
+            "type": "string"
+          },
           "board_challenge": {
             "anyOf": [
               {
@@ -59230,6 +59236,13 @@
             "title": "Credibility Rationale",
             "type": "string"
           },
+          "expected_signing_digest": {
+            "maxLength": 64,
+            "minLength": 64,
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Expected Signing Digest",
+            "type": "string"
+          },
           "reason": {
             "maxLength": 1000,
             "minLength": 1,
@@ -59239,7 +59252,9 @@
         },
         "required": [
           "credibility_rationale",
-          "reason"
+          "reason",
+          "authorization_token",
+          "expected_signing_digest"
         ],
         "title": "StressSignoffAttestation",
         "type": "object"
@@ -59320,6 +59335,18 @@
           "assumptions_rationale": {
             "title": "Assumptions Rationale",
             "type": "string"
+          },
+          "attestation_recipient_user_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Attestation Recipient User Id"
           },
           "attested_at": {
             "anyOf": [
@@ -59426,6 +59453,22 @@
             "title": "Scenario Narrative",
             "type": "string"
           },
+          "signing_authorization_id": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Signing Authorization Id"
+          },
+          "signing_digest": {
+            "title": "Signing Digest",
+            "type": "string"
+          },
           "status": {
             "$ref": "#/components/schemas/StressSignoffStatus"
           },
@@ -59504,6 +59547,9 @@
           "created_by",
           "submitted_by",
           "submitted_at",
+          "attestation_recipient_user_id",
+          "signing_digest",
+          "signing_authorization_id",
           "attested_by",
           "attested_at",
           "created_at",
@@ -59520,6 +59566,103 @@
           "withdrawn"
         ],
         "type": "string"
+      },
+      "StressSignoffStepUpGranted": {
+        "additionalProperties": false,
+        "properties": {
+          "authorization_token": {
+            "title": "Authorization Token",
+            "type": "string"
+          },
+          "expires_at": {
+            "format": "date-time",
+            "title": "Expires At",
+            "type": "string"
+          },
+          "method": {
+            "anyOf": [
+              {
+                "enum": [
+                  "oidc_reauth",
+                  "password_reauth"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Method"
+          },
+          "signing_digest": {
+            "title": "Signing Digest",
+            "type": "string"
+          }
+        },
+        "required": [
+          "authorization_token",
+          "expires_at",
+          "signing_digest",
+          "method"
+        ],
+        "title": "StressSignoffStepUpGranted",
+        "type": "object"
+      },
+      "StressSignoffStepUpRequest": {
+        "additionalProperties": false,
+        "description": "Fresh proof of presence for this exact sign-off and digest.",
+        "properties": {
+          "id_token": {
+            "anyOf": [
+              {
+                "maxLength": 8192,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Id Token"
+          },
+          "password": {
+            "anyOf": [
+              {
+                "maxLength": 1024,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Password"
+          }
+        },
+        "title": "StressSignoffStepUpRequest",
+        "type": "object"
+      },
+      "StressSignoffSubmission": {
+        "additionalProperties": false,
+        "properties": {
+          "attestation_recipient_user_id": {
+            "format": "uuid",
+            "title": "Attestation Recipient User Id",
+            "type": "string"
+          },
+          "reason": {
+            "maxLength": 1000,
+            "minLength": 1,
+            "title": "Reason",
+            "type": "string"
+          }
+        },
+        "required": [
+          "reason",
+          "attestation_recipient_user_id"
+        ],
+        "title": "StressSignoffSubmission",
+        "type": "object"
       },
       "StressSignoffSummary": {
         "additionalProperties": false,
@@ -79409,6 +79552,123 @@
         ]
       }
     },
+    "/api/v1/banks/{bank_id}/enterprise-stress/signoffs/{signoff_id}/step-up": {
+      "post": {
+        "operationId": "stepUpEnterpriseStressSignoff",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bank_id",
+            "required": true,
+            "schema": {
+              "title": "Bank Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "signoff_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Signoff Id",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StressSignoffStepUpRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StressSignoffStepUpGranted"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Step Up Signoff",
+        "tags": [
+          "enterprise-stress-signoff"
+        ]
+      }
+    },
     "/api/v1/banks/{bank_id}/enterprise-stress/signoffs/{signoff_id}/submit": {
       "post": {
         "operationId": "submitEnterpriseStressSignoff",
@@ -79437,7 +79697,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/StressSignoffTransition"
+                "$ref": "#/components/schemas/StressSignoffSubmission"
               }
             }
           },
