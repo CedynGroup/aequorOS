@@ -76,6 +76,21 @@ export function grantShortfall(draft: GrantScope): string | null {
       ? null
       : "This grant won't let them configure settings: that needs Restricted data.";
   }
+  if (draft.roleBundle === "signer") {
+    const institutionOk =
+      draft.institutionScope === "institution" && Boolean(draft.institutionId);
+    const moduleOk =
+      draft.moduleScope === "reg" ||
+      draft.moduleScope === "risk" ||
+      draft.moduleScope === "all";
+    const sensitivityOk = coversSensitivity(draft.sensitivityScope);
+    if (institutionOk && moduleOk && sensitivityOk) return null;
+    const missing: string[] = [];
+    if (!institutionOk) missing.push("an exact institution");
+    if (!moduleOk) missing.push("Regulatory Reporting or Risk & Limits");
+    if (!sensitivityOk) missing.push("Restricted data");
+    return `This grant won't let them sign filings or enterprise stress results: that needs ${missing.join(" and ")}.`;
+  }
   const work = CHAIN_DECISION_BUNDLES[draft.roleBundle];
   if (work === undefined) return null;
 
