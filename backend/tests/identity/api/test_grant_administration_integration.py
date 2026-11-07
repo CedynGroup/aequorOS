@@ -434,7 +434,9 @@ def test_signer_grant_denies_other_permissions(
     with _session() as db:
         principal = PrincipalLocator(ORG_1, GRANTEE, PrincipalType.HUMAN)
         exact = _resource(BANK_A, Module.REGULATORY, Sensitivity.RESTRICTED)
-        assert not authorization.evaluate_permission(db, principal, permission, exact).allowed
+        assert not authorization.evaluate_permission(
+            db, principal, permission, exact, conditions=SIGNING_CONDITIONS
+        ).allowed
 
 
 @pytest.mark.parametrize(
@@ -458,8 +460,12 @@ def test_signer_grant_is_exact_to_its_dimensions(
     """Sign-off authority never leaks across dimensions, reported per adjacent resource."""
     with _session() as db:
         principal = PrincipalLocator(ORG_1, GRANTEE, PrincipalType.HUMAN)
+        exact = _resource(BANK_A, Module.REGULATORY, Sensitivity.RESTRICTED)
+        assert authorization.evaluate_permission(
+            db, principal, Permission.SIGN_OFF, exact, conditions=SIGNING_CONDITIONS
+        ).allowed
         assert not authorization.evaluate_permission(
-            db, principal, Permission.SIGN_OFF, resource
+            db, principal, Permission.SIGN_OFF, resource, conditions=SIGNING_CONDITIONS
         ).allowed
 
 

@@ -36,6 +36,7 @@ from app.core.authorization import (
     RoleBundle,
     Sensitivity,
 )
+from app.core.security import has_role
 from app.identity.service import authorization
 from app.models import AuthorizationBinding, Bank, Organization, User
 from scripts.authorization_signing_routes import SIGNING_ROUTES, SigningRoute
@@ -329,9 +330,9 @@ def _impact(
             before = _combined(
                 source_read,
                 Eligibility(
-                    user.role == "approver",
+                    has_role([user.role], "approver"),
                     "legacy_scalar_approver"
-                    if user.role == "approver"
+                    if has_role([user.role], "approver")
                     else "legacy_scalar_approver_required",
                 ),
             )

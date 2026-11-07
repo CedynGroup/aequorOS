@@ -303,6 +303,7 @@ function ScopedEnterpriseStressWorkbench({
   // Default the focused run to the worst run in the registry when none picked.
   const effectiveRun = useMemo(() => {
     if (focusedRun) return focusedRun;
+    if (resumeRunId) return null;
     const runs = registry.data ?? [];
     if (runs.length === 0) return null;
     return [...runs].sort(
@@ -311,7 +312,7 @@ function ScopedEnterpriseStressWorkbench({
         (numOrNull(b.summary.car_erosion_pp) ?? Number.NEGATIVE_INFINITY) -
         (numOrNull(a.summary.car_erosion_pp) ?? Number.NEGATIVE_INFINITY),
     )[0];
-  }, [focusedRun, registry.data]);
+  }, [focusedRun, registry.data, resumeRunId]);
 
   const toggleSelect = (s: MacroScenarioSummary) => {
     setSelectedIds((ids) =>
@@ -426,6 +427,11 @@ function ScopedEnterpriseStressWorkbench({
       </div>
 
       <SubTabs items={TABS} active={tab} onChange={(k) => setTab(k as Tab)} />
+      {runError && tab !== "run" && (
+        <p role="alert" className="text-caption text-critical">
+          {runError}
+        </p>
+      )}
 
       {tab === "run" && (
         <div className="grid grid-cols-1 xl:grid-cols-5 gap-6 items-start">
@@ -630,9 +636,16 @@ function ScopedEnterpriseStressWorkbench({
           <NoRun onConfigure={() => setTab("run")} />
         ))}
 
-      {tab === "governance" && (
-        <SignoffPanel run={effectiveRun} bankId={bankId} />
-      )}
+      {tab === "governance" &&
+        (resumeRunId && !focusedRun ? (
+          !runError && (
+            <p role="status" className="text-caption text-slate">
+              Reopening the selected stress run.
+            </p>
+          )
+        ) : (
+          <SignoffPanel run={effectiveRun} bankId={bankId} />
+        ))}
 
       {tab === "registry" && (
         <RunRegistry
