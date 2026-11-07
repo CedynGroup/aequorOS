@@ -121,6 +121,62 @@ exclude = [".venv"]
 reportAny = "error"
 reportExplicitAny = false
 
+# Test helpers and test files run basedpyright's actual STANDARD preset. An
+# execution environment cannot set `typeCheckingMode`, so every rule where
+# getStandardDiagnosticRuleSet() differs from strict is set to its standard value,
+# plus `reportAny = "none"` countering the repo override above. The standard
+# defaults silence reportUnknown*, reportMissingParameterType,
+# reportMissingTypeArgument, reportPrivateUsage and reportAny. Real-error checks
+# (wrong argument types, missing attributes, return types, call issues) remain
+# error in both presets. The `tests` root also matches `tests/support` helpers.
+# The one standard difference that cannot be expressed per path is
+# `omitUnannotatedParamType` (standard true, strict false), a globally consumed
+# diagnostic type-printing flag, not a check; the tier probe confirms this
+# limitation changes no emitted diagnostic.
+[[tool.basedpyright.executionEnvironments]]
+root = "tests"
+extraPaths = ["."]
+reportAny = "none"
+reportAssertAlwaysTrue = "warning"
+reportConstantRedefinition = "none"
+reportDeprecated = "hint"
+reportDuplicateImport = "none"
+reportIncompleteStub = "none"
+reportInconsistentConstructor = "none"
+reportInvalidStringEscapeSequence = "warning"
+reportInvalidStubStatement = "none"
+reportInvalidTypeVarUse = "warning"
+reportMatchNotExhaustive = "none"
+reportMissingParameterType = "none"
+reportMissingTypeArgument = "none"
+reportMissingTypeStubs = "none"
+reportPrivateUsage = "none"
+reportSelfClsParameterName = "warning"
+reportTypeCommentUsage = "hint"
+reportUnknownArgumentType = "none"
+reportUnknownLambdaType = "none"
+reportUnknownMemberType = "none"
+reportUnknownParameterType = "none"
+reportUnknownVariableType = "none"
+reportUnnecessaryCast = "none"
+reportUnnecessaryComparison = "none"
+reportUnnecessaryContains = "none"
+reportUnnecessaryIsInstance = "none"
+reportUnsupportedDunderAll = "warning"
+reportUntypedBaseClass = "none"
+reportUntypedClassDecorator = "none"
+reportUntypedFunctionDecorator = "none"
+reportUntypedNamedTuple = "none"
+reportUnusedClass = "hint"
+reportUnusedExpression = "warning"
+reportUnusedFunction = "hint"
+reportUnusedImport = "hint"
+reportUnusedVariable = "hint"
+reportWildcardImportFromLibrary = "warning"
+strictDictionaryInference = false
+strictListInference = false
+strictSetInference = false
+
 # --- torch: CPU-only wheels on Linux -----------------------------------------
 # On Linux the default PyPI torch wheel drags the full NVIDIA CUDA stack
 # (~2.5GB download / ~8GB installed: cublas, cudnn, cufft, nccl, triton, ...).

@@ -32,6 +32,67 @@ BACKEND = type_check.BACKEND
 #: still flags every use of such a value.
 RELAXED_RULES = frozenset({"reportExplicitAny"})
 
+#: The rules where the installed checker's standard preset differs from strict
+#: (basedpyright 1.39.6, ``getStandardDiagnosticRuleSet()`` vs
+#: ``getStrictDiagnosticRuleSet()``), expressed at their standard values. An
+#: execution environment cannot set ``typeCheckingMode``, so the standard preset
+#: for both test tiers is this explicit map; ``reportAny = "none"`` also counters
+#: the repo's top-level strict override. Real-error rules — wrong argument types,
+#: missing attributes, return types, call issues — are error in both presets and
+#: are deliberately absent: they keep full strength in every tier.
+STANDARD_TIER_RULES: dict[str, object] = {
+    "reportAny": "none",
+    "reportAssertAlwaysTrue": "warning",
+    "reportConstantRedefinition": "none",
+    "reportDeprecated": "hint",
+    "reportDuplicateImport": "none",
+    "reportIncompleteStub": "none",
+    "reportInconsistentConstructor": "none",
+    "reportInvalidStringEscapeSequence": "warning",
+    "reportInvalidStubStatement": "none",
+    "reportInvalidTypeVarUse": "warning",
+    "reportMatchNotExhaustive": "none",
+    "reportMissingParameterType": "none",
+    "reportMissingTypeArgument": "none",
+    "reportMissingTypeStubs": "none",
+    "reportPrivateUsage": "none",
+    "reportSelfClsParameterName": "warning",
+    "reportTypeCommentUsage": "hint",
+    "reportUnknownArgumentType": "none",
+    "reportUnknownLambdaType": "none",
+    "reportUnknownMemberType": "none",
+    "reportUnknownParameterType": "none",
+    "reportUnknownVariableType": "none",
+    "reportUnnecessaryCast": "none",
+    "reportUnnecessaryComparison": "none",
+    "reportUnnecessaryContains": "none",
+    "reportUnnecessaryIsInstance": "none",
+    "reportUnsupportedDunderAll": "warning",
+    "reportUntypedBaseClass": "none",
+    "reportUntypedClassDecorator": "none",
+    "reportUntypedFunctionDecorator": "none",
+    "reportUntypedNamedTuple": "none",
+    "reportUnusedClass": "hint",
+    "reportUnusedExpression": "warning",
+    "reportUnusedFunction": "hint",
+    "reportUnusedImport": "hint",
+    "reportUnusedVariable": "hint",
+    "reportWildcardImportFromLibrary": "warning",
+    "strictDictionaryInference": False,
+    "strictListInference": False,
+    "strictSetInference": False,
+}
+
+#: Rules that must keep error strength everywhere, as a negative control on the
+#: map above: none of these may appear in a tier profile below error.
+_PRESERVED_REAL_ERROR_RULES = (
+    "reportArgumentType",
+    "reportAttributeAccessIssue",
+    "reportCallIssue",
+    "reportGeneralTypeIssues",
+    "reportReturnType",
+)
+
 #: Diagnostic levels strict mode leaves at full strength.
 _STRICT_LEVELS = frozenset({"error", True})
 
@@ -76,6 +137,33 @@ def test_basedpyright_is_configured_strict() -> None:
     )
     assert "ignore" not in config, "An ignored path escapes the baseline check entirely."
     assert config["exclude"] == [".venv"]
+
+
+def test_basedpyright_relaxes_only_test_file_noise() -> None:
+    """Test tiers run the checker's actual standard preset; source stays strict.
+
+    The ``tests`` environment covers helpers and test files with the same
+    standard map, whose defaults silence noisy unknown-type and missing-annotation
+    rules. An execution environment cannot set ``typeCheckingMode``.
+    """
+    environments = _basedpyright_config()["executionEnvironments"]
+    assert isinstance(environments, list)
+    assert [environment["root"] for environment in environments] == ["tests"]
+    for environment in environments:
+        overridden = {
+            key: level
+            for key, level in environment.items()
+            if key.startswith("report") or key.startswith("strict")
+        }
+        assert overridden == STANDARD_TIER_RULES, (
+            "Test tiers must express exactly the installed checker's standard preset "
+            f"(plus the reportAny counter). Got: {overridden}"
+        )
+    for rule in _PRESERVED_REAL_ERROR_RULES:
+        for environment in environments:
+            assert rule not in environment, (
+                f"{rule} is a real-error check and must keep full strength in every tier"
+            )
 
 
 @pytest.mark.parametrize("check_exit", [0, 1])

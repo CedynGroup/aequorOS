@@ -1,4 +1,4 @@
-"""Enforce basedpyright strict with a growth-only gate on legacy errors.
+"""Enforce configured basedpyright profiles with a growth-only gate on legacy errors.
 
 Decreases pass without requiring a same-PR baseline refresh.
 

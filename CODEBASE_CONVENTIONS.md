@@ -18,19 +18,51 @@ Paths below describe the existing layered tree; new feature code follows
   `# noqa: PLR0913` (and `PLR0915` for long orchestration functions) rather than restructuring.
 - **basedpyright**: `typeCheckingMode = "strict"`, `pythonVersion = "3.13"`, with included paths
   defined in `backend/pyproject.toml`; `reportAny` and the `reportUnknown*` family are errors, and
-  `reportExplicitAny` is off so the JSON-column type below stands. The
-  [type-check baseline](#type-check-baseline) enforces it.
+  `reportExplicitAny` is off so the JSON-column type below stands. `app`, `alembic` and `scripts`
+  run that full strict rule set. Test profiles and enforcement are defined in the
+  [type-check baseline](#type-check-baseline).
 - Every module starts with `from __future__ import annotations`.
 - Python 3.13 syntax is used freely: `type X = Literal[...]` aliases, `X | None`, `StrEnum`.
 
 ### Type-check baseline
 
-New code is strict; legacy code may only get stricter.
+New source code is strict; tests use the standard profile described below.
+Legacy diagnostic allowances may only shrink.
 
 - `mise run risk-service:typecheck` runs `backend/scripts/type_check_baseline.py check`. It
   type-checks the backend once and counts each module's errors and warnings per rule against
   `backend/scripts/type_check_baseline.json`.
-- **Strict modules** may have no errors and never take a baseline entry: every new module, every
+- **Source and test tiers.** The strict rule set applies
+  unchanged to `app`, `alembic` and `scripts`. Both test tiers — `tests/support` and the test
+  files under `tests/` outside it — run the checker's actual standard preset, expressed as
+  explicit per-rule levels in `executionEnvironments` because an environment cannot set
+  `typeCheckingMode` (the one preset key that cannot be expressed per path is
+  `omitUnannotatedParamType`, a diagnostic type-printing flag, not a check; an A/B scan
+  confirms the emitted diagnostics match a true standard-preset run exactly). The
+  standard preset still catches real defects on concretely typed values (wrong argument
+  types, missing attributes, bad returns).
+
+  The 2026-11-07 census used `cd backend && uv run basedpyright --outputjson`
+  (basedpyright 1.39.6, error and warning severities, 2,725 files):
+
+  | Tier | Before (strict everywhere) | After (tiered profile) | Removed |
+  | --- | ---: | ---: | ---: |
+  | Source (`app`, `alembic`, `scripts`) | 10,295 | 10,295 (set-identical) | 0 |
+  | Shared helpers (`tests/support`) | 7 | 0 | 7 |
+  | Test files (remaining `tests/`) | 13,028 | 0 | 13,028 |
+
+  These are measured diagnostics, including the after counts. The baseline stores
+  per-(module, rule) allowances instead: it now contains source modules only, with
+  512 modules, 1,227 entries and 10,295 charged allowances (before: 1,064 modules,
+  2,664 entries and 23,530 charged allowances). Source allowances are unchanged;
+  every test-tier entry was removed.
+
+  As the concrete PR811 case, the new `backend/tests/support/postgres_migrations.py`
+  at published head `b941f84f` typechecks with **0 errors under strict** and
+  **0 errors under the final tiered profile**, reproduced from the immutable
+  published git object. PR811 need not wait for this separate profile change.
+- **Unbaselined modules** may have no errors under their configured profile and never take a
+  baseline entry: every new module, every
   module that passed when the baseline was recorded, and the packages and modules listed in
   `STRICT_MODULES` in the script, except the exact-file migration allowances described below.
 - **A legacy module may not add errors.** A rule's count above its baseline fails, even when
@@ -46,7 +78,7 @@ New code is strict; legacy code may only get stricter.
   promoted, so a move PR stays a pure rename (§5). The check counts it under the name it had
   before its moves in `backend/scripts/feature_module_moves.json`. A module whose new location is
   already in `STRICT_MODULES` gets no allowance: fix its errors in the move PR, and `update` then
-  removes its old entry. The live layout migration has nine exact-file exceptions listed in
+  removes its old entry. The live layout migration has exact-file exceptions listed in
   `TRANSITIONAL_LEGACY_MODULES`, with their existing per-rule counts moved to their current
   names. All other live modules remain strict. Retire each exception when its errors are fixed
   and its baseline entry is removed; do not extend the exception set to new files.
@@ -54,7 +86,8 @@ New code is strict; legacy code may only get stricter.
   errors, run `update` so the baseline holds no entry for them (moved modules' entries sit under
   their pre-move names), then add the package to `STRICT_MODULES`.
   `tests/architecture/test_type_check_baseline.py` then rejects any baseline entry for it.
-- Plain `uv run basedpyright <files>` shows a file's strict errors, legacy ones included, and is
+- Plain `uv run basedpyright <files>` shows diagnostics under the file's configured profile,
+  legacy ones included, and is
   not a gate. Narrow `Any` with `isinstance`, a pydantic `TypeAdapter` or a typed SQLAlchemy result
   (`.tuples()`, `.scalars()`) rather than silencing it.
 
