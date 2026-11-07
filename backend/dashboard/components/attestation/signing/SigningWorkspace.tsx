@@ -185,7 +185,7 @@ export default function SigningWorkspace({
   const signing = usePackageSigningEligibility(
     bankId,
     signingRole,
-    statusQuery.data?.recipients ?? [],
+    statusQuery.data?.recipients,
     returnFamily,
   );
   const previewQuery = useCertificationPreview(
@@ -739,10 +739,16 @@ export default function SigningWorkspace({
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose, armed]);
 
+  const routeStatus = statusQuery.error
+    ? "Could not load the current-cycle signing route. Reload the page to retry."
+    : statusQuery.isLoading || !statusQuery.data
+      ? "Checking who this signature is routed to…"
+      : null;
+
   // Ineligibility closes the whole act, not just its final submit button. Do
   // not leave document placement, routing, adoption or send-back controls alive
   // around a disabled proof form when the binding, route or source READ is absent.
-  if (!signing.allowed) {
+  if (routeStatus || !signing.allowed) {
     return (
       <div
         role="dialog"
@@ -769,7 +775,7 @@ export default function SigningWorkspace({
             role="status"
             className="mt-5 text-caption text-warning leading-relaxed"
           >
-            {signing.reason}
+            {routeStatus ?? signing.reason}
           </p>
         </section>
       </div>

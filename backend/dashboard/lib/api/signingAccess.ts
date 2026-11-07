@@ -123,7 +123,7 @@ export function useSigningSourceEligibility(
 export function usePackageSigningEligibility(
   bankId: string | undefined,
   signingRole: SigningRole,
-  recipients: readonly SignatureRecipientRead[],
+  recipients: readonly SignatureRecipientRead[] | undefined,
   returnFamily = "regulatory",
 ) {
   const profile = useUserProfile();
@@ -141,6 +141,7 @@ export function usePackageSigningEligibility(
   const userId = profile.profile?.userId;
   const routed = Boolean(
     userId &&
+      recipients !== undefined &&
       recipients.some(
         (recipient) =>
           recipient.status === "pending" &&
@@ -149,13 +150,20 @@ export function usePackageSigningEligibility(
       ),
   );
   return {
-    allowed: signing.allowed && source.allowed && canApprove && routed,
+    allowed:
+      recipients !== undefined &&
+      signing.allowed &&
+      source.allowed &&
+      canApprove &&
+      routed,
     reason: !signing.allowed
       ? signing.reason
       : !source.allowed
         ? source.reason
         : !canApprove
           ? "Requires Regulatory Reporting approve access with Restricted data and exact-institution scope. Sign-off authority alone is not checker approval."
+          : recipients === undefined
+            ? "The signing route has not loaded. Wait before preview or step-up."
           : userId &&
               recipients.some(
                 (recipient) =>

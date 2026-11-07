@@ -99,7 +99,7 @@ export default function CertifyDialog({
   const signing = usePackageSigningEligibility(
     bankId,
     signingRole,
-    statusQuery.data?.recipients ?? [],
+    statusQuery.data?.recipients,
     returnFamily,
   );
   const previewQuery = useCertificationPreview(
@@ -218,7 +218,11 @@ export default function CertifyDialog({
         <div className="px-5 py-4 space-y-5 max-h-[70vh] overflow-y-auto">
           {!signing.allowed ? (
             <p role="status" className="text-caption text-warning leading-relaxed">
-              {signing.reason}
+              {statusQuery.error
+                ? "Could not load the current-cycle signing route. Reload the page to retry."
+                : statusQuery.isLoading || !statusQuery.data
+                  ? "Checking who this signature is routed to…"
+                  : signing.reason}
             </p>
           ) : previewQuery.isLoading ? (
             <SkeletonCard />
