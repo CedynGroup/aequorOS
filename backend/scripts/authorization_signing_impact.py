@@ -325,6 +325,16 @@ def _impact(
         )
         if route.baseline == "route_not_present":
             before = Eligibility(False, "route_not_present_before_this_change")
+        elif route.baseline == "legacy_scalar_approver":
+            before = _combined(
+                source_read,
+                Eligibility(
+                    user.role == "approver",
+                    "legacy_scalar_approver"
+                    if user.role == "approver"
+                    else "legacy_scalar_approver_required",
+                ),
+            )
         elif route.baseline == "source_view":
             before = _combined(source_read, Eligibility(True, "legacy_source_view"))
         else:

@@ -14,6 +14,7 @@ from uuid import UUID, uuid4
 
 import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy import event
 
 from app.core import security
 from app.core.authorization import RoleBundle, SensitivityScope
@@ -141,17 +142,33 @@ def test_signoff_maker_checker_lifecycle(db_client: TestClient) -> None:
     )
     assert step_up.status_code == 200, step_up.text
 
-    attest = db_client.post(
-        SIGNOFF_URL.format(bank_id=bank_id) + f"/{signoff_id}/attest",
-        headers=headers(user_id=board, roles=("approver",)),
-        json={
-            "credibility_rationale": "Reviewed and challenged; results are credible.",
-            "board_challenge": "Challenged FX severity; retained.",
-            "reason": "Board attestation.",
-            "authorization_token": step_up.json()["authorization_token"],
-            "expected_signing_digest": step_up.json()["signing_digest"],
-        },
-    )
+    locked_reads: list[str] = []
+
+    def observe_read(
+        _conn: object, _cursor: object, statement: str, *_args: object
+    ) -> None:
+        normalized = statement.upper()
+        if "ENTERPRISE_STRESS_SIGNOFFS" in normalized and "FOR UPDATE" in normalized:
+            locked_reads.append(statement)
+
+    with get_sessionmaker()() as session:
+        engine = session.get_bind()
+    event.listen(engine, "before_cursor_execute", observe_read)
+    try:
+        attest = db_client.post(
+            SIGNOFF_URL.format(bank_id=bank_id) + f"/{signoff_id}/attest",
+            headers=headers(user_id=board, roles=("approver",)),
+            json={
+                "credibility_rationale": "Reviewed and challenged; results are credible.",
+                "board_challenge": "Challenged FX severity; retained.",
+                "reason": "Board attestation.",
+                "authorization_token": step_up.json()["authorization_token"],
+                "expected_signing_digest": step_up.json()["signing_digest"],
+            },
+        )
+    finally:
+        event.remove(engine, "before_cursor_execute", observe_read)
+    assert len(locked_reads) == 1
     assert attest.status_code == 200, attest.text
     body = attest.json()
     assert body["status"] == "attested"

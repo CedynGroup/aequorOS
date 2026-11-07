@@ -67,15 +67,21 @@ def _get_bank_or_404(db: Session, ctx: TenantContext, bank_id: str) -> Bank:
 
 
 def _get_signoff_or_404(
-    db: Session, ctx: TenantContext, bank_id: str, signoff_id: UUID
+    db: Session,
+    ctx: TenantContext,
+    bank_id: str,
+    signoff_id: UUID,
+    *,
+    for_update: bool = False,
 ) -> EnterpriseStressSignoff:
-    signoff = db.scalar(
-        select(EnterpriseStressSignoff).where(
-            EnterpriseStressSignoff.id == signoff_id,
-            EnterpriseStressSignoff.organization_id == ctx.organization_id,
-            EnterpriseStressSignoff.bank_id == bank_id,
-        )
+    query = select(EnterpriseStressSignoff).where(
+        EnterpriseStressSignoff.id == signoff_id,
+        EnterpriseStressSignoff.organization_id == ctx.organization_id,
+        EnterpriseStressSignoff.bank_id == bank_id,
     )
+    if for_update:
+        query = query.with_for_update()
+    signoff = db.scalar(query)
     if signoff is None:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -555,7 +561,7 @@ def attest_signoff(
     signoff_id: UUID,
     payload: StressSignoffAttestation,
 ) -> StressSignoffRead:
-    signoff = _get_signoff_or_404(db, ctx, bank_id, signoff_id)
+    signoff = _get_signoff_or_404(db, ctx, bank_id, signoff_id, for_update=True)
     signing_digest = _attestation_preflight(db, ctx, signoff)
     assert ctx.actor_user_id is not None  # established by the preflight
     if payload.expected_signing_digest != signing_digest:

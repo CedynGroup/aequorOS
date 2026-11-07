@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type {
   AttestationStatusRead,
   SigningRole,
@@ -59,8 +59,17 @@ export default function SignatureRoutingForm({
     routedNominations(status, slots),
   );
   const [reason, setReason] = useState("");
+  const seededRouting = useRef<string | null>(null);
 
   useEffect(() => {
+    const key = JSON.stringify([
+      slots,
+      status.recipients
+        .filter((recipient) => recipient.status === "pending")
+        .map((recipient) => [recipient.signingRole, recipient.recipientUserId]),
+    ]);
+    if (seededRouting.current === key) return;
+    seededRouting.current = key;
     setNominations(routedNominations(status, slots));
   }, [status, slots]);
 
