@@ -82,6 +82,12 @@ mise installs Node, pnpm, Python and uv for you. Automatic installation is switc
 off in `mise.toml`, so a mise task run before `mise run setup` reports the missing
 tool instead of downloading it.
 
+The optional no-mistakes pipeline also requires an existing coreutils-compatible
+`timeout` or `gtimeout` with `--kill-after` support on `PATH`. On macOS, use an
+existing coreutils installation; `mise run setup` does not provide it. Required
+checks fail clearly if neither executable is available; optional CodeRabbit review
+is skipped as unverified.
+
 ## Set up a fresh checkout
 
 From the repository root:
