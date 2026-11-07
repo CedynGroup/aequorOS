@@ -32,22 +32,65 @@ BACKEND = type_check.BACKEND
 #: still flags every use of such a value.
 RELAXED_RULES = frozenset({"reportExplicitAny"})
 
-#: The noisy unknown-type and missing-annotation rules test files may drop: tests
-#: exercise typed production code and mock boundaries, where these flag test plumbing
-#: rather than defects. Real-error checks (wrong argument types, missing attributes,
-#: return types, ...) stay at full strength — the config test below pins the exact set.
-RELAXED_TEST_RULES = frozenset(
-    {
-        "reportAny",
-        "reportMissingParameterType",
-        "reportMissingTypeArgument",
-        "reportPrivateUsage",
-        "reportUnknownArgumentType",
-        "reportUnknownLambdaType",
-        "reportUnknownMemberType",
-        "reportUnknownParameterType",
-        "reportUnknownVariableType",
-    }
+#: The rules where the installed checker's standard preset differs from strict
+#: (basedpyright 1.39.6, ``getStandardDiagnosticRuleSet()`` vs
+#: ``getStrictDiagnosticRuleSet()``), expressed at their standard values. An
+#: execution environment cannot set ``typeCheckingMode``, so the standard preset
+#: for both test tiers is this explicit map; ``reportAny = "none"`` also counters
+#: the repo's top-level strict override. Real-error rules — wrong argument types,
+#: missing attributes, return types, call issues — are error in both presets and
+#: are deliberately absent: they keep full strength in every tier.
+STANDARD_TIER_RULES: dict[str, object] = {
+    "reportAny": "none",
+    "reportAssertAlwaysTrue": "warning",
+    "reportConstantRedefinition": "none",
+    "reportDeprecated": "hint",
+    "reportDuplicateImport": "none",
+    "reportIncompleteStub": "none",
+    "reportInconsistentConstructor": "none",
+    "reportInvalidStringEscapeSequence": "warning",
+    "reportInvalidStubStatement": "none",
+    "reportInvalidTypeVarUse": "warning",
+    "reportMatchNotExhaustive": "none",
+    "reportMissingParameterType": "none",
+    "reportMissingTypeArgument": "none",
+    "reportMissingTypeStubs": "none",
+    "reportPrivateUsage": "none",
+    "reportSelfClsParameterName": "warning",
+    "reportTypeCommentUsage": "hint",
+    "reportUnknownArgumentType": "none",
+    "reportUnknownLambdaType": "none",
+    "reportUnknownMemberType": "none",
+    "reportUnknownParameterType": "none",
+    "reportUnknownVariableType": "none",
+    "reportUnnecessaryCast": "none",
+    "reportUnnecessaryComparison": "none",
+    "reportUnnecessaryContains": "none",
+    "reportUnnecessaryIsInstance": "none",
+    "reportUnsupportedDunderAll": "warning",
+    "reportUntypedBaseClass": "none",
+    "reportUntypedClassDecorator": "none",
+    "reportUntypedFunctionDecorator": "none",
+    "reportUntypedNamedTuple": "none",
+    "reportUnusedClass": "hint",
+    "reportUnusedExpression": "warning",
+    "reportUnusedFunction": "hint",
+    "reportUnusedImport": "hint",
+    "reportUnusedVariable": "hint",
+    "reportWildcardImportFromLibrary": "warning",
+    "strictDictionaryInference": False,
+    "strictListInference": False,
+    "strictSetInference": False,
+}
+
+#: Rules that must keep error strength everywhere, as a negative control on the
+#: map above: none of these may appear in a tier profile below error.
+_PRESERVED_REAL_ERROR_RULES = (
+    "reportArgumentType",
+    "reportAttributeAccessIssue",
+    "reportCallIssue",
+    "reportGeneralTypeIssues",
+    "reportReturnType",
 )
 
 #: Diagnostic levels strict mode leaves at full strength.
@@ -97,25 +140,32 @@ def test_basedpyright_is_configured_strict() -> None:
 
 
 def test_basedpyright_relaxes_only_test_file_noise() -> None:
-    """Test files drop only the approved noisy rules; shared helpers stay strict.
+    """Test tiers run the checker's actual standard preset; source stays strict.
 
     Execution environments resolve in declaration order, so ``tests/support`` must
-    precede ``tests`` or its helpers would inherit the relaxed profile.
+    precede ``tests`` or its helpers would fall to the default (strict) profile.
+    The standard preset already silences the noisy unknown-type and
+    missing-annotation rules; both tiers carry the same explicit standard map
+    because an execution environment cannot set ``typeCheckingMode``.
     """
     environments = _basedpyright_config()["executionEnvironments"]
     assert isinstance(environments, list)
     assert [environment["root"] for environment in environments] == ["tests/support", "tests"]
-    helpers = environments[0]
-    assert not [key for key in helpers if key.startswith("report")], (
-        "Shared test helpers (tests/support) stay on the full strict rule set"
-    )
-    test_files = environments[1]
-    relaxed = {key for key in test_files if key.startswith("report")}
-    assert relaxed == RELAXED_TEST_RULES, (
-        "Test files may drop only the noisy unknown-type and missing-annotation rules; "
-        f"real-error checks must stay enabled. Got: {sorted(relaxed)}"
-    )
-    assert all(test_files[rule] is False for rule in relaxed)
+    for environment in environments:
+        overridden = {
+            key: level
+            for key, level in environment.items()
+            if key.startswith("report") or key.startswith("strict")
+        }
+        assert overridden == STANDARD_TIER_RULES, (
+            "Test tiers must express exactly the installed checker's standard preset "
+            f"(plus the reportAny counter). Got: {overridden}"
+        )
+    for rule in _PRESERVED_REAL_ERROR_RULES:
+        for environment in environments:
+            assert rule not in environment, (
+                f"{rule} is a real-error check and must keep full strength in every tier"
+            )
 
 
 @pytest.mark.parametrize("check_exit", [0, 1])

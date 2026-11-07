@@ -74,10 +74,10 @@ Each rule is stated in full in the document the index names.
   `backend/tests/architecture/test_feature_boundaries.py` ratchets the import graph; its
   baseline only shrinks.
 - **New backend code is basedpyright strict** (`reportAny` and `reportUnknown*` included); test
-  files under `tests/` (outside `tests/support`) relax only the noisy unknown-type and
-  missing-annotation rules while real-error checks stay enabled. Legacy errors are counted in
-  `backend/scripts/type_check_baseline.json`, which only shrinks;
-  `mise run risk-service:typecheck` is the gate, not plain `basedpyright`.
+  files under `tests/` (including `tests/support`) run the checker's standard preset, where
+  real-error checks (wrong argument types, missing attributes, return types) keep full
+  strength. Legacy errors are counted in `backend/scripts/type_check_baseline.json`, which only
+  shrinks; `mise run risk-service:typecheck` is the gate, not plain `basedpyright`.
 - **`app/domain/*` stays pure.** A future corporate entity is a sibling of `banks`
   (`CO-` platform id), never a nullable-heavy `banks` row.
 - **Every route that accepts an object id must be in the IDOR census.**

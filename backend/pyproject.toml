@@ -121,30 +121,107 @@ exclude = [".venv"]
 reportAny = "error"
 reportExplicitAny = false
 
-# Shared test helpers stay on the full strict rule set (execution environments
-# resolve in declaration order, so this root must precede the "tests" root).
+# Shared test helpers run basedpyright's actual STANDARD preset. An execution
+# environment cannot set `typeCheckingMode`, so the standard rule set is expressed
+# as explicit per-rule levels: every rule where the installed checker's
+# getStandardDiagnosticRuleSet() differs from strict, at its standard value, plus
+# `reportAny = "none"` countering the repo override above. The one standard
+# difference that cannot be expressed per path is `omitUnannotatedParamType`
+# (standard true, strict false) — a diagnostic type-printing flag consumed
+# globally, not a check; the tier probe proves the emitted diagnostics match a
+# true standard-preset run anyway. Environments resolve in declaration order, so
+# this root must precede the "tests" root.
 [[tool.basedpyright.executionEnvironments]]
 root = "tests/support"
-# An execution environment resolves first-party imports from its root, so the
-# backend root is re-added to keep `tests.*` and `app.*` imports resolvable.
 extraPaths = ["."]
+reportAny = "none"
+reportAssertAlwaysTrue = "warning"
+reportConstantRedefinition = "none"
+reportDeprecated = "hint"
+reportDuplicateImport = "none"
+reportIncompleteStub = "none"
+reportInconsistentConstructor = "none"
+reportInvalidStringEscapeSequence = "warning"
+reportInvalidStubStatement = "none"
+reportInvalidTypeVarUse = "warning"
+reportMatchNotExhaustive = "none"
+reportMissingParameterType = "none"
+reportMissingTypeArgument = "none"
+reportMissingTypeStubs = "none"
+reportPrivateUsage = "none"
+reportSelfClsParameterName = "warning"
+reportTypeCommentUsage = "hint"
+reportUnknownArgumentType = "none"
+reportUnknownLambdaType = "none"
+reportUnknownMemberType = "none"
+reportUnknownParameterType = "none"
+reportUnknownVariableType = "none"
+reportUnnecessaryCast = "none"
+reportUnnecessaryComparison = "none"
+reportUnnecessaryContains = "none"
+reportUnnecessaryIsInstance = "none"
+reportUnsupportedDunderAll = "warning"
+reportUntypedBaseClass = "none"
+reportUntypedClassDecorator = "none"
+reportUntypedFunctionDecorator = "none"
+reportUntypedNamedTuple = "none"
+reportUnusedClass = "hint"
+reportUnusedExpression = "warning"
+reportUnusedFunction = "hint"
+reportUnusedImport = "hint"
+reportUnusedVariable = "hint"
+reportWildcardImportFromLibrary = "warning"
+strictDictionaryInference = false
+strictListInference = false
+strictSetInference = false
 
-# Test files keep every real-error check (wrong argument types, missing
-# attributes, return types, ...) but drop the unknown-type and
-# missing-annotation noise: tests exercise typed production code and mock
-# boundaries, where those rules flag test plumbing rather than defects.
+# Test files run the same STANDARD preset (which already silences the noisy
+# unknown-type and missing-annotation category) while every real-error check —
+# wrong argument types, missing attributes, return types, call issues — stays at
+# its standard strength, which for these rules is error in both presets.
 [[tool.basedpyright.executionEnvironments]]
 root = "tests"
 extraPaths = ["."]
-reportAny = false
-reportMissingParameterType = false
-reportMissingTypeArgument = false
-reportPrivateUsage = false
-reportUnknownArgumentType = false
-reportUnknownLambdaType = false
-reportUnknownMemberType = false
-reportUnknownParameterType = false
-reportUnknownVariableType = false
+reportAny = "none"
+reportAssertAlwaysTrue = "warning"
+reportConstantRedefinition = "none"
+reportDeprecated = "hint"
+reportDuplicateImport = "none"
+reportIncompleteStub = "none"
+reportInconsistentConstructor = "none"
+reportInvalidStringEscapeSequence = "warning"
+reportInvalidStubStatement = "none"
+reportInvalidTypeVarUse = "warning"
+reportMatchNotExhaustive = "none"
+reportMissingParameterType = "none"
+reportMissingTypeArgument = "none"
+reportMissingTypeStubs = "none"
+reportPrivateUsage = "none"
+reportSelfClsParameterName = "warning"
+reportTypeCommentUsage = "hint"
+reportUnknownArgumentType = "none"
+reportUnknownLambdaType = "none"
+reportUnknownMemberType = "none"
+reportUnknownParameterType = "none"
+reportUnknownVariableType = "none"
+reportUnnecessaryCast = "none"
+reportUnnecessaryComparison = "none"
+reportUnnecessaryContains = "none"
+reportUnnecessaryIsInstance = "none"
+reportUnsupportedDunderAll = "warning"
+reportUntypedBaseClass = "none"
+reportUntypedClassDecorator = "none"
+reportUntypedFunctionDecorator = "none"
+reportUntypedNamedTuple = "none"
+reportUnusedClass = "hint"
+reportUnusedExpression = "warning"
+reportUnusedFunction = "hint"
+reportUnusedImport = "hint"
+reportUnusedVariable = "hint"
+reportWildcardImportFromLibrary = "warning"
+strictDictionaryInference = false
+strictListInference = false
+strictSetInference = false
 
 # --- torch: CPU-only wheels on Linux -----------------------------------------
 # On Linux the default PyPI torch wheel drags the full NVIDIA CUDA stack

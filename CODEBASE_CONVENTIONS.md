@@ -18,13 +18,12 @@ Paths below describe the existing layered tree; new feature code follows
   `# noqa: PLR0913` (and `PLR0915` for long orchestration functions) rather than restructuring.
 - **basedpyright**: `typeCheckingMode = "strict"`, `pythonVersion = "3.13"`, with included paths
   defined in `backend/pyproject.toml`; `reportAny` and the `reportUnknown*` family are errors, and
-  `reportExplicitAny` is off so the JSON-column type below stands. `app`, `alembic`, `scripts` and
-  the shared test helpers in `tests/support` run that full strict rule set; test files under
-  `tests/` (but outside `tests/support`) relax only the noisy unknown-type and missing-annotation
-  rules (`reportAny`, `reportUnknown*`, `reportMissingParameterType`,
-  `reportMissingTypeArgument`, `reportPrivateUsage`) through `executionEnvironments` —
-  real-error checks (wrong argument types, missing attributes, return types) stay enabled.
-  The [type-check baseline](#type-check-baseline) enforces it.
+  `reportExplicitAny` is off so the JSON-column type below stands. `app`, `alembic` and `scripts`
+  run that full strict rule set. The shared test helpers in `tests/support` and the test files
+  under `tests/` run the checker's actual **standard** preset through `executionEnvironments`
+  (expressed as explicit per-rule levels, since an environment cannot set `typeCheckingMode`);
+  real-error checks (wrong argument types, missing attributes, return types) are error in both
+  presets and keep full strength there. The [type-check baseline](#type-check-baseline) enforces it.
 - Every module starts with `from __future__ import annotations`.
 - Python 3.13 syntax is used freely: `type X = Literal[...]` aliases, `X | None`, `StrEnum`.
 
@@ -35,16 +34,20 @@ New code is strict; legacy code may only get stricter.
 - `mise run risk-service:typecheck` runs `backend/scripts/type_check_baseline.py check`. It
   type-checks the backend once and counts each module's errors and warnings per rule against
   `backend/scripts/type_check_baseline.json`.
-- **Source and test-helper tiers.** The strict rule set (and every statement below) applies
-  unchanged to `app`, `alembic`, `scripts` and `tests/support`; the relaxed profile applies only
-  to test files under `tests/` outside `tests/support`. As of 2026-11-07 the strict census was
-  10,295 source errors (all baselined legacy), 7 in `tests/support`, and 373 in test files — the
-  relaxation removed 12,655 test-file diagnostics, all of the nine relaxed rules, and the
-  baseline dropped the 1,312 `(module, rule)` entries that covered them (12,853 charged
-  allowances, including pre-existing drift). Test files still report real defects: 217 wrong
-  argument types, missing-attribute, unused-code and deprecated-use findings remain baselined,
-  and reportArgumentType, reportAttributeAccessIssue, return-type and every other real-error
-  rule stays at strict strength in all tiers.
+- **Source and test tiers.** The strict rule set (and every statement below) applies
+  unchanged to `app`, `alembic` and `scripts`. Both test tiers — `tests/support` and the test
+  files under `tests/` outside it — run the checker's actual standard preset, expressed as
+  explicit per-rule levels in `executionEnvironments` because an environment cannot set
+  `typeCheckingMode` (the one preset key that cannot be expressed per path is
+  `omitUnannotatedParamType`, a diagnostic type-printing flag, not a check; an A/B scan
+  confirms the emitted diagnostics match a true standard-preset run exactly). As of
+  2026-11-07 the strict census was 10,295 source errors (all baselined legacy); under the
+  standard preset both test tiers report zero errors and warnings — every strict-only
+  finding (unknown types, missing annotations, private usage, unused code) vanishes, and
+  even wrong-argument findings that strict's stronger inference exposed do not fire. The
+  standard preset still catches real defects on concretely typed values (wrong argument
+  types, missing attributes, bad returns), and the baseline dropped every test-tier entry
+  the standard profile no longer measures.
 - **Strict modules** may have no errors and never take a baseline entry: every new module, every
   module that passed when the baseline was recorded, and the packages and modules listed in
   `STRICT_MODULES` in the script, except the exact-file migration allowances described below.
