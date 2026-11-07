@@ -209,11 +209,12 @@ local runs keep bounded, reproducible budgets; the scheduled RLS-depth job
 row-level-security property files at a larger budget by setting
 `AQS_RLS_PROPERTY_EXAMPLES` (per-PR budgets are unchanged, and no larger
 Hypothesis profile exists — an explicit `@settings(max_examples=...)` always
-beats a profile). The filing, freeze, template and access-request database
-machines lower examples
-to 12 to bound persisted workflow setup and HTTP requests. The filing/freeze machines additionally build real computed
+beats a profile). The workflow header owns the measured runtime, cost estimate
+and failure-triage guidance. The filing, freeze, template and access-request database
+machines lower examples to 12 to bound persisted workflow setup and HTTP requests. The filing/freeze machines additionally build real computed
 positions and/or frozen reports. These retain 20 generated steps. The Postgres effective-access and reconciliation
-approval machines use 10 examples and 12 generated steps. Failure output
+approval machines default to 10 examples (overridden by `AQS_RLS_PROPERTY_EXAMPLES`)
+and retain 12 generated steps. Failure output
 contains a minimized command sequence and reproduction blob.
 
 The filing, freeze, template and access-request machine examples each own a
