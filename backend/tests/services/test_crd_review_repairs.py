@@ -22,7 +22,6 @@ from app.stress.domain.credit_bottom_up import compute_bottom_up_credit
 from app.stress.service.enterprise_stress import (
     _build_credit_exposures,  # pyright: ignore[reportPrivateUsage]
 )
-from tests.capital.domain.test_capital_engine import bog_capital_params
 from tests.credit.service.test_crd_credit_exposures import (
     _stress_row,  # pyright: ignore[reportPrivateUsage]
 )
@@ -30,6 +29,7 @@ from tests.services.test_derivation_fail_closed_defaults import (
     _canonical,  # pyright: ignore[reportPrivateUsage]
     _row,  # pyright: ignore[reportPrivateUsage]
 )
+from tests.support.capital_params import bog_capital_params
 
 pytestmark = pytest.mark.requirement("BoG CRD (June 2018) ¶98, ¶106–107, ¶117–124")
 

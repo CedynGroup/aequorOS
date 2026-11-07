@@ -24,12 +24,12 @@ from app.stress.domain.appendix_ii import _crd_class  # pyright: ignore[reportPr
 from app.stress.domain.credit_bottom_up import compute_bottom_up_credit
 from app.stress.domain.translation import MacroPathPoint
 from app.stress.service import enterprise_stress
-from tests.capital.domain.test_capital_engine import bog_capital_params
 from tests.services.test_derivation_fail_closed_defaults import (
     _canonical,  # pyright: ignore[reportPrivateUsage]
     _row,  # pyright: ignore[reportPrivateUsage]
 )
 from tests.stress.domain.stress_fixtures import base_paths
+from tests.support.capital_params import bog_capital_params
 
 pytestmark = pytest.mark.requirement("BoG CRD (June 2018) Part 2")
 

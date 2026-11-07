@@ -25,7 +25,6 @@ from app.stress.domain.credit_bottom_up import BottomUpCreditInputs, compute_bot
 from app.stress.domain.orchestrator import EnterpriseStressInputs, run_enterprise_stress
 from app.stress.domain.projection import EnterpriseProjectionInputs, project_enterprise
 from app.stress.service import enterprise_stress
-from tests.capital.domain.test_capital_engine import bog_capital_params
 from tests.credit.service.test_crd_credit_exposures import (
     _credit_rwa,  # pyright: ignore[reportPrivateUsage]
     _stress_row,  # pyright: ignore[reportPrivateUsage]
@@ -42,6 +41,7 @@ from tests.stress.domain.stress_fixtures import (
     sample_bank_latest_facts,
     severe_paths,
 )
+from tests.support.capital_params import bog_capital_params
 
 pytestmark = pytest.mark.requirement("BoG CRD (June 2018) ¶98, ¶139")
 

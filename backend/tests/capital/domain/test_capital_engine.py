@@ -18,7 +18,6 @@ from app.capital.domain.engine import (
     BiaGrossIncomeUnavailable,
     CapitalComputationError,
     CapitalFact,
-    CapitalParams,
     MissingParameterError,
     UnsupportedShockError,
     classify_capital_ratio,
@@ -28,6 +27,7 @@ from app.capital.domain.engine import (
     run_capital_stress,
 )
 from app.domain.authority.outcomes import NotComputable, OutcomeState
+from tests.support.capital_params import bog_capital_params
 
 MONEY = Decimal("0.0001")
 RATIO = Decimal("0.000001")
@@ -153,30 +153,6 @@ def sample_bank_latest_facts() -> tuple[CapitalFact, ...]:
         _component("perpetual_instruments", "20", "AT1"),
         _component("subordinated_debt", "45", "T2"),
         _component("general_provisions", "15", "T2"),
-    )
-
-
-def bog_capital_params() -> CapitalParams:
-    return CapitalParams(
-        risk_weights={
-            "RW0": Decimal("0"),
-            "RW20": Decimal("20"),
-            "RW35": Decimal("35"),
-            "RW50": Decimal("50"),
-            "RW75": Decimal("75"),
-            "RW100": Decimal("100"),
-            "RW150": Decimal("150"),
-        },
-        bia_alpha_pct=Decimal("15"),
-        fx_charge_pct=Decimal("8"),
-        rwa_multiplier_pct=Decimal("1250"),
-        tier2_gp_cap_pct_credit_rwa=Decimal("1.25"),
-        cet1_min_pct=Decimal("6.5"),
-        tier1_min_pct=Decimal("8"),
-        car_min_pct=Decimal("10"),
-        leverage_min_pct=Decimal("3"),
-        car_early_warning_pct=Decimal("10.5"),
-        car_critical_pct=Decimal("9"),
     )
 
 

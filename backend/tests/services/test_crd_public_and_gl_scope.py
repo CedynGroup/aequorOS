@@ -19,7 +19,6 @@ from app.stress.service.enterprise_stress import (
     EnterpriseStressError,
     _build_credit_exposures,  # pyright: ignore[reportPrivateUsage]
 )
-from tests.capital.domain.test_capital_engine import bog_capital_params
 from tests.credit.service.test_crd_credit_exposures import (
     _credit_rwa,  # pyright: ignore[reportPrivateUsage]
     _stress_row,  # pyright: ignore[reportPrivateUsage]
@@ -30,6 +29,7 @@ from tests.services.test_derivation_fail_closed_defaults import (
 from tests.stress.service.test_crd_credit_stress_repairs import (
     _capital_facts,  # pyright: ignore[reportPrivateUsage]
 )
+from tests.support.capital_params import bog_capital_params
 
 pytestmark = pytest.mark.requirement("BoG CRD (June 2018) ¶98, ¶117–122")
 
