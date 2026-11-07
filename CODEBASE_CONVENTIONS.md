@@ -32,7 +32,7 @@ Legacy diagnostic allowances may only shrink.
 - `mise run risk-service:typecheck` runs `backend/scripts/type_check_baseline.py check`. It
   type-checks the backend once and counts each module's errors and warnings per rule against
   `backend/scripts/type_check_baseline.json`.
-- **Source and test tiers.** The strict rule set (and every statement below) applies
+- **Source and test tiers.** The strict rule set applies
   unchanged to `app`, `alembic` and `scripts`. Both test tiers — `tests/support` and the test
   files under `tests/` outside it — run the checker's actual standard preset, expressed as
   explicit per-rule levels in `executionEnvironments` because an environment cannot set

@@ -249,7 +249,7 @@ risk-service:dev` defaults to `:8001`; pass `PORT=8000`.
 Backend, from the repository root or `backend/`:
 
 ```bash
-mise run risk-service:check       # static Ruff, strict type baseline and task wiring; no tests
+mise run risk-service:check       # static Ruff, type baseline and task wiring; no tests
 mise run risk-service:test        # bounded unit-only feedback; any database connection fails
 mise run risk-service:test --lf   # serial cached unit failures; no full-unit fallback
 ```
