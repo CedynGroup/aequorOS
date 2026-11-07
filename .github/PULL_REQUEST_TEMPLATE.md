@@ -2,10 +2,6 @@
 <!-- Use a Conventional Commit PR title with a scope, such as feat(dashboard): ...; repository documentation uses docs: ... . -->
 <!-- Put a blank line before and after every <details>, </summary>, and fenced code block. -->
 
-## Intent
-
-<!-- State the plain-language goal in 1-2 sentences. No speaker labels or tool/model names. -->
-
 ## Summary
 
 <!-- Write 3-4 sentences explaining the user-facing or engineering outcome and why it matters. -->
