@@ -1,0 +1,142 @@
+name: RLS property depth
+
+# Scheduled larger-budget run of the three true-PostgreSQL row-level-security
+# property suites (CedynGroup/aequorOS#813):
+#
+#   tests/db/test_authorization_tenant_isolation_properties_integration.py
+#   tests/db/test_authorization_effective_access_properties_integration.py
+#   tests/db/test_authorization_object_reference_properties_integration.py
+#
+# The per-PR path (risk-service.yml, schema suite) keeps its bounded budget;
+# this job re-runs the SAME tests with `AQS_RLS_PROPERTY_EXAMPLES` raised, so
+# deeper binding-space exploration cannot mask or break the merge gate — a red
+# run here reports a finding for triage, it never blocks a pull request.
+# Route breadth is unchanged: each example still drives every mounted route,
+# and the SQLite route census (tests/fixtures/object_references.py) is not
+# claimed to prove PostgreSQL RLS.
+#
+# MEASURED RUNTIME (local, not hosted-runner, evidence): disposable native
+# PostgreSQL 17 on 4 CPUs / 31 GiB, serial, numeric threads pinned to 1,
+# Hypothesis profile `ci` (derandomize, default stateful_step_count=20;
+# effective-access and reconciliation machines override steps to 12). Times are
+# pytest's own wall clock (JUnit); PostgreSQL init/teardown happen outside it:
+#
+#   per-PR defaults (15/10/15):  248 s  (8 test nodes passed)   2026-11-07
+#   this job's budget (200):    2851 s  (7 nodes passed, 1 failed) 2026-11-07
+#
+# `max_examples` is a CONFIGURED UPPER BUDGET, not proof that many examples
+# executed: Hypothesis may stop, exhaust, or be interrupted, and no per-example
+# statistics were captured. The configured-200 run's one failure was raised by
+# Hypothesis's data-generation consistency checker (`FlakyStrategyDefinition`
+# in stateful rule selection, matching the failure family documented in
+# HypothesisWorks/hypothesis#4206) during the reconciliation state machine.
+# No assertion and no authorization check failed; the interruption preceded
+# any assertion, so it is evidence about nothing except itself. MECHANISM
+# UNKNOWN: an isolated replay of the nodeid at the same budget passed, which
+# shows only non-determinism, not a root cause; a product-correctness
+# contribution is not excluded by the available evidence. Triage: re-run the
+# failed test by nodeid with the same budget, preserve the report and the
+# Hypothesis example database, and treat any recurrence as a finding requiring
+# root-cause analysis BEFORE any product conclusion. Record the failure either
+# way.
+#
+# COST: measured minutes above are LOCAL pytest wall time. Hosted billing is
+# arithmetic on UNMEASURED hosted minutes until this workflow's first
+# scheduled or workflow_dispatch run completes: one `ubuntu-24.04` job of
+# roughly 50-60 runner minutes per week, i.e. ~200-260 runner minutes per
+# month — an ESTIMATE, not a measurement, and no public/private or plan/
+# free-tier billing claim is made here because no repository billing
+# evidence was verified. The cron below is declared, not yet verified by an
+# external run; until one lands, this file is implementation evidence only.
+#
+# NO production database, role or credential is involved: the job stands up
+# its own PostgreSQL 17 and administers only its disposable test role.
+
+on:
+  schedule:
+    # Mondays 04:00 UTC. Weekly as the conservative starting cadence; revisit
+    # against hosted-runner measurements, not local extrapolation.
+    - cron: "0 4 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: rls-depth
+  cancel-in-progress: false
+
+env:
+  POSTGRES_TEST_URL: postgresql+psycopg://risk_service_test:risk_service_test@localhost:5432/risk_service
+
+jobs:
+  rls-depth:
+    name: Postgres RLS property depth
+    runs-on: ubuntu-24.04
+    # ~2x the measured 48-minute local run; still bounded.
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up PostgreSQL
+        uses: ./.github/actions/setup-postgres
+      - uses: jdx/mise-action@v5
+        with:
+          # Pinned — see MISE VERSION in risk-service.yml. Bump deliberately.
+          version: 2026.7.7
+          install_args: python@3.13 uv@0.11.18
+      - name: Install risk service dependencies
+        run: mise run risk-service:sync
+      # Same restricted-role contract as the schema suite: NOBYPASSRLS is a
+      # hard requirement — a superuser inverts this exact gate.
+      - name: Create restricted depth-run test role
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql --host localhost --username postgres --dbname risk_service --set ON_ERROR_STOP=1 <<'SQL'
+          CREATE ROLE risk_service_test
+            LOGIN PASSWORD 'risk_service_test'
+            NOSUPERUSER NOCREATEDB CREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS;
+          GRANT CONNECT, CREATE, TEMPORARY ON DATABASE risk_service TO risk_service_test;
+          GRANT aqs_owner TO risk_service_test WITH ADMIN TRUE, INHERIT TRUE, SET TRUE;
+          GRANT aequoros_audit_owner TO risk_service_test WITH ADMIN TRUE, INHERIT TRUE, SET TRUE;
+          SQL
+      - name: Larger-budget RLS property run
+        env:
+          TEST_DATABASE_URL: ${{ env.POSTGRES_TEST_URL }}
+          AQS_RLS_PROPERTY_EXAMPLES: '200'
+          OMP_NUM_THREADS: "1"
+          OPENBLAS_NUM_THREADS: "1"
+          MKL_NUM_THREADS: "1"
+          NUMEXPR_NUM_THREADS: "1"
+          VECLIB_MAXIMUM_THREADS: "1"
+          CI_DATABASE_OBSERVATIONS: ${{ runner.temp }}/rls-depth/database-observations
+          PYTEST_ADDOPTS: --junitxml=${{ runner.temp }}/rls-depth/report.xml
+        working-directory: backend
+        run: >-
+          uv run python scripts/local_services.py run --postgres --role-admin --
+          uv run pytest -m integration
+          tests/db/test_authorization_tenant_isolation_properties_integration.py
+          tests/db/test_authorization_effective_access_properties_integration.py
+          tests/db/test_authorization_object_reference_properties_integration.py
+      # The three suites hold 8 tests; the floor is collected minus the largest
+      # module, so a whole file vanishing trips it. Zero skips: the restricted
+      # role above must satisfy the RLS guard, and a role that cannot is a
+      # finding, not a skip.
+      - name: The property suites must have executed, not skipped
+        run: python3 .github/scripts/assert_pytest_ran.py "$RUNNER_TEMP/rls-depth/report.xml" --min-executed 5 --max-skipped 0
+      - name: Upload depth-run evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: rls-depth
+          path: ${{ runner.temp }}/rls-depth/
+          if-no-files-found: error
+          retention-days: 7
+      - name: Upload failed depth-run PostgreSQL log
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: rls-depth-postgres-log
+          path: ${{ runner.temp }}/postgres.log
+          if-no-files-found: ignore
+          retention-days: 7

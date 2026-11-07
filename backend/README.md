@@ -620,6 +620,9 @@ Schema isolation does not authorize running mutating tests against the primary.
 
 CI's direct pytest/native-wrapper commands live in
 [`risk-service.yml`](../.github/workflows/risk-service.yml), not local suite tasks.
+Scheduled (non-gating) deeper re-runs of the Postgres RLS property suites set
+`AQS_RLS_PROPERTY_EXAMPLES` and are documented in
+[`rls-depth.yml`](../.github/workflows/rls-depth.yml).
 Without a supplied URL outside CI, the wrapper provisions worktree-local Postgres, using
 native PostgreSQL 17 when Docker is unavailable. Set `AQS_LOCAL_SERVICES=native`
 to force that mode. Native MinIO setup, isolation and shutdown are documented
