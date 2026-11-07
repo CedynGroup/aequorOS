@@ -2192,5 +2192,12 @@
   ["tests.domain.curves.test_multicurve", "tests.market_data.domain.curves.test_multicurve"],
   ["tests.domain.curves.test_nss", "tests.market_data.domain.curves.test_nss"],
   ["tests.domain.curves.test_objects", "tests.market_data.domain.curves.test_objects"],
-  ["tests.domain.curves.test_ois_step", "tests.market_data.domain.curves.test_ois_step"]
+  ["tests.domain.curves.test_ois_step", "tests.market_data.domain.curves.test_ois_step"],
+  ["tests.domain.ingestion", "tests.data_engine.domain.ingestion"],
+  ["tests.domain.ingestion.test_optional_position_fields", "tests.data_engine.domain.ingestion.test_optional_position_fields"],
+  ["tests.domain.ingestion.test_position_attribute_text_bounds", "tests.data_engine.domain.ingestion.test_position_attribute_text_bounds"],
+  ["tests.domain.ingestion.test_reference_row_enforcement", "tests.data_engine.domain.ingestion.test_reference_row_enforcement"],
+  ["tests.domain.ingestion.test_reference_schemas", "tests.data_engine.domain.ingestion.test_reference_schemas"],
+  ["tests.domain.test_ingestion_enrichment", "tests.data_engine.domain.ingestion.test_ingestion_enrichment"],
+  ["tests.domain.test_ingestion_validation", "tests.data_engine.domain.ingestion.test_ingestion_validation"]
 ]

@@ -10,7 +10,7 @@ from app.data_engine.adapters.api_push.adapter import ApiPushAdapter, identity_m
 from app.data_engine.domain.ingestion.constants import REFERENCE_DATASET_KINDS
 from app.data_engine.domain.ingestion.contracts import CanonicalRecords, ExtractionResult, RawRecord
 from app.data_engine.domain.ingestion.reference_schemas import SCHEMAS
-from tests.domain.ingestion.test_reference_row_enforcement import VALID_ROWS
+from tests.data_engine.domain.ingestion.test_reference_row_enforcement import VALID_ROWS
 
 
 def _translate(kind: str, payloads: list[dict[str, str | None]]) -> CanonicalRecords:

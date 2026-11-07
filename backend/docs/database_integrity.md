@@ -109,7 +109,7 @@ types. The whole-root-table
 column type parity test normalizes only the documented JSON/JSONB difference;
 other type/width differences fail. Canonical FK/key/index parity remains intact.
 
-Coverage: `tests/domain/ingestion/test_reference_row_enforcement.py`,
+Coverage: `tests/data_engine/domain/ingestion/test_reference_row_enforcement.py`,
 `tests/data_engine/adapters/test_reference_boundary.py`, adapter end-to-end tests and
 `tests/db/test_column_representation_parity_integration.py`.
 
