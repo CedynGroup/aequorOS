@@ -11,7 +11,7 @@ import httpx2
 import pytest
 from fastapi.testclient import TestClient
 from pydantic import BaseModel, TypeAdapter
-from sqlalchemy import func, select
+from sqlalchemy import Connection, event, func, select
 
 from app.behavioral import service as behavioral_models
 from app.behavioral.ml.config import MODEL_VERSIONS, Accuracy, ModelResult, ProductEstimate
@@ -605,7 +605,6 @@ def test_review_evaluator_failure_does_not_accept(
 
 def test_acceptance_rolls_back_proposal_and_batch_when_row_persistence_fails(
     db_client: TestClient,
-    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     _seed_book()
     _, proposer_version = _grant()
@@ -613,12 +612,17 @@ def test_acceptance_rolls_back_proposal_and_batch_when_row_persistence_fails(
     _, reviewer_version = _grant(FORECAST_APPROVER_ID, RoleBundle.APPROVER)
     before = _counts()
 
-    def fail_write(*_args: object, **_kwargs: object) -> object:
+    def fail_write(_mapper: object, connection: Connection, _target: object) -> None:
+        assert connection.scalar(select(func.count()).select_from(IngestionBatch)) == before[1] + 1
+        assert connection.scalar(select(func.count()).select_from(LineageRecord)) == 1
         raise RuntimeError("reference row persistence failed")
 
-    # The batch and lineage have already flushed when the first row is built.
-    monkeypatch.setattr(behavioral_models, "CanonicalReferenceRow", fail_write)
-    failed = _review(db_client, proposal_id, FORECAST_APPROVER_ID, reviewer_version)
+    event.listen(CanonicalReferenceRow, "before_insert", fail_write)
+    try:
+        # The batch and lineage are flushed before the reference-row failure.
+        failed = _review(db_client, proposal_id, FORECAST_APPROVER_ID, reviewer_version)
+    finally:
+        event.remove(CanonicalReferenceRow, "before_insert", fail_write)
 
     assert failed.status_code == 500
     assert _counts() == before
