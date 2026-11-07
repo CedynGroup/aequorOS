@@ -23,8 +23,9 @@ Methodology (Product Documentation Module 3):
   negative one. The aggregate long and short sums are formed separately and the
   overall NOP is the Basel shorthand ``max(sum_long, sum_short)``. Both the
   overall NOP and each single currency are measured against Tier 1 capital: the
-  aggregate NOP must stay within ``aggregate_limit_pct`` (20% at BoG) and no
-  single currency may exceed ``single_limit_pct`` (10%).
+  aggregate NOP must stay within ``aggregate_limit_pct`` and no single
+  currency's absolute position may exceed ``single_limit_pct`` (board
+  starting values 20% and 10%, respectively).
   For disclosure, as issued: BoG Notice BG/FMD/2026/07 (signed 2026-02-10;
   in-force status not certified) prohibits long positions outright — squared
   (0%) or short not exceeding 10% of Net Own Funds per currency — caps the
