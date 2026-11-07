@@ -81,7 +81,7 @@ def _org_user_without_bindings(email: str) -> UUID:
     return user_id
 
 
-def _user_with_module_view(module_scope: ModuleScope, email: str) -> UUID:
+def _user_with_module_view(module_scope: ModuleScope, email: str) -> tuple[UUID, int]:
     """A tenant user holding exactly one active whole-institution VIEW binding."""
     user_id = uuid4()
     session = get_sessionmaker()()
@@ -105,22 +105,27 @@ def _user_with_module_view(module_scope: ModuleScope, email: str) -> UUID:
                 institution_scope=InstitutionScope.INSTITUTION,
                 institution_id=SAMPLE_BANK_ID,
                 module_scope=module_scope,
-                sensitivity_scope=SensitivityScope.CONFIDENTIAL,
+                sensitivity_scope=SensitivityScope.AGGREGATED,
             ),
             grantor=authorization.GrantorRef(GrantorType.SYSTEM, "live-authz-test"),
             reason="Freshness authorization test coverage",
         )
+        user = session.get(User, user_id)
+        assert user is not None
+        version = user.authorization_version
         session.commit()
     finally:
         session.close()
-    return user_id
+    return user_id, version
 
 
 def test_freshness_shows_only_bound_modules(db_client: TestClient) -> None:
     """Positive control: an IRRBB-only viewer sees exactly the irr entry."""
     _seed_and_refresh(db_client)
-    viewer = _user_with_module_view(ModuleScope.IRRBB, "irr-viewer@example.test")
-    response = db_client.get(f"{_BASE}/freshness", headers=headers(user_id=viewer))
+    viewer, version = _user_with_module_view(ModuleScope.IRRBB, "irr-viewer@example.test")
+    response = db_client.get(
+        f"{_BASE}/freshness", headers=headers(user_id=viewer, authorization_version=version)
+    )
     assert response.status_code == 200, response.text
     body = response.json()
     assert body["bank_id"] == str(SAMPLE_BANK_ID)
@@ -135,8 +140,10 @@ def test_freshness_omits_unbound_modules_without_data_leakage(
 ) -> None:
     """A viewer bound only to FX gets no hashes or staleness for other modules."""
     _seed_and_refresh(db_client)
-    viewer = _user_with_module_view(ModuleScope.FX, "fx-viewer@example.test")
-    response = db_client.get(f"{_BASE}/freshness", headers=headers(user_id=viewer))
+    viewer, version = _user_with_module_view(ModuleScope.FX, "fx-viewer@example.test")
+    response = db_client.get(
+        f"{_BASE}/freshness", headers=headers(user_id=viewer, authorization_version=version)
+    )
     assert response.status_code == 200, response.text
     body = response.json()
     assert [module["module"] for module in body["modules"]] == ["fx"]
@@ -158,29 +165,23 @@ def test_freshness_for_principal_without_bindings_is_empty(db_client: TestClient
 def test_freshness_binding_is_bank_scoped(db_client: TestClient) -> None:
     """An IRRBB binding on a different bank of the same org grants nothing here."""
     _seed_and_refresh(db_client)
-    other_bank_id = uuid4()  # created below inside the session
     session = get_sessionmaker()()
     try:
         from app.models import Bank
 
-        session.add(
-            Bank(
-                id=other_bank_id,
-                organization_id=ORG_1,
-                name="Other Bank Ltd",
-                short_name="OTHB",
-                currency="GHS",
-                jurisdiction_code="GH",
-                license_type="universal",
-                institution_type="universal_bank",
-            )
+        other_bank = Bank(
+            organization_id=ORG_1,
+            name="Other Bank Ltd",
+            short_name="OTHB",
+            currency="GHS",
+            jurisdiction_code="GH",
+            license_type="universal",
+            institution_type="universal_bank",
         )
+        session.add(other_bank)
         session.commit()
-    finally:
-        session.close()
-    viewer = uuid4()
-    session = get_sessionmaker()()
-    try:
+        other_bank_id = other_bank.id
+        viewer = uuid4()
         session.add(
             User(
                 id=viewer,
@@ -200,15 +201,20 @@ def test_freshness_binding_is_bank_scoped(db_client: TestClient) -> None:
                 institution_scope=InstitutionScope.INSTITUTION,
                 institution_id=other_bank_id,
                 module_scope=ModuleScope.IRRBB,
-                sensitivity_scope=SensitivityScope.CONFIDENTIAL,
+                sensitivity_scope=SensitivityScope.AGGREGATED,
             ),
             grantor=authorization.GrantorRef(GrantorType.SYSTEM, "live-authz-test"),
             reason="Bank-scoped binding isolation coverage",
         )
+        user = session.get(User, viewer)
+        assert user is not None
+        version = user.authorization_version
         session.commit()
     finally:
         session.close()
-    response = db_client.get(f"{_BASE}/freshness", headers=headers(user_id=viewer))
+    response = db_client.get(
+        f"{_BASE}/freshness", headers=headers(user_id=viewer, authorization_version=version)
+    )
     assert response.status_code == 200, response.text
     assert response.json()["modules"] == []
 
