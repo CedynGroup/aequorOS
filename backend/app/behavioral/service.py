@@ -318,6 +318,34 @@ def review_estimates(
             status_code=status.HTTP_409_CONFLICT,
             detail="Only a pending behavioral model proposal can be reviewed.",
         )
+    newer_accepted = db.scalar(
+        select(BehavioralModelProposal.id).where(
+            BehavioralModelProposal.organization_id == proposal.organization_id,
+            BehavioralModelProposal.bank_id == proposal.bank_id,
+            BehavioralModelProposal.model == proposal.model,
+            BehavioralModelProposal.status == "accepted",
+            BehavioralModelProposal.proposed_at > proposal.proposed_at,
+        )
+    )
+    if newer_accepted is not None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="A newer proposal for this model has already been accepted.",
+        )
+    latest_accepted_as_of = db.scalar(
+        select(func.max(IngestionBatch.as_of_date)).where(
+            IngestionBatch.organization_id == proposal.organization_id,
+            IngestionBatch.bank_id == proposal.bank_id,
+            IngestionBatch.adapter_version == "behavioral_ml_v1",
+        )
+    )
+    if latest_accepted_as_of is not None and latest_accepted_as_of > proposal.as_of_date:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                "An older proposal cannot relabel assumptions from a newer accepted batch."
+            ),
+        )
     if ctx.actor_user_id is None:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="A reviewer is required.")
     reviewed_at = utc_now()

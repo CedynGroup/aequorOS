@@ -228,6 +228,8 @@ export type ModuleScope = {
   forecastingApprove?: boolean;
   /** Exact BEH/aggregated view authority for model estimates and liquidity effects. */
   behavioralAggregatedView?: boolean;
+  /** Exact BEH/restricted view authority for independent proposal review. */
+  behavioralRestrictedView?: boolean;
   /** Exact BEH/confidential run authority for retraining a model. */
   behavioralRun?: boolean;
   /**
@@ -869,6 +871,8 @@ type ScopedModuleRoutePolicy = {
   /** The exact entry-view capability every page under `prefix` needs. */
   entryView: keyof ModuleScope;
   entry: AccessRequirement;
+  /** An independently sufficient restricted reader for a module's review queue. */
+  reviewView?: keyof ModuleScope;
   /** Pages that need confidential view instead; absent when the module has none. */
   confidential?: {
     view: keyof ModuleScope;
@@ -949,6 +953,7 @@ const SCOPED_MODULE_ROUTES: readonly ScopedModuleRoutePolicy[] = [
     prefix: "/behavioral",
     entryView: "behavioralAggregatedView",
     entry: BEHAVIORAL_AGGREGATED_VIEW,
+    reviewView: "behavioralRestrictedView",
   },
   {
     prefix: "/markets",
@@ -1035,7 +1040,10 @@ function scopedModuleRequirements(
       if (scope[confidential.view] !== true) {
         missing.push(confidential.requirement);
       }
-    } else if (scope[routePolicy.entryView] !== true) {
+    } else if (
+      scope[routePolicy.entryView] !== true &&
+      (!routePolicy.reviewView || scope[routePolicy.reviewView] !== true)
+    ) {
       missing.push(routePolicy.entry);
     }
     if (

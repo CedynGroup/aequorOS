@@ -32,6 +32,7 @@ type Fixture = {
   loading: boolean;
   error: Error | null;
   inspecting: boolean;
+  restrictedOnly: boolean;
   bankCapabilities: EffectiveCapabilityRead[];
   otherBankCapabilities: EffectiveCapabilityRead[];
   proposals: BehavioralProposalRead[];
@@ -50,6 +51,7 @@ const fixture = vi.hoisted((): Fixture => ({
   loading: false,
   error: null,
   inspecting: false,
+  restrictedOnly: false,
   bankCapabilities: [],
   otherBankCapabilities: [],
   proposals: [],
@@ -67,7 +69,11 @@ vi.mock("../../components/shell/BankContext", () => ({
   useBankContext: () => ({
     bank: { id: BANK },
     period: null,
-    moduleScope: { behavioralAggregatedView: true, behavioralRun: false },
+    moduleScope: {
+      behavioralAggregatedView: !fixture.restrictedOnly,
+      behavioralRestrictedView: true,
+      behavioralRun: false,
+    },
   }),
 }));
 vi.mock("../../components/profile/ProfileProvider", () => ({
@@ -92,7 +98,11 @@ vi.mock("../../components/impersonation/useImpersonation", () => ({
 }));
 vi.mock("../../lib/api/hooks", () => ({
   isServiceUnavailableError: () => false,
-  useBehavioralModel: () => ({ data: model, error: null, isLoading: false }),
+  useBehavioralModel: (bankId: string | undefined) => ({
+    data: bankId ? model : undefined,
+    error: null,
+    isLoading: false,
+  }),
   useTrainBehavioralModel: () => ({
     mutate: vi.fn(),
     isPending: false,
@@ -207,6 +217,7 @@ beforeEach(() => {
   fixture.loading = false;
   fixture.error = null;
   fixture.inspecting = false;
+  fixture.restrictedOnly = false;
   fixture.bankCapabilities = [
     capability("view", { sensitivity: "aggregated" }),
   ];
@@ -267,6 +278,22 @@ it("stores only the proposal acknowledgement and does not read protected evidenc
   ).toBeVisible();
   expect(screen.queryByText(/Applied 1 estimate/i)).toBeNull();
   expect(fixture.proposalReads).toBe(0);
+});
+
+it("opens the independent queue for a restricted reviewer without aggregated model access", async () => {
+  fixture.restrictedOnly = true;
+  fixture.bankCapabilities = [capability("view"), capability("approve")];
+  fixture.proposals = [pendingProposal()];
+  mountPage();
+
+  expect(screen.queryByText("Per-product estimates")).toBeNull();
+  const review = await screen.findByRole("button", {
+    name: "Review and accept",
+  });
+  expect(review).toBeEnabled();
+  await userEvent.setup().click(review);
+  expect(fixture.reviewCalls).toEqual([PROPOSAL_ID]);
+  expect(fixture.proposalReads).toBeGreaterThan(0);
 });
 
 it("uses restricted view to show immutable proposal evidence but denies review without approve", async () => {
