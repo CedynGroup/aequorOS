@@ -1284,7 +1284,8 @@ and [public ECR authentication](https://docs.aws.amazon.com/AmazonECR/latest/pub
     PR #774 merged that exact SHA at 20:11:10.
     [Push CI 42100999228](https://github.com/CedynGroup/aequorOS/actions/runs/42100999228)
     started at 20:11:12; typecheck failed at 20:13:49 with one new
-    `reportUnknownVariableType` in `tests.storage.test_sealed_documents`
+    `reportUnknownVariableType` in the then-unsuffixed sealed-documents test
+    module (now [the integration module](backend/tests/storage/test_sealed_documents_integration.py))
     against a baseline of zero. The diagnostic mechanism is unproven;
     these records do not establish a merged-tree interaction as its cause.
   - PR #773 head `1b067fda9953c58fb522cc25a191320f5569974e` passed
