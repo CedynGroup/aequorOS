@@ -15,7 +15,7 @@ carry, the input hash is scoped to the FTP fact groups, plus 404s and tenant iso
 from __future__ import annotations
 
 from decimal import ROUND_HALF_UP, Decimal
-from typing import Any
+from typing import Any, cast
 from uuid import UUID, uuid4
 
 from fastapi.testclient import TestClient
@@ -509,7 +509,7 @@ def test_ftp_input_hash_is_scoped_to_ftp_facts(
 
 
 def _assert_dashboard_details(body: dict[str, Any]) -> None:
-    metrics = body["metrics"]
+    metrics = cast(dict[str, Any], body["metrics"])
     assert metrics["nmd_core_status"] == _core_status(
         _dec(metrics["nmd_core_pct"]),
         _dec(metrics["nmd_core_min_pct"]),
@@ -538,7 +538,7 @@ def test_ftp_dashboard_computes_inline_then_prefers_stored_runs(real_client: Tes
         params={"reporting_period_id": period["id"]},
     )
     assert inline.status_code == 200, inline.text
-    body = inline.json()
+    body = cast(dict[str, Any], inline.json())
     assert body["stored"] is False
     assert body["latest_run_id"] is None
     assert body["period"]["id"] == period["id"]
@@ -554,25 +554,26 @@ def test_ftp_dashboard_computes_inline_then_prefers_stored_runs(real_client: Tes
     assert by_period[period["id"]]["stored"] is False
 
     batch = _run_all(real_client, period["id"])
-    baseline = batch["runs"][0]
-    facts = baseline["inputs"]["facts"]
-    input_curve = sorted(
-        [fact["attributes"] for fact in facts if fact["fact_group"] == "ftp_curve_point"],
-        key=lambda point: _dec(point["tenor_years"]),
-    )
-    total_balance = Decimal("0")
-    weighted_margin = Decimal("0")
+    baseline = cast(dict[str, Any], batch["runs"][0])
+    facts = cast(list[dict[str, Any]], baseline["inputs"]["facts"])
+    input_curve: list[dict[str, Any]] = [
+        fact["attributes"] for fact in facts if fact["fact_group"] == "ftp_curve_point"
+    ]
+    input_curve.sort(key=lambda point: _dec(point["tenor_years"]))
+    total_balance = weighted_margin = Decimal("0")
     for fact in facts:
         if fact["fact_group"] != "ftp_product":
             continue
-        product = fact["attributes"]
+        product = cast(dict[str, Any], fact["attributes"])
         balance = _money(_dec(fact["amount"]))
         transfer_rate = _rate_at(input_curve, _dec(product["tenor_years"]))
         customer_rate = _dec(product["customer_rate_pct"])
         costs = _dec(product["operating_cost_pct"])
         if product["category"] == "asset":
             margin = (
-                customer_rate - transfer_rate - costs
+                customer_rate
+                - transfer_rate
+                - costs
                 - _dec(product["expected_credit_loss_pct"])
                 - _dec(product["capital_charge_pct"])
             )
