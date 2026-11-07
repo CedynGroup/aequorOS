@@ -84,7 +84,7 @@ def _seed_proposal(connection: Connection) -> None:
                status, proposed_by_user_id, proposed_at, created_at, updated_at)
             VALUES
               (:id, :organization_id, :bank_id, 'nmd-duration', 'nmd-v1', '2026-03-31',
-               CAST(:values AS JSON), 'pending', :proposer, :now, :now, :now)
+               CAST(:values AS JSONB), 'pending', :proposer, :now, :now, :now)
             """
         ),
         {
@@ -165,6 +165,41 @@ def test_behavioral_proposals_have_forced_rls_and_immutable_review_evidence(
             {"schema_name": migrated_postgres_schema.schema_name, "table_name": _TABLE},
         ).one()
         assert tuple(row_security) == (True, True)
+        qualified_table = f"{migrated_postgres_schema.schema_name}.{_TABLE}"
+        column_types = connection.execute(
+            text(
+                """
+                SELECT attname, format_type(atttypid, atttypmod)
+                FROM pg_attribute
+                WHERE attrelid = CAST(:table_name AS regclass)
+                  AND attname IN ('id', 'values', 'proposed_by_user_id',
+                                  'reviewed_by_user_id', 'ingestion_batch_id')
+                ORDER BY attname
+                """
+            ),
+            {"table_name": qualified_table},
+        ).all()
+        assert column_types == [
+            ("id", "uuid"),
+            ("ingestion_batch_id", "uuid"),
+            ("proposed_by_user_id", "uuid"),
+            ("reviewed_by_user_id", "uuid"),
+            ("values", "jsonb"),
+        ]
+        for role in ("aqs_api", "aqs_worker"):
+            privileges = connection.execute(
+                text(
+                    """
+                    SELECT has_table_privilege(:role, :table_name, 'SELECT'),
+                           has_table_privilege(:role, :table_name, 'INSERT'),
+                           has_table_privilege(:role, :table_name, 'UPDATE'),
+                           has_table_privilege(:role, :table_name, 'DELETE'),
+                           has_table_privilege(:role, :table_name, 'TRUNCATE')
+                    """
+                ),
+                {"role": role, "table_name": qualified_table},
+            ).one()
+            assert tuple(privileges) == (True, True, True, False, False)
         _seed_proposal(connection)
 
     with (
