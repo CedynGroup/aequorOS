@@ -20,6 +20,7 @@ import re
 import shlex
 import subprocess
 import sys
+import tempfile
 import tomllib
 from pathlib import Path
 from typing import cast
@@ -347,6 +348,25 @@ def test_direct_ci_commands_preserve_service_and_report_owners(
         assert environment["CI_POSTGRES_FILES"] == "[]"
 
 
+def _isolate_runner_temp_outputs(environment: dict[str, str], scratch: Path) -> dict[str, str]:
+    """Point the workflow's ``${{ runner.temp }}`` outputs at an owned scratch dir.
+
+    Actions expands ``${{ runner.temp }}`` before its env reaches pytest. A direct
+    local subprocess instead receives the literal template, and instrumentation
+    that observes it (database_events.emit, the CI report writers) then creates
+    ``backend/${{ runner.temp }}/...`` inside the repository. The raw env values
+    stay in the asserted workflow; only this helper's subprocess gets real paths.
+    """
+    isolated = dict(environment)
+    for key, value in environment.items():
+        if "${{ runner.temp }}" not in value:
+            continue
+        target = scratch / value.replace("${{ runner.temp }}", "").lstrip("/")
+        target.parent.mkdir(parents=True, exist_ok=True)
+        isolated[key] = str(target)
+    return isolated
+
+
 def _assert_serial_ci_owner(job: str) -> None:
     tokens, step = _ci_pytest(job)
     arguments = tokens[tokens.index("pytest") + 1 :]
@@ -355,24 +375,25 @@ def _assert_serial_ci_owner(job: str) -> None:
         "PYTEST_DISABLE_PLUGIN_AUTOLOAD": "1",
         **cast(dict[str, str], step["env"]),
     }
-    result = subprocess.run(
-        [
-            sys.executable,
-            "-c",
-            "import json, sys; from _pytest.config import _prepareconfig; "
-            "config = _prepareconfig(sys.argv[1:]); "
-            "print(json.dumps(config.getoption('numprocesses')))",
-            "-p",
-            "xdist.plugin",
-            "--noconftest",
-            *arguments,
-        ],
-        cwd=REPO_ROOT / "backend",
-        env=environment,
-        text=True,
-        capture_output=True,
-        check=True,
-    )
+    with tempfile.TemporaryDirectory() as scratch:
+        result = subprocess.run(
+            [
+                sys.executable,
+                "-c",
+                "import json, sys; from _pytest.config import _prepareconfig; "
+                "config = _prepareconfig(sys.argv[1:]); "
+                "print(json.dumps(config.getoption('numprocesses')))",
+                "-p",
+                "xdist.plugin",
+                "--noconftest",
+                *arguments,
+            ],
+            cwd=REPO_ROOT / "backend",
+            env=_isolate_runner_temp_outputs(environment, Path(scratch)),
+            text=True,
+            capture_output=True,
+            check=True,
+        )
     assert json.loads(result.stdout) in (None, 0), job
 
 
@@ -406,6 +427,38 @@ def test_serial_owner_guard_rejects_parallel_configuration(
     monkeypatch.setitem(globals(), "WORKFLOWS", tmp_path)
     with pytest.raises(AssertionError, match=job):
         _assert_serial_ci_owner(job)
+
+
+def _untracked_repository_paths() -> list[str]:
+    result = subprocess.run(
+        ["git", "ls-files", "--others", "--exclude-standard"],
+        cwd=REPO_ROOT,
+        text=True,
+        capture_output=True,
+        check=True,
+    )
+    return result.stdout.splitlines()
+
+
+def test_serial_owner_validation_leaves_no_repository_byproducts(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Serial-owner validation must not materialize the workflow templates.
+
+    Actions expands ``${{ runner.temp }}`` in CI, but the direct local helper
+    subprocess would write observation and report byproducts through the literal
+    template path into the repository. Prove the isolated helper keeps the serial
+    and parallel-rejection verdicts while the repository stays clean.
+    """
+    before = _untracked_repository_paths()
+    for job in ("postgres-schema", "postgres-locks", "storage"):
+        _assert_serial_ci_owner(job)
+    test_serial_owner_guard_rejects_parallel_configuration(
+        tmp_path, monkeypatch, "postgres-locks", "command", "--numprocesses=4"
+    )
+    assert not any("${{ runner.temp }}" in path for path in _untracked_repository_paths())
+    assert not (REPO_ROOT / "backend" / "${{ runner.temp }}").exists()
+    assert _untracked_repository_paths() == before
 
 
 @pytest.mark.parametrize(
