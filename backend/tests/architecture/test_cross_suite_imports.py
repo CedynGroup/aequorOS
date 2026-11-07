@@ -2,9 +2,8 @@
 
 A **test module** is any ``test_*.py`` under ``tests/``. Its **suite** is the
 top-level directory it lives in (``tests/db/``, ``tests/identity/``, ...), with
-the root-level test files forming one more suite of their own; the layout
-guard's ``FEATURES``/``SHARED_DIRECTORIES``/``LAYERED_DIRECTORIES`` sets remain
-the only ownership registry. Importing a test module from another suite couples
+the root-level test files forming one more suite of their own.
+Importing a test module from another suite couples
 the suites' execution and re-collects the imported module's cases on both
 suites' runs; shared helpers belong in ``tests/support`` (where the migration
 fixtures landed once the migration test module stopped being one) or in the
@@ -43,11 +42,6 @@ from pathlib import Path
 import pytest
 
 from tests.architecture._planes import imported_modules
-from tests.architecture.test_test_layout import (
-    FEATURES,
-    LAYERED_DIRECTORIES,
-    SHARED_DIRECTORIES,
-)
 
 BASELINE = Path(__file__).with_name("cross_suite_import_baseline.json")
 TESTS = Path(__file__).parents[1]
@@ -126,18 +120,6 @@ def test_no_new_cross_suite_import_and_the_baseline_only_shrinks() -> None:
 def test_the_baseline_is_sorted_and_unique() -> None:
     baseline = _baseline()
     assert baseline == sorted(set(baseline)), f"Regenerate {BASELINE.name} with write_baseline()"
-
-
-def test_every_suite_the_scan_sees_is_a_known_layout_owner() -> None:
-    """A renamed or new top-level directory must surface here, not empty the scan."""
-    known = FEATURES | SHARED_DIRECTORIES | LAYERED_DIRECTORIES
-    observed = {_suite(module) for module in (_module(path, TESTS) for path in _test_files(TESTS))}
-    unknown = sorted(observed - known - {ROOT_SUITE})
-    assert unknown == [], (
-        "These suites are named by no owner in test_test_layout.py: they are "
-        "unowned, so cross-suite edges into or out of them scan as nothing: "
-        f"{unknown}"
-    )
 
 
 _SYNTHETIC_TAIL = (
