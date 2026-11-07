@@ -290,17 +290,25 @@ def require_certification_access(
     package: RegulatoryPackage,
     role: str,
 ) -> None:
-    """Preflight exact-bank Signer authority and a named route, without writes."""
+    """Preflight exact-bank Signer authority and a named route, without writes.
+
+    Order is deliberate: source READ and SIGN_OFF authority first, then the
+    named route (an unrouted caller hears the conflict they can act on), then
+    the checker's separate APPROVE duty — evaluated structurally, so a ROUTED
+    checker whose APPROVE was revoked is refused HERE, before ``step-up`` mints
+    a one-shot token or writes its success audit. The locked ceremony
+    re-evaluates the same duty at execution.
+    """
     if ctx.actor_user_id is None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="Authentication required."
         )
     from app.reporting.service import family_access  # noqa: PLC0415 - family policy owner
 
-    family_access.require_certify_authority(
-        db, ctx, _certification_bank(db, ctx, package), package, role
-    )
+    bank = _certification_bank(db, ctx, package)
+    family_access.require_certification_sign_off(db, ctx, bank, package, role)
     ensure_routed_signer(db, ctx, package, role=role, user_id=ctx.actor_user_id)
+    family_access.require_checker_approve(db, ctx, bank, package, role)
 
 
 def require_certification_execution_authority(

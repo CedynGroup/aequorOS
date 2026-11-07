@@ -32,6 +32,7 @@ from app.attestation.service.identity import ensure_signer_identity
 from app.attestation.service.keys import SignerKeyService
 from app.attestation.service.signers import get_raw_signer
 from app.attestation.service.workflow import AttestationConflict
+from app.core import security
 from app.core.authorization import (
     BindingStatus,
     InstitutionScope,
@@ -56,6 +57,7 @@ from app.models import (
 )
 from app.policy.service.institution_types import FALLBACK_TYPE_CODE
 from tests.attestation.service.test_attestation_workspace_integration import (
+    APPROVER,
     APPROVER_USER_ID,
     MAKER,
     OTHER_APPROVER_USER_ID,
@@ -626,3 +628,129 @@ def test_routed_signer_with_genuine_step_up_certifies_and_replay_is_refused(
 
     db_session.rollback()
     assert _mutation_counts(db_session) == before
+
+
+CHECKER_STEP_UP_PASSWORD = "checker-step-up-fixture-0001"  # noqa: S105 - disposable fixture
+
+
+def _route_and_certify_preparer(db_session: Session, package: Any) -> None:
+    """A routed approver waiting on a preparer's certification: the live state."""
+    _signer_binding(db_session, DEMO_USER_ID)
+    _signer_binding(db_session, APPROVER_USER_ID)
+    _route_two_signers(db_session, package)
+    _certify(db_session, MAKER, package, role="preparer")
+
+
+def _revoke_checker_approve(db_session: Session) -> None:
+    """Remove only the checker's APPROVE, keeping VIEW and SIGN_OFF intact.
+
+    The APPROVER bundle carried the checker's source VIEW too; an Analyst
+    binding replaces that visibility so the refusal below is about APPROVE,
+    not about a hidden return.
+    """
+    bindings = db_session.scalars(
+        select(AuthorizationBinding).where(
+            AuthorizationBinding.organization_id == DEMO_ORG_ID,
+            AuthorizationBinding.principal_user_id == APPROVER_USER_ID,
+            AuthorizationBinding.role_bundle == RoleBundle.APPROVER.value,
+        )
+    ).all()
+    assert bindings, "the fixture must have given the checker an APPROVE binding to revoke"
+    for binding in bindings:
+        binding.status = BindingStatus.REVOKED.value
+        binding.revoked_at = datetime.now(UTC)
+        binding.revoked_by_type = authorization.GrantorType.SYSTEM.value
+        binding.revoked_by_id = "signer-gate-test"
+        binding.revoked_reason = "Revoke the checker's APPROVE before their step-up"
+    authorization.create_role_binding(
+        db_session,
+        organization_id=DEMO_ORG_ID,
+        principal_user_id=APPROVER_USER_ID,
+        principal_type=authorization.PrincipalType.HUMAN,
+        role_bundle=RoleBundle.ANALYST,
+        scope=authorization.BindingScope(
+            InstitutionScope.INSTITUTION,
+            SAMPLE_BANK_ID,
+            ModuleScope.REGULATORY,
+            SensitivityScope.RESTRICTED,
+        ),
+        grantor=authorization.GrantorRef(authorization.GrantorType.SYSTEM, "signer-gate-test"),
+        reason="Keep the checker's source visibility after the APPROVE revocation",
+        commit=False,
+    )
+    db_session.commit()
+
+
+def test_step_up_for_a_checker_without_approve_mints_no_token_and_writes_no_success_audit(
+    db_session: Session, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Revoked APPROVE denies at PREFLIGHT, before the token and its audit exist.
+
+    The routing/VIEW preflight used to admit a checker holding only SIGN_OFF;
+    the separate APPROVE duty was re-evaluated only inside ``certify`` — after
+    ``step-up`` had already minted a one-shot token and written its success
+    audit. Denial before side effects puts the check with the other structural
+    preflights, and the execution-time re-evaluation below it stays.
+    """
+    package = _seed_without_signer(db_session)
+    _route_and_certify_preparer(db_session, package)
+    _revoke_checker_approve(db_session)
+    before = _mutation_counts(db_session)
+
+    def unexpected_step_up(*args: Any, **kwargs: Any) -> None:
+        raise AssertionError("re-authentication ran before checker APPROVE was established")
+
+    monkeypatch.setattr(stepup, "verify_step_up", unexpected_step_up)
+    with pytest.raises(HTTPException) as refused:
+        attestation_api.step_up(
+            db_session,
+            APPROVER,
+            SAMPLE_BANK_ID,
+            package.id,
+            StepUpRequest(signing_role="approver", password="not-used"),
+            _request(),
+        )
+
+    assert refused.value.status_code == 403
+    assert _mutation_counts(db_session) == before
+
+
+def test_step_up_for_a_checker_with_approve_mints_a_token(db_session: Session) -> None:
+    """The allow path is unchanged: a routed checker holding APPROVE gets a token."""
+    package = _seed_without_signer(db_session)
+    _route_and_certify_preparer(db_session, package)
+
+    checker = db_session.get(User, APPROVER_USER_ID)
+    assert checker is not None
+    checker.password_hash = security.hash_password(CHECKER_STEP_UP_PASSWORD)
+    checker.auth_provider = "password"
+    checker.failed_login_attempts = 0
+    checker.locked_until = None
+    db_session.commit()
+
+    granted = attestation_api.step_up(
+        db_session,
+        APPROVER,
+        SAMPLE_BANK_ID,
+        package.id,
+        StepUpRequest(signing_role="approver", password=CHECKER_STEP_UP_PASSWORD),
+        _request(),
+    )
+
+    assert granted.authorization_token
+    assert granted.signing_role == "approver"
+    minted = db_session.scalar(
+        select(SigningAuthorization).where(
+            SigningAuthorization.package_id == package.id,
+            SigningAuthorization.user_id == APPROVER_USER_ID,
+            SigningAuthorization.signing_role == "approver",
+        )
+    )
+    assert minted is not None
+    assert minted.consumed_at is None
+    success_audits = db_session.scalars(
+        select(AuditEvent.event_type).where(
+            AuditEvent.event_type == "attestation.step_up_authorized",
+        )
+    ).all()
+    assert "attestation.step_up_authorized" in success_audits

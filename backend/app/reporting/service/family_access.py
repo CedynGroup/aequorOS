@@ -623,7 +623,7 @@ def certification_conditions(
     )
 
 
-def require_certify_authority(  # noqa: PLR0913 - complete ceremony evidence tuple
+def require_certification_sign_off(  # noqa: PLR0913 - complete ceremony evidence tuple
     db: Session,
     ctx: TenantContext,
     bank: Bank,
@@ -632,12 +632,13 @@ def require_certify_authority(  # noqa: PLR0913 - complete ceremony evidence tup
     *,
     step_up_established: bool = False,
     maker_checker_established: bool = False,
-) -> bool:
-    """Require source READ, SIGN_OFF, and any distinct checker APPROVE duty.
+) -> None:
+    """Require source READ and the slot's SIGN_OFF binding; raise if absent.
 
-    Preflight deliberately evaluates stored bindings structurally. Only the
-    locked signing ceremony may set both execution-evidence flags after its
-    workflow checks and one-shot step-up consumption.
+    Preflight (both evidence flags left false) deliberately evaluates the
+    stored bindings structurally, so the denial lands before any ceremony side
+    effect. Only the locked signing ceremony may set both execution-evidence
+    flags after its workflow checks and one-shot step-up consumption.
     """
     require_view(db, ctx, bank, package)
     if ctx.impersonation_context is not None:
@@ -671,27 +672,90 @@ def require_certify_authority(  # noqa: PLR0913 - complete ceremony evidence tup
         exact_institution=True,
     ):
         raise _forbidden()
-    if (
-        execution
-        and role in CHECKER_ROLES
-        and not _evaluate(
-            db,
-            ctx,
-            bank,
-            SIGNING_GATE,
-            Permission.APPROVE,
-            surface=f"{package.return_family}_package_certify_approval",
-            conditions=(
+
+
+def require_checker_approve(  # noqa: PLR0913 - complete ceremony evidence tuple
+    db: Session,
+    ctx: TenantContext,
+    bank: Bank,
+    package: RegulatoryPackage,
+    role: str,
+    *,
+    step_up_established: bool = False,
+    maker_checker_established: bool = False,
+) -> None:
+    """A checker slot also needs its separate APPROVE duty (D8).
+
+    Evaluated STRUCTURALLY when the ceremony has not established its runtime
+    evidence — the preflight that keeps a routed checker whose APPROVE was
+    revoked from ever minting a step-up token or writing its success audit.
+    The locked ceremony re-evaluates the same duty with the established
+    maker/checker evidence, so a revocation between preflight and execution
+    still denies.
+    """
+    if role not in CHECKER_ROLES:
+        return
+    execution = step_up_established or maker_checker_established
+    if not _evaluate(
+        db,
+        ctx,
+        bank,
+        SIGNING_GATE,
+        Permission.APPROVE,
+        surface=f"{package.return_family}_package_certify_approval",
+        conditions=(
+            (
                 ConditionCheck(
                     ConditionKind.MAKER_CHECKER,
                     maker_checker_established,
                     "The locked checker guard must precede approval authority.",
                 ),
-            ),
-            exact_institution=True,
-        )
+            )
+            if execution
+            else ()
+        ),
+        structural=not execution,
+        exact_institution=True,
     ):
         raise _forbidden()
+
+
+def require_certify_authority(  # noqa: PLR0913 - complete ceremony evidence tuple
+    db: Session,
+    ctx: TenantContext,
+    bank: Bank,
+    package: RegulatoryPackage,
+    role: str,
+    *,
+    step_up_established: bool = False,
+    maker_checker_established: bool = False,
+) -> bool:
+    """Require source READ, SIGN_OFF, and any distinct checker APPROVE duty.
+
+    The whole gate in one call: :func:`require_certification_sign_off` then
+    :func:`require_checker_approve`. The signing surface's own preflight splits
+    the pair around the named-route check, so an unrouted caller still hears
+    the routing conflict; the combined form is the execution path's gate, where
+    the route was already established.
+    """
+    require_certification_sign_off(
+        db,
+        ctx,
+        bank,
+        package,
+        role,
+        step_up_established=step_up_established,
+        maker_checker_established=maker_checker_established,
+    )
+    require_checker_approve(
+        db,
+        ctx,
+        bank,
+        package,
+        role,
+        step_up_established=step_up_established,
+        maker_checker_established=maker_checker_established,
+    )
     return True
 
 
@@ -738,7 +802,9 @@ __all__ = [
     "gate_for",
     "hidden_families",
     "nominee_may_sign",
+    "require_certification_sign_off",
     "require_certify_authority",
+    "require_checker_approve",
     "require_export_authority",
     "require_generation_authority",
     "require_permission",
