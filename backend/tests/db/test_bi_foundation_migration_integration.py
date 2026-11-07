@@ -29,14 +29,14 @@ from app.bi.models.marts import (
     MONTHLY_PARTITIONED_TABLES,
     YEARLY_PARTITIONED_TABLES,
 )
-from tests.db.test_postgres_migrations_integration import (
+from tests.support.database import managed_engine
+from tests.support.postgres_migrations import (
     MigratedPostgresSchema,
     alembic_config_for_app,
     clear_database_caches,
     migrated_postgres_schema,
     postgres_schema_url,
 )
-from tests.support.database import managed_engine
 
 __all__ = ["migrated_postgres_schema"]
 

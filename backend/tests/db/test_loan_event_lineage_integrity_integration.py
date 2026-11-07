@@ -22,7 +22,7 @@ from tests.db.test_canonical_bank_integrity_integration import (
     sibling_banks_scenario,
 )
 from tests.db.test_canonical_migration_structural_parity_integration import bank_integrity_schema
-from tests.db.test_postgres_migrations_integration import (
+from tests.support.postgres_migrations import (
     MigratedPostgresSchema,
     alembic_config_for_app,
 )

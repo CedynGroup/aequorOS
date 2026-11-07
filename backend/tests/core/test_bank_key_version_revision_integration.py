@@ -12,9 +12,9 @@ from app.core.key_management import registry
 from app.core.key_management.local import LocalKeyProvider
 from app.db.base import utc_now
 from tests.core.test_bank_field_encryption_integration import BANK_A, BANK_B, KEY_A
-from tests.db.test_postgres_migrations_integration import alembic_config_for_app
 from tests.support.database import TestDatabaseConnections
 from tests.support.helpers import ORG_1
+from tests.support.postgres_migrations import alembic_config_for_app
 
 
 class VersionMigration(Protocol):

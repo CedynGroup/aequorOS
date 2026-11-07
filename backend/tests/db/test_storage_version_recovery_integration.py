@@ -55,12 +55,6 @@ from scripts.restore_database import RestoreOptions, run_restore
 from tests.db.test_governance_append_only_integration import (
     governance_schema as governance_schema,  # noqa: PLC0414 - shared fixture
 )
-from tests.db.test_postgres_migrations_integration import (
-    MigratedPostgresSchema,
-    alembic_config_for_app,
-    postgres_administrator_url,
-    postgres_schema_url,
-)
 from tests.storage.contract import metadata_for
 from tests.storage.test_bank_encryption_integration import KEY, NEXT_KEY
 from tests.support.database import (
@@ -70,6 +64,12 @@ from tests.support.database import (
 )
 from tests.support.factories.authorization import grant_institution_authority
 from tests.support.helpers import ORG_1, ORG_2
+from tests.support.postgres_migrations import (
+    MigratedPostgresSchema,
+    alembic_config_for_app,
+    postgres_administrator_url,
+    postgres_schema_url,
+)
 
 pytestmark = [
     pytest.mark.skipif(not os.getenv("TEST_DATABASE_URL"), reason="PostgreSQL required"),

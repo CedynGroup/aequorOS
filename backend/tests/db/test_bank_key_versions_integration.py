@@ -22,9 +22,9 @@ from app.identity.service import bank_encryption
 from app.models.organization import Organization
 from app.storage.client import StorageLocation
 from app.storage.encryption import ENCRYPTION_FORMAT, ObjectEncryption, object_context
-from tests.db import test_postgres_migrations_integration as migrations
 from tests.storage.contract import metadata_for
 from tests.storage.test_bank_encryption_integration import KEY, NEXT_KEY, SLUG
+from tests.support import postgres_migrations as migrations
 from tests.support.helpers import ORG_1
 
 pytestmark = pytest.mark.skipif(not os.getenv("TEST_DATABASE_URL"), reason="PostgreSQL required")

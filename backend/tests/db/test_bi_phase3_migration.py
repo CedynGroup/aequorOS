@@ -16,7 +16,7 @@ import pytest
 
 from app.bi.models.content import BI_CONTENT_TABLES
 from app.bi.models.notifications import BI_NOTIFICATION_TABLES
-from tests.db.test_postgres_migrations_integration import (
+from tests.support.postgres_migrations import (
     migrated_postgres_schema,
     postgres_schema_url,
 )

@@ -6,8 +6,8 @@ import pytest
 from sqlalchemy import text
 from sqlalchemy.exc import DBAPIError
 
-from tests.db import test_postgres_migrations_integration as migration_fixtures
-from tests.db.test_postgres_migrations_integration import MigratedPostgresSchema
+from tests.support import postgres_migrations as migration_fixtures
+from tests.support.postgres_migrations import MigratedPostgresSchema
 
 forward_migrated_postgres_schema = migration_fixtures.forward_migrated_postgres_schema
 

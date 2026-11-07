@@ -57,11 +57,6 @@ from app.integrations.storage.s3 import get_object_storage
 from app.main import create_app
 from app.models import AuthorizationBinding, Organization, RegulatoryPackage, User
 from app.reporting.service import common as regulatory_common
-from tests.db.test_postgres_migrations_integration import (
-    MigratedPostgresSchema,
-    clear_database_caches,
-    forward_migrated_postgres_schema,
-)
 from tests.fixtures.object_reference_routes import (
     GRANT_REASON,
     KNOWN_DEFECTS,
@@ -82,6 +77,11 @@ from tests.fixtures.object_reference_routes import (
 from tests.fixtures.object_reference_routes import Request as RouteRequest
 from tests.fixtures.object_references import ObjectSet, TenantSeed, bank_row, seed_objects
 from tests.support.helpers import headers
+from tests.support.postgres_migrations import (
+    MigratedPostgresSchema,
+    clear_database_caches,
+    forward_migrated_postgres_schema,
+)
 
 __all__ = ["forward_migrated_postgres_schema"]
 

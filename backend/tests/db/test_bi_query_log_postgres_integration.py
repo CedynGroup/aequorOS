@@ -41,14 +41,14 @@ from app.bi.service import query_log
 # Imported for the side effect as much as for the name: importing
 # ``app.db.session`` registers the ``after_begin`` listener that sets the GUC.
 from app.db.session import set_tenant_rls_context
-from tests.db.test_postgres_migrations_integration import (
+from tests.support.database import install_migration_engines, managed_engine
+from tests.support.helpers import ORG_1
+from tests.support.postgres_migrations import (
     MigratedPostgresSchema,
     alembic_config_for_app,
     clear_database_caches,
     postgres_schema_url,
 )
-from tests.support.database import install_migration_engines, managed_engine
-from tests.support.helpers import ORG_1
 
 _ = set_tenant_rls_context
 

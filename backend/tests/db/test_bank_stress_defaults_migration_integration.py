@@ -19,13 +19,13 @@ from sqlalchemy.orm import Session
 from alembic import command
 from app.db.session import force_rls_suspended
 from app.models import Bank, Organization, ParamStressShock
-from tests.db.test_postgres_migrations_integration import (
+from tests.support.database import managed_engine
+from tests.support.postgres_migrations import (
     MigratedPostgresSchema,
     alembic_config_for_app,
     clear_database_caches,
     forward_migrated_postgres_schema,
 )
-from tests.support.database import managed_engine
 
 __all__ = ["forward_migrated_postgres_schema"]
 

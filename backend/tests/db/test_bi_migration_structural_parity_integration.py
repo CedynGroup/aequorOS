@@ -43,7 +43,7 @@ from app.bi.models.content import BI_CONTENT_TABLES
 from app.bi.models.marts import BI_TABLES, MONTHLY_PARTITIONED_TABLES, YEARLY_PARTITIONED_TABLES
 from app.bi.models.notifications import BI_NOTIFICATION_TABLES
 from app.db.base import Base
-from tests.db.test_postgres_migrations_integration import (
+from tests.support.postgres_migrations import (
     MigratedPostgresSchema,
     catalog_postgres_schema,
     forward_migrated_postgres_schema,

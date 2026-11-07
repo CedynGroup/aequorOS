@@ -22,7 +22,7 @@ __all__ = ["migrated_postgres_schema"]
 from sqlalchemy import UniqueConstraint
 
 from app.db.base import Base
-from tests.db.test_postgres_migrations_integration import (
+from tests.support.postgres_migrations import (
     migrated_postgres_schema,
 )
 

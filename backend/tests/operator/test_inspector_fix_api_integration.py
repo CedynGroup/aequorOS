@@ -32,8 +32,8 @@ from app.models import (
     ParamCapitalThreshold,
     ParamLiquidityThreshold,
 )
-from tests.db.test_postgres_migrations_integration import alembic_config_for_app
 from tests.operator.conftest import operator_headers, provision_payload, start_inspection
+from tests.support.postgres_migrations import alembic_config_for_app
 
 BASE = "/operator/v1/tenants"
 

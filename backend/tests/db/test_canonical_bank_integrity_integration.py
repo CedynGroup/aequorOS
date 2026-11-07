@@ -24,7 +24,7 @@ from tests.db.test_bank_organization_integrity_integration import (
     bank_scope_scenario,
     pytestmark,
 )
-from tests.db.test_postgres_migrations_integration import (
+from tests.support.postgres_migrations import (
     MigratedPostgresSchema,
     alembic_config_for_app,
     migrate_isolated_postgres_schema,
