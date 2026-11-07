@@ -67,7 +67,7 @@ export async function POST(request: NextRequest): Promise<Response> {
   }
 
   const response = await backendRequest(
-    `${apiBase()}/banks/${bankId}/enterprise-stress/signoffs/${signoffId}/attest`,
+    `${apiBase()}/banks/${encodeURIComponent(bankId)}/enterprise-stress/signoffs/${encodeURIComponent(signoffId)}/attest`,
     {
       method: "POST",
       headers: {
