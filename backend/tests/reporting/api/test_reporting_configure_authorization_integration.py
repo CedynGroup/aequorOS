@@ -14,6 +14,7 @@ response.
 
 from __future__ import annotations
 
+from collections.abc import Iterator
 from typing import Any
 
 import pytest
@@ -81,8 +82,11 @@ def book_without_authority(db_client: TestClient) -> None:
 
 
 @pytest.fixture(autouse=True)
-def vault_key(monkeypatch: pytest.MonkeyPatch) -> None:
+def vault_key(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     monkeypatch.setenv("CREDENTIAL_VAULT_MASTER_KEY", MASTER_KEY)
+    get_settings.cache_clear()
+    yield
+    monkeypatch.undo()
     get_settings.cache_clear()
 
 
@@ -112,9 +116,7 @@ def _grant(
 def _current_version() -> int:
     with get_sessionmaker()() as db:
         db.info["organization_id"] = ORG_1
-        user = db.scalar(
-            select(User).where(User.id == USER_1, User.organization_id == ORG_1)
-        )
+        user = db.scalar(select(User).where(User.id == USER_1, User.organization_id == ORG_1))
         assert user is not None
         return user.authorization_version
 
@@ -129,9 +131,9 @@ def _counts() -> tuple[int, int, int]:
     with get_sessionmaker()() as db:
         return (
             db.scalar(
-                select(func.count()).select_from(AuditEvent).where(
-                    AuditEvent.organization_id == ORG_1
-                )
+                select(func.count())
+                .select_from(AuditEvent)
+                .where(AuditEvent.organization_id == ORG_1)
             )
             or 0,
             db.scalar(
@@ -314,9 +316,7 @@ def test_settings_put_succeeds_with_configurator_binding(db_client: TestClient) 
 def test_denial_leaves_existing_rows_untouched(db_client: TestClient) -> None:
     _grant(RoleBundle.CONFIGURATOR)
     assert (
-        db_client.put(
-            CHANNEL_URL, headers=_auth(), json={"config": {"kept": True}}
-        ).status_code
+        db_client.put(CHANNEL_URL, headers=_auth(), json={"config": {"kept": True}}).status_code
         == 200
     )
     counts = _counts()
@@ -359,9 +359,7 @@ def _suspend_all(db: Session | None = None) -> None:
     )
     for binding in bindings:
         binding.status = BindingStatus.SUSPENDED.value
-    user = session.scalar(
-        select(User).where(User.id == USER_1, User.organization_id == ORG_1)
-    )
+    user = session.scalar(select(User).where(User.id == USER_1, User.organization_id == ORG_1))
     assert user is not None
     user.authorization_version += 1
     session.commit()
