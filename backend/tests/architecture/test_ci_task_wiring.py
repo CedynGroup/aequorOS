@@ -361,9 +361,7 @@ def _isolate_runner_temp_outputs(environment: dict[str, str], scratch: Path) -> 
     for key, value in environment.items():
         if "${{ runner.temp }}" not in value:
             continue
-        target = scratch / value.replace("${{ runner.temp }}", "").lstrip("/")
-        target.parent.mkdir(parents=True, exist_ok=True)
-        isolated[key] = str(target)
+        isolated[key] = value.replace("${{ runner.temp }}", str(scratch))
     return isolated
 
 
