@@ -551,6 +551,35 @@ def test_ftp_dashboard_computes_inline_then_prefers_stored_runs(real_client: Tes
 
     batch = _run_all(real_client, period["id"])
     baseline = batch["runs"][0]
+    facts = baseline["inputs"]["facts"]
+    input_curve = sorted(
+        [fact["attributes"] for fact in facts if fact["fact_group"] == "ftp_curve_point"],
+        key=lambda point: _dec(point["tenor_years"]),
+    )
+    total_balance = Decimal("0")
+    weighted_margin = Decimal("0")
+    for fact in facts:
+        if fact["fact_group"] != "ftp_product":
+            continue
+        product = fact["attributes"]
+        balance = _money(_dec(fact["amount"]))
+        transfer_rate = _rate_at(input_curve, _dec(product["tenor_years"]))
+        customer_rate = _dec(product["customer_rate_pct"])
+        costs = _dec(product["operating_cost_pct"])
+        if product["category"] == "asset":
+            margin = (
+                customer_rate - transfer_rate - costs
+                - _dec(product["expected_credit_loss_pct"])
+                - _dec(product["capital_charge_pct"])
+            )
+        else:
+            margin = transfer_rate - customer_rate - costs
+        weighted_margin += balance * _ratio_pct(margin)
+        total_balance += balance
+    assert total_balance > 0
+    expected_nim = str(_ratio_pct(weighted_margin / total_balance))
+    assert metrics["portfolio_nim_pct"] == expected_nim
+    assert by_period[period["id"]]["portfolio_nim_pct"] == expected_nim
     stored = real_client.get(
         f"/api/v1/banks/{REAL_BANK_ID}/ftp/dashboard",
         headers=real_headers(),
@@ -564,9 +593,10 @@ def test_ftp_dashboard_computes_inline_then_prefers_stored_runs(real_client: Tes
     assert _dec(body["metrics"]["total_branch_contribution_ghs"]) == _dec(
         baseline["metrics"]["total_branch_contribution_ghs"]
     )
-    assert _dec(body["metrics"]["portfolio_nim_pct"]) == _dec(metrics["portfolio_nim_pct"])
+    assert body["metrics"]["portfolio_nim_pct"] == expected_nim
     trend = {point["reporting_period_id"]: point for point in body["trend"]}
     assert trend[period["id"]]["stored"] is True
+    assert trend[period["id"]]["portfolio_nim_pct"] == expected_nim
 
 
 def test_missing_ftp_shock_persists_failed_runs_without_500(
