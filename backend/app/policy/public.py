@@ -41,6 +41,7 @@ from app.policy.service.jurisdictions import (
 from app.policy.service.parameter_register import IRRBB_SHOCKS
 from app.policy.service.params import (
     PrefetchedActiveParams,
+    get_active_bank_params,
     get_active_params,
     prefetch_active_params,
 )
@@ -68,6 +69,7 @@ __all__ = [
     "RegulatoryParameter",
     "SEED_TYPES",
     "base_currency",
+    "get_active_bank_params",
     "get_active_params",
     "get_jurisdiction",
     "institution_class",

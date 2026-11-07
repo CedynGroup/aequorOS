@@ -78,9 +78,10 @@ def _seed_mapping(
     return mapping.id
 
 
-def _seed_liquidity_threshold(db: Session, organization_id: str) -> UUID:
+def _seed_liquidity_threshold(db: Session, organization_id: str, bank_id: str) -> UUID:
     row = ParamLiquidityThreshold(
         organization_id=organization_id,
+        bank_id=bank_id,
         jurisdiction_code="GH",
         institution_class="bank",
         threshold_code="LCR_MIN",
@@ -600,16 +601,15 @@ def test_config_threshold_value_creates_new_effective_row_and_audits(
 ) -> None:
     refreshes: list[str] = []
 
-    def enqueue(*_args: object, **_kwargs: object) -> list[object]:
-        refreshes.append("refresh")
-        return []
+    def enqueue(_db: object, *, organization_id: str, bank_id: str, reason: str) -> None:
+        refreshes.append(bank_id)
 
     monkeypatch.setattr(
-        "app.operator.features.inspector_fix.live_refresh_triggers.enqueue_organization_change",
+        "app.operator.features.inspector_fix.live_refresh_triggers.enqueue_bank_change",
         enqueue,
     )
     organization_id, _bank = _provision(operator_client)
-    threshold_id = _seed_liquidity_threshold(operator_db, organization_id)
+    threshold_id = _seed_liquidity_threshold(operator_db, organization_id, _bank)
     start_inspection(operator_client, organization_id)
 
     response = operator_client.post(
@@ -625,9 +625,10 @@ def test_config_threshold_value_creates_new_effective_row_and_audits(
     assert response.status_code == 200, response.text
     body = response.json()
     assert body["kind"] == "threshold_value"
+    assert body["before"]["bank_id"] == body["after"]["bank_id"] == _bank
     assert body["before"]["value_pct"] == 100.0
     assert body["after"]["value_pct"] == 110.0
-    assert refreshes == ["refresh"]
+    assert refreshes == [_bank]
     new_row_id = UUID(body["target_id"])
     assert new_row_id != threshold_id
 
@@ -645,6 +646,7 @@ def test_config_threshold_value_creates_new_effective_row_and_audits(
         )
     )
     assert current is not None
+    assert prior.bank_id == current.bank_id == _bank
     assert current.id == new_row_id
     assert current.threshold_pct == Decimal("110")
     assert current.approved_by == "dev@aequoros.com"
@@ -690,7 +692,7 @@ def test_config_threshold_value_rejects_boolean(
     operator_client: TestClient, operator_db: Session
 ) -> None:
     organization_id, _bank = _provision(operator_client)
-    threshold_id = _seed_liquidity_threshold(operator_db, organization_id)
+    threshold_id = _seed_liquidity_threshold(operator_db, organization_id, _bank)
     start_inspection(operator_client, organization_id)
     response = operator_client.post(
         f"{BASE}/{organization_id}/fix/config",

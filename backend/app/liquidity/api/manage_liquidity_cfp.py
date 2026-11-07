@@ -3,7 +3,7 @@
 The EWI GET is the server-side replacement for the dashboard's illustrative
 CFP page: indicator values, Board trigger levels, RAG states and the
 escalation state are computed here, never in the frontend. Register and plan
-writes are audited. The binding requirements and held register-update gate
+writes are audited. The binding requirements, including configuration authority,
 are documented in docs/liquidity_enforcement_rollout.md.
 """
 
@@ -15,7 +15,6 @@ from uuid import UUID
 from fastapi import APIRouter, Query, status
 
 from app.api.deps import (
-    ApproverTenant,
     DbSession,
     LiquidityConfidentialResource,
     ScopedMutationTenant,
@@ -64,7 +63,7 @@ def update_ewi_register(
     bank_id: str,
     payload: EwiRegisterPut,
     db: DbSession,
-    ctx: ApproverTenant,
+    ctx: ScopedMutationTenant,
 ) -> None:
     liquidity_ewi.update_register(db, ctx, bank_id, payload)
 

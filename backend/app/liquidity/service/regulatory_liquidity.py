@@ -103,6 +103,7 @@ from app.policy.public import (
     ParamStressShock,
     PrefetchedActiveParams,
     base_currency,
+    get_active_bank_params,
     get_active_params,
     prefetch_active_params,
     regulator_name,
@@ -1902,8 +1903,8 @@ def _currency_mismatch_limit(
     resolved for the tenant's institution class (docs/sdi.md §4.1), not pinned
     to the bank class."""
     klass = _resolve_institution_class(db, bank)
-    rows = get_active_params(
-        db, ctx.organization_id, bank.jurisdiction_code, ParamLiquidityThreshold, as_of
+    rows = get_active_bank_params(
+        db, ctx.organization_id, bank.id, bank.jurisdiction_code, ParamLiquidityThreshold, as_of
     )
     for row in rows:
         if row.institution_class == klass and row.threshold_code == "currency_mismatch_limit_pct":

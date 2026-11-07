@@ -3,7 +3,7 @@
 GET resolves the thresholds active on a date (Board register over regulatory
 defaults) plus the full generation history — the artifact behind "show me
 your Board-approved thresholds." PUT records a new Board-approved generation;
-approver-gated because adopting Board thresholds is a risk-configuration act,
+Configurator-gated because adopting Board thresholds is a risk-configuration act,
 and audited like every configuration change.
 """
 
@@ -14,12 +14,14 @@ from typing import Annotated
 
 from fastapi import APIRouter, Query
 
-from app.api.deps import ApproverTenant, DbSession, LiquidityConfidentialResource
+from app.api.deps import DbSession, LiquidityConfidentialResource, ScopedMutationTenant
 from app.liquidity.schemas.liquidity_thresholds import (
     LiquidityHaircutScheduleRead,
     LiquidityHaircutUpdate,
+    LiquidityHaircutWriteAcknowledgement,
     LiquidityThresholdRegisterRead,
     LiquidityThresholdUpdate,
+    LiquidityThresholdWriteAcknowledgement,
 )
 from app.liquidity.service import liquidity_thresholds
 
@@ -48,15 +50,15 @@ def get_liquidity_threshold_register(
 
 @router.put(
     "/banks/{bank_id}/liquidity-thresholds",
-    response_model=LiquidityThresholdRegisterRead,
+    response_model=LiquidityThresholdWriteAcknowledgement,
     operation_id="updateLiquidityThresholdRegister",
 )
 def update_liquidity_threshold_register(
     bank_id: str,
     payload: LiquidityThresholdUpdate,
     db: DbSession,
-    ctx: ApproverTenant,
-) -> LiquidityThresholdRegisterRead:
+    ctx: ScopedMutationTenant,
+) -> LiquidityThresholdWriteAcknowledgement:
     return liquidity_thresholds.update_register(db, ctx, bank_id, payload)
 
 
@@ -82,13 +84,13 @@ def get_liquidity_haircut_schedule(
 
 @router.put(
     "/banks/{bank_id}/liquidity-haircuts",
-    response_model=LiquidityHaircutScheduleRead,
+    response_model=LiquidityHaircutWriteAcknowledgement,
     operation_id="updateLiquidityHaircutSchedule",
 )
 def update_liquidity_haircut_schedule(
     bank_id: str,
     payload: LiquidityHaircutUpdate,
     db: DbSession,
-    ctx: ApproverTenant,
-) -> LiquidityHaircutScheduleRead:
+    ctx: ScopedMutationTenant,
+) -> LiquidityHaircutWriteAcknowledgement:
     return liquidity_thresholds.update_haircut_schedule(db, ctx, bank_id, payload)

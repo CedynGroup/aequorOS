@@ -328,6 +328,7 @@ def get_tenant_config(db: Session, organization_id: str) -> TenantConfigRead:
         liquidity=[
             TenantLiquidityThresholdRead(
                 id=str(threshold.id),
+                bank_id=threshold.bank_id,
                 institution_class=threshold.institution_class,
                 threshold_code=threshold.threshold_code,
                 threshold_pct=float(threshold.threshold_pct),

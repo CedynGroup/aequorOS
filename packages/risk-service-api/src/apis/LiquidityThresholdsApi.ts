@@ -15,8 +15,10 @@ import type {
   ErrorResponse,
   LiquidityHaircutScheduleRead,
   LiquidityHaircutUpdate,
+  LiquidityHaircutWriteAcknowledgement,
   LiquidityThresholdRegisterRead,
   LiquidityThresholdUpdate,
+  LiquidityThresholdWriteAcknowledgement,
 } from "../models/index";
 import {
   ErrorResponseFromJSON,
@@ -25,10 +27,14 @@ import {
   LiquidityHaircutScheduleReadToJSON,
   LiquidityHaircutUpdateFromJSON,
   LiquidityHaircutUpdateToJSON,
+  LiquidityHaircutWriteAcknowledgementFromJSON,
+  LiquidityHaircutWriteAcknowledgementToJSON,
   LiquidityThresholdRegisterReadFromJSON,
   LiquidityThresholdRegisterReadToJSON,
   LiquidityThresholdUpdateFromJSON,
   LiquidityThresholdUpdateToJSON,
+  LiquidityThresholdWriteAcknowledgementFromJSON,
+  LiquidityThresholdWriteAcknowledgementToJSON,
 } from "../models/index";
 
 export interface GetLiquidityHaircutScheduleRequest {
@@ -189,7 +195,7 @@ export class LiquidityThresholdsApi extends runtime.BaseAPI {
   async updateLiquidityHaircutScheduleRaw(
     requestParameters: UpdateLiquidityHaircutScheduleRequest,
     initOverrides?: RequestInit | runtime.InitOverrideFunction,
-  ): Promise<runtime.ApiResponse<LiquidityHaircutScheduleRead>> {
+  ): Promise<runtime.ApiResponse<LiquidityHaircutWriteAcknowledgement>> {
     if (requestParameters["bankId"] == null) {
       throw new runtime.RequiredError(
         "bankId",
@@ -235,7 +241,7 @@ export class LiquidityThresholdsApi extends runtime.BaseAPI {
     );
 
     return new runtime.JSONApiResponse(response, (jsonValue) =>
-      LiquidityHaircutScheduleReadFromJSON(jsonValue),
+      LiquidityHaircutWriteAcknowledgementFromJSON(jsonValue),
     );
   }
 
@@ -245,7 +251,7 @@ export class LiquidityThresholdsApi extends runtime.BaseAPI {
   async updateLiquidityHaircutSchedule(
     requestParameters: UpdateLiquidityHaircutScheduleRequest,
     initOverrides?: RequestInit | runtime.InitOverrideFunction,
-  ): Promise<LiquidityHaircutScheduleRead> {
+  ): Promise<LiquidityHaircutWriteAcknowledgement> {
     const response = await this.updateLiquidityHaircutScheduleRaw(
       requestParameters,
       initOverrides,
@@ -259,7 +265,7 @@ export class LiquidityThresholdsApi extends runtime.BaseAPI {
   async updateLiquidityThresholdRegisterRaw(
     requestParameters: UpdateLiquidityThresholdRegisterRequest,
     initOverrides?: RequestInit | runtime.InitOverrideFunction,
-  ): Promise<runtime.ApiResponse<LiquidityThresholdRegisterRead>> {
+  ): Promise<runtime.ApiResponse<LiquidityThresholdWriteAcknowledgement>> {
     if (requestParameters["bankId"] == null) {
       throw new runtime.RequiredError(
         "bankId",
@@ -305,7 +311,7 @@ export class LiquidityThresholdsApi extends runtime.BaseAPI {
     );
 
     return new runtime.JSONApiResponse(response, (jsonValue) =>
-      LiquidityThresholdRegisterReadFromJSON(jsonValue),
+      LiquidityThresholdWriteAcknowledgementFromJSON(jsonValue),
     );
   }
 
@@ -315,7 +321,7 @@ export class LiquidityThresholdsApi extends runtime.BaseAPI {
   async updateLiquidityThresholdRegister(
     requestParameters: UpdateLiquidityThresholdRegisterRequest,
     initOverrides?: RequestInit | runtime.InitOverrideFunction,
-  ): Promise<LiquidityThresholdRegisterRead> {
+  ): Promise<LiquidityThresholdWriteAcknowledgement> {
     const response = await this.updateLiquidityThresholdRegisterRaw(
       requestParameters,
       initOverrides,

@@ -1020,6 +1020,7 @@ def test_lmt_table1_uses_board_register_floor(db_session: Session) -> None:
     db_session.add(
         ParamLiquidityThreshold(
             organization_id=DEMO_ORG_ID,
+            bank_id=SAMPLE_BANK_ID,
             jurisdiction_code="GH",
             institution_class="bank",
             threshold_code="narrow_to_volatile",
@@ -1273,6 +1274,7 @@ def test_lmt_collateral_and_no_maturity_tables(db_session: Session) -> None:
     db_session.add(
         ParamLiquidityHaircut(
             organization_id=DEMO_ORG_ID,
+            bank_id=SAMPLE_BANK_ID,
             jurisdiction_code="GH",
             asset_class="SOVEREIGN",
             haircut_pct=Decimal("10"),

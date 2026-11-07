@@ -78,3 +78,33 @@ lifecycle, payload validity, maker/checker, step-up and other workflow context
 can still refuse execution. No workflow condition is fabricated by this report.
 Keep separate real HTTP and persisted-state evidence with each enforcement PR.
 Update the explicit catalogue if later slices add or replace route targets.
+
+## LIQ threshold and haircut effect scope
+
+After migrations `202611040109` and `202611040110`, the threshold and haircut
+PUT catalogue entries name `effect_scope: "bank_local"` and respectively
+`storage_table: "bank_liquidity_threshold"` / `"bank_liquidity_haircut"`.
+Combined impacts and both stage files additionally name
+`affected_institution_ids: ["BK-…"]`: only the request's bank, not every bank
+sharing its organization, jurisdiction or institution class. The exact-grant
+file repeats the route catalogue and these fields on candidate rows. These
+are additive schema-version-1 metadata, not new grant dimensions; `null` scope
+and an empty affected list on other routes mean **not inventoried here**, not
+proof of no effects.
+
+The ORM names `ParamLiquidityThreshold` and `ParamLiquidityHaircut` now resolve
+the bank-local tables. Historical `param_liquidity_*` tables are read-only
+archives, never a runtime fallback. A Bank A Configurator can change A's
+effective values and history but cannot supersede B's rows or enqueue B's
+refresh. Even an explicitly approved organization-wide grant authorizes
+separate bank-local writes; it does not turn a request into a shared write.
+VIEW remains a separate binding, and no migration creates a grant.
+
+This report describes the intended deployed contract; it does not inspect
+schema versions, compare registers, execute HTTP requests or prove isolation.
+For VAL-CFG-018 retain full before/after register and history snapshots for
+two nonempty sibling banks, A-only allowed threshold/haircut writes,
+wrong-bank/no-authority denials without persisted effects, and independent
+B reads. Keep another-tenant 404 evidence separate. Follow
+[the LIQ deployment and reader inventory](liquidity_enforcement_rollout.md#bank-local-register-deployment)
+before relying on the metadata.

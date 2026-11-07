@@ -42637,6 +42637,83 @@
         "title": "LiquidityHaircutUpdate",
         "type": "object"
       },
+      "LiquidityHaircutWriteAcknowledgement": {
+        "description": "Write evidence only, without active schedule or prior generations.",
+        "properties": {
+          "approval_timestamp": {
+            "format": "date-time",
+            "title": "Approval Timestamp",
+            "type": "string"
+          },
+          "approved_by": {
+            "title": "Approved By",
+            "type": "string"
+          },
+          "bank_id": {
+            "title": "Bank Id",
+            "type": "string"
+          },
+          "effective_from": {
+            "format": "date",
+            "title": "Effective From",
+            "type": "string"
+          },
+          "notes": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notes"
+          },
+          "written": {
+            "items": {
+              "$ref": "#/components/schemas/LiquidityHaircutWritten"
+            },
+            "title": "Written",
+            "type": "array"
+          }
+        },
+        "required": [
+          "bank_id",
+          "effective_from",
+          "approved_by",
+          "approval_timestamp",
+          "notes",
+          "written"
+        ],
+        "title": "LiquidityHaircutWriteAcknowledgement",
+        "type": "object"
+      },
+      "LiquidityHaircutWritten": {
+        "description": "Only a normalized haircut generation created by this request.",
+        "properties": {
+          "asset_class": {
+            "title": "Asset Class",
+            "type": "string"
+          },
+          "haircut_pct": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Haircut Pct",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "asset_class",
+          "haircut_pct"
+        ],
+        "title": "LiquidityHaircutWritten",
+        "type": "object"
+      },
       "LiquidityMetricRead": {
         "additionalProperties": false,
         "properties": {
@@ -43352,6 +43429,92 @@
           "reason"
         ],
         "title": "LiquidityThresholdUpdate",
+        "type": "object"
+      },
+      "LiquidityThresholdWriteAcknowledgement": {
+        "description": "Write evidence only. Read the register/history through its authorized GET.",
+        "properties": {
+          "approval_timestamp": {
+            "format": "date-time",
+            "title": "Approval Timestamp",
+            "type": "string"
+          },
+          "approved_by": {
+            "title": "Approved By",
+            "type": "string"
+          },
+          "bank_id": {
+            "title": "Bank Id",
+            "type": "string"
+          },
+          "effective_from": {
+            "format": "date",
+            "title": "Effective From",
+            "type": "string"
+          },
+          "institution_class": {
+            "enum": [
+              "bank",
+              "sdi"
+            ],
+            "title": "Institution Class",
+            "type": "string"
+          },
+          "notes": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notes"
+          },
+          "written": {
+            "items": {
+              "$ref": "#/components/schemas/LiquidityThresholdWritten"
+            },
+            "title": "Written",
+            "type": "array"
+          }
+        },
+        "required": [
+          "bank_id",
+          "institution_class",
+          "effective_from",
+          "approved_by",
+          "approval_timestamp",
+          "notes",
+          "written"
+        ],
+        "title": "LiquidityThresholdWriteAcknowledgement",
+        "type": "object"
+      },
+      "LiquidityThresholdWritten": {
+        "description": "Only a threshold generation created by this request, never a resolved row.",
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "threshold_code": {
+            "title": "Threshold Code",
+            "type": "string"
+          },
+          "threshold_pct": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Threshold Pct",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "threshold_code",
+          "threshold_pct"
+        ],
+        "title": "LiquidityThresholdWritten",
         "type": "object"
       },
       "LiquidityTrendPointRead": {
@@ -96404,7 +96567,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/LiquidityHaircutScheduleRead"
+                  "$ref": "#/components/schemas/LiquidityHaircutWriteAcknowledgement"
                 }
               }
             },
@@ -96738,7 +96901,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/LiquidityThresholdRegisterRead"
+                  "$ref": "#/components/schemas/LiquidityThresholdWriteAcknowledgement"
                 }
               }
             },

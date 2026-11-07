@@ -49,6 +49,8 @@ def projection_session(
         "param_credit_threshold",
         "param_liquidity_threshold",
         "param_liquidity_haircut",
+        "bank_liquidity_threshold",
+        "bank_liquidity_haircut",
     ],
 )
 @pytest.mark.parametrize("staff", [False, True])
@@ -133,12 +135,25 @@ def test_shared_register_bank_projections(
         entity_id=source,
         details={**details, "bank_id": jurisdiction},
     )
+    record_event(
+        db,
+        writer,
+        event_type="shared.changed",
+        entity_type=subject,
+        entity_id=source,
+        details={**details, "bank_id": source, "scope": {"institution_id": sibling}},
+    )
     db.flush()
     original_id = original.id
-    expected_banks: set[str] = {source, sibling} | (
-        {klass} if subject != "param_liquidity_threshold" else set()
+    expected_banks: set[str] = (
+        {source}
+        if subject.startswith("bank_liquidity_")
+        else {source, sibling} | ({klass} if subject != "param_liquidity_threshold" else set())
     )
     activity = get_tenant_activity(db, ORG_1, 100)
+    assert sum(item.summary.startswith("shared.changed") for item in activity.items) == len(
+        expected_banks
+    )
     assert {
         item.bank_id for item in activity.items if item.summary.startswith("shared.changed")
     } == expected_banks

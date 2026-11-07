@@ -9,8 +9,8 @@
  * a new Board-approved generation: only the codes whose level actually
  * changed ride the PUT (codes not present keep their current resolution),
  * and the write carries the Board evidence (effective-from, approved-by,
- * required audit reason). The PUT is approver-gated server-side; the Edit
- * action mirrors that gate.
+ * required audit reason). The PUT requires scoped configure access server-side;
+ * the Edit action mirrors that gate.
  */
 
 import { useMemo, useState } from "react";
@@ -42,8 +42,8 @@ import {
   numericInputCls,
   parseDecimalInput,
   sameDecimal,
-  useApproverGate,
 } from "./common";
+import { useConfigureEligibility } from "@/lib/api/configureAccess";
 
 /** LMTD Table 1 ratio vocabulary (the backend's threshold codes). */
 const THRESHOLD_LABELS: Record<string, string> = {
@@ -119,12 +119,13 @@ const viewColumns: Column<LiquidityThresholdRead>[] = [
 ];
 
 export default function ThresholdRegisterCard({ bankId }: { bankId: string }) {
-  const { isApprover } = useApproverGate();
+  const { allowed, reason } = useConfigureEligibility(bankId, "liq");
   const query = useLiquidityThresholdRegister(bankId);
   const [editing, setEditing] = useState(false);
 
   return (
     <SectionCard
+      className="[&>div:first-child]:flex-col sm:[&>div:first-child]:flex-row"
       title="Board threshold register"
       subtitle="Board-adopted liquidity thresholds and their approval evidence."
       noPadding
@@ -133,7 +134,8 @@ export default function ThresholdRegisterCard({ bankId }: { bankId: string }) {
           <RegulatoryRuleStatus code="LMT" sdiCode="SDI-LMT-MONTHLY" />
           {query.data && (
             <EditRegisterAction
-              isApprover={isApprover}
+              allowed={allowed}
+              reason={reason}
               editing={editing}
               onEdit={() => setEditing(true)}
             />
@@ -144,8 +146,8 @@ export default function ThresholdRegisterCard({ bankId }: { bankId: string }) {
         <span>
           Each save records an effective-dated, Board-approved generation —
           {` ${query.data?.history.length ?? 0} on record. `}
-          Updates are approver-gated and audited; the Monitoring Tools page
-          reads this same register.
+          Updates require scoped configure access and are audited; the
+          Monitoring Tools page reads this same register.
         </span>
       }
     >
@@ -160,8 +162,9 @@ export default function ThresholdRegisterCard({ bankId }: { bankId: string }) {
           />
         </div>
       ) : query.data ? (
-        editing ? (
+        editing && allowed ? (
           <ThresholdEditor
+            key={bankId}
             bankId={bankId}
             register={query.data}
             onClose={() => setEditing(false)}
