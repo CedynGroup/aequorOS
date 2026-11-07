@@ -268,6 +268,36 @@ def test_current_cycle_named_board_recipient_is_inventoried_without_legacy_autho
             status="pending",
         )
     )
+    for family in ("ordinary", "liquidity"):
+        routed_package = RegulatoryPackage(
+            organization_id=ORG,
+            bank_id=BANK,
+            return_family=family,
+            return_code=f"SIGNER-IMPACT-{family.upper()}",
+            reporting_date=date(2026, 3, 31),
+            frequency="annual",
+            basis="solo",
+            status="generated",
+            version=1,
+            snapshot={"sections": []},
+            source_runs=[],
+            generated_by=board.id,
+            generated_at=datetime.now(UTC),
+        )
+        db_session.add(routed_package)
+        db_session.flush()
+        db_session.add(
+            PackageSignatureRecipient(
+                organization_id=ORG,
+                package_id=routed_package.id,
+                attestation_cycle=routed_package.attestation_cycle,
+                signing_role="board",
+                recipient_user_id=board.id,
+                recipient_signer_id="synthetic-board-signer",
+                routing_order=1,
+                status="pending",
+            )
+        )
     db_session.commit()
 
     report = build_signoff_report(db_session, organization_id=ORG)
@@ -275,7 +305,9 @@ def test_current_cycle_named_board_recipient_is_inventoried_without_legacy_autho
     assert not impact.before.allowed
     assert impact.named_or_legacy_signer
     assert impact.named_roles == ["board"]
-    assert impact.source_families == ["icaap"]
+    assert impact.source_families == ["icaap", "liquidity", "ordinary"]
+    viewer_grants = [row for row in impact.required_grants if row.permission == "view"]
+    assert len(viewer_grants) == 2
     assert {(row.role_bundle, row.module_scope) for row in impact.required_grants} == {
         (RoleBundle.SIGNER.value, Module.REGULATORY.value),
         (RoleBundle.VIEWER.value, Module.CAPITAL.value),

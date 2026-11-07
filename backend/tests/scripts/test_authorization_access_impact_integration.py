@@ -1008,6 +1008,7 @@ def _signing_fixture(db: Session) -> dict[str, User]:
         "org_signer": _user(db, "org-signer@impact.example"),
         "stress": _user(db, "stress-executive@impact.example", role="approver"),
         "source_only": _user(db, "source-only@impact.example", role="analyst"),
+        "legacy_admin": _user(db, "legacy-admin@impact.example", role="admin"),
         "story": _user(
             db,
             "journey.approver.aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa@aequoros.example",
@@ -1071,6 +1072,15 @@ def _signing_fixture(db: Session) -> dict[str, User]:
     _grant(
         db,
         users["source_only"],
+        RoleBundle.VIEWER,
+        institution_scope=InstitutionScope.INSTITUTION,
+        institution_id=BANK,
+        module_scope=ModuleScope.RISK,
+        sensitivity_scope=SensitivityScope.CONFIDENTIAL,
+    )
+    _grant(
+        db,
+        users["legacy_admin"],
         RoleBundle.VIEWER,
         institution_scope=InstitutionScope.INSTITUTION,
         institution_id=BANK,
@@ -1157,6 +1167,11 @@ def test_signing_impact_compares_preparers_executives_and_e2e_identities(
     assert not source_only.before.allowed
     assert source_only.before.reason.endswith("legacy_scalar_approver_required")
     assert not source_only.newly_denied
+    legacy_admin = _signing_impact(
+        report, users["legacy_admin"], "risk.enterprise_stress.board.attest"
+    )
+    assert legacy_admin.source_read.allowed
+    assert legacy_admin.before.allowed and legacy_admin.newly_denied
     stress_step_up = _signing_impact(
         report, users["stress"], "risk.enterprise_stress.board.step-up"
     )

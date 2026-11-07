@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
 
 import "@testing-library/jest-dom/vitest";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { beforeEach, expect, it, vi } from "vitest";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import EnterpriseStressWorkbench from "@/components/stress/EnterpriseStressWorkbench";
 import type { EnterpriseStressRead } from "@/components/stress/types";
 
@@ -88,6 +88,8 @@ vi.mock("@/components/stress/RunRegistry", () => ({
   ),
 }));
 
+afterEach(cleanup);
+
 beforeEach(() => {
   vi.clearAllMocks();
   reopen.mockResolvedValue(returnedRun);
@@ -96,6 +98,17 @@ beforeEach(() => {
     "",
     "/irr/enterprise-stress?tab=governance&runId=run-authorized-for-signoff&stepUp=ready",
   );
+});
+
+it("shows a failed restore without signing a fallback run", async () => {
+  reopen.mockRejectedValue(new Error("synthetic reopen failure"));
+  render(<EnterpriseStressWorkbench />);
+
+  expect(await screen.findByRole("alert")).toHaveTextContent(
+    "The selected stress run could not be reopened.",
+  );
+  expect(screen.queryByTestId("selected-signoff-run")).toBeNull();
+  expect(reopen).toHaveBeenCalledTimes(1);
 });
 
 it("reopens the authorized run and restores governance after SSO", async () => {

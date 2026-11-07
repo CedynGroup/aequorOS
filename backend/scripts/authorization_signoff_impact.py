@@ -455,6 +455,7 @@ def _required_grants(  # noqa: PLR0913 - full grant and source context is intent
 
     if not after.allowed:
         add(RoleBundle.SIGNER, Permission.SIGN_OFF, module, Sensitivity.RESTRICTED)
+    seen_sources: set[tuple[Module, Sensitivity]] = set()
     for family in families:
         target, sensitivity = {
             "ordinary": (Module.REGULATORY, Sensitivity.RESTRICTED),
@@ -462,6 +463,9 @@ def _required_grants(  # noqa: PLR0913 - full grant and source context is intent
             "enterprise_stress": (Module.RISK, Sensitivity.CONFIDENTIAL),
             "liquidity": (Module.REGULATORY, Sensitivity.RESTRICTED),
         }.get(family, (Module.REGULATORY, Sensitivity.RESTRICTED))
+        if (target, sensitivity) in seen_sources:
+            continue
+        seen_sources.add((target, sensitivity))
         view = _decision(db, user, bindings, bank_id, target, sensitivity, Permission.VIEW, now=now)
         failed = failed or view.reason == "evaluation_failed"
         if view.reason != "evaluation_failed" and not view.allowed:
