@@ -76,6 +76,7 @@ ROLE_EXPECTATIONS: tuple[
     ),
     (PrincipalType.HUMAN, RoleBundle.ACCOUNT_ADMIN, frozenset({Permission.ADMINISTER})),
     (PrincipalType.HUMAN, RoleBundle.CONFIGURATOR, frozenset({Permission.CONFIGURE})),
+    (PrincipalType.HUMAN, RoleBundle.SIGNER, frozenset({Permission.SIGN_OFF})),
     (PrincipalType.HUMAN, RoleBundle.ORG_OWNER, frozenset({Permission.ADMINISTER})),
     (PrincipalType.MACHINE, RoleBundle.INTEGRATION_WRITER, frozenset({Permission.INGEST})),
 )
@@ -188,6 +189,82 @@ def test_only_configurator_carries_configure() -> None:
         for bundle, permissions in ROLE_PERMISSIONS.items()
         if Permission.CONFIGURE in permissions
     } == {RoleBundle.CONFIGURATOR}
+
+
+def test_only_signer_carries_sign_off() -> None:
+    """Signing is a dedicated grant, never inherited from an adjacent role."""
+    assert {
+        bundle
+        for bundle, permissions in ROLE_PERMISSIONS.items()
+        if Permission.SIGN_OFF in permissions
+    } == {RoleBundle.SIGNER}
+
+
+def test_approver_is_not_signer_and_signer_is_not_approver() -> None:
+    """Approval and formal signing remain separate duties in both directions."""
+    approver = _binding(
+        role=RoleBundle.APPROVER,
+        module=ModuleScope.REGULATORY,
+        sensitivity=SensitivityScope.RESTRICTED,
+    )
+    signer = _binding(
+        role=RoleBundle.SIGNER,
+        module=ModuleScope.REGULATORY,
+        sensitivity=SensitivityScope.RESTRICTED,
+    )
+    resource = _resource(module=Module.REGULATORY, sensitivity=Sensitivity.RESTRICTED)
+
+    assert _evaluate(Permission.APPROVE, resource, [approver]).allowed
+    assert not _evaluate(Permission.SIGN_OFF, resource, [approver]).allowed
+    assert _evaluate(Permission.SIGN_OFF, resource, [signer]).allowed
+    assert not _evaluate(Permission.APPROVE, resource, [signer]).allowed
+
+
+def _signer_mismatch_cases() -> list[tuple[str, BindingGrant]]:
+    """Each single-dimension corruption of the one complete sign-off binding."""
+    exact = _binding(
+        role=RoleBundle.SIGNER,
+        module=ModuleScope.REGULATORY,
+        sensitivity=SensitivityScope.RESTRICTED,
+    )
+    return [
+        ("wrong-institution", replace(exact, institution_id=BANK_B)),
+        ("wrong-module", replace(exact, module_scope=ModuleScope.RISK)),
+        ("wrong-sensitivity", replace(exact, sensitivity_scope=SensitivityScope.CONFIDENTIAL)),
+        ("suspended", replace(exact, status=BindingStatus.SUSPENDED)),
+        ("revoked", replace(exact, status=BindingStatus.REVOKED, revoked_at=NOW)),
+        ("not-yet-valid", replace(exact, valid_from=NOW + dt.timedelta(seconds=1))),
+        ("expired", replace(exact, valid_until=NOW)),
+    ]
+
+
+SIGNER_MISMATCH_CASES = _signer_mismatch_cases()
+
+
+@pytest.mark.parametrize(
+    "binding",
+    [pytest.param(binding, id=case) for case, binding in SIGNER_MISMATCH_CASES],
+)
+def test_a_single_broken_dimension_denies_sign_off(binding: BindingGrant) -> None:
+    """Each mismatch is its own reported case: one broken dimension denies signing."""
+    resource = _resource(module=Module.REGULATORY, sensitivity=Sensitivity.RESTRICTED)
+    assert not _evaluate(Permission.SIGN_OFF, resource, [binding]).allowed
+
+
+def test_signer_requires_one_complete_active_binding() -> None:
+    """Mismatched or ineffective grants cannot compose into signing authority."""
+    exact = _binding(
+        role=RoleBundle.SIGNER,
+        module=ModuleScope.REGULATORY,
+        sensitivity=SensitivityScope.RESTRICTED,
+    )
+    resource = _resource(module=Module.REGULATORY, sensitivity=Sensitivity.RESTRICTED)
+    assert _evaluate(Permission.SIGN_OFF, resource, [exact]).allowed
+    assert not _evaluate(Permission.SIGN_OFF, resource, []).allowed
+    mismatches = [binding for _, binding in SIGNER_MISMATCH_CASES]
+    assert not _evaluate(Permission.SIGN_OFF, resource, mismatches).allowed
+    veto = ConditionCheck(ConditionKind.DEMO_MODE, False, "demo mode")
+    assert not _evaluate(Permission.SIGN_OFF, resource, [exact], conditions=(veto,)).allowed
 
 
 def _configurator_mismatch_cases() -> list[tuple[str, BindingGrant]]:
