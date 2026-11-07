@@ -19462,6 +19462,11 @@
           "data_scope": {
             "$ref": "#/components/schemas/DataScopeRead"
           },
+          "exact_institution": {
+            "default": false,
+            "title": "Exact Institution",
+            "type": "boolean"
+          },
           "module": {
             "$ref": "#/components/schemas/Module"
           },

@@ -3,11 +3,10 @@
  *
  * These mirror the backend Pydantic schemas EXACTLY as they serialise on the
  * wire (app/stress/schemas/{stress,enterprise_stress,management_actions}.py and the
- * domain serializers under app/stress/domain/). Because the workbench fetches
- * these endpoints directly (the generated OpenAPI client does not yet carry the
- * Phase-1..5 stress surface, and regeneration is owned by a concurrent effort),
- * the JSON is consumed raw — hence **snake_case** keys and stringified Decimals,
- * matching the FastAPI response bodies.
+ * domain serializers under app/stress/domain/). The scenario, run and action-plan
+ * hooks consume raw JSON, hence **snake_case** keys and stringified Decimals.
+ * Sign-off contracts are re-exported from the generated client below and use its
+ * camelCase serializer.
  */
 
 import type { ScenarioStatus, ScenarioType, Severity } from "./macro";
@@ -475,59 +474,13 @@ export type EnterpriseStressRunCreate = {
 };
 
 // --- Enterprise-stress sign-off / Board attestation (backend EnterpriseStressSignoff) ---
-export type StressSignoffStatus =
-  "draft" | "pending_attestation" | "attested" | "withdrawn";
-
-export type StressSignoffSummary = {
-  id: string;
-  run_id: string;
-  reporting_period_id: string;
-  scenario_code: string;
-  status: StressSignoffStatus;
-  version: number;
-  stays_above_all_minima: boolean | null;
-};
-
-export type StressSignoffListRead = {
-  signoffs: StressSignoffSummary[];
-  total: number;
-};
-
-export type StressSignoffRead = {
-  id: string;
-  organization_id: string;
-  bank_id: string;
-  run_id: string;
-  reporting_period_id: string;
-  scenario_code: string;
-  status: StressSignoffStatus;
-  version: number;
-  scenario_narrative: string;
-  assumptions_rationale: string;
-  methodology_summary: string | null;
-  board_challenge: string | null;
-  credibility_rationale: string | null;
-  stays_above_all_minima: boolean | null;
-  with_actions_stays_above_all_minima: boolean | null;
-  created_by: string | null;
-  submitted_by: string | null;
-  submitted_at: string | null;
-  attested_by: string | null;
-  attested_at: string | null;
-  created_at: string;
-  updated_at: string;
-};
-
-export type StressSignoffCreate = {
-  run_id: string;
-  scenario_narrative: string;
-  assumptions_rationale: string;
-  methodology_summary?: string | null;
-  reason: string;
-};
-
-export type StressSignoffAttestation = {
-  credibility_rationale: string;
-  board_challenge?: string | null;
-  reason: string;
-};
+export type {
+  StressSignoffAttestation,
+  StressSignoffCreate,
+  StressSignoffListRead,
+  StressSignoffRead,
+  StressSignoffSubmission,
+  StressSignoffTransition,
+  StressSignoffUpdate,
+} from "@aequoros/risk-service-api";
+export type { StressSignoffStatus } from "@aequoros/risk-service-api";

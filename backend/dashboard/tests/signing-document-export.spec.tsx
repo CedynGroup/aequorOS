@@ -18,6 +18,7 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 
 const state = vi.hoisted(() => ({
   permissions: [] as string[],
+  exactInstitution: true,
   artifacts: [] as {
     id: string;
     kind: string;
@@ -26,6 +27,11 @@ const state = vi.hoisted(() => ({
   }[],
   versions: [] as { id: string; isFiled: boolean }[],
   preview: undefined as unknown,
+  previewCalls: 0,
+  placementCalls: 0,
+  adoptedSignatureCalls: 0,
+  signerIdentityCalls: 0,
+  status: undefined as unknown,
   stepUpBlockedReason: null as string | null,
   /** Whether the mocked canvas reports a drawn page, as a real one would. */
   rendersPage: true,
@@ -39,6 +45,8 @@ const state = vi.hoisted(() => ({
 vi.mock("@/components/profile/ProfileProvider", () => ({
   useUserProfile: () => ({
     isLoading: false,
+    error: null,
+    profile: { userId: "user-signer" },
     effectiveAuthority: {
       institutionCapabilities: [
         {
@@ -47,6 +55,8 @@ vi.mock("@/components/profile/ProfileProvider", () => ({
             module: "reg",
             sensitivity: "restricted",
             permission,
+            exactInstitution: state.exactInstitution,
+            dataScope: { kind: "all", branches: [], regions: [] },
           })),
         },
       ],
@@ -80,12 +90,33 @@ vi.mock("@/lib/api/hooks", () => {
     refetch: vi.fn(),
   });
   return {
-    useCertificationPreview: () => settled(state.preview),
-    usePackageSignaturePlacements: () => settled(undefined),
-    useMyAdoptedSignature: () => settled(undefined),
-    useMySignerIdentity: () => settled(undefined),
+    useCertificationPreview: (
+      _bankId: string,
+      _packageId: string,
+      _signingRole: string,
+      enabled = true,
+    ) => {
+      if (enabled) state.previewCalls += 1;
+      return settled(state.preview);
+    },
+    usePackageSignaturePlacements: (
+      _bankId: string,
+      _packageId: string,
+      enabled = true,
+    ) => {
+      if (enabled) state.placementCalls += 1;
+      return settled(undefined);
+    },
+    useMyAdoptedSignature: (enabled = true) => {
+      if (enabled) state.adoptedSignatureCalls += 1;
+      return settled(undefined);
+    },
+    useMySignerIdentity: (enabled = true) => {
+      if (enabled) state.signerIdentityCalls += 1;
+      return settled(undefined);
+    },
     useOrganizationUsers: () => settled({ users: [] }),
-    usePackageAttestation: () => settled(undefined),
+    usePackageAttestation: () => settled(state.status),
     usePackageArtifacts: () => settled({ artifacts: state.artifacts }),
     usePackageArtifactVersions: () => settled({ versions: state.versions }),
     useStepUpForSigning: idle,
@@ -185,9 +216,24 @@ const READY_PREVIEW = {
 
 beforeEach(() => {
   state.permissions = [];
+  state.exactInstitution = true;
   state.artifacts = [];
   state.versions = [];
   state.preview = undefined;
+  state.previewCalls = 0;
+  state.placementCalls = 0;
+  state.adoptedSignatureCalls = 0;
+  state.signerIdentityCalls = 0;
+  state.status = {
+    signatures: [],
+    recipients: [
+      {
+        signingRole: "approver",
+        recipientUserId: "user-signer",
+        status: "pending",
+      },
+    ],
+  };
   state.stepUpBlockedReason = null;
   state.rendersPage = true;
   state.renderFails = false;
@@ -213,7 +259,7 @@ function renderWorkspace() {
 }
 
 it("tells an approver without export which grant the document needs", async () => {
-  state.permissions = ["view", "review", "approve"];
+  state.permissions = ["view", "review", "approve", "sign_off"];
   state.artifacts = [PDF_ARTIFACT];
   state.preview = READY_PREVIEW;
   renderWorkspace();
@@ -235,7 +281,7 @@ it("tells an approver without export which grant the document needs", async () =
 });
 
 it("serves the page to a signing officer holding the exact export row", async () => {
-  state.permissions = ["view", "review", "approve", "export"];
+  state.permissions = ["view", "review", "approve", "sign_off", "export"];
   state.artifacts = [PDF_ARTIFACT];
   state.preview = READY_PREVIEW;
   renderWorkspace();
@@ -254,7 +300,7 @@ it("serves the page to a signing officer holding the exact export row", async ()
 });
 
 it("keeps certification shut while the page has not drawn", async () => {
-  state.permissions = ["view", "review", "approve", "export"];
+  state.permissions = ["view", "review", "approve", "sign_off", "export"];
   state.artifacts = [PDF_ARTIFACT];
   state.preview = READY_PREVIEW;
   // The bytes arrive and the canvas is on screen, but it never reports a page:
@@ -272,7 +318,7 @@ it("keeps certification shut while the page has not drawn", async () => {
 });
 
 it("closes the ceremony again when the page render fails", async () => {
-  state.permissions = ["view", "review", "approve", "export"];
+  state.permissions = ["view", "review", "approve", "sign_off", "export"];
   state.artifacts = [PDF_ARTIFACT];
   state.preview = READY_PREVIEW;
   // The PDF parses and the canvas mounts; the page then fails to draw. The
@@ -290,7 +336,7 @@ it("closes the ceremony again when the page render fails", async () => {
 });
 
 it("reads the filed revision once one exists", async () => {
-  state.permissions = ["view", "review", "export"];
+  state.permissions = ["view", "review", "approve", "sign_off", "export"];
   state.artifacts = [PDF_ARTIFACT];
   state.versions = [{ id: "version-9", isFiled: true }];
   renderWorkspace();
@@ -302,4 +348,78 @@ it("reads the filed revision once one exists", async () => {
     ),
   );
   expect(state.fetchArtifactBytes).not.toHaveBeenCalled();
+});
+
+it("keeps an Approver without Signer authority out of preview and step-up", async () => {
+  state.permissions = ["view", "review", "approve", "export"];
+  state.preview = READY_PREVIEW;
+  renderWorkspace();
+
+  expect(
+    await screen.findByText(/Regulatory Reporting sign-off/),
+  ).toBeVisible();
+  expect(state.stepUpBlockedReason).toBeNull();
+  expect(state.previewCalls).toBe(0);
+  expect(state.placementCalls).toBe(0);
+  expect(state.adoptedSignatureCalls).toBe(0);
+  expect(state.signerIdentityCalls).toBe(0);
+  expect(screen.queryByText("Send to")).not.toBeInTheDocument();
+  expect(screen.queryByRole("textbox")).not.toBeInTheDocument();
+});
+
+it("keeps a Signer without source-read authority out of preview and step-up", async () => {
+  state.permissions = ["approve", "sign_off", "export"];
+  state.preview = READY_PREVIEW;
+  renderWorkspace();
+
+  expect(
+    await screen.findByText(/Regulatory Reporting view access with Restricted data/),
+  ).toBeVisible();
+  expect(state.stepUpBlockedReason).toBeNull();
+  expect(state.previewCalls).toBe(0);
+});
+
+it("keeps an organization-wide Signer grant out of exact-bank signing", async () => {
+  state.permissions = ["view", "approve", "sign_off", "export"];
+  state.exactInstitution = false;
+  state.preview = READY_PREVIEW;
+  renderWorkspace();
+
+  expect(await screen.findByText(/exact-institution scope/)).toBeVisible();
+  expect(state.stepUpBlockedReason).toBeNull();
+  expect(state.previewCalls).toBe(0);
+});
+
+it("keeps a checker without separate approval authority out of preview and step-up", async () => {
+  state.permissions = ["view", "sign_off", "export"];
+  state.preview = READY_PREVIEW;
+  renderWorkspace();
+
+  expect(
+    await screen.findByText(/Regulatory Reporting approve access/),
+  ).toBeVisible();
+  expect(state.stepUpBlockedReason).toBeNull();
+  expect(state.previewCalls).toBe(0);
+});
+
+it("keeps a Signer who is not the named recipient out of preview and step-up", async () => {
+  state.permissions = ["view", "review", "approve", "sign_off", "export"];
+  state.preview = READY_PREVIEW;
+  state.status = {
+    signatures: [],
+    recipients: [
+      {
+        signingRole: "approver",
+        recipientUserId: "another-user",
+        status: "pending",
+      },
+    ],
+  };
+  renderWorkspace();
+
+  expect(
+    await screen.findByText(/not the named recipient/),
+  ).toBeVisible();
+  expect(state.stepUpBlockedReason).toBeNull();
+  expect(state.previewCalls).toBe(0);
 });

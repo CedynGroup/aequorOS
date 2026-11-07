@@ -59,6 +59,10 @@ import { useModuleScope } from "@/components/shell/BankContext";
 import { useUserProfile } from "@/components/profile/ProfileProvider";
 import { filingAuthorityFor } from "@/lib/submissions/filingAuthority";
 import {
+  useSignoffEligibility,
+  useSigningSourceEligibility,
+} from "@/lib/api/signingAccess";
+import {
   usePackageAttestation,
   useVerifyPackageAttestation,
   useVoidAttestation,
@@ -120,7 +124,21 @@ export default function AttestationPanel({
   showInlineCertifyActions?: boolean;
 }) {
   const { capitalApprove } = useModuleScope();
-  const { effectiveAuthority, isLoading: authorityLoading } = useUserProfile();
+  const {
+    effectiveAuthority,
+    isLoading: authorityLoading,
+    profile,
+  } = useUserProfile();
+  const signingAuthority = useSignoffEligibility(bankId, "reg");
+  const sourceAccess = useSigningSourceEligibility(bankId, returnFamily);
+  const signing = {
+    allowed: signingAuthority.allowed && sourceAccess.allowed,
+    reason: !signingAuthority.allowed
+      ? signingAuthority.reason
+      : !sourceAccess.allowed
+        ? sourceAccess.reason
+        : "",
+  };
   /**
    * Whether to OFFER the checker act — never whether to permit it. The server
    * decides that, and decides it differently per family
@@ -260,6 +278,9 @@ export default function AttestationPanel({
                 packageStatus={packageStatus}
                 validationClean={validationClean}
                 isApprover={isApprover}
+                signerAllowed={signing.allowed}
+                signerReason={signing.reason}
+                currentUserId={profile?.userId}
                 returnFamily={returnFamily}
                 showCertifyButtons={showInlineCertifyActions}
                 onCertify={setCertifyRole}
@@ -341,6 +362,7 @@ export default function AttestationPanel({
             packageId={packageId}
             signingRole={certifyRole}
             returnLabel={returnLabel}
+            returnFamily={returnFamily}
             ssoOutcome={ssoOutcome}
             onClose={() => {
               setCertifyRole(null);
@@ -355,6 +377,7 @@ export default function AttestationPanel({
             packageId={packageId}
             signingRole={certifyRole}
             returnLabel={returnLabel}
+            returnFamily={returnFamily}
             ssoOutcome={ssoOutcome}
             onClose={() => {
               setCertifyRole(null);
@@ -587,6 +610,9 @@ function Actions({
   packageStatus,
   validationClean,
   isApprover,
+  signerAllowed,
+  signerReason,
+  currentUserId,
   returnFamily,
   showCertifyButtons,
   onCertify,
@@ -596,6 +622,9 @@ function Actions({
   packageStatus: PackageStatus;
   validationClean: boolean;
   isApprover: boolean;
+  signerAllowed: boolean;
+  signerReason: string;
+  currentUserId: string | undefined;
   returnFamily: string;
   /**
    * False when the surface has lifted the certify act to its own command bar.
@@ -611,14 +640,30 @@ function Actions({
   // The preparer slot comes first in every policy; anything else is a checker act.
   const preparerOutstanding = outstandingRoles.includes("preparer");
   const checkerRole = outstandingRoles.find((role) => role !== "preparer");
+  const isNamedFor = (role: SigningRole) =>
+    Boolean(
+      currentUserId &&
+        status.recipients.some(
+          (recipient) =>
+            recipient.status === "pending" &&
+            recipient.signingRole === role &&
+            recipient.recipientUserId === currentUserId,
+        ),
+    );
 
   const canCertifyAsPreparer =
+    signerAllowed &&
+    isNamedFor("preparer") &&
     (state === "unsigned" || state === "void") &&
     preparerOutstanding &&
     CERTIFIABLE_STATUSES.includes(packageStatus) &&
     validationClean;
   const canCertifyAsChecker =
-    state === "preparer_certified" && checkerRole != null && isApprover;
+    signerAllowed &&
+    state === "preparer_certified" &&
+    checkerRole != null &&
+    isApprover &&
+    isNamedFor(checkerRole);
   const canVoid =
     (state === "preparer_certified" || state === "fully_certified") &&
     isApprover;
@@ -627,6 +672,7 @@ function Actions({
     <div className="pt-4 border-t border-border-light space-y-2">
       <div className="flex items-center gap-2 flex-wrap">
         {showCertifyButtons &&
+          signerAllowed &&
           (state === "unsigned" || state === "void") &&
           preparerOutstanding && (
             <button
@@ -645,6 +691,7 @@ function Actions({
             is true (docs/filing_workflow_redesign.md §4b.1). The sentence below
             names the authority the server asks for. */}
         {showCertifyButtons &&
+          signerAllowed &&
           isApprover &&
           state === "preparer_certified" &&
           checkerRole && (
@@ -671,7 +718,9 @@ function Actions({
       </div>
 
       <p className="text-caption text-slate leading-relaxed">
-        {state === "fully_certified"
+        {!signerAllowed
+          ? signerReason
+          : state === "fully_certified"
           ? "Fully certified — nothing further is required before submission."
           : state === "preparer_certified" && !isApprover
             ? returnFamily === "icaap"

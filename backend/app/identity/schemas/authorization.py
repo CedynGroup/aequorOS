@@ -85,6 +85,10 @@ class EffectiveCapabilityRead(ClosedModel):
     sensitivity: Sensitivity
     permission: Permission
     requires_contextual_authorization: bool
+    #: Whether a matching binding names this exact institution, rather than
+    #: reaching it through organization scope. Exact-bank ceremonies need this
+    #: distinction; it adds no authority to the projected permission itself.
+    exact_institution: bool = False
     #: The declared slice this exact (institution, module, sensitivity,
     #: permission) capability reads — reduced from the bindings that matched
     #: THIS resource, never one answer standing for a whole institution.
