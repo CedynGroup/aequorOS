@@ -11,6 +11,7 @@ name an executed test from each promised module.
 
 from __future__ import annotations
 
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -154,7 +155,12 @@ def test_a_missing_report_is_still_refused(tmp_path: Path) -> None:
     assert "was not written" in result.stdout
 
 
-def test_the_depth_workflow_passes_an_identity_flag_for_each_promised_module() -> None:
+@pytest.mark.parametrize(
+    "scenario", ["complete", *PROMISED_MODULES, "below_floor", "skipped"]
+)
+def test_the_depth_workflow_enforces_report_requirements(
+    tmp_path: Path, scenario: str
+) -> None:
     workflow = yaml.safe_load(WORKFLOW.read_text(encoding="utf-8"))
     steps = workflow["jobs"]["rls-depth"]["steps"]
     assert_step = next(
@@ -165,7 +171,28 @@ def test_the_depth_workflow_passes_an_identity_flag_for_each_promised_module() -
     )
     command = assert_step["run"]
 
-    for module in PROMISED_MODULES:
-        assert f"--required-suite {module}" in command
-    assert "--min-executed 5" in command
-    assert "--max-skipped 0" in command
+    suites = [
+        _suite(
+            f"tests.db.{module}",
+            1 if scenario == "below_floor" else tests,
+            1 if scenario == "skipped" else 0,
+        )
+        for module, tests in PROMISED_MODULES.items()
+        if module != scenario
+    ]
+    report_dir = tmp_path / "rls-depth"
+    report_dir.mkdir()
+    _report(report_dir / "report.xml", suites)
+
+    result = subprocess.run(
+        ["bash", "--noprofile", "--norc", "-e", "-o", "pipefail", "-c", command],
+        cwd=WORKFLOW.parents[2],
+        env={**os.environ, "RUNNER_TEMP": str(tmp_path)},
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert result.returncode == (0 if scenario == "complete" else 1), (
+        result.stdout + result.stderr
+    )
