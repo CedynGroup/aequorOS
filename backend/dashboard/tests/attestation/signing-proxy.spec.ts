@@ -47,8 +47,8 @@ const cases = [
     post: attestStressSignoff,
     path: "/api/stress/signoff/attest",
     body: {
-      bankId: "BK-SAMPLE",
-      signoffId: "22222222-2222-4222-8222-222222222222",
+      bankId: "BK/../OTHER?view=wrong",
+      signoffId: "22222222-2222-4222-8222-222222222222#wrong",
       expectedSigningDigest: "digest-stress",
       credibilityRationale: "Synthetic credibility rationale",
       boardChallenge: null,
@@ -86,7 +86,7 @@ describe("signing server routes", () => {
     await expect(response.text()).resolves.toBe("named Signer binding required");
     if (name === "stress sign-off with server-held SSO authorization") {
       expect(backendRequest).toHaveBeenCalledWith(
-        "http://risk-service.test/api/v1/banks/BK-SAMPLE/enterprise-stress/signoffs/22222222-2222-4222-8222-222222222222/attest",
+        "http://risk-service.test/api/v1/banks/BK%2F..%2FOTHER%3Fview%3Dwrong/enterprise-stress/signoffs/22222222-2222-4222-8222-222222222222%23wrong/attest",
         expect.objectContaining({
           method: "POST",
           body: JSON.stringify({
