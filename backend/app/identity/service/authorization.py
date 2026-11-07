@@ -1186,6 +1186,38 @@ def evaluate_prefetched_permission(  # noqa: PLR0913 - complete authorization se
     )
 
 
+def evaluate_prefetched_structural_permission(  # noqa: PLR0913 - complete binding sentence
+    principal: PrincipalLocator,
+    permission: Permission,
+    resource: ResourceLocator,
+    bindings: Sequence[AuthorizationBinding],
+    *,
+    principal_active: bool,
+    now: datetime | None = None,
+) -> AuthorizationDecision:
+    """Evaluate a consistent binding snapshot without inventing ceremony evidence.
+
+    This is the prefetched counterpart of :func:`evaluate_structural_permission`
+    for read-only impact inventories. Request-wide vetoes still apply; object-
+    specific maker/checker, step-up and digest evidence stays with the workflow.
+    """
+    conditions = request_wide_condition_checks()
+    if not principal_active:
+        return _deny_with_trace(
+            principal, permission, resource, conditions, now, "principal_not_active"
+        )
+    if resource.organization_id != principal.organization_id:
+        return _deny_with_trace(principal, permission, resource, conditions, now)
+    return evaluate_grants(
+        principal,
+        permission,
+        resource,
+        [_binding_grant(binding) for binding in bindings],
+        conditions=conditions,
+        now=now,
+    )
+
+
 def evaluate_liquidity_monitoring_views(
     db: Session,
     *,
