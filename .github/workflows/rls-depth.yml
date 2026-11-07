@@ -37,14 +37,11 @@ name: RLS property depth
 # HypothesisWorks/hypothesis#4206) during the reconciliation state machine —
 # no assertion and no authorization check failed. Its executed-example count
 # is unknown (the flaky path bypasses statistics), and an isolated replay at
-# the same budget passed, showing non-determinism only. Root cause (diagnosed
-# 2026-11-07, `no-mistakes` evidence bundle for this branch): the machines
-# picked rule victims by uuid-string order over server-generated uuid4 keys,
-# making state evolution a non-function of the drawn choices; replayed choice
-# prefixes then drew a feature-flag boolean where an integer rule index was
-# recorded. FIX: rule victims are now selected in dict insertion order
-# (`_slot_pick`), pinned by `tests/db/test_machine_slot_selection.py`. After
-# the fix, three independent local runs of the exact node at configured-200
+# the same budget passed, showing non-determinism only. The diagnosed cause
+# and rule-selection invariant live in
+# backend/docs/state_machine_testing.md ("Rule selection must be a function
+# of the drawn choices"); tests/db/test_machine_slot_selection.py pins the fix.
+# After the fix, three independent local runs of the exact node at configured-200
 # each executed 200 valid examples (stopped at max_examples=200; 9 invalid /
 # 10 overrun / 0 interesting) with zero failures. Triage for any future red
 # run here: preserve the report, capture statistics with an observation-only

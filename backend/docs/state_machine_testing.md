@@ -240,11 +240,11 @@ by uuid-string order over server-generated `uuid4` keys makes state evolution
 depend on unseeded randomness outside the choice sequence: Hypothesis's engine
 replays recorded choice prefixes across examples, and a replayed prefix whose
 precondition emptiness diverged draws a feature-flag boolean where an integer
-rule index was recorded, raising `FlakyStrategyDefinition`. That failure is
-invisible at per-PR budgets and grows steeper with example count (a
-no-database counterfactual machine showed 0/40 flakes at 10 examples versus
+rule index was recorded, raising `FlakyStrategyDefinition`. The observed flake
+frequency increased with the example budget: a no-database counterfactual machine showed 0/40 flakes at 10 examples versus
 15/40 at 200 with uuid ordering, and 0/40 with insertion ordering at every
-budget). `tests/db/test_machine_slot_selection.py` pins the selection
+budget. Zero observed failures at the smaller budget does not establish
+stability. `tests/db/test_machine_slot_selection.py` pins the selection
 semantics.
 
 ## Defects retained as regression examples
