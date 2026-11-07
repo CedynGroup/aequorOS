@@ -1439,7 +1439,30 @@
           "method": "PUT",
           "path": "/api/v1/banks/{bank_id}/ecl-assumptions",
           "endpoint": "app.credit.api.manage_credit_params:update_ecl_assumption_register"
-        },
+        }
+      ]
+    },
+    {
+      "name": "tenant-dependencies-liq-scoped-configure",
+      "kind": "dependency",
+      "basis": "LIQ configuration writes require scoped mutation tenancy; the service layer enforces the complete configure binding.",
+      "references": [
+        "app/api/deps.py:get_current_principal",
+        "app/api/deps.py:get_scoped_mutation_tenant_context",
+        "app/api/deps.py:get_tenant_context",
+        "app/api/deps.py:get_tenant_db_session",
+        "app/api/deps.py:resolve_tenant_bank"
+      ],
+      "authentication": "tenant",
+      "dependencies": [
+        "app.api.deps:get_current_principal",
+        "app.api.deps:get_scoped_mutation_tenant_context",
+        "app.api.deps:get_tenant_context",
+        "app.api.deps:get_tenant_db_session",
+        "app.api.deps:resolve_tenant_bank",
+        "fastapi.security.http:HTTPBearer"
+      ],
+      "routes": [
         {
           "application": "tenant",
           "method": "PUT",

@@ -30,14 +30,14 @@ from app.core.authorization import (
 )
 from app.identity.service import authentication, authorization
 from app.models import Organization, User
-from tests.db.test_postgres_migrations_integration import (
+from tests.support.database import managed_engine
+from tests.support.postgres_migrations import (
     MigratedPostgresSchema,
     alembic_config_for_app,
     forward_migrated_postgres_schema,
     postgres_administrator_url,
     postgres_schema_url,
 )
-from tests.support.database import managed_engine
 
 __all__ = ["forward_migrated_postgres_schema"]
 pytestmark = [
