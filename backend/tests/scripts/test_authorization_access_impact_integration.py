@@ -24,9 +24,14 @@ from sqlalchemy.orm import Session
 from app.core.authorization import (
     DataScope,
     InstitutionScope,
+    Module,
     ModuleScope,
+    Permission,
+    PrincipalLocator,
     PrincipalType,
+    ResourceLocator,
     RoleBundle,
+    Sensitivity,
     SensitivityScope,
 )
 from app.identity.service import authorization
@@ -53,6 +58,7 @@ from scripts.authorization_signing_impact import (
 from scripts.authorization_signing_impact import (
     SigningImpact,
     SigningReport,
+    _eligibility,
     build_signing_report,
     write_signing_artifacts,
 )
@@ -1242,6 +1248,7 @@ def _signing_mismatch_values(user: User, now: datetime, case: str) -> dict[str, 
         "institution_id": BANK,
         "module_scope": "reg",
         "sensitivity_scope": "restricted",
+        "status": "active",
         "data_scope_kind": "all",
         "data_scope_values": None,
         "granted_by_type": "system",
@@ -1319,6 +1326,52 @@ def test_signing_impact_never_composes_a_mismatched_signer_grant(
     assert row.source_read.allowed and not row.sign_off.allowed and not row.after.allowed
     assert [grant.permission for grant in row.required_grants] == ["sign_off"]
     assert row.required_grants[0].institution_id == BANK
+
+
+def test_signing_impact_requires_one_complete_exact_institution_binding(
+    db_session: Session,
+) -> None:
+    """Synthetic mixed rows must not combine into one complete signature grant.
+
+    The database rejects the partial Signer row. The report still defends this
+    input explicitly if it encounters an imported, historical or otherwise
+    inconsistent pair instead of treating database constraints as authority.
+    """
+    user = _user(db_session, "mixed-scope-signer@impact.example")
+    now = datetime.now(UTC)
+    bindings = [
+        AuthorizationBinding(
+            **(
+                _signing_mismatch_values(user, now, "organization-all")
+                | {"institution_scope": "organization", "institution_id": None}
+            )
+        ),
+        AuthorizationBinding(
+            **(
+                _signing_mismatch_values(user, now, "bank-partial")
+                | {"data_scope_kind": "branch", "data_scope_values": ["Head office"]}
+            )
+        ),
+    ]
+
+    eligibility = _eligibility(
+        PrincipalLocator(ORG, user.id, PrincipalType.HUMAN),
+        Permission.SIGN_OFF,
+        ResourceLocator(
+            ORG,
+            InstitutionScope.INSTITUTION,
+            BANK,
+            Module.REGULATORY,
+            Sensitivity.RESTRICTED,
+        ),
+        bindings,
+        now,
+        exact_institution=True,
+    )
+
+    assert len(eligibility.matching_binding_ids) == 2
+    assert not eligibility.allowed
+    assert eligibility.reason == "signing_requires_exact_institution_binding"
 
 
 def test_signing_impact_writes_private_deny_and_exact_grant_artifacts(

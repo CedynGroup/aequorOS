@@ -203,17 +203,23 @@ def _eligibility(  # noqa: PLR0913 - one complete policy sentence is explicit
         )
         matched = set(decision.matching_binding_ids)
         whole = any(row.id in matched and row.data_scope_kind == DataScope.ALL for row in bindings)
-        exact = any(
+        complete_exact_binding = any(
             row.id in matched
-            and row.institution_scope == InstitutionScope.INSTITUTION.value
-            and row.institution_id == resource.institution_id
+            and row.data_scope_kind == DataScope.ALL.value
+            and (
+                not exact_institution
+                or (
+                    row.institution_scope == InstitutionScope.INSTITUTION.value
+                    and row.institution_id == resource.institution_id
+                )
+            )
             for row in bindings
         )
-        allowed = decision.allowed and whole and (exact or not exact_institution)
+        allowed = decision.allowed and complete_exact_binding
         reason = decision.reason
         if decision.allowed and not whole:
             reason = "institution_grain_requires_whole_institution"
-        elif decision.allowed and exact_institution and not exact:
+        elif decision.allowed and exact_institution and not complete_exact_binding:
             reason = "signing_requires_exact_institution_binding"
         return Eligibility(
             allowed,
