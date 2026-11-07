@@ -34,6 +34,7 @@ import {
   useSaveChannelConfig,
 } from "@/lib/api/hooks";
 import { fmtTimestamp, shortId } from "@/lib/api/values";
+import { isApiError } from "@/lib/api/client";
 import { CHANNEL_LABELS } from "@/components/submissions/shared";
 import SigningPolicyPanel from "@/components/attestation/SigningPolicyPanel";
 import { useConfigureEligibility } from "@/lib/api/configureAccess";
@@ -175,6 +176,27 @@ export default function SettingsPage() {
         <SigningPolicyPanel />
       </PageContainer>
     </>
+  );
+}
+
+/**
+ * The channel read answers 404 while the bank has never configured it — the
+ * unconfigured state, not an outage. The settings page sits behind the shell's
+ * bank context, so a bank-missing 404 never reaches this query.
+ */
+function isMissingChannelConfig(error: unknown): boolean {
+  return isApiError(error) && error.status === 404;
+}
+
+function UnconfiguredStatus() {
+  return (
+    <div className="space-y-2">
+      <StatusPill tone="slate">No credentials stored</StatusPill>
+      <p className="text-caption text-slate leading-relaxed">
+        The ORASS sandbox works credential-less; storing credentials exercises
+        the vault seam that real ORASS onboarding will use.
+      </p>
+    </div>
   );
 }
 
@@ -653,9 +675,13 @@ function ChannelForm({
           {/* The save response is a write-only acknowledgement; the stored
               status and fingerprint come from the refetched read. The read is
               invalidated, not awaited, so never claim a stored/absent state
-              from data that is not current. */}
+              from data that is not current. A missing channel reads 404 —
+              that is the unconfigured state, not an outage; any other failure
+              leaves the status unknown. */}
           {configQuery.isPending ? (
             <StatusPill tone="slate">Checking credential status…</StatusPill>
+          ) : isMissingChannelConfig(configQuery.error) ? (
+            <UnconfiguredStatus />
           ) : configQuery.isError ? (
             <>
               <StatusPill tone="amber">Credential status unavailable</StatusPill>
@@ -672,13 +698,7 @@ function ChannelForm({
               </p>
             </div>
           ) : (
-            <div className="space-y-2">
-              <StatusPill tone="slate">No credentials stored</StatusPill>
-              <p className="text-caption text-slate leading-relaxed">
-                The ORASS sandbox works credential-less; storing credentials
-                exercises the vault seam that real ORASS onboarding will use.
-              </p>
-            </div>
+            <UnconfiguredStatus />
           )}
         </SectionCard>
 
