@@ -21,6 +21,7 @@ import BehavioralModelPage from "../../components/behavioral/BehavioralModelPage
 
 const BANK = "BK-SAMP0001";
 const PROPOSAL_ID = "11111111-1111-4111-8111-111111111111";
+const OTHER_PROPOSAL_ID = "22222222-2222-4222-8222-222222222222";
 const PROPOSER = "proposer";
 const REVIEWER = "reviewer";
 
@@ -35,6 +36,9 @@ type Fixture = {
   proposalReads: number;
   applyCalls: BehavioralApplyProduct[][];
   reviewCalls: string[];
+  reviewPending: boolean;
+  reviewVariables: string | undefined;
+  reviewError: Error | null;
 };
 
 const fixture = vi.hoisted((): Fixture => ({
@@ -48,6 +52,9 @@ const fixture = vi.hoisted((): Fixture => ({
   proposalReads: 0,
   applyCalls: [],
   reviewCalls: [],
+  reviewPending: false,
+  reviewVariables: undefined,
+  reviewError: null,
 }));
 
 vi.mock("../../components/shell/BankContext", () => ({
@@ -107,8 +114,9 @@ vi.mock("../../lib/api/hooks", () => ({
   },
   useReviewBehavioralModelProposal: () => ({
     mutate: (proposalId: string) => fixture.reviewCalls.push(proposalId),
-    isPending: false,
-    error: null,
+    isPending: fixture.reviewPending,
+    variables: fixture.reviewVariables,
+    error: fixture.reviewError,
   }),
 }));
 
@@ -198,6 +206,9 @@ beforeEach(() => {
   fixture.proposalReads = 0;
   fixture.applyCalls = [];
   fixture.reviewCalls = [];
+  fixture.reviewPending = false;
+  fixture.reviewVariables = undefined;
+  fixture.reviewError = null;
 });
 
 afterEach(() => {
@@ -294,6 +305,29 @@ it("allows an independent restricted approver to review the exact queued proposa
   await waitFor(() => expect(review).toBeEnabled());
   await userEvent.setup().click(review);
   expect(fixture.reviewCalls).toEqual([PROPOSAL_ID]);
+});
+
+it("scopes in-flight review progress and errors to the selected proposal", () => {
+  fixture.bankCapabilities.push(capability("view"), capability("approve"));
+  fixture.proposals = [
+    pendingProposal(),
+    pendingProposal({ proposalId: OTHER_PROPOSAL_ID }),
+  ];
+  fixture.reviewPending = true;
+  fixture.reviewVariables = OTHER_PROPOSAL_ID;
+  fixture.reviewError = new Error("synthetic review failure");
+  mountPage();
+
+  const reviews = screen.getAllByRole("button", { name: "Review and accept" });
+  const idleCard = reviews[0]?.closest("article");
+  const pendingCard = reviews[1]?.closest("article");
+  if (!idleCard || !pendingCard) throw new Error("proposal cards did not render");
+  expect(reviews[0]).toBeEnabled();
+  expect(reviews[1]).toBeDisabled();
+  expect(within(idleCard).queryByText(/Could not review/i)).toBeNull();
+  expect(
+    within(pendingCard).getByText(/Could not review — synthetic review failure/i),
+  ).toBeVisible();
 });
 
 it("explains the maker-checker refusal when the approver is also the proposer", async () => {
