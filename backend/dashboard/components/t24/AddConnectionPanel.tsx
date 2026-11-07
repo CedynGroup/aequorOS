@@ -8,7 +8,7 @@
  * the only stored representation shown is the fingerprint on the connection card.
  */
 
-import { useMemo, useState } from "react";
+import { useId, useMemo, useState } from "react";
 import {
   ArrowLeft,
   ArrowRight,
@@ -18,11 +18,12 @@ import {
   XCircle,
 } from "lucide-react";
 import type {
-  TemenosConnectionRead,
+  TemenosConnectionWriteAcknowledgement,
   TemenosDomainInfoRead,
   TemenosTestPullRead,
 } from "@aequoros/risk-service-api";
 import { useDataPermission } from "@/lib/api/dataAccess";
+import { useConfigureEligibility } from "@/lib/api/configureAccess";
 import { isApiError } from "@/lib/api/client";
 import {
   useCreateTemenosConnection,
@@ -70,7 +71,11 @@ export default function AddConnectionPanel({
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [touchedDomains, setTouchedDomains] = useState(false);
   const [stepIndex, setStepIndex] = useState(0);
-  const [created, setCreated] = useState<TemenosConnectionRead | null>(null);
+  // Write-only lifecycle acknowledgement (D27/D34): the stored row is read
+  // back through the view-gated connection list, never from this response.
+  const [created, setCreated] = useState<
+    TemenosConnectionWriteAcknowledgement | null
+  >(null);
   const [testResult, setTestResult] = useState<TemenosTestPullRead | null>(
     null,
   );
@@ -78,6 +83,11 @@ export default function AddConnectionPanel({
   const [running, setRunning] = useState(false);
 
   const canValidate = useDataPermission(bankId, "validate", "restricted");
+  // Creating a core connection is a configuration duty server-side (#184):
+  // the save mirrors the exact DATA configure gate.
+  const { allowed: canConfigure, reason: configureReason } =
+    useConfigureEligibility(bankId, "data");
+  const configureRequirementId = useId();
   const create = useCreateTemenosConnection(bankId);
   const test = useTestTemenosConnection(bankId);
   const domainsQuery = useTemenosDomains(bankId, mode ?? "OFS");
@@ -450,8 +460,13 @@ export default function AddConnectionPanel({
                 type="button"
                 onClick={() => void createAndTest()}
                 disabled={
-                  running || !mode || !endpoint.trim() || credentialsIncomplete
+                  running ||
+                  !canConfigure ||
+                  !mode ||
+                  !endpoint.trim() ||
+                  credentialsIncomplete
                 }
+                aria-describedby={!canConfigure ? configureRequirementId : undefined}
                 className="inline-flex items-center gap-2 px-4 py-2 rounded-sm text-body font-medium bg-action text-white hover:bg-action-hover disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 {running ? (
@@ -461,17 +476,27 @@ export default function AddConnectionPanel({
                 )}
                 Save configuration
               </button>
+              {!canConfigure && (
+                <p
+                  id={configureRequirementId}
+                  className="text-caption text-warning"
+                >
+                  {configureReason}
+                </p>
+              )}
             </>
           )}
 
           {created && (
             <div className="space-y-3">
               <div className="flex items-center gap-2">
-                <ConnectionStatusPill status={created.status} />
+                {/* A create acknowledgement always carries the written status;
+                    an absent one only means "not yet activated". */}
+                <ConnectionStatusPill status={created.status ?? "TESTING"} />
                 <p className="text-body text-navy">
-                  {created.status === "TESTING"
+                  {created.status === "TESTING" || created.status == null
                     ? "Connection stored, but credential validation failed — fix it from the connection card (Rotate credentials)."
-                    : `${modeName(created.connectionMode)} configuration saved. Live transport remains unavailable.`}
+                    : `${modeName(mode ?? "OFS")} configuration saved. Live transport remains unavailable.`}
                 </p>
               </div>
               {created.validationError && (

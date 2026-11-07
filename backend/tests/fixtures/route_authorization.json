@@ -664,7 +664,9 @@
         "app/identity/api/auth.py:logout"
       ],
       "authentication": null,
-      "dependencies": ["app.identity.api.auth:_system_session"],
+      "dependencies": [
+        "app.identity.api.auth:_system_session"
+      ],
       "routes": [
         {
           "application": "tenant",
@@ -683,7 +685,9 @@
         "app/identity/api/auth.py:sso_status"
       ],
       "authentication": null,
-      "dependencies": ["app.identity.api.auth:_system_session"],
+      "dependencies": [
+        "app.identity.api.auth:_system_session"
+      ],
       "routes": [
         {
           "application": "tenant",
@@ -1122,63 +1126,9 @@
       "routes": [
         {
           "application": "tenant",
-          "method": "DELETE",
-          "path": "/api/v1/banks/{bank_id}/database-direct/connections/{connection_id}",
-          "endpoint": "app.data_engine.api.database_connections:revoke_database_connection"
-        },
-        {
-          "application": "tenant",
-          "method": "DELETE",
-          "path": "/api/v1/banks/{bank_id}/market-data/connections/{connection_id}",
-          "endpoint": "app.market_data.api.manage_market_data_connections:revoke_market_data_connection"
-        },
-        {
-          "application": "tenant",
-          "method": "DELETE",
-          "path": "/api/v1/banks/{bank_id}/temenos/connections/{connection_id}",
-          "endpoint": "app.data_engine.api.manage_temenos_connections:revoke_temenos_connection"
-        },
-        {
-          "application": "tenant",
-          "method": "PATCH",
-          "path": "/api/v1/banks/{bank_id}/database-direct/connections/{connection_id}",
-          "endpoint": "app.data_engine.api.database_connections:update_database_connection"
-        },
-        {
-          "application": "tenant",
           "method": "PATCH",
           "path": "/api/v1/banks/{bank_id}/filing-workflow-templates/{template_id}",
           "endpoint": "app.reporting.api.manage_filing_workflow:update_filing_workflow_template"
-        },
-        {
-          "application": "tenant",
-          "method": "PATCH",
-          "path": "/api/v1/banks/{bank_id}/market-data/connections/{connection_id}",
-          "endpoint": "app.market_data.api.manage_market_data_connections:update_market_data_connection"
-        },
-        {
-          "application": "tenant",
-          "method": "PATCH",
-          "path": "/api/v1/banks/{bank_id}/temenos/connections/{connection_id}",
-          "endpoint": "app.data_engine.api.manage_temenos_connections:update_temenos_connection"
-        },
-        {
-          "application": "tenant",
-          "method": "POST",
-          "path": "/api/v1/banks/{bank_id}/database-direct/connections",
-          "endpoint": "app.data_engine.api.database_connections:create_database_connection"
-        },
-        {
-          "application": "tenant",
-          "method": "POST",
-          "path": "/api/v1/banks/{bank_id}/database-direct/connections/{connection_id}/disable",
-          "endpoint": "app.data_engine.api.database_connections:disable_database_connection"
-        },
-        {
-          "application": "tenant",
-          "method": "POST",
-          "path": "/api/v1/banks/{bank_id}/database-direct/connections/{connection_id}/enable",
-          "endpoint": "app.data_engine.api.database_connections:enable_database_connection"
         },
         {
           "application": "tenant",
@@ -1195,38 +1145,8 @@
         {
           "application": "tenant",
           "method": "POST",
-          "path": "/api/v1/banks/{bank_id}/mapping-configs",
-          "endpoint": "app.data_engine.api.ingest_data:create_mapping_config"
-        },
-        {
-          "application": "tenant",
-          "method": "POST",
-          "path": "/api/v1/banks/{bank_id}/market-data/connections",
-          "endpoint": "app.market_data.api.manage_market_data_connections:create_market_data_connection"
-        },
-        {
-          "application": "tenant",
-          "method": "POST",
-          "path": "/api/v1/banks/{bank_id}/market-data/connections/{connection_id}/disable",
-          "endpoint": "app.market_data.api.manage_market_data_connections:disable_market_data_connection"
-        },
-        {
-          "application": "tenant",
-          "method": "POST",
-          "path": "/api/v1/banks/{bank_id}/market-data/connections/{connection_id}/enable",
-          "endpoint": "app.market_data.api.manage_market_data_connections:enable_market_data_connection"
-        },
-        {
-          "application": "tenant",
-          "method": "POST",
           "path": "/api/v1/banks/{bank_id}/market-data/connections/{connection_id}/test",
           "endpoint": "app.market_data.api.manage_market_data_connections:test_market_data_connection"
-        },
-        {
-          "application": "tenant",
-          "method": "POST",
-          "path": "/api/v1/banks/{bank_id}/market-data/connections/{connection_id}/validate",
-          "endpoint": "app.market_data.api.manage_market_data_connections:validate_market_data_connection"
         },
         {
           "application": "tenant",
@@ -1239,36 +1159,6 @@
           "method": "POST",
           "path": "/api/v1/banks/{bank_id}/refresh",
           "endpoint": "app.live.api.manage_live_engine:refresh_bank_data"
-        },
-        {
-          "application": "tenant",
-          "method": "POST",
-          "path": "/api/v1/banks/{bank_id}/temenos/connections",
-          "endpoint": "app.data_engine.api.manage_temenos_connections:create_temenos_connection"
-        },
-        {
-          "application": "tenant",
-          "method": "POST",
-          "path": "/api/v1/banks/{bank_id}/temenos/connections/{connection_id}/disable",
-          "endpoint": "app.data_engine.api.manage_temenos_connections:disable_temenos_connection"
-        },
-        {
-          "application": "tenant",
-          "method": "POST",
-          "path": "/api/v1/banks/{bank_id}/temenos/connections/{connection_id}/enable",
-          "endpoint": "app.data_engine.api.manage_temenos_connections:enable_temenos_connection"
-        },
-        {
-          "application": "tenant",
-          "method": "POST",
-          "path": "/api/v1/banks/{bank_id}/temenos/connections/{connection_id}/validate",
-          "endpoint": "app.data_engine.api.manage_temenos_connections:validate_temenos_connection"
-        },
-        {
-          "application": "tenant",
-          "method": "PUT",
-          "path": "/api/v1/banks/{bank_id}/market-data/source-preferences",
-          "endpoint": "app.market_data.api.market_data_sources:update_source_preferences"
         },
         {
           "application": "tenant",
@@ -3739,6 +3629,114 @@
           "method": "PUT",
           "path": "/api/v1/banks/{bank_id}/related-parties/{party_id}/shareholdings/{shareholding_id}",
           "endpoint": "app.identity.api.manage_institution_profile:update_shareholding"
+        },
+        {
+          "application": "tenant",
+          "method": "DELETE",
+          "path": "/api/v1/banks/{bank_id}/database-direct/connections/{connection_id}",
+          "endpoint": "app.data_engine.api.database_connections:revoke_database_connection"
+        },
+        {
+          "application": "tenant",
+          "method": "DELETE",
+          "path": "/api/v1/banks/{bank_id}/market-data/connections/{connection_id}",
+          "endpoint": "app.market_data.api.manage_market_data_connections:revoke_market_data_connection"
+        },
+        {
+          "application": "tenant",
+          "method": "DELETE",
+          "path": "/api/v1/banks/{bank_id}/temenos/connections/{connection_id}",
+          "endpoint": "app.data_engine.api.manage_temenos_connections:revoke_temenos_connection"
+        },
+        {
+          "application": "tenant",
+          "method": "PATCH",
+          "path": "/api/v1/banks/{bank_id}/database-direct/connections/{connection_id}",
+          "endpoint": "app.data_engine.api.database_connections:update_database_connection"
+        },
+        {
+          "application": "tenant",
+          "method": "PATCH",
+          "path": "/api/v1/banks/{bank_id}/market-data/connections/{connection_id}",
+          "endpoint": "app.market_data.api.manage_market_data_connections:update_market_data_connection"
+        },
+        {
+          "application": "tenant",
+          "method": "PATCH",
+          "path": "/api/v1/banks/{bank_id}/temenos/connections/{connection_id}",
+          "endpoint": "app.data_engine.api.manage_temenos_connections:update_temenos_connection"
+        },
+        {
+          "application": "tenant",
+          "method": "POST",
+          "path": "/api/v1/banks/{bank_id}/database-direct/connections",
+          "endpoint": "app.data_engine.api.database_connections:create_database_connection"
+        },
+        {
+          "application": "tenant",
+          "method": "POST",
+          "path": "/api/v1/banks/{bank_id}/database-direct/connections/{connection_id}/disable",
+          "endpoint": "app.data_engine.api.database_connections:disable_database_connection"
+        },
+        {
+          "application": "tenant",
+          "method": "POST",
+          "path": "/api/v1/banks/{bank_id}/database-direct/connections/{connection_id}/enable",
+          "endpoint": "app.data_engine.api.database_connections:enable_database_connection"
+        },
+        {
+          "application": "tenant",
+          "method": "POST",
+          "path": "/api/v1/banks/{bank_id}/market-data/connections",
+          "endpoint": "app.market_data.api.manage_market_data_connections:create_market_data_connection"
+        },
+        {
+          "application": "tenant",
+          "method": "POST",
+          "path": "/api/v1/banks/{bank_id}/market-data/connections/{connection_id}/disable",
+          "endpoint": "app.market_data.api.manage_market_data_connections:disable_market_data_connection"
+        },
+        {
+          "application": "tenant",
+          "method": "POST",
+          "path": "/api/v1/banks/{bank_id}/market-data/connections/{connection_id}/enable",
+          "endpoint": "app.market_data.api.manage_market_data_connections:enable_market_data_connection"
+        },
+        {
+          "application": "tenant",
+          "method": "POST",
+          "path": "/api/v1/banks/{bank_id}/market-data/connections/{connection_id}/validate",
+          "endpoint": "app.market_data.api.manage_market_data_connections:validate_market_data_connection"
+        },
+        {
+          "application": "tenant",
+          "method": "POST",
+          "path": "/api/v1/banks/{bank_id}/temenos/connections",
+          "endpoint": "app.data_engine.api.manage_temenos_connections:create_temenos_connection"
+        },
+        {
+          "application": "tenant",
+          "method": "POST",
+          "path": "/api/v1/banks/{bank_id}/temenos/connections/{connection_id}/disable",
+          "endpoint": "app.data_engine.api.manage_temenos_connections:disable_temenos_connection"
+        },
+        {
+          "application": "tenant",
+          "method": "POST",
+          "path": "/api/v1/banks/{bank_id}/temenos/connections/{connection_id}/enable",
+          "endpoint": "app.data_engine.api.manage_temenos_connections:enable_temenos_connection"
+        },
+        {
+          "application": "tenant",
+          "method": "POST",
+          "path": "/api/v1/banks/{bank_id}/temenos/connections/{connection_id}/validate",
+          "endpoint": "app.data_engine.api.manage_temenos_connections:validate_temenos_connection"
+        },
+        {
+          "application": "tenant",
+          "method": "PUT",
+          "path": "/api/v1/banks/{bank_id}/market-data/source-preferences",
+          "endpoint": "app.market_data.api.market_data_sources:update_source_preferences"
         }
       ]
     },
@@ -6301,7 +6299,9 @@
         "tests/identity/api/test_auth_integration.py"
       ],
       "authentication": null,
-      "dependencies": ["app.identity.api.auth:_system_session"],
+      "dependencies": [
+        "app.identity.api.auth:_system_session"
+      ],
       "routes": [
         {
           "application": "tenant",
@@ -6321,7 +6321,9 @@
         "tests/identity/api/test_auth_integration.py"
       ],
       "authentication": null,
-      "dependencies": ["app.identity.api.auth:_system_session"],
+      "dependencies": [
+        "app.identity.api.auth:_system_session"
+      ],
       "routes": [
         {
           "application": "tenant",
@@ -6341,7 +6343,9 @@
         "tests/identity/api/test_auth_integration.py"
       ],
       "authentication": null,
-      "dependencies": ["app.identity.api.auth:_system_session"],
+      "dependencies": [
+        "app.identity.api.auth:_system_session"
+      ],
       "routes": [
         {
           "application": "tenant",
@@ -6361,7 +6365,9 @@
         "tests/storage/test_bank_encryption_integration.py"
       ],
       "authentication": null,
-      "dependencies": ["functools:_lru_cache_wrapper"],
+      "dependencies": [
+        "functools:_lru_cache_wrapper"
+      ],
       "routes": [
         {
           "application": "tenant",
@@ -6375,9 +6381,13 @@
       "name": "tenant-sso-internal-key",
       "kind": "handler",
       "basis": "NOT PUBLIC: handler requires a configured SSO_INTERNAL_KEY and constant-time header comparison before resolving server-to-server OIDC client configuration. Unconfigured returns 404; missing/invalid internal key returns 401.",
-      "references": ["app/identity/api/auth.py:sso_client_config"],
+      "references": [
+        "app/identity/api/auth.py:sso_client_config"
+      ],
       "authentication": null,
-      "dependencies": ["app.identity.api.auth:_system_session"],
+      "dependencies": [
+        "app.identity.api.auth:_system_session"
+      ],
       "routes": [
         {
           "application": "tenant",
@@ -6448,6 +6458,37 @@
           "endpoint": "app.case.api.read_financial_workspace:reject_unsupported_financial_entity_create"
         }
       ]
+    },
+    {
+      "dependencies": [
+        "app.api.deps:get_current_principal",
+        "app.api.deps:get_scoped_mutation_tenant_context",
+        "app.api.deps:get_tenant_context",
+        "app.api.deps:get_tenant_db_session",
+        "app.api.deps:resolve_tenant_bank",
+        "app.data_engine.api.ingest_data:require_configure_access",
+        "fastapi.security.http:HTTPBearer"
+      ],
+      "routes": [
+        {
+          "application": "tenant",
+          "method": "POST",
+          "path": "/api/v1/banks/{bank_id}/mapping-configs",
+          "endpoint": "app.data_engine.api.ingest_data:create_mapping_config"
+        }
+      ],
+      "name": "tenant-dependencies-ee37d1b6984c",
+      "kind": "dependency",
+      "basis": "Existing tenant authentication boundary and exact registered dependency calls listed here. The configure gate narrows mapping-config creation further at the dependency layer; handler and service checks can narrow this access further. Presence is not policy correctness.",
+      "references": [
+        "app/api/deps.py:get_current_principal",
+        "app/api/deps.py:get_scoped_mutation_tenant_context",
+        "app/api/deps.py:get_tenant_context",
+        "app/api/deps.py:get_tenant_db_session",
+        "app/api/deps.py:resolve_tenant_bank",
+        "app/data_engine/api/ingest_data.py:require_configure_access"
+      ],
+      "authentication": "tenant"
     }
   ]
 }

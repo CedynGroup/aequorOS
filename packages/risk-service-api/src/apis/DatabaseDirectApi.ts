@@ -20,6 +20,7 @@ import type {
   DatabaseConnectionSyncResult,
   DatabaseConnectionTestResult,
   DatabaseConnectionUpdate,
+  DatabaseConnectionWriteAcknowledgement,
   ErrorResponse,
 } from "../models/index";
 import {
@@ -39,6 +40,8 @@ import {
   DatabaseConnectionTestResultToJSON,
   DatabaseConnectionUpdateFromJSON,
   DatabaseConnectionUpdateToJSON,
+  DatabaseConnectionWriteAcknowledgementFromJSON,
+  DatabaseConnectionWriteAcknowledgementToJSON,
   ErrorResponseFromJSON,
   ErrorResponseToJSON,
 } from "../models/index";
@@ -104,7 +107,7 @@ export class DatabaseDirectApi extends runtime.BaseAPI {
   async createDatabaseDirectConnectionRaw(
     requestParameters: CreateDatabaseDirectConnectionRequest,
     initOverrides?: RequestInit | runtime.InitOverrideFunction,
-  ): Promise<runtime.ApiResponse<DatabaseConnectionRead>> {
+  ): Promise<runtime.ApiResponse<DatabaseConnectionWriteAcknowledgement>> {
     if (requestParameters["bankId"] == null) {
       throw new runtime.RequiredError(
         "bankId",
@@ -150,7 +153,7 @@ export class DatabaseDirectApi extends runtime.BaseAPI {
     );
 
     return new runtime.JSONApiResponse(response, (jsonValue) =>
-      DatabaseConnectionReadFromJSON(jsonValue),
+      DatabaseConnectionWriteAcknowledgementFromJSON(jsonValue),
     );
   }
 
@@ -160,7 +163,7 @@ export class DatabaseDirectApi extends runtime.BaseAPI {
   async createDatabaseDirectConnection(
     requestParameters: CreateDatabaseDirectConnectionRequest,
     initOverrides?: RequestInit | runtime.InitOverrideFunction,
-  ): Promise<DatabaseConnectionRead> {
+  ): Promise<DatabaseConnectionWriteAcknowledgement> {
     const response = await this.createDatabaseDirectConnectionRaw(
       requestParameters,
       initOverrides,
@@ -174,7 +177,7 @@ export class DatabaseDirectApi extends runtime.BaseAPI {
   async disableDatabaseDirectConnectionRaw(
     requestParameters: DisableDatabaseDirectConnectionRequest,
     initOverrides?: RequestInit | runtime.InitOverrideFunction,
-  ): Promise<runtime.ApiResponse<DatabaseConnectionRead>> {
+  ): Promise<runtime.ApiResponse<DatabaseConnectionWriteAcknowledgement>> {
     if (requestParameters["bankId"] == null) {
       throw new runtime.RequiredError(
         "bankId",
@@ -220,7 +223,7 @@ export class DatabaseDirectApi extends runtime.BaseAPI {
     );
 
     return new runtime.JSONApiResponse(response, (jsonValue) =>
-      DatabaseConnectionReadFromJSON(jsonValue),
+      DatabaseConnectionWriteAcknowledgementFromJSON(jsonValue),
     );
   }
 
@@ -230,7 +233,7 @@ export class DatabaseDirectApi extends runtime.BaseAPI {
   async disableDatabaseDirectConnection(
     requestParameters: DisableDatabaseDirectConnectionRequest,
     initOverrides?: RequestInit | runtime.InitOverrideFunction,
-  ): Promise<DatabaseConnectionRead> {
+  ): Promise<DatabaseConnectionWriteAcknowledgement> {
     const response = await this.disableDatabaseDirectConnectionRaw(
       requestParameters,
       initOverrides,
@@ -314,7 +317,7 @@ export class DatabaseDirectApi extends runtime.BaseAPI {
   async enableDatabaseDirectConnectionRaw(
     requestParameters: EnableDatabaseDirectConnectionRequest,
     initOverrides?: RequestInit | runtime.InitOverrideFunction,
-  ): Promise<runtime.ApiResponse<DatabaseConnectionRead>> {
+  ): Promise<runtime.ApiResponse<DatabaseConnectionWriteAcknowledgement>> {
     if (requestParameters["bankId"] == null) {
       throw new runtime.RequiredError(
         "bankId",
@@ -360,7 +363,7 @@ export class DatabaseDirectApi extends runtime.BaseAPI {
     );
 
     return new runtime.JSONApiResponse(response, (jsonValue) =>
-      DatabaseConnectionReadFromJSON(jsonValue),
+      DatabaseConnectionWriteAcknowledgementFromJSON(jsonValue),
     );
   }
 
@@ -370,7 +373,7 @@ export class DatabaseDirectApi extends runtime.BaseAPI {
   async enableDatabaseDirectConnection(
     requestParameters: EnableDatabaseDirectConnectionRequest,
     initOverrides?: RequestInit | runtime.InitOverrideFunction,
-  ): Promise<DatabaseConnectionRead> {
+  ): Promise<DatabaseConnectionWriteAcknowledgement> {
     const response = await this.enableDatabaseDirectConnectionRaw(
       requestParameters,
       initOverrides,
@@ -512,7 +515,7 @@ export class DatabaseDirectApi extends runtime.BaseAPI {
   async revokeDatabaseDirectConnectionRaw(
     requestParameters: RevokeDatabaseDirectConnectionRequest,
     initOverrides?: RequestInit | runtime.InitOverrideFunction,
-  ): Promise<runtime.ApiResponse<DatabaseConnectionRead>> {
+  ): Promise<runtime.ApiResponse<DatabaseConnectionWriteAcknowledgement>> {
     if (requestParameters["bankId"] == null) {
       throw new runtime.RequiredError(
         "bankId",
@@ -558,7 +561,7 @@ export class DatabaseDirectApi extends runtime.BaseAPI {
     );
 
     return new runtime.JSONApiResponse(response, (jsonValue) =>
-      DatabaseConnectionReadFromJSON(jsonValue),
+      DatabaseConnectionWriteAcknowledgementFromJSON(jsonValue),
     );
   }
 
@@ -568,7 +571,7 @@ export class DatabaseDirectApi extends runtime.BaseAPI {
   async revokeDatabaseDirectConnection(
     requestParameters: RevokeDatabaseDirectConnectionRequest,
     initOverrides?: RequestInit | runtime.InitOverrideFunction,
-  ): Promise<DatabaseConnectionRead> {
+  ): Promise<DatabaseConnectionWriteAcknowledgement> {
     const response = await this.revokeDatabaseDirectConnectionRaw(
       requestParameters,
       initOverrides,
@@ -734,7 +737,7 @@ export class DatabaseDirectApi extends runtime.BaseAPI {
   async updateDatabaseDirectConnectionRaw(
     requestParameters: UpdateDatabaseDirectConnectionRequest,
     initOverrides?: RequestInit | runtime.InitOverrideFunction,
-  ): Promise<runtime.ApiResponse<DatabaseConnectionRead>> {
+  ): Promise<runtime.ApiResponse<DatabaseConnectionWriteAcknowledgement>> {
     if (requestParameters["bankId"] == null) {
       throw new runtime.RequiredError(
         "bankId",
@@ -792,7 +795,7 @@ export class DatabaseDirectApi extends runtime.BaseAPI {
     );
 
     return new runtime.JSONApiResponse(response, (jsonValue) =>
-      DatabaseConnectionReadFromJSON(jsonValue),
+      DatabaseConnectionWriteAcknowledgementFromJSON(jsonValue),
     );
   }
 
@@ -802,7 +805,7 @@ export class DatabaseDirectApi extends runtime.BaseAPI {
   async updateDatabaseDirectConnection(
     requestParameters: UpdateDatabaseDirectConnectionRequest,
     initOverrides?: RequestInit | runtime.InitOverrideFunction,
-  ): Promise<DatabaseConnectionRead> {
+  ): Promise<DatabaseConnectionWriteAcknowledgement> {
     const response = await this.updateDatabaseDirectConnectionRaw(
       requestParameters,
       initOverrides,

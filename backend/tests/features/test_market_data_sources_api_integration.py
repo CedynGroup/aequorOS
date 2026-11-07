@@ -16,7 +16,16 @@ from typing import Any
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
+from app.core.authorization import (
+    GrantorType,
+    InstitutionScope,
+    ModuleScope,
+    PrincipalType,
+    RoleBundle,
+    SensitivityScope,
+)
 from app.db.session import get_sessionmaker
+from app.identity.service import authorization
 from app.models import (
     Bank,
     CanonicalYieldCurve,
@@ -24,8 +33,9 @@ from app.models import (
     DeskDetermination,
     IngestionBatch,
     LineageRecord,
+    User,
 )
-from tests.support.helpers import ORG_1, ORG_2, headers
+from tests.support.helpers import ORG_1, ORG_2, USER_1, headers
 
 AS_OF = date(2026, 7, 15)
 INGESTED_AT = datetime(2026, 7, 15, 12, 0, tzinfo=UTC)
@@ -123,6 +133,30 @@ def test_get_source_preferences_returns_defaults(db_client: TestClient) -> None:
     assert body["updated_by"] is None
 
 
+def _grant_markets_configure(bank_id: str) -> int:
+    """A complete active markets/configure/restricted exact-bank binding."""
+    with get_sessionmaker()() as session:
+        authorization.create_role_binding(
+            session,
+            organization_id=ORG_1,
+            principal_user_id=USER_1,
+            principal_type=PrincipalType.HUMAN,
+            role_bundle=RoleBundle.CONFIGURATOR,
+            scope=authorization.BindingScope(
+                InstitutionScope.INSTITUTION,
+                bank_id,
+                ModuleScope.MARKETS,
+                SensitivityScope.RESTRICTED,
+            ),
+            grantor=authorization.GrantorRef(GrantorType.SYSTEM, "source-pref-api-test"),
+            reason="Source-preference configure authority fixture",
+        )
+        session.commit()
+        user = session.get(User, USER_1)
+        assert user is not None
+        return user.authorization_version
+
+
 def test_put_source_preferences_upserts_and_persists(db_client: TestClient) -> None:
     _ = db_client
     session = get_sessionmaker()()
@@ -131,10 +165,11 @@ def test_put_source_preferences_upserts_and_persists(db_client: TestClient) -> N
         session.commit()
     finally:
         session.close()
+    version = _grant_markets_configure(bank_id)
 
     put = db_client.put(
         f"{_base(bank_id)}/source-preferences",
-        headers=headers(),
+        headers=headers(authorization_version=version),
         json={
             "curves": {"source": "vendor", "overlay": False},
             "fx": {"source": "bank"},
@@ -142,19 +177,27 @@ def test_put_source_preferences_upserts_and_persists(db_client: TestClient) -> N
         },
     )
     assert put.status_code == 200, put.text
+    # Write-only acknowledgement (D34): only the submitted patch fields come back.
     body = put.json()
     assert body["curves"] == {"source": "vendor", "overlay": False}
-    assert body["fx"] == {"source": "bank", "overlay": True}
-    assert body["rates"] == {"source": "aequor", "overlay": True}
-    assert body["updated_at"] is not None
-    assert body["updated_by"] is not None
+    assert body["fx"] == {"source": "bank", "overlay": None}
+    assert body["rates"] is None
 
-    # Re-read persists the selection.
-    again = db_client.get(f"{_base(bank_id)}/source-preferences", headers=headers())
+    # Re-read the resolved row through the view-gated GET.
+    again = db_client.get(
+        f"{_base(bank_id)}/source-preferences", headers=headers(authorization_version=version)
+    )
+    assert again.status_code == 200, again.text
     assert again.json()["curves"] == {"source": "vendor", "overlay": False}
+    assert again.json()["fx"] == {"source": "bank", "overlay": True}
+    assert again.json()["rates"] == {"source": "aequor", "overlay": True}
+    assert again.json()["updated_at"] is not None
+    assert again.json()["updated_by"] is not None
 
 
-def test_put_source_preferences_requires_analyst_role(db_client: TestClient) -> None:
+def test_put_source_preferences_requires_markets_configure(db_client: TestClient) -> None:
+    """Source-preference writes are a configuration duty: scalar roles — admin
+    or viewer — authorize nothing without a complete configure binding."""
     _ = db_client
     session = get_sessionmaker()()
     try:
@@ -163,12 +206,13 @@ def test_put_source_preferences_requires_analyst_role(db_client: TestClient) -> 
     finally:
         session.close()
 
-    response = db_client.put(
-        f"{_base(bank_id)}/source-preferences",
-        headers=headers(roles=("viewer",)),
-        json={"curves": {"source": "vendor"}},
-    )
-    assert response.status_code == 403, response.text
+    for roles in (("admin",), ("viewer",), ("analyst",)):
+        response = db_client.put(
+            f"{_base(bank_id)}/source-preferences",
+            headers=headers(roles=roles),
+            json={"curves": {"source": "vendor"}},
+        )
+        assert response.status_code == 403, (roles, response.text)
 
 
 def test_get_planes_side_by_side(db_client: TestClient) -> None:

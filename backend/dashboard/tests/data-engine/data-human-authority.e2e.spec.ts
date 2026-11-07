@@ -921,12 +921,14 @@ test.describe("credential onboarding without live-test authority", () => {
       roles: ["viewer"],
       bindings: [
         { bundle: "viewer", module: "data", sensitivity: "restricted" },
+        { bundle: "configurator", module: "data", sensitivity: "restricted" },
       ],
     },
   });
   test.beforeEach(async ({ storyIdentity }) => {
-    // Model the pre-cutover credential operator: legacy Analyst role plus exact
-    // restricted VIEW, with no operational Analyst binding and no VALIDATE.
+    // Model the credential operator: legacy Analyst role plus exact restricted
+    // VIEW and the explicit Configurator sentence saving credentials needs,
+    // with no operational Analyst binding and no VALIDATE.
     const db = new DatabaseSync(path.join(E2E_TMP, "e2e.db"));
     try {
       db.prepare(

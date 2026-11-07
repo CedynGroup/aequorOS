@@ -41,7 +41,9 @@
     ".next-verify/dev/types/**/*.ts",
     ".next-v/types/**/*.ts",
     ".next-v/dev/types/**/*.ts",
-    ".next-dev/dev/types/**/*.ts"
+    ".next-dev/dev/types/**/*.ts",
+    ".next-rbac-evidence/types/**/*.ts",
+    ".next-rbac-evidence/dev/types/**/*.ts"
   ],
   "exclude": [
     "node_modules",

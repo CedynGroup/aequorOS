@@ -2129,7 +2129,9 @@ def require_ilaap_refresh(
 # manual uploads), material derived from the bank's own book is `confidential`
 # (implied ratings, private curve overlays), and credential-bearing connection
 # metadata is `restricted`. Connection lifecycle and source-preference writes
-# keep their legacy gate until configuration authority lands.
+# are configuration duties: they carry the scoped-mutation boundary and the
+# service enforces the exact markets/configure/restricted binding; the
+# representative /test pull keeps its legacy operational gate.
 _MARKETS_VIEW_DETAIL = "Markets access requires an active scoped binding."
 
 

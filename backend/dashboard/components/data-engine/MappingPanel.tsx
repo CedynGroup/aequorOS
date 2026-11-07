@@ -8,11 +8,13 @@
  */
 
 import { CheckCircle2, FileSpreadsheet } from "lucide-react";
+import { useId } from "react";
 import StatusPill from "@/components/ui/StatusPill";
 import { useBankContext } from "@/components/shell/BankContext";
 import { ErrorPanel } from "@/components/ui/QueryBoundary";
 import { isApiError } from "@/lib/api/client";
 import DataAccessNotice from "@/components/ui/DataAccessNotice";
+import { useConfigureEligibility } from "@/lib/api/configureAccess";
 import {
   STARTER_TEMPLATES,
   useActivateTemplate,
@@ -23,6 +25,11 @@ export default function MappingPanel() {
   const { bank, authorityPending } = useBankContext();
   const configsQuery = useMappingConfigs(bank?.id, authorityPending);
   const activate = useActivateTemplate(bank?.id);
+  // Mapping-config creation is a configuration duty server-side (#184): the
+  // activation mirrors the exact DATA configure gate.
+  const { allowed: canConfigure, reason: configureReason } =
+    useConfigureEligibility(bank?.id, "data");
+  const configureRequirementId = useId();
   const mappingKnown =
     configsQuery.access === "allowed" && configsQuery.isSuccess;
   const activeConfig = (
@@ -126,10 +133,27 @@ export default function MappingPanel() {
                     </li>
                   ))}
                 </ul>
+                {!canConfigure && (
+                  <p
+                    id={`${configureRequirementId}-${template.key}`}
+                    className="mt-2 text-caption text-warning"
+                  >
+                    {configureReason}
+                  </p>
+                )}
                 <button
                   type="button"
                   disabled={
-                    !mappingKnown || isActive || activate.isPending || !bank
+                    !mappingKnown ||
+                    isActive ||
+                    activate.isPending ||
+                    !bank ||
+                    !canConfigure
+                  }
+                  aria-describedby={
+                    !canConfigure
+                      ? `${configureRequirementId}-${template.key}`
+                      : undefined
                   }
                   onClick={() => activate.mutate(template)}
                   className="mt-3 inline-flex items-center px-3 py-1.5 rounded-sm text-caption font-medium bg-action text-white hover:bg-action-hover disabled:opacity-40 disabled:cursor-not-allowed"

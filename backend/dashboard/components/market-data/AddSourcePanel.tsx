@@ -9,7 +9,7 @@
  * stored representation shown is the fingerprint on the source card.
  */
 
-import { useMemo, useState } from "react";
+import { useId, useMemo, useState } from "react";
 import {
   ArrowLeft,
   ArrowRight,
@@ -19,11 +19,13 @@ import {
   XCircle,
 } from "lucide-react";
 import type {
-  MarketDataConnectionRead,
+  MarketDataConnectionWriteAcknowledgement,
   ScopeInfoRead,
   TestPullRead,
 } from "@aequoros/risk-service-api";
 import { isApiError } from "@/lib/api/client";
+import { useConfigureEligibility } from "@/lib/api/configureAccess";
+import { useUserProfile } from "@/components/profile/ProfileProvider";
 import {
   useCreateMarketDataConnection,
   useMarketDataScopes,
@@ -50,6 +52,11 @@ const PULLS_PER_MONTH: Record<string, number> = {
   MONTHLY: 1,
 };
 
+/** Scalar roles the backend mutation gate admits: the operational ladder is
+ * admin/approver/analyst; ``account_admin`` administers accounts only and
+ * sits outside it, and viewer/examiner are read-only. */
+const TEST_PULL_ROLES = new Set(["admin", "approver", "analyst"]);
+
 type Step = "vendor" | "credentials" | "scopes" | "schedule" | "activate";
 
 function stepsFor(vendor: VendorKey | null): Step[] {
@@ -70,6 +77,18 @@ export default function AddSourcePanel({
   const scopesQuery = useMarketDataScopes(bankId);
   const create = useCreateMarketDataConnection(bankId);
   const test = useTestMarketDataConnection(bankId);
+  // Creating a source connection is a configuration duty server-side (#184):
+  // the save mirrors the exact MARKETS configure gate.
+  const { allowed: canConfigure, reason: configureReason } =
+    useConfigureEligibility(bankId, "markets");
+  // The representative /test pull keeps its legacy operational gate (a scalar
+  // analyst-or-higher role), separate from the configure duty: skip the
+  // automatic pull for a read-only principal instead of failing after the
+  // save succeeded.
+  const { profile } = useUserProfile();
+  const canTestPull =
+    profile !== undefined && TEST_PULL_ROLES.has(profile.role);
+  const configureRequirementId = useId();
 
   const [vendor, setVendor] = useState<VendorKey | null>(null);
   const [displayName, setDisplayName] = useState("");
@@ -78,7 +97,11 @@ export default function AddSourcePanel({
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [schedule, setSchedule] = useState<Record<string, string>>({});
   const [stepIndex, setStepIndex] = useState(0);
-  const [created, setCreated] = useState<MarketDataConnectionRead | null>(null);
+  // Write-only lifecycle acknowledgement (D27/D34): the stored row is read
+  // back through the view-gated connection list, never from this response.
+  const [created, setCreated] = useState<
+    MarketDataConnectionWriteAcknowledgement | null
+  >(null);
   const [testResult, setTestResult] = useState<TestPullRead | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [running, setRunning] = useState(false);
@@ -147,7 +170,11 @@ export default function AddSourcePanel({
         schedule: Object.keys(schedule).length ? schedule : undefined,
       });
       setCreated(connection);
-      if (vendor !== "manual_upload" && !connection.validationError) {
+      if (
+        canTestPull &&
+        vendor !== "manual_upload" &&
+        !connection.validationError
+      ) {
         setTestResult(await test.mutateAsync(connection.id));
       }
     } catch (caught) {
@@ -397,7 +424,12 @@ export default function AddSourcePanel({
               <button
                 type="button"
                 onClick={() => void createAndTest()}
-                disabled={running || !vendor || selected.size === 0}
+                disabled={
+                  running || !canConfigure || !vendor || selected.size === 0
+                }
+                aria-describedby={
+                  !canConfigure ? configureRequirementId : undefined
+                }
                 className="inline-flex items-center gap-2 px-4 py-2 rounded-sm text-body font-medium bg-action text-white hover:bg-action-hover disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 {running ? (
@@ -409,19 +441,29 @@ export default function AddSourcePanel({
                   ? "Create manual upload source"
                   : "Save vendor configuration"}
               </button>
+              {!canConfigure && (
+                <p
+                  id={configureRequirementId}
+                  className="text-caption text-warning"
+                >
+                  {configureReason}
+                </p>
+              )}
             </>
           )}
 
           {created && (
             <div className="space-y-3">
               <div className="flex items-center gap-2">
-                <ConnectionStatusPill status={created.status} />
+                {/* A create acknowledgement always carries the written status;
+                    an absent one only means "not yet activated". */}
+                <ConnectionStatusPill status={created.status ?? "TESTING"} />
                 <p className="text-body text-navy">
-                  {created.status === "TESTING"
+                  {created.status === "TESTING" || created.status == null
                     ? "Connection stored, but credential validation failed — fix the credentials from the source card (Rotate credentials)."
-                    : created.vendor === "manual_upload"
+                    : vendor === "manual_upload"
                       ? "Manual upload source active."
-                      : `${vendorName(created.vendor)} configuration saved. Live vendor transport remains unavailable.`}
+                      : `${vendorName(vendor ?? "manual_upload")} configuration saved. Live vendor transport remains unavailable.`}
                 </p>
               </div>
               {created.validationError && (
@@ -431,6 +473,14 @@ export default function AddSourcePanel({
                   </p>
                 </div>
               )}
+              {!canTestPull &&
+                vendor !== "manual_upload" &&
+                !created.validationError && (
+                  <p role="status" className="text-caption text-slate">
+                    Configuration saved. Automatic test pull omitted: it
+                    requires an operational role beyond the configure duty.
+                  </p>
+                )}
               {testResult && (
                 <div
                   className={`rounded border px-4 py-3 space-y-2 ${

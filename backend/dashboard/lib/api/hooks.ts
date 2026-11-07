@@ -2097,11 +2097,18 @@ export function useUpdateMarketDataSourcePreferences(
   return useMutation({
     mutationFn: (patch: MarketDataSourcePreferencesPatch) =>
       putMarketDataSourcePreferences(bankId!, patch),
-    onSuccess: (resolved) => {
-      queryClient.setQueryData(["md-source-prefs", bankId], resolved);
+    // The PUT response is a write-only acknowledgement (D27/D34) — the
+    // resolved preference comes back through the view-gated read query.
+    // Awaiting the preference refetch keeps the controls disabled until the
+    // new value is actually read back, so a second toggle reverses the value
+    // it displays instead of re-sending the same one.
+    onSuccess: () => {
       sourcePrefsInvalidatePrefixes.forEach((prefix) => {
-        void queryClient.invalidateQueries({ queryKey: [prefix] });
+        if (prefix !== "md-source-prefs") {
+          void queryClient.invalidateQueries({ queryKey: [prefix] });
+        }
       });
+      return queryClient.invalidateQueries({ queryKey: ["md-source-prefs"] });
     },
   });
 }

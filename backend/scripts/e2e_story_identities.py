@@ -134,6 +134,32 @@ def _grant(  # noqa: PLR0913 - the scope tuple is explicit, as in the service
     )
 
 
+def _grant_story_configure(db: Session, request: StoryRequest, user: User, role: str) -> None:
+    """Stories declare their institution hierarchy through the Data Engine.
+
+    That is a configure duty, so the provisioning officer holds the explicit
+    Configurator sentence; configure still grants no read. Bind it to the
+    story's bank when that row exists in the story's tenant (the real e2e
+    bootstrap); the shared sample tenant carries no bank rows in the
+    unit-test database, so fall back to organization scope, exactly like the
+    other story grants.
+    """
+    if role not in {"admin", "analyst"}:
+        return
+    bank = db.get(Bank, request.bank_id) if request.bank_id else None
+    institution = (
+        bank.id if bank is not None and bank.organization_id == user.organization_id else None
+    )
+    _grant(
+        db,
+        user,
+        RoleBundle.CONFIGURATOR,
+        ModuleScope.DATA,
+        SensitivityScope.RESTRICTED,
+        institution_id=institution,
+    )
+
+
 def _scalar_role(role: str, owned_tenant: bool) -> str:
     if role not in BASELINE_ROLES | {"admin", "analyst", "approver", "validator", "account_admin"}:
         raise ValueError(f"Unknown story profile: {role}")
@@ -150,7 +176,12 @@ def _apply_scoped_bindings(db: Session, request: StoryRequest, users: dict[str, 
     for binding in request.bindings:
         if binding.actor_role not in BASELINE_ROLES or binding.actor_role not in users:
             raise ValueError("Scoped story bindings require a baseline-only actor")
-        if binding.role_bundle not in {RoleBundle.VIEWER, RoleBundle.ANALYST, RoleBundle.APPROVER}:
+        if binding.role_bundle not in {
+            RoleBundle.VIEWER,
+            RoleBundle.ANALYST,
+            RoleBundle.APPROVER,
+            RoleBundle.CONFIGURATOR,
+        }:
             raise ValueError("Scoped story bindings must use an operational human bundle")
         user = users[binding.actor_role]
         _ = authorization.create_role_binding(
@@ -278,6 +309,7 @@ def provision(db: Session, request: StoryRequest) -> StoryRead:
             request.owned_tenant and role == "admin"
         ):
             _grant(db, user, RoleBundle.APPROVER if role == "approver" else RoleBundle.ANALYST)
+            _grant_story_configure(db, request, user, role)
         elif role == "validator":
             _grant(db, user, RoleBundle.VIEWER)
             _grant(

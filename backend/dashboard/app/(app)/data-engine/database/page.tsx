@@ -9,7 +9,7 @@
  */
 
 import PageContainer from "@/components/ui/PageContainer";
-import { useState } from "react";
+import { useId, useState } from "react";
 import Link from "next/link";
 import { ArrowRight, Database, Loader2, Plus } from "lucide-react";
 import PageHeader from "@/components/ui/PageHeader";
@@ -20,6 +20,7 @@ import { useDatabaseConnections } from "@/lib/api/database-direct";
 import AddConnectionPanel from "@/components/database/AddConnectionPanel";
 import ConnectionCard from "@/components/database/ConnectionCard";
 import { useDataPermissionState } from "@/lib/api/dataAccess";
+import { useConfigureEligibility } from "@/lib/api/configureAccess";
 import DataAccessNotice from "@/components/ui/DataAccessNotice";
 
 export default function DatabaseDirectPage() {
@@ -31,6 +32,24 @@ export default function DatabaseDirectPage() {
     "view",
     "restricted",
     authorityPending,
+  );
+  // Connection lifecycle is a configuration duty server-side (#184): the
+  // Connect action mirrors the exact DATA configure gate.
+  const { allowed: canConfigure, reason: configureReason } =
+    useConfigureEligibility(bank?.id, "data");
+  const configureRequirementId = useId();
+
+  const connectButton = (onClick: () => void) => (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={!canConfigure}
+      aria-describedby={!canConfigure ? configureRequirementId : undefined}
+      className="inline-flex items-center gap-1.5 px-3 py-2 text-caption font-medium btn-primary disabled:opacity-40 disabled:cursor-not-allowed"
+    >
+      <Plus size={13} aria-hidden />
+      Connect a database
+    </button>
   );
 
   const rows = connections.data?.connections ?? [];
@@ -66,15 +85,14 @@ export default function DatabaseDirectPage() {
                 </p>
               )}
             </div>
-            {!adding && (
-              <button
-                type="button"
-                onClick={() => setAdding(true)}
-                className="inline-flex items-center gap-1.5 px-3 py-2 text-caption font-medium btn-primary"
+            {!adding && connectButton(() => setAdding(true))}
+            {!adding && !canConfigure && (
+              <p
+                id={configureRequirementId}
+                className="text-caption text-warning"
               >
-                <Plus size={13} aria-hidden />
-                Connect a database
-              </button>
+                {configureReason}
+              </p>
             )}
           </div>
 
@@ -94,16 +112,7 @@ export default function DatabaseDirectPage() {
               Icon={Database}
               title="No database connection configured yet"
               description="Save a read-only reporting replica for onboarding. Live checks and syncs require the matching driver and network path on this deployment."
-              action={
-                <button
-                  type="button"
-                  onClick={() => setAdding(true)}
-                  className="inline-flex items-center gap-1.5 px-3 py-2 text-caption font-medium btn-primary"
-                >
-                  <Plus size={13} aria-hidden />
-                  Connect a database
-                </button>
-              }
+              action={connectButton(() => setAdding(true))}
             />
           ) : (
             <div className="grid grid-cols-1 gap-4">

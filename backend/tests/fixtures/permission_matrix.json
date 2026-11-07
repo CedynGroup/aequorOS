@@ -63,6 +63,12 @@
       "module": "liq",
       "sensitivity": "confidential"
     },
+    "data_sibling": {
+      "scope": "institution",
+      "bank": "sibling",
+      "module": "data",
+      "sensitivity": "restricted"
+    },
     "foreign": {
       "scope": "institution",
       "bank": "foreign",
@@ -821,7 +827,7 @@
     {
       "id": "configurator_data_wrong_bank",
       "grants": ["configurator_data"],
-      "resource": "sibling",
+      "resource": "data_sibling",
       "action": "configure",
       "allowed": false,
       "reason": "no_active_exact_binding"

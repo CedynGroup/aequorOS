@@ -9,7 +9,7 @@
  * displayed — only the fingerprint identifies what is on file.
  */
 
-import { useState } from "react";
+import { useId, useState } from "react";
 import {
   CheckCircle2,
   KeyRound,
@@ -23,6 +23,7 @@ import type {
   QuotaSummaryRead,
 } from "@aequoros/risk-service-api";
 import { isApiError } from "@/lib/api/client";
+import { useConfigureEligibility } from "@/lib/api/configureAccess";
 import {
   useDisableMarketDataConnection,
   useEnableMarketDataConnection,
@@ -48,12 +49,14 @@ function errorMessage(error: unknown): string {
 function ActionButton({
   onClick,
   disabled,
+  descriptionId,
   icon,
   children,
   tone = "default",
 }: {
   onClick: () => void;
   disabled?: boolean;
+  descriptionId?: string;
   icon: React.ReactNode;
   children: React.ReactNode;
   tone?: "default" | "danger";
@@ -63,6 +66,7 @@ function ActionButton({
       type="button"
       onClick={onClick}
       disabled={disabled}
+      aria-describedby={descriptionId}
       className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded border text-caption font-medium disabled:opacity-40 disabled:cursor-not-allowed ${
         tone === "danger"
           ? "border-critical/30 text-critical hover:bg-critical-light/40"
@@ -89,6 +93,12 @@ export default function SourceCard({
   const disable = useDisableMarketDataConnection(bankId);
   const enable = useEnableMarketDataConnection(bankId);
   const revoke = useRevokeMarketDataConnection(bankId);
+  // Connection lifecycle (validate credentials, rotate, disable/enable,
+  // revoke) is a configuration duty server-side (#184): these actions mirror
+  // the exact MARKETS configure gate.
+  const { allowed: canConfigure, reason: configureReason } =
+    useConfigureEligibility(bankId, "markets");
+  const configureRequirementId = useId();
 
   const [rotating, setRotating] = useState(false);
   const [rotateValues, setRotateValues] = useState<Record<string, string>>({});
@@ -231,7 +241,10 @@ export default function SourceCard({
                   "Credential configuration check completed.",
                 )
               }
-              disabled={busy || isDisabled}
+              disabled={!canConfigure || busy || isDisabled}
+              descriptionId={
+                !canConfigure ? configureRequirementId : undefined
+              }
               icon={<CheckCircle2 size={13} aria-hidden />}
             >
               Validate
@@ -244,7 +257,10 @@ export default function SourceCard({
                 setActionError(null);
                 setNotice(null);
               }}
-              disabled={busy}
+              disabled={!canConfigure || busy}
+              descriptionId={
+                !canConfigure ? configureRequirementId : undefined
+              }
               icon={<KeyRound size={13} aria-hidden />}
             >
               {rotating ? "Cancel rotation" : "Rotate credentials"}
@@ -258,7 +274,10 @@ export default function SourceCard({
                   "Connection re-validated and enabled.",
                 )
               }
-              disabled={busy}
+              disabled={!canConfigure || busy}
+              descriptionId={
+                !canConfigure ? configureRequirementId : undefined
+              }
               icon={<PlayCircle size={13} aria-hidden />}
             >
               Enable
@@ -271,7 +290,10 @@ export default function SourceCard({
                   "Connection disabled. Scheduled pulls are paused; credentials stay stored.",
                 )
               }
-              disabled={busy}
+              disabled={!canConfigure || busy}
+              descriptionId={
+                !canConfigure ? configureRequirementId : undefined
+              }
               icon={<PauseCircle size={13} aria-hidden />}
             >
               Disable
@@ -289,13 +311,19 @@ export default function SourceCard({
                 void run(() => revoke.mutateAsync(connection.id));
               }
             }}
-            disabled={busy}
+            disabled={!canConfigure || busy}
+            descriptionId={!canConfigure ? configureRequirementId : undefined}
             tone="danger"
             icon={<ShieldAlert size={13} aria-hidden />}
           >
             Revoke
           </ActionButton>
         </div>
+      )}
+      {!isRevoked && !canConfigure && (
+        <p id={configureRequirementId} className="text-caption text-warning">
+          {configureReason}
+        </p>
       )}
 
       {rotating && isVendor && !isRevoked && (
@@ -318,8 +346,10 @@ export default function SourceCard({
             onClick={() => void submitRotation()}
             disabled={
               busy ||
+              !canConfigure ||
               Object.values(rotateValues).every((value) => !value.trim())
             }
+            aria-describedby={!canConfigure ? configureRequirementId : undefined}
             className="inline-flex items-center gap-2 px-4 py-2 rounded-sm text-body font-medium bg-action text-white hover:bg-action-hover disabled:opacity-40 disabled:cursor-not-allowed"
           >
             {update.isPending ? (

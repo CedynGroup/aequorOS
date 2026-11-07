@@ -137,6 +137,17 @@ def seed_bank(client: TestClient) -> str:
             module=ModuleScope.DATA,
             sensitivity=SensitivityScope.ALL,
         )
+        # Mapping onboarding is a configure duty; the journey officer holds it
+        # explicitly, never through the analyst bundle.
+        grant_institution_authority(
+            session,
+            organization_id=ORG_1,
+            bank_id=SAMPLE_BANK_ID,
+            user_id=USER_1,
+            bundle=RoleBundle.CONFIGURATOR,
+            module=ModuleScope.DATA,
+            sensitivity=SensitivityScope.ALL,
+        )
         session.commit()
     finally:
         session.close()

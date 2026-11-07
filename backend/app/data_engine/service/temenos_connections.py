@@ -62,6 +62,7 @@ from app.data_engine.schemas.temenos_connections import (
     TemenosConnectionListRead,
     TemenosConnectionRead,
     TemenosConnectionUpdate,
+    TemenosConnectionWriteAcknowledgement,
     TemenosDomainInfoRead,
     TemenosDomainListRead,
     TemenosPullTriggerRead,
@@ -179,10 +180,13 @@ def list_domains(db: Session, ctx: TenantContext, bank_id: str, mode: str) -> Te
 
 def create_connection(
     db: Session, ctx: TenantContext, bank_id: str, payload: TemenosConnectionCreate
-) -> TemenosConnectionRead:
+) -> TemenosConnectionWriteAcknowledgement:
     """Onboard a connection. Credentials are stored through the encrypted vault
     and validated inline: success activates it, failure leaves it TESTING with
     the bank-facing error on the response."""
+    # Configuration duty: exact data/configure/restricted authority BEFORE any
+    # vault write, credential check or default-mapping seed.
+    require_data_access(db, ctx, bank_id, Permission.CONFIGURE, Sensitivity.RESTRICTED)
     _get_bank_or_404(db, ctx, bank_id)
     mode = payload.connection_mode
     domains = _validated_domains(mode, payload.domains)
@@ -263,7 +267,9 @@ def create_connection(
     )
     db.commit()
     _seed_default_mapping(db, ctx, bank_id, mode)
-    return _read_model(connection, validation_error=validation_error)
+    return _write_ack(
+        connection, written_status=connection.status, validation_error=validation_error
+    )
 
 
 def _seed_default_mapping(db: Session, ctx: TenantContext, bank_id: str, mode: str) -> None:
@@ -297,7 +303,10 @@ def _seed_default_mapping(db: Session, ctx: TenantContext, bank_id: str, mode: s
 
 def validate_connection(
     db: Session, ctx: TenantContext, bank_id: str, connection_id: UUID
-) -> TemenosConnectionRead:
+) -> TemenosConnectionWriteAcknowledgement:
+    # Credential validation is a configuration duty (D2): deny before the
+    # stored-credential check or any status mutation.
+    require_data_access(db, ctx, bank_id, Permission.CONFIGURE, Sensitivity.RESTRICTED, opaque=True)
     _get_bank_or_404(db, ctx, bank_id)
     connection = _get_connection_or_404(db, ctx, bank_id, connection_id)
     _ensure_not_revoked(connection)
@@ -326,7 +335,10 @@ def validate_connection(
         },
     )
     db.commit()
-    return _read_model(connection, validation_error=validation_error)
+    # The stored-credential failure message is derived from stored secret
+    # material, so it never crosses a mutation response (D34); the status this
+    # request wrote does.
+    return _write_ack(connection, written_status=connection.status)
 
 
 def test_connection(
@@ -356,8 +368,10 @@ def update_connection(
     bank_id: str,
     connection_id: UUID,
     payload: TemenosConnectionUpdate,
-) -> TemenosConnectionRead:
+) -> TemenosConnectionWriteAcknowledgement:
     """Post-onboarding edits and credential rotation (validate new first)."""
+    # Configuration duty (incl. credential rotation): deny before any vault write.
+    require_data_access(db, ctx, bank_id, Permission.CONFIGURE, Sensitivity.RESTRICTED, opaque=True)
     _get_bank_or_404(db, ctx, bank_id)
     connection = _get_connection_or_404(db, ctx, bank_id, connection_id)
     _ensure_not_revoked(connection)
@@ -432,12 +446,15 @@ def update_connection(
             details={"connection_mode": connection.connection_mode, "changed": changed},
         )
     db.commit()
-    return _read_model(connection)
+    # A patch without rotation writes no status; stored fields are never echoed.
+    written_status = connection.status if rotated else None
+    return _write_ack(connection, written_status=written_status)
 
 
 def disable_connection(
     db: Session, ctx: TenantContext, bank_id: str, connection_id: UUID
-) -> TemenosConnectionRead:
+) -> TemenosConnectionWriteAcknowledgement:
+    require_data_access(db, ctx, bank_id, Permission.CONFIGURE, Sensitivity.RESTRICTED, opaque=True)
     _get_bank_or_404(db, ctx, bank_id)
     connection = _get_connection_or_404(db, ctx, bank_id, connection_id)
     _ensure_not_revoked(connection)
@@ -453,12 +470,15 @@ def disable_connection(
             details={"connection_mode": connection.connection_mode, "from": previous},
         )
     db.commit()
-    return _read_model(connection)
+    # The requested end state, also when the connection was already disabled —
+    # never the stored view model (D34).
+    return _write_ack(connection, written_status="DISABLED")
 
 
 def enable_connection(
     db: Session, ctx: TenantContext, bank_id: str, connection_id: UUID
-) -> TemenosConnectionRead:
+) -> TemenosConnectionWriteAcknowledgement:
+    require_data_access(db, ctx, bank_id, Permission.CONFIGURE, Sensitivity.RESTRICTED, opaque=True)
     _get_bank_or_404(db, ctx, bank_id)
     connection = _get_connection_or_404(db, ctx, bank_id, connection_id)
     if connection.status != "DISABLED":
@@ -481,10 +501,17 @@ def enable_connection(
         event_type="temenos_connection.enabled",
         entity_type="temenos_connection",
         entity_id=connection.id,
-        details={"connection_mode": connection.connection_mode, "status": connection.status},
+        details={
+            "connection_mode": connection.connection_mode,
+            "status": connection.status,
+            "error": validation_error,
+        },
     )
     db.commit()
-    return _read_model(connection, validation_error=validation_error)
+    # The stored-credential failure message is derived from stored secret
+    # material, so it never crosses a mutation response (D34); the status this
+    # request wrote does.
+    return _write_ack(connection, written_status=connection.status)
 
 
 def trigger_pull(
@@ -541,11 +568,14 @@ def trigger_backfill(
 
 def revoke_connection(
     db: Session, ctx: TenantContext, bank_id: str, connection_id: UUID
-) -> TemenosConnectionRead:
+) -> TemenosConnectionWriteAcknowledgement:
+    require_data_access(db, ctx, bank_id, Permission.CONFIGURE, Sensitivity.RESTRICTED, opaque=True)
     _get_bank_or_404(db, ctx, bank_id)
     connection = _get_connection_or_404(db, ctx, bank_id, connection_id)
-    if connection.status == "REVOKED":
-        return _read_model(connection)
+    if connection.status == "REVOKED" and connection.credential_ciphertext is None:
+        # Already revoked and wiped (a pull/validation failure can set REVOKED
+        # without a vault delete): the replay is a pure acknowledgement (D34).
+        return _write_ack(connection, written_status="REVOKED")
     _vault(db).delete(connection)
     connection.status = "REVOKED"
     record_event(
@@ -557,7 +587,7 @@ def revoke_connection(
         details={"connection_mode": connection.connection_mode},
     )
     db.commit()
-    return _read_model(connection)
+    return _write_ack(connection, written_status="REVOKED")
 
 
 # --- Internals -------------------------------------------------------------
@@ -729,6 +759,23 @@ def _aware(value: datetime | None) -> datetime | None:
     if value.tzinfo is None:
         return value.replace(tzinfo=utc_now().tzinfo)
     return value
+
+
+def _write_ack(
+    connection: TemenosConnection,
+    *,
+    written_status: str | None = None,
+    validation_error: str | None = None,
+) -> TemenosConnectionWriteAcknowledgement:
+    """Write-only lifecycle evidence (D34): the mutated row's id, the status this
+    request wrote, and — only for checks of credentials submitted in this
+    request — the validation error. Never the stored view model."""
+    return TemenosConnectionWriteAcknowledgement(
+        id=connection.id,
+        bank_id=connection.bank_id,
+        status=written_status,
+        validation_error=validation_error,
+    )
 
 
 def _read_model(
