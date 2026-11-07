@@ -390,8 +390,8 @@ assert.deepEqual(hrefAccess("/forecasting", deniedForecasting), {
     "Requires Forecasting · Aggregated · View. Ask your organization owner or admin to grant it.",
 });
 assert.equal(isPathVisible("/forecasting/scenario", deniedForecasting), true);
-// Behavioral has no confidential page: every tab needs the same aggregated
-// view, and a run-only analyst is still shown the exact sentence they lack.
+// Behavioral model data stays aggregated-only, while restricted reviewers may
+// enter the same pages for their independently gated proposal queue.
 const deniedBehavioral = resolved(true, true, {
   behavioralAggregatedView: false,
   behavioralRun: true,
@@ -413,6 +413,12 @@ for (const href of [
   assert.equal(isHrefVisible(href, resolved(true)), true);
   assert.equal(isPathVisible(href, resolved(true)), true);
 }
+const behavioralReviewer = resolved(true, true, {
+  behavioralAggregatedView: false,
+  behavioralRestrictedView: true,
+});
+assert.equal(isHrefVisible("/behavioral/nmd-duration", behavioralReviewer), true);
+assert.equal(isPathVisible("/behavioral/nmd-duration", behavioralReviewer), true);
 const behavioralReader = resolved(true, true, { behavioralRun: false });
 assert.equal(isHrefVisible("/behavioral/nmd-duration", behavioralReader), true);
 assert.equal(isPathVisible("/behavioral/liquidity", behavioralReader), true);

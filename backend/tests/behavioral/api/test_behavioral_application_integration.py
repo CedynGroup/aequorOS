@@ -446,6 +446,76 @@ def test_distinct_approver_accepts_atomically_and_preserves_other_models(
     assert _counts() == (before_review[0], before_review[1] + 1)
 
 
+def test_superseded_same_model_proposal_cannot_be_accepted(
+    db_client: TestClient,
+) -> None:
+    _seed_book()
+    _, proposer_version = _grant()
+    older_id = _ack(_propose(db_client, proposer_version)).proposal_id
+    newer_id = _ack(_propose(db_client, proposer_version)).proposal_id
+    _, reviewer_version = _grant(FORECAST_APPROVER_ID, RoleBundle.APPROVER)
+
+    assert _review(
+        db_client, newer_id, FORECAST_APPROVER_ID, reviewer_version
+    ).status_code == 200
+    before = _counts()
+    stale = _review(db_client, older_id, FORECAST_APPROVER_ID, reviewer_version)
+
+    assert stale.status_code == 409, stale.text
+    assert "newer proposal" in stale.text
+    assert _counts() == before
+    assert _proposal(older_id).status == "pending"
+    assert _proposal(newer_id).status == "accepted"
+
+
+def test_older_proposal_cannot_relabel_newer_peer_assumptions(
+    db_client: TestClient,
+) -> None:
+    _seed_book()
+    _, proposer_version = _grant()
+    newer_peer = db_client.post(
+        f"{BASE}/prepayment/apply",
+        json=PROPOSE_BODY,
+        headers=_auth(USER_1, proposer_version, "analyst"),
+    )
+    peer_id = _ack(newer_peer).proposal_id
+    older_id = _ack(_propose(db_client, proposer_version)).proposal_id
+    with get_sessionmaker()() as session:
+        session.info["organization_id"] = ORG_1
+        peer = session.get(BehavioralModelProposal, peer_id)
+        assert peer is not None
+        peer.as_of_date = date(2026, 4, 30)
+        session.commit()
+    _, reviewer_version = _grant(FORECAST_APPROVER_ID, RoleBundle.APPROVER)
+    approved = _review(db_client, peer_id, FORECAST_APPROVER_ID, reviewer_version)
+    accepted = _accepted(approved)
+
+    before = _counts()
+    stale = _review(db_client, older_id, FORECAST_APPROVER_ID, reviewer_version)
+
+    assert stale.status_code == 409, stale.text
+    assert "older proposal" in stale.text
+    assert _counts() == before
+    assert _proposal(older_id).status == "pending"
+    with get_sessionmaker()() as session:
+        session.info["organization_id"] = ORG_1
+        batch = session.get(IngestionBatch, UUID(accepted.ingestion_batch_id))
+        assert batch is not None
+        assert batch.as_of_date == date(2026, 4, 30)
+        rows = list(
+            session.scalars(
+                select(CanonicalReferenceRow).where(
+                    CanonicalReferenceRow.organization_id == ORG_1,
+                    CanonicalReferenceRow.ingestion_batch_id
+                    == UUID(accepted.ingestion_batch_id),
+                )
+            ).all()
+        )
+    assert rows
+    assert all(row.as_of_date == date(2026, 4, 30) for row in rows)
+    assert rows[0].payload["assumption_type"] == "PREPAYMENT_RATE"
+
+
 def test_self_review_and_configurator_only_review_are_denied_without_acceptance(
     db_client: TestClient,
 ) -> None:

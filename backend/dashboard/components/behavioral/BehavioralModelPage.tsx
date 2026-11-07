@@ -443,9 +443,9 @@ export default function BehavioralModelPage({
               </SectionCard>
             )}
 
-            <BehavioralProposalQueue bankId={bankId} model={slug} />
           </>
         ) : null}
+        <BehavioralProposalQueue bankId={bankId} model={slug} />
       </PageContainer>
     </>
   );
