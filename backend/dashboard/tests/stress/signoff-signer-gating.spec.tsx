@@ -317,6 +317,33 @@ it("attests with the server-held authorization after SSO step-up", async () => {
   expect(window.location.search).toBe("?run=run-1");
 });
 
+it("clears consumed SSO readiness when attestation fails", async () => {
+  state.permissions = ["view", "sign_off"];
+  state.attestWithHeld.mockRejectedValueOnce(new Error("expired"));
+  window.history.replaceState({}, "", "/stress?run=run-1&stepUp=ready");
+  renderPanel();
+
+  fireEvent.change(screen.getByLabelText(/^Credibility rationale/), {
+    target: { value: "Synthetic failed SSO rationale" },
+  });
+  const ceremony = within(
+    screen.getByRole("group", { name: "Board attestation" }),
+  );
+  fireEvent.change(ceremony.getByPlaceholderText("Reason (audit)"), {
+    target: { value: "Retry after consumed authorization" },
+  });
+  fireEvent.click(
+    await screen.findByRole("button", { name: "Attest with single sign-on" }),
+  );
+
+  expect(
+    await screen.findByRole("button", { name: "Use single sign-on" }),
+  ).toBeEnabled();
+  expect(
+    screen.getByRole("button", { name: "Confirm identity and attest" }),
+  ).toBeDisabled();
+});
+
 it("routes a draft submission to a named recipient", () => {
   state.permissions = ["view", "edit"];
   state.attestationRecipientUserId = "";
