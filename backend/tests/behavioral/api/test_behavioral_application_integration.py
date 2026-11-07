@@ -14,7 +14,7 @@ from pydantic import BaseModel, TypeAdapter
 from sqlalchemy import func, select
 
 from app.behavioral import service as behavioral_models
-from app.behavioral.ml.config import MODEL_VERSIONS, Accuracy, ModelResult
+from app.behavioral.ml.config import MODEL_VERSIONS, Accuracy, ModelResult, ProductEstimate
 from app.behavioral.models import BehavioralModelProposal
 from app.behavioral.schemas import (
     BehavioralApplyRead,
@@ -120,7 +120,16 @@ def _stable_estimates(monkeypatch: pytest.MonkeyPatch) -> None:
                 month_coverage=0,
                 method="baseline",
             ),
-            products=[],
+            products=[
+                ProductEstimate(
+                    product_code="retail_savings",
+                    assumption_type="NMD_DURATION",
+                    value=30.75,
+                    unit="months",
+                    confidence=0.65,
+                    method="baseline",
+                )
+            ],
         )
 
     monkeypatch.setattr(behavioral_models, "_compute", compute)
@@ -323,9 +332,9 @@ def test_apply_requires_configure_and_creates_only_an_immutable_pending_proposal
     assert row.values == [
         {
             "product_code": "retail_savings",
-            "value": 36.5,
+            "value": 30.75,
             "unit": "months",
-            "confidence": 0.8,
+            "confidence": 0.65,
         }
     ]
     assert row.proposed_by_user_id == USER_1
@@ -337,6 +346,38 @@ def test_apply_requires_configure_and_creates_only_an_immutable_pending_proposal
     assert queue.status_code == 403
     assert proposed.text.find("36.5") == -1
     assert proposed.text.find(MODEL_VERSIONS[MODEL]) == -1
+
+
+@pytest.mark.parametrize(
+    "products",
+    [
+        [],
+        [
+            {
+                "productCode": "unestimated",
+                "value": 999.0,
+                "unit": "months",
+                "confidence": 1.0,
+            }
+        ],
+    ],
+)
+def test_proposal_rejects_empty_and_unestimated_product_selections(
+    db_client: TestClient,
+    products: list[dict[str, object]],
+) -> None:
+    _seed_book()
+    _, version = _grant()
+    before = _counts()
+
+    response = db_client.post(
+        f"{BASE}/{MODEL}/apply",
+        json={"products": products},
+        headers=_auth(USER_1, version, "analyst"),
+    )
+
+    assert response.status_code == 422
+    assert _counts() == before
 
 
 def _clear_bindings() -> None:
@@ -364,7 +405,7 @@ def test_distinct_approver_accepts_atomically_and_preserves_other_models(
     proposals = _proposal_list(queue).proposals
     assert [item.proposal_id for item in proposals] == [proposal_id]
     assert proposals[0].values[0].product_code == "retail_savings"
-    assert proposals[0].values[0].value == 36.5
+    assert proposals[0].values[0].value == 30.75
 
     before_review = _counts()
     reviewed = _review(db_client, proposal_id, FORECAST_APPROVER_ID, reviewer_version)
@@ -392,7 +433,7 @@ def test_distinct_approver_accepts_atomically_and_preserves_other_models(
     by_type = {payload.assumption_type: payload for payload in stored}
     assert by_type["PREPAYMENT_RATE"].value == 0.08
     assert by_type["DEPOSIT_STABILITY"].value == 0.7
-    assert by_type["NMD_DURATION"].value == 36.5
+    assert by_type["NMD_DURATION"].value == 30.75
     provenance = by_type["NMD_DURATION"].provenance
     assert provenance is not None
     assert provenance.proposal_id == proposal_id
