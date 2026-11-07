@@ -21,6 +21,16 @@ Methodology notes:
 - Market RWA charges ``fx_charge_pct`` of the larger open FX position and
   converts the charge to RWA with the 12.5x multiplier (``rwa_multiplier_pct``
   expressed as a percent, 1250).
+  Disclosure: the CRD BoG lists (June 2018 — listed status, not certified
+  unamended or currently binding) publishes the charge as 10% of the FX net
+  open position AND 10% of the net position in gold (¶388, worked example
+  "335 x10% = 33.5"). The rate applied here is the board register's
+  ``fx_charge_pct`` (starting value 8), not a governed minimum, and the
+  measured position is currency FX only — this engine has no gold leg. The
+  regulatory treatment of gold under the 2026 NOP limits notice (whose
+  printed computation has no explicit gold leg) is an open question, not an
+  established exemption; whether the CRD governs a given bank today is
+  likewise not established.
 - A risk class named in ``rwa_pct_of_credit_rwa`` is charged instead as a flat
   PERCENTAGE OF CREDIT RWA and its measured treatment (the FX open position for
   market risk, the BIA gross-income base for operational risk) does not apply.

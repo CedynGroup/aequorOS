@@ -23,8 +23,20 @@ Methodology (Product Documentation Module 3):
   negative one. The aggregate long and short sums are formed separately and the
   overall NOP is the Basel shorthand ``max(sum_long, sum_short)``. Both the
   overall NOP and each single currency are measured against Tier 1 capital: the
-  aggregate NOP must stay within ``aggregate_limit_pct`` (20% at BoG) and no
-  single currency may exceed ``single_limit_pct`` (10%).
+  aggregate NOP must stay within ``aggregate_limit_pct`` and no single
+  currency's absolute position may exceed ``single_limit_pct`` (board
+  starting values 20% and 10%, respectively).
+  For disclosure, as issued: BoG Notice BG/FMD/2026/07 (signed 2026-02-10;
+  in-force status not certified) prohibits long positions outright — squared
+  (0%) or short not exceeding 10% of Net Own Funds per currency — caps the
+  aggregate NOP at 20% of NOF, and converts at the BoG-published end-of-day
+  rate. This engine's single-currency test is the symmetric ±10% band and its
+  base is Tier 1, so the notice's no-long rule, its asymmetric 0/−10% band and
+  its NOF label are not what the code enforces; whether BoG's NOF equals the
+  platform's Tier 1 is not established. The notice's printed computation has
+  no explicit gold leg — an absence in the text, not evidence that gold is
+  exempt (the June 2018 CRD's published capital charge carries an explicit
+  10%-of-gold leg, ¶388).
 - **Value at Risk.** Historical simulation over a rolling window: the portfolio
   daily P&L vector is ``Sum_ccy net_ghs_c * return_c[t]`` across the joint
   historical return vectors, which naturally captures cross-currency

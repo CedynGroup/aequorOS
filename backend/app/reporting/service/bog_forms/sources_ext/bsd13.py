@@ -510,12 +510,26 @@ def _nop(rc: ResolveContext, params: dict[str, Any]) -> Decimal | None:  # noqa:
     ``spot`` · ``spot_long`` / ``spot_short`` / ``forward_long`` /
     ``forward_short`` (contract book; sales negative);
 
-    book-level (cedis / percent): ``net_worth`` (Tier 1 = NOF), ``afop``
+    book-level (cedis / percent): ``net_worth`` (Tier 1 — the platform's
+    ratio base; the notice's NOF label is not established to be the same
+    measure), ``afop``
     (the run's aggregate NOP), ``afop_pct_nof``, ``aggregate_limit_pct``,
     ``single_limit_pct``, ``sum_long_ghs``, ``sum_short_ghs``.
 
     ``None`` (⇒ input_required) when no succeeded FX run / fx_position fact /
     contract exists for the period.
+
+    Disclosure, as issued: BoG Notice BG/FMD/2026/07 (in-force status not
+    certified) states the limits on Net Own Funds — long positions
+    prohibited, single-currency shorts up to 10% of NOF, aggregate NOP up to
+    20% of NOF — with conversion at the BoG-published end-of-day rate. The
+    template's limit percentages come from the FX run's Tier-1-based
+    metrics; that is a label difference with an unestablished NOF↔Tier 1
+    mapping, not a claim of equivalence. The notice's printed computation
+    has no explicit gold leg — an absence in the text, not an exemption.
+    The June 2018 CRD's published capital charge carries an explicit
+    10%-of-gold leg (¶388); gold has no representation in the FX run this
+    resolver reads, and its treatment remains an open question.
     """
     measure = str(params.get("measure", "net"))
     named = _named(params)
