@@ -338,6 +338,29 @@ def provision(db: Session, request: StoryRequest) -> StoryRead:
                     SensitivityScope.RESTRICTED,
                     institution_id=request.bank_id,
                 )
+            # Signer gating (#185): every ceremony slot — the preparer's
+            # included — signs only with an exact-bank REG/restricted SIGN_OFF
+            # binding, and a checker slot additionally keeps its exact-bank
+            # APPROVE duty. The bundles above are read, mutation and export
+            # authority; none of them satisfies either gate.
+            if spec.role in {"admin", "approver"}:
+                _grant(
+                    db,
+                    user,
+                    RoleBundle.SIGNER,
+                    ModuleScope.REGULATORY,
+                    SensitivityScope.RESTRICTED,
+                    institution_id=request.bank_id,
+                )
+            if spec.role == "approver":
+                _grant(
+                    db,
+                    user,
+                    RoleBundle.APPROVER,
+                    ModuleScope.REGULATORY,
+                    SensitivityScope.RESTRICTED,
+                    institution_id=request.bank_id,
+                )
     db.commit()
     if request.signing:
         ctx = TenantContext(organization_id=request.organization_id)

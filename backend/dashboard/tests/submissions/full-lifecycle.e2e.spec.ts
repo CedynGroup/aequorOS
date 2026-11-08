@@ -34,7 +34,10 @@ import { E2E_API_ORIGIN, E2E_TMP } from "../../playwright.config";
 import { readPdf, readWorkbook, readZip } from "../../e2e/support/artifacts";
 import { mintBackendToken } from "../../e2e/support/mint";
 import { requireObjectStorage } from "../../e2e/support/object-storage";
-import { generateCurrentVersion } from "../../e2e/support/generate";
+import {
+  generateCurrentPackage,
+  generateCurrentVersion,
+} from "../../e2e/support/generate";
 import {
   currentFilingPackage,
   expectFilingCash,
@@ -211,7 +214,7 @@ async function generateAndClearChecks(
   page: Page,
   code: string,
   date: string,
-): Promise<void> {
+): Promise<string> {
   await page.goto(returnsUrl(code, date));
   await expect(
     page.getByRole("heading", { name: /returns workspace/i }),
@@ -221,12 +224,16 @@ async function generateAndClearChecks(
     0,
   );
 
-  await generateCurrentVersion(page);
+  // The minted package's id: the certification ceremony will not open until an
+  // approver has routed its preparer slot (Signer gating, #185), and the routing
+  // names the package, so the journey must know exactly which one it generated.
+  const { id } = await generateCurrentPackage(page);
 
   // Nobody pressed anything: the checks are part of generating.
   await expect(page.getByText("Checks passed").first()).toBeVisible({
     timeout: 60_000,
   });
+  return id;
 }
 
 /**
@@ -243,8 +250,8 @@ async function certifyAndApprove(
   code: string,
   date: string,
 ): Promise<void> {
-  await generateAndClearChecks(page, code, date);
-  await certifyAsPreparer(page, code, date);
+  const packageId = await generateAndClearChecks(page, code, date);
+  await certifyAsPreparer(page, code, date, packageId);
   await approveAndSignAsChecker(browser, approverState, code, date);
 }
 
@@ -340,7 +347,7 @@ async function correctAndRefile(
   expect(corrected.sourceRuns).not.toEqual(prior.sourceRuns);
   expect(corrected.snapshotSha256).not.toBe(prior.snapshotSha256);
   await expectPriorFilingFrozen(request, prior, signatures);
-  await certifyAsPreparer(page, LIQUIDITY_RETURN, date);
+  await certifyAsPreparer(page, LIQUIDITY_RETURN, date, corrected.id);
   await expectStaleReviewRefused(request, corrected.id, staleReview);
   await approveAndSignAsChecker(browser, approverState, LIQUIDITY_RETURN, date);
   await expectFreshFilingSignatures(request, corrected.id, signatures);
@@ -765,8 +772,12 @@ test.describe("full lifecycle", () => {
         "2000000",
         test.info().outputPath("original-filing-book.xlsx"),
       );
-      await generateAndClearChecks(page, LIQUIDITY_RETURN, date);
-      await certifyAsPreparer(page, LIQUIDITY_RETURN, date);
+      const liquidityPackageId = await generateAndClearChecks(
+        page,
+        LIQUIDITY_RETURN,
+        date,
+      );
+      await certifyAsPreparer(page, LIQUIDITY_RETURN, date, liquidityPackageId);
       const original = await currentFilingPackage(request, date);
       const certified = await filingAttestation(request, original.id);
       const signatures = filingSignatures(original.id);
@@ -775,8 +786,8 @@ test.describe("full lifecycle", () => {
       // A different return on the same date must keep its place in the queue.
       // BSD2's landscape document needs the same viewport as the artifact journey.
       await page.setViewportSize({ width: 1920, height: 1080 });
-      await generateAndClearChecks(page, BOG_FORM, date);
-      await certifyAsPreparer(page, BOG_FORM, date);
+      const bogPackageId = await generateAndClearChecks(page, BOG_FORM, date);
+      await certifyAsPreparer(page, BOG_FORM, date, bogPackageId);
       await sendBackAsChecker(
         browser,
         approverState,

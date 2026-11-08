@@ -5,7 +5,10 @@ import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { SessionProvider } from "next-auth/react";
-import { PathnameContext } from "next/dist/shared/lib/hooks-client-context.shared-runtime";
+import {
+  PathnameContext,
+  SearchParamsContext,
+} from "next/dist/shared/lib/hooks-client-context.shared-runtime";
 import { http, HttpResponse } from "msw";
 import { setupServer } from "msw/node";
 import ProfileProvider from "../../components/profile/ProfileProvider";
@@ -199,11 +202,13 @@ it.each([
         <QueryClientProvider client={client}>
           <QueryAuthorityScopeProvider scope={scope}>
             <PathnameContext.Provider value="/irr/enterprise-stress">
-              <ProfileProvider>
-                <BankProvider>
-                  <EnterpriseStressWorkbench moduleLens="irr" />
-                </BankProvider>
-              </ProfileProvider>
+              <SearchParamsContext.Provider value={new URLSearchParams()}>
+                <ProfileProvider>
+                  <BankProvider>
+                    <EnterpriseStressWorkbench moduleLens="irr" />
+                  </BankProvider>
+                </ProfileProvider>
+              </SearchParamsContext.Provider>
             </PathnameContext.Provider>
           </QueryAuthorityScopeProvider>
         </QueryClientProvider>

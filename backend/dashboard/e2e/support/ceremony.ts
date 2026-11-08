@@ -24,7 +24,8 @@ import {
   type Locator,
   type Page,
 } from "@playwright/test";
-import { E2E_PASSWORD, E2E_USERS } from "./mint";
+import { E2E_API_ORIGIN } from "../../playwright.config";
+import { E2E_PASSWORD, E2E_USERS, mintBackendToken } from "./mint";
 
 /** How long a ceremony may take: pyHanko signs and re-renders the document. */
 const CEREMONY_TIMEOUT = 120_000;
@@ -110,6 +111,79 @@ export async function adoptTypedMark(workspace: Locator): Promise<void> {
 }
 
 /**
+ * Name a freshly generated package's signers before the ceremony opens (Signer
+ * gating, #185).
+ *
+ * Certification requires a pending current-cycle route naming the exact signer —
+ * "the first signature is not an exception" — and the routing API fills every
+ * outstanding slot or none, so an approver (routing is an APPROVE act) names the
+ * preparer and the checker in one act. The picker in the ceremony reuses the
+ * pending checker, so the journeys' own nomination step keeps proving the same
+ * handoff it always has.
+ */
+export async function namePreparer(
+  packageId: string,
+  preparerUserId: string,
+): Promise<void> {
+  const authorize = { Authorization: `Bearer ${await mintBackendToken("approver")}` };
+  const routed = await fetch(
+    `${E2E_API_ORIGIN}/api/v1/banks/BK-SAMP0001/regulatory-packages/${packageId}/attestation/recipients`,
+    {
+      method: "PUT",
+      headers: { ...authorize, "Content-Type": "application/json" },
+      body: JSON.stringify({
+        recipients: [
+          { signing_role: "preparer", user_id: preparerUserId },
+          { signing_role: "approver", user_id: E2E_USERS.approver.id },
+        ],
+        reason: "e2e: name the signers before the ceremony opens",
+      }),
+    },
+  );
+  const routedBody = routed.clone();
+  expect(routed.ok, await routed.text()).toBeTruthy();
+  // The ceremony reads the routing back through the status projection, so the
+  // journeys fail here — naming exactly what the server recorded — rather than
+  // at a fail-closed workspace whose reason cannot say who was missed.
+  const status = (await routedBody.json()) as {
+    package_id: string;
+    recipients: {
+      signing_role: string;
+      status: string;
+      recipient_user_id: string | null;
+    }[];
+  };
+  expect(status.package_id).toBe(packageId);
+  expect(status.recipients).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({
+        signing_role: "preparer",
+        status: "pending",
+        recipient_user_id: preparerUserId,
+      }),
+    ]),
+  );
+  // The same projection the workspace reads, so a routing the ceremony cannot
+  // see fails HERE with the row in hand.
+  const readBack = await fetch(
+    `${E2E_API_ORIGIN}/api/v1/banks/BK-SAMP0001/regulatory-packages/${packageId}/attestation`,
+    { headers: authorize },
+  );
+  const readBackOk = readBack.ok;
+  const readBackBody = (await readBack.json()) as typeof status;
+  expect(readBackOk, JSON.stringify(readBackBody)).toBeTruthy();
+  expect(readBackBody.recipients).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({
+        signing_role: "preparer",
+        status: "pending",
+        recipient_user_id: preparerUserId,
+      }),
+    ]),
+  );
+}
+
+/**
  * Certify as the preparer: place, adopt, name the approver, prove presence, sign.
  *
  * One press at the end, because the backend treats it as one transaction — the
@@ -120,8 +194,13 @@ export async function certifyAsPreparer(
   page: Page,
   code: string,
   date: string,
+  packageId: string,
   approverLabel = `${E2E_USERS.approver.displayName ?? "E2E Approver"} (approver)`,
 ): Promise<void> {
+  // The journey's session user is the preparer (the full-lifecycle stories
+  // certify as their admin actor), and the ceremony will not open until an
+  // approver has routed this package's preparer slot to them.
+  await namePreparer(packageId, E2E_USERS.admin.id);
   await page.goto(returnsUrl(code, date));
   const certify = page.getByRole("button", { name: "Certify and freeze" });
   await expect(certify).toBeEnabled({ timeout: 30_000 });

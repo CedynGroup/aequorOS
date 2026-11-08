@@ -27,11 +27,12 @@ import {
 } from "../../playwright.config";
 import {
   adoptTypedMark,
+  namePreparer,
   placeBothSignatureFields,
   returnsUrl,
 } from "../../e2e/support/ceremony";
-import { generateCurrentVersion } from "../../e2e/support/generate";
-import { mintBackendToken } from "../../e2e/support/mint";
+import { generateCurrentPackage } from "../../e2e/support/generate";
+import { E2E_USERS, mintBackendToken } from "../../e2e/support/mint";
 import { requireObjectStorage } from "../../e2e/support/object-storage";
 import {
   IDP_ACCOUNTS,
@@ -286,11 +287,16 @@ test.describe("attestation step-up through single sign-on", () => {
 
     await page.goto(returnsUrl(RETURN_CODE, date));
     // The checks run with generation; there is no separate validation step.
-    await generateCurrentVersion(page);
+    const { id: packageId } = await generateCurrentPackage(page);
     await expect(page.getByText("Checks passed").first()).toBeVisible({
       timeout: 60_000,
     });
 
+    // The ceremony will not open until the package's preparer slot names the
+    // officer the IdP maps onto (Signer gating, #185); routing is an approver
+    // act. The reload lets the page read the routing it just received.
+    await namePreparer(packageId, E2E_USERS.sso_analyst.id);
+    await page.reload();
     const certify = page.getByRole("button", { name: "Certify and freeze" });
     await expect(certify).toBeEnabled({ timeout: 30_000 });
     await certify.click();
