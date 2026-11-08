@@ -342,7 +342,10 @@ def test_the_reference_schemas_do_not_import_the_bi_catalogue() -> None:
 
                 sys.path.insert(0, sys.argv[1])
 
-                class ForbiddenBIImport(ImportError):
+                # Not an ImportError: an ingestion module guarding an optional
+                # BI dependency with `except ImportError` must not swallow the
+                # guard's signal, and pkgutil only ever ignores ImportError.
+                class ForbiddenBIImport(Exception):
                     pass
 
                 class BlockBIDomain(importlib.abc.MetaPathFinder):
@@ -396,6 +399,82 @@ def test_the_reference_schemas_do_not_import_the_bi_catalogue() -> None:
                 """
             ),
             str(Path(__file__).resolve().parents[4]),
+        ],
+        capture_output=True,
+        text=True,
+        timeout=30,
+        check=False,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
+def test_the_guard_signal_survives_an_ingestion_module_that_catches_import_error(
+    tmp_path: Path,
+) -> None:
+    """An optional-dependency handler must not silence the dependency guard.
+
+    A module that wraps its forbidden BI import in ``try/except ImportError``
+    would swallow a sentinel derived from ``ImportError`` and the guard would
+    pass with the dependency direction broken. This replays exactly that
+    pattern against a synthetic package: the sentinel must escape the module's
+    own ``except ImportError`` while a legitimate sibling module still imports.
+    """
+    package = tmp_path / "ingestion_guard_probe"
+    package.mkdir()
+    (package / "__init__.py").write_text("")
+    (package / "optional_bi.py").write_text(
+        "try:\n    import bi_forbidden\nexcept ImportError:\n    bi_forbidden = None\n"
+    )
+    (package / "clean.py").write_text("ANSWER = 41 + 1\n")
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-I",
+            "-c",
+            dedent(
+                """
+                import importlib
+                import importlib.abc
+                import pkgutil
+                import sys
+
+                sys.path.insert(0, sys.argv[1])
+
+                class ForbiddenBIImport(Exception):
+                    pass
+
+                class BlockBIDomain(importlib.abc.MetaPathFinder):
+                    def find_spec(self, fullname, path=None, target=None):
+                        if fullname == "bi_forbidden" or fullname.startswith("bi_forbidden."):
+                            raise ForbiddenBIImport(fullname)
+                        return None
+
+                sys.meta_path.insert(0, BlockBIDomain())
+                try:
+                    importlib.import_module("bi_forbidden")
+                except ForbiddenBIImport as exc:
+                    assert exc.args == ("bi_forbidden",)
+                else:
+                    raise AssertionError("forbidden-import control did not fail")
+
+                package = importlib.import_module("ingestion_guard_probe")
+                modules = list(pkgutil.walk_packages(package.__path__, package.__name__ + "."))
+                assert sorted(module.name for module in modules) == [
+                    "ingestion_guard_probe.clean",
+                    "ingestion_guard_probe.optional_bi",
+                ]
+                try:
+                    importlib.import_module("ingestion_guard_probe.optional_bi")
+                except ForbiddenBIImport:
+                    pass  # the sentinel escaped the module's except ImportError
+                else:
+                    raise AssertionError(
+                        "the optional-dependency handler swallowed the guard signal"
+                    )
+                assert importlib.import_module("ingestion_guard_probe.clean").ANSWER == 42
+                """
+            ),
+            str(tmp_path),
         ],
         capture_output=True,
         text=True,
