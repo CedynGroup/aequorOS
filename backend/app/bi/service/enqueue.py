@@ -54,6 +54,7 @@ from sqlalchemy.orm import Session
 
 from app.bi.models.marts import MART_BUILD_SCOPES, BiMartBuild
 from app.bi.service.versions import BUILDER_VERSION
+from app.core.authorization import Module, Sensitivity
 from app.core.config import get_settings
 from app.db.base import utc_now
 from app.identity.public import Bank
@@ -76,13 +77,14 @@ def coalesce_key_for(bank_id: str, as_of: date) -> str:
     return f"bi:{bank_id}:{as_of.isoformat()}"
 
 
-def enqueue_mart_refresh(
+def enqueue_mart_refresh(  # noqa: PLR0913 - the seam carries the full dispatch envelope
     db: Session,
     *,
     organization_id: str,
     bank_id: str,
     as_of: date,
     reason: str,
+    provenance: job_queue.JobProvenance,
 ) -> Job | None:
     """Enqueue one coalesced ``bi_mart_refresh`` for ``(bank, as_of)``.
 
@@ -90,7 +92,8 @@ def enqueue_mart_refresh(
     or ``None`` when ``BI_MART_ENQUEUE_ENABLED`` is off — in which case the
     session is not touched at all. Flushes but never commits: the hook's own
     transaction owns the commit, so the job lands (or rolls back) with the
-    mutation that asked for it.
+    mutation that asked for it. The caller attributes the enqueue; the seam
+    supplies the BI locator (aggregated bank data).
     """
     settings = get_settings()
     if not settings.bi.mart_enqueue_enabled:
@@ -112,6 +115,8 @@ def enqueue_mart_refresh(
         coalesce_key=coalesce_key_for(bank_id, as_of),
         entity_type=ENTITY_TYPE,
         entity_id=bank_id,
+        locator=job_queue.JobLocator(module=Module.DATA, sensitivity=Sensitivity.AGGREGATED),
+        provenance=provenance,
     )
 
 

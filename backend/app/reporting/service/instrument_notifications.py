@@ -7,6 +7,7 @@ from datetime import date
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
+from app.core.authorization import Module, Sensitivity
 from app.identity.public import Bank
 from app.notifications.public import notifications
 from app.reporting.service.eligibility import resolve_eligibility
@@ -84,6 +85,9 @@ def scan_instrument_statuses(db: Session, ctx: TenantContext, bank: Bank, today:
                 ),
                 entity_type="bank",
                 entity_id=bank.id,
+                bank_id=bank.id,
+                module=Module.REGULATORY,
+                sensitivity=Sensitivity.CONFIDENTIAL,
             )
             observations[f"sent:{key}"] = "yes"
             emitted += 1

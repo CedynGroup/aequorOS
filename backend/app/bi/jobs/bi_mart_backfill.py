@@ -127,6 +127,10 @@ def run_bi_mart_backfill(session: Session, job: Job) -> None:
         coalesce_key=coalesce_key_for(bank.id),
         entity_type="bank",
         entity_id=bank.id,
+        # A successor hop inherits the original enqueue's locator and
+        # provenance verbatim (mission D9).
+        locator=job_queue.inherited_locator(job),
+        provenance=job_queue.inherited_provenance(job),
     )
     job.progress = {
         **progress,

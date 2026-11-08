@@ -32,6 +32,7 @@ from fastapi import HTTPException
 from sqlalchemy import select
 
 from app.api.deps import TenantContext
+from app.core.authorization import Module, Sensitivity
 from app.core.config import get_settings
 from app.data_engine.models.database_connection import DatabaseDirectConnection
 from app.data_engine.service import database_connections
@@ -145,6 +146,10 @@ def enqueue_due_database_direct_probes(
                 bank_id=connection.bank_id,
                 payload={"connection_id": str(connection.id)},
                 coalesce_key=f"dbdirect_health:{connection.id}:{now.date().isoformat()}",
+                locator=job_queue.JobLocator(
+                    module=Module.DATA, sensitivity=Sensitivity.CONFIDENTIAL
+                ),
+                provenance=job_queue.worker_provenance("scheduler.database_direct_health"),
             )
         )
     session.flush()

@@ -722,6 +722,8 @@ def _enqueue_live_refresh(
         payload=job_payload,
         run_after=utc_now() + timedelta(seconds=debounce),
         coalesce_key=f"refresh:{bank.id}:{payload.as_of_date.isoformat()}",
+        locator=job_queue.JobLocator(module=Module.DATA, sensitivity=Sensitivity.CONFIDENTIAL),
+        provenance=job_queue.context_provenance(ctx, action="data.pipeline_refresh"),
     )
 
 
@@ -751,6 +753,7 @@ def _enqueue_bi_mart_refresh(
         bank_id=bank.id,
         as_of=payload.as_of_date,
         reason="ingestion",
+        provenance=job_queue.context_provenance(ctx, action="data.mart_refresh"),
     )
 
 
@@ -781,6 +784,8 @@ def _enqueue_etl_dedup(
         coalesce_key=f"etl_dedup:{batch.id}",
         entity_type="ingestion_batch",
         entity_id=batch.id,
+        locator=job_queue.JobLocator(module=Module.DATA, sensitivity=Sensitivity.CONFIDENTIAL),
+        provenance=job_queue.context_provenance(ctx, action="data.etl_dedup"),
     )
 
 

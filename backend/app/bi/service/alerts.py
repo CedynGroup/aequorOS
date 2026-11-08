@@ -96,7 +96,7 @@ from app.bi.service.execution import execute
 from app.bi.service.identity_policy import IDENTITY_REASON
 from app.bi.service.insights.statements import render_value
 from app.bi.service.versions import BUILDER_VERSION
-from app.core.authorization import Permission
+from app.core.authorization import Module, Permission, Sensitivity
 from app.core.config import get_settings
 from app.core.key_management.presentation import contains_placeholder
 from app.db.base import utc_now
@@ -178,6 +178,9 @@ def enqueue_evaluation(
 
     if not get_settings().bi.alerts_enabled:
         return None
+    # The only caller is the ``bi_mart_refresh`` handler, so this enqueue is
+    # the worker following the build it just ran — attributed to the worker,
+    # not re-attributed to whoever requested the build.
     return job_queue.enqueue(
         db,
         organization_id,
@@ -192,6 +195,8 @@ def enqueue_evaluation(
         coalesce_key=coalesce_key_for(bank_id, as_of),
         entity_type=ENTITY_TYPE,
         entity_id=bank_id,
+        locator=job_queue.JobLocator(module=Module.DATA, sensitivity=Sensitivity.AGGREGATED),
+        provenance=job_queue.worker_provenance("worker.bi_alert_evaluate"),
     )
 
 

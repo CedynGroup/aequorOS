@@ -409,6 +409,9 @@ def _record_transition(  # noqa: PLR0913 - the ¶74 event carries its full evide
         entity_type="contingency_funding_plan",
         entity_id=plan.id,
         recipient_role="approver",
+        bank_id=bank.id,
+        module=Module.LIQUIDITY,
+        sensitivity=Sensitivity.CONFIDENTIAL,
     )
     if not rows:
         # The ¶74 obligation must surface even when no user currently holds
@@ -422,6 +425,9 @@ def _record_transition(  # noqa: PLR0913 - the ¶74 event carries its full evide
             body=body,
             entity_type="contingency_funding_plan",
             entity_id=plan.id,
+            bank_id=bank.id,
+            module=Module.LIQUIDITY,
+            sensitivity=Sensitivity.CONFIDENTIAL,
         )
     event = CfpActivationEvent(
         organization_id=ctx.organization_id,

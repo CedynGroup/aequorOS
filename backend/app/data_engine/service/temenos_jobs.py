@@ -31,6 +31,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
+from app.core.authorization import Module, Sensitivity
 from app.core.config import get_settings
 from app.core.outbound import OutboundTargetBlocked
 from app.data_engine.adapters.temenos_t24.auth import SimulatedSessionProvider
@@ -275,6 +276,10 @@ def enqueue_due_temenos_pulls(
                     "as_of_date": as_of.isoformat(),
                 },
                 coalesce_key=f"t24_pull:{connection.id}:{as_of.isoformat()}",
+                locator=job_queue.JobLocator(
+                    module=Module.DATA, sensitivity=Sensitivity.CONFIDENTIAL
+                ),
+                provenance=job_queue.worker_provenance("scheduler.temenos_pull"),
             )
         )
     session.flush()
@@ -309,6 +314,10 @@ def enqueue_backfill(
                     "as_of_date": cursor.isoformat(),
                 },
                 coalesce_key=f"t24_pull:{connection.id}:{cursor.isoformat()}",
+                locator=job_queue.JobLocator(
+                    module=Module.DATA, sensitivity=Sensitivity.CONFIDENTIAL
+                ),
+                provenance=job_queue.context_provenance(ctx, action="data.temenos_backfill"),
             )
         )
         cursor += timedelta(days=1)
