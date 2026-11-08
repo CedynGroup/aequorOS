@@ -546,6 +546,14 @@ def _effective_capabilities(  # noqa: PLR0913 - projection requires the complete
                                     and by_id[binding_id].institution_scope
                                     is InstitutionScope.INSTITUTION
                                     and by_id[binding_id].institution_id == institution_id
+                                    # One complete active binding must match
+                                    # every dimension: the exact-bank binding
+                                    # itself must carry the whole-institution
+                                    # data scope, mirroring the signing
+                                    # evaluators — an organization-scope grant
+                                    # cannot lend its breadth to a separate
+                                    # branch-narrowed exact-bank row.
+                                    and by_id[binding_id].data_scope is DataScope.ALL
                                     for binding_id in decision.matching_binding_ids
                                 )
                             ),
