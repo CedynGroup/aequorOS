@@ -1165,9 +1165,10 @@ def _legacy_worker_cycle(engine: Engine, organization_id: str) -> object:
         ).scalar_one()
         claimed = connection.execute(
             text(
-                "SELECT id FROM jobs WHERE status = 'queued' "
-                "ORDER BY queued_at LIMIT 1 FOR UPDATE SKIP LOCKED"
-            )
+                "SELECT id FROM jobs WHERE id = :id AND status = 'queued' "
+                "FOR UPDATE SKIP LOCKED"
+            ),
+            {"id": job_id},
         ).scalar_one()
         assert claimed == job_id
         connection.execute(
