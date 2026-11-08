@@ -460,7 +460,12 @@ def run_official(session: Session, job: Job) -> None:
         bank_id=bank.id,
         as_of=as_of,
         reason="official_run",
-        provenance=job_queue.context_provenance(ctx, action="official_run.requested"),
+        # The hand-off attributes to the PARENT job's enqueue provenance (D9),
+        # not the reconstructed execution context: a scheduled official run
+        # carries a selected human's id in its payload but was initiated by
+        # the scheduler, and stamping the successor human would enumerate a
+        # worker-initiated job through the tenant job list (#186).
+        provenance=job_queue.inherited_provenance(job),
     )
     session.commit()
     job.progress = {
