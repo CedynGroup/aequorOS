@@ -32,16 +32,33 @@ from __future__ import annotations
 
 import importlib
 from types import ModuleType
+from typing import TYPE_CHECKING, cast
 
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
+from app.bi.domain.catalogue import catalogue
 from app.bi.jobs import bi_common
 from app.core.authorization import Module, Sensitivity
 from app.core.config import get_settings
 from app.models.job import Job
 from app.notifications.public import notifications
 from app.services import audit
+
+if TYPE_CHECKING:
+    from typing import Any
+
+    from app.bi.service.alerts import BankAlertEvaluation
+
+
+class _AlertsServiceModule(ModuleType):
+    """Shape of the lazily loaded alerts service module's contract."""
+
+    BUILDER_VERSION: int
+
+    def evaluate_bank(
+        self, session: Session, **kwargs: Any
+    ) -> BankAlertEvaluation: ...
 
 #: The service module this handler dispatches into. A dotted string, not an
 #: import, for the reason ``bi_common.BUILDER_MODULE`` is one.
@@ -60,10 +77,28 @@ ENTITY_TYPE = "bi_alert"
 SKIP_REASON_DISABLED = "bi_alerts_disabled"
 
 
-def load_alerts() -> ModuleType:
+def _notification_locator(measure_id: str) -> tuple[Module, Sensitivity]:
+    """The alert's SOURCE authority, not an unrelated DATA grant (#844).
+
+    BI authorizes catalogue members by their own module and sensitivity —
+    exactly what the recipient split's ``authorize_query`` admitted the
+    recipient on — so the notification's locator names the measure's
+    authority and the queue reads admit the reader the alert already
+    admitted. A measure the catalogue dropped falls back to the plane's own
+    DATA locator, which is the pre-locator behavior.
+    """
+    try:
+        measure = catalogue().measure(measure_id)
+    except KeyError:
+        return (Module.DATA, Sensitivity.AGGREGATED)
+    return (Module(measure.module), Sensitivity(measure.sensitivity))
+
+
+def load_alerts() -> _AlertsServiceModule:
     """Import the alerts service at call time. The ONE seam tests stub."""
 
-    return importlib.import_module(ALERTS_MODULE)
+    # Dynamic-import boundary: the module is typed by its contract shape.
+    return cast(_AlertsServiceModule, importlib.import_module(ALERTS_MODULE))
 
 
 def run_bi_alert_evaluate(session: Session, job: Job) -> None:
@@ -92,6 +127,9 @@ def run_bi_alert_evaluate(session: Session, job: Job) -> None:
         if copy is None:  # pragma: no cover - ``transitions`` filters on it
             continue
         for recipient_id in outcome.admitted_user_ids:
+            notification_module, notification_sensitivity = _notification_locator(
+                outcome.measure_id
+            )
             notifications.emit(
                 session,
                 TenantContext(organization_id=job.organization_id, actor_user_id=recipient_id),
@@ -103,8 +141,8 @@ def run_bi_alert_evaluate(session: Session, job: Job) -> None:
                 entity_id=outcome.alert_id,
                 recipient_user_id=recipient_id,
                 bank_id=bank.id,
-                module=Module.DATA,
-                sensitivity=Sensitivity.AGGREGATED,
+                module=notification_module,
+                sensitivity=notification_sensitivity,
             )
             notified += 1
         if outcome.event is not None:
