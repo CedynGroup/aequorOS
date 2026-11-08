@@ -1026,6 +1026,60 @@ def test_run_official_bi_handoff_inherits_the_parent_job_provenance(
         get_settings.cache_clear()
 
 
+def test_run_refresh_bi_handoff_inherits_the_parent_job_provenance(
+    db_session: Session, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The live-refresh BI hand-off attributes to the PARENT job's enqueue
+    provenance, not to the context reconstructed from the payload's
+    ``actor_user_id`` (D9): a worker-initiated ``pipeline_refresh`` — e.g. the
+    one a scheduled Temenos pull enqueues, whose payload still carries the
+    connection creator's id — must not stamp its successor ``human:<id>``,
+    which would enumerate the worker-initiated job through the tenant job
+    list (#186).
+    """
+    monkeypatch.setenv("BI_MART_ENQUEUE_ENABLED", "1")
+    get_settings.cache_clear()
+    try:
+        _seed(db_session)
+        scheduled = job_queue.enqueue(
+            db_session,
+            ORG_1,
+            "pipeline_refresh",
+            bank_id=SAMPLE_BANK_ID,
+            payload={"as_of_date": FIXTURE_AS_OF.isoformat(), "actor_user_id": str(USER_1)},
+            provenance=job_queue.worker_provenance("data.pipeline_refresh"),
+        )
+        db_session.commit()
+        pipeline.run_refresh(db_session, scheduled)
+
+        (job,) = _bi_refresh_jobs(db_session)
+        assert job.enqueued_by_principal == "worker"
+        assert job.enqueued_action == "data.pipeline_refresh"
+
+        # Clear the coalesced row so the interactive leg enqueues afresh.
+        db_session.execute(delete(Job).where(Job.id == job.id))
+        db_session.commit()
+        interactive = job_queue.enqueue(
+            db_session,
+            ORG_1,
+            "pipeline_refresh",
+            bank_id=SAMPLE_BANK_ID,
+            payload={"as_of_date": FIXTURE_AS_OF.isoformat(), "actor_user_id": str(USER_1)},
+            provenance=job_queue.context_provenance(
+                TenantContext(organization_id=ORG_1, actor_user_id=USER_1),
+                action="data.pipeline_refresh",
+            ),
+            locator=job_queue.JobLocator(module=Module.DATA, sensitivity=Sensitivity.CONFIDENTIAL),
+        )
+        db_session.commit()
+        pipeline.run_refresh(db_session, interactive)
+
+        (successor,) = _bi_refresh_jobs(db_session)
+        assert successor.enqueued_by_principal == f"human:{USER_1}"
+    finally:
+        get_settings.cache_clear()
+
+
 def test_a_partial_live_refresh_still_hands_off_to_bi(
     db_session: Session, monkeypatch: pytest.MonkeyPatch
 ) -> None:
