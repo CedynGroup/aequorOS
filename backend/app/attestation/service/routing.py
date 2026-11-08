@@ -44,7 +44,7 @@ from app.attestation.service import workflow
 from app.attestation.service.identity import ensure_signer_identity
 from app.attestation.service.policy import SigningPolicy
 from app.attestation.service.workflow import AttestationConflict
-from app.core.authorization import Module, Sensitivity
+from app.core.return_family_access import gate_for
 from app.identity.public import Bank, User
 from app.notifications.public import notifications
 from app.reporting.models.packages import RegulatoryPackage
@@ -568,6 +568,7 @@ def _notify(
     package: RegulatoryPackage,
     row: PackageSignatureRecipient,
 ) -> None:
+    source_gate = gate_for(package.return_family)
     notifications.emit(
         db,
         ctx,
@@ -583,8 +584,12 @@ def _notify(
         entity_id=package.id,
         recipient_user_id=row.recipient_user_id,
         bank_id=package.bank_id,
-        module=Module.REGULATORY,
-        sensitivity=Sensitivity.RESTRICTED,
+        # Routing already verified the nominee's whole-institution VIEW of the
+        # package's own family gate, and the SIGNER bundle carries no VIEW
+        # permission, so the locator must be that same source-read family —
+        # an ICAAP signer would never see a REGULATORY-located notification.
+        module=source_gate.module,
+        sensitivity=source_gate.sensitivity,
     )
     row.notified_at = datetime.now(UTC)
 
