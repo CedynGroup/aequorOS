@@ -242,6 +242,8 @@ def refresh_bank_data(
         payload=_job_payload(ctx, payload.as_of_date.isoformat(), payload.reason),
         run_after=utc_now(),
         coalesce_key=f"refresh:{bank.id}:{payload.as_of_date.isoformat()}",
+        locator=job_queue.JobLocator(module=Module.DATA, sensitivity=Sensitivity.CONFIDENTIAL),
+        provenance=job_queue.context_provenance(ctx, action="bank_data.refresh_requested"),
     )
     record_event(
         db,
@@ -286,6 +288,8 @@ def mint_official_run(
         payload=_job_payload(ctx, payload.as_of_date.isoformat(), payload.reason),
         run_after=utc_now(),
         coalesce_key=f"official:{bank.id}:{payload.as_of_date.isoformat()}",
+        locator=job_queue.JobLocator(module=Module.REGULATORY, sensitivity=Sensitivity.RESTRICTED),
+        provenance=job_queue.context_provenance(ctx, action="official_run.requested"),
     )
     record_event(
         db,

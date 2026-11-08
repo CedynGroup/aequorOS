@@ -24,6 +24,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.bi.public import BUILDER_VERSION
+from app.core.authorization import Module, Sensitivity
 from app.core.config import get_settings
 from app.data_engine.public import CanonicalPositionSnapshot, is_current_generation
 from app.db.base import utc_now
@@ -148,6 +149,10 @@ def start_backfill(db: Session, organization_id: str, payload: BiBackfillRequest
             "initiated_by": _INITIATED_BY,
         },
         run_after=utc_now(),
+        locator=job_queue.JobLocator(module=Module.DATA, sensitivity=Sensitivity.AGGREGATED),
+        provenance=job_queue.operator_provenance(
+            _INITIATED_BY, action="operator.bi_backfill_requested"
+        ),
         coalesce_key=coalesce_key_for(bank.id),
         entity_type=ENTITY_TYPE,
         entity_id=bank.id,

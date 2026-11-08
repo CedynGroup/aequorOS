@@ -20,6 +20,7 @@ from app.identity.schemas.bank_encryption import (
     BankKeyStatusRead,
     BankKeyTestRead,
 )
+from app.services import job_queue
 from app.services.audit import record_event
 
 
@@ -169,7 +170,12 @@ def connect(
     except KeyUnavailableError as exc:
         db.rollback()
         raise HTTPException(503, str(exc)) from exc
-    _ = reencryption.enqueue(db, ctx.organization_id, bank_id)
+    _ = reencryption.enqueue(
+        db,
+        ctx.organization_id,
+        bank_id,
+        provenance=job_queue.context_provenance(ctx, action="institution.key_reencryption"),
+    )
     _audit(db, ctx, bank_id, "connected", {"key_id": payload.key_id})
     db.commit()
     return status(db, ctx, bank_id)

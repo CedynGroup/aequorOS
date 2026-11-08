@@ -30,6 +30,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
+from app.core.authorization import Module, Sensitivity
 from app.identity import public as institution_profile
 from app.notifications.public import notifications
 from app.reporting.models.packages import (
@@ -322,6 +323,9 @@ def request_approval(
         entity_type="regulatory_package",
         entity_id=package.id,
         recipient_role="approver",
+        bank_id=package.bank_id,
+        module=Module.REGULATORY,
+        sensitivity=Sensitivity.RESTRICTED,
     )
     db.commit()
     return read_package(db, package)
@@ -359,6 +363,9 @@ def _notify_decision(
         entity_type="regulatory_package",
         entity_id=package.id,
         recipient_user_id=package.generated_by,
+        bank_id=package.bank_id,
+        module=Module.REGULATORY,
+        sensitivity=Sensitivity.RESTRICTED,
     )
 
 
@@ -730,9 +737,25 @@ def _notify_regulator_decision(
         "entity_type": "regulatory_package",
         "entity_id": package.id,
     }
-    rows = notifications.emit(db, ctx, **envelope, recipient_role="approver")
+    rows = notifications.emit(
+        db,
+        ctx,
+        **envelope,
+        recipient_role="approver",
+        bank_id=package.bank_id,
+        module=Module.REGULATORY,
+        sensitivity=Sensitivity.RESTRICTED,
+    )
     if all(row.recipient_user_id != package.generated_by for row in rows):
-        notifications.emit(db, ctx, **envelope, recipient_user_id=package.generated_by)
+        notifications.emit(
+            db,
+            ctx,
+            **envelope,
+            recipient_user_id=package.generated_by,
+            bank_id=package.bank_id,
+            module=Module.REGULATORY,
+            sensitivity=Sensitivity.RESTRICTED,
+        )
 
 
 def list_submission_events(  # noqa: PLR0913

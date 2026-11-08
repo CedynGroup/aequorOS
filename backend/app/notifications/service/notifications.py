@@ -21,6 +21,7 @@ from sqlalchemy import ColumnElement, String, and_, cast, false, func, or_, sele
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
+from app.core.authorization import InstitutionScope, Module, Sensitivity
 from app.core.security import ROLES
 from app.identity.public import Bank, User
 from app.notifications.models import Notification
@@ -49,6 +50,9 @@ def emit(  # noqa: PLR0913 - a notification carries the full display envelope
     entity_id: UUID | str | None = None,
     recipient_user_id: UUID | None = None,
     recipient_role: str | None = None,
+    bank_id: str | None = None,
+    module: Module,
+    sensitivity: Sensitivity,
 ) -> list[Notification]:
     """Add notification rows to the caller's transaction (no commit).
 
@@ -56,6 +60,13 @@ def emit(  # noqa: PLR0913 - a notification carries the full display envelope
       or higher (maker-checker queues, regulator outcomes).
     - ``recipient_user_id``: one row for that user.
     - neither: one org-wide row (``recipient_user_id`` NULL).
+
+    Every emitter also declares the typed source locator (mission D9): the
+    producing module, the data sensitivity of what the notification is about,
+    and the bank it concerns. ``institution_scope`` derives from ``bank_id``.
+    A row without a locator is hidden from every tenant read path, so the
+    arguments are not optional — an emitter that cannot classify its own
+    module must not emit.
     """
     if recipient_role is not None:
         recipient_ids: list[UUID | None] = list(
@@ -69,6 +80,7 @@ def emit(  # noqa: PLR0913 - a notification carries the full display envelope
         )
     else:
         recipient_ids = [recipient_user_id]
+    scope = InstitutionScope.INSTITUTION if bank_id is not None else InstitutionScope.ORGANIZATION
     rows = [
         Notification(
             organization_id=ctx.organization_id,
@@ -79,6 +91,10 @@ def emit(  # noqa: PLR0913 - a notification carries the full display envelope
             body=body,
             entity_type=entity_type,
             entity_id=None if entity_id is None else str(entity_id),
+            institution_scope=scope.value,
+            bank_id=bank_id,
+            module=module.value,
+            sensitivity=sensitivity.value,
         )
         for recipient in recipient_ids
     ]

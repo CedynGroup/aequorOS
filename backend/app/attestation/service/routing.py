@@ -44,6 +44,7 @@ from app.attestation.service import workflow
 from app.attestation.service.identity import ensure_signer_identity
 from app.attestation.service.policy import SigningPolicy
 from app.attestation.service.workflow import AttestationConflict
+from app.core.authorization import Module, Sensitivity
 from app.identity.public import Bank, User
 from app.notifications.public import notifications
 from app.reporting.models.packages import RegulatoryPackage
@@ -581,6 +582,9 @@ def _notify(
         entity_type="regulatory_package",
         entity_id=package.id,
         recipient_user_id=row.recipient_user_id,
+        bank_id=package.bank_id,
+        module=Module.REGULATORY,
+        sensitivity=Sensitivity.RESTRICTED,
     )
     row.notified_at = datetime.now(UTC)
 

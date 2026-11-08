@@ -19,6 +19,7 @@ from __future__ import annotations
 from sqlalchemy import Select, func, select
 from sqlalchemy.orm import Session
 
+from app.core.authorization import Module, Sensitivity
 from app.identity.public import Bank
 from app.live.models.live import CurrentFinancialFact
 from app.models import Job
@@ -58,6 +59,10 @@ def _enqueue_bank(
         bank_id=bank.id,
         payload={"as_of_date": as_of.isoformat(), "reason": reason},
         coalesce_key=f"refresh:{bank.id}:{as_of.isoformat()}",
+        # A governed-change reflow is a defined system enqueue: the platform
+        # fans it out in the mutation's own transaction, whoever the actor was.
+        locator=job_queue.JobLocator(module=Module.DATA, sensitivity=Sensitivity.CONFIDENTIAL),
+        provenance=job_queue.system_provenance("live.reflow"),
     )
     enqueue_mart_refresh(
         db,
@@ -65,6 +70,7 @@ def _enqueue_bank(
         bank_id=bank.id,
         as_of=as_of,
         reason=reason,
+        provenance=job_queue.system_provenance("live.reflow"),
     )
     return job
 

@@ -35,6 +35,7 @@ from sqlalchemy.orm import Session
 from app.ai.public import AiFeature, gates, observability, quota
 from app.api.deps import IcaapAccess
 from app.attestation.public import canonical_json, sha256_hex
+from app.core.authorization import Module, Sensitivity
 from app.core.config import get_settings
 from app.core.ids import new_uuid7
 from app.db.base import utc_now
@@ -229,6 +230,12 @@ def enqueue(
         entity_type="icaap_ai_suggestion",
         entity_id=suggestion.id,
         max_attempts=settings.ai.job_max_attempts,
+        locator=job_queue.JobLocator(module=Module.CAPITAL, sensitivity=Sensitivity.CONFIDENTIAL),
+        provenance=job_queue.context_provenance(
+            access.ctx,
+            action="icaap.ai_draft.requested",
+            decision_reference=str(suggestion.id),
+        ),
     )
     suggestion.job_id = job.id
     record_event(

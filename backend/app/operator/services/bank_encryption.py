@@ -12,6 +12,7 @@ from app.core.key_management.schemas import BankKeyConnect, BankKeyRead, BankKey
 from app.core.key_management.types import KeyStatus, KeyUnavailableError
 from app.identity.public import Bank
 from app.operator.models import TenantStorage
+from app.services import job_queue
 
 
 @dataclass(frozen=True)
@@ -55,6 +56,7 @@ def connect_key(  # noqa: PLR0913 - scoped operator mutation
     organization_id: str,
     bank_id: str,
     payload: BankKeyConnect,
+    provenance: job_queue.JobProvenance,
     providers: registry.ProviderFactory | None = None,
 ) -> BankKeyRead:
     providers = providers or registry.provider_for
@@ -86,7 +88,7 @@ def connect_key(  # noqa: PLR0913 - scoped operator mutation
         raise HTTPException(status_code=503, detail=str(exc)) from exc
     _update_storage_reference(db, row)
     db.flush()
-    _ = reencryption.enqueue(db, organization_id, bank_id)
+    _ = reencryption.enqueue(db, organization_id, bank_id, provenance=provenance)
     return _read(row)
 
 

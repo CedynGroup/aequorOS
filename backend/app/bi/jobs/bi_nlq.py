@@ -51,6 +51,7 @@ from sqlalchemy.orm import Session
 from app.ai.public import AiFeature, gates, observability, quota
 from app.ai.public import client as ai_client
 from app.api.deps import TenantContext
+from app.core.authorization import Module, Sensitivity
 from app.core.config import get_settings
 from app.identity.public import Bank
 from app.models.job import Job
@@ -304,6 +305,8 @@ def request_translation(  # noqa: PLR0913 - the whole frozen request, spelled ou
         },
         entity_type=ENTITY_TYPE,
         max_attempts=settings.ai.job_max_attempts,
+        locator=job_queue.JobLocator(module=Module.DATA, sensitivity=Sensitivity.AGGREGATED),
+        provenance=job_queue.context_provenance(ctx, action=EVENT_REQUESTED),
     )
     audit.record_event(
         db,

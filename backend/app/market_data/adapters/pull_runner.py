@@ -37,6 +37,7 @@ from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
+from app.core.authorization import Module, Sensitivity
 from app.core.config import get_settings
 from app.core.ids import new_uuid7
 from app.data_engine.public import (
@@ -317,6 +318,17 @@ def execute_pull(  # noqa: PLR0913 - one call carries the full pull context
             payload={"as_of_date": as_of_date.isoformat()},
             run_after=now + timedelta(seconds=settings.worker.pipeline_debounce_seconds),
             coalesce_key=f"refresh:{bank.id}:{as_of_date.isoformat()}",
+            locator=job_queue.JobLocator(module=Module.DATA, sensitivity=Sensitivity.CONFIDENTIAL),
+            # A scheduled pull has no acting principal; a user-triggered one
+            # attributes the refresh to that human.
+            provenance=job_queue.JobProvenance(
+                principal=(
+                    job_queue.WORKER_PRINCIPAL
+                    if actor_user_id is None
+                    else f"human:{actor_user_id}"
+                ),
+                action="data.pipeline_refresh",
+            ),
         )
 
     db.commit()

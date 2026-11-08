@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
 from app.case.service.cases import get_case_or_404
+from app.core.authorization import InstitutionScope, Module, Sensitivity
 from app.core.config import Settings
 from app.core.content_digest import ContentReadOverrun, DeclaredDigestError, digest_matches
 from app.db.base import utc_now
@@ -468,12 +469,21 @@ def request_parse(db: Session, ctx: TenantContext, document_id: UUID) -> ParseRe
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST, detail="Document must be uploaded first."
         )
+    # Direct Job(...) writes are producers too: they persist the same typed
+    # locator and enqueue provenance the queue stamps (mission D9). The case
+    # workspace is organization-scoped (no bank dimension).
+    provenance = job_queue.context_provenance(ctx, action="document.parse_requested")
     job = Job(
         organization_id=ctx.organization_id,
         job_type="document_parse",
         status="queued",
         entity_type="document",
         entity_id=str(document.id),
+        institution_scope=InstitutionScope.ORGANIZATION.value,
+        module=Module.RISK.value,
+        sensitivity=Sensitivity.CONFIDENTIAL.value,
+        enqueued_by_principal=provenance.principal,
+        enqueued_action=provenance.action,
     )
     db.add(job)
     document.parse_status = "pending"
@@ -564,6 +574,8 @@ def delete_document(
         "document_delete",
         entity_type="document",
         entity_id=document.id,
+        locator=job_queue.JobLocator(module=Module.RISK, sensitivity=Sensitivity.CONFIDENTIAL),
+        provenance=job_queue.context_provenance(ctx, action="document.deleted"),
     )
     record_event(
         db, ctx, event_type="document.deleted", entity_type="document", entity_id=document.id

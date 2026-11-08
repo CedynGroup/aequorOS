@@ -192,6 +192,8 @@ def run_tick(session: Session, job: Job) -> None:
         SCHEDULED_TICK,
         run_after=_next_hour_boundary(now),
         coalesce_key=f"tick:{org_id}",
+        locator=None,
+        provenance=job_queue.worker_provenance("scheduler.tick"),
     )
     session.commit()
     job.progress = {
@@ -243,7 +245,14 @@ def _enqueue_session_purge(session: Session, org_id: str, now: datetime) -> Job 
     )
     if existing is not None:
         return None
-    return job_queue.enqueue(session, org_id, SESSION_PURGE, coalesce_key=key)
+    return job_queue.enqueue(
+        session,
+        org_id,
+        SESSION_PURGE,
+        coalesce_key=key,
+        locator=None,
+        provenance=job_queue.worker_provenance("scheduler.session_purge"),
+    )
 
 
 def _enqueue_due_official_runs(
@@ -274,6 +283,10 @@ def _enqueue_due_official_runs(
             bank_id=bank.id,
             payload=payload,
             coalesce_key=f"scheduled-official:{bank.id}:{now.date().isoformat()}",
+            locator=job_queue.JobLocator(
+                module=Module.REGULATORY, sensitivity=Sensitivity.RESTRICTED
+            ),
+            provenance=job_queue.worker_provenance("scheduler.official_run"),
         )
         enqueued.append(str(bank.id))
     return enqueued
@@ -376,6 +389,10 @@ def _enqueue_due_live_refreshes(session: Session, org_id: str, now: datetime) ->
                 bank_id=bank.id,
                 payload={"as_of_date": as_of, "reason": "scheduled input-change recovery"},
                 coalesce_key=f"refresh:{bank.id}:{as_of}",
+                locator=job_queue.JobLocator(
+                    module=Module.DATA, sensitivity=Sensitivity.CONFIDENTIAL
+                ),
+                provenance=job_queue.worker_provenance("scheduler.input_recovery"),
             )
         )
     session.flush()
@@ -407,6 +424,7 @@ def _enqueue_due_bi_rebuilds(session: Session, org_id: str, now: datetime) -> li
             bank_id=due.bank_id,
             as_of=due.as_of,
             reason="scheduled mart recovery",
+            provenance=job_queue.worker_provenance("scheduler.mart_recovery"),
         )
         if job is not None:
             enqueued.append(job)
@@ -469,6 +487,8 @@ def _enqueue_bi_subscription_scan(session: Session, org_id: str, now: datetime) 
         BI_SUBSCRIPTION_SCAN,
         payload={"builder_version": BUILDER_VERSION},
         coalesce_key=coalesce_key,
+        locator=None,
+        provenance=job_queue.worker_provenance("scheduler.bi_subscription_scan"),
     )
 
 

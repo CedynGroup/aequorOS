@@ -30,6 +30,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
+from app.core.authorization import Module, Sensitivity
 from app.db.base import utc_now
 from app.identity.public import Bank
 from app.models.job import Job
@@ -183,6 +184,9 @@ def _emit_once(  # noqa: PLR0913 - dedupe key + display envelope
         body=body,
         entity_type="bank",
         entity_id=bank.id,
+        bank_id=bank.id,
+        module=Module.REGULATORY,
+        sensitivity=Sensitivity.CONFIDENTIAL,
     )
     return 1
 
@@ -209,7 +213,16 @@ def enqueue_due_deadline_scan(
     )
     if existing is not None:
         return False
-    job_queue.enqueue(session, organization_id, DEADLINE_SCAN, coalesce_key=key)
+    # The scan is a worker-only job: explicit non-tenant provenance, no tenant
+    # locator, so tenant users never see it (mission D9).
+    job_queue.enqueue(
+        session,
+        organization_id,
+        DEADLINE_SCAN,
+        coalesce_key=key,
+        locator=None,
+        provenance=job_queue.worker_provenance("worker.reporting_deadline_scan"),
+    )
     return True
 
 

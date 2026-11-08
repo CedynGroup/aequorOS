@@ -54,6 +54,7 @@ from app.models import Job
 from app.policy.public import module_scope
 from app.rating.service import implied_rating
 from app.reporting.service import filing_reconciliation
+from app.services import job_queue
 from app.services.audit import record_event
 
 REFRESH_EVENT = "bank_data.refreshed"
@@ -332,6 +333,7 @@ def run_refresh(session: Session, job: Job) -> None:
         bank_id=bank.id,
         as_of=as_of,
         reason="live_refresh",
+        provenance=job_queue.context_provenance(ctx, action="live.refresh"),
     )
     session.commit()
     if outcome.modules_failed:
@@ -458,6 +460,7 @@ def run_official(session: Session, job: Job) -> None:
         bank_id=bank.id,
         as_of=as_of,
         reason="official_run",
+        provenance=job_queue.context_provenance(ctx, action="official_run.requested"),
     )
     session.commit()
     job.progress = {

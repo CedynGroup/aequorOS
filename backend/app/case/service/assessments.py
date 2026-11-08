@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import TenantContext
 from app.case.service.cases import ensure_case_is_not_archived, get_case_or_404
 from app.case.service.scoring import SCORING_VERSION, run_scoring
+from app.core.authorization import InstitutionScope, Module, Sensitivity
 from app.db.base import utc_now
 from app.domain.risk_constants import ASSESSMENT_TYPES, CaseStatus
 from app.models import (
@@ -18,6 +19,7 @@ from app.models import (
     RiskAssessment,
     RiskAssessmentRun,
 )
+from app.services import job_queue
 from app.services.audit import record_event
 
 
@@ -28,9 +30,7 @@ class RunAssessmentResult:
     status: str
 
 
-def get_assessment_or_404(
-    db: Session, organization_id: str, assessment_id: UUID
-) -> RiskAssessment:
+def get_assessment_or_404(db: Session, organization_id: str, assessment_id: UUID) -> RiskAssessment:
     assessment = db.scalar(
         select(RiskAssessment).where(
             RiskAssessment.id == assessment_id,
@@ -118,12 +118,21 @@ def run_assessment(db: Session, ctx: TenantContext, assessment_id: UUID) -> RunA
     )
     db.add(run)
     db.flush()
+    # Direct Job(...) writes are producers too: they persist the same typed
+    # locator and enqueue provenance the queue stamps (mission D9). The case
+    # workspace is organization-scoped (no bank dimension).
+    provenance = job_queue.context_provenance(ctx, action="assessment.run_requested")
     job = Job(
         organization_id=ctx.organization_id,
         job_type="assessment_run",
         status="queued",
         entity_type="risk_assessment_run",
         entity_id=str(run.id),
+        institution_scope=InstitutionScope.ORGANIZATION.value,
+        module=Module.RISK.value,
+        sensitivity=Sensitivity.CONFIDENTIAL.value,
+        enqueued_by_principal=provenance.principal,
+        enqueued_action=provenance.action,
     )
     db.add(job)
     assessment.status = "running"

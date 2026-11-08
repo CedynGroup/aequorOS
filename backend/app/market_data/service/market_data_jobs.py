@@ -32,6 +32,7 @@ from sqlalchemy.orm import Session
 
 import app.market_data.adapters  # noqa: F401 - registers shipped vendor adapters
 from app.api.deps import TenantContext
+from app.core.authorization import Module, Sensitivity
 from app.core.config import get_settings
 from app.data_engine.public import bank_slug
 from app.db.base import utc_now
@@ -221,6 +222,10 @@ def enqueue_due_market_data_pulls(
                     "as_of_date": as_of.isoformat(),
                 },
                 coalesce_key=f"md_pull:{connection.id}:{as_of.isoformat()}",
+                locator=job_queue.JobLocator(
+                    module=Module.MARKETS, sensitivity=Sensitivity.CONFIDENTIAL
+                ),
+                provenance=job_queue.worker_provenance("scheduler.market_data_pull"),
             )
         )
     session.flush()

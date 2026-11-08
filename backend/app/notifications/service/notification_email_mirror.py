@@ -68,7 +68,17 @@ def enqueue_due_notification_mirror(session: Session, org_id: str, *, now: datet
     )
     if existing is not None:
         return False
-    job_queue.enqueue(session, org_id, JOB_TYPE, payload={}, coalesce_key=coalesce_key)
+    job_queue.enqueue(
+        session,
+        org_id,
+        JOB_TYPE,
+        payload={},
+        coalesce_key=coalesce_key,
+        # The mirror is a worker-only job: explicit non-tenant provenance, no
+        # tenant locator, so tenant users never see it (mission D9).
+        locator=None,
+        provenance=job_queue.worker_provenance("worker.notification_email_mirror"),
+    )
     return True
 
 

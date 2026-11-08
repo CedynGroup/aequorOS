@@ -37,6 +37,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
 from app.bi.jobs import bi_common
+from app.core.authorization import Module, Sensitivity
 from app.core.config import get_settings
 from app.models.job import Job
 from app.notifications.public import notifications
@@ -101,6 +102,9 @@ def run_bi_alert_evaluate(session: Session, job: Job) -> None:
                 entity_type=ENTITY_TYPE,
                 entity_id=outcome.alert_id,
                 recipient_user_id=recipient_id,
+                bank_id=bank.id,
+                module=Module.DATA,
+                sensitivity=Sensitivity.AGGREGATED,
             )
             notified += 1
         if outcome.event is not None:
