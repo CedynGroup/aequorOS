@@ -15,6 +15,10 @@ from app.bi.api.manage_bi_notifications import router as bi_notifications_router
 from app.bi.api.read_bi import require_bi_enabled
 from app.bi.api.read_bi import router as bi_read_router
 from app.bi.api.read_bi_feeds import router as bi_feeds_router
+from app.bi.jobs.bi_export import JOB_TYPE as BI_EXPORT_JOB_TYPE
+from app.bi.jobs.bi_export import (
+    requester_visibility_condition as bi_export_requester_visibility_condition,
+)
 from app.bi.jobs.bi_nlq import JOB_TYPE as BI_QUESTION_JOB_TYPE
 from app.bi.jobs.bi_nlq import requester_visibility_condition
 from app.capital.api.manage_capital_plan import router as capital_plan_router
@@ -231,6 +235,12 @@ v1_router.include_router(capital_router)
 # read alike (the find_question rule, applied before pagination).
 jobs_service.PRIVATE_REQUESTER_PREDICATES[BI_QUESTION_JOB_TYPE] = (
     requester_visibility_condition
+)
+# Same rule for governed exports: the status read (and its bearer-credential
+# download link) answers 404 to anyone but the requesting principal, so the
+# queue surface may not enumerate their rows either.
+jobs_service.PRIVATE_REQUESTER_PREDICATES[BI_EXPORT_JOB_TYPE] = (
+    bi_export_requester_visibility_condition
 )
 v1_router.include_router(jobs_router)
 v1_router.include_router(assessments_router)

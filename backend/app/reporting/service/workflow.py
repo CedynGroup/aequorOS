@@ -30,7 +30,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
-from app.core.authorization import Module, Sensitivity
+from app.core.return_family_access import FamilyGate, gate_for
 from app.identity import public as institution_profile
 from app.notifications.public import notifications
 from app.reporting.models.packages import (
@@ -324,8 +324,13 @@ def request_approval(
         entity_id=package.id,
         recipient_role="approver",
         bank_id=package.bank_id,
-        module=Module.REGULATORY,
-        sensitivity=Sensitivity.RESTRICTED,
+        # The family factor admits regulatory-package rows by the package's own
+        # family read gate, so the locator is that gate: an ICAAP preparer's
+        # decision notices are Capital/confidential material, and a
+        # REGULATORY-located row would hide them from exactly the preparer the
+        # factor admits.
+        module=_locator_gate(package).module,
+        sensitivity=_locator_gate(package).sensitivity,
     )
     db.commit()
     return read_package(db, package)
@@ -364,8 +369,8 @@ def _notify_decision(
         entity_id=package.id,
         recipient_user_id=package.generated_by,
         bank_id=package.bank_id,
-        module=Module.REGULATORY,
-        sensitivity=Sensitivity.RESTRICTED,
+        module=_locator_gate(package).module,
+        sensitivity=_locator_gate(package).sensitivity,
     )
 
 
@@ -708,6 +713,19 @@ _REGULATOR_DECISION_LABELS = {
 _COMMENT_SNIPPET_CHARS = 300
 
 
+def _locator_gate(package: RegulatoryPackage) -> FamilyGate:
+    """The read gate the package's own family is admitted by (#186).
+
+    The family visibility factor admits regulatory-package notifications by
+    the package's family, so the locator is that same gate: an ICAAP
+    preparer's decision notices are Capital/confidential material, and a
+    REGULATORY-located row would hide them from exactly the preparer the
+    factor admits. Every actor the filing chain reaches has already passed
+    this gate's view check, so no intended recipient loses a notice.
+    """
+    return gate_for(package.return_family)
+
+
 def _notify_regulator_decision(
     db: Session,
     ctx: TenantContext,
@@ -743,8 +761,8 @@ def _notify_regulator_decision(
         **envelope,
         recipient_role="approver",
         bank_id=package.bank_id,
-        module=Module.REGULATORY,
-        sensitivity=Sensitivity.RESTRICTED,
+        module=_locator_gate(package).module,
+        sensitivity=_locator_gate(package).sensitivity,
     )
     if all(row.recipient_user_id != package.generated_by for row in rows):
         notifications.emit(
@@ -753,8 +771,8 @@ def _notify_regulator_decision(
             **envelope,
             recipient_user_id=package.generated_by,
             bank_id=package.bank_id,
-            module=Module.REGULATORY,
-            sensitivity=Sensitivity.RESTRICTED,
+            module=_locator_gate(package).module,
+            sensitivity=_locator_gate(package).sensitivity,
         )
 
 

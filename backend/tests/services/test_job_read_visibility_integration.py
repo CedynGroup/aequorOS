@@ -538,6 +538,70 @@ def _private_bi_question(db: Session) -> Job:
     )
 
 
+def _private_bi_export(db: Session) -> Job:
+    """A governed export queued by USER_1 under its DATA/aggregated locator."""
+    return job_queue.enqueue(
+        db,
+        ORG_1,
+        "bi_export",
+        bank_id=SAMPLE_BANK_ID,
+        payload={
+            "principal_user_id": str(USER_1),
+            "format": "csv",
+            "export_class": "record_level",
+        },
+        locator=job_queue.JobLocator(module=Module.DATA, sensitivity=Sensitivity.AGGREGATED),
+        provenance=_human_provenance(),
+    )
+
+
+def test_a_private_bi_export_answers_only_to_its_requester(
+    db_client: TestClient, db_session: Session, unbound: None
+) -> None:
+    """A colleague holding the same authority can neither list nor read it.
+
+    An export's download link is a bearer credential, so the status route
+    answers 404 to anyone but the principal who asked for it — and the
+    existence of another person's export (its object path, filename, row
+    count, size) is not this caller's business either. The queue surface
+    (list and detail alike, before pagination) refuses a colleague exactly
+    the way it refuses them for a private question.
+    """
+    job = _private_bi_export(db_session)
+    db_session.commit()
+    requester_version = _grant(
+        db_session,
+        module=ModuleScope.DATA,
+        sensitivity=SensitivityScope.AGGREGATED,
+        bank_id=SAMPLE_BANK_ID,
+    )
+    colleague_version = _grant(
+        db_session,
+        user_id=COLLEAGUE_ID,
+        module=ModuleScope.DATA,
+        sensitivity=SensitivityScope.AGGREGATED,
+        bank_id=SAMPLE_BANK_ID,
+    )
+
+    mine = _list(db_client, requester_version, user_id=USER_1)
+    assert [row["id"] for row in mine["jobs"]] == [str(job.id)]
+    assert mine["total"] == 1
+
+    theirs = _list(db_client, colleague_version, user_id=COLLEAGUE_ID)
+    assert theirs["jobs"] == []
+    assert theirs["total"] == 0
+
+    hidden = db_client.get(
+        f"{BASE}/{job.id}",
+        headers=headers(user_id=COLLEAGUE_ID, authorization_version=colleague_version),
+    )
+    assert hidden.status_code == 404
+    detail = db_client.get(
+        f"{BASE}/{job.id}", headers=headers(authorization_version=requester_version)
+    )
+    assert detail.status_code == 200
+
+
 def test_a_private_bi_question_answers_only_to_its_requester(
     db_client: TestClient, db_session: Session, unbound: None
 ) -> None:
