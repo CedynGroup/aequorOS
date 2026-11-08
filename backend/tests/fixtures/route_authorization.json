@@ -4990,14 +4990,14 @@
         "app/api/deps.py:get_current_principal",
         "app/api/deps.py:get_tenant_context",
         "app/api/deps.py:get_tenant_db_session",
-        "app/case/api/authorization.py:require_case_job_access"
+        "app/api/deps.py:get_tenant_job_visibility"
       ],
       "authentication": "tenant",
       "dependencies": [
         "app.api.deps:get_current_principal",
         "app.api.deps:get_tenant_context",
         "app.api.deps:get_tenant_db_session",
-        "app.case.api.authorization:require_case_job_access",
+        "app.api.deps:get_tenant_job_visibility",
         "fastapi.security.http:HTTPBearer"
       ],
       "routes": [

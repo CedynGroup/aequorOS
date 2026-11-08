@@ -471,7 +471,9 @@ def request_parse(db: Session, ctx: TenantContext, document_id: UUID) -> ParseRe
         )
     # Direct Job(...) writes are producers too: they persist the same typed
     # locator and enqueue provenance the queue stamps (mission D9). The case
-    # workspace is organization-scoped (no bank dimension).
+    # workspace is organization-scoped (no bank dimension), and the parse
+    # route answers at the restricted disclosure level, so the locator names
+    # the sensitivity a poller must hold view authority for.
     provenance = job_queue.context_provenance(ctx, action="document.parse_requested")
     job = Job(
         organization_id=ctx.organization_id,
@@ -481,7 +483,7 @@ def request_parse(db: Session, ctx: TenantContext, document_id: UUID) -> ParseRe
         entity_id=str(document.id),
         institution_scope=InstitutionScope.ORGANIZATION.value,
         module=Module.RISK.value,
-        sensitivity=Sensitivity.CONFIDENTIAL.value,
+        sensitivity=Sensitivity.RESTRICTED.value,
         enqueued_by_principal=provenance.principal,
         enqueued_action=provenance.action,
     )

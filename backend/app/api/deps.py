@@ -7,7 +7,7 @@ from uuid import UUID
 
 from fastapi import Depends, HTTPException, Query, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
-from sqlalchemy import select
+from sqlalchemy import ColumnElement, select
 from sqlalchemy.orm import Session
 
 from app.core import security
@@ -32,6 +32,7 @@ from app.identity.service.authorization import EffectiveDataScope
 from app.integrations.storage.base import ObjectStorage
 from app.integrations.storage.s3 import get_object_storage
 from app.models import Bank, Organization, RegulatoryPackage, User
+from app.services import jobs as jobs_service
 
 # Declares a `bearerAuth` (HTTP bearer) security scheme in OpenAPI; auto_error=False so
 # we raise our own 401 (with WWW-Authenticate) instead of FastAPI's default 403.
@@ -2721,6 +2722,30 @@ def _package_maker_checker_conditions(
 
 
 Tenant = Annotated[TenantContext, Depends(get_tenant_context)]
+
+
+def get_tenant_job_visibility(
+    db: DbSession,
+    ctx: Tenant,
+) -> ColumnElement[bool]:
+    """Read visibility over the job queue for one tenant principal (#186).
+
+    The filter is SQL, applied inside the lookup: a queue row without a
+    complete locator, without tenant-principal provenance, or outside the
+    caller's current view authority answers the same 404 an unknown id does.
+    """
+    from app.identity.service.authorization import (  # noqa: PLC0415 - avoid deps/service cycle
+        load_permission_grants,
+    )
+
+    return jobs_service.tenant_visibility_condition(
+        load_permission_grants(db, ctx, Permission.VIEW)
+    )
+
+
+JobVisibility = Annotated[ColumnElement[bool], Depends(get_tenant_job_visibility)]
+
+
 MutationTenant = Annotated[TenantContext, Depends(get_mutation_tenant_context)]
 ScopedMutationTenant = Annotated[TenantContext, Depends(get_scoped_mutation_tenant_context)]
 ApproverTenant = Annotated[TenantContext, Depends(get_approver_tenant_context)]

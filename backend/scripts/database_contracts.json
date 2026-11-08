@@ -424,7 +424,7 @@
         "tests/db/test_database_roles_integration.py::test_api_assessment_updates_job_lifecycle[False]",
         "tests/db/test_database_roles_integration.py::test_api_assessment_updates_job_lifecycle[True]",
         "tests/db/test_database_roles_integration.py::test_api_coalesces_two_accepted_uploads_before_pickup",
-        "tests/db/test_database_roles_integration.py::test_api_coalescing_updates_payload_schedule_and_bank",
+        "tests/db/test_database_roles_integration.py::test_api_coalescing_keeps_the_locator_and_never_merges_differing_banks",
         "tests/db/test_database_roles_integration.py::test_api_document_parse_updates_job_lifecycle",
         "tests/db/test_database_roles_integration.py::test_api_jobs_refuse_another_tenants_bank[coalesce]",
         "tests/db/test_database_roles_integration.py::test_api_jobs_refuse_another_tenants_bank[insert]",
