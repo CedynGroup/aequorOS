@@ -30,7 +30,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
-from app.core.authorization import Module, Sensitivity
+from app.core.return_family_access import FamilyGate, gate_for
 from app.db.base import utc_now
 from app.identity.public import Bank
 from app.models.job import Job
@@ -101,6 +101,12 @@ def _scan_obligation(
     """Emit the due-soon / overdue / re-upload notifications one obligation earns."""
     scope = f"{obligation.return_code}:{obligation.reporting_date.isoformat()}"
     label = f"{obligation.return_code} {obligation.reporting_date.isoformat()}"
+    # The reader's admission to this deadline is the family read gate (the
+    # family_visibility_condition factor admits these rows per family), so the
+    # locator is that same gate: an ICAAP obligation is Capital/confidential
+    # material, and a REGULATORY-located row would hide it from exactly the
+    # ICAAP readers the family factor admits.
+    gate = gate_for(obligation.return_family)
     emitted = 0
     if obligation.rag == "due_soon":
         days_left = (obligation.due_date - today).days
@@ -110,6 +116,7 @@ def _scan_obligation(
                 db,
                 ctx,
                 bank,
+                gate=gate,
                 key=f"reporting.deadline.due_soon_{threshold}:{scope}",
                 severity="warning",
                 title=f"{label} due in {days_left} day(s)",
@@ -124,6 +131,7 @@ def _scan_obligation(
             db,
             ctx,
             bank,
+            gate=gate,
             key=f"reporting.deadline.overdue:{scope}:{today.isoformat()}",
             severity="critical",
             title=f"{label} is overdue",
@@ -140,6 +148,7 @@ def _scan_obligation(
                 db,
                 ctx,
                 bank,
+                gate=gate,
                 key=f"reporting.deadline.reupload_pending:{scope}:{today.isoformat()}",
                 severity="critical",
                 title=f"{label} awaits its ORASS re-upload",
@@ -157,6 +166,7 @@ def _emit_once(  # noqa: PLR0913 - dedupe key + display envelope
     ctx: TenantContext,
     bank: Bank,
     *,
+    gate: FamilyGate,
     key: str,
     severity: str,
     title: str,
@@ -185,11 +195,10 @@ def _emit_once(  # noqa: PLR0913 - dedupe key + display envelope
         entity_type="bank",
         entity_id=bank.id,
         bank_id=bank.id,
-        # Filing deadlines are return-plane material: the same REGULATORY/
-        # restricted sentence the return-family gate and the workflow emitters
-        # apply, so one binding admits both the return and its notifications.
-        module=Module.REGULATORY,
-        sensitivity=Sensitivity.RESTRICTED,
+        # The same family read gate the visibility factor admits this row by,
+        # so one sentence decides both the return and its notifications.
+        module=gate.module,
+        sensitivity=gate.sensitivity,
     )
     return 1
 

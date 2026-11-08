@@ -7,7 +7,7 @@ from datetime import date
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
-from app.core.authorization import Module, Sensitivity
+from app.core.return_family_access import gate_for
 from app.identity.public import Bank
 from app.notifications.public import notifications
 from app.reporting.service.eligibility import resolve_eligibility
@@ -86,10 +86,13 @@ def scan_instrument_statuses(db: Session, ctx: TenantContext, bank: Bank, today:
                 entity_type="bank",
                 entity_id=bank.id,
                 bank_id=bank.id,
-                # Return-plane material: the REGULATORY/restricted sentence the
-                # return-family gate and the workflow emitters apply.
-                module=Module.REGULATORY,
-                sensitivity=Sensitivity.RESTRICTED,
+                # The visibility factor admits these rows per return family, so
+                # the locator is that same family read gate: an ICAAP
+                # instrument's notices are Capital/confidential material, and a
+                # REGULATORY-located row would hide them from exactly the
+                # ICAAP readers the factor admits.
+                module=gate_for(definition.family).module,
+                sensitivity=gate_for(definition.family).sensitivity,
             )
             observations[f"sent:{key}"] = "yes"
             emitted += 1

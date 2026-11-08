@@ -23,15 +23,17 @@ from app.identity.models.authorization import AuthorizationBinding
 from app.identity.service import authorization
 from app.liquidity.schemas.regulatory_liquidity import RegulatoryRunCreate
 from app.liquidity.service import regulatory_liquidity
-from app.models import BankReportingPeriod, Notification, RegulatoryPackage, User
+from app.models import Bank, BankReportingPeriod, Notification, RegulatoryPackage, User
 from app.notifications.schemas import NotificationRead
 from app.notifications.service import notifications, reporting_deadline_scan
 from app.reporting.schemas.packages import (
     PackageApprovalDecisionCreate,
     PackageApprovalRequestCreate,
     RegulatoryPackageCreate,
+    ReportingObligationRead,
 )
 from app.reporting.service import generation, validation, workflow
+from app.reporting.service.registry import REGISTRY
 from tests.fixtures.canonical_bank_fixture import (
     DEMO_ORG_ID,
     DEMO_USER_ID,
@@ -532,6 +534,56 @@ def test_deadline_scan_is_idempotent_for_the_same_day(db_session: Session) -> No
     rows = list(db_session.scalars(select(Notification)))
     assert all(row.recipient_user_id is None for row in rows)
     assert all(row.entity_type == "bank" and row.entity_id == SAMPLE_BANK_ID for row in rows)
+
+
+def test_an_icaap_deadline_notification_is_located_on_the_icaap_source_gate(
+    db_session: Session,
+) -> None:
+    """The ICAAP reader the family factor admits can see their deadline rows.
+
+    ``family_visibility_condition`` admits deadline rows whose return family is
+    visible to the reader — for ICAAP that is the CAPITAL/confidential gate —
+    while the locator filter then demands the row's own module/sensitivity.
+    Stamping REGULATORY/restricted hid ICAAP due-soon and overdue notices from
+    a reader holding exactly the CAPITAL/confidential VIEW the family factor
+    had already admitted them by, so the locator is that same family gate.
+    """
+    materialize_canonical_test_book(db_session)
+    bank = db_session.get(Bank, SAMPLE_BANK_ID)
+    assert bank is not None
+    definition = REGISTRY["ICAAP-REPORT"]
+    obligation = ReportingObligationRead(
+        return_code=definition.code,
+        return_family=definition.family,
+        title=definition.title,
+        frequency=definition.frequency,
+        fidelity=definition.fidelity,
+        default_channel=definition.default_channel,
+        reporting_date=REPORTING_DATE,
+        due_date=REPORTING_DATE + timedelta(days=3),
+        package_id=None,
+        package_status="draft",
+        package_version=None,
+        rag="due_soon",
+    )
+
+    emitted = reporting_deadline_scan._scan_obligation(  # pyright: ignore[reportPrivateUsage] - the scan's emission unit
+        db_session,
+        TenantContext(organization_id=DEMO_ORG_ID),
+        bank,
+        obligation,
+        REPORTING_DATE + timedelta(days=1),
+    )
+    db_session.commit()
+
+    assert emitted == 1
+    rows = _notification_rows(
+        db_session,
+        f"reporting.deadline.due_soon_3:{definition.code}:{REPORTING_DATE.isoformat()}",
+    )
+    assert len(rows) == 1
+    assert rows[0].module == Module.CAPITAL.value
+    assert rows[0].sensitivity == Sensitivity.CONFIDENTIAL.value
 
 
 def test_deadline_scan_thresholds_fire_at_the_right_offsets(db_session: Session) -> None:
