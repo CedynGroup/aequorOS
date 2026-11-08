@@ -19,7 +19,7 @@ closed-map helper pins live in
 
 from __future__ import annotations
 
-from datetime import timedelta
+from datetime import date, timedelta
 from uuid import UUID, uuid4
 
 import pytest
@@ -48,9 +48,9 @@ from tests.support.helpers import ORG_1, headers
 
 AS_OF = FIXTURE_AS_OF.isoformat()
 _BASE = f"/api/v1/banks/{SAMPLE_BANK_ID}"
-# The fixture's canonical period ends 2026-06-30 and a refresh stamps today's
+# The fixture's canonical period ends 2026-03-31 and a refresh stamps today's
 # plane-2 snapshot rows, so the analysis window must span both.
-_WINDOW_START = FIXTURE_AS_OF - timedelta(days=30)
+_WINDOW_START = date(2026, 3, 1)
 _WINDOW_END = utc_now().date() + timedelta(days=1)
 
 
@@ -235,8 +235,10 @@ def test_window_analytics_serves_only_bound_modules(db_client: TestClient) -> No
     body = _window(db_client, auth)
     ratios = body["ratios"]
     daily = body["daily"]
+    assert {ratio["ratio"] for ratio in ratios} == {"lcr_pct", "nsfr_pct"}
     assert all(ratio["module"] == "liquidity" for ratio in ratios)
-    assert all(entry["module"] == "liquidity" for entry in daily)
+    assert {entry["module"] for entry in daily} == {"liquidity"}
+    assert all(entry["day_count"] > 0 for entry in daily)
     assert "capital" not in _window(db_client, auth)  # serialized omission
 
 
@@ -367,6 +369,7 @@ def test_fully_bound_viewer_keeps_the_response_shapes(db_client: TestClient) -> 
     assert window["start_date"] == _WINDOW_START.isoformat()
     assert window["end_date"] == _WINDOW_END.isoformat()
     modules = {entry["module"] for entry in window["daily"]}
+    assert {"liquidity", "capital"} <= modules
     assert modules <= {"liquidity", "capital", "credit", "irr", "fx", "ftp", "rating", "forecast"}
     ladder = db_client.get(
         f"{_BASE}/live-snapshots", headers=auth, params={"module": "capital"}
