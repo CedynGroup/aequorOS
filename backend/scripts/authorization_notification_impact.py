@@ -41,10 +41,14 @@ from app.core.authorization import (
     BindingGrant,
     BindingStatus,
     InstitutionScope,
+    Module,
     ModuleScope,
     Permission,
+    PrincipalLocator,
     PrincipalType,
+    ResourceLocator,
     RoleBundle,
+    Sensitivity,
     SensitivityScope,
 )
 from app.core.locator_visibility import locator_visibility
@@ -217,6 +221,38 @@ def _locator_conditions(
     return conditions
 
 
+#: The case-job types the superseded ``require_case_job_access`` dependency
+#: gated on the pre-#186 job reads (case workspace authorization).
+CASE_JOB_TYPES: tuple[str, ...] = ("assessment_run", "document_parse")
+
+
+def _former_case_view(db: Session, organization_id: str, user: User) -> bool:
+    """Whether the superseded case-job endpoint guard admitted this principal.
+
+    The removed dependency required one complete RISK/restricted ``view``
+    sentence AND a whole-institution data scope (case service
+    ``_permission_result``), and it 404'd case jobs to anyone else — so the
+    pre-#186 side of the baseline must deny the same rows it denied, or the
+    report invents visibility losses that never happened.
+    """
+    if user.auth_provider == "service" or not user.is_active:
+        return False
+    principal = PrincipalLocator(organization_id, user.id, PrincipalType.HUMAN)
+    resource = ResourceLocator(
+        organization_id, InstitutionScope.ORGANIZATION, None, Module.RISK, Sensitivity.RESTRICTED
+    )
+    try:
+        decision = authorization.evaluate_permission(db, principal, Permission.VIEW, resource)
+    except Exception:  # noqa: BLE001 - the evaluator refuses before the report lies
+        return False
+    if not decision.allowed:
+        return False
+    scope = authorization.effective_data_scope(
+        db, organization_id=organization_id, binding_ids=decision.matching_binding_ids
+    )
+    return scope.whole_institution
+
+
 def _notification_count(  # noqa: PLR0913 - recipient, tenant, family and locator are one count
     db: Session,
     organization_id: str,
@@ -252,19 +288,27 @@ def _notification_count(  # noqa: PLR0913 - recipient, tenant, family and locato
     return db.scalar(select(func.count()).select_from(Notification).where(*conditions)) or 0
 
 
-def _job_count(
+def _job_count(  # noqa: PLR0913 - tenant, locator, baseline guard and filter are one count
     db: Session,
     organization_id: str,
     locator: _Locator,
     grants: tuple[BindingGrant, ...] | None,
     *,
     actor_user_id: UUID | None = None,
+    former_case_admitted: bool = True,
 ) -> int:
-    """Tenant queue rows with this locator, plus the tenant-visibility filter if given."""
+    """Tenant queue rows with this locator, plus the tenant-visibility filter if given.
+
+    ``former_case_admitted`` reproduces the pre-#186 baseline for the case-job
+    types the superseded dependency gated: rows of those types count toward a
+    before-count only for a principal the old guard admitted.
+    """
     conditions: list[ColumnElement[bool]] = [
         Job.organization_id == organization_id,
         *_locator_conditions(Job, locator),
     ]
+    if grants is None and not former_case_admitted:
+        conditions.append(Job.job_type.notin_(CASE_JOB_TYPES))
     if grants is not None:
         conditions.append(tenant_visibility_condition(grants, actor_user_id=actor_user_id))
     return db.scalar(select(func.count()).select_from(Job).where(*conditions)) or 0
@@ -473,7 +517,13 @@ def build_notification_impact_report(
                     )
                 )
             for locator in job_locators:
-                before = _job_count(db, organization_id, locator, None)
+                before = _job_count(
+                    db,
+                    organization_id,
+                    locator,
+                    None,
+                    former_case_admitted=_former_case_view(db, organization_id, user),
+                )
                 after = _job_count(
                     db, organization_id, locator, grants, actor_user_id=user.id
                 )
