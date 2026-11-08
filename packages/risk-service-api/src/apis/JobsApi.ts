@@ -11,16 +11,23 @@
  */
 
 import * as runtime from "../runtime";
-import type { ErrorResponse, JobRead } from "../models/index";
+import type { ErrorResponse, JobListRead, JobRead } from "../models/index";
 import {
   ErrorResponseFromJSON,
   ErrorResponseToJSON,
+  JobListReadFromJSON,
+  JobListReadToJSON,
   JobReadFromJSON,
   JobReadToJSON,
 } from "../models/index";
 
 export interface GetJobRequest {
   jobId: string;
+}
+
+export interface ListJobsRequest {
+  limit?: number;
+  offset?: number;
 }
 
 /**
@@ -81,6 +88,61 @@ export class JobsApi extends runtime.BaseAPI {
     initOverrides?: RequestInit | runtime.InitOverrideFunction,
   ): Promise<JobRead> {
     const response = await this.getJobRaw(requestParameters, initOverrides);
+    return await response.value();
+  }
+
+  /**
+   * The visible slice of the queue, paged (#186).  The page and its total ride the same ``tenant_visibility_condition`` as GET detail — complete locator, tenant-principal provenance, one current view grant — so legacy and worker-only rows shift neither count nor page and their existence stays opaque.
+   * List Jobs
+   */
+  async listJobsRaw(
+    requestParameters: ListJobsRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<runtime.ApiResponse<JobListRead>> {
+    const queryParameters: any = {};
+
+    if (requestParameters["limit"] != null) {
+      queryParameters["limit"] = requestParameters["limit"];
+    }
+
+    if (requestParameters["offset"] != null) {
+      queryParameters["offset"] = requestParameters["offset"];
+    }
+
+    const headerParameters: runtime.HTTPHeaders = {};
+
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
+
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
+    }
+    const response = await this.request(
+      {
+        path: `/api/v1/jobs`,
+        method: "GET",
+        headers: headerParameters,
+        query: queryParameters,
+      },
+      initOverrides,
+    );
+
+    return new runtime.JSONApiResponse(response, (jsonValue) =>
+      JobListReadFromJSON(jsonValue),
+    );
+  }
+
+  /**
+   * The visible slice of the queue, paged (#186).  The page and its total ride the same ``tenant_visibility_condition`` as GET detail — complete locator, tenant-principal provenance, one current view grant — so legacy and worker-only rows shift neither count nor page and their existence stays opaque.
+   * List Jobs
+   */
+  async listJobs(
+    requestParameters: ListJobsRequest = {},
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<JobListRead> {
+    const response = await this.listJobsRaw(requestParameters, initOverrides);
     return await response.value();
   }
 }
