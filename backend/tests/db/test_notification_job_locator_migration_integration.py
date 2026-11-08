@@ -11,8 +11,6 @@ from __future__ import annotations
 
 import os
 from datetime import UTC, datetime
-from enum import StrEnum
-from typing import cast
 from uuid import uuid4
 
 import pytest
@@ -151,7 +149,7 @@ def test_the_vocabulary_constraints_accept_every_enum_value_and_reject_unknowns(
                 ).scalar_one(), f"ck_{table}_{column} accepts {value!r}"
             missing = [
                 member.value
-                for member in cast("type[StrEnum]", vocabulary)
+                for member in vocabulary
                 if not connection.execute(
                     text(
                         f"SELECT ({expression}) IS NOT FALSE "

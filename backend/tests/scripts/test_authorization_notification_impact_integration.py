@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import cast
 from uuid import uuid4
 
 import pytest
@@ -783,6 +782,26 @@ def test_a_private_bi_export_impacts_only_its_requester(db_session: Session) -> 
     assert colleague_row.required_grants == []
 
 
+def _read_json(path: Path) -> dict[str, object]:
+    # Test-only JSON file boundary; the producer's dataclass schema is checked below.
+    data: object = json.loads(path.read_text())
+    if not isinstance(data, dict):
+        raise TypeError("expected a JSON object")
+    return {str(key): item for key, item in data.items()}
+
+
+def _object_list(value: object) -> list[dict[str, object]]:
+    """Validate JSON array rows at the test boundary without a type cast."""
+    if not isinstance(value, list):
+        raise TypeError("expected a JSON array")
+    rows: list[dict[str, object]] = []
+    for row in value:
+        if not isinstance(row, dict):
+            raise TypeError("expected JSON objects")
+        rows.append({str(key): item for key, item in row.items()})
+    return rows
+
+
 def test_artifacts_are_private_non_overwriting_and_name_every_tenant_surface(
     db_session: Session, tmp_path: Path
 ) -> None:
@@ -808,15 +827,12 @@ def test_artifacts_are_private_non_overwriting_and_name_every_tenant_surface(
         "notif-after.json",
         "notif-exact-grants.json",
     }
-    before = cast("dict[str, object]", json.loads((output / "notif-before.json").read_text()))
-    after = cast("dict[str, object]", json.loads((output / "notif-after.json").read_text()))
-    grants = cast("dict[str, object]", json.loads((output / "notif-exact-grants.json").read_text()))
+    before = _read_json(output / "notif-before.json")
+    after = _read_json(output / "notif-after.json")
+    grants = _read_json(output / "notif-exact-grants.json")
     assert before["stage"] == "before" and after["stage"] == "after"
     assert before["generated_at"] == after["generated_at"] == grants["generated_at"]
-    routes = [
-        f'{row["method"]} {row["path"]}'
-        for row in cast("list[dict[str, str]]", before["routes"])
-    ]
+    routes = [f'{row["method"]} {row["path"]}' for row in _object_list(before["routes"])]
     assert routes == [
         "GET /api/v1/notifications",
         "POST /api/v1/notifications/{notification_id}/read",
@@ -824,9 +840,9 @@ def test_artifacts_are_private_non_overwriting_and_name_every_tenant_surface(
         "GET /api/v1/jobs",
         "GET /api/v1/jobs/{job_id}",
     ]
-    outcomes = cast("list[dict[str, object]]", after["outcomes"])
+    outcomes = _object_list(after["outcomes"])
     assert any(row["newly_hidden"] for row in outcomes)
-    required = cast("list[dict[str, object]]", grants["required_grants"])
+    required = _object_list(grants["required_grants"])
     assert len(required) >= 1
     assert all(row["role_bundle"] == "viewer" and row["permission"] == "view" for row in required)
     assert all(row["approval_required"] is True for row in required)
