@@ -448,6 +448,57 @@ def main() -> None:
                 ),
                 reason="exercise the dashboard through explicit effective authority",
             )
+        # Signing is its own grant since the Signer bundle (#185): every ceremony
+        # slot — preparer included — needs an exact-institution REG/restricted
+        # SIGN_OFF binding on the sample bank, and a checker slot additionally
+        # needs its exact-institution APPROVE duty. The organization-wide
+        # sentences above are read/mutation authority only and never qualify.
+        # These four are the officers the browser journeys certify and approve
+        # with: admin and analyst as preparers, sso_analyst through the IdP
+        # round trip, approver as the maker-checker checker.
+        for role in ("admin", "analyst", "sso_analyst", "approver"):
+            authorization.create_role_binding(
+                session,
+                organization_id=DEMO_ORG_ID,
+                principal_user_id=users[role].id,
+                principal_type=PrincipalType.HUMAN,
+                role_bundle=RoleBundle.SIGNER,
+                scope=authorization.BindingScope(
+                    InstitutionScope.INSTITUTION,
+                    SAMPLE_BANK_ID,
+                    ModuleScope.REGULATORY,
+                    SensitivityScope.RESTRICTED,
+                    data_scope=DataScope.ALL,
+                    data_scope_values=(),
+                ),
+                grantor=authorization.GrantorRef(
+                    GrantorType.SYSTEM,
+                    "e2e-bootstrap",
+                ),
+                reason="exercise the signing ceremony through real Signer authority",
+            )
+        # The checker's separate approval duty is also exact-institution now, so
+        # the organization-wide APPROVER sentence above does not satisfy it.
+        authorization.create_role_binding(
+            session,
+            organization_id=DEMO_ORG_ID,
+            principal_user_id=users["approver"].id,
+            principal_type=PrincipalType.HUMAN,
+            role_bundle=RoleBundle.APPROVER,
+            scope=authorization.BindingScope(
+                InstitutionScope.INSTITUTION,
+                SAMPLE_BANK_ID,
+                ModuleScope.REGULATORY,
+                SensitivityScope.RESTRICTED,
+                data_scope=DataScope.ALL,
+                data_scope_values=(),
+            ),
+            grantor=authorization.GrantorRef(
+                GrantorType.SYSTEM,
+                "e2e-bootstrap",
+            ),
+            reason="the checker slot signs and approves on one exact-bank authority",
+        )
         _grant_bootstrap_configure(session, users)
         authorization.create_role_binding(
             session,

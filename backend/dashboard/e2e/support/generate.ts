@@ -13,7 +13,9 @@ import { expect, type Page } from "@playwright/test";
  * own version-bound controls lock against; waiting until the header names the
  * minted version closes it for the journeys.
  */
-export async function generateCurrentVersion(page: Page): Promise<number> {
+export async function generateCurrentPackage(
+  page: Page,
+): Promise<{ id: string; version: number }> {
   const generate = page
     .getByRole("button", { name: /generate the return|^regenerate$/i })
     .first();
@@ -25,9 +27,14 @@ export async function generateCurrentVersion(page: Page): Promise<number> {
       response.ok(),
   );
   await generate.click();
-  const { version } = (await (await minted).json()) as { version: number };
+  const body = (await (await minted).json()) as { id: string; version: number };
   await expect(
-    page.getByText(new RegExp(`\\bVersion ${version} ·`)),
+    page.getByText(new RegExp(`\\bVersion ${body.version} ·`)),
   ).toBeVisible({ timeout: 30_000 });
+  return body;
+}
+
+export async function generateCurrentVersion(page: Page): Promise<number> {
+  const { version } = await generateCurrentPackage(page);
   return version;
 }
