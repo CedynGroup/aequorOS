@@ -8,13 +8,23 @@ import {
   waitFor,
   within,
 } from "@testing-library/react";
-import { afterEach, beforeEach, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, expect, it, vi, type Mock } from "vitest";
 
-const state = vi.hoisted(() => ({
+const state = vi.hoisted((): {
+  userId: string;
+  recipientUserId: string;
+  exactInstitution: boolean;
+  permissions: string[];
+  attestationRecipientUserId: string;
+  stepUp: Mock;
+  attest: Mock;
+  attestWithHeld: Mock;
+  submit: Mock;
+} => ({
   userId: "user-signer",
   recipientUserId: "user-signer",
   exactInstitution: true,
-  permissions: [] as string[],
+  permissions: [],
   attestationRecipientUserId: "",
   stepUp: vi.fn(),
   attest: vi.fn(),

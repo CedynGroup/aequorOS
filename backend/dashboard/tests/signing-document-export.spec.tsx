@@ -14,28 +14,50 @@
  */
 import "@testing-library/jest-dom/vitest";
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
-import { afterEach, beforeEach, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, expect, it, vi, type Mock } from "vitest";
 
-const state = vi.hoisted(() => ({
-  permissions: [] as string[],
-  exactInstitution: true,
-  artifacts: [] as {
+const state = vi.hoisted((): {
+  permissions: string[];
+  exactInstitution: boolean;
+  artifacts: {
     id: string;
     kind: string;
     createdAt: Date;
     objectPath: string;
-  }[],
-  versions: [] as { id: string; isFiled: boolean }[],
-  preview: undefined as unknown,
+  }[];
+  versions: { id: string; isFiled: boolean }[];
+  preview: unknown;
+  previewCalls: number;
+  placementCalls: number;
+  adoptedSignatureCalls: number;
+  signerIdentityCalls: number;
+  routedNominations: { signingRole: string; userId: string }[];
+  status: unknown;
+  statusLoading: boolean;
+  statusError: Error | null;
+  stepUpBlockedReason: string | null;
+  /** Whether the mocked canvas reports a drawn page, as a real one would. */
+  rendersPage: boolean;
+  /** Whether the mocked canvas reports a real render failure instead. */
+  renderFails: boolean;
+  fetchArtifactBytes: Mock;
+  fetchArtifactVersionBytes: Mock;
+  exportMutate: Mock;
+} => ({
+  permissions: [],
+  exactInstitution: true,
+  artifacts: [],
+  versions: [],
+  preview: undefined,
   previewCalls: 0,
   placementCalls: 0,
   adoptedSignatureCalls: 0,
   signerIdentityCalls: 0,
-  routedNominations: [] as { signingRole: string; userId: string }[],
-  status: undefined as unknown,
+  routedNominations: [],
+  status: undefined,
   statusLoading: false,
-  statusError: null as Error | null,
-  stepUpBlockedReason: null as string | null,
+  statusError: null,
+  stepUpBlockedReason: null,
   /** Whether the mocked canvas reports a drawn page, as a real one would. */
   rendersPage: true,
   /** Whether the mocked canvas reports a real render failure instead. */

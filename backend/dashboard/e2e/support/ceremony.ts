@@ -145,14 +145,14 @@ export async function namePreparer(
   // The ceremony reads the routing back through the status projection, so the
   // journeys fail here — naming exactly what the server recorded — rather than
   // at a fail-closed workspace whose reason cannot say who was missed.
-  const status = (await routedBody.json()) as {
+  const status: {
     package_id: string;
     recipients: {
       signing_role: string;
       status: string;
       recipient_user_id: string | null;
     }[];
-  };
+  } = await routedBody.json();
   expect(status.package_id).toBe(packageId);
   expect(status.recipients).toEqual(
     expect.arrayContaining([
@@ -170,7 +170,7 @@ export async function namePreparer(
     { headers: authorize },
   );
   const readBackOk = readBack.ok;
-  const readBackBody = (await readBack.json()) as typeof status;
+  const readBackBody: typeof status = await readBack.json();
   expect(readBackOk, JSON.stringify(readBackBody)).toBeTruthy();
   expect(readBackBody.recipients).toEqual(
     expect.arrayContaining([

@@ -2,9 +2,12 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
 
 const backendRequest = vi.hoisted(() => vi.fn());
-const session = vi.hoisted(() => ({
-  accessToken: "synthetic-access-token" as string | null,
-  heldAuthorization: "synthetic-step-up-token" as string | null,
+const session = vi.hoisted((): {
+  accessToken: string | null;
+  heldAuthorization: string | null;
+} => ({
+  accessToken: "synthetic-access-token",
+  heldAuthorization: "synthetic-step-up-token",
 }));
 
 vi.mock("@/auth", () => ({

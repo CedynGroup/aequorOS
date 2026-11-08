@@ -26,7 +26,7 @@ export async function POST(request: NextRequest): Promise<Response> {
 
   let body: AttestBody;
   try {
-    body = (await request.json()) as AttestBody;
+    body = await request.json();
   } catch {
     return NextResponse.json({ error: "invalid_json" }, { status: 400 });
   }
