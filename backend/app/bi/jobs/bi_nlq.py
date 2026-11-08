@@ -42,10 +42,10 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
 from types import ModuleType
-from typing import Any
+from typing import Any, cast
 from uuid import UUID
 
-from sqlalchemy import select
+from sqlalchemy import ColumnElement, false, or_, select
 from sqlalchemy.orm import Session
 
 from app.ai.public import AiFeature, gates, observability, quota
@@ -153,8 +153,15 @@ def _catalogue_module() -> ModuleType:
     return importlib.import_module(_CATALOGUE_MODULE)
 
 
+class _PromptVersionedModule(ModuleType):
+    """Shape of the lazily loaded NLQ service module's contract."""
+
+    PROMPT_VERSION: str
+
+
 def _prompt_version() -> str:
-    return str(load_nlq().PROMPT_VERSION)
+    # Dynamic-import boundary: the module is typed by its contract shape.
+    return cast(_PromptVersionedModule, load_nlq()).PROMPT_VERSION
 
 
 # ---------------------------------------------------------------------------
@@ -370,6 +377,30 @@ def find_question(
     if str((job.payload or {}).get("principal_user_id")) != str(principal_user_id):
         return None
     return job
+
+
+def requester_visibility_condition(actor_user_id: UUID | None) -> ColumnElement[bool]:
+    """The queue-surface form of the :func:`find_question` requester rule (#186).
+
+    A question is one reader's, translated over the members THAT reader may
+    see, so a queue row served to a colleague — in a collection, where no job
+    UUID is even needed to find it, or in detail — would disclose exactly what
+    that colleague's grants withhold. Rows of any other job type pass
+    untouched; this type's rows answer only to their requester, and an
+    anonymous principal gets none.
+    """
+    if actor_user_id is None:
+        return false()
+    # SQL-boundary cast: the JSON indexer's as_string (json ->> key, the same
+    # marker find_question reads) is untyped in the ORM layer.
+    requester_marker = cast(
+        ColumnElement[bool],
+        Job.payload["principal_user_id"].as_string() == str(actor_user_id),
+    )
+    return or_(
+        Job.job_type != JOB_TYPE,
+        requester_marker,
+    )
 
 
 def _aware(value: datetime) -> datetime:

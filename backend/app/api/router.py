@@ -15,6 +15,7 @@ from app.bi.api.manage_bi_notifications import router as bi_notifications_router
 from app.bi.api.read_bi import require_bi_enabled
 from app.bi.api.read_bi import router as bi_read_router
 from app.bi.api.read_bi_feeds import router as bi_feeds_router
+from app.bi.public import BI_QUESTION_JOB_TYPE, requester_visibility_condition
 from app.capital.api.manage_capital_plan import router as capital_plan_router
 from app.capital.api.read_sdi_diagnostics import router as sdi_diagnostics_router
 from app.capital.api.run_regulatory_capital import router as regulatory_capital_router
@@ -98,6 +99,7 @@ from app.reporting.api.examiner_surfaces import router as examiner_router
 from app.reporting.api.manage_filing_workflow import router as filing_workflow_router
 from app.reporting.api.manage_package_attachments import router as package_attachments_router
 from app.reporting.api.manage_regulatory_reporting import router as regulatory_reporting_router
+from app.services import jobs as jobs_service
 from app.storage.api import router as storage_download_router
 from app.stress.api.manage_enterprise_stress import router as enterprise_stress_router
 from app.stress.api.manage_enterprise_stress_signoff import (
@@ -222,6 +224,13 @@ v1_router.include_router(financial_workspace_router)
 v1_router.include_router(scenarios_router)
 v1_router.include_router(calculations_router)
 v1_router.include_router(capital_router)
+# The kernel job surface cannot import a feature (the boundary ratchet), so
+# the composition root registers BI's one-reader question predicate: a queue
+# row of that type answers only to its requester, on the list and the detail
+# read alike (the find_question rule, applied before pagination).
+jobs_service.PRIVATE_REQUESTER_PREDICATES[BI_QUESTION_JOB_TYPE] = (
+    requester_visibility_condition
+)
 v1_router.include_router(jobs_router)
 v1_router.include_router(assessments_router)
 v1_router.include_router(findings_router)

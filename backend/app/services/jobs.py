@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from uuid import UUID
 
 from fastapi import HTTPException, status
@@ -11,8 +11,30 @@ from app.core.authorization import BindingGrant, Permission
 from app.core.locator_visibility import locator_visibility
 from app.models import Job
 
+#: Requester predicates for job types one reader owns, REGISTERED by the
+#: composition root: the kernel cannot import the owning feature (the
+#: boundary ratchet), so the feature contributes its own requester predicate
+#: here — the worker's ``HANDLERS`` pattern. Each predicate answers, for one
+#: actor, whether a row of that type is the actor's to see; ``None`` (an
+#: anonymous principal) never sees a requester-owned row.
+PRIVATE_REQUESTER_PREDICATES: dict[str, Callable[[UUID | None], ColumnElement[bool]]] = {}
 
-def tenant_visibility_condition(grants: Sequence[BindingGrant]) -> ColumnElement[bool]:
+
+def _requester_condition(actor_user_id: UUID | None) -> ColumnElement[bool]:
+    """Fold every registered one-reader job type into the visibility filter."""
+    return and_(
+        *(
+            or_(Job.job_type != job_type, predicate(actor_user_id))
+            for job_type, predicate in PRIVATE_REQUESTER_PREDICATES.items()
+        )
+    )
+
+
+def tenant_visibility_condition(
+    grants: Sequence[BindingGrant],
+    *,
+    actor_user_id: UUID | None = None,
+) -> ColumnElement[bool]:
     """When a tenant principal may see one queue row (#186).
 
     A job is visible only when it carries a complete locator, its enqueue
@@ -20,10 +42,13 @@ def tenant_visibility_condition(grants: Sequence[BindingGrant]) -> ColumnElement
     never the ``worker``/``system`` markers or the staff-only ``operator:``
     form (mission D9) — and one current view grant matches the locator.
     Locator-less rows (legacy rows and defined worker/system enqueues) match
-    no clause and are hidden. Claim, retry and execution ignore every one of
+    no clause and are hidden. A registered one-reader job type additionally
+    answers only to the principal its owning feature names as the requester,
+    so the queue surface can never enumerate a row the feature's own routes
+    would refuse that caller. Claim, retry and execution ignore every one of
     these columns, so the worker keeps processing what tenants cannot see.
     """
-    return and_(
+    conditions: list[ColumnElement[bool]] = [
         Job.institution_scope.is_not(None),
         Job.module.is_not(None),
         Job.sensitivity.is_not(None),
@@ -39,7 +64,10 @@ def tenant_visibility_condition(grants: Sequence[BindingGrant]) -> ColumnElement
             module=Job.module,
             sensitivity=Job.sensitivity,
         ),
-    )
+    ]
+    if PRIVATE_REQUESTER_PREDICATES:
+        conditions.append(_requester_condition(actor_user_id))
+    return and_(*conditions)
 
 
 def get_job_or_404(
