@@ -29,7 +29,10 @@ from app.db.session import get_sessionmaker
 from app.identity.service import authorization
 from app.models import Bank, CanonicalGlAccount, CanonicalLoanEvent, CanonicalReferenceRow, User
 from app.policy.service.institution_types import FALLBACK_TYPE_CODE
-from tests.data_engine.api.test_ingestion_integration import seed_bank
+
+# Mapping onboarding is a configure duty: the journey officer holds the
+# explicit DATA Configurator grant that bank_seeding's seeder adds.
+from tests.support.bank_seeding import seed_bank
 from tests.support.helpers import ORG_1, ORG_2, USER_1, USER_2, headers
 
 pytestmark = pytest.mark.committing_db

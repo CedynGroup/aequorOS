@@ -27,11 +27,13 @@ def test_the_direct_job_write_persists_locator_and_provenance(
 
     job = db_session.get(Job, result.job_id)
     assert job is not None
-    # The case workspace is organization-scoped: no bank dimension.
+    # The case workspace is organization-scoped: no bank dimension. Assessment
+    # runs answer through restricted-gated routes, so the poller needs RISK
+    # restricted view authority.
     assert job.institution_scope == "organization"
     assert job.bank_id is None
     assert job.module == "risk"
-    assert job.sensitivity == "confidential"
+    assert job.sensitivity == "restricted"
     assert job.enqueued_by_principal == f"human:{ctx.actor_user_id}"
     assert job.enqueued_action == "assessment.run_requested"
 
