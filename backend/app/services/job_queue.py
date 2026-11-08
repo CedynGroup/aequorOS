@@ -409,7 +409,13 @@ def enqueue(  # noqa: PLR0913 - queue insert carries the full dispatch envelope
             InstitutionScope.INSTITUTION if bank_id is not None else InstitutionScope.ORGANIZATION
         )
     if coalesce_key is not None:
-        existing = db.scalar(
+        wanted = _locator_tuple(
+            bank_id=bank_id, institution_scope=institution_scope, locator=locator
+        )
+        wanted_attributed = _is_tenant_attributed(
+            None if provenance is None else provenance.principal
+        )
+        candidates = db.scalars(
             select(Job)
             .where(
                 Job.organization_id == organization_id,
@@ -418,13 +424,17 @@ def enqueue(  # noqa: PLR0913 - queue insert carries the full dispatch envelope
                 Job.started_at.is_(None),
             )
             .order_by(Job.queued_at)
-            .limit(1)
         )
-        if existing is not None and _locator_tuple_of(existing) == _locator_tuple(
-            bank_id=bank_id, institution_scope=institution_scope, locator=locator
-        ) and _is_tenant_attributed(existing.enqueued_by_principal) == _is_tenant_attributed(
-            None if provenance is None else provenance.principal
-        ):
+        existing = next(
+            (
+                candidate
+                for candidate in candidates
+                if _locator_tuple_of(candidate) == wanted
+                and _is_tenant_attributed(candidate.enqueued_by_principal) == wanted_attributed
+            ),
+            None,
+        )
+        if existing is not None:
             candidates = [
                 aware
                 for aware in (_as_aware(existing.run_after), _as_aware(run_after))
