@@ -451,13 +451,24 @@ def _aware(value: datetime) -> datetime:
 
 
 def _active(binding: BindingGrant, now: datetime) -> tuple[bool, str]:
+    return grant_is_active(binding, now)
+
+
+def grant_is_active(binding: BindingGrant, now: datetime | None = None) -> tuple[bool, str]:
+    """Whether one grant's lifecycle lets it count, and why not when it does not.
+
+    The lifecycle half of ``evaluate_permission``'s binding test, public so
+    the SQL locator predicate (``core.locator_visibility``) applies the same
+    lifecycle to row visibility instead of trusting its caller to pre-filter.
+    """
+    moment = _aware(now or datetime.now(UTC))
     if binding.status is BindingStatus.SUSPENDED:
         return False, "binding_suspended"
     if binding.status is BindingStatus.REVOKED or binding.revoked_at is not None:
         return False, "binding_revoked"
-    if _aware(binding.valid_from) > now:
+    if _aware(binding.valid_from) > moment:
         return False, "binding_not_yet_valid"
-    if binding.valid_until is not None and _aware(binding.valid_until) <= now:
+    if binding.valid_until is not None and _aware(binding.valid_until) <= moment:
         return False, "binding_expired"
     return True, "active"
 

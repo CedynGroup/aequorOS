@@ -19,6 +19,7 @@ from sqlalchemy.orm import Session
 
 from app.core.authorization import (
     DATA_SCOPE_VALUE_MAX_LENGTH,
+    ROLE_PERMISSIONS,
     AuthorizationDecision,
     BindingGrant,
     BindingStatus,
@@ -38,6 +39,7 @@ from app.core.authorization import (
     RoleBundle,
     Sensitivity,
     SensitivityScope,
+    grant_is_active,
     normalise_data_scope_values,
     principal_bundle_compatible,
 )
@@ -203,6 +205,41 @@ def load_effective_grants(
         )
     )
     return {row.id: _binding_grant(row) for row in rows if binding_is_effective(row)}
+
+
+def load_permission_grants(
+    db: Session,
+    ctx: TenantPrincipalContext,
+    permission: Permission,
+) -> tuple[BindingGrant, ...]:
+    """The caller's ACTIVE grants whose bundle carries ``permission``.
+
+    Read paths that filter rows by current authority in SQL (#186
+    notifications and jobs) load these once per request and hand them to
+    ``core.locator_visibility.locator_visibility``. Every grant still in the
+    result is active, bundle-compatible for the principal kind, and carries
+    the permission — the same three tests ``evaluate_permission`` applies, so
+    a revoked, expired or future binding stops contributing the moment it
+    would stop allowing an individual check.
+
+    An impersonation context (no tenant principal — the actor is staff, not a
+    grant holder) and an unloaded principal both produce an empty tuple: the
+    default-deny answer.
+    """
+    try:
+        principal = principal_locator(ctx)
+    except AuthorizationInvariantError:
+        return ()
+    principal_active, grants = _load_principal_grants(db, principal)
+    if not principal_active:
+        return ()
+    return tuple(
+        grant
+        for grant in grants
+        if grant_is_active(grant)[0]
+        and principal_bundle_compatible(grant.principal_type, grant.role_bundle)
+        and permission in ROLE_PERMISSIONS[grant.role_bundle]
+    )
 
 
 def effective_data_scope(
