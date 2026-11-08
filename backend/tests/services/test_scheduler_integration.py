@@ -413,6 +413,24 @@ def test_scheduled_and_requested_official_runs_coalesce_independently(db_session
         grantor=authorization.GrantorRef(GrantorType.SYSTEM, "scheduler-test"),
         reason="Authorize requested official execution",
     )
+    # The official-run row is stamped REGULATORY/restricted and the queue reads
+    # admit a row only under the caller's current view authority (#186), so the
+    # minting requester holds exactly that monitoring view.
+    authorization.create_role_binding(
+        db_session,
+        organization_id=ORG_1,
+        principal_user_id=requester.id,
+        principal_type=PrincipalType.HUMAN,
+        role_bundle=RoleBundle.VIEWER,
+        scope=authorization.BindingScope(
+            InstitutionScope.INSTITUTION,
+            SAMPLE_BANK_ID,
+            ModuleScope.REGULATORY,
+            SensitivityScope.RESTRICTED,
+        ),
+        grantor=authorization.GrantorRef(GrantorType.SYSTEM, "scheduler-test"),
+        reason="Authorize monitoring of the requested official run",
+    )
     ctx = TenantContext(
         organization_id=ORG_1,
         actor_user_id=requester.id,

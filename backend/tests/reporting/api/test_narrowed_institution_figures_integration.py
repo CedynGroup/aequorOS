@@ -367,6 +367,16 @@ def test_narrowed_credit_cannot_mint_through_shared_http_paths(
     version = _grant(
         role_bundle=RoleBundle.ANALYST, sensitivity_scope=SensitivityScope.CONFIDENTIAL
     )
+    # The official-run row is stamped REGULATORY/restricted and the queue reads
+    # admit a row only under the caller's current view authority (#186), so the
+    # minting analyst holds exactly that monitoring view. The narrowed-credit
+    # refusal above stays denied at the whole-institution RUN gate.
+    if operation == "official-runs":
+        version = _grant(
+            role_bundle=RoleBundle.VIEWER,
+            module_scope=ModuleScope.REGULATORY,
+            sensitivity_scope=SensitivityScope.RESTRICTED,
+        )
     allowed = db_client.post(
         f"{BASE}/{operation}",
         headers=headers(roles=("analyst",), authorization_version=version),
