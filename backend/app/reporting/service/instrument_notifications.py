@@ -86,8 +86,10 @@ def scan_instrument_statuses(db: Session, ctx: TenantContext, bank: Bank, today:
                 entity_type="bank",
                 entity_id=bank.id,
                 bank_id=bank.id,
+                # Return-plane material: the REGULATORY/restricted sentence the
+                # return-family gate and the workflow emitters apply.
                 module=Module.REGULATORY,
-                sensitivity=Sensitivity.CONFIDENTIAL,
+                sensitivity=Sensitivity.RESTRICTED,
             )
             observations[f"sent:{key}"] = "yes"
             emitted += 1

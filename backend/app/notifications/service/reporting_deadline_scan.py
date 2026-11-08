@@ -185,8 +185,11 @@ def _emit_once(  # noqa: PLR0913 - dedupe key + display envelope
         entity_type="bank",
         entity_id=bank.id,
         bank_id=bank.id,
+        # Filing deadlines are return-plane material: the same REGULATORY/
+        # restricted sentence the return-family gate and the workflow emitters
+        # apply, so one binding admits both the return and its notifications.
         module=Module.REGULATORY,
-        sensitivity=Sensitivity.CONFIDENTIAL,
+        sensitivity=Sensitivity.RESTRICTED,
     )
     return 1
 

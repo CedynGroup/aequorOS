@@ -112,8 +112,11 @@ def _emit_rows(db: Session) -> None:
         recipient_user_id=USER_1,
         entity_type="regulatory_package",
         entity_id=package_id,
+        bank_id=SAMPLE_BANK_ID,
         module=Module.REGULATORY,
-        sensitivity=Sensitivity.CONFIDENTIAL,
+        # The workflow's own classification: return-plane material is
+        # REGULATORY/restricted, and the fixture grants are restricted-scoped.
+        sensitivity=Sensitivity.RESTRICTED,
     )
     notifications.emit(
         db,
@@ -125,8 +128,9 @@ def _emit_rows(db: Session) -> None:
         recipient_user_id=None,
         entity_type="bank",
         entity_id=SAMPLE_BANK_ID,
+        bank_id=SAMPLE_BANK_ID,
         module=Module.REGULATORY,
-        sensitivity=Sensitivity.CONFIDENTIAL,
+        sensitivity=Sensitivity.RESTRICTED,
     )
     db.commit()
 

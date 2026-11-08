@@ -6,8 +6,9 @@ fan-out targets every active user holding the role *or higher* per the
 ``app.core.security.ROLES`` hierarchy; ``recipient_user_id=None`` with no
 role means one org-wide row, subject to the read-side visibility rules below.
 
-Read-side visibility: recipient and tenant scope also require return-family
-authority for filing notifications.
+Read-side visibility: recipient and tenant scope, the requester's current
+``view`` authority over the typed source locator (SQL-filtered before counts
+and pagination, #186), and return-family authority for filing notifications.
 ``mark_read``/``mark_all_read`` only ever touch rows visible to the actor.
 """
 
@@ -21,9 +22,10 @@ from sqlalchemy import ColumnElement, String, and_, cast, false, func, or_, sele
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
-from app.core.authorization import InstitutionScope, Module, Sensitivity
+from app.core.authorization import InstitutionScope, Module, Permission, Sensitivity
+from app.core.locator_visibility import locator_visibility
 from app.core.security import ROLES
-from app.identity.public import Bank, User
+from app.identity.public import Bank, User, load_permission_grants
 from app.notifications.models import Notification
 from app.reporting.models.packages import RETURN_FAMILIES, RegulatoryPackage
 from app.reporting.service import family_access
@@ -104,7 +106,14 @@ def emit(  # noqa: PLR0913 - a notification carries the full display envelope
 
 
 def visibility_conditions(db: Session, ctx: TenantContext) -> tuple[ColumnElement[bool], ...]:
-    """Recipient, tenant and return-family boundaries for notification disclosure."""
+    """Recipient, tenant, locator-authority and return-family boundaries for disclosure.
+
+    Every factor is re-evaluated per call, so a binding granted or revoked
+    between requests changes visibility immediately. A row the locator factor
+    refuses (legacy rows without a locator, modules or sensitivities the
+    caller holds no current ``view`` grant for) is indistinguishable from one
+    that does not exist.
+    """
     if ctx.actor_user_id is None:
         recipient = Notification.recipient_user_id.is_(None)
     else:
@@ -112,6 +121,17 @@ def visibility_conditions(db: Session, ctx: TenantContext) -> tuple[ColumnElemen
             Notification.recipient_user_id.is_(None),
             Notification.recipient_user_id == ctx.actor_user_id,
         )
+    # Current view authority over the persisted locator (#186): list, counts,
+    # pagination and both mark-read paths all filter through this factor, and
+    # it hides every locator-less (legacy) row.
+    locator_view = locator_visibility(
+        load_permission_grants(db, ctx, Permission.VIEW),
+        Permission.VIEW,
+        institution_scope=Notification.institution_scope,
+        bank_id=Notification.bank_id,
+        module=Notification.module,
+        sensitivity=Notification.sensitivity,
+    )
     deadline = or_(
         Notification.type.startswith("reporting.deadline."),
         Notification.type.startswith("reporting.instrument."),
@@ -152,6 +172,7 @@ def visibility_conditions(db: Session, ctx: TenantContext) -> tuple[ColumnElemen
     return (
         Notification.organization_id == ctx.organization_id,
         recipient,
+        locator_view,
         or_(
             and_(
                 ~deadline,
