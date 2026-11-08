@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
 from app.core.authorization import (
+    BindingGrant,
     BindingStatus,
     ConditionCheck,
     ConditionKind,
@@ -237,6 +238,84 @@ def test_signing_projection_distinguishes_exact_institution_authority(
     capabilities = projection.institution_capabilities[0].capabilities
     sign_off = next(cap for cap in capabilities if cap.permission is Permission.SIGN_OFF)
     assert sign_off.exact_institution is expected_exact
+
+
+def test_signing_projection_never_composes_partial_signer_rows(
+    db_session: Session, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Exact-bank signing stays on one whole-book binding in the projection.
+
+    An organization-scope whole-book Signer grant plus a separate
+    branch-narrowed exact-bank Signer grant must not project
+    ``exact_institution``: neither binding independently supplies exact-bank
+    whole-book authority, and the dashboard's signing eligibility combines
+    this flag with the projected data scope. The evaluators
+    (``family_access._evaluate``, stress ``require_signer``) deny the pair;
+    the narrowed REG pair cannot be stored today (the narrowed-module CHECK
+    confines narrowed scopes to credit), so the principal-grants loader is
+    patched to answer exactly as a database holding the historical pair
+    would.
+    """
+    _banks(db_session)
+    org_binding = _raw_binding(
+        organization_id=ORG_1,
+        institution_id=None,
+        institution_scope=InstitutionScope.ORGANIZATION,
+        module_scope=ModuleScope.REGULATORY,
+        sensitivity_scope=SensitivityScope.RESTRICTED,
+        role_bundle=RoleBundle.SIGNER,
+    )
+    db_session.add(org_binding)
+    db_session.commit()
+
+    branch_grant = BindingGrant(
+        binding_id=uuid4(),
+        organization_id=ORG_1,
+        principal_id=USER_1,
+        principal_type=PrincipalType.HUMAN,
+        role_bundle=RoleBundle.SIGNER,
+        institution_scope=InstitutionScope.INSTITUTION,
+        institution_id=BANK_1,
+        module_scope=ModuleScope.REGULATORY,
+        sensitivity_scope=SensitivityScope.RESTRICTED,
+        status=BindingStatus.ACTIVE,
+        valid_from=utc_now(),
+        valid_until=None,
+        revoked_at=None,
+        data_scope=DataScope.BRANCH,
+        data_scope_values=("Head office",),
+    )
+    real_load_principal_grants = authorization._load_principal_grants
+
+    def historical_pair(
+        db: Session, principal: PrincipalLocator
+    ) -> tuple[bool, list[BindingGrant]]:
+        active, bindings = real_load_principal_grants(db, principal)
+        if org_binding.id in {binding.binding_id for binding in bindings}:
+            return active, [
+                *bindings,
+                branch_grant,
+            ]
+        return active, bindings
+
+    monkeypatch.setattr(authorization, "_load_principal_grants", historical_pair)
+
+    bank = db_session.get(Bank, BANK_1)
+    assert bank is not None
+    projection = authorization.project_effective_authority(
+        db_session,
+        TenantContext(
+            organization_id=ORG_1,
+            actor_user_id=USER_1,
+            authorization_version=1,
+        ),
+        [bank],
+        failure_surface="test_exact_institution_signing_projection",
+    )
+
+    capabilities = projection.institution_capabilities[0].capabilities
+    sign_off = next(cap for cap in capabilities if cap.permission is Permission.SIGN_OFF)
+    assert sign_off.exact_institution is False
 
 
 @pytest.mark.parametrize("module", [Module.CREDIT, Module.INSTITUTION])
