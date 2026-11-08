@@ -10,15 +10,18 @@ internally consistent; the graceful-empty envelope answers a loan-less tenant.
 from __future__ import annotations
 
 from decimal import Decimal
+from uuid import UUID
 
 from fastapi.testclient import TestClient
 from sqlalchemy import select
 
+from app.core.authorization import ModuleScope, RoleBundle
 from app.db.session import get_sessionmaker
 from app.live.service import pipeline
-from app.models import BankReportingPeriod
+from app.models import BankReportingPeriod, User
 from app.services import job_queue
 from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID, materialize_canonical_test_book
+from tests.support.factories.authorization import grant_institution_authority
 from tests.support.factories.canonical import FIXTURE_AS_OF, seed_canonical_fixture
 from tests.support.helpers import ORG_1, headers
 
@@ -211,9 +214,33 @@ def test_concentration_monitor_measures_dimensions_with_honest_coverage(
 
 def test_concentration_limits_register_roundtrip(db_client: TestClient) -> None:
     _seed_and_refresh(db_client)
+    # The PUT is Configurator authority (exact-bank CREDIT/restricted configure);
+    # the scalar admin token alone is denied. A separate fixture officer holds
+    # the grant so ordinary fixture readers stay read-only.
+    configurator = UUID("cccccccc-cccc-4ccc-8ccc-ccccccccccc2")
+    with get_sessionmaker()() as session:
+        if session.get(User, configurator) is None:
+            session.add(
+                User(
+                    id=configurator,
+                    organization_id=ORG_1,
+                    email="credit.configurator@example.test",
+                    display_name="Credit configuration fixture officer",
+                )
+            )
+            session.flush()
+        grant_institution_authority(
+            session,
+            organization_id=ORG_1,
+            bank_id=SAMPLE_BANK_ID,
+            user_id=configurator,
+            bundle=RoleBundle.CONFIGURATOR,
+            module=ModuleScope.CREDIT,
+        )
+        session.commit()
     put = db_client.put(
         f"{_BASE}/concentration-limits",
-        headers=headers(),
+        headers=headers(user_id=configurator, roles=("viewer",)),
         json={
             "effective_from": "2026-01-01",
             "approved_by": "Board Credit Committee",
@@ -225,8 +252,8 @@ def test_concentration_limits_register_roundtrip(db_client: TestClient) -> None:
         },
     )
     assert put.status_code == 200, put.text
-    register = put.json()
-    assert len(register["limits"]) == 2
+    ack = put.json()
+    assert {row["dimension"] for row in ack["written"]} == {"single_name", "employer"}
 
     monitor = db_client.get(f"{_BASE}/credit/concentration", headers=headers()).json()
     assert monitor["limit_count"] == 2

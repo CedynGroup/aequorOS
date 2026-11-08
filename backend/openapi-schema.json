@@ -16516,6 +16516,90 @@
         "title": "ConcentrationLimitUpdate",
         "type": "object"
       },
+      "ConcentrationLimitWriteAcknowledgement": {
+        "additionalProperties": false,
+        "description": "Write evidence only. Read the register through its authorized GET.",
+        "properties": {
+          "approval_timestamp": {
+            "format": "date-time",
+            "title": "Approval Timestamp",
+            "type": "string"
+          },
+          "approved_by": {
+            "title": "Approved By",
+            "type": "string"
+          },
+          "bank_id": {
+            "title": "Bank Id",
+            "type": "string"
+          },
+          "effective_from": {
+            "format": "date",
+            "title": "Effective From",
+            "type": "string"
+          },
+          "written": {
+            "items": {
+              "$ref": "#/components/schemas/ConcentrationLimitWritten"
+            },
+            "title": "Written",
+            "type": "array"
+          }
+        },
+        "required": [
+          "bank_id",
+          "effective_from",
+          "approved_by",
+          "approval_timestamp",
+          "written"
+        ],
+        "title": "ConcentrationLimitWriteAcknowledgement",
+        "type": "object"
+      },
+      "ConcentrationLimitWritten": {
+        "additionalProperties": false,
+        "description": "Only a limit row created by this request, never a resolved or locked row.",
+        "properties": {
+          "bucket_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bucket Key"
+          },
+          "dimension": {
+            "title": "Dimension",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "limit_kind": {
+            "title": "Limit Kind",
+            "type": "string"
+          },
+          "value": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Value",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "dimension",
+          "limit_kind",
+          "bucket_key",
+          "value"
+        ],
+        "title": "ConcentrationLimitWritten",
+        "type": "object"
+      },
       "ConnectionMode": {
         "enum": [
           "OFS",
@@ -17518,6 +17602,73 @@
         "title": "CreditThresholdUpdate",
         "type": "object"
       },
+      "CreditThresholdWriteAcknowledgement": {
+        "additionalProperties": false,
+        "description": "Write evidence only. Read the register through its authorized GET.",
+        "properties": {
+          "approval_timestamp": {
+            "format": "date-time",
+            "title": "Approval Timestamp",
+            "type": "string"
+          },
+          "approved_by": {
+            "title": "Approved By",
+            "type": "string"
+          },
+          "bank_id": {
+            "title": "Bank Id",
+            "type": "string"
+          },
+          "effective_from": {
+            "format": "date",
+            "title": "Effective From",
+            "type": "string"
+          },
+          "written": {
+            "items": {
+              "$ref": "#/components/schemas/CreditThresholdWritten"
+            },
+            "title": "Written",
+            "type": "array"
+          }
+        },
+        "required": [
+          "bank_id",
+          "effective_from",
+          "approved_by",
+          "approval_timestamp",
+          "written"
+        ],
+        "title": "CreditThresholdWriteAcknowledgement",
+        "type": "object"
+      },
+      "CreditThresholdWritten": {
+        "additionalProperties": false,
+        "description": "Only a threshold generation created by this request, never a resolved row.",
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "threshold_code": {
+            "title": "Threshold Code",
+            "type": "string"
+          },
+          "value_pct": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Value Pct",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "threshold_code",
+          "value_pct"
+        ],
+        "title": "CreditThresholdWritten",
+        "type": "object"
+      },
       "CreditValidationRead": {
         "additionalProperties": false,
         "properties": {
@@ -17780,6 +17931,85 @@
           "reason"
         ],
         "title": "CrmHaircutUpdate",
+        "type": "object"
+      },
+      "CrmHaircutWriteAcknowledgement": {
+        "additionalProperties": false,
+        "description": "Write evidence only, without the merged defaults or prior generations.",
+        "properties": {
+          "approval_timestamp": {
+            "format": "date-time",
+            "title": "Approval Timestamp",
+            "type": "string"
+          },
+          "approved_by": {
+            "title": "Approved By",
+            "type": "string"
+          },
+          "bank_id": {
+            "title": "Bank Id",
+            "type": "string"
+          },
+          "effective_from": {
+            "format": "date",
+            "title": "Effective From",
+            "type": "string"
+          },
+          "notes": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notes"
+          },
+          "written": {
+            "items": {
+              "$ref": "#/components/schemas/CrmHaircutWritten"
+            },
+            "title": "Written",
+            "type": "array"
+          }
+        },
+        "required": [
+          "bank_id",
+          "effective_from",
+          "approved_by",
+          "approval_timestamp",
+          "notes",
+          "written"
+        ],
+        "title": "CrmHaircutWriteAcknowledgement",
+        "type": "object"
+      },
+      "CrmHaircutWritten": {
+        "additionalProperties": false,
+        "description": "Only a normalized haircut generation created by this request.",
+        "properties": {
+          "collateral_class": {
+            "title": "Collateral Class",
+            "type": "string"
+          },
+          "haircut_pct": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Haircut Pct",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "collateral_class",
+          "haircut_pct"
+        ],
+        "title": "CrmHaircutWritten",
         "type": "object"
       },
       "CurveOverlayComponentRead": {
@@ -19388,6 +19618,96 @@
           "reason"
         ],
         "title": "EclAssumptionUpdate",
+        "type": "object"
+      },
+      "EclAssumptionWriteAcknowledgement": {
+        "additionalProperties": false,
+        "description": "Write evidence only. Read the register/history through its authorized GET.",
+        "properties": {
+          "approval_timestamp": {
+            "format": "date-time",
+            "title": "Approval Timestamp",
+            "type": "string"
+          },
+          "approved_by": {
+            "title": "Approved By",
+            "type": "string"
+          },
+          "bank_id": {
+            "title": "Bank Id",
+            "type": "string"
+          },
+          "effective_from": {
+            "format": "date",
+            "title": "Effective From",
+            "type": "string"
+          },
+          "notes": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Notes"
+          },
+          "written": {
+            "items": {
+              "$ref": "#/components/schemas/EclAssumptionWritten"
+            },
+            "title": "Written",
+            "type": "array"
+          }
+        },
+        "required": [
+          "bank_id",
+          "effective_from",
+          "approved_by",
+          "approval_timestamp",
+          "notes",
+          "written"
+        ],
+        "title": "EclAssumptionWriteAcknowledgement",
+        "type": "object"
+      },
+      "EclAssumptionWritten": {
+        "additionalProperties": false,
+        "description": "Only an assumption generation created by this request, never a resolved row.",
+        "properties": {
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "lgd_pct": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Lgd Pct",
+            "type": "string"
+          },
+          "pd_pct": {
+            "pattern": "^(?!^[-+.]*$)[+-]?0*\\d*\\.?\\d*$",
+            "title": "Pd Pct",
+            "type": "string"
+          },
+          "segment": {
+            "title": "Segment",
+            "type": "string"
+          },
+          "stage": {
+            "title": "Stage",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "segment",
+          "stage",
+          "pd_pct",
+          "lgd_pct"
+        ],
+        "title": "EclAssumptionWritten",
         "type": "object"
       },
       "EclSuggestionRead": {
@@ -74958,7 +75278,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/ConcentrationLimitRegisterRead"
+                  "$ref": "#/components/schemas/ConcentrationLimitWriteAcknowledgement"
                 }
               }
             },
@@ -75177,7 +75497,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/CreditThresholdRegisterRead"
+                  "$ref": "#/components/schemas/CreditThresholdWriteAcknowledgement"
                 }
               }
             },
@@ -76460,7 +76780,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/CrmHaircutRegisterRead"
+                  "$ref": "#/components/schemas/CrmHaircutWriteAcknowledgement"
                 }
               }
             },
@@ -77968,7 +78288,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/EclAssumptionRegisterRead"
+                  "$ref": "#/components/schemas/EclAssumptionWriteAcknowledgement"
                 }
               }
             },

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import date
 from decimal import Decimal
+from uuid import UUID
 
 import pytest
 from fastapi import HTTPException
@@ -11,6 +12,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
+from app.core.authorization import ModuleScope, RoleBundle
 from app.credit.schemas.regulatory_credit import (
     ConcentrationLimitEntry,
     ConcentrationLimitUpdate,
@@ -24,16 +26,49 @@ from app.models import (
     CanonicalPositionSnapshot,
     IngestionBatch,
     LineageRecord,
+    User,
 )
 from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID, materialize_canonical_test_book
+from tests.support.factories.authorization import grant_institution_authority
 from tests.support.factories.canonical import FIXTURE_AS_OF, seed_canonical_fixture
 from tests.support.helpers import ORG_1, USER_1
 
 CTX = TenantContext(organization_id=ORG_1, actor_user_id=USER_1)
 
+#: The Configurator officer holding the exact-bank CREDIT/restricted configure
+#: sentence the register PUTs now require — a separate fixture officer so
+#: ordinary fixture readers stay read-only (configure grants no read).
+CONFIGURATOR = UUID("cccccccc-cccc-4ccc-8ccc-ccccccccccc4")
+CONFIGURE_CTX = TenantContext(
+    organization_id=ORG_1, actor_user_id=CONFIGURATOR, authorization_version=1
+)
+
+
+def grant_configure(db_session: Session) -> None:
+    if db_session.get(User, CONFIGURATOR) is None:
+        db_session.add(
+            User(
+                id=CONFIGURATOR,
+                organization_id=ORG_1,
+                email="credit.limits.configurator@example.test",
+                display_name="Credit limits configuration fixture officer",
+            )
+        )
+        db_session.flush()
+    grant_institution_authority(
+        db_session,
+        organization_id=ORG_1,
+        bank_id=SAMPLE_BANK_ID,
+        user_id=CONFIGURATOR,
+        bundle=RoleBundle.CONFIGURATOR,
+        module=ModuleScope.CREDIT,
+    )
+    db_session.flush()
+
 
 def _prepare(db_session: Session) -> Bank:
     materialize_canonical_test_book(db_session)
+    grant_configure(db_session)
     db_session.flush()
     seed_canonical_fixture(db_session, organization_id=ORG_1, bank_id=SAMPLE_BANK_ID)
     fact_derivation.derive_facts(db_session, CTX, SAMPLE_BANK_ID, FIXTURE_AS_OF)
@@ -83,7 +118,7 @@ def test_board_limits_flow_from_the_register_into_breaches(db_session: Session) 
     _stamp_employers(db_session)
     credit_params.update_concentration_limit_register(
         db_session,
-        CTX,
+        CONFIGURE_CTX,
         SAMPLE_BANK_ID,
         ConcentrationLimitUpdate(
             effective_from=date(2026, 1, 1),
@@ -212,7 +247,7 @@ def test_threshold_register_rejects_unknown_codes(db_session: Session) -> None:
     with pytest.raises(HTTPException) as raised:
         credit_params.update_credit_threshold_register(
             db_session,
-            CTX,
+            CONFIGURE_CTX,
             SAMPLE_BANK_ID,
             CreditThresholdUpdate(
                 effective_from=date(2026, 1, 1),

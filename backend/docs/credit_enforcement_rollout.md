@@ -17,7 +17,7 @@ this one document is the contract for all of them:
 - **Phase 5 (enforced in code, 2026-11-03):** the four Board register GETs and the
   three SDI credit reads — the last tenancy-only credit reads — now carry exact
   CREDIT sentences, and their dashboard consumers gate on the same capabilities.
-  The register PUTs remain issue 184's Configurator work.
+  The register PUTs moved to Configurator authority in Phase 6 below.
 
 Run the inventory against each target deployment immediately before each
 release. Store the dated output with the deployment record. Do not copy
@@ -878,7 +878,7 @@ Attach, in addition to Phase 4's record:
 | ------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Each of the seven routes names its CREDIT dependency, no scalar or CAP gate                                                                            | `tests/architecture/test_credit_route_authorization.py`                                                                                                                                                                                                                       |
 | A fifth register on the register router cannot ship ungated                                                                                            | the same file, `test_every_register_router_read_is_in_the_authority_table`                                                                                                                                                                                                    |
-| The four register PUTs remain #184's Configurator work                                                                                                 | the same file, `test_register_writes_stay_pending_configurator`                                                                                                                                                                                                               |
+| The four register PUTs carry #184's Configurator authority                                                                            | the same file, `test_register_writes_are_configurator_authority`                                                                                                                                                                                                               |
 | Exact sentence admitted; scalar roles, CAP, other modules, other sensitivities, sibling institution and narrowed scopes refused                        | `tests/credit/api/test_credit_route_authorization_integration.py`, `test_remainder_reads_require_one_complete_exact_credit_sentence`                                                                                                                                                      |
 | The registers page mounts its credit cards only on CREDIT/`restricted`, names that sentence when it refuses, and asks the API for nothing on a refusal | `dashboard/tests/credit/credit-register-authorization.e2e.spec.ts` (real bindings, three journeys)                                                                                                                                                                            |
 | An SDI capital and risk reader is not shown, and does not request, the loan classification or the named exposures without the matching Credit sentence | `dashboard/tests/credit/sdi-credit-authorization.e2e.spec.ts` (real bindings, three journeys)                                                                                                                                                                                 |
@@ -887,3 +887,36 @@ Attach, in addition to Phase 4's record:
 | The dashboard mounts and fetches credit registers only on `restricted`                                                                                 | `dashboard/tests/institution/institution-registers-access.spec.tsx`                                                                                                                                                                                                           |
 | The access-request prompt asks for the sentence that opens the page                                                                                    | `dashboard/tests/access/accessRequests.test.ts` (against the server's `_EXACT_ROUTE_REQUIREMENTS` table) and `tests/identity/api/test_grant_administration_integration.py::test_institution_route_access_request_carries_expiry_into_the_grant[/institution/registers-credit-restricted]` |
 | The SDI capital screen renders the requirement, and asks for no book, without CREDIT/`aggregated`                                                      | `dashboard/tests/credit/sdi-credit-panels.spec.tsx`                                                                                                                                                                                                                           |
+
+## Phase 6: the register PUTs are Configurator authority (enforced in code, 2026-11-08)
+
+The four Board register PUTs (ECL assumptions, CRM haircuts, concentration
+limits, credit thresholds) leave the scalar approver gate and now require one
+complete active CREDIT/`restricted` `configurator` binding for the exact
+institution (`credit_params._require_configure`, the same allow/deny rule as the
+LIQ registers). A scalar `admin`/`approver` token with no binding is denied 403
+before any row, audit event or refresh trigger is touched; a bank of another
+tenant stays an opaque 404.
+
+Configure authority grants no read. Every PUT response is a write-only
+acknowledgement built from this request alone — acting bank, submitted
+effective date and Board evidence, server approval timestamp, and the row IDs
+and code/value pairs this request wrote — never the resolved register, its
+history or the Basel CRM defaults (D3). A configure-only caller reads nothing;
+with a separate CREDIT/`restricted` viewer grant the register is read back
+through its view-gated GETs, which are unchanged. The 409 generation-order
+refusals keep the submitted code identifier but no longer interpolate the
+stored generation's effective date or Board evidence.
+
+Grant rows: the Configurator `configurator`/`credit`/`restricted` sentence from
+the grant administration UI, one per officer need — no backfill, no
+compatibility grant for former scalar-approver writers.
+
+### Executable verification (Phase 6)
+
+| Property                                                                                          | Pinned by                                                                        |
+| ------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| The four PUTs name the scoped-mutation dependency and no scalar or read-gate dependency           | `tests/architecture/test_credit_route_authorization.py`                          |
+| Scalar roles, no binding, wrong bank/module/sensitivity, partial, expired/future/suspended/revoked denied with no side effects; evaluator failure denies closed | `tests/credit/api/test_credit_configure_authorization_integration.py` |
+| Configure-only PUT succeeds without resolving the register; read denied until a separate viewer grant | the same file, `test_configure_only_put_succeeds_but_read_needs_separate_viewer` |
+| Acknowledgement discloses only this request's write evidence; 409s leak no stored dates or policy | the same file, `_assert_write_acknowledgement` / `_assert_private_conflicts`     |
