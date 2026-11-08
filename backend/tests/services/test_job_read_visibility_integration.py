@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import re
 from typing import Any
+from uuid import UUID
 
 import pytest
 from fastapi.testclient import TestClient
@@ -42,6 +43,7 @@ from tests.support.helpers import ORG_1, ORG_2, USER_1, headers
 BASE = "/api/v1/jobs"
 SAMPLE_BANK_ID = "BK-JOBV0001"
 SIBLING_BANK_ID = "BK-JOBV0002"
+COLLEAGUE_ID = UUID("cccccccc-cccc-4ccc-8ccc-cccccccccc01")
 _REQUEST_ID = re.compile(r'"request_id":"[^"]*"')
 
 
@@ -68,11 +70,16 @@ def _opaque(response: Any) -> str:
 
 
 def _list(
-    db_client: TestClient, version: int, **params: Any
+    db_client: TestClient,
+    version: int,
+    user_id: UUID | None = None,
+    **params: Any,
 ) -> dict[str, Any]:
     """GET the collection, asserting the route itself answers 200."""
     response = db_client.get(
-        BASE, headers=headers(authorization_version=version), params=params
+        BASE,
+        headers=headers(user_id=user_id, authorization_version=version),
+        params=params,
     )
     assert response.status_code == 200, response.text
     payload: dict[str, Any] = response.json()
@@ -91,16 +98,32 @@ def _clear_bindings(db: Session) -> None:
 def _grant(  # noqa: PLR0913 - every binding dimension is an input to the match
     db: Session,
     *,
+    user_id: UUID = USER_1,
     module: ModuleScope = ModuleScope.RISK,
     sensitivity: SensitivityScope = SensitivityScope.RESTRICTED,
     bank_id: str | None = None,
 ) -> int:
+    if (
+        db.scalars(
+            select(User).where(User.id == user_id, User.organization_id == ORG_1)
+        ).one_or_none()
+        is None
+    ):
+        db.add(
+            User(
+                id=user_id,
+                organization_id=ORG_1,
+                email=f"{user_id.hex[:12]}@example.test",
+                display_name="Job visibility colleague",
+            )
+        )
+        db.commit()
     if bank_id is not None:
         _add_bank(db, bank_id)
     binding = authorization.create_role_binding(
         db,
         organization_id=ORG_1,
-        principal_user_id=USER_1,
+        principal_user_id=user_id,
         principal_type=PrincipalType.HUMAN,
         role_bundle=RoleBundle.VIEWER,
         scope=authorization.BindingScope(
@@ -115,8 +138,9 @@ def _grant(  # noqa: PLR0913 - every binding dimension is an input to the match
     )
     db.commit()
     assert binding is not None
-    actor = db.get(User, USER_1)
-    assert actor is not None
+    actor = db.scalars(
+        select(User).where(User.id == user_id, User.organization_id == ORG_1)
+    ).one()
     return actor.authorization_version
 
 
@@ -474,3 +498,62 @@ def test_the_worker_still_claims_and_completes_rows(
     payload = _list(db_client, version)
     assert [row["id"] for row in payload["jobs"]] == [str(job.id)]
     assert payload["total"] == 1
+
+
+def _private_bi_question(db: Session) -> Job:
+    """A private BI question queued by USER_1 under its DATA/aggregated locator."""
+    return job_queue.enqueue(
+        db,
+        ORG_1,
+        "bi_nlq_translate",
+        bank_id=SAMPLE_BANK_ID,
+        payload={"principal_user_id": str(USER_1)},
+        locator=job_queue.JobLocator(module=Module.DATA, sensitivity=Sensitivity.AGGREGATED),
+        provenance=_human_provenance(),
+    )
+
+
+def test_a_private_bi_question_answers_only_to_its_requester(
+    db_client: TestClient, db_session: Session, unbound: None
+) -> None:
+    """A colleague holding the same authority can neither list nor read it.
+
+    A question is one reader's, translated over the members THAT reader may
+    see, so the dedicated question routes already refuse a colleague — the
+    queue surface (list and detail alike, before pagination) refuses them
+    too: the existence of another person's question is not this caller's
+    business (the bi_export rule).
+    """
+    job = _private_bi_question(db_session)
+    db_session.commit()
+    requester_version = _grant(
+        db_session,
+        module=ModuleScope.DATA,
+        sensitivity=SensitivityScope.AGGREGATED,
+        bank_id=SAMPLE_BANK_ID,
+    )
+    colleague_version = _grant(
+        db_session,
+        user_id=COLLEAGUE_ID,
+        module=ModuleScope.DATA,
+        sensitivity=SensitivityScope.AGGREGATED,
+        bank_id=SAMPLE_BANK_ID,
+    )
+
+    mine = _list(db_client, requester_version, user_id=USER_1)
+    assert [row["id"] for row in mine["jobs"]] == [str(job.id)]
+    assert mine["total"] == 1
+
+    theirs = _list(db_client, colleague_version, user_id=COLLEAGUE_ID)
+    assert theirs["jobs"] == []
+    assert theirs["total"] == 0
+
+    hidden = db_client.get(
+        f"{BASE}/{job.id}",
+        headers=headers(user_id=COLLEAGUE_ID, authorization_version=colleague_version),
+    )
+    assert hidden.status_code == 404
+    detail = db_client.get(
+        f"{BASE}/{job.id}", headers=headers(authorization_version=requester_version)
+    )
+    assert detail.status_code == 200

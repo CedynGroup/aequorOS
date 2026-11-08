@@ -2731,13 +2731,17 @@ def get_tenant_job_visibility(
     The filter is SQL, applied inside the lookup: a queue row without a
     complete locator, without tenant-principal provenance, or outside the
     caller's current view authority answers the same 404 an unknown id does.
+    A one-reader question (the BI plane's private job type) additionally
+    answers only to its requester, so the collection can never enumerate a
+    colleague's proposal the dedicated question routes would refuse them.
     """
     from app.identity.service.authorization import (  # noqa: PLC0415 - avoid deps/service cycle
         load_permission_grants,
     )
 
     return jobs_service.tenant_visibility_condition(
-        load_permission_grants(db, ctx, Permission.VIEW)
+        load_permission_grants(db, ctx, Permission.VIEW),
+        actor_user_id=ctx.actor_user_id,
     )
 
 
