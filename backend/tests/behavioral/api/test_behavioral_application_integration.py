@@ -48,7 +48,7 @@ from tests.fixtures.canonical_bank_fixture import (
     SAMPLE_BANK_ID,
     materialize_canonical_test_book,
 )
-from tests.support.helpers import ORG_1, USER_1, headers
+from tests.support.helpers import ORG_1, ORG_2, USER_1, headers
 
 __all__ = ["_clean_authority_and_artifacts", "_stable_estimates"]
 
@@ -621,6 +621,26 @@ def test_wrong_bank_configure_binding_cannot_propose(db_client: TestClient) -> N
 
     assert response.status_code == 403
     assert _counts() == before
+
+
+def test_cross_tenant_caller_cannot_list_or_review_proposals(
+    db_client: TestClient,
+) -> None:
+    """A foreign tenant hears the same 404 as an unknown id, with no mutation."""
+    _seed_book()
+    _, proposer_version = _grant()
+    proposal_id = _ack(_propose(db_client, proposer_version)).proposal_id
+    before = _counts()
+
+    foreign_queue = db_client.get(f"{BASE}/proposals", headers=headers(ORG_2))
+    foreign_review = db_client.post(
+        f"{BASE}/proposals/{proposal_id}/review", headers=headers(ORG_2)
+    )
+
+    assert foreign_queue.status_code == 404
+    assert foreign_review.status_code == 404
+    assert _counts() == before
+    assert _proposal(proposal_id).status == "pending"
 
 
 @pytest.mark.parametrize(
