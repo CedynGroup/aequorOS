@@ -148,7 +148,10 @@ def test_coalescing_keeps_the_original_locator_and_provenance(db_session: Sessio
         bank_id="BK-TEST0001",
         coalesce_key="refresh:x",
         locator=job_queue.JobLocator(module=Module.DATA, sensitivity=Sensitivity.CONFIDENTIAL),
-        provenance=job_queue.system_provenance("live.reflow"),
+        provenance=job_queue.context_provenance(
+            TenantContext(organization_id=ORG_1, actor_user_id=uuid4()),
+            action="data.reflow",
+        ),
     )
     db_session.commit()
 
@@ -158,12 +161,58 @@ def test_coalescing_keeps_the_original_locator_and_provenance(db_session: Sessio
     assert second.enqueued_by_principal == first.enqueued_by_principal
 
 
+def test_a_tenant_enqueue_never_merges_into_a_worker_or_system_row(db_session: Session) -> None:
+    locator = job_queue.JobLocator(module=Module.DATA, sensitivity=Sensitivity.CONFIDENTIAL)
+    worker_row = job_queue.enqueue(
+        db_session,
+        ORG_1,
+        "pipeline_refresh",
+        bank_id="BK-TEST0001",
+        coalesce_key="refresh:x",
+        locator=locator,
+        provenance=job_queue.worker_provenance("worker.refresh"),
+    )
+    db_session.commit()
+    tenant_row = job_queue.enqueue(
+        db_session,
+        ORG_1,
+        "pipeline_refresh",
+        bank_id="BK-TEST0001",
+        coalesce_key="refresh:x",
+        locator=locator,
+        provenance=job_queue.context_provenance(
+            TenantContext(organization_id=ORG_1, actor_user_id=uuid4()),
+            action="data.refresh",
+        ),
+    )
+    db_session.commit()
+
+    # The tenant caller gets their own row: the surviving worker row is
+    # invisible to tenant polls, so merging would hand back an unpollable id.
+    assert tenant_row.id != worker_row.id
+    assert tenant_row.enqueued_by_principal is not None
+    assert tenant_row.enqueued_by_principal.startswith("human:")
+    # ... and the reverse merge direction is equally refused.
+    again_worker = job_queue.enqueue(
+        db_session,
+        ORG_1,
+        "pipeline_refresh",
+        bank_id="BK-TEST0001",
+        coalesce_key="refresh:x",
+        locator=locator,
+        provenance=job_queue.system_provenance("live.reflow"),
+    )
+    db_session.commit()
+    assert again_worker.id == worker_row.id
+
+
 def test_coalescing_never_merges_differing_locators(db_session: Session) -> None:
     first = job_queue.enqueue(
         db_session,
         ORG_1,
         "pipeline_refresh",
         bank_id="BK-TEST0001",
+        coalesce_key="refresh:x",
         locator=job_queue.JobLocator(module=Module.DATA, sensitivity=Sensitivity.CONFIDENTIAL),
         provenance=job_queue.worker_provenance("worker.refresh"),
     )
@@ -174,6 +223,7 @@ def test_coalescing_never_merges_differing_locators(db_session: Session) -> None
         ORG_1,
         "pipeline_refresh",
         bank_id="BK-TEST0002",
+        coalesce_key="refresh:x",
         locator=job_queue.JobLocator(module=Module.DATA, sensitivity=Sensitivity.CONFIDENTIAL),
         provenance=job_queue.worker_provenance("worker.refresh"),
     )
@@ -183,6 +233,7 @@ def test_coalescing_never_merges_differing_locators(db_session: Session) -> None
         ORG_1,
         "pipeline_refresh",
         bank_id="BK-TEST0001",
+        coalesce_key="refresh:x",
         locator=job_queue.JobLocator(module=Module.RISK, sensitivity=Sensitivity.CONFIDENTIAL),
         provenance=job_queue.worker_provenance("worker.refresh"),
     )
@@ -192,6 +243,7 @@ def test_coalescing_never_merges_differing_locators(db_session: Session) -> None
         db_session,
         ORG_1,
         "pipeline_refresh",
+        coalesce_key="refresh:x",
         provenance=job_queue.system_provenance("system.op"),
     )
     db_session.commit()

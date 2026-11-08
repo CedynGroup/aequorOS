@@ -41,6 +41,7 @@ from app.core.authorization import (
 )
 from app.core.locator_visibility import locator_visibility
 from app.identity.public import load_permission_grants
+from app.identity.service import authorization
 from app.models import AuthorizationBinding, Job, Notification, Organization, User
 from app.services.jobs import tenant_visibility_condition
 from scripts.authorization_configure_impact import ExistingGrant
@@ -378,7 +379,7 @@ def build_notification_impact_report(
                     _date(row.valid_from),
                     _date(row.valid_until),
                     _date(row.revoked_at),
-                    False,
+                    authorization.binding_is_effective(row, now=moment),
                 )
             )
         notif_locators = _tenant_locators(db, Notification, organization_id)

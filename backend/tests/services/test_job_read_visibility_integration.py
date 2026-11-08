@@ -143,6 +143,20 @@ def test_a_matching_current_grant_sees_the_job(
     assert response.status_code == 200, response.text
 
 
+@pytest.mark.usefixtures("unbound")
+def test_the_demo_mode_veto_hides_jobs_with_a_matching_grant(
+    db_client: TestClient, db_session: Session, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from app.core.config import get_settings  # noqa: PLC0415
+
+    version = _grant(db_session)
+    job = _visible_job(db_session)
+    db_session.commit()
+    monkeypatch.setattr(get_settings().app, "demo_mode", True)
+    response = db_client.get(f"{BASE}/{job.id}", headers=headers(authorization_version=version))
+    assert response.status_code == 404, _opaque(response)
+
+
 @pytest.mark.parametrize(
     ("grant_kwargs", "locator_kwargs"),
     [
@@ -174,7 +188,9 @@ def test_a_non_matching_grant_hides_the_job(
     }
     job = _visible_job(db_session, **kwargs)
     db_session.commit()
-    version = _grant(db_session, **grant_kwargs) if grant_kwargs else 1
+    # The no-extra-kwargs cases still hold the default matching grant, so the
+    # row hides because ITS locator differs, not because the caller is unbound.
+    version = _grant(db_session, **grant_kwargs)
     response = db_client.get(f"{BASE}/{job.id}", headers=headers(authorization_version=version))
     assert response.status_code == 404, response.text
 
