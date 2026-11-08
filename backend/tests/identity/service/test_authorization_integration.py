@@ -244,10 +244,12 @@ def test_organization_scoped_reg_configure_capability_projects(
     REGULATORY capability, so org-scoped configuration surfaces (signing policies,
     placement templates) can be offered from the projection."""
     _banks(db_session)
-    user = db_session.get(User, USER_1)
-    bank = db_session.get(Bank, BANK_1)
-    assert user is not None
-    assert bank is not None
+    user = db_session.scalars(
+        select(User).where(User.id == USER_1, User.organization_id == ORG_1)
+    ).one()
+    bank = db_session.scalars(
+        select(Bank).where(Bank.id == BANK_1, Bank.organization_id == ORG_1)
+    ).one()
     db_session.add(
         _raw_binding(
             organization_id=ORG_1,
@@ -284,10 +286,12 @@ def test_bank_scoped_reg_capability_never_projects_at_organization_scope(
     """An exact-bank REG binding stays on the bank's capability list: authority
     over one bank is never projected as organization-wide REG authority."""
     _banks(db_session)
-    user = db_session.get(User, USER_1)
-    bank = db_session.get(Bank, BANK_1)
-    assert user is not None
-    assert bank is not None
+    user = db_session.scalars(
+        select(User).where(User.id == USER_1, User.organization_id == ORG_1)
+    ).one()
+    bank = db_session.scalars(
+        select(Bank).where(Bank.id == BANK_1, Bank.organization_id == ORG_1)
+    ).one()
     db_session.add(
         _raw_binding(
             organization_id=ORG_1,
