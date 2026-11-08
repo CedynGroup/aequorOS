@@ -837,8 +837,6 @@ examiner evidence surfaces — the supervisory run list, run reproduction and
 documentation package, which need the `audit` entry sentence AND each embedded
 source module's own sentence — are owned by the
 [examiner evidence rollout contract](examiner_evidence_enforcement_rollout.md).
-Freshness read filtering is owned by the
-[live freshness rollout contract](live_enforcement_rollout.md).
 Existing
 operational routes outside these cutovers keep their current checks, while
 grant administration itself requires the owner binding. Explanation endpoints,

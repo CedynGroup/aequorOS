@@ -147,8 +147,21 @@ def test_freshness_omits_unbound_modules_without_data_leakage(
     assert response.status_code == 200, response.text
     body = response.json()
     assert [module["module"] for module in body["modules"]] == ["fx"]
-    # No leaked fields for the omitted modules anywhere in the payload.
-    assert all(module["module"] == "fx" for module in body["modules"])
+    # Full serialized omission: no other module name appears anywhere in the
+    # payload (no leaked hash/staleness entries under any serialization).
+    for module_name in (
+        "liquidity",
+        "capital",
+        "credit",
+        "irr",
+        "ftp",
+        "rating",
+        "forecast",
+    ):
+        assert module_name not in response.text
+    # The top-level staleness verdict reflects the permitted FX module only.
+    fx = body["modules"][0]
+    assert body["is_stale"] == fx["is_stale"]
 
 
 def test_freshness_for_principal_without_bindings_is_empty(db_client: TestClient) -> None:
