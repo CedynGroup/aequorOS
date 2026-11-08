@@ -141,3 +141,94 @@ it("routes every outstanding signer without organization-directory authority", a
   expect(directoryRequests).toBe(0);
   expect(screen.queryByRole("option")).not.toBeInTheDocument();
 });
+
+it("seeds nominations from the current pending recipients and re-seeds on an authorized reroute", async () => {
+  setAccessToken("synthetic-access-token");
+  const user = userEvent.setup();
+  const routed = (approverId: string) =>
+    AttestationStatusReadFromJSON({
+      ...rawStatus,
+      recipients: [
+        {
+          signing_role: "preparer",
+          recipient_user_id: "user-preparer-1",
+          status: "pending",
+        },
+        {
+          signing_role: "approver",
+          recipient_user_id: approverId,
+          status: "pending",
+        },
+      ],
+    });
+
+  const view = render(
+    <QueryClientProvider client={client}>
+      <SignatureRoutingForm
+        bankId={bankId}
+        packageId={packageId}
+        status={routed("user-approver-1")}
+      />
+    </QueryClientProvider>,
+  );
+
+  await waitFor(() => {
+    expect(screen.getByLabelText("Preparer recipient")).toHaveValue(
+      "user-preparer-1",
+    );
+    expect(screen.getByLabelText("Approver recipient")).toHaveValue(
+      "user-approver-1",
+    );
+  });
+
+  // An equivalent refetch (fresh objects, same pending route) must not clobber
+  // an officer's in-progress edit; an actual reroute does.
+  view.rerender(
+    <QueryClientProvider client={client}>
+      <SignatureRoutingForm
+        bankId={bankId}
+        packageId={packageId}
+        status={routed("user-approver-1")}
+      />
+    </QueryClientProvider>,
+  );
+  await user.clear(screen.getByLabelText("Preparer recipient"));
+  await user.type(
+    screen.getByLabelText("Preparer recipient"),
+    "user-preparer-1-edited",
+  );
+  view.rerender(
+    <QueryClientProvider client={client}>
+      <SignatureRoutingForm
+        bankId={bankId}
+        packageId={packageId}
+        status={routed("user-approver-1")}
+      />
+    </QueryClientProvider>,
+  );
+  await waitFor(() =>
+    expect(screen.getByLabelText("Preparer recipient")).toHaveValue(
+      "user-preparer-1-edited",
+    ),
+  );
+
+  view.rerender(
+    <QueryClientProvider client={client}>
+      <SignatureRoutingForm
+        bankId={bankId}
+        packageId={packageId}
+        status={routed("user-approver-2")}
+      />
+    </QueryClientProvider>,
+  );
+
+  await waitFor(() =>
+    expect(screen.getByLabelText("Approver recipient")).toHaveValue(
+      "user-approver-2",
+    ),
+  );
+  // The authorized reroute re-seeds every slot from the authoritative route.
+  expect(screen.getByLabelText("Preparer recipient")).toHaveValue(
+    "user-preparer-1",
+  );
+});

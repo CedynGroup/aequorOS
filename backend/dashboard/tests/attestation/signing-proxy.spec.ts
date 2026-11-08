@@ -2,14 +2,20 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
 
 const backendRequest = vi.hoisted(() => vi.fn());
+const session = vi.hoisted(() => ({
+  accessToken: "synthetic-access-token" as string | null,
+  heldAuthorization: "synthetic-step-up-token" as string | null,
+}));
 
 vi.mock("@/auth", () => ({
-  auth: vi.fn(async () => ({ accessToken: "synthetic-access-token" })),
+  auth: vi.fn(async () =>
+    session.accessToken ? { accessToken: session.accessToken } : null,
+  ),
 }));
 vi.mock("@/lib/backendRequest", () => ({ backendRequest }));
 vi.mock("@/lib/attestation/stepUp", () => ({
   apiBase: () => "http://risk-service.test/api/v1",
-  takeAuthorizationCookie: vi.fn(async () => "synthetic-step-up-token"),
+  takeAuthorizationCookie: vi.fn(async () => session.heldAuthorization),
 }));
 
 import { POST as certify } from "../../app/api/attestation/certify/route";
@@ -58,7 +64,11 @@ const cases = [
 ] as const;
 
 describe("signing server routes", () => {
-  beforeEach(() => backendRequest.mockReset());
+  beforeEach(() => {
+    backendRequest.mockReset();
+    session.accessToken = "synthetic-access-token";
+    session.heldAuthorization = "synthetic-step-up-token";
+  });
 
   it.each(cases)("passes the backend status and body through for $name", async ({
     name,
@@ -99,5 +109,99 @@ describe("signing server routes", () => {
         }),
       );
     }
+  });
+});
+
+describe("stress sign-off proxy deny paths", () => {
+  beforeEach(() => {
+    backendRequest.mockReset();
+    session.accessToken = "synthetic-access-token";
+    session.heldAuthorization = "synthetic-step-up-token";
+  });
+
+  it("refuses an unauthenticated caller before reading the body", async () => {
+    session.accessToken = null;
+
+    const response = await attestStressSignoff(
+      new NextRequest("http://dashboard.test/api/stress/signoff/attest", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          bankId: "BK-SAMPLE",
+          signoffId: "signoff-1",
+          expectedSigningDigest: "digest-1",
+          credibilityRationale: "Credible",
+          reason: "Board attestation",
+        }),
+      }),
+    );
+
+    expect(response.status).toBe(401);
+    await expect(response.json()).resolves.toEqual({
+      error: "not_authenticated",
+    });
+    expect(backendRequest).not.toHaveBeenCalled();
+  });
+
+  it("rejects a malformed JSON body", async () => {
+    const response = await attestStressSignoff(
+      new NextRequest("http://dashboard.test/api/stress/signoff/attest", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: "{not json",
+      }),
+    );
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({ error: "invalid_json" });
+    expect(backendRequest).not.toHaveBeenCalled();
+  });
+
+  it("rejects a body missing a required attestation field", async () => {
+    const response = await attestStressSignoff(
+      new NextRequest("http://dashboard.test/api/stress/signoff/attest", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          bankId: "BK-SAMPLE",
+          signoffId: "signoff-1",
+          expectedSigningDigest: "digest-1",
+          reason: "Board attestation without a credibility rationale",
+        }),
+      }),
+    );
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toEqual({
+      error:
+        "bankId, signoffId, expectedSigningDigest, credibilityRationale and reason are required",
+    });
+    expect(backendRequest).not.toHaveBeenCalled();
+  });
+
+  it("refuses to attest when no signing authorization is held", async () => {
+    session.heldAuthorization = null;
+
+    const response = await attestStressSignoff(
+      new NextRequest("http://dashboard.test/api/stress/signoff/attest", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          bankId: "BK-SAMPLE",
+          signoffId: "signoff-1",
+          expectedSigningDigest: "digest-1",
+          credibilityRationale: "Credible",
+          reason: "Board attestation",
+        }),
+      }),
+    );
+
+    expect(response.status).toBe(401);
+    await expect(response.json()).resolves.toEqual({
+      error: "step_up_required",
+      message:
+        "No signing authorization is held. Re-authenticate with your institution to attest.",
+    });
+    expect(backendRequest).not.toHaveBeenCalled();
   });
 });
