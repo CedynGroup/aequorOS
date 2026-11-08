@@ -52,7 +52,12 @@ fi
 
 # initdb refuses root, so services and Playwright run as this user.
 id aqs >/dev/null 2>&1 || useradd -m -s /bin/bash aqs
-[ -f /root/.ccr/ca-bundle.crt ] && install -m 644 /root/.ccr/ca-bundle.crt "$T/ca-bundle.crt"
+# The wrappers export this file as SSL_CERT_FILE, so it must always exist and be readable by aqs.
+if [ -f /root/.ccr/ca-bundle.crt ]; then
+  install -m 644 /root/.ccr/ca-bundle.crt "$T/ca-bundle.crt"
+else
+  install -m 644 /etc/ssl/certs/ca-certificates.crt "$T/ca-bundle.crt"
+fi
 
 # Browser matching the dashboard's exact @playwright/test pin.
 (cd "$ROOT/backend/dashboard" && PATH="$(cat "$T/toolpath")" PLAYWRIGHT_BROWSERS_PATH=/opt/pw-dashboard \
