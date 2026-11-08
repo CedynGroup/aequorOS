@@ -1,11 +1,13 @@
 """Tenant job reads filter on the persisted locator and current authority (#186).
 
-``GET /api/v1/jobs/{job_id}`` is the one tenant-facing queue read. A row is
-visible only when it carries a complete locator, its enqueue provenance names
-a tenant principal, and one current ``view`` grant matches the locator —
-anything else answers the same 404 an unknown id does. Claim, retry and
-execution ignore the locator entirely, so the worker keeps draining rows no
-tenant can poll (mission D9, VAL-NOTIF-005/007/011).
+``GET /api/v1/jobs/{job_id}`` (detail) and ``GET /api/v1/jobs`` (paginated
+list) are the tenant-facing queue reads, and they answer for ONE predicate: a
+row is visible only when it carries a complete locator, its enqueue provenance
+names a tenant principal, and one current ``view`` grant matches the locator —
+anything else answers the same 404 (detail) or is absent with an unshifted
+``total`` (list). Claim, retry and execution ignore the locator entirely, so
+the worker keeps draining rows no tenant can poll (mission D9,
+VAL-NOTIF-005/007/011).
 """
 
 from __future__ import annotations
@@ -63,6 +65,18 @@ def _add_bank(db: Session, bank_id: str) -> None:
 
 def _opaque(response: Any) -> str:
     return _REQUEST_ID.sub('"request_id":""', response.text)
+
+
+def _list(
+    db_client: TestClient, version: int, **params: Any
+) -> dict[str, Any]:
+    """GET the collection, asserting the route itself answers 200."""
+    response = db_client.get(
+        BASE, headers=headers(authorization_version=version), params=params
+    )
+    assert response.status_code == 200, response.text
+    payload: dict[str, Any] = response.json()
+    return payload
 
 
 def _human_provenance() -> job_queue.JobProvenance:
@@ -267,6 +281,173 @@ def test_revocation_removes_visibility(
     assert denied.status_code == 404, denied.text
 
 
+def test_the_list_shows_exactly_what_the_detail_shows(
+    db_client: TestClient, db_session: Session, unbound: None
+) -> None:
+    """One predicate for both reads: complete locator, tenant provenance, match.
+
+    Every shape the detail read answers 404 for is absent from the list, and
+    the total counts only the rows a page could actually hold.
+    """
+    version = _grant(db_session, bank_id=SAMPLE_BANK_ID)
+    visible = _visible_job(db_session, bank_id=SAMPLE_BANK_ID)
+    hidden = [
+        # Wrong bank: same organization, an institution grant never crosses.
+        _visible_job(db_session, bank_id=SIBLING_BANK_ID),
+        # Wrong module and wrong sensitivity at the granted bank.
+        _visible_job(db_session, bank_id=SAMPLE_BANK_ID, module=Module.CREDIT),
+        _visible_job(
+            db_session,
+            bank_id=SAMPLE_BANK_ID,
+            sensitivity=Sensitivity.CONFIDENTIAL,
+        ),
+    ]
+    # Legacy locator-less row and the non-tenant provenance markers.
+    db_session.add(Job(organization_id=ORG_1, job_type="document_delete", status="completed"))
+    for principal in ("worker", "system", "operator:inspector@example.test"):
+        job_queue.enqueue(
+            db_session,
+            ORG_1,
+            "document_delete",
+            locator=job_queue.JobLocator(module=Module.RISK, sensitivity=Sensitivity.RESTRICTED),
+            provenance=job_queue.JobProvenance(principal=principal, action="test.enqueue"),
+        )
+    # Another organization's row that would otherwise match the locator.
+    job_queue.enqueue(
+        db_session,
+        ORG_2,
+        "document_delete",
+        bank_id=SAMPLE_BANK_ID,
+        locator=job_queue.JobLocator(module=Module.RISK, sensitivity=Sensitivity.RESTRICTED),
+        provenance=job_queue.JobProvenance(principal=f"human:{USER_1}", action="test.enqueue"),
+    )
+    db_session.commit()
+    payload = _list(db_client, version)
+    assert [job["id"] for job in payload["jobs"]] == [str(visible.id)]
+    assert payload["total"] == 1
+    assert payload["has_more"] is False
+    # List and detail agree row by row: each hidden id answers the detail 404.
+    for row in hidden:
+        detail = db_client.get(f"{BASE}/{row.id}", headers=headers(authorization_version=version))
+        assert detail.status_code == 404, detail.text
+
+
+def test_the_list_is_opaque_about_hidden_rows(
+    db_client: TestClient, db_session: Session, unbound: None
+) -> None:
+    """A hidden row shifts nothing: same ids, same total, same page shape.
+
+    If ``total`` or any page moved when a hidden row is added, the list would
+    leak its existence — the aggregation form of the unknown-object answer.
+    """
+    version = _grant(db_session)
+    for _ in range(3):
+        _visible_job(db_session)
+    db_session.commit()
+    before = _list(db_client, version)
+    # Every hidden shape arrives between the two reads.
+    db_session.add(Job(organization_id=ORG_1, job_type="document_delete", status="completed"))
+    job_queue.enqueue(
+        db_session, ORG_1, "document_delete", provenance=job_queue.worker_provenance("worker.tick")
+    )
+    _visible_job(db_session, module=Module.CREDIT)
+    job_queue.enqueue(
+        db_session,
+        ORG_2,
+        "document_delete",
+        locator=job_queue.JobLocator(module=Module.RISK, sensitivity=Sensitivity.RESTRICTED),
+        provenance=job_queue.JobProvenance(principal=f"human:{USER_1}", action="test.enqueue"),
+    )
+    db_session.commit()
+    assert _list(db_client, version) == before
+    assert before["total"] == 3
+
+
+def test_pagination_sees_only_visible_rows(
+    db_client: TestClient, db_session: Session, unbound: None
+) -> None:
+    """Paging walks the visible set exactly: exact total, no hidden drift."""
+    version = _grant(db_session)
+    created = [_visible_job(db_session) for _ in range(5)]
+    # Interleave hidden rows so page offsets have to step over them.
+    for _ in range(5):
+        db_session.add(Job(organization_id=ORG_1, job_type="document_delete", status="completed"))
+        job_queue.enqueue(
+            db_session,
+            ORG_1,
+            "document_delete",
+            provenance=job_queue.worker_provenance("worker.tick"),
+        )
+    db_session.commit()
+    expected_ids = {str(job.id) for job in created}
+    seen: list[str] = []
+    offset = 0
+    while True:
+        payload = _list(db_client, version, limit=2, offset=offset)
+        assert payload["total"] == 5
+        assert payload["limit"] == 2 and payload["offset"] == offset
+        seen.extend(job["id"] for job in payload["jobs"])
+        if not payload["has_more"]:
+            break
+        offset += 2
+    assert sorted(seen) == sorted(expected_ids)
+    # Deterministic order: the same request answers the same page twice.
+    assert _list(db_client, version, limit=2, offset=offset) == _list(
+        db_client, version, limit=2, offset=offset
+    )
+    # Past the last page: an empty page, total unchanged, has_more False.
+    tail = _list(db_client, version, limit=2, offset=10)
+    assert tail["jobs"] == [] and tail["total"] == 5 and tail["has_more"] is False
+
+
+@pytest.mark.usefixtures("unbound")
+def test_a_caller_without_grants_sees_an_empty_page(
+    db_client: TestClient, db_session: Session
+) -> None:
+    """Zero grants: an empty page with a zero total, never an error shape."""
+    _visible_job(db_session)
+    _visible_job(db_session)
+    db_session.commit()
+    payload = _list(db_client, 1)
+    assert payload["jobs"] == [] and payload["total"] == 0 and payload["has_more"] is False
+
+
+@pytest.mark.usefixtures("unbound")
+def test_the_demo_mode_veto_empties_the_list(
+    db_client: TestClient, db_session: Session, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The request-wide veto the detail read honors empties the list too."""
+    from app.core.config import get_settings  # noqa: PLC0415
+
+    version = _grant(db_session)
+    _visible_job(db_session)
+    db_session.commit()
+    monkeypatch.setattr(get_settings().app, "demo_mode", True)
+    payload = _list(db_client, version)
+    assert payload["jobs"] == [] and payload["total"] == 0
+
+
+def test_revocation_empties_the_list(
+    db_client: TestClient, db_session: Session, unbound: None, job_id: str
+) -> None:
+    version = _grant(db_session)
+    assert _list(db_client, version)["total"] == 1
+    for binding in db_session.scalars(
+        select(AuthorizationBinding).where(AuthorizationBinding.principal_user_id == USER_1)
+    ):
+        binding.status = "revoked"
+        binding.revoked_at = utc_now()
+        binding.revoked_by_type = "system"
+        binding.revoked_by_id = "job-visibility-test"
+        binding.revoked_reason = "Revoke job visibility"
+    new_version = authorization.invalidate_user_authorization(
+        db_session, organization_id=ORG_1, user_id=USER_1, reason="Revoke job visibility"
+    )
+    db_session.commit()
+    payload = _list(db_client, new_version)
+    assert payload["jobs"] == [] and payload["total"] == 0
+
+
 def test_the_worker_still_claims_and_completes_rows(
     db_client: TestClient, db_session: Session, unbound: None
 ) -> None:
@@ -285,7 +466,11 @@ def test_the_worker_still_claims_and_completes_rows(
         assert claimed is not None and claimed.id == expected.id
         done = job_queue.complete(db_session, claimed, progress={"done": True})
         assert done.status == "succeeded"
-    # The visible row still polls; the worker-only row never does.
+    # The visible row still polls; the worker-only row never does — in the
+    # list as well, even after the worker has processed it.
     fresh = headers(authorization_version=version)
     assert db_client.get(f"{BASE}/{job.id}", headers=fresh).status_code == 200
     assert db_client.get(f"{BASE}/{hidden.id}", headers=fresh).status_code == 404
+    payload = _list(db_client, version)
+    assert [row["id"] for row in payload["jobs"]] == [str(job.id)]
+    assert payload["total"] == 1
