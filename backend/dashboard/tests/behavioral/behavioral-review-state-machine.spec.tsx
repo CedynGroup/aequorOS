@@ -26,11 +26,16 @@ const REVIEWER = "22222222-2222-4222-8222-222222222222";
 
 type Status = "pending" | "accepted";
 
-const boundary = vi.hoisted(() => ({
-  actor: undefined as string | undefined,
-  statuses: [] as Array<{ id: string; status: "pending" | "accepted" }>,
+const boundary = vi.hoisted((): {
+  actor: string | undefined;
+  statuses: Array<{ id: string; status: "pending" | "accepted" }>;
+  failNext: boolean;
+  reviews: string[];
+} => ({
+  actor: undefined,
+  statuses: [],
   failNext: false,
-  reviews: [] as string[],
+  reviews: [],
 }));
 
 function proposalWire(index: number): BehavioralProposalRead {
