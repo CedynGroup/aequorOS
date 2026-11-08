@@ -1,8 +1,9 @@
-# Live READ enforcement rollout — freshness (issue #177 backend slice)
+# Live READ enforcement rollout (issue #177 backend slice)
 
-Status: implemented in this slice (PR-A of the #177 backend pilot). This
-document owns the freshness read authorization contract and records the
-rollout evidence still owed before deployment.
+Status: freshness enforcement implemented in PR-A; existing snapshot, alert
+and window read behavior pinned in PR-C of the #177 backend pilot. This
+document owns these live read authorization contracts and records the rollout
+evidence still owed before deployment.
 
 ## Surface and decision
 
@@ -65,17 +66,32 @@ than a fresh summary with zero modules. A bank with no reporting periods has no
 freshness summary; a per-bank evaluation failure also yields no summary without
 failing the whole board.
 
-## Remaining pilot scope
+## Snapshot, alert and window read contract
 
 The official-snapshot READ loop (`live_view.list_live_snapshots`), the alerts
 feed (`alerts.get_bank_alerts`) and the window analytics
 (`window_analytics.compute_window`) already enforced the exact per-module VIEW
-binding through the shared closed engine map at the pilot base — including the
-Capital snapshot entry — so PR-C pins that contract end to end with dedicated
-tests instead of adding new enforcement. Unknown ladder modules stay a route
-422 (the closed query pattern), and an unknown module row cannot persist at
-all: the live tables' module CHECK constraint refuses it before any surface
-could serialize its name or values.
+binding at the pilot base, including the Capital snapshot entry. PR-C adds
+regression coverage without changing runtime permissions. Alerts and window
+analytics use engine gate lists matching the freshness map; the snapshot
+service has a separate module lookup, with additional route checks for
+liquidity and IRRBB.
+
+For an existing accessible bank, `GET /api/v1/banks/{bank_id}/live-snapshots`
+returns 403 when the requested module lacks a complete active whole-institution
+VIEW binding at aggregated sensitivity. By contrast, `/alerts` omits denied
+modules from both items and counts, and `/analytics/window` omits their ratio
+series and daily aggregates. With no permitted modules, alerts have zero total
+and window `ratios` and `daily` are empty; window dates and `period_count` remain.
+Authorized viewers retain their stored snapshots, findings and window results.
+
+Unknown snapshot query modules return 422 through the route's closed pattern.
+Unknown module rows are rejected by the module CHECK constraints on
+`live_metrics`, `live_findings` and `live_metric_snapshots`. This is a route
+and storage boundary, not a claim that the snapshot service's lookup or alerts'
+exclusion query independently rejects arbitrary unknown module strings.
+
+## Remaining pilot scope
 
 Further pilot work on the refresh/mint mutation
 gates (PR-B — mint authority already decided: the existing per-module RUN loop
@@ -107,8 +123,9 @@ deployment is authorized by this pilot.
 - `backend/tests/live/service/test_live_authorization.py` — hermetic pins for
   the mapping and deny-closed helper semantics.
 - `backend/tests/live/service/test_live_read_scope.py` — hermetic pins that
-  the snapshot ladder, alerts and window analytics gate through the same
-  closed engine map as freshness (PR-C).
+  the live-view, alerts and window engine gate lists match the freshness map
+  and cover the live module vocabulary (PR-C); the snapshot service's separate
+  lookup is exercised by the API tests below.
 - `backend/tests/live/api/test_live_read_scope_integration.py` — API-level
   READ-scope contract for those three surfaces (PR-C): bound module served,
   closed maps for unbound, foreign-bank and suspended principals, stale
@@ -116,3 +133,6 @@ deployment is authorized by this pilot.
   and the storage module CHECK refusing unknown module rows.
 - The existing `backend/tests/live/service/test_freshness_integration.py`
   keeps proving hash-staleness semantics for an authorized viewer.
+
+These are automated fixture-based contracts, including TestClient API checks;
+they do not constitute live deployment validation.
