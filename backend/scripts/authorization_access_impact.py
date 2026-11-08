@@ -95,7 +95,7 @@ from uuid import UUID
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session
 
-from app.core.authorization import Module, Permission, Sensitivity
+from app.core.authorization import DataScope, Module, Permission, Sensitivity
 from app.identity.service import authorization
 from app.models import AuthorizationBinding, Bank, Organization, User
 
@@ -141,7 +141,15 @@ class UserAccess:
 
 
 def _signing_institutions(db: Session, principal: _Principal, banks: list[Bank]) -> list[str]:
-    """Inventory exact-bank signing grants without inventing ceremony evidence."""
+    """Inventory exact-bank signing grants without inventing ceremony evidence.
+
+    The same-binding rule the execution gates enforce (#838): ONE grant must
+    independently supply the exact-bank scope AND whole-book data scope — an
+    organization-scoped whole-book grant never combines with a branch-restricted
+    exact-bank grant, so the inventory never reports coverage the gates deny.
+    The earlier whole-institution aggregation is subsumed: a single exact-bank
+    ``ALL`` grant implies it, and the compose-two-grants shape fails here too.
+    """
     locator = authorization.principal_locator(principal)
     result: list[str] = []
     for bank in banks:
@@ -157,12 +165,6 @@ def _signing_institutions(db: Session, principal: _Principal, banks: list[Bank])
         )
         if not decision.allowed:
             continue
-        if not authorization.effective_data_scope(
-            db,
-            organization_id=principal.organization_id,
-            binding_ids=decision.matching_binding_ids,
-        ).whole_institution:
-            continue
         grants = authorization.load_effective_grants(
             db,
             organization_id=principal.organization_id,
@@ -171,6 +173,7 @@ def _signing_institutions(db: Session, principal: _Principal, banks: list[Bank])
         if any(
             grant.institution_scope is authorization.InstitutionScope.INSTITUTION
             and grant.institution_id == bank.id
+            and grant.data_scope is DataScope.ALL
             for grant in grants.values()
         ):
             result.append(bank.id)
