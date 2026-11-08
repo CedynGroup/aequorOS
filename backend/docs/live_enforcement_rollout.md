@@ -67,8 +67,17 @@ failing the whole board.
 
 ## Remaining pilot scope
 
-Further pilot work on the official-snapshot read loop,
-alerts and board-pack window predicates (PR-C), the refresh/mint mutation
+The official-snapshot READ loop (`live_view.list_live_snapshots`), the alerts
+feed (`alerts.get_bank_alerts`) and the window analytics
+(`window_analytics.compute_window`) already enforced the exact per-module VIEW
+binding through the shared closed engine map at the pilot base — including the
+Capital snapshot entry — so PR-C pins that contract end to end with dedicated
+tests instead of adding new enforcement. Unknown ladder modules stay a route
+422 (the closed query pattern), and an unknown module row cannot persist at
+all: the live tables' module CHECK constraint refuses it before any surface
+could serialize its name or values.
+
+Further pilot work on the refresh/mint mutation
 gates (PR-B — mint authority already decided: the existing per-module RUN loop
 plus the `Module.CAPITAL` entry) and the impact-evidence tooling (PR-D) are
 later PRs of the same pilot. Issue #177 remains open until the full surface
@@ -97,5 +106,13 @@ deployment is authorized by this pilot.
   and order preserved for a fully bound viewer.
 - `backend/tests/live/service/test_live_authorization.py` — hermetic pins for
   the mapping and deny-closed helper semantics.
+- `backend/tests/live/service/test_live_read_scope.py` — hermetic pins that
+  the snapshot ladder, alerts and window analytics gate through the same
+  closed engine map as freshness (PR-C).
+- `backend/tests/live/api/test_live_read_scope_integration.py` — API-level
+  READ-scope contract for those three surfaces (PR-C): bound module served,
+  closed maps for unbound, foreign-bank and suspended principals, stale
+  authorization-version refusal, preserved shapes for a fully bound viewer,
+  and the storage module CHECK refusing unknown module rows.
 - The existing `backend/tests/live/service/test_freshness_integration.py`
   keeps proving hash-staleness semantics for an authorized viewer.
