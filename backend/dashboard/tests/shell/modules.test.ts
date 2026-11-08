@@ -13,6 +13,7 @@ import {
   hubRedirectFor,
   isRootPath,
   landingPathFor,
+  moduleEntryHref,
   moduleForPath,
   type ModuleKey,
   type ModuleScope,
@@ -436,6 +437,18 @@ for (const href of ["/behavioral", "/behavioral/liquidity"]) {
       "Requires Behavioral Models · Aggregated · View. Ask your organization owner or admin to grant it.",
   });
 }
+// The nav entries a restricted-only reviewer can reach (#829): the module
+// home is closed to them, so the sidebar and palette entries rewrite to the
+// first admitted review route — enabled there, never pointing at the closed
+// overview. Every other scope keeps the module home.
+assert.equal(moduleEntryHref("/behavioral", behavioralReviewer), "/behavioral/nmd-duration");
+assert.deepEqual(hrefAccess(moduleEntryHref("/behavioral", behavioralReviewer), behavioralReviewer), {
+  state: "enabled",
+});
+assert.equal(moduleEntryHref("/behavioral", deniedBehavioral), "/behavioral");
+assert.equal(moduleEntryHref("/behavioral", resolved(true)), "/behavioral");
+assert.equal(moduleEntryHref("/behavioral/nmd-duration", behavioralReviewer), "/behavioral/nmd-duration");
+assert.equal(moduleEntryHref("/markets", resolved(true)), "/markets");
 const behavioralReader = resolved(true, true, { behavioralRun: false });
 assert.equal(isHrefVisible("/behavioral/nmd-duration", behavioralReader), true);
 assert.equal(isPathVisible("/behavioral/liquidity", behavioralReader), true);

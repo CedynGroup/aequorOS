@@ -3,7 +3,7 @@
 import { useEffect, useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { PermissionLink } from "@/components/ui/DisabledWithReason";
-import { hrefAccess, type HrefAccess } from "@/lib/modules";
+import { hrefAccess, moduleEntryHref, type HrefAccess } from "@/lib/modules";
 import { useModuleScope } from "./BankContext";
 import {
   Search,
@@ -502,10 +502,13 @@ export default function CommandPalette({
             item.institutionScope === moduleScope.institutionClass),
       )
       .map((item) => {
+        // A restricted-only reviewer enters the module where their review
+        // workspace renders, not the closed module home (#829).
+        const href = moduleEntryHref(item.href, moduleScope);
         const access = item.requiresLiquidityConfidentialView
           ? hrefAccess("/liquidity/monitoring", moduleScope)
-          : hrefAccess(item.href, moduleScope);
-        return { ...item, access };
+          : hrefAccess(href, moduleScope);
+        return { ...item, href, access };
       })
       .filter((item) => item.access.state !== "hidden");
   }, [moduleScope]);

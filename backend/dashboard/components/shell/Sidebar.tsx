@@ -32,7 +32,7 @@ import {
 import Logo from "./Logo";
 import { PermissionLink } from "@/components/ui/DisabledWithReason";
 import { centralBankName } from "@/lib/format";
-import { hrefAccess } from "@/lib/modules";
+import { hrefAccess, moduleEntryHref } from "@/lib/modules";
 import { useBankContext } from "./BankContext";
 
 const COLLAPSE_STORAGE_KEY = "aeq-sidebar-collapsed";
@@ -120,10 +120,13 @@ export default function Sidebar() {
     .map((group) => ({
       ...group,
       items: group.items
-        .map((item) => ({
-          ...item,
-          access: hrefAccess(item.href, moduleScope),
-        }))
+        .map((item) => {
+          // A restricted-only reviewer's module home is closed but their
+          // review workspace is admitted (#829): enter where the queue
+          // renders, and gate THAT route.
+          const href = moduleEntryHref(item.href, moduleScope);
+          return { ...item, href, access: hrefAccess(href, moduleScope) };
+        })
         .filter((item) => item.access.state !== "hidden"),
     }))
     .filter((group) => group.items.length > 0);
