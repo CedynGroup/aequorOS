@@ -571,18 +571,25 @@ const orgDimsArb = (): fc.Arbitrary<CapabilityDims> => {
  * except Credit, and grant administration is the only writer of bindings, so
  * an organization capability row always carries the whole-institution scope.
  */
-const orgDimsArb = (): fc.Arbitrary<CapabilityDims> =>
-  fc.record({
+const orgDimsArb = (): fc.Arbitrary<CapabilityDims> => {
+  const orgScope: EffectiveCapabilityRead["dataScope"] = {
+    kind: "all",
+    branches: [],
+    regions: [],
+  };
+  return fc.record({
     module: fc.constantFrom("reg", "liq", "credit", "data", "markets"),
     permission: fc.constantFrom("view", "configure"),
-    sensitivity: fc.constantFrom("all", "confidential", "restricted"),
+    sensitivity: fc.constantFrom(
+      "published",
+      "aggregated",
+      "confidential",
+      "restricted",
+    ),
     requiresContextualAuthorization: fc.boolean(),
-    scope: fc.constant({
-      kind: "all",
-      branches: [],
-      regions: [],
-    } as EffectiveCapabilityRead["dataScope"]),
-  }) as fc.Arbitrary<CapabilityDims>;
+    scope: fc.constant(orgScope),
+  });
+};
 
 function toCapability(dims: CapabilityDims): EffectiveCapabilityRead {
   return {
