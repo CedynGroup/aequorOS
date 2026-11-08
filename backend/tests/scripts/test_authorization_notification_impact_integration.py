@@ -24,6 +24,7 @@ from app.core.authorization import (
 from app.identity.service import authorization
 from app.models import Bank, Job, Notification, Organization, User
 from app.policy.service.institution_types import FALLBACK_TYPE_CODE
+from app.reporting.service.registry import REGISTRY
 from scripts.authorization_notification_impact import (
     ImpactInputError,
     NotifImpactReport,
@@ -109,15 +110,20 @@ def _notification(  # noqa: PLR0913 - one fixture notification with its full loc
     module: str | None,
     sensitivity: str | None,
     recipient: User | None = None,
+    type: str = "synthetic.event",  # noqa: A002 - mirrors the column name
+    entity_type: str | None = None,
+    entity_id: str | None = None,
 ) -> None:
     db.add(
         Notification(
             organization_id=ORG,
             recipient_user_id=None if recipient is None else recipient.id,
-            type="synthetic.event",
+            type=type,
             severity="info",
             title="Synthetic notification",
             body="Synthetic body",
+            entity_type=entity_type,
+            entity_id=entity_id,
             institution_scope=scope,
             bank_id=bank,
             module=module,
@@ -332,6 +338,142 @@ def test_view_authority_decides_notification_and_job_visibility(
     assert bank_worker_row.after_count == 0
     assert bank_worker_row.newly_hidden
     assert bank_worker_row.required_grants == []
+
+
+def test_family_hidden_filing_notifications_are_never_newly_hidden(
+    db_session: Session,
+) -> None:
+    """A return-family-hidden row counts as hidden before AND after the cutover.
+
+    An SDI licence class has no ICAAP surface (C-27): the live API hides an
+    ICAAP-family filing notification from every principal of that bank,
+    whatever the locator-view filter would admit. The report must apply the
+    same family factor to its before and after counts — no deny impact, and
+    no grant candidate, because no grant restores family authority.
+    """
+    _tenant(db_session)
+    sdi_bank = "BK-NOTIMP03"
+    db_session.add(
+        Bank(
+            id=sdi_bank,
+            organization_id=ORG,
+            name="Synthetic SDI bank",
+            short_name=sdi_bank,
+            currency="GHS",
+            jurisdiction_code="GH",
+            license_type="savings_and_loans",
+            institution_type="savings_and_loans",
+        )
+    )
+    sdi_viewer = _user(db_session, "sdi-reg@notification-impact.example")
+    _grant(
+        db_session,
+        sdi_viewer,
+        RoleBundle.VIEWER,
+        institution_id=sdi_bank,
+        module=ModuleScope.REGULATORY,
+        sensitivity=SensitivityScope.RESTRICTED,
+    )
+    bare = _user(db_session, "sdi-bare@notification-impact.example")
+    code = next(code for code, definition in REGISTRY.items() if definition.family == "icaap")
+    _notification(
+        db_session,
+        scope=InstitutionScope.INSTITUTION.value,
+        bank=sdi_bank,
+        module=Module.REGULATORY.value,
+        sensitivity=Sensitivity.RESTRICTED.value,
+        type=f"reporting.deadline.due_soon_7:{code}:2026-03-31",
+        entity_type="bank",
+        entity_id=sdi_bank,
+    )
+    db_session.commit()
+
+    report = build_notification_impact_report(db_session, organization_id=ORG)
+
+    assert not report.evaluation_failed
+    for user in (sdi_viewer, bare):
+        row = _impact(
+            report,
+            user,
+            "notifications",
+            scope=InstitutionScope.INSTITUTION.value,
+            bank=sdi_bank,
+            module=Module.REGULATORY.value,
+            sensitivity=Sensitivity.RESTRICTED.value,
+        )
+        assert row.before_count == 0, "the family factor hid this row before the cutover"
+        assert row.after_count == 0
+        assert not row.newly_hidden
+        assert row.required_grants == [], "no grant restores return-family authority"
+
+
+def test_family_visible_locator_hidden_rows_get_restoring_candidates(
+    db_session: Session,
+) -> None:
+    """A visible return's notification is a true deny impact a grant can restore.
+
+    The requester holds whole-institution REGULATORY/restricted view, so the
+    return family is visible and the row was genuinely seen before the
+    cutover; the persisted locator names a module no grant covers, so the
+    locator-view filter refuses it after. The least-scope candidate for that
+    locator must be recommended, and simulating it must restore the row.
+    """
+    _tenant(db_session)
+    reg_viewer = _user(db_session, "reg@notification-impact.example")
+    _grant(
+        db_session,
+        reg_viewer,
+        RoleBundle.VIEWER,
+        module=ModuleScope.REGULATORY,
+        sensitivity=SensitivityScope.RESTRICTED,
+    )
+    code = next(code for code, definition in REGISTRY.items() if definition.family == "bsd")
+    _notification(
+        db_session,
+        scope=InstitutionScope.INSTITUTION.value,
+        bank=BANK,
+        module=Module.LIQUIDITY.value,
+        sensitivity=Sensitivity.RESTRICTED.value,
+        type=f"reporting.deadline.due_soon_7:{code}:2026-03-31",
+        entity_type="bank",
+        entity_id=BANK,
+    )
+    db_session.commit()
+
+    report = build_notification_impact_report(db_session, organization_id=ORG)
+
+    row = _impact(
+        report,
+        reg_viewer,
+        "notifications",
+        scope=InstitutionScope.INSTITUTION.value,
+        bank=BANK,
+        module=Module.LIQUIDITY.value,
+        sensitivity=Sensitivity.RESTRICTED.value,
+    )
+    assert row.before_count == 1
+    assert row.after_count == 0
+    assert row.newly_hidden
+    assert [
+        (
+            grant.role_bundle,
+            grant.permission,
+            grant.institution_scope,
+            grant.institution_id,
+            grant.module_scope,
+            grant.sensitivity_scope,
+        )
+        for grant in row.required_grants
+    ] == [
+        (
+            RoleBundle.VIEWER.value,
+            "view",
+            InstitutionScope.INSTITUTION.value,
+            BANK,
+            ModuleScope.LIQUIDITY.value,
+            SensitivityScope.RESTRICTED.value,
+        )
+    ]
 
 
 def test_recipient_scoped_rows_impact_only_their_recipient(
