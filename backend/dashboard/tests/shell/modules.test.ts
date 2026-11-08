@@ -417,8 +417,25 @@ const behavioralReviewer = resolved(true, true, {
   behavioralAggregatedView: false,
   behavioralRestrictedView: true,
 });
-assert.equal(isHrefVisible("/behavioral/nmd-duration", behavioralReviewer), true);
-assert.equal(isPathVisible("/behavioral/nmd-duration", behavioralReviewer), true);
+// The restricted-reader exception admits only the model workspaces that
+// render the proposal queue; the overview and liquidity pages stay hidden.
+for (const href of [
+  "/behavioral/nmd-duration",
+  "/behavioral/prepayment",
+  "/behavioral/deposit-stability",
+]) {
+  assert.equal(isHrefVisible(href, behavioralReviewer), true);
+  assert.equal(isPathVisible(href, behavioralReviewer), true);
+}
+for (const href of ["/behavioral", "/behavioral/liquidity"]) {
+  assert.equal(isHrefVisible(href, behavioralReviewer), false);
+  assert.equal(isPathVisible(href, behavioralReviewer), false);
+  assert.deepEqual(hrefAccess(href, behavioralReviewer), {
+    state: "disabled",
+    reason:
+      "Requires Behavioral Models · Aggregated · View. Ask your organization owner or admin to grant it.",
+  });
+}
 const behavioralReader = resolved(true, true, { behavioralRun: false });
 assert.equal(isHrefVisible("/behavioral/nmd-duration", behavioralReader), true);
 assert.equal(isPathVisible("/behavioral/liquidity", behavioralReader), true);

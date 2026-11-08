@@ -868,6 +868,9 @@ type ScopedModuleRoutePolicy = {
   entry: AccessRequirement;
   /** An independently sufficient restricted reader for a module's review queue. */
   reviewView?: keyof ModuleScope;
+  /** Pages under `prefix` that render the review queue; default: every page.
+   * The restricted-reader exception only admits a reviewer where they can act. */
+  reviewRoutes?: readonly string[];
   /** Pages that need confidential view instead; absent when the module has none. */
   confidential?: {
     view: keyof ModuleScope;
@@ -949,6 +952,13 @@ const SCOPED_MODULE_ROUTES: readonly ScopedModuleRoutePolicy[] = [
     entryView: "behavioralAggregatedView",
     entry: BEHAVIORAL_AGGREGATED_VIEW,
     reviewView: "behavioralRestrictedView",
+    // Only the model workspaces render the proposal queue; the overview and
+    // liquidity pages would admit a restricted reviewer to an empty read.
+    reviewRoutes: [
+      "/behavioral/nmd-duration",
+      "/behavioral/prepayment",
+      "/behavioral/deposit-stability",
+    ],
   },
   {
     prefix: "/markets",
@@ -1037,7 +1047,9 @@ function scopedModuleRequirements(
       }
     } else if (
       scope[routePolicy.entryView] !== true &&
-      (!routePolicy.reviewView || scope[routePolicy.reviewView] !== true)
+      (!routePolicy.reviewView ||
+        scope[routePolicy.reviewView] !== true ||
+        !underRoute(path, routePolicy.reviewRoutes ?? [routePolicy.prefix]))
     ) {
       missing.push(routePolicy.entry);
     }
