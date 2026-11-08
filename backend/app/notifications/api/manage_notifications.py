@@ -13,7 +13,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Query
 
-from app.api.deps import DbSession, MutationTenant, Tenant
+from app.api.deps import DbSession, ScopedMutationTenant, Tenant
 from app.notifications.schemas import (
     NotificationListRead,
     NotificationRead,
@@ -55,7 +55,7 @@ def list_notifications(
     operation_id="markNotificationRead",
 )
 def mark_notification_read(
-    notification_id: UUID, db: DbSession, ctx: MutationTenant
+    notification_id: UUID, db: DbSession, ctx: ScopedMutationTenant
 ) -> NotificationRead:
     return NotificationRead.model_validate(notifications.mark_read(db, ctx, notification_id))
 
@@ -65,5 +65,7 @@ def mark_notification_read(
     response_model=NotificationsMarkAllRead,
     operation_id="markAllNotificationsRead",
 )
-def mark_all_notifications_read(db: DbSession, ctx: MutationTenant) -> NotificationsMarkAllRead:
+def mark_all_notifications_read(
+    db: DbSession, ctx: ScopedMutationTenant
+) -> NotificationsMarkAllRead:
     return NotificationsMarkAllRead(marked=notifications.mark_all_read(db, ctx))
