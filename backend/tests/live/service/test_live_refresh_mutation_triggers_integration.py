@@ -87,6 +87,16 @@ def test_live_consumed_governed_mutations_refresh_the_affected_bank(
 ) -> None:
     ctx = _seed_live_input(db_session)
     grant_configure(db_session, SAMPLE_BANK_ID)
+    # The CREDIT registers are their own module: the LIQUIDITY configurator
+    # sentence never authorizes them.
+    grant_institution_authority(
+        db_session,
+        organization_id=ORG_1,
+        bank_id=SAMPLE_BANK_ID,
+        user_id=USER_1,
+        bundle=RoleBundle.CONFIGURATOR,
+        module=ModuleScope.CREDIT,
+    )
 
     credit_params.update_ecl_register(
         db_session,
