@@ -23,6 +23,17 @@ const filingMessage =
   "Approver and Validator roles must stay with different people, whatever the scope. " +
   "Remove the Approver grant first, or choose someone else.";
 
+// The reverse direction names every operational grant the member holds — the
+// organization-wide Approver sentence plus the exact-bank Signer and Approver
+// grants the signing ceremonies need — never account administration they do
+// not have.
+const conflictMessage =
+  "E2E Approver already has the Approver grant (all modules, every institution), " +
+  "the Signer grant (Regulatory Reporting, Sample Bank Ltd) and the Approver grant " +
+  "(Regulatory Reporting, Sample Bank Ltd). Making E2E Approver an Organization " +
+  "Administrator would let one person both do operational work and decide who has " +
+  "access to it. Remove all these Approver and Signer grants first, or choose someone else.";
+
 test.use({ storageState: path.join(E2E_TMP, "admin.json") });
 
 test("reverse account administration conflict shows the server finding at Define", async ({
@@ -44,17 +55,20 @@ test("reverse account administration conflict shows the server finding at Define
   await composer
     .getByLabel("Detail")
     .fill("Exercise reverse account administration conflict");
-  // The reverse direction names the operational grant the member holds,
-  // never account administration they do not have.
+  // The finding is the server's, verbatim, and every grant it names is
+  // reachable from the notice.
   await expect(composer.getByRole("alert")).toContainText(
     "This grant can't be given",
   );
-  await expect(composer.getByRole("alert")).toContainText(
-    "E2E Approver already has the Approver grant (all modules, every institution). " +
-      "Making E2E Approver an Organization Administrator would let one person both do " +
-      "operational work and decide who has access to it. Remove the Approver grant first, " +
-      "or choose someone else.",
-  );
+  await expect(composer.getByRole("alert")).toContainText(conflictMessage);
+  await expect(
+    composer.getByRole("button", {
+      name: "View E2E Approver's Approver grant",
+    }),
+  ).toHaveCount(2);
+  await expect(
+    composer.getByRole("button", { name: "View E2E Approver's Signer grant" }),
+  ).toHaveCount(1);
   await expect(
     composer.getByRole("button", { name: "Cannot be granted" }),
   ).toBeDisabled();
