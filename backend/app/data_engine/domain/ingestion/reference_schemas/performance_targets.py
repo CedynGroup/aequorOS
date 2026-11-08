@@ -71,7 +71,7 @@ VERSIONS: tuple[str, ...] = ("budget", "reforecast")
 #: an over-long value used to take positions, events, GL, engine metrics and
 #: dimensions down with it, every night, until the row was withdrawn (audit
 #: A8-01). It equals ``app.bi.models.marts.TARGET_SCOPE_VALUE_WIDTH``; the two are
-#: asserted equal in ``tests/domain/ingestion/test_reference_schemas.py`` rather
+#: asserted equal in ``tests/data_engine/domain/ingestion/test_reference_schemas.py`` rather
 #: than imported, because this module stays free of ``app.models``.
 SCOPE_VALUE_MAX_LENGTH = 255
 

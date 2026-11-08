@@ -17,7 +17,6 @@
  "tests.credit.service.test_concentration_identity_limits_integration -> tests.core.test_bank_field_encryption_integration",
  "tests.credit.service.test_concentration_identity_limits_integration -> tests.core.test_key_unavailable_numeric_integration",
  "tests.credit.service.test_crd_credit_exposures -> tests.services.test_derivation_fail_closed_defaults",
- "tests.data_engine.adapters.test_reference_boundary -> tests.domain.ingestion.test_reference_row_enforcement",
  "tests.db.test_bank_key_reader_lock_integration -> tests.storage.test_bank_encryption_integration",
  "tests.db.test_bank_key_versions_integration -> tests.storage.test_bank_encryption_integration",
  "tests.db.test_bank_sensitive_fields_integration -> tests.core.test_bank_field_encryption_integration",

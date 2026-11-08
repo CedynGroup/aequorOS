@@ -1,6 +1,6 @@
 """The four optional Data Engine fields, end to end through the push API.
 
-The unit suite (``tests/domain/ingestion/test_optional_position_fields.py``) pins
+The unit suite (``tests/data_engine/domain/ingestion/test_optional_position_fields.py``) pins
 the normalisation and the messages. This one pins the seam: that a real push
 lands the normalised values in ``canonical_position_snapshots.attributes``, that a
 malformed value is dropped and reported without losing the position, and that a

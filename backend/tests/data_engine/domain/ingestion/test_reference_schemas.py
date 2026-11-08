@@ -12,16 +12,18 @@ what the schema REFUSES. Three rules carry the weight:
   verbatim and a mapping config cannot rename a column, so the alias has to be
   resolved on read — by exactly one function.
 
-The last test pins the dependency direction: ``app/data_engine/domain/ingestion`` may not
-import ``app/bi/domain``, which is why the measure id is validated for shape
-rather than against the catalogue.
+The isolated import guard pins the dependency direction:
+``app/data_engine/domain/ingestion`` may not import ``app/bi/domain``, which is why
+the measure id is validated for shape rather than against the catalogue.
 """
 
 from __future__ import annotations
 
-import ast
+import subprocess
+import sys
 from datetime import date
 from pathlib import Path
+from textwrap import dedent
 
 import pytest
 
@@ -324,29 +326,145 @@ def test_region_is_optional_because_it_is_declared_not_inferred() -> None:
 # ---------------------------------------------------------------------------
 
 
-def test_the_reference_schemas_do_not_import_the_bi_catalogue() -> None:
-    """``app/data_engine/domain/ingestion`` is upstream of ``app/bi/domain``.
-
-    The catalogue CONSUMES these datasets, so a schema that imported it would
-    make the input depend on its own consumer — which is why ``measure_id``,
-    ``scope_dimension`` and ``time_behaviour`` are validated for shape and
-    vocabulary here and for membership there. Checked by AST, so the module
-    docstrings may name ``app.bi.domain`` in order to explain the rule.
+_BI_IMPORT_GUARD = dedent(
     """
-    package = Path(__file__).parents[3] / "app" / "domain" / "ingestion"
-    offenders: list[str] = []
-    for path in sorted(package.rglob("*.py")):
-        tree = ast.parse(path.read_text())
-        for node in ast.walk(tree):
-            if isinstance(node, ast.Import):
-                names = [alias.name for alias in node.names]
-            elif isinstance(node, ast.ImportFrom):
-                names = [node.module or ""]
-            else:
-                continue
-            if any(name == "app.bi.domain" or name.startswith("app.bi.domain.") for name in names):
-                offenders.append(str(path.relative_to(package.parents[2])))
-    assert not offenders, f"ingestion must not import the BI catalogue: {sorted(set(offenders))}"
+    import importlib
+    import importlib.abc
+    import pkgutil
+    import sys
+
+    sys.path.insert(0, sys.argv[1])
+    forbidden_module = sys.argv[2]
+
+    class ForbiddenBIImport(Exception):
+        pass
+
+    class BlockBIDomain(importlib.abc.MetaPathFinder):
+        def find_spec(self, fullname, path=None, target=None):
+            if fullname == forbidden_module or fullname.startswith(forbidden_module + "."):
+                raise ForbiddenBIImport(fullname)
+            return None
+
+    sys.meta_path.insert(0, BlockBIDomain())
+    try:
+        importlib.import_module(forbidden_module)
+    except ForbiddenBIImport as exc:
+        assert exc.args == (forbidden_module,)
+    else:
+        raise AssertionError("forbidden-import control did not fail")
+    """
+)
+
+
+def test_the_reference_schemas_do_not_import_the_bi_catalogue() -> None:
+    """Ingestion's shape contract must work without its BI consumer installed."""
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-I",
+            "-c",
+            _BI_IMPORT_GUARD
+            + dedent(
+                """
+                package = importlib.import_module("app.data_engine.domain.ingestion")
+                modules = list(pkgutil.walk_packages(package.__path__, package.__name__ + "."))
+                assert modules, "no ingestion modules discovered"
+                for module in modules:
+                    importlib.import_module(module.name)
+
+                from app.data_engine.domain.ingestion.reference_schemas import schema_for
+
+                targets = schema_for("performance_targets")
+                units = schema_for("business_units")
+                assert targets is not None and units is not None
+                row = {
+                    "period": "2026-03-31", "grain": "quarter",
+                    "measure_id": "unlisted.synthetic_measure", "time_behaviour": "stock",
+                    "value": "1250000", "version": "budget",
+                }
+                assert targets.problems_for(row) == []
+                assert targets.problems_for({
+                    **row, "scope_dimension": "unlisted.synthetic_dimension", "scope_value": "X",
+                }) == []
+                for field, value in (
+                    ("measure_id", "not a dotted identifier"),
+                    ("scope_dimension", "not a dotted identifier"),
+                    ("time_behaviour", "unknown"),
+                ):
+                    invalid = {**row, field: value}
+                    if field == "scope_dimension":
+                        invalid["scope_value"] = "X"
+                    assert any(field in problem for problem in targets.problems_for(invalid))
+                assert units.problems_for({"unit_id": "BR-001", "name": "Main"}) == []
+                assert units.problems_for({
+                    "business_unit_id": "BR-001", "business_unit_name": "Main",
+                    "parent_unit_id": "BR-001",
+                }) == ["field 'parent_unit_id' must not be the unit itself (got 'BR-001')"]
+                """
+            ),
+            str(Path(__file__).resolve().parents[4]),
+            "app.bi.domain",
+        ],
+        capture_output=True,
+        text=True,
+        timeout=30,
+        check=False,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
+
+
+def test_the_guard_signal_survives_an_ingestion_module_that_catches_import_error(
+    tmp_path: Path,
+) -> None:
+    """An optional-dependency handler must not silence the dependency guard.
+
+    A module that wraps its forbidden BI import in ``try/except ImportError``
+    would swallow a sentinel derived from ``ImportError`` and the guard would
+    pass with the dependency direction broken. This replays exactly that
+    pattern against a synthetic package: the sentinel must escape the module's
+    own ``except ImportError`` while a legitimate sibling module still imports.
+    """
+    package = tmp_path / "ingestion_guard_probe"
+    package.mkdir()
+    (package / "__init__.py").write_text("")
+    (package / "optional_bi.py").write_text(
+        "try:\n    import bi_forbidden\nexcept ImportError:\n    bi_forbidden = None\n"
+    )
+    (package / "clean.py").write_text("ANSWER = 41 + 1\n")
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-I",
+            "-c",
+            _BI_IMPORT_GUARD
+            + dedent(
+                """
+                package = importlib.import_module("ingestion_guard_probe")
+                modules = list(pkgutil.walk_packages(package.__path__, package.__name__ + "."))
+                assert sorted(module.name for module in modules) == [
+                    "ingestion_guard_probe.clean",
+                    "ingestion_guard_probe.optional_bi",
+                ]
+                try:
+                    importlib.import_module("ingestion_guard_probe.optional_bi")
+                except ForbiddenBIImport:
+                    pass  # the sentinel escaped the module's except ImportError
+                else:
+                    raise AssertionError(
+                        "the optional-dependency handler swallowed the guard signal"
+                    )
+                assert importlib.import_module("ingestion_guard_probe.clean").ANSWER == 42
+                """
+            ),
+            str(tmp_path),
+            "bi_forbidden",
+        ],
+        capture_output=True,
+        text=True,
+        timeout=30,
+        check=False,
+    )
+    assert result.returncode == 0, result.stdout + result.stderr
 
 
 def test_the_target_scope_bound_equals_what_the_comparison_mart_can_store() -> None:
