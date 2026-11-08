@@ -358,10 +358,11 @@ on one canonical store — the live tier for intraday awareness, the official ti
   including same-date corrections. Prior runs and generated packages retain their frozen evidence;
   unchanged financial values reproduce the same `input_hash` per run (see §3). Regression:
   `backend/tests/live/service/test_pipeline_integration.py::test_official_remint_reports_same_date_cash_correction_in_bsd2`.
-- **Freshness** (`app/live/service/freshness.py`, `GET /banks/{id}/freshness`): compares each module's
+- **Freshness** (`app/live/service/freshness.py`, `GET /banks/{id}/freshness`): compares each authorized module's
   live `input_hash` to the latest official run's `input_hash`. Because the hash is value-based, a
   bare re-derivation of unchanged data stays **fresh**; only an actual economic change reads as
-  stale ("data changed since last filing run — mint an official run").
+  stale ("data changed since last filing run — mint an official run"). Authorization and
+  response filtering follow the [freshness rollout contract](backend/docs/live_enforcement_rollout.md).
 - **Alerts** (`app/live/service/alerts.py`, `GET /banks/{id}/alerts`): open `critical`/`high`
   `live_findings` across modules, surfaced by the header bell (cheap, jittered polling).
 - **Scheduler** (`app/services/scheduler.py`): the worker enqueues a `scheduled_tick`; the handler

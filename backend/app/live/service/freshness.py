@@ -22,6 +22,7 @@ from app.live.models.live import LiveMetric
 from app.live.models.regulatory import BankReportingPeriod
 from app.live.models.regulatory_run import RegulatoryRun
 from app.live.schemas.live import BankFreshnessRead, FreshnessModuleRead
+from app.live.service import live_access
 from app.models import ImpliedRatingRun
 
 # The scenario whose immutable run carries the comparable baseline input hash.
@@ -93,9 +94,15 @@ def get_bank_freshness(
         )
     }
 
+    # Only the caller's VIEW-authorized modules are served: one complete
+    # active binding per module, unknown names default-deny, and an
+    # unauthorized module never triggers its engine hash computation or
+    # official-run lookup. See docs/live_enforcement_rollout.md.
+    allowed = live_access.allowed_modules(db, ctx, bank, _MODULES, surface="bank_freshness")
+
     modules: list[FreshnessModuleRead] = []
     any_stale = False
-    for module in _MODULES:
+    for module in allowed:
         live_row = live_rows.get(module)
         if live_row is not None:
             live_hash = live_row.computed_from_input_hash

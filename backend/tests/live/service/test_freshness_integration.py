@@ -29,7 +29,12 @@ pytestmark = pytest.mark.usefixtures(
 
 
 def _ctx() -> TenantContext:
-    return TenantContext(organization_id=ORG_1, actor_user_id=USER_1)
+    # The service-layer VIEW gate denies closed on a principal whose context
+    # carries no authorization version (the evaluator cannot trust role claims
+    # without it), so this context mirrors what a real token for USER_1
+    # carries; the hermetic fixture bootstrap grants USER_1 an organization-
+    # scoped ALL-module VIEWER binding to evaluate against.
+    return TenantContext(organization_id=ORG_1, actor_user_id=USER_1, authorization_version=1)
 
 
 def _seed(db_session: Session) -> None:

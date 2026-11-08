@@ -528,10 +528,12 @@ def _tenant_row(  # noqa: PLR0913 - a row is the join of these seven sources
 def _freshness_summary(
     db: Session, organization_id: str, bank_id: str, period_count: int
 ) -> TenantFreshnessSummaryRead | None:
-    """Reuse the tenant freshness service — it is cross-tenant-callable
-    because it scopes strictly by the ctx we hand it. A tenant with no
-    periods has nothing to be fresh about; a per-tenant failure must never
-    take down the whole board."""
+    """Reuse tenant freshness; operator compatibility is pending.
+
+    See docs/live_enforcement_rollout.md for the rollout boundary. A tenant
+    with no periods has nothing to be fresh about; a per-tenant failure must
+    never take down the whole board.
+    """
     if period_count == 0:
         return None
     try:
