@@ -144,11 +144,12 @@ it("the bell badge and inbox rows mirror the scoped API feed exactly", async () 
 });
 
 function withinRows(dialog: HTMLElement): string[] {
-  return Array.from(dialog.querySelectorAll("ul li span")).flatMap((node) =>
-    ["Deadline approaching", "Package approved"].includes(node.textContent ?? "")
-      ? [node.textContent as string]
-      : [],
-  );
+  return Array.from(dialog.querySelectorAll("ul li span")).flatMap((node) => {
+    const text = node.textContent ?? "";
+    return ["Deadline approaching", "Package approved"].includes(text)
+      ? [text]
+      : [];
+  });
 }
 
 it("a mark-read denial for a since-hidden row refetches the scoped feed", async () => {
