@@ -1,0 +1,10 @@
+#!/bin/bash
+# Runs the dashboard Playwright suite as the test user. Usage: aequoros-dashboard-e2e [playwright args]
+# Example: aequoros-dashboard-e2e --shard=1/4 --trace off. Set AEQUOROS_ROOT to target another worktree.
+set -euo pipefail
+. "$(dirname "$(readlink -f "$0")")/lib.sh"
+D="$ROOT/backend/dashboard"
+install -d -o aqs -g aqs "$ROOT/.local-services" "$D/.next" "$D/.next-e2e" "$D/test-results" "$D/playwright-report" "$D/e2e/.tmp"
+chown aqs:aqs "$D" # Next writes next-env.d.ts here
+as_aqs env PLAYWRIGHT_BROWSERS_PATH=/opt/pw-dashboard UV_NO_SYNC=1 UV_PROJECT_ENVIRONMENT="$ROOT/backend/.venv" \
+  bash -c 'cd "$0/backend/dashboard" && exec pnpm e2e "$@"' "$ROOT" "$@"
