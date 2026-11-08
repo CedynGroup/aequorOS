@@ -185,6 +185,12 @@ def run_temenos_pull(session: Session, job: Job) -> None:
             mapping_config_id=mapping_id,
             domains=connection.domains or None,
             catalog_overrides=connection.catalog_overrides or None,
+            # The follow-on refresh / mart / dedup enqueues attribute to the
+            # PULL JOB's enqueue provenance (D9), not the context built from
+            # ``connection.created_by``: the scheduler initiated the pull, and
+            # stamping the successors human would enumerate worker-initiated
+            # jobs through the tenant job list (#186).
+            enqueue_provenance=job_queue.inherited_provenance(job),
         )
     except TemenosError as exc:
         _record_pull_failure(session, job, connection, exc, now)

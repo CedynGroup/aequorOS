@@ -12,19 +12,34 @@ from datetime import UTC, date, datetime
 from pathlib import Path
 
 import pytest
+from fastapi.testclient import TestClient
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
+from app.core.authorization import (
+    GrantorType,
+    InstitutionScope,
+    Module,
+    ModuleScope,
+    PrincipalType,
+    RoleBundle,
+    Sensitivity,
+    SensitivityScope,
+)
 from app.core.config import get_settings
+from app.data_engine.adapters.temenos_t24.auth import SimulatedSessionProvider
 from app.data_engine.adapters.temenos_t24.credential_vault import TemenosCredentialVault
+from app.data_engine.adapters.temenos_t24.pull import pull_and_ingest
 from app.data_engine.adapters.temenos_t24.transport import FixtureTransport
 from app.data_engine.models.temenos import TemenosConnection
-from app.data_engine.service import temenos_connections, temenos_jobs
+from app.data_engine.service import ingestion, temenos_connections, temenos_jobs
+from app.identity.models.user import User
+from app.identity.service import authorization
 from app.models import Bank, CanonicalPosition, Job
 from app.services import job_queue
 from tests.support.factories.outbound import stub_dns, stub_public_dns
-from tests.support.helpers import ORG_1, USER_1
+from tests.support.helpers import ORG_1, USER_1, headers
 from tests.support.inmemory_storage import InMemoryStorageClient
 
 OFS_FIXTURES = Path(__file__).resolve().parents[1] / "adapters/temenos_t24/ofs/fixtures"
@@ -108,6 +123,73 @@ def _use_fixture_transport(mp: pytest.MonkeyPatch) -> InMemoryStorageClient:
     mp.setattr(temenos_jobs, "resolve_transport", _transport)
     mp.setattr(temenos_connections, "live_transport_available", lambda: True)
     return storage
+
+
+def _scheduled_pull_job(db_session: Session, connection: TemenosConnection) -> Job:
+    """The pull job as the scheduler tick enqueues it: worker provenance."""
+    job = job_queue.enqueue(
+        db_session,
+        ORG_1,
+        "temenos_pull",
+        bank_id=connection.bank_id,
+        payload={"connection_id": str(connection.id), "as_of_date": AS_OF.isoformat()},
+        locator=job_queue.JobLocator(module=Module.DATA, sensitivity=Sensitivity.CONFIDENTIAL),
+        provenance=job_queue.worker_provenance("scheduler.temenos_pull"),
+    )
+    db_session.commit()
+    return job
+
+
+def _data_view_grant(db_session: Session, bank: Bank) -> int:
+    """Grant USER_1 a DATA/confidential view over the bank: the authority the
+    tenant job list needs to (and only to) show the pull's successor jobs."""
+    if (
+        db_session.scalar(select(User).where(User.id == USER_1, User.organization_id == ORG_1))
+        is None
+    ):
+        db_session.add(
+            User(
+                id=USER_1,
+                organization_id=ORG_1,
+                email="pull-viewer@example.test",
+                display_name="Pull viewer",
+            )
+        )
+        db_session.commit()
+    binding = authorization.create_role_binding(
+        db_session,
+        organization_id=ORG_1,
+        principal_user_id=USER_1,
+        principal_type=PrincipalType.HUMAN,
+        role_bundle=RoleBundle.VIEWER,
+        scope=authorization.BindingScope(
+            InstitutionScope.INSTITUTION, bank.id, ModuleScope.DATA, SensitivityScope.CONFIDENTIAL
+        ),
+        grantor=authorization.GrantorRef(GrantorType.SYSTEM, "temenos-jobs-test"),
+        reason="Exercise pull successor visibility",
+        commit=False,
+    )
+    db_session.commit()
+    assert binding is not None
+    actor = db_session.scalar(
+        select(User).where(User.id == USER_1, User.organization_id == ORG_1)
+    )
+    assert actor is not None
+    return actor.authorization_version
+
+
+def _successors(db_session: Session, bank_id: str) -> list[Job]:
+    return list(
+        db_session.scalars(
+            select(Job)
+            .where(
+                Job.organization_id == ORG_1,
+                Job.bank_id == bank_id,
+                Job.job_type.in_(("pipeline_refresh", "bi_mart_refresh", "etl_dedup")),
+            )
+            .order_by(Job.queued_at)
+        )
+    )
 
 
 def test_run_temenos_pull_ingests_over_fixture_transport(
@@ -225,3 +307,108 @@ def test_run_temenos_pull_is_blocked_when_the_endpoint_resolves_internally(
     assert job.progress["status"] == "failed_no_retry"
     assert "not a permitted destination" in job.progress["error"]
     assert "169.254.169.254" not in job.progress["error"]
+
+
+def test_a_scheduled_pulls_successors_inherit_its_worker_provenance(
+    db_client: TestClient, db_session: Session, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A scheduled pull's follow-on jobs inherit the PULL JOB's enqueue
+    provenance (D9), not the execution context built from
+    ``connection.created_by``: the scheduler initiated the pull, so its
+    refresh, mart and ETL-dedup successors stay worker-attributed and never
+    leak into the tenant job list (#186).
+    """
+    monkeypatch.setenv("BI_MART_ENQUEUE_ENABLED", "1")
+    monkeypatch.setattr(ingestion, "_ETL_INLINE_DEDUP_MAX_RECORDS", 0)
+    get_settings.cache_clear()
+    try:
+        bank = _bank(db_session)
+        connection = _connection(db_session, bank)
+        _store_creds(db_session, connection, monkeypatch)
+        _use_fixture_transport(monkeypatch)
+        version = _data_view_grant(db_session, bank)
+        job = _scheduled_pull_job(db_session, connection)
+
+        temenos_jobs.run_temenos_pull(db_session, job)
+
+        successors = _successors(db_session, bank.id)
+        assert {successor.job_type for successor in successors} == {
+            "pipeline_refresh",
+            "bi_mart_refresh",
+            "etl_dedup",
+        }
+        for successor in successors:
+            assert successor.enqueued_by_principal == job_queue.WORKER_PRINCIPAL
+            assert successor.enqueued_action == "scheduler.temenos_pull"
+
+        # Worker-initiated rows stay invisible through the tenant job list —
+        # the reviewer-visible form of the D47 exclusion.
+        listed = db_client.get(
+            "/api/v1/jobs",
+            headers=headers(user_id=USER_1, authorization_version=version),
+        )
+        assert listed.status_code == 200, listed.text
+        assert listed.json()["total"] == 0
+    finally:
+        get_settings.cache_clear()
+
+
+def test_an_interactive_ingestion_keeps_human_provenance(
+    db_client: TestClient, db_session: Session, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Interactive ingestion keeps context attribution: the upload and
+    sync-now routes call the spine with the caller's context and no inherited
+    provenance, so the successors stay ``human:<actor>`` and the acting user
+    can follow them in the tenant job list.
+    """
+    monkeypatch.setenv("BI_MART_ENQUEUE_ENABLED", "1")
+    get_settings.cache_clear()
+    try:
+        bank = _bank(db_session)
+        connection = _connection(db_session, bank)
+        _store_creds(db_session, connection, monkeypatch)
+        storage = _use_fixture_transport(monkeypatch)
+        version = _data_view_grant(db_session, bank)
+        ctx = TenantContext(organization_id=ORG_1, actor_user_id=USER_1)
+        mapping_id = temenos_jobs._ensure_default_mapping(db_session, ctx, connection)
+        credentials = TemenosCredentialVault(
+            db_session, master_key=MASTER_KEY
+        ).retrieve(connection)
+        db_session.commit()
+
+        pull_and_ingest(
+            db_session,
+            ctx,
+            connection.bank_id,
+            storage,
+            mode="OFS",
+            as_of=AS_OF,
+            company=None,
+            transport=FixtureTransport(OFS_FIXTURES),
+            session_provider=SimulatedSessionProvider(),
+            credentials=credentials,
+            endpoint="ofs://sample-bank",
+            reason="interactive T24 pull",
+            mapping_config_id=mapping_id,
+        )
+
+        successors = _successors(db_session, bank.id)
+        assert {successor.job_type for successor in successors} == {
+            "pipeline_refresh",
+            "bi_mart_refresh",
+        }
+        refresh = next(
+            successor for successor in successors if successor.job_type == "pipeline_refresh"
+        )
+        assert refresh.enqueued_by_principal == f"human:{USER_1}"
+        assert refresh.enqueued_action == "data.pipeline_refresh"
+
+        # The human branch stays visible: the acting user polls their own job.
+        listed = db_client.get(
+            "/api/v1/jobs",
+            headers=headers(user_id=USER_1, authorization_version=version),
+        )
+        assert listed.status_code == 200, listed.text
+        assert str(refresh.id) in [item["id"] for item in listed.json()["jobs"]]
+    finally:
+        get_settings.cache_clear()

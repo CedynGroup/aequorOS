@@ -333,7 +333,13 @@ def run_refresh(session: Session, job: Job) -> None:
         bank_id=bank.id,
         as_of=as_of,
         reason="live_refresh",
-        provenance=job_queue.context_provenance(ctx, action="live.refresh"),
+        # The hand-off attributes to the PARENT job's enqueue provenance (D9),
+        # not the reconstructed execution context: a worker-initiated
+        # ``pipeline_refresh`` (a scheduled pull enqueues it) still carries the
+        # connection creator's id in its payload, and stamping the successor
+        # human would enumerate a worker-initiated job through the tenant job
+        # list (#186).
+        provenance=job_queue.inherited_provenance(job),
     )
     session.commit()
     if outcome.modules_failed:

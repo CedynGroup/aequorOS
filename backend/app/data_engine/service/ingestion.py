@@ -417,11 +417,20 @@ def start_ingestion(  # noqa: PLR0912, PLR0913, PLR0915 - lifecycle and transact
     storage: StorageClient,
     *,
     commit: bool = True,
+    enqueue_provenance: job_queue.JobProvenance | None = None,
 ) -> IngestionBatchStartRead:
     """Ingest a trusted internal source, including worker-built local file paths.
 
     Tenant requests must use :func:`start_uploaded_ingestion` instead.
     Ingest under transaction-held locks on every position identity in the batch.
+
+    ``enqueue_provenance`` attributes the follow-on refresh / mart / dedup
+    enqueues. Interactive callers omit it: their context's initiating
+    principal (``human:<id>`` / ``machine:<id>``) is the enqueue's provenance.
+    A worker-initiated ingestion (a scheduled pull) threads its own job's
+    provenance instead — attributing from the reconstructed context would
+    stamp a worker-initiated job with a human principal and make it
+    enumerable through the tenant job list (#186, D9).
 
     Reserve missing identities through natural-key uniqueness before locking in
     ID order, so concurrent first sightings also wait for the first acceptance.
@@ -681,10 +690,10 @@ def start_ingestion(  # noqa: PLR0912, PLR0913, PLR0915 - lifecycle and transact
 
     storage.flush_access_log()
     _record_batch_event(db, ctx, batch, payload.reason)
-    _enqueue_live_refresh(db, ctx, bank, payload, batch)
-    _enqueue_bi_mart_refresh(db, ctx, bank, payload, batch)
+    _enqueue_live_refresh(db, ctx, bank, payload, batch, enqueue_provenance)
+    _enqueue_bi_mart_refresh(db, ctx, bank, payload, batch, enqueue_provenance)
     if not etl_inline_dedup:
-        _enqueue_etl_dedup(db, ctx, bank, batch)
+        _enqueue_etl_dedup(db, ctx, bank, batch, enqueue_provenance)
     if commit:
         db.commit()
     else:
@@ -694,12 +703,13 @@ def start_ingestion(  # noqa: PLR0912, PLR0913, PLR0915 - lifecycle and transact
     )
 
 
-def _enqueue_live_refresh(
+def _enqueue_live_refresh(  # noqa: PLR0913 - the enqueue carries the context plus its inherited provenance
     db: Session,
     ctx: TenantContext,
     bank: Bank,
     payload: IngestionBatchPayload,
     batch: IngestionBatch,
+    enqueue_provenance: job_queue.JobProvenance | None,
 ) -> None:
     """Trigger the automatic live pipeline for accepted batches.
 
@@ -723,16 +733,17 @@ def _enqueue_live_refresh(
         run_after=utc_now() + timedelta(seconds=debounce),
         coalesce_key=f"refresh:{bank.id}:{payload.as_of_date.isoformat()}",
         locator=job_queue.JobLocator(module=Module.DATA, sensitivity=Sensitivity.CONFIDENTIAL),
-        provenance=job_queue.context_provenance(ctx, action="data.pipeline_refresh"),
+        provenance=_enqueue_provenance(ctx, enqueue_provenance, action="data.pipeline_refresh"),
     )
 
 
-def _enqueue_bi_mart_refresh(
+def _enqueue_bi_mart_refresh(  # noqa: PLR0913 - the enqueue carries the context plus its inherited provenance
     db: Session,
     ctx: TenantContext,
     bank: Bank,
     payload: IngestionBatchPayload,
     batch: IngestionBatch,
+    enqueue_provenance: job_queue.JobProvenance | None,
 ) -> None:
     """Ask the BI lane to rebuild this batch's ``(bank, as_of)`` mart slice.
 
@@ -753,7 +764,7 @@ def _enqueue_bi_mart_refresh(
         bank_id=bank.id,
         as_of=payload.as_of_date,
         reason="ingestion",
-        provenance=job_queue.context_provenance(ctx, action="data.mart_refresh"),
+        provenance=_enqueue_provenance(ctx, enqueue_provenance, action="data.mart_refresh"),
     )
 
 
@@ -762,6 +773,7 @@ def _enqueue_etl_dedup(
     ctx: TenantContext,
     bank: Bank,
     batch: IngestionBatch,
+    enqueue_provenance: job_queue.JobProvenance | None,
 ) -> None:
     """Enqueue the out-of-band ML-ETL dedup pass for a large accepted batch.
 
@@ -785,8 +797,27 @@ def _enqueue_etl_dedup(
         entity_type="ingestion_batch",
         entity_id=batch.id,
         locator=job_queue.JobLocator(module=Module.DATA, sensitivity=Sensitivity.CONFIDENTIAL),
-        provenance=job_queue.context_provenance(ctx, action="data.etl_dedup"),
+        provenance=_enqueue_provenance(ctx, enqueue_provenance, action="data.etl_dedup"),
     )
+
+
+def _enqueue_provenance(
+    ctx: TenantContext,
+    enqueue_provenance: job_queue.JobProvenance | None,
+    *,
+    action: str,
+) -> job_queue.JobProvenance:
+    """The provenance for a follow-on enqueue of an ingestion.
+
+    A worker-initiated ingestion threads its own job's provenance through
+    ``enqueue_provenance``; without it the enqueue attributes to the caller's
+    execution context — an interactive caller's human principal (D9), but for
+    a scheduled pull a human derived from ``connection.created_by``, which
+    would leak the worker-initiated job into the tenant job list (#186).
+    """
+    if enqueue_provenance is not None:
+        return enqueue_provenance
+    return job_queue.context_provenance(ctx, action=action)
 
 
 def list_batches(
