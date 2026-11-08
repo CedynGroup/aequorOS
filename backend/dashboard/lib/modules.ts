@@ -1174,6 +1174,26 @@ export function isHrefVisible(href: string, scope: ModuleScope): boolean {
 }
 
 /**
+ * A nav entry's effective destination for one scope (#829). A module home that
+ * is closed to the caller while their review workspace IS admitted — the
+ * Behavioral restricted-only reviewer — enters where their queue actually
+ * renders instead of a route the route guard refuses; everyone else keeps the
+ * module home.
+ */
+export function moduleEntryHref(href: string, scope: ModuleScope): string {
+  const path = normalize(href);
+  for (const routePolicy of SCOPED_MODULE_ROUTES) {
+    if (path !== routePolicy.prefix) continue;
+    if (!routePolicy.reviewView || !routePolicy.reviewRoutes) return href;
+    if (scope[routePolicy.entryView] === true) return href;
+    if (scope[routePolicy.reviewView] !== true) return href;
+    const [firstReviewRoute] = routePolicy.reviewRoutes;
+    return firstReviewRoute ?? href;
+  }
+  return href;
+}
+
+/**
  * Navigation treatment for an href. Structural and object-scope exclusions stay
  * hidden; a resolved permission gap on a binding-controlled module (Liquidity
  * or any `SCOPED_MODULE_ROUTES` entry) stays visible but disabled with the
