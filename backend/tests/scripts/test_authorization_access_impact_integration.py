@@ -7,13 +7,13 @@ import os
 import re
 import subprocess
 import sys
-from collections.abc import Generator
+from collections.abc import Generator, Sequence
 from contextlib import contextmanager
 from dataclasses import asdict
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import cast
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import pytest
 from fastapi.routing import APIRoute
@@ -22,6 +22,8 @@ from sqlalchemy.engine import Connection
 from sqlalchemy.orm import Session
 
 from app.core.authorization import (
+    BindingGrant,
+    BindingStatus,
     DataScope,
     InstitutionScope,
     Module,
@@ -163,6 +165,8 @@ def _grant(  # noqa: PLR0913 - one indivisible sentence per call
     institution_id: str | None = None,
     module_scope: ModuleScope = ModuleScope.ALL,
     sensitivity_scope: SensitivityScope = SensitivityScope.ALL,
+    data_scope: DataScope = DataScope.ALL,
+    data_scope_values: tuple[str, ...] = (),
 ) -> None:
     authorization.create_role_binding(
         db,
@@ -171,7 +175,12 @@ def _grant(  # noqa: PLR0913 - one indivisible sentence per call
         principal_type=PrincipalType.HUMAN,
         role_bundle=bundle,
         scope=authorization.BindingScope(
-            institution_scope, institution_id, module_scope, sensitivity_scope
+            institution_scope,
+            institution_id,
+            module_scope,
+            sensitivity_scope,
+            data_scope=data_scope,
+            data_scope_values=data_scope_values,
         ),
         grantor=authorization.GrantorRef(authorization.GrantorType.SYSTEM, "test:impact"),
         reason="impact report fixture",
@@ -870,6 +879,83 @@ def test_the_report_names_exact_bank_signoff_grant_holders(db_session: Session) 
     assert rows["organization-signer@impact.example"].signing_institutions == []
     assert rows["risk-signer@impact.example"].signing_institutions == []
     assert _rendered_cells(list(rows.values()))["signer@impact.example"]["signing"] == BANK
+
+
+def test_the_report_never_composes_two_grants_into_signing_coverage(
+    db_session: Session, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """An org-scope grant cannot lend its whole-book breadth to a narrowed row.
+
+    The execution gates require ONE binding to supply the exact bank AND the
+    whole-book data scope; the inventory projects the same sentence. A narrowed
+    REGULATORY pair cannot be stored today (the narrowed-module CHECK confines
+    narrowed scopes to credit), so the effective-grant loader is patched to
+    answer exactly as a database holding the historical pair would.
+    """
+    db_session.add(Organization(id=ORG, name="Impact proof"))
+    db_session.add(
+        Bank(
+            id=BANK,
+            organization_id=ORG,
+            name="Impact Bank",
+            short_name="Impact",
+            currency="GHS",
+            jurisdiction_code="GH",
+            license_type="universal_bank",
+            institution_type=FALLBACK_TYPE_CODE,
+        )
+    )
+    composer = _user(db_session, "composing-signer@impact.example")
+    db_session.flush()
+    _grant(
+        db_session,
+        composer,
+        RoleBundle.SIGNER,
+        module_scope=ModuleScope.REGULATORY,
+        sensitivity_scope=SensitivityScope.RESTRICTED,
+    )
+    db_session.commit()
+    org_binding = db_session.scalars(
+        select(AuthorizationBinding).where(
+            AuthorizationBinding.principal_user_id == composer.id
+        )
+    ).one()
+
+    branch_grant = BindingGrant(
+        binding_id=UUID("44444444-4444-4444-8444-444444444444"),
+        organization_id=ORG,
+        principal_id=composer.id,
+        principal_type=PrincipalType.HUMAN,
+        role_bundle=RoleBundle.SIGNER,
+        institution_scope=InstitutionScope.INSTITUTION,
+        institution_id=BANK,
+        module_scope=ModuleScope.REGULATORY,
+        sensitivity_scope=SensitivityScope.RESTRICTED,
+        status=BindingStatus.ACTIVE,
+        valid_from=datetime.now(UTC),
+        valid_until=None,
+        revoked_at=None,
+        data_scope=DataScope.BRANCH,
+        data_scope_values=("Head office",),
+    )
+
+    real_load = authorization.load_effective_grants
+
+    def historical_pair(
+        db: Session, *, organization_id: str, binding_ids: Sequence[UUID]
+    ) -> dict[UUID, BindingGrant]:
+        grants = dict(
+            real_load(db, organization_id=organization_id, binding_ids=binding_ids)
+        )
+        if org_binding.id in binding_ids:
+            grants[branch_grant.binding_id] = branch_grant
+        return grants
+
+    monkeypatch.setattr(authorization, "load_effective_grants", historical_pair)
+
+    rows = {row.email: row for row in build_report(db_session, organization_id=ORG)}
+
+    assert rows["composing-signer@impact.example"].signing_institutions == []
 
 
 def test_the_report_names_who_may_transmit_a_return(db_session: Session) -> None:
