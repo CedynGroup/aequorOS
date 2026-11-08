@@ -152,7 +152,7 @@ function firstPending(model: Model): number {
 
 function reviewButtonOf(index: number): HTMLElement {
   return within(
-    screen.getAllByRole("article")[index] as HTMLElement,
+    screen.getAllByRole("article")[index],
   ).getByRole("button", { name: "Review and accept" });
 }
 
@@ -161,7 +161,7 @@ async function observe(model: Model) {
   const cards = screen.getAllByRole("article");
   expect(cards).toHaveLength(model.statuses.length);
   for (const [index, status] of model.statuses.entries()) {
-    const card = within(cards[index] as HTMLElement);
+    const card = within(cards[index]);
     expect(card.getByText(status)).toBeVisible();
     const button = card.queryByRole("button", { name: "Review and accept" });
     if (status === "accepted") {
@@ -214,7 +214,7 @@ class ReviewCommand implements fc.AsyncCommand<Model, Real> {
     await real.user.click(reviewButtonOf(index));
     await waitFor(() =>
       expect(
-        within(screen.getAllByRole("article")[index] as HTMLElement).getByText(
+        within(screen.getAllByRole("article")[index]).getByText(
           "accepted",
         ),
       ).toBeVisible(),
@@ -248,7 +248,7 @@ class FailThenRetryCommand implements fc.AsyncCommand<Model, Real> {
     await real.user.click(reviewButtonOf(index));
     await waitFor(() =>
       expect(
-        within(screen.getAllByRole("article")[index] as HTMLElement).getByText(
+        within(screen.getAllByRole("article")[index]).getByText(
           /Could not review — review channel refused/i,
         ),
       ).toBeVisible(),
@@ -261,7 +261,7 @@ class FailThenRetryCommand implements fc.AsyncCommand<Model, Real> {
     await real.user.click(reviewButtonOf(index));
     await waitFor(() =>
       expect(
-        within(screen.getAllByRole("article")[index] as HTMLElement).getByText(
+        within(screen.getAllByRole("article")[index]).getByText(
           "accepted",
         ),
       ).toBeVisible(),
