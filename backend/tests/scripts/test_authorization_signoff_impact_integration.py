@@ -5,7 +5,6 @@ from __future__ import annotations
 import json
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
-from typing import cast
 from uuid import uuid4
 
 import pytest
@@ -389,6 +388,26 @@ def test_signoff_requires_one_effective_exact_bank_whole_book_binding(
     assert not _impact(report, exact, Module.REGULATORY, bank_id=OTHER_BANK).after.allowed
 
 
+def _read_json(path: Path) -> dict[str, object]:
+    # Test-only JSON file boundary; the producer's dataclass schema is checked below.
+    data: object = json.loads(path.read_text())
+    if not isinstance(data, dict):
+        raise TypeError("expected a JSON object")
+    return {str(key): item for key, item in data.items()}
+
+
+def _object_list(value: object) -> list[dict[str, object]]:
+    """Validate JSON array rows at the test boundary without a type cast."""
+    if not isinstance(value, list):
+        raise TypeError("expected a JSON array")
+    rows: list[dict[str, object]] = []
+    for row in value:
+        if not isinstance(row, dict):
+            raise TypeError("expected JSON objects")
+        rows.append({str(key): item for key, item in row.items()})
+    return rows
+
+
 def test_artifacts_are_private_non_overwriting_and_name_every_signing_route(
     db_session: Session, tmp_path: Path
 ) -> None:
@@ -413,15 +432,15 @@ def test_artifacts_are_private_non_overwriting_and_name_every_signing_route(
         "signoff-after.json",
         "signoff-exact-grants.json",
     }
-    before = cast(dict[str, object], json.loads((output / "signoff-before.json").read_text()))
-    after = cast(dict[str, object], json.loads((output / "signoff-after.json").read_text()))
-    grants = cast(dict[str, object], json.loads((output / "signoff-exact-grants.json").read_text()))
+    before = _read_json(output / "signoff-before.json")
+    after = _read_json(output / "signoff-after.json")
+    grants = _read_json(output / "signoff-exact-grants.json")
     assert before["stage"] == "before" and after["stage"] == "after"
     assert before["generated_at"] == after["generated_at"] == grants["generated_at"]
-    assert len(cast(list[object], before["routes"])) == 6
-    outcomes = cast(list[dict[str, object]], after["outcomes"])
+    assert len(_object_list(before["routes"])) == 6
+    outcomes = _object_list(after["outcomes"])
     assert any(row["newly_denied"] for row in outcomes)
-    required = cast(list[dict[str, object]], grants["required_grants"])
+    required = _object_list(grants["required_grants"])
     assert len(required) == 1
     assert required[0]["role_bundle"] == "signer"
     assert required[0]["permission"] == "sign_off"

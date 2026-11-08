@@ -227,6 +227,7 @@ def _named_routes(db: Session, organization_id: str) -> dict[tuple[UUID, str], _
         )
     ).all()
     for row in rows:
+        # SQLAlchemy Row unpacking is untyped; the select's column order is the shape.
         user_id, bank_id, role, family = cast(tuple[UUID, str, str, str], row)
         named = result.setdefault((user_id, bank_id), _NamedRoutes())
         named.roles.add(role)
@@ -247,6 +248,7 @@ def _named_stress_routes(db: Session, organization_id: str) -> dict[tuple[UUID, 
     ).all()
     result: dict[tuple[UUID, str], _NamedRoutes] = {}
     for row in rows:
+        # SQLAlchemy Row unpacking is untyped; the select's column order is the shape.
         user_id, bank_id = cast(tuple[UUID | None, str], row)
         if user_id is not None:
             result.setdefault((user_id, bank_id), _NamedRoutes()).roles.add("board")
