@@ -6,7 +6,9 @@ Run from backend: uv run python -m scripts.authorization_notification_impact
 Uses WORKER_DATABASE_URL then DATABASE_URL, or --database-url. Without
 --output-dir prints combined JSON. No email, credential or grant reason is
 exported. The report counts the stored rows each principal would have seen
-before #186 and sees under the current locator-view read filter, then names
+before #186 and sees under the current read filters — the new locator-view
+filter plus the pre-existing return-family factor for filing notifications,
+both applied exactly as the production read paths apply them — then names
 the least-scope VIEWER grants an operator could approve to restore visibility
 where a grant can actually do that. Legacy locator-less rows and worker/system
 provenance jobs are inventoried but never receive a grant candidate.
@@ -24,7 +26,7 @@ from pathlib import Path
 from typing import cast
 from uuid import UUID, uuid4
 
-from sqlalchemy import ColumnElement, Engine, create_engine, func, or_, select
+from sqlalchemy import ColumnElement, Engine, create_engine, false, func, or_, select, true
 from sqlalchemy.orm import Session
 
 # Standalone execution must register the tenant RLS listener, as the API does.
@@ -40,9 +42,11 @@ from app.core.authorization import (
     SensitivityScope,
 )
 from app.core.locator_visibility import locator_visibility
+from app.core.tenancy import TenantContext
 from app.identity.public import load_permission_grants
 from app.identity.service import authorization
 from app.models import AuthorizationBinding, Job, Notification, Organization, User
+from app.notifications.public import notifications as notifications_service
 from app.services.jobs import tenant_visibility_condition
 from scripts.authorization_configure_impact import ExistingGrant
 
@@ -126,12 +130,14 @@ class NotifImpactReport:
             "generated_at": self.generated_at,
             "assessment": (
                 "stored notification and job visibility before versus after the #186 "
-                "locator-view read filter"
+                "locator-view read filter, with the pre-existing return-family factor "
+                "for filing notifications applied on both sides"
             ),
             "limitations": [
-                "Not HTTP evidence: session, tenant RLS and the pre-existing "
-                "return-family factor for filing notifications still apply on the live API; "
-                "the measured delta is exactly the new locator-view factor.",
+                "Not HTTP evidence: session and tenant RLS still apply on the live API. "
+                "The measured factors are the new locator-view filter and the "
+                "pre-existing return-family factor for filing notifications, each "
+                "applied exactly as the production read paths apply them.",
                 "Required grants are candidates for operator approval; none are created here.",
                 "Legacy locator-less rows and worker/system-provenance jobs can never be "
                 "granted back into visibility; no backfill by inference.",
@@ -167,15 +173,6 @@ class _Locator:
         )
 
 
-@dataclass(frozen=True)
-class _PrincipalContext:
-    """Minimal TenantPrincipalContext for one inventoried principal."""
-
-    organization_id: str
-    actor_user_id: UUID
-    authorization_version: int | None
-
-
 def _date(value: datetime | None) -> str | None:
     if value is None:
         return None
@@ -208,20 +205,25 @@ def _locator_conditions(
     return conditions
 
 
-def _notification_count(
+def _notification_count(  # noqa: PLR0913 - recipient, tenant, family and locator are one count
     db: Session,
     organization_id: str,
     principal_id: UUID,
     locator: _Locator,
     grants: tuple[BindingGrant, ...] | None,
+    family: ColumnElement[bool],
 ) -> int:
-    """Rows visible under the recipient and tenant factors, plus the filter if given."""
+    """Rows visible under the recipient, tenant and family factors, plus the filter."""
     conditions: list[ColumnElement[bool]] = [
         Notification.organization_id == organization_id,
         or_(
             Notification.recipient_user_id.is_(None),
             Notification.recipient_user_id == principal_id,
         ),
+        # The pre-existing return-family factor, exactly as the production read
+        # path applies it (notifications service visibility_conditions): a row
+        # it hides was never API-visible, on either side of the cutover.
+        family,
         *_locator_conditions(Notification, locator),
     ]
     if grants is not None:
@@ -285,6 +287,7 @@ def _required_grants(  # noqa: PLR0913 - one candidate needs user, locator and b
     grants: tuple[BindingGrant, ...],
     before_count: int,
     after_count: int,
+    family: ColumnElement[bool],
 ) -> list[RequiredGrant]:
     """Name the least-scope viewer grant only when it would actually restore rows."""
     if (
@@ -296,7 +299,9 @@ def _required_grants(  # noqa: PLR0913 - one candidate needs user, locator and b
         return []
     candidate = _candidate_grant(user, locator)
     if surface == "notifications":
-        restored = _notification_count(db, organization_id, user.id, locator, (*grants, candidate))
+        restored = _notification_count(
+            db, organization_id, user.id, locator, (*grants, candidate), family
+        )
     else:
         restored = _job_count(db, organization_id, locator, (*grants, candidate))
     if restored <= after_count:
@@ -399,23 +404,27 @@ def build_notification_impact_report(
                 )
             )
             grants: tuple[BindingGrant, ...]
+            family: ColumnElement[bool]
             error: str | None = None
             try:
-                grants = load_permission_grants(
-                    db,
-                    _PrincipalContext(
-                        organization_id,
-                        user.id,
-                        None if kind is PrincipalType.MACHINE else 1,
-                    ),
-                    Permission.VIEW,
+                principal = TenantContext(
+                    organization_id=organization_id,
+                    actor_user_id=user.id,
+                    authorization_version=None if kind is PrincipalType.MACHINE else 1,
                 )
+                grants = load_permission_grants(db, principal, Permission.VIEW)
+                # The production family factor for this principal (the same
+                # function the notification read path applies), so family-hidden
+                # rows are hidden on both sides of the cutover and candidates are
+                # only recommended when the simulated recount truly restores.
+                family = notifications_service.family_visibility_condition(db, principal)
             except Exception:
                 grants = ()
+                family = false()
                 error = "evaluation_failed"
             for locator in notif_locators:
-                before = _notification_count(db, organization_id, user.id, locator, None)
-                after = _notification_count(db, organization_id, user.id, locator, grants)
+                before = _notification_count(db, organization_id, user.id, locator, None, family)
+                after = _notification_count(db, organization_id, user.id, locator, grants, family)
                 required = (
                     []
                     if error is not None
@@ -428,6 +437,7 @@ def build_notification_impact_report(
                         grants,
                         before,
                         after,
+                        family,
                     )
                 )
                 report.impacts.append(
@@ -461,6 +471,8 @@ def build_notification_impact_report(
                         grants,
                         before,
                         after,
+                        # Queue rows carry no return-family factor.
+                        true(),
                     )
                 )
                 report.impacts.append(
