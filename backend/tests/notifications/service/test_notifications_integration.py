@@ -9,7 +9,18 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
-from app.core.authorization import Module, Sensitivity
+from app.core.authorization import (
+    GrantorType,
+    InstitutionScope,
+    Module,
+    ModuleScope,
+    PrincipalType,
+    RoleBundle,
+    Sensitivity,
+    SensitivityScope,
+)
+from app.identity.models.authorization import AuthorizationBinding
+from app.identity.service import authorization
 from app.liquidity.schemas.regulatory_liquidity import RegulatoryRunCreate
 from app.liquidity.service import regulatory_liquidity
 from app.models import BankReportingPeriod, Notification, RegulatoryPackage, User
@@ -69,6 +80,41 @@ def _ensure_role_users(db: Session, organization_id: str) -> None:
                     is_active=is_active,
                 )
             )
+    db.flush()
+    # Every active role user also holds one complete organization-wide viewer
+    # binding: the read paths filter on current locator authority (#186), so a
+    # list or mark-read expectation needs the grant in place, not just the
+    # legacy scalar role the fan-out targets.
+    for user_id, _role, _email, is_active in _ROLE_USERS:
+        if not is_active or user_id == USER_1:
+            continue  # USER_1 already holds the bootstrap viewer binding
+        if (
+            db.scalar(
+                select(AuthorizationBinding.id).where(
+                    AuthorizationBinding.principal_user_id == user_id,
+                    AuthorizationBinding.organization_id == organization_id,
+                    AuthorizationBinding.role_bundle == RoleBundle.VIEWER.value,
+                )
+            )
+            is not None
+        ):
+            continue
+        authorization.create_role_binding(
+            db,
+            organization_id=organization_id,
+            principal_user_id=user_id,
+            principal_type=PrincipalType.HUMAN,
+            role_bundle=RoleBundle.VIEWER,
+            scope=authorization.BindingScope(
+                InstitutionScope.ORGANIZATION,
+                None,
+                ModuleScope.ALL,
+                SensitivityScope.ALL,
+            ),
+            grantor=authorization.GrantorRef(GrantorType.SYSTEM, "notification-fixture"),
+            reason="Notification read-path fixture authority",
+            commit=False,
+        )
     db.commit()
 
 
