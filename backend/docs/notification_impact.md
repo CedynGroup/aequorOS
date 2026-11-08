@@ -53,7 +53,8 @@ naming that bank.
 hidden rows. Machine principals and inactive users receive no candidates. The
 relevant tenant surfaces are `GET /api/v1/notifications`,
 `POST /api/v1/notifications/{notification_id}/read`,
-`POST /api/v1/notifications/read-all`, and `GET /api/v1/jobs/{job_id}`. Claim,
+`POST /api/v1/notifications/read-all`, `GET /api/v1/jobs`, and
+`GET /api/v1/jobs/{job_id}`. Claim,
 retry and execution ignore the locator, so workers keep processing rows no
 tenant can poll. The existing `authorization_access_impact.py` dashboard
 projection remains the full-access report; this sibling adds the

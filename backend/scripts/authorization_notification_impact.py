@@ -54,6 +54,7 @@ NOTIF_ROUTES: tuple[tuple[str, str], ...] = (
     ("GET", "/api/v1/notifications"),
     ("POST", "/api/v1/notifications/{notification_id}/read"),
     ("POST", "/api/v1/notifications/read-all"),
+    ("GET", "/api/v1/jobs"),
     ("GET", "/api/v1/jobs/{job_id}"),
 )
 

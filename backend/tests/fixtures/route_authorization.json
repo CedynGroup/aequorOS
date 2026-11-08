@@ -2979,14 +2979,14 @@
       "basis": "Existing tenant authentication boundary and exact registered dependency calls listed here. Named scoped/legacy gates remain unchanged; handler and service checks can narrow this access further. Presence is not policy correctness.",
       "references": [
         "app/api/deps.py:get_current_principal",
-        "app/api/deps.py:get_mutation_tenant_context",
+        "app/api/deps.py:get_scoped_mutation_tenant_context",
         "app/api/deps.py:get_tenant_context",
         "app/api/deps.py:get_tenant_db_session"
       ],
       "authentication": "tenant",
       "dependencies": [
         "app.api.deps:get_current_principal",
-        "app.api.deps:get_mutation_tenant_context",
+        "app.api.deps:get_scoped_mutation_tenant_context",
         "app.api.deps:get_tenant_context",
         "app.api.deps:get_tenant_db_session",
         "fastapi.security.http:HTTPBearer"
@@ -5001,6 +5001,12 @@
         "fastapi.security.http:HTTPBearer"
       ],
       "routes": [
+        {
+          "application": "tenant",
+          "method": "GET",
+          "path": "/api/v1/jobs",
+          "endpoint": "app.features.track_jobs:list_jobs"
+        },
         {
           "application": "tenant",
           "method": "GET",

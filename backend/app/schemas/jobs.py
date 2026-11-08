@@ -22,3 +22,11 @@ class JobRead(BaseModel):
     queued_at: datetime
     started_at: datetime | None
     completed_at: datetime | None
+
+
+class JobListRead(BaseModel):
+    jobs: list[JobRead]
+    total: int
+    limit: int
+    offset: int
+    has_more: bool

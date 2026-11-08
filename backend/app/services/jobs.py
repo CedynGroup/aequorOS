@@ -4,7 +4,7 @@ from collections.abc import Sequence
 from uuid import UUID
 
 from fastapi import HTTPException, status
-from sqlalchemy import ColumnElement, and_, or_, select
+from sqlalchemy import ColumnElement, and_, func, or_, select
 from sqlalchemy.orm import Session
 
 from app.core.authorization import BindingGrant, Permission
@@ -60,3 +60,32 @@ def get_job_or_404(
     if job is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Job not found.")
     return job
+
+
+def list_jobs(
+    db: Session,
+    organization_id: str,
+    visibility: ColumnElement[bool],
+    *,
+    limit: int,
+    offset: int,
+) -> tuple[list[Job], int]:
+    """The visible page of the queue and its exact visible total (#186).
+
+    Page and count share the caller's ``tenant_visibility_condition``, so a
+    hidden row shifts neither ``total`` nor any page boundary: its existence
+    is as opaque to the list as the 404 is to the detail read. Ordering is
+    deterministic (newest first, id as the tie-break).
+    """
+    conditions = [Job.organization_id == organization_id, visibility]
+    rows = list(
+        db.scalars(
+            select(Job)
+            .where(*conditions)
+            .order_by(Job.queued_at.desc(), Job.id.desc())
+            .limit(limit)
+            .offset(offset)
+        )
+    )
+    total = db.scalar(select(func.count()).select_from(Job).where(*conditions)) or 0
+    return rows, total
