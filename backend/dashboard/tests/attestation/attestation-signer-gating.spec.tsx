@@ -7,11 +7,16 @@ import type { AttestationStatusRead } from "@aequoros/risk-service-api";
 import { AttestationStatusReadFromJSON } from "@aequoros/risk-service-api";
 import { setActiveJurisdiction } from "../../lib/format";
 
-const state = vi.hoisted(() => ({
+const state = vi.hoisted((): {
+  userId: string;
+  permissions: string[];
+  exactInstitution: boolean;
+  attestationStatus: AttestationStatusRead | null;
+} => ({
   userId: "user-signer",
-  permissions: [] as string[],
+  permissions: [],
   exactInstitution: true,
-  attestationStatus: null as AttestationStatusRead | null,
+  attestationStatus: null,
 }));
 
 vi.mock("@/components/profile/ProfileProvider", () => ({

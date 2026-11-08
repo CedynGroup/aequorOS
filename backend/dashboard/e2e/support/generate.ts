@@ -27,7 +27,7 @@ export async function generateCurrentPackage(
       response.ok(),
   );
   await generate.click();
-  const body = (await (await minted).json()) as { id: string; version: number };
+  const body: { id: string; version: number } = await (await minted).json();
   await expect(
     page.getByText(new RegExp(`\\bVersion ${body.version} ·`)),
   ).toBeVisible({ timeout: 30_000 });
