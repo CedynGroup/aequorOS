@@ -326,6 +326,36 @@ def test_region_is_optional_because_it_is_declared_not_inferred() -> None:
 # ---------------------------------------------------------------------------
 
 
+_BI_IMPORT_GUARD = dedent(
+    """
+    import importlib
+    import importlib.abc
+    import pkgutil
+    import sys
+
+    sys.path.insert(0, sys.argv[1])
+    forbidden_module = sys.argv[2]
+
+    class ForbiddenBIImport(Exception):
+        pass
+
+    class BlockBIDomain(importlib.abc.MetaPathFinder):
+        def find_spec(self, fullname, path=None, target=None):
+            if fullname == forbidden_module or fullname.startswith(forbidden_module + "."):
+                raise ForbiddenBIImport(fullname)
+            return None
+
+    sys.meta_path.insert(0, BlockBIDomain())
+    try:
+        importlib.import_module(forbidden_module)
+    except ForbiddenBIImport as exc:
+        assert exc.args == (forbidden_module,)
+    else:
+        raise AssertionError("forbidden-import control did not fail")
+    """
+)
+
+
 def test_the_reference_schemas_do_not_import_the_bi_catalogue() -> None:
     """Ingestion's shape contract must work without its BI consumer installed."""
     result = subprocess.run(
@@ -333,35 +363,9 @@ def test_the_reference_schemas_do_not_import_the_bi_catalogue() -> None:
             sys.executable,
             "-I",
             "-c",
-            dedent(
+            _BI_IMPORT_GUARD
+            + dedent(
                 """
-                import importlib
-                import importlib.abc
-                import pkgutil
-                import sys
-
-                sys.path.insert(0, sys.argv[1])
-
-                # Not an ImportError: an ingestion module guarding an optional
-                # BI dependency with `except ImportError` must not swallow the
-                # guard's signal, and pkgutil only ever ignores ImportError.
-                class ForbiddenBIImport(Exception):
-                    pass
-
-                class BlockBIDomain(importlib.abc.MetaPathFinder):
-                    def find_spec(self, fullname, path=None, target=None):
-                        if fullname == "app.bi.domain" or fullname.startswith("app.bi.domain."):
-                            raise ForbiddenBIImport(fullname)
-                        return None
-
-                sys.meta_path.insert(0, BlockBIDomain())
-                try:
-                    importlib.import_module("app.bi.domain")
-                except ForbiddenBIImport as exc:
-                    assert exc.args == ("app.bi.domain",)
-                else:
-                    raise AssertionError("forbidden-import control did not fail")
-
                 package = importlib.import_module("app.data_engine.domain.ingestion")
                 modules = list(pkgutil.walk_packages(package.__path__, package.__name__ + "."))
                 assert modules, "no ingestion modules discovered"
@@ -399,6 +403,7 @@ def test_the_reference_schemas_do_not_import_the_bi_catalogue() -> None:
                 """
             ),
             str(Path(__file__).resolve().parents[4]),
+            "app.bi.domain",
         ],
         capture_output=True,
         text=True,
@@ -431,32 +436,9 @@ def test_the_guard_signal_survives_an_ingestion_module_that_catches_import_error
             sys.executable,
             "-I",
             "-c",
-            dedent(
+            _BI_IMPORT_GUARD
+            + dedent(
                 """
-                import importlib
-                import importlib.abc
-                import pkgutil
-                import sys
-
-                sys.path.insert(0, sys.argv[1])
-
-                class ForbiddenBIImport(Exception):
-                    pass
-
-                class BlockBIDomain(importlib.abc.MetaPathFinder):
-                    def find_spec(self, fullname, path=None, target=None):
-                        if fullname == "bi_forbidden" or fullname.startswith("bi_forbidden."):
-                            raise ForbiddenBIImport(fullname)
-                        return None
-
-                sys.meta_path.insert(0, BlockBIDomain())
-                try:
-                    importlib.import_module("bi_forbidden")
-                except ForbiddenBIImport as exc:
-                    assert exc.args == ("bi_forbidden",)
-                else:
-                    raise AssertionError("forbidden-import control did not fail")
-
                 package = importlib.import_module("ingestion_guard_probe")
                 modules = list(pkgutil.walk_packages(package.__path__, package.__name__ + "."))
                 assert sorted(module.name for module in modules) == [
@@ -475,6 +457,7 @@ def test_the_guard_signal_survives_an_ingestion_module_that_catches_import_error
                 """
             ),
             str(tmp_path),
+            "bi_forbidden",
         ],
         capture_output=True,
         text=True,
