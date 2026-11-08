@@ -243,6 +243,18 @@ def refresh_bank_data(
 ) -> JobEnqueuedRead:
     """Enqueue an immediate live refresh (the "Recompute now" button)."""
     bank = _get_bank_or_404(db, ctx, bank_id)
+    # The accepted refresh must be monitorable: the queue reads admit a row
+    # only under the caller's CURRENT view authority (#186), and the row's
+    # locator is DATA/confidential, so enqueueing requires that view.
+    scoped_authorization.require_resolved_bank_permission(
+        db,
+        ctx,
+        bank,
+        permission=Permission.VIEW,
+        module=Module.DATA,
+        sensitivity=Sensitivity.CONFIDENTIAL,
+        surface="refresh_bank_data",
+    )
     job = job_queue.enqueue(
         db,
         ctx.organization_id,
