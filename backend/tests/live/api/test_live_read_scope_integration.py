@@ -1,12 +1,13 @@
 """Live READ scope end to end: only permitted modules cross the wire.
 
 The official-snapshot ladder, the alerts feed and the window analytics are
-filtered through the caller's exact active VIEW bindings with the same closed
-module map the live summary and the freshness view use. These tests pin the
+authorized through the caller's exact active VIEW bindings. The snapshot
+service has a separate lookup matching the live module authority map; alerts
+and window analytics use matching engine gate lists. These tests pin the
 API-level contract on all three surfaces: a scoped viewer sees only their
 bound module (including the capital ladder), unbound, foreign-bank, suspended
 or stale-version principals get closed maps or refusals, a fully bound viewer
-keeps the pre-existing response shapes, and an unknown module row can never
+receives the full response shapes, and an unknown module row can never
 exist to surface — the storage layer's own module CHECK refuses it before any
 serialization could name or carry it.
 
@@ -47,8 +48,8 @@ from tests.support.helpers import ORG_1, headers
 
 AS_OF = FIXTURE_AS_OF.isoformat()
 _BASE = f"/api/v1/banks/{SAMPLE_BANK_ID}"
-# The fixture's canonical period ends 2026-03-31 and a refresh stamps today's
-# plane-2 snapshot rows, so the analysis window must span both.
+# The analysis window spans the fixture's canonical period ending 2026-03-31
+# and the refresh-date plane-2 snapshot rows.
 _WINDOW_START = date(2026, 3, 1)
 _WINDOW_END = utc_now().date() + timedelta(days=1)
 
@@ -203,7 +204,7 @@ def test_snapshot_ladder_serves_only_the_bound_module(db_client: TestClient) -> 
 
 
 def test_alerts_serve_only_bound_modules(db_client: TestClient) -> None:
-    """An IRRBB-free, LIQUIDITY-only viewer sees the liquidity breach only."""
+    """A LIQUIDITY-only viewer sees the liquidity breach only."""
     _seed_and_refresh(db_client)
     _seed_findings()
     viewer, version = _user_with_module_view(ModuleScope.LIQUIDITY, "alerts-viewer@example.test")
@@ -234,11 +235,11 @@ def test_window_analytics_serves_only_bound_modules(db_client: TestClient) -> No
     assert all(ratio["module"] == "liquidity" for ratio in ratios)
     assert {entry["module"] for entry in daily} == {"liquidity"}
     assert all(entry["day_count"] > 0 for entry in daily)
-    assert "capital" not in _window(db_client, auth)  # serialized omission
+    assert "capital" not in _window(db_client, auth)  # No capital key in the response object.
 
 
 def test_unbound_principal_gets_closed_maps(db_client: TestClient) -> None:
-    """No binding, no modules: every surface answers with a closed map."""
+    """Without bindings, alerts and windows are empty and snapshots are denied."""
     _seed_and_refresh(db_client)
     nobody = _org_user_without_bindings("read-scope-no-bindings@example.test")
     auth = headers(user_id=nobody)

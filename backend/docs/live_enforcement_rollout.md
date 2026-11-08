@@ -9,7 +9,7 @@ storage boundaries guarantee.
 `GET /api/v1/banks/{bank_id}/freshness` serves only the modules the caller can
 VIEW. Enforcement lives at the service layer (`app/live/service/freshness.py`
 via the exact-binding decision helper `app/live/service/live_access.py`),
-matching the existing precedents:
+matching these service-layer authorization patterns:
 
 - `app/data_engine/service/access.py` (DATA)
 - `app/case/service/authorization.py` (cases)
@@ -30,7 +30,7 @@ freshness-to-authorization module mapping. It matches the live summary's
 freshness module vocabulary. A new authorization enum value requires a
 CHECK-widening migration, not just a surface mapping change.
 
-## Tenant semantics
+## Tenant freshness semantics
 
 - **One complete active binding per module.** VIEW, aggregated sensitivity,
   whole-institution grain, exact match; partial rows never compose; no scalar
@@ -44,15 +44,15 @@ CHECK-widening migration, not just a surface mapping change.
 - **Aggregate honesty.** `is_stale` aggregates only the served (authorized)
   modules; a restricted viewer's flag describes exactly the payload served.
   With no permitted modules, `modules` is empty and `is_stale` is false.
-- **Response compatibility.** The response schema and module order are unchanged.
-  Fully authorized tenant viewers retain all modules and the existing hash and
-  staleness behavior.
-- **Opaque bank denial unchanged.** Unknown or other-tenant banks still 404
+- **Response shape and order.** Authorization filters the module list without
+  changing its schema or relative order. Fully authorized tenant viewers receive
+  all modules with their hash and staleness fields.
+- **Opaque bank denial.** Unknown or other-tenant banks return 404
   before any module decision.
 
 ## Operator-board freshness
 
-`GET /operator/v1/tenants` reads freshness through its existing staff gate
+`GET /operator/v1/tenants` reads freshness through its staff gate
 (`get_operator_context`). Its service selects the explicit `staff_board` module
 authority in `get_bank_freshness`, serving the full freshness module vocabulary
 for each bank with reporting periods. This selection is internal, never request
@@ -110,7 +110,7 @@ exclusion query independently rejects arbitrary unknown module strings.
   authorization-version refusal, preserved shapes for a fully bound viewer,
   and the storage module CHECK refusing unknown module rows.
 - `backend/tests/live/service/test_freshness_integration.py`
-  keeps proving hash-staleness semantics for an authorized viewer.
+  verifies hash-staleness semantics for an authorized viewer.
 
 These are automated fixture-based contracts, including TestClient API checks;
 they do not constitute live deployment validation.
