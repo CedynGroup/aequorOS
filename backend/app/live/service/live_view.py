@@ -289,6 +289,19 @@ def mint_official_run(
                 sensitivity=Sensitivity.CONFIDENTIAL,
                 surface="mint_official_run",
             )
+    # The accepted mint must be monitorable: the queue reads admit a row only
+    # under the caller's CURRENT view authority (#186), so minting requires
+    # the view authority the official-run locator demands, and the row is
+    # stamped with the bank that authority is scoped to.
+    scoped_authorization.require_resolved_bank_permission(
+        db,
+        ctx,
+        bank,
+        permission=Permission.VIEW,
+        module=Module.REGULATORY,
+        sensitivity=Sensitivity.RESTRICTED,
+        surface="mint_official_run",
+    )
     job = job_queue.enqueue(
         db,
         ctx.organization_id,
