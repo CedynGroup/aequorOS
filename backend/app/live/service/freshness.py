@@ -10,6 +10,7 @@ has moved on since the last regulatory filing run.
 from __future__ import annotations
 
 from collections.abc import Callable
+from typing import Literal
 from uuid import UUID
 
 from fastapi import HTTPException, status
@@ -45,6 +46,8 @@ def get_bank_freshness(
     ctx: TenantContext,
     bank_id: str,
     reporting_period_id: UUID | None = None,
+    *,
+    module_authority: Literal["tenant_bindings", "staff_board"] = "tenant_bindings",
 ) -> BankFreshnessRead:
     from app.capital.service import (  # noqa: PLC0415 - engines consume live contracts
         regulatory_capital,
@@ -94,11 +97,20 @@ def get_bank_freshness(
         )
     }
 
-    # Only the caller's VIEW-authorized modules are served: one complete
-    # active binding per module, unknown names default-deny, and an
+    # The caller's module set. The default (and every tenant caller) evaluates
+    # the same per-module VIEW bindings the live summary gates with: one
+    # complete active binding per module, unknown names default-deny, and an
     # unauthorized module never triggers its engine hash computation or
     # official-run lookup. See docs/live_enforcement_rollout.md.
-    allowed = live_access.allowed_modules(db, ctx, bank, _MODULES, surface="bank_freshness")
+    # ``staff_board`` is selected ONLY by the operator plane's tenants board
+    # behind its existing staff route gate: the staff seat is not a tenant
+    # principal, holds no tenant binding, and reads the whole institution by
+    # construction (the examiner-seat exclusion precedent) — no tenant grant
+    # is created and the tenant path's None-actor denial is untouched.
+    if module_authority == "staff_board":
+        allowed = list(_MODULES)
+    else:
+        allowed = live_access.allowed_modules(db, ctx, bank, _MODULES, surface="bank_freshness")
 
     modules: list[FreshnessModuleRead] = []
     any_stale = False
