@@ -264,6 +264,101 @@ def _prepare_story_bank(db: Session, request: StoryRequest) -> None:
         seed_tenant_register(db, bank=bank, approved_by="e2e-story", approved_at=utc_now())
 
 
+def _create_story_actor(
+    db: Session, request: StoryRequest, spec: ActorSpec, source: User
+) -> User:
+    """Create one story principal with its baseline and journey bundles."""
+    if spec.user_id == SOURCE_ADMIN or db.get(User, spec.user_id) is not None:
+        raise ValueError("A story must use a fresh principal identity")
+    role = spec.role
+    scalar = _scalar_role(role, request.owned_tenant)
+    name = (
+        f"E2E {role.replace('_', ' ').title()}"
+        if request.owned_tenant
+        else f"Story {spec.user_id.hex[:8]} {role.replace('_', ' ').title()}"
+    )
+    user = User(
+        id=spec.user_id,
+        organization_id=request.organization_id,
+        email=f"journey.{role}.{spec.user_id.hex}@aequoros.example",
+        display_name=name,
+        role=scalar,
+        password_hash=source.password_hash,
+        auth_provider="password",
+    )
+    db.add(user)
+    db.flush()
+    _ = membership.ensure_baseline_membership(
+        db, user=user, granted_by_id="e2e-story", commit=False
+    )
+    if request.owned_tenant and role == "admin":
+        _ = assign_initial_owner(
+            db,
+            organization_id=request.organization_id,
+            candidate=user,
+            granted_by_id="e2e-story",
+            commit=False,
+        )
+    if role in {"admin", "analyst", "approver"} and not (
+        request.owned_tenant and role == "admin"
+    ):
+        _grant(db, user, RoleBundle.APPROVER if role == "approver" else RoleBundle.ANALYST)
+        _grant_story_configure(db, request, user, role)
+    elif role == "validator":
+        _grant(db, user, RoleBundle.VIEWER)
+        _grant(
+            db, user, RoleBundle.VALIDATOR, ModuleScope.REGULATORY, SensitivityScope.RESTRICTED
+        )
+    elif role == "account_admin":
+        _grant(
+            db, user, RoleBundle.ACCOUNT_ADMIN, ModuleScope.ACCOUNT, SensitivityScope.RESTRICTED
+        )
+    return user
+
+
+def _grant_story_signer_bindings(
+    db: Session, request: StoryRequest, users: list[tuple[ActorSpec, User]]
+) -> None:
+    """Grant the exact-bank ceremony bundles per actor for a signing story."""
+    for spec, user in users:
+        if spec.role in RETURN_EXPORT_ROLES:
+            # Return export on the story's own bank, on top of the
+            # officer's own bundle, which the ceremony keeps requiring for
+            # the action. Institution-scoped so it cannot reach a sibling
+            # bank of the same tenant.
+            _grant(
+                db,
+                user,
+                RoleBundle.ANALYST,
+                ModuleScope.REGULATORY,
+                SensitivityScope.RESTRICTED,
+                institution_id=request.bank_id,
+            )
+        # Signer gating (#185): every ceremony slot — the preparer's
+        # included — signs only with an exact-bank REG/restricted SIGN_OFF
+        # binding, and a checker slot additionally keeps its exact-bank
+        # APPROVE duty. The bundles above are read, mutation and export
+        # authority; none of them satisfies either gate.
+        if spec.role in {"admin", "approver"}:
+            _grant(
+                db,
+                user,
+                RoleBundle.SIGNER,
+                ModuleScope.REGULATORY,
+                SensitivityScope.RESTRICTED,
+                institution_id=request.bank_id,
+            )
+        if spec.role == "approver":
+            _grant(
+                db,
+                user,
+                RoleBundle.APPROVER,
+                ModuleScope.REGULATORY,
+                SensitivityScope.RESTRICTED,
+                institution_id=request.bank_id,
+            )
+
+
 def provision(db: Session, request: StoryRequest) -> StoryRead:
     """Create identities and setup only; never prepare financial facts."""
     source = db.get(User, SOURCE_ADMIN)
@@ -274,93 +369,12 @@ def provision(db: Session, request: StoryRequest) -> StoryRead:
     users: list[tuple[ActorSpec, User]] = []
     # The sole owner must exist before another account administrator is added.
     for spec in sorted(request.actors, key=lambda item: item.role != "admin"):
-        if spec.user_id == SOURCE_ADMIN or db.get(User, spec.user_id) is not None:
-            raise ValueError("A story must use a fresh principal identity")
-        role = spec.role
-        scalar = _scalar_role(role, request.owned_tenant)
-        name = (
-            f"E2E {role.replace('_', ' ').title()}"
-            if request.owned_tenant
-            else f"Story {spec.user_id.hex[:8]} {role.replace('_', ' ').title()}"
-        )
-        user = User(
-            id=spec.user_id,
-            organization_id=request.organization_id,
-            email=f"journey.{role}.{spec.user_id.hex}@aequoros.example",
-            display_name=name,
-            role=scalar,
-            password_hash=source.password_hash,
-            auth_provider="password",
-        )
-        db.add(user)
-        db.flush()
-        _ = membership.ensure_baseline_membership(
-            db, user=user, granted_by_id="e2e-story", commit=False
-        )
-        if request.owned_tenant and role == "admin":
-            _ = assign_initial_owner(
-                db,
-                organization_id=request.organization_id,
-                candidate=user,
-                granted_by_id="e2e-story",
-                commit=False,
-            )
-        if role in {"admin", "analyst", "approver"} and not (
-            request.owned_tenant and role == "admin"
-        ):
-            _grant(db, user, RoleBundle.APPROVER if role == "approver" else RoleBundle.ANALYST)
-            _grant_story_configure(db, request, user, role)
-        elif role == "validator":
-            _grant(db, user, RoleBundle.VIEWER)
-            _grant(
-                db, user, RoleBundle.VALIDATOR, ModuleScope.REGULATORY, SensitivityScope.RESTRICTED
-            )
-        elif role == "account_admin":
-            _grant(
-                db, user, RoleBundle.ACCOUNT_ADMIN, ModuleScope.ACCOUNT, SensitivityScope.RESTRICTED
-            )
-        users.append((spec, user))
+        users.append((spec, _create_story_actor(db, request, spec, source)))
     by_role = {spec.role: user for spec, user in users}
     _apply_scoped_bindings(db, request, by_role)
     _configure_owner_read(db, request, by_role)
     if request.signing:
-        for spec, user in users:
-            if spec.role in RETURN_EXPORT_ROLES:
-                # Return export on the story's own bank, on top of the
-                # officer's own bundle, which the ceremony keeps requiring for
-                # the action. Institution-scoped so it cannot reach a sibling
-                # bank of the same tenant.
-                _grant(
-                    db,
-                    user,
-                    RoleBundle.ANALYST,
-                    ModuleScope.REGULATORY,
-                    SensitivityScope.RESTRICTED,
-                    institution_id=request.bank_id,
-                )
-            # Signer gating (#185): every ceremony slot — the preparer's
-            # included — signs only with an exact-bank REG/restricted SIGN_OFF
-            # binding, and a checker slot additionally keeps its exact-bank
-            # APPROVE duty. The bundles above are read, mutation and export
-            # authority; none of them satisfies either gate.
-            if spec.role in {"admin", "approver"}:
-                _grant(
-                    db,
-                    user,
-                    RoleBundle.SIGNER,
-                    ModuleScope.REGULATORY,
-                    SensitivityScope.RESTRICTED,
-                    institution_id=request.bank_id,
-                )
-            if spec.role == "approver":
-                _grant(
-                    db,
-                    user,
-                    RoleBundle.APPROVER,
-                    ModuleScope.REGULATORY,
-                    SensitivityScope.RESTRICTED,
-                    institution_id=request.bank_id,
-                )
+        _grant_story_signer_bindings(db, request, users)
     db.commit()
     if request.signing:
         ctx = TenantContext(organization_id=request.organization_id)
