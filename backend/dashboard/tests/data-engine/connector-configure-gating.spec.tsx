@@ -6,7 +6,12 @@ import userEvent from "@testing-library/user-event";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { SessionProvider } from "next-auth/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import type { EffectiveCapabilityRead } from "@aequoros/risk-service-api";
+import type {
+  DatabaseConnectionRead,
+  EffectiveCapabilityRead,
+  MarketDataConnectionRead,
+  TemenosConnectionRead,
+} from "@aequoros/risk-service-api";
 import MappingPanel from "../../components/data-engine/MappingPanel";
 import DatabaseConnectionCard from "../../components/database/ConnectionCard";
 import TemenosConnectionCard from "../../components/t24/ConnectionCard";
@@ -154,6 +159,14 @@ const sourcePreferences = {
   updated_at: null,
   updated_by: null,
 };
+
+/**
+ * Fixture boundary: the wire-shape fixtures above feed both the mocked list
+ * responses and the cards' parsed client-model props.
+ */
+function asCardConnection<CardConnection>(fixture: object): CardConnection {
+  return fixture as CardConnection;
+}
 
 let client: QueryClient;
 let writes: { method: string; path: string }[];
@@ -336,7 +349,7 @@ it.each(DATABASE_LIFECYCLE)(
     mount(
       <DatabaseConnectionCard
         bankId={authority.bankId}
-        connection={databaseConnection as never}
+        connection={asCardConnection<DatabaseConnectionRead>(databaseConnection)}
       />,
     );
     const button = await screen.findByRole("button", { name: label });
@@ -356,7 +369,7 @@ it.each(DATABASE_LIFECYCLE)(
     mount(
       <DatabaseConnectionCard
         bankId={authority.bankId}
-        connection={databaseConnection as never}
+        connection={asCardConnection<DatabaseConnectionRead>(databaseConnection)}
       />,
     );
     const button = await screen.findByRole("button", { name: label });
@@ -370,7 +383,7 @@ it("keeps database lifecycle controls disabled for a foreign configure capabilit
   mount(
     <DatabaseConnectionCard
       bankId={authority.bankId}
-      connection={databaseConnection as never}
+      connection={asCardConnection<DatabaseConnectionRead>(databaseConnection)}
     />,
   );
   const edit = await screen.findByRole("button", { name: "Edit" });
@@ -398,7 +411,7 @@ it.each(TEMENOS_LIFECYCLE)(
     mount(
       <TemenosConnectionCard
         bankId={authority.bankId}
-        connection={temenosConnection as never}
+        connection={asCardConnection<TemenosConnectionRead>(temenosConnection)}
       />,
     );
     const button = await screen.findByRole("button", { name: label });
@@ -417,7 +430,7 @@ it.each(TEMENOS_LIFECYCLE)(
     mount(
       <TemenosConnectionCard
         bankId={authority.bankId}
-        connection={temenosConnection as never}
+        connection={asCardConnection<TemenosConnectionRead>(temenosConnection)}
       />,
     );
     const button = await screen.findByRole("button", { name: label });
@@ -443,7 +456,7 @@ it.each(MARKETS_LIFECYCLE)(
     mount(
       <MarketDataSourceCard
         bankId={authority.bankId}
-        connection={marketDataConnection as never}
+        connection={asCardConnection<MarketDataConnectionRead>(marketDataConnection)}
         quota={undefined}
       />,
     );
@@ -459,7 +472,7 @@ it.each(MARKETS_LIFECYCLE)(
     mount(
       <MarketDataSourceCard
         bankId={authority.bankId}
-        connection={marketDataConnection as never}
+        connection={asCardConnection<MarketDataConnectionRead>(marketDataConnection)}
         quota={undefined}
       />,
     );
@@ -474,7 +487,7 @@ it("keeps market source controls disabled for a foreign configure capability", a
   mount(
     <MarketDataSourceCard
       bankId={authority.bankId}
-      connection={marketDataConnection as never}
+      connection={asCardConnection<MarketDataConnectionRead>(marketDataConnection)}
       quota={undefined}
     />,
   );

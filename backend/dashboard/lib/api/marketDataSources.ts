@@ -313,10 +313,11 @@ function parsePreferences(body: unknown): MarketDataSourcePreferences {
 
 function parseWrittenCategory(value: unknown): MarketDataSourcePreferenceWritten | null {
   if (!value || typeof value !== 'object') return null;
-  const raw = value as Record<string, unknown>;
+  const source = field(value, 'source');
+  const overlay = field(value, 'overlay');
   return {
-    source: raw['source'] === undefined || raw['source'] === null ? null : parseSource(raw['source']),
-    overlay: raw['overlay'] === undefined || raw['overlay'] === null ? null : bool(raw['overlay']),
+    source: source === undefined || source === null ? null : parseSource(source),
+    overlay: overlay === undefined || overlay === null ? null : bool(overlay),
   };
 }
 

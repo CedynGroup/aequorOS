@@ -71,14 +71,14 @@ const connection = {
   status: "ACTIVE",
   vendor: "bloomberg",
   validation_error: null,
-} as never;
+};
 
 beforeEach(() => {
   createConnection.mockResolvedValue(connection);
   testPull.mockResolvedValue({
     success: true,
     sampleValues: { open: "1" },
-  } as never);
+  });
 });
 
 afterEach(() => {
