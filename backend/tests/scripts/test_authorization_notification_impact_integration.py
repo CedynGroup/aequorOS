@@ -719,6 +719,70 @@ def test_a_private_bi_question_impacts_only_its_requester(db_session: Session) -
     assert colleague_row.required_grants == []
 
 
+def test_a_private_bi_export_impacts_only_its_requester(db_session: Session) -> None:
+    """The report reproduces the export status read's owner rule, per principal.
+
+    A governed export's download link is a bearer credential, so the status
+    route refuses anyone but its requester; the standalone inventory must
+    reproduce that registration too (the composition root registers both
+    one-reader job types), or it counts colleagues' exports as visible and
+    recommends grants that cannot restore rows the API would still refuse.
+    """
+    _tenant(db_session)
+    requester = _user(db_session, "export.requester@notification-impact.example")
+    colleague = _user(db_session, "export.colleague@notification-impact.example")
+    for user in (requester, colleague):
+        _grant(
+            db_session,
+            user,
+            RoleBundle.VIEWER,
+            institution_scope=InstitutionScope.INSTITUTION,
+            institution_id=BANK,
+            module=ModuleScope.DATA,
+            sensitivity=SensitivityScope.AGGREGATED,
+        )
+    _job(
+        db_session,
+        scope=InstitutionScope.INSTITUTION.value,
+        bank=BANK,
+        module=Module.DATA.value,
+        sensitivity=Sensitivity.AGGREGATED.value,
+        principal=f"human:{requester.id}",
+        job_type="bi_export",
+        payload={"principal_user_id": str(requester.id), "format": "csv"},
+    )
+    db_session.commit()
+
+    report = build_notification_impact_report(db_session, organization_id=ORG)
+
+    requester_row = _impact(
+        report,
+        requester,
+        "jobs",
+        scope=InstitutionScope.INSTITUTION.value,
+        bank=BANK,
+        module=Module.DATA.value,
+        sensitivity=Sensitivity.AGGREGATED.value,
+    )
+    assert requester_row.after_count == 1
+    assert not requester_row.newly_hidden
+    assert requester_row.required_grants == []
+
+    colleague_row = _impact(
+        report,
+        colleague,
+        "jobs",
+        scope=InstitutionScope.INSTITUTION.value,
+        bank=BANK,
+        module=Module.DATA.value,
+        sensitivity=Sensitivity.AGGREGATED.value,
+    )
+    assert colleague_row.after_count == 0
+    # A grant cannot make another reader's export the colleague's own, so the
+    # recommendation engine must stay silent rather than promise restoration.
+    assert colleague_row.required_grants == []
+
+
 def test_artifacts_are_private_non_overwriting_and_name_every_tenant_surface(
     db_session: Session, tmp_path: Path
 ) -> None:
