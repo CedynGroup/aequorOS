@@ -33,6 +33,12 @@ fi
 chmod -R a+rX /opt/mise
 (cd "$ROOT" && mise exec -- printenv PATH) > "$T/toolpath"
 
+# lsof backs local_services.py's native port-ownership checks; slim images do not ship it.
+if ! command -v lsof >/dev/null; then
+  apt-get update
+  DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends lsof
+fi
+
 # PostgreSQL 17 (CI parity); local_services.py starts its own cluster, so drop the packaged one.
 if [ ! -x /usr/lib/postgresql/17/bin/postgres ]; then
   install -d /usr/share/postgresql-common/pgdg
@@ -59,9 +65,9 @@ else
   install -m 644 /etc/ssl/certs/ca-certificates.crt "$T/ca-bundle.crt"
 fi
 
-# Browser matching the dashboard's exact @playwright/test pin.
+# Browser and its system libraries, matching the dashboard's exact @playwright/test pin (as CI does).
 (cd "$ROOT/backend/dashboard" && PATH="$(cat "$T/toolpath")" PLAYWRIGHT_BROWSERS_PATH=/opt/pw-dashboard \
-  node node_modules/@playwright/test/cli.js install chromium)
+  node node_modules/@playwright/test/cli.js install --with-deps chromium)
 chmod -R a+rX /opt/pw-dashboard
 
 for wrapper in aequoros-services aequoros-dashboard-e2e aequoros-kms aequoros-openbao; do
