@@ -9,6 +9,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
+from app.core.authorization import Module, Sensitivity
 from app.liquidity.schemas.regulatory_liquidity import RegulatoryRunCreate
 from app.liquidity.service import regulatory_liquidity
 from app.models import BankReportingPeriod, Notification, RegulatoryPackage, User
@@ -103,6 +104,8 @@ def test_emit_role_fanout_targets_role_and_higher_active_users(db_session: Sessi
         title="BSD3 2026-03-31 awaits approval",
         body="Version 1 is pending an approval decision.",
         recipient_role="approver",
+        module=Module.REGULATORY,
+        sensitivity=Sensitivity.CONFIDENTIAL,
     )
     db_session.commit()
     # Account administration no longer implies operational approval. Fan-out
@@ -124,14 +127,63 @@ def test_emit_unknown_role_is_rejected(db_session: Session) -> None:
             title="t",
             body="b",
             recipient_role="supervisor",
+            module=Module.REGULATORY,
+            sensitivity=Sensitivity.CONFIDENTIAL,
         )
+
+
+def test_emit_persists_the_typed_source_locator(db_session: Session) -> None:
+    """Every emitted row carries the emitter's locator; the scope derives from the bank."""
+    _ensure_role_users(db_session, ORG_1)
+    ctx = TenantContext(organization_id=ORG_1, actor_user_id=USER_1, authorization_version=1)
+    bank_rows = notifications.emit(
+        db_session,
+        ctx,
+        type="reporting.package.pending_approval",
+        severity="warning",
+        title="BSD3 2026-03-31 awaits approval",
+        body="Version 1 is pending an approval decision.",
+        recipient_user_id=USER_1,
+        bank_id=SAMPLE_BANK_ID,
+        module=Module.REGULATORY,
+        sensitivity=Sensitivity.RESTRICTED,
+    )
+    org_rows = notifications.emit(
+        db_session,
+        ctx,
+        type="account.notice",
+        severity="info",
+        title="Account notice",
+        body="General",
+        bank_id=None,
+        module=Module.ACCOUNT,
+        sensitivity=Sensitivity.PUBLISHED,
+    )
+    db_session.commit()
+    for row in bank_rows:
+        assert row.institution_scope == "institution"
+        assert row.bank_id == SAMPLE_BANK_ID
+        assert row.module == "reg"
+        assert row.sensitivity == "restricted"
+    for row in org_rows:
+        assert row.institution_scope == "organization"
+        assert row.bank_id is None
+        assert row.module == "account"
+        assert row.sensitivity == "published"
 
 
 def test_list_visibility_user_specific_vs_org_wide_vs_other_user(db_session: Session) -> None:
     _ensure_role_users(db_session, ORG_1)
     ctx = TenantContext(organization_id=ORG_1, actor_user_id=USER_1, authorization_version=1)
     notifications.emit(
-        db_session, ctx, type="reporting.test.org_wide", severity="info", title="org", body="b"
+        db_session,
+        ctx,
+        type="reporting.test.org_wide",
+        severity="info",
+        title="org",
+        body="b",
+        module=Module.REGULATORY,
+        sensitivity=Sensitivity.CONFIDENTIAL,
     )
     notifications.emit(
         db_session,
@@ -141,6 +193,8 @@ def test_list_visibility_user_specific_vs_org_wide_vs_other_user(db_session: Ses
         title="mine",
         body="b",
         recipient_user_id=USER_1,
+        module=Module.REGULATORY,
+        sensitivity=Sensitivity.CONFIDENTIAL,
     )
     notifications.emit(
         db_session,
@@ -150,6 +204,8 @@ def test_list_visibility_user_specific_vs_org_wide_vs_other_user(db_session: Ses
         title="other",
         body="b",
         recipient_user_id=APPROVER_ID,
+        module=Module.REGULATORY,
+        sensitivity=Sensitivity.CONFIDENTIAL,
     )
     db_session.commit()
 
@@ -178,7 +234,14 @@ def test_mark_read_and_mark_all_read_touch_only_visible_rows(db_session: Session
     _ensure_role_users(db_session, ORG_1)
     ctx = TenantContext(organization_id=ORG_1, actor_user_id=USER_1, authorization_version=1)
     org_wide = notifications.emit(
-        db_session, ctx, type="reporting.test.org_wide", severity="info", title="org", body="b"
+        db_session,
+        ctx,
+        type="reporting.test.org_wide",
+        severity="info",
+        title="org",
+        body="b",
+        module=Module.REGULATORY,
+        sensitivity=Sensitivity.CONFIDENTIAL,
     )[0]
     notifications.emit(
         db_session,
@@ -188,6 +251,8 @@ def test_mark_read_and_mark_all_read_touch_only_visible_rows(db_session: Session
         title="other",
         body="b",
         recipient_user_id=APPROVER_ID,
+        module=Module.REGULATORY,
+        sensitivity=Sensitivity.CONFIDENTIAL,
     )
     db_session.commit()
 
@@ -208,6 +273,8 @@ def test_mark_read_and_mark_all_read_touch_only_visible_rows(db_session: Session
         title="mine",
         body="b",
         recipient_user_id=USER_1,
+        module=Module.REGULATORY,
+        sensitivity=Sensitivity.CONFIDENTIAL,
     )
     db_session.commit()
     assert notifications.mark_all_read(db_session, ctx) == 1  # org-wide already read
@@ -521,6 +588,8 @@ def test_platform_id_entity_survives_the_read_schema(db_session: Session) -> Non
         body="Contingency funding plan activated.",
         entity_type="bank",
         entity_id="BK-SAMP0001",
+        module=Module.REGULATORY,
+        sensitivity=Sensitivity.CONFIDENTIAL,
     )
     db_session.commit()
     assert emitted

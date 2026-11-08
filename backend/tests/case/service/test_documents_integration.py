@@ -13,9 +13,32 @@ from sqlalchemy.orm import Session
 
 from app.case.service import documents
 from app.integrations.storage.base import StoredObjectHead
-from app.models import AuditEvent, Document, DocumentChunk, StoredObject
+from app.models import AuditEvent, Document, DocumentChunk, Job, StoredObject
 from tests.case.factories import ServiceFactories, upload_payload
 from tests.conftest import FakeStorage
+
+
+def test_the_direct_parse_job_write_persists_locator_and_provenance(
+    db_session: Session,
+    service_factories: ServiceFactories,
+) -> None:
+    """The document service's direct Job(...) write stamps the locator itself (mission D9)."""
+    factories = service_factories
+    ctx = factories.ctx
+    case = factories.cases.create()
+    document = factories.documents.create_uploaded(case.id)
+
+    result = documents.request_parse(db_session, ctx, document.id)
+
+    job = db_session.get(Job, result.job_id)
+    assert job is not None
+    # The case workspace is organization-scoped: no bank dimension.
+    assert job.institution_scope == "organization"
+    assert job.bank_id is None
+    assert job.module == "risk"
+    assert job.sensitivity == "confidential"
+    assert job.enqueued_by_principal == f"human:{ctx.actor_user_id}"
+    assert job.enqueued_action == "document.parse_requested"
 
 
 def test_request_upload_validates_content_type_and_size(

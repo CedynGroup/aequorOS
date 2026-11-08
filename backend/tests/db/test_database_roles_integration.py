@@ -357,7 +357,9 @@ def test_worker_reencrypts_with_scoped_audit_counts(
                     detail={"synthetic": True},
                 )
             )
-        job = reencryption.enqueue(db, ORG_1, bank_id)
+        job = reencryption.enqueue(
+            db, ORG_1, bank_id, provenance=job_queue.system_provenance("test")
+        )
         db.commit()
         job_id = job.id
         expected_audit_count = db.scalar(
@@ -796,28 +798,44 @@ def test_api_coalesces_two_accepted_uploads_before_pickup(
             assert first_run_after is not None and job.run_after > first_run_after
 
 
-def test_api_coalescing_updates_payload_schedule_and_bank(
+def test_api_coalescing_keeps_the_locator_and_never_merges_differing_banks(
     api_session: Session, role_banks: dict[str, str]
 ) -> None:
+    """Same locator coalesces (payload/schedule update, locator untouched);
+    a different bank with the same key is a different locator and never merges
+    into the queued row (mission D9) — it inserts a second job instead."""
     first = job_queue.enqueue(
         api_session, ORG_1, "pipeline_refresh", payload={"first": True}, coalesce_key="probe"
     )
     api_session.commit()
-    second = job_queue.enqueue(
+    same_locator = job_queue.enqueue(
         api_session,
         ORG_1,
         "pipeline_refresh",
-        bank_id=role_banks[ORG_1],
         payload={"second": True},
         run_after=first.queued_at + timedelta(seconds=30),
         coalesce_key="probe",
     )
     api_session.commit()
-    api_session.refresh(second)
-    assert second.id == first.id
-    assert second.payload == {"first": True, "second": True}
-    assert second.bank_id == role_banks[ORG_1]
-    assert second.run_after == first.queued_at + timedelta(seconds=30)
+    api_session.refresh(same_locator)
+    assert same_locator.id == first.id
+    assert same_locator.payload == {"first": True, "second": True}
+    assert same_locator.run_after == first.queued_at + timedelta(seconds=30)
+
+    other_bank = job_queue.enqueue(
+        api_session,
+        ORG_1,
+        "pipeline_refresh",
+        bank_id=role_banks[ORG_1],
+        payload={"third": True},
+        coalesce_key="probe",
+    )
+    api_session.commit()
+    api_session.refresh(first)
+    assert other_bank.id != first.id
+    # The surviving row keeps its ORIGINAL locator: coalescing never rewrites it.
+    assert first.bank_id is None
+    assert other_bank.bank_id == role_banks[ORG_1]
 
 
 @pytest.mark.parametrize("operation", ["insert", "update", "coalesce"])

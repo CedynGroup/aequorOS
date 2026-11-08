@@ -17,6 +17,7 @@ from app.core.key_management.schemas import BankKeyRotate
 from app.core.key_management.types import KeyDescription, KeyReference, KeyStatus
 from app.identity.service import bank_encryption as administrator
 from app.operator.services import bank_encryption as staff
+from app.services import job_queue
 from tests.identity.api.test_bank_encryption_integration import BANK, CTX, KEY, NEXT, local_keys
 from tests.support.helpers import ORG_1
 from tests.support.key_concurrency import assert_blocked, backend_pid
@@ -211,7 +212,13 @@ def test_registration_fk_serializes_between_staff_and_administrator(
 
             def invoke() -> None:
                 if owner == "staff":
-                    staff.connect_key(writer, ORG_1, BANK, KEY)
+                    staff.connect_key(
+                        writer,
+                        ORG_1,
+                        BANK,
+                        KEY,
+                        provenance=job_queue.system_provenance("test"),
+                    )
                 else:
                     administrator.connect(writer, CTX, BANK, KEY)
 
