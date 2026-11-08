@@ -342,6 +342,68 @@ def test_view_authority_decides_notification_and_job_visibility(
     assert bank_worker_row.required_grants == []
 
 
+def test_the_baseline_reproduces_the_superseded_case_job_guard(
+    db_session: Session,
+) -> None:
+    """Pre-#186, case jobs 404'd without whole-institution RISK/restricted view.
+
+    The removed ``require_case_job_access`` dependency denied assessment and
+    document-parse jobs to every principal the guard refused; the baseline must
+    deny the same rows or the report invents visibility losses that never
+    happened and recommends grants as though they merely restored access.
+    """
+    _tenant(db_session)
+    case_viewer = _user(db_session, "case-view@notification-impact.example")
+    _grant(
+        db_session,
+        case_viewer,
+        RoleBundle.VIEWER,
+        institution_scope=InstitutionScope.ORGANIZATION,
+        institution_id=None,
+        module=ModuleScope.RISK,
+        sensitivity=SensitivityScope.RESTRICTED,
+    )
+    bank_risk_viewer = _user(db_session, "bank-risk@notification-impact.example")
+    _grant(
+        db_session,
+        bank_risk_viewer,
+        RoleBundle.VIEWER,
+        module=ModuleScope.RISK,
+        sensitivity=SensitivityScope.RESTRICTED,
+    )
+    bare = _user(db_session, "case-bare@notification-impact.example")
+    _job(
+        db_session,
+        scope=InstitutionScope.ORGANIZATION.value,
+        bank=None,
+        module=Module.RISK.value,
+        sensitivity=Sensitivity.RESTRICTED.value,
+        principal=f"human:{uuid4()}",
+        job_type="assessment_run",
+    )
+    db_session.commit()
+
+    report = build_notification_impact_report(db_session, organization_id=ORG)
+
+    assert not report.evaluation_failed
+    # The whole-institution viewer is exactly whom the former guard admitted,
+    # so the cutover reports no loss; the narrowed and bare viewers were 404'd
+    # on this row before, so its visibility is a gain — never a phantom loss.
+    for user, expected_before in ((case_viewer, 1), (bank_risk_viewer, 0), (bare, 0)):
+        row = _impact(
+            report,
+            user,
+            "jobs",
+            scope=InstitutionScope.ORGANIZATION.value,
+            bank=None,
+            module=Module.RISK.value,
+            sensitivity=Sensitivity.RESTRICTED.value,
+        )
+        assert row.before_count == expected_before
+        assert row.newly_hidden is False
+        assert row.required_grants == []
+
+
 def test_family_hidden_filing_notifications_are_never_newly_hidden(
     db_session: Session,
 ) -> None:
