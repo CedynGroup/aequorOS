@@ -31,6 +31,12 @@ from sqlalchemy.orm import Session
 
 # Standalone execution must register the tenant RLS listener, as the API does.
 import app.db.session  # noqa: F401  # pyright: ignore[reportUnusedImport]
+
+# The API's composition root registers each one-reader job type's requester
+# predicate (mirroring the worker HANDLERS seam); the standalone inventory
+# reproduces that registration so its counts answer the same visibility the
+# API answers, private BI questions included.
+from app.bi.public import BI_QUESTION_JOB_TYPE, requester_visibility_condition
 from app.core.authorization import (
     BindingGrant,
     BindingStatus,
@@ -47,8 +53,13 @@ from app.identity.public import load_permission_grants
 from app.identity.service import authorization
 from app.models import AuthorizationBinding, Job, Notification, Organization, User
 from app.notifications.public import notifications as notifications_service
+from app.services import jobs as jobs_service
 from app.services.jobs import tenant_visibility_condition
 from scripts.authorization_configure_impact import ExistingGrant
+
+jobs_service.PRIVATE_REQUESTER_PREDICATES[BI_QUESTION_JOB_TYPE] = (
+    requester_visibility_condition
+)
 
 NOTIF_ROUTES: tuple[tuple[str, str], ...] = (
     ("GET", "/api/v1/notifications"),
@@ -246,6 +257,8 @@ def _job_count(
     organization_id: str,
     locator: _Locator,
     grants: tuple[BindingGrant, ...] | None,
+    *,
+    actor_user_id: UUID | None = None,
 ) -> int:
     """Tenant queue rows with this locator, plus the tenant-visibility filter if given."""
     conditions: list[ColumnElement[bool]] = [
@@ -253,7 +266,7 @@ def _job_count(
         *_locator_conditions(Job, locator),
     ]
     if grants is not None:
-        conditions.append(tenant_visibility_condition(grants))
+        conditions.append(tenant_visibility_condition(grants, actor_user_id=actor_user_id))
     return db.scalar(select(func.count()).select_from(Job).where(*conditions)) or 0
 
 
@@ -304,7 +317,9 @@ def _required_grants(  # noqa: PLR0913 - one candidate needs user, locator and b
             db, organization_id, user.id, locator, (*grants, candidate), family
         )
     else:
-        restored = _job_count(db, organization_id, locator, (*grants, candidate))
+        restored = _job_count(
+            db, organization_id, locator, (*grants, candidate), actor_user_id=user.id
+        )
     if restored <= after_count:
         return []
     return [
@@ -459,7 +474,9 @@ def build_notification_impact_report(
                 )
             for locator in job_locators:
                 before = _job_count(db, organization_id, locator, None)
-                after = _job_count(db, organization_id, locator, grants)
+                after = _job_count(
+                    db, organization_id, locator, grants, actor_user_id=user.id
+                )
                 required = (
                     []
                     if error is not None

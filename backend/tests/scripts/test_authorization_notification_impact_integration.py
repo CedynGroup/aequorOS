@@ -141,13 +141,15 @@ def _job(  # noqa: PLR0913 - one fixture job with its full locator and provenanc
     module: str | None,
     sensitivity: str | None,
     principal: str | None,
+    job_type: str = "synthetic",
+    payload: dict[str, object] | None = None,
 ) -> None:
     db.add(
         Job(
             organization_id=ORG,
-            job_type="synthetic",
+            job_type=job_type,
             status="queued",
-            payload={},
+            payload=payload or {},
             institution_scope=scope,
             bank_id=bank,
             module=module,
@@ -588,6 +590,71 @@ def test_legacy_and_machine_rows_never_receive_grant_candidates(
     )
     assert inactive_row.newly_hidden
     assert inactive_row.required_grants == []
+
+
+def test_a_private_bi_question_impacts_only_its_requester(db_session: Session) -> None:
+    """The report reproduces the API's requester visibility, per principal.
+
+    A queued BI question is one reader's: the report must count it visible
+    for the requester alone, never recommend a grant to a colleague whose
+    simulated recount still could not restore another reader's question
+    (the composition root's registration is what the standalone script must
+    reproduce — an unregistered predicate overcounts, and a registered one
+    without the assessed user's id hides even the requester's own rows).
+    """
+    _tenant(db_session)
+    requester = _user(db_session, "requester@notification-impact.example")
+    colleague = _user(db_session, "colleague@notification-impact.example")
+    for user in (requester, colleague):
+        _grant(
+            db_session,
+            user,
+            RoleBundle.VIEWER,
+            institution_scope=InstitutionScope.INSTITUTION,
+            institution_id=BANK,
+            module=ModuleScope.DATA,
+            sensitivity=SensitivityScope.AGGREGATED,
+        )
+    _job(
+        db_session,
+        scope=InstitutionScope.INSTITUTION.value,
+        bank=BANK,
+        module=Module.DATA.value,
+        sensitivity=Sensitivity.AGGREGATED.value,
+        principal=f"human:{requester.id}",
+        job_type="bi_nlq_translate",
+        payload={"principal_user_id": str(requester.id)},
+    )
+    db_session.commit()
+
+    report = build_notification_impact_report(db_session, organization_id=ORG)
+
+    requester_row = _impact(
+        report,
+        requester,
+        "jobs",
+        scope=InstitutionScope.INSTITUTION.value,
+        bank=BANK,
+        module=Module.DATA.value,
+        sensitivity=Sensitivity.AGGREGATED.value,
+    )
+    assert requester_row.after_count == 1
+    assert not requester_row.newly_hidden
+    assert requester_row.required_grants == []
+
+    colleague_row = _impact(
+        report,
+        colleague,
+        "jobs",
+        scope=InstitutionScope.INSTITUTION.value,
+        bank=BANK,
+        module=Module.DATA.value,
+        sensitivity=Sensitivity.AGGREGATED.value,
+    )
+    assert colleague_row.after_count == 0
+    # A grant cannot make a colleague's question the colleague's own, so the
+    # recommendation engine must stay silent rather than promise restoration.
+    assert colleague_row.required_grants == []
 
 
 def test_artifacts_are_private_non_overwriting_and_name_every_tenant_surface(
