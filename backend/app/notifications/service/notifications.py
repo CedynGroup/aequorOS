@@ -105,33 +105,19 @@ def emit(  # noqa: PLR0913 - a notification carries the full display envelope
     return rows
 
 
-def visibility_conditions(db: Session, ctx: TenantContext) -> tuple[ColumnElement[bool], ...]:
-    """Recipient, tenant, locator-authority and return-family boundaries for disclosure.
+def family_visibility_condition(db: Session, ctx: TenantContext) -> ColumnElement[bool]:
+    """The return-family factor: filing notifications need family view authority.
 
-    Every factor is re-evaluated per call, so a binding granted or revoked
-    between requests changes visibility immediately. A row the locator factor
-    refuses (legacy rows without a locator, modules or sensitivities the
-    caller holds no current ``view`` grant for) is indistinguishable from one
-    that does not exist.
+    Deadline, instrument and regulatory-package notifications disclose a
+    return, so they are visible only when the requester currently holds
+    whole-institution view authority for that family's gate (an SDI licence
+    class has no ICAAP surface at all); every other row is unaffected. This
+    factor predated the #186 locator filter and is re-evaluated per call, so
+    a binding granted or revoked between requests changes visibility
+    immediately. The deny-impact reporter applies this exact function to its
+    before, after and simulated-grant counts, so its numbers measure the same
+    visibility the live API serves.
     """
-    if ctx.actor_user_id is None:
-        recipient = Notification.recipient_user_id.is_(None)
-    else:
-        recipient = or_(
-            Notification.recipient_user_id.is_(None),
-            Notification.recipient_user_id == ctx.actor_user_id,
-        )
-    # Current view authority over the persisted locator (#186): list, counts,
-    # pagination and both mark-read paths all filter through this factor, and
-    # it hides every locator-less (legacy) row.
-    locator_view = locator_visibility(
-        load_permission_grants(db, ctx, Permission.VIEW),
-        Permission.VIEW,
-        institution_scope=Notification.institution_scope,
-        bank_id=Notification.bank_id,
-        module=Notification.module,
-        sensitivity=Notification.sensitivity,
-    )
     deadline = or_(
         Notification.type.startswith("reporting.deadline."),
         Notification.type.startswith("reporting.instrument."),
@@ -169,25 +155,55 @@ def visibility_conditions(db: Session, ctx: TenantContext) -> tuple[ColumnElemen
         )
         .exists()
     )
+    return or_(
+        and_(
+            ~deadline,
+            or_(
+                Notification.entity_type.is_(None),
+                Notification.entity_type != "regulatory_package",
+            ),
+        ),
+        and_(
+            deadline,
+            Notification.entity_type == "bank",
+            or_(false(), *deadline_scopes),
+        ),
+        and_(Notification.entity_type == "regulatory_package", package_visible),
+    )
+
+
+def visibility_conditions(db: Session, ctx: TenantContext) -> tuple[ColumnElement[bool], ...]:
+    """Recipient, tenant, locator-authority and return-family boundaries for disclosure.
+
+    Every factor is re-evaluated per call, so a binding granted or revoked
+    between requests changes visibility immediately. A row the locator factor
+    refuses (legacy rows without a locator, modules or sensitivities the
+    caller holds no current ``view`` grant for) is indistinguishable from one
+    that does not exist.
+    """
+    if ctx.actor_user_id is None:
+        recipient = Notification.recipient_user_id.is_(None)
+    else:
+        recipient = or_(
+            Notification.recipient_user_id.is_(None),
+            Notification.recipient_user_id == ctx.actor_user_id,
+        )
+    # Current view authority over the persisted locator (#186): list, counts,
+    # pagination and both mark-read paths all filter through this factor, and
+    # it hides every locator-less (legacy) row.
+    locator_view = locator_visibility(
+        load_permission_grants(db, ctx, Permission.VIEW),
+        Permission.VIEW,
+        institution_scope=Notification.institution_scope,
+        bank_id=Notification.bank_id,
+        module=Notification.module,
+        sensitivity=Notification.sensitivity,
+    )
     return (
         Notification.organization_id == ctx.organization_id,
         recipient,
         locator_view,
-        or_(
-            and_(
-                ~deadline,
-                or_(
-                    Notification.entity_type.is_(None),
-                    Notification.entity_type != "regulatory_package",
-                ),
-            ),
-            and_(
-                deadline,
-                Notification.entity_type == "bank",
-                or_(false(), *deadline_scopes),
-            ),
-            and_(Notification.entity_type == "regulatory_package", package_visible),
-        ),
+        family_visibility_condition(db, ctx),
     )
 
 
