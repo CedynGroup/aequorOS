@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import pytest
+from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.authorization import (
@@ -54,7 +55,8 @@ def reporting_configure_authority(db_session: Session) -> None:
         reason="Authorize the integration fixture reporting configuration",
         commit=False,
     )
-    user = db_session.get(User, USER_1)
-    assert user is not None
+    user = db_session.scalars(
+        select(User).where(User.id == USER_1, User.organization_id == ORG_1)
+    ).one()
     user.authorization_version = 1
     db_session.commit()
