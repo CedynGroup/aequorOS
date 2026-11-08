@@ -1,9 +1,8 @@
 """Live READ scope end to end: only permitted modules cross the wire.
 
-Pilot C of the #177 backend slice. The three remaining live READ surfaces —
-the official-snapshot ladder, the alerts feed and the window analytics — are
+The official-snapshot ladder, the alerts feed and the window analytics are
 filtered through the caller's exact active VIEW bindings with the same closed
-module map the live summary and the freshness slice use. These tests pin the
+module map the live summary and the freshness view use. These tests pin the
 API-level contract on all three surfaces: a scoped viewer sees only their
 bound module (including the capital ladder), unbound, foreign-bank, suspended
 or stale-version principals get closed maps or refusals, a fully bound viewer
@@ -192,18 +191,14 @@ def test_snapshot_ladder_serves_only_the_bound_module(db_client: TestClient) -> 
     viewer, version = _user_with_module_view(ModuleScope.CAPITAL, "capital-viewer@example.test")
     auth = headers(user_id=viewer, authorization_version=version)
 
-    response = db_client.get(
-        f"{_BASE}/live-snapshots", headers=auth, params={"module": "capital"}
-    )
+    response = db_client.get(f"{_BASE}/live-snapshots", headers=auth, params={"module": "capital"})
     assert response.status_code == 200, response.text
     body = response.json()
     assert body["module"] == "capital"
     assert len(body["snapshots"]) > 0
     assert all(snapshot["module"] == "capital" for snapshot in body["snapshots"])
 
-    denied = db_client.get(
-        f"{_BASE}/live-snapshots", headers=auth, params={"module": "liquidity"}
-    )
+    denied = db_client.get(f"{_BASE}/live-snapshots", headers=auth, params={"module": "liquidity"})
     assert denied.status_code == 403
 
 
@@ -252,9 +247,7 @@ def test_unbound_principal_gets_closed_maps(db_client: TestClient) -> None:
     window = _window(db_client, auth)
     assert window["daily"] == []
     assert window["ratios"] == []
-    ladder = db_client.get(
-        f"{_BASE}/live-snapshots", headers=auth, params={"module": "capital"}
-    )
+    ladder = db_client.get(f"{_BASE}/live-snapshots", headers=auth, params={"module": "capital"})
     assert ladder.status_code == 403
 
 
@@ -312,9 +305,7 @@ def test_foreign_bank_binding_grants_nothing_here(db_client: TestClient) -> None
     window = _window(db_client, auth)
     assert window["daily"] == []
     assert window["ratios"] == []
-    ladder = db_client.get(
-        f"{_BASE}/live-snapshots", headers=auth, params={"module": "irr"}
-    )
+    ladder = db_client.get(f"{_BASE}/live-snapshots", headers=auth, params={"module": "irr"})
     assert ladder.status_code == 403
 
 
@@ -339,9 +330,7 @@ def test_suspended_binding_stops_serving_its_module(db_client: TestClient) -> No
     assert _alerts(db_client, auth)["total"] == 0
     window = _window(db_client, auth)
     assert window["daily"] == []
-    ladder = db_client.get(
-        f"{_BASE}/live-snapshots", headers=auth, params={"module": "liquidity"}
-    )
+    ladder = db_client.get(f"{_BASE}/live-snapshots", headers=auth, params={"module": "liquidity"})
     assert ladder.status_code == 403
 
 
@@ -371,9 +360,7 @@ def test_fully_bound_viewer_keeps_the_response_shapes(db_client: TestClient) -> 
     modules = {entry["module"] for entry in window["daily"]}
     assert {"liquidity", "capital"} <= modules
     assert modules <= {"liquidity", "capital", "credit", "irr", "fx", "ftp", "rating", "forecast"}
-    ladder = db_client.get(
-        f"{_BASE}/live-snapshots", headers=auth, params={"module": "capital"}
-    )
+    ladder = db_client.get(f"{_BASE}/live-snapshots", headers=auth, params={"module": "capital"})
     assert ladder.status_code == 200
 
 

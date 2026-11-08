@@ -1,9 +1,8 @@
 """The live READ scope: one closed module map governs every engine surface.
 
-Pilot C of the #177 backend slice. The official-snapshot ladder, the alerts
-feed and the window analytics must all serve exactly the modules their caller
-holds an exact aggregated VIEW binding for, through the same closed
-engine-to-authorization-module mapping the freshness slice pinned in
+The official-snapshot ladder, the alerts feed and the window analytics must
+all serve exactly the modules their caller holds an exact aggregated VIEW
+binding for, through the closed engine-to-authorization-module mapping in
 ``live_access``. These hermetic pins hold every surface's gate list to that
 map, so a new live module fails visibly until it is mapped and the surfaces
 cannot drift apart. The end-to-end behavior — bound module served, unbound
