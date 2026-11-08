@@ -51,16 +51,26 @@ type CapabilityDims = {
   scope: EffectiveCapabilityRead["dataScope"];
 };
 
-const state = {
-  bankCapabilities: [] as EffectiveCapabilityRead[],
-  otherBankCapabilities: [] as EffectiveCapabilityRead[],
-  orgCapabilities: [] as EffectiveCapabilityRead[],
+const state: {
+  bankCapabilities: EffectiveCapabilityRead[];
+  otherBankCapabilities: EffectiveCapabilityRead[];
+  orgCapabilities: EffectiveCapabilityRead[];
+  authError: boolean;
+  impersonating: boolean;
+  /** Drives the channel-config read: what the backend would have stored. */
+  storedConfig: boolean;
+  reads: { channelConfig: number; signingPolicies: number };
+  writes: { method: string; path: string; body: unknown }[];
+} = {
+  bankCapabilities: [],
+  otherBankCapabilities: [],
+  orgCapabilities: [],
   authError: false,
   impersonating: false,
   /** Drives the channel-config read: what the backend would have stored. */
   storedConfig: false,
   reads: { channelConfig: 0, signingPolicies: 0 },
-  writes: [] as { method: string; path: string; body: unknown }[],
+  writes: [],
 };
 
 function wireCapability(capability: EffectiveCapabilityRead) {
@@ -159,7 +169,7 @@ const server = setupServer(
   http.put(
     `${apiBaseUrl}/banks/${BANK}/regulatory-reporting/channel-configs/orass_sandbox`,
     async ({ request }) => {
-      const body = (await request.json()) as Record<string, unknown>;
+      const body = await jsonBody(request);
       state.writes.push({ method: "PUT", path: "channel-config", body });
       // The write-only acknowledgement never echoes the stored config or
       // credential state; the pill must come from the refetched read.
@@ -181,7 +191,7 @@ const server = setupServer(
     });
   }),
   http.put(`${apiBaseUrl}/attestation/signing-policies`, async ({ request }) => {
-    const body = (await request.json()) as Record<string, unknown>;
+    const body = await jsonBody(request);
     state.writes.push({ method: "PUT", path: "signing-policies", body });
     return HttpResponse.json({
       id: "11111111-1111-1111-1111-111111111111",
@@ -499,18 +509,35 @@ function capability(
   };
 }
 
+/**
+ * MSW boundary: handler `request.json()` is `DefaultBodyType` (possibly
+ * undefined); validate the JSON object before recording the write.
+ */
+async function jsonBody(request: Request): Promise<Record<string, unknown>> {
+  const parsed: unknown = await request.json();
+  if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+    throw new TypeError("expected a JSON object body");
+  }
+  return parsed as Record<string, unknown>;
+}
+
 const dimsArb = (): fc.Arbitrary<CapabilityDims> =>
   fc.record({
     module: fc.constantFrom("reg", "liq", "credit", "data", "markets"),
     permission: fc.constantFrom("view", "configure"),
-    sensitivity: fc.constantFrom("all", "confidential", "restricted"),
+    sensitivity: fc.constantFrom(
+      "published",
+      "aggregated",
+      "confidential",
+      "restricted",
+    ),
     requiresContextualAuthorization: fc.boolean(),
     scope: fc.record({
       kind: fc.constantFrom("all", "branch", "region", "mixed", "none"),
       branches: fc.constant([]),
       regions: fc.constant([]),
     }),
-  }) as fc.Arbitrary<CapabilityDims>;
+  });
 
 /**
  * Organization-scope capability rows, as the system can actually produce them:
@@ -518,18 +545,25 @@ const dimsArb = (): fc.Arbitrary<CapabilityDims> =>
  * except Credit, and grant administration is the only writer of bindings, so
  * an organization capability row always carries the whole-institution scope.
  */
-const orgDimsArb = (): fc.Arbitrary<CapabilityDims> =>
-  fc.record({
+const orgDimsArb = (): fc.Arbitrary<CapabilityDims> => {
+  const orgScope: EffectiveCapabilityRead["dataScope"] = {
+    kind: "all",
+    branches: [],
+    regions: [],
+  };
+  return fc.record({
     module: fc.constantFrom("reg", "liq", "credit", "data", "markets"),
     permission: fc.constantFrom("view", "configure"),
-    sensitivity: fc.constantFrom("all", "confidential", "restricted"),
+    sensitivity: fc.constantFrom(
+      "published",
+      "aggregated",
+      "confidential",
+      "restricted",
+    ),
     requiresContextualAuthorization: fc.boolean(),
-    scope: fc.constant({
-      kind: "all",
-      branches: [],
-      regions: [],
-    } as EffectiveCapabilityRead["dataScope"]),
-  }) as fc.Arbitrary<CapabilityDims>;
+    scope: fc.constant(orgScope),
+  });
+};
 
 function toCapability(dims: CapabilityDims): EffectiveCapabilityRead {
   return {
