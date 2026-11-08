@@ -44,12 +44,17 @@ CHECK-widening migration, not just a surface mapping change.
 - **Aggregate honesty.** `is_stale` aggregates only the served (authorized)
   modules; a restricted viewer's flag describes exactly the payload served.
   With no permitted modules, `modules` is empty and `is_stale` is false.
+- **Response compatibility.** The response schema and module order are unchanged.
+  Fully authorized tenant viewers retain all modules and the existing hash and
+  staleness behavior.
 - **Opaque bank denial unchanged.** Unknown or other-tenant banks still 404
   before any module decision.
 
 ## Scope of this slice (and what it is not)
 
-This slice changes the freshness read only. Further pilot work on the official-snapshot read loop,
+This slice implements the tenant freshness read filter. Operator-board freshness
+compatibility is delivered in the next PR stacked on this one; this slice does
+not establish compatibility for that caller. Further pilot work on the official-snapshot read loop,
 alerts and board-pack window predicates (PR-C), the refresh/mint mutation
 gates (PR-B — mint authority already decided: the existing per-module RUN loop
 plus the `Module.CAPITAL` entry) and the impact-evidence tooling (PR-D) are
@@ -72,7 +77,7 @@ deployment is authorized by this pilot.
 
 - `backend/tests/live/api/test_live_engine_authorization_integration.py` —
   API-level contract: bound module present, unbound modules absent without
-  leakage, bindings-free principal closed map, bank-scoped isolation, schema
+  leakage, bindings-free principal closed map, same-organization bank-scoped isolation, schema
   and order preserved for a fully bound viewer.
 - `backend/tests/live/service/test_live_authorization.py` — hermetic pins for
   the mapping and deny-closed helper semantics.
