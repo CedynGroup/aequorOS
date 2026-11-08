@@ -619,6 +619,34 @@ def test_deadline_scan_thresholds_fire_at_the_right_offsets(db_session: Session)
         assert rows[0].severity == "critical"
 
 
+def test_an_icaap_package_decision_notification_is_located_on_the_icaap_source_gate(
+    db_session: Session,
+) -> None:
+    """The ICAAP preparer the family factor admits can see their decision.
+
+    ``family_visibility_condition`` admits regulatory-package notifications by
+    the package's own family, so a REGULATORY/restricted locator hid approval
+    and rework notices (and the regulator's decisions) from an ICAAP preparer
+    holding exactly the CAPITAL/confidential VIEW the family factor had
+    already admitted them by. The locator is that same family read gate.
+    """
+    _seed_with_baseline_run(db_session)
+    generated = _generate(db_session, return_code="LCR-NSFR")
+    package = _package_row(db_session, generated.id)
+    package.return_family = "icaap"
+    db_session.commit()
+
+    workflow._notify_decision(  # pyright: ignore[reportPrivateUsage] - the notice's emission unit
+        db_session, MAKER, package, approved=False, reason="Fix the coverage note."
+    )
+    db_session.commit()
+
+    rows = _notification_rows(db_session, "reporting.package.approval_rejected")
+    assert len(rows) == 1
+    assert rows[0].module == Module.CAPITAL.value
+    assert rows[0].sensitivity == Sensitivity.CONFIDENTIAL.value
+
+
 def test_deadline_scan_flags_pending_orass_reupload_daily(db_session: Session) -> None:
     _seed_with_baseline_run(db_session)
     relax_signing(db_session, organization_id=DEMO_ORG_ID, return_code="BSD2")
