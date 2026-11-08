@@ -91,6 +91,20 @@ def operator_provenance(
     )
 
 
+def tenant_principal_marker(ctx: TenantContext) -> str | None:
+    """The D9 principal marker a tenant enqueue records, if one applies.
+
+    Integration keys are machine principals; a tenant user is human. Operator
+    impersonation and unattributed contexts are staff/system, never a tenant
+    identity, so they name no tenant principal.
+    """
+    if ctx.integration_key_id is not None:
+        return f"machine:{ctx.integration_key_id}"
+    if ctx.actor_user_id is not None:
+        return f"human:{ctx.actor_user_id}"
+    return None
+
+
 def context_provenance(
     ctx: TenantContext, *, action: str, decision_reference: str | None = None
 ) -> JobProvenance:
@@ -99,14 +113,13 @@ def context_provenance(
     Integration keys are machine principals; a tenant user is human; operator
     act-as-examiner impersonation is staff, never a tenant identity.
     """
-    if ctx.integration_key_id is not None:
-        principal = f"machine:{ctx.integration_key_id}"
-    elif ctx.actor_user_id is not None:
-        principal = f"human:{ctx.actor_user_id}"
-    elif ctx.actor_operator is not None:
-        principal = f"operator:{ctx.actor_operator}"
-    else:
-        principal = SYSTEM_PRINCIPAL
+    principal = tenant_principal_marker(ctx)
+    if principal is None:
+        principal = (
+            f"operator:{ctx.actor_operator}"
+            if ctx.actor_operator is not None
+            else SYSTEM_PRINCIPAL
+        )
     return JobProvenance(principal=principal, action=action, decision_reference=decision_reference)
 
 
