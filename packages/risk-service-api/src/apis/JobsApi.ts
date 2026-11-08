@@ -28,6 +28,7 @@ export interface GetJobRequest {
  */
 export class JobsApi extends runtime.BaseAPI {
   /**
+   * One queue row, visible only through its persisted locator authority (#186).  A row without a complete locator or tenant-principal provenance, or outside the caller\'s current view authority, answers the same 404 an unknown id does. Claim and execution are untouched, so the worker keeps processing rows no tenant can poll.
    * Get Job
    */
   async getJobRaw(
@@ -72,6 +73,7 @@ export class JobsApi extends runtime.BaseAPI {
   }
 
   /**
+   * One queue row, visible only through its persisted locator authority (#186).  A row without a complete locator or tenant-principal provenance, or outside the caller\'s current view authority, answers the same 404 an unknown id does. Claim and execution are untouched, so the worker keeps processing rows no tenant can poll.
    * Get Job
    */
   async getJob(

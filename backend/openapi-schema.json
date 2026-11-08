@@ -122471,6 +122471,7 @@
     },
     "/api/v1/jobs/{job_id}": {
       "get": {
+        "description": "One queue row, visible only through its persisted locator authority (#186).\n\nA row without a complete locator or tenant-principal provenance, or\noutside the caller's current view authority, answers the same 404 an\nunknown id does. Claim and execution are untouched, so the worker keeps\nprocessing rows no tenant can poll.",
         "operationId": "getJob",
         "parameters": [
           {
