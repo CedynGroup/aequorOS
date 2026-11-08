@@ -10,8 +10,11 @@ from uuid import UUID
 import httpx2
 import pytest
 from fastapi.testclient import TestClient
+from hypothesis import settings
+from hypothesis import strategies as st
+from hypothesis.stateful import RuleBasedStateMachine, invariant, rule, run_state_machine_as_test
 from pydantic import BaseModel, TypeAdapter
-from sqlalchemy import Connection, event, func, select
+from sqlalchemy import Connection, delete, event, func, select
 
 from app.behavioral import service as behavioral_models
 from app.behavioral.ml.config import MODEL_VERSIONS, Accuracy, ModelResult, ProductEstimate
@@ -752,3 +755,133 @@ def test_acceptance_rolls_back_proposal_and_batch_when_row_persistence_fails(
     assert row.status == "pending"
     assert row.reviewed_by_user_id is None
     assert row.ingestion_batch_id is None
+
+
+def _reset_proposal_state() -> None:
+    """Clear proposals, accepted batches and ORG_1 bindings between examples."""
+    with get_sessionmaker()() as session:
+        session.info["organization_id"] = ORG_1
+        session.execute(
+            delete(CanonicalReferenceRow).where(
+                CanonicalReferenceRow.dataset_kind == "behavioral_assumptions"
+            )
+        )
+        session.query(BehavioralModelProposal).delete(synchronize_session=False)
+        session.execute(
+            delete(LineageRecord).where(
+                LineageRecord.operation_ref.like("behavioral_ml/%"),
+            )
+        )
+        session.execute(
+            delete(IngestionBatch).where(
+                IngestionBatch.adapter_version.in_(["behavioral_ml_v1", "behavioral_test_fixture"])
+            )
+        )
+        session.query(AuthorizationBinding).filter(
+            AuthorizationBinding.organization_id == ORG_1
+        ).delete(synchronize_session=False)
+        session.commit()
+
+
+def test_proposal_review_workflow_state_machine(db_client: TestClient) -> None:
+    """Interleaved proposals, acceptances, retries and unauthorized actors.
+
+    A transition model tracks pending and accepted proposals; after every step
+    the invariants check persisted counts, immutability of both states,
+    maker-checker separation on accepted rows, and unchanged state after
+    refusals.
+    """
+
+    class ProposalReviewMachine(RuleBasedStateMachine):
+        def __init__(self) -> None:
+            super().__init__()
+            _reset_proposal_state()
+            _seed_book()
+            _, proposer_version = _grant()
+            self.proposer_version = proposer_version
+            _, reviewer_version = _grant(FORECAST_APPROVER_ID, RoleBundle.APPROVER)
+            self.reviewer_version = reviewer_version
+            # Accepted reviews append batches; everything earlier is absorbed
+            # into this per-example baseline.
+            self.batch_baseline = _counts()[1]
+            self.pending: list[UUID] = []
+            self.accepted: list[UUID] = []
+            self.model_of: dict[UUID, str] = {}
+            self.seq: dict[UUID, int] = {}
+            self.counter = 0
+
+        @rule(model=st.sampled_from([MODEL, "prepayment"]))
+        def propose(self, model: str) -> None:
+            response = db_client.post(
+                f"{BASE}/{model}/apply",
+                json=PROPOSE_BODY,
+                headers=_auth(USER_1, self.proposer_version, "analyst"),
+            )
+            assert response.status_code == 200, response.text
+            proposal_id = _ack(response).proposal_id
+            self.counter += 1
+            self.model_of[proposal_id] = model
+            self.seq[proposal_id] = self.counter
+            self.pending.append(proposal_id)
+
+        @rule(
+            index=st.integers(min_value=0, max_value=7),
+            reviewer=st.sampled_from(["reviewer", "proposer"]),
+        )
+        def review(self, index: int, reviewer: str) -> None:
+            if not self.pending:
+                return
+            proposal_id = self.pending[index % len(self.pending)]
+            before = _counts()
+            if reviewer == "proposer":
+                # Maker-checker: the proposer can never take the review slot.
+                refused = _review(db_client, proposal_id, USER_1, self.proposer_version)
+                assert refused.status_code == 403
+                assert _counts() == before
+                return
+            model = self.model_of[proposal_id]
+            superseded_by_accepted = any(
+                self.model_of[accepted_id] == model
+                and self.seq[accepted_id] > self.seq[proposal_id]
+                for accepted_id in self.accepted
+            )
+            if superseded_by_accepted:
+                assert _review(
+                    db_client, proposal_id, FORECAST_APPROVER_ID, self.reviewer_version
+                ).status_code == 409
+                assert _counts() == before
+                return
+            reviewed = _review(db_client, proposal_id, FORECAST_APPROVER_ID, self.reviewer_version)
+            assert reviewed.status_code == 200, reviewed.text
+            self.pending.remove(proposal_id)
+            self.accepted.append(proposal_id)
+
+        @rule(index=st.integers(min_value=0, max_value=7))
+        def replay_accepted_review(self, index: int) -> None:
+            if not self.accepted:
+                return
+            proposal_id = self.accepted[index % len(self.accepted)]
+            before = _counts()
+            response = _review(db_client, proposal_id, FORECAST_APPROVER_ID, self.reviewer_version)
+            assert response.status_code == 409
+            assert _counts() == before
+
+        @invariant()
+        def transition_model_holds(self) -> None:
+            proposals, batches = _counts()
+            assert proposals == len(self.pending) + len(self.accepted)
+            assert batches == self.batch_baseline + len(self.accepted)
+            for proposal_id in self.pending:
+                row = _proposal(proposal_id)
+                assert row.status == "pending"
+                assert row.reviewed_by_user_id is None
+            for proposal_id in self.accepted:
+                row = _proposal(proposal_id)
+                assert row.status == "accepted"
+                assert row.proposed_by_user_id == USER_1
+                assert row.reviewed_by_user_id == FORECAST_APPROVER_ID
+
+    run_state_machine_as_test(
+        ProposalReviewMachine,
+        settings=settings(max_examples=12, stateful_step_count=20, deadline=None),
+    )
