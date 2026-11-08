@@ -620,7 +620,17 @@ def test_artifacts_are_private_non_overwriting_and_name_every_tenant_surface(
     grants = cast("dict[str, object]", json.loads((output / "notif-exact-grants.json").read_text()))
     assert before["stage"] == "before" and after["stage"] == "after"
     assert before["generated_at"] == after["generated_at"] == grants["generated_at"]
-    assert len(cast("list[object]", before["routes"])) == 4
+    routes = [
+        f'{row["method"]} {row["path"]}'
+        for row in cast("list[dict[str, str]]", before["routes"])
+    ]
+    assert routes == [
+        "GET /api/v1/notifications",
+        "POST /api/v1/notifications/{notification_id}/read",
+        "POST /api/v1/notifications/read-all",
+        "GET /api/v1/jobs",
+        "GET /api/v1/jobs/{job_id}",
+    ]
     outcomes = cast("list[dict[str, object]]", after["outcomes"])
     assert any(row["newly_hidden"] for row in outcomes)
     required = cast("list[dict[str, object]]", grants["required_grants"])
