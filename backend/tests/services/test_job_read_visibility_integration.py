@@ -387,6 +387,31 @@ def test_the_list_is_opaque_about_hidden_rows(
     assert before["total"] == 3
 
 
+def test_a_bank_targeted_job_serializes_its_platform_id(
+    db_client: TestClient, db_session: Session, unbound: None
+) -> None:
+    """Bank-targeted producers persist ``BK-…`` ids; the reads echo them.
+
+    ``Job.entity_id`` is a polymorphic string column: row-targeted producers
+    store a UUID while bank-targeted ones (``bi_export``, re-encryption) store
+    the institution's platform id. The response contract accepts whichever
+    identifier the row carries — one ordinary authorized bank job must not
+    turn the whole page (or its detail read) into a 500.
+    """
+    version = _grant(db_session)
+    job = _visible_job(db_session)
+    job.entity_type = "bank"
+    job.entity_id = SAMPLE_BANK_ID
+    db_session.commit()
+
+    detail = db_client.get(f"{BASE}/{job.id}", headers=headers(authorization_version=version))
+    assert detail.status_code == 200, detail.text
+    assert detail.json()["entity_id"] == SAMPLE_BANK_ID
+    payload = _list(db_client, version)
+    assert payload["total"] == 1
+    assert [row["entity_id"] for row in payload["jobs"]] == [SAMPLE_BANK_ID]
+
+
 def test_pagination_sees_only_visible_rows(
     db_client: TestClient, db_session: Session, unbound: None
 ) -> None:
