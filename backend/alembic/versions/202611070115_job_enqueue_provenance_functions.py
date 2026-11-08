@@ -116,12 +116,19 @@ def _platform_enqueue(schema: str, *, stamped: bool) -> str:
     """
 
 
+def _quoted_schema() -> str:
+    # Raw SQLAlchemy scalars have no static type; validate this SQL boundary.
+    schema = cast(object, op.get_bind().exec_driver_sql("SELECT current_schema()").scalar_one())
+    if not isinstance(schema, str):
+        raise RuntimeError("Expected a migration schema")
+    return op.get_bind().dialect.identifier_preparer.quote_identifier(schema)
+
+
 def upgrade() -> None:
     connection = op.get_bind()
     if connection.dialect.name != "postgresql":
         return
-    quote = connection.dialect.identifier_preparer.quote_identifier
-    schema = quote(cast("str", connection.exec_driver_sql("SELECT current_schema()").scalar_one()))
+    schema = _quoted_schema()
     op.execute(_seed_ticks(schema, stamped=True))
     op.execute(_platform_enqueue(schema, stamped=True))
 
@@ -130,7 +137,6 @@ def downgrade() -> None:
     connection = op.get_bind()
     if connection.dialect.name != "postgresql":
         return
-    quote = connection.dialect.identifier_preparer.quote_identifier
-    schema = quote(cast("str", connection.exec_driver_sql("SELECT current_schema()").scalar_one()))
+    schema = _quoted_schema()
     op.execute(_seed_ticks(schema, stamped=False))
     op.execute(_platform_enqueue(schema, stamped=False))

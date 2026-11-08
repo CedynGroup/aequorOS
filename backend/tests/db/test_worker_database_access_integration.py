@@ -1231,6 +1231,7 @@ def test_legacy_bypass_worker_operates_before_and_after_compatibility_migration(
             with Session(administrator) as admin:
                 # Raw read: HEAD's ORM addresses columns the downgraded
                 # schema does not have, so verify through SQL either way.
+                # Raw SQL row unpacking is untyped; the SELECT's column order is the shape.
                 status, claimed_by = cast(
                     tuple[str, str | None],
                     tuple(
