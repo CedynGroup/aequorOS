@@ -35,7 +35,15 @@ import app.db.session  # noqa: F401  # pyright: ignore[reportUnusedImport]
 # The API's composition root registers each one-reader job type's requester
 # predicate (mirroring the worker HANDLERS seam); the standalone inventory
 # reproduces that registration so its counts answer the same visibility the
-# API answers, private BI questions included.
+# API answers — private BI questions and governed exports alike. An export's
+# status read refuses anyone but its requester, so a colleague's exports must
+# stay out of the ordinary and simulated-grant counts too.
+from app.bi.jobs.bi_export import (
+    JOB_TYPE as BI_EXPORT_JOB_TYPE,
+)
+from app.bi.jobs.bi_export import (
+    requester_visibility_condition as bi_export_requester_visibility_condition,
+)
 from app.bi.public import BI_QUESTION_JOB_TYPE, requester_visibility_condition
 from app.core.authorization import (
     BindingGrant,
@@ -63,6 +71,9 @@ from scripts.authorization_configure_impact import ExistingGrant
 
 jobs_service.PRIVATE_REQUESTER_PREDICATES[BI_QUESTION_JOB_TYPE] = (
     requester_visibility_condition
+)
+jobs_service.PRIVATE_REQUESTER_PREDICATES[BI_EXPORT_JOB_TYPE] = (
+    bi_export_requester_visibility_condition
 )
 
 NOTIF_ROUTES: tuple[tuple[str, str], ...] = (
