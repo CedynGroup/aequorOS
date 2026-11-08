@@ -22,7 +22,6 @@ from app.models import (
     CanonicalProduct,
 )
 from app.stress.service.enterprise_stress import EnterpriseStressError
-from tests.capital.domain.test_capital_engine import bog_capital_params
 from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID
 from tests.fixtures.capital_structure import MAKER, REPORTING_DATE, seed_book
 from tests.services.test_crd_counterparty_and_bank_claims import (
@@ -31,6 +30,7 @@ from tests.services.test_crd_counterparty_and_bank_claims import (
     _credit_rwa,
     _position_row,
 )
+from tests.support.capital_params import bog_capital_params
 
 pytestmark = pytest.mark.requirement("BoG CRD (June 2018) ¶98, ¶117–124")
 

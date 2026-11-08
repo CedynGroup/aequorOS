@@ -45,7 +45,6 @@ from app.stress.service import enterprise_stress
 from app.stress.service.enterprise_stress import (
     _build_credit_exposures,  # pyright: ignore[reportPrivateUsage]
 )
-from tests.capital.domain.test_capital_engine import bog_capital_params
 from tests.credit.service.test_crd_credit_exposures import (
     _stress_row,  # pyright: ignore[reportPrivateUsage]
 )
@@ -76,6 +75,7 @@ from tests.stress.domain.stress_fixtures import (
 from tests.stress.service.test_crd_credit_stress_repairs import (
     _capital_facts,  # pyright: ignore[reportPrivateUsage]
 )
+from tests.support.capital_params import bog_capital_params
 from tests.support.factories.authorization import grant_institution_authority
 from tests.support.helpers import headers
 from tests.support.ingestion_seeding import seed_bank

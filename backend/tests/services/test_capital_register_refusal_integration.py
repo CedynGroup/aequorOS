@@ -58,7 +58,6 @@ from app.stress.schemas.enterprise_stress import EnterpriseStressRunCreate
 from app.stress.schemas.reverse_stress import ReverseStressRunCreate
 from app.stress.schemas.scenario_workbench import AnalysisRunCreate, ScenarioRefIn, WorkbenchModule
 from app.stress.service import analysis_workbench, enterprise_stress, reverse_stress
-from tests.capital.domain.test_capital_engine import bog_capital_params
 from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID
 from tests.fixtures.capital_structure import (
     MAKER,
@@ -69,6 +68,7 @@ from tests.fixtures.capital_structure import (
 )
 from tests.services.sf_book import seed_fx
 from tests.support.authority import grant_organization_analyst
+from tests.support.capital_params import bog_capital_params
 
 pytestmark = pytest.mark.canonical_book_baseline
 

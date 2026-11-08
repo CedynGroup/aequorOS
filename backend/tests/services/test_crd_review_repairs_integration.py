@@ -24,7 +24,6 @@ from app.models import (
     CanonicalProduct,
     RegulatoryRun,
 )
-from tests.capital.domain.test_capital_engine import bog_capital_params
 from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID, materialize_canonical_test_book
 from tests.fixtures.capital_structure import MAKER, REPORTING_DATE
 from tests.services.test_crd_review_repairs import _derive_specs
@@ -39,6 +38,7 @@ from tests.stress.api.test_enterprise_stress_phase4_integration import (
     _AS_OF,  # pyright: ignore[reportPrivateUsage]
     _seed_canonical_positions,  # pyright: ignore[reportPrivateUsage]
 )
+from tests.support.capital_params import bog_capital_params
 from tests.support.helpers import headers
 from tests.support.ingestion_seeding import seed_bank
 
