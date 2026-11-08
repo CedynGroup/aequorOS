@@ -528,9 +528,16 @@ def _tenant_row(  # noqa: PLR0913 - a row is the join of these seven sources
 def _freshness_summary(
     db: Session, organization_id: str, bank_id: str, period_count: int
 ) -> TenantFreshnessSummaryRead | None:
-    """Reuse tenant freshness; operator compatibility is pending.
+    """The staff board's freshness summary, evaluated through the operator
+    plane's own access boundary.
 
-    See docs/live_enforcement_rollout.md for the rollout boundary. A tenant
+    The access decision is the tenants route's existing staff gate
+    (``get_operator_context``); the seat is not a tenant principal and holds
+    no tenant binding, so the summary selects the freshness service's explicit
+    ``staff_board`` module authority — the staff-seat reads-the-whole-book
+    exclusion — rather than tenant VIEW bindings. No tenant grant is created,
+    ordinary tenant freshness permissions (and the actor-less denial behind
+    them) are untouched, and no request input can select this path. A tenant
     with no periods has nothing to be fresh about; a per-tenant failure must
     never take down the whole board.
     """
@@ -538,7 +545,9 @@ def _freshness_summary(
         return None
     try:
         ctx = TenantContext(organization_id=organization_id)
-        report = freshness_service.get_bank_freshness(db, ctx, bank_id)
+        report = freshness_service.get_bank_freshness(
+            db, ctx, bank_id, module_authority="staff_board"
+        )
     except Exception:  # noqa: BLE001 - one tenant's failure must not break the list
         logger.exception("freshness summary failed for org %s bank %s", organization_id, bank_id)
         return None

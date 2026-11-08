@@ -30,7 +30,7 @@ freshness-to-authorization module mapping. It matches the live summary's
 freshness module vocabulary. A new authorization enum value requires a
 CHECK-widening migration, not just a surface mapping change.
 
-## Semantics
+## Tenant semantics
 
 - **One complete active binding per module.** VIEW, aggregated sensitivity,
   whole-institution grain, exact match; partial rows never compose; no scalar
@@ -50,11 +50,24 @@ CHECK-widening migration, not just a surface mapping change.
 - **Opaque bank denial unchanged.** Unknown or other-tenant banks still 404
   before any module decision.
 
-## Scope of this slice (and what it is not)
+## Operator-board freshness
 
-This slice implements the tenant freshness read filter. Operator-board freshness
-compatibility is delivered in the next PR stacked on this one; this slice does
-not establish compatibility for that caller. Further pilot work on the official-snapshot read loop,
+`GET /operator/v1/tenants` reads freshness through its existing staff gate
+(`get_operator_context`). Its service selects the explicit `staff_board` module
+authority in `get_bank_freshness`, serving the full freshness module vocabulary
+for each bank with reporting periods. This selection is internal, never request
+input: the staff seat is not a tenant principal, and no tenant grant is created.
+The default `tenant_bindings` authority retains the tenant semantics above,
+including denial for an actor-less context.
+
+The board aggregates the returned modules, so drift is reported as stale rather
+than a fresh summary with zero modules. A bank with no reporting periods has no
+freshness summary; a per-bank evaluation failure also yields no summary without
+failing the whole board.
+
+## Remaining pilot scope
+
+Further pilot work on the official-snapshot read loop,
 alerts and board-pack window predicates (PR-C), the refresh/mint mutation
 gates (PR-B — mint authority already decided: the existing per-module RUN loop
 plus the `Module.CAPITAL` entry) and the impact-evidence tooling (PR-D) are
@@ -75,6 +88,9 @@ deployment is authorized by this pilot.
 
 ## Test evidence
 
+- `backend/tests/operator/test_operator_freshness_plane_integration.py` —
+  operator-route coverage for drifted modules, absent live state, and denial
+  without staff authentication.
 - `backend/tests/live/api/test_live_engine_authorization_integration.py` —
   API-level contract: bound module present, unbound modules absent without
   leakage, bindings-free principal closed map, same-organization bank-scoped isolation, schema
