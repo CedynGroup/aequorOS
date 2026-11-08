@@ -6,6 +6,7 @@ set -euo pipefail
 IMG=nsmithuk/local-kms:3.11.7@sha256:360d7377b6f3687c89a622236791e4fa3f7316366267b437829edbdfa8a5fc60
 case "${1:-}" in
   start)
+    command -v docker >/dev/null && command -v dockerd >/dev/null || { echo "aequoros-kms needs Docker; run backend/scripts/cloud/setup.sh" >&2; exit 1; }
     if ! docker info >/dev/null 2>&1; then
       nohup dockerd >/var/log/dockerd.log 2>&1 </dev/null &
       for _ in $(seq 1 30); do docker info >/dev/null 2>&1 && break; sleep 1; done

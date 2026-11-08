@@ -39,6 +39,12 @@ if ! command -v lsof >/dev/null; then
   DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends lsof
 fi
 
+# Docker backs aequoros-kms (the local-kms emulator). Images that already ship Docker keep theirs.
+if ! command -v dockerd >/dev/null; then
+  apt-get update
+  DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends docker.io
+fi
+
 # PostgreSQL 17 (CI parity); local_services.py starts its own cluster, so drop the packaged one.
 if [ ! -x /usr/lib/postgresql/17/bin/postgres ]; then
   install -d /usr/share/postgresql-common/pgdg
