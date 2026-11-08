@@ -286,6 +286,116 @@ def test_return_notification_visibility_covers_counts_and_mutations(  # noqa: PL
         assert {row["id"] for row in revoked["notifications"]} == set()
 
 
+def test_a_viewer_with_a_scoped_view_grant_can_mark_visible_notifications_read(
+    db_client: TestClient,
+    db_session: Session,
+    return_notifications: dict[str, dict[str, set[str]]],
+) -> None:
+    """VAL-NOTIF-003: mark-read and read-all carry no scalar role gate.
+
+    A Viewer whose token holds no write role can still mark the rows its
+    scoped ``view`` grants make visible: mark-read succeeds on a visible id,
+    a hidden id answers the same opaque 404 as a nonexistent one, read-all
+    marks exactly the visible unread rows, and hidden rows are untouched.
+    """
+    buckets = return_notifications["buckets"]
+    deadline_only = return_notifications["deadline_only"]
+    version = _grant(
+        role_bundle=RoleBundle.VIEWER,
+        module_scope=ModuleScope.REGULATORY,
+        sensitivity_scope=SensitivityScope.RESTRICTED,
+        data_scope=DataScope.ALL,
+    )
+    auth = headers(roles=("viewer",), authorization_version=version)
+    expected = set(deadline_only["ordinary"])
+    hidden = set().union(*buckets.values()) - expected
+    unknown = db_client.post(f"{BASE}/{uuid4()}/read", headers=auth)
+    assert unknown.status_code == 404, unknown.text
+    listed = db_client.get(BASE, headers=auth, params={"limit": 100}).json()
+    assert {row["id"] for row in listed["notifications"]} == expected
+    for notification_id in hidden:
+        refused = db_client.post(f"{BASE}/{notification_id}/read", headers=auth)
+        assert refused.status_code == 404, refused.text
+        assert _opaque_body(refused) == _opaque_body(unknown)
+    for notification_id in expected:
+        marked = db_client.post(f"{BASE}/{notification_id}/read", headers=auth)
+        assert marked.status_code == 200, marked.text
+        assert marked.json()["read_at"] is not None
+    # Everything visible was just marked, so read-all has nothing left.
+    bulk = db_client.post(f"{BASE}/read-all", headers=auth)
+    assert bulk.status_code == 200, bulk.text
+    assert bulk.json()["marked"] == 0
+    db_session.expire_all()
+    for row_id in hidden:
+        row = db_session.get(Notification, UUID(row_id))
+        assert row is not None
+        assert row.read_at is None
+    for row_id in expected:
+        row = db_session.get(Notification, UUID(row_id))
+        assert row is not None
+        assert row.read_at is not None
+
+
+def test_a_viewer_with_a_scoped_view_grant_read_all_marks_exactly_the_visible_rows(
+    db_client: TestClient,
+    db_session: Session,
+    return_notifications: dict[str, dict[str, set[str]]],
+) -> None:
+    """read-all marks the visible unread rows in one call; hidden rows keep
+    their read state whatever the caller once could or could not see."""
+    buckets = return_notifications["buckets"]
+    deadline_only = return_notifications["deadline_only"]
+    version = _grant(
+        role_bundle=RoleBundle.VIEWER,
+        module_scope=ModuleScope.REGULATORY,
+        sensitivity_scope=SensitivityScope.RESTRICTED,
+        data_scope=DataScope.ALL,
+    )
+    auth = headers(roles=("viewer",), authorization_version=version)
+    expected = set(deadline_only["ordinary"])
+    hidden = set().union(*buckets.values()) - expected
+    bulk = db_client.post(f"{BASE}/read-all", headers=auth)
+    assert bulk.status_code == 200, bulk.text
+    assert bulk.json()["marked"] == len(expected)
+    db_session.expire_all()
+    now = datetime.now(UTC)
+    for row_id in expected:
+        row = db_session.get(Notification, UUID(row_id))
+        assert row is not None
+        assert row.read_at is not None
+        assert abs(now - row.read_at) < timedelta(minutes=1)
+    for row_id in hidden:
+        row = db_session.get(Notification, UUID(row_id))
+        assert row is not None
+        assert row.read_at is None
+
+
+@pytest.mark.usefixtures("return_notifications")
+def test_a_viewer_without_any_binding_is_denied_without_side_effects(
+    db_client: TestClient,
+    db_session: Session,
+    return_notifications: dict[str, dict[str, set[str]]],
+) -> None:
+    """No grant, no viewer role: every id — visible or not — is the same 404,
+    read-all marks nothing, and no row changes state."""
+    all_ids = set().union(*return_notifications["buckets"].values())
+    auth = headers(roles=("viewer",), authorization_version=1)
+    unknown = db_client.post(f"{BASE}/{uuid4()}/read", headers=auth)
+    assert unknown.status_code == 404, unknown.text
+    for notification_id in all_ids:
+        refused = db_client.post(f"{BASE}/{notification_id}/read", headers=auth)
+        assert refused.status_code == 404, refused.text
+        assert _opaque_body(refused) == _opaque_body(unknown)
+    bulk = db_client.post(f"{BASE}/read-all", headers=auth)
+    assert bulk.status_code == 200, bulk.text
+    assert bulk.json()["marked"] == 0
+    db_session.expire_all()
+    for row_id in all_ids:
+        row = db_session.get(Notification, UUID(row_id))
+        assert row is not None
+        assert row.read_at is None
+
+
 @pytest.mark.usefixtures("return_notifications")
 def test_the_demo_mode_veto_hides_notifications_with_a_matching_grant(
     db_client: TestClient, monkeypatch: pytest.MonkeyPatch
