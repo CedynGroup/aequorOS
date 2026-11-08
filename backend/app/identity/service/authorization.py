@@ -224,8 +224,12 @@ def load_permission_grants(
 
     An impersonation context (no tenant principal — the actor is staff, not a
     grant holder) and an unloaded principal both produce an empty tuple: the
-    default-deny answer.
+    default-deny answer. A failed request-wide condition (demo mode, for one)
+    produces the same empty tuple: the SQL filters must never surface rows the
+    per-object evaluator would deny.
     """
+    if not all(check.passed for check in request_wide_condition_checks()):
+        return ()
     try:
         principal = principal_locator(ctx)
     except AuthorizationInvariantError:

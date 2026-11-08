@@ -385,8 +385,11 @@ def enqueue(  # noqa: PLR0913 - queue insert carries the full dispatch envelope
     bumped to the later of the two and payloads are merged — a burst of
     ingestions debounces into one refresh instead of a queue full of
     duplicates. Differing locators never merge: the coalesced row would
-    misattribute one caller's work to another's module or bank. The surviving
-    row keeps its ORIGINAL locator and provenance.
+    misattribute one caller's work to another's module or bank. Enqueues of
+    different tenant-visibility classes never merge either: a tenant-initiated
+    enqueue that merged into a worker/system row would hand back an id the
+    caller cannot poll. The surviving row keeps its ORIGINAL locator and
+    provenance.
     """
     _validate_job_type(job_type)
     payload = payload or {}
@@ -419,6 +422,8 @@ def enqueue(  # noqa: PLR0913 - queue insert carries the full dispatch envelope
         )
         if existing is not None and _locator_tuple_of(existing) == _locator_tuple(
             bank_id=bank_id, institution_scope=institution_scope, locator=locator
+        ) and _is_tenant_attributed(existing.enqueued_by_principal) == _is_tenant_attributed(
+            None if provenance is None else provenance.principal
         ):
             candidates = [
                 aware
@@ -477,6 +482,11 @@ def _locator_tuple(
 
 def _locator_tuple_of(job: Job) -> tuple[str | None, str | None, str | None, str | None]:
     return (job.institution_scope, job.bank_id, job.module, job.sensitivity)
+
+
+def _is_tenant_attributed(principal: str | None) -> bool:
+    """Mirror the ``human:``/``machine:`` test in ``jobs.tenant_visibility_condition``."""
+    return principal is not None and principal.startswith(("human:", "machine:"))
 
 
 def enqueue_platform_daily(

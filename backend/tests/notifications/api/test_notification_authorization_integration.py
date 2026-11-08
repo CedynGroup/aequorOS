@@ -284,3 +284,22 @@ def test_return_notification_visibility_covers_counts_and_mutations(  # noqa: PL
         # the org-wide rows.
         revoked = db_client.get(BASE, headers=auth).json()
         assert {row["id"] for row in revoked["notifications"]} == set()
+
+
+@pytest.mark.usefixtures("return_notifications")
+def test_the_demo_mode_veto_hides_notifications_with_a_matching_grant(
+    db_client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from app.core.config import get_settings  # noqa: PLC0415
+
+    version = _grant(
+        role_bundle=RoleBundle.VIEWER,
+        module_scope=ModuleScope.REGULATORY,
+        sensitivity_scope=SensitivityScope.RESTRICTED,
+        data_scope=DataScope.ALL,
+        data_scope_values=(),
+    )
+    monkeypatch.setattr(get_settings().app, "demo_mode", True)
+    auth = headers(roles=("analyst",), authorization_version=version)
+    payload = db_client.get(BASE, headers=auth).json()
+    assert payload["total"] == payload["unread_count"] == 0
