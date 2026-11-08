@@ -19,13 +19,13 @@ import openpyxl
 import pytest
 from openpyxl.worksheet.worksheet import Worksheet
 from pydantic import InstanceOf, TypeAdapter
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
 from app import worker
 from app.api.deps import TenantContext
 from app.capital.service import regulatory_capital
-from app.core.authorization import ModuleScope, RoleBundle, SensitivityScope
+from app.core.authorization import Module, ModuleScope, RoleBundle, Sensitivity, SensitivityScope
 from app.core.config import get_settings
 from app.data_engine.domain.ingestion.contracts import EntityMapping, MappingConfig
 from app.data_engine.domain.ingestion.locations import StagedIngestionLocation
@@ -965,6 +965,63 @@ def test_run_official_enqueues_one_bi_job_after_the_runs_are_sealed(
         assert job.coalesce_key == f"bi:{SAMPLE_BANK_ID}:{FIXTURE_AS_OF.isoformat()}"
         assert job.payload["reason"] == "official_run"
         assert (db_session.scalar(select(func.count()).select_from(RegulatoryRun)) or 0) > 0
+    finally:
+        get_settings.cache_clear()
+
+
+def test_run_official_bi_handoff_inherits_the_parent_job_provenance(
+    db_session: Session, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """The BI successor is a hand-off: it attributes to the PARENT job's enqueue
+    provenance, not to the reconstructed execution context (D9).
+
+    A scheduled official run carries a selected human's id in its execution
+    payload but was initiated by the scheduler — stamping the successor
+    ``human:<id>`` would make a worker-initiated job enumerable through the
+    tenant job list (#186), defeating the worker visibility exclusion.
+    """
+    monkeypatch.setenv("BI_MART_ENQUEUE_ENABLED", "1")
+    get_settings.cache_clear()
+    try:
+        _seed(db_session)
+        scheduled = job_queue.enqueue(
+            db_session,
+            ORG_1,
+            "official_run",
+            bank_id=SAMPLE_BANK_ID,
+            payload={"as_of_date": FIXTURE_AS_OF.isoformat(), "actor_user_id": str(USER_1)},
+            provenance=job_queue.worker_provenance("scheduler.official_run"),
+        )
+        db_session.commit()
+        pipeline.run_official(db_session, scheduled)
+
+        (job,) = _bi_refresh_jobs(db_session)
+        assert job.enqueued_by_principal == "worker"
+        assert job.enqueued_action == "scheduler.official_run"
+
+        # Clear the coalesced row so the interactive leg enqueues afresh.
+        db_session.execute(delete(Job).where(Job.id == job.id))
+        db_session.commit()
+        interactive = job_queue.enqueue(
+            db_session,
+            ORG_1,
+            "official_run",
+            bank_id=SAMPLE_BANK_ID,
+            payload={"as_of_date": FIXTURE_AS_OF.isoformat(), "actor_user_id": str(USER_1)},
+            provenance=job_queue.context_provenance(
+                TenantContext(organization_id=ORG_1, actor_user_id=USER_1),
+                action="official_run.requested",
+            ),
+            locator=job_queue.JobLocator(
+                module=Module.REGULATORY, sensitivity=Sensitivity.RESTRICTED
+            ),
+        )
+        db_session.commit()
+        pipeline.run_official(db_session, interactive)
+
+        (successor,) = _bi_refresh_jobs(db_session)
+        assert successor.enqueued_by_principal == f"human:{USER_1}"
+        assert successor.enqueued_action == "official_run.requested"
     finally:
         get_settings.cache_clear()
 
