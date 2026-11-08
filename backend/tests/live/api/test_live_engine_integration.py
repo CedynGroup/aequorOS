@@ -235,6 +235,34 @@ def test_refresh_endpoint_enqueues_and_is_pollable(db_client: TestClient) -> Non
     assert polled.json()["job_type"] == "pipeline_refresh"
 
 
+@pytest.mark.usefixtures("credit_run_authority")
+def test_refresh_requires_the_view_authority_its_locator_demands(
+    db_client: TestClient,
+) -> None:
+    """A caller without DATA/confidential view cannot enqueue a refresh.
+
+    An accepted operation must remain monitorable — the queue reads admit a
+    row only under current view authority — so the refresh demands the view
+    its locator carries up front and refuses otherwise. The hermetic baseline
+    sentence (viewer/all/all) is cleared first so the refusal is the missing
+    DATA/confidential view, not a stale session.
+    """
+    _seed_and_refresh(db_client)
+    with get_sessionmaker()() as session:
+        session.execute(delete(AuthorizationBinding))
+        session.commit()
+        new_version = authorization.invalidate_user_authorization(
+            session, organization_id=ORG_1, user_id=USER_1, reason="Clear the baseline sentence"
+        )
+        session.commit()
+    response = db_client.post(
+        f"{_BASE}/refresh",
+        headers=headers(authorization_version=new_version),
+        json={"as_of_date": AS_OF, "reason": "recompute"},
+    )
+    assert response.status_code == 403, response.text
+
+
 def _mint_authority(*, view: bool) -> int:
     """Grant USER_1 the RUN authority the sample bank's run plan enables.
 
