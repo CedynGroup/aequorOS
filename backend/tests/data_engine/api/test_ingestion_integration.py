@@ -40,6 +40,7 @@ from app.live.service.fact_derivation import _load_position_rows
 from app.models import Bank, CanonicalPosition, CanonicalPositionSnapshot, CanonicalReferenceRow
 from app.storage.client import StorageLocation
 from tests.data_engine.adapters.excel_csv import fixtures
+from tests.support.bank_seeding import seed_bank
 from tests.support.factories.authorization import grant_institution_authority
 from tests.support.helpers import ORG_1, ORG_2, USER_1, USER_2, headers
 from tests.support.ingestion_seeding import (
@@ -47,33 +48,10 @@ from tests.support.ingestion_seeding import (
     FULL_MAPPING,
     RECON_MAPPING,
     activate_mapping,
-    seed_bank,
     stage_source,
     start_batch,
 )
 from tests.support.inmemory_storage import InMemoryStorageClient
-from tests.support.ingestion_seeding import seed_bank as _seed_shared_bank
-
-
-def seed_bank(client: TestClient) -> str:
-    bank_id = _seed_shared_bank(client)
-    # Mapping onboarding is a configure duty; the journey officer holds it
-    # explicitly, never through the analyst bundle.
-    session = get_sessionmaker()()
-    try:
-        grant_institution_authority(
-            session,
-            organization_id=ORG_1,
-            bank_id=bank_id,
-            user_id=USER_1,
-            bundle=RoleBundle.CONFIGURATOR,
-            module=ModuleScope.DATA,
-            sensitivity=SensitivityScope.ALL,
-        )
-        session.commit()
-    finally:
-        session.close()
-    return bank_id
 
 
 def create_scoped_mapping(

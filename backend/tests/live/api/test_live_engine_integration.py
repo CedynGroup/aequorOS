@@ -26,6 +26,10 @@ from app.policy.service import module_scope
 from app.services import job_queue
 from tests.data_engine.adapters.excel_csv import fixtures
 from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID, materialize_canonical_test_book
+
+# Mapping onboarding is a configure duty: the journey officer holds the
+# explicit DATA Configurator grant that bank_seeding's seeder adds.
+from tests.support.bank_seeding import seed_bank
 from tests.support.factories.canonical import (
     FIXTURE_AS_OF,
     seed_canonical_fixture,
@@ -35,7 +39,6 @@ from tests.support.helpers import ORG_1, ORG_2, USER_1, headers
 from tests.support.ingestion_seeding import (
     FULL_MAPPING,
     activate_mapping,
-    seed_bank,
     start_batch,
 )
 
