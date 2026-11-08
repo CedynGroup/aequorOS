@@ -168,9 +168,15 @@ def _evaluate(  # noqa: PLR0913 - the complete decision tuple is explicit
                 organization_id=ctx.organization_id,
                 binding_ids=decision.matching_binding_ids,
             )
+            # One complete active binding must match every dimension; partial
+            # rows never compose. The exact-bank signing binding itself must
+            # carry the whole-institution data scope, so an organization-scope
+            # grant can never lend its breadth to a separate branch-restricted
+            # exact-bank grant (mirrors the stress require_signer check).
             if not any(
                 grant.institution_scope is InstitutionScope.INSTITUTION
                 and grant.institution_id == bank.id
+                and grant.data_scope is DataScope.ALL
                 for grant in matched_grants.values()
             ):
                 decision = replace(

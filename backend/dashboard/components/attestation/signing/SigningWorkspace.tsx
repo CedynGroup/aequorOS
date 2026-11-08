@@ -739,11 +739,14 @@ export default function SigningWorkspace({
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose, armed]);
 
-  const routeStatus = statusQuery.error
-    ? "Could not load the current-cycle signing route. Reload the page to retry."
-    : statusQuery.isLoading || !statusQuery.data
-      ? "Checking who this signature is routed to…"
-      : null;
+  // A failed background refetch keeps the previous data in TanStack Query v5,
+  // so only a workspace with no route status at all yields to the load error;
+  // the server still re-checks the route when the signer certifies.
+  const routeStatus = !statusQuery.data
+    ? statusQuery.error
+      ? "Could not load the current-cycle signing route. Reload the page to retry."
+      : "Checking who this signature is routed to…"
+    : null;
 
   // Ineligibility closes the whole act, not just its final submit button. Do
   // not leave document placement, routing, adoption or send-back controls alive

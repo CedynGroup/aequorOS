@@ -9,9 +9,10 @@ policy kernel, and prove denied ceremonies mint or mutate nothing.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from datetime import UTC, datetime, timedelta
 from typing import Any
-from uuid import UUID
+from uuid import UUID, uuid4
 
 import pytest
 from fastapi import HTTPException
@@ -34,11 +35,14 @@ from app.attestation.service.signers import get_raw_signer
 from app.attestation.service.workflow import AttestationConflict
 from app.core import security
 from app.core.authorization import (
+    BindingGrant,
     BindingStatus,
+    DataScope,
     InstitutionScope,
     Module,
     ModuleScope,
     Permission,
+    PrincipalType,
     ResourceLocator,
     RoleBundle,
     Sensitivity,
@@ -368,6 +372,77 @@ def test_organization_wide_signer_cannot_be_named_for_an_exact_bank_signature(
         )
 
     assert refused.value.error_code == "recipient_role_insufficient"
+
+
+def test_composing_partial_signer_rows_never_authorize_preview(
+    db_session: Session, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """An org-scope grant and a separate branch-narrowed grant never combine.
+
+    The exact-bank SIGN_OFF binding itself must carry the whole-institution
+    data scope; an organization-scope grant cannot lend its breadth to a
+    branch-restricted exact-bank row, mirroring the stress ``require_signer``
+    check. A narrowed REG pair cannot be stored today (the narrowed-module
+    CHECK confines narrowed scopes to credit), so the effective-grant loader
+    is patched to answer exactly as a database holding the historical pair
+    would.
+    """
+    package = _seed_without_signer(db_session)
+    org_binding = _signer_binding(db_session, DEMO_USER_ID, bank_id=None)
+    _signer_binding(db_session, APPROVER_USER_ID)
+    db_session.commit()
+
+    org_grant = BindingGrant(
+        binding_id=org_binding.id,
+        organization_id=DEMO_ORG_ID,
+        principal_id=DEMO_USER_ID,
+        principal_type=PrincipalType.HUMAN,
+        role_bundle=RoleBundle.SIGNER,
+        institution_scope=InstitutionScope.ORGANIZATION,
+        institution_id=None,
+        module_scope=ModuleScope.REGULATORY,
+        sensitivity_scope=SensitivityScope.RESTRICTED,
+        status=BindingStatus.ACTIVE,
+        valid_from=datetime.now(UTC),
+        valid_until=None,
+        revoked_at=None,
+    )
+    branch_grant = BindingGrant(
+        binding_id=uuid4(),
+        organization_id=DEMO_ORG_ID,
+        principal_id=DEMO_USER_ID,
+        principal_type=PrincipalType.HUMAN,
+        role_bundle=RoleBundle.SIGNER,
+        institution_scope=InstitutionScope.INSTITUTION,
+        institution_id=SAMPLE_BANK_ID,
+        module_scope=ModuleScope.REGULATORY,
+        sensitivity_scope=SensitivityScope.RESTRICTED,
+        status=BindingStatus.ACTIVE,
+        valid_from=datetime.now(UTC),
+        valid_until=None,
+        revoked_at=None,
+        data_scope=DataScope.BRANCH,
+        data_scope_values=("Head office",),
+    )
+    from app.identity import public as authorization_service  # noqa: PLC0415
+
+    real_load_effective_grants = authorization_service.load_effective_grants
+
+    def historical_pair(
+        db: Session, *, organization_id: str, binding_ids: Sequence[UUID]
+    ) -> dict[UUID, BindingGrant]:
+        if org_binding.id in binding_ids:
+            return {org_grant.binding_id: org_grant, branch_grant.binding_id: branch_grant}
+        return real_load_effective_grants(
+            db, organization_id=organization_id, binding_ids=binding_ids
+        )
+
+    monkeypatch.setattr(authorization_service, "load_effective_grants", historical_pair)
+
+    with pytest.raises(HTTPException) as refused:
+        _preview(db_session, MAKER, package)
+
+    assert refused.value.status_code == 403
 
 
 def test_signer_without_source_read_is_hidden_and_mutates_nothing(db_session: Session) -> None:

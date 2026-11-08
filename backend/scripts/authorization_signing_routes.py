@@ -39,8 +39,16 @@ class SigningRoute:
 
     @property
     def requires_checker_approval(self) -> bool:
-        """Only execution of a checker signature carries the additional duty."""
-        return self.action in {"certify", "certify-and-send"} and self.signing_role in {
+        """Every REG ceremony act runs the checker-approval preflight.
+
+        preview, step-up, certify and certify-and-send all pass through
+        ``routing.require_certification_access``, whose checker APPROVE duty is
+        unconditional for checker roles — so the report must list a missing
+        APPROVE grant for those acts too. The stress ceremony carries
+        maker/checker as evaluated conditions instead, not a separate APPROVE
+        duty, so its routes never set this.
+        """
+        return self.source_family != "enterprise_stress" and self.signing_role in {
             "approver",
             "board",
         }
