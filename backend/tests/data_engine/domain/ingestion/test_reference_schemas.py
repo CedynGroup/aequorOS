@@ -12,7 +12,7 @@ what the schema REFUSES. Three rules carry the weight:
   verbatim and a mapping config cannot rename a column, so the alias has to be
   resolved on read — by exactly one function.
 
-The last test pins the dependency direction: ``app/data_engine/domain/ingestion`` may not
+The isolated import guard pins the dependency direction: ``app/data_engine/domain/ingestion`` may not
 import ``app/bi/domain``, which is why the measure id is validated for shape
 rather than against the catalogue.
 """
