@@ -120,7 +120,9 @@ def run_assessment(db: Session, ctx: TenantContext, assessment_id: UUID) -> RunA
     db.flush()
     # Direct Job(...) writes are producers too: they persist the same typed
     # locator and enqueue provenance the queue stamps (mission D9). The case
-    # workspace is organization-scoped (no bank dimension).
+    # workspace is organization-scoped (no bank dimension), and the run's
+    # progress discloses its restricted input snapshot, so the locator names
+    # the sensitivity a poller must hold view authority for.
     provenance = job_queue.context_provenance(ctx, action="assessment.run_requested")
     job = Job(
         organization_id=ctx.organization_id,
@@ -130,7 +132,7 @@ def run_assessment(db: Session, ctx: TenantContext, assessment_id: UUID) -> RunA
         entity_id=str(run.id),
         institution_scope=InstitutionScope.ORGANIZATION.value,
         module=Module.RISK.value,
-        sensitivity=Sensitivity.CONFIDENTIAL.value,
+        sensitivity=Sensitivity.RESTRICTED.value,
         enqueued_by_principal=provenance.principal,
         enqueued_action=provenance.action,
     )

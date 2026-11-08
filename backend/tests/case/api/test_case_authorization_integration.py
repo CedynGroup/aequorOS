@@ -22,9 +22,11 @@ from app.case.schemas.findings import FindingRead
 from app.core.authorization import (
     GrantorType,
     InstitutionScope,
+    Module,
     ModuleScope,
     PrincipalType,
     RoleBundle,
+    Sensitivity,
     SensitivityScope,
 )
 from app.db.base import utc_now
@@ -36,6 +38,7 @@ from app.models import CalculationRun, Document, Job, RiskCase, RiskFinding
 from app.models.audit_event import AuditEvent
 from app.schemas.common import ErrorResponse, JsonObject
 from app.schemas.jobs import JobRead
+from app.services import job_queue
 from tests.case.testing.authorization_matrix import CASE_OPERATIONS, permits
 from tests.case.testing.generators import CaseBinding, case_binding_sets
 from tests.conftest import FakeStorage
@@ -856,13 +859,28 @@ def test_case_job_polling_uses_current_restricted_authority(
         organization_id=ORG_1, job_type="unrelated", status="queued", progress={"step": 1}
     )
     document = Job(organization_id=ORG_1, job_type="document_parse", status="queued")
+    located = job_queue.enqueue(
+        db_session,
+        ORG_1,
+        "document_delete",
+        locator=job_queue.JobLocator(module=Module.RISK, sensitivity=Sensitivity.RESTRICTED),
+        provenance=job_queue.JobProvenance(
+            principal=f"human:{USER_1}", action="document.delete_requested"
+        ),
+    )
     db_session.add_all([unrelated, document])
     db_session.commit()
     disclosure_grants(db_session, restricted=False)
-    assert db_client.get(f"/api/v1/jobs/{unrelated.id}", headers=headers()).status_code == 200
+    # A locator-less row stays hidden under every grant: without the typed
+    # locator the queue cannot tell whose work it is (mission D9).
+    assert db_client.get(f"/api/v1/jobs/{unrelated.id}", headers=headers()).status_code == 404
     assert db_client.get(f"/api/v1/jobs/{document.id}", headers=headers()).status_code == 404
+    # A located, tenant-provenanced row follows the caller's current
+    # authority: the disclosure grants above are confidential-scoped, so the
+    # restricted-locator row appears only once restricted view is granted.
+    assert db_client.get(f"/api/v1/jobs/{located.id}", headers=headers()).status_code == 404
     grant(db_session, RoleBundle.VIEWER, SensitivityScope.RESTRICTED)
-    assert db_client.get(f"/api/v1/jobs/{document.id}", headers=headers()).status_code == 200
+    assert db_client.get(f"/api/v1/jobs/{located.id}", headers=headers()).status_code == 200
 
 
 @pytest.mark.usefixtures("unbound")

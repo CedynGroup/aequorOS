@@ -1,0 +1,275 @@
+"""Tenant job reads filter on the persisted locator and current authority (#186).
+
+``GET /api/v1/jobs/{job_id}`` is the one tenant-facing queue read. A row is
+visible only when it carries a complete locator, its enqueue provenance names
+a tenant principal, and one current ``view`` grant matches the locator —
+anything else answers the same 404 an unknown id does. Claim, retry and
+execution ignore the locator entirely, so the worker keeps draining rows no
+tenant can poll (mission D9, VAL-NOTIF-005/007/011).
+"""
+
+from __future__ import annotations
+
+import re
+from typing import Any
+
+import pytest
+from fastapi.testclient import TestClient
+from sqlalchemy import delete, select
+from sqlalchemy.orm import Session
+
+from app.core.authorization import (
+    GrantorType,
+    InstitutionScope,
+    Module,
+    ModuleScope,
+    PrincipalType,
+    RoleBundle,
+    Sensitivity,
+    SensitivityScope,
+)
+from app.db.base import utc_now
+from app.identity.models.authorization import AuthorizationBinding
+from app.identity.models.user import User
+from app.identity.service import authorization
+from app.models import Bank, Job
+from app.policy.service.institution_types import FALLBACK_TYPE_CODE
+from app.services import job_queue
+from tests.support.helpers import ORG_1, ORG_2, USER_1, headers
+
+BASE = "/api/v1/jobs"
+SAMPLE_BANK_ID = "BK-JOBV0001"
+SIBLING_BANK_ID = "BK-JOBV0002"
+_REQUEST_ID = re.compile(r'"request_id":"[^"]*"')
+
+
+def _add_bank(db: Session, bank_id: str) -> None:
+    """Create the bank a wrong-bank grant needs to validate against."""
+    if db.get(Bank, bank_id) is None:
+        db.add(
+            Bank(
+                id=bank_id,
+                organization_id=ORG_1,
+                name=f"Fixture {bank_id}",
+                short_name="Fixture",
+                currency="GHS",
+                jurisdiction_code="GH",
+                license_type="universal",
+                institution_type=FALLBACK_TYPE_CODE,
+            )
+        )
+        db.commit()
+
+
+def _opaque(response: Any) -> str:
+    return _REQUEST_ID.sub('"request_id":""', response.text)
+
+
+def _human_provenance() -> job_queue.JobProvenance:
+    return job_queue.JobProvenance(principal=f"human:{USER_1}", action="test.enqueue")
+
+
+def _clear_bindings(db: Session) -> None:
+    db.execute(delete(AuthorizationBinding))
+    db.commit()
+
+
+def _grant(  # noqa: PLR0913 - every binding dimension is an input to the match
+    db: Session,
+    *,
+    module: ModuleScope = ModuleScope.RISK,
+    sensitivity: SensitivityScope = SensitivityScope.RESTRICTED,
+    bank_id: str | None = None,
+) -> int:
+    if bank_id is not None:
+        _add_bank(db, bank_id)
+    binding = authorization.create_role_binding(
+        db,
+        organization_id=ORG_1,
+        principal_user_id=USER_1,
+        principal_type=PrincipalType.HUMAN,
+        role_bundle=RoleBundle.VIEWER,
+        scope=authorization.BindingScope(
+            InstitutionScope.ORGANIZATION if bank_id is None else InstitutionScope.INSTITUTION,
+            bank_id,
+            module,
+            sensitivity,
+        ),
+        grantor=authorization.GrantorRef(GrantorType.SYSTEM, "job-visibility-test"),
+        reason="Exercise job read visibility",
+        commit=False,
+    )
+    db.commit()
+    assert binding is not None
+    actor = db.get(User, USER_1)
+    assert actor is not None
+    return actor.authorization_version
+
+
+def _visible_job(db: Session, **locator: Any) -> Job:
+    """Enqueue one visible-shaped row: complete locator, human provenance.
+
+    ``bank_id`` rides through to ``enqueue`` (it is the locator's institution
+    id there), the remaining two keys form the ``JobLocator``.
+    """
+    locator = {"module": Module.RISK, "sensitivity": Sensitivity.RESTRICTED, **locator}
+    return job_queue.enqueue(
+        db,
+        ORG_1,
+        "document_delete",
+        bank_id=locator.pop("bank_id", None),
+        locator=job_queue.JobLocator(**locator),
+        provenance=_human_provenance(),
+    )
+
+
+@pytest.fixture
+def unbound(db_session: Session) -> None:
+    _clear_bindings(db_session)
+
+
+@pytest.fixture
+def job_id(db_session: Session) -> str:
+    job = _visible_job(db_session)
+    db_session.commit()
+    return str(job.id)
+
+
+def test_a_matching_current_grant_sees_the_job(
+    db_client: TestClient, db_session: Session, unbound: None, job_id: str
+) -> None:
+    version = _grant(db_session)
+    response = db_client.get(f"{BASE}/{job_id}", headers=headers(authorization_version=version))
+    assert response.status_code == 200, response.text
+
+
+@pytest.mark.parametrize(
+    ("grant_kwargs", "locator_kwargs"),
+    [
+        # Wrong module: a CREDIT grant never admits a RISK-locator job.
+        ({"module": ModuleScope.CREDIT}, {}),
+        # Wrong sensitivity: confidential authority never admits restricted rows.
+        ({"sensitivity": SensitivityScope.CONFIDENTIAL}, {}),
+        # Wrong bank: an institution grant for the sample bank never admits
+        # the sibling bank's row, though both belong to the same organization.
+        ({"bank_id": SAMPLE_BANK_ID}, {"bank_id": SIBLING_BANK_ID}),
+        # An institution grant never admits an organization-scoped row.
+        ({"bank_id": SAMPLE_BANK_ID}, {}),
+        # The row's own locator does not match the granted one.
+        ({}, {"module": Module.CREDIT}),
+        ({}, {"sensitivity": Sensitivity.CONFIDENTIAL}),
+    ],
+)
+def test_a_non_matching_grant_hides_the_job(
+    db_client: TestClient,
+    db_session: Session,
+    unbound: None,
+    grant_kwargs: dict[str, Any],
+    locator_kwargs: dict[str, Any],
+) -> None:
+    kwargs: dict[str, Any] = {
+        "module": ModuleScope.RISK,
+        "sensitivity": SensitivityScope.RESTRICTED,
+        **locator_kwargs,
+    }
+    job = _visible_job(db_session, **kwargs)
+    db_session.commit()
+    version = _grant(db_session, **grant_kwargs) if grant_kwargs else 1
+    response = db_client.get(f"{BASE}/{job.id}", headers=headers(authorization_version=version))
+    assert response.status_code == 404, response.text
+
+
+def test_legacy_and_non_tenant_rows_stay_hidden(
+    db_client: TestClient, db_session: Session, unbound: None
+) -> None:
+    version = _grant(db_session)
+    db_session.add(Job(organization_id=ORG_1, job_type="document_delete", status="completed"))
+    for principal in ("worker", "system", "operator:inspector@example.test"):
+        job_queue.enqueue(
+            db_session,
+            ORG_1,
+            "document_delete",
+            locator=job_queue.JobLocator(module=Module.RISK, sensitivity=Sensitivity.RESTRICTED),
+            provenance=job_queue.JobProvenance(principal=principal, action="test.enqueue"),
+        )
+    db_session.commit()
+    for row in db_session.scalars(select(Job).where(Job.organization_id == ORG_1)):
+        response = db_client.get(f"{BASE}/{row.id}", headers=headers(authorization_version=version))
+        assert response.status_code == 404, f"{row.enqueued_by_principal}: {response.text}"
+
+
+def test_hidden_is_the_unknown_object_answer(
+    db_client: TestClient, db_session: Session, unbound: None
+) -> None:
+    job = _visible_job(db_session)
+    db_session.commit()
+    # No grant holder: the row and a fabricated id answer identically.
+    ungranted = headers(authorization_version=1)
+    hidden = db_client.get(f"{BASE}/{job.id}", headers=ungranted)
+    unknown = db_client.get(f"{BASE}/00000000-0000-7fff-8fff-ffffffffffff", headers=ungranted)
+    assert hidden.status_code == unknown.status_code == 404
+    assert _opaque(hidden) == _opaque(unknown)
+
+
+def test_cross_tenant_job_never_visible(
+    db_client: TestClient, db_session: Session, unbound: None
+) -> None:
+    foreign = job_queue.enqueue(
+        db_session,
+        ORG_2,
+        "document_delete",
+        locator=job_queue.JobLocator(module=Module.RISK, sensitivity=Sensitivity.RESTRICTED),
+        provenance=job_queue.JobProvenance(principal=f"human:{USER_1}", action="test.enqueue"),
+    )
+    db_session.commit()
+    # The foreign caller's own session is fresh (its user was never granted).
+    response = db_client.get(f"{BASE}/{foreign.id}", headers=headers(ORG_2))
+    assert response.status_code == 404, response.text
+
+
+def test_revocation_removes_visibility(
+    db_client: TestClient, db_session: Session, unbound: None, job_id: str
+) -> None:
+    version = _grant(db_session)
+    allowed = db_client.get(f"{BASE}/{job_id}", headers=headers(authorization_version=version))
+    assert allowed.status_code == 200, allowed.text
+    for binding in db_session.scalars(
+        select(AuthorizationBinding).where(AuthorizationBinding.principal_user_id == USER_1)
+    ):
+        binding.status = "revoked"
+        binding.revoked_at = utc_now()
+        binding.revoked_by_type = "system"
+        binding.revoked_by_id = "job-visibility-test"
+        binding.revoked_reason = "Revoke job visibility"
+    new_version = authorization.invalidate_user_authorization(
+        db_session, organization_id=ORG_1, user_id=USER_1, reason="Revoke job visibility"
+    )
+    db_session.commit()
+    denied = db_client.get(
+        f"{BASE}/{job_id}", headers=headers(authorization_version=new_version)
+    )
+    assert denied.status_code == 404, denied.text
+
+
+def test_the_worker_still_claims_and_completes_rows(
+    db_client: TestClient, db_session: Session, unbound: None
+) -> None:
+    """Scoping changes visibility only: claim and completion are untouched."""
+    version = _grant(db_session)
+    job = _visible_job(db_session)
+    hidden = job_queue.enqueue(
+        db_session,
+        ORG_1,
+        "document_delete",
+        provenance=job_queue.worker_provenance("worker.tick"),
+    )
+    db_session.commit()
+    for expected in (job, hidden):
+        claimed = job_queue.claim_next(db_session, utc_now(), ("document_delete",))
+        assert claimed is not None and claimed.id == expected.id
+        done = job_queue.complete(db_session, claimed, progress={"done": True})
+        assert done.status == "succeeded"
+    # The visible row still polls; the worker-only row never does.
+    fresh = headers(authorization_version=version)
+    assert db_client.get(f"{BASE}/{job.id}", headers=fresh).status_code == 200
+    assert db_client.get(f"{BASE}/{hidden.id}", headers=fresh).status_code == 404
