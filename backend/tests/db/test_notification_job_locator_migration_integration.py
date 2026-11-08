@@ -185,21 +185,29 @@ def test_legacy_rows_keep_all_null_locators_after_a_round_trip(
     clear_database_caches()
     with schema.app_engine.begin() as connection:
         _tenant(connection, ORG)
-        notification_locators = connection.execute(
-            text(
-                "SELECT institution_scope, bank_id, module, sensitivity FROM notifications "
-                "WHERE organization_id = :org"
-            ),
-            {"org": ORG},
-        ).tuples().all()
-        job_locators = connection.execute(
-            text(
-                "SELECT institution_scope, bank_id, module, sensitivity, "
-                "enqueued_by_principal, enqueued_action, enqueue_decision_reference FROM jobs "
-                "WHERE organization_id = :org"
-            ),
-            {"org": ORG},
-        ).tuples().all()
+        notification_locators = (
+            connection.execute(
+                text(
+                    "SELECT institution_scope, bank_id, module, sensitivity FROM notifications "
+                    "WHERE organization_id = :org"
+                ),
+                {"org": ORG},
+            )
+            .tuples()
+            .all()
+        )
+        job_locators = (
+            connection.execute(
+                text(
+                    "SELECT institution_scope, bank_id, module, sensitivity, "
+                    "enqueued_by_principal, enqueued_action, enqueue_decision_reference FROM jobs "
+                    "WHERE organization_id = :org"
+                ),
+                {"org": ORG},
+            )
+            .tuples()
+            .all()
+        )
     assert notification_locators == [(None, None, None, None)]
     assert job_locators == [(None, None, None, None, None, None, None)]
 
@@ -218,6 +226,35 @@ def test_the_read_filter_indexes_round_trip(
     command.upgrade(config, "head")
     clear_database_caches()
     assert schema.indexes(INDEXES) == INDEXES
+
+
+def test_the_worker_functions_stamp_their_non_tenant_provenance(
+    forward_migrated_postgres_schema: MigratedPostgresSchema,
+) -> None:
+    """The SQL enqueue functions are producers too: they stamp the worker principal.
+
+    These functions insert jobs directly in SQL, bypassing ``job_queue.enqueue``;
+    without the stamp their rows would look like legacy rows (all-NULL) forever
+    instead of explicitly non-tenant (mission D9).
+    """
+    schema = forward_migrated_postgres_schema
+    with schema.app_engine.connect() as connection:
+        for function, action in (
+            ("aqs_worker_seed_ticks", "scheduler.seed_tick"),
+            ("aqs_worker_enqueue_platform_daily", "'platform.daily:' || p_kind"),
+        ):
+            source = connection.execute(
+                text(
+                    "SELECT p.prosrc FROM pg_proc p JOIN pg_namespace n "
+                    "ON n.oid = p.pronamespace WHERE p.proname = :function "
+                    "AND n.nspname = :schema"
+                ),
+                {"function": function, "schema": schema.schema_name},
+            ).scalar_one()
+            assert isinstance(source, str)
+            assert "enqueued_by_principal" in source, f"{function} stamps no provenance"
+            assert "'worker'" in source, f"{function} does not stamp the worker principal"
+            assert action in source, f"{function} does not stamp its action {action!r}"
 
 
 def test_the_vocabulary_constraints_reject_invalid_writes(

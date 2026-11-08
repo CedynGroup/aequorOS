@@ -73,7 +73,12 @@ def claim_large_object_job(db_session: Session, bank_storage: BankStorage) -> Jo
     key = registry.scoped_key(db_session, organization_id=ORG_1, bank_id="BK-SAMP0001")
     registry.rotate(db_session, key, NEXT_KEY, lambda _: bank_storage.provider)
     db_session.commit()
-    _ = reencryption.enqueue(db_session, ORG_1, "BK-SAMP0001")
+    _ = reencryption.enqueue(
+        db_session,
+        ORG_1,
+        "BK-SAMP0001",
+        provenance=job_queue.worker_provenance("worker.bank_reencrypt"),
+    )
     db_session.commit()
     while True:
         job = job_queue.claim_next(db_session, utc_now(), (reencryption.JOB_TYPE,))
@@ -187,7 +192,12 @@ def test_inventory_metadata_budget_persists_each_exact_version_cursor(
         return list_versions(**kwargs)
 
     monkeypatch.setattr(client, "list_object_versions", page)
-    job = reencryption.enqueue(db_session, ORG_1, "BK-SAMP0001")
+    job = reencryption.enqueue(
+        db_session,
+        ORG_1,
+        "BK-SAMP0001",
+        provenance=job_queue.worker_provenance("worker.bank_reencrypt"),
+    )
     db_session.commit()
     object_cursors: list[EncryptionCursor] = []
     while True:
@@ -272,7 +282,12 @@ def test_title_cased_metadata_migrates_editable_ciphertext(
     registry.rotate(db_session, key, NEXT_KEY, providers)
     db_session.commit()
     bodies = minio_metadata(bank_storage, monkeypatch, head_denied=head_denied)
-    job = reencryption.enqueue(db_session, ORG_1, "BK-SAMP0001")
+    job = reencryption.enqueue(
+        db_session,
+        ORG_1,
+        "BK-SAMP0001",
+        provenance=job_queue.worker_provenance("worker.bank_reencrypt"),
+    )
     db_session.commit()
     job = drain(db_session, job, bank_storage.storage)
     progress = reencryption.Progress.model_validate(job.progress)
@@ -320,7 +335,12 @@ def test_title_cased_deleted_history_keeps_its_envelope_and_retirement_hold(
     registry.rotate(db_session, key, NEXT_KEY, providers)
     db_session.commit()
     bodies = minio_metadata(bank_storage, monkeypatch, head_denied=head_denied)
-    job = reencryption.enqueue(db_session, ORG_1, "BK-SAMP0001")
+    job = reencryption.enqueue(
+        db_session,
+        ORG_1,
+        "BK-SAMP0001",
+        provenance=job_queue.worker_provenance("worker.bank_reencrypt"),
+    )
     db_session.commit()
     job = drain(db_session, job, bank_storage.storage)
     progress = reencryption.Progress.model_validate(job.progress)
@@ -554,7 +574,12 @@ def test_object_resume_after_publication_keeps_retained_version_and_retirement_b
             raise StorageBackendError("Synthetic interruption after publication")
         return result
 
-    job = reencryption.enqueue(db_session, ORG_1, "BK-SAMP0001")
+    job = reencryption.enqueue(
+        db_session,
+        ORG_1,
+        "BK-SAMP0001",
+        provenance=job_queue.worker_provenance("worker.bank_reencrypt"),
+    )
     db_session.commit()
     monkeypatch.setattr(objects, "reencrypt", crash_after_publication)
     with pytest.raises(StorageBackendError, match="Synthetic interruption"):
@@ -719,7 +744,12 @@ def test_object_job_uses_bounded_inventory_pages(
 
     monkeypatch.setattr(objects, "inventory_page", observe_inventory(real_inventory_page))
     monkeypatch.setattr(objects, "reencrypt", observe_reencryption(real_reencrypt))
-    job = reencryption.enqueue(db_session, ORG_1, "BK-SAMP0001")
+    job = reencryption.enqueue(
+        db_session,
+        ORG_1,
+        "BK-SAMP0001",
+        provenance=job_queue.worker_provenance("worker.bank_reencrypt"),
+    )
     db_session.commit()
     job = drain(db_session, job, bank_storage.storage)
     progress = reencryption.Progress.model_validate(job.progress)
@@ -855,7 +885,12 @@ def test_existing_bank_upgrade_preserves_legacy_objects_and_initializes_empty_ba
         )
     registry.rotate(db_session, key, NEXT_KEY, lambda _: bank_storage.provider)
     db_session.commit()
-    job = reencryption.enqueue(db_session, ORG_1, "BK-SAMP0001")
+    job = reencryption.enqueue(
+        db_session,
+        ORG_1,
+        "BK-SAMP0001",
+        provenance=job_queue.worker_provenance("worker.bank_reencrypt"),
+    )
     db_session.commit()
     job = drain(db_session, job, bank_storage.storage)
     progress = reencryption.Progress.model_validate(job.progress)
@@ -895,7 +930,12 @@ def test_database_pin_retains_only_its_location_with_a_null_version(
         return bank_storage.provider
 
     monkeypatch.setattr(registry, "provider_for", providers)
-    job = reencryption.enqueue(db_session, ORG_1, "BK-SAMP0001")
+    job = reencryption.enqueue(
+        db_session,
+        ORG_1,
+        "BK-SAMP0001",
+        provenance=job_queue.worker_provenance("worker.bank_reencrypt"),
+    )
     db_session.commit()
     job = drain(db_session, job, bank_storage.storage)
     progress = reencryption.Progress.model_validate(job.progress)
@@ -971,7 +1011,12 @@ def test_versioning_transition_keeps_null_version_envelope_and_blocks_retirement
 
     if head_denied:
         monkeypatch.setattr(bank_storage.s3, "head_object", denied_head)
-    job = reencryption.enqueue(db_session, ORG_1, "BK-SAMP0001")
+    job = reencryption.enqueue(
+        db_session,
+        ORG_1,
+        "BK-SAMP0001",
+        provenance=job_queue.worker_provenance("worker.bank_reencrypt"),
+    )
     db_session.commit()
     job = drain(db_session, job, bank_storage.storage)
     progress = reencryption.Progress.model_validate(job.progress)
@@ -1027,7 +1072,12 @@ def test_versioned_pin_keeps_original_while_current_object_moves(
         return bank_storage.provider
 
     monkeypatch.setattr(registry, "provider_for", providers)
-    job = reencryption.enqueue(db_session, ORG_1, "BK-SAMP0001")
+    job = reencryption.enqueue(
+        db_session,
+        ORG_1,
+        "BK-SAMP0001",
+        provenance=job_queue.worker_provenance("worker.bank_reencrypt"),
+    )
     db_session.commit()
     job = drain(db_session, job, bank_storage.storage)
     versions = list(inventory_items(bank_storage))

@@ -92,7 +92,9 @@ def test_interrupted_terminal_parent_cannot_swallow_a_new_target_request(
 ) -> None:
     party_id = counterparty(db_session, include_package=False).id
     connect(db_session, provider)
-    root = reencryption.enqueue(db_session, ORG_1, BANK_A)
+    root = reencryption.enqueue(
+        db_session, ORG_1, BANK_A, provenance=job_queue.worker_provenance("worker.bank_reencrypt")
+    )
     db_session.commit()
     claimed = job_queue.claim_next(db_session, utc_now(), (reencryption.JOB_TYPE,))
     assert claimed is not None and claimed.id == root.id
@@ -114,9 +116,19 @@ def test_interrupted_terminal_parent_cannot_swallow_a_new_target_request(
     target = key.current_version_id
     assert target != old_target
     db_session.commit()
-    fresh = reencryption.enqueue(db_session, ORG_1, BANK_A)
+    fresh = reencryption.enqueue(
+        db_session, ORG_1, BANK_A, provenance=job_queue.worker_provenance("worker.bank_reencrypt")
+    )
     assert fresh.id not in {parent.id, root.id, last.id}
-    assert reencryption.enqueue(db_session, ORG_1, BANK_A).id == fresh.id
+    assert (
+        reencryption.enqueue(
+            db_session,
+            ORG_1,
+            BANK_A,
+            provenance=job_queue.worker_provenance("worker.bank_reencrypt"),
+        ).id
+        == fresh.id
+    )
     db_session.commit()
     completed = drain(db_session, fresh, EmptyStorage())
     result = reencryption.Progress.model_validate(completed.progress)
@@ -178,7 +190,9 @@ def test_large_object_claim_scales_with_size_and_recovers_an_interruption(
             return True
 
     storage = LargeStorage()
-    _ = reencryption.enqueue(db_session, ORG_1, BANK_A)
+    _ = reencryption.enqueue(
+        db_session, ORG_1, BANK_A, provenance=job_queue.worker_provenance("worker.bank_reencrypt")
+    )
     db_session.commit()
     while True:
         claimed = job_queue.claim_next(db_session, now, (reencryption.JOB_TYPE,))
@@ -210,7 +224,9 @@ def test_field_migration_and_verification_resume_across_bounded_dispatches(
         counterparty(db_session, reference=f"Synthetic-{number}", include_package=False)
     connect(db_session, provider)
     monkeypatch.setattr(reencryption, "BATCH_SIZE", 2)
-    _ = reencryption.enqueue(db_session, ORG_1, BANK_A)
+    _ = reencryption.enqueue(
+        db_session, ORG_1, BANK_A, provenance=job_queue.worker_provenance("worker.bank_reencrypt")
+    )
     db_session.commit()
     checkpoints: dict[str, list[UUID | None]] = {"fields": [], "verify_fields": []}
     while True:
@@ -298,7 +314,9 @@ def test_bounded_dispatches_outlive_the_old_six_hour_window_without_reclaim(
             return True
 
     storage = SlowStorage()
-    root = reencryption.enqueue(db_session, ORG_1, BANK_A)
+    root = reencryption.enqueue(
+        db_session, ORG_1, BANK_A, provenance=job_queue.worker_provenance("worker.bank_reencrypt")
+    )
     db_session.commit()
     jobs = 0
     last = root
@@ -334,7 +352,9 @@ def test_interrupted_batch_reclaims_at_default_window_and_resumes(
     connect(db_session, provider)
     now = utc_now()
     monkeypatch.setattr(job_queue, "utc_now", lambda: now)
-    root = reencryption.enqueue(db_session, ORG_1, BANK_A)
+    root = reencryption.enqueue(
+        db_session, ORG_1, BANK_A, provenance=job_queue.worker_provenance("worker.bank_reencrypt")
+    )
     db_session.commit()
     with pytest.raises(StorageBackendError, match="Synthetic interruption"):
         drain(db_session, root, UnavailableStorage())
@@ -448,7 +468,9 @@ def test_resume_moves_fields_preserves_immutable_bytes_and_is_idempotent(
         ).scalar_one(),
     )
     connect(db_session, provider)
-    job = reencryption.enqueue(db_session, ORG_1, BANK_A)
+    job = reencryption.enqueue(
+        db_session, ORG_1, BANK_A, provenance=job_queue.worker_provenance("worker.bank_reencrypt")
+    )
     db_session.commit()
     job_id = job.id
     with pytest.raises(StorageBackendError, match="Synthetic interruption"):
@@ -526,7 +548,9 @@ def test_plain_snapshot_does_not_retain_retired_encryption_version(
     snapshot_before = db_session.scalar(select(RegulatoryPackage.snapshot))
     registry.rotate(db_session, key, NEXT, lambda _: provider)
     db_session.commit()
-    job = reencryption.enqueue(db_session, ORG_1, BANK_A)
+    job = reencryption.enqueue(
+        db_session, ORG_1, BANK_A, provenance=job_queue.worker_provenance("worker.bank_reencrypt")
+    )
     db_session.commit()
     job = drain(db_session, job, EmptyStorage())
     assert reencryption.Progress.model_validate(job.progress).retained == {}
@@ -566,7 +590,9 @@ def test_editable_only_migration_releases_unused_versions_but_keeps_backup_hold(
     )
     registry.rotate(db_session, key, NEXT, lambda _: provider)
     db_session.commit()
-    job = reencryption.enqueue(db_session, ORG_1, BANK_A)
+    job = reencryption.enqueue(
+        db_session, ORG_1, BANK_A, provenance=job_queue.worker_provenance("worker.bank_reencrypt")
+    )
     db_session.commit()
     job = drain(db_session, job, EmptyStorage())
     assert reencryption.Progress.model_validate(job.progress).summary == "complete"
@@ -650,7 +676,9 @@ def test_child_fields_are_scoped_and_audit_history_is_retained(
     role_ids = [r.id for r in roles]
     before = cast(object, db_session.execute(text("SELECT details FROM audit_events")).scalar_one())
     connect(db_session, provider)
-    job = reencryption.enqueue(db_session, ORG_1, BANK_A)
+    job = reencryption.enqueue(
+        db_session, ORG_1, BANK_A, provenance=job_queue.worker_provenance("worker.bank_reencrypt")
+    )
     db_session.commit()
     job = drain(db_session, job, EmptyStorage())
     first = db_session.scalar(
@@ -770,7 +798,9 @@ def test_job_clears_historical_bi_identity_copies_and_keeps_numeric_queries(
                     )
             return super().encryption_page(institution_slug, cursor, limit)
 
-    job = reencryption.enqueue(db_session, ORG_1, bank.id)
+    job = reencryption.enqueue(
+        db_session, ORG_1, bank.id, provenance=job_queue.worker_provenance("worker.bank_reencrypt")
+    )
     db_session.commit()
     job = drain(db_session, job, LateIdentityStorage())
     key = registry.bank_key(db_session, ORG_1, bank.id)
@@ -908,7 +938,9 @@ def test_maintenance_preserves_numeric_bi_and_rewrites_only_identity_leaves(
                 (cast(Table, BiSubscription.__table__), subscription_id, "query", query),
             ],
         )
-    job = reencryption.enqueue(db_session, ORG_1, BANK_A)
+    job = reencryption.enqueue(
+        db_session, ORG_1, BANK_A, provenance=job_queue.worker_provenance("worker.bank_reencrypt")
+    )
     db_session.commit()
     _ = drain(db_session, job, EmptyStorage())
     stored_filters = db_session.scalar(select(BiAlert.filters).where(BiAlert.id == alert_id))
@@ -928,7 +960,9 @@ def test_maintenance_preserves_numeric_bi_and_rewrites_only_identity_leaves(
     assert restored_alert is not None and restored_alert.filters == filters
     assert restored_subscription is not None and restored_subscription.query == query
     db_session.commit()
-    job = reencryption.enqueue(db_session, ORG_1, BANK_A)
+    job = reencryption.enqueue(
+        db_session, ORG_1, BANK_A, provenance=job_queue.worker_provenance("worker.bank_reencrypt")
+    )
     db_session.commit()
     _ = drain(db_session, job, EmptyStorage())
     assert (
@@ -961,7 +995,9 @@ def test_nested_immutable_identity_keeps_its_envelope_without_rewriting_bytes(
     original, old_version = registry.reference(key), key.current_version_id
     registry.rotate(db_session, key, NEXT, lambda _: provider)
     db_session.commit()
-    job = reencryption.enqueue(db_session, ORG_1, BANK_A)
+    job = reencryption.enqueue(
+        db_session, ORG_1, BANK_A, provenance=job_queue.worker_provenance("worker.bank_reencrypt")
+    )
     db_session.commit()
     last = drain(db_session, job, EmptyStorage())
     assert reencryption.Progress.model_validate(last.progress).retained == {
@@ -1019,7 +1055,12 @@ def test_cutovers_preserve_every_canonical_group_representation(
         if rotate:
             registry.rotate(db_session, key, NEXT, lambda _: provider)
         db_session.commit()
-        job = reencryption.enqueue(db_session, ORG_1, BANK_A)
+        job = reencryption.enqueue(
+            db_session,
+            ORG_1,
+            BANK_A,
+            provenance=job_queue.worker_provenance("worker.bank_reencrypt"),
+        )
         db_session.commit()
         _ = drain(db_session, job, EmptyStorage())
         tokens = list(

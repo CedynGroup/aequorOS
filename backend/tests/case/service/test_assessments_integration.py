@@ -8,8 +8,32 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.case.service import assessments, findings
-from app.models import DocumentExtraction, RiskFinding, RiskScore
+from app.models import DocumentExtraction, Job, RiskFinding, RiskScore
 from tests.case.factories import ServiceFactories
+
+
+def test_the_direct_job_write_persists_locator_and_provenance(
+    db_session: Session,
+    service_factories: ServiceFactories,
+) -> None:
+    """The case service's direct Job(...) write stamps the locator itself (mission D9)."""
+    factories = service_factories
+    ctx = factories.ctx
+    case = factories.cases.create()
+    factories.documents.create_parsed(case.id)
+    assessment = factories.assessments.create(case.id)
+
+    result = assessments.run_assessment(db_session, ctx, assessment.id)
+
+    job = db_session.get(Job, result.job_id)
+    assert job is not None
+    # The case workspace is organization-scoped: no bank dimension.
+    assert job.institution_scope == "organization"
+    assert job.bank_id is None
+    assert job.module == "risk"
+    assert job.sensitivity == "confidential"
+    assert job.enqueued_by_principal == f"human:{ctx.actor_user_id}"
+    assert job.enqueued_action == "assessment.run_requested"
 
 
 def test_create_assessment_snapshots_current_documents(

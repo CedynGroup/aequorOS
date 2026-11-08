@@ -83,6 +83,7 @@ def test_the_seam_is_inert_when_the_switch_is_off(db_session: Session) -> None:
         bank_id=SAMPLE_BANK_ID,
         as_of=AS_OF,
         reason="ingestion",
+        provenance=job_queue.system_provenance("test"),
     )
 
     assert job is None
@@ -102,6 +103,7 @@ def test_the_seam_enqueues_the_contract_payload_once(db_session: Session) -> Non
         bank_id=SAMPLE_BANK_ID,
         as_of=AS_OF,
         reason="ingestion",
+        provenance=job_queue.system_provenance("test"),
     )
     db_session.commit()
 
@@ -134,13 +136,28 @@ def test_two_triggers_for_one_day_coalesce_and_two_days_do_not(db_session: Sessi
     db_session.commit()
 
     first = enqueue.enqueue_mart_refresh(
-        db_session, organization_id=ORG_1, bank_id=SAMPLE_BANK_ID, as_of=AS_OF, reason="a"
+        db_session,
+        organization_id=ORG_1,
+        bank_id=SAMPLE_BANK_ID,
+        as_of=AS_OF,
+        reason="a",
+        provenance=job_queue.system_provenance("test"),
     )
     second = enqueue.enqueue_mart_refresh(
-        db_session, organization_id=ORG_1, bank_id=SAMPLE_BANK_ID, as_of=AS_OF, reason="b"
+        db_session,
+        organization_id=ORG_1,
+        bank_id=SAMPLE_BANK_ID,
+        as_of=AS_OF,
+        reason="b",
+        provenance=job_queue.system_provenance("test"),
     )
     other = enqueue.enqueue_mart_refresh(
-        db_session, organization_id=ORG_1, bank_id=SAMPLE_BANK_ID, as_of=OTHER_AS_OF, reason="c"
+        db_session,
+        organization_id=ORG_1,
+        bank_id=SAMPLE_BANK_ID,
+        as_of=OTHER_AS_OF,
+        reason="c",
+        provenance=job_queue.system_provenance("test"),
     )
     db_session.commit()
 

@@ -9,7 +9,14 @@ from sqlalchemy import delete, select, update
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
-from app.core.authorization import DataScope, ModuleScope, RoleBundle, SensitivityScope
+from app.core.authorization import (
+    DataScope,
+    Module,
+    ModuleScope,
+    RoleBundle,
+    Sensitivity,
+    SensitivityScope,
+)
 from app.models import AuthorizationBinding, Bank, Notification, RegulatorySubmissionEvent
 from app.notifications.service import notifications, reporting_deadline_scan
 from app.reporting.schemas.packages import ReportingObligationRead
@@ -85,6 +92,8 @@ def return_notifications(db_client: TestClient, db_session: Session) -> dict[str
                     entity_type="regulatory_package",
                     entity_id=package_id,
                     recipient_user_id=recipient,
+                    module=Module.REGULATORY,
+                    sensitivity=Sensitivity.CONFIDENTIAL,
                 )
             result[key].update(
                 str(row.id)
@@ -114,6 +123,8 @@ def return_notifications(db_client: TestClient, db_session: Session) -> dict[str
             body="Hidden",
             entity_type=entity_type,
             entity_id=entity_id,
+            module=Module.REGULATORY,
+            sensitivity=Sensitivity.CONFIDENTIAL,
         )[0]
         result["hidden"].add(str(row.id))
     general = notifications.emit(
@@ -123,6 +134,8 @@ def return_notifications(db_client: TestClient, db_session: Session) -> dict[str
         severity="info",
         title="Account notice",
         body="General",
+        module=Module.REGULATORY,
+        sensitivity=Sensitivity.CONFIDENTIAL,
     )[0]
     result["general"] = {str(general.id)}
     db_session.commit()
