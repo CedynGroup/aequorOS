@@ -203,12 +203,18 @@ do not infer legal transitions solely from a column CHECK constraint.
 
 `tests/conftest.py` registers and loads Hypothesis profile `ci`: 25 examples,
 20 stateful steps, no wall-clock deadline, `derandomize=True`, `print_blob=True`.
-`HYPOTHESIS_PROFILE` may select an explicitly registered profile. There is no
-scheduled property-test CI job, so no unbounded or larger nightly profile is added.
-The filing, freeze, template and access-request database machines lower examples
-to 12 to bound persisted workflow setup and HTTP requests. The filing/freeze machines additionally build real computed
+`HYPOTHESIS_PROFILE` may select an explicitly registered profile. Per-PR and
+local runs keep bounded, reproducible budgets; the scheduled RLS-depth job
+(`.github/workflows/rls-depth.yml`) re-runs the three Postgres
+row-level-security property files at a larger budget by setting
+`AQS_RLS_PROPERTY_EXAMPLES` (per-PR budgets are unchanged, and no larger
+Hypothesis profile exists — an explicit `@settings(max_examples=...)` always
+beats a profile). The workflow header owns the measured runtime, cost estimate
+and failure-triage guidance. The filing, freeze, template and access-request database
+machines lower examples to 12 to bound persisted workflow setup and HTTP requests. The filing/freeze machines additionally build real computed
 positions and/or frozen reports. These retain 20 generated steps. The Postgres effective-access and reconciliation
-approval machines use 10 examples and 12 generated steps. Failure output
+approval machines default to 10 examples (overridden by `AQS_RLS_PROPERTY_EXAMPLES`)
+and retain 12 generated steps. Failure output
 contains a minimized command sequence and reproduction blob.
 
 The filing, freeze, template and access-request machine examples each own a
@@ -224,6 +230,22 @@ with FORCE RLS. Append-only governance rows remain until schema teardown.
 Setup runs in a Hypothesis initializer so failures still receive teardown. Refused
 commands roll back the request transaction before comparing persisted evidence,
 matching the API session boundary without discarding earlier committed actions.
+
+### Rule selection must be a function of the drawn choices
+
+A stateful rule's victim (which binding to revoke, which exception to decide)
+must be selected in dict insertion order — rule-execution order — as
+`_slot_pick` does for the effective-access and reconciliation machines. Selecting
+by uuid-string order over server-generated `uuid4` keys makes state evolution
+depend on unseeded randomness outside the choice sequence: Hypothesis's engine
+replays recorded choice prefixes across examples, and a replayed prefix whose
+precondition emptiness diverged draws a feature-flag boolean where an integer
+rule index was recorded, raising `FlakyStrategyDefinition`. The observed flake
+frequency increased with the example budget: a no-database counterfactual machine showed 0/40 flakes at 10 examples versus
+15/40 at 200 with uuid ordering, and 0/40 with insertion ordering at every
+budget. Zero observed failures at the smaller budget does not establish
+stability. `tests/db/test_machine_slot_selection.py` pins the selection
+semantics.
 
 ## Defects retained as regression examples
 

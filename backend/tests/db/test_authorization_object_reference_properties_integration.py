@@ -90,6 +90,12 @@ pytestmark = pytest.mark.skipif(
     reason="TEST_DATABASE_URL is required for Postgres object-reference authorization properties.",
 )
 
+# Per-run authority-combination exploration depth. Local and per-PR runs keep
+# the default; the scheduled RLS-depth job (`.github/workflows/rls-depth.yml`)
+# raises it through ``AQS_RLS_PROPERTY_EXAMPLES``. A malformed override fails
+# at import instead of silently shrinking the budget.
+_PROPERTY_EXAMPLES = int(os.environ.get("AQS_RLS_PROPERTY_EXAMPLES", "15"))
+
 _GENERATED_BUNDLES = (
     RoleBundle.VIEWER,
     RoleBundle.AUDITOR,
@@ -316,7 +322,7 @@ def test_generated_callers_never_reach_foreign_objects(
     app, engine, tenants = object_reference_sweep
     routes = object_routes(app)
 
-    @settings(max_examples=15, deadline=None)
+    @settings(max_examples=_PROPERTY_EXAMPLES, deadline=None)
     @given(caller=_CALLER)
     def property_check(caller: tuple[int, tuple[str, ...], list[BindingSpec], Layout]) -> None:
         user_slot, roles, specs, layout = caller
