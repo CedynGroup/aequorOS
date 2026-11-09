@@ -15,6 +15,10 @@ MINIO_RELEASE=RELEASE.2025-09-07T16-13-09Z
 MINIO_SHA256=7c5bd8512c6e966455b1d198209358b2d191c77a83ab377c4073281065fb855f
 OPENBAO_VERSION=v2.6.1
 OPENBAO_SHA256=ca8d836eb3a5c80407e45e762300b64e7138c419e78826955f2e4ba4ce6d8a6b
+# Same version as .no-mistakes.yaml pins; the release publishes no checksum, so this
+# hash pins the tarball that was reviewed when the version was pinned (re-pin both on a bump).
+NO_MISTAKES_VERSION=v1.106.1
+NO_MISTAKES_SHA256=fbf131356a278623a509b6b50ecb39c5375b1a82e7dcfc48e42d10e761416d1e
 
 mkdir -p "$T/minio" "$T/openbao"
 
@@ -61,6 +65,15 @@ if [ ! -x "$T/openbao/bao" ]; then
   fetch "https://github.com/openbao/openbao/releases/download/$OPENBAO_VERSION/openbao_${OPENBAO_VERSION#v}_linux_amd64.tar.gz" "$OPENBAO_SHA256" "$T/openbao/openbao.tar.gz"
   tar -xzf "$T/openbao/openbao.tar.gz" -C "$T/openbao" bao
 fi
+
+# no-mistakes: installed only (never run here); `no-mistakes init` stays a per-repository choice.
+if [ ! -x /opt/no-mistakes/no-mistakes ]; then
+  mkdir -p /opt/no-mistakes
+  fetch "https://github.com/kunchenguid/no-mistakes/releases/download/$NO_MISTAKES_VERSION/no-mistakes-$NO_MISTAKES_VERSION-linux-amd64.tar.gz" "$NO_MISTAKES_SHA256" /opt/no-mistakes/no-mistakes.tar.gz
+  tar -xzf /opt/no-mistakes/no-mistakes.tar.gz --no-same-owner -C /opt/no-mistakes no-mistakes
+  chmod 755 /opt/no-mistakes/no-mistakes
+fi
+ln -sf /opt/no-mistakes/no-mistakes /usr/local/bin/no-mistakes
 
 # initdb refuses root, so services and Playwright run as this user.
 id aqs >/dev/null 2>&1 || useradd -m -s /bin/bash aqs
