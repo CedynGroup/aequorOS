@@ -320,9 +320,11 @@ def test_ranking_orders_by_wasted_minutes_then_count() -> None:
 
 def test_per_event_rates() -> None:
     events = [
-        event("flake:A", event="merge_group"),
-        event("flake:A", event="merge_group"),
-        event("flake:A", event="pull_request"),
+        event("flake:A", event="merge_group", run_id=41),
+        event("flake:A", event="merge_group", run_id=42),
+        # A run that failed the signature twice counts once in the rate.
+        event("flake:A", event="merge_group", run_id=41),
+        event("flake:A", event="pull_request", run_id=43),
     ]
     denominators = {
         ("Risk Service CI", "merge_group"): 64,
@@ -330,8 +332,13 @@ def test_per_event_rates() -> None:
         ("Risk Service CI", "push"): 36,
     }
     row = flake_report.build_ranking(events, denominators)[0]
-    assert row["event_counts"] == {"merge_group": 2, "pull_request": 1}
+    assert row["event_counts"] == {"merge_group": 3, "pull_request": 1}
     assert row["event_rates"]["merge_group"] == {"failed": 2, "runs": 64, "rate": 0.0312}
+    assert row["event_rates"]["pull_request"] == {
+        "failed": 1,
+        "runs": 100,
+        "rate": 0.01,
+    }
     assert row["event_rates"]["push"] == {"failed": 0, "runs": 36, "rate": 0.0}
 
 

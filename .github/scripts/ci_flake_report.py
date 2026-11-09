@@ -441,8 +441,10 @@ def build_ranking(
             for event_type, count in rates_denominators_by_workflow[workflow].items():
                 rates_denominators[event_type] += count
         event_counts: Counter[str] = Counter()
+        failed_runs_by_event: dict[str, set[int]] = defaultdict(set)
         for event in signature_events:
             event_counts[event.event] += 1
+            failed_runs_by_event[event.event].add(event.run_id)
         rerun_events = [event for event in signature_events if event.rerun]
         branches = sorted({event.branch for event in signature_events})
         minutes = sum(event.minutes for event in signature_events)
@@ -468,11 +470,15 @@ def build_ranking(
                 "workflows": sorted(row_workflows),
                 "event_counts": dict(sorted(event_counts.items())),
                 "event_rates": {
+                    # Rate numerator: distinct runs that saw the failure
+                    # (a run failing the signature in two attempts or two
+                    # jobs counts once against its runs).
                     event_type: {
-                        "failed": event_counts.get(event_type, 0),
+                        "failed": len(failed_runs_by_event.get(event_type, ())),
                         "runs": rates_denominators.get(event_type, 0),
                         "rate": round(
-                            event_counts.get(event_type, 0) / rates_denominators[event_type],
+                            len(failed_runs_by_event.get(event_type, ()))
+                            / rates_denominators[event_type],
                             4,
                         )
                         if rates_denominators.get(event_type)
@@ -1095,7 +1101,8 @@ def collect_report_data(
 
 def cmd_report(args: argparse.Namespace) -> int:
     cache_dir = Path(args.cache_dir)
-    cache_dir.mkdir(parents=True, exist_ok=True)
+    # Private: the cache is read back trusting earlier runs of this script.
+    cache_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
     workflow_files = args.workflows.split(",") if args.workflows else list(WORKFLOW_FILES)
     since = args.since or (datetime.now(UTC) - timedelta(days=90)).strftime("%Y-%m-%d")
     commands = (
