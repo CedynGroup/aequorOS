@@ -2060,13 +2060,15 @@ def list_enterprise_stress_runs(
     (a failed attempt carries no Appendix II payload to summarise).
     """
     bank = _get_bank_or_404(db, ctx, bank_id)
+    # The list summaries carry stressed CAR and the capital gap, so the list
+    # matches latest/detail at confidential (W5); aggregated readers lose it.
     scoped_authorization.require_resolved_bank_permission(
         db,
         ctx,
         bank,
         permission=Permission.VIEW,
         module=Module.RISK,
-        sensitivity=Sensitivity.AGGREGATED,
+        sensitivity=Sensitivity.CONFIDENTIAL,
         surface="list_enterprise_stress_runs",
     )
     stmt = (

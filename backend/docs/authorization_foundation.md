@@ -964,9 +964,9 @@ Shared live summary, alerts, snapshots and window analytics also gate capital
 Reconciliation amounts require at least one whole-institution engine view.
 Generic regulatory-run lists/details also gate Capital, Credit and enterprise
 stress under their module authorities. Direct enterprise-stress history,
-latest and detail reads require RISK/aggregated (history) or RISK/confidential
-(detail and execution response), with whole-institution coverage. Execution
-authority follows the [Stress rollout contract](stress_enforcement_rollout.md).
+latest and detail reads require RISK/confidential VIEW, with whole-institution
+coverage (the history summaries carry stressed CAR and the capital gap).
+Execution authority follows the [Stress rollout contract](stress_enforcement_rollout.md).
 This closes the parallel read path that otherwise disclosed capital stress
 outcomes independently of the FX projection. This is a denial-only access change;
 no bindings are backfilled. Run
