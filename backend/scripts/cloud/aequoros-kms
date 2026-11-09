@@ -8,7 +8,7 @@ case "${1:-}" in
   start)
     command -v docker >/dev/null || { echo "aequoros-kms needs the Docker client; run backend/scripts/cloud/setup.sh" >&2; exit 1; }
     if ! docker info >/dev/null 2>&1; then
-      command -v dockerd >/dev/null || { echo "No reachable Docker daemon and dockerd is not installed; run backend/scripts/cloud/setup.sh or mount a Docker socket" >&2; exit 1; }
+      command -v dockerd >/dev/null || { echo "No reachable Docker daemon and dockerd is not installed; run backend/scripts/cloud/setup.sh or mount a Docker socket (with host networking)" >&2; exit 1; }
       nohup dockerd >/var/log/dockerd.log 2>&1 </dev/null &
       for _ in $(seq 1 30); do docker info >/dev/null 2>&1 && break; sleep 1; done
       docker info >/dev/null 2>&1 || { echo "dockerd did not start (see /var/log/dockerd.log); it needs a VM or a privileged container" >&2; exit 1; }
@@ -16,7 +16,7 @@ case "${1:-}" in
     docker start risk-kms >/dev/null 2>&1 || docker run -d --name risk-kms -e KMS_REGION=us-east-1 \
       -e KMS_ACCOUNT_ID=111122223333 -v aequoros-kms-data:/data -p 127.0.0.1:18080:8080 "$IMG" >/dev/null
     for _ in $(seq 1 30); do curl -s -o /dev/null http://127.0.0.1:18080 && exit 0; sleep 1; done
-    echo "KMS emulator did not become reachable" >&2; exit 1 ;;
+    echo "KMS emulator did not become reachable at 127.0.0.1:18080. With a Docker socket mounted from the host, this container must share the host network namespace, because the port is published on the host's loopback." >&2; exit 1 ;;
   stop) docker rm -f risk-kms >/dev/null 2>&1 || true ;;
   *) echo "usage: aequoros-kms start|stop" >&2; exit 2 ;;
 esac

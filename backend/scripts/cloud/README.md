@@ -21,7 +21,7 @@ the wrappers below into `/usr/local/bin`. The test user `aqs` exists because `in
 
 `aequoros-kms` needs a Docker daemon: `setup.sh` installs `docker.io` when Docker is missing, but `dockerd`
 only starts in a VM or a privileged container. Elsewhere the command stops with that reason, and the
-Postgres, MinIO, OpenBao and dashboard commands keep working without it.
+Postgres, MinIO, OpenBao and dashboard commands keep working without it. A Docker socket mounted from the host also works, but the container then needs the host network namespace, because the emulator's port is published on the host's loopback.
 
 Pass `TEST_KMS_ENDPOINT_URL` (backend) or `BANK_KMS_ENDPOINT_URL` (dashboard) as
 `http://127.0.0.1:18080` after `aequoros-kms start`. Set `AEQUOROS_ROOT` to another git worktree to
