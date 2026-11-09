@@ -3,6 +3,7 @@
 # Example: aequoros-dashboard-e2e --shard=1/4 --trace off. Set AEQUOROS_ROOT to target another worktree.
 set -euo pipefail
 . "$(dirname "$(readlink -f "$0")")/lib.sh"
+require_aqs_access
 D="$ROOT/backend/dashboard"
 install -d -o aqs -g aqs "$ROOT/.local-services" "$D/.next" "$D/.next-e2e" "$D/test-results" "$D/playwright-report" "$D/e2e/.tmp"
 chown aqs:aqs "$D" # Next writes next-env.d.ts here

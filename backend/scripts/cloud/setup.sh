@@ -67,13 +67,14 @@ if [ ! -x "$T/openbao/bao" ]; then
 fi
 
 # no-mistakes: installed only (never run here); `no-mistakes init` stays a per-repository choice.
-if [ ! -x /opt/no-mistakes/no-mistakes ]; then
-  mkdir -p /opt/no-mistakes
-  fetch "https://github.com/kunchenguid/no-mistakes/releases/download/$NO_MISTAKES_VERSION/no-mistakes-$NO_MISTAKES_VERSION-linux-amd64.tar.gz" "$NO_MISTAKES_SHA256" /opt/no-mistakes/no-mistakes.tar.gz
-  tar -xzf /opt/no-mistakes/no-mistakes.tar.gz --no-same-owner -C /opt/no-mistakes no-mistakes
-  chmod 755 /opt/no-mistakes/no-mistakes
+NM_DIR="/opt/no-mistakes/$NO_MISTAKES_VERSION"
+if [ ! -x "$NM_DIR/no-mistakes" ]; then
+  mkdir -p "$NM_DIR"
+  fetch "https://github.com/kunchenguid/no-mistakes/releases/download/$NO_MISTAKES_VERSION/no-mistakes-$NO_MISTAKES_VERSION-linux-amd64.tar.gz" "$NO_MISTAKES_SHA256" "$NM_DIR/no-mistakes.tar.gz"
+  tar -xzf "$NM_DIR/no-mistakes.tar.gz" --no-same-owner -C "$NM_DIR" no-mistakes
+  chmod 755 "$NM_DIR/no-mistakes"
 fi
-ln -sf /opt/no-mistakes/no-mistakes /usr/local/bin/no-mistakes
+ln -sfn "$NM_DIR/no-mistakes" /usr/local/bin/no-mistakes
 
 # initdb refuses root, so services and Playwright run as this user.
 id aqs >/dev/null 2>&1 || useradd -m -s /bin/bash aqs
@@ -88,6 +89,8 @@ fi
 (cd "$ROOT/backend/dashboard" && PATH="$(cat "$T/toolpath")" PLAYWRIGHT_BROWSERS_PATH=/opt/pw-dashboard \
   node node_modules/@playwright/test/cli.js install --with-deps chromium)
 chmod -R a+rX /opt/pw-dashboard
+
+runuser -u aqs -- test -x "$ROOT/backend" || echo "WARNING: user aqs cannot reach $ROOT, so the aequoros-* wrappers will fail. Use a checkout outside /root or run: chmod o+x each directory on the path." >&2
 
 for wrapper in aequoros-services aequoros-dashboard-e2e aequoros-kms aequoros-openbao; do
   ln -sf "$HERE/$wrapper" "/usr/local/bin/$wrapper"

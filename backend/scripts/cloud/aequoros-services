@@ -4,5 +4,6 @@
 # Set AEQUOROS_ROOT to target another worktree.
 set -euo pipefail
 . "$(dirname "$(readlink -f "$0")")/lib.sh"
+require_aqs_access
 install -d -o aqs -g aqs "$ROOT/.local-services"
 as_aqs bash -c 'cd "$0/backend" && exec .venv/bin/python scripts/local_services.py run "$@"' "$ROOT" "$@"

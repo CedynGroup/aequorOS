@@ -9,3 +9,11 @@ as_aqs() {
     AQS_POSTGRES_BIN=/usr/lib/postgresql/17/bin AQS_OPENBAO_BIN="$T/openbao/bao" \
     AQS_LOCAL_SERVICES=native PYTHONDONTWRITEBYTECODE=1 SSL_CERT_FILE="$T/ca-bundle.crt" NODE_EXTRA_CA_CERTS="$T/ca-bundle.crt" "$@"
 }
+
+# Fail early with the cause when the test user cannot reach the checkout (for example under /root).
+require_aqs_access() {
+  runuser -u aqs -- test -x "$ROOT/backend" || {
+    echo "User aqs cannot reach $ROOT. Use a checkout outside /root, or run chmod o+x on each directory on its path." >&2
+    exit 1
+  }
+}

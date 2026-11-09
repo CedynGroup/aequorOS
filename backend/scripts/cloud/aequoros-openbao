@@ -5,7 +5,7 @@ set -euo pipefail
 . "$(dirname "$(readlink -f "$0")")/lib.sh"
 case "${1:-}" in
   start)
-    if ! pgrep -f "^$T/openbao/bao server -dev" >/dev/null; then
+    if ! BAO_ADDR=http://127.0.0.1:8200 "$T/openbao/bao" status >/dev/null 2>&1; then
       # setsid -f is an external command, so no saved copy of our stdout stays open and `$(...)` can return.
       setsid -f bash -c '. "$(dirname "$(readlink -f "$0")")/lib.sh"
         as_aqs env BAO_DEV_ROOT_TOKEN_ID=root "$T/openbao/bao" server -dev -dev-listen-address=127.0.0.1:8200' "$0" \
@@ -14,6 +14,6 @@ case "${1:-}" in
     for _ in $(seq 1 30); do BAO_ADDR=http://127.0.0.1:8200 "$T/openbao/bao" status >/dev/null 2>&1 && break; sleep 1; done
     BAO_ADDR=http://127.0.0.1:8200 "$T/openbao/bao" status >/dev/null
     echo "export OPENBAO_TEST_ADDR=http://127.0.0.1:8200 OPENBAO_TEST_TOKEN=root" ;;
-  stop) pkill -f "^$T/openbao/bao server -dev" || true ;;
+  stop) pkill -f "^$T/openbao/bao server -dev -dev-listen-address=127.0.0.1:8200" || true ;;
   *) echo "usage: aequoros-openbao start|stop" >&2; exit 2 ;;
 esac
