@@ -13,7 +13,7 @@ plus per-module daily aggregates over the ``LiveMetricSnapshot`` ladder.
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Sequence
 from datetime import date
 from decimal import Decimal, InvalidOperation
 
@@ -36,9 +36,7 @@ from app.capital.public import (
 from app.capital.public import (
     run_metrics as _capital_run_metrics,
 )
-from app.core.authorization import Module, Permission, Sensitivity
 from app.domain.authority.results import Computed
-from app.identity import public as scoped_authorization
 from app.identity.public import Bank
 from app.liquidity.schemas.window_analytics import (
     WindowAnalyticsRead,
@@ -60,7 +58,7 @@ from app.liquidity.service.regulatory_liquidity import (
 from app.liquidity.service.regulatory_liquidity import (
     _scalar_metrics as _liquidity_run_metrics,  # noqa: PLC2701 - dashboard-trend parity
 )
-from app.live.public import BankReportingPeriod, LiveMetricSnapshot
+from app.live.public import BankReportingPeriod, LiveMetricSnapshot, live_access
 from app.stress.service.stress_scenarios import _get_bank_or_404  # noqa: PLC2701 - shared guard
 
 _MAX_WINDOW_MONTHS = 36
@@ -92,22 +90,6 @@ _PRIMARY_METRIC_KEY: dict[str, str] = {
     "forecast": "year5_car_pct",
 }
 
-#: Daily-snapshot modules served only to a principal holding an exact aggregated
-#: ``view`` binding on the engine's module, filtered in SQL before aggregation.
-#: This list stays identical to
-#: ``live_view._GATED_ENGINE_MODULES`` so the two surfaces cannot disagree about
-#: who may read an engine. It must only ever grow.
-_GATED_ENGINE_MODULES: tuple[tuple[str, Module], ...] = (
-    ("liquidity", Module.LIQUIDITY),
-    ("capital", Module.CAPITAL),
-    ("rating", Module.MARKETS),
-    ("credit", Module.CREDIT),
-    ("irr", Module.IRRBB),
-    ("fx", Module.FX),
-    ("ftp", Module.FTP),
-    ("forecast", Module.FORECASTING),
-)
-
 
 def compute_window(
     db: Session,
@@ -120,22 +102,15 @@ def compute_window(
     """Ratio series + window statistics + daily aggregates for [start, end]."""
     bank = _get_bank_or_404(db, ctx, bank_id)
     _validate_window(start_date, end_date)
-    allowed: dict[str, bool] = {}
-    for engine, module in _GATED_ENGINE_MODULES:
-        decision = scoped_authorization.evaluate_bank_permission(
-            db,
-            ctx,
-            bank,
-            permission=Permission.VIEW,
-            module=module,
-            sensitivity=Sensitivity.AGGREGATED,
-            surface="window_analytics",
-        )
-        allowed[engine] = decision is not None and decision.allowed
+    # The one closed engine-to-module map decides what this caller may read.
+    # A positive include list hides new or unknown modules by default.
+    allowed = live_access.allowed_modules(
+        db, ctx, bank, tuple(live_access.FRESHNESS_VIEW_MODULES), surface="window_analytics"
+    )
     periods = _periods_in_window(db, ctx, bank, start_date, end_date)
     ratios = [
-        *(_liquidity_series(db, ctx, bank, periods) if allowed["liquidity"] else []),
-        *(_capital_series(db, ctx, bank, periods) if allowed["capital"] else []),
+        *(_liquidity_series(db, ctx, bank, periods) if "liquidity" in allowed else []),
+        *(_capital_series(db, ctx, bank, periods) if "capital" in allowed else []),
     ]
     return WindowAnalyticsRead(
         bank_id=bank.id,
@@ -283,20 +258,20 @@ def _ratio_stat(
     ]
 
 
-def _daily_stats(  # noqa: PLR0913 - explicit tenant, date window, and authorization decision
+def _daily_stats(  # noqa: PLR0913 - explicit tenant, date window, and authorization scope
     db: Session,
     ctx: TenantContext,
     bank: Bank,
     start_date: date,
     end_date: date,
     *,
-    allowed: Mapping[str, bool],
+    allowed: Sequence[str],
 ) -> list[WindowDailyStatRead]:
-    """``allowed`` carries one verdict per gated engine (``_GATED_ENGINE_MODULES``).
+    """``allowed`` is the caller's permitted-module list from ``live_access``.
 
-    A gated engine absent from ``allowed`` is excluded: the gate list and the
-    verdicts come from the same tuple, so a missing key can only mean the
-    caller skipped the evaluation, and that must not read as permission.
+    The positive include filters snapshots in SQL: a module absent from
+    ``allowed`` contributes no rows, and an empty list matches none at all —
+    permission can never arrive by skipping an evaluation.
     """
     query = (
         select(LiveMetricSnapshot)
@@ -305,12 +280,10 @@ def _daily_stats(  # noqa: PLR0913 - explicit tenant, date window, and authoriza
             LiveMetricSnapshot.bank_id == bank.id,
             LiveMetricSnapshot.snapshot_date >= start_date,
             LiveMetricSnapshot.snapshot_date <= end_date,
+            LiveMetricSnapshot.module.in_(allowed),
         )
         .order_by(LiveMetricSnapshot.snapshot_date)
     )
-    for engine, _module in _GATED_ENGINE_MODULES:
-        if not allowed.get(engine, False):
-            query = query.where(LiveMetricSnapshot.module != engine)
     values_by_module: dict[str, list[Decimal]] = {}
     for row in db.scalars(query):
         key = _PRIMARY_METRIC_KEY.get(row.module)

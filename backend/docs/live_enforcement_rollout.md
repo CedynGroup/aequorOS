@@ -22,9 +22,11 @@ layer is explicitly permitted by the route-authorization census basis
 
 ## Mapping authority
 
-`FRESHNESS_VIEW_MODULES` in `app/live/service/live_access.py` owns the exact
-freshness-to-authorization module mapping. It matches the live summary's
-`_GATED_ENGINE_MODULES`, including MARKETS authority for implied ratings.
+`FRESHNESS_VIEW_MODULES` in `app/live/service/live_access.py` is the one closed
+engine-to-authorization module mapping for every live read surface — freshness,
+live summary, alerts, window analytics and the snapshot ladder (whose service
+gate resolves each requested module through `live_access.module_for`). It
+includes MARKETS authority for implied ratings.
 `test_mapping_covers_every_freshness_module` in
 `backend/tests/live/service/test_live_authorization.py` checks coverage of the
 freshness module vocabulary. A new authorization enum value requires a

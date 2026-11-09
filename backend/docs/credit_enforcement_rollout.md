@@ -109,10 +109,11 @@ the intended one.
 
 The gate is the same one the other engines use: `scoped_authorization.evaluate_bank_permission`
 per engine with `Permission.VIEW`, `Sensitivity.AGGREGATED`, evaluated against
-the resolved bank. Each surface names its gate list in one tuple
-(`_GATED_ENGINE_MODULES` in `app/live/service/{live_view,alerts}.py` and
-`app/liquidity/service/window_analytics.py`); `tests/architecture/test_credit_module.py` pins that
-`("credit", Module.CREDIT)` is in every one of them.
+the resolved bank. Every surface reads its permitted-module set from the one
+closed map (`live_access.FRESHNESS_VIEW_MODULES` in
+`app/live/service/live_access.py`, applied by `live_view`, `alerts`,
+`window_analytics` and the snapshot ladder's `live_access.module_for` gate);
+`tests/architecture/test_credit_module.py` pins that credit is in it.
 
 Shared-feed whole-institution enforcement, including the Capital and rating
 policies and reconciliation visibility, follows

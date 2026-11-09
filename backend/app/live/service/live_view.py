@@ -31,7 +31,7 @@ from app.live.schemas.live import (
     OfficialRunRequest,
     RefreshRequest,
 )
-from app.live.service import fact_derivation
+from app.live.service import fact_derivation, live_access
 from app.policy.domain.regulatory_instruments import forecast_status
 from app.policy.public import (
     forecast_legacy_thresholds,
@@ -48,20 +48,6 @@ _MODULE_ORDER = {
         ("liquidity", "capital", "credit", "irr", "fx", "ftp", "rating", "forecast")
     )
 }
-
-#: Live-engine rows the summary serves only to a principal holding an exact
-#: aggregated ``view`` binding on the engine's module.
-#: Every engine requires whole-institution coverage.
-_GATED_ENGINE_MODULES: tuple[tuple[str, Module], ...] = (
-    ("liquidity", Module.LIQUIDITY),
-    ("capital", Module.CAPITAL),
-    ("rating", Module.MARKETS),
-    ("credit", Module.CREDIT),
-    ("irr", Module.IRRBB),
-    ("fx", Module.FX),
-    ("ftp", Module.FTP),
-    ("forecast", Module.FORECASTING),
-)
 
 
 def get_live_summary(db: Session, ctx: TenantContext, bank_id: str) -> LiveSummaryRead:
@@ -92,27 +78,31 @@ def get_live_summary(db: Session, ctx: TenantContext, bank_id: str) -> LiveSumma
     """
     bank = _get_bank_or_404(db, ctx, bank_id)
     period = _latest_period(db, ctx, bank)
-    query = select(LiveMetric).where(
-        LiveMetric.organization_id == ctx.organization_id,
-        LiveMetric.bank_id == bank.id,
+    # The one closed engine-to-module map decides what this caller may read.
+    # A positive include list hides new or unknown modules by default; with
+    # nothing permitted the query matches no rows at all.
+    allowed = live_access.allowed_modules(
+        db, ctx, bank, tuple(live_access.FRESHNESS_VIEW_MODULES), surface="live_summary"
     )
-    any_whole_institution_view = False
-    for engine, module in _GATED_ENGINE_MODULES:
-        decision = scoped_authorization.evaluate_bank_permission(
-            db,
-            ctx,
-            bank,
-            permission=Permission.VIEW,
-            module=module,
-            sensitivity=Sensitivity.AGGREGATED,
-            surface="live_summary",
+    rows = list(
+        db.scalars(
+            select(LiveMetric).where(
+                LiveMetric.organization_id == ctx.organization_id,
+                LiveMetric.bank_id == bank.id,
+                LiveMetric.module.in_(allowed),
+            )
         )
-        if decision is None or not decision.allowed:
-            query = query.where(LiveMetric.module != engine)
-        else:
-            any_whole_institution_view = True
-    rows = list(db.scalars(query))
-    is_stale = _cache_is_behind_the_book(db, ctx, bank, {row.module: row for row in rows})
+    )
+    # The staleness probe reads bank-wide ingestion state; it only runs for a
+    # caller who may actually read something. A zero-module caller gets
+    # ``is_stale=False`` without the probe, so the payload carries no signal
+    # about data they cannot see.
+    is_stale = (
+        _cache_is_behind_the_book(db, ctx, bank, {row.module: row for row in rows})
+        if allowed
+        else False
+    )
+    any_whole_institution_view = bool(allowed)
     rows.sort(key=lambda row: _MODULE_ORDER.get(row.module, 99))
     liquidity_in_force = (
         rule_in_force(db, ctx, bank, "LCR-NSFR")
@@ -336,44 +326,40 @@ def _get_bank_or_404(db: Session, ctx: TenantContext, bank_id: str) -> Bank:
     return bank
 
 
-def list_live_snapshots(  # noqa: PLR0913 - query scope plus optional resolved bank
+def list_live_snapshots(
     db: Session,
     ctx: TenantContext,
     bank_id: str,
     *,
     module: str,
     days: int = 45,
-    resolved_bank: Bank | None = None,
 ) -> LiveSnapshotListRead:
     """The plane-2 daily ladder, oldest first, capped at ``days`` rows.
 
     Past days are end-of-day closes; today's row (when present) is the live
     edge. The series only has rows for days a refresh actually ran — gaps
     are honest, not zero-filled.
+
+    One service gate per request: the ``live_access`` map resolves the
+    module's authority, and an unknown name denies without ever being served
+    ungated. A foreign bank stays an opaque 404.
     """
-    bank = resolved_bank or _get_bank_or_404(db, ctx, bank_id)
-    # ``liquidity`` and ``irr`` are also resolved by the route dependency
-    # (``manage_live_engine.list_live_snapshots``); the others are gated here.
-    protected_module = {
-        "liquidity": Module.LIQUIDITY,
-        "capital": Module.CAPITAL,
-        "rating": Module.MARKETS,
-        "irr": Module.IRRBB,
-        "credit": Module.CREDIT,
-        "fx": Module.FX,
-        "ftp": Module.FTP,
-        "forecast": Module.FORECASTING,
-    }.get(module)
-    if protected_module is not None:
-        scoped_authorization.require_resolved_bank_permission(
-            db,
-            ctx,
-            bank,
-            permission=Permission.VIEW,
-            module=protected_module,
-            sensitivity=Sensitivity.AGGREGATED,
-            surface="live_snapshots",
+    bank = _get_bank_or_404(db, ctx, bank_id)
+    authorized_module = live_access.module_for(module)
+    if authorized_module is None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=scoped_authorization.DEFAULT_DENIAL_DETAIL,
         )
+    scoped_authorization.require_resolved_bank_permission(
+        db,
+        ctx,
+        bank,
+        permission=Permission.VIEW,
+        module=authorized_module,
+        sensitivity=Sensitivity.AGGREGATED,
+        surface="live_snapshots",
+    )
     rows = list(
         db.scalars(
             select(LiveMetricSnapshot)
