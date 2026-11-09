@@ -253,6 +253,56 @@ def test_merge_group_skipped_jobs_excluded() -> None:
     assert flake_report.same_sha_mixed_outcomes(runs, jobs_by_run) == []
 
 
+def test_fail_fail_pass_is_one_rerun_pass() -> None:
+    attempts = {
+        1: [job("Dashboard journeys shard 4/4", "failure", 20.0, 11)],
+        2: [job("Dashboard journeys shard 4/4", "failure", 20.0, 12)],
+        3: [job("Dashboard journeys shard 4/4", "success", 20.0, 13)],
+    }
+    passes = flake_report.compare_attempts(attempts)
+    assert len(passes) == 1
+    assert passes[0].failed_attempt == 1
+    assert passes[0].passed_attempt == 3
+
+
+def test_fail_pass_fail_later_failure_is_not_a_rerun() -> None:
+    run = flake_report.RunRecord(
+        run_id=7,
+        workflow="Dashboard Playwright journeys",
+        event="pull_request",
+        head_branch="feature/a",
+        head_sha="abc123",
+        run_attempt=3,
+        conclusion="failure",
+        created_at="2026-11-08T10:00:00Z",
+    )
+    failed_jobs = [
+        (run, 1, job("Dashboard journeys shard 4/4", "failure", 20.0, 21)),
+        (run, 2, job("Dashboard journeys shard 4/4", "success", 20.0, 22)),
+        (run, 3, job("Dashboard journeys shard 4/4", "failure", 20.0, 23)),
+    ]
+    rerun_passes = {
+        (7, 1, "Dashboard journeys shard 4/4"): flake_report.RerunPass(
+            failed_job=failed_jobs[0][2],
+            failed_attempt=1,
+            passed_attempt=2,
+            passed_minutes=20.0,
+        ),
+    }
+    signature = "playwright:tests/x.e2e.spec.ts"
+    findings_by_job = {
+        21: [flake_report.Finding("test", signature, ["t"])],
+        23: [flake_report.Finding("test", signature, ["t"])],
+    }
+    events = flake_report._build_events(failed_jobs, rerun_passes, set(), findings_by_job)
+    failures = [e for e in events if e.attempt != 2]
+    assert len(failures) == 2
+    by_attempt = {e.attempt: e for e in failures}
+    assert by_attempt[1].rerun is True
+    assert by_attempt[3].rerun is False
+    assert by_attempt[3].rerun_minutes == 0.0
+
+
 # --- ranking ------------------------------------------------------------------
 
 

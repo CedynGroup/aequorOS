@@ -290,7 +290,13 @@ def parse_runs(payload: dict[str, Any], workflow: str) -> list[RunRecord]:
 def compare_attempts(
     attempts: dict[int, list[JobRecord]],
 ) -> list[RerunPass]:
-    """Jobs that failed on one attempt and passed on a later attempt of the same run."""
+    """Jobs that failed and then passed on a later attempt of the same run.
+
+    One RerunPass per run job: the first failed attempt before the first
+    passing attempt. Later failures before that pass are additional lost
+    minutes but not additional rerun-only passes (a run that failed, failed
+    again and then passed needed one rerun, not two).
+    """
     passes: list[RerunPass] = []
     for name in {job.name for jobs in attempts.values() for job in jobs}:
         failed = [
@@ -307,17 +313,17 @@ def compare_attempts(
         ]
         if not failed or not passed:
             continue
+        first_fail = failed[0]
         first_pass = passed[0]
-        for failed_attempt, failed_job in failed:
-            if failed_attempt < first_pass[0]:
-                passes.append(
-                    RerunPass(
-                        failed_job=failed_job,
-                        failed_attempt=failed_attempt,
-                        passed_attempt=first_pass[0],
-                        passed_minutes=first_pass[1].minutes,
-                    )
+        if first_fail[0] < first_pass[0]:
+            passes.append(
+                RerunPass(
+                    failed_job=first_fail[1],
+                    failed_attempt=first_fail[0],
+                    passed_attempt=first_pass[0],
+                    passed_minutes=first_pass[1].minutes,
                 )
+            )
     return passes
 
 
@@ -1004,13 +1010,13 @@ def _failed_leaf_jobs(
 
 def _build_events(
     failed_jobs: list[tuple[RunRecord, int, JobRecord]],
-    rerun_passes: dict[tuple[int, str], RerunPass],
+    rerun_passes: dict[tuple[int, int, str], RerunPass],
     mixed_flags: set[tuple[int, str]],
     findings_by_job: dict[int, list[Finding]],
 ) -> list[FlakeEvent]:
     events: list[FlakeEvent] = []
     for run, attempt, job in failed_jobs:
-        rerun = rerun_passes.get((run.run_id, job.name))
+        rerun = rerun_passes.get((run.run_id, attempt, job.name))
         findings = findings_by_job.get(job.job_id, [])
         if not findings:
             findings = [Finding("unclassified", f"unclassified:{job.name}")]
@@ -1049,10 +1055,10 @@ def collect_report_data(
         options.repo, attempts_needed, options, log
     )
 
-    rerun_passes: dict[tuple[int, str], RerunPass] = {}
+    rerun_passes: dict[tuple[int, int, str], RerunPass] = {}
     for run_id, attempts in jobs_by_run_attempt.items():
         for rerun in compare_attempts(attempts):
-            rerun_passes[(run_id, rerun.failed_job.name)] = rerun
+            rerun_passes[(run_id, rerun.failed_attempt, rerun.failed_job.name)] = rerun
     mixed = same_sha_mixed_outcomes(all_runs, jobs_by_run)
     mixed_flags = {(outcome.failed_run_id, outcome.job_name) for outcome in mixed}
 
