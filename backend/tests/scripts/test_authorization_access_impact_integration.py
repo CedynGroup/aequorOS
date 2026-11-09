@@ -1136,6 +1136,7 @@ def test_the_report_names_live_refresh_and_mint_authority(db_session: Session) -
     recompute = _user(db_session, "recompute@impact.example", role="analyst")
     minter = _user(db_session, "minter@impact.example", role="analyst")
     desk = _user(db_session, "desk@impact.example", role="analyst")
+    branch_desk = _user(db_session, "branch@impact.example", role="analyst")
     db_session.commit()
 
     # The monitoring view alone: could refresh before this cutover, cannot after.
@@ -1203,6 +1204,51 @@ def test_the_report_names_live_refresh_and_mint_authority(db_session: Session) -
         module_scope=ModuleScope.REGULATORY,
         sensitivity_scope=SensitivityScope.RESTRICTED,
     )
+    # A branch-scoped CREDIT run beside whole-book run rows on every other
+    # planned module: Credit is the only module whose bindings may narrow to
+    # a branch, and the mint gate demands WHOLE-book run on every planned
+    # engine (require_resolved_bank_permission's whole-institution check), so
+    # the narrow row must not complete this user's mint sentence. The
+    # whole-book DATA run row DOES complete the refresh sentence.
+    for module_scope_value in (
+        ModuleScope.DATA,
+        ModuleScope.LIQUIDITY,
+        ModuleScope.CAPITAL,
+        ModuleScope.MARKETS,
+        ModuleScope.IRRBB,
+        ModuleScope.FX,
+        ModuleScope.FTP,
+        ModuleScope.FORECASTING,
+    ):
+        _grant(
+            db_session,
+            branch_desk,
+            RoleBundle.ANALYST,
+            institution_scope=InstitutionScope.INSTITUTION,
+            institution_id=BANK,
+            module_scope=module_scope_value,
+            sensitivity_scope=SensitivityScope.CONFIDENTIAL,
+        )
+    _grant(
+        db_session,
+        branch_desk,
+        RoleBundle.ANALYST,
+        institution_scope=InstitutionScope.INSTITUTION,
+        institution_id=BANK,
+        module_scope=ModuleScope.CREDIT,
+        sensitivity_scope=SensitivityScope.CONFIDENTIAL,
+        data_scope=DataScope.BRANCH,
+        data_scope_values=("branch-accra",),
+    )
+    _grant(
+        db_session,
+        branch_desk,
+        RoleBundle.VIEWER,
+        institution_scope=InstitutionScope.INSTITUTION,
+        institution_id=BANK,
+        module_scope=ModuleScope.REGULATORY,
+        sensitivity_scope=SensitivityScope.RESTRICTED,
+    )
     db_session.commit()
 
     rows = {row.email: row for row in build_report(db_session, organization_id=ORG)}
@@ -1211,6 +1257,11 @@ def test_the_report_names_live_refresh_and_mint_authority(db_session: Session) -
     assert rows["minter@impact.example"].live_refresh_institutions == [BANK, OTHER_BANK]
     assert rows["minter@impact.example"].official_mint_institutions == [BANK]
     assert rows["desk@impact.example"].official_mint_institutions == []
+    # The branch-scoped desk: a whole-book DATA run completes the refresh
+    # sentence, but the branch-narrowed CREDIT run does not complete the
+    # mint sentence — the projection matches the gates.
+    assert rows["branch@impact.example"].live_refresh_institutions == [BANK]
+    assert rows["branch@impact.example"].official_mint_institutions == []
     cells = _rendered_cells(list(rows.values()))
     assert cells["monitor@impact.example"]["refresh"] == "-"
     assert cells["recompute@impact.example"]["refresh"] == BANK

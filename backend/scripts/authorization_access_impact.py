@@ -356,6 +356,11 @@ def build_report(db: Session, *, organization_id: str) -> list[UserAccess]:
             entry.institution_id: {
                 (capability.module.value, capability.sensitivity.value, capability.permission.value)
                 for capability in entry.capabilities
+                # Both live-mutation gates demand WHOLE-book authority
+                # (require_resolved_bank_permission's whole-institution
+                # check), so a branch- or region-scoped run row is denied by
+                # the gate and must not count here.
+                if capability.data_scope.kind == "all"
             }
             for entry in projection.institution_capabilities
         }
