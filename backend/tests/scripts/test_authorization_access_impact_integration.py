@@ -9,6 +9,7 @@ import subprocess
 import sys
 from collections.abc import Generator
 from contextlib import contextmanager
+from dataclasses import asdict
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import cast
@@ -295,6 +296,23 @@ def _assert_configure_cutover(db: Session, owner: User, analyst: User) -> None:
         for row in before.existing_grants
     )
     assert all(not row.after.allowed for row in before.impacts)
+    local_routes = {
+        route.path.rsplit("/", 1)[-1]: route.storage_table
+        for route in CONFIGURE_ROUTES
+        if route.effect_scope == "bank_local"
+    }
+    assert local_routes == {
+        "liquidity-thresholds": "bank_liquidity_threshold",
+        "liquidity-haircuts": "bank_liquidity_haircut",
+    }
+    for row in before.impacts:
+        if row.path.rsplit("/", 1)[-1] in local_routes:
+            assert row.effect_scope == "bank_local"
+            assert row.storage_table == local_routes[row.path.rsplit("/", 1)[-1]]
+            assert row.affected_institution_ids == [row.institution_id]
+        else:
+            assert row.effect_scope is None and row.storage_table is None
+            assert row.affected_institution_ids == []
     analyst_impacts = [row for row in before.impacts if row.principal_id == str(analyst.id)]
     assert any(row.newly_denied for row in analyst_impacts if row.module == "data")
     assert all(not row.before.allowed for row in analyst_impacts if row.module == "liq")
@@ -479,9 +497,34 @@ def _assert_artifact_content(report: ConfigureReport, directory: Path) -> None:
     assert before["principals"] == after["principals"] == grants["principals"]
     assert before["outcomes"] != after["outcomes"]
     assert grants["existing_grants"] == report.to_dict()["existing_grants"]
+    assert before["routes"] == after["routes"] == grants["routes"]
+    for stage in (before, after):
+        expected = [
+            {
+                "organization_id": row.organization_id,
+                "principal_id": row.principal_id,
+                "principal_type": row.principal_type,
+                "method": row.method,
+                "path": row.path,
+                "institution_scope": row.institution_scope,
+                "institution_id": row.institution_id,
+                "module": row.module,
+                "effect_scope": row.effect_scope,
+                "storage_table": row.storage_table,
+                "affected_institution_ids": row.affected_institution_ids,
+                "sensitivity": row.sensitivity,
+                "permission": row.permission,
+                "eligibility": asdict(row.before if stage["stage"] == "before" else row.after),
+                "newly_denied": row.newly_denied,
+            }
+            for row in report.impacts
+        ]
+        assert stage["outcomes"] == expected
     required = grants["required_grants"]
     assert isinstance(required, list) and required
     assert "approval_required" in json.dumps(required)
+    assert "bank_liquidity_threshold" in json.dumps(required)
+    assert "bank_liquidity_haircut" in json.dumps(required)
     for path in directory.glob("*.json"):
         assert path.stat().st_mode & 0o777 == 0o600
         content = path.read_text()

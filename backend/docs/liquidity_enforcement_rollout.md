@@ -8,7 +8,8 @@ record. Do not copy production identities into this repository.
 No migration or application startup creates compatibility grants. A principal
 without one complete active row for the consumed institution, surface's module,
 sensitivity, and permission is denied immediately (403 unless the object-hiding
-404 contract below applies). This cutover requires no new migration.
+404 contract below applies). The original #165 binding cutover required no new
+migration; the later bank-local register cutover requires the migrations below.
 
 ## Affected authority
 
@@ -22,6 +23,7 @@ sensitivity, and permission is denied immediately (403 unless the object-hiding
 | Create a CFP draft, custom scenario, or saved analysis                                                                                                     | LIQ / `confidential` / `create`                                                       |
 | Update a CFP draft or custom scenario; archive a scenario; delete a saved analysis                                                                         | LIQ / `confidential` / `edit`                                                         |
 | Approve, activate, or de-escalate a CFP                                                                                                                    | LIQ / `confidential` / `approve`, with maker-checker still a global veto for approval |
+| Liquidity threshold, haircut, and EWI register PUTs | LIQ / `restricted` / `configure`, evaluated for the exact target bank before any mutation |
 
 Regulatory-run lists remove unauthorized LIQ rows before total counts, offsets,
 and limits. Live summaries omit unauthorized Liquidity metrics; alerts omit
@@ -56,13 +58,128 @@ EWI reads, so a verified act-as-examiner session bound to the bank in the path
 reads those three and no other Liquidity surface
 (`app/core/examiner.py`, `examiner_evidence_enforcement_rollout.md`).
 
-The EWI, Liquidity threshold, and Liquidity haircut PUT routes remain on their
-existing configuration gate until issue #184. Scheduled internal live
+Issue #184 replaces the held Approver gate on EWI, Liquidity threshold, and
+Liquidity haircut PUTs with service-enforced scoped configuration authority.
+Analyst, Approver, Account Admin, and Owner bindings do not convey `configure`;
+no existing principal receives a compatibility grant. A Configurator can PUT
+without `view`. GET still requires a separate LIQ/confidential view grant.
+The existing effective-dated history, Board evidence, audit and refresh triggers
+are preserved. Denial precedes register reads, generation
+closure, parameter writes, success audit, and job enqueue. Threshold and haircut
+storage and effect scope are now the exact bank named by the request, including
+all history and generation closure. No shared-register fallback exists.
+Scheduled internal live
 computation does not impersonate a user and receives no binding; this cutover
 checks tenant-facing entry points. Scheduled official-run authority is owned by
 the [FX queued-run contract](fx_enforcement_rollout.md#queued-and-scheduled-official-runs).
 Capital, Credit, and RISK-owned enterprise-stress backend
 enforcement remain outside this cutover.
+
+### Configuration response contract (D3)
+
+Threshold and haircut PUTs return HTTP 200 write acknowledgements, **not**
+registers, for every caller, including callers with separate read authority.
+`LiquidityThresholdWriteAcknowledgement` and
+`LiquidityHaircutWriteAcknowledgement` contain the acting `bank_id`, submitted
+`effective_from`, `approved_by`, `notes`, server `approval_timestamp`, and
+`written` entries containing only the newly created row `id` and stored
+code/value for this write (haircut asset classes are normalized). Percentages
+are refreshed from the database, not necessarily exact echoes of the input:
+PostgreSQL stores and returns both percentages rounded to six decimal places
+(for example, `95.1234567` becomes `95.123457`). Threshold acknowledgements
+also contain the submitted `institution_class`. Build these before commit from
+the request and newly written rows; return them only after commit succeeds.
+Never resolve the register or invoke a read function to construct a PUT response.
+No active register, defaults, untouched codes, prior generations, history,
+jurisdiction metadata or sibling-bank data is returned. EWI PUT already returns
+an empty HTTP 204 and retains that contract.
+
+This intentionally changes the two PUT response schemas. Regenerate the API
+client and deploy API/client consumers together. The dashboard ignores the
+acknowledgement and invalidates its existing authority-scoped read queries;
+displayed register values and history come only from the separately authorized
+GET, never the submitted value (which can differ from the resolved floor).
+Configure-only grants still permit writes but never GETs. No read grant is
+inferred or added. LIQ browser Edit controls require the selected bank's
+restricted `configure` capability. The threshold Edit control appears only
+after the register loads, so browser editing also needs separate read access;
+a configure-only grant permits API writes, not browser register editing.
+
+Generation-order conflicts still return HTTP 409, but their messages never
+include the stored generation's effective date or other read-protected policy
+metadata. This applies equally with and without a separate read grant.
+
+## Bank-local register deployment
+
+The D19 shared-write security finding is resolved by D20's bank-local storage,
+not by widening a Bank A grant to Bank B. `ParamLiquidityThreshold` maps to
+`bank_liquidity_threshold`; `ParamLiquidityHaircut` maps to
+`bank_liquidity_haircut`. Both keys include organization, bank, jurisdiction,
+parameter key and effective date (thresholds also include institution class).
+Composite bank/organization FKs and FORCE RLS retain tenant isolation.
+`param_liquidity_threshold` and `param_liquidity_haircut` remain immutable
+historical archives. Regulatory control-plane defaults and missing-policy
+refusals retain their existing contracts; an absent bank row never reads a
+sibling or archive row.
+
+Deploy in a maintenance window, using the migration-role/ownership preparation
+in [tamper-evident records](tamper_evident_records.md#required-deployment-follow-up):
+
+1. Pause tenant/staff register writes and bank provisioning/classification
+   changes; retain a recoverable database backup and dated impact inventory.
+   Stop **all old tenant APIs, operator APIs, workers and scheduled consumers**
+   before migrating. Do not run mixed old/new binaries or rely on rolling
+   restarts: old code targets archives that the migration freezes.
+2. Apply `202611040109`, then `202611040110` (and the deployment's complete
+   migration head). The first locks source/destination tables and bank/type
+   metadata while copying **every stored generation**, including closed and
+   future-effective history, to each existing matching bank. Matching uses the
+   source organization/jurisdiction and, for thresholds, the institution-type
+   registry's institution class. Stored values, effective windows, Board evidence,
+   notes and timestamps are preserved; destination row UUIDs are new. Unmatched
+   source rows remain archived; no speculative bank policy is invented.
+3. Before reopening traffic, compare each bank's copied current, historical and
+   future-effective values against its pre-migration effective register. Verify
+   source archives unchanged, bank FKs/RLS, archive write refusal, retained-row
+   protections and API/worker table privileges. Verify the migration created
+   **no bindings, identities, sessions or seeded financial facts**. New banks
+   do not inherit the archives; their officer must supply their own Board policy.
+4. Deploy the cutover build and restart **every** consumer listed below, including
+   long-lived workers and the staff operator API. Smoke-test independent A/B
+   reads/history, an A-only threshold and haircut write, sibling unchanged values
+   and history, denied writes without audit-success/job effects, and staff audit
+   attribution. Reopen traffic only after these checks pass. Approve any new
+   grants separately through normal administration; require reauthentication
+   after `authv` changes.
+
+**Rollback is not a merge policy.** `202611040109` downgrade compares the entire
+bank-local multiset with the expected archive expansion (excluding only fresh
+row UUIDs) under locks. Any divergence, including added/closed generations,
+changed metadata/timestamps or changed bank classification, refuses a lossy
+downgrade. `202611040110` only restores the prior audit-reader definitions.
+Do not deploy old binaries against a diverged database, disable the refusal,
+or collapse banks' Board decisions into shared rows. After divergence use a
+forward fix, or an explicitly approved full backup restoration with recovery
+and data-loss review. An unchanged rollback still requires stopped consumers
+and maintenance-window verification.
+
+### Reader, engine and audit cutover inventory
+
+| Consumer | Bank-local contract |
+| --- | --- |
+| `liquidity/service/liquidity_thresholds.py` | GET effective registers and full history; PUT closes only that bank's generations, records Board evidence and triggers only that bank's live refresh. |
+| `policy/service/params.py` and `policy/public.py` | `get_active_bank_params` uses complete organization/bank/jurisdiction/date scope. Generic active/prefetch helpers require `bank_id` for these models, including empty date sets. |
+| `liquidity/service/regulatory_liquidity.py` | Currency-mismatch limits resolve the run's bank; direct and batched/trend parameter loads retain bank scope. Live, inline and official paths share this seam. |
+| `reporting/service/le_generation.py` | LMT Table 1 floors and Table 9 haircut schedules read the report bank, including fallback schedules within that bank; sibling Board decisions cannot affect generated sections. |
+| `operator/services/inspector_reads.py`, `inspector_fix.py` | Staff inspection reads the local model; threshold fixes resolve an explicit bank (or refuse ambiguous multi-bank selection), mutate only it and retain staff audit. Organization-wide diagnostic lists do not imply shared write authority. |
+| `core/audit_attribution.py`, `operator/services/operator_views.py`, migration `202611040110` | New `bank_liquidity_threshold` / `bank_liquidity_haircut` audit subjects use the exact bank ID and reject contradictory scope details. Tenant audit readers, staff attribution, chain linkage and inspection context follow that owner. Historical `param_liquidity_*` audit types keep their original shared-history interpretation; no old audit record is rewritten. |
+
+Stored historical runs, input hashes and results remain immutable. Focused
+coverage in `tests/liquidity/api/test_bank_local_parameters_integration.py` proves sibling
+register/history, refresh, currency-policy and actual LMT result isolation;
+the database migration tests cover copy fidelity, RLS/ACLs, archive immutability,
+audit-reader ownership and guarded rollback. Real HTTP/browser evidence is
+additional deployment evidence, not a substitute for those regressions.
 
 ## Dashboard access
 
@@ -83,6 +200,15 @@ navigation follows
 The SDI Liquidity landing requires confidential view because it reads the SDI position.
 
 ## Deny-impact inventory
+
+For configuration cutover evidence, change to `backend/` from the repository
+root, then run
+`python -m scripts.authorization_configure_impact --organization OR-XXXXXXXX
+--output-dir /outside/repo/dated-configure-impact`, as described in
+[the configuration inventory contract](configurator_impact.md).
+Keep dated deny-impact and exact-grant artifacts outside the repository. The
+inventory covers human and machine principals; machine keys cannot use these
+interactive-human configuration endpoints even with a matching binding.
 
 Run this read-only query with a role that can see all organizations, banks,
 users, and bindings. It evaluates active human and machine principals without
@@ -156,7 +282,14 @@ authority AS (
                 AND b.sensitivity_scope IN ('confidential', 'all')
             ) FILTER (WHERE b.principal_type = 'human'),
             FALSE
-        ) AS may_approve
+        ) AS may_approve,
+        COALESCE(
+            bool_or(
+                b.role_bundle = 'configurator'
+                AND b.sensitivity_scope IN ('restricted', 'all')
+            ) FILTER (WHERE b.principal_type = 'human'),
+            FALSE
+        ) AS may_configure
     FROM principal_institutions AS p
     LEFT JOIN active_bindings AS b
       ON b.organization_id = p.organization_id
@@ -190,11 +323,12 @@ SELECT
     may_view_confidential,
     may_run_create_edit,
     may_approve,
+    may_configure,
     CASE
         WHEN principal_type = 'machine' THEN
             'denied: interactive human binding required'
         WHEN may_view_aggregated OR may_view_confidential
-             OR may_run_create_edit OR may_approve THEN
+             OR may_run_create_edit OR may_approve OR may_configure THEN
             'partially or fully allowed: compare flags with actual duties'
         ELSE
             'denied: no active exact LIQ binding'
@@ -219,6 +353,11 @@ families are revoked in the same transaction.
 | Read forecasts, CFP, thresholds, haircuts, SDI positions, scenario details, and full run snapshots | `human`          | `viewer` or institution-approved `auditor`/`analyst`/`approver` | `institution`       | exact `BK-*`     | `liq`          | `confidential`      |
 | Create runs and analyses; create/edit CFP drafts and scenario artifacts                            | `human`          | `analyst`                                                       | `institution`       | exact `BK-*`     | `liq`          | `confidential`      |
 | Approve, activate, and de-escalate CFPs                                                            | `human`          | `approver`                                                      | `institution`       | exact `BK-*`     | `liq`          | `confidential`      |
+| Configure Liquidity threshold, haircut, and EWI registers                                         | `human`          | `configurator`                                                  | `institution`       | exact `BK-*`     | `liq`          | `restricted`        |
+
+Configurator carries only `configure`, not `view`. Add the separate
+LIQ/confidential view row above only when the officer's confirmed duties also
+include reading the register; a configure-only officer can PUT without GET.
 
 If an institution explicitly approves coverage across all its banks, replace
 only `institution_scope` with `organization` and `institution_id` with `NULL`.

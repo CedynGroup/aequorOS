@@ -25,24 +25,30 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
+from app.core.authorization import Module, Permission, Sensitivity
 from app.db.base import utc_now
 from app.domain.authority.outcomes import OutcomeState, outcome
+from app.identity import public as scoped_authorization
 from app.identity.public import Bank
 from app.liquidity.schemas.liquidity_thresholds import (
     InstitutionClass,
     LiquidityHaircutRead,
     LiquidityHaircutScheduleRead,
     LiquidityHaircutUpdate,
+    LiquidityHaircutWriteAcknowledgement,
+    LiquidityHaircutWritten,
     LiquidityThresholdHistoryRead,
     LiquidityThresholdRead,
     LiquidityThresholdRegisterRead,
     LiquidityThresholdUpdate,
+    LiquidityThresholdWriteAcknowledgement,
+    LiquidityThresholdWritten,
 )
 from app.live.public import live_refresh_triggers
 from app.policy.public import (
     ParamLiquidityHaircut,
     ParamLiquidityThreshold,
-    get_active_params,
+    get_active_bank_params,
     jurisdictions,
     regulatory_parameters,
 )
@@ -133,8 +139,8 @@ def get_register(
     klass = cast(InstitutionClass, _resolve_institution_class(db, bank))
     active_rows = {
         (row.institution_class, row.threshold_code): row
-        for row in get_active_params(
-            db, ctx.organization_id, jurisdiction, ParamLiquidityThreshold, as_of
+        for row in get_active_bank_params(
+            db, ctx.organization_id, bank.id, jurisdiction, ParamLiquidityThreshold, as_of
         )
     }
     thresholds: list[LiquidityThresholdRead] = []
@@ -216,6 +222,7 @@ def get_register(
         select(ParamLiquidityThreshold)
         .where(
             ParamLiquidityThreshold.organization_id == ctx.organization_id,
+            ParamLiquidityThreshold.bank_id == bank.id,
             ParamLiquidityThreshold.jurisdiction_code == jurisdiction,
         )
         .order_by(
@@ -247,7 +254,7 @@ def get_register(
 
 def update_register(
     db: Session, ctx: TenantContext, bank_id: str, payload: LiquidityThresholdUpdate
-) -> LiquidityThresholdRegisterRead:
+) -> LiquidityThresholdWriteAcknowledgement:
     """Record a Board-approved threshold generation.
 
     Effective-dated, never destructive: open generations for the updated
@@ -257,6 +264,15 @@ def update_register(
     server-side). The write is audited; history keeps every generation.
     """
     bank = _get_bank_or_404(db, ctx, bank_id)
+    scoped_authorization.require_resolved_bank_permission(
+        db,
+        ctx,
+        bank,
+        permission=Permission.CONFIGURE,
+        module=Module.LIQUIDITY,
+        sensitivity=Sensitivity.RESTRICTED,
+        surface="liquidity_thresholds.update_register",
+    )
     jurisdiction = _jurisdiction(bank)
     if payload.institution_class not in _INSTITUTION_CLASSES:
         raise HTTPException(
@@ -299,6 +315,7 @@ def update_register(
         open_rows = db.scalars(
             select(ParamLiquidityThreshold).where(
                 ParamLiquidityThreshold.organization_id == ctx.organization_id,
+                ParamLiquidityThreshold.bank_id == bank.id,
                 ParamLiquidityThreshold.jurisdiction_code == jurisdiction,
                 ParamLiquidityThreshold.institution_class == payload.institution_class,
                 ParamLiquidityThreshold.threshold_code == code,
@@ -310,14 +327,15 @@ def update_register(
                 raise HTTPException(
                     status_code=status.HTTP_409_CONFLICT,
                     detail=(
-                        f"{code}: an open generation effective {row.effective_from} "
-                        "already starts on or after the requested effective date."
+                        f"{code}: an open generation already starts on or after "
+                        "the requested effective date."
                     ),
                 )
             previous_thresholds[row.threshold_code] = str(row.threshold_pct)
             row.effective_to = payload.effective_from
         created = ParamLiquidityThreshold(
             organization_id=ctx.organization_id,
+            bank_id=bank.id,
             jurisdiction_code=jurisdiction,
             institution_class=payload.institution_class,
             threshold_code=code,
@@ -336,7 +354,7 @@ def update_register(
         db,
         ctx,
         event_type="liquidity_thresholds.updated",
-        entity_type="param_liquidity_threshold",
+        entity_type="bank_liquidity_threshold",
         entity_id=bank.id,
         details={
             "institution_class": payload.institution_class,
@@ -350,14 +368,30 @@ def update_register(
             "reason": payload.reason,
         },
     )
-    live_refresh_triggers.enqueue_organization_change(
+    live_refresh_triggers.enqueue_bank_change(
         db,
         organization_id=ctx.organization_id,
-        jurisdiction_code=jurisdiction,
+        bank_id=bank.id,
         reason="liquidity threshold register updated",
     )
+    acknowledgement = LiquidityThresholdWriteAcknowledgement(
+        bank_id=bank.id,
+        institution_class=payload.institution_class,
+        effective_from=payload.effective_from,
+        approved_by=payload.approved_by,
+        approval_timestamp=now,
+        notes=payload.notes,
+        written=[
+            LiquidityThresholdWritten(
+                id=row.id,
+                threshold_code=row.threshold_code,
+                threshold_pct=row.threshold_pct,
+            )
+            for row in written
+        ],
+    )
     db.commit()
-    return get_register(db, ctx, bank_id, payload.effective_from)
+    return acknowledgement
 
 
 def get_haircut_schedule(
@@ -376,14 +410,15 @@ def get_haircut_schedule(
             approval_timestamp=row.approval_timestamp,
             notes=row.notes,
         )
-        for row in get_active_params(
-            db, ctx.organization_id, jurisdiction, ParamLiquidityHaircut, as_of
+        for row in get_active_bank_params(
+            db, ctx.organization_id, bank.id, jurisdiction, ParamLiquidityHaircut, as_of
         )
     ]
     history_rows = db.scalars(
         select(ParamLiquidityHaircut)
         .where(
             ParamLiquidityHaircut.organization_id == ctx.organization_id,
+            ParamLiquidityHaircut.bank_id == bank.id,
             ParamLiquidityHaircut.jurisdiction_code == jurisdiction,
         )
         .order_by(ParamLiquidityHaircut.asset_class, ParamLiquidityHaircut.effective_from.desc())
@@ -411,9 +446,18 @@ def get_haircut_schedule(
 
 def update_haircut_schedule(
     db: Session, ctx: TenantContext, bank_id: str, payload: LiquidityHaircutUpdate
-) -> LiquidityHaircutScheduleRead:
+) -> LiquidityHaircutWriteAcknowledgement:
     """Record a reviewed liquidity-value generation (LRMD ¶62(b) evidence)."""
     bank = _get_bank_or_404(db, ctx, bank_id)
+    scoped_authorization.require_resolved_bank_permission(
+        db,
+        ctx,
+        bank,
+        permission=Permission.CONFIGURE,
+        module=Module.LIQUIDITY,
+        sensitivity=Sensitivity.RESTRICTED,
+        surface="liquidity_thresholds.update_haircut_schedule",
+    )
     jurisdiction = _jurisdiction(bank)
     out_of_range = sorted(
         asset_class
@@ -434,6 +478,7 @@ def update_haircut_schedule(
         open_rows = db.scalars(
             select(ParamLiquidityHaircut).where(
                 ParamLiquidityHaircut.organization_id == ctx.organization_id,
+                ParamLiquidityHaircut.bank_id == bank.id,
                 ParamLiquidityHaircut.jurisdiction_code == jurisdiction,
                 ParamLiquidityHaircut.asset_class == normalized,
                 ParamLiquidityHaircut.effective_to.is_(None),
@@ -444,14 +489,15 @@ def update_haircut_schedule(
                 raise HTTPException(
                     status_code=status.HTTP_409_CONFLICT,
                     detail=(
-                        f"{normalized}: an open generation effective {row.effective_from} "
-                        "already starts on or after the requested effective date."
+                        f"{normalized}: an open generation already starts on or after "
+                        "the requested effective date."
                     ),
                 )
             previous_haircuts[row.asset_class] = str(row.haircut_pct)
             row.effective_to = payload.effective_from
         created = ParamLiquidityHaircut(
             organization_id=ctx.organization_id,
+            bank_id=bank.id,
             jurisdiction_code=jurisdiction,
             asset_class=normalized,
             haircut_pct=pct,
@@ -469,7 +515,7 @@ def update_haircut_schedule(
         db,
         ctx,
         event_type="liquidity_haircuts.updated",
-        entity_type="param_liquidity_haircut",
+        entity_type="bank_liquidity_haircut",
         entity_id=bank.id,
         details={
             "effective_from": payload.effective_from.isoformat(),
@@ -480,11 +526,26 @@ def update_haircut_schedule(
             "reason": payload.reason,
         },
     )
-    live_refresh_triggers.enqueue_organization_change(
+    live_refresh_triggers.enqueue_bank_change(
         db,
         organization_id=ctx.organization_id,
-        jurisdiction_code=jurisdiction,
+        bank_id=bank.id,
         reason="liquidity haircut schedule updated",
     )
+    acknowledgement = LiquidityHaircutWriteAcknowledgement(
+        bank_id=bank.id,
+        effective_from=payload.effective_from,
+        approved_by=payload.approved_by,
+        approval_timestamp=now,
+        notes=payload.notes,
+        written=[
+            LiquidityHaircutWritten(
+                id=row.id,
+                asset_class=row.asset_class,
+                haircut_pct=row.haircut_pct,
+            )
+            for row in written
+        ],
+    )
     db.commit()
-    return get_haircut_schedule(db, ctx, bank_id, payload.effective_from)
+    return acknowledgement

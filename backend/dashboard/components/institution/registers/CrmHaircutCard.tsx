@@ -32,13 +32,12 @@ import {
   textOrNull,
 } from "@/components/institution/shared";
 import {
-  EditRegisterAction,
   EvidenceFields,
   numericInputCls,
   parseDecimalInput,
   sameDecimal,
-  useApproverGate,
 } from "./common";
+import { EditRegisterAction, useApproverGate } from "./legacyCreditAccess";
 
 const viewColumns: Column<CrmHaircutRead>[] = [
   {

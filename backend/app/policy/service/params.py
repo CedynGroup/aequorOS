@@ -6,7 +6,10 @@ from datetime import date
 from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
-from app.policy.models.parameter_register import RegulatoryParameterMixin
+from app.policy.models.parameter_register import (
+    BankLiquidityParameterMixin,
+    RegulatoryParameterMixin,
+)
 
 
 @dataclass(frozen=True)
@@ -25,18 +28,22 @@ class PrefetchedActiveParams[ParamT: RegulatoryParameterMixin]:
         ]
 
 
-def get_active_params[ParamT: RegulatoryParameterMixin](
+def get_active_params[ParamT: RegulatoryParameterMixin](  # noqa: PLR0913 - complete tenant/bank resolution key
     session: Session,
     organization_id: str,
     jurisdiction_code: str,
     model: type[ParamT],
     as_of_date: date,
+    *,
+    bank_id: str | None = None,
 ) -> list[ParamT]:
     """Return parameter rows active on ``as_of_date`` for one tenant and jurisdiction.
 
     A row is active when ``effective_from <= as_of_date`` and ``effective_to`` is
     either null (open-ended) or strictly greater than ``as_of_date``.
     """
+    if issubclass(model, BankLiquidityParameterMixin) and not bank_id:
+        raise ValueError("Bank-local liquidity parameters require bank_id.")
     statement = (
         select(model)
         .where(
@@ -47,15 +54,19 @@ def get_active_params[ParamT: RegulatoryParameterMixin](
         )
         .order_by(model.effective_from, model.id)
     )
+    if issubclass(model, BankLiquidityParameterMixin):
+        statement = statement.where(model.bank_id == bank_id)
     return list(session.scalars(statement))
 
 
-def prefetch_active_params[ParamT: RegulatoryParameterMixin](
+def prefetch_active_params[ParamT: RegulatoryParameterMixin](  # noqa: PLR0913 - complete tenant/bank resolution key
     session: Session,
     organization_id: str,
     jurisdiction_code: str,
     model: type[ParamT],
     as_of_dates: list[date],
+    *,
+    bank_id: str | None = None,
 ) -> PrefetchedActiveParams[ParamT]:
     """Load every generation that can be active on one of ``as_of_dates``.
 
@@ -63,6 +74,8 @@ def prefetch_active_params[ParamT: RegulatoryParameterMixin](
     effective-date window. ``active_on`` then applies the exact same date rule
     and ordering as :func:`get_active_params` for each dashboard trend point.
     """
+    if issubclass(model, BankLiquidityParameterMixin) and not bank_id:
+        raise ValueError("Bank-local liquidity parameters require bank_id.")
     if not as_of_dates:
         return PrefetchedActiveParams(())
     first, last = min(as_of_dates), max(as_of_dates)
@@ -76,4 +89,20 @@ def prefetch_active_params[ParamT: RegulatoryParameterMixin](
         )
         .order_by(model.effective_from, model.id)
     )
+    if issubclass(model, BankLiquidityParameterMixin):
+        statement = statement.where(model.bank_id == bank_id)
     return PrefetchedActiveParams(tuple(session.scalars(statement)))
+
+
+def get_active_bank_params[ParamT: BankLiquidityParameterMixin](  # noqa: PLR0913 - complete tenant/bank resolution key
+    session: Session,
+    organization_id: str,
+    bank_id: str,
+    jurisdiction_code: str,
+    model: type[ParamT],
+    as_of_date: date,
+) -> list[ParamT]:
+    """Resolve only this bank's effective liquidity policy; never use the archive."""
+    return get_active_params(
+        session, organization_id, jurisdiction_code, model, as_of_date, bank_id=bank_id
+    )

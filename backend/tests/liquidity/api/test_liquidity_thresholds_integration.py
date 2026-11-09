@@ -2,7 +2,7 @@
 
 The register resolves regulatory defaults until a Board generation exists,
 records generations effective-dated with approval evidence, keeps history,
-rejects unknown codes and non-positive floors, and gates writes at approver.
+rejects unknown codes and non-positive floors, and requires explicit configure.
 """
 
 from __future__ import annotations
@@ -12,6 +12,7 @@ from decimal import Decimal
 from fastapi.testclient import TestClient
 
 from app.liquidity.service.liquidity_thresholds import BANK_MINIMUM_PCT
+from tests.liquidity.configure_helpers import configure_headers
 from tests.support.helpers import ORG_2, headers
 from tests.support.ingestion_seeding import seed_bank
 
@@ -35,7 +36,7 @@ def test_board_generations_supersede_and_keep_history(db_client: TestClient) -> 
     bank_id = seed_bank(db_client)
     first = db_client.put(
         URL.format(bank_id=bank_id),
-        headers=headers(roles=("approver",)),
+        headers=configure_headers(bank_id),
         json={
             "effective_from": "2026-04-01",
             "approved_by": "Board minute 2026-14",
@@ -44,7 +45,11 @@ def test_board_generations_supersede_and_keep_history(db_client: TestClient) -> 
         },
     )
     assert first.status_code == 200, first.text
-    by_code = {row["threshold_code"]: row for row in first.json()["thresholds"]}
+    first_read = db_client.get(
+        URL.format(bank_id=bank_id) + "?as_of=2026-04-30", headers=headers()
+    )
+    assert first_read.status_code == 200, first_read.text
+    by_code = {row["threshold_code"]: row for row in first_read.json()["thresholds"]}
     assert by_code["narrow_to_volatile"]["source"] == "board_register"
     assert Decimal(by_code["narrow_to_volatile"]["threshold_pct"]) == Decimal("85")
     assert by_code["narrow_to_volatile"]["approved_by"] == "Board minute 2026-14"
@@ -53,7 +58,7 @@ def test_board_generations_supersede_and_keep_history(db_client: TestClient) -> 
 
     second = db_client.put(
         URL.format(bank_id=bank_id),
-        headers=headers(roles=("approver",)),
+        headers=configure_headers(bank_id),
         json={
             "effective_from": "2026-06-01",
             "approved_by": "Board minute 2026-22",
@@ -62,7 +67,11 @@ def test_board_generations_supersede_and_keep_history(db_client: TestClient) -> 
         },
     )
     assert second.status_code == 200, second.text
-    history = second.json()["history"]
+    second_read = db_client.get(
+        URL.format(bank_id=bank_id) + "?as_of=2026-06-30", headers=headers()
+    )
+    assert second_read.status_code == 200, second_read.text
+    history = second_read.json()["history"]
     assert len(history) == 2
     generations = {row["effective_from"]: row for row in history}
     assert generations["2026-04-01"]["effective_to"] == "2026-06-01"  # closed
@@ -89,7 +98,7 @@ def test_validation_and_authorization_guards(db_client: TestClient) -> None:
     bank_id = seed_bank(db_client)
     unknown = db_client.put(
         URL.format(bank_id=bank_id),
-        headers=headers(roles=("approver",)),
+        headers=configure_headers(bank_id),
         json={
             "effective_from": "2026-04-01",
             "approved_by": "Board minute",
@@ -102,7 +111,7 @@ def test_validation_and_authorization_guards(db_client: TestClient) -> None:
 
     non_positive = db_client.put(
         URL.format(bank_id=bank_id),
-        headers=headers(roles=("approver",)),
+        headers=configure_headers(bank_id),
         json={
             "effective_from": "2026-04-01",
             "approved_by": "Board minute",
@@ -139,7 +148,7 @@ def test_haircut_schedule_lifecycle(db_client: TestClient) -> None:
 
     first = db_client.put(
         HAIRCUT_URL.format(bank_id=bank_id),
-        headers=headers(roles=("approver",)),
+        headers=configure_headers(bank_id),
         json={
             "effective_from": "2026-04-01",
             "approved_by": "ALCO review 2026-04",
@@ -148,14 +157,18 @@ def test_haircut_schedule_lifecycle(db_client: TestClient) -> None:
         },
     )
     assert first.status_code == 200, first.text
-    active = {row["asset_class"]: row for row in first.json()["haircuts"]}
+    first_read = db_client.get(
+        HAIRCUT_URL.format(bank_id=bank_id) + "?as_of=2026-04-30", headers=headers()
+    )
+    assert first_read.status_code == 200, first_read.text
+    active = {row["asset_class"]: row for row in first_read.json()["haircuts"]}
     assert set(active) == {"SOVEREIGN", "EQUITY_GSE"}  # classes normalize upper
     assert Decimal(active["SOVEREIGN"]["haircut_pct"]) == Decimal("10")
     assert active["SOVEREIGN"]["approved_by"] == "ALCO review 2026-04"
 
     revised = db_client.put(
         HAIRCUT_URL.format(bank_id=bank_id),
-        headers=headers(roles=("approver",)),
+        headers=configure_headers(bank_id),
         json={
             "effective_from": "2026-07-01",
             "approved_by": "ALCO review 2026-07",
@@ -164,14 +177,18 @@ def test_haircut_schedule_lifecycle(db_client: TestClient) -> None:
         },
     )
     assert revised.status_code == 200, revised.text
-    history = revised.json()["history"]
+    revised_read = db_client.get(
+        HAIRCUT_URL.format(bank_id=bank_id) + "?as_of=2026-07-31", headers=headers()
+    )
+    assert revised_read.status_code == 200, revised_read.text
+    history = revised_read.json()["history"]
     sovereign_rows = [row for row in history if row["asset_class"] == "SOVEREIGN"]
     assert len(sovereign_rows) == 2
     assert {row["effective_to"] for row in sovereign_rows} == {"2026-07-01", None}
 
     out_of_range = db_client.put(
         HAIRCUT_URL.format(bank_id=bank_id),
-        headers=headers(roles=("approver",)),
+        headers=configure_headers(bank_id),
         json={
             "effective_from": "2026-08-01",
             "approved_by": "x",

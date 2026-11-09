@@ -931,7 +931,16 @@ def list_data_engine_connections(db: Session) -> DataEnginesRead:
     return DataEnginesRead(connections=connections)
 
 
-def _activity_event_banks(db: Session, event: AuditEvent) -> list[str | None]:
+def _audit_scope_institution(scope: object) -> object:
+    if not isinstance(scope, dict):
+        return None
+    # Audit JSON is dynamically typed at the ORM boundary; inspect only this marker.
+    return cast(dict[str, object], scope).get("institution_id")
+
+
+def _activity_event_banks(  # noqa: PLR0911 - explicit audit ownership variants
+    db: Session, event: AuditEvent
+) -> list[str | None]:
     details = event.details or {}
     if event.entity_type in SHARED_REGISTER_SUBJECTS:
         predicate = text(
@@ -957,6 +966,21 @@ def _activity_event_banks(db: Session, event: AuditEvent) -> list[str | None]:
                     "id": event.entity_id,
                     "details": details,
                 },
+            )
+        )
+    if event.entity_type in {"bank_liquidity_threshold", "bank_liquidity_haircut"}:
+        local_marker: object = details.get("bank_id")
+        if local_marker is not None and local_marker != event.entity_id:
+            return []
+        local_institution = _audit_scope_institution(details.get("scope"))
+        if local_institution is not None and local_institution != event.entity_id:
+            return []
+        return list(
+            db.scalars(
+                select(Bank.id).where(
+                    Bank.organization_id == event.organization_id,
+                    Bank.id == event.entity_id,
+                )
             )
         )
     marker: object = details.get("bank_id")

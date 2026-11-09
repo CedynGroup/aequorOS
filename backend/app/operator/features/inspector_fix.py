@@ -156,15 +156,29 @@ def fix_config(
     organization_id = normalize_public_id(org_id)
     session = require_active_inspection(db, operator, organization_id)
     result = inspector_fix.apply_config(db, organization_id, payload, approved_by=operator.email)
-    refresh_jobs = (
-        live_refresh_triggers.enqueue_organization_change(
+    if result.kind == "threshold_value" and result.after.get("register") == "liquidity":
+        bank_id = result.after.get("bank_id")
+        if not isinstance(bank_id, str):
+            raise RuntimeError("Bank-local liquidity correction requires bank_id.")
+        refresh_job = live_refresh_triggers.enqueue_bank_change(
             db,
             organization_id=organization_id,
+            bank_id=bank_id,
             reason=f"operator threshold superseded:{result.target_id}",
         )
-        if result.kind == "threshold_value"
-        else []
-    )
+        refresh_count = int(refresh_job is not None)
+    else:
+        refresh_count = (
+            len(
+                live_refresh_triggers.enqueue_organization_change(
+                    db,
+                    organization_id=organization_id,
+                    reason=f"operator threshold superseded:{result.target_id}",
+                )
+            )
+            if result.kind == "threshold_value"
+            else 0
+        )
     record_operator_action(
         db,
         operator,
@@ -177,7 +191,7 @@ def fix_config(
             "target_id": result.target_id,
             "before": result.before,
             "after": result.after,
-            "live_refreshes_enqueued": len(refresh_jobs),
+            "live_refreshes_enqueued": refresh_count,
         },
     )
     db.commit()

@@ -26,9 +26,11 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
+from app.core.authorization import Module, Permission, Sensitivity
 from app.credit.service import loan_classification
 from app.data_engine.public import CanonicalPosition, CanonicalPositionSnapshot
 from app.db.base import utc_now
+from app.identity import public as scoped_authorization
 from app.identity.public import Bank
 from app.liquidity.schemas.liquidity_cfp import (
     EscalationState,
@@ -193,6 +195,15 @@ def _register_rows(db: Session, ctx: TenantContext, bank: Bank) -> dict[str, Liq
 def update_register(db: Session, ctx: TenantContext, bank_id: str, payload: EwiRegisterPut) -> None:
     """Audited Board-evidence write of trigger levels / custom indicators."""
     bank = _get_bank_or_404(db, ctx, bank_id)
+    scoped_authorization.require_resolved_bank_permission(
+        db,
+        ctx,
+        bank,
+        permission=Permission.CONFIGURE,
+        module=Module.LIQUIDITY,
+        sensitivity=Sensitivity.RESTRICTED,
+        surface="liquidity_ewi.update_register",
+    )
     existing = _register_rows(db, ctx, bank)
     seen: set[str] = set()
     for entry in payload.indicators:

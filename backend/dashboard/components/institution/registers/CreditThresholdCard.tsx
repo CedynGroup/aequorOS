@@ -30,13 +30,12 @@ import { fmtDateUTC, num } from "@/lib/api/values";
 import { fmtPct } from "@/lib/format";
 import { FormActions, ReasonField } from "@/components/institution/shared";
 import {
-  EditRegisterAction,
   EvidenceFields,
   numericInputCls,
   parseDecimalInput,
   sameDecimal,
-  useApproverGate,
 } from "./common";
+import { EditRegisterAction, useApproverGate } from "./legacyCreditAccess";
 
 /** The closed code list (mirrors the backend's CREDIT_THRESHOLD_CODES). */
 const THRESHOLDS: { code: string; label: string; hint: string }[] = [

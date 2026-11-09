@@ -21,6 +21,8 @@ class ConfigureRoute:
     module: Module
     baseline: Baseline = "analyst"
     institution_scope: InstitutionScope = InstitutionScope.INSTITUTION
+    effect_scope: Literal["bank_local"] | None = None
+    storage_table: str | None = None
 
 
 _BANK = "/api/v1/banks/{bank_id}"
@@ -43,10 +45,26 @@ def _lifecycle(prefix: str, module: Module, *, validate: bool) -> list[Configure
 
 
 CONFIGURE_ROUTES: tuple[ConfigureRoute, ...] = (
+    ConfigureRoute(
+        "PUT",
+        f"{_BANK}/liquidity-thresholds",
+        Module.LIQUIDITY,
+        "approver",
+        effect_scope="bank_local",
+        storage_table="bank_liquidity_threshold",
+    ),
+    ConfigureRoute(
+        "PUT",
+        f"{_BANK}/liquidity-haircuts",
+        Module.LIQUIDITY,
+        "approver",
+        effect_scope="bank_local",
+        storage_table="bank_liquidity_haircut",
+    ),
     *(
         ConfigureRoute("PUT", f"{_BANK}/{path}", module, "approver")
         for module, paths in (
-            (Module.LIQUIDITY, ("liquidity-thresholds", "liquidity-haircuts", "liquidity/ewis")),
+            (Module.LIQUIDITY, ("liquidity/ewis",)),
             (
                 Module.CREDIT,
                 ("ecl-assumptions", "crm-haircuts", "concentration-limits", "credit-thresholds"),

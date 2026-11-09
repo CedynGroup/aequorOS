@@ -2073,6 +2073,24 @@ def test_repeated_resource_banks_are_verified_in_one_batch(db_client: TestClient
         assert len(recorded) == 3 and all(row.detail["outcome"] == "success" for row in recorded)
 
 
+def _shared_register_writer(db: Session, subject: str) -> TenantContext:
+    grant_institution_authority(
+        db,
+        organization_id=ORG_1,
+        bank_id=BANK,
+        user_id=USER_1,
+        bundle=RoleBundle.CONFIGURATOR,
+        module=(
+            ModuleScope.LIQUIDITY
+            if subject.startswith(("param_liquidity_", "bank_liquidity_"))
+            else ModuleScope.CREDIT
+        ),
+        sensitivity=SensitivityScope.RESTRICTED,
+    )
+    db.flush()
+    return TenantContext(ORG_1, actor_user_id=USER_1, authorization_version=1)
+
+
 def _update_shared_register(
     db: Session, ctx: TenantContext, subject: str, payload: dict[str, JsonValue]
 ) -> None:
@@ -2090,7 +2108,7 @@ def _update_shared_register(
         credit_params.update_credit_threshold_register(
             db, ctx, BANK, CreditThresholdUpdate.model_validate(payload)
         )
-    elif subject == "param_liquidity_threshold":
+    elif subject in {"param_liquidity_threshold", "bank_liquidity_threshold"}:
         liquidity_thresholds.update_register(
             db, ctx, BANK, LiquidityThresholdUpdate.model_validate(payload)
         )
@@ -2098,6 +2116,22 @@ def _update_shared_register(
         liquidity_thresholds.update_haircut_schedule(
             db, ctx, BANK, LiquidityHaircutUpdate.model_validate(payload)
         )
+
+
+def _historical_staff_register_event(
+    db: Session, ctx: TenantContext, original: AuditEvent, subject: str, action: str
+) -> AuditEvent:
+    # Staff sessions are read-only; fixture historical evidence is not a mutation.
+    recorded = record_event(
+        db,
+        ctx,
+        event_type=action,
+        entity_type=subject,
+        entity_id=BANK,
+        details=TypeAdapter(dict[str, JsonValue]).validate_python(original.details),
+    )
+    db.flush()
+    return recorded
 
 
 def _prepare_shared_register_banks() -> tuple[str, str]:
@@ -2140,6 +2174,8 @@ def _assert_shared_register_change_values(
         "param_credit_threshold": CreditThresholdUpdate,
         "param_liquidity_threshold": LiquidityThresholdUpdate,
         "param_liquidity_haircut": LiquidityHaircutUpdate,
+        "bank_liquidity_threshold": LiquidityThresholdUpdate,
+        "bank_liquidity_haircut": LiquidityHaircutUpdate,
     }[subject]
     assert model.model_validate({**payload, **after}) == model.model_validate(payload)
     before = TypeAdapter(dict[str, JsonValue]).validate_python(original_details["before"])
@@ -2208,9 +2244,15 @@ def _assert_shared_register_inspection_visibility(
             {"thresholds": {"narrow_to_volatile": "110"}},
         ),
         ("param_liquidity_haircut", "liquidity_haircuts.updated", {"haircuts": {"BONDS": "10"}}),
+        (
+            "bank_liquidity_threshold",
+            "liquidity_thresholds.updated",
+            {"thresholds": {"narrow_to_volatile": "110"}},
+        ),
+        ("bank_liquidity_haircut", "liquidity_haircuts.updated", {"haircuts": {"BONDS": "10"}}),
     ],
 )
-def test_shared_register_visibility_redaction_and_integrity(
+def test_shared_register_visibility_redaction_and_integrity(  # noqa: PLR0915 - complete audit lifecycle
     db_client: TestClient, subject: str, action: str, change: dict[str, JsonValue], staff: bool
 ) -> None:
     other_jurisdiction, other_class = _prepare_shared_register_banks()
@@ -2221,6 +2263,7 @@ def test_shared_register_visibility_redaction_and_integrity(
         "reason": "Private board deliberation",
     }
     with _session() as db:
+        writer = _shared_register_writer(db, subject)
         session = inspector.start_session(
             db,
             organization_id=ORG_1,
@@ -2243,7 +2286,7 @@ def test_shared_register_visibility_redaction_and_integrity(
                 {"segment": "ALL", "stage": 1, "pd_pct": "1", "lgd_pct": "40"}
             ]
         for current_payload in (previous_payload, payload):
-            _update_shared_register(db, ctx, subject, current_payload)
+            _update_shared_register(db, writer, subject, current_payload)
         original = db.scalar(
             select(AuditEvent)
             .where(AuditEvent.event_type == action)
@@ -2251,6 +2294,10 @@ def test_shared_register_visibility_redaction_and_integrity(
             .limit(1)
         )
         assert original is not None
+        if subject.startswith("bank_liquidity_"):
+            assert original.entity_type == subject
+        if staff or subject.startswith("param_liquidity_"):
+            original = _historical_staff_register_event(db, ctx, original, subject, action)
         original_details = TypeAdapter(dict[str, JsonValue]).validate_python(original.details)
         assert original_details["bank_id"] == BANK
         before, after = _assert_shared_register_change_values(
@@ -2280,9 +2327,12 @@ def test_shared_register_visibility_redaction_and_integrity(
         db.commit()
         expected_ids = {original.id, historical.id}
         activity = operator_views.get_tenant_activity(db, ORG_1, 100)
-        expected_banks = {BANK, SIBLING}
-        if subject != "param_liquidity_threshold":
-            expected_banks.add(other_class)
+        expected_banks: set[str] = (
+            {BANK}
+            if subject.startswith("bank_liquidity_")
+            else {BANK, SIBLING}
+            | ({other_class} if subject != "param_liquidity_threshold" else set[str]())
+        )
         assert {
             item.bank_id for item in activity.items if item.summary.startswith(action)
         } == expected_banks
@@ -2416,6 +2466,7 @@ def test_register_audit_after_matches_next_before_at_storage_precision(
     grant(RoleBundle.SECURITY_OFFICER)
     grant(RoleBundle.SECURITY_OFFICER, bank=SIBLING)
     with _session() as db:
+        writer = _shared_register_writer(db, subject)
         for index, effective_from in enumerate(("2026-10-01", "2026-11-01")):
             request_change: dict[str, JsonValue] = change
             if index and subject in {"param_ecl_assumption", "param_concentration_limit"}:
@@ -2426,7 +2477,7 @@ def test_register_audit_after_matches_next_before_at_storage_precision(
                 request_change = {**change, key: list(reversed(request_entries))}
             _update_shared_register(
                 db,
-                TenantContext(ORG_1, actor_user_id=USER_1),
+                writer,
                 subject,
                 {
                     **request_change,
@@ -2443,6 +2494,9 @@ def test_register_audit_after_matches_next_before_at_storage_precision(
         )
         assert response.status_code == 200, response.text
         entries = AuditLogRead.model_validate_json(response.text).events
+        if bank == SIBLING and subject.startswith("param_liquidity_"):
+            assert entries == []
+            continue
         assert len(entries) == 2
         newest, previous = entries
         assert previous.after == newest.before == newest.after

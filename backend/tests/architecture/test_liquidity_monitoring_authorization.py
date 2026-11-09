@@ -99,7 +99,7 @@ def test_liquidity_mutations_use_service_enforced_scoped_principal_boundary() ->
         assert "get_approver_tenant_context" not in dependencies, (method, path)
 
 
-def test_configuration_puts_remain_on_the_held_approver_gate() -> None:
+def test_configuration_puts_require_service_enforced_scoped_authority() -> None:
     held_routes = (
         "/api/v1/banks/{bank_id}/liquidity/ewis",
         "/api/v1/banks/{bank_id}/liquidity-thresholds",
@@ -107,5 +107,6 @@ def test_configuration_puts_remain_on_the_held_approver_gate() -> None:
     )
     for path in held_routes:
         dependencies = _dependency_names(_route(path, "PUT"))
-        assert "get_approver_tenant_context" in dependencies, path
-        assert "get_scoped_mutation_tenant_context" not in dependencies, path
+        assert "get_scoped_mutation_tenant_context" in dependencies, path
+        assert "get_approver_tenant_context" not in dependencies, path
+        assert "get_mutation_tenant_context" not in dependencies, path

@@ -149,6 +149,7 @@ def test_board_currency_mismatch_limit_produces_validation_rows(
     db_session.add(
         ParamLiquidityThreshold(
             organization_id=DEMO_ORG_ID,
+            bank_id=SAMPLE_BANK_ID,
             jurisdiction_code="GH",
             institution_class="bank",
             threshold_code="currency_mismatch_limit_pct",
