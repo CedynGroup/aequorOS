@@ -6,10 +6,12 @@ set -euo pipefail
 IMG=nsmithuk/local-kms:3.11.7@sha256:360d7377b6f3687c89a622236791e4fa3f7316366267b437829edbdfa8a5fc60
 case "${1:-}" in
   start)
-    command -v docker >/dev/null && command -v dockerd >/dev/null || { echo "aequoros-kms needs Docker; run backend/scripts/cloud/setup.sh" >&2; exit 1; }
+    command -v docker >/dev/null || { echo "aequoros-kms needs the Docker client; run backend/scripts/cloud/setup.sh" >&2; exit 1; }
     if ! docker info >/dev/null 2>&1; then
+      command -v dockerd >/dev/null || { echo "No reachable Docker daemon and dockerd is not installed; run backend/scripts/cloud/setup.sh or mount a Docker socket" >&2; exit 1; }
       nohup dockerd >/var/log/dockerd.log 2>&1 </dev/null &
       for _ in $(seq 1 30); do docker info >/dev/null 2>&1 && break; sleep 1; done
+      docker info >/dev/null 2>&1 || { echo "dockerd did not start (see /var/log/dockerd.log); it needs a VM or a privileged container" >&2; exit 1; }
     fi
     docker start risk-kms >/dev/null 2>&1 || docker run -d --name risk-kms -e KMS_REGION=us-east-1 \
       -e KMS_ACCOUNT_ID=111122223333 -v aequoros-kms-data:/data -p 127.0.0.1:18080:8080 "$IMG" >/dev/null

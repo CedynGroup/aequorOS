@@ -19,6 +19,10 @@ the wrappers below into `/usr/local/bin`. The test user `aqs` exists because `in
 | `aequoros-kms start\|stop`                        | the pinned local-kms emulator on `127.0.0.1:18080` (starts Docker if needed)  |
 | `aequoros-openbao start\|stop`                    | an OpenBao dev server; export the printed `OPENBAO_TEST_*` variables          |
 
+`aequoros-kms` needs a Docker daemon: `setup.sh` installs `docker.io` when Docker is missing, but `dockerd`
+only starts in a VM or a privileged container. Elsewhere the command stops with that reason, and the
+Postgres, MinIO, OpenBao and dashboard commands keep working without it.
+
 Pass `TEST_KMS_ENDPOINT_URL` (backend) or `BANK_KMS_ENDPOINT_URL` (dashboard) as
 `http://127.0.0.1:18080` after `aequoros-kms start`. Set `AEQUOROS_ROOT` to another git worktree to
 run two shards at once; a worktree has its own services, ports and run lock, but needs its own
