@@ -452,6 +452,12 @@ export default function BankProvider({ children }: { children: ReactNode }) {
         "restricted",
         "view",
       ),
+      marketsAggregatedView: hasEffectiveCapability(
+        institutionCapabilities,
+        "markets",
+        "aggregated",
+        "view",
+      ),
       marketsUpload: hasEffectiveCapability(
         institutionCapabilities,
         "markets",

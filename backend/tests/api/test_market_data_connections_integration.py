@@ -19,11 +19,76 @@ from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy.orm import Session
 
+from app.core.authorization import (
+    BindingStatus,
+    GrantorType,
+    InstitutionScope,
+    ModuleScope,
+    PrincipalType,
+    RoleBundle,
+    SensitivityScope,
+)
 from app.core.config import get_settings
-from tests.real_data import REAL_BANK_ID, other_headers, real_headers, requires_real_data
+from app.models import AuthorizationBinding
+from tests.real_data import (
+    REAL_BANK_ID,
+    REAL_ORG_ID,
+    REAL_USER_ID,
+    other_headers,
+    real_headers,
+    requires_real_data,
+)
 
 pytestmark = requires_real_data
+
+
+@pytest.fixture(autouse=True)
+def _grant_markets_connection_test_authority(real_session: Session) -> None:
+    """Keep the opt-in primary-data suite independent of production grants.
+
+    The representative ``/test`` pull is a configuration duty requiring an
+    exact ``markets/configure/restricted`` binding, and its full response
+    additionally requires the matching view binding. Insert both
+    transaction-locally (rolled back with ``real_session``) without
+    invalidating the real user's sessions or bumping their authorization
+    version.
+    """
+    real_session.info["organization_id"] = REAL_ORG_ID
+    real_session.add_all(
+        [
+            AuthorizationBinding(
+                organization_id=REAL_ORG_ID,
+                principal_user_id=REAL_USER_ID,
+                principal_type=PrincipalType.HUMAN.value,
+                role_bundle=RoleBundle.CONFIGURATOR.value,
+                institution_scope=InstitutionScope.INSTITUTION.value,
+                institution_id=REAL_BANK_ID,
+                module_scope=ModuleScope.MARKETS.value,
+                sensitivity_scope=SensitivityScope.RESTRICTED.value,
+                granted_by_type=GrantorType.SYSTEM.value,
+                granted_by_id="real-data-test",
+                grant_reason="Transaction-local markets configure authority",
+                status=BindingStatus.ACTIVE.value,
+            ),
+            AuthorizationBinding(
+                organization_id=REAL_ORG_ID,
+                principal_user_id=REAL_USER_ID,
+                principal_type=PrincipalType.HUMAN.value,
+                role_bundle=RoleBundle.VIEWER.value,
+                institution_scope=InstitutionScope.INSTITUTION.value,
+                institution_id=REAL_BANK_ID,
+                module_scope=ModuleScope.MARKETS.value,
+                sensitivity_scope=SensitivityScope.RESTRICTED.value,
+                granted_by_type=GrantorType.SYSTEM.value,
+                granted_by_id="real-data-test",
+                grant_reason="Transaction-local markets restricted view authority",
+                status=BindingStatus.ACTIVE.value,
+            ),
+        ]
+    )
+    real_session.commit()
 
 MASTER_KEY = "api-test-master-key"
 

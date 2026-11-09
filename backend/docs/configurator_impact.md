@@ -39,9 +39,10 @@ evidence to approve deployment. `evaluation_failed` marks evaluator failures.
 ## What the inventory means
 
 The catalogue in `scripts/authorization_configure_routes.py` explicitly lists
-31 issue-184 targets across LIQ, CREDIT, DATA, MARKETS, REG and BEH. Tests check
-that every method/path still exists. Connection `/test`, schema discovery,
-sync and pull are operational, not configure targets. Database-direct has no
+32 issue-184 targets across LIQ, CREDIT, DATA, MARKETS, REG and BEH. Tests check
+that every method/path still exists. The market-data connection `/test` pull is
+a configure target (#172); the operational data/temenos test, schema discovery,
+sync and pull routes stay outside. Database-direct has no
 separate stored-credential `/validate`; Temenos and Markets do.
 
 Before/after are two **policy eligibility assessments of the same snapshot**,

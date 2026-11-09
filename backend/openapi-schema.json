@@ -60552,7 +60552,7 @@
       },
       "TestPullRead": {
         "additionalProperties": false,
-        "description": "Result of the \u00a79.2 step-5 representative test pull: human-readable\nsample values on success, a bank-facing error otherwise.",
+        "description": "Result of the \u00a79.2 step-5 representative test pull: human-readable\nsample values on success, a bank-facing error otherwise. The vendor\ncontent is read material: a caller holding the configuration duty without\nthe bank's markets/restricted view binding gets only the success flag,\nwith empty sample values and no error.",
         "properties": {
           "error": {
             "anyOf": [

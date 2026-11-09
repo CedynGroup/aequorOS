@@ -1,12 +1,16 @@
-"""MARKETS configure cutover: connection lifecycle and source-preference writes
-need exact grants.
+"""MARKETS configure cutover: connection lifecycle, test pulls and
+source-preference writes need exact grants.
 
-Vendor connection lifecycle (create, validate, patch, disable, enable, revoke)
-and the per-bank source-preference upsert are configuration duties: they
-require a complete active ``markets/configure/restricted`` exact-bank binding,
-denied BEFORE any vault write, vendor call, status mutation or audit row. The
-read boundaries (published/confidential/restricted views) and the operational
-``/test`` pull keep their existing gates and gain nothing from Configurator
+Vendor connection lifecycle (create, validate, patch, disable, enable, revoke),
+the representative ``/test`` pull and the per-bank source-preference upsert are
+configuration duties: they require a complete active
+``markets/configure/restricted`` exact-bank binding, denied BEFORE any vault
+write, vendor call, status mutation or audit row. The pull's vendor content
+(sample values, vendor error) is separately authorized read material: a
+configure-only caller gets a write-only acknowledgement, and the full
+``TestPullRead`` only when the caller also holds the markets/restricted VIEW
+binding on the exact bank. The read boundaries
+(published/confidential/restricted views) gain nothing from Configurator
 (no broadening).
 """
 
@@ -38,9 +42,11 @@ from app.core.config import get_settings
 from app.db.base import utc_now
 from app.db.session import get_sessionmaker
 from app.identity.service import authorization
+from app.market_data.adapters.base import TestPullResult
 from app.market_data.adapters.credential_manager import EncryptedDbVault
 from app.market_data.schemas.market_data_connections import (
     MarketDataConnectionWriteAcknowledgement,
+    TestPullRead,
 )
 from app.market_data.schemas.market_data_sources import (
     SourcePreferencesRead,
@@ -55,7 +61,7 @@ from app.models import (
     User,
 )
 from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID, materialize_canonical_test_book
-from tests.support.helpers import ORG_1, USER_1, error_envelope, headers
+from tests.support.helpers import ORG_1, ORG_2, USER_1, error_envelope, headers
 from tests.support.stateful import workflow_settings
 
 BASE = f"/api/v1/banks/{SAMPLE_BANK_ID}"
@@ -164,11 +170,13 @@ def _refuse_vendor_and_vault(monkeypatch: pytest.MonkeyPatch) -> None:
     )
 
 
-def _seed_connection(vendor: str = "refinitiv", status: str = "ACTIVE") -> UUID:
+def _seed_connection(
+    vendor: str = "refinitiv", status: str = "ACTIVE", bank_id: str = SAMPLE_BANK_ID
+) -> UUID:
     with get_sessionmaker()() as db:
         row = MarketDataConnection(
             organization_id=ORG_1,
-            bank_id=SAMPLE_BANK_ID,
+            bank_id=bank_id,
             vendor=vendor,
             display_name=f"Configure fixture [{uuid4().hex[:8]}]",
             status=status,
@@ -178,6 +186,39 @@ def _seed_connection(vendor: str = "refinitiv", status: str = "ACTIVE") -> UUID:
         db.add(row)
         db.commit()
         return row.id
+
+
+def _seed_vendor_connection_with_credentials() -> UUID:
+    """A refinitiv connection whose stored credentials decrypt from the vault."""
+    connection_id = _seed_connection()
+    with get_sessionmaker()() as db:
+        connection = db.get(MarketDataConnection, connection_id)
+        assert connection is not None
+        EncryptedDbVault(db, master_key=MASTER_KEY).store(
+            organization_id=ORG_1,
+            bank_id=SAMPLE_BANK_ID,
+            vendor=connection.vendor,
+            credentials=dict(REFINITIV_CREDENTIALS),
+            expires_at=None,
+        )
+        db.commit()
+    return connection_id
+
+
+def _stage_test_pull_result(monkeypatch: pytest.MonkeyPatch, result: TestPullResult) -> None:
+    """Serve a deterministic vendor result from the /test pull path."""
+
+    class _StubAdapter:
+        def __init__(self, **_kwargs: object) -> None:
+            pass
+
+        def test_pull(self, credentials: object, scopes: object) -> TestPullResult:
+            return result
+
+    monkeypatch.setattr(
+        "app.market_data.service.market_data_connections.get_market_data_adapter_class",
+        lambda vendor: _StubAdapter,
+    )
 
 
 def _vendor_payload() -> dict[str, Any]:
@@ -790,11 +831,205 @@ def test_binding_lifecycle_fail_closed_for_markets_configure(
 # --- Read/run boundaries unchanged -------------------------------------------
 
 
-def test_configurator_gains_no_read_or_test_pull_authority(db_client: TestClient) -> None:
-    """Configure alone neither reads connection metadata nor runs a test pull.
+# --- Test-pull cutover (W6/W7) -------------------------------------------------
 
-    The connection list keeps its exact MARKETS/restricted VIEW gate, and the
-    ``/test`` representative pull keeps its legacy operational gate (D2): a
+
+def test_test_pull_denied_without_configure_before_vault_and_vendor(
+    db_client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """No markets/configure binding: an opaque 404, before vault or vendor.
+
+    Scalar roles and the ambient fixture VIEWER grant nothing here; the denial
+    is identical to an unknown connection's, and no row or audit row changes.
+    """
+    connection_id = _seed_connection()
+    before = _counts()
+    _refuse_vendor_and_vault(monkeypatch)
+
+    denied = db_client.post(f"{CONNECTIONS}/{connection_id}/test", headers=_auth())
+    unknown = db_client.post(f"{CONNECTIONS}/{uuid4()}/test", headers=_auth())
+    assert denied.status_code == 404, denied.text
+    assert denied.status_code == unknown.status_code
+    assert error_envelope(denied)["message"] == error_envelope(unknown)["message"]
+    assert error_envelope(denied)["message"] == "Market data object not found."
+    assert _counts() == before
+    with get_sessionmaker()() as db:
+        row = db.get(MarketDataConnection, connection_id)
+        assert row is not None
+        assert row.status == "ACTIVE"
+
+
+@pytest.mark.parametrize(
+    ("module", "sensitivity", "bank_id"),
+    [
+        (ModuleScope.DATA, SensitivityScope.RESTRICTED, SAMPLE_BANK_ID),
+        (ModuleScope.MARKETS, SensitivityScope.CONFIDENTIAL, SAMPLE_BANK_ID),
+        (ModuleScope.MARKETS, SensitivityScope.RESTRICTED, SIBLING),
+    ],
+)
+def test_test_pull_denies_mismatched_configure_binding_dimensions(
+    db_client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
+    module: ModuleScope,
+    sensitivity: SensitivityScope,
+    bank_id: str,
+) -> None:
+    """Wrong module, wrong sensitivity or sibling bank: opaque 404, no pull."""
+    _grant(RoleBundle.CONFIGURATOR, module=module, sensitivity=sensitivity, bank_id=bank_id)
+    connection_id = _seed_connection()
+    before = _counts()
+    _refuse_vendor_and_vault(monkeypatch)
+
+    denied = db_client.post(f"{CONNECTIONS}/{connection_id}/test", headers=_auth())
+    assert denied.status_code == 404, denied.text
+    assert error_envelope(denied)["message"] == "Market data object not found."
+    assert _counts() == before
+
+
+@pytest.mark.parametrize("lifecycle", ["suspended", "revoked", "expired", "future"])
+def test_test_pull_denies_incomplete_binding_lifecycles(
+    db_client: TestClient, monkeypatch: pytest.MonkeyPatch, lifecycle: str
+) -> None:
+    """Suspended, revoked, expired and not-yet-valid bindings grant nothing."""
+    _grant(RoleBundle.CONFIGURATOR)
+    with get_sessionmaker()() as db:
+        binding = db.scalar(
+            select(AuthorizationBinding)
+            .where(
+                AuthorizationBinding.principal_user_id == USER_1,
+                AuthorizationBinding.role_bundle == RoleBundle.CONFIGURATOR.value,
+            )
+            .order_by(AuthorizationBinding.created_at.desc())
+            .limit(1)
+        )
+        assert binding is not None
+        if lifecycle == "suspended":
+            binding.status = BindingStatus.SUSPENDED.value
+        elif lifecycle == "revoked":
+            binding.status = BindingStatus.REVOKED.value
+            binding.revoked_at = utc_now()
+            binding.revoked_by_type = GrantorType.SYSTEM.value
+            binding.revoked_by_id = "markets-configure-test"
+            binding.revoked_reason = "Configure-cutover revocation test"
+        elif lifecycle == "expired":
+            binding.valid_from = utc_now() - timedelta(days=2)
+            binding.valid_until = utc_now() - timedelta(seconds=1)
+        else:
+            binding.valid_from = utc_now() + timedelta(days=1)
+        db.commit()
+    connection_id = _seed_connection()
+    before = _counts()
+    _refuse_vendor_and_vault(monkeypatch)
+
+    denied = db_client.post(f"{CONNECTIONS}/{connection_id}/test", headers=_auth())
+    assert denied.status_code == 404, denied.text
+    assert _counts() == before
+
+
+def test_test_pull_sibling_bank_is_an_opaque_404(
+    db_client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A bank A configure binding cannot test a sibling bank B connection.
+
+    Both the sibling-bank path and the sibling's connection id under bank A's
+    path return the opaque 404, with no vault retrieval or vendor call.
+    """
+    _grant(RoleBundle.CONFIGURATOR, bank_id=SAMPLE_BANK_ID)
+    sibling_connection_id = _seed_connection(bank_id=SIBLING)
+    before = _counts()
+    _refuse_vendor_and_vault(monkeypatch)
+
+    via_sibling = db_client.post(
+        f"/api/v1/banks/{SIBLING}/market-data/connections/{sibling_connection_id}/test",
+        headers=_auth(),
+    )
+    via_own_path = db_client.post(
+        f"{CONNECTIONS}/{sibling_connection_id}/test", headers=_auth()
+    )
+    unknown = db_client.post(f"{CONNECTIONS}/{uuid4()}/test", headers=_auth())
+    assert via_sibling.status_code == 404, via_sibling.text
+    assert via_own_path.status_code == 404, via_own_path.text
+    assert via_sibling.status_code == via_own_path.status_code == unknown.status_code
+    assert _counts() == before
+
+
+def test_foreign_org_caller_cannot_test_a_connection(
+    db_client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A foreign-organization principal gets the same 404 as any invisible bank."""
+    connection_id = _seed_connection()
+    before = _counts()
+    _refuse_vendor_and_vault(monkeypatch)
+
+    denied = db_client.post(
+        f"{CONNECTIONS}/{connection_id}/test", headers=headers(org_id=ORG_2)
+    )
+    assert denied.status_code == 404, denied.text
+    assert _counts() == before
+
+
+def test_test_pull_configure_only_gets_write_only_acknowledgement(
+    db_client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Configure without view: the pull runs, but vendor content is withheld.
+
+    Even with the vendor returning sample values and an error, the body carries
+    only the success flag: ``sample_values`` empty and ``error`` null.
+    """
+    with get_sessionmaker()() as db:
+        db.execute(
+            delete(AuthorizationBinding).where(AuthorizationBinding.organization_id == ORG_1)
+        )
+        db.commit()
+    _grant(RoleBundle.CONFIGURATOR)
+    connection_id = _seed_vendor_connection_with_credentials()
+    _stage_test_pull_result(
+        monkeypatch,
+        TestPullResult(
+            success=False,
+            sample_values={"GHS 3M": "15.80%", "FX_SPOT_USD_GHS": "15.42"},
+            error="Terminal unreachable; contact the vendor administrator.",
+        ),
+    )
+    auth = headers(roles=("viewer",), authorization_version=_current_version())
+
+    response = db_client.post(f"{CONNECTIONS}/{connection_id}/test", headers=auth)
+    assert response.status_code == 200, response.text
+    body = TestPullRead.model_validate_json(response.text)
+    assert body.success is False
+    assert body.sample_values == {}
+    assert body.error is None
+    assert "15.80%" not in response.text
+    assert "Terminal unreachable" not in response.text
+
+
+def test_test_pull_configure_plus_view_gets_the_full_result(
+    db_client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Configure plus the markets/restricted view binding: the full pull result."""
+    _grant(RoleBundle.CONFIGURATOR)  # the ambient fixture viewer binding remains
+    connection_id = _seed_vendor_connection_with_credentials()
+    _stage_test_pull_result(
+        monkeypatch,
+        TestPullResult(
+            success=True,
+            sample_values={"GHS 3M": "15.80%"},
+            error=None,
+        ),
+    )
+
+    response = db_client.post(f"{CONNECTIONS}/{connection_id}/test", headers=_auth())
+    assert response.status_code == 200, response.text
+    body = TestPullRead.model_validate_json(response.text)
+    assert body.success is True
+    assert body.sample_values == {"GHS 3M": "15.80%"}
+    assert body.error is None
+
+
+def test_configurator_gains_no_connection_read_authority(db_client: TestClient) -> None:
+    """Configure alone still cannot read connection metadata.
+
+    The connection list keeps its exact MARKETS/restricted VIEW gate; a
     configure-only principal (no analyst-or-higher scalar role) is refused
     there. The ambient fixture viewer binding is removed so the principal is
     genuinely configure-only.
@@ -805,7 +1040,6 @@ def test_configurator_gains_no_read_or_test_pull_authority(db_client: TestClient
         )
         db.commit()
     _grant(RoleBundle.CONFIGURATOR)
-    connection_id = _seed_connection(vendor="manual_upload")
     auth = headers(roles=("viewer",), authorization_version=_current_version())
 
     denied_list = db_client.get(CONNECTIONS, headers=auth)
@@ -814,26 +1048,16 @@ def test_configurator_gains_no_read_or_test_pull_authority(db_client: TestClient
         "Market data connection access requires an active scoped binding."
     )
 
-    denied_test = db_client.post(f"{CONNECTIONS}/{connection_id}/test", headers=auth)
-    assert denied_test.status_code == 403, denied_test.text
-    assert error_envelope(denied_test)["message"] == (
-        "This action requires the 'analyst' role or higher."
-    )
 
-
-def test_restricted_viewer_keeps_test_pull_through_the_operational_gate(
-    db_client: TestClient,
-) -> None:
-    """The existing operational /test boundary is preserved: a Markets-restricted
-    analyst still reaches the service (its 400 is the service answering)."""
+def test_view_only_caller_cannot_run_the_test_pull(db_client: TestClient) -> None:
+    """The markets/restricted VIEW binding alone gains no test-pull authority:
+    even a manual-upload connection's 400 never leaks past the denial."""
     _grant(RoleBundle.VIEWER)
     connection_id = _seed_connection(vendor="manual_upload")
 
-    response = db_client.post(
+    denied = db_client.post(
         f"{CONNECTIONS}/{connection_id}/test",
         headers=headers(roles=("analyst",), authorization_version=_current_version()),
     )
-    assert response.status_code == 400, response.text
-    assert error_envelope(response)["message"] == (
-        "Manual upload connections are tested by uploading a file; use the upload endpoint."
-    )
+    assert denied.status_code == 404, denied.text
+    assert error_envelope(denied)["message"] == "Market data object not found."

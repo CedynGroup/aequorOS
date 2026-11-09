@@ -2130,8 +2130,10 @@ def require_ilaap_refresh(
 # (implied ratings, private curve overlays), and credential-bearing connection
 # metadata is `restricted`. Connection lifecycle and source-preference writes
 # are configuration duties: they carry the scoped-mutation boundary and the
-# service enforces the exact markets/configure/restricted binding; the
-# representative /test pull keeps its legacy operational gate.
+# service enforces the exact markets/configure/restricted binding. The
+# representative /test pull is one of them: it denies before the bank or
+# connection lookup, the vault retrieval or any vendor call, and its vendor
+# content (sample values, vendor error) is separately authorized read material.
 _MARKETS_VIEW_DETAIL = "Markets access requires an active scoped binding."
 
 

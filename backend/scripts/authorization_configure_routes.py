@@ -1,7 +1,8 @@
 """Reviewed issue-184 targets, not a source of runtime authority.
 
 The baseline names the pre-cutover dependency, not an observed HTTP outcome.
-Operational connection test/schema/sync/pull routes deliberately stay outside.
+The market-data ``/test`` pull joined the configuration duties (#172); the
+operational data/temenos test, schema, sync and pull routes stay outside.
 """
 
 from __future__ import annotations
@@ -28,8 +29,13 @@ class ConfigureRoute:
 _BANK = "/api/v1/banks/{bank_id}"
 
 
-def _lifecycle(prefix: str, module: Module, *, validate: bool) -> list[ConfigureRoute]:
-    """Inventory connection configuration, excluding operational test and pull."""
+def _lifecycle(
+    prefix: str, module: Module, *, validate: bool, test: bool = False
+) -> list[ConfigureRoute]:
+    """Inventory connection configuration, excluding operational pull routes.
+
+    ``test`` joins the representative test pull only where a cutover made it a
+    configuration duty (the market-data ``/test`` pull, #172)."""
     base = f"{_BANK}/{prefix}/connections"
     item = base + "/{connection_id}"
     routes = [
@@ -41,6 +47,8 @@ def _lifecycle(prefix: str, module: Module, *, validate: bool) -> list[Configure
     ]
     if validate:
         routes.append(ConfigureRoute("POST", item + "/validate", module))
+    if test:
+        routes.append(ConfigureRoute("POST", item + "/test", module))
     return routes
 
 
@@ -75,7 +83,7 @@ CONFIGURE_ROUTES: tuple[ConfigureRoute, ...] = (
     ConfigureRoute("POST", f"{_BANK}/mapping-configs", Module.DATA),
     *_lifecycle("database-direct", Module.DATA, validate=False),
     *_lifecycle("temenos", Module.DATA, validate=True),
-    *_lifecycle("market-data", Module.MARKETS, validate=True),
+    *_lifecycle("market-data", Module.MARKETS, validate=True, test=True),
     ConfigureRoute("PUT", f"{_BANK}/market-data/source-preferences", Module.MARKETS),
     ConfigureRoute(
         "PUT", f"{_BANK}/regulatory-reporting/channel-configs/{{channel}}", Module.REGULATORY
