@@ -515,7 +515,7 @@ mise run risk-service:test --lf  # serial cached unit failures only
 These commands work at the repository root or in `backend/`. There is no local
 full-suite command or separate suite alias. CI owns the direct pytest commands
 for units, PostgreSQL integration, storage and backend e2e, using `-m unit`,
-`-m integration` and `-m e2e`. Its e2e job installs dashboard dependencies first.
+`-m integration` and `-m e2e`. Its e2e step installs workspace dependencies first.
 
 Test placement and suite filename conventions follow the
 [testing standard](../CODEBASE_CONVENTIONS.md#behavior-properties-and-state-machines-backend-and-dashboard).
@@ -555,7 +555,7 @@ declares a runtime requirement, not a suite override.
 
 MinIO runs in storage/schema jobs and the shard containing native service
 contracts. OpenBao runs in its integration shard. Backend Playwright contracts
-have an explicit e2e job beside dashboard journeys. Their runtime and
+run as a guarded step of the 'Lint and typecheck' job. Their runtime and
 zero-skip guards remain independent of filename selection.
 
 CI's dedicated unit run uses pytest's normal discovery and configured file patterns,
@@ -771,7 +771,7 @@ package and deployment runners were unchanged.
 The independent CI collection adds real work, about 47.5 seconds in this sample.
 These figures are not full-suite or hosted-CI execution timings and establish no
 speedup. Compare actual hosted unit, schema, lock, storage, integration-shard and
-e2e job durations after validation; do not infer wall time from duration weights.
+e2e step durations after validation; do not infer wall time from duration weights.
 
 ### Test databases and the primary database
 

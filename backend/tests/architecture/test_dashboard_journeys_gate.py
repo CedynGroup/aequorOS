@@ -30,6 +30,7 @@ GATE = Path(__file__).parents[3] / ".github/scripts/dashboard_journeys_gate.sh"
         ("failure", "false", "skipped", False),
         ("cancelled", "true", "success", False),
         ("skipped", "false", "skipped", False),
+        ("skipped", "false", "success", True),
     ],
 )
 def test_required_check_accepts_only_verified_results(
