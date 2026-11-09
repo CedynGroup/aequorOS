@@ -920,3 +920,74 @@ compatibility grant for former scalar-approver writers.
 | Scalar roles, no binding, wrong bank/module/sensitivity, partial, expired/future/suspended/revoked denied with no side effects; evaluator failure denies closed | `tests/credit/api/test_credit_configure_authorization_integration.py` |
 | Configure-only PUT succeeds without resolving the register; read denied until a separate viewer grant | the same file, `test_configure_only_put_succeeds_but_read_needs_separate_viewer` |
 | Acknowledgement discloses only this request's write evidence; 409s leak no stored dates or policy | the same file, `_assert_write_acknowledgement` / `_assert_private_conflicts`     |
+
+## Phase 7: the credit registers are bank-local storage (enforced in code, 2026-11-09)
+
+The D55 shared-write finding closes the same way D19/D20 closed liquidity: the
+four Board registers stop being organization/jurisdiction rows that any bank's
+Configurator could silently change for its siblings. `ParamEclAssumption` maps
+to `bank_ecl_assumption`, `ParamCrmHaircut` to `bank_crm_haircut`,
+`ParamConcentrationLimit` to `bank_concentration_limit`, and
+`ParamCreditThreshold` to `bank_credit_threshold` (D55). Every key now includes
+organization, bank, jurisdiction, parameter key and effective date, with
+composite bank/organization FKs and FORCE RLS retaining tenant isolation. The
+`param_*` credit tables remain immutable historical archives: frozen at
+migration time, append-only, retained. There is no shared-row fallback — an
+absent bank row never reads a sibling's or an archive's policy, and the generic
+active/prefetch resolvers refuse these models without a complete
+organization/bank/jurisdiction/date scope.
+
+Phase 6's authority contract is unchanged: the same exact CREDIT/`restricted`
+`configurator` sentence per bank writes its own bank's rows only, the PUT
+responses remain write-only acknowledgements, and no grant is widened or
+backfilled. A bank A configure grant now changes exactly bank A's registers —
+the authority boundary and the storage boundary finally agree.
+
+Deploy in a maintenance window, using the migration-role/ownership preparation
+in [tamper-evident records](tamper_evident_records.md#required-deployment-follow-up):
+
+1. Stop all old tenant APIs, operator APIs, workers and scheduled consumers
+   before migrating; old code targets the frozen archives. Keep a recoverable
+   backup and the dated impact inventory.
+2. Apply `202611090116`, then `202611090117` (and the deployment's complete
+   migration head). The first copies **every stored generation** — including
+   closed and future-effective history — to each existing matching bank
+   (matching on organization/jurisdiction), preserving values, effective
+   windows, Board evidence and timestamps with fresh row UUIDs, then freezes
+   the archives. The second rebuilds the audit-reader policy for the new
+   bank-local subjects. Unmatched source rows stay archived; no speculative
+   policy is invented for banks that never had one.
+3. Before reopening traffic, verify per-bank copies against the pre-migration
+   register, archive write refusal, retained-row protections, bank FKs/RLS and
+   API/worker table privileges, and that the migration created no bindings or
+   seeded financial facts.
+4. Deploy the cutover build and restart every consumer below. Smoke-test
+   independent A/B register reads and history, an A-only write leaving B
+   byte-identical, and staff audit attribution for the new subjects.
+
+**Rollback is not a merge policy.** The `202611090116` downgrade compares the
+entire bank-local multiset with the expected archive expansion and refuses a
+lossy downgrade on any divergence. `202611090117` only restores the prior
+audit-reader definitions. After divergence use a forward fix.
+
+### Reader, engine and audit cutover inventory
+
+| Consumer | Bank-local contract |
+| --- | --- |
+| `credit/service/credit_params.py` | GET effective registers and history, PUT supersession and Board evidence write only the acting bank's rows and trigger only that bank's live refresh. |
+| `policy/service/params.py`, `policy/public.py` | `get_active_bank_params` resolves the full organization/bank/jurisdiction/date scope; generic active/prefetch helpers require `bank_id` for these models, including empty date sets. |
+| `capital/service/regulatory_capital.py` | CRM haircuts and ECL assumptions (direct and dashboard batch loads) resolve the run's bank only. |
+| `credit/service/regulatory_credit.py` | Board credit thresholds resolve the run's bank. |
+| `credit/service/credit_concentration.py` | Concentration limits resolve the run's bank. |
+| `stress/service/enterprise_stress.py`, `icaap/service/pillar2_inputs/granularity.py`, `forecasting/service/regulatory_forecasting.py` | Stressed CRM/ECL rows, ICAAP granularity defaults and governed forecast assumptions read the analyzed bank only. |
+| `core/audit_attribution.py`, `operator/services/operator_views.py`, migration `202611090117` | The `bank_ecl_assumption` / `bank_crm_haircut` / `bank_concentration_limit` / `bank_credit_threshold` audit subjects use the exact bank ID and reject contradictory scope details. Historical `param_*` credit audit events keep their shared-history interpretation; no old audit record is rewritten. |
+
+### Executable verification (Phase 7)
+
+| Property | Pinned by |
+| --- | --- |
+| Bank A configure writes leave the sibling's registers, engine inputs and history byte-identical; sibling PUT stays denied | `tests/credit/api/test_bank_local_parameters_integration.py` |
+| Generic resolvers refuse credit register models without a bank scope; cross-org/jurisdiction reads return only the scoped bank | the same file, `test_policy_resolver_requires_complete_bank_scope` |
+| Migration copies every generation per bank, freezes archives, refuses lossy downgrade | `tests/db/test_bank_credit_parameters_migration_integration.py` |
+| Audit attribution of the new bank-local subjects | `tests/core/test_shared_register_audit_integration.py`, `tests/identity/api/test_audit_log_integration.py` |
+| Configure catalogue marks the four PUTs bank-local with their storage tables | `tests/scripts/test_authorization_access_impact_integration.py` |
