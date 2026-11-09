@@ -43,6 +43,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import re
 import subprocess
 import sys
@@ -1103,6 +1104,13 @@ def cmd_report(args: argparse.Namespace) -> int:
     cache_dir = Path(args.cache_dir)
     # Private: the cache is read back trusting earlier runs of this script.
     cache_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
+    cache_stat = cache_dir.stat()
+    if cache_dir.is_symlink() or cache_stat.st_uid != os.getuid() or cache_stat.st_mode & 0o077:
+        print(
+            f"Refusing cache dir {cache_dir}: not private to the current user",
+            file=sys.stderr,
+        )
+        return 2
     workflow_files = args.workflows.split(",") if args.workflows else list(WORKFLOW_FILES)
     since = args.since or (datetime.now(UTC) - timedelta(days=90)).strftime("%Y-%m-%d")
     commands = (
