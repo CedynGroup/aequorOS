@@ -800,22 +800,32 @@ def _parse_timestamp(value: str | None) -> datetime | None:
         return None
 
 
-def gh_api(*endpoint_args: str) -> str:
+def gh_api(*endpoint_args: str, allow_escape_sequences: bool = False) -> str:
     """Read-only gh api call; transient server errors are retried a few times.
 
     (This is API-call resilience for the measurement tool, not a job retry:
     nothing about CI jobs or tests is ever re-run.)
     """
-    cmd = ["gh", "api", "--allow-escape-sequences", *endpoint_args]
+    cmd = ["gh", "api"]
+    if allow_escape_sequences:
+        cmd.append("--allow-escape-sequences")
+    cmd.extend(endpoint_args)
     last_error = ""
     for attempt in range(1, API_RETRIES + 1):
-        result = subprocess.run(
-            cmd,
-            capture_output=True,
-            text=True,
-            timeout=API_TIMEOUT_SECONDS,
-            check=False,
-        )
+        try:
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=API_TIMEOUT_SECONDS,
+                check=False,
+            )
+        except subprocess.TimeoutExpired as error:
+            last_error = f"gh api timed out after {API_TIMEOUT_SECONDS}s: {error.cmd[-1]}"
+            if attempt == API_RETRIES:
+                raise RuntimeError(last_error) from error
+            time.sleep(API_RETRY_WAIT_SECONDS * attempt)
+            continue
         if result.returncode == 0:
             return result.stdout
         last_error = f"gh api failed ({result.returncode}): {result.stderr[:400]}"
@@ -845,7 +855,7 @@ def list_workflow_runs(
         records.extend(page_records)
         oldest = page_records[-1].created_at
         log(f"    {workflow_file} page {page}: {len(page_records)} runs (oldest {oldest[:10]})")
-        if len(records) >= min_runs or oldest[:10] < since:
+        if (min_runs and len(records) >= min_runs) or oldest[:10] < since:
             break
         page += 1
     records = [run for run in records if run.created_at[:10] >= since]
@@ -872,7 +882,7 @@ def fetch_job_log(repo: str, job_id: int, cache_dir: Path, keep_logs: bool) -> s
     cache_path = cache_dir / f"{job_id}.log"
     if cache_path.exists():
         return cache_path.read_text(errors="replace")
-    text = gh_api(f"repos/{repo}/actions/jobs/{job_id}/logs")
+    text = gh_api(f"repos/{repo}/actions/jobs/{job_id}/logs", allow_escape_sequences=True)
     cache_path.write_text(text)
     return text
 
