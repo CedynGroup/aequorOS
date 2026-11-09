@@ -281,11 +281,13 @@ jobs:
     # toolchain setup once. The job runs when ANY of the three areas changed;
     # every gated step keeps its own `if: always()` guard so a red step cannot
     # hide the result of the others.
-    if: always() && (needs.preflight.outputs.backend == 'true' || needs.preflight.outputs.guards == 'true' || needs.preflight.outputs.api_client == 'true')
+    if: (needs.preflight.outputs.backend == 'true' || needs.preflight.outputs.guards == 'true' || needs.preflight.outputs.api_client == 'true')
     # No job may outlive this. P0-15's outage was a task that recursed instead of
     # running anything; unbounded, GitHub would have let it burn the 360-minute
-    # default. Values are ~3x the measured local wall clock, not tight.
-    timeout-minutes: 30
+    # default. Values are ~3x the measured local wall clock, not tight. This job
+    # now runs lint+typecheck, the backend e2e contracts and the client
+    # freshness check serially, so its cap covers their combined measure.
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
       - uses: jdx/mise-action@v5
