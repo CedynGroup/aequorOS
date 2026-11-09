@@ -9,8 +9,10 @@ Credentials are write-only: they appear in request bodies only, and no
 response ever carries credential values. The connection list still carries
 credential metadata (fingerprint, expiry, status), so it requires an exact
 MARKETS/restricted view binding; the scope catalog and quota ledger are
-published-tier reads. Lifecycle mutations keep the legacy analyst gate until
-configuration authority lands.
+published-tier reads. Connection lifecycle is a configuration duty: mutations
+carry the interactive-human scoped-mutation boundary and the service requires
+an exact markets/configure/restricted binding before any vault write or vendor
+call. The representative ``/test`` pull keeps its legacy operational gate.
 """
 
 from __future__ import annotations
@@ -19,12 +21,18 @@ from uuid import UUID
 
 from fastapi import APIRouter, status
 
-from app.api.deps import DbSession, MarketsPublishedView, MarketsRestrictedView, MutationTenant
+from app.api.deps import (
+    DbSession,
+    MarketsPublishedView,
+    MarketsRestrictedView,
+    MutationTenant,
+    ScopedMutationTenant,
+)
 from app.market_data.schemas.market_data_connections import (
     MarketDataConnectionCreate,
     MarketDataConnectionListRead,
-    MarketDataConnectionRead,
     MarketDataConnectionUpdate,
+    MarketDataConnectionWriteAcknowledgement,
     MarketDataQuotaListRead,
     MarketDataScopeListRead,
     TestPullRead,
@@ -47,7 +55,7 @@ def list_market_data_connections(
 
 @router.post(
     "/banks/{bank_id}/market-data/connections",
-    response_model=MarketDataConnectionRead,
+    response_model=MarketDataConnectionWriteAcknowledgement,
     status_code=status.HTTP_201_CREATED,
     operation_id="createMarketDataConnection",
 )
@@ -55,22 +63,22 @@ def create_market_data_connection(
     bank_id: str,
     payload: MarketDataConnectionCreate,
     db: DbSession,
-    ctx: MutationTenant,
-) -> MarketDataConnectionRead:
+    ctx: ScopedMutationTenant,
+) -> MarketDataConnectionWriteAcknowledgement:
     return market_data_connections.create_connection(db, ctx, bank_id, payload)
 
 
 @router.post(
     "/banks/{bank_id}/market-data/connections/{connection_id}/validate",
-    response_model=MarketDataConnectionRead,
+    response_model=MarketDataConnectionWriteAcknowledgement,
     operation_id="validateMarketDataConnection",
 )
 def validate_market_data_connection(
     bank_id: str,
     connection_id: UUID,
     db: DbSession,
-    ctx: MutationTenant,
-) -> MarketDataConnectionRead:
+    ctx: ScopedMutationTenant,
+) -> MarketDataConnectionWriteAcknowledgement:
     return market_data_connections.validate_connection(db, ctx, bank_id, connection_id)
 
 
@@ -90,7 +98,7 @@ def test_market_data_connection(
 
 @router.patch(
     "/banks/{bank_id}/market-data/connections/{connection_id}",
-    response_model=MarketDataConnectionRead,
+    response_model=MarketDataConnectionWriteAcknowledgement,
     operation_id="updateMarketDataConnection",
 )
 def update_market_data_connection(
@@ -98,50 +106,50 @@ def update_market_data_connection(
     connection_id: UUID,
     payload: MarketDataConnectionUpdate,
     db: DbSession,
-    ctx: MutationTenant,
-) -> MarketDataConnectionRead:
+    ctx: ScopedMutationTenant,
+) -> MarketDataConnectionWriteAcknowledgement:
     return market_data_connections.update_connection(db, ctx, bank_id, connection_id, payload)
 
 
 @router.post(
     "/banks/{bank_id}/market-data/connections/{connection_id}/disable",
-    response_model=MarketDataConnectionRead,
+    response_model=MarketDataConnectionWriteAcknowledgement,
     operation_id="disableMarketDataConnection",
 )
 def disable_market_data_connection(
     bank_id: str,
     connection_id: UUID,
     db: DbSession,
-    ctx: MutationTenant,
-) -> MarketDataConnectionRead:
+    ctx: ScopedMutationTenant,
+) -> MarketDataConnectionWriteAcknowledgement:
     return market_data_connections.disable_connection(db, ctx, bank_id, connection_id)
 
 
 @router.post(
     "/banks/{bank_id}/market-data/connections/{connection_id}/enable",
-    response_model=MarketDataConnectionRead,
+    response_model=MarketDataConnectionWriteAcknowledgement,
     operation_id="enableMarketDataConnection",
 )
 def enable_market_data_connection(
     bank_id: str,
     connection_id: UUID,
     db: DbSession,
-    ctx: MutationTenant,
-) -> MarketDataConnectionRead:
+    ctx: ScopedMutationTenant,
+) -> MarketDataConnectionWriteAcknowledgement:
     return market_data_connections.enable_connection(db, ctx, bank_id, connection_id)
 
 
 @router.delete(
     "/banks/{bank_id}/market-data/connections/{connection_id}",
-    response_model=MarketDataConnectionRead,
+    response_model=MarketDataConnectionWriteAcknowledgement,
     operation_id="revokeMarketDataConnection",
 )
 def revoke_market_data_connection(
     bank_id: str,
     connection_id: UUID,
     db: DbSession,
-    ctx: MutationTenant,
-) -> MarketDataConnectionRead:
+    ctx: ScopedMutationTenant,
+) -> MarketDataConnectionWriteAcknowledgement:
     return market_data_connections.revoke_connection(db, ctx, bank_id, connection_id)
 
 

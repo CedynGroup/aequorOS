@@ -62,6 +62,32 @@ class SourcePreferencesUpdate(ClosedModel):
     reason: str | None = None
 
 
+class SourcePreferenceCategoryWritten(ClosedModel):
+    """Only the fields this request's patch submitted — never untouched stored values."""
+
+    source: Source | None = Field(default=None, title="Category Source Written")
+    overlay: bool | None = Field(default=None, title="Category Overlay Written")
+
+
+class SourcePreferenceWriteAcknowledgement(ClosedModel):
+    """Write-only evidence of a source-preference upsert (D27/D34).
+
+    Categories absent from the submitted patch are ``None`` here, and a present
+    category echoes only the fields the patch carried. The full resolved
+    preference (including untouched stored categories and the defaults) is read
+    through the view-gated GET.
+    """
+
+    bank_id: str
+    curves: SourcePreferenceCategoryWritten | None = Field(
+        default=None, title="Curves Preference Written"
+    )
+    fx: SourcePreferenceCategoryWritten | None = Field(default=None, title="Fx Preference Written")
+    rates: SourcePreferenceCategoryWritten | None = Field(
+        default=None, title="Rates Preference Written"
+    )
+
+
 # ---------------------------------------------------------------------------
 # GET /planes
 # ---------------------------------------------------------------------------

@@ -60,6 +60,17 @@ with Session(create_engine(f"sqlite+pysqlite:///{database}")) as session:
             reason="Exercise ingestion through the real worker", commit=False,
         )
         assert user.authorization_version == 3
+        if role is RoleBundle.ANALYST:
+            # Mapping onboarding is a configure duty; the journey worker
+            # actor holds the explicit bank-local Configurator sentence.
+            authorization.create_role_binding(
+                session, organization_id=org, principal_user_id=user.id,
+                principal_type=PrincipalType.HUMAN, role_bundle=RoleBundle.CONFIGURATOR,
+                scope=authorization.BindingScope(InstitutionScope.INSTITUTION, bank.id, ModuleScope.DATA, SensitivityScope.RESTRICTED, data_scope=DataScope.ALL),
+                grantor=authorization.GrantorRef(GrantorType.SYSTEM, "e2e-worker-journey"),
+                reason="Exercise ingestion through the real worker", commit=False,
+            )
+            assert user.authorization_version == 4
     seed_tenant_register(session, bank=bank, approved_by="e2e-worker-journey", approved_at=utc_now())
     session.commit()
 `,

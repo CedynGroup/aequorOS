@@ -9,11 +9,12 @@
  * call) — so a prominent banner states where it flows.
  */
 
-import { useState } from "react";
+import { useId, useState } from "react";
 import { Info, Radio, Waypoints } from "lucide-react";
 import { ErrorPanel } from "@/components/ui/QueryBoundary";
 import StatusPill from "@/components/ui/StatusPill";
 import { fmtTimestamp } from "@/lib/api/values";
+import { useConfigureEligibility } from "@/lib/api/configureAccess";
 import {
   useMarketDataPlanes,
   useMarketDataSourcePreferences,
@@ -73,16 +74,19 @@ function OverlayToggle({
   checked,
   onChange,
   disabled,
+  descriptionId,
 }: {
   checked: boolean;
   onChange: (next: boolean) => void;
   disabled?: boolean;
+  descriptionId?: string;
 }) {
   return (
     <button
       type="button"
       role="switch"
       aria-checked={checked}
+      aria-describedby={descriptionId}
       disabled={disabled}
       onClick={() => onChange(!checked)}
       className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full border transition-colors ${
@@ -108,6 +112,8 @@ function CategoryRow({
   busy,
   focused,
   onFocus,
+  configureDisabled,
+  configureDescriptionId,
 }: {
   category: MarketDataCategory;
   preference: CategorySourcePreference;
@@ -117,6 +123,8 @@ function CategoryRow({
   busy: boolean;
   focused: boolean;
   onFocus: () => void;
+  configureDisabled?: boolean;
+  configureDescriptionId?: string;
 }) {
   const available = availableMap(planes);
   const selectedPlane = planes?.planes.find((plane) => plane.isSelected);
@@ -150,7 +158,10 @@ function CategoryRow({
           value={preference.source}
           available={available}
           onChange={onSource}
-          disabled={busy}
+          disabled={busy || configureDisabled}
+          descriptionId={
+            configureDisabled ? configureDescriptionId : undefined
+          }
         />
       </td>
       <td className="px-4 py-3 text-right align-middle">
@@ -159,7 +170,10 @@ function CategoryRow({
           <OverlayToggle
             checked={preference.overlay}
             onChange={onOverlay}
-            disabled={busy}
+            disabled={busy || configureDisabled}
+            descriptionId={
+              configureDisabled ? configureDescriptionId : undefined
+            }
           />
         </label>
       </td>
@@ -193,6 +207,12 @@ export default function SourcesControlRoom({
   };
 
   const [focused, setFocused] = useState<MarketDataCategory>("curves");
+  // The source-preference upsert is a configuration duty server-side (#184):
+  // the routing controls mirror the exact MARKETS configure gate.
+  const { allowed: canConfigure, reason: configureReason } =
+    useConfigureEligibility(bankId, "markets");
+  const configureRequirementId = useId();
+  const configureDisabled = !canConfigure;
 
   if (prefs.isError) {
     return <ErrorPanel error={prefs.error} onRetry={() => prefs.refetch()} />;
@@ -229,6 +249,14 @@ export default function SourcesControlRoom({
             </p>
           </div>
         </div>
+        {configureDisabled && (
+          <p
+            id={configureRequirementId}
+            className="border-t border-border px-4 py-3 text-caption text-warning"
+          >
+            {configureReason}
+          </p>
+        )}
         {!data ? (
           <div className="space-y-px" aria-busy>
             {MARKET_DATA_CATEGORIES.map((category) => (
@@ -257,6 +285,8 @@ export default function SourcesControlRoom({
                   busy={busy}
                   focused={focused === category}
                   onFocus={() => setFocused(category)}
+                  configureDisabled={configureDisabled}
+                  configureDescriptionId={configureRequirementId}
                   onSource={(source) =>
                     update.mutate(buildPatch(category, { source }))
                   }

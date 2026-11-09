@@ -6,7 +6,7 @@ from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, status
 
-from app.api.deps import DbSession, MutationTenant, ScopedMutationTenant, Tenant
+from app.api.deps import DbSession, ScopedMutationTenant, Tenant
 from app.core.authorization import Permission, Sensitivity
 from app.data_engine.api.upload_seam import (
     MAX_UPLOAD_BYTES,
@@ -53,13 +53,24 @@ def require_batch_run_access(bank_id: str, db: DbSession, ctx: ScopedMutationTen
     require_data_access(db, ctx, bank_id, Permission.RUN, Sensitivity.RESTRICTED)
 
 
+def require_configure_access(bank_id: str, db: DbSession, ctx: ScopedMutationTenant) -> None:
+    """Mapping creation is a configuration duty: exact data/configure/restricted.
+
+    Enforced here rather than in ``ingestion.create_mapping_config`` because that
+    service is also the internal provisioning path for system-seeded mappings
+    (Temenos onboarding, API_PUSH identity, worker jobs) under other authority.
+    """
+    require_data_access(db, ctx, bank_id, Permission.CONFIGURE, Sensitivity.RESTRICTED)
+
+
 @router.post(
     "/banks/{bank_id}/mapping-configs",
     response_model=MappingConfigRead,
     operation_id="createMappingConfig",
+    dependencies=[Depends(require_configure_access)],
 )
 def create_mapping_config(
-    bank_id: str, payload: MappingConfigCreate, db: DbSession, ctx: MutationTenant
+    bank_id: str, payload: MappingConfigCreate, db: DbSession, ctx: ScopedMutationTenant
 ) -> MappingConfigRead:
     return ingestion.create_mapping_config(db, ctx, bank_id, payload)
 

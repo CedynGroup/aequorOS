@@ -89,6 +89,17 @@ def _bank(db: Session) -> Bank:
         module=ModuleScope.DATA,
         sensitivity=SensitivityScope.RESTRICTED,
     )
+    # Connection lifecycle is a configure duty; the fixture officer holds it
+    # explicitly, never through the analyst bundle.
+    grant_institution_authority(
+        db,
+        organization_id=ORG_1,
+        bank_id=bank.id,
+        user_id=USER_1,
+        bundle=RoleBundle.CONFIGURATOR,
+        module=ModuleScope.DATA,
+        sensitivity=SensitivityScope.RESTRICTED,
+    )
     return bank
 
 
@@ -158,27 +169,27 @@ def test_create_seals_credentials_and_activates(
     db_session: Session, ctx: TenantContext, vault_key: None
 ) -> None:
     bank = _bank(db_session)
-    read = database_connections.create_connection(db_session, ctx, bank.id, _create_payload())
-    assert read.status == "ACTIVE"
-    assert read.credential_fingerprint
-    assert read.validation_error is None
+    ack = database_connections.create_connection(db_session, ctx, bank.id, _create_payload())
+    assert ack.status == "ACTIVE"
+    assert ack.validation_error is None
     # The sealed ciphertext exists on the row but the secret never appears in the view.
-    row = db_session.get(DatabaseDirectConnection, read.id)
+    row = db_session.get(DatabaseDirectConnection, ack.id)
     assert row is not None
+    assert row.credential_fingerprint
     assert row.credential_ciphertext is not None
     assert SECRET not in row.credential_ciphertext
-    assert SECRET not in read.model_dump_json()
+    assert SECRET not in ack.model_dump_json()
 
 
 def test_create_bad_credential_shape_stays_testing(
     db_session: Session, ctx: TenantContext, vault_key: None
 ) -> None:
     bank = _bank(db_session)
-    read = database_connections.create_connection(
+    ack = database_connections.create_connection(
         db_session, ctx, bank.id, _create_payload(credentials={"username": "RO"})
     )
-    assert read.status == "TESTING"
-    assert read.validation_error
+    assert ack.status == "TESTING"
+    assert ack.validation_error
 
 
 def test_create_rejects_jdbc_without_block(
@@ -252,27 +263,30 @@ def test_rotate_credentials_changes_fingerprint(
     db_session: Session, ctx: TenantContext, vault_key: None
 ) -> None:
     bank = _bank(db_session)
-    read = database_connections.create_connection(db_session, ctx, bank.id, _create_payload())
-    before = read.credential_fingerprint
-    updated = database_connections.update_connection(
+    ack = database_connections.create_connection(db_session, ctx, bank.id, _create_payload())
+    row = db_session.get(DatabaseDirectConnection, ack.id)
+    assert row is not None
+    before = row.credential_fingerprint
+    rotated = database_connections.update_connection(
         db_session,
         ctx,
         bank.id,
-        read.id,
+        ack.id,
         DatabaseConnectionUpdate(credentials={"username": "RO_NEW", "password": "another-secret"}),
     )
-    assert updated.credential_fingerprint != before
+    assert rotated.status == "ACTIVE"
+    assert row.credential_fingerprint != before
 
 
 def test_revoke_wipes_credential(db_session: Session, ctx: TenantContext, vault_key: None) -> None:
     bank = _bank(db_session)
-    read = database_connections.create_connection(db_session, ctx, bank.id, _create_payload())
-    revoked = database_connections.revoke_connection(db_session, ctx, bank.id, read.id)
-    assert revoked.status == "REVOKED"
-    assert revoked.credential_fingerprint is None
-    row = db_session.get(DatabaseDirectConnection, read.id)
+    ack = database_connections.create_connection(db_session, ctx, bank.id, _create_payload())
+    row = db_session.get(DatabaseDirectConnection, ack.id)
     assert row is not None
+    revoked = database_connections.revoke_connection(db_session, ctx, bank.id, ack.id)
+    assert revoked.status == "REVOKED"
     assert row.credential_ciphertext is None
+    assert row.credential_fingerprint is None
 
 
 def test_test_connection_refuses_a_stored_host_that_resolves_to_metadata(

@@ -40,6 +40,7 @@ from app.live.service.fact_derivation import _load_position_rows
 from app.models import Bank, CanonicalPosition, CanonicalPositionSnapshot, CanonicalReferenceRow
 from app.storage.client import StorageLocation
 from tests.data_engine.adapters.excel_csv import fixtures
+from tests.support.bank_seeding import seed_bank
 from tests.support.factories.authorization import grant_institution_authority
 from tests.support.helpers import ORG_1, ORG_2, USER_1, USER_2, headers
 from tests.support.ingestion_seeding import (
@@ -47,7 +48,6 @@ from tests.support.ingestion_seeding import (
     FULL_MAPPING,
     RECON_MAPPING,
     activate_mapping,
-    seed_bank,
     stage_source,
     start_batch,
 )

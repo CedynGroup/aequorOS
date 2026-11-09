@@ -21,11 +21,13 @@ from sqlalchemy import event, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
+from app.core.authorization import ModuleScope, RoleBundle, SensitivityScope
 from app.market_data.schemas.market_data_overlays import MarketDataOverlayCreate
 from app.market_data.schemas.market_data_sources import (
     CategoryPreferenceUpdate,
     PlaneCurveItemRead,
     PlaneIndexItemRead,
+    SourcePreferenceCategoryWritten,
     SourcePreferencesUpdate,
 )
 from app.market_data.service import market_data, market_data_overlays, market_data_sources
@@ -41,12 +43,17 @@ from app.models import (
     LineageRecord,
     MarketDataSourcePreference,
 )
+from tests.support.factories.authorization import grant_institution_authority
 from tests.support.helpers import ORG_1, ORG_2, USER_1, USER_2
 
 AS_OF = date(2026, 7, 15)
 NOW = datetime(2026, 7, 15, 12, 0, tzinfo=UTC)
-CTX = TenantContext(organization_id=ORG_1, actor_user_id=USER_1)
-CTX_2 = TenantContext(organization_id=ORG_2, actor_user_id=USER_2)
+CTX = TenantContext(
+    organization_id=ORG_1, actor_user_id=USER_1, authorization_version=1
+)
+CTX_2 = TenantContext(
+    organization_id=ORG_2, actor_user_id=USER_2, authorization_version=1
+)
 
 
 def _seed_bank(db: Session, organization_id: str = ORG_1) -> str:
@@ -61,6 +68,18 @@ def _seed_bank(db: Session, organization_id: str = ORG_1) -> str:
     )
     db.add(bank)
     db.flush()
+    if organization_id == ORG_1:
+        # The preference PUT is a configure duty; the fixture officer holds the
+        # exact markets/configure/restricted binding explicitly, never a scalar role.
+        grant_institution_authority(
+            db,
+            organization_id=organization_id,
+            bank_id=bank.id,
+            user_id=USER_1,
+            bundle=RoleBundle.CONFIGURATOR,
+            module=ModuleScope.MARKETS,
+            sensitivity=SensitivityScope.RESTRICTED,
+        )
     return bank.id
 
 
@@ -220,12 +239,17 @@ def test_set_preference_upsert_and_audit(db_session: Session) -> None:
         reason="switch curves to the licensed vendor feed",
     )
     result = market_data_sources.set_preference(db_session, CTX, bank_id, patch)
-    assert result.curves.source == "vendor"
-    assert result.curves.overlay is False
-    # Untouched categories fall to the defaults on first write.
-    assert result.fx.source == "aequor"
-    assert result.fx.overlay is True
-    assert result.updated_by == USER_1
+    # The acknowledgement echoes only the submitted patch (D34 write-only ack).
+    assert result.curves == SourcePreferenceCategoryWritten(source="vendor", overlay=False)
+    assert result.fx is None
+    assert result.rates is None
+
+    # Untouched categories fall to the defaults on first write; read the
+    # resolved row through the authorized read path.
+    resolved = market_data_sources.load_preference(db_session, ORG_1, bank_id)
+    assert resolved.fx.source == "aequor"
+    assert resolved.fx.overlay is True
+    assert resolved.updated_by == USER_1
 
     row = db_session.scalar(
         select(MarketDataSourcePreference).where(
@@ -256,9 +280,14 @@ def test_set_preference_partial_patch_preserves_other_categories(db_session: Ses
         bank_id,
         SourcePreferencesUpdate(rates=CategoryPreferenceUpdate(overlay=False)),
     )
-    assert result.fx.source == "bank"  # kept from the first write
-    assert result.rates.overlay is False
-    assert result.curves.source == "aequor"
+    # The partial acknowledgement carries only the patch it submitted (D34).
+    assert result.rates == SourcePreferenceCategoryWritten(source=None, overlay=False)
+    assert result.curves is None
+    assert result.fx is None
+    resolved = market_data_sources.load_preference(db_session, ORG_1, bank_id)
+    assert resolved.fx.source == "bank"  # kept from the first write
+    assert resolved.rates.overlay is False
+    assert resolved.curves.source == "aequor"
 
 
 def test_preferred_projection_curve_honours_source_selection(db_session: Session) -> None:

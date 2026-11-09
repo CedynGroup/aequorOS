@@ -15,6 +15,7 @@ import type {
   ErrorResponse,
   ForwardGridRead,
   PlanesRead,
+  SourcePreferenceWriteAcknowledgement,
   SourcePreferencesRead,
   SourcePreferencesUpdate,
 } from "../models/index";
@@ -25,6 +26,8 @@ import {
   ForwardGridReadToJSON,
   PlanesReadFromJSON,
   PlanesReadToJSON,
+  SourcePreferenceWriteAcknowledgementFromJSON,
+  SourcePreferenceWriteAcknowledgementToJSON,
   SourcePreferencesReadFromJSON,
   SourcePreferencesReadToJSON,
   SourcePreferencesUpdateFromJSON,
@@ -276,7 +279,7 @@ export class MarketDataSourcesApi extends runtime.BaseAPI {
   async updateMarketDataSourcePreferencesRaw(
     requestParameters: UpdateMarketDataSourcePreferencesRequest,
     initOverrides?: RequestInit | runtime.InitOverrideFunction,
-  ): Promise<runtime.ApiResponse<SourcePreferencesRead>> {
+  ): Promise<runtime.ApiResponse<SourcePreferenceWriteAcknowledgement>> {
     if (requestParameters["bankId"] == null) {
       throw new runtime.RequiredError(
         "bankId",
@@ -322,7 +325,7 @@ export class MarketDataSourcesApi extends runtime.BaseAPI {
     );
 
     return new runtime.JSONApiResponse(response, (jsonValue) =>
-      SourcePreferencesReadFromJSON(jsonValue),
+      SourcePreferenceWriteAcknowledgementFromJSON(jsonValue),
     );
   }
 
@@ -332,7 +335,7 @@ export class MarketDataSourcesApi extends runtime.BaseAPI {
   async updateMarketDataSourcePreferences(
     requestParameters: UpdateMarketDataSourcePreferencesRequest,
     initOverrides?: RequestInit | runtime.InitOverrideFunction,
-  ): Promise<SourcePreferencesRead> {
+  ): Promise<SourcePreferenceWriteAcknowledgement> {
     const response = await this.updateMarketDataSourcePreferencesRaw(
       requestParameters,
       initOverrides,

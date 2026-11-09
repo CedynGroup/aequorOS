@@ -70,6 +70,23 @@ export interface MarketDataSourcePreferencesPatch {
   reason?: string;
 }
 
+/**
+ * `PUT /source-preferences` write-only acknowledgement (D27/D34): a present
+ * category echoes only the fields the submitted patch carried; categories the
+ * patch did not touch are `null`. The resolved preference is read through the
+ * view-gated GET.
+ */
+export interface MarketDataSourcePreferenceWritten {
+  source: MarketDataSource | null;
+  overlay: boolean | null;
+}
+
+export interface MarketDataSourcePreferenceWriteAck {
+  curves: MarketDataSourcePreferenceWritten | null;
+  fx: MarketDataSourcePreferenceWritten | null;
+  rates: MarketDataSourcePreferenceWritten | null;
+}
+
 /** Provenance + freshness for one plane column (mirrors SourceAttribution). */
 export interface PlaneAttribution {
   sourceSystem: string;
@@ -294,6 +311,24 @@ function parsePreferences(body: unknown): MarketDataSourcePreferences {
   };
 }
 
+function parseWrittenCategory(value: unknown): MarketDataSourcePreferenceWritten | null {
+  if (!value || typeof value !== 'object') return null;
+  const source = field(value, 'source');
+  const overlay = field(value, 'overlay');
+  return {
+    source: source === undefined || source === null ? null : parseSource(source),
+    overlay: overlay === undefined || overlay === null ? null : bool(overlay),
+  };
+}
+
+function parsePreferenceWriteAck(body: unknown): MarketDataSourcePreferenceWriteAck {
+  return {
+    curves: parseWrittenCategory(field(body, 'curves')),
+    fx: parseWrittenCategory(field(body, 'fx')),
+    rates: parseWrittenCategory(field(body, 'rates')),
+  };
+}
+
 function parseAttribution(value: unknown): PlaneAttribution | null {
   if (!value || typeof value !== 'object') return null;
   return {
@@ -405,12 +440,12 @@ export async function getMarketDataSourcePreferences(
   return parsePreferences(await mdFetch(`${base(bankId)}/source-preferences`));
 }
 
-/** `PUT /source-preferences` (partial body; returns the resolved row). */
+/** `PUT /source-preferences` (partial body; returns the write-only acknowledgement). */
 export async function putMarketDataSourcePreferences(
   bankId: string,
   patch: MarketDataSourcePreferencesPatch
-): Promise<MarketDataSourcePreferences> {
-  return parsePreferences(
+): Promise<MarketDataSourcePreferenceWriteAck> {
+  return parsePreferenceWriteAck(
     await mdFetch(`${base(bankId)}/source-preferences`, {
       method: 'PUT',
       body: JSON.stringify(patch),

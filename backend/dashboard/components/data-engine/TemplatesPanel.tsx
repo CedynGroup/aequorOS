@@ -6,11 +6,12 @@
  * which mapping each format needs and offers one-click activation.
  */
 
-import { useState } from "react";
+import { useId, useState } from "react";
 import { Download, FileDown } from "lucide-react";
 import DataAccessNotice from "@/components/ui/DataAccessNotice";
 import { ErrorPanel } from "@/components/ui/QueryBoundary";
 import { useBankContext } from "@/components/shell/BankContext";
+import { useConfigureEligibility } from "@/lib/api/configureAccess";
 import {
   STARTER_TEMPLATES,
   useActivateTemplate,
@@ -44,6 +45,11 @@ export default function TemplatesPanel() {
   const [format, setFormat] = useState<TemplateFormat>("canonical");
   const configsQuery = useMappingConfigs(bank?.id, authorityPending);
   const activate = useActivateTemplate(bank?.id);
+  // Mapping-config creation is a configuration duty server-side (#184): the
+  // activation mirrors the exact DATA configure gate.
+  const { allowed: canConfigure, reason: configureReason } =
+    useConfigureEligibility(bank?.id, "data");
+  const configureRequirementId = useId();
 
   const requiredName = REQUIRED_MAPPING[format];
   const activeConfig = (
@@ -118,14 +124,27 @@ export default function TemplatesPanel() {
               These files ingest against the{" "}
               <span className="font-medium">{requiredName}</span> mapping.
               {starter && (
-                <button
-                  type="button"
-                  disabled={!bank || activate.isPending}
-                  onClick={() => activate.mutate(starter)}
-                  className="inline-flex items-center px-2 py-1 rounded-sm bg-action text-white font-medium hover:bg-action-hover disabled:opacity-40 disabled:cursor-not-allowed"
-                >
-                  {activate.isPending ? "Activating…" : "Activate it"}
-                </button>
+                <>
+                  <button
+                    type="button"
+                    disabled={!bank || activate.isPending || !canConfigure}
+                    aria-describedby={
+                      !canConfigure ? configureRequirementId : undefined
+                    }
+                    onClick={() => activate.mutate(starter)}
+                    className="inline-flex items-center px-2 py-1 rounded-sm bg-action text-white font-medium hover:bg-action-hover disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    {activate.isPending ? "Activating…" : "Activate it"}
+                  </button>
+                  {!canConfigure && (
+                    <span
+                      id={configureRequirementId}
+                      className="basis-full text-warning"
+                    >
+                      {configureReason}
+                    </span>
+                  )}
+                </>
               )}
             </span>
           )}

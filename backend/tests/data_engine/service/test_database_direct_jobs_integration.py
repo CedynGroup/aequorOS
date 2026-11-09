@@ -19,6 +19,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
+from app.core.authorization import ModuleScope, RoleBundle, SensitivityScope
 from app.core.config import get_settings
 from app.data_engine.adapters.database_direct.config import ConnectionConfig
 from app.data_engine.adapters.database_direct.credential_vault import DatabaseDirectCredentialVault
@@ -39,6 +40,7 @@ from app.data_engine.service import database_connections, database_direct_jobs
 from app.db.base import utc_now
 from app.models import AuditEvent, Bank, Job
 from app.services import job_queue, scheduler
+from tests.support.factories.authorization import grant_institution_authority
 from tests.support.factories.outbound import stub_public_dns
 from tests.support.helpers import ORG_1, USER_1
 
@@ -69,7 +71,10 @@ def _resolvable_core(monkeypatch: pytest.MonkeyPatch) -> None:
 
 @pytest.fixture
 def ctx() -> TenantContext:
-    return TenantContext(organization_id=ORG_1, actor_user_id=USER_1)
+    # The fixture grant pins the officer's authorization_version to 1.
+    return TenantContext(
+        organization_id=ORG_1, actor_user_id=USER_1, authorization_version=1
+    )
 
 
 def _bank(db: Session) -> Bank:
@@ -84,6 +89,17 @@ def _bank(db: Session) -> Bank:
     )
     db.add(bank)
     db.flush()
+    # Connection onboarding is a configure duty; the fixture officer holds it
+    # explicitly so create_connection can provision the probe target.
+    grant_institution_authority(
+        db,
+        organization_id=ORG_1,
+        bank_id=bank.id,
+        user_id=USER_1,
+        bundle=RoleBundle.CONFIGURATOR,
+        module=ModuleScope.DATA,
+        sensitivity=SensitivityScope.RESTRICTED,
+    )
     return bank
 
 

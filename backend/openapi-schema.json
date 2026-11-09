@@ -18617,6 +18617,49 @@
         "title": "DatabaseConnectionUpdate",
         "type": "object"
       },
+      "DatabaseConnectionWriteAcknowledgement": {
+        "additionalProperties": false,
+        "description": "Write-only evidence of a connection lifecycle mutation (D27/D34).\n\nCarries the mutated row's id, the bank, the status value this request wrote\n(``None`` when the request wrote no status, e.g. a no-rotation patch), and \u2014\nonly where the check consumed credentials submitted in this request \u2014 the\nbank-facing validation error. Stored configuration (host, schemas,\nextraction spec, sync history, stored-credential state) is never echoed:\nread the connection through its view-gated GET.",
+        "properties": {
+          "bank_id": {
+            "title": "Bank Id",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Connection Written Status"
+          },
+          "validation_error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Connection Validation Error"
+          }
+        },
+        "required": [
+          "id",
+          "bank_id"
+        ],
+        "title": "DatabaseConnectionWriteAcknowledgement",
+        "type": "object"
+      },
       "DeclaredMethodologyRead": {
         "additionalProperties": false,
         "description": "One \"which figure does this return mean?\" disclosure, typed.\n\nCF-1's answer to the audit's LCR question: BSD3's LCR and LMT Table 11's LCR\nare different methodologies by design, and forcing them to agree would break\na correct engine. The registry has recorded that since ARCH-4 and the\ngenerator has written it into ``snapshot[\"provenance\"]`` \u2014 where, until\n2026-08-22, nothing read it (audit D-20). ``snapshot`` is typed\n``dict[str, Any]``, so an untyped blob is not a contract; this is.",
@@ -45840,6 +45883,49 @@
         "title": "MarketDataConnectionUpdate",
         "type": "object"
       },
+      "MarketDataConnectionWriteAcknowledgement": {
+        "additionalProperties": false,
+        "description": "Write-only evidence of a connection lifecycle mutation (D27/D34).\n\nCarries the mutated row's id, the bank, the status value this request wrote\n(``None`` when the request wrote no status, e.g. a no-rotation patch), and \u2014\nonly where the check consumed credentials submitted in this request \u2014 the\nbank-facing validation error. Stored configuration (scopes, schedule,\ncredential fingerprint/expiry, pull history) is never echoed: read the\nconnection through its view-gated GET.",
+        "properties": {
+          "bank_id": {
+            "title": "Bank Id",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Connection Written Status"
+          },
+          "validation_error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Connection Validation Error"
+          }
+        },
+        "required": [
+          "id",
+          "bank_id"
+        ],
+        "title": "MarketDataConnectionWriteAcknowledgement",
+        "type": "object"
+      },
       "MarketDataOverlayCreate": {
         "additionalProperties": false,
         "description": "One new adjustment record; ``supersedes`` performs an append-only edit.",
@@ -58169,6 +58255,89 @@
         "title": "SourceBookRead",
         "type": "object"
       },
+      "SourcePreferenceCategoryWritten": {
+        "additionalProperties": false,
+        "description": "Only the fields this request's patch submitted \u2014 never untouched stored values.",
+        "properties": {
+          "overlay": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Category Overlay Written"
+          },
+          "source": {
+            "anyOf": [
+              {
+                "enum": [
+                  "aequor",
+                  "bank",
+                  "vendor"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Category Source Written"
+          }
+        },
+        "title": "SourcePreferenceCategoryWritten",
+        "type": "object"
+      },
+      "SourcePreferenceWriteAcknowledgement": {
+        "additionalProperties": false,
+        "description": "Write-only evidence of a source-preference upsert (D27/D34).\n\nCategories absent from the submitted patch are ``None`` here, and a present\ncategory echoes only the fields the patch carried. The full resolved\npreference (including untouched stored categories and the defaults) is read\nthrough the view-gated GET.",
+        "properties": {
+          "bank_id": {
+            "title": "Bank Id",
+            "type": "string"
+          },
+          "curves": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SourcePreferenceCategoryWritten"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Curves Preference Written"
+          },
+          "fx": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SourcePreferenceCategoryWritten"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fx Preference Written"
+          },
+          "rates": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/SourcePreferenceCategoryWritten"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rates Preference Written"
+          }
+        },
+        "required": [
+          "bank_id"
+        ],
+        "title": "SourcePreferenceWriteAcknowledgement",
+        "type": "object"
+      },
       "SourcePreferencesRead": {
         "additionalProperties": false,
         "description": "The bank's resolved preference (defaults synthesised when no row).",
@@ -60200,6 +60369,49 @@
           }
         },
         "title": "TemenosConnectionUpdate",
+        "type": "object"
+      },
+      "TemenosConnectionWriteAcknowledgement": {
+        "additionalProperties": false,
+        "description": "Write-only evidence of a connection lifecycle mutation (D27/D34).\n\nCarries the mutated row's id, the bank, the status value this request wrote\n(``None`` when the request wrote no status, e.g. a no-rotation patch), and \u2014\nonly where the check consumed credentials submitted in this request \u2014 the\nbank-facing validation error. Stored configuration (endpoint, companies,\nschedule, catalog overrides, pull history, stored-credential state) is never\nechoed: read the connection through its view-gated GET.",
+        "properties": {
+          "bank_id": {
+            "title": "Bank Id",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Connection Written Status"
+          },
+          "validation_error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Connection Validation Error"
+          }
+        },
+        "required": [
+          "id",
+          "bank_id"
+        ],
+        "title": "TemenosConnectionWriteAcknowledgement",
         "type": "object"
       },
       "TemenosDomainInfoRead": {
@@ -76070,7 +76282,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/DatabaseConnectionRead"
+                  "$ref": "#/components/schemas/DatabaseConnectionWriteAcknowledgement"
                 }
               }
             },
@@ -76177,7 +76389,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/DatabaseConnectionRead"
+                  "$ref": "#/components/schemas/DatabaseConnectionWriteAcknowledgement"
                 }
               }
             },
@@ -76397,7 +76609,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/DatabaseConnectionRead"
+                  "$ref": "#/components/schemas/DatabaseConnectionWriteAcknowledgement"
                 }
               }
             },
@@ -76504,7 +76716,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/DatabaseConnectionRead"
+                  "$ref": "#/components/schemas/DatabaseConnectionWriteAcknowledgement"
                 }
               }
             },
@@ -76611,7 +76823,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/DatabaseConnectionRead"
+                  "$ref": "#/components/schemas/DatabaseConnectionWriteAcknowledgement"
                 }
               }
             },
@@ -98690,7 +98902,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/MarketDataConnectionRead"
+                  "$ref": "#/components/schemas/MarketDataConnectionWriteAcknowledgement"
                 }
               }
             },
@@ -98797,7 +99009,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/MarketDataConnectionRead"
+                  "$ref": "#/components/schemas/MarketDataConnectionWriteAcknowledgement"
                 }
               }
             },
@@ -98912,7 +99124,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/MarketDataConnectionRead"
+                  "$ref": "#/components/schemas/MarketDataConnectionWriteAcknowledgement"
                 }
               }
             },
@@ -99019,7 +99231,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/MarketDataConnectionRead"
+                  "$ref": "#/components/schemas/MarketDataConnectionWriteAcknowledgement"
                 }
               }
             },
@@ -99126,7 +99338,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/MarketDataConnectionRead"
+                  "$ref": "#/components/schemas/MarketDataConnectionWriteAcknowledgement"
                 }
               }
             },
@@ -99340,7 +99552,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/MarketDataConnectionRead"
+                  "$ref": "#/components/schemas/MarketDataConnectionWriteAcknowledgement"
                 }
               }
             },
@@ -100361,7 +100573,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/SourcePreferencesRead"
+                  "$ref": "#/components/schemas/SourcePreferenceWriteAcknowledgement"
                 }
               }
             },
@@ -112624,7 +112836,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/TemenosConnectionRead"
+                  "$ref": "#/components/schemas/TemenosConnectionWriteAcknowledgement"
                 }
               }
             },
@@ -112731,7 +112943,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/TemenosConnectionRead"
+                  "$ref": "#/components/schemas/TemenosConnectionWriteAcknowledgement"
                 }
               }
             },
@@ -112846,7 +113058,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/TemenosConnectionRead"
+                  "$ref": "#/components/schemas/TemenosConnectionWriteAcknowledgement"
                 }
               }
             },
@@ -113070,7 +113282,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/TemenosConnectionRead"
+                  "$ref": "#/components/schemas/TemenosConnectionWriteAcknowledgement"
                 }
               }
             },
@@ -113177,7 +113389,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/TemenosConnectionRead"
+                  "$ref": "#/components/schemas/TemenosConnectionWriteAcknowledgement"
                 }
               }
             },
@@ -113508,7 +113720,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/TemenosConnectionRead"
+                  "$ref": "#/components/schemas/TemenosConnectionWriteAcknowledgement"
                 }
               }
             },
