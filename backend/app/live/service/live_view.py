@@ -41,6 +41,7 @@ from app.policy.public import (
 )
 from app.services import job_queue
 from app.services.audit import record_event
+from app.services.public_ids import normalize_public_id
 
 _MODULE_ORDER = {
     module: index
@@ -342,9 +343,11 @@ def list_live_snapshots(
 
     One service gate per request: the ``live_access`` map resolves the
     module's authority, and an unknown name denies without ever being served
-    ungated. A foreign bank stays an opaque 404.
+    ungated. A foreign bank stays an opaque 404. The bank id is normalized
+    like the shared resolver the route's old gate used, so the case-insensitive
+    spellings it accepted still resolve.
     """
-    bank = _get_bank_or_404(db, ctx, bank_id)
+    bank = _get_bank_or_404(db, ctx, normalize_public_id(bank_id))
     authorized_module = live_access.module_for(module)
     if authorized_module is None:
         raise HTTPException(

@@ -414,6 +414,28 @@ def test_snapshot_ladder_serves_only_bound_modules(db_client: TestClient) -> Non
     assert unbound.status_code == 403
 
 
+def test_snapshot_ladder_normalizes_the_bank_id(db_client: TestClient) -> None:
+    """A lowercase or padded bank id resolves like the shared resolver's lookup."""
+    _seed_and_refresh(db_client)
+    viewer, version = _user_with_module_view(
+        ModuleScope.CAPITAL, "ladder-normalized-viewer@example.test"
+    )
+    auth = headers(user_id=viewer, authorization_version=version)
+    padded = db_client.get(
+        f"{_BASE}/live-snapshots",
+        headers=auth,
+        params={"module": "capital"},
+    )
+    assert padded.status_code == 200
+    lower = db_client.get(
+        f"/api/v1/banks/{str(SAMPLE_BANK_ID).lower()}/live-snapshots",
+        headers=auth,
+        params={"module": "capital"},
+    )
+    assert lower.status_code == 200, lower.text
+    assert lower.json()["module"] == "capital"
+
+
 def test_snapshot_service_denies_an_unknown_module_in_one_evaluation(
     db_client: TestClient,
 ) -> None:
