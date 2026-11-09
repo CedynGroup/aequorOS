@@ -435,7 +435,7 @@ def test_baseline_rates() -> None:
             created_at="2026-11-08T13:00:00Z",
         ),
     ]
-    flaky = event("flake:A", event="pull_request")
+    flaky = event("flake:A", event="pull_request", run_id=3)
     rates = flake_report.baseline_rates(runs, [flaky])
     entry = rates["Risk Service CI"]
     assert entry["total_runs"] == 4
@@ -490,6 +490,47 @@ def test_report_json_round_trips() -> None:
     encoded = json.dumps(report)
     assert "flake:A" in encoded
     assert report["ranking"][0]["rerun_count"] == 1
+
+
+def test_rerun_run_merges_test_names_across_findings() -> None:
+    run = flake_report.RunRecord(
+        run_id=9,
+        workflow="Risk Service CI",
+        event="pull_request",
+        head_branch="feature/a",
+        head_sha="abc123",
+        run_attempt=2,
+        conclusion="success",
+        created_at="2026-11-08T10:00:00Z",
+    )
+    events = [
+        event("pytest:tests/a.py", run_id=9, rerun=True, test_names=["t_a"]),
+        event("pytest:tests/b.py", run_id=9, rerun=True, test_names=["t_b1", "t_b2"]),
+    ]
+    report = flake_report.build_report(runs=[run], events=events, meta=REPORT_META)
+    detail = report["rerun_runs"][0]
+    assert len(detail["jobs"]) == 1
+    assert sorted(detail["jobs"][0]["test_names"]) == ["t_a", "t_b1", "t_b2"]
+    assert sorted(detail["test_names"]) == ["t_a", "t_b1", "t_b2"]
+
+
+def test_branch_breakage_excluded_from_baseline_rate() -> None:
+    run = flake_report.RunRecord(
+        run_id=11,
+        workflow="Risk Service CI",
+        event="pull_request",
+        head_branch="feature/break",
+        head_sha="abc123",
+        run_attempt=1,
+        conclusion="failure",
+        created_at="2026-11-08T10:00:00Z",
+    )
+    events = [event("flake:branch-only", branch="feature/break", run_id=11)]
+    report = flake_report.build_report(runs=[run], events=events, meta=REPORT_META)
+    entry = report["baseline"]["Risk Service CI"]
+    assert entry["flaky_failed_runs"] == 0
+    assert entry["baseline_flake_rate"] == 0.0
+    assert len(report["branch_breakage"]) == 1
 
 
 # --- CLI ----------------------------------------------------------------------

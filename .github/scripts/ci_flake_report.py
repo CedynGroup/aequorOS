@@ -635,18 +635,25 @@ def build_report(
                 "test_names": [],
             },
         )
-        if not any(job["job"] == event.job for job in detail["jobs"]):
-            detail["jobs"].append(
-                {
-                    "job": event.job,
-                    "failed_attempt": event.attempt,
-                    "test_names": list(event.test_names),
-                }
-            )
+        job_detail = next((entry for entry in detail["jobs"] if entry["job"] == event.job), None)
+        if job_detail is None:
+            job_detail = {
+                "job": event.job,
+                "failed_attempt": event.attempt,
+                "test_names": [],
+            }
+            detail["jobs"].append(job_detail)
+        for name in event.test_names:
+            if name not in job_detail["test_names"]:
+                job_detail["test_names"].append(name)
         for name in event.test_names:
             if name not in detail["test_names"]:
                 detail["test_names"].append(name)
 
+    # Branch breakage is excluded from the baseline flake rate (the report
+    # notes say so); it is deterministic failure on its own branch.
+    breakage_signatures = {row["signature"] for row in breakage_rows}
+    baseline_events = [event for event in events if event.signature not in breakage_signatures]
     return {
         "meta": {
             "repo": meta["repo"],
@@ -659,7 +666,7 @@ def build_report(
                 for workflow, counts in sorted(run_counts.items())
             },
         },
-        "baseline": baseline_rates(runs, events),
+        "baseline": baseline_rates(runs, baseline_events),
         "ranking": flake_rows,
         "infrastructure": infra_rows,
         "branch_breakage": breakage_rows,
