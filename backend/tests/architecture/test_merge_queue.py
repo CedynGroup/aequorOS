@@ -49,8 +49,6 @@ def _condition_runs(condition: str, values: dict[str, str]) -> bool:
                 return value
             case ast.Name(id=name) if name in {"true", "false"}:
                 return name == "true"
-            case ast.Call(func=ast.Name(id="always"), args=[]):
-                return True
             case ast.BoolOp(op=operator, values=operands):
                 results = [evaluate(operand) for operand in operands]
                 return all(results) if isinstance(operator, ast.And) else any(results)

@@ -47,7 +47,7 @@ jobs:
     needs: changes
     # The queue never runs change detection, so its entries run every shard;
     # a pull request runs the shards only when the journey area changed.
-    if: github.event_name == 'merge_group' || needs.changes.outputs.journeys == 'true'
+    if: ${{ !cancelled() && (github.event_name == 'merge_group' || needs.changes.outputs.journeys == 'true') }}
     strategy:
       fail-fast: false
       matrix:
