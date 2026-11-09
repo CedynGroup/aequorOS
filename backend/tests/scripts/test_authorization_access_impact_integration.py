@@ -1092,6 +1092,129 @@ def test_the_report_names_who_may_read_examiner_evidence(db_session: Session) ->
     assert cells["admin@impact.example"]["examiner"] == "-"
 
 
+def test_the_report_names_live_refresh_and_mint_authority(db_session: Session) -> None:
+    """The live-mutation cutover (#177 part B): who keeps the two buttons.
+
+    ``refresh`` is the complete DATA/confidential sentence — the monitoring
+    ``view`` #186 already demanded PLUS the ``run`` this cutover adds — so a
+    view-only monitor loses the button the analyst beside them keeps.
+    ``mint`` is the REGULATORY/restricted monitoring view plus confidential
+    ``run`` on EVERY module the bank's regime runs (``module_scope
+    .runs_module``): a caller who can run all but the Markets implied rating
+    mints nothing, and an SDI plan that excludes FX and FTP does not demand
+    them.
+    """
+    db_session.add(Organization(id=ORG, name="Live mutation impact"))
+    db_session.add(
+        Bank(
+            id=BANK,
+            organization_id=ORG,
+            name="Impact Bank",
+            short_name="Impact",
+            currency="GHS",
+            jurisdiction_code="GH",
+            license_type="universal_bank",
+            institution_type=FALLBACK_TYPE_CODE,
+        )
+    )
+    db_session.add(
+        Bank(
+            id=OTHER_BANK,
+            organization_id=ORG,
+            name="Savings Bank",
+            short_name="Savings",
+            currency="GHS",
+            jurisdiction_code="GH",
+            license_type="savings_and_loans",
+            institution_type="savings_and_loans",
+        )
+    )
+    monitor = _user(db_session, "monitor@impact.example")
+    recompute = _user(db_session, "recompute@impact.example", role="analyst")
+    minter = _user(db_session, "minter@impact.example", role="analyst")
+    desk = _user(db_session, "desk@impact.example", role="analyst")
+    db_session.commit()
+
+    # The monitoring view alone: could refresh before this cutover, cannot after.
+    _grant(
+        db_session,
+        monitor,
+        RoleBundle.VIEWER,
+        institution_scope=InstitutionScope.INSTITUTION,
+        institution_id=BANK,
+        module_scope=ModuleScope.DATA,
+        sensitivity_scope=SensitivityScope.CONFIDENTIAL,
+    )
+    # View plus run: the complete refresh sentence.
+    _grant(
+        db_session,
+        recompute,
+        RoleBundle.ANALYST,
+        institution_scope=InstitutionScope.INSTITUTION,
+        institution_id=BANK,
+        module_scope=ModuleScope.DATA,
+        sensitivity_scope=SensitivityScope.CONFIDENTIAL,
+    )
+    # Full mint authority on the universal bank: run everywhere, plus the
+    # exact-bank regulatory monitoring view.
+    _grant(
+        db_session,
+        minter,
+        RoleBundle.ANALYST,
+        module_scope=ModuleScope.ALL,
+        sensitivity_scope=SensitivityScope.CONFIDENTIAL,
+    )
+    _grant(
+        db_session,
+        minter,
+        RoleBundle.VIEWER,
+        institution_scope=InstitutionScope.INSTITUTION,
+        institution_id=BANK,
+        module_scope=ModuleScope.REGULATORY,
+        sensitivity_scope=SensitivityScope.RESTRICTED,
+    )
+    # Every engine but the Markets implied rating on the SDI bank: no mint —
+    # while FX and FTP, which the SDI plan excludes, are genuinely not demanded.
+    for module_scope_value in (
+        ModuleScope.LIQUIDITY,
+        ModuleScope.CAPITAL,
+        ModuleScope.CREDIT,
+        ModuleScope.IRRBB,
+        ModuleScope.FORECASTING,
+    ):
+        _grant(
+            db_session,
+            desk,
+            RoleBundle.ANALYST,
+            institution_scope=InstitutionScope.INSTITUTION,
+            institution_id=OTHER_BANK,
+            module_scope=module_scope_value,
+            sensitivity_scope=SensitivityScope.CONFIDENTIAL,
+        )
+    _grant(
+        db_session,
+        desk,
+        RoleBundle.VIEWER,
+        institution_scope=InstitutionScope.INSTITUTION,
+        institution_id=OTHER_BANK,
+        module_scope=ModuleScope.REGULATORY,
+        sensitivity_scope=SensitivityScope.RESTRICTED,
+    )
+    db_session.commit()
+
+    rows = {row.email: row for row in build_report(db_session, organization_id=ORG)}
+    assert rows["monitor@impact.example"].live_refresh_institutions == []
+    assert rows["recompute@impact.example"].live_refresh_institutions == [BANK]
+    assert rows["minter@impact.example"].live_refresh_institutions == [BANK, OTHER_BANK]
+    assert rows["minter@impact.example"].official_mint_institutions == [BANK]
+    assert rows["desk@impact.example"].official_mint_institutions == []
+    cells = _rendered_cells(list(rows.values()))
+    assert cells["monitor@impact.example"]["refresh"] == "-"
+    assert cells["recompute@impact.example"]["refresh"] == BANK
+    assert cells["minter@impact.example"]["mint"] == BANK
+    assert cells["desk@impact.example"]["mint"] == "-"
+
+
 def _signing_fixture(db: Session) -> dict[str, User]:
     """Synthetic legacy officers, exact grant holders and E2E identities."""
     db.add(Organization(id=ORG, name="Signing impact proof"))
