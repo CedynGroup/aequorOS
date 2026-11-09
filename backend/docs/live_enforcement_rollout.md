@@ -1,18 +1,18 @@
-# Live READ enforcement rollout — freshness (issue #177 backend slice)
+# Live read enforcement
 
-Status: implemented in this slice (PR-A of the #177 backend pilot). This
-document owns the freshness read authorization contract and records the
-rollout evidence still owed before deployment.
+This document owns the live read authorization contracts: which modules each
+live read surface serves a caller, how denial behaves, and what the route and
+storage boundaries guarantee.
 
 ## Surface and decision
 
 `GET /api/v1/banks/{bank_id}/freshness` serves only the modules the caller can
 VIEW. Enforcement lives at the service layer (`app/live/service/freshness.py`
 via the exact-binding decision helper `app/live/service/live_access.py`),
-matching the existing precedents:
+matching these service-layer authorization patterns:
 
-- `app/data_engine/service/access.py` (DATA, PR 759)
-- `app/case/service/authorization.py` (cases, PR 766)
+- `app/data_engine/service/access.py` (DATA)
+- `app/case/service/authorization.py` (cases)
 - the live summary's per-module VIEW gate (`app/live/service/live_view.py`
   `_GATED_ENGINE_MODULES`), which freshness reuses for its module mapping.
 
@@ -30,7 +30,7 @@ freshness-to-authorization module mapping. It matches the live summary's
 freshness module vocabulary. A new authorization enum value requires a
 CHECK-widening migration, not just a surface mapping change.
 
-## Tenant semantics
+## Tenant freshness semantics
 
 - **One complete active binding per module.** VIEW, aggregated sensitivity,
   whole-institution grain, exact match; partial rows never compose; no scalar
@@ -44,15 +44,22 @@ CHECK-widening migration, not just a surface mapping change.
 - **Aggregate honesty.** `is_stale` aggregates only the served (authorized)
   modules; a restricted viewer's flag describes exactly the payload served.
   With no permitted modules, `modules` is empty and `is_stale` is false.
-- **Response compatibility.** The response schema and module order are unchanged.
-  Fully authorized tenant viewers retain all modules and the existing hash and
-  staleness behavior.
-- **Opaque bank denial unchanged.** Unknown or other-tenant banks still 404
+- **Response shape and order.** Authorization filters the module list without
+  changing its schema or relative order. Fully authorized tenant viewers receive
+  all modules with their hash and staleness fields.
+- **No reporting period is an empty map, not a denial.** Freshness is defined
+  against reporting periods: when none exists for the bank and the caller omits
+  `reporting_period_id`, the service answers `modules: []` and `is_stale: false`
+  before any binding evaluation; a request that supplies a `reporting_period_id`
+  for a missing period instead returns 404. An empty payload can therefore mean
+  "no period yet" as well as "no permitted modules"; a missing period is data
+  state, never an authorization verdict.
+- **Opaque bank denial.** Unknown or other-tenant banks return 404
   before any module decision.
 
 ## Operator-board freshness
 
-`GET /operator/v1/tenants` reads freshness through its existing staff gate
+`GET /operator/v1/tenants` reads freshness through its staff gate
 (`get_operator_context`). Its service selects the explicit `staff_board` module
 authority in `get_bank_freshness`, serving the full freshness module vocabulary
 for each bank with reporting periods. This selection is internal, never request
@@ -65,26 +72,35 @@ than a fresh summary with zero modules. A bank with no reporting periods has no
 freshness summary; a per-bank evaluation failure also yields no summary without
 failing the whole board.
 
-## Remaining pilot scope
+## Snapshot, alert and window read contract
 
-Further pilot work on the official-snapshot read loop,
-alerts and board-pack window predicates (PR-C), the refresh/mint mutation
-gates (PR-B — mint authority already decided: the existing per-module RUN loop
-plus the `Module.CAPITAL` entry) and the impact-evidence tooling (PR-D) are
-later PRs of the same pilot. Issue #177 remains open until the full surface
-set and the UI compounds land.
+The live-snapshot ladder (`live_view.list_live_snapshots`), the alerts
+feed (`alerts.get_bank_alerts`) and the window analytics
+(`window_analytics.compute_window`) enforce the exact per-module VIEW
+binding, including the Capital entry. The ladder is live data:
+`LiveMetricSnapshot` rows hold one snapshot per bank, day and module — each
+live refresh overwrites that day's row. Past rows are completed daily closes;
+today's row is the live edge, the latest computed value rather than a finished
+close, and never an official regulatory result — an official run is an
+immutable run record read through the freshness hashes, not a row on this
+ladder. Alerts and window
+analytics use engine gate lists matching the freshness map; the snapshot
+service has a separate module lookup, with additional route checks for
+liquidity and IRRBB.
 
-## Rollout evidence owed before deployment
+For an existing accessible bank, `GET /api/v1/banks/{bank_id}/live-snapshots`
+returns 403 when the requested module lacks a complete active whole-institution
+VIEW binding at aggregated sensitivity. By contrast, `/alerts` omits denied
+modules from both items and counts, and `/analytics/window` omits their ratio
+series and daily aggregates. With no permitted modules, alerts have zero total
+and window `ratios` and `daily` are empty; window dates and `period_count` remain.
+Authorized viewers retain their stored snapshots, findings and window results.
 
-Per the authorization verification contract and the pilot plan:
-
-- dated deny-impact output for the freshness surface (PR-D tooling),
-- exact-grant artifacts showing which bundles change behavior,
-- reviewer-visible before/after dashboard evidence for the restricted-caller
-  FreshnessStrip state (synthetic fixtures only; no production data).
-
-None of these block the code PR; they are deployment-gate artifacts, and no
-deployment is authorized by this pilot.
+Unknown snapshot query modules return 422 through the route's closed pattern.
+Unknown module rows are rejected by the module CHECK constraints on
+`live_metrics`, `live_findings` and `live_metric_snapshots`. This is a route
+and storage boundary, not a claim that the snapshot service's lookup or alerts'
+exclusion query independently rejects arbitrary unknown module strings.
 
 ## Test evidence
 
@@ -97,5 +113,17 @@ deployment is authorized by this pilot.
   and order preserved for a fully bound viewer.
 - `backend/tests/live/service/test_live_authorization.py` — hermetic pins for
   the mapping and deny-closed helper semantics.
-- The existing `backend/tests/live/service/test_freshness_integration.py`
-  keeps proving hash-staleness semantics for an authorized viewer.
+- `backend/tests/live/service/test_live_read_scope.py` — hermetic pins that
+  the live-view, alerts and window engine gate lists match the freshness map
+  and cover the live module vocabulary; the snapshot service's separate
+  lookup is exercised by the API tests below.
+- `backend/tests/live/api/test_live_read_scope_integration.py` — API-level
+  READ-scope contract for those three surfaces: bound module served,
+  closed maps for unbound, foreign-bank and suspended principals, stale
+  authorization-version refusal, preserved shapes for a fully bound viewer,
+  and the storage module CHECK refusing unknown module rows.
+- `backend/tests/live/service/test_freshness_integration.py`
+  verifies hash-staleness semantics for an authorized viewer.
+
+These are automated fixture-based contracts, including TestClient API checks;
+they do not constitute live deployment validation.

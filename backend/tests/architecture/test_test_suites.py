@@ -50,7 +50,9 @@ def _collect_with_filename_guard(
         env=environment,
         capture_output=True,
         text=True,
-        timeout=120,
+        # Whole-repository collection grows with the test tree and takes over
+        # two minutes on the slowest CI runners; only a hung run should trip.
+        timeout=300,
         check=False,
     )
 
