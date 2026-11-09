@@ -2,6 +2,7 @@
   "contracts": [
     {
       "cases": [
+        "tests/db/test_bindings_constraint_migrations_integration.py::test_configurator_migration_grants_nothing_and_preserves_existing_authority",
         "tests/db/test_ai_migration_integration.py::test_a_decision_takes_no_update_at_all",
         "tests/db/test_ai_migration_integration.py::test_a_finished_request_frees_the_in_flight_slot",
         "tests/db/test_ai_migration_integration.py::test_a_refused_or_cancelled_row_can_never_carry_output",
@@ -948,6 +949,15 @@
     },
     {
       "cases": [
+        "tests/identity/api/test_grant_administration_integration.py::test_multiple_conflicting_bindings_must_all_be_removed[held_roles8-account_admin-Validator]",
+        "tests/identity/api/test_grant_administration_integration.py::test_owner_account_admin_conflict_names_only_the_revocable_grant[configurator]",
+        "tests/identity/api/test_grant_administration_integration.py::test_multiple_conflicting_bindings_must_all_be_removed[held_roles9-account_admin-Configurator]",
+        "tests/identity/api/test_grant_administration_integration.py::test_multiple_conflicting_bindings_must_all_be_removed[held_roles7-account_admin-Approver]",
+        "tests/identity/api/test_grant_administration_integration.py::test_multiple_conflicting_bindings_must_all_be_removed[held_roles6-account_admin-Analyst]",
+        "tests/identity/api/test_grant_administration_integration.py::test_multiple_conflicting_bindings_must_all_be_removed[held_roles5-configurator-Organization Administrator]",
+        "tests/identity/api/test_grant_administration_integration.py::test_multiple_conflicting_bindings_must_all_be_removed[held_roles11-account_admin-Analyst and Validator]",
+        "tests/identity/api/test_grant_administration_integration.py::test_multiple_conflicting_bindings_must_all_be_removed[held_roles10-account_admin-Analyst and Approver]",
+        "tests/identity/api/test_grant_administration_integration.py::test_configurator_is_explicit_exact_and_invalidates_sign_ins",
         "tests/db/test_authorization_effective_access_properties_integration.py::test_reconciliation_approval_never_skips_the_second_officer",
         "tests/db/test_authorization_effective_access_properties_integration.py::test_scoped_grant_lifecycle_never_exceeds_current_bindings",
         "tests/identity/api/test_access_request_state_machine_integration.py::test_access_requests_remain_scoped_and_resolved_history_is_terminal",
@@ -1220,11 +1230,6 @@
         "tests/identity/api/test_grant_administration_integration.py::test_multiple_conflicting_bindings_must_all_be_removed[held_roles2-analyst-Organization Administrator]",
         "tests/identity/api/test_grant_administration_integration.py::test_multiple_conflicting_bindings_must_all_be_removed[held_roles3-approver-Organization Administrator]",
         "tests/identity/api/test_grant_administration_integration.py::test_multiple_conflicting_bindings_must_all_be_removed[held_roles4-validator-Organization Administrator]",
-        "tests/identity/api/test_grant_administration_integration.py::test_multiple_conflicting_bindings_must_all_be_removed[held_roles5-account_admin-Analyst]",
-        "tests/identity/api/test_grant_administration_integration.py::test_multiple_conflicting_bindings_must_all_be_removed[held_roles6-account_admin-Approver]",
-        "tests/identity/api/test_grant_administration_integration.py::test_multiple_conflicting_bindings_must_all_be_removed[held_roles7-account_admin-Validator]",
-        "tests/identity/api/test_grant_administration_integration.py::test_multiple_conflicting_bindings_must_all_be_removed[held_roles8-account_admin-Analyst and Approver]",
-        "tests/identity/api/test_grant_administration_integration.py::test_multiple_conflicting_bindings_must_all_be_removed[held_roles9-account_admin-Analyst and Validator]",
         "tests/identity/api/test_grant_administration_integration.py::test_one_request_cannot_fan_out_and_two_combinations_require_two_requests",
         "tests/identity/api/test_grant_administration_integration.py::test_owner_account_admin_conflict_names_only_the_revocable_grant[analyst]",
         "tests/identity/api/test_grant_administration_integration.py::test_owner_account_admin_conflict_names_only_the_revocable_grant[approver]",

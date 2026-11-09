@@ -159,6 +159,7 @@ export const SsoAccessRequestApproveRoleBundleEnum = {
   Analyst: "analyst",
   Approver: "approver",
   Validator: "validator",
+  Configurator: "configurator",
   AccountAdmin: "account_admin",
 } as const;
 export type SsoAccessRequestApproveRoleBundleEnum =

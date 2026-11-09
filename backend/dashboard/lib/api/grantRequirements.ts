@@ -71,6 +71,11 @@ function coversSensitivity(scope: string): boolean {
  * granted something they have not.
  */
 export function grantShortfall(draft: GrantScope): string | null {
+  if (draft.roleBundle === "configurator") {
+    return coversSensitivity(draft.sensitivityScope)
+      ? null
+      : "This grant won't let them configure settings: that needs Restricted data.";
+  }
   const work = CHAIN_DECISION_BUNDLES[draft.roleBundle];
   if (work === undefined) return null;
 

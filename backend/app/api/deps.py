@@ -270,34 +270,6 @@ def _authenticate_principal(
     )
 
 
-def require_role(minimum: str):  # noqa: ANN201 - returns a FastAPI dependency callable
-    """Dependency factory: 403 unless the caller holds ``minimum`` (or higher)."""
-
-    def _dependency(
-        ctx: Annotated[TenantContext, Depends(get_current_principal)],
-    ) -> TenantContext:
-        if not security.has_role(list(ctx.roles), minimum):
-            authorization_denied(
-                reason="insufficient_role",
-                required_role=minimum,
-                held_roles=",".join(ctx.roles),
-                organization_id=ctx.organization_id,
-            )
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail=f"This action requires the '{minimum}' role or higher.",
-            )
-        return ctx
-
-    # Name the dependency after the role it enforces. The route table is the only
-    # place the mutation-guard invariant can be checked wholesale (see
-    # ``tests/api/test_impersonation_boundary.py``), and it classifies routes by
-    # dependency name — an anonymous ``_dependency`` closure is indistinguishable
-    # from every other factory-produced dependency.
-    _dependency.__name__ = f"require_role_{minimum}"
-    return _dependency
-
-
 # Dependencies that make a route a guarded mutation. ``examiner``/``viewer``
 # remain read roles; scoped Account administration and the explicit
 # mutation-role dependencies are the recognized write gates.
@@ -346,9 +318,6 @@ MUTATION_ROLE_DEPENDENCY_NAMES: frozenset[str] = frozenset(
         # The filing review chain: a stage decision is a write, whichever
         # authority the stage names.
         "require_package_stage_decision",
-        "require_role_admin",
-        "require_role_approver",
-        "require_role_analyst",
     }
 )
 
