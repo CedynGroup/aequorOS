@@ -48,10 +48,12 @@ CHECK-widening migration, not just a surface mapping change.
   changing its schema or relative order. Fully authorized tenant viewers receive
   all modules with their hash and staleness fields.
 - **No reporting period is an empty map, not a denial.** Freshness is defined
-  against reporting periods: when none exists for the bank, the service answers
-  `modules: []` and `is_stale: false` before any binding evaluation. An empty
-  payload can therefore mean "no period yet" as well as "no permitted modules";
-  a missing period is data state, never an authorization verdict.
+  against reporting periods: when none exists for the bank and the caller omits
+  `reporting_period_id`, the service answers `modules: []` and `is_stale: false`
+  before any binding evaluation; a request that supplies a `reporting_period_id`
+  for a missing period instead returns 404. An empty payload can therefore mean
+  "no period yet" as well as "no permitted modules"; a missing period is data
+  state, never an authorization verdict.
 - **Opaque bank denial.** Unknown or other-tenant banks return 404
   before any module decision.
 
@@ -76,9 +78,12 @@ The live-snapshot ladder (`live_view.list_live_snapshots`), the alerts
 feed (`alerts.get_bank_alerts`) and the window analytics
 (`window_analytics.compute_window`) enforce the exact per-module VIEW
 binding, including the Capital entry. The ladder is live data:
-`LiveMetricSnapshot` rows are the per-day closes of each live refresh, never
-official regulatory results — an official run is an immutable run record read
-through the freshness hashes, not a row on this ladder. Alerts and window
+`LiveMetricSnapshot` rows hold one snapshot per bank, day and module — each
+live refresh overwrites that day's row. Past rows are completed daily closes;
+today's row is the live edge, the latest computed value rather than a finished
+close, and never an official regulatory result — an official run is an
+immutable run record read through the freshness hashes, not a row on this
+ladder. Alerts and window
 analytics use engine gate lists matching the freshness map; the snapshot
 service has a separate module lookup, with additional route checks for
 liquidity and IRRBB.
