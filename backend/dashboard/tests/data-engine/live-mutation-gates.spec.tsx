@@ -213,3 +213,35 @@ it("enables both controls and sends both mutations for full run authority", asyn
     reason: "Minted official run for filing from the Data Engine console.",
   });
 });
+
+it("does not demand the Basel forecast run for an SDI (no s.29 projection authority)", async () => {
+  // runs_module excludes forecast for an SDI (sdi_regime: the Basel projection
+  // has no s.29 authority) beside the liquidity substitution — the UI gate
+  // mirrors both, so a user who may run every engine the SDI actually plans
+  // sees an enabled mint control, never a Forecasting · Run demand the
+  // backend would not make.
+  state.moduleScope = {
+    ...state.moduleScope,
+    institutionClass: "sdi",
+    entitledModules: new Set([
+      "liquidity",
+      "capital",
+      "markets",
+      "credit",
+      "irrbb",
+      "forecasting",
+    ]),
+    dataRun: true,
+    capitalRun: true,
+    marketsRun: true,
+    liquidityRun: true,
+    creditRun: true,
+    irrbbRun: true,
+    forecastingRun: false,
+  };
+  mount();
+  await openAdvanced();
+  const mint = screen.getByRole("button", { name: "Mint official run" });
+  expect(mint).toBeEnabled();
+  expect(screen.queryByText(/Forecasting · Run/)).not.toBeInTheDocument();
+});

@@ -50,9 +50,11 @@ function progressCount(job: JobRead | undefined, key: string): number | null {
 /** Mirror of live_view.MINT_RUN_ENGINES (#177 part B): each engine the bank's
  * regime actually runs (its entitlement set — the same source the backend's
  * runs_module consults) demands a confidential run sentence, resolved against
- * the module-scope flags below. The SDI substitution is mirrored too: an SDI's
- * liquidity is the LMTD monitoring view, not the official-run LCR/NSFR engine.
- * The service re-decides every mint; this only decides whether the control is
+ * the module-scope flags below. Two regime exceptions are mirrored from
+ * runs_module: an SDI's liquidity is the LMTD monitoring view, not the
+ * official-run LCR/NSFR engine, and the Basel forecast projection has no s.29
+ * authority (sdi_regime), so neither engine is demanded for an SDI. The
+ * service re-decides every mint; this only decides whether the control is
  * offered. */
 const MINT_RUN_REQUIREMENTS = [
   { engine: "liquidity", moduleKey: "liquidity", label: "Liquidity", flag: "liquidityRun" },
@@ -88,10 +90,8 @@ export default function ActivatePanel() {
     return MINT_RUN_REQUIREMENTS.filter(
       (requirement) =>
         entitled.has(requirement.moduleKey) &&
-        !(
-          requirement.engine === "liquidity" &&
-          moduleScope.institutionClass === "sdi"
-        ) &&
+        !(moduleScope.institutionClass === "sdi" &&
+          (requirement.engine === "liquidity" || requirement.engine === "forecast")) &&
         moduleScope[requirement.flag] !== true,
     );
   }, [moduleScope]);
