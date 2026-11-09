@@ -1073,34 +1073,45 @@ test("status disclosure remains reachable when its badge scrolls out of view", a
   const panel = section.getByTestId("instrument-status-disclosure");
   await badge.click();
   await expect(panel).toBeVisible();
-  // Scroll the real containing page without touching the floating panel.
+  // Scroll the real containing page without touching the floating panel. The
+  // scroll is re-applied on every poll: on a loaded runner the register can
+  // swap through its loading skeleton between the scroll and the check (the
+  // bank-scoped template query re-renders the list once the bank context
+  // resolves), which collapses the content and resets the scroll. Only a poll
+  // that observes the badge cleared can vouch for the panel bounds.
   for (const edge of ["above", "below"] as const) {
-    await badge.evaluate((element, edge) => {
-      for (
-        let parent = element.parentElement;
-        parent;
-        parent = parent.parentElement
-      ) {
-        if (
-          parent.scrollHeight > parent.clientHeight &&
-          /auto|scroll/.test(getComputedStyle(parent).overflowY)
-        ) {
-          const offset = element.getBoundingClientRect().top;
-          parent.scrollTop +=
-            edge === "above" ? offset + 100 : offset - window.innerHeight - 100;
-          return;
-        }
-      }
-      const offset = element.getBoundingClientRect().top;
-      window.scrollBy(
-        0,
-        edge === "above" ? offset + 100 : offset - window.innerHeight - 100,
-      );
-    }, edge);
     await expect(async () => {
-      const anchor = (await badge.boundingBox())!;
-      if (edge === "above") expect(anchor.y + anchor.height).toBeLessThan(0);
-      else expect(anchor.y).toBeGreaterThan(360);
+      const anchor = await badge.boundingBox();
+      const cleared =
+        edge === "above"
+          ? anchor !== null && anchor.y + anchor.height < 0
+          : anchor !== null && anchor.y > 360;
+      if (!cleared)
+        await badge.evaluate((element, edge) => {
+          for (
+            let parent = element.parentElement;
+            parent;
+            parent = parent.parentElement
+          ) {
+            if (
+              parent.scrollHeight > parent.clientHeight &&
+              /auto|scroll/.test(getComputedStyle(parent).overflowY)
+            ) {
+              const offset = element.getBoundingClientRect().top;
+              parent.scrollTop +=
+                edge === "above"
+                  ? offset + 100
+                  : offset - window.innerHeight - 100;
+              return;
+            }
+          }
+          const offset = element.getBoundingClientRect().top;
+          window.scrollBy(
+            0,
+            edge === "above" ? offset + 100 : offset - window.innerHeight - 100,
+          );
+        }, edge);
+      expect(cleared, `badge scrolled ${edge} the viewport`).toBe(true);
       const bounds = await panel.boundingBox();
       expect(bounds).not.toBeNull();
       expect(bounds!.y).toBeGreaterThanOrEqual(0);
