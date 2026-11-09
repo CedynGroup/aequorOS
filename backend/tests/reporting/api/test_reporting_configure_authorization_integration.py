@@ -359,9 +359,11 @@ def _suspend_all(db: Session | None = None) -> None:
     )
     for binding in bindings:
         binding.status = BindingStatus.SUSPENDED.value
-    user = session.scalar(select(User).where(User.id == USER_1, User.organization_id == ORG_1))
-    assert user is not None
-    user.authorization_version += 1
-    session.commit()
+    authorization.invalidate_user_authorization(
+        session,
+        organization_id=ORG_1,
+        user_id=USER_1,
+        reason="suspend every active fixture binding",
+    )
     if not owned:
         session.close()

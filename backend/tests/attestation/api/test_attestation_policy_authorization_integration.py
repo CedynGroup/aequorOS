@@ -186,10 +186,12 @@ def _suspend_all() -> None:
         )
         for binding in bindings:
             binding.status = BindingStatus.SUSPENDED.value
-        user = db.get(User, USER_1)
-        assert user is not None
-        user.authorization_version += 1
-        db.commit()
+        authorization.invalidate_user_authorization(
+            db,
+            organization_id=ORG_1,
+            user_id=USER_1,
+            reason="suspend every active fixture binding",
+        )
 
 
 @pytest.fixture
