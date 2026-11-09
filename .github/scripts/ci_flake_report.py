@@ -1026,7 +1026,7 @@ def _fetch_findings(
             delete_large_log(options.cache_dir, job.job_id, options.keep_logs)
         except (RuntimeError, OSError) as error:
             log(f"  ! log unavailable for job {job.job_id}: {error}")
-            findings_by_job[job.job_id] = []
+            findings_by_job[job.job_id] = [Finding("unclassified", f"log-unavailable:{job.name}")]
         if index % 50 == 0 or index == len(failed_jobs):
             log(f"  logs: {index}/{len(failed_jobs)}")
     return findings_by_job
