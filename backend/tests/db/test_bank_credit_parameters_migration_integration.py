@@ -725,3 +725,99 @@ def test_audit_reader_attributes_new_subjects_directly_but_keeps_shared_history(
                     if bank == BANK and kind in expected
                     else None
                 )
+
+
+def test_downgrade_restores_liquidity_audit_readers(
+    bank_local_schema: MigratedPostgresSchema,
+    credit_administrator: Engine,
+) -> None:
+    """Rolling back CREDIT keeps the 202611040110 liquidity readers working.
+
+    The liquidity writers attribute the bank directly in ``entity_id`` with no
+    ``details.bank_id``; a CREDIT downgrade must not fall back to the frozen
+    202610120100 predicates that recognize neither bank-local liquidity type.
+    """
+    with credit_administrator.connect() as connection, connection.begin():
+        _tenant(connection, ORG)
+        session = uuid4()
+        connection.execute(
+            text(
+                "INSERT INTO operator_inspector_sessions (id, organization_id, started_by, "
+                "mode, reason, started_at, expires_at, support_reference) VALUES "
+                "(:id, :org, 'staff@example.test', 'consent', 'CREDIT downgrade regression', "
+                "now(), now() + interval '1 hour', 'SYNTHETIC-CREDIT-DOWNGRADE')"
+            ),
+            {"id": session, "org": ORG},
+        )
+        evidence: dict[str, object] = {
+            "act_operator": "staff@example.test",
+            "impersonation_session_id": str(session),
+        }
+        ids: dict[str, str] = {}
+        for kind, entity, detail in (
+            ("bank_liquidity_threshold", BANK, evidence),
+            ("bank_liquidity_haircut", BANK, evidence),
+            ("param_liquidity_threshold", BANK, evidence),
+            ("foreign", FOREIGN, evidence),
+        ):
+            event = uuid4()
+            ids[kind] = str(event)
+            connection.execute(
+                text(
+                    "INSERT INTO audit_events (id, organization_id, event_type, entity_type, "
+                    "entity_id, details, created_at) VALUES (:id, :org, 'LIQ.test', :kind, "
+                    ":entity, CAST(:details AS jsonb), now())"
+                ),
+                {
+                    "id": event,
+                    "org": ORG,
+                    "entity": entity,
+                    "details": json.dumps(detail),
+                    "kind": "bank_liquidity_threshold" if kind == "foreign" else kind,
+                },
+            )
+
+    command.downgrade(alembic_config_for_app(), PREVIOUS)
+
+    expected_visible = (
+        ids["bank_liquidity_threshold"],
+        ids["bank_liquidity_haircut"],
+        ids["param_liquidity_threshold"],
+    )
+    with credit_administrator.connect() as connection, connection.begin():
+        _tenant(connection, ORG)
+        connection.execute(text("SET LOCAL ROLE aqs_api"))
+        connection.execute(
+            text("SELECT set_config('app.audit_bank_id', :bank, true)"), {"bank": BANK}
+        )
+        visible = {
+            str(value)
+            for value in _values(
+                connection,
+                text(
+                    "SELECT event_id FROM audit_chain_entries WHERE event_id = ANY("
+                    "CAST(:ids AS uuid[]))"
+                ),
+                {"ids": list(ids.values())},
+            )
+        }
+        assert visible == set(expected_visible)
+        for kind in ("bank_liquidity_threshold", "bank_liquidity_haircut"):
+            assert connection.scalar(
+                text(
+                    "SELECT bank_audit_previous_link(c.stream, c.sequence, c.previous_hash) "
+                    "FROM audit_chain_entries c WHERE event_id = CAST(:event AS uuid)"
+                ),
+                {"event": ids[kind]},
+            ) is True
+            context = _scalar(
+                connection,
+                text(
+                    "SELECT bank_audit_inspection_context('audit_events', CAST(:event AS uuid))"
+                ),
+                {"event": ids[kind]},
+            )
+            assert context == {
+                "reason": "CREDIT downgrade regression",
+                "support_reference": "SYNTHETIC-CREDIT-DOWNGRADE",
+            }

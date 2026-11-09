@@ -4,7 +4,9 @@ The historical migration is a frozen SQL dependency, never today's application
 ownership registry. The new bank-local CREDIT entity types are NOT
 shared-register types. Existing function ownership, execution ACLs and security
 configuration survive CREATE OR REPLACE; no identity, binding or session row
-changes.
+changes. Downgrade restores the 202611040110 liquidity-aware readers: it
+removes only the CREDIT subject additions, never the bank-local liquidity
+attribution those readers already provide.
 """
 
 from __future__ import annotations
@@ -22,11 +24,12 @@ down_revision = "202611090116"
 branch_labels = None
 depends_on = None
 
-LOCAL_SUBJECTS = (
-    "'bank_liquidity_threshold', 'bank_liquidity_haircut', "
+LIQUIDITY_LOCAL_SUBJECTS = "'bank_liquidity_threshold', 'bank_liquidity_haircut'"
+CREDIT_LOCAL_SUBJECTS = (
     "'bank_concentration_limit', 'bank_credit_threshold', "
     "'bank_ecl_assumption', 'bank_crm_haircut'"
 )
+LOCAL_SUBJECTS = f"{LIQUIDITY_LOCAL_SUBJECTS}, {CREDIT_LOCAL_SUBJECTS}"
 SHARED_SUBJECTS = (
     "param_concentration_limit",
     "param_credit_threshold",
@@ -60,27 +63,25 @@ def _quoted_schema() -> str:
     return op.get_bind().dialect.identifier_preparer.quote_identifier(schema)
 
 
-def _replace_readers(*, bank_local: bool) -> None:
+def _replace_readers(*, local_subjects: str) -> None:
     tenant, staff = _historical_sql()
     shared = ", ".join(f"'{kind}'" for kind in SHARED_SUBJECTS)
-    if bank_local:
-        local = LOCAL_SUBJECTS
-        # Require the retained platform-ID owner even if details names a bank.
-        # An unknown/cross-tenant owner cannot borrow a matching detail reference.
-        direct = f"""
-            e.organization_id = {SESSION_ORGANIZATION}
-            AND e.entity_type IN ({local})
-            AND e.entity_id = {SESSION_BANK}
-            AND EXISTS (SELECT 1 FROM banks b WHERE b.id = e.entity_id
-                        AND b.organization_id = e.organization_id)
-            AND (e.details->>'bank_id' IS NULL OR e.details->>'bank_id' = {SESSION_BANK})
-            AND (e.details->'scope'->>'institution_id' IS NULL
-                 OR e.details->'scope'->>'institution_id' = {SESSION_BANK})
-        """
-        tenant = (
-            f"(({direct}) OR ((e.entity_type IS NULL OR "
-            f"e.entity_type NOT IN ({local})) AND ({tenant})))"
-        )
+    # Require the retained platform-ID owner even if details names a bank.
+    # An unknown/cross-tenant owner cannot borrow a matching detail reference.
+    direct = f"""
+        e.organization_id = {SESSION_ORGANIZATION}
+        AND e.entity_type IN ({local_subjects})
+        AND e.entity_id = {SESSION_BANK}
+        AND EXISTS (SELECT 1 FROM banks b WHERE b.id = e.entity_id
+                    AND b.organization_id = e.organization_id)
+        AND (e.details->>'bank_id' IS NULL OR e.details->>'bank_id' = {SESSION_BANK})
+        AND (e.details->'scope'->>'institution_id' IS NULL
+             OR e.details->'scope'->>'institution_id' = {SESSION_BANK})
+    """
+    tenant = (
+        f"(({direct}) OR ((e.entity_type IS NULL OR "
+        f"e.entity_type NOT IN ({local_subjects})) AND ({tenant})))"
+    )
     quoted = _quoted_schema()
     session_uuid = (
         "CASE WHEN e.session_id ~ '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-"
@@ -182,8 +183,10 @@ def _replace_readers(*, bank_local: bool) -> None:
 
 
 def upgrade() -> None:
-    _replace_readers(bank_local=True)
+    _replace_readers(local_subjects=LOCAL_SUBJECTS)
 
 
 def downgrade() -> None:
-    _replace_readers(bank_local=False)
+    # Restore the 202611040110 reader definitions verbatim: drop only the
+    # CREDIT subject additions, keep the bank-local liquidity attribution.
+    _replace_readers(local_subjects=LIQUIDITY_LOCAL_SUBJECTS)
