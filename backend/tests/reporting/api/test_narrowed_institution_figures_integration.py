@@ -308,6 +308,7 @@ def narrowed_credit_executor(db_client: TestClient, request: pytest.FixtureReque
     for module in (
         ModuleScope.LIQUIDITY,
         ModuleScope.CAPITAL,
+        ModuleScope.MARKETS,
         ModuleScope.IRRBB,
         ModuleScope.FX,
         ModuleScope.FTP,
