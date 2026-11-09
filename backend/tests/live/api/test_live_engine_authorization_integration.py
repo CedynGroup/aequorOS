@@ -1,6 +1,6 @@
 """Live-engine freshness authorization: only permitted modules are served.
 
-Issue #177 backend slice. Freshness results are filtered through the caller's
+Freshness results are filtered through the caller's
 exact active VIEW bindings, mirroring the live summary's per-module gating.
 These tests pin the API-level contract: permitted modules present with their
 hashes, unpermitted modules absent without data leakage, partial or unbound

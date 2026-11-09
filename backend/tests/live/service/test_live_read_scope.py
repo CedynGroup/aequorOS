@@ -1,6 +1,6 @@
 """Live READ gate lists match the freshness authorization map.
 
-The official-snapshot ladder, the alerts feed and the window analytics must
+The live-snapshot ladder, the alerts feed and the window analytics must
 all serve exactly the modules their caller holds an exact aggregated VIEW
 binding for. These hermetic pins hold the live summary, alerts and window
 gate lists to the engine-to-authorization-module mapping in ``live_access``.
