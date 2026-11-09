@@ -26,9 +26,8 @@ def _has_exited(pid: int) -> bool:
     """
     try:
         stat = (Path("/proc") / str(pid) / "stat").read_text()
-    except FileNotFoundError:
-        return True
     except OSError:
+        # No procfs (macOS) or no such entry: os.kill separates the two.
         pass
     else:
         # The state letter follows the ")" that closes the command name.
@@ -38,6 +37,36 @@ def _has_exited(pid: int) -> bool:
     except ProcessLookupError:
         return True
     return False
+
+
+def test_has_exited_reports_a_live_process_without_procfs(monkeypatch):
+    def no_procfs(self: Path, *args: object, **kwargs: object) -> str:
+        raise FileNotFoundError(self)
+
+    monkeypatch.setattr(Path, "read_text", no_procfs)
+
+    assert not _has_exited(os.getpid())
+
+
+def test_has_exited_reports_a_reaped_process():
+    child = subprocess.Popen([sys.executable, "-c", "pass"])
+    child.wait()
+
+    assert _has_exited(child.pid)
+
+
+@pytest.mark.skipif(not Path("/proc/self/stat").exists(), reason="Requires procfs")
+def test_has_exited_treats_an_unreaped_zombie_as_stopped():
+    child = subprocess.Popen([sys.executable, "-c", "pass"])
+    try:
+        deadline = time.monotonic() + 10
+        while not _has_exited(child.pid):
+            assert time.monotonic() < deadline, "child never exited"
+            time.sleep(0.05)
+        # Not yet waited on, so the kernel still lists it as a zombie.
+        os.kill(child.pid, 0)
+    finally:
+        child.wait()
 
 
 @pytest.mark.skipif(
