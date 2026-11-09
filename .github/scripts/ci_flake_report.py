@@ -897,7 +897,10 @@ def fetch_attempt_jobs(
     payload = gh_api_json(
         f"repos/{repo}/actions/runs/{run_id}/attempts/{attempt}/jobs?per_page={PER_PAGE}"
     )
-    if cache_path is not None:
+    # Never cache an attempt that is still running: a partial job list would
+    # be reused forever and hide the rerun pass it has not produced yet.
+    jobs_complete = all(raw.get("status") == "completed" for raw in payload.get("jobs", []))
+    if cache_path is not None and jobs_complete:
         cache_path.parent.mkdir(parents=True, exist_ok=True)
         cache_path.write_text(json.dumps(payload))
     return parse_jobs(payload)
