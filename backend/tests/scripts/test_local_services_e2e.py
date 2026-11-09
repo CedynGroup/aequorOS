@@ -10,10 +10,63 @@ import signal
 import subprocess
 import sys
 import time
+from pathlib import Path
 
 import pytest
 
 from scripts import local_services
+
+
+def _has_exited(pid: int) -> bool:
+    """Return whether ``pid`` is gone or a zombie.
+
+    A killed orphan stays a zombie (state ``Z``) until its reaper collects it,
+    and some container init processes take seconds to do so. ``os.kill(pid, 0)``
+    still succeeds for a zombie even though the process no longer runs.
+    """
+    try:
+        stat = (Path("/proc") / str(pid) / "stat").read_text()
+    except OSError:
+        # No procfs (macOS) or no such entry: os.kill separates the two.
+        pass
+    else:
+        # The state letter follows the ")" that closes the command name.
+        return stat.rsplit(")", 1)[1].split()[0] in {"Z", "X"}
+    try:
+        os.kill(pid, 0)
+    except ProcessLookupError:
+        return True
+    return False
+
+
+def test_has_exited_reports_a_live_process_without_procfs(monkeypatch):
+    def no_procfs(self: Path, *args: object, **kwargs: object) -> str:
+        raise FileNotFoundError(self)
+
+    monkeypatch.setattr(Path, "read_text", no_procfs)
+
+    assert not _has_exited(os.getpid())
+
+
+def test_has_exited_reports_a_reaped_process():
+    child = subprocess.Popen([sys.executable, "-c", "pass"])
+    child.wait()
+
+    assert _has_exited(child.pid)
+
+
+@pytest.mark.skipif(not Path("/proc/self/stat").exists(), reason="Requires procfs")
+def test_has_exited_treats_an_unreaped_zombie_as_stopped():
+    child = subprocess.Popen([sys.executable, "-c", "pass"])
+    try:
+        deadline = time.monotonic() + 10
+        while not _has_exited(child.pid):
+            assert time.monotonic() < deadline, "child never exited"
+            time.sleep(0.05)
+        # Not yet waited on, so the kernel still lists it as a zombie.
+        os.kill(child.pid, 0)
+    finally:
+        child.wait()
 
 
 @pytest.mark.skipif(
@@ -75,8 +128,7 @@ def test_cancellation_allows_playwright_to_stop_detached_web_server(tmp_path):
             assert wrapper.wait(timeout=30) == 130
             # The real Playwright runner owns a detached server group; the
             # wrapper must leave it enough time to tear that group down.
-            with pytest.raises(ProcessLookupError):
-                os.kill(pid, 0)
+            assert _has_exited(pid), f"detached web server {pid} survived the wrapper"
         finally:
             if wrapper.poll() is None:
                 wrapper.terminate()
