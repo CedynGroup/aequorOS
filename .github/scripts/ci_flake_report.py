@@ -894,6 +894,13 @@ def list_workflow_runs(
     return records[:min_runs] if min_runs else records
 
 
+def _write_cache(path: Path, text: str) -> None:
+    """Write a cache file atomically (an interrupt must not leave a truncated file)."""
+    tmp_path = path.with_name(f"{path.name}.{os.getpid()}.tmp")
+    tmp_path.write_text(text, encoding="utf-8")
+    os.replace(tmp_path, path)
+
+
 def fetch_attempt_jobs(
     repo: str, run_id: int, attempt: int, cache_dir: Path | None = None
 ) -> list[JobRecord]:
@@ -909,7 +916,7 @@ def fetch_attempt_jobs(
     jobs_complete = all(raw.get("status") == "completed" for raw in payload.get("jobs", []))
     if cache_path is not None and jobs_complete:
         cache_path.parent.mkdir(parents=True, exist_ok=True)
-        cache_path.write_text(json.dumps(payload))
+        _write_cache(cache_path, json.dumps(payload))
     return parse_jobs(payload)
 
 
@@ -918,7 +925,7 @@ def fetch_job_log(repo: str, job_id: int, cache_dir: Path, keep_logs: bool) -> s
     if cache_path.exists():
         return cache_path.read_text(errors="replace")
     text = gh_api(f"repos/{repo}/actions/jobs/{job_id}/logs", allow_escape_sequences=True)
-    cache_path.write_text(text)
+    _write_cache(cache_path, text)
     return text
 
 
