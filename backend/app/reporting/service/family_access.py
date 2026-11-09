@@ -89,13 +89,40 @@ def _forbidden(detail: str = _DETAIL) -> HTTPException:
     return HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=detail)
 
 
+#: The maker-checker refusal when the failed condition carries no reason of its
+#: own. One sentence whatever the act, because four eyes on a regulatory return
+#: is one rule: the officer who generated it cannot also decide on it.
+MAKER_CHECKER_DETAIL: Final[str] = (
+    "Maker-checker: the officer who generated this return cannot also decide on "
+    "it; a different officer must review, certify or file it."
+)
+
+
+def _denial_detail(decision: AuthorizationDecision | None, generic: str) -> str:
+    """The refusal a denied caller should read, chosen by WHY the gate shut.
+
+    A maker/checker condition denial is not a missing grant: the caller's
+    binding is complete and the condition wrote its own reason — who may take
+    this act. Returning the generic binding sentence would send that officer to
+    re-issue a grant they already hold (#129), so the condition's reason is the
+    detail and this constant stands in only when a condition names none. Every
+    other denial keeps the surface's generic detail unchanged.
+    """
+    if decision is None or decision.reason != "condition_denied:maker_checker":
+        return generic
+    failed = next((check for check in decision.condition_trace if not check.passed), None)
+    if failed is not None and failed.reason:
+        return failed.reason
+    return MAKER_CHECKER_DETAIL
+
+
 def _institution_class(db: Session, bank: Bank) -> str:
     from app.policy.public import institution_types  # noqa: PLC0415
 
     return institution_types.institution_class(db, bank)
 
 
-def _evaluate(  # noqa: PLR0913 - the complete decision tuple is explicit
+def _evaluate_decision(  # noqa: PLR0913 - the complete decision tuple is explicit
     db: Session,
     ctx: TenantContext,
     bank: Bank,
@@ -107,16 +134,17 @@ def _evaluate(  # noqa: PLR0913 - the complete decision tuple is explicit
     prefetched_bindings: tuple[bool, list[AuthorizationBinding]] | None = None,
     structural: bool = False,
     exact_institution: bool = False,
-) -> bool:
-    """One complete active binding for this exact institution, or False.
+) -> AuthorizationDecision | None:
+    """One complete active binding for this exact institution, or None.
 
     Any evaluator failure denies (the enforcement rule everywhere else in the
-    codebase): a binding engine that cannot answer has not said yes.
+    codebase): a binding engine that cannot answer has not said yes, so the
+    failure is ``None`` and every caller treats ``None`` as a denial.
     """
     from app.identity import public as authorization_service  # noqa: PLC0415
 
     if ctx.actor_user_id is None:
-        return False
+        return None
     principal = authorization_service.principal_locator(ctx)
     resource = ResourceLocator(
         ctx.organization_id,
@@ -186,11 +214,40 @@ def _evaluate(  # noqa: PLR0913 - the complete decision tuple is explicit
         authorization_service.record_binding_evaluation_failure(
             principal, permission, resource, surface=surface, error=exc
         )
-        return False
+        return None
     authorization_service.record_binding_decision(
         decision, surface=surface, severity="info" if decision.allowed else "warning"
     )
-    return decision.allowed
+    return decision
+
+
+def _evaluate(  # noqa: PLR0913 - the complete decision tuple is explicit
+    db: Session,
+    ctx: TenantContext,
+    bank: Bank,
+    gate: FamilyGate,
+    permission: Permission,
+    *,
+    surface: str,
+    conditions: tuple[ConditionCheck, ...] = (),
+    prefetched_bindings: tuple[bool, list[AuthorizationBinding]] | None = None,
+    structural: bool = False,
+    exact_institution: bool = False,
+) -> bool:
+    """The boolean half of :func:`_evaluate_decision`."""
+    decision = _evaluate_decision(
+        db,
+        ctx,
+        bank,
+        gate,
+        permission,
+        surface=surface,
+        conditions=conditions,
+        prefetched_bindings=prefetched_bindings,
+        structural=structural,
+        exact_institution=exact_institution,
+    )
+    return decision is not None and decision.allowed
 
 
 def can_view(
@@ -363,7 +420,7 @@ def require_permission(  # noqa: PLR0913 - the complete policy tuple is explicit
         # Reached only if a read-only impersonation somehow arrived at an action
         # gate. The dependency layer already refuses; this is the last line.
         raise _forbidden()
-    if not _evaluate(
+    decision = _evaluate_decision(
         db,
         ctx,
         bank,
@@ -371,8 +428,9 @@ def require_permission(  # noqa: PLR0913 - the complete policy tuple is explicit
         permission,
         surface=surface,
         conditions=conditions,
-    ):
-        raise _forbidden()
+    )
+    if decision is None or not decision.allowed:
+        raise _forbidden(_denial_detail(decision, _DETAIL))
 
 
 def require_export_authority(
@@ -428,7 +486,7 @@ def require_transmission_authority(  # noqa: PLR0913 - the complete policy tuple
         # An examiner reads; an examiner never files. The dependency layer
         # already refuses every impersonated mutation; this is the last line.
         raise _forbidden(_TRANSMISSION_DETAIL)
-    if not _evaluate(
+    decision = _evaluate_decision(
         db,
         ctx,
         bank,
@@ -436,8 +494,9 @@ def require_transmission_authority(  # noqa: PLR0913 - the complete policy tuple
         permission,
         surface=surface,
         conditions=conditions,
-    ):
-        raise _forbidden(_TRANSMISSION_DETAIL)
+    )
+    if decision is None or not decision.allowed:
+        raise _forbidden(_denial_detail(decision, _TRANSMISSION_DETAIL))
 
 
 #: What a near-miss binding got wrong, in the order the operator should hear it.
@@ -666,7 +725,7 @@ def require_certification_sign_off(  # noqa: PLR0913 - complete ceremony evidenc
         if execution
         else ()
     )
-    if not _evaluate(
+    decision = _evaluate_decision(
         db,
         ctx,
         bank,
@@ -676,8 +735,9 @@ def require_certification_sign_off(  # noqa: PLR0913 - complete ceremony evidenc
         conditions=sign_off_conditions,
         structural=not execution,
         exact_institution=True,
-    ):
-        raise _forbidden()
+    )
+    if decision is None or not decision.allowed:
+        raise _forbidden(_denial_detail(decision, _DETAIL))
 
 
 def require_checker_approve(  # noqa: PLR0913 - complete ceremony evidence tuple
@@ -702,7 +762,7 @@ def require_checker_approve(  # noqa: PLR0913 - complete ceremony evidence tuple
     if role not in CHECKER_ROLES:
         return
     execution = step_up_established or maker_checker_established
-    if not _evaluate(
+    decision = _evaluate_decision(
         db,
         ctx,
         bank,
@@ -722,8 +782,9 @@ def require_checker_approve(  # noqa: PLR0913 - complete ceremony evidence tuple
         ),
         structural=not execution,
         exact_institution=True,
-    ):
-        raise _forbidden()
+    )
+    if decision is None or not decision.allowed:
+        raise _forbidden(_denial_detail(decision, _DETAIL))
 
 
 def require_certify_authority(  # noqa: PLR0913 - complete ceremony evidence tuple
