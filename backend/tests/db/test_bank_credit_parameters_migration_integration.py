@@ -91,15 +91,17 @@ SPECS = (
         "bank_concentration_limit",
         "param_concentration_limit",
         "value",
-        "dimension, limit_kind, bucket_key",
-        {"dimension": "sector", "limit_kind": "share_of_book_pct", "bucket_key": None},
+        "dimension, limit_kind, bucket_key, value",
+        # A named bucket, not NULL: Postgres treats NULLs as distinct in a
+        # unique key, so only a named bucket pins uq_..._scope in the probe.
+        {"dimension": "sector", "limit_kind": "share_of_book_pct", "bucket_key": "cp:SYNTH", "value": 25},
     ),
     TableSpec(
         "bank_credit_threshold",
         "param_credit_threshold",
         "value_pct",
-        "threshold_code",
-        {"threshold_code": "npl_board_trigger_pct"},
+        "threshold_code, value_pct",
+        {"threshold_code": "npl_board_trigger_pct", "value_pct": 7},
     ),
     TableSpec(
         "bank_ecl_assumption",
@@ -441,7 +443,9 @@ def test_bank_local_integrity_rls_retention_and_archive_freeze(
             ).one() == (True, True)
             assert connection.scalar(text(f"SELECT count(*) FROM {local}")) == 9
             _tenant(connection, OTHER)
-            assert connection.scalar(text(f"SELECT count(*) FROM {local}")) == 6
+            # Only FOREIGN shares a seeded jurisdiction; UNCONFIGURED (NG) has
+            # no shared generation, so it correctly receives nothing.
+            assert connection.scalar(text(f"SELECT count(*) FROM {local}")) == 3
             _tenant(connection, "")
             assert connection.scalar(text(f"SELECT count(*) FROM {local}")) == 0
             _tenant(connection, ORG)
