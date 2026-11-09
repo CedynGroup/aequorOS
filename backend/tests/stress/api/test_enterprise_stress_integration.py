@@ -786,6 +786,7 @@ def test_stage3_only_book_has_no_incremental_charge_in_either_projection(
         session.add(
             ParamEclAssumption(
                 organization_id=loans[0].organization_id,
+                bank_id=bank_id,
                 jurisdiction_code="GH",
                 effective_from=date(2026, 1, 1),
                 approved_by="Model committee",
@@ -884,6 +885,7 @@ def test_annual_coverage_refusal_is_independent_of_register_availability(
             session.add(
                 ParamEclAssumption(
                     organization_id=ORG_1,
+                    bank_id=bank_id,
                     jurisdiction_code="GH",
                     effective_from=date(2026, 1, 1),
                     approved_by="Model committee",
@@ -975,6 +977,7 @@ def test_annual_coverage_accepts_derivation_rounding_in_both_directions(
             session.add(
                 ParamEclAssumption(
                     organization_id=ORG_1,
+                    bank_id=bank_id,
                     jurisdiction_code="GH",
                     effective_from=date(2026, 1, 1),
                     approved_by="Model committee",

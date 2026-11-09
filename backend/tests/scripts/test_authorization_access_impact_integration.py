@@ -336,6 +336,10 @@ def _assert_configure_cutover(db: Session, owner: User, analyst: User) -> None:
     assert local_routes == {
         "liquidity-thresholds": "bank_liquidity_threshold",
         "liquidity-haircuts": "bank_liquidity_haircut",
+        "ecl-assumptions": "bank_ecl_assumption",
+        "crm-haircuts": "bank_crm_haircut",
+        "concentration-limits": "bank_concentration_limit",
+        "credit-thresholds": "bank_credit_threshold",
     }
     for row in before.impacts:
         if row.path.rsplit("/", 1)[-1] in local_routes:
@@ -569,6 +573,10 @@ def _assert_artifact_content(report: ConfigureReport, directory: Path) -> None:
     assert "approval_required" in json.dumps(required)
     assert "bank_liquidity_threshold" in json.dumps(required)
     assert "bank_liquidity_haircut" in json.dumps(required)
+    assert "bank_ecl_assumption" in json.dumps(required)
+    assert "bank_crm_haircut" in json.dumps(required)
+    assert "bank_concentration_limit" in json.dumps(required)
+    assert "bank_credit_threshold" in json.dumps(required)
     for path in directory.glob("*.json"):
         assert path.stat().st_mode & 0o777 == 0o600
         content = path.read_text()

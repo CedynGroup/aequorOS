@@ -108,7 +108,7 @@ from app.live.public import (
     findings_from_validations,
     live_block,
 )
-from app.policy.public import ParamCreditThreshold, get_active_params, jurisdictions
+from app.policy.public import ParamCreditThreshold, get_active_bank_params, jurisdictions
 from app.policy.public import regulatory_parameters as rp
 from app.reporting.service import filing_reconciliation
 from app.services.audit import record_event
@@ -288,8 +288,8 @@ def _board_thresholds(
     """
     return {
         row.threshold_code: Decimal(str(row.value_pct))
-        for row in get_active_params(
-            db, ctx.organization_id, bank.jurisdiction_code, ParamCreditThreshold, as_of
+        for row in get_active_bank_params(
+            db, ctx.organization_id, bank.id, bank.jurisdiction_code, ParamCreditThreshold, as_of
         )
     }
 

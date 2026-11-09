@@ -968,7 +968,14 @@ def _activity_event_banks(  # noqa: PLR0911 - explicit audit ownership variants
                 },
             )
         )
-    if event.entity_type in {"bank_liquidity_threshold", "bank_liquidity_haircut"}:
+    if event.entity_type in {
+        "bank_liquidity_threshold",
+        "bank_liquidity_haircut",
+        "bank_ecl_assumption",
+        "bank_crm_haircut",
+        "bank_concentration_limit",
+        "bank_credit_threshold",
+    }:
         local_marker: object = details.get("bank_id")
         if local_marker is not None and local_marker != event.entity_id:
             return []

@@ -6,7 +6,6 @@ import json
 import os
 from collections.abc import Iterator
 from datetime import date
-from decimal import Decimal
 from typing import cast
 from uuid import uuid4
 
@@ -94,7 +93,12 @@ SPECS = (
         "dimension, limit_kind, bucket_key, value",
         # A named bucket, not NULL: Postgres treats NULLs as distinct in a
         # unique key, so only a named bucket pins uq_..._scope in the probe.
-        {"dimension": "sector", "limit_kind": "share_of_book_pct", "bucket_key": "cp:SYNTH", "value": 25},
+        {
+            "dimension": "sector",
+            "limit_kind": "share_of_book_pct",
+            "bucket_key": "cp:SYNTH",
+            "value": 25,
+        },
     ),
     TableSpec(
         "bank_credit_threshold",
@@ -270,7 +274,7 @@ def _seed_shared(schema: MigratedPostgresSchema) -> None:
             (EMPTY, "GH", 30),
         ):
             _tenant(connection, org)
-            for year, value in ((2024, 17), (2026, 19), (2030, 23)):
+            for year, _value in ((2024, 17), (2026, 19), (2030, 23)):
                 effective_to = date(year + 1, 12, 31) if year == 2024 else None
                 for spec in SPECS:
                     notes = f"Preserve generation {year}/{offset}"
@@ -368,12 +372,17 @@ def test_all_generations_are_copied_only_to_matching_existing_banks(
                 )
                 assert (
                     connection.scalar(
-                        text(f"SELECT count(*) FROM {spec.local} p JOIN {spec.archive} a ON a.id = p.id")
+                        text(
+                            f"SELECT count(*) FROM {spec.local} p"
+                            f" JOIN {spec.archive} a ON a.id = p.id"
+                        )
                     )
                     == 0
                 )
                 assert (
-                    connection.scalar(text(f"SELECT count(*) = count(DISTINCT id) FROM {spec.local}"))
+                    connection.scalar(
+                        text(f"SELECT count(*) = count(DISTINCT id) FROM {spec.local}")
+                    )
                     is True
                 )
             for bank, jurisdiction, _kind in _bank_scopes(connection, org):
@@ -709,7 +718,10 @@ def test_audit_reader_attributes_new_subjects_directly_but_keeps_shared_history(
                     {"event": event},
                 )
                 assert context == (
-                    {"reason": "CREDIT migration regression", "support_reference": "SYNTHETIC-CREDIT"}
+                    {
+                        "reason": "CREDIT migration regression",
+                        "support_reference": "SYNTHETIC-CREDIT",
+                    }
                     if bank == BANK and kind in expected
                     else None
                 )

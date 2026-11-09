@@ -1977,6 +1977,7 @@ def test_optional_bank_named_limit_matches_the_stored_group(
     db_session.add(
         ParamConcentrationLimit(
             organization_id=ORG_1,
+            bank_id=BANK_A,
             jurisdiction_code="GH",
             dimension="single_name",
             limit_kind="share_of_book_pct",
@@ -2225,6 +2226,7 @@ def test_credit_concentration_identity_survives_locked_labels(
     assert len({item.group_key for item in before}) == 2
     limit = ParamConcentrationLimit(
         organization_id=ORG_1,
+        bank_id=BANK_A,
         jurisdiction_code="GH",
         dimension="single_name",
         limit_kind="share_of_book_pct",
@@ -2304,6 +2306,7 @@ def test_positional_concentration_limit_matches_without_key(
     db_session.add(
         ParamConcentrationLimit(
             organization_id=ORG_1,
+            bank_id=BANK_A,
             jurisdiction_code="GH",
             dimension="single_name",
             limit_kind="share_of_book_pct",

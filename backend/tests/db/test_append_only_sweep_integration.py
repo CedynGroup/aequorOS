@@ -32,12 +32,18 @@ PARAMETERS: dict[str, dict[str, object]] = {
         "shock_value": 5,
     },
     "param_capital_threshold": {"threshold_code": "test", "value_pct": 5},
-    "param_concentration_limit": {
+    "bank_concentration_limit": {
+        "bank_id": "BK-SEAL001",
         "dimension": "sector",
         "limit_kind": "share_of_book_pct",
+        "bucket_key": "cp:SYNTH",
         "value": 5,
     },
-    "param_credit_threshold": {"threshold_code": "test", "value_pct": 5},
+    "bank_credit_threshold": {
+        "bank_id": "BK-SEAL001",
+        "threshold_code": "test",
+        "value_pct": 5,
+    },
     "bank_liquidity_threshold": {
         "bank_id": "BK-SEAL001",
         "institution_class": "bank",
@@ -45,8 +51,18 @@ PARAMETERS: dict[str, dict[str, object]] = {
         "threshold_pct": 5,
     },
     "bank_liquidity_haircut": {"bank_id": "BK-SEAL001", "asset_class": "test", "haircut_pct": 5},
-    "param_ecl_assumption": {"segment": "test", "stage": 1, "pd_pct": 5, "lgd_pct": 5},
-    "param_crm_haircut": {"collateral_class": "test", "haircut_pct": 5},
+    "bank_ecl_assumption": {
+        "bank_id": "BK-SEAL001",
+        "segment": "test",
+        "stage": 1,
+        "pd_pct": 5,
+        "lgd_pct": 5,
+    },
+    "bank_crm_haircut": {
+        "bank_id": "BK-SEAL001",
+        "collateral_class": "test",
+        "haircut_pct": 5,
+    },
 }
 AUDIT_OWNER_TABLES = (
     "audit_events",
@@ -58,6 +74,10 @@ RETAINED_TABLES = (
     *PARAMETERS,
     "param_liquidity_threshold",
     "param_liquidity_haircut",
+    "param_concentration_limit",
+    "param_credit_threshold",
+    "param_ecl_assumption",
+    "param_crm_haircut",
     *AUDIT_OWNER_TABLES,
     "scenario_assumption_history",
     "financial_manual_edit_history",

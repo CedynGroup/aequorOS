@@ -206,6 +206,7 @@ def _private_policy(path: str) -> None:
     with get_sessionmaker()() as db:
         common = {
             "organization_id": ORG_1,
+            "bank_id": BANK,
             "jurisdiction_code": "GH",
             "effective_from": date(2026, 1, 1),
             "approved_by": "Private prior Board evidence",

@@ -76,6 +76,7 @@ from app.policy.public import (
     ParamNsfrWeight,
     ParamRiskWeight,
     ParamStressShock,
+    get_active_bank_params,
     get_active_params,
     institution_types,
     jurisdictions,
@@ -407,8 +408,8 @@ def _capital_params(db: Session, ctx: TenantContext, bank: Bank, as_of: date) ->
     threshold_rows = get_active_params(
         db, ctx.organization_id, bank.jurisdiction_code, ParamCapitalThreshold, as_of
     )
-    crm_rows = get_active_params(
-        db, ctx.organization_id, bank.jurisdiction_code, ParamCrmHaircut, as_of
+    crm_rows = get_active_bank_params(
+        db, ctx.organization_id, bank.id, bank.jurisdiction_code, ParamCrmHaircut, as_of
     )
     # Tighten-only guard (QA audit 2026-08-20 P1-5), adopted here 2026-08-22 while
     # closing D-15. This loader read the tenant's board register RAW while
@@ -673,8 +674,8 @@ def _ecl_inputs(
     as_of: date,
     capital_rows: Sequence[FinancialFactRow],
 ) -> tuple[list[EclExposure], list[EclAssumption]]:
-    assumptions_rows = get_active_params(
-        db, ctx.organization_id, bank.jurisdiction_code, ParamEclAssumption, as_of
+    assumptions_rows = get_active_bank_params(
+        db, ctx.organization_id, bank.id, bank.jurisdiction_code, ParamEclAssumption, as_of
     )
     exposures: list[EclExposure] = []
     for fact in capital_rows:

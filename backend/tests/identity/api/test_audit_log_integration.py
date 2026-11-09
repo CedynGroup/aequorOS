@@ -2107,17 +2107,17 @@ def _shared_register_writer(db: Session, subject: str) -> TenantContext:
 def _update_shared_register(
     db: Session, ctx: TenantContext, subject: str, payload: dict[str, JsonValue]
 ) -> None:
-    if subject == "param_ecl_assumption":
+    if subject == "bank_ecl_assumption":
         credit_params.update_ecl_register(
             db, ctx, BANK, EclAssumptionUpdate.model_validate(payload)
         )
-    elif subject == "param_crm_haircut":
+    elif subject == "bank_crm_haircut":
         credit_params.update_crm_register(db, ctx, BANK, CrmHaircutUpdate.model_validate(payload))
-    elif subject == "param_concentration_limit":
+    elif subject == "bank_concentration_limit":
         credit_params.update_concentration_limit_register(
             db, ctx, BANK, ConcentrationLimitUpdate.model_validate(payload)
         )
-    elif subject == "param_credit_threshold":
+    elif subject == "bank_credit_threshold":
         credit_params.update_credit_threshold_register(
             db, ctx, BANK, CreditThresholdUpdate.model_validate(payload)
         )
@@ -2181,10 +2181,10 @@ def _assert_shared_register_change_values(
 ) -> tuple[dict[str, JsonValue], dict[str, JsonValue]]:
     after = TypeAdapter(dict[str, JsonValue]).validate_python(original_details["after"])
     model: type[BaseModel] = {
-        "param_ecl_assumption": EclAssumptionUpdate,
-        "param_crm_haircut": CrmHaircutUpdate,
-        "param_concentration_limit": ConcentrationLimitUpdate,
-        "param_credit_threshold": CreditThresholdUpdate,
+        "bank_ecl_assumption": EclAssumptionUpdate,
+        "bank_crm_haircut": CrmHaircutUpdate,
+        "bank_concentration_limit": ConcentrationLimitUpdate,
+        "bank_credit_threshold": CreditThresholdUpdate,
         "param_liquidity_threshold": LiquidityThresholdUpdate,
         "param_liquidity_haircut": LiquidityHaircutUpdate,
         "bank_liquidity_threshold": LiquidityThresholdUpdate,
@@ -2227,13 +2227,13 @@ def _assert_shared_register_inspection_visibility(
     ("subject", "action", "change"),
     [
         (
-            "param_ecl_assumption",
+            "bank_ecl_assumption",
             "ecl_assumptions.updated",
             {"assumptions": [{"segment": "ALL", "stage": 1, "pd_pct": "2", "lgd_pct": "40"}]},
         ),
-        ("param_crm_haircut", "crm_haircuts.updated", {"haircuts": {"CASH": "5"}}),
+        ("bank_crm_haircut", "crm_haircuts.updated", {"haircuts": {"CASH": "5"}}),
         (
-            "param_concentration_limit",
+            "bank_concentration_limit",
             "concentration_limits.updated",
             {
                 "limits": [
@@ -2247,7 +2247,7 @@ def _assert_shared_register_inspection_visibility(
             },
         ),
         (
-            "param_credit_threshold",
+            "bank_credit_threshold",
             "credit_thresholds.updated",
             {"thresholds": {"npl_board_trigger_pct": "7"}},
         ),
@@ -2294,7 +2294,7 @@ def test_shared_register_visibility_redaction_and_integrity(  # noqa: PLR0915 - 
             actor_operator="private-staff@example.test" if staff else None,
         )
         previous_payload: dict[str, JsonValue] = {**payload, "effective_from": "2026-09-01"}
-        if subject == "param_ecl_assumption":
+        if subject == "bank_ecl_assumption":
             previous_payload["assumptions"] = [
                 {"segment": "ALL", "stage": 1, "pd_pct": "1", "lgd_pct": "40"}
             ]
@@ -2307,7 +2307,7 @@ def test_shared_register_visibility_redaction_and_integrity(  # noqa: PLR0915 - 
             .limit(1)
         )
         assert original is not None
-        if subject.startswith("bank_liquidity_"):
+        if subject.startswith("bank_"):
             assert original.entity_type == subject
         if staff or subject.startswith("param_liquidity_"):
             original = _historical_staff_register_event(db, ctx, original, subject, action)
@@ -2342,7 +2342,7 @@ def test_shared_register_visibility_redaction_and_integrity(  # noqa: PLR0915 - 
         activity = operator_views.get_tenant_activity(db, ORG_1, 100)
         expected_banks: set[str] = (
             {BANK}
-            if subject.startswith("bank_liquidity_")
+            if subject.startswith("bank_")
             else {BANK, SIBLING}
             | ({other_class} if subject != "param_liquidity_threshold" else set[str]())
         )
@@ -2416,7 +2416,7 @@ def test_shared_register_visibility_redaction_and_integrity(  # noqa: PLR0915 - 
     ("subject", "action", "change"),
     [
         (
-            "param_ecl_assumption",
+            "bank_ecl_assumption",
             "ecl_assumptions.updated",
             {
                 "assumptions": [
@@ -2435,9 +2435,9 @@ def test_shared_register_visibility_redaction_and_integrity(  # noqa: PLR0915 - 
                 ]
             },
         ),
-        ("param_crm_haircut", "crm_haircuts.updated", {"haircuts": {"CASH": "5.12345678"}}),
+        ("bank_crm_haircut", "crm_haircuts.updated", {"haircuts": {"CASH": "5.12345678"}}),
         (
-            "param_concentration_limit",
+            "bank_concentration_limit",
             "concentration_limits.updated",
             {
                 "limits": [
@@ -2457,7 +2457,7 @@ def test_shared_register_visibility_redaction_and_integrity(  # noqa: PLR0915 - 
             },
         ),
         (
-            "param_credit_threshold",
+            "bank_credit_threshold",
             "credit_thresholds.updated",
             {"thresholds": {"npl_board_trigger_pct": "7.12345678"}},
         ),
@@ -2482,8 +2482,8 @@ def test_register_audit_after_matches_next_before_at_storage_precision(
         writer = _shared_register_writer(db, subject)
         for index, effective_from in enumerate(("2026-10-01", "2026-11-01")):
             request_change: dict[str, JsonValue] = change
-            if index and subject in {"param_ecl_assumption", "param_concentration_limit"}:
-                key = "assumptions" if subject == "param_ecl_assumption" else "limits"
+            if index and subject in {"bank_ecl_assumption", "bank_concentration_limit"}:
+                key = "assumptions" if subject == "bank_ecl_assumption" else "limits"
                 request_entries = TypeAdapter(list[dict[str, JsonValue]]).validate_python(
                     change[key]
                 )
@@ -2507,7 +2507,9 @@ def test_register_audit_after_matches_next_before_at_storage_precision(
         )
         assert response.status_code == 200, response.text
         entries = AuditLogRead.model_validate_json(response.text).events
-        if bank == SIBLING and subject.startswith("param_liquidity_"):
+        if bank == SIBLING:
+            # Bank-local writes belong to the configuring bank only: no shared
+            # register fan-out reaches a sibling's audit log.
             assert entries == []
             continue
         assert len(entries) == 2
@@ -2515,7 +2517,7 @@ def test_register_audit_after_matches_next_before_at_storage_precision(
         assert previous.after == newest.before == newest.after
         assert previous.after != change
         assert all(entry.integrity == "verified" for entry in entries)
-        if subject == "param_ecl_assumption":
+        if subject == "bank_ecl_assumption":
             evidence = TypeAdapter(dict[str, list[dict[str, str | int]]]).validate_python(
                 previous.after
             )
