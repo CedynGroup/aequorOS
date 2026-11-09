@@ -27,6 +27,7 @@ import {
 import type { JobRead } from "@aequoros/risk-service-api";
 import { useBankContext } from "@/components/shell/BankContext";
 import DataAccessNotice from "@/components/ui/DataAccessNotice";
+import { DisabledWithReason } from "@/components/ui/DisabledWithReason";
 import { ErrorPanel } from "@/components/ui/QueryBoundary";
 import StatusPill from "@/components/ui/StatusPill";
 import { isApiError } from "@/lib/api/client";
@@ -46,15 +47,61 @@ function progressCount(job: JobRead | undefined, key: string): number | null {
   return null;
 }
 
+/** Mirror of live_view.MINT_RUN_ENGINES (#177 part B): each engine the bank's
+ * regime actually runs (its entitlement set — the same source the backend's
+ * runs_module consults) demands a confidential run sentence, resolved against
+ * the module-scope flags below. The SDI substitution is mirrored too: an SDI's
+ * liquidity is the LMTD monitoring view, not the official-run LCR/NSFR engine.
+ * The service re-decides every mint; this only decides whether the control is
+ * offered. */
+const MINT_RUN_REQUIREMENTS = [
+  { engine: "liquidity", moduleKey: "liquidity", label: "Liquidity", flag: "liquidityRun" },
+  { engine: "capital", moduleKey: "capital", label: "Capital", flag: "capitalRun" },
+  { engine: "rating", moduleKey: "markets", label: "Market Data", flag: "marketsRun" },
+  { engine: "credit", moduleKey: "credit", label: "Credit", flag: "creditRun" },
+  { engine: "irr", moduleKey: "irrbb", label: "IRRBB", flag: "irrbbRun" },
+  { engine: "fx", moduleKey: "fx", label: "FX", flag: "fxRun" },
+  { engine: "ftp", moduleKey: "ftp", label: "Funds Transfer Pricing", flag: "ftpRun" },
+  { engine: "forecast", moduleKey: "forecasting", label: "Forecasting", flag: "forecastingRun" },
+] as const;
+
+const RECOMPUTE_REASON =
+  "Recomputing the live tier needs DATA · Confidential · Run. Ask your organization owner for the grant.";
+
 export default function ActivatePanel() {
   const dateId = useId();
-  const { bank, period } = useBankContext();
+  const { bank, period, moduleScope } = useBankContext();
   const batchesQuery = useIngestionBatches(bank?.id);
   const liveSummary = useLiveSummary(bank?.id);
   const refresh = useRefreshBankData(bank?.id);
   const mint = useMintOfficialRun(bank?.id);
 
   const [advancedOpen, setAdvancedOpen] = useState(false);
+
+  // The recompute is a mutation of the derived live plane, not a read (#177
+  // part B): the button demands DATA/confidential run, which the backend
+  // enforces before anything is enqueued.
+  const canRefresh = moduleScope.dataRun === true;
+  const missingMintRuns = useMemo(() => {
+    const entitled = moduleScope.entitledModules;
+    if (!entitled) return [];
+    return MINT_RUN_REQUIREMENTS.filter(
+      (requirement) =>
+        entitled.has(requirement.moduleKey) &&
+        !(
+          requirement.engine === "liquidity" &&
+          moduleScope.institutionClass === "sdi"
+        ) &&
+        moduleScope[requirement.flag] !== true,
+    );
+  }, [moduleScope]);
+  const canMint = missingMintRuns.length === 0;
+  const mintReason =
+    missingMintRuns.length > 0
+      ? `Minting an official run needs confidential Run on every planned engine. Missing: ${missingMintRuns
+          .map((requirement) => `${requirement.label} · Run`)
+          .join(", ")}.`
+      : null;
 
   const latestBatchAsOf = useMemo(() => {
     if (batchesQuery.access !== "allowed" || !batchesQuery.isSuccess)
@@ -196,22 +243,40 @@ export default function ActivatePanel() {
                   Re-derive facts and refresh live metrics and alerts. Does not
                   mint an immutable regulatory run.
                 </p>
-                <button
-                  type="button"
-                  disabled={!bank || !effectiveAsOf || running}
-                  onClick={() =>
-                    refresh.mutate({
-                      asOfDate: effectiveAsOf,
-                      reason: "Recompute now from the Data Engine console.",
-                    })
-                  }
-                  className="inline-flex items-center gap-2 px-3 py-2 rounded-sm text-caption font-medium bg-action text-white hover:bg-action-hover disabled:opacity-40 disabled:cursor-not-allowed"
-                >
-                  {refresh.isPending && (
-                    <Loader2 size={14} className="animate-spin" aria-hidden />
-                  )}
-                  {refresh.isPending ? "Recomputing…" : "Recompute now"}
-                </button>
+                {(() => {
+                  const recomputeButton = (describedBy: string | undefined) => (
+                    <button
+                      type="button"
+                      disabled={!bank || !effectiveAsOf || running || !canRefresh}
+                      aria-describedby={describedBy}
+                      onClick={() =>
+                        refresh.mutate({
+                          asOfDate: effectiveAsOf,
+                          reason:
+                            "Recompute now from the Data Engine console.",
+                        })
+                      }
+                      className="inline-flex items-center gap-2 px-3 py-2 rounded-sm text-caption font-medium bg-action text-white hover:bg-action-hover disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                      {refresh.isPending && (
+                        <Loader2 size={14} className="animate-spin" aria-hidden />
+                      )}
+                      {refresh.isPending ? "Recomputing…" : "Recompute now"}
+                    </button>
+                  );
+                  return canRefresh ? (
+                    recomputeButton(undefined)
+                  ) : (
+                    <DisabledWithReason reason={RECOMPUTE_REASON}>
+                      {recomputeButton}
+                    </DisabledWithReason>
+                  );
+                })()}
+                {!canRefresh && (
+                  <p className="text-caption text-slate">
+                    Recomputing needs DATA · Confidential · Run.
+                  </p>
+                )}
                 <ActionResult
                   isError={refresh.isError}
                   error={refresh.error}
@@ -238,23 +303,38 @@ export default function ActivatePanel() {
                   Create the immutable, auditable regulatory runs (22 scenarios
                   + forecast) for this reporting date.
                 </p>
-                <button
-                  type="button"
-                  disabled={!bank || !effectiveAsOf || running}
-                  onClick={() =>
-                    mint.mutate({
-                      asOfDate: effectiveAsOf,
-                      reason:
-                        "Minted official run for filing from the Data Engine console.",
-                    })
-                  }
-                  className="inline-flex items-center gap-2 px-3 py-2 rounded-sm text-caption font-medium btn-primary disabled:opacity-40 disabled:cursor-not-allowed"
-                >
-                  {mint.isPending && (
-                    <Loader2 size={14} className="animate-spin" aria-hidden />
-                  )}
-                  {mint.isPending ? "Minting…" : "Mint official run"}
-                </button>
+                {(() => {
+                  const mintButton = (describedBy: string | undefined) => (
+                    <button
+                      type="button"
+                      disabled={!bank || !effectiveAsOf || running || !canMint}
+                      aria-describedby={describedBy}
+                      onClick={() =>
+                        mint.mutate({
+                          asOfDate: effectiveAsOf,
+                          reason:
+                            "Minted official run for filing from the Data Engine console.",
+                        })
+                      }
+                      className="inline-flex items-center gap-2 px-3 py-2 rounded-sm text-caption font-medium btn-primary disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                      {mint.isPending && (
+                        <Loader2 size={14} className="animate-spin" aria-hidden />
+                      )}
+                      {mint.isPending ? "Minting…" : "Mint official run"}
+                    </button>
+                  );
+                  return canMint ? (
+                    mintButton(undefined)
+                  ) : (
+                    <DisabledWithReason reason={mintReason ?? ""}>
+                      {mintButton}
+                    </DisabledWithReason>
+                  );
+                })()}
+                {mintReason && (
+                  <p className="text-caption text-slate">{mintReason}</p>
+                )}
                 <ActionResult
                   isError={mint.isError}
                   error={mint.error}

@@ -179,6 +179,17 @@ export type ModuleScope = {
   creditRestrictedView?: boolean;
   /** Exact CAP/confidential run authority. */
   capitalRun?: boolean;
+  /** Exact LIQ/confidential run authority for the official-run liquidity engine (#177 part B). */
+  liquidityRun?: boolean;
+  /** Exact CREDIT/confidential run authority for the official-run credit engine (#177 part B). */
+  creditRun?: boolean;
+  /** Exact MARKETS/confidential run authority — the implied-rating engine of an official run (#177 part B). */
+  marketsRun?: boolean;
+  /**
+   * Exact DATA/confidential run authority — enqueueing a live-tier recompute
+     is a mutation of the derived plane, not a read (#177 part B).
+   */
+  dataRun?: boolean;
   /** Exact CAP/confidential create authority (new ICAAP cycles). */
   capitalCreate?: boolean;
   /** Exact CAP/confidential edit authority (sections, blocks, attachments). */

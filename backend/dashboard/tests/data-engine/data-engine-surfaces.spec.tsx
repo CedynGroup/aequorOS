@@ -57,15 +57,43 @@ vi.mock("@/components/profile/ProfileProvider", () => ({
     },
   }),
 }));
-vi.mock("@/components/shell/BankContext", () => ({
-  useBankContext: () => ({
-    bank: state.bankPending ? null : { id: state.bank },
-    authorityPending: state.loading || state.bankPending,
-    period: { periodEnd: new Date("2026-09-30") },
-    moduleScope: { marketsRestrictedView: false },
-  }),
-  useModuleScope: () => ({ institutionClass: "bank", modules: new Set() }),
-}));
+vi.mock("@/components/shell/BankContext", async () => {
+  // Project the fixture capabilities into the exact module-scope flags the
+  // surfaces read, through the real capability helper (the backend re-decides
+  // everything; these flags only decide what the UI offers).
+  const { hasEffectiveCapability } = await import("@/lib/modules");
+  const scope = () => ({
+    isResolved: true,
+    institutionClass: "bank",
+    organizationModules: new Set(),
+    hasInstitutionAuthority: true,
+    entitledModules: new Set(),
+    marketsRestrictedView: hasEffectiveCapability(
+      state.capabilities,
+      "markets",
+      "restricted",
+      "view",
+    ),
+    liquidityRun: hasEffectiveCapability(state.capabilities, "liq", "confidential", "run"),
+    capitalRun: hasEffectiveCapability(state.capabilities, "cap", "confidential", "run"),
+    creditRun: hasEffectiveCapability(state.capabilities, "credit", "confidential", "run"),
+    marketsRun: hasEffectiveCapability(state.capabilities, "markets", "confidential", "run"),
+    irrbbRun: hasEffectiveCapability(state.capabilities, "irrbb", "confidential", "run"),
+    fxRun: hasEffectiveCapability(state.capabilities, "fx", "confidential", "run"),
+    ftpRun: hasEffectiveCapability(state.capabilities, "ftp", "confidential", "run"),
+    forecastingRun: hasEffectiveCapability(state.capabilities, "fcst", "confidential", "run"),
+    dataRun: hasEffectiveCapability(state.capabilities, "data", "confidential", "run"),
+  });
+  return {
+    useBankContext: () => ({
+      bank: state.bankPending ? null : { id: state.bank },
+      authorityPending: state.loading || state.bankPending,
+      period: { periodEnd: new Date("2026-09-30") },
+      moduleScope: scope(),
+    }),
+    useModuleScope: () => ({ institutionClass: "bank", modules: new Set() }),
+  };
+});
 vi.mock("@/components/impersonation/useImpersonation", () => ({
   useImpersonation: () => ({ impersonating: false }),
 }));
@@ -798,7 +826,7 @@ it.each(["loading", "failed", "empty", "active"] as const)(
 );
 
 it("requires an explicit date when upload metadata is denied without blocking manual recompute", async () => {
-  state.capabilities = [capability("view"), capability("run")];
+  state.capabilities = [capability("view"), capability("run", "confidential")];
   let body: unknown;
   server.use(
     http.post(`${base}/refresh`, async ({ request }) => {

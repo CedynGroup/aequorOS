@@ -27,6 +27,7 @@ import UnifiedBell from "@/components/shell/UnifiedBell";
 import { regShort } from "@/lib/format";
 import { useImpersonation } from "@/components/impersonation/useImpersonation";
 import { leaveImpersonation } from "@/lib/api/impersonation";
+import { DisabledWithReason } from "@/components/ui/DisabledWithReason";
 
 export default function Header({
   onMobileMenu,
@@ -184,7 +185,7 @@ const LIVE_STALE_AFTER_MS = 2 * 60 * 60 * 1000;
  * surfaces live-compute continuously. Amber here means only "the live tier
  * has not recomputed recently"; the click is a manual recompute. */
 function LiveFreshnessPill() {
-  const { bank } = useBankContext();
+  const { bank, moduleScope } = useBankContext();
   const { impersonating } = useImpersonation();
   const summary = useLiveSummary(bank?.id);
   const refresh = useRefreshBankData(bank?.id);
@@ -213,8 +214,36 @@ function LiveFreshnessPill() {
     return !acc || computed.getTime() > acc.getTime() ? computed : acc;
   }, null);
   const aged = !latest || Date.now() - latest.getTime() > LIVE_STALE_AFTER_MS;
+  // Recomputing is a mutation of the derived live plane, not a read (#177
+  // part B): the button demands DATA/confidential run, which the backend
+  // enforces before anything is enqueued.
+  const canRefresh = moduleScope.dataRun === true;
 
   if (aged || refresh.isPending) {
+    const label = refresh.isPending
+      ? "Recomputing…"
+      : `Refresh delayed${latest ? ` (${fmtRelative(latest)})` : ""}`;
+    if (!canRefresh && !refresh.isPending) {
+      return (
+        <DisabledWithReason
+          reason="Recomputing the live tier needs DATA · Confidential · Run. Ask your organization owner for the grant."
+          className="mx-1"
+        >
+          {(descriptionId) => (
+            <button
+              type="button"
+              disabled
+              aria-describedby={descriptionId}
+              title="The live tier has not recomputed recently. Recomputing needs DATA · Confidential · Run."
+              className="hidden lg:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-warning/30 bg-warning-light text-warning text-caption font-medium whitespace-nowrap disabled:opacity-60 disabled:cursor-not-allowed"
+            >
+              <AlertTriangle size={11} aria-hidden />
+              {label} · DATA run required
+            </button>
+          )}
+        </DisabledWithReason>
+      );
+    }
     return (
       <button
         type="button"
@@ -234,9 +263,7 @@ function LiveFreshnessPill() {
         ) : (
           <AlertTriangle size={11} aria-hidden />
         )}
-        {refresh.isPending
-          ? "Recomputing…"
-          : `Refresh delayed${latest ? ` (${fmtRelative(latest)})` : ""}`}
+        {label}
       </button>
     );
   }
