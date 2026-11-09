@@ -603,6 +603,29 @@ def test_an_icaap_signature_request_is_located_on_the_icaap_source_gate(
     db_session.refresh(package)
     package.return_family = "icaap"
     db_session.commit()
+    # The nominee's persona: exact-bank REGULATORY APPROVER+SIGNER (from _users)
+    # plus the CAPITAL/confidential source read the ICAAP family gate demands of
+    # anyone who may see the request. Without it the routing refusal is correct.
+    authorization.create_role_binding(
+        db_session,
+        organization_id=DEMO_ORG_ID,
+        principal_user_id=APPROVER_USER_ID,
+        principal_type=PrincipalType.HUMAN,
+        role_bundle=RoleBundle.APPROVER,
+        scope=authorization.BindingScope(
+            InstitutionScope.INSTITUTION,
+            SAMPLE_BANK_ID,
+            ModuleScope.CAPITAL,
+            SensitivityScope.CONFIDENTIAL,
+        ),
+        grantor=authorization.GrantorRef(GrantorType.SYSTEM, "signing-fixture"),
+        reason="Read the ICAAP return whose signature request the nominee must see",
+        commit=False,
+    )
+    nominee = db_session.get(User, APPROVER_USER_ID)
+    assert nominee is not None
+    nominee.authorization_version = 1
+    db_session.commit()
 
     rows = _route(db_session, package, _nominate("approver", APPROVER_USER_ID))
     db_session.commit()
