@@ -24,6 +24,7 @@ from sqlalchemy.orm import Session
 from app.core.authorization import (
     DataScope,
     InstitutionScope,
+    Module,
     ModuleScope,
     PrincipalType,
     RoleBundle,
@@ -263,8 +264,8 @@ def test_report_flags_users_the_dashboard_would_show_nothing(
 def _assert_configure_cutover(db: Session, owner: User, analyst: User) -> None:
     """The same cutover inventory must include machines and never infer grants."""
     before = build_configure_report(db, organization_id=ORG)
-    assert len(CONFIGURE_ROUTES) == 31
-    assert len({(route.method, route.path) for route in CONFIGURE_ROUTES}) == 31
+    assert len(CONFIGURE_ROUTES) == 32
+    assert len({(route.method, route.path) for route in CONFIGURE_ROUTES}) == 32
     mounted = {
         (method, route.path)
         for route in app.routes
@@ -280,8 +281,15 @@ def _assert_configure_cutover(db: Session, owner: User, analyst: User) -> None:
         "reg",
         "beh",
     }
+    # The market-data /test pull joined the configuration duties (#172); the
+    # operational data/temenos test, schema, sync and pull routes stay outside.
     assert not any(
-        route.path.endswith(("/test", "/schema", "/sync", "/pull")) for route in CONFIGURE_ROUTES
+        route.path.endswith(("/schema", "/sync", "/pull")) for route in CONFIGURE_ROUTES
+    )
+    assert not any(
+        route.path.endswith("/test")
+        for route in CONFIGURE_ROUTES
+        if route.module is not Module.MARKETS
     )
     machine = next(user for user in before.principals if user.principal_type == "machine")
     machine_impacts = [row for row in before.impacts if row.principal_id == machine.principal_id]
