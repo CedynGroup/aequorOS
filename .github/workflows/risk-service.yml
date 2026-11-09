@@ -457,7 +457,7 @@ jobs:
           CI_DATABASE_OBSERVATIONS: ${{ runner.temp }}/pg-schema/database-observations
           PYTEST_ADDOPTS: -p scripts.ci_postgres_plugin --junitxml=${{ runner.temp }}/pg-schema/report.xml
         working-directory: backend
-        run: uv run python scripts/local_services.py run --postgres --storage --role-admin -- uv run pytest -m integration tests/db
+        run: uv run python scripts/local_services.py run --postgres --storage --role-admin -- uv run pytest -m integration --group schema
       - name: Upload failed schema shard PostgreSQL log
         if: failure()
         uses: actions/upload-artifact@v7
@@ -518,7 +518,7 @@ jobs:
           CI_DATABASE_OBSERVATIONS: ${{ runner.temp }}/pg-locks/database-observations
           PYTEST_ADDOPTS: --junitxml=${{ runner.temp }}/pg-locks/report.xml
         working-directory: backend
-        run: uv run python scripts/local_services.py run --postgres -- uv run pytest -m integration tests/case/api/test_liquidity_integration.py tests/case/api/test_scenarios_integration.py tests/case/api/test_calculations_integration.py tests/storage/test_key_rotation_concurrency_integration.py
+        run: uv run python scripts/local_services.py run --postgres -- uv run pytest -m integration --group locks
       # Retain the execution floor and require zero skips for the lock owner.
       # The integration aggregate also checks exact cross-owner coverage;
       # ownership and service requirements: backend/README.md#run-tests.
@@ -587,7 +587,7 @@ jobs:
           CI_DATABASE_OBSERVATIONS: ${{ runner.temp }}/pg-suite/database-observations
           PYTEST_ADDOPTS: -p scripts.ci_postgres_plugin --junitxml=${{ runner.temp }}/pg-suite/report.xml
         working-directory: backend
-        run: uv run python scripts/local_services.py run --postgres -- uv run pytest -m integration -n 4 --dist loadfile --ignore=tests/db --ignore=tests/case/api/test_calculations_integration.py --ignore=tests/case/api/test_liquidity_integration.py --ignore=tests/case/api/test_scenarios_integration.py --ignore=tests/storage
+        run: uv run python scripts/local_services.py run --postgres -- uv run pytest -m integration -n 4 --dist loadfile --group pg-shard
       - name: Upload failed suite shard PostgreSQL log
         if: failure()
         uses: actions/upload-artifact@v7
@@ -761,7 +761,7 @@ jobs:
           CI_DATABASE_OBSERVATIONS: ${{ runner.temp }}/storage-tests/database-observations
           PYTEST_ADDOPTS: --junitxml=${{ runner.temp }}/storage-tests/report.xml
         working-directory: backend
-        run: uv run python scripts/local_services.py run --postgres --storage -- uv run pytest -m integration tests/storage --ignore=tests/storage/test_key_rotation_concurrency_integration.py
+        run: uv run python scripts/local_services.py run --postgres --storage -- uv run pytest -m integration --group storage
       # `--max-skipped 0`: MinIO exercises the object-store contract, and
       # Postgres exercises key-rotation database contracts; locks own concurrency.
       # Missing either dependency must not silently leave its tests unexercised.

@@ -20,7 +20,7 @@ from _pytest.terminal import TerminalReporter
 from scripts import database_contracts
 from scripts.ci_database_children import python_path
 from scripts.ci_no_database import install
-from scripts.test_suites import case_key, owner, selected_modules
+from scripts.test_suites import GROUPS, case_key, group, owner, selected_modules
 
 _PATCHES = pytest.StashKey[pytest.MonkeyPatch]()
 _DIRECTORY = pytest.StashKey[Path]()
@@ -124,6 +124,11 @@ def pytest_addoption(parser: pytest.Parser) -> None:
         help="Collect only modules in the filename-selected suite",
     )
     parser.addoption(
+        "--group",
+        choices=GROUPS,
+        help="Collect only modules in one CI execution group (see GROUP_RULES)",
+    )
+    parser.addoption(
         "--collection-output",
         help="Write complete, unfiltered collection evidence for CI aggregation",
     )
@@ -186,6 +191,21 @@ def pytest_configure(config: pytest.Config) -> None:
 
 
 def pytest_ignore_collect(collection_path: Path, config: pytest.Config) -> bool | None:
+    selected = cast(str | None, config.getoption("group"))
+    if selected is not None and collection_path.suffix == ".py":
+        module = (
+            collection_path.relative_to(config.rootpath).as_posix()
+            if collection_path.is_relative_to(config.rootpath)
+            else collection_path.as_posix()
+        )
+        if (
+            any(
+                fnmatch(collection_path.name, pattern)
+                for pattern in cast(list[str], config.getini("python_files"))
+            )
+            and group(module) != selected
+        ):
+            return True
     if not config.getoption("suite_only"):
         return None
     if collection_path.suffix != ".py" or not any(

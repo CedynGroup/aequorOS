@@ -526,6 +526,15 @@ suite. Split a mixed module rather than adding a marker override. New cases and
 parametrizations inherit their file's suite without a registration step.
 Collection rejects duplicates and conflicting suite markers.
 
+A suite says what a test is; a **CI group** says which job runs it. Integration
+modules are split into `schema`, `locks`, `storage` and `pg-shard` by the ordered
+`GROUP_RULES` table in [`scripts/test_suites.py`](scripts/test_suites.py), where the
+first matching path wins and unmatched integration modules run in `pg-shard`. Select
+one group with `pytest -m integration --group storage`; the workflow jobs use the same
+flag. To move a module between jobs, edit that table rather than a workflow `--ignore`
+list. `tests/architecture/test_ci_groups.py` rejects stale rules and the wiring test
+checks each job names its group.
+
 [`scripts/database_contracts.json`](scripts/database_contracts.json) remains a
 separate reviewed catalogue of PostgreSQL guarantees, with exact identities and
 grouped reasons. It does not select tests. A moved or renamed protected case must

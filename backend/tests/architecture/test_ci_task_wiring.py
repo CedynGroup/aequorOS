@@ -383,6 +383,8 @@ def _assert_serial_ci_owner(job: str) -> None:
                 "print(json.dumps(config.getoption('numprocesses')))",
                 "-p",
                 "xdist.plugin",
+                "-p",
+                "scripts.test_suites_plugin",
                 "--noconftest",
                 *arguments,
             ],
@@ -798,19 +800,25 @@ def test_every_pytest_path_a_task_names_exists() -> None:
     )
 
 
-def test_the_remaining_suite_ignores_exactly_what_its_sibling_steps_run() -> None:
-    """Only integration siblings are ignored; markers own unit selection."""
-    suite, _step = _ci_pytest("postgres-shard")
-    assert suite[suite.index("-m") + 1] == "integration"
-    ignored = {token.partition("=")[2] for token in suite if token.startswith("--ignore=")}
-    owned: set[str] = set()
-    for job in ("postgres-schema", "postgres-locks", "storage"):
-        tokens, _step = _ci_pytest(job)
-        assert tokens[tokens.index("-m") + 1] == "integration"
-        owned.update(token for token in tokens if token.startswith("tests/"))
-    owned = {path for path in owned if not any(path.startswith(other + "/") for other in owned)}
-    assert ignored == owned
-    assert all((TESTS.parent / path).exists() for path in ignored)
+@pytest.mark.parametrize(
+    ("job", "group"),
+    [
+        ("postgres-schema", "schema"),
+        ("postgres-locks", "locks"),
+        ("storage", "storage"),
+        ("postgres-shard", "pg-shard"),
+    ],
+)
+def test_integration_jobs_select_their_registry_group(job: str, group: str) -> None:
+    """Jobs name a group from scripts/test_suites.py instead of paths or --ignore lists.
+
+    A module belongs to exactly one group, so the shard job cannot silently drop or
+    duplicate what its sibling jobs run.
+    """
+    tokens, _step = _ci_pytest(job)
+    assert tokens[tokens.index("-m") + 1] == "integration"
+    assert tokens[tokens.index("--group") + 1] == group
+    assert not [t for t in tokens if t.startswith(("tests/", "--ignore"))], job
 
 
 def test_the_hermetic_run_still_proves_it_collected_every_module(tmp_path: Path) -> None:

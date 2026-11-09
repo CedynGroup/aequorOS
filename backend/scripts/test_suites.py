@@ -34,6 +34,34 @@ def owner(nodeid: str) -> Suite:
     return "unit"
 
 
+# CI execution groups. A suite says what a test is; a group says which CI job runs it.
+# Rules are ordered and the first match wins, so a narrow module can sit ahead of the
+# directory that contains it. Integration modules matching no rule fall to PG_SHARD_GROUP.
+# Edit this table, not the workflow, to move a module between jobs.
+GROUP_RULES: tuple[tuple[str, str], ...] = (
+    ("tests/case/api/test_calculations_integration.py", "locks"),
+    ("tests/case/api/test_liquidity_integration.py", "locks"),
+    ("tests/case/api/test_scenarios_integration.py", "locks"),
+    ("tests/storage/test_key_rotation_concurrency_integration.py", "locks"),
+    ("tests/db/", "schema"),
+    ("tests/storage/", "storage"),
+)
+PG_SHARD_GROUP = "pg-shard"
+GROUPS: tuple[str, ...] = ("unit", "e2e", "schema", "locks", "storage", PG_SHARD_GROUP)
+
+
+def group(nodeid: str) -> str:
+    """Name the CI execution group of a case; unit and e2e are their own groups."""
+    suite = owner(nodeid)
+    if suite != "integration":
+        return suite
+    module = nodeid.split("::", 1)[0].replace("\\", "/")
+    for prefix, name in GROUP_RULES:
+        if module == prefix or (prefix.endswith("/") and module.startswith(prefix)):
+            return name
+    return PG_SHARD_GROUP
+
+
 def selected_modules(
     suite: str,
     root: Path = BACKEND,
