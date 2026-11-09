@@ -25,6 +25,8 @@ import type {
 } from "@aequoros/risk-service-api";
 import { isApiError } from "@/lib/api/client";
 import { useConfigureEligibility } from "@/lib/api/configureAccess";
+import { wholeInstitutionCapabilities } from "@/lib/api/dataScope";
+import { hasEffectiveCapability } from "@/lib/modules";
 import { useUserProfile } from "@/components/profile/ProfileProvider";
 import {
   useCreateMarketDataConnection,
@@ -52,11 +54,6 @@ const PULLS_PER_MONTH: Record<string, number> = {
   MONTHLY: 1,
 };
 
-/** Scalar roles the backend mutation gate admits: the operational ladder is
- * admin/approver/analyst; ``account_admin`` administers accounts only and
- * sits outside it, and viewer/examiner are read-only. */
-const TEST_PULL_ROLES = new Set(["admin", "approver", "analyst"]);
-
 type Step = "vendor" | "credentials" | "scopes" | "schedule" | "activate";
 
 function stepsFor(vendor: VendorKey | null): Step[] {
@@ -77,17 +74,27 @@ export default function AddSourcePanel({
   const scopesQuery = useMarketDataScopes(bankId);
   const create = useCreateMarketDataConnection(bankId);
   const test = useTestMarketDataConnection(bankId);
-  // Creating a source connection is a configuration duty server-side (#184):
-  // the save mirrors the exact MARKETS configure gate.
+  // Creating a source connection AND its automatic representative test pull
+  // are the same MARKETS/restricted configure duty (#172 cutover; #184 gates
+  // the save): the pull runs only when the capability projection confirms it.
   const { allowed: canConfigure, reason: configureReason } =
     useConfigureEligibility(bankId, "markets");
-  // The representative /test pull keeps its legacy operational gate (a scalar
-  // analyst-or-higher role), separate from the configure duty: skip the
-  // automatic pull for a read-only principal instead of failing after the
-  // save succeeded.
-  const { profile } = useUserProfile();
-  const canTestPull =
-    profile !== undefined && TEST_PULL_ROLES.has(profile.role);
+  // The pull's RESULT is read material (W7): vendor sample values and errors
+  // are separately authorized by the exact MARKETS/restricted VIEW binding,
+  // so a configure-only principal gets the write-only acknowledgement —
+  // the success flag, empty sample values and no error — which must render
+  // as a completed check, not a failure.
+  const { effectiveAuthority } = useUserProfile();
+  const canReadTestPull = hasEffectiveCapability(
+    wholeInstitutionCapabilities(
+      effectiveAuthority?.institutionCapabilities.find(
+        (entry) => entry.institutionId === bankId,
+      )?.capabilities ?? [],
+    ),
+    "markets",
+    "restricted",
+    "view",
+  );
   const configureRequirementId = useId();
 
   const [vendor, setVendor] = useState<VendorKey | null>(null);
@@ -171,7 +178,7 @@ export default function AddSourcePanel({
       });
       setCreated(connection);
       if (
-        canTestPull &&
+        canConfigure &&
         vendor !== "manual_upload" &&
         !connection.validationError
       ) {
@@ -473,12 +480,13 @@ export default function AddSourcePanel({
                   </p>
                 </div>
               )}
-              {!canTestPull &&
+              {!canConfigure &&
                 vendor !== "manual_upload" &&
                 !created.validationError && (
                   <p role="status" className="text-caption text-slate">
-                    Configuration saved. Automatic test pull omitted: it
-                    requires an operational role beyond the configure duty.
+                    Configuration saved. The automatic test pull was omitted
+                    because it requires Markets · Restricted · Configure
+                    authority on this bank.
                   </p>
                 )}
               {testResult && (
@@ -505,11 +513,13 @@ export default function AddSourcePanel({
                     )}
                     <p className="text-body font-medium text-navy">
                       {testResult.success
-                        ? "Configuration check complete."
-                        : "Live vendor transport unavailable"}
+                        ? canReadTestPull
+                          ? "Configuration check complete."
+                          : "Test pull completed."
+                        : "Test pull did not succeed."}
                     </p>
                   </div>
-                  {testResult.success ? (
+                  {testResult.success && canReadTestPull && (
                     <ul className="space-y-1">
                       {Object.entries(testResult.sampleValues).map(
                         ([label, value]) => (
@@ -522,8 +532,19 @@ export default function AddSourcePanel({
                         ),
                       )}
                     </ul>
-                  ) : (
-                    <p className="text-body text-navy">{testResult.error}</p>
+                  )}
+                  {testResult.success && !canReadTestPull && (
+                    // Write-only acknowledgement (W7): nothing failed; the
+                    // vendor's sample values are simply read material.
+                    <p className="text-caption text-slate">
+                      Sample values are shown to colleagues holding Markets ·
+                      Restricted · View on this bank.
+                    </p>
+                  )}
+                  {!testResult.success && canReadTestPull && (
+                    <p className="text-body text-navy">
+                      {testResult.error ?? "Live vendor transport unavailable."}
+                    </p>
                   )}
                 </div>
               )}

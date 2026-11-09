@@ -17,7 +17,7 @@ import { requireObjectStorage } from "../../e2e/support/object-storage";
 const evidenceDir = process.env.E2E_EVIDENCE_DIR;
 const BACKEND_DIR = path.join(__dirname, "..", "..", "..");
 const MARKET_DATA_REQUEST =
-  /\/(?:market-data|implied-rating)(?:\/|$|\?)|\/market-data\/templates\//;
+  /\/(?:market-data|implied-rating|live-snapshots)(?:\/|$|\?)|\/market-data\/templates\//;
 // The as-of date the shared full-coverage workbook fixture is built for.
 const UPLOAD_AS_OF = "2026-06-30";
 

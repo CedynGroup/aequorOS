@@ -240,6 +240,11 @@ export type ModuleScope = {
   marketsPublishedView?: boolean;
   marketsConfidentialView?: boolean;
   marketsRestrictedView?: boolean;
+  /**
+   * Exact MARKETS/aggregated view authority — the live engine's read grain,
+   * which governs the rating ladder's `/live-snapshots` snapshots (#172).
+   */
+  marketsAggregatedView?: boolean;
   /** Exact MARKETS/published create authority — manual market-data upload. */
   marketsUpload?: boolean;
   /** Exact MARKETS/confidential create authority — adding an overlay version. */

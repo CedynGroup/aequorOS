@@ -205,8 +205,15 @@ export default function MarketsPage() {
     liveRating?.metrics.assessment_kind === "sdi_financial_strength";
   // The plane-2 daily ladder for the rating module. Already exposed by
   // ``GET /banks/{id}/live-snapshots`` — the trend is a read of what was
-  // recorded each day, not a recomputation of history.
-  const ratingLadder = useLiveSnapshots(bank?.id, "rating", 45);
+  // recorded each day, not a recomputation of history. The backend serves
+  // rating snapshots at the live engine's aggregated read grain (W11), so the
+  // request goes out only for a caller holding that exact MARKETS binding; a
+  // published-only reader sends no live-snapshots request at all instead of
+  // collecting the route's denial.
+  const ratingLadderBankId = moduleScope.marketsAggregatedView
+    ? bank?.id
+    : undefined;
+  const ratingLadder = useLiveSnapshots(ratingLadderBankId, "rating", 45);
   // The SDI scorecard has THREE unavailable states and they mean different
   // things to an operator. Rendering one message for all of them told a reader
   // the methodology was awaiting approval when it had already been approved and
