@@ -58,9 +58,14 @@ leave every institution-scoped analyst unable to fetch the template they are
 authorized to upload. The download is decided by the same exact
 MARKETS/`published`/`view` grant the Markets hub needs, on the named bank.
 
-Held for the configuration-authority cutover (unchanged, legacy analyst gate):
-market-data connection create / validate / test / update / disable / enable /
-revoke, and `PUT …/market-data/source-preferences`.
+Cut over with the configuration duties (scoped-mutation boundary plus the
+service's exact MARKETS/`restricted`/`configure` check, denied opaquely before
+any vault write, vendor call or status mutation): market-data connection
+create / validate / test / update / disable / enable / revoke, and
+`PUT …/market-data/source-preferences`. The `/test` pull's vendor content
+(sample values, vendor error) is separately authorized read material: a
+configure-only caller gets a write-only acknowledgement, and the full result
+only with MARKETS/`restricted`/`view` on the exact bank.
 
 Out of scope and unchanged: the live rating card on the Markets overview reads
 `GET …/live-summary` (shared live projection) and the Data Engine console's
