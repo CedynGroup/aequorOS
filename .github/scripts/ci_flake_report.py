@@ -849,6 +849,8 @@ def gh_api(*endpoint_args: str, allow_escape_sequences: bool = False) -> str:
                 cmd,
                 capture_output=True,
                 text=True,
+                encoding="utf-8",
+                errors="replace",
                 timeout=API_TIMEOUT_SECONDS,
                 check=False,
             )
@@ -907,7 +909,7 @@ def fetch_attempt_jobs(
     """Jobs of one run attempt; cached on disk so interrupted runs resume."""
     cache_path = cache_dir / "jobs" / f"{run_id}-{attempt}.json" if cache_dir else None
     if cache_path is not None and cache_path.exists():
-        return parse_jobs(json.loads(cache_path.read_text()))
+        return parse_jobs(json.loads(cache_path.read_text(encoding="utf-8")))
     payload = gh_api_json(
         f"repos/{repo}/actions/runs/{run_id}/attempts/{attempt}/jobs?per_page={PER_PAGE}"
     )
@@ -1149,11 +1151,11 @@ def cmd_report(args: argparse.Namespace) -> int:
     markdown = render_markdown(report)
     if args.out_md:
         Path(args.out_md).parent.mkdir(parents=True, exist_ok=True)
-        Path(args.out_md).write_text(markdown)
+        Path(args.out_md).write_text(markdown, encoding="utf-8")
         print(f"Wrote {args.out_md}")
     if args.out_json:
         Path(args.out_json).parent.mkdir(parents=True, exist_ok=True)
-        Path(args.out_json).write_text(json.dumps(report, indent=1))
+        Path(args.out_json).write_text(json.dumps(report, indent=1), encoding="utf-8")
         print(f"Wrote {args.out_json}")
     if not args.out_md and not args.out_json:
         print(markdown)
