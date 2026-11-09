@@ -111,6 +111,16 @@ jobs:
           PLAYWRIGHT_QUARANTINE_REPORT: ${{ runner.temp }}/journeys.json
           PLAYWRIGHT_CRITICAL_OUTCOMES_REPORT: ${{ runner.temp }}/critical-journeys.json
           E2E_EVIDENCE_DIR: ${{ runner.temp }}/evidence
+          # Whole-file sharding by test count leaves shard 4 carrying the
+          # regulatory-config rerun below (a second full stack plus its own
+          # journeys), so its main-suite share is weighted smallest. The weights
+          # are calibrated against per-test durations captured from merge-group
+          # runs of this workflow; recalibrate them the same way when journey
+          # durations drift. `PWTEST_SHARD_WEIGHTS` is a Playwright CLI feature,
+          # so the exact @playwright/test pin in the dashboard's package.json is
+          # what keeps the syntax stable. Ignored by the shardless invocations
+          # in this step.
+          PWTEST_SHARD_WEIGHTS: "11:6:9:4"
         run: |
           mise exec -- pnpm --filter @aequoros/dashboard e2e --shard=${{ matrix.shard }}/4 --output=${{ runner.temp }}/journey-results
           if [ "${{ matrix.shard }}" = "4" ]; then
