@@ -776,6 +776,20 @@ def nominee_may_sign(  # noqa: PLR0913 - the complete decision tuple is explicit
     """Evaluate structural nominee authority without inventing step-up proof."""
     if not can_view(db, ctx, bank, package.return_family):
         return False
+    # The SIGNER bundle carries no VIEW, so the nominee's source READ is an
+    # independent duty the ceremony will demand (require_certification_sign_off
+    # opens with require_view). Refuse the route here — before any recipient
+    # row is persisted — for a nominee who could never pass it, evaluating the
+    # nominee in their own session rather than through the nominator's
+    # impersonation. can_view also owns the gated families' Capital/confidential
+    # source gate for ICAAP.
+    if not can_view(
+        db,
+        replace(nominee, impersonation_context=None),
+        bank,
+        package.return_family,
+    ):
+        return False
     if not _evaluate(
         db,
         nominee,
