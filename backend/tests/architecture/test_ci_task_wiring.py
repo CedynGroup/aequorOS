@@ -232,7 +232,13 @@ def test_dashboard_journeys_have_an_always_reported_sharded_gate() -> None:
     assert jobs["gate"]["if"] == "always()"
     assert set(_needs(jobs["gate"])) == {"changes", "journeys"}
     assert _needs(jobs["journeys"]) == ["changes"]
-    assert jobs["journeys"]["if"] == "needs.changes.outputs.journeys == 'true'"
+    # The queue skips change detection and runs every shard; a pull request
+    # runs the shards only when the journey area changed.
+    assert jobs["changes"]["if"] == "github.event_name != 'merge_group'"
+    assert (
+        jobs["journeys"]["if"]
+        == "github.event_name == 'merge_group' || needs.changes.outputs.journeys == 'true'"
+    )
     strategy = cast(dict[str, object], jobs["journeys"]["strategy"])
     assert cast(dict[str, object], strategy["matrix"])["shard"] == ["1", "2", "3", "4"]
     assert strategy["fail-fast"] == "false"
@@ -258,8 +264,14 @@ def test_the_backend_gates_ci_must_run_are_all_defined() -> None:
     assert required <= set(_tasks(ROOT_TASKS))
 
 
-def _ci_pytest(job_name: str) -> tuple[list[str], dict[str, object]]:
-    """Read executable direct commands, not labels, comments or echoed strings."""
+def _ci_pytest(
+    job_name: str, *, allow_guarded_step: bool = False
+) -> tuple[list[str], dict[str, object]]:
+    """Read executable direct commands, not labels, comments or echoed strings.
+
+    ``allow_guarded_step`` admits the pytest step of a combined job whose
+    execution is gated by a step-level `if` instead of the job-level one.
+    """
     document = cast(
         dict[str, dict[str, dict[str, object]]],
         yaml.safe_load((WORKFLOWS / "risk-service.yml").read_text()),
@@ -278,7 +290,9 @@ def _ci_pytest(job_name: str) -> tuple[list[str], dict[str, object]]:
         if not direct or "--collect-only" in tokens:
             continue
         assert step.get("working-directory") == "backend"
-        assert "if" not in step and not step.get("continue-on-error", False)
+        assert (allow_guarded_step or "if" not in step) and not step.get(
+            "continue-on-error", False
+        )
         assert not any(token in {";", "&&", "||", "|"} for token in tokens)
         matches.append((tokens, step))
     assert len(matches) == 1, f"{job_name} must execute exactly one direct pytest suite"
@@ -295,13 +309,16 @@ def test_ci_actually_runs_every_required_gate() -> None:
     assert required <= invoked, f"Not gated in CI: {sorted(required - invoked)}"
     for job, marker in (
         ("architecture", "unit"),
-        ("backend-e2e", "e2e"),
+        ("static", "e2e"),
         ("postgres-schema", "integration"),
         ("postgres-locks", "integration"),
         ("postgres-shard", "integration"),
         ("storage", "integration"),
     ):
-        tokens, _step = _ci_pytest(job)
+        tokens, step = _ci_pytest(job, allow_guarded_step=job == "static")
+        if job == "static":
+            # The combined static job gates the e2e suite by step, not by job.
+            assert "guards" in cast(str, step["if"])
         assert tokens[tokens.index("-m") + 1] == marker, job
     _ = _ci_pytest("real-data")
 
@@ -499,7 +516,7 @@ def test_serial_owner_validation_leaves_no_repository_byproducts(
     "job",
     [
         "architecture",
-        "backend-e2e",
+        "static",
         "postgres-schema",
         "postgres-locks",
         "postgres-shard",
@@ -514,7 +531,7 @@ def test_removing_a_ci_suite_fails_the_gate(
         dict[str, dict[str, dict[str, object]]],
         yaml.safe_load((WORKFLOWS / "risk-service.yml").read_text()),
     )
-    _tokens, target = _ci_pytest(job)
+    _tokens, target = _ci_pytest(job, allow_guarded_step=job == "static")
     steps = cast(list[dict[str, object]], document["jobs"][job]["steps"])
     steps[:] = [step for step in steps if step != target]
     _ = (tmp_path / "risk-service.yml").write_text(yaml.safe_dump(document))
@@ -644,8 +661,13 @@ def test_unit_suite_command_and_ci_job_are_explicit() -> None:
         assert environment[variable] == "1"
     assert not any("setup-postgres" in str(step.get("uses", "")) for step in steps)
     assert job["if"] == "needs.preflight.outputs.guards == 'true'"
-    assert document["jobs"]["postgres-suite"]["name"] == "Integration tests"
-    assert {"architecture", "backend-e2e"} <= set(_needs(document["jobs"]["gate"]))
+    # The gate joins every real job directly; the static job owns lint,
+    # typecheck, the e2e contracts and client freshness in one place.
+    assert document["jobs"]["static"]["name"] == "Lint and typecheck"
+    assert {"architecture", "static"} <= set(_needs(document["jobs"]["gate"]))
+    assert not {"backend-e2e", "api-fresh", "postgres", "postgres-suite"} & set(
+        document["jobs"]
+    )
 
 
 # --------------------------------------------------------------------------
@@ -658,7 +680,7 @@ _PYTEST_PATHS = re.compile(r"(?:^|\s)(tests/[A-Za-z0-9_./-]*)")
 
 
 def _ci_paths(job: str) -> list[str]:
-    tokens, _step = _ci_pytest(job)
+    tokens, _step = _ci_pytest(job, allow_guarded_step=job == "static")
     return [token for token in tokens if token.startswith("tests/")]
 
 
@@ -781,7 +803,7 @@ def test_every_pytest_path_a_task_names_exists() -> None:
                         missing.append(f"{config.name}:{name} -> {path}")
     for job in (
         "architecture",
-        "backend-e2e",
+        "static",
         "postgres-schema",
         "postgres-locks",
         "postgres-shard",

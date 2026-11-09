@@ -678,7 +678,7 @@ credential-vault encryption tests need no vault server. The live storage and
 OpenBao execution guards remain in
 [Risk Service CI](../.github/workflows/risk-service.yml).
 
-The integration aggregate also joins the lock and storage execution reports with
+The **Risk service gate** also joins the lock and storage execution reports with
 unit, e2e and Postgres shard evidence. Their selected union must match the classified
 collection exactly once. Every selected protected case must execute successfully
 without skips in its Postgres owner. Storage integration cases run only in the storage job,
@@ -695,11 +695,11 @@ and the schema/RLS suite in two hash-based shards; lock tests retain their own j
 Longest-first packing uses the committed `scripts/ci_postgres_durations.json`
 baseline, excluding files with a non-Postgres owner. Each file stays together, including OpenBao's shared AppRole fixtures.
 New modules use stable hashing until the baseline is refreshed. The
-**Integration tests** aggregate joins the suite shards; **Postgres schema, RLS and locks**
-and the always-reported **Risk service gate** remain enforced. Shards upload their complete
-collection manifests and JUnit reports; the aggregates verify that their union
-contains every expected test exactly once, preserve the full-suite execution
-floor, and reject any skipped schema/RLS or live OpenBao test.
+always-reported **Risk service gate** joins the suite, schema/RLS and lock jobs
+directly and stays enforced. Shards upload their complete
+collection manifests and JUnit reports; the gate verifies that their union
+contains every expected test exactly once, preserves the full-suite execution
+floor, and rejects any skipped schema/RLS or live OpenBao test.
 Failed schema and suite shards also upload `postgres.log` as
 `pg-schema-server-log-<shard>` or `pg-suite-server-log-<shard>` when the log
 exists, retained for seven days.

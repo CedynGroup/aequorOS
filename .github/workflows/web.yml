@@ -102,11 +102,15 @@ jobs:
           RESULTS: ${{ toJSON(needs) }}
         run: |
           set -euo pipefail
-          printf '%s\n' "$RESULTS" | jq -r 'to_entries[] | "  \(.key): \(.value.result)"'
+          NOT_PASSED="$(printf '%s\n' "$RESULTS" \
+            | jq -r 'to_entries[] | select(.value.result != "success") | "  \(.key): \(.value.result)"')"
+          if [ -n "$NOT_PASSED" ]; then
+            printf 'Web jobs that did not pass:\n%s\n' "$NOT_PASSED"
+          fi
           FAILED="$(printf '%s\n' "$RESULTS" \
             | jq -r 'to_entries[] | select(.value.result == "failure" or .value.result == "cancelled") | .key')"
           if [ -n "$FAILED" ]; then
-            echo "::error::These web gates did not pass: $(printf '%s' "$FAILED" | tr '\n' ' ')"
+            echo "::error::These web jobs did not pass:"$'\n'"$NOT_PASSED"
             exit 1
           fi
-          echo "Every web gate passed or was skipped."
+          echo "Every web job passed or was skipped."

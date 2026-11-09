@@ -22,6 +22,9 @@ concurrency:
 
 jobs:
   changes:
+    # Queue entries always run the journey shards, so re-detecting changes
+    # there would only delay them; per-PR checks have already run.
+    if: github.event_name != 'merge_group'
     name: Detect journey changes
     runs-on: ubuntu-24.04
     timeout-minutes: 10
@@ -42,7 +45,9 @@ jobs:
   journeys:
     name: Dashboard journeys shard ${{ matrix.shard }}/4
     needs: changes
-    if: needs.changes.outputs.journeys == 'true'
+    # The queue never runs change detection, so its entries run every shard;
+    # a pull request runs the shards only when the journey area changed.
+    if: github.event_name == 'merge_group' || needs.changes.outputs.journeys == 'true'
     strategy:
       fail-fast: false
       matrix:
@@ -229,35 +234,35 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Download shard reports
-        if: needs.changes.outputs.journeys == 'true'
+        if: needs.journeys.result == 'success'
         uses: actions/download-artifact@v8
         with:
           pattern: dashboard-journey-report-*
           path: ${{ runner.temp }}/journey-reports
       - name: Verify complete journey execution and report skipped names
-        if: needs.changes.outputs.journeys == 'true'
+        if: needs.journeys.result == 'success'
         run: |
           node .github/scripts/assert_dashboard_journeys.mjs \
             "$RUNNER_TEMP"/journey-reports/*/journeys.json
       - name: Download complete browser contract report
-        if: needs.changes.outputs.journeys == 'true'
+        if: needs.journeys.result == 'success'
         uses: actions/download-artifact@v8
         with:
           name: dashboard-browser-contract-report
           path: ${{ runner.temp }}/contract-report
       - name: Require the reviewed browser contract collection without skips
-        if: needs.changes.outputs.journeys == 'true'
+        if: needs.journeys.result == 'success'
         run: |
           node .github/scripts/assert_dashboard_contracts.mjs \
             "$RUNNER_TEMP"/contract-report/contracts.json
       - name: Download critical outcome reports
-        if: needs.changes.outputs.journeys == 'true'
+        if: needs.journeys.result == 'success'
         uses: actions/download-artifact@v8
         with:
           pattern: dashboard-critical-outcomes-*
           path: ${{ runner.temp }}/critical-outcomes
       - name: Require passing critical outcomes in their declared layers
-        if: needs.changes.outputs.journeys == 'true'
+        if: needs.journeys.result == 'success'
         run: |
           node .github/scripts/assert_dashboard_outcomes.mjs \
             "$RUNNER_TEMP"/critical-outcomes/*/critical-*.json

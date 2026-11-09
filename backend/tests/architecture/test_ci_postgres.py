@@ -711,21 +711,19 @@ def test_workflow_preserves_required_names_and_joins_all_postgres_jobs() -> None
         yaml.safe_load((REPO / ".github/workflows/risk-service.yml").read_text()),
     )
     jobs = document["jobs"]
-    assert jobs["postgres-suite"]["name"] == "Integration tests"
-    assert jobs["postgres"]["name"] == "Postgres schema, RLS and locks"
     assert jobs["gate"]["name"] == "Risk service gate"
-    assert set(cast(list[str], jobs["postgres"]["needs"])) == {
+    # The gate joins every real job directly; no chained summary job may sit
+    # between the gate and the shards it vouches for.
+    assert not {"postgres", "postgres-suite", "backend-e2e", "api-fresh"} & set(jobs)
+    assert set(cast(list[str], jobs["gate"]["needs"])) == {
         "preflight",
+        "static",
+        "architecture",
         "postgres-schema",
         "postgres-locks",
-    }
-    assert set(cast(list[str], jobs["postgres-suite"]["needs"])) == {
-        "preflight",
         "postgres-shard",
-        "postgres",
         "storage",
-        "architecture",
-        "backend-e2e",
+        "real-data",
     }
     schema_strategy = cast(dict[str, object], jobs["postgres-schema"]["strategy"])
     matrix = cast(dict[str, object], schema_strategy["matrix"])

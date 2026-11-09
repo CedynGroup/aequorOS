@@ -49,14 +49,17 @@ def _condition_runs(condition: str, values: dict[str, str]) -> bool:
                 return value
             case ast.Name(id=name) if name in {"true", "false"}:
                 return name == "true"
-            case ast.BoolOp(op=ast.And(), values=operands):
-                return all(evaluate(operand) for operand in operands)
-            case ast.BoolOp(op=ast.Or(), values=operands):
-                return any(evaluate(operand) for operand in operands)
-            case ast.Compare(left=left, ops=[ast.Eq()], comparators=[right]):
-                return evaluate(left) == evaluate(right)
-            case ast.Compare(left=left, ops=[ast.NotEq()], comparators=[right]):
-                return evaluate(left) != evaluate(right)
+            case ast.Call(func=ast.Name(id="always"), args=[]):
+                return True
+            case ast.BoolOp(op=operator, values=operands):
+                results = [evaluate(operand) for operand in operands]
+                return all(results) if isinstance(operator, ast.And) else any(results)
+            case ast.Compare(left=left, ops=[comparator], comparators=[right]):
+                left_value = evaluate(left)
+                right_value = evaluate(right)
+                if isinstance(comparator, ast.Eq):
+                    return left_value == right_value
+                return left_value != right_value
             case _:
                 raise AssertionError(f"Unsupported condition: {condition}")
 
@@ -79,11 +82,11 @@ def test_queue_head_execution_policy(event: str, preflight: str, enabled: str) -
     values = {
         "github.event_name": event,
         "needs.preflight.outputs.backend": preflight,
+        "needs.preflight.outputs.guards": preflight,
         "needs.preflight.outputs.api_client": preflight,
         "vars.REAL_DATA_CI_ENABLED": enabled,
     }
-    for name in ("Lint and typecheck", "Generated API client freshness"):
-        assert _condition_runs(jobs[name]["if"], values) == (preflight == "true"), name
+    assert _condition_runs(jobs["Lint and typecheck"]["if"], values) == (preflight == "true")
     assert _condition_runs(jobs["Real-data API surface"]["if"], values) == (
         event != "merge_group" and preflight == "true" and enabled == "true"
     )
