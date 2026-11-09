@@ -19,6 +19,7 @@ closed-map helper pins live in
 
 from __future__ import annotations
 
+import json
 from datetime import date, timedelta
 from uuid import UUID, uuid4
 
@@ -52,6 +53,10 @@ _BASE = f"/api/v1/banks/{SAMPLE_BANK_ID}"
 # and the refresh-date plane-2 snapshot rows.
 _WINDOW_START = date(2026, 3, 1)
 _WINDOW_END = utc_now().date() + timedelta(days=1)
+_WINDOW_PARAMS = {
+    "start_date": _WINDOW_START.isoformat(),
+    "end_date": _WINDOW_END.isoformat(),
+}
 
 
 def _seed_and_refresh(db_client: TestClient) -> None:
@@ -173,11 +178,7 @@ def _alerts(db_client: TestClient, auth: dict[str, str]):
 
 
 def _window(db_client: TestClient, auth: dict[str, str]):
-    response = db_client.get(
-        f"{_BASE}/analytics/window",
-        headers=auth,
-        params={"start_date": _WINDOW_START.isoformat(), "end_date": _WINDOW_END.isoformat()},
-    )
+    response = db_client.get(f"{_BASE}/analytics/window", headers=auth, params=_WINDOW_PARAMS)
     assert response.status_code == 200, response.text
     return response.json()
 
@@ -235,7 +236,9 @@ def test_window_analytics_serves_only_bound_modules(db_client: TestClient) -> No
     assert all(ratio["module"] == "liquidity" for ratio in ratios)
     assert {entry["module"] for entry in daily} == {"liquidity"}
     assert all(entry["day_count"] > 0 for entry in daily)
-    assert "capital" not in _window(db_client, auth)  # No capital key in the response object.
+    # Full serialized omission: no capital name, ratio or metric anywhere in
+    # the serialized payload, not just its top-level keys.
+    assert "capital" not in json.dumps(body)
 
 
 def test_unbound_principal_gets_closed_maps(db_client: TestClient) -> None:
