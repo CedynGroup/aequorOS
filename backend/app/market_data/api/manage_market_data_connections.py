@@ -9,10 +9,14 @@ Credentials are write-only: they appear in request bodies only, and no
 response ever carries credential values. The connection list still carries
 credential metadata (fingerprint, expiry, status), so it requires an exact
 MARKETS/restricted view binding; the scope catalog and quota ledger are
-published-tier reads. Connection lifecycle is a configuration duty: mutations
-carry the interactive-human scoped-mutation boundary and the service requires
-an exact markets/configure/restricted binding before any vault write or vendor
-call. The representative ``/test`` pull keeps its legacy operational gate.
+published-tier reads. Connection lifecycle and the representative ``/test``
+pull are configuration duties: mutations carry the interactive-human
+scoped-mutation boundary and the service requires an exact
+markets/configure/restricted binding before any vault write, vendor call or
+status mutation. The pull's vendor content (sample values, vendor error) is
+separately authorized read material: a configure-only caller gets a
+write-only acknowledgement, and the full result only with the matching
+markets/restricted view binding on the exact bank.
 """
 
 from __future__ import annotations
@@ -25,7 +29,6 @@ from app.api.deps import (
     DbSession,
     MarketsPublishedView,
     MarketsRestrictedView,
-    MutationTenant,
     ScopedMutationTenant,
 )
 from app.market_data.schemas.market_data_connections import (
@@ -91,7 +94,7 @@ def test_market_data_connection(
     bank_id: str,
     connection_id: UUID,
     db: DbSession,
-    ctx: MutationTenant,
+    ctx: ScopedMutationTenant,
 ) -> TestPullRead:
     return market_data_connections.test_connection(db, ctx, bank_id, connection_id)
 

@@ -31,10 +31,10 @@ from fastapi import HTTPException, status
 from sqlalchemy import select
 
 import app.market_data.adapters  # noqa: F401 - registers shipped vendor adapters
-from app.core.authorization import Permission, Sensitivity
+from app.core.authorization import Module, Permission, Sensitivity
 from app.data_engine.public import bank_slug
 from app.db.base import utc_now
-from app.identity.public import Bank
+from app.identity.public import Bank, evaluate_bank_permission
 from app.market_data.adapters.base import (
     AuthResult,
     CredentialSet,
@@ -347,6 +347,11 @@ def test_connection(
     db: Session, ctx: TenantContext, bank_id: str, connection_id: UUID
 ) -> TestPullRead:
     """Run the §9.2 step-5 representative test pull for the connection's scopes."""
+    # The test pull is a configuration duty: deny before the bank or connection
+    # lookup, the vault retrieval, or any vendor call.
+    require_markets_access(
+        db, ctx, bank_id, Permission.CONFIGURE, Sensitivity.RESTRICTED, opaque=True
+    )
     bank = _get_bank_or_404(db, ctx, bank_id)
     connection = _get_connection_or_404(db, ctx, bank_id, connection_id)
     if connection.vendor == MANUAL_UPLOAD_VENDOR:
@@ -360,11 +365,33 @@ def test_connection(
     credentials = _retrieve_credentials(db, connection)
     adapter = _adapter(db, bank, bank_slug(db, bank), connection.vendor)
     result = adapter.test_pull(credentials, _connection_scopes(connection))
+    if not _may_read_test_pull_result(db, ctx, bank):
+        # Write-only acknowledgement (W7): the vendor's sample values and error
+        # are read material, separately authorized by the restricted view.
+        return TestPullRead(success=result.success, sample_values={}, error=None)
     return TestPullRead(
         success=result.success,
         sample_values=dict(result.sample_values),
         error=result.error,
     )
+
+
+def _may_read_test_pull_result(db: Session, ctx: TenantContext, bank: Bank) -> bool:
+    """Whether this caller may see the test pull's vendor content (W7).
+
+    Non-raising twin of the connection list's view gate: full
+    ``TestPullRead`` requires the exact markets/restricted VIEW binding on
+    the same bank; a failed evaluation denies closed."""
+    decision = evaluate_bank_permission(
+        db,
+        ctx,
+        bank,
+        permission=Permission.VIEW,
+        module=Module.MARKETS,
+        sensitivity=Sensitivity.RESTRICTED,
+        surface="market_data",
+    )
+    return decision is not None and decision.allowed
 
 
 def update_connection(  # noqa: PLR0913

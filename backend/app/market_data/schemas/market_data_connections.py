@@ -134,7 +134,10 @@ class MarketDataQuotaListRead(ClosedModel):
 
 class TestPullRead(ClosedModel):
     """Result of the §9.2 step-5 representative test pull: human-readable
-    sample values on success, a bank-facing error otherwise."""
+    sample values on success, a bank-facing error otherwise. The vendor
+    content is read material: a caller holding the configuration duty without
+    the bank's markets/restricted view binding gets only the success flag,
+    with empty sample values and no error."""
 
     success: bool
     sample_values: dict[str, str] = Field(title="Test Pull Sample Values")
