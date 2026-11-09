@@ -1,6 +1,6 @@
 """Live READ scope end to end: only permitted modules cross the wire.
 
-The live-snapshot ladder, the alerts feed and the window analytics are
+The official-snapshot ladder, the alerts feed and the window analytics are
 authorized through the caller's exact active VIEW bindings. The snapshot
 service has a separate lookup matching the live module authority map; alerts
 and window analytics use matching engine gate lists. These tests pin the
@@ -187,7 +187,7 @@ def test_snapshot_ladder_serves_only_the_bound_module(db_client: TestClient) -> 
     """A CAPITAL-only viewer reads the capital ladder and no other module's.
 
     This is the capital snapshot entry end to end: the same exact VIEW binding
-    that gates the live summary gates the live-snapshot ladder.
+    that gates the live summary gates the official-snapshot loop.
     """
     _seed_and_refresh(db_client)
     viewer, version = _user_with_module_view(ModuleScope.CAPITAL, "capital-viewer@example.test")
