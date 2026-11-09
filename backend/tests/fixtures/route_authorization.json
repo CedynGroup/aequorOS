@@ -1145,12 +1145,6 @@
         {
           "application": "tenant",
           "method": "POST",
-          "path": "/api/v1/banks/{bank_id}/market-data/connections/{connection_id}/test",
-          "endpoint": "app.market_data.api.manage_market_data_connections:test_market_data_connection"
-        },
-        {
-          "application": "tenant",
-          "method": "POST",
           "path": "/api/v1/banks/{bank_id}/official-runs",
           "endpoint": "app.live.api.manage_live_engine:mint_official_run"
         },
@@ -3689,6 +3683,12 @@
           "method": "POST",
           "path": "/api/v1/banks/{bank_id}/market-data/connections",
           "endpoint": "app.market_data.api.manage_market_data_connections:create_market_data_connection"
+        },
+        {
+          "application": "tenant",
+          "method": "POST",
+          "path": "/api/v1/banks/{bank_id}/market-data/connections/{connection_id}/test",
+          "endpoint": "app.market_data.api.manage_market_data_connections:test_market_data_connection"
         },
         {
           "application": "tenant",
