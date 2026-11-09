@@ -466,7 +466,9 @@ def test_markdown_renders_ranking_and_baseline() -> None:
     assert "pytest:tests/db/test_document_deletion_timeout_integration.py" in markdown
     assert "baseline" in markdown.lower()
     assert "python3 .github/scripts/ci_flake_report.py report" in markdown
-    assert report["meta"]["window"]["since"] == "2026-10-11"
+    # The window reports what the data covers, not what was requested.
+    assert report["meta"]["window"]["since"] == "2026-11-08"
+    assert report["meta"]["window"]["requested_since"] == "2026-10-11"
 
 
 def test_report_json_round_trips() -> None:

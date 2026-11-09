@@ -654,11 +654,18 @@ def build_report(
     # notes say so); it is deterministic failure on its own branch.
     breakage_signatures = {row["signature"] for row in breakage_rows}
     baseline_events = [event for event in events if event.signature not in breakage_signatures]
+    # The window claims what the data actually covers, which can be shorter
+    # than the requested window when a run cap stopped paging early.
+    oldest_seen = min((run.created_at[:10] for run in runs), default=meta["since"])
     return {
         "meta": {
             "repo": meta["repo"],
             "generated_at": meta["generated_at"],
-            "window": {"since": meta["since"], "until": meta["generated_at"][:10]},
+            "window": {
+                "since": oldest_seen,
+                "until": meta["generated_at"][:10],
+                "requested_since": meta["since"],
+            },
             "commands": meta["commands"],
             "workflow_files": meta["workflow_files"],
             "run_counts": {
@@ -713,11 +720,16 @@ def _render_ranking_table(title: str, rows: list[dict[str, Any]]) -> list[str]:
 def render_markdown(report: dict[str, Any]) -> str:
     meta = report["meta"]
     workflow_links = ", ".join(f"`.github/workflows/{name}`" for name in meta["workflow_files"])
+    window = meta["window"]
+    window_line = f"- Window: {window['since']} .. {window['until']}"
+    requested = window.get("requested_since")
+    if requested and requested != window["since"]:
+        window_line += f" (requested from {requested}; run cap stopped earlier)"
     lines: list[str] = [
         "# CI flake ranking",
         "",
         f"- Repository: `{meta['repo']}`",
-        f"- Window: {meta['window']['since']} .. {meta['window']['until']}",
+        window_line,
         f"- Generated: {meta['generated_at']}",
         f"- Command: `{meta['commands']}`",
         f"- Workflows: {workflow_links}",
