@@ -410,6 +410,16 @@ def test_official_enqueue_preserves_mixed_module_gate(
     _seed_book()
     _grant(RoleBundle.ANALYST, module=ModuleScope.CREDIT, sensitivity=SensitivityScope.CONFIDENTIAL)
     _grant(RoleBundle.ANALYST, module=ModuleScope.IRRBB, sensitivity=SensitivityScope.CONFIDENTIAL)
+    # The mint demands confidential RUN on every planned engine (#177), so the
+    # actor runs the whole universal-bank plan — the same authority
+    # _mint_authority grants in the live suite; the role dimension under test
+    # is untouched.
+    _grant(
+        RoleBundle.ANALYST, module=ModuleScope.CAPITAL, sensitivity=SensitivityScope.CONFIDENTIAL
+    )
+    _grant(
+        RoleBundle.ANALYST, module=ModuleScope.MARKETS, sensitivity=SensitivityScope.CONFIDENTIAL
+    )
     version = _grant(RoleBundle.ANALYST, sensitivity=SensitivityScope.CONFIDENTIAL)
     version = _grant(
         RoleBundle.ANALYST,
@@ -667,6 +677,16 @@ def test_sdi_mixed_operations_do_not_require_liquidity_run_binding(
     _seed_book()
     _grant(RoleBundle.ANALYST, module=ModuleScope.DATA, sensitivity=SensitivityScope.RESTRICTED)
     _grant(RoleBundle.ANALYST, module=ModuleScope.CREDIT, sensitivity=SensitivityScope.CONFIDENTIAL)
+    # The mint demands confidential RUN on every planned engine (#177); the
+    # SDI's plan still runs Capital and the Markets implied rating beside IRRBB
+    # and Credit, so those RUN grants join the actor — while the liquidity RUN
+    # binding deliberately stays absent, the point under test.
+    _grant(
+        RoleBundle.ANALYST, module=ModuleScope.CAPITAL, sensitivity=SensitivityScope.CONFIDENTIAL
+    )
+    _grant(
+        RoleBundle.ANALYST, module=ModuleScope.MARKETS, sensitivity=SensitivityScope.CONFIDENTIAL
+    )
     version = _grant(
         RoleBundle.ANALYST, module=ModuleScope.IRRBB, sensitivity=SensitivityScope.CONFIDENTIAL
     )
