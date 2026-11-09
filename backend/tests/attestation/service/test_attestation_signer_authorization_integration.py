@@ -465,6 +465,82 @@ def test_signer_without_source_read_is_hidden_and_mutates_nothing(db_session: Se
     assert _mutation_counts(db_session) == before
 
 
+def test_a_viewless_signer_nominee_is_refused_and_no_route_row_is_persisted(
+    db_session: Session,
+) -> None:
+    """A Signer-only nominee can never pass the ceremony's source READ.
+
+    The SIGNER bundle carries no VIEW, so a nominee holding only an exact-bank
+    Signer binding could never pass ``require_certification_sign_off``'s
+    ``require_view`` gate. Routing must refuse them at nomination — before any
+    recipient row or signature-request notification exists.
+    """
+    package = _seed_without_signer(db_session)
+    _signer_binding(db_session, OTHER_APPROVER_USER_ID)
+    _signer_binding(db_session, APPROVER_USER_ID)
+    # Leave the preparer nominee Signer-only: suspend every non-SIGNER
+    # binding, which removes the approver bundle's source VIEW.
+    for binding in db_session.scalars(
+        select(AuthorizationBinding).where(
+            AuthorizationBinding.principal_user_id == OTHER_APPROVER_USER_ID,
+            AuthorizationBinding.role_bundle != RoleBundle.SIGNER.value,
+        )
+    ):
+        binding.status = BindingStatus.SUSPENDED.value
+    db_session.commit()
+    before = _mutation_counts(db_session)
+
+    with pytest.raises(AttestationConflict) as refused:
+        routing.route(
+            db_session,
+            MAKER,
+            package,
+            policy=workflow.package_policy(db_session, MAKER, package),
+            nominations=[
+                routing.Nomination(signing_role="preparer", user_id=OTHER_APPROVER_USER_ID),
+                routing.Nomination(signing_role="approver", user_id=APPROVER_USER_ID),
+            ],
+            signatures=workflow.current_signatures(db_session, MAKER, package),
+            reason="Name both officers before the first certification",
+        )
+
+    assert refused.value.error_code == "recipient_role_insufficient"
+    db_session.rollback()
+    assert _mutation_counts(db_session) == before
+
+
+def test_a_signer_nominee_who_can_read_the_source_is_routed(db_session: Session) -> None:
+    """The positive half of the nominee gate: view + exact-bank Signer routes.
+
+    Same nomination shape as the refusal, with the nominee's own source VIEW
+    restored — here the approver bundle's. That is exactly the authority the
+    ceremony will demand, so both recipient rows persist.
+    """
+    package = _seed_without_signer(db_session)
+    _signer_binding(db_session, OTHER_APPROVER_USER_ID)
+    _signer_binding(db_session, APPROVER_USER_ID)
+
+    routed = routing.route(
+        db_session,
+        MAKER,
+        package,
+        policy=workflow.package_policy(db_session, MAKER, package),
+        nominations=[
+            routing.Nomination(signing_role="preparer", user_id=OTHER_APPROVER_USER_ID),
+            routing.Nomination(signing_role="approver", user_id=APPROVER_USER_ID),
+        ],
+        signatures=workflow.current_signatures(db_session, MAKER, package),
+        reason="Name both officers before the first certification",
+    )
+    db_session.commit()
+
+    assert [row.recipient_user_id for row in routed] == [
+        OTHER_APPROVER_USER_ID,
+        APPROVER_USER_ID,
+    ]
+    assert db_session.scalar(select(func.count()).select_from(PackageSignatureRecipient)) == 2
+
+
 def test_step_up_without_signer_mints_no_token_and_writes_no_success_audit(
     db_session: Session, monkeypatch: pytest.MonkeyPatch
 ) -> None:
