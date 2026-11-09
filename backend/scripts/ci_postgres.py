@@ -45,6 +45,11 @@ LEGACY_FAMILIES = ("pg-suite", "pg-schema", "storage-tests")
 SCHEMA_FLOOR = 320
 SUITE_FLOOR = 3000
 POOL_FLOOR = 8789
+# One shard runs its schema/RLS slice serially (schema tests grant function
+# privileges to concurrently existing roles, so migration and role-probe
+# fixtures may never overlap in one database) and its remaining
+# integration/storage scope with workers.
+PHASES = ("schema", "suite")
 
 
 def shard_for(module: str, count: int = SHARDS) -> int:
@@ -206,12 +211,24 @@ def plan(root: Path, event: str, base: str) -> dict[str, object]:
 
 
 def read_manifests(directory: Path, files: list[str], prefix: str) -> tuple[list[str], int]:
+    """Verify every pool shard manifest set and return the exact expected selection.
+
+    Each shard runs two phases: the schema slice serially (schema tests grant
+    function privileges to concurrently existing roles, so two migration or
+    role-probe fixtures may never overlap in one database) and the remaining
+    integration/storage scope with workers. Phase lives in the manifest and
+    report file names; the two phases' collections must partition the tree.
+    """
     paths = sorted(directory.glob(f"{prefix}-*/collection-*.json"))
     if not paths:
         raise ValueError("Missing shard collection manifests")
-    full: list[str] | None = None
-    selected_by_shard: dict[int, list[str]] = {}
+    collected_by_phase: dict[str, list[str]] = {}
+    selected_by_phase_shard: dict[tuple[str, int], list[str]] = {}
+    shards: set[int] = set()
     for path in paths:
+        phase = path.stem.removeprefix("collection-").split("-")[0]
+        if phase not in PHASES:
+            raise ValueError(f"Unknown pool phase in {path.name}")
         manifest = load_object(path)
         collected = strings(manifest["collected"])
         selected = strings(manifest["selected"])
@@ -220,30 +237,41 @@ def read_manifests(directory: Path, files: list[str], prefix: str) -> tuple[list
             raise ValueError(f"Invalid shard in {path}")
         if manifest["count"] != SHARDS or manifest["files"] != files:
             raise ValueError(f"Inconsistent shard configuration in {path}")
-        if full is not None and collected != full:
+        if phase in collected_by_phase and collected != collected_by_phase[phase]:
             raise ValueError("Workers/shards collected different test sets")
-        full = collected
+        collected_by_phase[phase] = collected
         expected = selected_tests(collected, files, index)
-        if selected != expected or not selected:
+        # An empty selection is a sanctioned no-op only when the command
+        # collected real scope and the shard owns none of it; an empty
+        # collection means the suite moved and the step ran nothing.
+        if selected != expected or (not selected and not collected):
             raise ValueError(f"Incorrect or empty selection in {path}")
-        if index in selected_by_shard and selected_by_shard[index] != selected:
+        key = (phase, index)
+        if key in selected_by_phase_shard and selected_by_phase_shard[key] != selected:
             raise ValueError("Workers selected different test sets")
-        selected_by_shard[index] = selected
-    assert full is not None
+        selected_by_phase_shard[key] = selected
+        shards.add(index)
+    missing = [phase for phase in PHASES if phase not in collected_by_phase]
+    if missing:
+        raise ValueError(f"Missing {missing[0]}-phase collection manifests")
+    overlap = set(collected_by_phase["schema"]) & set(collected_by_phase["suite"])
+    if overlap:
+        raise ValueError(f"Both phases collected {sorted(overlap)[0]}")
+    full = [nodeid for phase in PHASES for nodeid in collected_by_phase[phase]]
     expected_all = [nodeid for nodeid in full if not files or nodeid.split("::")[0] in files]
-    if Counter(nodeid for group in selected_by_shard.values() for nodeid in group) != Counter(
-        expected_all
-    ):
+    if Counter(
+        nodeid for group in selected_by_phase_shard.values() for nodeid in group
+    ) != Counter(expected_all):
         raise ValueError("Shards dropped or duplicated collected tests")
     if files and set(files) != {nodeid.split("::")[0] for nodeid in expected_all}:
         raise ValueError("An affected module collected no tests")
-    return expected_all, len(selected_by_shard)
+    return expected_all, len(shards)
 
 
 def verify(directory: Path, files: list[str]) -> None:
     expected_all, shard_count = read_manifests(directory, files, "pg-pool")
-    reports = sorted(directory.glob("pg-pool-*/report.xml"))
-    if len(reports) != shard_count:
+    reports = sorted(directory.glob("pg-pool-*/report-*.xml"))
+    if len(reports) != len(PHASES) * shard_count:
         raise ValueError("Missing or duplicate shard JUnit reports")
     node_by_case = {case_key(nodeid): nodeid for nodeid in expected_all}
     cases = [case for report in reports for case in ET.parse(report).iter("testcase")]
@@ -304,17 +332,21 @@ def report_module(classname: str, index: dict[str, str]) -> str | None:
     return None
 
 
-def refresh_durations(directory: Path, source_run: str, output: Path) -> None:
-    """Refresh only from complete, successfully executed full-suite evidence.
-
-    Pool shards carry collection manifests and are verified for exact coverage.
-    Report families without manifests are accepted only as a complete set from
-    one recorded run, whose own aggregates verified coverage at that revision.
-    """
+def _select_duration_evidence(
+    directory: Path,
+) -> tuple[list[Path], dict[tuple[str, str], str]]:
+    """Verify pool manifests or a complete recorded run; return its JUnit reports."""
     pool = sorted(directory.glob("pg-pool-*/collection-*.json"))
-    recorded = [family for family in LEGACY_FAMILIES if list(directory.glob(f"{family}-*")) or list(directory.glob(family))]
+    recorded = [
+        family
+        for family in LEGACY_FAMILIES
+        if list(directory.glob(f"{family}-*")) or list(directory.glob(family))
+    ]
+    case_modules: dict[tuple[str, str], str] = {}
     if pool:
         verify(directory, [])
+        collected, _ = read_manifests(directory, [], "pg-pool")
+        case_modules = {case_key(nodeid): nodeid.split("::")[0] for nodeid in collected}
     elif sorted(LEGACY_FAMILIES) != sorted(recorded):
         raise ValueError(
             "Refresh requires either pg-pool shard reports or the complete "
@@ -326,18 +358,26 @@ def refresh_durations(directory: Path, source_run: str, output: Path) -> None:
                 if load_object(manifest)["files"] != []:
                     raise ValueError("Recorded-run refresh requires a full-suite selection")
         _verify_recorded_families(directory)
-    index = module_index()
-    case_modules: dict[tuple[str, str], str] = {}
-    if pool:
-        collected, _ = read_manifests(directory, [], "pg-pool")
-        case_modules = {case_key(nodeid): nodeid.split("::")[0] for nodeid in collected}
-    durations: dict[str, float] = {}
-    owners: dict[str, str] = {}
     reports = [
         report
         for report in sorted(directory.glob("*/report.xml"))
+        + sorted(directory.glob("pg-pool-*/report-*.xml"))
         if not report.parent.name.startswith("pg-locks")
     ]
+    return reports, case_modules
+
+
+def refresh_durations(directory: Path, source_run: str, output: Path) -> None:
+    """Refresh only from complete, successfully executed full-suite evidence.
+
+    Pool shards carry collection manifests and are verified for exact coverage.
+    Report families without manifests are accepted only as a complete set from
+    one recorded run, whose own aggregates verified coverage at that revision.
+    """
+    reports, case_modules = _select_duration_evidence(directory)
+    index = module_index()
+    durations: dict[str, float] = {}
+    owners: dict[str, str] = {}
     for report in reports:
         for case in ET.parse(report).iter("testcase"):
             identity = (case.get("classname", ""), case.get("name", ""))
