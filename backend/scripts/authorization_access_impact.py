@@ -205,19 +205,6 @@ def _signing_institutions(db: Session, principal: _Principal, banks: list[Bank])
     return sorted(result)
 
 
-def _bank_runs_engine(db: Session, bank: Bank, engine: str) -> bool:
-    """Whether the bank's regime runs ``engine``; an unresolved regime runs nothing.
-
-    The mint gate itself fail-closes through ``module_scope.runs_module`` when
-    the licence class does not resolve, so the projection reports the same
-    denial instead of crashing the whole report on one mis-typed bank.
-    """
-    try:
-        return module_scope.runs_module(db, bank, engine)
-    except InstitutionTypeUnresolved:
-        return False
-
-
 def _bank_live_surfaces(
     db: Session,
     bank: Bank,
@@ -231,9 +218,18 @@ def _bank_live_surfaces(
     may_refresh = holds(Module.DATA, Sensitivity.CONFIDENTIAL, Permission.VIEW) and holds(
         Module.DATA, Sensitivity.CONFIDENTIAL, Permission.RUN
     )
-    required_run = {
-        module.value for engine, module in MINT_RUN_ENGINES if _bank_runs_engine(db, bank, engine)
-    }
+    try:
+        required_run = {
+            module.value
+            for engine, module in MINT_RUN_ENGINES
+            if module_scope.runs_module(db, bank, engine)
+        }
+    except InstitutionTypeUnresolved:
+        # Fail closed like the mint gate itself: an unresolved licence class
+        # raises rather than planning engines, so nothing this user holds can
+        # mint for the bank and the projection must not report a mint the
+        # gate denies.
+        return may_refresh, False
     may_mint = holds(Module.REGULATORY, Sensitivity.RESTRICTED, Permission.VIEW) and all(
         holds(Module(module_value), Sensitivity.CONFIDENTIAL, Permission.RUN)
         for module_value in required_run

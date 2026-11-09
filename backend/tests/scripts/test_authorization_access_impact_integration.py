@@ -39,6 +39,9 @@ from app.core.authorization import (
 from app.identity.service import authorization
 from app.main import app
 from app.models import AuthorizationBinding, Bank, Organization, User
+from app.policy.domain import policy_unresolved
+from app.policy.models.institution_type import InstitutionType
+from app.policy.service import institution_types
 from app.policy.service.institution_types import FALLBACK_TYPE_CODE
 from scripts import authorization_configure_impact as configure_impact
 from scripts.authorization_access_impact import (
@@ -1213,6 +1216,75 @@ def test_the_report_names_live_refresh_and_mint_authority(db_session: Session) -
     assert cells["recompute@impact.example"]["refresh"] == BANK
     assert cells["minter@impact.example"]["mint"] == BANK
     assert cells["desk@impact.example"]["mint"] == "-"
+
+
+def test_the_mint_projection_fails_closed_on_an_unresolved_licence_class(
+    db_session: Session, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """An unresolved regime plans NO engines: the projection reports no mint.
+
+    The registry's foreign key refuses an unknown licence class on a persisted
+    bank, so the resolver's own refusal is injected at its seam (the
+    capital-plan suite's pattern). The projection must fail closed like the
+    mint gate — never treat the empty plan of an unresolved regime as a plan
+    the caller satisfies.
+    """
+    db_session.add(Organization(id=ORG, name="Live mutation impact unresolved"))
+    for bank_id in (BANK, OTHER_BANK):
+        db_session.add(
+            Bank(
+                id=bank_id,
+                organization_id=ORG,
+                name=f"Impact {bank_id}",
+                short_name=f"Impact {bank_id}",
+                currency="GHS",
+                jurisdiction_code="GH",
+                license_type="universal_bank",
+                institution_type=FALLBACK_TYPE_CODE,
+            )
+        )
+    minter = _user(db_session, "unresolved@impact.example", role="analyst")
+    db_session.commit()
+    _grant(
+        db_session,
+        minter,
+        RoleBundle.ANALYST,
+        module_scope=ModuleScope.ALL,
+        sensitivity_scope=SensitivityScope.CONFIDENTIAL,
+    )
+    for bank_id in (BANK, OTHER_BANK):
+        _grant(
+            db_session,
+            minter,
+            RoleBundle.VIEWER,
+            institution_scope=InstitutionScope.INSTITUTION,
+            institution_id=bank_id,
+            module_scope=ModuleScope.REGULATORY,
+            sensitivity_scope=SensitivityScope.RESTRICTED,
+        )
+    db_session.commit()
+
+    real_get_type = institution_types.get_type
+
+    def unresolved(db: Session, bank: Bank) -> InstitutionType:
+        if bank.id == OTHER_BANK:
+            raise institution_types.InstitutionTypeUnresolved(
+                policy_unresolved("institution_type", reason="licence type not in the registry")
+            )
+        return real_get_type(db, bank)
+
+    monkeypatch.setattr(institution_types, "get_type", unresolved)
+
+    rows = {row.email: row for row in build_report(db_session, organization_id=ORG)}
+    # Refresh consults no regime, so the complete DATA/confidential run
+    # sentence covers both banks; the mint is denied for the unresolved one.
+    assert rows["unresolved@impact.example"].live_refresh_institutions == [
+        BANK,
+        OTHER_BANK,
+    ]
+    assert rows["unresolved@impact.example"].official_mint_institutions == [BANK]
+    cells = _rendered_cells(list(rows.values()))
+    assert cells["unresolved@impact.example"]["mint"] == BANK
 
 
 def _signing_fixture(db: Session) -> dict[str, User]:
