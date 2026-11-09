@@ -1,4 +1,4 @@
-"""Plan conservative PR selection and verify the complete PostgreSQL shard reports.
+"""Plan conservative PR selection and verify the complete PostgreSQL pool reports.
 
 The CLI is stdlib-only: preflight and aggregate checks must work before mise.
 """
@@ -22,28 +22,41 @@ if __package__:
 else:
     from test_suites import case_key, owner
 
-SHARDS = 4
-SCHEMA_SHARDS = 2
+SHARDS = 6
 DURATIONS = Path(__file__).with_name("ci_postgres_durations.json")
 BAO_MODULE = "tests/attestation/service/test_attestation_openbao_integration.py"
+# Owned by the dedicated concurrency-lock job, never by a pool shard.
+LOCK_FILES = frozenset(
+    {
+        "tests/case/api/test_calculations_integration.py",
+        "tests/case/api/test_liquidity_integration.py",
+        "tests/case/api/test_scenarios_integration.py",
+        "tests/storage/test_key_rotation_concurrency_integration.py",
+    }
+)
+# Report families whose shards carry collection manifests, keyed by manifest
+# presence. Pool shards always carry them; earlier report families stored only
+# JUnit reports, and the refresh step maps their cases through module prefixes.
+MANIFEST_FAMILIES = ("pg-pool",)
+LEGACY_FAMILIES = ("pg-suite", "pg-schema", "storage-tests")
+# Execution floors recorded from full main-branch runs, one per report family:
+# a whole test module vanishing must trip them. The suite family floor assumes
+# the largest module (the authorization coverage matrix) disappeared.
+SCHEMA_FLOOR = 320
+SUITE_FLOOR = 3000
+POOL_FLOOR = 8789
 
 
 def shard_for(module: str, count: int = SHARDS) -> int:
     return int(hashlib.sha256(module.encode()).hexdigest(), 16) % count + 1
 
 
-def shard_count(suite: str) -> int:
-    return SCHEMA_SHARDS if suite == "schema" else SHARDS
-
-
-def module_shards(suite: str = "suite") -> dict[str, int]:
+def module_shards() -> dict[str, int]:
     """Longest-first packing keeps fixture-sharing modules on a single worker.
 
     Unrecorded modules use the stable hash fallback until the next main refresh.
     Assignment uses the committed baseline and ownership, never a PR subset.
     """
-    if suite == "schema":
-        return {}
     values = load_object(DURATIONS)["durations"]
     if not isinstance(values, dict):
         raise ValueError("Expected module durations")
@@ -53,7 +66,7 @@ def module_shards(suite: str = "suite") -> dict[str, int]:
             raise ValueError(f"Invalid duration for {module}")
         if not math.isfinite(value) or value < 0:
             raise ValueError(f"Invalid duration for {module}")
-        if owner(module) == "integration":
+        if owner(module) == "integration" and module not in LOCK_FILES:
             durations[module] = max(float(value), 0.001)
     totals = [0.0] * SHARDS
     assignments: dict[str, int] = {}
@@ -64,14 +77,13 @@ def module_shards(suite: str = "suite") -> dict[str, int]:
     return assignments
 
 
-def selected_tests(collected: list[str], files: list[str], index: int, suite: str) -> list[str]:
-    assignments = module_shards(suite)
-    count = shard_count(suite)
+def selected_tests(collected: list[str], files: list[str], index: int) -> list[str]:
+    assignments = module_shards()
     return [
         nodeid
         for nodeid in collected
         if (not files or nodeid.split("::")[0] in files)
-        and assignments.get(nodeid.split("::")[0], shard_for(nodeid.split("::")[0], count)) == index
+        and assignments.get(nodeid.split("::")[0], shard_for(nodeid.split("::")[0])) == index
     ]
 
 
@@ -184,14 +196,6 @@ def plan(root: Path, event: str, base: str) -> dict[str, object]:
             "include": [
                 {
                     "shard": index,
-                    "minio": (
-                        not files or "tests/scripts/test_local_services_integration.py" in files
-                    )
-                    and index
-                    == assignments.get(
-                        "tests/scripts/test_local_services_integration.py",
-                        shard_for("tests/scripts/test_local_services_integration.py"),
-                    ),
                     "openbao": not files
                     and index == assignments.get(BAO_MODULE, shard_for(BAO_MODULE)),
                 }
@@ -201,12 +205,8 @@ def plan(root: Path, event: str, base: str) -> dict[str, object]:
     }
 
 
-def read_manifests(directory: Path, files: list[str], suite: str) -> tuple[list[str], int]:
-    count = shard_count(suite)
-    # The gate verifies BOTH suites from one shared evidence directory; select
-    # only this suite's shard artifacts, named pg-schema-* / pg-suite-* by the
-    # uploading jobs and download-artifact.
-    paths = sorted(directory.glob(f"pg-{suite}-*/collection-*.json"))
+def read_manifests(directory: Path, files: list[str], prefix: str) -> tuple[list[str], int]:
+    paths = sorted(directory.glob(f"{prefix}-*/collection-*.json"))
     if not paths:
         raise ValueError("Missing shard collection manifests")
     full: list[str] | None = None
@@ -216,14 +216,14 @@ def read_manifests(directory: Path, files: list[str], suite: str) -> tuple[list[
         collected = strings(manifest["collected"])
         selected = strings(manifest["selected"])
         index = manifest["shard"]
-        if not isinstance(index, int) or not 1 <= index <= count:
+        if not isinstance(index, int) or not 1 <= index <= SHARDS:
             raise ValueError(f"Invalid shard in {path}")
-        if manifest["count"] != count or manifest["files"] != files:
+        if manifest["count"] != SHARDS or manifest["files"] != files:
             raise ValueError(f"Inconsistent shard configuration in {path}")
         if full is not None and collected != full:
             raise ValueError("Workers/shards collected different test sets")
         full = collected
-        expected = selected_tests(collected, files, index, suite)
+        expected = selected_tests(collected, files, index)
         if selected != expected or not selected:
             raise ValueError(f"Incorrect or empty selection in {path}")
         if index in selected_by_shard and selected_by_shard[index] != selected:
@@ -240,30 +240,34 @@ def read_manifests(directory: Path, files: list[str], suite: str) -> tuple[list[
     return expected_all, len(selected_by_shard)
 
 
-def verify(directory: Path, files: list[str], suite: str) -> None:
-    expected_all, shard_count = read_manifests(directory, files, suite)
-    reports = sorted(directory.glob(f"pg-{suite}-*/report.xml"))
+def verify(directory: Path, files: list[str]) -> None:
+    expected_all, shard_count = read_manifests(directory, files, "pg-pool")
+    reports = sorted(directory.glob("pg-pool-*/report.xml"))
     if len(reports) != shard_count:
         raise ValueError("Missing or duplicate shard JUnit reports")
+    node_by_case = {case_key(nodeid): nodeid for nodeid in expected_all}
     cases = [case for report in reports for case in ET.parse(report).iter("testcase")]
     if Counter((case.get("classname", ""), case.get("name", "")) for case in cases) != Counter(
-        case_key(nodeid) for nodeid in expected_all
+        node_by_case.keys()
     ):
         raise ValueError("JUnit reports dropped or duplicated selected tests")
     skipped = sum(case.find("skipped") is not None for case in cases)
     executed = len(cases) - skipped
-    floor = 320 if suite == "schema" else (1 if files else 3000)
+    floor = 1 if files else POOL_FLOOR
     if executed < floor or any(
         case.find("failure") is not None or case.find("error") is not None for case in cases
     ):
         raise ValueError("Tests failed, errored or did not reach the existing execution floor")
-    if suite == "schema" and skipped:
-        raise ValueError("Schema/RLS tests skipped")
-    if (
-        suite == "suite"
-        and not files
-        and any(nodeid.split("::")[0] == BAO_MODULE for nodeid in expected_all)
+    abstaining = [
+        node_by_case[(case.get("classname", ""), case.get("name", ""))]
+        for case in cases
+        if case.find("skipped") is not None
+    ]
+    if any(
+        module.split("::")[0].startswith(("tests/db/", "tests/storage/")) for module in abstaining
     ):
+        raise ValueError("Schema/RLS or storage contract tests skipped")
+    if not files and any(nodeid.split("::")[0] == BAO_MODULE for nodeid in expected_all):
         bao = [
             case
             for case in cases
@@ -275,20 +279,78 @@ def verify(directory: Path, files: list[str], suite: str) -> None:
             raise ValueError("OpenBao tests were absent or skipped")
         print(f"OpenBao: {len(bao)} executed, 0 skipped")
     print(
-        f"{suite}: {len(cases)} collected, {executed} executed, {skipped} skipped; "
+        f"pool: {len(cases)} collected, {executed} executed, {skipped} skipped; "
         "exact shard coverage verified"
     )
 
 
+def module_index() -> dict[str, str]:
+    """Map dotted module-name prefixes onto integration-owned test files."""
+    from scripts.test_suites import selected_modules  # noqa: PLC0415
+
+    return {
+        module.removesuffix(".py").replace("/", "."): module
+        for module in selected_modules("integration")
+    }
+
+
+def report_module(classname: str, index: dict[str, str]) -> str | None:
+    parts = classname.split(".")
+    while parts:
+        module = index.get(".".join(parts))
+        if module is not None:
+            return module
+        parts.pop()
+    return None
+
+
 def refresh_durations(directory: Path, source_run: str, output: Path) -> None:
-    """Refresh only from complete, successfully executed full-suite evidence."""
-    verify(directory, [], "suite")
-    collected, _ = read_manifests(directory, [], "suite")
-    modules = {case_key(nodeid): nodeid.split("::")[0] for nodeid in collected}
+    """Refresh only from complete, successfully executed full-suite evidence.
+
+    Pool shards carry collection manifests and are verified for exact coverage.
+    Report families without manifests are accepted only as a complete set from
+    one recorded run, whose own aggregates verified coverage at that revision.
+    """
+    pool = sorted(directory.glob("pg-pool-*/collection-*.json"))
+    recorded = [family for family in LEGACY_FAMILIES if list(directory.glob(f"{family}-*")) or list(directory.glob(family))]
+    if pool:
+        verify(directory, [])
+    elif sorted(LEGACY_FAMILIES) != sorted(recorded):
+        raise ValueError(
+            "Refresh requires either pg-pool shard reports or the complete "
+            "pg-suite, pg-schema and storage-tests families of one recorded run"
+        )
+    else:
+        for prefix in ("pg-suite", "pg-schema"):
+            for manifest in sorted(directory.glob(f"{prefix}-*/collection-*.json")):
+                if load_object(manifest)["files"] != []:
+                    raise ValueError("Recorded-run refresh requires a full-suite selection")
+        _verify_recorded_families(directory)
+    index = module_index()
+    case_modules: dict[tuple[str, str], str] = {}
+    if pool:
+        collected, _ = read_manifests(directory, [], "pg-pool")
+        case_modules = {case_key(nodeid): nodeid.split("::")[0] for nodeid in collected}
     durations: dict[str, float] = {}
-    for report in sorted(directory.glob("pg-suite-*/report.xml")):
+    owners: dict[str, str] = {}
+    reports = [
+        report
+        for report in sorted(directory.glob("*/report.xml"))
+        if not report.parent.name.startswith("pg-locks")
+    ]
+    for report in reports:
         for case in ET.parse(report).iter("testcase"):
-            module = modules[(case.get("classname", ""), case.get("name", ""))]
+            identity = (case.get("classname", ""), case.get("name", ""))
+            module = case_modules.get(identity) or report_module(identity[0], index)
+            if module is None:
+                raise ValueError(f"Unmapped JUnit classname {identity[0]!r}")
+            if module in owners and owners[module] != report.parent.name:
+                raise ValueError(f"Module {module} reported by two execution owners")
+            owners[module] = report.parent.name
+            if case.find("skipped") is not None and module.startswith(
+                ("tests/db/", "tests/storage/")
+            ):
+                raise ValueError(f"Skipped case in {module}")
             duration = float(case.get("time", "0"))
             if not math.isfinite(duration) or duration < 0:
                 raise ValueError("Invalid JUnit duration")
@@ -305,11 +367,33 @@ def refresh_durations(directory: Path, source_run: str, output: Path) -> None:
     )
 
 
+def _verify_recorded_families(directory: Path) -> None:
+    schema = sum(
+        1
+        for report in sorted(directory.glob("pg-schema-*/report.xml"))
+        for case in ET.parse(report).iter("testcase")
+        if case.find("skipped") is None
+    )
+    suite = sum(
+        1
+        for report in sorted(directory.glob("pg-suite-*/report.xml"))
+        for case in ET.parse(report).iter("testcase")
+        if case.find("skipped") is None
+    )
+    storage = sum(
+        1
+        for report in sorted(directory.glob("storage-tests/report.xml"))
+        for case in ET.parse(report).iter("testcase")
+        if case.find("skipped") is None
+    )
+    if schema < SCHEMA_FLOOR or suite < SUITE_FLOOR or storage < 1:
+        raise ValueError("Recorded-run reports did not reach the recorded execution floors")
+
+
 class Arguments(argparse.Namespace):
     command: str
     root: Path
     directory: Path
-    suite: str
     source_run: str
     output: Path
 
@@ -321,7 +405,6 @@ def main() -> None:
     planning.add_argument("--root", type=Path, default=Path.cwd())
     checking = sub.add_parser("verify")
     checking.add_argument("directory", type=Path)
-    checking.add_argument("--suite", choices=["suite", "schema"], required=True)
     refresh = sub.add_parser("refresh-durations")
     refresh.add_argument("directory", type=Path)
     refresh.add_argument("--source-run", required=True)
@@ -341,7 +424,6 @@ def main() -> None:
         verify(
             args.directory,
             strings(cast(object, json.loads(os.getenv("CI_POSTGRES_FILES", "[]")))),
-            args.suite,
         )
 
 

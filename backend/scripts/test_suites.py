@@ -91,21 +91,20 @@ def verify_partition(directory: Path, *, protected: Mapping[str, str] | None = N
     evidence, classified = _collection(directory)
     check_classification(classified, protected=protected)
     files = cast(list[str], json.loads(os.getenv("CI_POSTGRES_FILES", "[]")))
-    indices = set(range(1, 5))
+    if __package__:
+        from scripts.ci_postgres import SHARDS, module_shards, shard_for  # noqa: PLC0415
+    else:
+        from ci_postgres import SHARDS, module_shards, shard_for  # noqa: PLC0415
     if files:
-        if __package__:
-            from scripts.ci_postgres import module_shards, shard_for  # noqa: PLC0415
-        else:
-            from ci_postgres import module_shards, shard_for  # noqa: PLC0415
         assignments = module_shards()
         indices = {assignments.get(module, shard_for(module)) for module in files}
+    else:
+        indices = set(range(1, SHARDS + 1))
     reports = sorted(directory.glob("*/report.xml"))
     expected_reports = {
         "unit-tests",
         "pg-locks",
-        "storage-tests",
-        *(f"pg-suite-{index}" for index in indices),
-        *(f"pg-schema-{index}" for index in range(1, 3)),
+        *(f"pg-pool-{index}" for index in indices),
     }
     expected_reports.update({"e2e-tests"} if "e2e" in classified.values() else set())
     if {report.parent.name for report in reports} != expected_reports:
@@ -128,7 +127,7 @@ def verify_partition(directory: Path, *, protected: Mapping[str, str] | None = N
     _verify_service_execution(reports, cast(list[str], evidence["services"]))
     omitted: set[str] = set()
     if files:
-        for manifest in directory.glob("pg-suite-*/collection-*.json"):
+        for manifest in directory.glob("pg-pool-*/collection-*.json"):
             collected = cast(dict[str, list[str]], json.loads(manifest.read_text()))["collected"]
             omitted.update(nodeid for nodeid in collected if nodeid.split("::")[0] not in files)
     expected = Counter(case_key(nodeid) for nodeid in classified if nodeid not in omitted)
