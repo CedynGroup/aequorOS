@@ -13,6 +13,6 @@ if ! jq -e '
   )
 ' <<<"$RESULTS" >/dev/null; then
   NOT_PASSED="$(jq -r 'to_entries[] | select(.value.result != "success") | "  \(.key): \(.value.result)"' <<<"$RESULTS")"
-  echo "::error::These dashboard journey jobs did not pass:"$'\n'"$NOT_PASSED"
+  echo "::error::These dashboard journey jobs did not pass:${NOT_PASSED//$'\n'/%0A}"
   exit 1
 fi
