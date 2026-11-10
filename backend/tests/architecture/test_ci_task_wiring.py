@@ -236,8 +236,7 @@ def test_dashboard_journeys_have_an_always_reported_sharded_gate() -> None:
     # runs the shards only when the journey area changed.
     assert jobs["changes"]["if"] == "github.event_name != 'merge_group'"
     assert (
-        jobs["journeys"]["if"]
-        == "${{ !cancelled() && (github.event_name == 'merge_group"
+        jobs["journeys"]["if"] == "${{ !cancelled() && (github.event_name == 'merge_group'"
         " || needs.changes.outputs.journeys == 'true') }}"
     )
     strategy = cast(dict[str, object], jobs["journeys"]["strategy"])
@@ -291,9 +290,7 @@ def _ci_pytest(
         if not direct or "--collect-only" in tokens:
             continue
         assert step.get("working-directory") == "backend"
-        assert (allow_guarded_step or "if" not in step) and not step.get(
-            "continue-on-error", False
-        )
+        assert (allow_guarded_step or "if" not in step) and not step.get("continue-on-error", False)
         assert not any(token in {";", "&&", "||", "|"} for token in tokens)
         matches.append((tokens, step))
     assert len(matches) == 1, f"{job_name} must execute exactly one direct pytest suite"
@@ -666,9 +663,7 @@ def test_unit_suite_command_and_ci_job_are_explicit() -> None:
     # typecheck, the e2e contracts and client freshness in one place.
     assert document["jobs"]["static"]["name"] == "Lint and typecheck"
     assert {"architecture", "static"} <= set(_needs(document["jobs"]["gate"]))
-    assert not {"backend-e2e", "api-fresh", "postgres", "postgres-suite"} & set(
-        document["jobs"]
-    )
+    assert not {"backend-e2e", "api-fresh", "postgres", "postgres-suite"} & set(document["jobs"])
 
 
 # --------------------------------------------------------------------------
