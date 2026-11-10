@@ -959,13 +959,16 @@ keep those bytes only in memory. Separate output directories preserve journey
 attachments when contracts start.
 The full contract inventory is uploaded as `dashboard-browser-contract-report`.
 The aggregate requires all four reports, unique journey identities,
-and the executed-journey floor defined in the
+the executed-journey floor and the pinned discovered-journey total defined in the
 [gate script](../../.github/scripts/assert_dashboard_journeys.mjs), with zero skips. It verifies the
 reported counters against the named results and prints every skipped journey
 in the log and job summary before failing. Retries replace the same journey's
 result and cannot inflate the count. Missing/unfinished tests or a lost shard
 fail the gate even when the remaining reports pass. Raise the floor when adding
-coverage; reducing it requires a reviewed suite change.
+coverage; reducing it requires a reviewed suite change. The discovered-journey
+total is pinned to the suite size, so a shard silently dropping journeys fails
+the gate instead of passing a quietly smaller suite; bump it in the same change
+that adds or removes journeys.
 
 Runner 4 also runs the separate regulatory status suite after its default shard.
 Its CI reporter requires every discovered journey to execute and rejects skips or
