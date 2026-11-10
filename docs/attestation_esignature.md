@@ -163,8 +163,10 @@ the browser can be saved. Transmission has its own
 [filing authority](../backend/docs/filing_submit_authority_rollout.md),
 and review-stage separation follows the
 [filing workflow](../backend/docs/filing_workflow_redesign.md).
-Configuring signing policies and placement templates requires `GrantAdminTenant`
-(the persisted Org Owner binding).
+Configuring signing policies and placement templates requires organization-scope
+`reg/configure/restricted` authority (VAL-CFG-008) — a bank-scoped Configurator
+binding is deliberately insufficient, since a signing policy governs every bank
+in the organization.
 
 ### 1.4 Identity: OIDC → platform user
 
