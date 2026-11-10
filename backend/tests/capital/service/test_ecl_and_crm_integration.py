@@ -474,6 +474,7 @@ def _grant_register_configuration(db: Session) -> None:
             AuthorizationBinding.organization_id == DEMO_ORG_ID,
             AuthorizationBinding.principal_user_id == DEMO_USER_ID,
             AuthorizationBinding.institution_id == SAMPLE_BANK_ID,
+            AuthorizationBinding.role_bundle == RoleBundle.CONFIGURATOR.value,
             AuthorizationBinding.module_scope == ModuleScope.CREDIT.value,
             AuthorizationBinding.sensitivity_scope == SensitivityScope.RESTRICTED.value,
             AuthorizationBinding.status == "active",
