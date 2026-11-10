@@ -30,6 +30,7 @@ GATE = Path(__file__).parents[3] / ".github/scripts/dashboard_journeys_gate.sh"
         ("failure", "false", "skipped", False),
         ("cancelled", "true", "success", False),
         ("skipped", "false", "skipped", False),
+        ("skipped", "false", "success", True),
     ],
 )
 def test_required_check_accepts_only_verified_results(
@@ -59,6 +60,28 @@ def test_required_check_refuses_missing_or_malformed_results(results: str) -> No
         check=False,
     )
     assert result.returncode != 0
+
+
+def test_failure_annotation_carries_every_job_name() -> None:
+    results = {
+        "changes": {"result": "failure"},
+        "journeys": {"result": "cancelled"},
+    }
+    result = subprocess.run(
+        ["bash", str(GATE)],
+        env={**os.environ, "RESULTS": json.dumps(results)},
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert result.returncode != 0
+    annotations = [line for line in result.stdout.splitlines() if line.startswith("::error::")]
+    assert len(annotations) == 1, result.stdout
+    # A literal newline would end the annotation command at its header, so the
+    # job names travel as Actions' %0A escapes on that single command line.
+    assert annotations[0].count("%0A") == 1, annotations[0]
+    assert "  changes: failure" in annotations[0], annotations[0]
+    assert "  journeys: cancelled" in annotations[0], annotations[0]
 
 
 @pytest.mark.parametrize(

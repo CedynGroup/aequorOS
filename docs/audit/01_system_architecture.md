@@ -162,8 +162,8 @@ cannot compute returns one of these rather than a substituted value.
 Backend routes/schemas change → `mise run risk-service:openapi-client` regenerates
 `backend/openapi-schema.json` and `packages/risk-service-api` → `mise run risk-service:api-fresh`
 asserts the working tree is clean for both. The freshness gate runs pre-push
-(`.pre-commit-config.yaml`) and as the `api-fresh` CI job
-(`.github/workflows/risk-service.yml:211`).
+(`.pre-commit-config.yaml`) and as the "Regenerate and verify the API client"
+step of the `Lint and typecheck` job in `.github/workflows/risk-service.yml`.
 
 ---
 

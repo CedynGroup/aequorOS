@@ -933,10 +933,12 @@ workspace manifest, lockfile, interpreter file, workflow, action and script,
 select the suite. Dashboard images and runtime Markdown also select it.
 The shared detector's ignore mode is used only by this workflow; other workflows
 keep their inclusion predicates. Renames consider both the old and new path.
-All events other than pull requests run every shard; unknown or empty change
-decisions fail closed. The **`Dashboard journeys gate`** is the stable check to
-require before merge: it always reports and accepts a skipped suite only after
-successful detection of an ignored-only PR.
+All events other than pull requests run every shard; queued merge results skip
+change detection entirely and run every shard unconditionally. Unknown or empty
+pull-request change decisions fail closed. The **`Dashboard journeys gate`** is
+the stable check to require before merge: it always reports and accepts a
+skipped suite only after successful detection of an ignored-only PR, or on a
+queued merge result whose journey shards succeeded.
 
 Four runners use Playwright `--shard=1/4` through `--shard=4/4`, each with one
 worker and its own disposable SQLite database, fixture bank, loopback MinIO

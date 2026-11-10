@@ -515,7 +515,7 @@ mise run risk-service:test --lf  # serial cached unit failures only
 These commands work at the repository root or in `backend/`. There is no local
 full-suite command or separate suite alias. CI owns the direct pytest commands
 for units, PostgreSQL integration, storage and backend e2e, using `-m unit`,
-`-m integration` and `-m e2e`. Its e2e job installs dashboard dependencies first.
+`-m integration` and `-m e2e`. Its e2e step installs workspace dependencies first.
 
 Test placement and suite filename conventions follow the
 [testing standard](../CODEBASE_CONVENTIONS.md#behavior-properties-and-state-machines-backend-and-dashboard).
@@ -555,7 +555,7 @@ declares a runtime requirement, not a suite override.
 
 MinIO runs in storage/schema jobs and the shard containing native service
 contracts. OpenBao runs in its integration shard. Backend Playwright contracts
-have an explicit e2e job beside dashboard journeys. Their runtime and
+run as a guarded step of the 'Lint and typecheck' job. Their runtime and
 zero-skip guards remain independent of filename selection.
 
 CI's dedicated unit run uses pytest's normal discovery and configured file patterns,
@@ -663,7 +663,7 @@ rejects any skipped test.
 
 The schema workflow command also supplies MinIO for the document cleanup regression. Each
 CI schema shard starts it and creates the document test bucket before pytest;
-the schema aggregate continues to reject every skip.
+the gate's schema verification continues to reject every skip.
 
 CI's [MinIO action](../.github/actions/setup-minio/action.yml) and
 [OpenBao action](../.github/actions/setup-openbao/action.yml) download official
@@ -678,7 +678,7 @@ credential-vault encryption tests need no vault server. The live storage and
 OpenBao execution guards remain in
 [Risk Service CI](../.github/workflows/risk-service.yml).
 
-The integration aggregate also joins the lock and storage execution reports with
+The **Risk service gate** also joins the lock and storage execution reports with
 unit, e2e and Postgres shard evidence. Their selected union must match the classified
 collection exactly once. Every selected protected case must execute successfully
 without skips in its Postgres owner. Storage integration cases run only in the storage job,
@@ -695,11 +695,11 @@ and the schema/RLS suite in two hash-based shards; lock tests retain their own j
 Longest-first packing uses the committed `scripts/ci_postgres_durations.json`
 baseline, excluding files with a non-Postgres owner. Each file stays together, including OpenBao's shared AppRole fixtures.
 New modules use stable hashing until the baseline is refreshed. The
-**Integration tests** aggregate joins the suite shards; **Postgres schema, RLS and locks**
-and the always-reported **Risk service gate** remain enforced. Shards upload their complete
-collection manifests and JUnit reports; the aggregates verify that their union
-contains every expected test exactly once, preserve the full-suite execution
-floor, and reject any skipped schema/RLS or live OpenBao test.
+always-reported **Risk service gate** joins the suite, schema/RLS and lock jobs
+directly and stays enforced. Shards upload their complete
+collection manifests and JUnit reports; the gate verifies that their union
+contains every expected test exactly once, preserves the full-suite execution
+floor, and rejects any skipped schema/RLS or live OpenBao test.
 Failed schema and suite shards also upload `postgres.log` as
 `pg-schema-server-log-<shard>` or `pg-suite-server-log-<shard>` when the log
 exists, retained for seven days.
@@ -771,7 +771,7 @@ package and deployment runners were unchanged.
 The independent CI collection adds real work, about 47.5 seconds in this sample.
 These figures are not full-suite or hosted-CI execution timings and establish no
 speedup. Compare actual hosted unit, schema, lock, storage, integration-shard and
-e2e job durations after validation; do not infer wall time from duration weights.
+e2e step durations after validation; do not infer wall time from duration weights.
 
 ### Test databases and the primary database
 

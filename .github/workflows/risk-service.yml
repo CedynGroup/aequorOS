@@ -33,18 +33,24 @@ name: Risk Service CI
 #   preflight   — the mise task wiring, checked in stdlib Python with no mise
 #                 and no uv, plus the change detection that replaced this
 #                 workflow's `paths:` filter. Every other job needs it.
-#   static      — ruff, basedpyright (image build: risk-service-image.yml)
+#   static      — lint and typecheck (ruff, basedpyright), the Backend
+#                 Playwright contracts and the generated-client freshness check
+#                 in ONE job, so a pull request pays the toolchain setup once.
+#                 Each area keeps its own step, guarded with `if: always()` and
+#                 by its own preflight output, so one failure cannot hide the
+#                 others (image build: risk-service-image.yml)
 #   architecture— Unit tests: database-free logic and architecture guards,
 #                 explicit classification and connection/execution refusal
-#   backend-e2e — Backend Playwright contracts; backend/README.md#run-tests
-#   postgres    — aggregate of schema shards and the lock job: migration chain,
-#                 RLS policies, schema defaults, row/advisory locks.
-#                 The schema workflow command covers integration cases in tests/db,
+#   postgres-schema — migration chain, RLS policies and schema defaults, in two
+#                 hash-assigned shards. The schema workflow command covers
+#                 integration cases in tests/db,
 #                 including tests/db/test_tenant_rls_completeness_integration.py — the structural
 #                 guard on tenant isolation.
-#   postgres-suite — the integration aggregate, including exact cross-owner
-#                 coverage and runtime resource-boundary checks. Filename ownership,
-#                 sharding, selection and coverage guards are documented in
+#   postgres-locks — dedicated row-lock and advisory-lock coverage.
+#   postgres-shard — the integration suite in duration-balanced shards,
+#                 including exact cross-owner coverage and runtime
+#                 resource-boundary checks. Filename ownership, sharding,
+#                 selection and coverage guards are documented in
 #                 backend/README.md#run-tests.
 #                 Parallel execution and schema isolation are documented in
 #                 backend/README.md#test-databases-and-the-primary-database.
@@ -55,12 +61,12 @@ name: Risk Service CI
 #                 `27 passed, 18 skipped` with the credentials blanked; `45
 #                 passed` against the MinIO below). MinIO's BUILT-IN KMS is
 #                 enough — the KES sidecar this appeared to need is not.
-#   gate        — aggregates every job above into ONE always-reported context,
-#                 so the suite can be made a required check. See BRANCH
-#                 PROTECTION below.
-#   api-fresh   — the generated TypeScript client matches the OpenAPI schema.
-#                 Previously a local pre-push hook only, so a stale client could
-#                 (and did) reach main.
+#   gate        — depends DIRECTLY on every job above (no chained summary
+#                 jobs), verifies exact shard coverage and the execution guards
+#                 for BOTH Postgres suites plus the aggregate cross-owner
+#                 check, and aggregates every job into ONE always-reported
+#                 context, so the suite can be made a required check. See
+#                 BRANCH PROTECTION below.
 #   real-data   — the DB-backed regulatory/attestation/auth/vendor API surface,
 #                 plus BOTH run-parity proofs (tests/equivalence). 25 modules
 #                 import `requires_real_data` (measured by AST import, not
@@ -82,15 +88,15 @@ name: Risk Service CI
 # and a following step asserts a floor of tests actually executed
 # (.github/scripts/assert_pytest_ran.py or the shard aggregate verifier).
 # The unit owner's execution guard is documented in backend/README.md#run-tests.
-# The storage job, the schema/RLS aggregate
+# The storage job, the gate's schema/RLS shard verification
 # and the lock job additionally allow ZERO skips, because the environment each
 # stands up is supposed to satisfy its whole suite — and an RLS proof can
 # abstain one test at a time (a role that bypasses RLS, a missing CREATEROLE),
-# which a floor of "at least N ran" cannot see (audit A360-4). The Postgres
-# full-suite aggregate sets no skip ceiling, because the opt-in tiers below
-# legitimately skip there. Floors are set so that a whole test MODULE vanishing
-# trips them: at least (collected − the largest module); recount when the suite
-# changes shape.
+# which a floor of "at least N ran" cannot see (audit A360-4). The gate's
+# integration-suite verification sets no skip ceiling, because the opt-in tiers
+# below legitimately skip there. Floors are set so that a whole test MODULE
+# vanishing trips them: at least (collected − the largest module); recount when
+# the suite changes shape.
 #
 # EXCLUDED from every job, with the reason — the honest complement of the list
 # above. None of these is a scheduling oversight:
@@ -271,11 +277,17 @@ jobs:
     name: Lint and typecheck
     runs-on: ubuntu-24.04
     needs: preflight
-    if: needs.preflight.outputs.backend == 'true'
+    # One job for the three cheap backend gates so a pull request pays the
+    # toolchain setup once. The job runs when ANY of the three areas changed;
+    # every gated step keeps its own `if: always()` guard so a red step cannot
+    # hide the result of the others.
+    if: (needs.preflight.outputs.backend == 'true' || needs.preflight.outputs.guards == 'true' || needs.preflight.outputs.api_client == 'true')
     # No job may outlive this. P0-15's outage was a task that recursed instead of
     # running anything; unbounded, GitHub would have let it burn the 360-minute
-    # default. Values are ~3x the measured local wall clock, not tight.
-    timeout-minutes: 30
+    # default. Values are ~3x the measured local wall clock, not tight. This job
+    # now runs lint+typecheck, the backend e2e contracts and the client
+    # freshness check serially, so its cap covers their combined measure.
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
       - uses: jdx/mise-action@v5
@@ -286,11 +298,38 @@ jobs:
       - name: Install risk service dependencies
         run: mise run risk-service:sync
       - name: Lint risk service
+        if: always() && needs.preflight.outputs.backend == 'true'
         run: mise run risk-service:lint
       - name: Test TLS container environment policy
+        if: always() && needs.preflight.outputs.backend == 'true'
         run: mise exec -- node --test deploy/tls/serve-next.test.cjs
       - name: Typecheck risk service
+        if: always() && needs.preflight.outputs.backend == 'true'
         run: mise run risk-service:typecheck
+      - name: Install workspace dependencies
+        if: always() && (needs.preflight.outputs.guards == 'true' || needs.preflight.outputs.api_client == 'true')
+        run: mise exec -- pnpm install --frozen-lockfile
+      - name: Run backend e2e contracts
+        if: always() && needs.preflight.outputs.guards == 'true'
+        env:
+          CI_E2E_REPORT_DIR: ${{ runner.temp }}/e2e-tests
+          CI_DATABASE_OBSERVATIONS: ${{ runner.temp }}/e2e-tests/database-observations
+          PYTEST_ADDOPTS: --junitxml=${{ runner.temp }}/e2e-tests/report.xml
+        working-directory: backend
+        run: uv run pytest -m e2e --suite-only
+      - name: Upload e2e execution and classification evidence
+        if: always() && needs.preflight.outputs.guards == 'true'
+        uses: actions/upload-artifact@v7
+        with:
+          name: e2e-tests
+          path: ${{ runner.temp }}/e2e-tests/
+          if-no-files-found: error
+      # Regenerates the schema and the TypeScript client and fails if either
+      # moves. This existed only as a local pre-push hook, so a schema change
+      # merged with a stale client whenever the hook was skipped.
+      - name: Regenerate and verify the API client
+        if: always() && needs.preflight.outputs.api_client == 'true'
+        run: mise run risk-service:api-fresh
 
   architecture:
     name: Unit tests
@@ -336,37 +375,6 @@ jobs:
         with:
           name: unit-tests
           path: ${{ runner.temp }}/unit-tests/
-          if-no-files-found: error
-
-  backend-e2e:
-    name: Backend Playwright e2e contracts
-    runs-on: ubuntu-24.04
-    needs: preflight
-    if: needs.preflight.outputs.guards == 'true'
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@v4
-      - uses: jdx/mise-action@v5
-        with:
-          version: 2026.7.7
-          install_args: python@3.13 uv@0.11.18 node@24 pnpm@11.2.2
-      - name: Install risk service dependencies
-        run: mise run risk-service:sync
-      - name: Install dashboard Playwright dependencies
-        run: mise exec -- pnpm install --frozen-lockfile
-      - name: Run backend e2e contracts
-        env:
-          CI_E2E_REPORT_DIR: ${{ runner.temp }}/e2e-tests
-          CI_DATABASE_OBSERVATIONS: ${{ runner.temp }}/e2e-tests/database-observations
-          PYTEST_ADDOPTS: --junitxml=${{ runner.temp }}/e2e-tests/report.xml
-        working-directory: backend
-        run: uv run pytest -m e2e --suite-only
-      - name: Upload e2e execution and classification evidence
-        if: always()
-        uses: actions/upload-artifact@v7
-        with:
-          name: e2e-tests
-          path: ${{ runner.temp }}/e2e-tests/
           if-no-files-found: error
 
   postgres-schema:
@@ -520,8 +528,8 @@ jobs:
         working-directory: backend
         run: uv run python scripts/local_services.py run --postgres -- uv run pytest -m integration tests/case/api/test_liquidity_integration.py tests/case/api/test_scenarios_integration.py tests/case/api/test_calculations_integration.py tests/storage/test_key_rotation_concurrency_integration.py
       # Retain the execution floor and require zero skips for the lock owner.
-      # The integration aggregate also checks exact cross-owner coverage;
-      # ownership and service requirements: backend/README.md#run-tests.
+      # The gate's integration-suite verification also checks exact cross-owner
+      # coverage; ownership and service requirements: backend/README.md#run-tests.
       - name: The concurrency tests must have executed, not skipped
         run: python3 .github/scripts/assert_pytest_ran.py "$RUNNER_TEMP/pg-locks/report.xml" --min-executed 60 --max-skipped 0
       - name: Upload lock integration execution evidence
@@ -615,89 +623,6 @@ jobs:
           SERVICE_PID: ${{ steps.minio.outputs.pid }}
         run: kill "$SERVICE_PID" 2>/dev/null || true
 
-  postgres:
-    name: Postgres schema, RLS and locks
-    runs-on: ubuntu-24.04
-    needs: [preflight, postgres-schema, postgres-locks]
-    if: always() && needs.preflight.outputs.backend == 'true'
-    timeout-minutes: 5
-    steps:
-      - name: Require every shard to pass
-        env:
-          RESULTS: ${{ toJSON(needs) }}
-        run: |
-          python3 - <<'PY'
-          import json
-          import os
-          results = json.loads(os.environ["RESULTS"])
-          if any(job["result"] != "success" for job in results.values()):
-              raise SystemExit("A PostgreSQL dependency failed, was cancelled or skipped")
-          PY
-      - uses: actions/checkout@v4
-      - uses: actions/download-artifact@v8
-        with:
-          pattern: pg-schema-*
-          path: ${{ runner.temp }}/postgres-reports
-      - name: Verify exact shard coverage and execution guards
-        env:
-          CI_POSTGRES_FILES: "[]"
-        run: python3 backend/scripts/ci_postgres.py verify "$RUNNER_TEMP/postgres-reports" --suite schema
-
-  postgres-suite:
-    name: Integration tests
-    runs-on: ubuntu-24.04
-    needs:
-      [preflight, postgres-shard, postgres, storage, architecture, backend-e2e]
-    if: always() && needs.preflight.outputs.backend == 'true'
-    timeout-minutes: 5
-    steps:
-      - name: Require every shard to pass
-        env:
-          RESULTS: ${{ toJSON(needs) }}
-        run: |
-          python3 - <<'PY'
-          import json
-          import os
-          results = json.loads(os.environ["RESULTS"])
-          if any(job["result"] != "success" for job in results.values()):
-              raise SystemExit("A PostgreSQL dependency failed, was cancelled or skipped")
-          PY
-      - uses: actions/checkout@v4
-      - uses: actions/download-artifact@v8
-        with:
-          pattern: pg-suite-*
-          path: ${{ runner.temp }}/postgres-reports
-      - name: Verify exact shard coverage and execution guards
-        env:
-          CI_POSTGRES_FILES: ${{ needs.preflight.outputs.postgres_files }}
-        run: python3 backend/scripts/ci_postgres.py verify "$RUNNER_TEMP/postgres-reports" --suite suite
-      - uses: actions/download-artifact@v8
-        with:
-          name: unit-tests
-          path: ${{ runner.temp }}/postgres-reports/unit-tests
-      - uses: actions/download-artifact@v8
-        with:
-          name: e2e-tests
-          path: ${{ runner.temp }}/postgres-reports/e2e-tests
-      - uses: actions/download-artifact@v8
-        with:
-          pattern: pg-schema-*
-          path: ${{ runner.temp }}/postgres-reports
-      - uses: actions/download-artifact@v8
-        with:
-          name: pg-locks
-          path: ${{ runner.temp }}/postgres-reports/pg-locks
-      - uses: actions/download-artifact@v8
-        with:
-          name: storage-tests
-          path: ${{ runner.temp }}/postgres-reports/storage-tests
-      - name: Every classified test has exactly one CI execution owner
-        env:
-          CI_POSTGRES_FILES: ${{ needs.preflight.outputs.postgres_files }}
-        run: |
-          python3 backend/scripts/test_suites.py "$RUNNER_TEMP/postgres-reports"
-          python3 backend/scripts/database_observation_check.py "$RUNNER_TEMP/postgres-reports"
-
   storage:
     name: Storage contract
     runs-on: ubuntu-24.04
@@ -780,29 +705,6 @@ jobs:
           SERVICE_PID: ${{ steps.minio.outputs.pid }}
         run: kill "$SERVICE_PID" 2>/dev/null || true
 
-  api-fresh:
-    name: Generated API client freshness
-    runs-on: ubuntu-24.04
-    needs: preflight
-    if: needs.preflight.outputs.api_client == 'true'
-    timeout-minutes: 30
-    steps:
-      - uses: actions/checkout@v4
-      - uses: jdx/mise-action@v5
-        with:
-          # Pinned — see MISE VERSION in the header. Bump deliberately.
-          version: 2026.7.7
-          install_args: python@3.13 uv@0.11.18 node@24 pnpm@11.2.2
-      - name: Install risk service dependencies
-        run: mise run risk-service:sync
-      - name: Install workspace dependencies
-        run: mise exec -- pnpm install --frozen-lockfile
-      # Regenerates the schema and the TypeScript client and fails if either
-      # moves. This existed only as a local pre-push hook, so a schema change
-      # merged with a stale client whenever the hook was skipped.
-      - name: Regenerate and verify the API client
-        run: mise run risk-service:api-fresh
-
   real-data:
     name: Real-data API surface
     runs-on: ubuntu-24.04
@@ -839,33 +741,91 @@ jobs:
   # `REAL_DATA_CI_ENABLED` is unset — and a skipped required check is NOT a
   # passing one: GitHub waits on it forever. This job always runs, always
   # reports, and is red if and only if something it depends on actually failed
-  # or was cancelled.
+  # or was cancelled. It depends directly on every real job — there are no
+  # intermediate summary hops to hide a failure two levels deep — and it owns
+  # the shard-coverage verifications the two removed summary jobs used to run.
   gate:
     name: Risk service gate
     runs-on: ubuntu-24.04
-    timeout-minutes: 5
+    timeout-minutes: 10
     if: always()
     needs:
       - preflight
       - static
       - architecture
-      - backend-e2e
-      - postgres
-      - postgres-suite
+      - postgres-schema
+      - postgres-locks
+      - postgres-shard
       - storage
-      - api-fresh
       - real-data
     steps:
-      - name: Require every risk service gate to have passed or been skipped
+      # Failure messages name every job that did not pass, with its result, so
+      # a red run is diagnosed from the gate alone.
+      - name: Report every gate job that did not pass
         env:
           RESULTS: ${{ toJSON(needs) }}
         run: |
           set -euo pipefail
-          printf '%s\n' "$RESULTS" | jq -r 'to_entries[] | "  \(.key): \(.value.result)"'
+          NOT_PASSED="$(printf '%s\n' "$RESULTS" \
+            | jq -r 'to_entries[] | select(.value.result != "success") | "  \(.key): \(.value.result)"')"
+          if [ -n "$NOT_PASSED" ]; then
+            printf 'Gate jobs that did not pass:\n%s\n' "$NOT_PASSED"
+          fi
           FAILED="$(printf '%s\n' "$RESULTS" \
             | jq -r 'to_entries[] | select(.value.result == "failure" or .value.result == "cancelled") | .key')"
           if [ -n "$FAILED" ]; then
-            echo "::error::These risk service gates did not pass: $(printf '%s' "$FAILED" | tr '\n' ' ')"
+            echo "::error::These risk service gates did not pass:${NOT_PASSED//$'\n'/%0A}"
             exit 1
           fi
-          echo "Every risk service gate passed or was skipped."
+          if [ -z "$NOT_PASSED" ]; then
+            echo "Every risk service gate job passed."
+          fi
+      - uses: actions/checkout@v4
+        if: needs.preflight.outputs.backend == 'true'
+      - uses: actions/download-artifact@v8
+        if: needs.preflight.outputs.backend == 'true'
+        with:
+          pattern: pg-schema-*
+          path: ${{ runner.temp }}/postgres-reports
+      - name: Verify exact schema-shard coverage and execution guards
+        if: needs.preflight.outputs.backend == 'true'
+        env:
+          CI_POSTGRES_FILES: "[]"
+        run: python3 backend/scripts/ci_postgres.py verify "$RUNNER_TEMP/postgres-reports" --suite schema
+      - uses: actions/download-artifact@v8
+        if: needs.preflight.outputs.backend == 'true'
+        with:
+          pattern: pg-suite-*
+          path: ${{ runner.temp }}/postgres-reports
+      - name: Verify exact integration-shard coverage and execution guards
+        if: needs.preflight.outputs.backend == 'true'
+        env:
+          CI_POSTGRES_FILES: ${{ needs.preflight.outputs.postgres_files }}
+        run: python3 backend/scripts/ci_postgres.py verify "$RUNNER_TEMP/postgres-reports" --suite suite
+      - uses: actions/download-artifact@v8
+        if: needs.preflight.outputs.backend == 'true'
+        with:
+          name: unit-tests
+          path: ${{ runner.temp }}/postgres-reports/unit-tests
+      - uses: actions/download-artifact@v8
+        if: needs.preflight.outputs.backend == 'true'
+        with:
+          name: e2e-tests
+          path: ${{ runner.temp }}/postgres-reports/e2e-tests
+      - uses: actions/download-artifact@v8
+        if: needs.preflight.outputs.backend == 'true'
+        with:
+          name: pg-locks
+          path: ${{ runner.temp }}/postgres-reports/pg-locks
+      - uses: actions/download-artifact@v8
+        if: needs.preflight.outputs.backend == 'true'
+        with:
+          name: storage-tests
+          path: ${{ runner.temp }}/postgres-reports/storage-tests
+      - name: Every classified test has exactly one CI execution owner
+        if: needs.preflight.outputs.backend == 'true'
+        env:
+          CI_POSTGRES_FILES: ${{ needs.preflight.outputs.postgres_files }}
+        run: |
+          python3 backend/scripts/test_suites.py "$RUNNER_TEMP/postgres-reports"
+          python3 backend/scripts/database_observation_check.py "$RUNNER_TEMP/postgres-reports"
