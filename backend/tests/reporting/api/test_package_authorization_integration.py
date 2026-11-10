@@ -440,6 +440,35 @@ def test_regulatory_viewer_cannot_send_back_but_approver_can(
         assert stored_package.status == "generated"
 
 
+def test_the_officer_who_generated_the_return_cannot_take_the_certification_surface(
+    db_client: TestClient,
+) -> None:
+    """The attestation surface's approval-class acts refuse their own maker (#129).
+
+    Voiding, sending back and re-routing all ride the APPROVE gate with the
+    certification maker/checker condition. The maker's Approver grant is
+    complete, so the refusal is the condition's reason — the checker signature
+    the preparer cannot provide — not the generic no-binding sentence.
+    """
+    package_id = _package(
+        family="liquidity", return_code="LCR-NSFR", status="pending_approval", generated_by=USER_1
+    )
+    authv = _approver_grant(sensitivity=SensitivityScope.RESTRICTED)
+    response = db_client.post(
+        f"/api/v1/banks/{SAMPLE_BANK_ID}/regulatory-packages/{package_id}/attestation/send-back",
+        headers=headers(roles=("viewer",), authorization_version=authv),
+        json={"reason": "Send the return back for corrections."},
+    )
+    assert response.status_code == 403
+    message = response.json()["error"]["message"]
+    assert "checker signature" in message
+    assert "requires an active scoped binding" not in message
+    with get_sessionmaker()() as session:
+        stored_package = session.get(RegulatoryPackage, package_id)
+        assert stored_package is not None
+        assert stored_package.status == "pending_approval"
+
+
 def test_binding_only_signer_queue_filters_by_whole_institution_family(
     db_client: TestClient,
 ) -> None:
@@ -749,7 +778,12 @@ def test_the_officer_who_generated_the_return_cannot_file_it(db_client: TestClie
         request_headers=headers(roles=("viewer",), authorization_version=authv),
     )
     assert response.status_code == 403
-    assert "Validator" in response.json()["error"]["message"]
+    message = response.json()["error"]["message"]
+    # The holder's Validator grant is complete, so a sentence naming a missing
+    # grant would send this officer to re-issue one they already hold. The
+    # refusal is the maker/checker condition's own reason (#129).
+    assert "cannot also file it" in message
+    assert "Validator" not in message
 
 
 def test_a_gated_family_still_hides_before_it_refuses(db_client: TestClient) -> None:
@@ -952,7 +986,11 @@ def test_a_validator_binding_does_not_open_the_approvers_stage(db_client: TestCl
 def test_the_officer_who_generated_the_return_cannot_take_a_review_stage(
     db_client: TestClient,
 ) -> None:
-    """§3.3 layer 3, at the gate: the Preparer is a maker on every stage."""
+    """§3.3 layer 3, at the gate: the Preparer is a maker on every stage.
+
+    The refusal is the maker/checker condition's own reason, not the generic
+    no-binding sentence (#129): this holder's Validator grant is complete.
+    """
     package_id = _package(family="liquidity", return_code="LCR-NSFR", generated_by=USER_1)
     _pin_chain(package_id, current_stage_seq=3)
     authv = _filing_grant()
@@ -960,6 +998,9 @@ def test_the_officer_who_generated_the_return_cannot_take_a_review_stage(
     digest = _chain_digest(db_client, package_id, request_headers)
     response = _decide_stage(db_client, package_id, request_headers=request_headers, digest=digest)
     assert response.status_code == 403
+    message = response.json()["error"]["message"]
+    assert "prepared this return" in message
+    assert "requires an active scoped binding" not in message
 
 
 def test_a_gated_family_hides_its_chain_before_it_refuses(db_client: TestClient) -> None:
@@ -1039,6 +1080,31 @@ def test_the_legacy_approval_route_reads_the_same_binding(db_client: TestClient)
     # would mean the gate is still shut, which is what this test exists to catch.
     assert response.status_code == 409, response.text
     assert response.json()["error"]["details"]["error_code"] == "approval_requires_signature"
+
+
+def test_the_officer_who_generated_the_return_cannot_approve_it(
+    db_client: TestClient,
+) -> None:
+    """Four eyes on the approval, at the gate (#129).
+
+    The maker's own Approver grant is complete, so the refusal must be the
+    maker/checker condition's reason — not the generic "requires an active
+    scoped binding" sentence that would send this officer to re-issue a grant
+    they already hold.
+    """
+    package_id = _package(
+        family="liquidity", return_code="LCR-NSFR", status="pending_approval", generated_by=USER_1
+    )
+    authv = _approver_grant(sensitivity=SensitivityScope.RESTRICTED)
+    response = _decide_approval(
+        db_client,
+        package_id,
+        request_headers=headers(roles=("account_admin",), authorization_version=authv),
+    )
+    assert response.status_code == 403
+    message = response.json()["error"]["message"]
+    assert "cannot also release it" in message
+    assert "requires an active scoped binding" not in message
 
 
 @pytest.mark.parametrize("route", ["stage", "legacy"])
