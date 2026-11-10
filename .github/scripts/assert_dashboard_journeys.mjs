@@ -4,6 +4,12 @@ import { readFileSync, appendFileSync } from "node:fs";
 // when adding coverage; reducing it requires a reviewed suite change.
 // Critical scenario results are checked separately by assert_dashboard_outcomes.mjs.
 const floor = 213;
+// The four shards must partition the whole suite: a journey identity may not
+// repeat across shards (checked below), and the shards' discovered totals must
+// add up to this pinned count, so a shard silently dropping journeys fails the
+// gate instead of passing a quietly smaller suite. Bump this count in the same
+// change that adds or removes journeys.
+const expectedDiscovered = 233;
 const files = process.argv.slice(2);
 const problems = [];
 const ids = new Set();
@@ -75,6 +81,10 @@ try {
     );
   if (executed < floor)
     problems.push(`Only ${executed} journeys executed; floor is ${floor}.`);
+  if (discovered !== expectedDiscovered)
+    problems.push(
+      `The shards discovered ${discovered} journeys; the suite pins ${expectedDiscovered}.`,
+    );
   if (skippedNames.length)
     problems.push(
       `The required suite permits no skips (${skippedNames.length} skipped).`,
