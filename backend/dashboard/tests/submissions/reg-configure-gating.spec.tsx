@@ -565,32 +565,6 @@ const orgDimsArb = (): fc.Arbitrary<CapabilityDims> => {
   });
 };
 
-/**
- * Organization-scope capability rows, as the system can actually produce them:
- * `validate_public_grant` refuses branch/region narrowing for every module
- * except Credit, and grant administration is the only writer of bindings, so
- * an organization capability row always carries the whole-institution scope.
- */
-const orgDimsArb = (): fc.Arbitrary<CapabilityDims> => {
-  const orgScope: EffectiveCapabilityRead["dataScope"] = {
-    kind: "all",
-    branches: [],
-    regions: [],
-  };
-  return fc.record({
-    module: fc.constantFrom("reg", "liq", "credit", "data", "markets"),
-    permission: fc.constantFrom("view", "configure"),
-    sensitivity: fc.constantFrom(
-      "published",
-      "aggregated",
-      "confidential",
-      "restricted",
-    ),
-    requiresContextualAuthorization: fc.boolean(),
-    scope: fc.constant(orgScope),
-  });
-};
-
 function toCapability(dims: CapabilityDims): EffectiveCapabilityRead {
   return {
     module: dims.module,
