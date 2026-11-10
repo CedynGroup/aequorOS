@@ -1,4 +1,4 @@
-'use client';
+"use client";
 
 /**
  * The command bar of the Returns workspace.
@@ -15,18 +15,18 @@
  * buried the exports below the fold behind acts most roles cannot perform.
  */
 
-import type { ReactNode } from 'react';
-import { Download, FileOutput, Loader2 } from 'lucide-react';
-import type { ArtifactKind } from '@aequoros/risk-service-api';
-import { DisabledWithReason } from '@/components/ui/DisabledWithReason';
-import type { PrimaryAction } from '@/lib/submissions/returnsSurface';
+import type { ReactNode } from "react";
+import { Download, FileOutput, Loader2 } from "lucide-react";
+import type { ArtifactKind } from "@aequoros/risk-service-api";
+import { DisabledWithReason } from "@/components/ui/DisabledWithReason";
+import type { PrimaryAction } from "@/lib/submissions/returnsSurface";
 
 /** Compact artifact names. The bar has one row; "XLSX with formulas" does not fit. */
 export const ARTIFACT_BUTTON_LABELS: Record<string, string> = {
-  pdf: 'PDF',
-  xlsx: 'XLSX',
-  xlsx_working: 'Formula copy',
-  csv: 'CSV',
+  pdf: "PDF",
+  xlsx: "XLSX",
+  xlsx_working: "Formula copy",
+  csv: "CSV",
 };
 
 export function ReturnCommandBar({
@@ -95,6 +95,7 @@ export function ArtifactGroup({
   onTake,
   signedLabelFor,
   unavailableReason,
+  pendingReason,
 }: {
   kinds: ArtifactKind[];
   /** Kinds already minted for this version. */
@@ -106,17 +107,28 @@ export function ArtifactGroup({
   signedLabelFor?: (kind: ArtifactKind) => string | null;
   /** Why a kind cannot be produced by this officer. */
   unavailableReason: string;
+  /**
+   * Why the act is not ready to run at all. The act hands over a document it
+   * has not chosen yet until the version chain lands — on a certified return
+   * that choice is the difference between the filed document and a fresh
+   * unsigned export — so while the chain is unresolved the buttons hold with
+   * the reason on screen instead of refusing a click they already accepted.
+   */
+  pendingReason?: string | null;
 }) {
   return (
     <div className="flex items-center gap-1.5 flex-wrap">
       {kinds.map((kind) => {
         const exists = available.has(kind);
         const signed = signedLabelFor?.(kind) ?? null;
-        const label = signed ?? ARTIFACT_BUTTON_LABELS[kind] ?? kind.toUpperCase();
+        const label =
+          signed ?? ARTIFACT_BUTTON_LABELS[kind] ?? kind.toUpperCase();
         const busy = busyKind === kind;
-        if (!exists && !canExport) {
+        const heldReason =
+          pendingReason ?? (!exists && !canExport ? unavailableReason : null);
+        if (heldReason) {
           return (
-            <DisabledWithReason key={kind} reason={unavailableReason}>
+            <DisabledWithReason key={kind} reason={heldReason}>
               {(descriptionId) => (
                 <span
                   role="button"
@@ -138,7 +150,7 @@ export function ArtifactGroup({
             type="button"
             disabled={busy}
             onClick={() => onTake(kind)}
-            aria-label={`${exists ? 'Download' : 'Produce and download'} ${label}`}
+            aria-label={`${exists ? "Download" : "Produce and download"} ${label}`}
             className="inline-flex items-center gap-1.5 rounded-md border border-border px-2.5 py-1.5 text-caption font-medium text-navy hover:bg-surface disabled:opacity-60"
           >
             {busy ? (
