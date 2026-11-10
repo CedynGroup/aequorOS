@@ -23,6 +23,11 @@ else:
     from test_suites import case_key, owner
 
 SHARDS = 6
+# Worker count of the pool's parallel (suite) phase; the schema phase is serial.
+WORKERS = 4
+# The schema phase's scope: it runs serially, so its modules weigh on a shard's
+# wall at full duration while suite modules divide across the workers.
+SCHEMA_PREFIX = "tests/db/"
 DURATIONS = Path(__file__).with_name("ci_postgres_durations.json")
 BAO_MODULE = "tests/attestation/service/test_attestation_openbao_integration.py"
 # Owned by the dedicated concurrency-lock job, never by a pool shard.
@@ -57,10 +62,14 @@ def shard_for(module: str, count: int = SHARDS) -> int:
 
 
 def module_shards() -> dict[str, int]:
-    """Longest-first packing keeps fixture-sharing modules on a single worker.
+    """Pack modules to balance each shard's wall: serial schema plus suite/4.
 
-    Unrecorded modules use the stable hash fallback until the next main refresh.
-    Assignment uses the committed baseline and ownership, never a PR subset.
+    Longest-first packing keeps fixture-sharing modules on a single worker. A
+    shard's wall is its schema slice's full duration (serial) plus its suite
+    slice divided across the workers, so packing weighs the two phases
+    differently; unrecorded modules use the stable hash fallback until the next
+    main refresh. Assignment uses the committed baseline and ownership, never a
+    PR subset.
     """
     values = load_object(DURATIONS)["durations"]
     if not isinstance(values, dict):
@@ -72,7 +81,10 @@ def module_shards() -> dict[str, int]:
         if not math.isfinite(value) or value < 0:
             raise ValueError(f"Invalid duration for {module}")
         if owner(module) == "integration" and module not in LOCK_FILES:
-            durations[module] = max(float(value), 0.001)
+            weight = float(value)
+            if not module.startswith(SCHEMA_PREFIX):
+                weight /= WORKERS
+            durations[module] = max(weight, 0.001)
     totals = [0.0] * SHARDS
     assignments: dict[str, int] = {}
     for module in sorted(durations, key=lambda name: (-durations[name], name)):

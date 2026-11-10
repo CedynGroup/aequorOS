@@ -789,6 +789,37 @@ def test_duration_baseline_rejects_invalid_weights(
         module_shards()
 
 
+def test_packing_weighs_the_serial_schema_slice_at_full_duration(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Packing balances each shard's wall: schema in full, suite over workers.
+
+    A shard's schema slice runs serially, so weighing every module by raw
+    duration underbalances once tests/db joins the pool: schema-heavy shards
+    run far longer than the requirement allows.
+    """
+    baseline = tmp_path / "durations.json"
+    weights = {
+        **{f"tests/db/test_db_{n}_integration.py": 10.0 for n in range(4)},
+        **{f"tests/suite/test_{n}_integration.py": 10.0 for n in range(16)},
+    }
+    baseline.write_text(json.dumps({"durations": weights}))
+    monkeypatch.setattr(ci_postgres, "DURATIONS", baseline)
+    assignments = module_shards()
+    schema = [0.0] * SHARDS
+    suite = [0.0] * SHARDS
+    for module, weight in weights.items():
+        shard = assignments[module] - 1
+        if module.startswith(ci_postgres.SCHEMA_PREFIX):
+            schema[shard] += weight
+        else:
+            suite[shard] += weight
+    walls = [schema[i] + suite[i] / ci_postgres.WORKERS for i in range(SHARDS)]
+    assert max(walls) / min(walls) <= 1.25, f"phase walls unbalanced: {walls}"
+    raw = [schema[i] + suite[i] for i in range(SHARDS)]
+    assert max(raw) / min(raw) > 1.5, "the fixture no longer distinguishes raw from phase packing"
+
+
 def _write_phase_manifests(
     directory: Path, index: int, collected: list[str], files: list[str]
 ) -> dict[str, list[str]]:
