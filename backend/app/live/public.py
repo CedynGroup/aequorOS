@@ -36,6 +36,7 @@ from app.live.schemas.live import LiveModuleView
 from app.live.service import (
     fact_derivation,
     freshness,
+    live_access,
     live_refresh_triggers,
     regulatory_dashboard_batching,
 )
@@ -79,6 +80,7 @@ __all__ = [
     "fact_derivation",
     "findings_from_validations",
     "freshness",
+    "live_access",
     "live_block",
     "live_refresh_triggers",
     "load_current_facts",

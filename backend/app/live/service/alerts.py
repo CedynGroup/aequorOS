@@ -12,11 +12,10 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
-from app.core.authorization import Module, Permission, Sensitivity
-from app.identity import public as scoped_authorization
 from app.identity.public import Bank
 from app.live.models.live import LiveFinding
 from app.live.schemas.live import AlertItemRead, BankAlertsRead
+from app.live.service import live_access
 from app.policy.domain.regulatory_instruments import forecast_rule_applicable
 from app.policy.public import rule_in_force
 
@@ -24,44 +23,25 @@ _ALERT_SEVERITIES = ("critical", "high")
 _SEVERITY_RANK = {"critical": 0, "high": 1, "medium": 2, "low": 3}
 _OPEN_STATUSES = ("open", "needs_review")
 
-#: Live-engine findings served only to a principal holding an exact aggregated
-#: ``view`` binding on the engine's module, filtered in SQL before counts and
-#: the limit. Every engine requires whole-institution coverage.
-_GATED_ENGINE_MODULES: tuple[tuple[str, Module], ...] = (
-    ("liquidity", Module.LIQUIDITY),
-    ("capital", Module.CAPITAL),
-    ("rating", Module.MARKETS),
-    ("credit", Module.CREDIT),
-    ("irr", Module.IRRBB),
-    ("fx", Module.FX),
-    ("ftp", Module.FTP),
-    ("forecast", Module.FORECASTING),
-)
-
 
 def get_bank_alerts(
     db: Session, ctx: TenantContext, bank_id: str, *, limit: int = 50
 ) -> BankAlertsRead:
     bank = _get_bank_or_404(db, ctx, bank_id)
 
+    # The one closed engine-to-module map decides what this caller may read;
+    # the positive include list filters counts, the limit and every item in
+    # SQL before anything is serialized.
+    allowed = live_access.allowed_modules(
+        db, ctx, bank, tuple(live_access.FRESHNESS_VIEW_MODULES), surface="bank_alerts"
+    )
     query = select(LiveFinding).where(
         LiveFinding.organization_id == ctx.organization_id,
         LiveFinding.bank_id == bank.id,
         LiveFinding.status.in_(_OPEN_STATUSES),
         LiveFinding.severity.in_(_ALERT_SEVERITIES),
+        LiveFinding.module.in_(allowed),
     )
-    for engine, module in _GATED_ENGINE_MODULES:
-        decision = scoped_authorization.evaluate_bank_permission(
-            db,
-            ctx,
-            bank,
-            permission=Permission.VIEW,
-            module=module,
-            sensitivity=Sensitivity.AGGREGATED,
-            surface="bank_alerts",
-        )
-        if decision is None or not decision.allowed:
-            query = query.where(LiveFinding.module != engine)
     findings = list(db.scalars(query))
     if any(finding.module == "forecast" for finding in findings):
         liquidity_in_force = rule_in_force(db, ctx, bank, "LCR-NSFR")

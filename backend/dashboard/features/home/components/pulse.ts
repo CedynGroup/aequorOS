@@ -202,7 +202,16 @@ export function usePulseCards(
     irr: useLiveSnapshots(ladderId("irr"), "irr"),
     fx: useLiveSnapshots(ladderId("fx"), "fx"),
     ftp: useLiveSnapshots(ladderId("ftp"), "ftp"),
-    rating: useLiveSnapshots(ladderId("rating"), "rating"),
+    // The backend serves rating snapshots at the live engine's aggregated
+    // read grain (live_access; W11), so the ladder request goes out only for
+    // a caller holding the exact MARKETS/aggregated binding — the /markets
+    // page entry (MARKETS/published) is a lower sensitivity and gates the
+    // hub link, not this snapshot read. A published-only reader sends no
+    // live-snapshots request at all instead of collecting the denial.
+    rating: useLiveSnapshots(
+      scope.marketsAggregatedView ? ladderId("rating") : undefined,
+      "rating",
+    ),
     forecast: useLiveSnapshots(ladderId("forecast"), "forecast"),
   } as const;
 

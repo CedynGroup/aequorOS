@@ -4,13 +4,12 @@ Credit shipped under the ``risk`` label with no server-side consumer, and the
 shared live feeds served its rows to every tenant reader while liquidity,
 IRRBB, FX and FTP were filtered by binding (D-017). These pins keep the module
 in the vocabulary, in the projection, in the cutover gate's module set, in the
-Members composer's sentence, and in each shared surface's gate list — so a
-future edit cannot quietly drop credit back to "served ungated".
+Members composer's sentence, and in the one closed live-read authority map —
+so a future edit cannot quietly drop credit back to "served ungated".
 """
 
 from __future__ import annotations
 
-import ast
 import inspect
 
 from app.core.authorization import Module, ModuleScope, RoleBundle, SensitivityScope
@@ -21,11 +20,9 @@ from app.identity.service.grant_administration import (
     _MODULE_LABELS,  # noqa: PLC2701 - sentence oracle
     compose_authority_sentence,
 )
-from app.liquidity.service import window_analytics
-from app.live.service import alerts, live_view
+from app.live.models.live import LIVE_MODULES
+from app.live.service import live_access, live_view
 from scripts.authorization_access_impact import INSTITUTION_MODULES
-
-_CREDIT_GATE = ("credit", Module.CREDIT)
 
 
 def test_credit_is_a_concrete_module_and_a_binding_scope() -> None:
@@ -69,37 +66,24 @@ def test_a_credit_grant_reads_as_one_plain_sentence() -> None:
 
 
 def test_shared_surfaces_gate_credit_alongside_the_other_engines() -> None:
-    """Live summary, alerts and window analytics name CREDIT in their gate list."""
-    for surface in (live_view, alerts, window_analytics):
-        gated = surface._GATED_ENGINE_MODULES  # noqa: SLF001 - the pin reads the gate itself
-        assert _CREDIT_GATE in gated, surface.__name__
-        # Every live engine names its module authority.
-        assert {engine for engine, _module in gated} == {
-            "liquidity",
-            "credit",
-            "capital",
-            "rating",
-            "irr",
-            "fx",
-            "ftp",
-            "forecast",
-        }
-        assert all(isinstance(module, Module) for _engine, module in gated)
+    """Credit rides the one closed live-read map every surface filters with."""
+    assert live_access.module_for("credit") is Module.CREDIT
+    # Every live engine is mapped; none is unmapped.
+    assert set(live_access.FRESHNESS_VIEW_MODULES) == {
+        "liquidity",
+        "credit",
+        "capital",
+        "rating",
+        "irr",
+        "fx",
+        "ftp",
+        "forecast",
+    }
+    assert set(live_access.FRESHNESS_VIEW_MODULES) == set(LIVE_MODULES)
+    assert all(isinstance(module, Module) for module in live_access.FRESHNESS_VIEW_MODULES.values())
 
 
 def test_explicit_credit_snapshot_ladders_require_the_same_view() -> None:
-    """``list_live_snapshots`` maps ``credit`` to ``Module.CREDIT`` in its guard dict."""
-    tree = ast.parse(inspect.getsource(live_view.list_live_snapshots))
-    protected: dict[str, str] = {}
-    for node in ast.walk(tree):
-        if not isinstance(node, ast.Dict):
-            continue
-        for key, value in zip(node.keys, node.values, strict=True):
-            if (
-                isinstance(key, ast.Constant)
-                and isinstance(value, ast.Attribute)
-                and isinstance(value.value, ast.Name)
-                and value.value.id == "Module"
-            ):
-                protected[str(key.value)] = value.attr
-    assert protected.get("credit") == "CREDIT", protected
+    """``list_live_snapshots`` gates every ladder through the shared map."""
+    assert live_access.module_for("credit") is Module.CREDIT
+    assert "module_for" in inspect.getsource(live_view.list_live_snapshots)

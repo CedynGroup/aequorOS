@@ -378,6 +378,13 @@ async function main(): Promise<void> {
   mock(clients.notificationsApi, {
     listNotifications: response("notifications", {}),
   });
+  mock(clients.windowAnalyticsApi, {
+    computeWindowAnalytics: response("window-analytics", {
+      periodCount: 0,
+      ratios: [],
+      daily: [],
+    }),
+  });
   mock(clients.jobsApi, {
     getJob: response("job-status", { status: "succeeded" }),
   });
@@ -467,6 +474,17 @@ async function main(): Promise<void> {
 
   function PersonalSelfServiceHookHarness() {
     hooks.useBanks(false);
+    return null;
+  }
+
+  // The window-analytics compute is a Command Center button gate whose cache
+  // entry must not cross authorities: the same window computed under one
+  // binding set is different read material under another (#177 A). Each
+  // boundary owns its QueryClient, so the harness captures its own.
+  let windowBoundaryClient: ReturnType<typeof useQueryClient> | null = null;
+  function WindowAnalyticsHarness() {
+    windowBoundaryClient = useQueryClient();
+    hooks.useWindowAnalytics(BANK_ID, "2026-08-01", "2026-08-27", true);
     return null;
   }
 
@@ -853,6 +871,66 @@ async function main(): Promise<void> {
     );
   });
   await act(async () => reportsRenderer!.unmount());
+
+  // Window analytics keys carry the authority scope: the cached computation
+  // for one binding set is never served to another.
+  let windowRenderer: ReturnType<typeof create>;
+  await act(async () => {
+    windowRenderer = create(
+      <QueryAuthorityBoundary
+        scope={resolvedAuthority!}
+        fallback={<span>loading</span>}
+      >
+        <WindowAnalyticsHarness />
+      </QueryAuthorityBoundary>,
+    );
+  });
+  await act(async () => {
+    await waitFor(
+      () => counts.get("window-analytics") === 1,
+      "window analytics did not compute for the first authority",
+    );
+  });
+  const windowKeys = windowBoundaryClient!
+    .getQueryCache()
+    .getAll()
+    .map((query) => query.queryKey)
+    .filter((key) => key[0] === "window-analytics");
+  assert.equal(windowKeys.length, 1);
+  assert.deepEqual(
+    windowKeys[0],
+    [
+      "window-analytics",
+      impersonationClaims.org,
+      `operator:${impersonationClaims.act_operator}|authv:0`,
+      BANK_ID,
+      "2026-08-01",
+      "2026-08-27",
+    ],
+    "the window-analytics key must carry tenant and authority before its dimensions",
+  );
+  await act(async () => windowRenderer!.unmount());
+  await act(async () => {
+    windowRenderer = create(
+      <QueryAuthorityBoundary
+        scope={{
+          tenantId: impersonationClaims.org,
+          authorityId: "operator:other-operator|authv:0",
+        }}
+        fallback={<span>loading</span>}
+      >
+        <WindowAnalyticsHarness />
+      </QueryAuthorityBoundary>,
+    );
+  });
+  await act(async () => {
+    await waitFor(
+      () => counts.get("window-analytics") === 2,
+      "a second authority must recompute window analytics instead of reusing another authority's cache",
+    );
+  });
+  await act(async () => windowRenderer!.unmount());
+
   globalThis.setInterval = nativeSetInterval;
   globalThis.setTimeout = nativeSetTimeout;
   console.log(

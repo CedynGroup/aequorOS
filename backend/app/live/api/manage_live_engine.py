@@ -6,8 +6,6 @@ from uuid import UUID
 from fastapi import APIRouter, Query, status
 
 from app.api.deps import DbSession, MutationTenant, Tenant
-from app.core.authorization import Module, Permission, Sensitivity
-from app.identity import public as scoped_authorization
 from app.live.schemas.live import (
     BankAlertsRead,
     BankFreshnessRead,
@@ -110,22 +108,10 @@ def list_live_snapshots(
     days: Annotated[int, Query(ge=2, le=120)] = 45,
 ) -> LiveSnapshotListRead:
     """Plane-2 daily ladder: past days are EOD closes, today is the live edge."""
-    bank = None
-    if module in ("liquidity", "irr"):
-        bank = scoped_authorization.require_bank_permission(
-            db,
-            ctx,
-            bank_id,
-            permission=Permission.VIEW,
-            module=Module.LIQUIDITY if module == "liquidity" else Module.IRRBB,
-            sensitivity=Sensitivity.AGGREGATED,
-            surface="live_snapshots",
-        )
     return live_view.list_live_snapshots(
         db,
         ctx,
         bank_id,
         module=module,
         days=days,
-        resolved_bank=bank,
     )

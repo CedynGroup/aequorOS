@@ -4912,8 +4912,19 @@ export function useWindowAnalytics(
   end: string | undefined,
   enabled: boolean,
 ) {
+  // The window's ratios and daily closes are authority-filtered live reads
+  // (#177 A), so the cache entry carries the authority scope like every other
+  // live surface: a binding change recomputes instead of replaying another
+  // authority's window.
+  const scope = useQueryAuthorityScope();
   return useQuery({
-    queryKey: ["window-analytics", bankId, start ?? null, end ?? null],
+    queryKey: scopedQueryKey(
+      "window-analytics",
+      scope,
+      bankId ?? null,
+      start ?? null,
+      end ?? null,
+    ),
     queryFn: () =>
       apiCall(() =>
         windowAnalyticsApi.computeWindowAnalytics({
