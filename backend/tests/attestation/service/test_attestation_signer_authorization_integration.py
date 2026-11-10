@@ -57,7 +57,6 @@ from app.models import (
     PackageSignatureRecipient,
     SignerIdentity,
     SigningAuthorization,
-    User,
 )
 from app.policy.service.institution_types import FALLBACK_TYPE_CODE
 from tests.attestation.service.test_attestation_workspace_integration import (
@@ -72,6 +71,7 @@ from tests.attestation.service.test_attestation_workspace_integration import (
     signing_env,
 )
 from tests.fixtures.canonical_bank_fixture import DEMO_ORG_ID, DEMO_USER_ID, SAMPLE_BANK_ID
+from tests.support.authorization_fixtures import tenant_user
 
 __all__ = ["signing_env"]
 
@@ -116,8 +116,7 @@ def _signer_binding(
         reason="Authorize this exact signing ceremony",
         commit=False,
     )
-    user = db.get(User, user_id)
-    assert user is not None
+    user = tenant_user(db, organization_id=DEMO_ORG_ID, user_id=user_id)
     user.authorization_version = 1
     db.flush()
     return binding
@@ -871,8 +870,7 @@ def test_step_up_for_a_checker_with_approve_mints_a_token(db_session: Session) -
     package = _seed_without_signer(db_session)
     _route_and_certify_preparer(db_session, package)
 
-    checker = db_session.get(User, APPROVER_USER_ID)
-    assert checker is not None
+    checker = tenant_user(db_session, organization_id=DEMO_ORG_ID, user_id=APPROVER_USER_ID)
     checker.password_hash = security.hash_password(CHECKER_STEP_UP_PASSWORD)
     checker.auth_provider = "password"
     checker.failed_login_attempts = 0

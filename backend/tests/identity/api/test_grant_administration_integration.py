@@ -51,6 +51,7 @@ from app.models import (
 )
 from app.policy.service.institution_types import FALLBACK_TYPE_CODE
 from app.schemas.common import JsonObject
+from tests.support.authorization_fixtures import tenant_user
 from tests.support.helpers import ORG_1, ORG_2, USER_1, USER_2, headers
 
 GRANTEE = UUID("cccccccc-cccc-4ccc-8ccc-cccccccccccc")
@@ -308,8 +309,7 @@ def test_configurator_is_explicit_exact_and_invalidates_sign_ins(grant_client: T
 def test_signer_is_explicit_exact_and_invalidates_sign_ins(grant_client: TestClient) -> None:
     """Create and revoke exact sign-off-only authority while invalidating old tokens."""
     with _session() as db:
-        user = db.get(User, GRANTEE)
-        assert user is not None
+        user = tenant_user(db, organization_id=ORG_1, user_id=GRANTEE)
         issued = authentication.issue_tokens(db, user)
         version = user.authorization_version
         assert not list(
@@ -352,8 +352,7 @@ def test_signer_is_explicit_exact_and_invalidates_sign_ins(grant_client: TestCli
         == 401
     )
     with _session() as db:
-        user = db.get(User, GRANTEE)
-        assert user is not None
+        user = tenant_user(db, organization_id=ORG_1, user_id=GRANTEE)
         assert user.authorization_version == version + 1
         principal = PrincipalLocator(ORG_1, GRANTEE, PrincipalType.HUMAN)
         exact = _resource(BANK_A, Module.REGULATORY, Sensitivity.RESTRICTED)
@@ -391,8 +390,7 @@ def test_signer_is_explicit_exact_and_invalidates_sign_ins(grant_client: TestCli
         == 401
     )
     with _session() as db:
-        user = db.get(User, GRANTEE)
-        assert user is not None
+        user = tenant_user(db, organization_id=ORG_1, user_id=GRANTEE)
         assert user.authorization_version == version + 2
         assert not authorization.evaluate_permission(
             db, principal, Permission.SIGN_OFF, exact, conditions=SIGNING_CONDITIONS

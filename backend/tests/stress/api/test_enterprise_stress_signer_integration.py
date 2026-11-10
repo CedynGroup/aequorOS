@@ -41,6 +41,7 @@ from tests.stress.api.test_enterprise_stress_integration import (
 )
 from tests.stress.api.test_enterprise_stress_signoff_integration import _create_signoff
 from tests.stress.authority import grant
+from tests.support.authorization_fixtures import suspend_all_bindings, tenant_user
 from tests.support.bank_seeding import seed_bank
 from tests.support.helpers import ORG_1, USER_1, headers
 
@@ -630,9 +631,7 @@ def _composing_partial_signer_grants(
             db, organization_id=organization_id, binding_ids=binding_ids
         )
 
-    monkeypatch.setattr(
-        scope_authorization.authorization, "load_effective_grants", historical_pair
-    )
+    monkeypatch.setattr(scope_authorization.authorization, "load_effective_grants", historical_pair)
     return org_binding_id
 
 
@@ -666,14 +665,15 @@ def test_composing_partial_signer_rows_are_denied_at_execution(
     db_client: TestClient, db_session: Session, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     """The execution re-evaluation also refuses the composing partial pair."""
-    bank_id, signoff_id, signer, signer_binding_id, _ = _pending(db_client, db_session)
-    binding = db_session.get(AuthorizationBinding, signer_binding_id)
-    assert binding is not None
-    binding.status = BindingStatus.SUSPENDED.value
-    db_session.commit()
+    bank_id, signoff_id, signer, _, _ = _pending(db_client, db_session)
+    suspend_all_bindings(
+        db_session,
+        organization_id=ORG_1,
+        user_id=signer,
+        reason="Suspend the routed signer's bindings before execution",
+    )
     _composing_partial_signer_grants(db_session, bank_id, signer, monkeypatch)
-    officer = db_session.get(User, signer)
-    assert officer is not None
+    officer = tenant_user(db_session, organization_id=ORG_1, user_id=signer)
     ctx = TenantContext(
         organization_id=ORG_1,
         actor_user_id=signer,

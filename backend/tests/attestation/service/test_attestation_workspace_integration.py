@@ -262,8 +262,7 @@ def _name_certifier(
     )
     if existing is not None:
         return
-    user = db.get(User, user_id)
-    assert user is not None
+    user = tenant_user(db, organization_id=package.organization_id, user_id=user_id)
     db.add(
         PackageSignatureRecipient(
             organization_id=package.organization_id,
