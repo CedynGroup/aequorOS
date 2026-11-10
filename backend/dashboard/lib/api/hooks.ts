@@ -1765,14 +1765,39 @@ async function invalidateCompletedOfficialRun(
  * success; rejects with a normalized ApiError on failure. Bounded so a stuck
  * worker never hangs the mutation forever — on timeout it resolves with the
  * last-seen job so the UI can still refresh and show progress.
+ *
+ * A scoped job read (#186) denies an unauthorized caller with the same opaque
+ * 404 as an unknown id. That denial is terminal — retrying can never succeed —
+ * so the poll stops immediately with a plain sentence instead of looping or
+ * surfacing a raw "Request failed (404)".
  */
+/** An authorization denial on a scoped read (opaque 404 or 403). */
+function isScopedReadDenial(error: unknown): boolean {
+  if (!isApiError(error)) return false;
+  return error.status === 404 || error.status === 403;
+}
+
 async function pollJobToCompletion(
   jobId: string,
   { intervalMs = 1500, timeoutMs = 120_000 } = {},
 ) {
   const deadline = Date.now() + timeoutMs;
   for (;;) {
-    const job = await apiCall(() => jobsApi.getJob({ jobId }));
+    let job: Awaited<ReturnType<typeof jobsApi.getJob>>;
+    try {
+      job = await apiCall(() => jobsApi.getJob({ jobId }));
+    } catch (error) {
+      if (isScopedReadDenial(error)) {
+        throw new ApiError({
+          message: "This background job is no longer available for your account.",
+          status: isApiError(error) ? error.status : null,
+          code: "job_not_visible",
+          errorCode: null,
+          details: null,
+        });
+      }
+      throw error;
+    }
     if (job.status === "succeeded") return job;
     if (job.status === "failed") {
       throw new ApiError({
@@ -3616,6 +3641,14 @@ export function useMarkNotificationRead() {
       apiCall(() => notificationsApi.markNotificationRead({ notificationId })),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["notifications"] });
+    },
+    onError: (error) => {
+      // A row hidden between render and click (view authority revoked, #186)
+      // answers the same opaque 404 as an unknown id. Refetch the scoped feed
+      // so the stale row leaves the open bell/drawer instead of lingering.
+      if (isScopedReadDenial(error)) {
+        void queryClient.invalidateQueries({ queryKey: ["notifications"] });
+      }
     },
   });
 }

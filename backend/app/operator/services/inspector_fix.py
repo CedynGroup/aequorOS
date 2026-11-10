@@ -25,6 +25,7 @@ from fastapi import HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session, load_only
 
+from app.core.authorization import Module, Sensitivity
 from app.data_engine.domain.ingestion.constants import STUCK_DEDUP_STATUSES
 from app.data_engine.public import IngestionBatch, MappingConfigRecord
 from app.db.base import utc_now
@@ -136,6 +137,10 @@ def recompute(db: Session, organization_id: str, payload: FixRecomputeRequest) -
         payload={"as_of_date": as_of, "reason": payload.note, "initiated_by": _INITIATED_BY},
         run_after=utc_now(),
         coalesce_key=f"refresh:{bank.id}:{as_of}",
+        locator=job_queue.JobLocator(module=Module.DATA, sensitivity=Sensitivity.CONFIDENTIAL),
+        provenance=job_queue.operator_provenance(
+            _INITIATED_BY, action="operator.recompute_requested"
+        ),
     )
     return JobFixResult(
         read=FixJobEnqueuedRead(job_id=job.id, job_type=job.job_type, status=job.status),
@@ -166,6 +171,10 @@ def official_run(db: Session, organization_id: str, payload: FixOfficialRunReque
         payload={"as_of_date": as_of, "reason": payload.note, "initiated_by": _INITIATED_BY},
         run_after=utc_now(),
         coalesce_key=f"official:{bank.id}:{as_of}",
+        locator=job_queue.JobLocator(module=Module.REGULATORY, sensitivity=Sensitivity.RESTRICTED),
+        provenance=job_queue.operator_provenance(
+            _INITIATED_BY, action="operator.official_run_requested"
+        ),
     )
     return JobFixResult(
         read=FixJobEnqueuedRead(job_id=job.id, job_type=job.job_type, status=job.status),
@@ -223,6 +232,10 @@ def rerun_ingestion(
         },
         run_after=utc_now(),
         coalesce_key=f"refresh:{batch.bank_id}:{as_of}",
+        locator=job_queue.JobLocator(module=Module.DATA, sensitivity=Sensitivity.CONFIDENTIAL),
+        provenance=job_queue.operator_provenance(
+            _INITIATED_BY, action="operator.batch_rerun_requested"
+        ),
     )
     detail = (
         "Enqueued a live recompute (pipeline_refresh) from currently-canonical data. "
@@ -323,6 +336,10 @@ def redrive_dedup(
         coalesce_key=f"etl_dedup:{batch.id}",
         entity_type="ingestion_batch",
         entity_id=batch.id,
+        locator=job_queue.JobLocator(module=Module.DATA, sensitivity=Sensitivity.CONFIDENTIAL),
+        provenance=job_queue.operator_provenance(
+            _INITIATED_BY, action="operator.etl_dedup_redrive"
+        ),
     )
     return FixRedriveDedupRead(
         job_id=job.id,

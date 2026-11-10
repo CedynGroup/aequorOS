@@ -73,12 +73,24 @@ CONFIGURE_ROUTES: tuple[ConfigureRoute, ...] = (
         ConfigureRoute("PUT", f"{_BANK}/{path}", module, "approver")
         for module, paths in (
             (Module.LIQUIDITY, ("liquidity/ewis",)),
-            (
-                Module.CREDIT,
-                ("ecl-assumptions", "crm-haircuts", "concentration-limits", "credit-thresholds"),
-            ),
         )
         for path in paths
+    ),
+    *(
+        ConfigureRoute(
+            "PUT",
+            f"{_BANK}/{path}",
+            Module.CREDIT,
+            "approver",
+            effect_scope="bank_local",
+            storage_table=table,
+        )
+        for path, table in (
+            ("ecl-assumptions", "bank_ecl_assumption"),
+            ("crm-haircuts", "bank_crm_haircut"),
+            ("concentration-limits", "bank_concentration_limit"),
+            ("credit-thresholds", "bank_credit_threshold"),
+        )
     ),
     ConfigureRoute("POST", f"{_BANK}/mapping-configs", Module.DATA),
     *_lifecycle("database-direct", Module.DATA, validate=False),

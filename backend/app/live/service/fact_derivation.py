@@ -2614,7 +2614,7 @@ def _derive_crm_collateral(
     Reads the documented ``crm_collateral_ghs``/``crm_collateral_class`` and
     ``crm_guarantee_ghs``/``crm_guarantor_class`` attribute conventions
     (docs/API_INTEGRATION.md §3.4); the supervisory haircut is applied by the
-    capital engine from the effective-dated ``param_crm_haircut`` schedule,
+    capital engine from the effective-dated ``bank_crm_haircut`` schedule,
     never here.
     """
     totals: dict[str, Decimal] = {}

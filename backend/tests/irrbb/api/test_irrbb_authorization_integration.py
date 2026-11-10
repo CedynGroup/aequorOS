@@ -651,6 +651,14 @@ def test_mixed_execution_requires_irrbb_only_in_plan(
     )
     if irr_authority:
         _, version = _grant(RoleBundle.ANALYST, sensitivity=SensitivityScope.CONFIDENTIAL)
+    # The official-run row is stamped REGULATORY/restricted and the queue reads
+    # admit a row only under the caller's current view authority (#186), so the
+    # minting analyst holds exactly that monitoring view.
+    _, version = _grant(
+        RoleBundle.VIEWER,
+        module=ModuleScope.REGULATORY,
+        sensitivity=SensitivityScope.RESTRICTED,
+    )
     original = module_scope.runs_module
     monkeypatch.setattr(
         module_scope,

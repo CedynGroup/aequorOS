@@ -77,7 +77,7 @@ from app.icaap.domain.units import HUNDRED
 from app.icaap.models.workspace import IcaapCycle
 from app.icaap.service import params
 from app.identity.public import Bank
-from app.policy.public import ParamEclAssumption, get_active_params
+from app.policy.public import ParamEclAssumption, get_active_bank_params
 
 #: The governed rows this builder reads, on top of the six the formula reads.
 BOOK_PARAMETER_CODES: tuple[str, ...] = (
@@ -192,7 +192,9 @@ def ecl_defaults(db: Session, organization_id: str, bank: Bank, as_of: date) -> 
     Stage 1 only, and deliberately: a stage-2 row carries a LIFETIME PD, and the
     conditional loss this adjustment corrects is a one-year figure.
     """
-    rows = get_active_params(db, organization_id, bank.jurisdiction_code, ParamEclAssumption, as_of)
+    rows = get_active_bank_params(
+        db, organization_id, bank.id, bank.jurisdiction_code, ParamEclAssumption, as_of
+    )
     for row in rows:
         if row.segment == _ECL_SEGMENT_ALL and row.stage == _ECL_STAGE_ONE:
             return EclDefaults(pd_pct=_decimal(row.pd_pct), lgd_pct=_decimal(row.lgd_pct))

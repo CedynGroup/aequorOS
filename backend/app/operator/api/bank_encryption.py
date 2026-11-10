@@ -15,6 +15,7 @@ from app.models.job import Job
 from app.operator.deps import OperatorAdmin, OperatorDb, record_operator_action
 from app.operator.inspection import require_active_inspection
 from app.operator.services import bank_encryption
+from app.services import job_queue
 from app.services.public_ids import normalize_public_id
 
 router = APIRouter(
@@ -57,7 +58,17 @@ def connect_bank_encryption_key(
     org_id = normalize_public_id(org_id)
     bank_id = normalize_public_id(bank_id)
     inspection = require_active_inspection(db, operator, org_id)
-    result = bank_encryption.connect_key(db, org_id, bank_id, payload)
+    result = bank_encryption.connect_key(
+        db,
+        org_id,
+        bank_id,
+        payload,
+        provenance=job_queue.operator_provenance(
+            operator.email,
+            action="bank_key.connected",
+            decision_reference=str(inspection.id),
+        ),
+    )
     record_operator_action(
         db,
         operator,
@@ -142,7 +153,16 @@ def start_bank_reencryption(
     org_id, bank_id = normalize_public_id(org_id), normalize_public_id(bank_id)
     inspection = require_active_inspection(db, operator, org_id)
     _ = bank_encryption.get_key(db, org_id, bank_id)
-    job = reencryption.enqueue(db, org_id, bank_id)
+    job = reencryption.enqueue(
+        db,
+        org_id,
+        bank_id,
+        provenance=job_queue.operator_provenance(
+            operator.email,
+            action="bank_key.reencryption_requested",
+            decision_reference=str(inspection.id),
+        ),
+    )
     record_operator_action(
         db,
         operator,

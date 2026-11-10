@@ -12,6 +12,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
+from app.core.authorization import ModuleScope, RoleBundle
 from app.credit.domain.dpd_bands import dpd_band
 from app.credit.schemas.regulatory_credit import CreditLoansPageRead, CreditScenarioBatchCreate
 from app.credit.service import regulatory_credit
@@ -32,6 +33,7 @@ from app.models import (
 from app.reporting.schemas.packages import RegulatoryPackageCreate
 from app.reporting.service import generation as reporting_generation
 from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID, materialize_canonical_test_book
+from tests.support.factories.authorization import grant_institution_authority
 from tests.support.factories.canonical import FIXTURE_AS_OF, seed_canonical_fixture
 from tests.support.helpers import ORG_1, USER_1
 
@@ -567,6 +569,17 @@ def _set_thresholds(db_session: Session, thresholds: dict[str, Decimal]) -> None
     from app.credit.schemas.regulatory_credit import CreditThresholdUpdate  # noqa: PLC0415
     from app.credit.service import credit_params  # noqa: PLC0415
 
+    # The register PUT is Configurator authority (exact-bank CREDIT/restricted
+    # configure); grant the fixture officer that sentence explicitly.
+    grant_institution_authority(
+        db_session,
+        organization_id=ORG_1,
+        bank_id=SAMPLE_BANK_ID,
+        user_id=USER_1,
+        bundle=RoleBundle.CONFIGURATOR,
+        module=ModuleScope.CREDIT,
+    )
+    db_session.flush()
     credit_params.update_credit_threshold_register(
         db_session,
         CTX,

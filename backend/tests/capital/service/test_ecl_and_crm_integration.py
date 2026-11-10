@@ -34,6 +34,7 @@ from app.capital.domain.engine import (
     compute_rwa,
 )
 from app.capital.service import regulatory_capital
+from app.core.authorization import ModuleScope, RoleBundle, SensitivityScope
 from app.credit.schemas.credit_params import EclAssumptionEntry, EclAssumptionUpdate
 from app.credit.service import credit_params
 from app.db.base import utc_now
@@ -41,6 +42,7 @@ from app.domain.authority.registry import AdvisoryDesignation, authorities_for_m
 from app.liquidity.schemas.regulatory_liquidity import RegulatoryRunCreate
 from app.live.service.fact_derivation import derive_facts
 from app.models import (
+    AuthorizationBinding,
     Bank,
     BankFinancialFact,
     BankReportingPeriod,
@@ -56,6 +58,7 @@ from tests.fixtures.canonical_bank_fixture import (
     materialize_canonical_test_book,
 )
 from tests.services.test_le_and_lmt_integration import _CanonicalSeeder
+from tests.support.factories.authorization import grant_institution_authority
 from tests.support.factories.reconciliation import allow_fixture_balance_gap
 
 pytestmark = pytest.mark.usefixtures("capital_run_authority")
@@ -304,6 +307,7 @@ def test_capital_run_uses_modeled_ecl_with_scenario_conditioning(db_session: Ses
     assert stored_before is not None
     assert "ecl_total_ghs" not in stored_before.metrics
 
+    _grant_register_configuration(db_session)
     credit_params.update_ecl_register(
         db_session,
         MAKER,
@@ -461,7 +465,37 @@ def _metric(run: RegulatoryRun, key: str) -> Decimal:
     return Decimal(str(metrics[key]))
 
 
+def _grant_register_configuration(db: Session) -> None:
+    """The register PUTs are CREDIT configuration: the maker must hold the exact
+    bank's ``credit``/``restricted`` ``configure`` sentence — no scalar role or
+    partial binding substitutes, and the grant never adds read authority."""
+    existing = db.scalar(
+        select(AuthorizationBinding.id).where(
+            AuthorizationBinding.organization_id == DEMO_ORG_ID,
+            AuthorizationBinding.principal_user_id == DEMO_USER_ID,
+            AuthorizationBinding.institution_id == SAMPLE_BANK_ID,
+            AuthorizationBinding.role_bundle == RoleBundle.CONFIGURATOR.value,
+            AuthorizationBinding.module_scope == ModuleScope.CREDIT.value,
+            AuthorizationBinding.sensitivity_scope == SensitivityScope.RESTRICTED.value,
+            AuthorizationBinding.status == "active",
+            AuthorizationBinding.revoked_at.is_(None),
+        )
+    )
+    if existing is not None:
+        return
+    grant_institution_authority(
+        db,
+        organization_id=DEMO_ORG_ID,
+        bank_id=SAMPLE_BANK_ID,
+        user_id=DEMO_USER_ID,
+        bundle=RoleBundle.CONFIGURATOR,
+        module=ModuleScope.CREDIT,
+    )
+    db.flush()
+
+
 def _adopt_register(db: Session, *entries: tuple[str, int, str, str]) -> None:
+    _grant_register_configuration(db)
     credit_params.update_ecl_register(
         db,
         MAKER,

@@ -50,9 +50,11 @@ from app.attestation.service.workflow import AttestationConflict
 from app.core.authorization import (
     GrantorType,
     InstitutionScope,
+    Module,
     ModuleScope,
     PrincipalType,
     RoleBundle,
+    Sensitivity,
     SensitivityScope,
 )
 from app.core.config import get_settings
@@ -576,6 +578,66 @@ def test_routing_records_the_nominee_and_notifies_them(db_session: Session) -> N
     ).all()
     assert len(addressed) == 1
     assert "awaits your signature" in addressed[0].title
+    # Ordinary returns are read under the REGULATORY/restricted family gate,
+    # and the notification must carry exactly that locator.
+    assert addressed[0].module == Module.REGULATORY.value
+    assert addressed[0].sensitivity == Sensitivity.RESTRICTED.value
+
+
+def test_an_icaap_signature_request_is_located_on_the_icaap_source_gate(
+    db_session: Session,
+) -> None:
+    """A routed ICAAP signer must be able to SEE their signature request.
+
+    ``require_certification_sign_off`` verifies the recipient's whole-institution
+    VIEW of the package's own family gate, and the SIGNER bundle carries no VIEW
+    permission, so the notification's locator is that source-read gate. Stamping
+    REGULATORY/restricted hid the request from an ICAAP signer holding
+    CAPITAL/confidential source read plus exact-bank REGULATORY SIGN_OFF, while
+    ``notified_at`` still claimed they were told.
+    """
+    package = _seed(db_session)
+    _certify(db_session, MAKER, package, role="preparer")
+    db_session.refresh(package)
+    package.return_family = "icaap"
+    db_session.commit()
+    # The nominee's persona: exact-bank REGULATORY APPROVER+SIGNER (from _users)
+    # plus the CAPITAL/confidential source read the ICAAP family gate demands of
+    # anyone who may see the request. Without it the routing refusal is correct.
+    authorization.create_role_binding(
+        db_session,
+        organization_id=DEMO_ORG_ID,
+        principal_user_id=APPROVER_USER_ID,
+        principal_type=PrincipalType.HUMAN,
+        role_bundle=RoleBundle.APPROVER,
+        scope=authorization.BindingScope(
+            InstitutionScope.INSTITUTION,
+            SAMPLE_BANK_ID,
+            ModuleScope.CAPITAL,
+            SensitivityScope.CONFIDENTIAL,
+        ),
+        grantor=authorization.GrantorRef(GrantorType.SYSTEM, "signing-fixture"),
+        reason="Read the ICAAP return whose signature request the nominee must see",
+        commit=False,
+    )
+    nominee = db_session.get(User, APPROVER_USER_ID)
+    assert nominee is not None
+    nominee.authorization_version = 1
+    db_session.commit()
+
+    rows = _route(db_session, package, _nominate("approver", APPROVER_USER_ID))
+    db_session.commit()
+
+    assert rows[0].notified_at is not None
+    addressed = db_session.scalar(
+        select(Notification).where(
+            Notification.type == "attestation.signature_requested",
+            Notification.recipient_user_id == APPROVER_USER_ID,
+        )
+    )
+    assert addressed is not None
+    assert addressed.module == Module.CAPITAL.value
+    assert addressed.sensitivity == Sensitivity.CONFIDENTIAL.value
 
 
 def test_certify_and_send_reuses_matching_pending_recipients(db_session: Session) -> None:

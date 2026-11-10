@@ -5,8 +5,12 @@ the exact institution, covering the whole institution: the registers are the
 Board's adopted assumptions and limits, and a concentration-limit row can name a
 counterparty group. Capital authority does not admit them.
 
-Approver-gated PUTs are unchanged and still on the scalar approver gate; moving
-them to a dedicated Configurator authority is issue 184, not this cutover.
+PUTs require one complete active CREDIT / ``restricted`` / ``configure``
+binding for the exact institution (issue 184's Configurator authority) — never
+a scalar role. The response is write evidence built from this request only
+(D3): a configure-only caller holds no view authority, so the acknowledgement
+never resolves the read-gated register; the register is read back through its
+own view-gated GET.
 """
 
 from __future__ import annotations
@@ -16,18 +20,22 @@ from typing import Annotated
 
 from fastapi import APIRouter, Query
 
-from app.api.deps import ApproverTenant, CreditRestrictedView, DbSession
+from app.api.deps import CreditRestrictedView, DbSession, ScopedMutationTenant
 from app.credit.schemas.credit_params import (
     CrmHaircutRegisterRead,
     CrmHaircutUpdate,
+    CrmHaircutWriteAcknowledgement,
     EclAssumptionRegisterRead,
     EclAssumptionUpdate,
+    EclAssumptionWriteAcknowledgement,
 )
 from app.credit.schemas.regulatory_credit import (
     ConcentrationLimitRegisterRead,
     ConcentrationLimitUpdate,
+    ConcentrationLimitWriteAcknowledgement,
     CreditThresholdRegisterRead,
     CreditThresholdUpdate,
+    CreditThresholdWriteAcknowledgement,
 )
 from app.credit.service import credit_params
 
@@ -51,15 +59,15 @@ def get_ecl_assumption_register(
 
 @router.put(
     "/banks/{bank_id}/ecl-assumptions",
-    response_model=EclAssumptionRegisterRead,
+    response_model=EclAssumptionWriteAcknowledgement,
     operation_id="updateEclAssumptionRegister",
 )
 def update_ecl_assumption_register(
     bank_id: str,
     payload: EclAssumptionUpdate,
     db: DbSession,
-    ctx: ApproverTenant,
-) -> EclAssumptionRegisterRead:
+    ctx: ScopedMutationTenant,
+) -> EclAssumptionWriteAcknowledgement:
     return credit_params.update_ecl_register(db, ctx, bank_id, payload)
 
 
@@ -80,15 +88,15 @@ def get_crm_haircut_register(
 
 @router.put(
     "/banks/{bank_id}/crm-haircuts",
-    response_model=CrmHaircutRegisterRead,
+    response_model=CrmHaircutWriteAcknowledgement,
     operation_id="updateCrmHaircutRegister",
 )
 def update_crm_haircut_register(
     bank_id: str,
     payload: CrmHaircutUpdate,
     db: DbSession,
-    ctx: ApproverTenant,
-) -> CrmHaircutRegisterRead:
+    ctx: ScopedMutationTenant,
+) -> CrmHaircutWriteAcknowledgement:
     return credit_params.update_crm_register(db, ctx, bank_id, payload)
 
 
@@ -109,15 +117,15 @@ def get_concentration_limit_register(
 
 @router.put(
     "/banks/{bank_id}/concentration-limits",
-    response_model=ConcentrationLimitRegisterRead,
+    response_model=ConcentrationLimitWriteAcknowledgement,
     operation_id="updateConcentrationLimitRegister",
 )
 def update_concentration_limit_register(
     bank_id: str,
     payload: ConcentrationLimitUpdate,
     db: DbSession,
-    ctx: ApproverTenant,
-) -> ConcentrationLimitRegisterRead:
+    ctx: ScopedMutationTenant,
+) -> ConcentrationLimitWriteAcknowledgement:
     return credit_params.update_concentration_limit_register(db, ctx, bank_id, payload)
 
 
@@ -138,13 +146,13 @@ def get_credit_threshold_register(
 
 @router.put(
     "/banks/{bank_id}/credit-thresholds",
-    response_model=CreditThresholdRegisterRead,
+    response_model=CreditThresholdWriteAcknowledgement,
     operation_id="updateCreditThresholdRegister",
 )
 def update_credit_threshold_register(
     bank_id: str,
     payload: CreditThresholdUpdate,
     db: DbSession,
-    ctx: ApproverTenant,
-) -> CreditThresholdRegisterRead:
+    ctx: ScopedMutationTenant,
+) -> CreditThresholdWriteAcknowledgement:
     return credit_params.update_credit_threshold_register(db, ctx, bank_id, payload)

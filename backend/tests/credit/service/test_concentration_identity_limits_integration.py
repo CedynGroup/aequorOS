@@ -3,6 +3,7 @@ from __future__ import annotations
 from datetime import date
 from decimal import Decimal
 from typing import Literal, cast
+from uuid import UUID
 
 import pytest
 from fastapi.testclient import TestClient
@@ -10,9 +11,11 @@ from pydantic import TypeAdapter
 from sqlalchemy import select
 from sqlalchemy.orm import Session, undefer_group
 
+from app.core.authorization import ModuleScope, RoleBundle
 from app.core.key_management.local import LocalKeyProvider
 from app.core.key_management.presentation import HEADER, LOCKED_TEXT, SESSION_SUPPORT
 from app.core.key_management.types import KeyStatus
+from app.core.tenancy import TenantContext
 from app.credit.schemas.regulatory_credit import (
     ConcentrationLimitEntry,
     ConcentrationLimitRegisterRead,
@@ -27,17 +30,49 @@ from app.models import (
     CanonicalCounterparty,
     CanonicalPositionSnapshot,
     ParamConcentrationLimit,
+    User,
 )
 from tests.api import test_impersonation_auth_integration as impersonation
 from tests.core import test_key_unavailable_numeric_integration as encrypted
 from tests.core.test_bank_field_encryption_integration import KEY_A
 from tests.credit.service.test_credit_concentration_integration import CTX
 from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID, materialize_canonical_test_book
+from tests.support.factories.authorization import grant_institution_authority
 from tests.support.factories.canonical import FIXTURE_AS_OF, seed_canonical_fixture
 from tests.support.helpers import ORG_1, headers
 
 type Prefix = Literal["group", "cp"]
 type Kind = Literal["share_of_book_pct", "share_of_capital_pct"]
+
+#: The Configurator officer holding the exact-bank CREDIT/restricted configure
+#: sentence the register PUT now requires — a separate fixture officer so
+#: ordinary fixture readers stay read-only (configure grants no read).
+CONFIGURATOR = UUID("cccccccc-cccc-4ccc-8ccc-ccccccccccc3")
+CONFIGURE_CTX = TenantContext(
+    organization_id=ORG_1, actor_user_id=CONFIGURATOR, authorization_version=1
+)
+
+
+def grant_configure(db: Session) -> None:
+    if db.get(User, CONFIGURATOR) is None:
+        db.add(
+            User(
+                id=CONFIGURATOR,
+                organization_id=ORG_1,
+                email="concentration.configurator@example.test",
+                display_name="Concentration configuration fixture officer",
+            )
+        )
+        db.flush()
+    grant_institution_authority(
+        db,
+        organization_id=ORG_1,
+        bank_id=SAMPLE_BANK_ID,
+        user_id=CONFIGURATOR,
+        bundle=RoleBundle.CONFIGURATOR,
+        module=ModuleScope.CREDIT,
+    )
+    db.flush()
 
 
 @pytest.mark.parametrize("connected", [False, True])
@@ -50,6 +85,7 @@ def test_support_register_reads_hide_named_buckets_without_mutating_limits(
     materialize_canonical_test_book(db_session)
     if connected:
         encrypted.connect(db_session, monkeypatch)
+    grant_configure(db_session)
     entries = [
         ConcentrationLimitEntry(
             dimension="single_name",
@@ -72,9 +108,9 @@ def test_support_register_reads_hide_named_buckets_without_mutating_limits(
             dimension="sector", limit_kind="hhi", bucket_key="Manufacturing", value=Decimal(6)
         )
     )
-    expected = credit_params.update_concentration_limit_register(
+    credit_params.update_concentration_limit_register(
         db_session,
-        CTX,
+        CONFIGURE_CTX,
         SAMPLE_BANK_ID,
         ConcentrationLimitUpdate(
             effective_from=date(2026, 1, 1),
@@ -82,6 +118,9 @@ def test_support_register_reads_hide_named_buckets_without_mutating_limits(
             reason="Synthetic support register presentation regression",
             limits=entries,
         ),
+    )
+    expected = credit_params.get_concentration_limit_register(
+        db_session, CTX, SAMPLE_BANK_ID, date(2026, 1, 1)
     )
     rows = list(
         db_session.scalars(select(ParamConcentrationLimit).order_by(ParamConcentrationLimit.id))
@@ -121,6 +160,7 @@ def prepare(
     db: Session, monkeypatch: pytest.MonkeyPatch, prefix: Prefix, *, connected: bool
 ) -> tuple[Bank, LocalKeyProvider | None, str]:
     materialize_canonical_test_book(db)
+    grant_configure(db)
     provider = encrypted.connect(db, monkeypatch) if connected else None
     seed_canonical_fixture(db, organization_id=ORG_1, bank_id=SAMPLE_BANK_ID)
     parties = list(
@@ -158,7 +198,7 @@ def prepare(
 def limits(db: Session, kind: Kind, *keys: str) -> None:
     credit_params.update_concentration_limit_register(
         db,
-        CTX,
+        CONFIGURE_CTX,
         SAMPLE_BANK_ID,
         ConcentrationLimitUpdate(
             effective_from=date(2026, 1, 1),

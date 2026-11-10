@@ -77,7 +77,7 @@ from app.bi.service.errors import BiQueryError
 from app.bi.service.exports import policy, runner
 from app.bi.service.identity_policy import IDENTITY_REASON
 from app.bi.service.versions import BUILDER_VERSION
-from app.core.authorization import Permission
+from app.core.authorization import Module, Permission, Sensitivity
 from app.core.config import get_settings
 from app.core.key_management.presentation import contains_placeholder
 from app.db.base import utc_now
@@ -343,6 +343,8 @@ def _enqueue_run(db: Session, run: DueRun) -> Job | None:
         coalesce_key=key,
         entity_type=ENTITY_TYPE,
         entity_id=run.bank_id,
+        locator=job_queue.JobLocator(module=Module.DATA, sensitivity=Sensitivity.AGGREGATED),
+        provenance=job_queue.worker_provenance("worker.bi_subscription_run"),
     )
 
 

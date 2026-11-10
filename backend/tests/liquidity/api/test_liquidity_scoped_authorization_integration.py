@@ -426,6 +426,15 @@ def test_official_enqueue_preserves_mixed_module_gate(
         module=ModuleScope.FX,
         sensitivity=SensitivityScope.CONFIDENTIAL,
     )
+    # The official-run row is stamped REGULATORY/restricted and the queue reads
+    # admit a row only under the caller's current view authority (#186), so the
+    # minting analyst holds exactly that monitoring view. The viewer role still
+    # refuses the mint at the write-side role gate.
+    version = _grant(
+        RoleBundle.VIEWER,
+        module=ModuleScope.REGULATORY,
+        sensitivity=SensitivityScope.RESTRICTED,
+    )
 
     with get_sessionmaker()() as session:
         before = [
@@ -660,6 +669,14 @@ def test_sdi_mixed_operations_do_not_require_liquidity_run_binding(
     _grant(RoleBundle.ANALYST, module=ModuleScope.CREDIT, sensitivity=SensitivityScope.CONFIDENTIAL)
     version = _grant(
         RoleBundle.ANALYST, module=ModuleScope.IRRBB, sensitivity=SensitivityScope.CONFIDENTIAL
+    )
+    # The official-run row is stamped REGULATORY/restricted and the queue reads
+    # admit a row only under the caller's current view authority (#186), so the
+    # minting analyst holds exactly that monitoring view.
+    version = _grant(
+        RoleBundle.VIEWER,
+        module=ModuleScope.REGULATORY,
+        sensitivity=SensitivityScope.RESTRICTED,
     )
     with get_sessionmaker()() as session:
         bank = session.get(Bank, SAMPLE_BANK_ID)

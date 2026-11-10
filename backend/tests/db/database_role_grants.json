@@ -281,6 +281,22 @@
       "aqs_api": ["DELETE", "INSERT", "SELECT", "UPDATE"],
       "aqs_worker": ["DELETE", "INSERT", "SELECT", "UPDATE"]
     },
+    "bank_concentration_limit": {
+      "aqs_api": ["INSERT", "SELECT", "UPDATE"],
+      "aqs_worker": ["INSERT", "SELECT", "UPDATE"]
+    },
+    "bank_credit_threshold": {
+      "aqs_api": ["INSERT", "SELECT", "UPDATE"],
+      "aqs_worker": ["INSERT", "SELECT", "UPDATE"]
+    },
+    "bank_crm_haircut": {
+      "aqs_api": ["INSERT", "SELECT", "UPDATE"],
+      "aqs_worker": ["INSERT", "SELECT", "UPDATE"]
+    },
+    "bank_ecl_assumption": {
+      "aqs_api": ["INSERT", "SELECT", "UPDATE"],
+      "aqs_worker": ["INSERT", "SELECT", "UPDATE"]
+    },
     "bank_liquidity_haircut": {
       "aqs_api": ["INSERT", "SELECT", "UPDATE"],
       "aqs_worker": ["INSERT", "SELECT", "UPDATE"]
@@ -857,20 +873,20 @@
       "aqs_worker": ["INSERT", "SELECT", "UPDATE"]
     },
     "param_concentration_limit": {
-      "aqs_api": ["INSERT", "SELECT", "UPDATE"],
-      "aqs_worker": ["INSERT", "SELECT", "UPDATE"]
+      "aqs_api": ["SELECT"],
+      "aqs_worker": ["SELECT"]
     },
     "param_credit_threshold": {
-      "aqs_api": ["INSERT", "SELECT", "UPDATE"],
-      "aqs_worker": ["INSERT", "SELECT", "UPDATE"]
+      "aqs_api": ["SELECT"],
+      "aqs_worker": ["SELECT"]
     },
     "param_crm_haircut": {
-      "aqs_api": ["INSERT", "SELECT", "UPDATE"],
-      "aqs_worker": ["INSERT", "SELECT", "UPDATE"]
+      "aqs_api": ["SELECT"],
+      "aqs_worker": ["SELECT"]
     },
     "param_ecl_assumption": {
-      "aqs_api": ["INSERT", "SELECT", "UPDATE"],
-      "aqs_worker": ["INSERT", "SELECT", "UPDATE"]
+      "aqs_api": ["SELECT"],
+      "aqs_worker": ["SELECT"]
     },
     "param_lcr_runoff_rate": {
       "aqs_api": ["INSERT", "SELECT", "UPDATE"],

@@ -130,6 +130,7 @@ from app.policy.public import (
     ParamLcrRunoffRate,
     ParamNsfrWeight,
     ParamRiskWeight,
+    get_active_bank_params,
     get_active_params,
     regulatory_parameters,
     rule_in_force,
@@ -1112,8 +1113,8 @@ def _load_active_params(
     # The CRM register ``regulatory_capital._load_active_params`` reads, same
     # precedence (code defaults overlaid by the effective-dated register).
     # Resolving it differently here would be the divergence in another form.
-    crm_rows = get_active_params(
-        db, ctx.organization_id, bank.jurisdiction_code, ParamCrmHaircut, as_of
+    crm_rows = get_active_bank_params(
+        db, ctx.organization_id, bank.id, bank.jurisdiction_code, ParamCrmHaircut, as_of
     )
     crm_haircuts = dict(DEFAULT_CRM_HAIRCUTS)
     crm_haircuts.update({row.collateral_class: Decimal(str(row.haircut_pct)) for row in crm_rows})

@@ -14,12 +14,16 @@ import * as runtime from "../runtime";
 import type {
   ConcentrationLimitRegisterRead,
   ConcentrationLimitUpdate,
+  ConcentrationLimitWriteAcknowledgement,
   CreditThresholdRegisterRead,
   CreditThresholdUpdate,
+  CreditThresholdWriteAcknowledgement,
   CrmHaircutRegisterRead,
   CrmHaircutUpdate,
+  CrmHaircutWriteAcknowledgement,
   EclAssumptionRegisterRead,
   EclAssumptionUpdate,
+  EclAssumptionWriteAcknowledgement,
   ErrorResponse,
 } from "../models/index";
 import {
@@ -27,18 +31,26 @@ import {
   ConcentrationLimitRegisterReadToJSON,
   ConcentrationLimitUpdateFromJSON,
   ConcentrationLimitUpdateToJSON,
+  ConcentrationLimitWriteAcknowledgementFromJSON,
+  ConcentrationLimitWriteAcknowledgementToJSON,
   CreditThresholdRegisterReadFromJSON,
   CreditThresholdRegisterReadToJSON,
   CreditThresholdUpdateFromJSON,
   CreditThresholdUpdateToJSON,
+  CreditThresholdWriteAcknowledgementFromJSON,
+  CreditThresholdWriteAcknowledgementToJSON,
   CrmHaircutRegisterReadFromJSON,
   CrmHaircutRegisterReadToJSON,
   CrmHaircutUpdateFromJSON,
   CrmHaircutUpdateToJSON,
+  CrmHaircutWriteAcknowledgementFromJSON,
+  CrmHaircutWriteAcknowledgementToJSON,
   EclAssumptionRegisterReadFromJSON,
   EclAssumptionRegisterReadToJSON,
   EclAssumptionUpdateFromJSON,
   EclAssumptionUpdateToJSON,
+  EclAssumptionWriteAcknowledgementFromJSON,
+  EclAssumptionWriteAcknowledgementToJSON,
   ErrorResponseFromJSON,
   ErrorResponseToJSON,
 } from "../models/index";
@@ -349,7 +361,7 @@ export class CreditParamsApi extends runtime.BaseAPI {
   async updateConcentrationLimitRegisterRaw(
     requestParameters: UpdateConcentrationLimitRegisterRequest,
     initOverrides?: RequestInit | runtime.InitOverrideFunction,
-  ): Promise<runtime.ApiResponse<ConcentrationLimitRegisterRead>> {
+  ): Promise<runtime.ApiResponse<ConcentrationLimitWriteAcknowledgement>> {
     if (requestParameters["bankId"] == null) {
       throw new runtime.RequiredError(
         "bankId",
@@ -395,7 +407,7 @@ export class CreditParamsApi extends runtime.BaseAPI {
     );
 
     return new runtime.JSONApiResponse(response, (jsonValue) =>
-      ConcentrationLimitRegisterReadFromJSON(jsonValue),
+      ConcentrationLimitWriteAcknowledgementFromJSON(jsonValue),
     );
   }
 
@@ -405,7 +417,7 @@ export class CreditParamsApi extends runtime.BaseAPI {
   async updateConcentrationLimitRegister(
     requestParameters: UpdateConcentrationLimitRegisterRequest,
     initOverrides?: RequestInit | runtime.InitOverrideFunction,
-  ): Promise<ConcentrationLimitRegisterRead> {
+  ): Promise<ConcentrationLimitWriteAcknowledgement> {
     const response = await this.updateConcentrationLimitRegisterRaw(
       requestParameters,
       initOverrides,
@@ -419,7 +431,7 @@ export class CreditParamsApi extends runtime.BaseAPI {
   async updateCreditThresholdRegisterRaw(
     requestParameters: UpdateCreditThresholdRegisterRequest,
     initOverrides?: RequestInit | runtime.InitOverrideFunction,
-  ): Promise<runtime.ApiResponse<CreditThresholdRegisterRead>> {
+  ): Promise<runtime.ApiResponse<CreditThresholdWriteAcknowledgement>> {
     if (requestParameters["bankId"] == null) {
       throw new runtime.RequiredError(
         "bankId",
@@ -465,7 +477,7 @@ export class CreditParamsApi extends runtime.BaseAPI {
     );
 
     return new runtime.JSONApiResponse(response, (jsonValue) =>
-      CreditThresholdRegisterReadFromJSON(jsonValue),
+      CreditThresholdWriteAcknowledgementFromJSON(jsonValue),
     );
   }
 
@@ -475,7 +487,7 @@ export class CreditParamsApi extends runtime.BaseAPI {
   async updateCreditThresholdRegister(
     requestParameters: UpdateCreditThresholdRegisterRequest,
     initOverrides?: RequestInit | runtime.InitOverrideFunction,
-  ): Promise<CreditThresholdRegisterRead> {
+  ): Promise<CreditThresholdWriteAcknowledgement> {
     const response = await this.updateCreditThresholdRegisterRaw(
       requestParameters,
       initOverrides,
@@ -489,7 +501,7 @@ export class CreditParamsApi extends runtime.BaseAPI {
   async updateCrmHaircutRegisterRaw(
     requestParameters: UpdateCrmHaircutRegisterRequest,
     initOverrides?: RequestInit | runtime.InitOverrideFunction,
-  ): Promise<runtime.ApiResponse<CrmHaircutRegisterRead>> {
+  ): Promise<runtime.ApiResponse<CrmHaircutWriteAcknowledgement>> {
     if (requestParameters["bankId"] == null) {
       throw new runtime.RequiredError(
         "bankId",
@@ -533,7 +545,7 @@ export class CreditParamsApi extends runtime.BaseAPI {
     );
 
     return new runtime.JSONApiResponse(response, (jsonValue) =>
-      CrmHaircutRegisterReadFromJSON(jsonValue),
+      CrmHaircutWriteAcknowledgementFromJSON(jsonValue),
     );
   }
 
@@ -543,7 +555,7 @@ export class CreditParamsApi extends runtime.BaseAPI {
   async updateCrmHaircutRegister(
     requestParameters: UpdateCrmHaircutRegisterRequest,
     initOverrides?: RequestInit | runtime.InitOverrideFunction,
-  ): Promise<CrmHaircutRegisterRead> {
+  ): Promise<CrmHaircutWriteAcknowledgement> {
     const response = await this.updateCrmHaircutRegisterRaw(
       requestParameters,
       initOverrides,
@@ -557,7 +569,7 @@ export class CreditParamsApi extends runtime.BaseAPI {
   async updateEclAssumptionRegisterRaw(
     requestParameters: UpdateEclAssumptionRegisterRequest,
     initOverrides?: RequestInit | runtime.InitOverrideFunction,
-  ): Promise<runtime.ApiResponse<EclAssumptionRegisterRead>> {
+  ): Promise<runtime.ApiResponse<EclAssumptionWriteAcknowledgement>> {
     if (requestParameters["bankId"] == null) {
       throw new runtime.RequiredError(
         "bankId",
@@ -603,7 +615,7 @@ export class CreditParamsApi extends runtime.BaseAPI {
     );
 
     return new runtime.JSONApiResponse(response, (jsonValue) =>
-      EclAssumptionRegisterReadFromJSON(jsonValue),
+      EclAssumptionWriteAcknowledgementFromJSON(jsonValue),
     );
   }
 
@@ -613,7 +625,7 @@ export class CreditParamsApi extends runtime.BaseAPI {
   async updateEclAssumptionRegister(
     requestParameters: UpdateEclAssumptionRegisterRequest,
     initOverrides?: RequestInit | runtime.InitOverrideFunction,
-  ): Promise<EclAssumptionRegisterRead> {
+  ): Promise<EclAssumptionWriteAcknowledgement> {
     const response = await this.updateEclAssumptionRegisterRaw(
       requestParameters,
       initOverrides,

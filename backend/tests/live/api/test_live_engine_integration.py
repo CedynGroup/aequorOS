@@ -19,6 +19,7 @@ from app.core.authorization import (
     SensitivityScope,
 )
 from app.db.session import get_sessionmaker
+from app.identity.models.authorization import AuthorizationBinding
 from app.identity.service import authorization
 from app.live.service import pipeline
 from app.models import Bank, BankReportingPeriod, CurrentFinancialFact, Job, LiveMetric, User
@@ -235,8 +236,40 @@ def test_refresh_endpoint_enqueues_and_is_pollable(db_client: TestClient) -> Non
 
 
 @pytest.mark.usefixtures("credit_run_authority")
-def test_mint_official_run_enqueues(db_client: TestClient) -> None:
+def test_refresh_requires_the_view_authority_its_locator_demands(
+    db_client: TestClient,
+) -> None:
+    """A caller without DATA/confidential view cannot enqueue a refresh.
+
+    An accepted operation must remain monitorable — the queue reads admit a
+    row only under current view authority — so the refresh demands the view
+    its locator carries up front and refuses otherwise. The hermetic baseline
+    sentence (viewer/all/all) is cleared first so the refusal is the missing
+    DATA/confidential view, not a stale session.
+    """
     _seed_and_refresh(db_client)
+    with get_sessionmaker()() as session:
+        session.execute(delete(AuthorizationBinding))
+        session.commit()
+        new_version = authorization.invalidate_user_authorization(
+            session, organization_id=ORG_1, user_id=USER_1, reason="Clear the baseline sentence"
+        )
+        session.commit()
+    response = db_client.post(
+        f"{_BASE}/refresh",
+        headers=headers(authorization_version=new_version),
+        json={"as_of_date": AS_OF, "reason": "recompute"},
+    )
+    assert response.status_code == 403, response.text
+
+
+def _mint_authority(*, view: bool) -> int:
+    """Grant USER_1 the RUN authority the sample bank's run plan enables.
+
+    When ``view`` is set, the grant also carries the bank-scoped regulatory
+    view authority the official-run locator demands — the authority the queue
+    reads need to monitor the accepted mint (#186).
+    """
     with get_sessionmaker()() as session:
         bank = session.get(Bank, SAMPLE_BANK_ID)
         assert bank is not None
@@ -258,9 +291,32 @@ def test_mint_official_run_enqueues(db_client: TestClient) -> None:
             grantor=authorization.GrantorRef(GrantorType.SYSTEM, "live-engine-test"),
             reason="Authorize the IRRBB engine in the official run plan",
         )
+        if view:
+            authorization.create_role_binding(
+                session,
+                organization_id=ORG_1,
+                principal_user_id=USER_1,
+                principal_type=PrincipalType.HUMAN,
+                role_bundle=RoleBundle.VIEWER,
+                scope=authorization.BindingScope(
+                    institution_scope=InstitutionScope.INSTITUTION,
+                    institution_id=SAMPLE_BANK_ID,
+                    module_scope=ModuleScope.REGULATORY,
+                    sensitivity_scope=SensitivityScope.RESTRICTED,
+                ),
+                grantor=authorization.GrantorRef(GrantorType.SYSTEM, "live-engine-test"),
+                reason="Authorize monitoring of the official-run queue row",
+            )
         user = session.get(User, USER_1)
         assert user is not None
         authorization_version = user.authorization_version
+    return authorization_version
+
+
+@pytest.mark.usefixtures("credit_run_authority")
+def test_mint_official_run_enqueues(db_client: TestClient) -> None:
+    _seed_and_refresh(db_client)
+    authorization_version = _mint_authority(view=True)
     response = db_client.post(
         f"{_BASE}/official-runs",
         headers=headers(authorization_version=authorization_version),
@@ -268,6 +324,15 @@ def test_mint_official_run_enqueues(db_client: TestClient) -> None:
     )
     assert response.status_code == 202, response.text
     assert response.json()["job_type"] == "official_run"
+
+    # The accepted mint is monitorable: the caller holds exactly the view
+    # authority the row's locator demands, so the poll answers 200 (#186).
+    job_id = response.json()["job_id"]
+    polled = db_client.get(
+        f"/api/v1/jobs/{job_id}", headers=headers(authorization_version=authorization_version)
+    )
+    assert polled.status_code == 200, polled.text
+    assert polled.json()["job_type"] == "official_run"
 
     session = get_sessionmaker()()
     try:
@@ -279,6 +344,33 @@ def test_mint_official_run_enqueues(db_client: TestClient) -> None:
     finally:
         session.close()
     assert len(official) == 1
+
+
+@pytest.mark.usefixtures("credit_run_authority")
+def test_mint_official_run_requires_monitoring_view(db_client: TestClient) -> None:
+    """RUN authority alone cannot mint: the queue reads are view-scoped.
+
+    An accepted operation must not return a job its caller cannot monitor —
+    the read contract admits a row only under current view authority — so the
+    mint demands the regulatory view up front and refuses otherwise. The
+    hermetic baseline sentence (viewer/all/all) is cleared first so the
+    refusal is the missing regulatory view, not the loop's RUN gates.
+    """
+    _seed_and_refresh(db_client)
+    with get_sessionmaker()() as session:
+        session.execute(delete(AuthorizationBinding))
+        session.commit()
+        authorization.invalidate_user_authorization(
+            session, organization_id=ORG_1, user_id=USER_1, reason="Clear the baseline sentence"
+        )
+        session.commit()
+    authorization_version = _mint_authority(view=False)
+    response = db_client.post(
+        f"{_BASE}/official-runs",
+        headers=headers(authorization_version=authorization_version),
+        json={"as_of_date": AS_OF, "reason": "filing"},
+    )
+    assert response.status_code == 403, response.text
 
 
 def test_tenant_isolation_org2_gets_404(db_client: TestClient) -> None:

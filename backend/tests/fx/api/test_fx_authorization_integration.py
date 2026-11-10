@@ -975,6 +975,14 @@ def test_queued_official_run_mints_authorized_fx_results(
         role_bundle=RoleBundle.ANALYST,
         sensitivity_scope=SensitivityScope.CONFIDENTIAL,
     )
+    # The official-run row is stamped REGULATORY/restricted and the queue reads
+    # admit a row only under the caller's current view authority (#186), so the
+    # minting analyst holds exactly that monitoring view.
+    _, version = _grant(
+        role_bundle=RoleBundle.VIEWER,
+        module_scope=ModuleScope.REGULATORY,
+        sensitivity_scope=SensitivityScope.RESTRICTED,
+    )
     with get_sessionmaker()() as session:
         period = session.get(BankReportingPeriod, period_id)
         assert period is not None

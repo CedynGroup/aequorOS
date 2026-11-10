@@ -12,7 +12,7 @@ from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
-from app.core.authorization import RoleBundle
+from app.core.authorization import Module, RoleBundle, Sensitivity
 from app.core.config import get_settings
 from app.models import AuthorizationBinding, Job, Notification, User
 from app.notifications.service import notifications
@@ -112,6 +112,11 @@ def _emit_rows(db: Session) -> None:
         recipient_user_id=USER_1,
         entity_type="regulatory_package",
         entity_id=package_id,
+        bank_id=SAMPLE_BANK_ID,
+        module=Module.REGULATORY,
+        # The workflow's own classification: return-plane material is
+        # REGULATORY/restricted, and the fixture grants are restricted-scoped.
+        sensitivity=Sensitivity.RESTRICTED,
     )
     notifications.emit(
         db,
@@ -123,6 +128,9 @@ def _emit_rows(db: Session) -> None:
         recipient_user_id=None,
         entity_type="bank",
         entity_id=SAMPLE_BANK_ID,
+        bank_id=SAMPLE_BANK_ID,
+        module=Module.REGULATORY,
+        sensitivity=Sensitivity.RESTRICTED,
     )
     db.commit()
 

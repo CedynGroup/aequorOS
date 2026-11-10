@@ -35,6 +35,7 @@ if TYPE_CHECKING:
 
     from app.api.deps import TenantContext
     from app.data_engine.schemas.ingestion import IngestionBatchStartRead, IngestionUploadRead
+    from app.services.job_queue import JobProvenance
     from app.storage.client import StorageClient
 
 
@@ -167,6 +168,7 @@ def pull_and_ingest(  # noqa: PLR0913 - a pull binds connection + transport + au
     mapping_config_id: UUID | None = None,
     domains: list[str] | None = None,
     catalog_overrides: dict[str, Any] | None = None,
+    enqueue_provenance: JobProvenance | None = None,
 ) -> IngestionBatchStartRead:
     """Stage a pull, then run it through the ingestion spine end-to-end."""
     from app.data_engine.schemas.ingestion import IngestionBatchCreate  # noqa: PLC0415
@@ -194,4 +196,6 @@ def pull_and_ingest(  # noqa: PLR0913 - a pull binds connection + transport + au
         mapping_config_id=mapping_config_id,
         reason=reason,
     )
-    return start_ingestion(db, ctx, bank_id, payload, storage)
+    return start_ingestion(
+        db, ctx, bank_id, payload, storage, enqueue_provenance=enqueue_provenance
+    )

@@ -122,6 +122,7 @@ from app.policy.public import (
     ParamStressShock,
     PrefetchedActiveParams,
     base_currency,
+    get_active_bank_params,
     get_active_params,
     prefetch_active_params,
     regulator_name,
@@ -1472,10 +1473,15 @@ def _prefetch_dashboard_batch(
             db, ctx.organization_id, bank.jurisdiction_code, ParamCapitalThreshold, dates
         ),
         crm=prefetch_active_params(
-            db, ctx.organization_id, bank.jurisdiction_code, ParamCrmHaircut, dates
+            db, ctx.organization_id, bank.jurisdiction_code, ParamCrmHaircut, dates, bank_id=bank.id
         ),
         ecl=prefetch_active_params(
-            db, ctx.organization_id, bank.jurisdiction_code, ParamEclAssumption, dates
+            db,
+            ctx.organization_id,
+            bank.jurisdiction_code,
+            ParamEclAssumption,
+            dates,
+            bank_id=bank.id,
         ),
         governed=regulatory_parameters.PrefetchedParameterResolver.load(
             # Calculation plane: this engine's run is sealed with
@@ -1977,11 +1983,11 @@ def _load_active_params(
     threshold_rows = get_active_params(
         db, ctx.organization_id, bank.jurisdiction_code, ParamCapitalThreshold, as_of
     )
-    crm_rows = get_active_params(
-        db, ctx.organization_id, bank.jurisdiction_code, ParamCrmHaircut, as_of
+    crm_rows = get_active_bank_params(
+        db, ctx.organization_id, bank.id, bank.jurisdiction_code, ParamCrmHaircut, as_of
     )
-    ecl_rows = get_active_params(
-        db, ctx.organization_id, bank.jurisdiction_code, ParamEclAssumption, as_of
+    ecl_rows = get_active_bank_params(
+        db, ctx.organization_id, bank.id, bank.jurisdiction_code, ParamEclAssumption, as_of
     )
     crm_haircuts = dict(DEFAULT_CRM_HAIRCUTS)
     crm_haircuts.update({row.collateral_class: Decimal(str(row.haircut_pct)) for row in crm_rows})

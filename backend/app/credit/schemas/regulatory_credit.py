@@ -12,7 +12,7 @@ limit when the control-plane row is unseeded — never a fabricated zero.
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime
 from decimal import Decimal
 from typing import Literal
 from uuid import UUID
@@ -258,6 +258,26 @@ class ConcentrationLimitUpdate(ClosedModel):
     limits: list[ConcentrationLimitEntry]
 
 
+class ConcentrationLimitWritten(ClosedModel):
+    """Only a limit row created by this request, never a resolved or locked row."""
+
+    id: UUID
+    dimension: str
+    limit_kind: str
+    bucket_key: str | None
+    value: Decimal
+
+
+class ConcentrationLimitWriteAcknowledgement(ClosedModel):
+    """Write evidence only. Read the register through its authorized GET."""
+
+    bank_id: str
+    effective_from: date
+    approved_by: str
+    approval_timestamp: datetime
+    written: list[ConcentrationLimitWritten]
+
+
 class CreditThresholdRead(ClosedModel):
     threshold_code: str
     value_pct: Decimal
@@ -275,6 +295,24 @@ class CreditThresholdUpdate(ClosedModel):
     approved_by: str
     reason: str
     thresholds: dict[str, Decimal]
+
+
+class CreditThresholdWritten(ClosedModel):
+    """Only a threshold generation created by this request, never a resolved row."""
+
+    id: UUID
+    threshold_code: str
+    value_pct: Decimal
+
+
+class CreditThresholdWriteAcknowledgement(ClosedModel):
+    """Write evidence only. Read the register through its authorized GET."""
+
+    bank_id: str
+    effective_from: date
+    approved_by: str
+    approval_timestamp: datetime
+    written: list[CreditThresholdWritten]
 
 
 # --- loan events / activity (credit PR-4) ----------------------------------

@@ -4,15 +4,13 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from typing import Annotated
-from uuid import UUID
 
-from fastapi import Depends, HTTPException, Request
+from fastapi import Depends, Request
 
 from app.api.deps import DbSession, ScopedMutationTenant, Tenant
 from app.case.service.authorization import require_permission
 from app.core.authorization import Permission, Sensitivity
 from app.core.tenancy import TenantContext
-from app.services.jobs import get_job_or_404
 
 
 def _access(
@@ -58,12 +56,3 @@ CaseRestrictedReview = Annotated[
     TenantContext, Depends(_access(Permission.REVIEW, Sensitivity.RESTRICTED))
 ]
 CaseExport = Annotated[TenantContext, Depends(_access(Permission.EXPORT, Sensitivity.RESTRICTED))]
-
-
-def require_case_job_access(job_id: UUID, db: DbSession, ctx: Tenant) -> None:
-    job = get_job_or_404(db, ctx.organization_id, job_id)
-    if job.job_type in ("assessment_run", "document_parse"):
-        try:
-            require_permission(db, ctx, Permission.VIEW, Sensitivity.RESTRICTED, opaque=True)
-        except HTTPException as exc:
-            raise HTTPException(status_code=404, detail="Job not found.") from exc

@@ -62,9 +62,6 @@ const cards: readonly {
 }[] = [
   { name: "liquidity thresholds", module: "liq", Card: ThresholdRegisterCard },
   { name: "EWI triggers", module: "liq", Card: EwiRegisterCard },
-];
-// CREDIT configure eligibility and save cases resume in m8 from 5db65e8c (D17).
-const creditCards = [
   { name: "credit thresholds", module: "credit", Card: CreditThresholdCard },
   { name: "CRM haircuts", module: "credit", Card: CrmHaircutCard },
   { name: "ECL assumptions", module: "credit", Card: EclAssumptionCard },
@@ -161,36 +158,57 @@ it.each(cards)("allows $name with an exact configure projection", async ({ Card,
   await userEvent.click(edit);
   expect(screen.getByRole("button", { name: /Record (generation|trigger levels)/ })).toBeVisible();
 });
-it.each(creditCards.flatMap((card) =>
-  ["viewer", "analyst", "account_admin"].map((role) => ({ ...card, role })),
-))("preserves the base $name denial for $role despite CREDIT configure", async ({ Card, role }) => {
-  authority.roles = [role];
+it("saves a changed credit threshold through the generated client with Board evidence", async () => {
+  authority.roles = ["viewer"];
   authority.capabilities = [
     capability("credit"),
     capability("credit", { permission: "view", sensitivity: "confidential" }),
   ];
-  render(<Card bankId="BK-SAMP0001" />, { wrapper: Providers });
-  const edit = await screen.findByRole("button", { name: "Edit register" });
-  expect(edit).toBeDisabled();
-  expect(edit).toHaveAttribute("title", "Requires the approver role");
-  expect(screen.getByText("Requires the approver role")).toBeVisible();
-  await userEvent.click(edit);
-  expect(screen.queryByRole("button", { name: "Record generation" })).toBeNull();
-  expect(writes).toEqual([]);
+  render(<CreditThresholdCard bankId="BK-SAMP0001" />, { wrapper: Providers });
+  await userEvent.click(await screen.findByRole("button", { name: "Edit register" }));
+  const user = userEvent.setup();
+  await user.type(screen.getByLabelText("NPL Board trigger"), "5");
+  await user.type(screen.getByLabelText(/Effective from/), "2026-11-08");
+  await user.type(screen.getByLabelText(/Approved by/), "Board minute");
+  await user.type(screen.getByLabelText(/Reason/), "Record approved trigger");
+  await user.click(screen.getByRole("button", { name: "Record generation" }));
+  await waitFor(() => expect(writes).toHaveLength(1));
+  expect(writes[0]).toMatchObject({
+    path: "/api/v1/banks/BK-SAMP0001/credit-thresholds",
+    body: {
+      thresholds: { npl_board_trigger_pct: "5" },
+      approved_by: "Board minute",
+      reason: "Record approved trigger",
+    },
+  });
+  await waitFor(() =>
+    expect(screen.queryByRole("button", { name: "Record generation" })).toBeNull(),
+  );
 });
-it.each(creditCards.flatMap((card) =>
-  ["approver", "admin"].map((role) => ({ ...card, role })),
-))("preserves the base $name editor for $role without configure", async ({ Card, role }) => {
-  authority.roles = [role];
-  authority.capabilities = [
-    capability("credit", { permission: "view", sensitivity: "confidential" }),
-  ];
-  render(<Card bankId="BK-SAMP0001" />, { wrapper: Providers });
-  const edit = await screen.findByRole("button", { name: "Edit register" });
-  expect(edit).toBeEnabled();
-  await userEvent.click(edit);
-  expect(screen.getByRole("button", { name: "Record generation" })).toBeVisible();
-  expect(screen.queryByRole("button", { name: "Edit register" })).toBeNull();
+it("retains the credit editor and displays the backend denial if authority changes before save", async () => {
+  authority.roles = ["viewer"];
+  authority.capabilities = [capability("credit")];
+  vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    const path = new URL(input instanceof Request ? input.url : String(input)).pathname;
+    if (init?.method === "PUT") {
+      writes.push({ path, body: JSON.parse(String(init.body)) });
+      return Response.json(
+        { error: { code: "forbidden", message: "Configure binding revoked" } },
+        { status: 403 },
+      );
+    }
+    return Response.json({ as_of: "2026-11-08", thresholds: [] });
+  }));
+  render(<CreditThresholdCard bankId="BK-SAMP0001" />, { wrapper: Providers });
+  await userEvent.click(await screen.findByRole("button", { name: "Edit register" }));
+  const user = userEvent.setup();
+  await user.type(screen.getByLabelText("NPL Board trigger"), "5");
+  await user.type(screen.getByLabelText(/Effective from/), "2026-11-08");
+  await user.type(screen.getByLabelText(/Approved by/), "Board minute");
+  await user.type(screen.getByLabelText(/Reason/), "Record approved trigger");
+  await user.click(screen.getByRole("button", { name: "Record generation" }));
+  expect(await screen.findByText("Configure binding revoked")).toBeVisible();
+  expect(screen.getByLabelText("NPL Board trigger")).toHaveValue("5");
 });
 it("does not turn configure-only authority into register read/navigation access", () => {
   authority.capabilities = [capability("liq"), capability("credit")];

@@ -54,6 +54,7 @@ from app.models import Job
 from app.policy.public import module_scope
 from app.rating.service import implied_rating
 from app.reporting.service import filing_reconciliation
+from app.services import job_queue
 from app.services.audit import record_event
 
 REFRESH_EVENT = "bank_data.refreshed"
@@ -332,6 +333,13 @@ def run_refresh(session: Session, job: Job) -> None:
         bank_id=bank.id,
         as_of=as_of,
         reason="live_refresh",
+        # The hand-off attributes to the PARENT job's enqueue provenance (D9),
+        # not the reconstructed execution context: a worker-initiated
+        # ``pipeline_refresh`` (a scheduled pull enqueues it) still carries the
+        # connection creator's id in its payload, and stamping the successor
+        # human would enumerate a worker-initiated job through the tenant job
+        # list (#186).
+        provenance=job_queue.inherited_provenance(job),
     )
     session.commit()
     if outcome.modules_failed:
@@ -458,6 +466,12 @@ def run_official(session: Session, job: Job) -> None:
         bank_id=bank.id,
         as_of=as_of,
         reason="official_run",
+        # The hand-off attributes to the PARENT job's enqueue provenance (D9),
+        # not the reconstructed execution context: a scheduled official run
+        # carries a selected human's id in its payload but was initiated by
+        # the scheduler, and stamping the successor human would enumerate a
+        # worker-initiated job through the tenant job list (#186).
+        provenance=job_queue.inherited_provenance(job),
     )
     session.commit()
     job.progress = {

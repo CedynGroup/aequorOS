@@ -59,6 +59,7 @@ from app.bi.service.authorization import BiAuthorization, authorize_query
 from app.bi.service.errors import BiQueryError
 from app.bi.service.exports import policy, runner
 from app.bi.service.versions import BUILDER_VERSION
+from app.core.authorization import Module, Sensitivity
 from app.core.config import get_settings
 from app.identity.public import Bank, User
 from app.models.job import Job
@@ -157,6 +158,10 @@ def enqueue_export(  # noqa: PLR0913 - the job contract, spelled out
         ),
         entity_type=ENTITY_TYPE,
         entity_id=bank_id,
+        locator=job_queue.JobLocator(module=Module.DATA, sensitivity=Sensitivity.AGGREGATED),
+        provenance=job_queue.JobProvenance(
+            principal=f"human:{principal_user_id}", action="bi.export"
+        ),
     )
 
 

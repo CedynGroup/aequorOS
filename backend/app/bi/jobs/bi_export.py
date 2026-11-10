@@ -30,7 +30,10 @@ from __future__ import annotations
 
 import importlib
 from types import ModuleType
+from typing import cast
+from uuid import UUID
 
+from sqlalchemy import ColumnElement, false, or_
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
@@ -56,6 +59,37 @@ ENTITY_TYPE = "bi_export"
 
 #: ``job.progress["reason"]`` when ``BI_ENABLED`` went off after the enqueue.
 SKIP_REASON_DISABLED = "bi_disabled"
+
+#: The queue row type. The same literal the lazy service module owns
+#: (``EXPORT_MODULE``'s ``JOB_TYPE``); spelled here so the composition root can
+#: register this module's requester predicate without importing the service
+#: layer a worker without BI must not load.
+JOB_TYPE = "bi_export"
+
+
+def requester_visibility_condition(actor_user_id: UUID | None) -> ColumnElement[bool]:
+    """The queue-surface form of the export read's owner rule (#186).
+
+    An export's download link is a bearer credential, so the status read route
+    answers 404 to anyone but the principal who asked for it — and the
+    existence of another person's export (its object path, filename, row
+    count, size) is not this caller's business either. A queue row served to a
+    colleague, in a collection where no job UUID is even needed to find it,
+    would disclose exactly what that route refuses. Rows of any other job type
+    pass untouched; an anonymous principal gets none.
+    """
+    if actor_user_id is None:
+        return false()
+    # SQL boundary: json ->> key (the same owner marker the export read route
+    # checks) is untyped in the ORM layer; the cast pins the comparison type.
+    requester_marker = cast(
+        "ColumnElement[bool]",
+        Job.payload["principal_user_id"].as_string() == str(actor_user_id),  # pyright: ignore[reportAny] - untyped JSON as_string, the documented boundary
+    )
+    return or_(
+        Job.job_type != JOB_TYPE,
+        requester_marker,
+    )
 
 
 def load_exports() -> ModuleType:

@@ -15,10 +15,15 @@ from app.bi.api.manage_bi_notifications import router as bi_notifications_router
 from app.bi.api.read_bi import require_bi_enabled
 from app.bi.api.read_bi import router as bi_read_router
 from app.bi.api.read_bi_feeds import router as bi_feeds_router
+from app.bi.jobs.bi_export import JOB_TYPE as BI_EXPORT_JOB_TYPE
+from app.bi.jobs.bi_export import (
+    requester_visibility_condition as bi_export_requester_visibility_condition,
+)
+from app.bi.jobs.bi_nlq import JOB_TYPE as BI_QUESTION_JOB_TYPE
+from app.bi.jobs.bi_nlq import requester_visibility_condition
 from app.capital.api.manage_capital_plan import router as capital_plan_router
 from app.capital.api.read_sdi_diagnostics import router as sdi_diagnostics_router
 from app.capital.api.run_regulatory_capital import router as regulatory_capital_router
-from app.case.api.authorization import require_case_job_access
 from app.case.api.bulk_update_cases import router as bulk_update_cases_router
 from app.case.api.generate_case_reports import router as case_reports_router
 from app.case.api.list_case_taxonomy import router as case_taxonomy_router
@@ -99,6 +104,7 @@ from app.reporting.api.examiner_surfaces import router as examiner_router
 from app.reporting.api.manage_filing_workflow import router as filing_workflow_router
 from app.reporting.api.manage_package_attachments import router as package_attachments_router
 from app.reporting.api.manage_regulatory_reporting import router as regulatory_reporting_router
+from app.services import jobs as jobs_service
 from app.storage.api import router as storage_download_router
 from app.stress.api.manage_enterprise_stress import router as enterprise_stress_router
 from app.stress.api.manage_enterprise_stress_signoff import (
@@ -223,7 +229,20 @@ v1_router.include_router(financial_workspace_router)
 v1_router.include_router(scenarios_router)
 v1_router.include_router(calculations_router)
 v1_router.include_router(capital_router)
-v1_router.include_router(jobs_router, dependencies=[Depends(require_case_job_access)])
+# The kernel job surface cannot import a feature (the boundary ratchet), so
+# the composition root registers BI's one-reader question predicate: a queue
+# row of that type answers only to its requester, on the list and the detail
+# read alike (the find_question rule, applied before pagination).
+jobs_service.PRIVATE_REQUESTER_PREDICATES[BI_QUESTION_JOB_TYPE] = (
+    requester_visibility_condition
+)
+# Same rule for governed exports: the status read (and its bearer-credential
+# download link) answers 404 to anyone but the requesting principal, so the
+# queue surface may not enumerate their rows either.
+jobs_service.PRIVATE_REQUESTER_PREDICATES[BI_EXPORT_JOB_TYPE] = (
+    bi_export_requester_visibility_condition
+)
+v1_router.include_router(jobs_router)
 v1_router.include_router(assessments_router)
 v1_router.include_router(findings_router)
 v1_router.include_router(liquidity_router)

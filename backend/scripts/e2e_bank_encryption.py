@@ -39,6 +39,7 @@ from app.data_engine.service import ingestion
 from app.identity.service import authorization, membership
 from app.models import Bank, Organization, User
 from app.operator.services import bank_encryption
+from app.services import job_queue
 from tests.support.inmemory_storage import InMemoryStorageClient
 
 STORIES = ("revocation", "outage", "rotation")
@@ -347,7 +348,11 @@ def run(options: Options) -> dict[str, object]:
                 _ = admin.disable_key(KeyId=state.keys[0])
                 try:
                     bank_encryption.connect_key(
-                        db, identity.organizationId, bank, BankKeyConnect.model_validate(payload)
+                        db,
+                        identity.organizationId,
+                        bank,
+                        BankKeyConnect.model_validate(payload),
+                        provenance=job_queue.system_provenance("e2e_bank_encryption"),
                     )
                 except HTTPException as refused:
                     assert refused.status_code == 503
@@ -355,7 +360,11 @@ def run(options: Options) -> dict[str, object]:
                     raise AssertionError("A disabled bank key must not connect")
                 _ = admin.enable_key(KeyId=state.keys[0])
                 connected = bank_encryption.connect_key(
-                    db, identity.organizationId, bank, BankKeyConnect.model_validate(payload)
+                    db,
+                    identity.organizationId,
+                    bank,
+                    BankKeyConnect.model_validate(payload),
+                    provenance=job_queue.system_provenance("e2e_bank_encryption"),
                 )
                 db.commit()
                 _ingest_identity(db, identity, bank, directory)

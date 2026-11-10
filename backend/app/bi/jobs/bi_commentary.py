@@ -58,6 +58,7 @@ from app.bi.models.commentary import (
     AI_COMMENTARY_DRAFT_TERMINAL_STATUSES,
     AiCommentaryDraft,
 )
+from app.core.authorization import Module, Sensitivity
 from app.core.config import get_settings
 from app.core.ids import new_uuid7
 from app.db.base import utc_now
@@ -367,6 +368,10 @@ def request_commentary(
         entity_type=ENTITY_TYPE,
         entity_id=draft.id,
         max_attempts=settings.ai.job_max_attempts,
+        locator=job_queue.JobLocator(module=Module.DATA, sensitivity=Sensitivity.AGGREGATED),
+        provenance=job_queue.context_provenance(
+            ctx, action=EVENT_REQUESTED, decision_reference=str(draft.id)
+        ),
     )
     draft.job_id = job.id
     audit.record_event(

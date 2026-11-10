@@ -70,14 +70,15 @@ _CREDIT_AUTHORIZED_READS: dict[tuple[str, str], str] = {
     **_SDI_CREDIT_READS,
 }
 
-#: The register writes deliberately stay on the scalar approver gate. A dedicated
-#: Configurator authority is issue 184; pinning them here keeps this cutover from
-#: reading as if it had converted them.
-_REGISTER_WRITES_PENDING_CONFIGURATOR: dict[tuple[str, str], str] = {
-    ("PUT", f"{_BANK_PREFIX}/ecl-assumptions"): "get_approver_tenant_context",
-    ("PUT", f"{_BANK_PREFIX}/crm-haircuts"): "get_approver_tenant_context",
-    ("PUT", f"{_BANK_PREFIX}/concentration-limits"): "get_approver_tenant_context",
-    ("PUT", f"{_BANK_PREFIX}/credit-thresholds"): "get_approver_tenant_context",
+#: The register writes carry issue 184's Configurator authority: the route
+#: dependency deliberately checks no scalar role — the product service resolves
+#: the target bank and requires the exact stored ``credit``/``restricted``
+#: ``configure`` sentence before any row is touched.
+_REGISTER_WRITES: dict[tuple[str, str], str] = {
+    ("PUT", f"{_BANK_PREFIX}/ecl-assumptions"): "get_scoped_mutation_tenant_context",
+    ("PUT", f"{_BANK_PREFIX}/crm-haircuts"): "get_scoped_mutation_tenant_context",
+    ("PUT", f"{_BANK_PREFIX}/concentration-limits"): "get_scoped_mutation_tenant_context",
+    ("PUT", f"{_BANK_PREFIX}/credit-thresholds"): "get_scoped_mutation_tenant_context",
 }
 
 
@@ -195,13 +196,14 @@ def test_credit_authorized_reads_outside_credit_cut_over(
     assert not any(name.startswith("require_capital_") for name in dependencies)
 
 
-@pytest.mark.parametrize(("key", "required"), sorted(_REGISTER_WRITES_PENDING_CONFIGURATOR.items()))
-def test_register_writes_stay_pending_configurator(key: tuple[str, str], required: str) -> None:
-    """The four PUTs are issue 184's dedicated Configurator work, not this cutover.
+@pytest.mark.parametrize(("key", "required"), sorted(_REGISTER_WRITES.items()))
+def test_register_writes_are_configurator_authority(key: tuple[str, str], required: str) -> None:
+    """The four PUTs require an exact-bank configure sentence, never a scalar role.
 
-    They keep the scalar approver gate; converting them here would ship a
-    configuration authority nobody designed. This test is the executable boundary
-    between the two issues.
+    The route dependency is deliberately role-free; the service-level gate
+    (``credit_params._require_configure``) denies before any row, audit event or
+    refresh trigger is touched, and the response is write evidence built from
+    this request (D3) — never the read-gated register resolution.
     """
     method, path = key
     matches = [
@@ -212,6 +214,11 @@ def test_register_writes_stay_pending_configurator(key: tuple[str, str], require
     assert len(matches) == 1, f"{method} {path} must have exactly one route"
     dependencies = _dependency_names(matches[0])
     assert required in dependencies
+    assert "get_approver_tenant_context" not in dependencies
+    assert "get_mutation_tenant_context" not in dependencies
+    assert not any(name.startswith("require_role_") for name in dependencies)
+    # Configure authority is write authority: no read-gate dependency may sit on
+    # the PUT, or a configure-only caller would be denied after commit.
     assert not any(name.startswith("require_credit_") for name in dependencies)
 
 

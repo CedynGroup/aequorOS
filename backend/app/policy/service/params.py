@@ -7,7 +7,7 @@ from sqlalchemy import or_, select
 from sqlalchemy.orm import Session
 
 from app.policy.models.parameter_register import (
-    BankLiquidityParameterMixin,
+    BankOwnedParameterMixin,
     RegulatoryParameterMixin,
 )
 
@@ -42,8 +42,8 @@ def get_active_params[ParamT: RegulatoryParameterMixin](  # noqa: PLR0913 - comp
     A row is active when ``effective_from <= as_of_date`` and ``effective_to`` is
     either null (open-ended) or strictly greater than ``as_of_date``.
     """
-    if issubclass(model, BankLiquidityParameterMixin) and not bank_id:
-        raise ValueError("Bank-local liquidity parameters require bank_id.")
+    if issubclass(model, BankOwnedParameterMixin) and not bank_id:
+        raise ValueError("Bank-local parameters require bank_id.")
     statement = (
         select(model)
         .where(
@@ -54,7 +54,7 @@ def get_active_params[ParamT: RegulatoryParameterMixin](  # noqa: PLR0913 - comp
         )
         .order_by(model.effective_from, model.id)
     )
-    if issubclass(model, BankLiquidityParameterMixin):
+    if issubclass(model, BankOwnedParameterMixin):
         statement = statement.where(model.bank_id == bank_id)
     return list(session.scalars(statement))
 
@@ -74,8 +74,8 @@ def prefetch_active_params[ParamT: RegulatoryParameterMixin](  # noqa: PLR0913 -
     effective-date window. ``active_on`` then applies the exact same date rule
     and ordering as :func:`get_active_params` for each dashboard trend point.
     """
-    if issubclass(model, BankLiquidityParameterMixin) and not bank_id:
-        raise ValueError("Bank-local liquidity parameters require bank_id.")
+    if issubclass(model, BankOwnedParameterMixin) and not bank_id:
+        raise ValueError("Bank-local parameters require bank_id.")
     if not as_of_dates:
         return PrefetchedActiveParams(())
     first, last = min(as_of_dates), max(as_of_dates)
@@ -89,12 +89,12 @@ def prefetch_active_params[ParamT: RegulatoryParameterMixin](  # noqa: PLR0913 -
         )
         .order_by(model.effective_from, model.id)
     )
-    if issubclass(model, BankLiquidityParameterMixin):
+    if issubclass(model, BankOwnedParameterMixin):
         statement = statement.where(model.bank_id == bank_id)
     return PrefetchedActiveParams(tuple(session.scalars(statement)))
 
 
-def get_active_bank_params[ParamT: BankLiquidityParameterMixin](  # noqa: PLR0913 - complete tenant/bank resolution key
+def get_active_bank_params[ParamT: BankOwnedParameterMixin](  # noqa: PLR0913 - complete tenant/bank resolution key
     session: Session,
     organization_id: str,
     bank_id: str,
@@ -102,7 +102,7 @@ def get_active_bank_params[ParamT: BankLiquidityParameterMixin](  # noqa: PLR091
     model: type[ParamT],
     as_of_date: date,
 ) -> list[ParamT]:
-    """Resolve only this bank's effective liquidity policy; never use the archive."""
+    """Resolve only this bank's effective policy rows; never use the archive."""
     return get_active_params(
         session, organization_id, jurisdiction_code, model, as_of_date, bank_id=bank_id
     )

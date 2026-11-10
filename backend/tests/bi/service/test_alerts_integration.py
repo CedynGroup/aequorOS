@@ -42,9 +42,11 @@ from app.bi.service.errors import BiQueryTimeout
 from app.core.authorization import (
     GrantorType,
     InstitutionScope,
+    Module,
     ModuleScope,
     PrincipalType,
     RoleBundle,
+    Sensitivity,
     SensitivityScope,
 )
 from app.core.config import get_settings
@@ -675,6 +677,52 @@ def test_the_handler_emits_nothing_for_an_unevaluated_alert(
         )
         is None
     )
+
+
+def test_the_notification_locator_carries_the_measures_source_authority(
+    db_session: Session, bank: Bank, fingerprint: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A module-scoped BI reader keeps their alert delivery.
+
+    BI authorizes catalogue members by their own module and sensitivity — a
+    credit/aggregated reader may query loans.balance_rc and receive its
+    alerts, and require_bi_read imposes no additional DATA grant — so the
+    notification's locator names the MEASURE's authority. A hardcoded
+    DATA/aggregated locator would make the scoped read filters hide the row
+    from a legitimately admitted recipient, and the SMTP mirror would skip
+    and stamp it processed without delivering.
+    """
+    monkeypatch.setenv("BI_ALERTS_ENABLED", "1")
+    get_settings.cache_clear()
+
+    recipient = _user(db_session, "handler.credit-scoped@bank.test")
+    _revoke_everything(db_session, recipient.id)
+    _grant(
+        db_session,
+        recipient.id,
+        module=ModuleScope.CREDIT,
+        sensitivity=SensitivityScope.AGGREGATED,
+    )
+    _alert(
+        db_session,
+        direction="above",
+        threshold=Decimal("1"),
+        notify_user_ids=[str(recipient.id)],
+    )
+    db_session.commit()
+
+    job = _job(db_session)
+    alert_job.run_bi_alert_evaluate(db_session, job)
+
+    assert job.progress["notifications_emitted"] == 1
+    emitted = list(
+        db_session.scalars(
+            select(Notification).where(Notification.type == alerts.NOTIFICATION_TYPE_BREACHED)
+        )
+    )
+    assert [one.recipient_user_id for one in emitted] == [recipient.id]
+    assert emitted[0].module == Module.CREDIT.value
+    assert emitted[0].sensitivity == Sensitivity.AGGREGATED.value
 
 
 # --- a failed rebuild is not a state to judge ----------------------------------

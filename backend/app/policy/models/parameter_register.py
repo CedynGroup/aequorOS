@@ -141,17 +141,12 @@ class ParamCapitalThreshold(RegulatoryParameterMixin, Base):
     value_pct: Mapped[Decimal] = mapped_column(Numeric(12, 6), nullable=False)
 
 
-class ParamConcentrationLimit(RegulatoryParameterMixin, Base):
-    """Board credit-concentration limits (BoG Concentration Guidelines, Sept 2025).
+class LegacyParamConcentrationLimit(RegulatoryParameterMixin, Base):
+    """Read-only pre-cutover archive, never a runtime policy fallback.
 
-    The Guidelines require a Board limit structure per concentration dimension
-    (§D: limits defined against capital or total assets, with breach
-    escalation) but prescribe NO numeric values — so this register starts
-    EMPTY and every row is a Board decision with the mixin's approval
-    evidence. An absent limit renders "Not set" on the monitor, never an
-    invented number. ``bucket_key`` scopes a limit to one named bucket (a
-    single employer, a named sector); NULL applies the limit to the
-    dimension's largest bucket.
+    The Board credit-concentration limits (BoG Concentration Guidelines, Sept
+    2025) were shared per organization/jurisdiction before the bank-local
+    cutover; these rows are retained approval evidence only.
     """
 
     __tablename__ = "param_concentration_limit"
@@ -183,10 +178,8 @@ class ParamConcentrationLimit(RegulatoryParameterMixin, Base):
     value: Mapped[Decimal] = mapped_column(Numeric(12, 6), nullable=False)
 
 
-class ParamCreditThreshold(RegulatoryParameterMixin, Base):
-    """Board credit early-warning trigger levels (watch/action bands the credit
-    EWIs compare against). Starts EMPTY for the same reason as the
-    concentration limits: no instrument prescribes the values."""
+class LegacyParamCreditThreshold(RegulatoryParameterMixin, Base):
+    """Read-only pre-cutover archive, never a runtime policy fallback."""
 
     __tablename__ = "param_credit_threshold"
     __table_args__: TableArgs = (
@@ -247,13 +240,13 @@ class LegacyParamLiquidityHaircut(RegulatoryParameterMixin, Base):
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
 
 
-class BankLiquidityParameterMixin(RegulatoryParameterMixin):
+class BankOwnedParameterMixin(RegulatoryParameterMixin):
     """Bank-owned configuration; shared legacy rows are archive-only."""
 
     bank_id: Mapped[str] = mapped_column(String(16), nullable=False)
 
 
-class ParamLiquidityThreshold(BankLiquidityParameterMixin, Base):
+class ParamLiquidityThreshold(BankOwnedParameterMixin, Base):
     """LMTD 2026 ¶11(b)–(e): the Board-set internal threshold register.
 
     The Board must set internal thresholds for the six liquidity monitoring
@@ -294,7 +287,7 @@ class ParamLiquidityThreshold(BankLiquidityParameterMixin, Base):
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
 
 
-class ParamLiquidityHaircut(BankLiquidityParameterMixin, Base):
+class ParamLiquidityHaircut(BankOwnedParameterMixin, Base):
     """LRMD 2026 ¶60–63: the institution's internal liquidity-value schedule.
 
     Estimated haircuts per asset class, re-assessed at least annually by
@@ -330,16 +323,85 @@ class ParamLiquidityHaircut(BankLiquidityParameterMixin, Base):
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
 
 
-class ParamEclAssumption(RegulatoryParameterMixin, Base):
-    """IFRS 9 PD/LGD assumptions per segment + stage (Phase 2 item 8).
+class ParamConcentrationLimit(BankOwnedParameterMixin, Base):
+    """Board credit-concentration limits (BoG Concentration Guidelines, Sept 2025).
 
-    ``segment`` names a loan exposure category in the upper-case spelling of
-    ``app.capital.domain.ecl.normalize_segment``, with ``ALL`` as the
-    fallback; stage 1 rows carry the 12-month PD, stage 2 the lifetime PD,
-    and stage 3 rows contribute only their LGD (PD is 100% by definition for
-    credit-impaired exposures). The mixin's approval evidence is the model
-    committee / Board trail an auditor asks for.
+    The Guidelines require a Board limit structure per concentration dimension
+    (§D: limits defined against capital or total assets, with breach
+    escalation) but prescribe NO numeric values — so this register starts
+    EMPTY and every row is a Board decision with the mixin's approval
+    evidence. An absent limit renders "Not set" on the monitor, never an
+    invented number. ``bucket_key`` scopes a limit to one named bucket (a
+    single employer, a named sector); NULL applies the limit to the
+    dimension's largest bucket. Bank-local: a Configurator grant for one bank
+    can never change a sibling bank's limits (D55).
     """
+
+    __tablename__ = "bank_concentration_limit"
+    __table_args__: TableArgs = (
+        CheckConstraint(
+            "dimension IN ('single_name', 'sector', 'geography', 'product', "
+            "'collateral', 'funding', 'employer')",
+            name="ck_bank_concentration_limit_dimension",
+        ),
+        CheckConstraint(
+            "limit_kind IN ('share_of_book_pct', 'share_of_capital_pct', 'hhi')",
+            name="ck_bank_concentration_limit_kind",
+        ),
+        ForeignKeyConstraint(
+            ["bank_id", "organization_id"],
+            ["banks.id", "banks.organization_id"],
+            name="fk_bank_concentration_limit_org_bank",
+        ),
+        UniqueConstraint(
+            "organization_id",
+            "bank_id",
+            "jurisdiction_code",
+            "dimension",
+            "limit_kind",
+            "bucket_key",
+            "effective_from",
+            name="uq_bank_concentration_limit_scope",
+        ),
+    )
+
+    dimension: Mapped[str] = mapped_column(String(24), nullable=False)
+    limit_kind: Mapped[str] = mapped_column(String(24), nullable=False)
+    bucket_key: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    #: Percent for the share kinds; the raw index value (0-10,000) for ``hhi``.
+    value: Mapped[Decimal] = mapped_column(Numeric(12, 6), nullable=False)
+
+
+class ParamCreditThreshold(BankOwnedParameterMixin, Base):
+    """Board credit early-warning trigger levels (watch/action bands the credit
+    EWIs compare against). Starts EMPTY for the same reason as the
+    concentration limits: no instrument prescribes the values. Bank-local: a
+    Configurator grant for one bank can never change a sibling bank's
+    thresholds (D55)."""
+
+    __tablename__ = "bank_credit_threshold"
+    __table_args__: TableArgs = (
+        ForeignKeyConstraint(
+            ["bank_id", "organization_id"],
+            ["banks.id", "banks.organization_id"],
+            name="fk_bank_credit_threshold_org_bank",
+        ),
+        UniqueConstraint(
+            "organization_id",
+            "bank_id",
+            "jurisdiction_code",
+            "threshold_code",
+            "effective_from",
+            name="uq_bank_credit_threshold_scope",
+        ),
+    )
+
+    threshold_code: Mapped[str] = mapped_column(String(60), nullable=False)
+    value_pct: Mapped[Decimal] = mapped_column(Numeric(12, 6), nullable=False)
+
+
+class LegacyParamEclAssumption(RegulatoryParameterMixin, Base):
+    """Read-only pre-cutover archive, never a runtime policy fallback."""
 
     __tablename__ = "param_ecl_assumption"
     __table_args__: TableArgs = (
@@ -361,15 +423,8 @@ class ParamEclAssumption(RegulatoryParameterMixin, Base):
     notes: Mapped[str | None] = mapped_column(Text, nullable=True)
 
 
-class ParamCrmHaircut(RegulatoryParameterMixin, Base):
-    """Supervisory haircuts per CRM collateral class (Phase 2 item 9).
-
-    Basel II comprehensive-approach supervisory haircuts (¶151 table) for
-    collateral recognized against credit exposures. Distinct from
-    ``ParamLiquidityHaircut`` (the LRMD liquidity-value schedule): a class
-    with no active row gets ZERO recognition in credit RWA — a haircut is
-    never invented for an unknown collateral type.
-    """
+class LegacyParamCrmHaircut(RegulatoryParameterMixin, Base):
+    """Read-only pre-cutover archive, never a runtime policy fallback."""
 
     __tablename__ = "param_crm_haircut"
     __table_args__: TableArgs = (
@@ -379,6 +434,77 @@ class ParamCrmHaircut(RegulatoryParameterMixin, Base):
             "collateral_class",
             "effective_from",
             name="uq_param_crm_haircut_scope",
+        ),
+    )
+
+    collateral_class: Mapped[str] = mapped_column(String(80), nullable=False)
+    haircut_pct: Mapped[Decimal] = mapped_column(Numeric(9, 6), nullable=False)
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+
+class ParamEclAssumption(BankOwnedParameterMixin, Base):
+    """IFRS 9 PD/LGD assumptions per segment + stage (Phase 2 item 8).
+
+    ``segment`` names a loan exposure category in the upper-case spelling of
+    ``app.capital.domain.ecl.normalize_segment``, with ``ALL`` as the
+    fallback; stage 1 rows carry the 12-month PD, stage 2 the lifetime PD,
+    and stage 3 rows contribute only their LGD (PD is 100% by definition for
+    credit-impaired exposures). The mixin's approval evidence is the model
+    committee / Board trail an auditor asks for. Bank-local: a Configurator
+    grant for one bank can never change a sibling bank's assumptions (D55).
+    """
+
+    __tablename__ = "bank_ecl_assumption"
+    __table_args__: TableArgs = (
+        CheckConstraint("stage IN (1, 2, 3)", name="ck_bank_ecl_assumption_stage"),
+        ForeignKeyConstraint(
+            ["bank_id", "organization_id"],
+            ["banks.id", "banks.organization_id"],
+            name="fk_bank_ecl_assumption_org_bank",
+        ),
+        UniqueConstraint(
+            "organization_id",
+            "bank_id",
+            "jurisdiction_code",
+            "segment",
+            "stage",
+            "effective_from",
+            name="uq_bank_ecl_assumption_scope",
+        ),
+    )
+
+    segment: Mapped[str] = mapped_column(String(60), nullable=False)
+    stage: Mapped[int] = mapped_column(Integer, nullable=False)
+    pd_pct: Mapped[Decimal] = mapped_column(Numeric(9, 6), nullable=False)
+    lgd_pct: Mapped[Decimal] = mapped_column(Numeric(9, 6), nullable=False)
+    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+
+
+class ParamCrmHaircut(BankOwnedParameterMixin, Base):
+    """Supervisory haircuts per CRM collateral class (Phase 2 item 9).
+
+    Basel II comprehensive-approach supervisory haircuts (¶151 table) for
+    collateral recognized against credit exposures. Distinct from
+    ``ParamLiquidityHaircut`` (the LRMD liquidity-value schedule): a class
+    with no active row gets ZERO recognition in credit RWA — a haircut is
+    never invented for an unknown collateral type. Bank-local: a Configurator
+    grant for one bank can never change a sibling bank's schedule (D55).
+    """
+
+    __tablename__ = "bank_crm_haircut"
+    __table_args__: TableArgs = (
+        ForeignKeyConstraint(
+            ["bank_id", "organization_id"],
+            ["banks.id", "banks.organization_id"],
+            name="fk_bank_crm_haircut_org_bank",
+        ),
+        UniqueConstraint(
+            "organization_id",
+            "bank_id",
+            "jurisdiction_code",
+            "collateral_class",
+            "effective_from",
+            name="uq_bank_crm_haircut_scope",
         ),
     )
 

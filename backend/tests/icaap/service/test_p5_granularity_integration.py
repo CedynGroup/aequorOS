@@ -255,6 +255,7 @@ def test_the_board_ecl_register_is_the_second_source(
         [
             ParamEclAssumption(
                 organization_id=ORG_1,
+                bank_id=SAMPLE_BANK_ID,
                 jurisdiction_code="GH",
                 segment="ALL",
                 stage=1,
@@ -266,6 +267,7 @@ def test_the_board_ecl_register_is_the_second_source(
             ),
             ParamEclAssumption(
                 organization_id=ORG_1,
+                bank_id=SAMPLE_BANK_ID,
                 jurisdiction_code="GH",
                 segment="ALL",
                 stage=2,

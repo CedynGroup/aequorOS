@@ -62,6 +62,10 @@ SUBJECT_TABLES = {
     "param_liquidity_haircut": "banks",
     "bank_liquidity_threshold": "banks",
     "bank_liquidity_haircut": "banks",
+    "bank_ecl_assumption": "banks",
+    "bank_crm_haircut": "banks",
+    "bank_concentration_limit": "banks",
+    "bank_credit_threshold": "banks",
 }
 
 PACKAGE_SUBJECTS = {"regulatory_package_artifact", "regulatory_artifact_version"}

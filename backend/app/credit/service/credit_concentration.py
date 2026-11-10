@@ -47,7 +47,7 @@ from app.identity.public import Bank
 from app.live.public import load_current_facts
 from app.policy.public import (
     ParamConcentrationLimit,
-    get_active_params,
+    get_active_bank_params,
     institution_types,
     jurisdictions,
 )
@@ -176,8 +176,8 @@ def capital_base(db: Session, ctx: TenantContext, bank: Bank, as_of: date) -> De
 def active_limits(
     db: Session, ctx: TenantContext, bank: Bank, as_of: date
 ) -> tuple[ConcentrationLimit, ...]:
-    rows = get_active_params(
-        db, ctx.organization_id, bank.jurisdiction_code, ParamConcentrationLimit, as_of
+    rows = get_active_bank_params(
+        db, ctx.organization_id, bank.id, bank.jurisdiction_code, ParamConcentrationLimit, as_of
     )
     limits: list[ConcentrationLimit] = []
     presentation = db.info.get(SESSION_STATE)

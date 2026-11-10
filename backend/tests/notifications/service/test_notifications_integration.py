@@ -9,17 +9,31 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
+from app.core.authorization import (
+    GrantorType,
+    InstitutionScope,
+    Module,
+    ModuleScope,
+    PrincipalType,
+    RoleBundle,
+    Sensitivity,
+    SensitivityScope,
+)
+from app.identity.models.authorization import AuthorizationBinding
+from app.identity.service import authorization
 from app.liquidity.schemas.regulatory_liquidity import RegulatoryRunCreate
 from app.liquidity.service import regulatory_liquidity
-from app.models import BankReportingPeriod, Notification, RegulatoryPackage, User
+from app.models import Bank, BankReportingPeriod, Notification, RegulatoryPackage, User
 from app.notifications.schemas import NotificationRead
 from app.notifications.service import notifications, reporting_deadline_scan
 from app.reporting.schemas.packages import (
     PackageApprovalDecisionCreate,
     PackageApprovalRequestCreate,
     RegulatoryPackageCreate,
+    ReportingObligationRead,
 )
 from app.reporting.service import generation, validation, workflow
+from app.reporting.service.registry import REGISTRY
 from tests.fixtures.canonical_bank_fixture import (
     DEMO_ORG_ID,
     DEMO_USER_ID,
@@ -68,6 +82,41 @@ def _ensure_role_users(db: Session, organization_id: str) -> None:
                     is_active=is_active,
                 )
             )
+    db.flush()
+    # Every active role user also holds one complete organization-wide viewer
+    # binding: the read paths filter on current locator authority (#186), so a
+    # list or mark-read expectation needs the grant in place, not just the
+    # legacy scalar role the fan-out targets.
+    for user_id, _role, _email, is_active in _ROLE_USERS:
+        if not is_active or user_id == USER_1:
+            continue  # USER_1 already holds the bootstrap viewer binding
+        if (
+            db.scalar(
+                select(AuthorizationBinding.id).where(
+                    AuthorizationBinding.principal_user_id == user_id,
+                    AuthorizationBinding.organization_id == organization_id,
+                    AuthorizationBinding.role_bundle == RoleBundle.VIEWER.value,
+                )
+            )
+            is not None
+        ):
+            continue
+        authorization.create_role_binding(
+            db,
+            organization_id=organization_id,
+            principal_user_id=user_id,
+            principal_type=PrincipalType.HUMAN,
+            role_bundle=RoleBundle.VIEWER,
+            scope=authorization.BindingScope(
+                InstitutionScope.ORGANIZATION,
+                None,
+                ModuleScope.ALL,
+                SensitivityScope.ALL,
+            ),
+            grantor=authorization.GrantorRef(GrantorType.SYSTEM, "notification-fixture"),
+            reason="Notification read-path fixture authority",
+            commit=False,
+        )
     db.commit()
 
 
@@ -103,6 +152,8 @@ def test_emit_role_fanout_targets_role_and_higher_active_users(db_session: Sessi
         title="BSD3 2026-03-31 awaits approval",
         body="Version 1 is pending an approval decision.",
         recipient_role="approver",
+        module=Module.REGULATORY,
+        sensitivity=Sensitivity.CONFIDENTIAL,
     )
     db_session.commit()
     # Account administration no longer implies operational approval. Fan-out
@@ -124,14 +175,63 @@ def test_emit_unknown_role_is_rejected(db_session: Session) -> None:
             title="t",
             body="b",
             recipient_role="supervisor",
+            module=Module.REGULATORY,
+            sensitivity=Sensitivity.CONFIDENTIAL,
         )
+
+
+def test_emit_persists_the_typed_source_locator(db_session: Session) -> None:
+    """Every emitted row carries the emitter's locator; the scope derives from the bank."""
+    _ensure_role_users(db_session, ORG_1)
+    ctx = TenantContext(organization_id=ORG_1, actor_user_id=USER_1, authorization_version=1)
+    bank_rows = notifications.emit(
+        db_session,
+        ctx,
+        type="reporting.package.pending_approval",
+        severity="warning",
+        title="BSD3 2026-03-31 awaits approval",
+        body="Version 1 is pending an approval decision.",
+        recipient_user_id=USER_1,
+        bank_id=SAMPLE_BANK_ID,
+        module=Module.REGULATORY,
+        sensitivity=Sensitivity.RESTRICTED,
+    )
+    org_rows = notifications.emit(
+        db_session,
+        ctx,
+        type="account.notice",
+        severity="info",
+        title="Account notice",
+        body="General",
+        bank_id=None,
+        module=Module.ACCOUNT,
+        sensitivity=Sensitivity.PUBLISHED,
+    )
+    db_session.commit()
+    for row in bank_rows:
+        assert row.institution_scope == "institution"
+        assert row.bank_id == SAMPLE_BANK_ID
+        assert row.module == "reg"
+        assert row.sensitivity == "restricted"
+    for row in org_rows:
+        assert row.institution_scope == "organization"
+        assert row.bank_id is None
+        assert row.module == "account"
+        assert row.sensitivity == "published"
 
 
 def test_list_visibility_user_specific_vs_org_wide_vs_other_user(db_session: Session) -> None:
     _ensure_role_users(db_session, ORG_1)
     ctx = TenantContext(organization_id=ORG_1, actor_user_id=USER_1, authorization_version=1)
     notifications.emit(
-        db_session, ctx, type="reporting.test.org_wide", severity="info", title="org", body="b"
+        db_session,
+        ctx,
+        type="reporting.test.org_wide",
+        severity="info",
+        title="org",
+        body="b",
+        module=Module.REGULATORY,
+        sensitivity=Sensitivity.CONFIDENTIAL,
     )
     notifications.emit(
         db_session,
@@ -141,6 +241,8 @@ def test_list_visibility_user_specific_vs_org_wide_vs_other_user(db_session: Ses
         title="mine",
         body="b",
         recipient_user_id=USER_1,
+        module=Module.REGULATORY,
+        sensitivity=Sensitivity.CONFIDENTIAL,
     )
     notifications.emit(
         db_session,
@@ -150,6 +252,8 @@ def test_list_visibility_user_specific_vs_org_wide_vs_other_user(db_session: Ses
         title="other",
         body="b",
         recipient_user_id=APPROVER_ID,
+        module=Module.REGULATORY,
+        sensitivity=Sensitivity.CONFIDENTIAL,
     )
     db_session.commit()
 
@@ -178,7 +282,14 @@ def test_mark_read_and_mark_all_read_touch_only_visible_rows(db_session: Session
     _ensure_role_users(db_session, ORG_1)
     ctx = TenantContext(organization_id=ORG_1, actor_user_id=USER_1, authorization_version=1)
     org_wide = notifications.emit(
-        db_session, ctx, type="reporting.test.org_wide", severity="info", title="org", body="b"
+        db_session,
+        ctx,
+        type="reporting.test.org_wide",
+        severity="info",
+        title="org",
+        body="b",
+        module=Module.REGULATORY,
+        sensitivity=Sensitivity.CONFIDENTIAL,
     )[0]
     notifications.emit(
         db_session,
@@ -188,6 +299,8 @@ def test_mark_read_and_mark_all_read_touch_only_visible_rows(db_session: Session
         title="other",
         body="b",
         recipient_user_id=APPROVER_ID,
+        module=Module.REGULATORY,
+        sensitivity=Sensitivity.CONFIDENTIAL,
     )
     db_session.commit()
 
@@ -208,6 +321,8 @@ def test_mark_read_and_mark_all_read_touch_only_visible_rows(db_session: Session
         title="mine",
         body="b",
         recipient_user_id=USER_1,
+        module=Module.REGULATORY,
+        sensitivity=Sensitivity.CONFIDENTIAL,
     )
     db_session.commit()
     assert notifications.mark_all_read(db_session, ctx) == 1  # org-wide already read
@@ -421,6 +536,56 @@ def test_deadline_scan_is_idempotent_for_the_same_day(db_session: Session) -> No
     assert all(row.entity_type == "bank" and row.entity_id == SAMPLE_BANK_ID for row in rows)
 
 
+def test_an_icaap_deadline_notification_is_located_on_the_icaap_source_gate(
+    db_session: Session,
+) -> None:
+    """The ICAAP reader the family factor admits can see their deadline rows.
+
+    ``family_visibility_condition`` admits deadline rows whose return family is
+    visible to the reader — for ICAAP that is the CAPITAL/confidential gate —
+    while the locator filter then demands the row's own module/sensitivity.
+    Stamping REGULATORY/restricted hid ICAAP due-soon and overdue notices from
+    a reader holding exactly the CAPITAL/confidential VIEW the family factor
+    had already admitted them by, so the locator is that same family gate.
+    """
+    materialize_canonical_test_book(db_session)
+    bank = db_session.get(Bank, SAMPLE_BANK_ID)
+    assert bank is not None
+    definition = REGISTRY["ICAAP-REPORT"]
+    obligation = ReportingObligationRead(
+        return_code=definition.code,
+        return_family=definition.family,
+        title=definition.title,
+        frequency=definition.frequency,
+        fidelity=definition.fidelity,
+        default_channel=definition.default_channel,
+        reporting_date=REPORTING_DATE,
+        due_date=REPORTING_DATE + timedelta(days=3),
+        package_id=None,
+        package_status="draft",
+        package_version=None,
+        rag="due_soon",
+    )
+
+    emitted = reporting_deadline_scan._scan_obligation(  # pyright: ignore[reportPrivateUsage] - the scan's emission unit
+        db_session,
+        TenantContext(organization_id=DEMO_ORG_ID),
+        bank,
+        obligation,
+        REPORTING_DATE + timedelta(days=1),
+    )
+    db_session.commit()
+
+    assert emitted == 1
+    rows = _notification_rows(
+        db_session,
+        f"reporting.deadline.due_soon_3:{definition.code}:{REPORTING_DATE.isoformat()}",
+    )
+    assert len(rows) == 1
+    assert rows[0].module == Module.CAPITAL.value
+    assert rows[0].sensitivity == Sensitivity.CONFIDENTIAL.value
+
+
 def test_deadline_scan_thresholds_fire_at_the_right_offsets(db_session: Session) -> None:
     materialize_canonical_test_book(db_session)
     scope = f"BSD2:{REPORTING_DATE.isoformat()}"
@@ -452,6 +617,34 @@ def test_deadline_scan_thresholds_fire_at_the_right_offsets(db_session: Session)
         rows = _notification_rows(db_session, key)
         assert len(rows) == 1
         assert rows[0].severity == "critical"
+
+
+def test_an_icaap_package_decision_notification_is_located_on_the_icaap_source_gate(
+    db_session: Session,
+) -> None:
+    """The ICAAP preparer the family factor admits can see their decision.
+
+    ``family_visibility_condition`` admits regulatory-package notifications by
+    the package's own family, so a REGULATORY/restricted locator hid approval
+    and rework notices (and the regulator's decisions) from an ICAAP preparer
+    holding exactly the CAPITAL/confidential VIEW the family factor had
+    already admitted them by. The locator is that same family read gate.
+    """
+    _seed_with_baseline_run(db_session)
+    generated = _generate(db_session, return_code="LCR-NSFR")
+    package = _package_row(db_session, generated.id)
+    package.return_family = "icaap"
+    db_session.commit()
+
+    workflow._notify_decision(  # pyright: ignore[reportPrivateUsage] - the notice's emission unit
+        db_session, MAKER, package, approved=False, reason="Fix the coverage note."
+    )
+    db_session.commit()
+
+    rows = _notification_rows(db_session, "reporting.package.approval_rejected")
+    assert len(rows) == 1
+    assert rows[0].module == Module.CAPITAL.value
+    assert rows[0].sensitivity == Sensitivity.CONFIDENTIAL.value
 
 
 def test_deadline_scan_flags_pending_orass_reupload_daily(db_session: Session) -> None:
@@ -521,6 +714,8 @@ def test_platform_id_entity_survives_the_read_schema(db_session: Session) -> Non
         body="Contingency funding plan activated.",
         entity_type="bank",
         entity_id="BK-SAMP0001",
+        module=Module.REGULATORY,
+        sensitivity=Sensitivity.CONFIDENTIAL,
     )
     db_session.commit()
     assert emitted

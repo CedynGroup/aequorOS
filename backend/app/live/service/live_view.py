@@ -234,6 +234,18 @@ def refresh_bank_data(
 ) -> JobEnqueuedRead:
     """Enqueue an immediate live refresh (the "Recompute now" button)."""
     bank = _get_bank_or_404(db, ctx, bank_id)
+    # The accepted refresh must be monitorable: the queue reads admit a row
+    # only under the caller's CURRENT view authority (#186), and the row's
+    # locator is DATA/confidential, so enqueueing requires that view.
+    scoped_authorization.require_resolved_bank_permission(
+        db,
+        ctx,
+        bank,
+        permission=Permission.VIEW,
+        module=Module.DATA,
+        sensitivity=Sensitivity.CONFIDENTIAL,
+        surface="refresh_bank_data",
+    )
     job = job_queue.enqueue(
         db,
         ctx.organization_id,
@@ -242,6 +254,8 @@ def refresh_bank_data(
         payload=_job_payload(ctx, payload.as_of_date.isoformat(), payload.reason),
         run_after=utc_now(),
         coalesce_key=f"refresh:{bank.id}:{payload.as_of_date.isoformat()}",
+        locator=job_queue.JobLocator(module=Module.DATA, sensitivity=Sensitivity.CONFIDENTIAL),
+        provenance=job_queue.context_provenance(ctx, action="bank_data.refresh_requested"),
     )
     record_event(
         db,
@@ -278,6 +292,19 @@ def mint_official_run(
                 sensitivity=Sensitivity.CONFIDENTIAL,
                 surface="mint_official_run",
             )
+    # The accepted mint must be monitorable: the queue reads admit a row only
+    # under the caller's CURRENT view authority (#186), so minting requires
+    # the view authority the official-run locator demands, and the row is
+    # stamped with the bank that authority is scoped to.
+    scoped_authorization.require_resolved_bank_permission(
+        db,
+        ctx,
+        bank,
+        permission=Permission.VIEW,
+        module=Module.REGULATORY,
+        sensitivity=Sensitivity.RESTRICTED,
+        surface="mint_official_run",
+    )
     job = job_queue.enqueue(
         db,
         ctx.organization_id,
@@ -286,6 +313,8 @@ def mint_official_run(
         payload=_job_payload(ctx, payload.as_of_date.isoformat(), payload.reason),
         run_after=utc_now(),
         coalesce_key=f"official:{bank.id}:{payload.as_of_date.isoformat()}",
+        locator=job_queue.JobLocator(module=Module.REGULATORY, sensitivity=Sensitivity.RESTRICTED),
+        provenance=job_queue.context_provenance(ctx, action="official_run.requested"),
     )
     record_event(
         db,

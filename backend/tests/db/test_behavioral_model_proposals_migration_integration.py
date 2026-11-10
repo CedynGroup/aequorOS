@@ -148,9 +148,9 @@ def test_behavioral_proposals_have_forced_rls_and_immutable_review_evidence(
 ) -> None:
     assert migrated_postgres_schema.tables({_TABLE}) == {_TABLE}
     assert migrated_postgres_schema.policies({_TABLE}) == {_TABLE + "_tenant_isolation"}
-    assert migrated_postgres_schema.indexes(
-        {"ix_behavioral_model_proposals_scope_status"}
-    ) == {"ix_behavioral_model_proposals_scope_status"}
+    assert migrated_postgres_schema.indexes({"ix_behavioral_model_proposals_scope_status"}) == {
+        "ix_behavioral_model_proposals_scope_status"
+    }
     with migrated_postgres_schema.app_engine.begin() as connection:
         _set_tenant(connection)
         row_security = connection.execute(

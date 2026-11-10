@@ -73,6 +73,7 @@ from app.models import (
     IngestionBatch,
     LineageRecord,
 )
+from app.services import job_queue
 from app.services.audit import record_event
 
 REQUESTED_EVENT = "canonical_withdrawal.requested"
@@ -460,6 +461,7 @@ def approve_withdrawal(
         bank_id=row.bank_id,
         as_of=row.as_of_date,
         reason="withdrawal_applied",
+        provenance=job_queue.context_provenance(ctx, action=APPROVED_EVENT),
     )
     record_event(
         db,
@@ -703,6 +705,7 @@ def reverse_withdrawal(  # noqa: PLR0913 - governed reversal evidence is explici
         bank_id=row.bank_id,
         as_of=row.as_of_date,
         reason="withdrawal_reversed",
+        provenance=job_queue.context_provenance(ctx, action=REVERSED_EVENT),
     )
     record_event(
         db,

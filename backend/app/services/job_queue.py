@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import json
 from collections.abc import Mapping
+from dataclasses import dataclass
 from datetime import UTC, date, datetime, timedelta
 from types import MappingProxyType
 from typing import Any, cast
@@ -19,6 +20,8 @@ from uuid import UUID
 from sqlalchemy import or_, select, text
 from sqlalchemy.orm import Session
 
+from app.core.authorization import InstitutionScope, Module, Sensitivity
+from app.core.tenancy import TenantContext
 from app.db.base import utc_now
 from app.db.worker_access import (
     CLAIM_SIGNATURE,
@@ -27,6 +30,118 @@ from app.db.worker_access import (
     has_worker_function,
 )
 from app.models import Job
+
+
+@dataclass(frozen=True)
+class JobLocator:
+    """The typed source locator a producer must declare for a tenant-facing job.
+
+    ``bank_id`` stays the existing ``enqueue`` parameter and is subsumed by the
+    locator: the persisted ``institution_scope`` derives from it, so a producer
+    cannot contradict itself. Legacy rows and defined worker/system enqueues
+    carry no locator at all (all locator columns NULL) and tenant read paths
+    treat every locator-less row as hidden (mission D9).
+    """
+
+    module: Module
+    sensitivity: Sensitivity
+
+
+@dataclass(frozen=True)
+class JobProvenance:
+    """Enqueue provenance (#186): who initiated an enqueue, and under which action.
+
+    ``principal`` is either the initiating principal (``human:<uuid>``,
+    ``machine:<uuid>`` or ``operator:<email>``) or an explicit non-tenant
+    marker (``WORKER_PRINCIPAL``/``SYSTEM_PRINCIPAL``) for defined worker and
+    system enqueues, which tenant users never see.
+    """
+
+    principal: str
+    action: str
+    decision_reference: str | None = None
+
+
+#: Explicit non-tenant principals for defined worker/system enqueues (D9).
+WORKER_PRINCIPAL = "worker"
+SYSTEM_PRINCIPAL = "system"
+_TENANTLESS_PRINCIPALS = frozenset({WORKER_PRINCIPAL, SYSTEM_PRINCIPAL})
+
+
+def worker_provenance(action: str, *, decision_reference: str | None = None) -> JobProvenance:
+    """Provenance for an enqueue the worker/scheduler initiated itself."""
+    return JobProvenance(
+        principal=WORKER_PRINCIPAL, action=action, decision_reference=decision_reference
+    )
+
+
+def system_provenance(action: str, *, decision_reference: str | None = None) -> JobProvenance:
+    """Provenance for a defined platform/system enqueue with no initiating tenant actor."""
+    return JobProvenance(
+        principal=SYSTEM_PRINCIPAL, action=action, decision_reference=decision_reference
+    )
+
+
+def operator_provenance(
+    operator: str, *, action: str, decision_reference: str | None = None
+) -> JobProvenance:
+    """Provenance for an enqueue a staff operator initiated (never a tenant identity)."""
+    return JobProvenance(
+        principal=f"operator:{operator}", action=action, decision_reference=decision_reference
+    )
+
+
+def tenant_principal_marker(ctx: TenantContext) -> str | None:
+    """The D9 principal marker a tenant enqueue records, if one applies.
+
+    Integration keys are machine principals; a tenant user is human. Operator
+    impersonation and unattributed contexts are staff/system, never a tenant
+    identity, so they name no tenant principal.
+    """
+    if ctx.integration_key_id is not None:
+        return f"machine:{ctx.integration_key_id}"
+    if ctx.actor_user_id is not None:
+        return f"human:{ctx.actor_user_id}"
+    return None
+
+
+def context_provenance(
+    ctx: TenantContext, *, action: str, decision_reference: str | None = None
+) -> JobProvenance:
+    """Attribute an enqueue to the context's initiating principal (D9).
+
+    Integration keys are machine principals; a tenant user is human; operator
+    act-as-examiner impersonation is staff, never a tenant identity.
+    """
+    principal = tenant_principal_marker(ctx)
+    if principal is None:
+        principal = (
+            f"operator:{ctx.actor_operator}"
+            if ctx.actor_operator is not None
+            else SYSTEM_PRINCIPAL
+        )
+    return JobProvenance(principal=principal, action=action, decision_reference=decision_reference)
+
+
+def inherited_provenance(job: Job) -> JobProvenance:
+    """The original enqueue provenance for a successor/retry enqueue (D9).
+
+    A successor job inherits its parent's provenance verbatim. A legacy row
+    predating the locator columns carries none, so the successor is attributed
+    to the worker that produced it rather than being left unattributed.
+    """
+    return JobProvenance(
+        principal=job.enqueued_by_principal or WORKER_PRINCIPAL,
+        action=job.enqueued_action or f"retry:{job.job_type}",
+        decision_reference=job.enqueue_decision_reference,
+    )
+
+
+def inherited_locator(job: Job) -> JobLocator | None:
+    """The original enqueue locator for a successor enqueue, if it carried one."""
+    if job.module is None or job.sensitivity is None:
+        return None
+    return JobLocator(module=Module(job.module), sensitivity=Sensitivity(job.sensitivity))
 
 
 def _as_aware(value: datetime | None) -> datetime | None:
@@ -264,18 +379,56 @@ def enqueue(  # noqa: PLR0913 - queue insert carries the full dispatch envelope
     entity_type: str | None = None,
     entity_id: UUID | str | None = None,
     max_attempts: int = 3,
+    locator: JobLocator | None = None,
+    provenance: JobProvenance | None = None,
 ) -> Job:
     """Insert a queued job, or coalesce into an existing un-started one.
 
+    Every producer must state its ``provenance``; a tenant-initiated enqueue
+    (any principal beyond the worker/system markers) must also state a
+    ``locator``, which is stamped with the initiating principal onto the row —
+    a locator-less job is hidden from every tenant read path (mission D9).
+    Omitting ``provenance`` inserts an unattributed row, which tenants never
+    see either; the producer census
+    (``tests/architecture/test_producer_locator_census.py``) statically refuses
+    an app call site that omits either argument.
+
     When ``coalesce_key`` is given and a still-queued, never-claimed job with the
-    same (org, key) exists, that job's ``run_after`` is bumped to the later of
-    the two and payloads are merged — a burst of ingestions debounces into one
-    refresh instead of a queue full of duplicates.
+    same (org, key) AND THE SAME LOCATOR exists, that job's ``run_after`` is
+    bumped to the later of the two and payloads are merged — a burst of
+    ingestions debounces into one refresh instead of a queue full of
+    duplicates. Differing locators never merge: the coalesced row would
+    misattribute one caller's work to another's module or bank. Enqueues of
+    different tenant-visibility classes never merge either: a tenant-initiated
+    enqueue that merged into a worker/system row would hand back an id the
+    caller cannot poll. The surviving row keeps its ORIGINAL locator and
+    provenance.
     """
     _validate_job_type(job_type)
     payload = payload or {}
+    if (
+        provenance is not None
+        and provenance.principal not in _TENANTLESS_PRINCIPALS
+        and locator is None
+    ):
+        msg = (
+            f"job type {job_type!r} is enqueued for principal "
+            f"{provenance.principal!r}, which must carry a locator"
+        )
+        raise ValueError(msg)
+    institution_scope: InstitutionScope | None = None
+    if locator is not None:
+        institution_scope = (
+            InstitutionScope.INSTITUTION if bank_id is not None else InstitutionScope.ORGANIZATION
+        )
     if coalesce_key is not None:
-        existing = db.scalar(
+        wanted = _locator_tuple(
+            bank_id=bank_id, institution_scope=institution_scope, locator=locator
+        )
+        wanted_attributed = _is_tenant_attributed(
+            None if provenance is None else provenance.principal
+        )
+        candidates = db.scalars(
             select(Job)
             .where(
                 Job.organization_id == organization_id,
@@ -284,7 +437,15 @@ def enqueue(  # noqa: PLR0913 - queue insert carries the full dispatch envelope
                 Job.started_at.is_(None),
             )
             .order_by(Job.queued_at)
-            .limit(1)
+        )
+        existing = next(
+            (
+                candidate
+                for candidate in candidates
+                if _locator_tuple_of(candidate) == wanted
+                and _is_tenant_attributed(candidate.enqueued_by_principal) == wanted_attributed
+            ),
+            None,
         )
         if existing is not None:
             candidates = [
@@ -294,8 +455,6 @@ def enqueue(  # noqa: PLR0913 - queue insert carries the full dispatch envelope
             ]
             existing.run_after = max(candidates) if candidates else None
             existing.payload = {**existing.payload, **payload}
-            if bank_id is not None:
-                existing.bank_id = bank_id
             db.flush()
             return existing
 
@@ -310,10 +469,47 @@ def enqueue(  # noqa: PLR0913 - queue insert carries the full dispatch envelope
         run_after=run_after,
         coalesce_key=coalesce_key,
         max_attempts=max_attempts,
+        institution_scope=None if institution_scope is None else institution_scope.value,
+        module=None if locator is None else locator.module.value,
+        sensitivity=None if locator is None else locator.sensitivity.value,
+        enqueued_by_principal=None if provenance is None else provenance.principal,
+        enqueued_action=None if provenance is None else provenance.action,
+        enqueue_decision_reference=(None if provenance is None else provenance.decision_reference),
     )
     db.add(job)
     db.flush()
     return job
+
+
+def _locator_tuple(
+    *,
+    bank_id: str | None,
+    institution_scope: InstitutionScope | None,
+    locator: JobLocator | None,
+) -> tuple[str | None, str | None, str | None, str | None]:
+    """The locator an enqueue would match for coalescing (or stamp on a row).
+
+    ``bank_id`` participates even without a module: it is part of the persisted
+    locator (the migration subsumes it), so a bankless enqueue never merges into
+    a bank-targeted row and two different banks never merge, whatever else.
+    """
+    if locator is None:
+        return (None, bank_id, None, None)
+    return (
+        institution_scope.value if institution_scope is not None else None,
+        bank_id,
+        locator.module.value,
+        locator.sensitivity.value,
+    )
+
+
+def _locator_tuple_of(job: Job) -> tuple[str | None, str | None, str | None, str | None]:
+    return (job.institution_scope, job.bank_id, job.module, job.sensitivity)
+
+
+def _is_tenant_attributed(principal: str | None) -> bool:
+    """Mirror the ``human:``/``machine:`` test in ``jobs.tenant_visibility_condition``."""
+    return principal is not None and principal.startswith(("human:", "machine:"))
 
 
 def enqueue_platform_daily(
@@ -337,7 +533,15 @@ def enqueue_platform_daily(
     key = f"{prefix}:{day.isoformat()}"
     if db.scalar(select(Job.id).where(Job.job_type == job_type, Job.coalesce_key == key).limit(1)):
         return None
-    return enqueue(db, organization_id, job_type, payload=payload, coalesce_key=key)
+    return enqueue(
+        db,
+        organization_id,
+        job_type,
+        payload=payload,
+        coalesce_key=key,
+        locator=None,
+        provenance=worker_provenance(f"platform.daily:{job_type}"),
+    )
 
 
 def seed_tick(db: Session, organization_id: str) -> Job:
@@ -348,6 +552,8 @@ def seed_tick(db: Session, organization_id: str) -> Job:
         "scheduled_tick",
         run_after=utc_now(),
         coalesce_key=f"tick:{organization_id}",
+        locator=None,
+        provenance=worker_provenance("scheduler.seed_tick"),
     )
 
 

@@ -134,6 +134,7 @@ def _derive_credit_basis(db_session: Session, bank_id: str, haircut: str | None)
     db_session.add_all(
         ParamEclAssumption(
             organization_id=bank.organization_id,
+            bank_id=bank.id,
             jurisdiction_code=bank.jurisdiction_code,
             segment="ALL",
             stage=stage,
@@ -149,6 +150,7 @@ def _derive_credit_basis(db_session: Session, bank_id: str, haircut: str | None)
         db_session.add(
             ParamCrmHaircut(
                 organization_id=bank.organization_id,
+                bank_id=bank.id,
                 jurisdiction_code=bank.jurisdiction_code,
                 collateral_class="CASH",
                 haircut_pct=Decimal(haircut),

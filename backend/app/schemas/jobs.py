@@ -14,7 +14,10 @@ class JobRead(BaseModel):
     job_type: str
     status: str
     entity_type: str | None
-    entity_id: UUID | None
+    # The entity reference the producer persisted, as a STRING: producers
+    # target institutions by their platform id (`BK-...`) and rows by UUID,
+    # so the wire form keeps whichever identifier the row carries.
+    entity_id: str | None
     attempts: int
     max_attempts: int
     progress: dict[str, object]
@@ -22,3 +25,11 @@ class JobRead(BaseModel):
     queued_at: datetime
     started_at: datetime | None
     completed_at: datetime | None
+
+
+class JobListRead(BaseModel):
+    jobs: list[JobRead]
+    total: int
+    limit: int
+    offset: int
+    has_more: bool

@@ -71,7 +71,9 @@ def prepare_duplicate_job(
         False,
         500 * 1024 * 1024,
     )
-    job = reencryption.enqueue(db_session, ORG_1, BANK_A)
+    job = reencryption.enqueue(
+        db_session, ORG_1, BANK_A, provenance=job_queue.worker_provenance("worker.bank_reencrypt")
+    )
     job.progress = reencryption.Progress(
         target_version=target, phase="large_object", large_object=item
     ).model_dump(mode="json")
@@ -240,7 +242,9 @@ def test_duplicate_concurrent_batch_publishes_one_continuation(
     connect(db_session, provider)
     key = registry.scoped_key(db_session, organization_id=ORG_1, bank_id=BANK_A)
     target = key.current_version_id
-    job = reencryption.enqueue(db_session, ORG_1, BANK_A)
+    job = reencryption.enqueue(
+        db_session, ORG_1, BANK_A, provenance=job_queue.worker_provenance("worker.bank_reencrypt")
+    )
     job.status = "running"
     job.progress = reencryption.Progress(
         target_version=target,
@@ -359,7 +363,9 @@ def test_job_drains_writer_admitted_before_rotation_and_migrates_its_commit(
             waiter.set_result(backend_pid(peer))
             key = registry.scoped_key(peer, organization_id=ORG_1, bank_id=BANK_A)
             registry.rotate(peer, key, NEXT, lambda _: provider)
-            job = reencryption.enqueue(peer, ORG_1, BANK_A)
+            job = reencryption.enqueue(
+                peer, ORG_1, BANK_A, provenance=job_queue.worker_provenance("worker.bank_reencrypt")
+            )
             peer.commit()
             _ = drain(peer, job, EmptyStorage())
 

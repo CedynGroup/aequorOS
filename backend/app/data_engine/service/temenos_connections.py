@@ -28,7 +28,7 @@ from fastapi import HTTPException, status
 from sqlalchemy import select
 
 import app.data_engine.adapters.temenos_t24  # noqa: F401 - registers the T24 adapter
-from app.core.authorization import Permission, Sensitivity
+from app.core.authorization import Module, Permission, Sensitivity
 from app.core.outbound import OutboundTargetBlocked, check_url
 from app.data_engine.adapters.temenos_t24.auth import (
     SimulatedSessionProvider,
@@ -535,6 +535,8 @@ def trigger_pull(
         bank_id=connection.bank_id,
         payload={"connection_id": str(connection.id), "as_of_date": as_of.isoformat()},
         coalesce_key=f"t24_pull:{connection.id}:{as_of.isoformat()}",
+        locator=job_queue.JobLocator(module=Module.DATA, sensitivity=Sensitivity.CONFIDENTIAL),
+        provenance=job_queue.context_provenance(ctx, action="data.temenos_pull.requested"),
     )
     db.commit()
     return TemenosPullTriggerRead(job_ids=[job.id], count=1)

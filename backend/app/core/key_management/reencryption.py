@@ -12,6 +12,7 @@ from pydantic import BaseModel, Field, TypeAdapter
 from sqlalchemy import JSON, ColumnElement, String, Table, delete, or_, select, text
 from sqlalchemy.orm import Session
 
+from app.core.authorization import Module, Sensitivity
 from app.core.key_management import fields, maintenance, registry
 from app.core.key_management.fields import ProtectedField, SealedField
 from app.core.key_management.models import BankEncryptionKey, ObjectKeyEnvelope
@@ -83,7 +84,9 @@ def _owned_job(db: Session, job: Job) -> Job | None:
     )
 
 
-def enqueue(db: Session, organization: str, bank: str) -> Job:
+def enqueue(
+    db: Session, organization: str, bank: str, *, provenance: job_queue.JobProvenance
+) -> Job:
     _ = registry.scoped_key(db, organization_id=organization, bank_id=bank)
     active = db.scalar(
         select(Job)
@@ -106,6 +109,8 @@ def enqueue(db: Session, organization: str, bank: str) -> Job:
         bank_id=bank,
         entity_type="bank",
         entity_id=bank,
+        locator=job_queue.JobLocator(module=Module.INSTITUTION, sensitivity=Sensitivity.RESTRICTED),
+        provenance=provenance,
     )
 
 
@@ -395,6 +400,10 @@ def run(  # noqa: PLR0912 - dispatch durable phases within one checkpoint transa
             payload={"reencryption_bytes": progress.large_object.size_bytes}
             if progress.large_object
             else {},
+            # A successor hop inherits the original enqueue's locator and
+            # provenance verbatim (mission D9).
+            locator=job_queue.inherited_locator(current),
+            provenance=job_queue.inherited_provenance(current),
         )
         successor.progress = progress.model_dump(mode="json")
         progress.next_job_id = successor.id

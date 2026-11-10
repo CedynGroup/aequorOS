@@ -1281,37 +1281,13 @@
           "method": "POST",
           "path": "/api/v1/banks/{bank_id}/filing-workflow-templates/{template_id}/decision",
           "endpoint": "app.reporting.api.manage_filing_workflow:decide_filing_workflow_template"
-        },
-        {
-          "application": "tenant",
-          "method": "PUT",
-          "path": "/api/v1/banks/{bank_id}/concentration-limits",
-          "endpoint": "app.credit.api.manage_credit_params:update_concentration_limit_register"
-        },
-        {
-          "application": "tenant",
-          "method": "PUT",
-          "path": "/api/v1/banks/{bank_id}/credit-thresholds",
-          "endpoint": "app.credit.api.manage_credit_params:update_credit_threshold_register"
-        },
-        {
-          "application": "tenant",
-          "method": "PUT",
-          "path": "/api/v1/banks/{bank_id}/crm-haircuts",
-          "endpoint": "app.credit.api.manage_credit_params:update_crm_haircut_register"
-        },
-        {
-          "application": "tenant",
-          "method": "PUT",
-          "path": "/api/v1/banks/{bank_id}/ecl-assumptions",
-          "endpoint": "app.credit.api.manage_credit_params:update_ecl_assumption_register"
         }
       ]
     },
     {
       "name": "tenant-dependencies-liq-scoped-configure",
       "kind": "dependency",
-      "basis": "LIQ configuration writes require scoped mutation tenancy; the service layer enforces the complete configure binding.",
+      "basis": "LIQ and CREDIT configuration writes require scoped mutation tenancy; the service layer enforces the complete configure binding.",
       "references": [
         "app/api/deps.py:get_current_principal",
         "app/api/deps.py:get_scoped_mutation_tenant_context",
@@ -1346,6 +1322,30 @@
           "method": "PUT",
           "path": "/api/v1/banks/{bank_id}/liquidity/ewis",
           "endpoint": "app.liquidity.api.manage_liquidity_cfp:update_ewi_register"
+        },
+        {
+          "application": "tenant",
+          "method": "PUT",
+          "path": "/api/v1/banks/{bank_id}/concentration-limits",
+          "endpoint": "app.credit.api.manage_credit_params:update_concentration_limit_register"
+        },
+        {
+          "application": "tenant",
+          "method": "PUT",
+          "path": "/api/v1/banks/{bank_id}/credit-thresholds",
+          "endpoint": "app.credit.api.manage_credit_params:update_credit_threshold_register"
+        },
+        {
+          "application": "tenant",
+          "method": "PUT",
+          "path": "/api/v1/banks/{bank_id}/crm-haircuts",
+          "endpoint": "app.credit.api.manage_credit_params:update_crm_haircut_register"
+        },
+        {
+          "application": "tenant",
+          "method": "PUT",
+          "path": "/api/v1/banks/{bank_id}/ecl-assumptions",
+          "endpoint": "app.credit.api.manage_credit_params:update_ecl_assumption_register"
         }
       ]
     },
@@ -2979,14 +2979,14 @@
       "basis": "Existing tenant authentication boundary and exact registered dependency calls listed here. Named scoped/legacy gates remain unchanged; handler and service checks can narrow this access further. Presence is not policy correctness.",
       "references": [
         "app/api/deps.py:get_current_principal",
-        "app/api/deps.py:get_mutation_tenant_context",
+        "app/api/deps.py:get_scoped_mutation_tenant_context",
         "app/api/deps.py:get_tenant_context",
         "app/api/deps.py:get_tenant_db_session"
       ],
       "authentication": "tenant",
       "dependencies": [
         "app.api.deps:get_current_principal",
-        "app.api.deps:get_mutation_tenant_context",
+        "app.api.deps:get_scoped_mutation_tenant_context",
         "app.api.deps:get_tenant_context",
         "app.api.deps:get_tenant_db_session",
         "fastapi.security.http:HTTPBearer"
@@ -4990,17 +4990,23 @@
         "app/api/deps.py:get_current_principal",
         "app/api/deps.py:get_tenant_context",
         "app/api/deps.py:get_tenant_db_session",
-        "app/case/api/authorization.py:require_case_job_access"
+        "app/api/deps.py:get_tenant_job_visibility"
       ],
       "authentication": "tenant",
       "dependencies": [
         "app.api.deps:get_current_principal",
         "app.api.deps:get_tenant_context",
         "app.api.deps:get_tenant_db_session",
-        "app.case.api.authorization:require_case_job_access",
+        "app.api.deps:get_tenant_job_visibility",
         "fastapi.security.http:HTTPBearer"
       ],
       "routes": [
+        {
+          "application": "tenant",
+          "method": "GET",
+          "path": "/api/v1/jobs",
+          "endpoint": "app.features.track_jobs:list_jobs"
+        },
         {
           "application": "tenant",
           "method": "GET",

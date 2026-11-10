@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import date, datetime
 from decimal import Decimal
+from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -47,6 +48,27 @@ class EclAssumptionRegisterRead(ClosedModel):
     history: list[EclAssumptionRead]
 
 
+class EclAssumptionWritten(ClosedModel):
+    """Only an assumption generation created by this request, never a resolved row."""
+
+    id: UUID
+    segment: str
+    stage: int
+    pd_pct: Decimal
+    lgd_pct: Decimal
+
+
+class EclAssumptionWriteAcknowledgement(ClosedModel):
+    """Write evidence only. Read the register/history through its authorized GET."""
+
+    bank_id: str
+    effective_from: date
+    approved_by: str
+    approval_timestamp: datetime
+    notes: str | None
+    written: list[EclAssumptionWritten]
+
+
 class CrmHaircutRead(ClosedModel):
     collateral_class: str
     haircut_pct: Decimal
@@ -73,3 +95,22 @@ class CrmHaircutRegisterRead(ClosedModel):
     as_of_date: date
     haircuts: list[CrmHaircutRead]
     history: list[CrmHaircutRead]
+
+
+class CrmHaircutWritten(ClosedModel):
+    """Only a normalized haircut generation created by this request."""
+
+    id: UUID
+    collateral_class: str
+    haircut_pct: Decimal
+
+
+class CrmHaircutWriteAcknowledgement(ClosedModel):
+    """Write evidence only, without the merged defaults or prior generations."""
+
+    bank_id: str
+    effective_from: date
+    approved_by: str
+    approval_timestamp: datetime
+    notes: str | None
+    written: list[CrmHaircutWritten]

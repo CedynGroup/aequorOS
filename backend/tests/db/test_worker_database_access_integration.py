@@ -1151,6 +1151,36 @@ def test_worker_audit_metadata_detects_tampering_without_disclosing_payloads(
         admin.rollback()
 
 
+def _legacy_worker_cycle(engine: Engine, organization_id: str) -> object:
+    """Enqueue, claim and complete one job using the legacy column set only."""
+    with engine.begin() as connection:
+        job_id = connection.execute(
+            text(
+                "INSERT INTO jobs(id, organization_id, job_type, status, payload, "
+                "progress, attempts, max_attempts, queued_at) "
+                "VALUES (gen_random_uuid(), :org, 'bi_mart_refresh', 'queued', "
+                "'{}'::json, '{}'::json, 0, 3, now()) RETURNING id"
+            ),
+            {"org": organization_id},
+        ).scalar_one()
+        claimed = connection.execute(
+            text(
+                "SELECT id FROM jobs WHERE id = :id AND status = 'queued' "
+                "FOR UPDATE SKIP LOCKED"
+            ),
+            {"id": job_id},
+        ).scalar_one()
+        assert claimed == job_id
+        connection.execute(
+            text(
+                "UPDATE jobs SET status = 'succeeded', claimed_by = 'legacy-worker-probe', "
+                "started_at = now(), completed_at = now() WHERE id = :id"
+            ),
+            {"id": job_id},
+        )
+    return job_id
+
+
 def test_legacy_bypass_worker_operates_before_and_after_compatibility_migration(
     administrator: Engine,
     role_schema: migrations.MigratedPostgresSchema,
@@ -1183,15 +1213,36 @@ def test_legacy_bypass_worker_operates_before_and_after_compatibility_migration(
         for after_migration in (False, True):
             if after_migration:
                 command.upgrade(config, "head")
+                with Session(administrator) as admin:
+                    job = job_queue.enqueue(admin, ORG_1, "bi_mart_refresh")
+                    admin.commit()
+                    job_id = job.id
+                assert worker.run_once(("bi_mart_refresh",), worker_id="legacy-worker-probe") is (
+                    True
+                )
+            else:
+                # The pre-upgrade world: the running code predates the
+                # locator/provenance columns, so it addresses the legacy
+                # column set only (HEAD's ORM always names every mapped
+                # column, so it cannot run against this schema). What the
+                # compatibility contract pins here is that the worker ROLE
+                # can still enqueue, claim and complete on the same tables.
+                job_id = _legacy_worker_cycle(engine, ORG_1)
             with Session(administrator) as admin:
-                job = job_queue.enqueue(admin, ORG_1, "bi_mart_refresh")
-                admin.commit()
-                job_id = job.id
-            assert worker.run_once(("bi_mart_refresh",), worker_id="legacy-worker-probe") is True
-            with Session(administrator) as admin:
-                persisted = admin.get(Job, job_id)
-                assert persisted is not None and persisted.status == "succeeded"
-                assert persisted.claimed_by == "legacy-worker-probe"
+                # Raw read: HEAD's ORM addresses columns the downgraded
+                # schema does not have, so verify through SQL either way.
+                # Raw SQL row unpacking is untyped; the SELECT's column order is the shape.
+                status, claimed_by = cast(
+                    tuple[str, str | None],
+                    tuple(
+                        admin.execute(
+                            text("SELECT status, claimed_by FROM jobs WHERE id = :id"),
+                            {"id": job_id},
+                        ).one()
+                    ),
+                )
+                assert status == "succeeded"
+                assert claimed_by == "legacy-worker-probe"
             with engine.connect() as login:
                 assert (
                     login.scalar(
