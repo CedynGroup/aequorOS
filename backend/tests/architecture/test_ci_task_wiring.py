@@ -237,7 +237,8 @@ def test_dashboard_journeys_have_an_always_reported_sharded_gate() -> None:
     assert jobs["changes"]["if"] == "github.event_name != 'merge_group'"
     assert (
         jobs["journeys"]["if"]
-        == "${{ !cancelled() && (github.event_name == 'merge_group' || needs.changes.outputs.journeys == 'true') }}"
+        == "${{ !cancelled() && (github.event_name == 'merge_group"
+        " || needs.changes.outputs.journeys == 'true') }}"
     )
     strategy = cast(dict[str, object], jobs["journeys"]["strategy"])
     assert cast(dict[str, object], strategy["matrix"])["shard"] == ["1", "2", "3", "4"]
