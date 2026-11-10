@@ -307,29 +307,6 @@ function AttestForm({ signoff }: { signoff: StressSignoffRead }) {
     );
     window.location.assign(start);
   };
-  const onSsoStepUp = () => {
-    if (!hasRationale || pending) return;
-    try {
-      window.sessionStorage.setItem(
-        stashKey,
-        JSON.stringify({ credibility, challenge, reason }),
-      );
-    } catch {
-      // The form remains usable after SSO even when browser storage is blocked.
-    }
-    const returnTo = new URL(window.location.href);
-    returnTo.searchParams.delete("stepUp");
-    returnTo.searchParams.set("runId", signoff.runId);
-    returnTo.searchParams.set("tab", "governance");
-    const start = new URL("/api/attestation/step-up/start", window.location.origin);
-    start.searchParams.set("bankId", signoff.bankId);
-    start.searchParams.set("signoffId", signoff.id);
-    start.searchParams.set(
-      "returnTo",
-      `${returnTo.pathname}${returnTo.search}`,
-    );
-    window.location.assign(start);
-  };
 
   return (
     <div

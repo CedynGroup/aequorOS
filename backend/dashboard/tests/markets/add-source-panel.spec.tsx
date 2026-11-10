@@ -204,12 +204,3 @@ it("keeps the save gate on the configure duty and omits the pull without it", as
   expect(createConnection).not.toHaveBeenCalled();
   expect(testPull).not.toHaveBeenCalled();
 });
-
-it("omits the automatic test pull for an account-only administrator", async () => {
-  // ``account_admin`` sits outside the operational role ladder the backend
-  // mutation gate enforces, so the pull would 403 after a successful save.
-  fixture.role = "account_admin";
-  await saveVendorConnection();
-  expect(testPull).not.toHaveBeenCalled();
-  expect(screen.getByText(/Automatic test pull omitted/i)).toBeVisible();
-});

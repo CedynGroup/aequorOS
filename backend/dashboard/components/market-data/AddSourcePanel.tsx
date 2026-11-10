@@ -54,11 +54,6 @@ const PULLS_PER_MONTH: Record<string, number> = {
   MONTHLY: 1,
 };
 
-/** Scalar roles the backend mutation gate admits: the operational ladder is
- * admin/approver/analyst; ``account_admin`` administers accounts only and
- * sits outside it, and viewer/examiner are read-only. */
-const TEST_PULL_ROLES = new Set(["admin", "approver", "analyst"]);
-
 type Step = "vendor" | "credentials" | "scopes" | "schedule" | "activate";
 
 function stepsFor(vendor: VendorKey | null): Step[] {
