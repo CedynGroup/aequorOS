@@ -792,6 +792,11 @@ function PackageWorkspace({
   // signature pinned. It is what a filing sends, so it is what Download hands over.
   const filedVersion =
     versionsQuery.data?.versions.find((version) => version.isFiled) ?? null;
+  const chainHoldReason = versionsQuery.isPending
+    ? "The version chain that names the filed document is still loading."
+    : versionsQuery.isError && !versionsQuery.data
+      ? "The version chain that names the filed document could not be loaded."
+      : null;
   const resubmissions = resubmissionsQuery.data?.requests ?? [];
   const submissionRevision =
     pkg?.submissionRevision ?? summary.submissionRevision;
@@ -988,7 +993,7 @@ function PackageWorkspace({
         canExport={authority.mayExport}
         onTake={takeArtifact}
         filedVersion={filedVersion}
-        chainPending={versionsQuery.isPending}
+        chainHoldReason={chainHoldReason}
         action={action}
         actionPending={actionPending}
         actionIcon={action ? actionIcon[action.kind] : null}
@@ -1021,6 +1026,13 @@ function PackageWorkspace({
       />
 
       {summary.isRehearsal && <RehearsalNotice />}
+      {chainHoldReason && versionsQuery.isError ? (
+        <ErrorPanel
+          error={versionsQuery.error}
+          title="Could not load the version chain"
+          onRetry={() => void versionsQuery.refetch()}
+        />
+      ) : null}
       {regenerateError ? (
         <ErrorPanel error={regenerateError} title="Could not regenerate" />
       ) : null}
@@ -1343,7 +1355,7 @@ function ReturnCommandBarBlock({
   canExport,
   onTake,
   filedVersion,
-  chainPending,
+  chainHoldReason,
   action,
   actionPending,
   actionIcon,
@@ -1363,8 +1375,8 @@ function ReturnCommandBarBlock({
   canExport: boolean;
   onTake: (kind: ArtifactKind) => void;
   filedVersion: RegulatoryArtifactVersionRead | null;
-  /** The version chain has not landed yet, so the act cannot name its document. */
-  chainPending: boolean;
+  /** Why the act cannot name its document yet, or null once the chain landed. */
+  chainHoldReason: string | null;
   action: ReturnType<typeof primaryFilingAction>;
   actionPending: boolean;
   actionIcon: ReactNode;
@@ -1423,11 +1435,7 @@ function ReturnCommandBarBlock({
                 kind === "pdf" && filedVersion ? "Signed PDF" : null
               }
               unavailableReason="This document has not been produced yet, and producing it is the preparer's act."
-              pendingReason={
-                chainPending
-                  ? "The version chain that names the filed document is still loading."
-                  : null
-              }
+              pendingReason={chainHoldReason}
             />
             {filedVersion && <SignedReturnLine version={filedVersion} />}
           </>
