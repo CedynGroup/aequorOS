@@ -100,7 +100,9 @@ def verify_partition(directory: Path, *, protected: Mapping[str, str] | None = N
         indices = {assignments.get(module, shard_for(module)) for module in files}
     else:
         indices = set(range(1, SHARDS + 1))
-    reports = sorted(directory.glob("*/report.xml"))
+    # Pool shards write one report per phase (report-schema.xml / report-suite.xml);
+    # every other owner writes report.xml.
+    reports = sorted(directory.glob("*/report*.xml"))
     expected_reports = {
         "unit-tests",
         "pg-locks",
