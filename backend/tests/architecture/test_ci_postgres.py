@@ -21,6 +21,8 @@ from scripts.ci_postgres import BAO_MODULE, SHARDS, module_shards, plan, shard_f
 from scripts.test_fast import run as run_fast
 from scripts.test_fast import unchanged as local_unchanged
 
+DATABASE_MODULE = "tests/db/test_probe_integration.py"
+
 BACKEND = Path(__file__).parents[2]
 REPO = BACKEND.parent
 
@@ -65,7 +67,6 @@ def test_leaf_body_change_selects_only_its_module(selection_repo: tuple[Path, st
             {
                 "shard": shard_for("tests/credit/domain/test_leaf_example_integration.py"),
                 "openbao": False,
-                "minio": False,
             }
         ]
     }
@@ -578,11 +579,6 @@ def test_uncertain_changes_run_every_shard(
             {
                 "shard": index,
                 "openbao": index == module_shards().get(BAO_MODULE, shard_for(BAO_MODULE)),
-                "minio": index
-                == module_shards().get(
-                    "tests/scripts/test_local_services_integration.py",
-                    shard_for("tests/scripts/test_local_services_integration.py"),
-                ),
             }
             for index in range(1, SHARDS + 1)
         ]
@@ -602,29 +598,51 @@ def built_reports(tmp_path_factory: pytest.TempPathFactory) -> tuple[Path, list[
         path.parent.mkdir(exist_ok=True)
         path.write_text(
             "import pytest\n"
+            "pytestmark = pytest.mark.integration\n"
             "@pytest.mark.parametrize('value', range(1, 82), ids=lambda n: f'value::{n}')\n"
             "def test_pass(value):\n    assert value > 0\n"
             "@pytest.mark.skip(reason='existing opt-in fixture')\n"
             "def test_skip():\n    pass\n"
         )
         modules.append(module)
+    database = tmp_path / "tests/db/test_probe_integration.py"
+    database.parent.mkdir(parents=True, exist_ok=True)
+    _ = database.write_text(
+        "import pytest\n"
+        "pytestmark = pytest.mark.integration\n"
+        "def test_probe():\n    assert True\n"
+    )
     config = tmp_path / "pytest.ini"
     config.write_text("[pytest]\n")
     reports = tmp_path / "reports"
-    for suite in ("suite", "schema"):
-        for index in range(1, ci_postgres.shard_count(suite) + 1):
-            # Name the shard directories after the uploaded artifacts, as
-            # download-artifact does in the gate's shared evidence directory.
-            directory = reports / suite / f"pg-{suite}-{index}"
-            env = {
-                **os.environ,
-                "PYTHONPATH": str(BACKEND),
-                "PYTEST_ADDOPTS": "",
-                "CI_POSTGRES_SHARD": str(index),
-                "CI_POSTGRES_SUITE": suite,
-                "CI_POSTGRES_FILES": json.dumps(modules),
-                "CI_POSTGRES_REPORT_DIR": str(directory),
-            }
+    for index in range(1, SHARDS + 1):
+        directory = reports / f"pg-pool-{index}"
+        base_env = {
+            **os.environ,
+            "PYTHONPATH": str(BACKEND),
+            "PYTEST_ADDOPTS": "",
+            "CI_POSTGRES_SHARD": str(index),
+            "CI_POSTGRES_FILES": json.dumps(modules),
+            "CI_POSTGRES_REPORT_DIR": str(directory),
+        }
+        for phase, arguments, report in (
+            ("schema", ["-m", "integration", "tests/db"], "report-schema.xml"),
+            (
+                "suite",
+                [
+                    "-n",
+                    "2",
+                    "--dist",
+                    "loadfile",
+                    "-m",
+                    "integration",
+                    "tests",
+                    "--ignore=tests/db",
+                ],
+                "report-suite.xml",
+            ),
+        ):
+            env = {**base_env, "CI_POSTGRES_PHASE": phase}
             _ = subprocess.run(
                 [
                     sys.executable,
@@ -634,12 +652,8 @@ def built_reports(tmp_path_factory: pytest.TempPathFactory) -> tuple[Path, list[
                     str(config),
                     "-p",
                     "scripts.ci_postgres_plugin",
-                    "-n",
-                    "2",
-                    "--dist",
-                    "loadfile",
-                    f"--junitxml={directory}/report.xml",
-                    "tests",
+                    *arguments,
+                    f"--junitxml={directory}/{report}",
                 ],
                 cwd=tmp_path,
                 env=env,
@@ -654,7 +668,7 @@ def built_reports(tmp_path_factory: pytest.TempPathFactory) -> tuple[Path, list[
 def shard_reports(built_reports: tuple[Path, list[str]], tmp_path: Path) -> tuple[Path, list[str]]:
     reports, modules = built_reports
     copy = tmp_path / "reports"
-    _ = shutil.copytree(reports / "suite", copy)
+    _ = shutil.copytree(reports, copy)
     return copy, modules.copy()
 
 
@@ -662,47 +676,7 @@ def test_real_workers_partition_every_test_and_preserve_junit_names(
     shard_reports: tuple[Path, list[str]],
 ) -> None:
     reports, modules = shard_reports
-    verify(reports, modules, "suite")
-
-
-def test_one_evidence_directory_holding_both_suites_verifies_each_suite(
-    shard_reports: tuple[Path, list[str]],
-) -> None:
-    # The gate downloads pg-schema-* and pg-suite-* artifacts into ONE evidence
-    # directory; each suite's verification must judge exactly its own shards,
-    # as the pre-consolidation per-job directories did. Schema evidence is
-    # built synthetically because the shared pytest-run fixture legitimately
-    # carries opt-in skips that the schema guard forbids.
-    reports, modules = shard_reports
-    names = [f"tests/test_schema_{n}_integration.py" for n in range(100)]
-    schema_modules = [
-        next(name for name in names if shard_for(name, 2) == shard) for shard in (1, 2)
-    ]
-    collected = [
-        f"{module}::test_pass[{index}]" for module in schema_modules for index in range(170)
-    ]
-    for index in (1, 2):
-        directory = reports / f"pg-schema-{index}"
-        directory.mkdir()
-        selected = ci_postgres.selected_tests(collected, [], index, "schema")
-        (directory / "collection-main.json").write_text(
-            json.dumps(
-                {
-                    "count": 2,
-                    "shard": index,
-                    "files": [],
-                    "collected": collected,
-                    "selected": selected,
-                }
-            )
-        )
-        suite = ET.Element("testsuite")
-        for nodeid in selected:
-            classname, name = ci_postgres.case_key(nodeid)
-            _ = ET.SubElement(suite, "testcase", classname=classname, name=name, time="1.0")
-        ET.ElementTree(suite).write(directory / "report.xml")
-    verify(reports, [], "schema")
-    verify(reports, modules, "suite")
+    verify(reports, modules)
 
 
 @pytest.mark.parametrize(
@@ -713,20 +687,17 @@ def test_one_evidence_directory_holding_both_suites_verifies_each_suite(
         "duplicate-case",
         "different-collection",
         "missing-module",
-        "schema-skips",
     ],
 )
 def test_coverage_guard_rejects_incomplete_or_inconsistent_results(
-    shard_reports: tuple[Path, list[str]], built_reports: tuple[Path, list[str]], damage: str
+    shard_reports: tuple[Path, list[str]], damage: str
 ) -> None:
     reports, modules = shard_reports
-    if damage == "schema-skips":
-        reports = built_reports[0] / "schema"
-    elif damage == "missing-shard":
-        for path in (reports / "pg-suite-2").iterdir():
+    if damage == "missing-shard":
+        for path in (reports / "pg-pool-2").iterdir():
             path.unlink()
     elif damage in {"missing-case", "duplicate-case"}:
-        report = reports / "pg-suite-1/report.xml"
+        report = reports / "pg-pool-1/report-suite.xml"
         tree = ET.parse(report)
         suite = next(tree.iter("testsuite"))
         case = next(suite.iter("testcase"))
@@ -736,14 +707,12 @@ def test_coverage_guard_rejects_incomplete_or_inconsistent_results(
             suite.append(case)
         tree.write(report)
     elif damage == "different-collection":
-        manifest = next((reports / "pg-suite-2").glob("collection-*.json"))
+        manifest = next((reports / "pg-pool-2").glob("collection-*.json"))
         manifest.write_text('{"count":2,"shard":2,"files":[],"collected":[],"selected":[]}')
     elif damage == "missing-module":
         modules.append("tests/test_missing.py")
-    with pytest.raises(
-        ValueError, match="Schema/RLS tests skipped" if damage == "schema-skips" else None
-    ):
-        verify(reports, modules, "schema" if damage == "schema-skips" else "suite")
+    with pytest.raises(ValueError):
+        verify(reports, modules)
 
 
 def test_workflow_preserves_required_names_and_joins_all_postgres_jobs() -> None:
@@ -753,6 +722,7 @@ def test_workflow_preserves_required_names_and_joins_all_postgres_jobs() -> None
         yaml.safe_load((REPO / ".github/workflows/risk-service.yml").read_text()),
     )
     jobs = document["jobs"]
+    assert jobs["postgres-pool"]["name"] == "Postgres tests shard ${{ matrix.shard }}/6"
     assert jobs["gate"]["name"] == "Risk service gate"
     # The gate joins every real job directly; no chained summary job may sit
     # between the gate and the shards it vouches for.
@@ -761,45 +731,50 @@ def test_workflow_preserves_required_names_and_joins_all_postgres_jobs() -> None
         "preflight",
         "static",
         "architecture",
-        "postgres-schema",
+        "postgres-pool",
         "postgres-locks",
-        "postgres-shard",
-        "storage",
         "real-data",
     }
-    schema_strategy = cast(dict[str, object], jobs["postgres-schema"]["strategy"])
-    matrix = cast(dict[str, object], schema_strategy["matrix"])
-    assert matrix["shard"] == [1, 2]
-    assert schema_strategy["fail-fast"] is False
-    assert cast(dict[str, object], jobs["postgres-shard"]["strategy"])["fail-fast"] is False
+    pool_strategy = cast(dict[str, object], jobs["postgres-pool"]["strategy"])
+    matrix = cast(dict[str, object], pool_strategy["matrix"])
+    assert matrix == "${{ fromJSON(needs.preflight.outputs.postgres_matrix) }}"
+    assert pool_strategy["fail-fast"] is False
+    assert cast(dict[str, object], jobs["postgres-locks"])["name"] == "Postgres concurrency locks"
 
 
 def test_recorded_durations_balance_modules_and_break_ties_deterministically(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     baseline = tmp_path / "durations.json"
+    weights = {n: n for n in range(1, 13)}
     baseline.write_text(
-        json.dumps({"durations": {f"tests/test_{n}_integration.py": n for n in range(1, 9)}})
+        json.dumps(
+            {
+                "durations": {
+                    **{f"tests/test_{n}_integration.py": n for n in weights},
+                    "tests/case/api/test_liquidity_integration.py": 500,
+                }
+            }
+        )
     )
     monkeypatch.setattr(ci_postgres, "DURATIONS", baseline)
     assignments = module_shards()
+    lock_free = [n for n in range(1, 13)]
     totals = [
-        sum(n for n in range(1, 9) if assignments[f"tests/test_{n}_integration.py"] == index)
+        sum(n for n in lock_free if assignments[f"tests/test_{n}_integration.py"] == index)
         for index in range(1, SHARDS + 1)
     ]
-    assert totals == [9, 9, 9, 9]
-    assert assignments["tests/test_8_integration.py"] == 1
-    collected = [f"tests/test_{n}_integration.py::test_example" for n in range(1, 10)]
+    assert totals == [13, 13, 13, 13, 13, 13]
+    assert assignments["tests/test_12_integration.py"] == 1
+    # The lock job owns its files: they take no pool weight or shard.
+    assert "tests/case/api/test_liquidity_integration.py" not in assignments
+    collected = [f"tests/test_{n}_integration.py::test_example" for n in range(1, 13)]
     partitions = [
-        ci_postgres.selected_tests(collected, [], index, "suite") for index in range(1, SHARDS + 1)
+        ci_postgres.selected_tests(collected, [], index) for index in range(1, SHARDS + 1)
     ]
     assert sorted(node for partition in partitions for node in partition) == sorted(collected)
-    assert ci_postgres.selected_tests(collected, ["tests/test_8_integration.py"], 1, "suite") == [
-        collected[7]
-    ]
-    assert ci_postgres.shard_count("schema") == 2
-    assert ci_postgres.selected_tests(collected, [], 1, "schema") == [
-        node for node in collected if shard_for(node.split("::")[0], 2) == 1
+    assert ci_postgres.selected_tests(collected, ["tests/test_12_integration.py"], 1) == [
+        collected[11]
     ]
 
 
@@ -814,10 +789,69 @@ def test_duration_baseline_rejects_invalid_weights(
         module_shards()
 
 
-@pytest.mark.parametrize("skipped", [0, 2])
+def test_packing_weighs_the_serial_schema_slice_at_full_duration(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Packing balances each shard's wall: schema in full, suite over workers.
+
+    A shard's schema slice runs serially, so weighing every module by raw
+    duration underbalances once tests/db joins the pool: schema-heavy shards
+    run far longer than the requirement allows.
+    """
+    baseline = tmp_path / "durations.json"
+    weights = {
+        **{f"tests/db/test_db_{n}_integration.py": 10.0 for n in range(4)},
+        **{f"tests/suite/test_{n}_integration.py": 10.0 for n in range(16)},
+    }
+    baseline.write_text(json.dumps({"durations": weights}))
+    monkeypatch.setattr(ci_postgres, "DURATIONS", baseline)
+    assignments = module_shards()
+    schema = [0.0] * SHARDS
+    suite = [0.0] * SHARDS
+    for module, weight in weights.items():
+        shard = assignments[module] - 1
+        if module.startswith(ci_postgres.SCHEMA_PREFIX):
+            schema[shard] += weight
+        else:
+            suite[shard] += weight
+    walls = [schema[i] + suite[i] / ci_postgres.WORKERS for i in range(SHARDS)]
+    assert max(walls) / min(walls) <= 1.25, f"phase walls unbalanced: {walls}"
+    raw = [schema[i] + suite[i] for i in range(SHARDS)]
+    assert max(raw) / min(raw) > 1.5, "the fixture no longer distinguishes raw from phase packing"
+
+
+def _write_phase_manifests(
+    directory: Path, index: int, collected: list[str], files: list[str]
+) -> dict[str, list[str]]:
+    """Split a synthetic collection into the two phases' manifests and selections."""
+    scopes = {
+        phase: [
+            node
+            for node in collected
+            if node.split("::")[0].startswith("tests/db/") == (phase == "schema")
+        ]
+        for phase in ci_postgres.PHASES
+    }
+    for phase, scope in scopes.items():
+        _ = (directory / f"collection-{phase}.json").write_text(
+            json.dumps(
+                {
+                    "count": SHARDS,
+                    "shard": index,
+                    "files": files,
+                    "collected": scope,
+                    "selected": ci_postgres.selected_tests(scope, files, index),
+                }
+            )
+        )
+    return scopes
+
+
+@pytest.mark.parametrize("skipped", [0, 4])
 def test_full_suite_floor_and_refresh_use_verified_execution_evidence(
     tmp_path: Path, skipped: int
 ) -> None:
+    base, remainder = divmod(ci_postgres.POOL_FLOOR, SHARDS)
     modules = [
         next(
             f"tests/test_duration_{n}_integration.py"
@@ -826,31 +860,28 @@ def test_full_suite_floor_and_refresh_use_verified_execution_evidence(
         )
         for index in range(1, SHARDS + 1)
     ]
-    collected = [f"{modules[index % 4]}::test_example[{index}]" for index in range(3000)] + [
-        f"{BAO_MODULE}::test_live"
-    ]
-    for index in range(1, SHARDS + 1):
-        selected = ci_postgres.selected_tests(collected, [], index, "suite")
-        directory = tmp_path / f"pg-suite-{index}"
-        directory.mkdir()
-        (directory / "collection-main.json").write_text(
-            json.dumps(
-                {
-                    "count": SHARDS,
-                    "shard": index,
-                    "files": [],
-                    "collected": collected,
-                    "selected": selected,
-                }
-            )
+    collected = [
+        nodeid
+        for offset, module in enumerate(modules)
+        for nodeid in (
+            f"{module}::test_example[{index}]"
+            for index in range(base + (1 if offset < remainder else 0))
         )
-        suite = ET.Element("testsuite")
-        for nodeid in selected:
-            classname, name = ci_postgres.case_key(nodeid)
-            case = ET.SubElement(suite, "testcase", classname=classname, name=name, time="1.0")
-            if nodeid in collected[:skipped]:
-                _ = ET.SubElement(case, "skipped")
-        ET.ElementTree(suite).write(directory / "report.xml")
+    ] + [f"{BAO_MODULE}::test_live", f"{DATABASE_MODULE}::test_probe"]
+    for index in range(1, SHARDS + 1):
+        directory = tmp_path / f"pg-pool-{index}"
+        directory.mkdir()
+        scopes = _write_phase_manifests(directory, index, collected, [])
+        for phase, report in (("schema", "report-schema.xml"), ("suite", "report-suite.xml")):
+            suite = ET.Element("testsuite")
+            for nodeid in ci_postgres.selected_tests(scopes[phase], [], index):
+                classname, name = ci_postgres.case_key(nodeid)
+                case = ET.SubElement(
+                    suite, "testcase", classname=classname, name=name, time="1.0"
+                )
+                if nodeid in collected[:skipped]:
+                    _ = ET.SubElement(case, "skipped")
+            ET.ElementTree(suite).write(directory / report)
     output = tmp_path / "durations.json"
     if skipped:
         with pytest.raises(ValueError, match="execution floor"):
@@ -860,10 +891,204 @@ def test_full_suite_floor_and_refresh_use_verified_execution_evidence(
         ci_postgres.refresh_durations(tmp_path, "fixture-run", output)
         result = ci_postgres.load_object(output)
         assert result["source_run"] == "fixture-run"
+        counts = iter(
+            [
+                *(base + (1 if offset < remainder else 0) for offset in range(SHARDS)),
+            ]
+        )
         assert result["durations"] == {
-            **{module: 750 for module in modules},
-            BAO_MODULE: 1,
+            **{module: float(next(counts)) for module in modules},
+            BAO_MODULE: 1.0,
+            DATABASE_MODULE: 1.0,
         }
+
+
+def test_refresh_accepts_recorded_runs_without_collection_manifests(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A recorded run's JUnit-only families refresh the baseline without manifests."""
+    monkeypatch.setattr(ci_postgres, "SCHEMA_FLOOR", 0)
+    monkeypatch.setattr(ci_postgres, "SUITE_FLOOR", 0)
+    monkeypatch.setattr(
+        ci_postgres,
+        "module_index",
+        lambda: {
+            "tests.db.test_probe_integration": "tests/db/test_probe_integration.py",
+            "tests.credit.api.test_probe_integration": (
+                "tests/credit/api/test_probe_integration.py"
+            ),
+            "tests.storage.test_s3_compatible_contract_integration": (
+                "tests/storage/test_s3_compatible_contract_integration.py"
+            ),
+            "tests.case.api.test_probe_integration": "tests/case/api/test_probe_integration.py",
+        },
+    )
+    schema = tmp_path / "pg-schema-1"
+    suite = tmp_path / "pg-suite-1"
+    storage = tmp_path / "storage-tests"
+    for directory in (schema, suite, storage):
+        directory.mkdir()
+    _ = (schema / "report.xml").write_text(
+        '<testsuite><testcase classname="tests.db.test_probe_integration" '
+        'name="test_probe" time="2.0"/></testsuite>'
+    )
+    _ = (suite / "report.xml").write_text(
+        '<testsuite><testcase classname="tests.credit.api.test_probe_integration" '
+        'name="test_probe" time="3.0"/>'
+        '<testcase classname="tests.credit.api.test_probe_integration.TestSuite" '
+        'name="test_probe" time="1.0"/></testsuite>'
+    )
+    _ = (storage / "report.xml").write_text(
+        '<testsuite><testcase '
+        'classname="tests.storage.test_s3_compatible_contract_integration'
+        '.TestS3CompatibleStorageContract" '
+        'name="test_probe" time="1.5"/></testsuite>'
+    )
+    output = tmp_path / "durations.json"
+    ci_postgres.refresh_durations(tmp_path, "recorded-run", output)
+    result = ci_postgres.load_object(output)
+    assert result["durations"] == {
+        "tests/db/test_probe_integration.py": 2.0,
+        "tests/credit/api/test_probe_integration.py": 4.0,
+        "tests/storage/test_s3_compatible_contract_integration.py": 1.5,
+    }
+    _ = (tmp_path / "pg-locks" / "report.xml").parent.mkdir()
+    _ = (tmp_path / "pg-locks" / "report.xml").write_text(
+        '<testsuite><testcase classname="tests.case.api.test_probe_integration" '
+        'name="test_probe" time="1.0"/></testsuite>'
+    )
+    # pg-locks belongs to the lock job, not the pool scope: its presence neither
+    # completes an incomplete refresh nor adds weight.
+    _ = shutil.copyfile(output, tmp_path / "with-locks.json")
+    ci_postgres.refresh_durations(tmp_path, "recorded-run", output)
+    assert ci_postgres.load_object(output) == ci_postgres.load_object(tmp_path / "with-locks.json")
+    _ = shutil.rmtree(storage)
+    with pytest.raises(ValueError, match="complete"):
+        ci_postgres.refresh_durations(tmp_path, "recorded-run", output)
+
+
+def test_refresh_command_runs_standalone_from_repo_root(tmp_path: Path) -> None:
+    """The documented root-level refresh command imports without PYTHONPATH.
+
+    Python puts `backend/scripts`, not `backend`, on a standalone script's
+    import path, so a `from scripts.` import inside the refresh path raised
+    ModuleNotFoundError before any baseline was written.
+    """
+    families = {
+        "pg-schema-1": (
+            "tests.db.test_bi_query_log_postgres_integration",
+            ci_postgres.SCHEMA_FLOOR,
+        ),
+        "pg-suite-1": (
+            "tests.credit.api.test_credit_route_authorization_integration",
+            ci_postgres.SUITE_FLOOR,
+        ),
+        "storage-tests": ("tests.storage.test_s3_compatible_contract_integration", 1),
+    }
+    for family, (classname, count) in families.items():
+        cases = "".join(
+            f'<testcase classname="{classname}" name="test_probe_{n}" time="0.1"/>'
+            for n in range(count)
+        )
+        _ = (tmp_path / family).mkdir()
+        _ = (tmp_path / family / "report.xml").write_text(f"<testsuite>{cases}</testsuite>")
+    output = tmp_path / "durations.json"
+    environment = {key: value for key, value in os.environ.items() if key != "PYTHONPATH"}
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(REPO / "backend/scripts/ci_postgres.py"),
+            "refresh-durations",
+            str(tmp_path),
+            "--source-run",
+            "standalone-fixture",
+            "--output",
+            str(output),
+        ],
+        cwd=REPO,
+        env=environment,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
+    durations = cast(dict[str, object], ci_postgres.load_object(output)["durations"])
+    assert set(durations) == {
+        "tests/db/test_bi_query_log_postgres_integration.py",
+        "tests/credit/api/test_credit_route_authorization_integration.py",
+        "tests/storage/test_s3_compatible_contract_integration.py",
+    }
+
+
+def test_refresh_rejects_failed_recorded_cases(tmp_path: Path) -> None:
+    """Failed or errored legacy cases must not overwrite the baseline.
+
+    The recorded-run path trusts the source run's aggregates for coverage, but
+    a premature termination can still leave failed or errored cases whose
+    timings would distort the packing; the pool path rejects them through
+    verify, and this path must reject them too.
+    """
+    families = {
+        "pg-schema-1": (
+            "tests.db.test_bi_query_log_postgres_integration",
+            ci_postgres.SCHEMA_FLOOR,
+        ),
+        "pg-suite-1": (
+            "tests.credit.api.test_credit_route_authorization_integration",
+            ci_postgres.SUITE_FLOOR,
+        ),
+        "storage-tests": ("tests.storage.test_s3_compatible_contract_integration", 1),
+    }
+    for family, (classname, count) in families.items():
+        cases = "".join(
+            f'<testcase classname="{classname}" name="test_probe_{n}" time="0.1"/>'
+            for n in range(count)
+        )
+        _ = (tmp_path / family).mkdir()
+        if family == "pg-suite-1":
+            cases += (
+                f'<testcase classname="{classname}" name="test_failed" time="0.1">'
+                "<failure/></testcase>"
+            )
+        _ = (tmp_path / family / "report.xml").write_text(f"<testsuite>{cases}</testsuite>")
+    output = tmp_path / "durations.json"
+    with pytest.raises(ValueError, match="Failed or errored case"):
+        ci_postgres.refresh_durations(tmp_path, "failed-run", output)
+    assert not output.exists()
+
+
+def test_protected_pool_modules_may_neither_skip_nor_vanish(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Schema/RLS and storage cases abstain in no environment (audit A360-4)."""
+    monkeypatch.setattr(ci_postgres, "POOL_FLOOR", 0)
+    module = "tests/db/test_probe_integration.py"
+    other = next(
+        f"tests/credit/api/test_probe_{n}_integration.py"
+        for n in range(100)
+        if shard_for(f"tests/credit/api/test_probe_{n}_integration.py") != shard_for(module)
+    )
+    collected = [f"{module}::test_a", f"{module}::test_b", f"{other}::test_c"]
+    shards = sorted({shard_for(module), shard_for(other)})
+    for shard in shards:
+        directory = tmp_path / f"pg-pool-{shard}"
+        directory.mkdir()
+        scopes = _write_phase_manifests(directory, shard, collected, [])
+        for phase, report in (("schema", "report-schema.xml"), ("suite", "report-suite.xml")):
+            suite = ET.Element("testsuite")
+            for nodeid in ci_postgres.selected_tests(scopes[phase], [], shard):
+                classname, name = ci_postgres.case_key(nodeid)
+                ET.SubElement(suite, "testcase", classname=classname, name=name, time="1.0")
+            ET.ElementTree(suite).write(directory / report)
+    ci_postgres.verify(tmp_path, [])
+    # A skipped schema case trips the protected zero-skip rule...
+    report = ET.parse(tmp_path / f"pg-pool-{shard_for(module)}" / "report-schema.xml")
+    suite = next(report.iter("testsuite"))
+    case = next(suite.iter("testcase"))
+    _ = ET.SubElement(case, "skipped")
+    report.write(tmp_path / f"pg-pool-{shard_for(module)}" / "report-schema.xml")
+    with pytest.raises(ValueError, match="Schema/RLS or storage contract tests skipped"):
+        ci_postgres.verify(tmp_path, [])
 
 
 def test_pure_owner_change_does_not_select_an_empty_postgres_shard(

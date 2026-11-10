@@ -176,9 +176,7 @@ def test_ci_partition_requires_exactly_one_suite_execution(
         "unit-tests",
         "e2e-tests",
         "pg-locks",
-        "storage-tests",
-        *[f"pg-suite-{i}" for i in range(1, 5)],
-        *[f"pg-schema-{i}" for i in range(1, 3)],
+        *[f"pg-pool-{i}" for i in range(1, 7)],
     ]:
         path = tmp_path / name
         path.mkdir(exist_ok=True)
@@ -187,13 +185,19 @@ def test_ci_partition_requires_exactly_one_suite_execution(
             cases = '<testcase classname="tests.test_browser_e2e" name="test_browser"/>'
         if name == "unit-tests":
             cases = '<testcase classname="tests.test_unit" name="test_unit"/>'
-        if name == "pg-suite-1" and mutation != "missing":
+        if name == "pg-pool-1" and mutation != "missing":
             cases = '<testcase classname="tests.test_db_integration" name="test_db"/>'
-        if name == "pg-suite-2" and mutation == "duplicate":
+        if name == "pg-pool-2" and mutation == "duplicate":
             cases = '<testcase classname="tests.test_db_integration" name="test_db"/>'
-        if name == "pg-suite-2" and mutation == "wrong-suite":
+        if name == "pg-pool-2" and mutation == "wrong-suite":
             cases = '<testcase classname="tests.test_unit" name="test_unit"/>'
-        _ = (path / "report.xml").write_text(f"<testsuite>{cases}</testsuite>")
+        if name.startswith("pg-pool"):
+            # Production shape: every pool shard writes one report per phase,
+            # and both phases run even when a phase owns nothing on that shard.
+            _ = (path / "report-schema.xml").write_text(f"<testsuite>{cases}</testsuite>")
+            _ = (path / "report-suite.xml").write_text("<testsuite></testsuite>")
+        else:
+            _ = (path / "report.xml").write_text(f"<testsuite>{cases}</testsuite>")
     if mutation == "none":
         verify_partition(tmp_path, protected={})
         _ = (tmp_path / "e2e-tests/report.xml").write_text(
@@ -222,10 +226,7 @@ def test_affected_partition_omits_only_explicitly_unselected_suite_cases(
     owners = [
         "unit-tests",
         "pg-locks",
-        "storage-tests",
-        f"pg-suite-{index}",
-        "pg-schema-1",
-        "pg-schema-2",
+        f"pg-pool-{index}",
     ]
     for name in owners:
         path = tmp_path / name
@@ -233,15 +234,19 @@ def test_affected_partition_omits_only_explicitly_unselected_suite_cases(
         cases = ""
         if name == "unit-tests":
             cases = '<testcase classname="tests.test_unit" name="test_unit"/>'
-        if name == f"pg-suite-{index}":
+        if name == f"pg-pool-{index}":
             cases = (
                 '<testcase classname="tests.domain.test_selected_integration" '
                 'name="test_selected"/>'
             )
-            _ = (path / "collection-main.json").write_text(
+            _ = (path / "collection-suite-main.json").write_text(
                 json.dumps({"collected": [selected, omitted]})
             )
-        _ = (path / "report.xml").write_text(f"<testsuite>{cases}</testsuite>")
+        if name.startswith("pg-pool"):
+            _ = (path / "report-schema.xml").write_text("<testsuite></testsuite>")
+            _ = (path / "report-suite.xml").write_text(f"<testsuite>{cases}</testsuite>")
+        else:
+            _ = (path / "report.xml").write_text(f"<testsuite>{cases}</testsuite>")
     _ = (tmp_path / "unit-tests" / "all-tests.json").write_text(
         json.dumps(
             {
@@ -251,7 +256,7 @@ def test_affected_partition_omits_only_explicitly_unselected_suite_cases(
         )
     )
     verify_partition(tmp_path, protected={})
-    (tmp_path / f"pg-suite-{index}" / "collection-main.json").unlink()
+    (tmp_path / f"pg-pool-{index}" / "collection-suite-main.json").unlink()
     with pytest.raises(ValueError, match="dropped or duplicated"):
         verify_partition(tmp_path, protected={})
 

@@ -553,8 +553,8 @@ It never infers a suite from resource use, demotes an integration file because i
 did not connect, or generates membership data. The `requires_service(name)` marker
 declares a runtime requirement, not a suite override.
 
-MinIO runs in storage/schema jobs and the shard containing native service
-contracts. OpenBao runs in its integration shard. Backend Playwright contracts
+MinIO runs in every Postgres pool shard. OpenBao runs in the pool shard owning
+the live signing cases. Backend Playwright contracts
 run as a guarded step of the 'Lint and typecheck' job. Their runtime and
 zero-skip guards remain independent of filename selection.
 
@@ -603,7 +603,7 @@ fall back visibly to **database-free units only**, with the existing refusal gua
 and unit scheduler (`-m unit --suite-only --dist load`, at most two workers).
 An unchanged worktree selects nothing and says so. Neither outcome claims full
 coverage or silently launches the combined suite. Numeric thread counts are one.
-Schema/role, lock and storage owners are never added to parallel local selection.
+Lock-owner and pool-shard Postgres coverage is never added to parallel local selection.
 
 The same test command accepts `--lf` and runs serially against pytest's actual
 worktree-local failure cache. It intersects the selected units with cached failures:
@@ -649,21 +649,19 @@ must also meet the [role-test preparation requirements](../docs/ops/database-rol
 
 CI starts native PostgreSQL 17 through
 [`setup-postgres`](../.github/actions/setup-postgres/action.yml), shared by the
-schema/RLS/locks, storage and full-suite jobs. It verifies the server version and
+pool and locks jobs. It verifies the server version and
 raises `max_locks_per_transaction` to 256 before creating the restricted test roles.
 The migration chain requires no extensions: `gen_random_uuid()` is built into
 PostgreSQL 17. If a migration adds an extension dependency, install its PostgreSQL
 17 package in that action and verify availability before running migrations.
 
-The workflow-owned storage command uses the native wrapper, which supplies
-disposable PostgreSQL for storage integration cases and MinIO
-for the object-store contract unless `TEST_DATABASE_URL` and `S3_*` settings
-already supply those services. The dedicated CI storage job supplies both and
-rejects any skipped test.
+The workflow-owned pool command uses the native wrapper, which supplies
+disposable PostgreSQL and MinIO unless `TEST_DATABASE_URL` and `S3_*` settings
+already supply those services. The pool supplies both on every shard, and its
+aggregate rejects a skipped schema/RLS or storage-contract test.
 
-The schema workflow command also supplies MinIO for the document cleanup regression. Each
-CI schema shard starts it and creates the document test bucket before pytest;
-the gate's schema verification continues to reject every skip.
+Every pool shard also creates the document test bucket before pytest; the
+Postgres aggregate continues to reject every protected skip.
 
 CI's [MinIO action](../.github/actions/setup-minio/action.yml) and
 [OpenBao action](../.github/actions/setup-openbao/action.yml) download official
@@ -678,30 +676,30 @@ credential-vault encryption tests need no vault server. The live storage and
 OpenBao execution guards remain in
 [Risk Service CI](../.github/workflows/risk-service.yml).
 
-The **Risk service gate** also joins the lock and storage execution reports with
-unit, e2e and Postgres shard evidence. Their selected union must match the classified
+The cross-owner aggregate joins the pool and lock execution reports with
+unit and e2e evidence. Their selected union must match the classified
 collection exactly once. Every selected protected case must execute successfully
-without skips in its Postgres owner. Storage integration cases run only in the storage job,
-except key-rotation concurrency, which belongs to locks. The storage job also
+without skips in its Postgres owner. Storage integration cases run in the pool
+shards, except key-rotation concurrency, which belongs to locks. The pool also
 runs for merge groups. A conservative affected-module run excludes only the
 explicitly unselected suite cases from this cross-owner comparison.
 
 The **Unit tests** job directly runs `uv run pytest -m unit --suite-only`, including database-free
-architecture guards. Database-using architecture cases run in the integration
-shards.
+architecture guards. Database-using architecture cases run in the pool shards.
 
-CI runs the remaining PostgreSQL suite in four duration-balanced module shards,
-and the schema/RLS suite in two hash-based shards; lock tests retain their own job.
+CI runs the schema/RLS suite (tests/db), the integration suite and the storage
+contract in six duration-balanced pool shards; lock tests retain their own job.
 Longest-first packing uses the committed `scripts/ci_postgres_durations.json`
-baseline, excluding files with a non-Postgres owner. Each file stays together, including OpenBao's shared AppRole fixtures.
+baseline, excluding files with a non-Postgres owner and the lock-owned modules.
+Each file stays together, including OpenBao's shared AppRole fixtures.
 New modules use stable hashing until the baseline is refreshed. The
-always-reported **Risk service gate** joins the suite, schema/RLS and lock jobs
-directly and stays enforced. Shards upload their complete
+always-reported **Risk service gate** joins the pool shards and the lock job
+directly. Shards upload their complete
 collection manifests and JUnit reports; the gate verifies that their union
 contains every expected test exactly once, preserves the full-suite execution
-floor, and rejects any skipped schema/RLS or live OpenBao test.
-Failed schema and suite shards also upload `postgres.log` as
-`pg-schema-server-log-<shard>` or `pg-suite-server-log-<shard>` when the log
+floor, and rejects any skipped schema/RLS, storage-contract or live OpenBao test.
+Failed pool shards also upload `postgres.log` as
+`pg-pool-server-log-<shard>` when the log
 exists, retained for seven days.
 
 Main pushes and queued merge results always run the full suite. On pull requests,
@@ -723,21 +721,21 @@ the current process; each caller receives a fresh set. Read-only route guards
 inspect the served application's route graph instead of rebuilding the same app
 for each assertion. Changed source is scanned again automatically.
 
-Refresh the duration baseline after a successful **full** main run, using its four
-`pg-suite-*` artifacts (download them into separate directories under one parent):
+Refresh the duration baseline after a successful **full** main run, using its six
+`pg-pool-*` artifacts (download them into separate directories under one parent):
 run these commands from the repository root at that run's commit, before changing
 the baseline. Verification recomputes shard assignments from the baseline in that
 revision, so reports from another revision may be rejected.
 
 ```bash
-gh-axi run download <run-id> --name pg-suite-1 --dir /tmp/pg-reports/pg-suite-1
-# Repeat for pg-suite-2, pg-suite-3 and pg-suite-4.
+gh-axi run download <run-id> --name pg-pool-1 --dir /tmp/pg-reports/pg-pool-1
+# Repeat for pg-pool-2 through pg-pool-6.
 python3 backend/scripts/ci_postgres.py refresh-durations /tmp/pg-reports \
   --source-run https://github.com/CedynGroup/aequorOS/actions/runs/<run-id>
 ```
 
-The refresh verifies exact collection/execution coverage, the 3,000-executed
-floor and live OpenBao execution before replacing the baseline. JUnit case times
+The refresh verifies exact collection/execution coverage and the pool's
+execution floor before replacing the baseline. JUnit case times
 include setup, call and teardown. Review and commit the resulting baseline; CI
 never writes it automatically. Refresh after substantial fixture or test layout
 changes, and compare actual job timings rather than treating summed test durations
@@ -770,8 +768,8 @@ package and deployment runners were unchanged.
 
 The independent CI collection adds real work, about 47.5 seconds in this sample.
 These figures are not full-suite or hosted-CI execution timings and establish no
-speedup. Compare actual hosted unit, schema, lock, storage, integration-shard and
-e2e step durations after validation; do not infer wall time from duration weights.
+speedup. Compare actual hosted unit, pool-shard, lock and
+e2e job durations after validation; do not infer wall time from duration weights.
 
 ### Test databases and the primary database
 

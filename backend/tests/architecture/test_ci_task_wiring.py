@@ -264,9 +264,9 @@ def test_the_backend_gates_ci_must_run_are_all_defined() -> None:
     assert required <= set(_tasks(ROOT_TASKS))
 
 
-def _ci_pytest(
+def _ci_pytest_all(
     job_name: str, *, allow_guarded_step: bool = False
-) -> tuple[list[str], dict[str, object]]:
+) -> list[tuple[list[str], dict[str, object]]]:
     """Read executable direct commands, not labels, comments or echoed strings.
 
     ``allow_guarded_step`` admits the pytest step of a combined job whose
@@ -290,9 +290,18 @@ def _ci_pytest(
         if not direct or "--collect-only" in tokens:
             continue
         assert step.get("working-directory") == "backend"
-        assert (allow_guarded_step or "if" not in step) and not step.get("continue-on-error", False)
+        assert (allow_guarded_step or "if" not in step) and not step.get(
+            "continue-on-error", False
+        )
         assert not any(token in {";", "&&", "||", "|"} for token in tokens)
         matches.append((tokens, step))
+    return matches
+
+
+def _ci_pytest(
+    job_name: str, *, allow_guarded_step: bool = False
+) -> tuple[list[str], dict[str, object]]:
+    matches = _ci_pytest_all(job_name, allow_guarded_step=allow_guarded_step)
     assert len(matches) == 1, f"{job_name} must execute exactly one direct pytest suite"
     return matches[0]
 
@@ -308,59 +317,64 @@ def test_ci_actually_runs_every_required_gate() -> None:
     for job, marker in (
         ("architecture", "unit"),
         ("static", "e2e"),
-        ("postgres-schema", "integration"),
         ("postgres-locks", "integration"),
-        ("postgres-shard", "integration"),
-        ("storage", "integration"),
+        ("real-data", None),
     ):
-        tokens, step = _ci_pytest(job, allow_guarded_step=job == "static")
-        if job == "static":
-            # The combined static job gates the e2e suite by step, not by job.
-            assert "guards" in cast(str, step["if"])
-        assert tokens[tokens.index("-m") + 1] == marker, job
-    _ = _ci_pytest("real-data")
+        tokens, _step = _ci_pytest(job, allow_guarded_step=job == "static")
+        if marker is not None:
+            assert tokens[tokens.index("-m") + 1] == marker, job
+    pool = _ci_pytest_all("postgres-pool")
+    assert [tokens[tokens.index("-m") + 1] for tokens, _step in pool] == [
+        "integration",
+        "integration",
+    ], "postgres-pool must run both phases (serial schema, parallel suite)"
 
 
 @pytest.mark.parametrize(
     ("job", "services"),
     [
-        ("postgres-schema", ["--postgres", "--storage", "--role-admin"]),
         ("postgres-locks", ["--postgres"]),
-        ("postgres-shard", ["--postgres"]),
-        ("storage", ["--postgres", "--storage"]),
+        ("postgres-pool", ["--postgres", "--storage", "--role-admin"]),
     ],
 )
 def test_direct_ci_commands_preserve_service_and_report_owners(
     job: str, services: list[str]
 ) -> None:
-    tokens, step = _ci_pytest(job)
-    separator = tokens.index("--")
-    assert tokens[:separator] == [
-        "uv",
-        "run",
-        "python",
-        "scripts/local_services.py",
-        "run",
-        *services,
-    ]
-    assert tokens[separator + 1 : separator + 4] == ["uv", "run", "pytest"]
-    assert not {"--lf", "--suite-only", "--collect-only"}.intersection(tokens)
-    environment = cast(dict[str, str], step["env"])
-    assert environment["TEST_DATABASE_URL"] == "${{ env.POSTGRES_TEST_URL }}"
-    assert "CI_DATABASE_OBSERVATIONS" in environment
-    assert "--junitxml=" in environment["PYTEST_ADDOPTS"]
-    if job in {"postgres-schema", "postgres-shard"}:
-        assert shlex.split(environment["PYTEST_ADDOPTS"])[:2] == [
-            "-p",
-            "scripts.ci_postgres_plugin",
+    for tokens, step in _ci_pytest_all(job):
+        separator = tokens.index("--")
+        assert tokens[:separator] == [
+            "uv",
+            "run",
+            "python",
+            "scripts/local_services.py",
+            "run",
+            *services,
         ]
-        assert environment["CI_POSTGRES_SHARD"] == "${{ matrix.shard }}"
-        assert "CI_POSTGRES_FILES" in environment
-        assert "CI_POSTGRES_REPORT_DIR" in environment
-    if job == "postgres-schema":
-        assert environment["POSTGRES_PRIVILEGE_TESTS_REQUIRED"] == "1"
-        assert environment["CI_POSTGRES_SUITE"] == "schema"
-        assert environment["CI_POSTGRES_FILES"] == "[]"
+        assert tokens[separator + 1 : separator + 4] == ["uv", "run", "pytest"]
+        assert not {"--lf", "--suite-only", "--collect-only"}.intersection(tokens)
+        environment = cast(dict[str, str], step["env"])
+        assert environment["TEST_DATABASE_URL"] == "${{ env.POSTGRES_TEST_URL }}"
+        assert "CI_DATABASE_OBSERVATIONS" in environment
+        assert "--junitxml=" in environment["PYTEST_ADDOPTS"]
+        if job == "postgres-pool":
+            assert shlex.split(environment["PYTEST_ADDOPTS"])[:2] == [
+                "-p",
+                "scripts.ci_postgres_plugin",
+            ]
+            assert environment["CI_POSTGRES_SHARD"] == "${{ matrix.shard }}"
+            assert "CI_POSTGRES_FILES" in environment
+            assert "CI_POSTGRES_REPORT_DIR" in environment
+            assert environment["CI_POSTGRES_PHASE"] in ("schema", "suite")
+            assert "report-" + environment["CI_POSTGRES_PHASE"] + ".xml" in environment[
+                "PYTEST_ADDOPTS"
+            ]
+            assert environment["CI_POSTGRES_REPORT_DIR"] == "${{ runner.temp }}/pg-pool"
+            if environment["CI_POSTGRES_PHASE"] == "schema":
+                assert environment["POSTGRES_PRIVILEGE_TESTS_REQUIRED"] == "1"
+                assert "tests/db" in tokens and "-n" not in tokens
+            else:
+                assert "POSTGRES_PRIVILEGE_TESTS_REQUIRED" not in environment
+                assert tokens[tokens.index("-n") + 1] == "4"
 
 
 def _isolate_runner_temp_outputs(environment: dict[str, str], scratch: Path) -> dict[str, str]:
@@ -380,8 +394,24 @@ def _isolate_runner_temp_outputs(environment: dict[str, str], scratch: Path) -> 
     return isolated
 
 
-def _assert_serial_ci_owner(job: str) -> None:
-    tokens, step = _ci_pytest(job)
+def _ci_pytest_for_phase(
+    job: str, phase: str | None, *, allow_guarded_step: bool = False
+) -> tuple[list[str], dict[str, object]]:
+    matches = _ci_pytest_all(job, allow_guarded_step=allow_guarded_step)
+    if phase is None:
+        assert len(matches) == 1, f"{job} must execute exactly one direct pytest suite"
+        return matches[0]
+    matches = [
+        (tokens, step)
+        for tokens, step in matches
+        if cast(dict[str, str], step.get("env") or {}).get("CI_POSTGRES_PHASE") == phase
+    ]
+    assert len(matches) == 1, f"{job} must have exactly one {phase}-phase suite"
+    return matches[0]
+
+
+def _assert_serial_ci_owner(job: str, phase: str | None = None) -> None:
+    tokens, step = _ci_pytest_for_phase(job, phase)
     arguments = tokens[tokens.index("pytest") + 1 :]
     environment = {
         **os.environ,
@@ -410,23 +440,41 @@ def _assert_serial_ci_owner(job: str) -> None:
     assert json.loads(result.stdout) in (None, 0), job
 
 
-@pytest.mark.parametrize("job", ["postgres-schema", "postgres-locks", "storage"])
-def test_ci_serial_owners_resolve_to_no_workers(job: str) -> None:
-    """Schema, lock and storage owners require serial execution."""
-    _assert_serial_ci_owner(job)
+@pytest.mark.parametrize(
+    ("job", "phase"), [("postgres-locks", None), ("postgres-pool", "schema")]
+)
+def test_ci_serial_owners_resolve_to_no_workers(job: str, phase: str | None) -> None:
+    """The lock owner and each pool shard's schema slice require serial execution."""
+    _assert_serial_ci_owner(job, phase)
 
 
-@pytest.mark.parametrize("job", ["postgres-schema", "postgres-locks", "storage"])
-@pytest.mark.parametrize("source", ["command", "environment", "configuration"])
-@pytest.mark.parametrize("option", ["--numprocesses=4", "--numprocesses 4"])
+@pytest.mark.parametrize(
+    ("job", "phase"), [("postgres-locks", None), ("postgres-pool", "schema")]
+)
+@pytest.mark.parametrize(
+    "injection",
+    [
+        "command --numprocesses=4",
+        "command --numprocesses 4",
+        "environment --numprocesses=4",
+        "environment --numprocesses 4",
+        "configuration --numprocesses=4",
+        "configuration --numprocesses 4",
+    ],
+)
 def test_serial_owner_guard_rejects_parallel_configuration(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, job: str, source: str, option: str
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    job: str,
+    phase: str | None,
+    injection: str,
 ) -> None:
+    source, option = injection.split(" ", 1)
     document = cast(
         dict[str, dict[str, dict[str, object]]],
         yaml.safe_load((WORKFLOWS / "risk-service.yml").read_text()),
     )
-    _tokens, target = _ci_pytest(job)
+    _tokens, target = _ci_pytest_for_phase(job, phase)
     steps = cast(list[dict[str, object]], document["jobs"][job]["steps"])
     step = next(step for step in steps if step == target)
     if source == "command":
@@ -439,7 +487,7 @@ def test_serial_owner_guard_rejects_parallel_configuration(
     _ = (tmp_path / "risk-service.yml").write_text(yaml.safe_dump(document))
     monkeypatch.setitem(globals(), "WORKFLOWS", tmp_path)
     with pytest.raises(AssertionError, match=job):
-        _assert_serial_ci_owner(job)
+        _assert_serial_ci_owner(job, phase)
 
 
 _GIT_LOCATION_OVERRIDES = frozenset(
@@ -500,10 +548,10 @@ def test_serial_owner_validation_leaves_no_repository_byproducts(
     and parallel-rejection verdicts while the repository stays clean.
     """
     before = _untracked_repository_paths()
-    for job in ("postgres-schema", "postgres-locks", "storage"):
-        _assert_serial_ci_owner(job)
+    _assert_serial_ci_owner("postgres-locks")
+    _assert_serial_ci_owner("postgres-pool", "schema")
     test_serial_owner_guard_rejects_parallel_configuration(
-        tmp_path, monkeypatch, "postgres-locks", "command", "--numprocesses=4"
+        tmp_path, monkeypatch, "postgres-locks", None, "command --numprocesses=4"
     )
     assert not any("${{ runner.temp }}" in path for path in _untracked_repository_paths())
     assert not (REPO_ROOT / "backend" / "${{ runner.temp }}").exists()
@@ -511,25 +559,24 @@ def test_serial_owner_validation_leaves_no_repository_byproducts(
 
 
 @pytest.mark.parametrize(
-    "job",
+    ("job", "phase"),
     [
-        "architecture",
-        "static",
-        "postgres-schema",
-        "postgres-locks",
-        "postgres-shard",
-        "storage",
-        "real-data",
+        ("architecture", None),
+        ("static", None),
+        ("postgres-locks", None),
+        ("postgres-pool", "schema"),
+        ("postgres-pool", "suite"),
+        ("real-data", None),
     ],
 )
 def test_removing_a_ci_suite_fails_the_gate(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, job: str
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, job: str, phase: str | None
 ) -> None:
     document = cast(
         dict[str, dict[str, dict[str, object]]],
         yaml.safe_load((WORKFLOWS / "risk-service.yml").read_text()),
     )
-    _tokens, target = _ci_pytest(job, allow_guarded_step=job == "static")
+    _tokens, target = _ci_pytest_for_phase(job, phase, allow_guarded_step=job == "static")
     steps = cast(list[dict[str, object]], document["jobs"][job]["steps"])
     steps[:] = [step for step in steps if step != target]
     _ = (tmp_path / "risk-service.yml").write_text(yaml.safe_dump(document))
@@ -663,7 +710,9 @@ def test_unit_suite_command_and_ci_job_are_explicit() -> None:
     # typecheck, the e2e contracts and client freshness in one place.
     assert document["jobs"]["static"]["name"] == "Lint and typecheck"
     assert {"architecture", "static"} <= set(_needs(document["jobs"]["gate"]))
-    assert not {"backend-e2e", "api-fresh", "postgres", "postgres-suite"} & set(document["jobs"])
+    assert not {"backend-e2e", "api-fresh", "postgres", "postgres-suite"} & set(
+        document["jobs"]
+    )
 
 
 # --------------------------------------------------------------------------
@@ -675,9 +724,14 @@ TESTS = Path(__file__).parents[1]
 _PYTEST_PATHS = re.compile(r"(?:^|\s)(tests/[A-Za-z0-9_./-]*)")
 
 
-def _ci_paths(job: str) -> list[str]:
-    tokens, _step = _ci_pytest(job, allow_guarded_step=job == "static")
-    return [token for token in tokens if token.startswith("tests/")]
+def _ci_paths(job: str, *, allow_guarded_step: bool = False) -> list[str]:
+    matches = _ci_pytest_all(job, allow_guarded_step=allow_guarded_step)
+    return [
+        token
+        for tokens, _step in matches
+        for token in tokens
+        if token.startswith("tests/")
+    ]
 
 
 # --------------------------------------------------------------------------
@@ -800,13 +854,11 @@ def test_every_pytest_path_a_task_names_exists() -> None:
     for job in (
         "architecture",
         "static",
-        "postgres-schema",
         "postgres-locks",
-        "postgres-shard",
-        "storage",
+        "postgres-pool",
         "real-data",
     ):
-        for path in _ci_paths(job):
+        for path in _ci_paths(job, allow_guarded_step=job == "static"):
             if not (TESTS.parent / path).exists():
                 missing.append(f"risk-service.yml:{job} -> {path}")
 
@@ -816,19 +868,20 @@ def test_every_pytest_path_a_task_names_exists() -> None:
     )
 
 
-def test_the_remaining_suite_ignores_exactly_what_its_sibling_steps_run() -> None:
-    """Only integration siblings are ignored; markers own unit selection."""
-    suite, _step = _ci_pytest("postgres-shard")
-    assert suite[suite.index("-m") + 1] == "integration"
-    ignored = {token.partition("=")[2] for token in suite if token.startswith("--ignore=")}
-    owned: set[str] = set()
-    for job in ("postgres-schema", "postgres-locks", "storage"):
-        tokens, _step = _ci_pytest(job)
-        assert tokens[tokens.index("-m") + 1] == "integration"
-        owned.update(token for token in tokens if token.startswith("tests/"))
-    owned = {path for path in owned if not any(path.startswith(other + "/") for other in owned)}
-    assert ignored == owned
+def test_the_pool_ignores_exactly_what_the_lock_owner_runs() -> None:
+    """Only lock-owned modules are ignored; the schema slice owns tests/db."""
+    _pool_suite, _step = _ci_pytest_for_phase("postgres-pool", "suite")
+    pool = _pool_suite
+    assert pool[pool.index("-m") + 1] == "integration"
+    ignored = {token.partition("=")[2] for token in pool if token.startswith("--ignore=")}
+    tokens, _step = _ci_pytest("postgres-locks")
+    assert tokens[tokens.index("-m") + 1] == "integration"
+    owned = {token for token in tokens if token.startswith("tests/")}
+    assert ignored == owned | {"tests/db"}
     assert all((TESTS.parent / path).exists() for path in ignored)
+    schema, _step = _ci_pytest_for_phase("postgres-pool", "schema")
+    assert {token for token in schema if token.startswith("tests/")} == {"tests/db"}
+    assert not any(token.startswith("--ignore=") for token in schema)
 
 
 def test_the_hermetic_run_still_proves_it_collected_every_module(tmp_path: Path) -> None:
@@ -891,16 +944,17 @@ def test_the_hermetic_run_still_proves_it_collected_every_module(tmp_path: Path)
         extra.unlink()
 
 
-def test_duration_shards_preserve_worker_limit_and_schema_configuration() -> None:
-    tokens, _step = _ci_pytest("postgres-shard")
-    assert tokens[tokens.index("-n") + 1] == "4"
-    assert tokens[tokens.index("--dist") + 1] == "loadfile"
+def test_duration_shards_preserve_worker_limit_and_planned_matrix() -> None:
+    suite, _step = _ci_pytest_for_phase("postgres-pool", "suite")
+    assert suite[suite.index("-n") + 1] == "4"
+    assert suite[suite.index("--dist") + 1] == "loadfile"
     document = cast(
         dict[str, dict[str, dict[str, object]]],
         yaml.safe_load((WORKFLOWS / "risk-service.yml").read_text()),
     )
-    schema = document["jobs"]["postgres-schema"]
-    _tokens, step = _ci_pytest("postgres-schema")
-    assert cast(dict[str, object], step["env"])["CI_POSTGRES_SUITE"] == "schema"
-    strategy = cast(dict[str, object], schema["strategy"])
-    assert cast(dict[str, object], strategy["matrix"])["shard"] == [1, 2]
+    pool = document["jobs"]["postgres-pool"]
+    strategy = cast(dict[str, object], pool["strategy"])
+    assert cast(dict[str, object], strategy["matrix"]) == (
+        "${{ fromJSON(needs.preflight.outputs.postgres_matrix) }}"
+    )
+    assert strategy["fail-fast"] is False

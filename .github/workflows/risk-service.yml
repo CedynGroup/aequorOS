@@ -41,32 +41,20 @@ name: Risk Service CI
 #                 others (image build: risk-service-image.yml)
 #   architecture— Unit tests: database-free logic and architecture guards,
 #                 explicit classification and connection/execution refusal
-#   postgres-schema — migration chain, RLS policies and schema defaults, in two
-#                 hash-assigned shards. The schema workflow command covers
-#                 integration cases in tests/db,
-#                 including tests/db/test_tenant_rls_completeness_integration.py — the structural
-#                 guard on tenant isolation.
+#   postgres-pool — the whole Postgres-backed scope on one pool of six
+#                 duration-balanced shards: migration chain, RLS policies,
+#                 schema defaults, row/advisory locks, and the integration and
+#                 storage contracts. Each shard runs its tests/db slice
+#                 serially, then the remaining scope with workers; pool
+#                 sharding, selection and coverage guards are documented in
+#                 backend/README.md#run-tests; parallel execution and schema
+#                 isolation in backend/README.md#test-databases-and-the-primary-database.
 #   postgres-locks — dedicated row-lock and advisory-lock coverage.
-#   postgres-shard — the integration suite in duration-balanced shards,
-#                 including exact cross-owner coverage and runtime
-#                 resource-boundary checks. Filename ownership, sharding,
-#                 selection and coverage guards are documented in
-#                 backend/README.md#run-tests.
-#                 Parallel execution and schema isolation are documented in
-#                 backend/README.md#test-databases-and-the-primary-database.
-#   storage     — the S3-compatible object-store contract: SSE-KMS at rest, the
-#                 hash-chained access log, per-institution provisioning. Added
-#                 2026-08-22. It self-skips without S3_*, and no job had ever
-#                 configured them, so 18 of its 45 tests ran nowhere (measured
-#                 `27 passed, 18 skipped` with the credentials blanked; `45
-#                 passed` against the MinIO below). MinIO's BUILT-IN KMS is
-#                 enough — the KES sidecar this appeared to need is not.
-#   gate        — depends DIRECTLY on every job above (no chained summary
-#                 jobs), verifies exact shard coverage and the execution guards
-#                 for BOTH Postgres suites plus the aggregate cross-owner
-#                 check, and aggregates every job into ONE always-reported
-#                 context, so the suite can be made a required check. See
-#                 BRANCH PROTECTION below.
+#   gate        — depends DIRECTLY on every real job (no chained summary jobs),
+#                 verifies the pool's exact shard coverage and execution
+#                 guards plus the aggregate cross-owner check, and aggregates
+#                 every job into ONE always-reported context, so the suite can
+#                 be made a required check. See BRANCH PROTECTION below.
 #   real-data   — the DB-backed regulatory/attestation/auth/vendor API surface,
 #                 plus BOTH run-parity proofs (tests/equivalence). 25 modules
 #                 import `requires_real_data` (measured by AST import, not
@@ -86,17 +74,17 @@ name: Risk Service CI
 # skipped` for months and how the concurrency tests ran in no environment at
 # all. Postgres and storage suites write a JUnit report via PYTEST_ADDOPTS,
 # and a following step asserts a floor of tests actually executed
-# (.github/scripts/assert_pytest_ran.py or the shard aggregate verifier).
+# (.github/scripts/assert_pytest_ran.py or the gate's pool verifier).
 # The unit owner's execution guard is documented in backend/README.md#run-tests.
-# The storage job, the gate's schema/RLS shard verification
-# and the lock job additionally allow ZERO skips, because the environment each
-# stands up is supposed to satisfy its whole suite — and an RLS proof can
-# abstain one test at a time (a role that bypasses RLS, a missing CREATEROLE),
-# which a floor of "at least N ran" cannot see (audit A360-4). The gate's
-# integration-suite verification sets no skip ceiling, because the opt-in tiers
-# below legitimately skip there. Floors are set so that a whole test MODULE
-# vanishing trips them: at least (collected − the largest module); recount when
-# the suite changes shape.
+# The lock job additionally allows ZERO skips, and so does the gate's pool
+# verification for the schema/RLS and storage-contract modules, because the
+# environment each stands up is supposed to satisfy its whole suite — and an
+# RLS proof can abstain one test at a time (a role that bypasses RLS, a missing
+# CREATEROLE), which a floor of "at least N ran" cannot see (audit A360-4). The
+# pool verification sets no skip ceiling for the remaining integration tiers,
+# because the opt-in tiers below legitimately skip there. Floors are set so
+# that a whole test MODULE vanishing trips them: at least (collected − the
+# largest module); recount when the suite changes shape.
 #
 # EXCLUDED from every job, with the reason — the honest complement of the list
 # above. None of these is a scheduling oversight:
@@ -377,22 +365,53 @@ jobs:
           path: ${{ runner.temp }}/unit-tests/
           if-no-files-found: error
 
-  postgres-schema:
-    name: Postgres schema shard ${{ matrix.shard }}/2
+  # One pool of Postgres-backed shards covering the schema/RLS suite (tests/db),
+  # the integration suite and the storage contract. Every shard starts its own
+  # PostgreSQL and MinIO; the shard owning the live-signing module starts
+  # OpenBao. Membership comes from the committed duration baseline
+  # (backend/scripts/ci_postgres_durations.json); exact coverage is verified by
+  # the gate's pool verification.
+  postgres-pool:
+    name: Postgres tests shard ${{ matrix.shard }}/6
     runs-on: ubuntu-24.04
     needs: preflight
     if: needs.preflight.outputs.backend == 'true'
     timeout-minutes: 30
     strategy:
       fail-fast: false
-      matrix:
-        shard: [1, 2]
+      matrix: ${{ fromJSON(needs.preflight.outputs.postgres_matrix) }}
+    services:
+      # Answers the aws-kms envelope contracts of the storage suite. MinIO's
+      # BUILT-IN KMS is enough for its server-side encryption — the KES sidecar
+      # this appeared to need is not.
+      bank-kms:
+        image: nsmithuk/local-kms:3.11.7@sha256:360d7377b6f3687c89a622236791e4fa3f7316366267b437829edbdfa8a5fc60
+        env:
+          KMS_REGION: us-east-1
+          KMS_ACCOUNT_ID: "111122223333"
+        ports:
+          - 18080:8080
     env:
       S3_ENDPOINT: http://127.0.0.1:9000
       S3_ACCESS_KEY: ciminio
       S3_SECRET_KEY: ciminio123
       S3_BUCKET: risk-local
       S3_REGION: us-east-1
+      # Ungates tests/attestation/service/test_attestation_openbao.py against native OpenBao
+      # started below. Absent (a developer's machine), those tests skip and the
+      # rest of the suite is unaffected.
+      OPENBAO_TEST_ADDR: http://127.0.0.1:8200
+      OPENBAO_TEST_TOKEN: aequoros-ci-root
+      # STORAGE_RETIRE_AFTER is REQUIRED: enforce_retirement refuses to build a
+      # client for env=mvp without one, so every storage contract test errors in
+      # its fixture without it. test_storage_config.py clears the name itself,
+      # so setting it here is safe. The date is CI-local and deliberately far
+      # out — this job proves the storage contract, not the retirement policy.
+      STORAGE_BACKEND: minio
+      STORAGE_ENV: mvp
+      STORAGE_RETIRE_AFTER: "2099-01-01"
+      STORAGE_KMS_KEY_ID: aequoros-key
+      TEST_KMS_ENDPOINT_URL: http://127.0.0.1:18080
     steps:
       - uses: actions/checkout@v4
       - name: Set up PostgreSQL
@@ -420,10 +439,11 @@ jobs:
       # that exist to prove tenant isolation are the ones that go red, which
       # invites "fix" by relaxing the assertion. Never point this job at a
       # superuser connection, and never at the primary.
-      # Test infrastructure may create isolated roles and administer objects via
+      # CREATEROLE: the schema suite provisions disposable roles directly. Test
+      # infrastructure may create isolated roles and administer objects via
       # the NOLOGIN owner. It is not an application credential. Real application
       # role behavior is checked using independent, unprivileged logins.
-      - name: Create restricted migration test role
+      - name: Create restricted test role
         env:
           PGPASSWORD: postgres
         run: |
@@ -435,7 +455,7 @@ jobs:
           GRANT aqs_owner TO risk_service_test WITH ADMIN TRUE, INHERIT TRUE, SET TRUE;
           GRANT aequoros_audit_owner TO risk_service_test WITH ADMIN TRUE, INHERIT TRUE, SET TRUE;
           SQL
-      - name: Start MinIO for document cleanup coverage
+      - name: Start MinIO for document and storage contracts
         id: minio
         uses: ./.github/actions/setup-minio
       - name: Create document test bucket
@@ -454,34 +474,60 @@ jobs:
           )
           client.create_bucket(Bucket=os.environ["S3_BUCKET"])
           PY
-      - name: Migration chain, RLS policies and schema defaults
+      - name: Start OpenBao
+        id: openbao
+        if: matrix.openbao
+        uses: ./.github/actions/setup-openbao
+      # Two phases per shard. The schema/RLS slice runs SERIALLY: schema tests
+      # grant function privileges to concurrently existing roles, so migration
+      # and role-probe fixtures must never overlap in one database — the same
+      # serial contract the schema suite always had, now per shard. The
+      # remaining integration/storage scope runs with workers against the same
+      # database, which the fixtures isolate by disposable per-run schemas.
+      - name: Schema slice, serial
         env:
           TEST_DATABASE_URL: ${{ env.POSTGRES_TEST_URL }}
           POSTGRES_PRIVILEGE_TESTS_REQUIRED: "1"
           CI_POSTGRES_SHARD: ${{ matrix.shard }}
-          CI_POSTGRES_FILES: "[]"
-          CI_POSTGRES_SUITE: schema
-          CI_POSTGRES_REPORT_DIR: ${{ runner.temp }}/pg-schema
-          CI_DATABASE_OBSERVATIONS: ${{ runner.temp }}/pg-schema/database-observations
-          PYTEST_ADDOPTS: -p scripts.ci_postgres_plugin --junitxml=${{ runner.temp }}/pg-schema/report.xml
+          CI_POSTGRES_FILES: ${{ needs.preflight.outputs.postgres_files }}
+          CI_POSTGRES_PHASE: schema
+          CI_POSTGRES_REPORT_DIR: ${{ runner.temp }}/pg-pool
+          CI_DATABASE_OBSERVATIONS: ${{ runner.temp }}/pg-pool/database-observations
+          PYTEST_ADDOPTS: -p scripts.ci_postgres_plugin --junitxml=${{ runner.temp }}/pg-pool/report-schema.xml
         working-directory: backend
         run: uv run python scripts/local_services.py run --postgres --storage --role-admin -- uv run pytest -m integration tests/db
-      - name: Upload failed schema shard PostgreSQL log
+      - name: Integration and storage slice
+        env:
+          TEST_DATABASE_URL: ${{ env.POSTGRES_TEST_URL }}
+          CI_POSTGRES_SHARD: ${{ matrix.shard }}
+          CI_POSTGRES_FILES: ${{ needs.preflight.outputs.postgres_files }}
+          CI_POSTGRES_PHASE: suite
+          CI_POSTGRES_REPORT_DIR: ${{ runner.temp }}/pg-pool
+          CI_DATABASE_OBSERVATIONS: ${{ runner.temp }}/pg-pool/database-observations
+          PYTEST_ADDOPTS: -p scripts.ci_postgres_plugin --junitxml=${{ runner.temp }}/pg-pool/report-suite.xml
+        working-directory: backend
+        run: uv run python scripts/local_services.py run --postgres --storage --role-admin -- uv run pytest -m integration -n 4 --dist loadfile --ignore=tests/db --ignore=tests/case/api/test_calculations_integration.py --ignore=tests/case/api/test_liquidity_integration.py --ignore=tests/case/api/test_scenarios_integration.py --ignore=tests/storage/test_key_rotation_concurrency_integration.py tests
+      - name: Upload failed pool shard PostgreSQL log
         if: failure()
         uses: actions/upload-artifact@v7
         with:
-          name: pg-schema-server-log-${{ matrix.shard }}
+          name: pg-pool-server-log-${{ matrix.shard }}
           path: ${{ runner.temp }}/postgres.log
           if-no-files-found: ignore
           retention-days: 7
-      - name: Upload schema shard evidence
+      - name: Upload pool shard evidence
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: pg-schema-${{ matrix.shard }}
-          path: ${{ runner.temp }}/pg-schema/
+          name: pg-pool-${{ matrix.shard }}
+          path: ${{ runner.temp }}/pg-pool/
           if-no-files-found: error
           retention-days: 7
+      - name: Stop OpenBao
+        if: always() && steps.openbao.outputs.pid != ''
+        env:
+          SERVICE_PID: ${{ steps.openbao.outputs.pid }}
+        run: kill "$SERVICE_PID" 2>/dev/null || true
       - name: Stop MinIO
         if: always() && steps.minio.outputs.pid != ''
         env:
@@ -528,8 +574,8 @@ jobs:
         working-directory: backend
         run: uv run python scripts/local_services.py run --postgres -- uv run pytest -m integration tests/case/api/test_liquidity_integration.py tests/case/api/test_scenarios_integration.py tests/case/api/test_calculations_integration.py tests/storage/test_key_rotation_concurrency_integration.py
       # Retain the execution floor and require zero skips for the lock owner.
-      # The gate's integration-suite verification also checks exact cross-owner
-      # coverage; ownership and service requirements: backend/README.md#run-tests.
+      # The gate's verification also checks exact cross-owner coverage;
+      # ownership and service requirements: backend/README.md#run-tests.
       - name: The concurrency tests must have executed, not skipped
         run: python3 .github/scripts/assert_pytest_ran.py "$RUNNER_TEMP/pg-locks/report.xml" --min-executed 60 --max-skipped 0
       - name: Upload lock integration execution evidence
@@ -539,171 +585,6 @@ jobs:
           name: pg-locks
           path: ${{ runner.temp }}/pg-locks/
           if-no-files-found: error
-
-  postgres-shard:
-    name: Integration tests shard ${{ matrix.shard }}/4
-    runs-on: ubuntu-24.04
-    needs: preflight
-    if: needs.preflight.outputs.backend == 'true'
-    timeout-minutes: 30
-    strategy:
-      fail-fast: false
-      matrix: ${{ fromJSON(needs.preflight.outputs.postgres_matrix) }}
-    env:
-      # Ungates tests/attestation/service/test_attestation_openbao.py against native OpenBao
-      # started below. Absent (a developer's machine), those tests skip and the
-      # rest of the suite is unaffected.
-      OPENBAO_TEST_ADDR: http://127.0.0.1:8200
-      OPENBAO_TEST_TOKEN: aequoros-ci-root
-    steps:
-      - uses: actions/checkout@v4
-      - name: Set up PostgreSQL
-        uses: ./.github/actions/setup-postgres
-      - uses: jdx/mise-action@v5
-        with:
-          # Pinned — see MISE VERSION in the header. Bump deliberately.
-          version: 2026.7.7
-          install_args: python@3.13 uv@0.11.18 node@24 pnpm@11.2.2
-      - name: Install risk service dependencies
-        run: mise run risk-service:sync
-      - name: Create restricted test role
-        env:
-          PGPASSWORD: postgres
-        run: |
-          psql --host localhost --username postgres --dbname risk_service --set ON_ERROR_STOP=1 <<'SQL'
-          CREATE ROLE risk_service_test
-            LOGIN PASSWORD 'risk_service_test'
-            NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS;
-          GRANT CONNECT, CREATE, TEMPORARY ON DATABASE risk_service TO risk_service_test;
-          GRANT aqs_owner TO risk_service_test WITH ADMIN TRUE, INHERIT TRUE, SET TRUE;
-          GRANT aequoros_audit_owner TO risk_service_test WITH ADMIN TRUE, INHERIT TRUE, SET TRUE;
-          SQL
-      - name: Start OpenBao
-        id: openbao
-        if: matrix.openbao
-        uses: ./.github/actions/setup-openbao
-      - name: Provide MinIO for native service contracts
-        id: minio
-        if: matrix.minio
-        uses: ./.github/actions/setup-minio
-      - name: Integration tests against Postgres
-        env:
-          TEST_DATABASE_URL: ${{ env.POSTGRES_TEST_URL }}
-          CI_POSTGRES_SHARD: ${{ matrix.shard }}
-          CI_POSTGRES_FILES: ${{ needs.preflight.outputs.postgres_files }}
-          CI_POSTGRES_REPORT_DIR: ${{ runner.temp }}/pg-suite
-          CI_DATABASE_OBSERVATIONS: ${{ runner.temp }}/pg-suite/database-observations
-          PYTEST_ADDOPTS: -p scripts.ci_postgres_plugin --junitxml=${{ runner.temp }}/pg-suite/report.xml
-        working-directory: backend
-        run: uv run python scripts/local_services.py run --postgres -- uv run pytest -m integration -n 4 --dist loadfile --ignore=tests/db --ignore=tests/case/api/test_calculations_integration.py --ignore=tests/case/api/test_liquidity_integration.py --ignore=tests/case/api/test_scenarios_integration.py --ignore=tests/storage
-      - name: Upload failed suite shard PostgreSQL log
-        if: failure()
-        uses: actions/upload-artifact@v7
-        with:
-          name: pg-suite-server-log-${{ matrix.shard }}
-          path: ${{ runner.temp }}/postgres.log
-          if-no-files-found: ignore
-          retention-days: 7
-      - name: Upload suite shard evidence
-        if: always()
-        uses: actions/upload-artifact@v7
-        with:
-          name: pg-suite-${{ matrix.shard }}
-          path: ${{ runner.temp }}/pg-suite/
-          if-no-files-found: error
-          retention-days: 7
-      - name: Stop OpenBao
-        if: always() && steps.openbao.outputs.pid != ''
-        env:
-          SERVICE_PID: ${{ steps.openbao.outputs.pid }}
-        run: kill "$SERVICE_PID" 2>/dev/null || true
-      - name: Stop MinIO
-        if: always() && steps.minio.outputs.pid != ''
-        env:
-          SERVICE_PID: ${{ steps.minio.outputs.pid }}
-        run: kill "$SERVICE_PID" 2>/dev/null || true
-
-  storage:
-    name: Storage contract
-    runs-on: ubuntu-24.04
-    needs: preflight
-    if: needs.preflight.outputs.backend == 'true'
-    timeout-minutes: 20
-    services:
-      bank-kms:
-        image: nsmithuk/local-kms:3.11.7@sha256:360d7377b6f3687c89a622236791e4fa3f7316366267b437829edbdfa8a5fc60
-        env:
-          KMS_REGION: us-east-1
-          KMS_ACCOUNT_ID: "111122223333"
-        ports:
-          - 18080:8080
-    steps:
-      - uses: actions/checkout@v4
-      - name: Set up PostgreSQL
-        uses: ./.github/actions/setup-postgres
-      - uses: jdx/mise-action@v5
-        with:
-          # Pinned — see MISE VERSION in the header. Bump deliberately.
-          version: 2026.7.7
-          install_args: python@3.13 uv@0.11.18 node@24 pnpm@11.2.2
-      - name: Install risk service dependencies
-        run: mise run risk-service:sync
-      - name: Create restricted storage test role
-        env:
-          PGPASSWORD: postgres
-        run: |
-          psql --host localhost --username postgres --dbname risk_service --set ON_ERROR_STOP=1 <<'SQL'
-          CREATE ROLE risk_service_test
-            LOGIN PASSWORD 'risk_service_test'
-            NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS;
-          GRANT CONNECT, CREATE, TEMPORARY ON DATABASE risk_service TO risk_service_test;
-          GRANT aqs_owner TO risk_service_test WITH ADMIN TRUE, INHERIT TRUE, SET TRUE;
-          GRANT aequoros_audit_owner TO risk_service_test WITH ADMIN TRUE, INHERIT TRUE, SET TRUE;
-          SQL
-      - name: Start MinIO with built-in KMS
-        id: minio
-        uses: ./.github/actions/setup-minio
-      # STORAGE_RETIRE_AFTER is REQUIRED: enforce_retirement refuses to build a
-      # client for env=mvp without one, so every contract test errors in its
-      # fixture without it. It used to be omitted because the process env leaked
-      # into tests/storage/test_storage_config.py and defeated the refusal that
-      # file asserts; that test now clears the name itself, so setting it here is
-      # safe. The date is CI-local and deliberately far out — this job proves the
-      # storage contract, not the retirement policy, which
-      # test_mvp_past_retirement_refuses_to_initialize covers on its own inputs.
-      - name: Storage contract suite
-        env:
-          TEST_KMS_ENDPOINT_URL: http://127.0.0.1:18080
-          TEST_DATABASE_URL: ${{ env.POSTGRES_TEST_URL }}
-          S3_ENDPOINT: http://127.0.0.1:9000
-          S3_ACCESS_KEY: ciminio
-          S3_SECRET_KEY: ciminio123
-          S3_REGION: us-east-1
-          STORAGE_BACKEND: minio
-          STORAGE_ENV: mvp
-          STORAGE_RETIRE_AFTER: "2099-01-01"
-          STORAGE_KMS_KEY_ID: aequoros-key
-          CI_DATABASE_OBSERVATIONS: ${{ runner.temp }}/storage-tests/database-observations
-          PYTEST_ADDOPTS: --junitxml=${{ runner.temp }}/storage-tests/report.xml
-        working-directory: backend
-        run: uv run python scripts/local_services.py run --postgres --storage -- uv run pytest -m integration tests/storage --ignore=tests/storage/test_key_rotation_concurrency_integration.py
-      # `--max-skipped 0`: MinIO exercises the object-store contract, and
-      # Postgres exercises key-rotation database contracts; locks own concurrency.
-      # Missing either dependency must not silently leave its tests unexercised.
-      - name: The storage contract must have executed, not skipped
-        run: python3 .github/scripts/assert_pytest_ran.py "$RUNNER_TEMP/storage-tests/report.xml" --max-skipped 0
-      - name: Upload storage integration execution evidence
-        if: always()
-        uses: actions/upload-artifact@v7
-        with:
-          name: storage-tests
-          path: ${{ runner.temp }}/storage-tests/
-          if-no-files-found: error
-      - name: Stop MinIO
-        if: always() && steps.minio.outputs.pid != ''
-        env:
-          SERVICE_PID: ${{ steps.minio.outputs.pid }}
-        run: kill "$SERVICE_PID" 2>/dev/null || true
 
   real-data:
     name: Real-data API surface
@@ -743,7 +624,7 @@ jobs:
   # reports, and is red if and only if something it depends on actually failed
   # or was cancelled. It depends directly on every real job — there are no
   # intermediate summary hops to hide a failure two levels deep — and it owns
-  # the shard-coverage verifications the two removed summary jobs used to run.
+  # the pool-coverage verifications and the cross-owner check.
   gate:
     name: Risk service gate
     runs-on: ubuntu-24.04
@@ -753,10 +634,8 @@ jobs:
       - preflight
       - static
       - architecture
-      - postgres-schema
+      - postgres-pool
       - postgres-locks
-      - postgres-shard
-      - storage
       - real-data
     steps:
       # Failure messages name every job that did not pass, with its result, so
@@ -785,23 +664,13 @@ jobs:
       - uses: actions/download-artifact@v8
         if: needs.preflight.outputs.backend == 'true'
         with:
-          pattern: pg-schema-*
+          pattern: pg-pool-*
           path: ${{ runner.temp }}/postgres-reports
-      - name: Verify exact schema-shard coverage and execution guards
-        if: needs.preflight.outputs.backend == 'true'
-        env:
-          CI_POSTGRES_FILES: "[]"
-        run: python3 backend/scripts/ci_postgres.py verify "$RUNNER_TEMP/postgres-reports" --suite schema
-      - uses: actions/download-artifact@v8
-        if: needs.preflight.outputs.backend == 'true'
-        with:
-          pattern: pg-suite-*
-          path: ${{ runner.temp }}/postgres-reports
-      - name: Verify exact integration-shard coverage and execution guards
+      - name: Verify exact pool coverage and execution guards
         if: needs.preflight.outputs.backend == 'true'
         env:
           CI_POSTGRES_FILES: ${{ needs.preflight.outputs.postgres_files }}
-        run: python3 backend/scripts/ci_postgres.py verify "$RUNNER_TEMP/postgres-reports" --suite suite
+        run: python3 backend/scripts/ci_postgres.py verify "$RUNNER_TEMP/postgres-reports"
       - uses: actions/download-artifact@v8
         if: needs.preflight.outputs.backend == 'true'
         with:
@@ -817,11 +686,6 @@ jobs:
         with:
           name: pg-locks
           path: ${{ runner.temp }}/postgres-reports/pg-locks
-      - uses: actions/download-artifact@v8
-        if: needs.preflight.outputs.backend == 'true'
-        with:
-          name: storage-tests
-          path: ${{ runner.temp }}/postgres-reports/storage-tests
       - name: Every classified test has exactly one CI execution owner
         if: needs.preflight.outputs.backend == 'true'
         env:

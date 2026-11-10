@@ -138,7 +138,7 @@ def verify_execution(
                 continue
             owner = path.parent.name
             if not (
-                owner.startswith(("pg-schema-", "pg-suite-"))
+                owner.startswith(("pg-pool-", "pg-suite-", "pg-schema-"))
                 or owner in {"pg-locks", "storage-tests"}
             ):
                 raise ValueError(
