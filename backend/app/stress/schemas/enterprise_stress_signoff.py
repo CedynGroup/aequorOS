@@ -59,12 +59,35 @@ class StressSignoffTransition(ClosedModel):
     reason: str = Field(min_length=1, max_length=1000)
 
 
+class StressSignoffSubmission(StressSignoffTransition):
+    #: The one explicitly named Board signer for this pending attestation.
+    attestation_recipient_user_id: UUID
+
+
+class StressSignoffStepUpRequest(ClosedModel):
+    """Fresh proof of presence for this exact sign-off and digest."""
+
+    id_token: str | None = Field(default=None, min_length=1, max_length=8192)
+    password: str | None = Field(default=None, min_length=1, max_length=1024)
+
+
+class StressSignoffStepUpGranted(ClosedModel):
+    authorization_token: str
+    expires_at: datetime
+    signing_digest: str
+    method: Literal["oidc_reauth", "password_reauth"] | None
+
+
 class StressSignoffAttestation(ClosedModel):
     #: ¶20: the Board's rationale for the credibility of framework + results.
     credibility_rationale: str = Field(min_length=1, max_length=16000)
     #: ¶16 reporting & challenge / ¶20: the Board's challenge and review record.
     board_challenge: str | None = Field(default=None, max_length=16000)
     reason: str = Field(min_length=1, max_length=1000)
+    #: One-shot proof obtained from this sign-off's step-up endpoint.
+    authorization_token: str = Field(min_length=1, max_length=512)
+    #: The value the signer reviewed. The service recomputes it before signing.
+    expected_signing_digest: str = Field(min_length=64, max_length=64, pattern="^[0-9a-f]{64}$")
 
     _no_control_characters = field_validator("credibility_rationale", "board_challenge")(
         reject_control_characters
@@ -90,6 +113,9 @@ class StressSignoffRead(ClosedModel):
     created_by: UUID | None
     submitted_by: UUID | None
     submitted_at: datetime | None
+    attestation_recipient_user_id: UUID | None
+    signing_digest: str
+    signing_authorization_id: UUID | None
     attested_by: UUID | None
     attested_at: datetime | None
     created_at: datetime

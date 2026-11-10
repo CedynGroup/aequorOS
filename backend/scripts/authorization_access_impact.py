@@ -32,6 +32,12 @@ Flags per user:
                           reads no product: the exact shape that locked the
                           Owner out; ``202609160052`` backfills the read row.
 
+The ``signing`` column inventories active human holders of whole-book,
+exact-bank REG/restricted ``sign_off`` authority. Organization-wide grants do
+not appear. This is a grant inventory, not certification eligibility: source
+READ, a named recipient, checker APPROVE, digest stability, and genuine step-up
+remain independent ceremony requirements.
+
 The ``filing`` column answers the filing cutover of 2026-09-20: which
 institutions this user may TRANSMIT a return to the regulator for. It is a
 separate question from product view — the Validator bundle is the only one that
@@ -89,7 +95,7 @@ from uuid import UUID
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session
 
-from app.core.authorization import Module, Permission, Sensitivity
+from app.core.authorization import DataScope, Module, Permission, Sensitivity
 from app.identity.service import authorization
 from app.models import AuthorizationBinding, Bank, Organization, User
 
@@ -122,6 +128,8 @@ class UserAccess:
     data_scopes: dict[str, dict[str, dict[str, object]]] = field(default_factory=dict)
     #: Institutions this user may transmit a return to the regulator for.
     filing_institutions: list[str] = field(default_factory=list)
+    #: Exact-bank REG/restricted SIGN_OFF grant holders, not execution authority.
+    signing_institutions: list[str] = field(default_factory=list)
     #: Organization-wide case authority; bank RISK grants cannot open a case.
     case_permissions: list[str] = field(default_factory=list)
     #: Institutions whose EXAMINER evidence bundle this user's whole-institution
@@ -130,6 +138,46 @@ class UserAccess:
     #: answers "who loses the examiner surfaces", which is the cutover question.
     examiner_evidence: list[str] = field(default_factory=list)
     flags: list[str] = field(default_factory=list)
+
+
+def _signing_institutions(db: Session, principal: _Principal, banks: list[Bank]) -> list[str]:
+    """Inventory exact-bank signing grants without inventing ceremony evidence.
+
+    The same-binding rule the execution gates enforce (#838): ONE grant must
+    independently supply the exact-bank scope AND whole-book data scope — an
+    organization-scoped whole-book grant never combines with a branch-restricted
+    exact-bank grant, so the inventory never reports coverage the gates deny.
+    The earlier whole-institution aggregation is subsumed: a single exact-bank
+    ``ALL`` grant implies it, and the compose-two-grants shape fails here too.
+    """
+    locator = authorization.principal_locator(principal)
+    result: list[str] = []
+    for bank in banks:
+        resource = authorization.ResourceLocator(
+            principal.organization_id,
+            authorization.InstitutionScope.INSTITUTION,
+            bank.id,
+            Module.REGULATORY,
+            Sensitivity.RESTRICTED,
+        )
+        decision = authorization.evaluate_structural_permission(
+            db, locator, authorization.Permission.SIGN_OFF, resource
+        )
+        if not decision.allowed:
+            continue
+        grants = authorization.load_effective_grants(
+            db,
+            organization_id=principal.organization_id,
+            binding_ids=decision.matching_binding_ids,
+        )
+        if any(
+            grant.institution_scope is authorization.InstitutionScope.INSTITUTION
+            and grant.institution_id == bank.id
+            and grant.data_scope is DataScope.ALL
+            for grant in grants.values()
+        ):
+            result.append(bank.id)
+    return sorted(result)
 
 
 def build_report(db: Session, *, organization_id: str) -> list[UserAccess]:
@@ -153,9 +201,10 @@ def build_report(db: Session, *, organization_id: str) -> list[UserAccess]:
     )
     report: list[UserAccess] = []
     for user in users:
+        principal = _Principal(organization_id, user.id, user.authorization_version)
         projection = authorization.project_effective_authority(
             db,
-            _Principal(organization_id, user.id, user.authorization_version),
+            principal,
             banks,
             failure_surface="access_impact_report",
         )
@@ -243,6 +292,7 @@ def build_report(db: Session, *, organization_id: str) -> list[UserAccess]:
                 institutions=institutions,
                 data_scopes=data_scopes,
                 filing_institutions=filing_institutions,
+                signing_institutions=_signing_institutions(db, principal, banks),
                 case_permissions=sorted(
                     f"{cap.sensitivity.value}/{cap.permission.value}"
                     for cap in projection.organization_capabilities
@@ -313,6 +363,7 @@ def render_table(rows: list[UserAccess]) -> str:
         "product view",
         "data scope",
         "filing",
+        "signing",
         "case RISK",
         "examiner",
         "flags",
@@ -343,6 +394,7 @@ def render_table(rows: list[UserAccess]) -> str:
                 product,
                 data_scope,
                 ",".join(row.filing_institutions) or "-",
+                ",".join(row.signing_institutions) or "-",
                 ",".join(row.case_permissions) or "-",
                 ",".join(row.examiner_evidence) or "-",
                 ",".join(row.flags) or "-",

@@ -15,10 +15,9 @@
  *     control that silently did nothing would be worse than one that explains.
  *  2. The Board control exists at all, and only for the one report that can
  *     carry a third signature block.
- *  3. The embedded attestation panel offers the approve-and-sign act on the
- *     authority the SERVER asks for: capital authority for an ICAAP report,
- *     the reporting ladder for every other return. A board member whose whole
- *     authority is over capital was previously never shown the control.
+ *  3. The embedded attestation panel keeps source-family approval for routing
+ *     and voiding, but offers checker signing on exact-institution Regulatory
+ *     Reporting approval for ICAAP and every other return.
  *
  * Harness: the same transpile-and-evaluate loader as
  * `tests/icaap/p3-resilience.test.ts` — read its header for why the
@@ -78,6 +77,9 @@ let policyList: Record<string, unknown> = {
 };
 /** The projected capabilities for the active institution. */
 let moduleScope: Record<string, unknown> = { capitalApprove: false };
+/** Signing eligibility is tested in the workspace suite, not conflated with
+ * the filing authority whose checker offer this file characterizes. */
+let signingAccessAllowed = true;
 /** The scalar session roles. Kept as a fixture precisely so the tests can
  * prove they no longer decide anything on a return. */
 let sessionRoles: string[] = [];
@@ -182,12 +184,26 @@ function stubFor(specifier: string): unknown | undefined {
       };
     case "@/components/profile/ProfileProvider":
       return {
-        useUserProfile: () => ({ effectiveAuthority, isLoading: false }),
+        useUserProfile: () => ({
+          effectiveAuthority,
+          isLoading: false,
+          profile: { userId: "user-checker" },
+        }),
       };
     case "@/lib/api/hooks":
       return hooksModule;
     case "@/lib/api/grantAdministration":
       return { useGrantAdministrationAccess: () => true };
+    case "@/lib/api/signingAccess":
+      return {
+        useSignoffEligibility: () => ({
+          allowed: signingAccessAllowed,
+          reason: signingAccessAllowed
+            ? ""
+            : "Requires an exact-institution Signer grant.",
+        }),
+        useSigningSourceEligibility: () => ({ allowed: true, reason: "" }),
+      };
     // The configure gates live in this hook module; these panels are exercised
     // for their copy and Board control, with the authority fixtures above.
     case "@/lib/api/configureAccess":
@@ -418,6 +434,7 @@ function resetSwitches(): void {
     icaapSigningSuspended: false,
   };
   moduleScope = { capitalApprove: false };
+  signingAccessAllowed = true;
   sessionRoles = [];
   effectiveAuthority = reportingAuthority(["view"]);
   attestationStatus = status();
@@ -547,9 +564,10 @@ test("ordered signing is offered, and forced once the Board signs", () => {
 // 3. Who is OFFERED the approve-and-sign act
 // ---------------------------------------------------------------------------
 
-test("an ICAAP checker is offered the act on capital authority alone", () => {
+test("ICAAP signing uses Regulatory Reporting approval without Capital approval", () => {
   resetSwitches();
-  moduleScope = { capitalApprove: true };
+  moduleScope = { capitalApprove: false };
+  effectiveAuthority = reportingAuthority(["view", "approve"]);
   sessionRoles = [];
   const text = mount(component("AttestationPanel.tsx"), {
     ...PANEL_PROPS,
@@ -557,25 +575,56 @@ test("an ICAAP checker is offered the act on capital authority alone", () => {
   }).text();
   assert.ok(
     text.includes("Approve and certify") || text.includes("Approve and sign"),
-    "a board member holding capital approval authority was offered nothing",
+    "the Signer holding Regulatory Reporting approval was offered nothing",
+  );
+  assert.ok(
+    text.includes("No pending current-cycle recipient names you"),
+    "the disabled checker did not explain its missing named route",
   );
 });
 
-test("a scalar approver with no capital standing is offered nothing on an ICAAP", () => {
+test("capital approval alone cannot open ICAAP signing without Signer", () => {
   resetSwitches();
-  moduleScope = { capitalApprove: false };
-  sessionRoles = ["approver", "admin"];
+  moduleScope = { capitalApprove: true };
+  signingAccessAllowed = false;
   const text = mount(component("AttestationPanel.tsx"), {
     ...PANEL_PROPS,
     returnFamily: "icaap",
   }).text();
   assert.ok(
-    text.includes("capital approval authority for this institution"),
-    "the panel did not name the authority the server actually asks for",
+    !text.includes("Approve and certify") && !text.includes("Approve and sign"),
+    "approval authority bypassed the signing grant gate",
+  );
+  assert.ok(
+    text.includes("Requires an exact-institution Signer grant"),
+    "the withheld signing action did not explain its missing grant",
+  );
+});
+
+test("a scalar approver without signing approval is offered no ICAAP checker act", () => {
+  resetSwitches();
+  moduleScope = { capitalApprove: true };
+  sessionRoles = ["approver", "admin"];
+  attestationStatus = status({
+    recipients: [
+      {
+        signingRole: "approver",
+        recipientUserId: "user-checker",
+        status: "pending",
+      },
+    ],
+  });
+  const text = mount(component("AttestationPanel.tsx"), {
+    ...PANEL_PROPS,
+    returnFamily: "icaap",
+  }).text();
+  assert.ok(
+    text.includes("Regulatory Reporting approval with Restricted data"),
+    "the panel did not name the signing authority the server asks for",
   );
   assert.ok(
     !text.includes("Approving requires the approver role"),
-    "an ICAAP report explained itself with the prudential ladder's sentence",
+    "the scalar session role replaced the caller's exact binding",
   );
 });
 

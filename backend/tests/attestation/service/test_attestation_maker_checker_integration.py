@@ -43,6 +43,7 @@ from app.core.config import get_settings
 from app.models import (
     AttestationSignature,
     AuditEvent,
+    PackageSignatureRecipient,
     RegulatoryPackage,
     RegulatoryPackageApproval,
     ReturnSigningPolicy,
@@ -295,13 +296,8 @@ def test_a_distinct_authorised_approver_releases_the_package(db_session: Session
 # --- 4. an unentitled role cannot approve -------------------------------------
 
 
-def test_an_analyst_cannot_certify_as_a_checker(db_session: Session) -> None:
-    """Case 4. The checker slot needs the approver platform role.
-
-    Driven through ``attestation_api`` rather than the service, because the
-    entitlement gate is what the API layer adds and it is the surface a real
-    caller reaches.
-    """
+def test_an_unrouted_analyst_cannot_enter_the_checker_ceremony(db_session: Session) -> None:
+    """D7 rejects the missing named route before any token is consumed."""
     package = _seed(db_session)
     _certify(db_session, MAKER, package, role="preparer")
     db_session.refresh(package)
@@ -320,8 +316,10 @@ def test_an_analyst_cannot_certify_as_a_checker(db_session: Session) -> None:
                 ).certification_digest,
             ),
         )
-    assert raised.value.status_code == 403
-    assert "scoped binding" in str(raised.value.detail)
+    assert raised.value.status_code == 409
+    detail = raised.value.detail
+    assert isinstance(detail, dict)
+    assert detail.get("error_code") == "signer_not_routed"
 
     db_session.rollback()
     db_session.refresh(package)
@@ -579,13 +577,13 @@ def test_a_replayed_or_repeated_approval_does_not_bypass_separation(
     # (a) the same approver certifying again
     with pytest.raises(AttestationConflict) as repeated:
         _certify(db_session, APPROVER, package, role="approver")
-    assert repeated.value.error_code == "already_fully_certified"
+    assert repeated.value.error_code == "signer_not_routed"
     db_session.rollback()
 
     # (b) a DIFFERENT approver certifying again
     with pytest.raises(AttestationConflict) as second_checker:
         _certify(db_session, OTHER_APPROVER, package, role="approver")
-    assert second_checker.value.error_code == "already_fully_certified"
+    assert second_checker.value.error_code == "signer_not_routed"
     db_session.rollback()
 
     # (c) the preparer replaying the bare decision on the approved package
@@ -655,6 +653,14 @@ def test_refused_approvals_leave_the_signature_evidence_untouched(
     with pytest.raises(AttestationConflict):
         _certify(db_session, MAKER, package, role="approver")
     db_session.rollback()
+    for recipient in db_session.scalars(
+        select(PackageSignatureRecipient).where(
+            PackageSignatureRecipient.package_id == package.id,
+            PackageSignatureRecipient.signing_role == "approver",
+        )
+    ):
+        db_session.delete(recipient)
+    db_session.commit()
 
     assert _signature_fingerprints(db_session) == before
     assert _signature_count(db_session) == 1

@@ -308,6 +308,7 @@ def mint_authorization(  # noqa: PLR0913 - the binding tuple IS the argument lis
     signing_role: str,
     certification_digest: str,
     auth_evidence: dict[str, Any],
+    audit_entity_type: str = "regulatory_package",
 ) -> tuple[str, SigningAuthorization]:
     """Issue a single-use signing authorisation. The raw token is returned once."""
     raw = secrets.token_urlsafe(32)
@@ -329,7 +330,7 @@ def mint_authorization(  # noqa: PLR0913 - the binding tuple IS the argument lis
         db,
         ctx,
         event_type="attestation.step_up_authorized",
-        entity_type="regulatory_package",
+        entity_type=audit_entity_type,
         entity_id=package_id,
         details={
             "signing_role": signing_role,

@@ -20,7 +20,8 @@ import {
  */
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
+import { Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { Activity, FileBarChart, Play } from "lucide-react";
 import SectionCard from "@/components/ui/SectionCard";
 import SubTabs from "@/components/ui/SubTabs";
@@ -66,6 +67,7 @@ import {
   useMacroScenario,
   useMacroScenarios,
   useManagementActionPlans,
+  useReopenEnterpriseStressRun,
   useRunEnterpriseStress,
   useEnterpriseStressRegistry,
 } from "./hooks";
@@ -103,7 +105,21 @@ const TABS: { key: Tab; label: string }[] = [
 export default function EnterpriseStressWorkbench(props: {
   moduleLens?: StressModuleLens;
 }) {
+  return (
+    <Suspense fallback={null}>
+      <EnterpriseStressWorkbenchWithRecovery {...props} />
+    </Suspense>
+  );
+}
+
+function EnterpriseStressWorkbenchWithRecovery(props: {
+  moduleLens?: StressModuleLens;
+}) {
   const scope = useQueryAuthorityScope();
+  const searchParams = useSearchParams();
+  const resumeRunId = searchParams.get("runId");
+  const resumeTab =
+    TABS.find(({ key }) => key === searchParams.get("tab"))?.key ?? "run";
   const { bank, isLoading } = useBankContext();
   const stressAuthority = useStressAuthority();
   const bankId = bank?.id;
@@ -153,6 +169,8 @@ export default function EnterpriseStressWorkbench(props: {
   return (
     <ScopedEnterpriseStressWorkbench
       key={`${scope.tenantId}:${scope.authorityId}:${bankId}`}
+      resumeRunId={resumeRunId}
+      resumeTab={resumeTab}
       {...props}
     />
   );
@@ -160,8 +178,12 @@ export default function EnterpriseStressWorkbench(props: {
 
 function ScopedEnterpriseStressWorkbench({
   moduleLens,
+  resumeRunId,
+  resumeTab,
 }: {
   moduleLens?: StressModuleLens;
+  resumeRunId: string | null;
+  resumeTab: Tab;
 }) {
   const { bank, period, periods, periodsStatus, moduleScope } =
     useBankContext();
@@ -182,7 +204,7 @@ function ScopedEnterpriseStressWorkbench({
           ? IRRBB_CONFIDENTIAL_RUN_REASON
           : null;
 
-  const [tab, setTab] = useState<Tab>("run");
+  const [tab, setTab] = useState<Tab>(resumeTab);
   const [builderOpen, setBuilderOpen] = useState(false);
   const [editScenarioId, setEditScenarioId] = useState<string | null>(null);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
@@ -220,12 +242,43 @@ function ScopedEnterpriseStressWorkbench({
     approvedScenarios.map((s) => s.id),
   );
   const runMutation = useRunEnterpriseStress(bankId);
+  const reopen = useReopenEnterpriseStressRun(bankId);
   const sdiCapital = useSdiCapitalSummary(
     isSdiTenant && moduleScope.capitalAggregatedView ? bankId : undefined,
   );
   const sdiLiquidity = useSdiLiquidityPosition(
     isSdiTenant && moduleScope.liquidityConfidentialView ? bankId : undefined,
   );
+
+  const reopenRun = reopen.mutateAsync;
+  const resumeStarted = useRef(false);
+  useEffect(() => {
+    if (!resumeRunId || resumeStarted.current) return;
+    resumeStarted.current = true;
+    let active = true;
+    void reopenRun(resumeRunId)
+      .then((run) => {
+        if (!active) return;
+        setFocusedRun(run);
+        const query = new URLSearchParams(window.location.search);
+        query.delete("runId");
+        query.delete("tab");
+        const remaining = query.toString();
+        window.history.replaceState(
+          window.history.state,
+          "",
+          `${window.location.pathname}${remaining ? `?${remaining}` : ""}`,
+        );
+      })
+      .catch(() => {
+        if (active) setRunError("The selected stress run could not be reopened.");
+      });
+    return () => {
+      active = false;
+      // React StrictMode replays effects; the live attempt owns this guard.
+      resumeStarted.current = false;
+    };
+  }, [reopenRun, resumeRunId]);
 
   useEffect(() => {
     if (isSdiTenant) {
@@ -250,6 +303,7 @@ function ScopedEnterpriseStressWorkbench({
   // Default the focused run to the worst run in the registry when none picked.
   const effectiveRun = useMemo(() => {
     if (focusedRun) return focusedRun;
+    if (resumeRunId) return null;
     const runs = registry.data ?? [];
     if (runs.length === 0) return null;
     return [...runs].sort(
@@ -258,7 +312,7 @@ function ScopedEnterpriseStressWorkbench({
         (numOrNull(b.summary.car_erosion_pp) ?? Number.NEGATIVE_INFINITY) -
         (numOrNull(a.summary.car_erosion_pp) ?? Number.NEGATIVE_INFINITY),
     )[0];
-  }, [focusedRun, registry.data]);
+  }, [focusedRun, registry.data, resumeRunId]);
 
   const toggleSelect = (s: MacroScenarioSummary) => {
     setSelectedIds((ids) =>
@@ -373,6 +427,11 @@ function ScopedEnterpriseStressWorkbench({
       </div>
 
       <SubTabs items={TABS} active={tab} onChange={(k) => setTab(k as Tab)} />
+      {runError && tab !== "run" && (
+        <p role="alert" className="text-caption text-critical">
+          {runError}
+        </p>
+      )}
 
       {tab === "run" && (
         <div className="grid grid-cols-1 xl:grid-cols-5 gap-6 items-start">
@@ -577,9 +636,16 @@ function ScopedEnterpriseStressWorkbench({
           <NoRun onConfigure={() => setTab("run")} />
         ))}
 
-      {tab === "governance" && (
-        <SignoffPanel run={effectiveRun} bankId={bankId} />
-      )}
+      {tab === "governance" &&
+        (resumeRunId && !focusedRun ? (
+          !runError && (
+            <p role="status" className="text-caption text-slate">
+              Reopening the selected stress run.
+            </p>
+          )
+        ) : (
+          <SignoffPanel run={effectiveRun} bankId={bankId} />
+        ))}
 
       {tab === "registry" && (
         <RunRegistry

@@ -408,6 +408,19 @@ class EnterpriseStressSignoff(UuidV4PrimaryKeyMixin, TimestampMixin, Base):
     created_by: Mapped[UUID | None] = mapped_column(Uuid(as_uuid=True), nullable=True)
     submitted_by: Mapped[UUID | None] = mapped_column(Uuid(as_uuid=True), nullable=True)
     submitted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    # The submitter names exactly who may attest. Routing never replaces the
+    # recipient's own exact-bank Signer, READ, digest and step-up obligations.
+    attestation_recipient_user_id: Mapped[UUID | None] = mapped_column(
+        Uuid(as_uuid=True), nullable=True
+    )
+    # Frozen when the maker submits. Attestation recomputes the value-based
+    # digest and links the consumed one-shot authorization as durable evidence.
+    signing_digest: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    signing_authorization_id: Mapped[UUID | None] = mapped_column(
+        Uuid(as_uuid=True),
+        ForeignKey("signing_authorizations.id"),
+        nullable=True,
+    )
     # Set on attestation; the maker-checker rule (attester != preparer) is enforced
     # in the service, so these user ids are never equal on an attested row.
     attested_by: Mapped[UUID | None] = mapped_column(Uuid(as_uuid=True), nullable=True)

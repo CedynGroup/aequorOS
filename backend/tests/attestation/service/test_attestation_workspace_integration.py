@@ -163,9 +163,13 @@ def _users(db: Session) -> None:
     for user_id, bundle in (
         (DEMO_USER_ID, RoleBundle.ANALYST),
         (DEMO_USER_ID, RoleBundle.APPROVER),
+        (DEMO_USER_ID, RoleBundle.SIGNER),
         (APPROVER_USER_ID, RoleBundle.APPROVER),
+        (APPROVER_USER_ID, RoleBundle.SIGNER),
         (ANALYST_USER_ID, RoleBundle.ANALYST),
+        (ANALYST_USER_ID, RoleBundle.SIGNER),
         (OTHER_APPROVER_USER_ID, RoleBundle.APPROVER),
+        (OTHER_APPROVER_USER_ID, RoleBundle.SIGNER),
     ):
         authorization.create_role_binding(
             db,
@@ -244,6 +248,38 @@ def _seed(
     return package
 
 
+def _name_certifier(
+    db: Session, package: RegulatoryPackage, *, role: str, user_id: UUID, signer_id: str
+) -> None:
+    """Give a successful legacy ceremony fixture its now-mandatory named route."""
+    existing = db.scalar(
+        select(PackageSignatureRecipient.id).where(
+            PackageSignatureRecipient.organization_id == package.organization_id,
+            PackageSignatureRecipient.package_id == package.id,
+            PackageSignatureRecipient.attestation_cycle == package.attestation_cycle,
+            PackageSignatureRecipient.signing_role == role,
+        )
+    )
+    if existing is not None:
+        return
+    user = tenant_user(db, organization_id=package.organization_id, user_id=user_id)
+    db.add(
+        PackageSignatureRecipient(
+            organization_id=package.organization_id,
+            package_id=package.id,
+            attestation_cycle=package.attestation_cycle,
+            signing_role=role,
+            recipient_user_id=user_id,
+            recipient_signer_id=signer_id,
+            recipient_display_name=user.display_name,
+            recipient_job_title=user.job_title,
+            routing_order=1,
+            status="pending",
+        )
+    )
+    db.flush()
+
+
 def _certify(  # noqa: PLR0913 - mirrors signing.certify's own irreducible inputs
     db: Session,
     ctx: TenantContext,
@@ -255,6 +291,7 @@ def _certify(  # noqa: PLR0913 - mirrors signing.certify's own irreducible input
 ) -> AttestationSignature:
     assert ctx.actor_user_id is not None
     identity = ensure_signer_identity(db, ctx, ctx.actor_user_id)
+    _name_certifier(db, package, role=role, user_id=ctx.actor_user_id, signer_id=identity.signer_id)
     service = SignerKeyService(db, ctx)
     if service.active_key(identity.signer_id) is None:
         service.issue(
@@ -541,6 +578,53 @@ def test_routing_records_the_nominee_and_notifies_them(db_session: Session) -> N
     assert "awaits your signature" in addressed[0].title
 
 
+def test_certify_and_send_reuses_matching_pending_recipients(db_session: Session) -> None:
+    """An existing route is evidence to reuse, not a row to insert again."""
+    package = _seed(db_session)
+    _certify(db_session, MAKER, package, role="preparer", commit=False)
+    db_session.refresh(package)
+    routed = _route(db_session, package, _nominate("approver", APPROVER_USER_ID))
+    notification_count = len(list(db_session.scalars(select(Notification.id))))
+
+    reconciled = routing.reconcile(
+        db_session,
+        MAKER,
+        package,
+        policy=workflow.package_policy(db_session, MAKER, package),
+        nominations=[_nominate("approver", APPROVER_USER_ID)],
+        signatures=workflow.current_signatures(db_session, MAKER, package),
+        reason="certify against the existing route",
+    )
+
+    assert [row.id for row in reconciled] == [row.id for row in routed]
+    assert len(list(db_session.scalars(select(PackageSignatureRecipient.id)))) == 2
+    assert len(list(db_session.scalars(select(Notification.id)))) == notification_count
+
+
+def test_certify_and_send_requires_reroute_to_replace_a_pending_recipient(
+    db_session: Session,
+) -> None:
+    package = _seed(db_session)
+    _certify(db_session, MAKER, package, role="preparer", commit=False)
+    db_session.refresh(package)
+    routed = _route(db_session, package, _nominate("approver", APPROVER_USER_ID))
+
+    with pytest.raises(AttestationConflict) as raised:
+        routing.reconcile(
+            db_session,
+            MAKER,
+            package,
+            policy=workflow.package_policy(db_session, MAKER, package),
+            nominations=[_nominate("approver", OTHER_APPROVER_USER_ID)],
+            signatures=workflow.current_signatures(db_session, MAKER, package),
+            reason="attempt an unauthorized route replacement",
+        )
+
+    assert raised.value.error_code == "routing_change_requires_reroute"
+    assert [row.recipient_user_id for row in routed] == [APPROVER_USER_ID]
+    assert len(list(db_session.scalars(select(PackageSignatureRecipient.id)))) == 2
+
+
 def test_the_preparer_cannot_nominate_themselves(db_session: Session) -> None:
     """Maker-checker, reached through routing rather than reimplemented.
 
@@ -627,8 +711,7 @@ def test_a_deactivated_nominee_is_refused(db_session: Session) -> None:
 def test_only_the_named_signer_may_fill_a_routed_slot(db_session: Session) -> None:
     """A nomination the audit trail cannot rely on would be decoration.
 
-    The gate exists only where somebody created it: an unrouted return is
-    unaffected (every other attestation test proves that by passing).
+    Every certification has a current-cycle route; only the named person may fill it.
     """
     package = _seed(db_session)
     _certify(db_session, MAKER, package, role="preparer")
@@ -648,7 +731,11 @@ def test_only_the_named_signer_may_fill_a_routed_slot(db_session: Session) -> No
     _certify(db_session, APPROVER, package, role="approver")
     db_session.refresh(package)
     assert package.attestation_state == "fully_certified"
-    closed = routing.current_recipients(db_session, MAKER, package)
+    closed = [
+        row
+        for row in routing.current_recipients(db_session, MAKER, package)
+        if row.signing_role == "approver"
+    ]
     assert [row.status for row in closed] == ["signed"]
     assert closed[0].signed_at is not None
     assert closed[0].signature_id is not None
@@ -675,7 +762,11 @@ def test_rerouting_frees_a_return_whose_nominee_is_unavailable(
     )
     db_session.commit()
 
-    rerouted = routing.current_recipients(db_session, MAKER, package)
+    rerouted = [
+        row
+        for row in routing.current_recipients(db_session, MAKER, package)
+        if row.status == "pending"
+    ]
     assert [row.recipient_user_id for row in rerouted] == [OTHER_APPROVER_USER_ID]
     other = TenantContext(
         organization_id=DEMO_ORG_ID, actor_user_id=OTHER_APPROVER_USER_ID, authorization_version=1
@@ -750,7 +841,8 @@ def test_a_rejected_nominee_takes_the_certification_with_it(db_session: Session)
     db_session.refresh(package)
     assert package.attestation_state == "unsigned"
     assert package.status == "validated"
-    assert db_session.scalars(select(PackageSignatureRecipient.id)).all() == []
+    remaining_routes = db_session.scalars(select(PackageSignatureRecipient)).all()
+    assert [(row.signing_role, row.status) for row in remaining_routes] == [("preparer", "pending")]
 
 
 # --- the approver's one act: review, sign, approve ---------------------------

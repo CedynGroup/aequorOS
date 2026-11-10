@@ -7,13 +7,13 @@ import os
 import re
 import subprocess
 import sys
-from collections.abc import Generator
+from collections.abc import Generator, Sequence
 from contextlib import contextmanager
 from dataclasses import asdict
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import cast
-from uuid import uuid4
+from uuid import UUID, uuid4
 
 import pytest
 from fastapi.routing import APIRoute
@@ -22,12 +22,18 @@ from sqlalchemy.engine import Connection
 from sqlalchemy.orm import Session
 
 from app.core.authorization import (
+    BindingGrant,
+    BindingStatus,
     DataScope,
     InstitutionScope,
     Module,
     ModuleScope,
+    Permission,
+    PrincipalLocator,
     PrincipalType,
+    ResourceLocator,
     RoleBundle,
+    Sensitivity,
     SensitivityScope,
 )
 from app.identity.service import authorization
@@ -48,6 +54,17 @@ from scripts.authorization_configure_impact import (
     write_artifacts,
 )
 from scripts.authorization_configure_routes import CONFIGURE_ROUTES
+from scripts.authorization_signing_impact import (
+    ImpactInputError as SigningImpactInputError,
+)
+from scripts.authorization_signing_impact import (
+    SigningImpact,
+    SigningReport,
+    _eligibility,
+    build_signing_report,
+    write_signing_artifacts,
+)
+from scripts.authorization_signing_routes import SIGNING_ROUTES
 from tests.support.database import isolated_database
 
 ORG = "OR-IMPCT001"
@@ -148,6 +165,8 @@ def _grant(  # noqa: PLR0913 - one indivisible sentence per call
     institution_id: str | None = None,
     module_scope: ModuleScope = ModuleScope.ALL,
     sensitivity_scope: SensitivityScope = SensitivityScope.ALL,
+    data_scope: DataScope = DataScope.ALL,
+    data_scope_values: tuple[str, ...] = (),
 ) -> None:
     authorization.create_role_binding(
         db,
@@ -156,7 +175,12 @@ def _grant(  # noqa: PLR0913 - one indivisible sentence per call
         principal_type=PrincipalType.HUMAN,
         role_bundle=bundle,
         scope=authorization.BindingScope(
-            institution_scope, institution_id, module_scope, sensitivity_scope
+            institution_scope,
+            institution_id,
+            module_scope,
+            sensitivity_scope,
+            data_scope=data_scope,
+            data_scope_values=data_scope_values,
         ),
         grantor=authorization.GrantorRef(authorization.GrantorType.SYSTEM, "test:impact"),
         reason="impact report fixture",
@@ -495,6 +519,18 @@ def _read_json(path: Path) -> dict[str, object]:
     return cast(dict[str, object], json.loads(path.read_text()))
 
 
+def _object_list(value: object) -> list[dict[str, object]]:
+    """Validate JSON array rows at the test boundary without a type cast."""
+    if not isinstance(value, list):
+        raise TypeError("expected a JSON array")
+    result: list[dict[str, object]] = []
+    for row in value:
+        if not isinstance(row, dict):
+            raise TypeError("expected JSON objects")
+        result.append({str(key): item for key, item in row.items()})
+    return result
+
+
 def _assert_artifact_content(report: ConfigureReport, directory: Path) -> None:
     """Verify consistent, private and non-overwritable policy assessment artifacts."""
     before = _read_json(directory / "configure-before.json")
@@ -609,14 +645,11 @@ def _assert_configure_artifacts(
         )
         collision = capsys.readouterr()
         assert (
-            "failed: impact artifacts already exist; choose a new dated directory"
-            in collision.err
+            "failed: impact artifacts already exist; choose a new dated directory" in collision.err
         )
         assert "no complete assessment" not in collision.err
         assert (
-            configure_impact.main(
-                ["--database-url", "sqlite://", "--organization", "OR-UNKNOWN01"]
-            )
+            configure_impact.main(["--database-url", "sqlite://", "--organization", "OR-UNKNOWN01"])
             == 2
         )
         missing = capsys.readouterr()
@@ -794,6 +827,137 @@ def test_configure_inventory_uses_one_read_only_snapshot(
     )
 
 
+def test_the_report_names_exact_bank_signoff_grant_holders(db_session: Session) -> None:
+    """The signing inventory never substitutes an org-wide or wrong-module grant."""
+    db_session.add(Organization(id=ORG, name="Impact proof"))
+    db_session.add(
+        Bank(
+            id=BANK,
+            organization_id=ORG,
+            name="Impact Bank",
+            short_name="Impact",
+            currency="GHS",
+            jurisdiction_code="GH",
+            license_type="universal_bank",
+            institution_type=FALLBACK_TYPE_CODE,
+        )
+    )
+    exact = _user(db_session, "signer@impact.example")
+    organization_wide = _user(db_session, "organization-signer@impact.example")
+    wrong_module = _user(db_session, "risk-signer@impact.example")
+    db_session.flush()
+    _grant(
+        db_session,
+        exact,
+        RoleBundle.SIGNER,
+        institution_scope=InstitutionScope.INSTITUTION,
+        institution_id=BANK,
+        module_scope=ModuleScope.REGULATORY,
+        sensitivity_scope=SensitivityScope.RESTRICTED,
+    )
+    _grant(
+        db_session,
+        organization_wide,
+        RoleBundle.SIGNER,
+        module_scope=ModuleScope.REGULATORY,
+        sensitivity_scope=SensitivityScope.RESTRICTED,
+    )
+    _grant(
+        db_session,
+        wrong_module,
+        RoleBundle.SIGNER,
+        institution_scope=InstitutionScope.INSTITUTION,
+        institution_id=BANK,
+        module_scope=ModuleScope.RISK,
+        sensitivity_scope=SensitivityScope.RESTRICTED,
+    )
+    db_session.commit()
+
+    rows = {row.email: row for row in build_report(db_session, organization_id=ORG)}
+
+    assert rows["signer@impact.example"].signing_institutions == [BANK]
+    assert rows["organization-signer@impact.example"].signing_institutions == []
+    assert rows["risk-signer@impact.example"].signing_institutions == []
+    assert _rendered_cells(list(rows.values()))["signer@impact.example"]["signing"] == BANK
+
+
+def test_the_report_never_composes_two_grants_into_signing_coverage(
+    db_session: Session, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """An org-scope grant cannot lend its whole-book breadth to a narrowed row.
+
+    The execution gates require ONE binding to supply the exact bank AND the
+    whole-book data scope; the inventory projects the same sentence. A narrowed
+    REGULATORY pair cannot be stored today (the narrowed-module CHECK confines
+    narrowed scopes to credit), so the effective-grant loader is patched to
+    answer exactly as a database holding the historical pair would.
+    """
+    db_session.add(Organization(id=ORG, name="Impact proof"))
+    db_session.add(
+        Bank(
+            id=BANK,
+            organization_id=ORG,
+            name="Impact Bank",
+            short_name="Impact",
+            currency="GHS",
+            jurisdiction_code="GH",
+            license_type="universal_bank",
+            institution_type=FALLBACK_TYPE_CODE,
+        )
+    )
+    composer = _user(db_session, "composing-signer@impact.example")
+    db_session.flush()
+    _grant(
+        db_session,
+        composer,
+        RoleBundle.SIGNER,
+        module_scope=ModuleScope.REGULATORY,
+        sensitivity_scope=SensitivityScope.RESTRICTED,
+    )
+    db_session.commit()
+    org_binding = db_session.scalars(
+        select(AuthorizationBinding).where(
+            AuthorizationBinding.principal_user_id == composer.id
+        )
+    ).one()
+
+    branch_grant = BindingGrant(
+        binding_id=UUID("44444444-4444-4444-8444-444444444444"),
+        organization_id=ORG,
+        principal_id=composer.id,
+        principal_type=PrincipalType.HUMAN,
+        role_bundle=RoleBundle.SIGNER,
+        institution_scope=InstitutionScope.INSTITUTION,
+        institution_id=BANK,
+        module_scope=ModuleScope.REGULATORY,
+        sensitivity_scope=SensitivityScope.RESTRICTED,
+        status=BindingStatus.ACTIVE,
+        valid_from=datetime.now(UTC),
+        valid_until=None,
+        revoked_at=None,
+        data_scope=DataScope.BRANCH,
+        data_scope_values=("Head office",),
+    )
+
+    real_load = authorization.load_effective_grants
+
+    def historical_pair(
+        db: Session, *, organization_id: str, binding_ids: Sequence[UUID]
+    ) -> dict[UUID, BindingGrant]:
+        grants = dict(
+            real_load(db, organization_id=organization_id, binding_ids=binding_ids)
+        )
+        if org_binding.id in binding_ids:
+            grants[branch_grant.binding_id] = branch_grant
+        return grants
+
+    monkeypatch.setattr(authorization, "load_effective_grants", historical_pair)
+
+    rows = {row.email: row for row in build_report(db_session, organization_id=ORG)}
+
+    assert rows["composing-signer@impact.example"].signing_institutions == []
+
+
 def test_the_report_names_who_may_transmit_a_return(db_session: Session) -> None:
     """The filing cutover's gate: the `filing` column is the after-picture.
 
@@ -918,3 +1082,436 @@ def test_the_report_names_who_may_read_examiner_evidence(db_session: Session) ->
     assert cells["confidential@impact.example"]["examiner"] == "-"
     assert cells["liquidity@impact.example"]["examiner"] == "-"
     assert cells["admin@impact.example"]["examiner"] == "-"
+
+
+def _signing_fixture(db: Session) -> dict[str, User]:
+    """Synthetic legacy officers, exact grant holders and E2E identities."""
+    db.add(Organization(id=ORG, name="Signing impact proof"))
+    db.add(
+        Bank(
+            id=BANK,
+            organization_id=ORG,
+            name="Signing Impact Bank",
+            short_name="Signing",
+            currency="GHS",
+            jurisdiction_code="GH",
+            license_type="universal_bank",
+            institution_type=FALLBACK_TYPE_CODE,
+        )
+    )
+    users = {
+        "analyst": _user(db, "e2e.analyst@aequoros.example", role="analyst"),
+        "board": _user(db, "e2e.board@aequoros.example"),
+        "routed": _user(db, "routed@impact.example", role="approver"),
+        "signer_only": _user(db, "signer-only@impact.example"),
+        "org_signer": _user(db, "org-signer@impact.example"),
+        "stress": _user(db, "stress-executive@impact.example", role="approver"),
+        "source_only": _user(db, "source-only@impact.example", role="analyst"),
+        "legacy_admin": _user(db, "legacy-admin@impact.example", role="admin"),
+        "story": _user(
+            db,
+            "journey.approver.aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa@aequoros.example",
+            role="approver",
+        ),
+        "machine": _user(
+            db,
+            "signing-machine@impact.example",
+            role="analyst",
+            auth_provider="service",
+        ),
+        "inactive": _user(db, "inactive-signer@impact.example", is_active=False),
+    }
+    db.flush()
+    _grant(db, users["analyst"], RoleBundle.ANALYST)
+    _grant(
+        db,
+        users["board"],
+        RoleBundle.APPROVER,
+        institution_scope=InstitutionScope.INSTITUTION,
+        institution_id=BANK,
+        module_scope=ModuleScope.CAPITAL,
+        sensitivity_scope=SensitivityScope.CONFIDENTIAL,
+    )
+    for bundle in (RoleBundle.VIEWER, RoleBundle.SIGNER, RoleBundle.APPROVER):
+        _grant(
+            db,
+            users["routed"],
+            bundle,
+            institution_scope=InstitutionScope.INSTITUTION,
+            institution_id=BANK,
+            module_scope=ModuleScope.REGULATORY,
+            sensitivity_scope=SensitivityScope.RESTRICTED,
+        )
+    _grant(
+        db,
+        users["signer_only"],
+        RoleBundle.SIGNER,
+        institution_scope=InstitutionScope.INSTITUTION,
+        institution_id=BANK,
+        module_scope=ModuleScope.REGULATORY,
+        sensitivity_scope=SensitivityScope.RESTRICTED,
+    )
+    for bundle in (RoleBundle.VIEWER, RoleBundle.SIGNER):
+        _grant(
+            db,
+            users["org_signer"],
+            bundle,
+            module_scope=ModuleScope.REGULATORY,
+            sensitivity_scope=SensitivityScope.RESTRICTED,
+        )
+    _grant(
+        db,
+        users["stress"],
+        RoleBundle.APPROVER,
+        institution_scope=InstitutionScope.INSTITUTION,
+        institution_id=BANK,
+        module_scope=ModuleScope.RISK,
+        sensitivity_scope=SensitivityScope.CONFIDENTIAL,
+    )
+    _grant(
+        db,
+        users["source_only"],
+        RoleBundle.VIEWER,
+        institution_scope=InstitutionScope.INSTITUTION,
+        institution_id=BANK,
+        module_scope=ModuleScope.RISK,
+        sensitivity_scope=SensitivityScope.CONFIDENTIAL,
+    )
+    _grant(
+        db,
+        users["legacy_admin"],
+        RoleBundle.VIEWER,
+        institution_scope=InstitutionScope.INSTITUTION,
+        institution_id=BANK,
+        module_scope=ModuleScope.RISK,
+        sensitivity_scope=SensitivityScope.CONFIDENTIAL,
+    )
+    _grant(db, users["story"], RoleBundle.APPROVER)
+    db.commit()
+    return users
+
+
+def _signing_impact(report: SigningReport, user: User, route_key: str) -> SigningImpact:
+    principals = {row.principal_id: row for row in report.principals}
+    assert str(user.id) in principals
+    return next(
+        row
+        for row in report.impacts
+        if row.principal_id == str(user.id) and row.route_key == route_key
+    )
+
+
+def test_signing_impact_compares_preparers_executives_and_e2e_identities(
+    db_session: Session,
+) -> None:
+    """Legacy certification authority never becomes an implicit Signer grant."""
+    users = _signing_fixture(db_session)
+    report = build_signing_report(db_session, organization_id=ORG)
+
+    preparer = _signing_impact(report, users["analyst"], "reg.ordinary.preparer.certify")
+    assert preparer.before.allowed and not preparer.after.allowed
+    assert preparer.source_read.allowed and not preparer.sign_off.allowed
+    assert preparer.newly_denied
+    assert {row.permission for row in preparer.required_grants} == {"sign_off"}
+    signer_grant = preparer.required_grants[0]
+    assert (
+        signer_grant.institution_scope,
+        signer_grant.institution_id,
+        signer_grant.module_scope,
+        signer_grant.sensitivity_scope,
+        signer_grant.role_bundle,
+    ) == ("institution", BANK, "reg", "restricted", "signer")
+
+    executive = _signing_impact(report, users["board"], "reg.icaap.board.certify")
+    assert executive.before.allowed and not executive.after.allowed
+    assert executive.source_read.allowed
+    assert not executive.sign_off.allowed
+    assert executive.checker_approve is not None and not executive.checker_approve.allowed
+    assert {(row.permission, row.module_scope) for row in executive.required_grants} == {
+        ("sign_off", "reg"),
+        ("approve", "reg"),
+    }
+
+    routed = _signing_impact(report, users["routed"], "reg.ordinary.approver.certify")
+    assert routed.before.allowed and routed.after.allowed
+    assert routed.source_read.allowed and routed.sign_off.allowed
+    assert routed.checker_approve is not None and routed.checker_approve.allowed
+    assert routed.required_grants == []
+
+    signer_only = _signing_impact(report, users["signer_only"], "reg.ordinary.preparer.preview")
+    assert not signer_only.before.allowed and not signer_only.after.allowed
+    assert signer_only.sign_off.allowed and not signer_only.source_read.allowed
+    assert [(row.permission, row.role_bundle) for row in signer_only.required_grants] == [
+        ("view", "viewer")
+    ]
+
+    organization_wide = _signing_impact(
+        report, users["org_signer"], "reg.ordinary.preparer.certify"
+    )
+    assert organization_wide.source_read.allowed
+    assert not organization_wide.sign_off.allowed
+    assert organization_wide.sign_off.reason == "signing_requires_exact_institution_binding"
+    assert [row.institution_scope for row in organization_wide.required_grants] == ["institution"]
+
+    stress = _signing_impact(report, users["stress"], "risk.enterprise_stress.board.attest")
+    assert stress.before.allowed and not stress.after.allowed and stress.newly_denied
+    assert stress.source_read.allowed and not stress.sign_off.allowed
+    assert [(row.permission, row.module_scope) for row in stress.required_grants] == [
+        ("sign_off", "risk")
+    ]
+    source_only = _signing_impact(
+        report, users["source_only"], "risk.enterprise_stress.board.attest"
+    )
+    assert source_only.source_read.allowed
+    assert not source_only.before.allowed
+    assert source_only.before.reason.endswith("legacy_scalar_approver_required")
+    assert not source_only.newly_denied
+    legacy_admin = _signing_impact(
+        report, users["legacy_admin"], "risk.enterprise_stress.board.attest"
+    )
+    assert legacy_admin.source_read.allowed
+    assert legacy_admin.before.allowed and legacy_admin.newly_denied
+    stress_step_up = _signing_impact(
+        report, users["stress"], "risk.enterprise_stress.board.step-up"
+    )
+    assert not stress_step_up.before.allowed
+    assert stress_step_up.before.reason == "route_not_present_before_this_change"
+    assert not stress_step_up.newly_denied
+
+    assert not db_session.new and not db_session.dirty and not db_session.deleted
+
+
+def test_signing_impact_labels_e2e_roles_without_machine_grant_recommendations(
+    db_session: Session,
+) -> None:
+    """Synthetic labels never turn machine or inactive identities into signers."""
+    users = _signing_fixture(db_session)
+    report = build_signing_report(db_session, organization_id=ORG)
+    synthetic_roles = {
+        row.principal_id: row.synthetic_role
+        for row in report.principals
+        if row.synthetic_role is not None
+    }
+    assert synthetic_roles[str(users["analyst"].id)] == "analyst"
+    assert synthetic_roles[str(users["board"].id)] == "board"
+    assert synthetic_roles[str(users["story"].id)] == "approver"
+    assert all(
+        row.synthetic_role is None
+        for row in report.principals
+        if row.principal_id == str(users["routed"].id)
+    )
+    machine_rows = [row for row in report.impacts if row.principal_id == str(users["machine"].id)]
+    assert machine_rows
+    assert all(not row.before.allowed and not row.after.allowed for row in machine_rows)
+    assert all(row.after.reason == "human_session_required" for row in machine_rows)
+    assert all(row.required_grants == [] for row in machine_rows)
+    inactive_rows = [row for row in report.impacts if row.principal_id == str(users["inactive"].id)]
+    assert inactive_rows and all(
+        row.after.reason == "principal_not_active" for row in inactive_rows
+    )
+
+
+def test_signing_impact_catalogue_covers_every_mounted_signing_route() -> None:
+    """The six API routes expand to role- and family-specific policy targets."""
+    assert len(SIGNING_ROUTES) == 34
+    assert len({row.route_key for row in SIGNING_ROUTES}) == 34
+    mounted = {
+        (method, route.path)
+        for route in app.routes
+        if isinstance(route, APIRoute)
+        for method in route.methods
+    }
+    assert {(row.method, row.path) for row in SIGNING_ROUTES} <= mounted
+    assert len({(row.method, row.path) for row in SIGNING_ROUTES}) == 6
+    assert {row.source_family for row in SIGNING_ROUTES} == {
+        "ordinary",
+        "icaap",
+        "enterprise_stress",
+    }
+
+
+def _signing_mismatch_values(user: User, now: datetime, case: str) -> dict[str, object]:
+    return {
+        "id": uuid4(),
+        "organization_id": ORG,
+        "principal_user_id": user.id,
+        "principal_type": "human",
+        "role_bundle": "signer",
+        "institution_scope": "institution",
+        "institution_id": BANK,
+        "module_scope": "reg",
+        "sensitivity_scope": "restricted",
+        "status": "active",
+        "data_scope_kind": "all",
+        "data_scope_values": None,
+        "granted_by_type": "system",
+        "granted_by_id": f"test:{case}",
+        "grant_reason": "signing impact matrix",
+        "valid_from": now - timedelta(days=2),
+    }
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        pytest.param({"institution_id": OTHER_BANK}, id="wrong-bank"),
+        pytest.param({"module_scope": "risk"}, id="wrong-module"),
+        pytest.param({"sensitivity_scope": "confidential"}, id="wrong-sensitivity"),
+        pytest.param({"role_bundle": "approver"}, id="wrong-role"),
+        pytest.param(
+            {"institution_scope": "organization", "institution_id": None}, id="organization-wide"
+        ),
+        pytest.param({"status": "suspended"}, id="suspended"),
+        pytest.param(
+            {
+                "status": "revoked",
+                "revoked_at": datetime.now(UTC),
+                "revoked_by_type": "system",
+                "revoked_by_id": "test",
+                "revoked_reason": "test",
+            },
+            id="revoked",
+        ),
+        pytest.param({"valid_from": datetime.now(UTC) + timedelta(days=1)}, id="future"),
+        pytest.param({"valid_until": datetime.now(UTC) - timedelta(days=1)}, id="expired"),
+    ],
+)
+def test_signing_impact_never_composes_a_mismatched_signer_grant(
+    db_session: Session, overrides: dict[str, object]
+) -> None:
+    """Every single-dimension mismatch leaves a precise replacement sentence."""
+    now = datetime.now(UTC)
+    db_session.add(Organization(id=ORG, name="Signing mismatch proof"))
+    db_session.add_all(
+        Bank(
+            id=bank_id,
+            organization_id=ORG,
+            name=bank_id,
+            short_name=bank_id,
+            currency="GHS",
+            jurisdiction_code="GH",
+            license_type="universal_bank",
+            institution_type=FALLBACK_TYPE_CODE,
+        )
+        for bank_id in (BANK, OTHER_BANK)
+    )
+    user = _user(db_session, "mismatched-signer@impact.example")
+    db_session.flush()
+    _grant(
+        db_session,
+        user,
+        RoleBundle.VIEWER,
+        institution_scope=InstitutionScope.INSTITUTION,
+        institution_id=BANK,
+        module_scope=ModuleScope.REGULATORY,
+        sensitivity_scope=SensitivityScope.RESTRICTED,
+    )
+    db_session.add(
+        AuthorizationBinding(**(_signing_mismatch_values(user, now, "case") | overrides))
+    )
+    db_session.commit()
+
+    row = _signing_impact(
+        build_signing_report(db_session, organization_id=ORG),
+        user,
+        "reg.ordinary.preparer.certify",
+    )
+    assert row.source_read.allowed and not row.sign_off.allowed and not row.after.allowed
+    assert [grant.permission for grant in row.required_grants] == ["sign_off"]
+    assert row.required_grants[0].institution_id == BANK
+
+
+def test_signing_impact_requires_one_complete_exact_institution_binding(
+    db_session: Session,
+) -> None:
+    """Synthetic mixed rows must not combine into one complete signature grant.
+
+    The database rejects the partial Signer row. The report still defends this
+    input explicitly if it encounters an imported, historical or otherwise
+    inconsistent pair instead of treating database constraints as authority.
+    """
+    user = _user(db_session, "mixed-scope-signer@impact.example")
+    now = datetime.now(UTC)
+    bindings = [
+        AuthorizationBinding(
+            **(
+                _signing_mismatch_values(user, now, "organization-all")
+                | {"institution_scope": "organization", "institution_id": None}
+            )
+        ),
+        AuthorizationBinding(
+            **(
+                _signing_mismatch_values(user, now, "bank-partial")
+                | {"data_scope_kind": "branch", "data_scope_values": ["Head office"]}
+            )
+        ),
+    ]
+
+    eligibility = _eligibility(
+        PrincipalLocator(ORG, user.id, PrincipalType.HUMAN),
+        Permission.SIGN_OFF,
+        ResourceLocator(
+            ORG,
+            InstitutionScope.INSTITUTION,
+            BANK,
+            Module.REGULATORY,
+            Sensitivity.RESTRICTED,
+        ),
+        bindings,
+        now,
+        exact_institution=True,
+    )
+
+    assert len(eligibility.matching_binding_ids) == 2
+    assert not eligibility.allowed
+    assert eligibility.reason == "signing_requires_exact_institution_binding"
+
+
+def test_signing_impact_writes_private_deny_and_exact_grant_artifacts(
+    db_session: Session, tmp_path: Path
+) -> None:
+    """The three files preserve before/after deltas and every required sentence."""
+    _signing_fixture(db_session)
+    report = build_signing_report(db_session, organization_id=ORG)
+    directory = tmp_path / "signing-impact"
+    write_signing_artifacts(report, directory)
+
+    before = _read_json(directory / "signing-before.json")
+    after = _read_json(directory / "signing-after.json")
+    grants = _read_json(directory / "signing-exact-grants.json")
+    assert before["stage"] == "before" and after["stage"] == "after"
+    assert before["generated_at"] == after["generated_at"] == grants["generated_at"]
+    assert before["principals"] == after["principals"] == grants["principals"]
+    assert before["outcomes"] != after["outcomes"]
+    assert any(row["newly_denied"] for row in _object_list(after["outcomes"]))
+    assert grants["existing_grants"] == report.to_dict()["existing_grants"]
+    required = _object_list(grants["required_grants"])
+    assert required
+    assert {row["permission"] for row in required} == {"view", "sign_off", "approve"}
+    assert all(row["approval_required"] is True for row in required)
+    assert all(row["institution_scope"] == "institution" for row in required)
+    assert all(row["institution_id"] == BANK for row in required)
+    assert "route_key" in required[0] and "purpose" in required[0]
+    assert all("email" not in row for row in _object_list(grants["principals"]))
+    assert "@impact.example" not in json.dumps(grants)
+    for path in directory.glob("*.json"):
+        assert path.stat().st_mode & 0o777 == 0o600
+    with pytest.raises(SigningImpactInputError, match="already exist"):
+        write_signing_artifacts(report, directory)
+
+
+def test_signing_impact_fails_closed_without_recommending_a_grant_after_evaluator_failure(
+    db_session: Session, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """An incomplete policy evaluation can never become an allow or grant instruction."""
+    users = _signing_fixture(db_session)
+
+    def fail(*args: object, **kwargs: object) -> None:
+        raise RuntimeError("synthetic evaluator failure")
+
+    monkeypatch.setattr(authorization, "evaluate_prefetched_structural_permission", fail)
+    report = build_signing_report(db_session, organization_id=ORG)
+    row = _signing_impact(report, users["analyst"], "reg.ordinary.preparer.certify")
+    assert report.evaluation_failed
+    assert row.after.reason == "evaluation_failed"
+    assert row.required_grants == []

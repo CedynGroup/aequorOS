@@ -25,7 +25,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
 from app.attestation.service import digests
-from app.core.authorization import RoleBundle
+from app.core.authorization import RoleBundle, SensitivityScope
 from app.models import Bank, RegulatoryPackage, RegulatoryParameter, RegulatoryRun, User
 from app.reporting.service.exports import export_package
 from app.reporting.service.templates import (
@@ -157,9 +157,14 @@ def _csv_section(
 
 
 def _prepare(
-    db: Session, *, checker: TenantContext | None = None, **narrative: Any
+    db: Session,
+    *,
+    checker: TenantContext | None = None,
+    materialize: bool = True,
+    **narrative: Any,
 ) -> RegulatoryPackage:
-    materialize_canonical_test_book(db)
+    if materialize:
+        materialize_canonical_test_book(db)
     _seed_checker(db)
     scenario_id = _approved_scenario(db)
     run_id = _run_enterprise_stress(db, scenario_id)
@@ -171,6 +176,9 @@ def _prepare(
 
 
 def _seed_hostile_attester(db: Session) -> None:
+    # The SIGN_OFF binding below validates the institution scope, so the bank
+    # row must exist first (the signer grant needs an institution to name).
+    materialize_canonical_test_book(db)
     if db.get(User, HOSTILE_ATTESTER_ID) is None:
         db.add(
             User(
@@ -184,6 +192,13 @@ def _seed_hostile_attester(db: Session) -> None:
         )
     db.flush()
     grant(db, RoleBundle.VIEWER, user_id=HOSTILE_ATTESTER_ID)
+    grant(
+        db,
+        RoleBundle.SIGNER,
+        user_id=HOSTILE_ATTESTER_ID,
+        bank_id=SAMPLE_BANK_ID,
+        sensitivity=SensitivityScope.RESTRICTED,
+    )
 
 
 # --- P0-2: neutral headers + provenance -----------------------------------------------
@@ -373,7 +388,7 @@ def test_hostile_narratives_are_literal_in_the_pdf_and_do_not_break_layout(
     db_session: Session, storage: InMemoryStorageClient
 ) -> None:
     _seed_hostile_attester(db_session)
-    package = _prepare(db_session, checker=HOSTILE_ATTESTER, **HOSTILE)
+    package = _prepare(db_session, checker=HOSTILE_ATTESTER, materialize=False, **HOSTILE)
     first = _export(db_session, storage, package, "pdf")
     second = _export(db_session, storage, package, "pdf")
     assert first == second, "PDF output is not byte-deterministic"
@@ -435,7 +450,7 @@ def test_hostile_narratives_are_inert_in_xlsx_and_csv(
     db_session: Session, storage: InMemoryStorageClient
 ) -> None:
     _seed_hostile_attester(db_session)
-    package = _prepare(db_session, checker=HOSTILE_ATTESTER, **HOSTILE)
+    package = _prepare(db_session, checker=HOSTILE_ATTESTER, materialize=False, **HOSTILE)
     expected = {
         key: value.replace("\r\n", "\n").replace("\r", "\n").strip()
         for key, value in HOSTILE.items()

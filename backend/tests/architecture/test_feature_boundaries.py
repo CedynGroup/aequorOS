@@ -109,6 +109,8 @@ PEER_EDGES: frozenset[tuple[str, str]] = frozenset(
         ("credit", "capital"),
         ("rating", "capital"),
         ("liquidity", "behavioral"),
+        # Stress reuses attestation's one-shot step-up ceremony through public.py.
+        ("stress", "attestation"),
     }
 )
 

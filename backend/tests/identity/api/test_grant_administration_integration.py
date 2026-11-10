@@ -16,6 +16,8 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
 from app.core.authorization import (
+    ConditionCheck,
+    ConditionKind,
     GrantReasonCategory,
     InstitutionScope,
     Module,
@@ -49,11 +51,16 @@ from app.models import (
 )
 from app.policy.service.institution_types import FALLBACK_TYPE_CODE
 from app.schemas.common import JsonObject
+from tests.support.authorization_fixtures import tenant_user
 from tests.support.helpers import ORG_1, ORG_2, USER_1, USER_2, headers
 
 GRANTEE = UUID("cccccccc-cccc-4ccc-8ccc-cccccccccccc")
 BANK_A = "BK-GRNT0001"
 BANK_B = "BK-GRNT0002"
+SIGNING_CONDITIONS = (
+    ConditionCheck(ConditionKind.MAKER_CHECKER, True, "distinct maker and checker"),
+    ConditionCheck(ConditionKind.STEP_UP, True, "genuine step-up characterization"),
+)
 
 # This concurrency test needs PostgreSQL row locks and independent sessions.
 requires_committing_db = pytest.mark.committing_db
@@ -297,6 +304,167 @@ def test_configurator_is_explicit_exact_and_invalidates_sign_ins(grant_client: T
         refresh_rows = list(db.scalars(select(RefreshToken).where(RefreshToken.user_id == GRANTEE)))
         assert refresh_rows
         assert all(row.revoked_reason == "authorization_changed" for row in refresh_rows)
+
+
+def test_signer_is_explicit_exact_and_invalidates_sign_ins(grant_client: TestClient) -> None:
+    """Create and revoke exact sign-off-only authority while invalidating old tokens."""
+    with _session() as db:
+        user = tenant_user(db, organization_id=ORG_1, user_id=GRANTEE)
+        issued = authentication.issue_tokens(db, user)
+        version = user.authorization_version
+        assert not list(
+            db.scalars(
+                select(AuthorizationBinding).where(AuthorizationBinding.role_bundle == "signer")
+            )
+        )
+    grantee_headers = {"Authorization": f"Bearer {issued.access_token}"}
+    assert grant_client.get("/api/v1/auth/me", headers=grantee_headers).status_code == 200
+    payload = _payload(role="signer", module="reg", sensitivity="restricted")
+    invalid = {**payload, "institution_id": None}
+    assert (
+        grant_client.post(
+            "/api/v1/authorization/bindings/preview", headers=_owner_headers(), json=invalid
+        ).status_code
+        == 422
+    )
+    created = grant_client.post(
+        "/api/v1/authorization/bindings",
+        headers=_owner_headers(),
+        json=_reviewed_payload(grant_client, payload),
+    )
+    assert created.status_code == 201, created.text
+    result = BindingCreateResponse.model_validate_json(created.text)
+    binding = result.binding
+    assert binding.role_bundle == "signer"
+    assert binding.institution_id == BANK_A
+    assert binding.module_scope is ModuleScope.REGULATORY
+    assert binding.sensitivity_scope is SensitivityScope.RESTRICTED
+    assert binding.authority_sentence == (
+        "Amma Owusu is a Signer in Regulatory Reporting for Aequor Bank Ghana, "
+        "covering Restricted data."
+    )
+    assert result.sod_decision.outcome == "allow"
+    assert grant_client.get("/api/v1/auth/me", headers=grantee_headers).status_code == 401
+    assert (
+        grant_client.post(
+            "/api/v1/auth/refresh", json={"refresh_token": issued.refresh_token}
+        ).status_code
+        == 401
+    )
+    with _session() as db:
+        user = tenant_user(db, organization_id=ORG_1, user_id=GRANTEE)
+        assert user.authorization_version == version + 1
+        principal = PrincipalLocator(ORG_1, GRANTEE, PrincipalType.HUMAN)
+        exact = _resource(BANK_A, Module.REGULATORY, Sensitivity.RESTRICTED)
+        without_workflow_context = authorization.evaluate_permission(
+            db, principal, Permission.SIGN_OFF, exact
+        )
+        assert not without_workflow_context.allowed
+        assert without_workflow_context.reason == "condition_denied:maker_checker"
+        assert authorization.evaluate_permission(
+            db, principal, Permission.SIGN_OFF, exact, conditions=SIGNING_CONDITIONS
+        ).allowed
+        current = authentication.issue_tokens(db, user)
+    assert (
+        grant_client.get(
+            "/api/v1/auth/me", headers={"Authorization": f"Bearer {current.access_token}"}
+        ).status_code
+        == 200
+    )
+    revoked = grant_client.post(
+        f"/api/v1/authorization/bindings/{binding.id}/revoke",
+        headers=_owner_headers(),
+        json={"reason": "Signing responsibilities reassigned"},
+    )
+    assert revoked.status_code == 200, revoked.text
+    assert (
+        grant_client.get(
+            "/api/v1/auth/me", headers={"Authorization": f"Bearer {current.access_token}"}
+        ).status_code
+        == 401
+    )
+    assert (
+        grant_client.post(
+            "/api/v1/auth/refresh", json={"refresh_token": current.refresh_token}
+        ).status_code
+        == 401
+    )
+    with _session() as db:
+        user = tenant_user(db, organization_id=ORG_1, user_id=GRANTEE)
+        assert user.authorization_version == version + 2
+        assert not authorization.evaluate_permission(
+            db, principal, Permission.SIGN_OFF, exact, conditions=SIGNING_CONDITIONS
+        ).allowed
+        refresh_rows = list(db.scalars(select(RefreshToken).where(RefreshToken.user_id == GRANTEE)))
+        assert refresh_rows
+        assert all(row.revoked_reason == "authorization_changed" for row in refresh_rows)
+
+
+@pytest.fixture
+def signer_grant(grant_client: TestClient) -> None:
+    """One exact Signer grant: Aequor Bank Ghana, Regulatory Reporting, Restricted."""
+    created = grant_client.post(
+        "/api/v1/authorization/bindings",
+        headers=_owner_headers(),
+        json=_reviewed_payload(
+            grant_client, _payload(role="signer", module="reg", sensitivity="restricted")
+        ),
+    )
+    assert created.status_code == 201, created.text
+
+
+@pytest.mark.parametrize(
+    "permission",
+    [
+        pytest.param(Permission.VIEW, id="view-denied"),
+        pytest.param(Permission.APPROVE, id="approve-denied"),
+        pytest.param(Permission.SUBMIT, id="submit-denied"),
+        pytest.param(Permission.CONFIGURE, id="configure-denied"),
+        pytest.param(Permission.ADMINISTER, id="administer-denied"),
+    ],
+)
+def test_signer_grant_denies_other_permissions(
+    grant_client: TestClient,
+    signer_grant: None,
+    permission: Permission,
+) -> None:
+    """Signing never implies reading, approval, filing, configuration or administration."""
+    with _session() as db:
+        principal = PrincipalLocator(ORG_1, GRANTEE, PrincipalType.HUMAN)
+        exact = _resource(BANK_A, Module.REGULATORY, Sensitivity.RESTRICTED)
+        assert not authorization.evaluate_permission(
+            db, principal, permission, exact, conditions=SIGNING_CONDITIONS
+        ).allowed
+
+
+@pytest.mark.parametrize(
+    "resource",
+    [
+        pytest.param(
+            _resource(BANK_B, Module.REGULATORY, Sensitivity.RESTRICTED), id="other-institution"
+        ),
+        pytest.param(_resource(BANK_A, Module.RISK, Sensitivity.RESTRICTED), id="other-module"),
+        pytest.param(
+            _resource(BANK_A, Module.REGULATORY, Sensitivity.CONFIDENTIAL),
+            id="other-sensitivity",
+        ),
+    ],
+)
+def test_signer_grant_is_exact_to_its_dimensions(
+    grant_client: TestClient,
+    signer_grant: None,
+    resource: ResourceLocator,
+) -> None:
+    """Sign-off authority never leaks across dimensions, reported per adjacent resource."""
+    with _session() as db:
+        principal = PrincipalLocator(ORG_1, GRANTEE, PrincipalType.HUMAN)
+        exact = _resource(BANK_A, Module.REGULATORY, Sensitivity.RESTRICTED)
+        assert authorization.evaluate_permission(
+            db, principal, Permission.SIGN_OFF, exact, conditions=SIGNING_CONDITIONS
+        ).allowed
+        assert not authorization.evaluate_permission(
+            db, principal, Permission.SIGN_OFF, resource, conditions=SIGNING_CONDITIONS
+        ).allowed
 
 
 @pytest.fixture
@@ -1249,7 +1417,7 @@ def test_preview_returns_the_decision_the_create_call_would_reach(
     assert binding_count() == before
 
 
-@pytest.mark.parametrize("role", ["analyst", "approver", "validator", "configurator"])
+@pytest.mark.parametrize("role", ["analyst", "approver", "validator", "configurator", "signer"])
 def test_owner_account_admin_conflict_names_only_the_revocable_grant(
     grant_client: TestClient, role: str
 ) -> None:
@@ -1296,6 +1464,7 @@ def test_owner_account_admin_conflict_names_only_the_revocable_grant(
         "approver": "an Approver",
         "validator": "a Validator",
         "configurator": "a Configurator",
+        "signer": "a Signer",
     }
     assert finding.message == (
         "Demo User One already has the Organization Administrator grant "
@@ -1349,6 +1518,10 @@ def test_owner_account_admin_conflict_names_only_the_revocable_grant(
         (("configurator", "configurator"), "account_admin", "Configurator"),
         (("analyst", "approver"), "account_admin", "Analyst and Approver"),
         (("analyst", "validator"), "account_admin", "Analyst and Validator"),
+        # Signer cases stay last so the positional held_rolesN ids of the
+        # catalogued protected cases above never shift.
+        (("account_admin", "account_admin"), "signer", "Organization Administrator"),
+        (("signer", "signer"), "account_admin", "Signer"),
     ],
 )
 def test_multiple_conflicting_bindings_must_all_be_removed(

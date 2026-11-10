@@ -101,6 +101,7 @@ from app.storage.public import (
     publish_sealed_document,
 )
 from scripts import verify_attestation as offline_verifier
+from tests.attestation.service.test_attestation_workspace_integration import _name_certifier
 from tests.core import test_key_unavailable_numeric_integration as encrypted
 from tests.core.test_bank_field_encryption_integration import KEY_A, NEXT
 from tests.fixtures.canonical_bank_fixture import (
@@ -295,7 +296,9 @@ def _seed(db: Session) -> RegulatoryPackage:
     db.commit()
     for user_id, bundle in (
         (DEMO_USER_ID, RoleBundle.ANALYST),
+        (DEMO_USER_ID, RoleBundle.SIGNER),
         (CHECKER_USER_ID, RoleBundle.APPROVER),
+        (CHECKER_USER_ID, RoleBundle.SIGNER),
     ):
         grant_institution_authority(
             db,
@@ -374,6 +377,7 @@ def _certify(  # noqa: PLR0913 - mirrors signing.certify's own irreducible input
     """Drive the real certification path with an injected soft signer."""
     assert ctx.actor_user_id is not None
     signer_id = _enrol(db, ctx, pki, key_ref)
+    _name_certifier(db, package, role=role, user_id=ctx.actor_user_id, signer_id=signer_id)
     binding = workflow.compute_binding(package)
     token, _authorization = stepup.mint_authorization(
         db,
@@ -605,7 +609,10 @@ def test_step_up_rechecks_rotation_after_committed_authentication(
         RegulatoryPackageCreate(return_code="LCR-NSFR", reporting_date=REPORTING_DATE),
     )
     validation.validate_package(db, MAKER, SAMPLE_BANK_ID, read.id)
-    _enrol(db, MAKER, pki, "softkey:preparer")
+    signer_id = _enrol(db, MAKER, pki, "softkey:preparer")
+    package = db.get(RegulatoryPackage, read.id)
+    assert package is not None
+    _name_certifier(db, package, role="preparer", user_id=DEMO_USER_ID, signer_id=signer_id)
     user = db.get(User, DEMO_USER_ID)
     assert user is not None
     password = "synthetic-authentication-rotation-proof"

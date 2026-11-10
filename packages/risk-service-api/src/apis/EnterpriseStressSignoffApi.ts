@@ -18,6 +18,9 @@ import type {
   StressSignoffListRead,
   StressSignoffRead,
   StressSignoffStatus,
+  StressSignoffStepUpGranted,
+  StressSignoffStepUpRequest,
+  StressSignoffSubmission,
   StressSignoffTransition,
   StressSignoffUpdate,
 } from "../models/index";
@@ -34,6 +37,12 @@ import {
   StressSignoffReadToJSON,
   StressSignoffStatusFromJSON,
   StressSignoffStatusToJSON,
+  StressSignoffStepUpGrantedFromJSON,
+  StressSignoffStepUpGrantedToJSON,
+  StressSignoffStepUpRequestFromJSON,
+  StressSignoffStepUpRequestToJSON,
+  StressSignoffSubmissionFromJSON,
+  StressSignoffSubmissionToJSON,
   StressSignoffTransitionFromJSON,
   StressSignoffTransitionToJSON,
   StressSignoffUpdateFromJSON,
@@ -62,10 +71,16 @@ export interface ListEnterpriseStressSignoffsRequest {
   status?: StressSignoffStatus | null;
 }
 
+export interface StepUpEnterpriseStressSignoffRequest {
+  bankId: string;
+  signoffId: string;
+  stressSignoffStepUpRequest: StressSignoffStepUpRequest;
+}
+
 export interface SubmitEnterpriseStressSignoffRequest {
   bankId: string;
   signoffId: string;
-  stressSignoffTransition: StressSignoffTransition;
+  stressSignoffSubmission: StressSignoffSubmission;
 }
 
 export interface UpdateEnterpriseStressSignoffRequest {
@@ -374,6 +389,88 @@ export class EnterpriseStressSignoffApi extends runtime.BaseAPI {
   }
 
   /**
+   * Step Up Signoff
+   */
+  async stepUpEnterpriseStressSignoffRaw(
+    requestParameters: StepUpEnterpriseStressSignoffRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<runtime.ApiResponse<StressSignoffStepUpGranted>> {
+    if (requestParameters["bankId"] == null) {
+      throw new runtime.RequiredError(
+        "bankId",
+        'Required parameter "bankId" was null or undefined when calling stepUpEnterpriseStressSignoff().',
+      );
+    }
+
+    if (requestParameters["signoffId"] == null) {
+      throw new runtime.RequiredError(
+        "signoffId",
+        'Required parameter "signoffId" was null or undefined when calling stepUpEnterpriseStressSignoff().',
+      );
+    }
+
+    if (requestParameters["stressSignoffStepUpRequest"] == null) {
+      throw new runtime.RequiredError(
+        "stressSignoffStepUpRequest",
+        'Required parameter "stressSignoffStepUpRequest" was null or undefined when calling stepUpEnterpriseStressSignoff().',
+      );
+    }
+
+    const queryParameters: any = {};
+
+    const headerParameters: runtime.HTTPHeaders = {};
+
+    headerParameters["Content-Type"] = "application/json";
+
+    if (this.configuration && this.configuration.accessToken) {
+      const token = this.configuration.accessToken;
+      const tokenString = await token("HTTPBearer", []);
+
+      if (tokenString) {
+        headerParameters["Authorization"] = `Bearer ${tokenString}`;
+      }
+    }
+    const response = await this.request(
+      {
+        path: `/api/v1/banks/{bank_id}/enterprise-stress/signoffs/{signoff_id}/step-up`
+          .replace(
+            `{${"bank_id"}}`,
+            encodeURIComponent(String(requestParameters["bankId"])),
+          )
+          .replace(
+            `{${"signoff_id"}}`,
+            encodeURIComponent(String(requestParameters["signoffId"])),
+          ),
+        method: "POST",
+        headers: headerParameters,
+        query: queryParameters,
+        body: StressSignoffStepUpRequestToJSON(
+          requestParameters["stressSignoffStepUpRequest"],
+        ),
+      },
+      initOverrides,
+    );
+
+    return new runtime.JSONApiResponse(response, (jsonValue) =>
+      StressSignoffStepUpGrantedFromJSON(jsonValue),
+    );
+  }
+
+  /**
+   * Step Up Signoff
+   */
+  async stepUpEnterpriseStressSignoff(
+    requestParameters: StepUpEnterpriseStressSignoffRequest,
+    initOverrides?: RequestInit | runtime.InitOverrideFunction,
+  ): Promise<StressSignoffStepUpGranted> {
+    const response = await this.stepUpEnterpriseStressSignoffRaw(
+      requestParameters,
+      initOverrides,
+    );
+    return await response.value();
+  }
+
+  /**
    * Submit Signoff
    */
   async submitEnterpriseStressSignoffRaw(
@@ -394,10 +491,10 @@ export class EnterpriseStressSignoffApi extends runtime.BaseAPI {
       );
     }
 
-    if (requestParameters["stressSignoffTransition"] == null) {
+    if (requestParameters["stressSignoffSubmission"] == null) {
       throw new runtime.RequiredError(
-        "stressSignoffTransition",
-        'Required parameter "stressSignoffTransition" was null or undefined when calling submitEnterpriseStressSignoff().',
+        "stressSignoffSubmission",
+        'Required parameter "stressSignoffSubmission" was null or undefined when calling submitEnterpriseStressSignoff().',
       );
     }
 
@@ -429,8 +526,8 @@ export class EnterpriseStressSignoffApi extends runtime.BaseAPI {
         method: "POST",
         headers: headerParameters,
         query: queryParameters,
-        body: StressSignoffTransitionToJSON(
-          requestParameters["stressSignoffTransition"],
+        body: StressSignoffSubmissionToJSON(
+          requestParameters["stressSignoffSubmission"],
         ),
       },
       initOverrides,

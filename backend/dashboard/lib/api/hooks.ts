@@ -4045,6 +4045,7 @@ export function useVerifyPackageAttestation(
 export function usePackageSignaturePlacements(
   bankId: string | undefined,
   packageId: string | null | undefined,
+  enabled = true,
 ) {
   return useQuery({
     queryKey: ["attn-placements", bankId, packageId],
@@ -4055,7 +4056,7 @@ export function usePackageSignaturePlacements(
           packageId: packageId!,
         }),
       ),
-    enabled: Boolean(bankId && packageId),
+    enabled: enabled && Boolean(bankId && packageId),
   });
 }
 
@@ -4137,6 +4138,37 @@ export function useAdoptMySignature() {
       ),
     onSuccess: (adopted) => {
       queryClient.setQueryData(["attn-appearance"], adopted);
+    },
+  });
+}
+
+/** Name or re-assign every outstanding signature before certification starts. */
+export function useUpdatePackageSignatureRouting(bankId: string | undefined) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      packageId,
+      recipients,
+      reason,
+    }: {
+      packageId: string;
+      recipients: CertifyAndSendRequest["recipients"];
+      reason: string;
+    }) =>
+      apiCall(() =>
+        attestationApi.updatePackageSignatureRouting({
+          bankId: bankId!,
+          packageId,
+          signatureRoutingUpdateRequest: { recipients, reason },
+        }),
+      ),
+    onSuccess: (status) => {
+      queryClient.setQueryData(
+        ["attn-status", bankId, status.packageId],
+        status,
+      );
+      void queryClient.invalidateQueries({ queryKey: ["attn-preview"] });
+      void queryClient.invalidateQueries({ queryKey: ["attn-awaiting"] });
     },
   });
 }

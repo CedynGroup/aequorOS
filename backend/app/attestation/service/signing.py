@@ -327,6 +327,7 @@ def certify(  # noqa: PLR0913 - one transactional act with irreducible inputs
     into the approval decision a checker's certification writes, so the recorded
     decision quotes the approver rather than the platform.
     """
+    routing.require_certification_access(db, ctx, package, role)
     settings = get_settings()
     if not settings.attestation.signing_enabled:
         raise HTTPException(
@@ -364,9 +365,8 @@ def certify(  # noqa: PLR0913 - one transactional act with irreducible inputs
         signer_id=identity.signer_id,
         job_title=job_title,
     )
-    # Additive to the guards above, and silent unless somebody routed this slot
-    # to named people: the policy decides whether a signature is acceptable, the
-    # routing decides whose turn it is.
+    # Re-check the current-cycle route under the same ceremony guards. The
+    # public preflight and this service entry point use the identical gate.
     routing.ensure_routed_signer(db, ctx, package, role=role, user_id=actor_user_id)
     # Data-integrity gate (audit 2026-08-22 D-2): an officer certifies that the
     # figures are true, so the platform must not accept that certification over
@@ -385,6 +385,9 @@ def certify(  # noqa: PLR0913 - one transactional act with irreducible inputs
         signing_role=role,
         certification_digest=binding.certification_digest,
     )
+    # Structural preflight is not execution authority. Re-evaluate the stored
+    # bindings only after the locked workflow guards and genuine token consume.
+    routing.require_certification_execution_authority(db, ctx, package, role)
 
     if backends.raw_signer is None:
         raise HTTPException(

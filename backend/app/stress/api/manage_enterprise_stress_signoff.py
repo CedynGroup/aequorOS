@@ -12,15 +12,18 @@ from __future__ import annotations
 from typing import Annotated
 from uuid import UUID
 
-from fastapi import APIRouter, Query, status
+from fastapi import APIRouter, Query, Request, status
 
-from app.api.deps import ApproverTenant, DbSession, ScopedMutationTenant, Tenant
+from app.api.deps import DbSession, ScopedMutationTenant, Tenant
 from app.stress.schemas.enterprise_stress_signoff import (
     StressSignoffAttestation,
     StressSignoffCreate,
     StressSignoffListRead,
     StressSignoffRead,
     StressSignoffStatus,
+    StressSignoffStepUpGranted,
+    StressSignoffStepUpRequest,
+    StressSignoffSubmission,
     StressSignoffTransition,
     StressSignoffUpdate,
 )
@@ -100,11 +103,27 @@ def update_signoff(
 def submit_signoff(
     bank_id: str,
     signoff_id: UUID,
-    payload: StressSignoffTransition,
+    payload: StressSignoffSubmission,
     db: DbSession,
     ctx: ScopedMutationTenant,
 ) -> StressSignoffRead:
     return enterprise_stress_signoff.submit_signoff(db, ctx, bank_id, signoff_id, payload)
+
+
+@router.post(
+    _BASE + "/{signoff_id}/step-up",
+    response_model=StressSignoffStepUpGranted,
+    operation_id="stepUpEnterpriseStressSignoff",
+)
+def step_up_signoff(  # noqa: PLR0913 - FastAPI injects request/db/ctx
+    bank_id: str,
+    signoff_id: UUID,
+    payload: StressSignoffStepUpRequest,
+    request: Request,
+    db: DbSession,
+    ctx: ScopedMutationTenant,
+) -> StressSignoffStepUpGranted:
+    return enterprise_stress_signoff.step_up_signoff(db, ctx, bank_id, signoff_id, payload, request)
 
 
 @router.post(
@@ -117,7 +136,7 @@ def attest_signoff(
     signoff_id: UUID,
     payload: StressSignoffAttestation,
     db: DbSession,
-    ctx: ApproverTenant,
+    ctx: ScopedMutationTenant,
 ) -> StressSignoffRead:
     return enterprise_stress_signoff.attest_signoff(db, ctx, bank_id, signoff_id, payload)
 

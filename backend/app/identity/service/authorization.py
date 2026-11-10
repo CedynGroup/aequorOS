@@ -539,6 +539,24 @@ def _effective_capabilities(  # noqa: PLR0913 - projection requires the complete
                             requires_contextual_authorization=bool(
                                 _REQUIRED_RUNTIME_CONDITIONS.get(permission)
                             ),
+                            exact_institution=(
+                                resource_scope is InstitutionScope.INSTITUTION
+                                and any(
+                                    binding_id in by_id
+                                    and by_id[binding_id].institution_scope
+                                    is InstitutionScope.INSTITUTION
+                                    and by_id[binding_id].institution_id == institution_id
+                                    # One complete active binding must match
+                                    # every dimension: the exact-bank binding
+                                    # itself must carry the whole-institution
+                                    # data scope, mirroring the signing
+                                    # evaluators — an organization-scope grant
+                                    # cannot lend its breadth to a separate
+                                    # branch-narrowed exact-bank row.
+                                    and by_id[binding_id].data_scope is DataScope.ALL
+                                    for binding_id in decision.matching_binding_ids
+                                )
+                            ),
                             data_scope=data_scope_read(
                                 reduce_data_scope(
                                     [
@@ -1043,20 +1061,23 @@ def prefetch_principal_bindings(
     return True, [binding for _, binding in rows if binding is not None]
 
 
-def evaluate_permission(  # noqa: PLR0913 - the complete decision tuple is explicit
+def _evaluate_permission(  # noqa: PLR0913 - the complete decision tuple is explicit
     db: Session,
     principal: PrincipalLocator,
     permission: Permission,
     resource: ResourceLocator,
     *,
-    conditions: tuple[ConditionCheck, ...] = (),
-    now: datetime | None = None,
+    conditions: tuple[ConditionCheck, ...],
+    now: datetime | None,
+    enforce_runtime_conditions: bool,
 ) -> AuthorizationDecision:
-    """Check permissions using only stored bindings, returning a trace for audit."""
-
     conditions = (
         *request_wide_condition_checks(),
-        *runtime_condition_checks(permission, resource, conditions),
+        *(
+            runtime_condition_checks(permission, resource, conditions)
+            if enforce_runtime_conditions
+            else conditions
+        ),
     )
     principal_active, bindings = _load_principal_grants(db, principal)
     if not principal_active:
@@ -1091,6 +1112,56 @@ def evaluate_permission(  # noqa: PLR0913 - the complete decision tuple is expli
     )
 
 
+def evaluate_permission(  # noqa: PLR0913 - the complete decision tuple is explicit
+    db: Session,
+    principal: PrincipalLocator,
+    permission: Permission,
+    resource: ResourceLocator,
+    *,
+    conditions: tuple[ConditionCheck, ...] = (),
+    now: datetime | None = None,
+) -> AuthorizationDecision:
+    """Evaluate one executable authority, including every required runtime veto."""
+
+    return _evaluate_permission(
+        db,
+        principal,
+        permission,
+        resource,
+        conditions=conditions,
+        now=now,
+        enforce_runtime_conditions=True,
+    )
+
+
+def evaluate_structural_permission(  # noqa: PLR0913 - explicit preflight tuple
+    db: Session,
+    principal: PrincipalLocator,
+    permission: Permission,
+    resource: ResourceLocator,
+    *,
+    now: datetime | None = None,
+) -> AuthorizationDecision:
+    """Evaluate stored authority without claiming transaction evidence exists.
+
+    This is ONLY for a ceremony's preflight, such as a preview or recipient
+    nomination. The execution path must call :func:`evaluate_permission` again
+    with its real maker/checker, step-up, or other workflow evidence. Omitting
+    those not-yet-established conditions here never turns this result into
+    execution authority.
+    """
+
+    return _evaluate_permission(
+        db,
+        principal,
+        permission,
+        resource,
+        conditions=(),
+        now=now,
+        enforce_runtime_conditions=False,
+    )
+
+
 def evaluate_prefetched_permission(  # noqa: PLR0913 - complete authorization sentence
     principal: PrincipalLocator,
     permission: Permission,
@@ -1107,6 +1178,38 @@ def evaluate_prefetched_permission(  # noqa: PLR0913 - complete authorization se
         *request_wide_condition_checks(),
         *runtime_condition_checks(permission, resource, conditions),
     )
+    if not principal_active:
+        return _deny_with_trace(
+            principal, permission, resource, conditions, now, "principal_not_active"
+        )
+    if resource.organization_id != principal.organization_id:
+        return _deny_with_trace(principal, permission, resource, conditions, now)
+    return evaluate_grants(
+        principal,
+        permission,
+        resource,
+        [_binding_grant(binding) for binding in bindings],
+        conditions=conditions,
+        now=now,
+    )
+
+
+def evaluate_prefetched_structural_permission(  # noqa: PLR0913 - complete binding sentence
+    principal: PrincipalLocator,
+    permission: Permission,
+    resource: ResourceLocator,
+    bindings: Sequence[AuthorizationBinding],
+    *,
+    principal_active: bool,
+    now: datetime | None = None,
+) -> AuthorizationDecision:
+    """Evaluate a consistent binding snapshot without inventing ceremony evidence.
+
+    This is the prefetched counterpart of :func:`evaluate_structural_permission`
+    for read-only impact inventories. Request-wide vetoes still apply; object-
+    specific maker/checker, step-up and digest evidence stays with the workflow.
+    """
+    conditions = request_wide_condition_checks()
     if not principal_active:
         return _deny_with_trace(
             principal, permission, resource, conditions, now, "principal_not_active"

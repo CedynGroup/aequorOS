@@ -198,6 +198,7 @@ class RoleBundle(StrEnum):
     #: machine rules check the Preparer re-runs, not this person's act.
     VALIDATOR = "validator"
     CONFIGURATOR = "configurator"
+    SIGNER = "signer"
     ACCOUNT_ADMIN = "account_admin"
     ORG_OWNER = "org_owner"
     INTEGRATION_WRITER = "integration_writer"
@@ -258,6 +259,8 @@ ROLE_PERMISSIONS: Final[Mapping[RoleBundle, frozenset[Permission]]] = MappingPro
         RoleBundle.VALIDATOR: frozenset({Permission.VIEW, Permission.SUBMIT}),
         # Configuration is separate from read, operations and approval.
         RoleBundle.CONFIGURATOR: frozenset({Permission.CONFIGURE}),
+        # Formal signing is separate from read, preparation and approval.
+        RoleBundle.SIGNER: frozenset({Permission.SIGN_OFF}),
         # Account administration is intentionally outside operational bundles.
         RoleBundle.ACCOUNT_ADMIN: frozenset({Permission.ADMINISTER}),
         # Ownership is a distinct authority even though its first bounded

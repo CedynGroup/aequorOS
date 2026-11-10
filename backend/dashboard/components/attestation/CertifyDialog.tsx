@@ -47,8 +47,10 @@ import {
   useCertificationPreview,
   useCertifyPackage,
   useCertifyWithHeldAuthorization,
+  usePackageAttestation,
   useStepUpForSigning,
 } from "@/lib/api/hooks";
+import { usePackageSigningEligibility } from "@/lib/api/signingAccess";
 import { SIGNING_ROLE_ACTIONS, roleNoun } from "./shared";
 import {
   CertificationFailure,
@@ -66,6 +68,7 @@ export default function CertifyDialog({
   packageId,
   signingRole,
   returnLabel,
+  returnFamily = "regulatory",
   onClose,
   onCertified,
   onRequestVoid,
@@ -76,6 +79,8 @@ export default function CertifyDialog({
   signingRole: SigningRole;
   /** e.g. "BSD3 · 31 Mar 2026 v2" — for the dialog heading. */
   returnLabel: string;
+  /** Source READ follows the family even though signing is always REG. */
+  returnFamily?: string;
   onClose: () => void;
   onCertified?: () => void;
   /**
@@ -90,7 +95,19 @@ export default function CertifyDialog({
    */
   ssoOutcome?: string | null;
 }) {
-  const previewQuery = useCertificationPreview(bankId, packageId, signingRole);
+  const statusQuery = usePackageAttestation(bankId, packageId);
+  const signing = usePackageSigningEligibility(
+    bankId,
+    signingRole,
+    statusQuery.data?.recipients,
+    returnFamily,
+  );
+  const previewQuery = useCertificationPreview(
+    bankId,
+    packageId,
+    signingRole,
+    signing.allowed,
+  );
   const stepUp = useStepUpForSigning(bankId);
   const certify = useCertifyPackage(bankId);
   const certifyWithHeld = useCertifyWithHeldAuthorization(bankId);
@@ -126,7 +143,7 @@ export default function CertifyDialog({
 
   const onPasswordSubmit = (event: React.FormEvent) => {
     event.preventDefault();
-    if (!preview) return;
+    if (!preview || !signing.allowed) return;
     // Rejections are rendered from the mutations' own error state.
     void (async () => {
       const granted = await stepUp.mutateAsync({
@@ -149,7 +166,7 @@ export default function CertifyDialog({
   /** Spend the cookie-held authorisation minted by the SSO callback. */
   const onHeldAuthorizationSubmit = (event: React.FormEvent) => {
     event.preventDefault();
-    if (!preview) return;
+    if (!preview || !signing.allowed) return;
     void certifyWithHeld
       .mutateAsync({
         packageId,
@@ -199,7 +216,15 @@ export default function CertifyDialog({
         </header>
 
         <div className="px-5 py-4 space-y-5 max-h-[70vh] overflow-y-auto">
-          {previewQuery.isLoading ? (
+          {!signing.allowed ? (
+            <p role="status" className="text-caption text-warning leading-relaxed">
+              {statusQuery.error
+                ? "Could not load the current-cycle signing route. Reload the page to retry."
+                : statusQuery.isLoading || !statusQuery.data
+                  ? "Checking who this signature is routed to…"
+                  : signing.reason}
+            </p>
+          ) : previewQuery.isLoading ? (
             <SkeletonCard />
           ) : previewQuery.error ? (
             <PreviewError error={previewQuery.error} />
@@ -227,7 +252,7 @@ export default function CertifyDialog({
 
           {ssoOutcome && <SsoOutcomeNotice outcome={ssoOutcome} />}
 
-          {preview && !terminal && (
+          {preview && signing.allowed && !terminal && (
             <StepUpSection
               signingRole={signingRole}
               password={password}

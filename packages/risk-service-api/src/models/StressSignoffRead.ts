@@ -18,13 +18,13 @@ import {
   AttestedAtToJSON,
   AttestedAtToJSONTyped,
 } from "./AttestedAt";
-import type { StaysAboveAllMinima } from "./StaysAboveAllMinima";
+import type { AttestationRecipientUserId } from "./AttestationRecipientUserId";
 import {
-  StaysAboveAllMinimaFromJSON,
-  StaysAboveAllMinimaFromJSONTyped,
-  StaysAboveAllMinimaToJSON,
-  StaysAboveAllMinimaToJSONTyped,
-} from "./StaysAboveAllMinima";
+  AttestationRecipientUserIdFromJSON,
+  AttestationRecipientUserIdFromJSONTyped,
+  AttestationRecipientUserIdToJSON,
+  AttestationRecipientUserIdToJSONTyped,
+} from "./AttestationRecipientUserId";
 import type { CreatedBy } from "./CreatedBy";
 import {
   CreatedByFromJSON,
@@ -32,20 +32,6 @@ import {
   CreatedByToJSON,
   CreatedByToJSONTyped,
 } from "./CreatedBy";
-import type { WithActionsStaysAboveAllMinima } from "./WithActionsStaysAboveAllMinima";
-import {
-  WithActionsStaysAboveAllMinimaFromJSON,
-  WithActionsStaysAboveAllMinimaFromJSONTyped,
-  WithActionsStaysAboveAllMinimaToJSON,
-  WithActionsStaysAboveAllMinimaToJSONTyped,
-} from "./WithActionsStaysAboveAllMinima";
-import type { SubmittedAt } from "./SubmittedAt";
-import {
-  SubmittedAtFromJSON,
-  SubmittedAtFromJSONTyped,
-  SubmittedAtToJSON,
-  SubmittedAtToJSONTyped,
-} from "./SubmittedAt";
 import type { CredibilityRationale } from "./CredibilityRationale";
 import {
   CredibilityRationaleFromJSON,
@@ -88,6 +74,34 @@ import {
   AttestedByToJSON,
   AttestedByToJSONTyped,
 } from "./AttestedBy";
+import type { StaysAboveAllMinima } from "./StaysAboveAllMinima";
+import {
+  StaysAboveAllMinimaFromJSON,
+  StaysAboveAllMinimaFromJSONTyped,
+  StaysAboveAllMinimaToJSON,
+  StaysAboveAllMinimaToJSONTyped,
+} from "./StaysAboveAllMinima";
+import type { WithActionsStaysAboveAllMinima } from "./WithActionsStaysAboveAllMinima";
+import {
+  WithActionsStaysAboveAllMinimaFromJSON,
+  WithActionsStaysAboveAllMinimaFromJSONTyped,
+  WithActionsStaysAboveAllMinimaToJSON,
+  WithActionsStaysAboveAllMinimaToJSONTyped,
+} from "./WithActionsStaysAboveAllMinima";
+import type { SubmittedAt } from "./SubmittedAt";
+import {
+  SubmittedAtFromJSON,
+  SubmittedAtFromJSONTyped,
+  SubmittedAtToJSON,
+  SubmittedAtToJSONTyped,
+} from "./SubmittedAt";
+import type { SigningAuthorizationId } from "./SigningAuthorizationId";
+import {
+  SigningAuthorizationIdFromJSON,
+  SigningAuthorizationIdFromJSONTyped,
+  SigningAuthorizationIdToJSON,
+  SigningAuthorizationIdToJSONTyped,
+} from "./SigningAuthorizationId";
 
 /**
  *
@@ -101,6 +115,12 @@ export interface StressSignoffRead {
    * @memberof StressSignoffRead
    */
   assumptionsRationale: string;
+  /**
+   *
+   * @type {AttestationRecipientUserId}
+   * @memberof StressSignoffRead
+   */
+  attestationRecipientUserId: AttestationRecipientUserId;
   /**
    *
    * @type {AttestedAt}
@@ -187,6 +207,18 @@ export interface StressSignoffRead {
   scenarioNarrative: string;
   /**
    *
+   * @type {SigningAuthorizationId}
+   * @memberof StressSignoffRead
+   */
+  signingAuthorizationId: SigningAuthorizationId;
+  /**
+   *
+   * @type {string}
+   * @memberof StressSignoffRead
+   */
+  signingDigest: string;
+  /**
+   *
    * @type {StressSignoffStatus}
    * @memberof StressSignoffRead
    */
@@ -240,6 +272,11 @@ export function instanceOfStressSignoffRead(
     value["assumptionsRationale"] === undefined
   )
     return false;
+  if (
+    !("attestationRecipientUserId" in value) ||
+    value["attestationRecipientUserId"] === undefined
+  )
+    return false;
   if (!("attestedAt" in value) || value["attestedAt"] === undefined)
     return false;
   if (!("attestedBy" in value) || value["attestedBy"] === undefined)
@@ -275,6 +312,13 @@ export function instanceOfStressSignoffRead(
     value["scenarioNarrative"] === undefined
   )
     return false;
+  if (
+    !("signingAuthorizationId" in value) ||
+    value["signingAuthorizationId"] === undefined
+  )
+    return false;
+  if (!("signingDigest" in value) || value["signingDigest"] === undefined)
+    return false;
   if (!("status" in value) || value["status"] === undefined) return false;
   if (
     !("staysAboveAllMinima" in value) ||
@@ -309,6 +353,9 @@ export function StressSignoffReadFromJSONTyped(
   return {
     ...json,
     assumptionsRationale: json["assumptions_rationale"],
+    attestationRecipientUserId: AttestationRecipientUserIdFromJSON(
+      json["attestation_recipient_user_id"],
+    ),
     attestedAt: AttestedAtFromJSON(json["attested_at"]),
     attestedBy: AttestedByFromJSON(json["attested_by"]),
     bankId: json["bank_id"],
@@ -327,6 +374,10 @@ export function StressSignoffReadFromJSONTyped(
     runId: json["run_id"],
     scenarioCode: json["scenario_code"],
     scenarioNarrative: json["scenario_narrative"],
+    signingAuthorizationId: SigningAuthorizationIdFromJSON(
+      json["signing_authorization_id"],
+    ),
+    signingDigest: json["signing_digest"],
     status: StressSignoffStatusFromJSON(json["status"]),
     staysAboveAllMinima: StaysAboveAllMinimaFromJSON(
       json["stays_above_all_minima"],
@@ -355,6 +406,9 @@ export function StressSignoffReadToJSONTyped(
 
   return {
     assumptions_rationale: value["assumptionsRationale"],
+    attestation_recipient_user_id: AttestationRecipientUserIdToJSON(
+      value["attestationRecipientUserId"],
+    ),
     attested_at: AttestedAtToJSON(value["attestedAt"]),
     attested_by: AttestedByToJSON(value["attestedBy"]),
     bank_id: value["bankId"],
@@ -371,6 +425,10 @@ export function StressSignoffReadToJSONTyped(
     run_id: value["runId"],
     scenario_code: value["scenarioCode"],
     scenario_narrative: value["scenarioNarrative"],
+    signing_authorization_id: SigningAuthorizationIdToJSON(
+      value["signingAuthorizationId"],
+    ),
+    signing_digest: value["signingDigest"],
     status: StressSignoffStatusToJSON(value["status"]),
     stays_above_all_minima: StaysAboveAllMinimaToJSON(
       value["staysAboveAllMinima"],

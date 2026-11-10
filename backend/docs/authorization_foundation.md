@@ -136,9 +136,45 @@ analysis: delegated Account Admin conflicts block in either assignment order;
 the documented Owner exception remains a warning with audit evidence.
 Configuration route enforcement ships in separate module cutovers.
 
-`sign_off` remains reserved, absent from every bundle. Workflow-specific authority
-must be designed explicitly rather than inferred from a nearby role.
-`submit` left that reserved set on 2026-09-20:
+`signer` carries exactly `sign_off`, with no read, preparation, approval,
+configuration, submission or account-administration authority. Migration
+`202611070112` widens only the bundle CHECK; it creates no grants and changes no
+existing identities or sessions. Owners must explicitly assign complete scoped
+bindings. Signer participates in the existing C9 operational-duty analysis:
+delegated Account Admin conflicts block in either assignment order; the
+documented Owner exception remains a warning with audit evidence. An ordinary
+Approver binding never supplies signing authority, and a Signer-only binding
+never supplies approval. Attestation preview, step-up, certification and
+combined certification/routing require an active, exact-bank
+REG/restricted Signer binding, independent family source READ, and a pending
+current-cycle route naming the actor. The first signature has no unrouted
+fallback. Checker slots additionally evaluate exact-bank REG/restricted
+APPROVE after their workflow guards; Signer does not imply that duty.
+
+Ceremony preflight uses `evaluate_structural_permission` only to inspect stored
+binding eligibility without fabricating step-up or maker/checker evidence. It
+never authorizes execution by itself. `signing.certify` repeats ordinary
+`evaluate_permission` after the locked ceremony guards and genuine one-shot
+token consumption, with the evidence those guards established. Revocation,
+suspension, expiry, wrong bank, wrong module and wrong sensitivity therefore
+close the ceremony before signature writes.
+
+Enterprise-stress final attestation uses the same Signer ceremony with one
+active, institution-scoped exact-bank RISK/restricted `sign_off` binding,
+independent confidential VIEW of the source sign-off, and whole-institution data
+coverage. Organization-wide Signer grants and ordinary Approver grants do not
+qualify. Submission names an eligible signer who is not the preparer, freezes the
+recipient and a value-based signing digest, and records both in the submission
+audit. Stress step-up verifies a genuine password or fresh OIDC identity through
+the shared attestation service and mints a one-shot token bound to the signer,
+sign-off, `board` role and digest. Attestation re-evaluates execution authority
+with maker/checker and step-up evidence established, atomically consumes the
+token, and persists its authorization ID. Recipient mismatch, content drift,
+forged tokens and replay deny without attesting the row. Existing rows keep NULL
+ceremony fields; an old pending row without a recipient/digest requires a new
+run and sign-off rather than implicit routing or signing.
+
+`submit` left the reserved action set on 2026-09-20:
 it is carried by the `validator` bundle alone and enforced on the filing surface
 ([filing submit authority rollout](filing_submit_authority_rollout.md)). It is
 the worked example of the rule — the authority was designed, given its own
@@ -448,9 +484,10 @@ target member in the current browser tab. Returning to Members after signing
 in again restores the draft, including after a self-revocation ends the session.
 Successful submission or cancellation clears the saved draft.
 
-The Members composer offers Viewer, Auditor, Analyst, Approver, Validator, or
-Account Admin. The additional API-only audit officer grants and their staged UI
-delivery are governed by [the bank audit contract](tamper_evident_records.md#bank-audit-read-api). Org
+The Members composer offers Viewer, Auditor, Analyst, Configurator, Signer,
+Approver, Validator, or Account Admin. The additional API-only audit officer
+grants and their staged UI delivery are governed by
+[the bank audit contract](tamper_evident_records.md#bank-audit-read-api). Org
 Owner, Member, and Integration Writer are not tenant-grantable; Account Admin is valid
 only as organization-wide Account Administration at all sensitivity levels.
 
@@ -821,9 +858,8 @@ projection, optimizer, what-if and reverse-stress routes, their rows in shared
 projections and the run registry, and the capital-plan projection they feed —
 is owned by the [Forecasting rollout contract](forecasting_enforcement_rollout.md).
 Stress scenario and management-action governance, sign-off preparation, and
-enterprise execution are owned by the
-[Stress rollout contract](stress_enforcement_rollout.md); final attestation
-remains with the dedicated Signer cutover.
+enterprise execution and the final Signer attestation ceremony are owned by the
+[Stress rollout contract](stress_enforcement_rollout.md).
 Behavioral model estimates, liquidity behavior, and retraining are owned by the
 [Behavioral rollout contract](behavioral_enforcement_rollout.md); model
 application stays with the governed model-application cutover. Markets views,

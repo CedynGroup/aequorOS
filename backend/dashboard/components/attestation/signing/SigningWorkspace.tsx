@@ -72,6 +72,7 @@ import StatusPill from "@/components/ui/StatusPill";
 import { SkeletonCard } from "@/components/ui/Skeleton";
 import { ErrorPanel } from "@/components/ui/QueryBoundary";
 import { useOrganizationConfigureEligibility } from "@/lib/api/configureAccess";
+import { usePackageSigningEligibility } from "@/lib/api/signingAccess";
 import {
   useCertifyAndSend,
   useCertifyAndSendWithHeldAuthorization,
@@ -161,6 +162,7 @@ export default function SigningWorkspace({
   packageId,
   signingRole,
   returnLabel,
+  returnFamily = "regulatory",
   onClose,
   onCertified,
   onRequestVoid,
@@ -171,16 +173,34 @@ export default function SigningWorkspace({
   signingRole: SigningRole;
   /** e.g. "BSD3 · 31 Mar 2026 v2". */
   returnLabel: string;
+  /** Source READ follows the family even though signing is always REG. */
+  returnFamily?: string;
   onClose: () => void;
   onCertified?: () => void;
   onRequestVoid?: () => void;
   /** The `stepUp` marker the SSO callback redirected back with, if any. */
   ssoOutcome?: string | null;
 }) {
-  const previewQuery = useCertificationPreview(bankId, packageId, signingRole);
-  const placementsQuery = usePackageSignaturePlacements(bankId, packageId);
-  const appearanceQuery = useMyAdoptedSignature();
-  const identityQuery = useMySignerIdentity();
+  const statusQuery = usePackageAttestation(bankId, packageId);
+  const signing = usePackageSigningEligibility(
+    bankId,
+    signingRole,
+    statusQuery.data?.recipients,
+    returnFamily,
+  );
+  const previewQuery = useCertificationPreview(
+    bankId,
+    packageId,
+    signingRole,
+    signing.allowed,
+  );
+  const placementsQuery = usePackageSignaturePlacements(
+    bankId,
+    packageId,
+    signing.allowed,
+  );
+  const appearanceQuery = useMyAdoptedSignature(signing.allowed);
+  const identityQuery = useMySignerIdentity(signing.allowed);
   const { effectiveAuthority, isLoading: authorityLoading } = useUserProfile();
   /**
    * The document bytes are the return's own file, so they follow the export
@@ -188,14 +208,13 @@ export default function SigningWorkspace({
    * return but may not take it away gets no copy of it — including this
    * render, which cannot promise the browser will not keep what it draws.
    */
-  const mayReadDocument = filingAuthorityFor(effectiveAuthority, bankId, {
-    resolved: !authorityLoading,
-  }).mayExport;
-  const usersQuery = useOrganizationUsers(
-    hasAccountDirectoryAuthority(effectiveAuthority),
-  );
-  const statusQuery = usePackageAttestation(bankId, packageId);
-
+  const mayReadDocument =
+    signing.allowed &&
+    filingAuthorityFor(effectiveAuthority, bankId, {
+      resolved: !authorityLoading,
+    }).mayExport;
+  const directoryAvailable = hasAccountDirectoryAuthority(effectiveAuthority);
+  const usersQuery = useOrganizationUsers(directoryAvailable);
   const stepUp = useStepUpForSigning(bankId);
   const certifyAndSend = useCertifyAndSend(bankId);
   const certifyWithHeld = useCertifyAndSendWithHeldAuthorization(bankId);
@@ -357,6 +376,26 @@ export default function SigningWorkspace({
     return slots;
   }, [preview, signingRole]);
 
+  // Reuse current-cycle nominees in outstanding-slot order, so the combined
+  // certification cannot exchange an approver and Board recipient by row order.
+  useEffect(() => {
+    if (!status || nominationSlots.length === 0) return;
+    setNominations((current) => {
+      if (current.length > 0) return current;
+      const pending = status.recipients.filter(
+        (recipient) =>
+          recipient.status === "pending" && recipient.signingRole !== signingRole,
+      );
+      return nominationSlots.map((role) => {
+        const at = pending.findIndex(
+          (recipient) => recipient.signingRole === role,
+        );
+        const match = at >= 0 ? pending.splice(at, 1)[0] : undefined;
+        return { signingRole: role, userId: match?.recipientUserId ?? "" };
+      });
+    });
+  }, [status, signingRole, nominationSlots]);
+
   /**
    * Who each role's boxes belong to, and the identity they will print.
    *
@@ -508,7 +547,9 @@ export default function SigningWorkspace({
     savePlacements.isPending;
 
   const offending = slots.find((slot) => slot.violation);
-  const missingNominee = nominationSlots.length !== nominations.length;
+  const missingNominee =
+    nominationSlots.length !== nominations.length ||
+    nominations.some((nomination) => !nomination.userId.trim());
   // Both signature fields, or none: the workspace starts empty on purpose, and
   // certifying with nothing placed would silently fall back to the platform
   // default layout — the guess this screen exists to replace.
@@ -544,6 +585,7 @@ export default function SigningWorkspace({
             : null;
 
   const blockedReason =
+    (!signing.allowed ? signing.reason : null) ??
     documentBlockedReason ??
     (offending
       ? `The ${offending.ownerLabel.toLowerCase()} ${FIELD_TYPE_LABELS[
@@ -639,6 +681,7 @@ export default function SigningWorkspace({
    * signing a layout nobody chose.
    */
   const onSsoClick = () => {
+    if (blockedReason) return;
     void (async () => {
       try {
         window.sessionStorage.setItem(
@@ -695,6 +738,52 @@ export default function SigningWorkspace({
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, [onClose, armed]);
+
+  // A failed background refetch keeps the previous data in TanStack Query v5,
+  // so only a workspace with no route status at all yields to the load error;
+  // the server still re-checks the route when the signer certifies.
+  const routeStatus = !statusQuery.data
+    ? statusQuery.error
+      ? "Could not load the current-cycle signing route. Reload the page to retry."
+      : "Checking who this signature is routed to…"
+    : null;
+
+  // Ineligibility closes the whole act, not just its final submit button. Do
+  // not leave document placement, routing, adoption or send-back controls alive
+  // around a disabled proof form when the binding, route or source READ is absent.
+  if (routeStatus || !signing.allowed) {
+    return (
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label={`Sign ${returnLabel}`}
+        data-testid="signing-workspace"
+        className="fixed inset-0 z-50 flex items-center justify-center bg-surface-alt p-5"
+      >
+        <section className="w-full max-w-xl rounded-lg border border-border bg-surface-raised p-6 shadow-pop">
+          <div className="flex items-start justify-between gap-4">
+            <h2 className="text-h3 text-navy">
+              {SIGNING_ROLE_ACTIONS[signingRole] ?? "Certify"} — {returnLabel}
+            </h2>
+            <button
+              type="button"
+              aria-label="Close the signing workspace"
+              onClick={onClose}
+              className="w-9 h-9 rounded-sm text-slate hover:bg-surface inline-flex items-center justify-center"
+            >
+              <X size={16} aria-hidden />
+            </button>
+          </div>
+          <p
+            role="status"
+            className="mt-5 text-caption text-warning leading-relaxed"
+          >
+            {routeStatus ?? signing.reason}
+          </p>
+        </section>
+      </div>
+    );
+  }
 
   return (
     <div
@@ -846,7 +935,11 @@ export default function SigningWorkspace({
           aria-label="What you are signing"
           className="w-full lg:w-[440px] shrink-0 overflow-y-auto p-5 space-y-5 bg-surface-raised"
         >
-          {previewQuery.isLoading ? (
+          {!signing.allowed ? (
+            <p role="status" className="text-caption text-warning leading-relaxed">
+              {signing.reason}
+            </p>
+          ) : previewQuery.isLoading ? (
             <SkeletonCard />
           ) : previewQuery.error ? (
             <PreviewError error={previewQuery.error} />
@@ -877,6 +970,7 @@ export default function SigningWorkspace({
               users={usersQuery.data?.users ?? []}
               nominations={nominations}
               onChange={setNominations}
+              directoryAvailable={directoryAvailable}
             />
           </div>
 
@@ -913,7 +1007,7 @@ export default function SigningWorkspace({
 
           {ssoOutcome && <SsoOutcomeNotice outcome={ssoOutcome} />}
 
-          {preview && !terminal && (
+          {preview && signing.allowed && !terminal && (
             <StepUpSection
               signingRole={signingRole}
               password={password}

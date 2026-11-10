@@ -47,6 +47,9 @@ class StoryAuthority(NamedTuple):
     bundles: set[str]
     #: (bundle, institution_scope, institution_id) for the export bundle only.
     export_rows: set[tuple[str, str, str | None]]
+    #: (bundle, institution_scope, institution_id) for the ceremony's
+    #: exact-bank SIGNER and APPROVER duty bindings (#185).
+    ceremony_rows: set[tuple[str, str, str | None]]
 
 
 def test_scoped_story_credentials_enforce_real_backend_permission_boundaries(
@@ -203,6 +206,17 @@ def test_signing_story_officers_hold_return_export_and_other_stories_do_not(
                         for binding in bindings
                         if binding.role_bundle == RoleBundle.ANALYST.value
                     },
+                    {
+                        (
+                            binding.role_bundle,
+                            binding.institution_scope,
+                            binding.institution_id,
+                        )
+                        for binding in bindings
+                        if binding.role_bundle
+                        in {RoleBundle.SIGNER.value, RoleBundle.APPROVER.value}
+                        and binding.institution_scope == InstitutionScope.INSTITUTION.value
+                    },
                 )
             return authority
         finally:
@@ -225,16 +239,28 @@ def test_signing_story_officers_hold_return_export_and_other_stories_do_not(
         assert export_rows == {("analyst", InstitutionScope.INSTITUTION.value, signed_bank)}, role
         assert set(capabilities) == {signed_bank}, role
     # A plain approver keeps its own bundle and stays refused: no analyst row,
-    # and no export the ceremony could read a page with.
-    assert signed["approver"].bundles == {
+    # and no export the ceremony could read a page with. The #185 ceremony
+    # contract names its signing duty exactly: an exact-bank REG/restricted
+    # SIGNER binding for the signing step, and an exact-bank APPROVER binding
+    # so the checker slot keeps its APPROVE duty confined to the story's bank.
+    approver = signed["approver"]
+    assert approver.bundles == {
         RoleBundle.MEMBER.value,
         RoleBundle.APPROVER.value,
         RoleBundle.ANALYST.value,
+        RoleBundle.SIGNER.value,
+    }
+    assert approver.ceremony_rows == {
+        ("signer", InstitutionScope.INSTITUTION.value, signed_bank),
+        ("approver", InstitutionScope.INSTITUTION.value, signed_bank),
     }
     assert ("reg", "restricted", "export") not in unsigned["approver"].capabilities.get(
         unsigned_bank, set()
     )
     assert unsigned["approver"].bundles == {RoleBundle.MEMBER.value, RoleBundle.APPROVER.value}
+    # Without a signing story there is no ceremony, so no exact-bank duty
+    # binding is issued at all.
+    assert unsigned["approver"].ceremony_rows == set()
     assert unsigned["validator"].bundles == {
         RoleBundle.MEMBER.value,
         RoleBundle.VIEWER.value,
@@ -245,6 +271,9 @@ def test_signing_story_officers_hold_return_export_and_other_stories_do_not(
     )
     # No story role outside the signing set receives an analyst row at all.
     assert unsigned["approver"].export_rows == unsigned["validator"].export_rows == set()
+    # The validator exports but is not a ceremony slot: it holds no SIGNER or
+    # exact-bank APPROVER duty in either story.
+    assert signed["validator"].ceremony_rows == unsigned["validator"].ceremony_rows == set()
     # An unrelated story role is untouched by the signing rule.
     assert unsigned["viewer"].bundles == signed["viewer"].bundles == {RoleBundle.MEMBER.value}
 

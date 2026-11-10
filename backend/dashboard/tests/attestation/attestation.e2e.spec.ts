@@ -18,11 +18,15 @@ import { test, expect, type Response } from "@playwright/test";
 import path from "path";
 import { E2E_API_ORIGIN, E2E_TMP } from "../../playwright.config";
 import { requireObjectStorage } from "../../e2e/support/object-storage";
-import { mintBackendToken } from "../../e2e/support/mint";
-import { generateCurrentVersion } from "../../e2e/support/generate";
+import { E2E_USERS, mintBackendToken } from "../../e2e/support/mint";
+import {
+  generateCurrentPackage,
+  generateCurrentVersion,
+} from "../../e2e/support/generate";
 // Shared with the full-lifecycle journeys, which sign for real: one description
 // of the ceremony surface, so a change to it cannot pass here and rot there.
 import {
+  namePreparer,
   placeBothSignatureFields,
   placeField,
 } from "../../e2e/support/ceremony";
@@ -123,7 +127,7 @@ test.describe("the certification ceremony", () => {
       expect(opted.ok()).toBeTruthy();
 
       await page.goto(GATED_RETURN);
-      await generateCurrentVersion(page);
+      const { id: ceremonyPackageId } = await generateCurrentPackage(page);
       await expect(
         page.getByText(/Generated|Checks passed/).first(),
       ).toBeVisible({ timeout: 60_000 });
@@ -180,6 +184,13 @@ test.describe("the certification ceremony", () => {
         });
       }
 
+      // The ceremony will not open until the package's preparer slot names this
+      // session's analyst (Signer gating, #185): routing is an approver act, and
+      // "the first signature is not an exception". The page re-loads so the
+      // ceremony reads the routed status instead of the snapshot it cached
+      // while the routing was in flight.
+      await namePreparer(ceremonyPackageId, E2E_USERS.analyst.id);
+      await page.reload();
       const certify = page.getByRole("button", {
         name: "Certify and freeze",
       });
@@ -381,7 +392,7 @@ test.describe("the signing workspace", () => {
       expect(opted.ok()).toBeTruthy();
 
       await page.goto(GATED_RETURN);
-      await generateCurrentVersion(page);
+      const { id: workspacePackageId } = await generateCurrentPackage(page);
       await expect(
         page.getByText(/Generated|Checks passed/).first(),
       ).toBeVisible({ timeout: 60_000 });
@@ -399,7 +410,15 @@ test.describe("the signing workspace", () => {
         });
       }
 
-      // The entry point is the workspace, not a modal.
+      // The entry point is the workspace, not a modal — and the workspace only
+      // opens for a routed, exactly-institution Signer (Signer gating, #185).
+      await namePreparer(workspacePackageId, E2E_USERS.analyst.id);
+      // The page cached the package's pre-routing status (staleTime 30s), and a
+      // reload would serve the workspace's fonts from Chromium's memory cache,
+      // which emits no network responses for the font-hash assertion below to
+      // read. Waiting out the staleness makes the ceremony's own mount refetch
+      // the routed status — what a preparer's page does within a minute anyway.
+      await page.waitForTimeout(31_000);
       await page.getByRole("button", { name: "Certify and freeze" }).click();
       const workspace = page.getByTestId("signing-workspace");
       await expect(workspace).toBeVisible({ timeout: 30_000 });

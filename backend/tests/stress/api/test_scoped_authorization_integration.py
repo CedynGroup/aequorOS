@@ -461,13 +461,28 @@ def test_hidden_and_missing_stress_objects_have_identical_responses(
     operations: list[tuple[str, str, dict[str, object] | None]] = [
         ("GET", "", None),
         ("PATCH", "", reason),
-        ("POST", "/submit", reason),
+        (
+            "POST",
+            "/submit",
+            reason | {"attestation_recipient_user_id": str(uuid4())}
+            if resource == "signoff"
+            else reason,
+        ),
     ]
     if resource == "signoff":
         operations.extend(
             [
                 ("POST", "/withdraw", reason),
-                ("POST", "/attest", reason | {"credibility_rationale": "Board review"}),
+                (
+                    "POST",
+                    "/attest",
+                    reason
+                    | {
+                        "credibility_rationale": "Board review",
+                        "authorization_token": "not-minted-for-hidden-object",
+                        "expected_signing_digest": "0" * 64,
+                    },
+                ),
             ]
         )
     else:

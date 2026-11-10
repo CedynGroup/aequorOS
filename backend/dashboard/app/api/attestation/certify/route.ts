@@ -24,7 +24,7 @@ interface CertifyBody {
   expectedCertificationDigest?: string;
 }
 
-export async function POST(request: NextRequest): Promise<NextResponse> {
+export async function POST(request: NextRequest): Promise<Response> {
   const session = await auth();
   if (!session?.accessToken) {
     return NextResponse.json({ error: "not_authenticated" }, { status: 401 });
@@ -78,10 +78,10 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     },
   );
 
-  // Pass the risk service's own verdict through unchanged — the dialog branches
-  // on its error codes (maker_checker, figures_changed_since_certification, …).
-  const payload: unknown = await response.json().catch(() => null);
-  return NextResponse.json(payload ?? { error: "certify_failed" }, {
+  // Preserve the backend's exact status, bytes and media type. The dialog
+  // branches on its error codes (maker_checker, figures_changed_since_certification, …).
+  return new Response(response.body, {
     status: response.status,
+    headers: response.headers,
   });
 }

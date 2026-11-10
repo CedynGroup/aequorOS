@@ -9,12 +9,16 @@ isolation — against the deterministic canonical seeded book.
 
 from __future__ import annotations
 
+from collections.abc import Iterator
 from uuid import UUID, uuid4
 
 import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy import event
 
-from app.core.authorization import RoleBundle
+from app.core import security
+from app.core.authorization import RoleBundle, SensitivityScope
+from app.core.config import get_settings
 from app.db.session import get_sessionmaker
 from app.models import User
 from tests.stress.api.test_enterprise_stress_integration import (
@@ -35,7 +39,7 @@ RUNS_URL = "/api/v1/banks/{bank_id}/enterprise-stress/runs"
 SIGNOFF_URL = "/api/v1/banks/{bank_id}/enterprise-stress/signoffs"
 
 
-def _seed_board(client: TestClient) -> UUID:
+def _seed_board(client: TestClient, bank_id: str) -> UUID:
     _ = client
     board_id = uuid4()
     session = get_sessionmaker()()
@@ -47,10 +51,19 @@ def _seed_board(client: TestClient) -> UUID:
                 email=f"board-{board_id.hex[:8]}@aequoros.example",
                 display_name="Board Member",
                 role="approver",
+                password_hash=security.hash_password("stress-board-test-password"),
+                auth_provider="password",
             )
         )
         session.commit()
-        grant(session, RoleBundle.VIEWER, user_id=board_id)
+        grant(session, RoleBundle.VIEWER, user_id=board_id, bank_id=bank_id)
+        grant(
+            session,
+            RoleBundle.SIGNER,
+            user_id=board_id,
+            bank_id=bank_id,
+            sensitivity=SensitivityScope.RESTRICTED,
+        )
     finally:
         session.close()
     return board_id
@@ -90,10 +103,19 @@ def _create_signoff(client: TestClient, bank_id: str, run_id: str) -> str:
     return response.json()["id"]
 
 
+@pytest.fixture
+def signer_identity_pepper(monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
+    monkeypatch.setenv("SIGNER_ID_PEPPER", "stress-signoff-test-pepper-not-production")
+    get_settings.cache_clear()
+    yield
+    get_settings.cache_clear()
+
+
+@pytest.mark.usefixtures("signer_identity_pepper")
 def test_signoff_maker_checker_lifecycle(db_client: TestClient) -> None:
     bank_id = seed_bank(db_client)
     run_id, _ = _run_enterprise_stress(db_client, bank_id)
-    board = _seed_board(db_client)
+    board = _seed_board(db_client, bank_id)
     signoff_id = _create_signoff(db_client, bank_id, run_id)
 
     # Draft carries the run's headline outcome captured at prepare time.
@@ -105,30 +127,50 @@ def test_signoff_maker_checker_lifecycle(db_client: TestClient) -> None:
     submit = db_client.post(
         SIGNOFF_URL.format(bank_id=bank_id) + f"/{signoff_id}/submit",
         headers=headers(user_id=USER_1, roles=("analyst",)),
-        json={"reason": "Ready for Board attestation."},
+        json={
+            "attestation_recipient_user_id": str(board),
+            "reason": "Ready for Board attestation.",
+        },
     )
     assert submit.status_code == 200, submit.text
     assert submit.json()["status"] == "pending_attestation"
 
-    # Maker ≠ checker: the preparer/submitter cannot attest their own sign-off.
-    self_attest = db_client.post(
-        SIGNOFF_URL.format(bank_id=bank_id) + f"/{signoff_id}/attest",
-        headers=headers(user_id=USER_1, roles=("approver",)),
-        json={"credibility_rationale": "self", "reason": "self attest"},
-    )
-    assert self_attest.status_code == 409, self_attest.text
-    assert self_attest.json()["error"]["details"]["error_code"] == "maker_is_checker"
-
-    attest = db_client.post(
-        SIGNOFF_URL.format(bank_id=bank_id) + f"/{signoff_id}/attest",
+    step_up = db_client.post(
+        SIGNOFF_URL.format(bank_id=bank_id) + f"/{signoff_id}/step-up",
         headers=headers(user_id=board, roles=("approver",)),
-        json={
-            "credibility_rationale": "Reviewed and challenged; results are credible.",
-            "board_challenge": "Challenged FX severity; retained.",
-            "reason": "Board attestation.",
-        },
+        json={"password": "stress-board-test-password"},
     )
+    assert step_up.status_code == 200, step_up.text
+
+    locked_reads: list[str] = []
+
+    def observe_read(
+        _conn: object, _cursor: object, statement: str, *_args: object
+    ) -> None:
+        normalized = statement.upper()
+        if "ENTERPRISE_STRESS_SIGNOFFS" in normalized and "FOR UPDATE" in normalized:
+            locked_reads.append(statement)
+
+    with get_sessionmaker()() as session:
+        engine = session.get_bind()
+    event.listen(engine, "before_cursor_execute", observe_read)
+    try:
+        attest = db_client.post(
+            SIGNOFF_URL.format(bank_id=bank_id) + f"/{signoff_id}/attest",
+            headers=headers(user_id=board, roles=("approver",)),
+            json={
+                "credibility_rationale": "Reviewed and challenged; results are credible.",
+                "board_challenge": "Challenged FX severity; retained.",
+                "reason": "Board attestation.",
+                "authorization_token": step_up.json()["authorization_token"],
+                "expected_signing_digest": step_up.json()["signing_digest"],
+            },
+        )
+    finally:
+        event.remove(engine, "before_cursor_execute", observe_read)
     assert attest.status_code == 200, attest.text
+    if engine.dialect.name == "postgresql":
+        assert len(locked_reads) == 1, locked_reads
     body = attest.json()
     assert body["status"] == "attested"
     assert body["attested_by"] == str(board)

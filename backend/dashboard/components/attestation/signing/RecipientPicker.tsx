@@ -42,12 +42,18 @@ export default function RecipientPicker({
   users,
   nominations,
   onChange,
+  directoryAvailable = true,
+  notificationPoint = "certification",
 }: {
   /** One entry per signature still outstanding after the caller signs. */
   slots: SigningRole[];
   users: OrganizationUserRead[];
   nominations: Nomination[];
   onChange: (nominations: Nomination[]) => void;
+  /** Without directory READ, submit a user ID for the server to validate. */
+  directoryAvailable?: boolean;
+  /** Initial routing notifies on save; combined certification notifies on signing. */
+  notificationPoint?: "certification" | "routing";
 }) {
   if (slots.length === 0) {
     return (
@@ -84,29 +90,48 @@ export default function RecipientPicker({
                 {slots.filter((slot) => slot === role).length > 1 &&
                   ` #${index + 1}`}
               </span>
-              <select
-                value={selected}
-                aria-label={`${roleNoun(role)} recipient`}
-                onChange={(event) => {
-                  const next = slots.map((slotRole, slotIndex) => ({
-                    signingRole: slotRole,
-                    userId:
-                      slotIndex === index
-                        ? event.target.value
-                        : (nominations[slotIndex]?.userId ?? ""),
-                  }));
-                  onChange(next.filter((entry) => entry.userId.length > 0));
-                }}
-                className="w-full rounded-sm border border-border bg-surface px-3 py-2 text-body text-navy"
-              >
-                <option value="">Select an officer…</option>
-                {roster.map((user) => (
-                  <option key={user.id} value={user.id}>
-                    {user.displayName ?? user.email}
-                    {user.jobTitle ? ` — ${user.jobTitle}` : ""} ({user.role})
-                  </option>
-                ))}
-              </select>
+              {directoryAvailable ? (
+                <select
+                  value={selected}
+                  aria-label={`${roleNoun(role)} recipient`}
+                  onChange={(event) => {
+                    const next = slots.map((slotRole, slotIndex) => ({
+                      signingRole: slotRole,
+                      userId:
+                        slotIndex === index
+                          ? event.target.value
+                          : (nominations[slotIndex]?.userId ?? ""),
+                    }));
+                    onChange(next);
+                  }}
+                  className="w-full rounded-sm border border-border bg-surface px-3 py-2 text-body text-navy"
+                >
+                  <option value="">Select an officer…</option>
+                  {roster.map((user) => (
+                    <option key={user.id} value={user.id}>
+                      {user.displayName ?? user.email}
+                      {user.jobTitle ? ` — ${user.jobTitle}` : ""} ({user.role})
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <input
+                  value={selected}
+                  aria-label={`${roleNoun(role)} recipient`}
+                  placeholder="Recipient user ID"
+                  onChange={(event) => {
+                    const next = slots.map((slotRole, slotIndex) => ({
+                      signingRole: slotRole,
+                      userId:
+                        slotIndex === index
+                          ? event.target.value.trim()
+                          : (nominations[slotIndex]?.userId ?? ""),
+                    }));
+                    onChange(next);
+                  }}
+                  className="w-full rounded-sm border border-border bg-surface px-3 py-2 text-body text-navy"
+                />
+              )}
             </label>
             {mismatch && (
               <p
@@ -126,9 +151,12 @@ export default function RecipientPicker({
 
       <p className="inline-flex items-start gap-1.5 text-caption text-slate leading-relaxed">
         <UserCheck size={13} className="shrink-0 mt-0.5" aria-hidden />
-        They are notified as soon as your signature lands, and the return
-        appears in their signature queue. Only a named recipient can then fill
-        the slot — signing around a nomination is refused.
+        {!directoryAvailable
+          ? "Enter each recipient’s user ID. The server validates active membership, scoped signing authority and maker-checker eligibility. "
+          : ""}
+        {notificationPoint === "routing"
+          ? "They are notified when this routing is saved, and the return appears in their signature queue. Only a named recipient can fill each slot."
+          : "They are notified as soon as your signature lands, and the return appears in their signature queue. Only a named recipient can then fill the slot — signing around a nomination is refused."}
       </p>
     </div>
   );
