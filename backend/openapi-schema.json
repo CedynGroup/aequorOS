@@ -3839,6 +3839,14 @@
         "title": "BehavioralModelRead",
         "type": "object"
       },
+      "BehavioralModelSlug": {
+        "enum": [
+          "nmd-duration",
+          "prepayment",
+          "deposit-stability"
+        ],
+        "type": "string"
+      },
       "BehavioralProductEstimate": {
         "additionalProperties": false,
         "properties": {
@@ -3900,6 +3908,144 @@
           "method"
         ],
         "title": "BehavioralProductEstimate",
+        "type": "object"
+      },
+      "BehavioralProposalAcknowledgement": {
+        "additionalProperties": false,
+        "properties": {
+          "proposalId": {
+            "format": "uuid",
+            "title": "Proposalid",
+            "type": "string"
+          },
+          "status": {
+            "const": "pending",
+            "default": "pending",
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "proposalId"
+        ],
+        "title": "BehavioralProposalAcknowledgement",
+        "type": "object"
+      },
+      "BehavioralProposalListRead": {
+        "additionalProperties": false,
+        "properties": {
+          "proposals": {
+            "items": {
+              "$ref": "#/components/schemas/BehavioralProposalRead"
+            },
+            "title": "Proposals",
+            "type": "array"
+          }
+        },
+        "required": [
+          "proposals"
+        ],
+        "title": "BehavioralProposalListRead",
+        "type": "object"
+      },
+      "BehavioralProposalRead": {
+        "additionalProperties": false,
+        "properties": {
+          "asOfDate": {
+            "format": "date",
+            "title": "Asofdate",
+            "type": "string"
+          },
+          "bankId": {
+            "title": "Bankid",
+            "type": "string"
+          },
+          "ingestionBatchId": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ingestionbatchid"
+          },
+          "model": {
+            "$ref": "#/components/schemas/BehavioralModelSlug"
+          },
+          "modelVersion": {
+            "title": "Modelversion",
+            "type": "string"
+          },
+          "proposalId": {
+            "format": "uuid",
+            "title": "Proposalid",
+            "type": "string"
+          },
+          "proposedAt": {
+            "format": "date-time",
+            "title": "Proposedat",
+            "type": "string"
+          },
+          "proposedByUserId": {
+            "format": "uuid",
+            "title": "Proposedbyuserid",
+            "type": "string"
+          },
+          "reviewedAt": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reviewedat"
+          },
+          "reviewedByUserId": {
+            "anyOf": [
+              {
+                "format": "uuid",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reviewedbyuserid"
+          },
+          "status": {
+            "enum": [
+              "pending",
+              "accepted"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "values": {
+            "items": {
+              "$ref": "#/components/schemas/BehavioralApplyProduct"
+            },
+            "title": "Values",
+            "type": "array"
+          }
+        },
+        "required": [
+          "proposalId",
+          "bankId",
+          "model",
+          "modelVersion",
+          "asOfDate",
+          "values",
+          "status",
+          "proposedByUserId",
+          "proposedAt"
+        ],
+        "title": "BehavioralProposalRead",
         "type": "object"
       },
       "BiAlertEventListRead": {
@@ -66461,6 +66607,210 @@
         ]
       }
     },
+    "/api/v1/banks/{bank_id}/behavioral/proposals": {
+      "get": {
+        "operationId": "listBehavioralModelProposals",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bank_id",
+            "required": true,
+            "schema": {
+              "title": "Bank Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BehavioralProposalListRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "List Behavioral Model Proposals",
+        "tags": [
+          "behavioral-models"
+        ]
+      }
+    },
+    "/api/v1/banks/{bank_id}/behavioral/proposals/{proposal_id}/review": {
+      "post": {
+        "operationId": "reviewBehavioralModelProposal",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "bank_id",
+            "required": true,
+            "schema": {
+              "title": "Bank Id",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "proposal_id",
+            "required": true,
+            "schema": {
+              "format": "uuid",
+              "title": "Proposal Id",
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BehavioralApplyRead"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Bad request."
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Missing or invalid tenant context."
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Requested resource was not found for the tenant."
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Workflow transition or state conflict."
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Request validation failed."
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            },
+            "description": "Unexpected server error."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Review Behavioral Model Proposal",
+        "tags": [
+          "behavioral-models"
+        ]
+      }
+    },
     "/api/v1/banks/{bank_id}/behavioral/{model}": {
       "get": {
         "operationId": "getBehavioralModel",
@@ -66581,7 +66931,8 @@
             "name": "bank_id",
             "required": true,
             "schema": {
-              "title": "Bank Id"
+              "title": "Bank Id",
+              "type": "string"
             }
           },
           {
@@ -66614,7 +66965,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/BehavioralApplyRead"
+                  "$ref": "#/components/schemas/BehavioralProposalAcknowledgement"
                 }
               }
             },

@@ -228,6 +228,8 @@ export type ModuleScope = {
   forecastingApprove?: boolean;
   /** Exact BEH/aggregated view authority for model estimates and liquidity effects. */
   behavioralAggregatedView?: boolean;
+  /** Exact BEH/restricted view authority for independent proposal review. */
+  behavioralRestrictedView?: boolean;
   /** Exact BEH/confidential run authority for retraining a model. */
   behavioralRun?: boolean;
   /**
@@ -869,6 +871,11 @@ type ScopedModuleRoutePolicy = {
   /** The exact entry-view capability every page under `prefix` needs. */
   entryView: keyof ModuleScope;
   entry: AccessRequirement;
+  /** An independently sufficient restricted reader for a module's review queue. */
+  reviewView?: keyof ModuleScope;
+  /** Pages under `prefix` that render the review queue; default: every page.
+   * The restricted-reader exception only admits a reviewer where they can act. */
+  reviewRoutes?: readonly string[];
   /** Pages that need confidential view instead; absent when the module has none. */
   confidential?: {
     view: keyof ModuleScope;
@@ -949,6 +956,14 @@ const SCOPED_MODULE_ROUTES: readonly ScopedModuleRoutePolicy[] = [
     prefix: "/behavioral",
     entryView: "behavioralAggregatedView",
     entry: BEHAVIORAL_AGGREGATED_VIEW,
+    reviewView: "behavioralRestrictedView",
+    // Only the model workspaces render the proposal queue; the overview and
+    // liquidity pages would admit a restricted reviewer to an empty read.
+    reviewRoutes: [
+      "/behavioral/nmd-duration",
+      "/behavioral/prepayment",
+      "/behavioral/deposit-stability",
+    ],
   },
   {
     prefix: "/markets",
@@ -1035,7 +1050,12 @@ function scopedModuleRequirements(
       if (scope[confidential.view] !== true) {
         missing.push(confidential.requirement);
       }
-    } else if (scope[routePolicy.entryView] !== true) {
+    } else if (
+      scope[routePolicy.entryView] !== true &&
+      (!routePolicy.reviewView ||
+        scope[routePolicy.reviewView] !== true ||
+        !underRoute(path, routePolicy.reviewRoutes ?? [routePolicy.prefix]))
+    ) {
       missing.push(routePolicy.entry);
     }
     if (
@@ -1151,6 +1171,26 @@ export function isPathVisible(pathname: string, scope: ModuleScope): boolean {
  */
 export function isHrefVisible(href: string, scope: ModuleScope): boolean {
   return hrefAccess(href, scope).state === "enabled";
+}
+
+/**
+ * A nav entry's effective destination for one scope (#829). A module home that
+ * is closed to the caller while their review workspace IS admitted — the
+ * Behavioral restricted-only reviewer — enters where their queue actually
+ * renders instead of a route the route guard refuses; everyone else keeps the
+ * module home.
+ */
+export function moduleEntryHref(href: string, scope: ModuleScope): string {
+  const path = normalize(href);
+  for (const routePolicy of SCOPED_MODULE_ROUTES) {
+    if (path !== routePolicy.prefix) continue;
+    if (!routePolicy.reviewView || !routePolicy.reviewRoutes) return href;
+    if (scope[routePolicy.entryView] === true) return href;
+    if (scope[routePolicy.reviewView] !== true) return href;
+    const [firstReviewRoute] = routePolicy.reviewRoutes;
+    return firstReviewRoute ?? href;
+  }
+  return href;
 }
 
 /**

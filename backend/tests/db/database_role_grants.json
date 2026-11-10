@@ -177,6 +177,11 @@
     ["aequoros_signed_package_guard", "", "aqs_bi"],
     ["aequoros_signed_package_guard", "", "aqs_operator"],
     ["aequoros_signed_package_guard", "", "aqs_worker"],
+    ["aqs_behavioral_model_proposal_guard", "", "aqs_api"],
+    ["aqs_behavioral_model_proposal_guard", "", "aqs_audit_verifier"],
+    ["aqs_behavioral_model_proposal_guard", "", "aqs_bi"],
+    ["aqs_behavioral_model_proposal_guard", "", "aqs_operator"],
+    ["aqs_behavioral_model_proposal_guard", "", "aqs_worker"],
     ["aqs_bound_letter_guard", "", "aqs_api"],
     ["aqs_document_binding_validate", "", "aqs_api"],
     ["aqs_reconciliation_proposal_guard", "", "aqs_api"],
@@ -303,6 +308,10 @@
     "banks": {
       "aqs_api": ["DELETE", "INSERT", "SELECT", "UPDATE"],
       "aqs_worker": ["DELETE", "INSERT", "SELECT", "UPDATE"]
+    },
+    "behavioral_model_proposals": {
+      "aqs_api": ["INSERT", "SELECT", "UPDATE"],
+      "aqs_worker": ["INSERT", "SELECT", "UPDATE"]
     },
     "bi_agg_position_daily": {
       "aqs_api": ["DELETE", "INSERT", "SELECT", "UPDATE"],

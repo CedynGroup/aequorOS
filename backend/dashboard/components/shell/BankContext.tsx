@@ -428,6 +428,12 @@ export default function BankProvider({ children }: { children: ReactNode }) {
         "aggregated",
         "view",
       ),
+      behavioralRestrictedView: hasEffectiveCapability(
+        institutionCapabilities,
+        "beh",
+        "restricted",
+        "view",
+      ),
       behavioralRun: hasEffectiveCapability(
         institutionCapabilities,
         "beh",

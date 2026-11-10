@@ -2104,37 +2104,6 @@
       ]
     },
     {
-      "name": "tenant-dependencies-5472f5f1f8a7",
-      "kind": "dependency",
-      "basis": "Existing tenant authentication boundary and exact registered dependency calls listed here. Named scoped/legacy gates remain unchanged; handler and service checks can narrow this access further. Presence is not policy correctness.",
-      "references": [
-        "app/api/deps.py:get_current_principal",
-        "app/api/deps.py:get_mutation_tenant_context",
-        "app/api/deps.py:get_tenant_context",
-        "app/api/deps.py:get_tenant_db_session",
-        "app/api/deps.py:require_module_access.<locals>._dependency",
-        "app/api/deps.py:resolve_tenant_bank"
-      ],
-      "authentication": "tenant",
-      "dependencies": [
-        "app.api.deps:get_current_principal",
-        "app.api.deps:get_mutation_tenant_context",
-        "app.api.deps:get_tenant_context",
-        "app.api.deps:get_tenant_db_session",
-        "app.api.deps:require_module_access.<locals>._dependency",
-        "app.api.deps:resolve_tenant_bank",
-        "fastapi.security.http:HTTPBearer"
-      ],
-      "routes": [
-        {
-          "application": "tenant",
-          "method": "POST",
-          "path": "/api/v1/banks/{bank_id}/behavioral/{model}/apply",
-          "endpoint": "app.behavioral.api.read_behavioral_models:apply_behavioral_model"
-        }
-      ]
-    },
-    {
       "name": "tenant-dependencies-57d70dbbb9e8",
       "kind": "dependency",
       "basis": "Existing tenant authentication boundary and exact registered dependency calls listed here. Named scoped/legacy gates remain unchanged; handler and service checks can narrow this access further. Presence is not policy correctness.",
@@ -4972,6 +4941,18 @@
         {
           "application": "tenant",
           "method": "POST",
+          "path": "/api/v1/banks/{bank_id}/behavioral/{model}/apply",
+          "endpoint": "app.behavioral.api.read_behavioral_models:apply_behavioral_model"
+        },
+        {
+          "application": "tenant",
+          "method": "POST",
+          "path": "/api/v1/banks/{bank_id}/behavioral/proposals/{proposal_id}/review",
+          "endpoint": "app.behavioral.api.read_behavioral_models:review_behavioral_model_proposal"
+        },
+        {
+          "application": "tenant",
+          "method": "POST",
           "path": "/api/v1/banks/{bank_id}/behavioral/{model}/train",
           "endpoint": "app.behavioral.api.read_behavioral_models:train_behavioral_model"
         },
@@ -6133,6 +6114,12 @@
         "fastapi.security.http:HTTPBearer"
       ],
       "routes": [
+        {
+          "application": "tenant",
+          "method": "GET",
+          "path": "/api/v1/banks/{bank_id}/behavioral/proposals",
+          "endpoint": "app.behavioral.api.read_behavioral_models:list_behavioral_model_proposals"
+        },
         {
           "application": "tenant",
           "method": "GET",

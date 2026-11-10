@@ -15,6 +15,7 @@
   "BankProduct": "app.models.institution_profile.BankProduct",
   "BankReportingPeriod": "app.models.regulatory.BankReportingPeriod",
   "BankSupervisoryAddon": "app.models.icaap_risk_capital.BankSupervisoryAddon",
+  "BehavioralModelProposal": "app.behavioral.models.BehavioralModelProposal",
   "BiAggPositionDaily": "app.models.bi.BiAggPositionDaily",
   "BiAlert": "app.models.bi_notifications.BiAlert",
   "BiAlertEvent": "app.models.bi_notifications.BiAlertEvent",

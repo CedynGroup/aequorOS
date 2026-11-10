@@ -13,6 +13,7 @@ import {
   hubRedirectFor,
   isRootPath,
   landingPathFor,
+  moduleEntryHref,
   moduleForPath,
   type ModuleKey,
   type ModuleScope,
@@ -390,8 +391,8 @@ assert.deepEqual(hrefAccess("/forecasting", deniedForecasting), {
     "Requires Forecasting · Aggregated · View. Ask your organization owner or admin to grant it.",
 });
 assert.equal(isPathVisible("/forecasting/scenario", deniedForecasting), true);
-// Behavioral has no confidential page: every tab needs the same aggregated
-// view, and a run-only analyst is still shown the exact sentence they lack.
+// Behavioral model data stays aggregated-only, while restricted reviewers may
+// enter the same pages for their independently gated proposal queue.
 const deniedBehavioral = resolved(true, true, {
   behavioralAggregatedView: false,
   behavioralRun: true,
@@ -413,6 +414,41 @@ for (const href of [
   assert.equal(isHrefVisible(href, resolved(true)), true);
   assert.equal(isPathVisible(href, resolved(true)), true);
 }
+const behavioralReviewer = resolved(true, true, {
+  behavioralAggregatedView: false,
+  behavioralRestrictedView: true,
+});
+// The restricted-reader exception admits only the model workspaces that
+// render the proposal queue; the overview and liquidity pages stay hidden.
+for (const href of [
+  "/behavioral/nmd-duration",
+  "/behavioral/prepayment",
+  "/behavioral/deposit-stability",
+]) {
+  assert.equal(isHrefVisible(href, behavioralReviewer), true);
+  assert.equal(isPathVisible(href, behavioralReviewer), true);
+}
+for (const href of ["/behavioral", "/behavioral/liquidity"]) {
+  assert.equal(isHrefVisible(href, behavioralReviewer), false);
+  assert.equal(isPathVisible(href, behavioralReviewer), false);
+  assert.deepEqual(hrefAccess(href, behavioralReviewer), {
+    state: "disabled",
+    reason:
+      "Requires Behavioral Models · Aggregated · View. Ask your organization owner or admin to grant it.",
+  });
+}
+// The nav entries a restricted-only reviewer can reach (#829): the module
+// home is closed to them, so the sidebar and palette entries rewrite to the
+// first admitted review route — enabled there, never pointing at the closed
+// overview. Every other scope keeps the module home.
+assert.equal(moduleEntryHref("/behavioral", behavioralReviewer), "/behavioral/nmd-duration");
+assert.deepEqual(hrefAccess(moduleEntryHref("/behavioral", behavioralReviewer), behavioralReviewer), {
+  state: "enabled",
+});
+assert.equal(moduleEntryHref("/behavioral", deniedBehavioral), "/behavioral");
+assert.equal(moduleEntryHref("/behavioral", resolved(true)), "/behavioral");
+assert.equal(moduleEntryHref("/behavioral/nmd-duration", behavioralReviewer), "/behavioral/nmd-duration");
+assert.equal(moduleEntryHref("/markets", resolved(true)), "/markets");
 const behavioralReader = resolved(true, true, { behavioralRun: false });
 assert.equal(isHrefVisible("/behavioral/nmd-duration", behavioralReader), true);
 assert.equal(isPathVisible("/behavioral/liquidity", behavioralReader), true);
