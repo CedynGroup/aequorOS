@@ -13,8 +13,8 @@ matching these service-layer authorization patterns:
 
 - `app/data_engine/service/access.py` (DATA)
 - `app/case/service/authorization.py` (cases)
-- the live summary's per-module VIEW gate (`app/live/service/live_view.py`
-  `_GATED_ENGINE_MODULES`), which freshness reuses for its module mapping.
+- the live summary, alerts feed and window analytics read gates, which resolve
+  their permitted modules through the same `live_access` map.
 
 The API dependency stays the plain tenant dependency; narrowing at the service
 layer is explicitly permitted by the route-authorization census basis
