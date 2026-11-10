@@ -37,7 +37,7 @@ function fixture(run) {
   }
 }
 function reports() {
-  return [54, 53, 53, 53].map((count, index) => ({
+  return [59, 58, 58, 58].map((count, index) => ({
     shard: { current: index + 1, total: 4 },
     status: "passed",
     discovered: count,
@@ -212,11 +212,11 @@ test("main reporter retains its twenty-journey execution floor", () =>
       ),
     );
   }));
-test("accepts a complete four-shard run at the executed-journey floor", () =>
+test("accepts a complete four-shard run of the pinned suite", () =>
   fixture((root) => {
     const result = invoke(root, reports());
     assert.equal(result.status, 0, result.stdout);
-    assert.match(result.stdout, /213 executed, 0 skipped/);
+    assert.match(result.stdout, /233 executed, 0 skipped/);
   }));
 test("rejects a vanished journey even when every shard passed", () =>
   fixture((root) => {
@@ -226,7 +226,12 @@ test("rejects a vanished journey even when every shard passed", () =>
     data[0].executed--;
     const result = invoke(root, data);
     assert.equal(result.status, 1);
-    assert.match(result.stdout, /floor is 213/);
+    assert.match(result.stdout, /the suite pins 233/);
+    const belowFloor = reports();
+    belowFloor[0].journeys.splice(21);
+    belowFloor[0].discovered -= 21;
+    belowFloor[0].executed -= 21;
+    assert.match(invoke(root, belowFloor).stdout, /floor is 213/);
   }));
 test("names skipped journeys and refuses skip-based success", () =>
   fixture((root) => {
@@ -276,7 +281,7 @@ test("counts unsuccessful journeys as executed while refusing the run", () =>
       data[0].journeys[0].status = status;
       const result = invoke(root, data);
       assert.equal(result.status, 1);
-      assert.match(result.stdout, /213 executed, 0 skipped/);
+      assert.match(result.stdout, /233 executed, 0 skipped/);
       assert.ok(
         result.stdout.includes(
           `Journey did not pass: ${data[0].journeys[0].name} (${status})`,
