@@ -7,16 +7,41 @@ outputs:
 runs:
   using: composite
   steps:
-    - name: Download and verify MinIO
+    - name: Cache the MinIO binary
+      id: minio-cache
+      uses: actions/cache@v6
+      with:
+        path: ${{ runner.temp }}/aequoros-ci-minio
+        # Keyed by release, platform and the pinned binary checksum; when the
+        # release CDN answers 504, the cache restores the verified binary
+        # instead of failing every job of the run.
+        key: minio-${{ runner.os }}-${{ runner.arch }}-RELEASE.2025-09-07T16-13-09Z-7c5bd8512c6e966455b1d198209358b2d191c77a83ab377c4073281065fb855f
+    - name: Download MinIO
+      if: steps.minio-cache.outputs.cache-hit != 'true'
+      shell: bash
+      run: |
+        set -euo pipefail
+        staging="$RUNNER_TEMP/aequoros-ci-minio-staging"
+        mkdir -p "$staging"
+        curl --fail --silent --show-error --location --retry 3 \
+          https://github.com/minio/minio/releases/download/RELEASE.2025-09-07T16-13-09Z/minio.linux-amd64.RELEASE.2025-09-07T16-13-09Z \
+          --output "$staging/minio"
+        # SHA256 from the official release's .sha256sum asset.
+        echo "7c5bd8512c6e966455b1d198209358b2d191c77a83ab377c4073281065fb855f  $staging/minio" | sha256sum --check --strict
+        # Only a checksum-verified binary enters the cache path, so a failed
+        # download can never save a partial file under the cache key.
+        mkdir -p "$RUNNER_TEMP/aequoros-ci-minio"
+        mv "$staging/minio" "$RUNNER_TEMP/aequoros-ci-minio/minio"
+    - name: Verify and expose MinIO
       shell: bash
       run: |
         set -euo pipefail
         directory="$RUNNER_TEMP/aequoros-ci-minio"
-        mkdir -p "$directory"
-        curl --fail --silent --show-error --location --retry 3 \
-          https://github.com/minio/minio/releases/download/RELEASE.2025-09-07T16-13-09Z/minio.linux-amd64.RELEASE.2025-09-07T16-13-09Z \
-          --output "$directory/minio"
-        # SHA256 from the official release's .sha256sum asset.
+        if [ ! -f "$directory/minio" ]; then
+          echo "The MinIO binary is missing: neither the cache nor the download produced $directory/minio" >&2
+          exit 1
+        fi
+        # Enforced on every run, cache hit or not.
         echo "7c5bd8512c6e966455b1d198209358b2d191c77a83ab377c4073281065fb855f  $directory/minio" | sha256sum --check --strict
         chmod +x "$directory/minio"
         echo "$directory" >> "$GITHUB_PATH"
