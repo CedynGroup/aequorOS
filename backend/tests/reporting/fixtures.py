@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import pytest
-from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.authorization import (

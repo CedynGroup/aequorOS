@@ -44,13 +44,13 @@ from app.models import (
     CanonicalReferenceRow,
     IngestionBatch,
     LineageRecord,
-    User,
 )
 from tests.fixtures.canonical_bank_fixture import (
     FORECAST_APPROVER_ID,
     SAMPLE_BANK_ID,
     materialize_canonical_test_book,
 )
+from tests.support.authorization_fixtures import tenant_user
 from tests.support.helpers import ORG_1, ORG_2, USER_1, headers
 
 __all__ = ["_clean_authority_and_artifacts", "_stable_estimates"]
@@ -169,8 +169,7 @@ def _grant(
             grantor=authorization.GrantorRef(GrantorType.SYSTEM, "behavioral-application-test"),
             reason="Behavioral governed application regression",
         )
-        user = session.get(User, user_id)
-        assert user is not None
+        user = tenant_user(session, organization_id=ORG_1, user_id=user_id)
         return binding.id, user.authorization_version
 
 
