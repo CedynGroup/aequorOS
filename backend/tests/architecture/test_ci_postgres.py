@@ -613,7 +613,9 @@ def built_reports(tmp_path_factory: pytest.TempPathFactory) -> tuple[Path, list[
     reports = tmp_path / "reports"
     for suite in ("suite", "schema"):
         for index in range(1, ci_postgres.shard_count(suite) + 1):
-            directory = reports / suite / f"pg-suite-{index}"
+            # Name the shard directories after the uploaded artifacts, as
+            # download-artifact does in the gate's shared evidence directory.
+            directory = reports / suite / f"pg-{suite}-{index}"
             env = {
                 **os.environ,
                 "PYTHONPATH": str(BACKEND),
@@ -660,6 +662,46 @@ def test_real_workers_partition_every_test_and_preserve_junit_names(
     shard_reports: tuple[Path, list[str]],
 ) -> None:
     reports, modules = shard_reports
+    verify(reports, modules, "suite")
+
+
+def test_one_evidence_directory_holding_both_suites_verifies_each_suite(
+    shard_reports: tuple[Path, list[str]],
+) -> None:
+    # The gate downloads pg-schema-* and pg-suite-* artifacts into ONE evidence
+    # directory; each suite's verification must judge exactly its own shards,
+    # as the pre-consolidation per-job directories did. Schema evidence is
+    # built synthetically because the shared pytest-run fixture legitimately
+    # carries opt-in skips that the schema guard forbids.
+    reports, modules = shard_reports
+    names = [f"tests/test_schema_{n}_integration.py" for n in range(100)]
+    schema_modules = [
+        next(name for name in names if shard_for(name, 2) == shard) for shard in (1, 2)
+    ]
+    collected = [
+        f"{module}::test_pass[{index}]" for module in schema_modules for index in range(170)
+    ]
+    for index in (1, 2):
+        directory = reports / f"pg-schema-{index}"
+        directory.mkdir()
+        selected = ci_postgres.selected_tests(collected, [], index, "schema")
+        (directory / "collection-main.json").write_text(
+            json.dumps(
+                {
+                    "count": 2,
+                    "shard": index,
+                    "files": [],
+                    "collected": collected,
+                    "selected": selected,
+                }
+            )
+        )
+        suite = ET.Element("testsuite")
+        for nodeid in selected:
+            classname, name = ci_postgres.case_key(nodeid)
+            _ = ET.SubElement(suite, "testcase", classname=classname, name=name, time="1.0")
+        ET.ElementTree(suite).write(directory / "report.xml")
+    verify(reports, [], "schema")
     verify(reports, modules, "suite")
 
 

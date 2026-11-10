@@ -203,7 +203,10 @@ def plan(root: Path, event: str, base: str) -> dict[str, object]:
 
 def read_manifests(directory: Path, files: list[str], suite: str) -> tuple[list[str], int]:
     count = shard_count(suite)
-    paths = sorted(directory.glob("*/collection-*.json"))
+    # The gate verifies BOTH suites from one shared evidence directory; select
+    # only this suite's shard artifacts, named pg-schema-* / pg-suite-* by the
+    # uploading jobs and download-artifact.
+    paths = sorted(directory.glob(f"pg-{suite}-*/collection-*.json"))
     if not paths:
         raise ValueError("Missing shard collection manifests")
     full: list[str] | None = None
@@ -239,7 +242,7 @@ def read_manifests(directory: Path, files: list[str], suite: str) -> tuple[list[
 
 def verify(directory: Path, files: list[str], suite: str) -> None:
     expected_all, shard_count = read_manifests(directory, files, suite)
-    reports = sorted(directory.glob("*/report.xml"))
+    reports = sorted(directory.glob(f"pg-{suite}-*/report.xml"))
     if len(reports) != shard_count:
         raise ValueError("Missing or duplicate shard JUnit reports")
     cases = [case for report in reports for case in ET.parse(report).iter("testcase")]
@@ -283,7 +286,7 @@ def refresh_durations(directory: Path, source_run: str, output: Path) -> None:
     collected, _ = read_manifests(directory, [], "suite")
     modules = {case_key(nodeid): nodeid.split("::")[0] for nodeid in collected}
     durations: dict[str, float] = {}
-    for report in sorted(directory.glob("*/report.xml")):
+    for report in sorted(directory.glob("pg-suite-*/report.xml")):
         for case in ET.parse(report).iter("testcase"):
             module = modules[(case.get("classname", ""), case.get("name", ""))]
             duration = float(case.get("time", "0"))
