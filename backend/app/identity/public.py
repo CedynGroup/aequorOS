@@ -72,6 +72,7 @@ from app.identity.service.scoped_authorization import (
     evaluate_bank_permission,
     require_bank_permission,
     require_bank_permission_prefetched,
+    require_organization_permission,
     require_resolved_bank_permission,
     resolve_bank,
 )
@@ -141,6 +142,7 @@ __all__ = [
     "require_bank_permission",
     "require_bank_permission_prefetched",
     "require_institution_coverage",
+    "require_organization_permission",
     "require_resolved_bank_permission",
     "resolve_bank",
     "resolve_bank_reference",

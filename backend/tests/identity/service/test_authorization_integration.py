@@ -85,21 +85,24 @@ def _banks(db: Session) -> None:
     db.commit()
 
 
-def _raw_binding(
+def _raw_binding(  # noqa: PLR0913 - the fixture binding sentence is explicit
     *,
     organization_id: str,
-    institution_id: str,
+    institution_id: str | None,
     module_scope: ModuleScope = ModuleScope.LIQUIDITY,
+    institution_scope: InstitutionScope = InstitutionScope.INSTITUTION,
+    sensitivity_scope: SensitivityScope = SensitivityScope.CONFIDENTIAL,
+    role_bundle: RoleBundle = RoleBundle.VIEWER,
 ) -> AuthorizationBinding:
     return AuthorizationBinding(
         organization_id=organization_id,
         principal_user_id=USER_1,
         principal_type=PrincipalType.HUMAN.value,
-        role_bundle=RoleBundle.VIEWER.value,
-        institution_scope=InstitutionScope.INSTITUTION.value,
+        role_bundle=role_bundle.value,
+        institution_scope=institution_scope.value,
         institution_id=institution_id,
         module_scope=module_scope.value,
-        sensitivity_scope=SensitivityScope.CONFIDENTIAL.value,
+        sensitivity_scope=sensitivity_scope.value,
         granted_by_type=authorization.GrantorType.SYSTEM.value,
         granted_by_id="test-suite",
         grant_reason="prove tenant-consistent institution references",
@@ -232,6 +235,93 @@ def test_credit_and_institution_project_per_institution_like_every_product_modul
         (module, Sensitivity.CONFIDENTIAL, Permission.VIEW)
     ]
     assert BANK_1_SIBLING not in by_bank
+
+
+def test_organization_scoped_reg_configure_capability_projects(
+    db_session: Session,
+) -> None:
+    """VAL-CFG-008: an organization-scope REG binding projects an organization-wide
+    REGULATORY capability, so org-scoped configuration surfaces (signing policies,
+    placement templates) can be offered from the projection."""
+    _banks(db_session)
+    user = db_session.scalars(
+        select(User).where(User.id == USER_1, User.organization_id == ORG_1)
+    ).one()
+    bank = db_session.scalars(
+        select(Bank).where(Bank.id == BANK_1, Bank.organization_id == ORG_1)
+    ).one()
+    db_session.add(
+        _raw_binding(
+            organization_id=ORG_1,
+            institution_id=None,
+            institution_scope=InstitutionScope.ORGANIZATION,
+            module_scope=ModuleScope.REGULATORY,
+            sensitivity_scope=SensitivityScope.RESTRICTED,
+            role_bundle=RoleBundle.CONFIGURATOR,
+        )
+    )
+    db_session.commit()
+
+    projection = authorization.project_effective_authority(
+        db_session,
+        TenantContext(
+            organization_id=ORG_1,
+            actor_user_id=user.id,
+            roles=("admin",),
+            authorization_version=user.authorization_version,
+        ),
+        [bank],
+        failure_surface="test_organization_reg_projection",
+    )
+
+    assert [
+        (cap.module, cap.sensitivity, cap.permission, cap.requires_contextual_authorization)
+        for cap in projection.organization_capabilities
+    ] == [(Module.REGULATORY, Sensitivity.RESTRICTED, Permission.CONFIGURE, False)]
+
+
+def test_bank_scoped_reg_capability_never_projects_at_organization_scope(
+    db_session: Session,
+) -> None:
+    """An exact-bank REG binding stays on the bank's capability list: authority
+    over one bank is never projected as organization-wide REG authority."""
+    _banks(db_session)
+    user = db_session.scalars(
+        select(User).where(User.id == USER_1, User.organization_id == ORG_1)
+    ).one()
+    bank = db_session.scalars(
+        select(Bank).where(Bank.id == BANK_1, Bank.organization_id == ORG_1)
+    ).one()
+    db_session.add(
+        _raw_binding(
+            organization_id=ORG_1,
+            institution_id=BANK_1,
+            module_scope=ModuleScope.REGULATORY,
+            sensitivity_scope=SensitivityScope.RESTRICTED,
+            role_bundle=RoleBundle.CONFIGURATOR,
+        )
+    )
+    db_session.commit()
+
+    projection = authorization.project_effective_authority(
+        db_session,
+        TenantContext(
+            organization_id=ORG_1,
+            actor_user_id=user.id,
+            roles=("admin",),
+            authorization_version=user.authorization_version,
+        ),
+        [bank],
+        failure_surface="test_bank_scoped_reg_projection",
+    )
+
+    assert projection.organization_capabilities == []
+    by_bank = {
+        item.institution_id: item.capabilities for item in projection.institution_capabilities
+    }
+    assert [(cap.module, cap.sensitivity, cap.permission) for cap in by_bank[BANK_1]] == [
+        (Module.REGULATORY, Sensitivity.RESTRICTED, Permission.CONFIGURE)
+    ]
 
 
 def test_effective_authority_applies_contextual_runtime_requirements(

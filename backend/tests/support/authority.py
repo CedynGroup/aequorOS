@@ -13,7 +13,7 @@ from app.core.authorization import (
     SensitivityScope,
 )
 from app.identity.service import authorization
-from app.models import User
+from tests.support.authorization_fixtures import tenant_user
 from tests.support.helpers import ORG_1, USER_1
 
 
@@ -46,7 +46,6 @@ def grant_organization_analyst(
         reason=reason,
         commit=False,
     )
-    user = db_session.get(User, USER_1)
-    assert user is not None
+    user = tenant_user(db_session, organization_id=ORG_1, user_id=USER_1)
     user.authorization_version = 1
     db_session.commit()

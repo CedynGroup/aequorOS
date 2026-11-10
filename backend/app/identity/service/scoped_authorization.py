@@ -365,3 +365,96 @@ def require_bank_permission_prefetched(  # noqa: PLR0913 - complete authorizatio
         )
         raise HTTPException(status_code=denial_status, detail=denial_detail)
     return bank
+
+
+def require_organization_permission(  # noqa: PLR0913 - complete authorization sentence
+    db: Session,
+    ctx: TenantContext,
+    *,
+    permission: Permission,
+    module: Module,
+    sensitivity: Sensitivity,
+    surface: str,
+    conditions: Sequence[ConditionCheck] = (),
+    denial_status: int = status.HTTP_403_FORBIDDEN,
+    denial_detail: str = DEFAULT_DENIAL_DETAIL,
+) -> None:
+    """Require one complete ORGANIZATION-wide binding on a module.
+
+    The organization itself is the resource: an institution-scoped binding never
+    substitutes, because authority that spans every bank must have been granted
+    at organization scope explicitly. Machine principals and impersonated
+    sessions never hold a human configuration duty and are refused outright.
+    """
+
+    if ctx.integration_key_id is not None or ctx.impersonation_context is not None:
+        authorization_denied(
+            reason="human_organization_binding_required",
+            organization_id=ctx.organization_id,
+            actor_user_id=str(ctx.actor_user_id) if ctx.actor_user_id is not None else None,
+            module=module.value,
+            sensitivity=sensitivity.value,
+            permission=permission.value,
+            surface=surface,
+        )
+        raise HTTPException(status_code=denial_status, detail=denial_detail)
+    if ctx.actor_user_id is None or ctx.authorization_version is None:
+        authorization_denied(
+            reason="human_scoped_binding_required",
+            organization_id=ctx.organization_id,
+            module=module.value,
+            sensitivity=sensitivity.value,
+            permission=permission.value,
+            surface=surface,
+        )
+        raise HTTPException(status_code=denial_status, detail=denial_detail)
+    principal = PrincipalLocator(ctx.organization_id, ctx.actor_user_id, PrincipalType.HUMAN)
+    resource = ResourceLocator(
+        ctx.organization_id,
+        InstitutionScope.ORGANIZATION,
+        None,
+        module,
+        sensitivity,
+    )
+    try:
+        decision = authorization.evaluate_permission(
+            db,
+            principal,
+            permission,
+            resource,
+            conditions=tuple(conditions),
+        )
+    except Exception as exc:  # noqa: BLE001 - enforcement must deny closed
+        authorization.record_binding_evaluation_failure(
+            principal,
+            permission,
+            resource,
+            surface=surface,
+            error=exc,
+        )
+        authorization_denied(
+            reason="binding_evaluation_failed",
+            organization_id=ctx.organization_id,
+            actor_user_id=str(ctx.actor_user_id),
+            module=module.value,
+            sensitivity=sensitivity.value,
+            permission=permission.value,
+            surface=surface,
+        )
+        raise HTTPException(status_code=denial_status, detail=denial_detail) from exc
+    authorization.record_binding_decision(
+        decision,
+        surface=surface,
+        severity="info" if decision.allowed else "warning",
+    )
+    if not decision.allowed:
+        authorization_denied(
+            reason=decision.reason,
+            organization_id=ctx.organization_id,
+            actor_user_id=str(ctx.actor_user_id),
+            module=module.value,
+            sensitivity=sensitivity.value,
+            permission=permission.value,
+            surface=surface,
+        )
+        raise HTTPException(status_code=denial_status, detail=denial_detail)

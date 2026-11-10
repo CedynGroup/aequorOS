@@ -234,12 +234,37 @@ def _create_sod_owner(session: Session, password_hash: str) -> None:
 
 
 def _grant_bootstrap_configure(session: Session, users: dict[str, User]) -> None:
-    """Mapping and connection onboarding are configure duties.
+    """Mapping, connection onboarding and REG configuration are configure duties.
 
-    The shared bootstrap officers hold the explicit exact-bank DATA
-    Configurator sentence. Configure still grants no read.
+    The shared bootstrap officers hold the explicit exact-bank DATA Configurator
+    sentence, the exact-bank REG Configurator sentence (channel configuration and
+    reporting settings) and the organization-scope REG Configurator sentence
+    (signing policies and placements). Configure still grants no read.
     """
     for role in ("admin", "analyst"):
+        for module in (ModuleScope.DATA, ModuleScope.REGULATORY):
+            authorization.create_role_binding(
+                session,
+                organization_id=DEMO_ORG_ID,
+                principal_user_id=users[role].id,
+                principal_type=PrincipalType.HUMAN,
+                role_bundle=RoleBundle.CONFIGURATOR,
+                scope=authorization.BindingScope(
+                    InstitutionScope.INSTITUTION,
+                    SAMPLE_BANK_ID,
+                    module,
+                    SensitivityScope.RESTRICTED,
+                    data_scope=DataScope.ALL,
+                    data_scope_values=(),
+                ),
+                grantor=authorization.GrantorRef(
+                    GrantorType.SYSTEM,
+                    "e2e-bootstrap",
+                ),
+                reason="exercise the dashboard through explicit effective authority",
+            )
+        # The org-level REG surfaces (signing policies, placements) answer to
+        # the organization-scope sentence, never to a bank-scoped one.
         authorization.create_role_binding(
             session,
             organization_id=DEMO_ORG_ID,
@@ -247,9 +272,9 @@ def _grant_bootstrap_configure(session: Session, users: dict[str, User]) -> None
             principal_type=PrincipalType.HUMAN,
             role_bundle=RoleBundle.CONFIGURATOR,
             scope=authorization.BindingScope(
-                InstitutionScope.INSTITUTION,
-                SAMPLE_BANK_ID,
-                ModuleScope.DATA,
+                InstitutionScope.ORGANIZATION,
+                None,
+                ModuleScope.REGULATORY,
                 SensitivityScope.RESTRICTED,
                 data_scope=DataScope.ALL,
                 data_scope_values=(),

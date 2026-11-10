@@ -67,6 +67,7 @@ from tests.reporting.testing.generators import (
     EvidenceBinding,
     evidence_binding_sets,
 )
+from tests.support.authorization_fixtures import tenant_user
 from tests.support.helpers import ORG_1, ORG_2, USER_1, error_envelope, headers
 
 BASE = f"/api/v1/banks/{SAMPLE_BANK_ID}"
@@ -131,8 +132,7 @@ def grant(  # noqa: PLR0913 - every binding dimension is an explicit input
         reason="Exercise explicit examiner evidence authority",
         commit=False,
     )
-    user = db.get(User, user_id)
-    assert user is not None
+    user = tenant_user(db, organization_id=ORG_1, user_id=user_id)
     user.authorization_version = 1
     db.commit()
     return row

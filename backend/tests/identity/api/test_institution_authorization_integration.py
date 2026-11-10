@@ -23,10 +23,10 @@ from app.identity import public
 from app.identity.models.authorization import AuthorizationBinding
 from app.identity.models.bank import Bank
 from app.identity.models.institution_profile import InstitutionProfile, Outlet
-from app.identity.models.user import User
 from app.identity.schemas.institution_profile import InstitutionProfileAccessRead
 from app.identity.service import authorization
 from app.models.audit_event import AuditEvent
+from tests.support.authorization_fixtures import tenant_user
 from tests.support.helpers import ORG_1, ORG_2, USER_1, headers
 
 BANK = "BK-1NST0001"
@@ -88,8 +88,7 @@ def grant(
         reason="Synthetic exact institution grant",
         commit=False,
     )
-    user = db.get(User, USER_1)
-    assert user is not None
+    user = tenant_user(db, organization_id=ORG_1, user_id=USER_1)
     user.authorization_version = 1
     db.commit()
     return binding
