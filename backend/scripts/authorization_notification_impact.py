@@ -252,10 +252,7 @@ def _former_case_view(db: Session, organization_id: str, user: User) -> bool:
     resource = ResourceLocator(
         organization_id, InstitutionScope.ORGANIZATION, None, Module.RISK, Sensitivity.RESTRICTED
     )
-    try:
-        decision = authorization.evaluate_permission(db, principal, Permission.VIEW, resource)
-    except Exception:  # noqa: BLE001 - the evaluator refuses before the report lies
-        return False
+    decision = authorization.evaluate_permission(db, principal, Permission.VIEW, resource)
     if not decision.allowed:
         return False
     scope = authorization.effective_data_scope(
@@ -477,6 +474,7 @@ def build_notification_impact_report(
             grants: tuple[BindingGrant, ...]
             family: ColumnElement[bool]
             error: str | None = None
+            former_case_admitted = False
             try:
                 principal = TenantContext(
                     organization_id=organization_id,
@@ -489,6 +487,12 @@ def build_notification_impact_report(
                 # rows are hidden on both sides of the cutover and candidates are
                 # only recommended when the simulated recount truly restores.
                 family = notifications_service.family_visibility_condition(db, principal)
+                if job_locators:
+                    # The superseded guard is one side of the BEFORE baseline,
+                    # so its evaluation shares the assessment's failure flow:
+                    # evaluated once per principal here, a refusal marks the
+                    # assessment unusable instead of masquerading as a denial.
+                    former_case_admitted = _former_case_view(db, organization_id, user)
             except Exception:
                 grants = ()
                 family = false()
@@ -533,7 +537,7 @@ def build_notification_impact_report(
                     organization_id,
                     locator,
                     None,
-                    former_case_admitted=_former_case_view(db, organization_id, user),
+                    former_case_admitted=former_case_admitted,
                 )
                 after = _job_count(
                     db, organization_id, locator, grants, actor_user_id=user.id
