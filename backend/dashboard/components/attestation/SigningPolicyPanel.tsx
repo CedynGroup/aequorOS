@@ -124,7 +124,7 @@ export default function SigningPolicyPanel() {
 function SigningPolicyPanelInner() {
   const { bank } = useBankContext();
   const policiesQuery = useSigningPolicies();
-  const templatesQuery = useReturnTemplates();
+  const templatesQuery = useReturnTemplates(bank?.id);
   const upsert = useUpsertSigningPolicy();
   // Organization-scope authority: the backend refuses a bank-scoped grant here
   // (VAL-CFG-008), so the offer mirrors exactly that projection.

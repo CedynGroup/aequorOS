@@ -3234,6 +3234,10 @@ export function useReturnTemplates(bankId?: string) {
       }
       return current;
     },
+    // Never fetch with an unresolved bank: the un-scoped response would
+    // render the register once, then the resolved key would re-run the query
+    // and swap the surface through its loading skeleton (the #846 remount).
+    enabled: Boolean(bankId),
     staleTime: 60_000,
     refetchInterval: 60_000,
     refetchOnWindowFocus: "always",

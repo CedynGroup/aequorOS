@@ -282,7 +282,11 @@ function RegisterContents({ upcoming = false }: { upcoming?: boolean }) {
         </div>
         <QueryBoundary
           contained
-          isLoading={query.isLoading}
+          // isPending, not isLoading: until the bank context resolves the
+          // query is enabled-but-idle, and the register must hold its
+          // skeleton instead of flashing an empty register that would then
+          // collapse into a second loading swap once the bank arrives.
+          isLoading={query.isPending}
           error={query.error}
           onRetry={() => void query.refetch()}
         >
