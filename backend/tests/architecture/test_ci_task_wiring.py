@@ -399,11 +399,12 @@ def _ci_pytest_for_phase(
 ) -> tuple[list[str], dict[str, object]]:
     matches = _ci_pytest_all(job, allow_guarded_step=allow_guarded_step)
     if phase is None:
+        assert len(matches) == 1, f"{job} must execute exactly one direct pytest suite"
         return matches[0]
     matches = [
         (tokens, step)
-        for tokens, step in _ci_pytest_all(job, allow_guarded_step=allow_guarded_step)
-        if cast(dict[str, str], step.get("env")).get("CI_POSTGRES_PHASE") == phase
+        for tokens, step in matches
+        if cast(dict[str, str], step.get("env") or {}).get("CI_POSTGRES_PHASE") == phase
     ]
     assert len(matches) == 1, f"{job} must have exactly one {phase}-phase suite"
     return matches[0]
@@ -563,7 +564,6 @@ def test_serial_owner_validation_leaves_no_repository_byproducts(
         ("architecture", None),
         ("static", None),
         ("postgres-locks", None),
-        ("postgres-pool", None),
         ("postgres-pool", "schema"),
         ("postgres-pool", "suite"),
         ("real-data", None),

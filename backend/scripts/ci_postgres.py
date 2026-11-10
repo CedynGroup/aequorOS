@@ -326,7 +326,13 @@ def verify(directory: Path, files: list[str]) -> None:
 
 def module_index() -> dict[str, str]:
     """Map dotted module-name prefixes onto integration-owned test files."""
-    from scripts.test_suites import selected_modules  # noqa: PLC0415
+    # Same package-versus-standalone handling as the top of this file: the
+    # documented refresh command runs `python3 backend/scripts/ci_postgres.py`
+    # from the repository root, where `scripts` is not an importable package.
+    if __package__:
+        from scripts.test_suites import selected_modules  # noqa: PLC0415
+    else:
+        from test_suites import selected_modules  # noqa: PLC0415
 
     return {
         module.removesuffix(".py").replace("/", "."): module
@@ -420,25 +426,31 @@ def refresh_durations(directory: Path, source_run: str, output: Path) -> None:
 
 
 def _verify_recorded_families(directory: Path) -> None:
-    schema = sum(
-        1
-        for report in sorted(directory.glob("pg-schema-*/report.xml"))
-        for case in ET.parse(report).iter("testcase")
-        if case.find("skipped") is None
-    )
-    suite = sum(
-        1
-        for report in sorted(directory.glob("pg-suite-*/report.xml"))
-        for case in ET.parse(report).iter("testcase")
-        if case.find("skipped") is None
-    )
-    storage = sum(
-        1
-        for report in sorted(directory.glob("storage-tests/report.xml"))
-        for case in ET.parse(report).iter("testcase")
-        if case.find("skipped") is None
-    )
-    if schema < SCHEMA_FLOOR or suite < SUITE_FLOOR or storage < 1:
+    """Reject failed, errored or skipped-short evidence before it can refresh.
+
+    A recorded run's own aggregates verified coverage at its revision, but its
+    reports can still carry failed or errored cases from a premature
+    termination; timing evidence from failed executions would distort the
+    packing, so they are rejected exactly as the pool path rejects them.
+    """
+    counts: dict[str, int] = {
+        "pg-schema-*/report.xml": 0,
+        "pg-suite-*/report.xml": 0,
+        "storage-tests/report.xml": 0,
+    }
+    for pattern in counts:
+        for report in sorted(directory.glob(pattern)):
+            for case in ET.parse(report).iter("testcase"):
+                if case.find("skipped") is not None:
+                    continue
+                if case.find("failure") is not None or case.find("error") is not None:
+                    raise ValueError(f"Failed or errored case in {report}")
+                counts[pattern] += 1
+    if (
+        counts["pg-schema-*/report.xml"] < SCHEMA_FLOOR
+        or counts["pg-suite-*/report.xml"] < SUITE_FLOOR
+        or counts["storage-tests/report.xml"] < 1
+    ):
         raise ValueError("Recorded-run reports did not reach the recorded execution floors")
 
 

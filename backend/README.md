@@ -693,11 +693,11 @@ Longest-first packing uses the committed `scripts/ci_postgres_durations.json`
 baseline, excluding files with a non-Postgres owner and the lock-owned modules.
 Each file stays together, including OpenBao's shared AppRole fixtures.
 New modules use stable hashing until the baseline is refreshed. The
-**Postgres schema, RLS, locks and storage** aggregate joins the pool shards and
-the lock job; the always-reported **Risk service gate** remains enforced. Shards upload their complete
-collection manifests and JUnit reports; the aggregates verify that their union
-contains every expected test exactly once, preserve the full-suite execution
-floor, and reject any skipped schema/RLS, storage-contract or live OpenBao test.
+always-reported **Risk service gate** joins the pool shards and the lock job
+directly. Shards upload their complete
+collection manifests and JUnit reports; the gate verifies that their union
+contains every expected test exactly once, preserves the full-suite execution
+floor, and rejects any skipped schema/RLS, storage-contract or live OpenBao test.
 Failed pool shards also upload `postgres.log` as
 `pg-pool-server-log-<shard>` when the log
 exists, retained for seven days.

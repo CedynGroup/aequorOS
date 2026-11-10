@@ -967,6 +967,96 @@ def test_refresh_accepts_recorded_runs_without_collection_manifests(
         ci_postgres.refresh_durations(tmp_path, "recorded-run", output)
 
 
+def test_refresh_command_runs_standalone_from_repo_root(tmp_path: Path) -> None:
+    """The documented root-level refresh command imports without PYTHONPATH.
+
+    Python puts `backend/scripts`, not `backend`, on a standalone script's
+    import path, so a `from scripts.` import inside the refresh path raised
+    ModuleNotFoundError before any baseline was written.
+    """
+    families = {
+        "pg-schema-1": (
+            "tests.db.test_bi_query_log_postgres_integration",
+            ci_postgres.SCHEMA_FLOOR,
+        ),
+        "pg-suite-1": (
+            "tests.credit.api.test_credit_route_authorization_integration",
+            ci_postgres.SUITE_FLOOR,
+        ),
+        "storage-tests": ("tests.storage.test_s3_compatible_contract_integration", 1),
+    }
+    for family, (classname, count) in families.items():
+        cases = "".join(
+            f'<testcase classname="{classname}" name="test_probe_{n}" time="0.1"/>'
+            for n in range(count)
+        )
+        _ = (tmp_path / family).mkdir()
+        _ = (tmp_path / family / "report.xml").write_text(f"<testsuite>{cases}</testsuite>")
+    output = tmp_path / "durations.json"
+    environment = {key: value for key, value in os.environ.items() if key != "PYTHONPATH"}
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(REPO / "backend/scripts/ci_postgres.py"),
+            "refresh-durations",
+            str(tmp_path),
+            "--source-run",
+            "standalone-fixture",
+            "--output",
+            str(output),
+        ],
+        cwd=REPO,
+        env=environment,
+        text=True,
+        capture_output=True,
+        check=False,
+    )
+    assert result.returncode == 0, result.stderr
+    durations = cast(dict[str, object], ci_postgres.load_object(output)["durations"])
+    assert set(durations) == {
+        "tests/db/test_bi_query_log_postgres_integration.py",
+        "tests/credit/api/test_credit_route_authorization_integration.py",
+        "tests/storage/test_s3_compatible_contract_integration.py",
+    }
+
+
+def test_refresh_rejects_failed_recorded_cases(tmp_path: Path) -> None:
+    """Failed or errored legacy cases must not overwrite the baseline.
+
+    The recorded-run path trusts the source run's aggregates for coverage, but
+    a premature termination can still leave failed or errored cases whose
+    timings would distort the packing; the pool path rejects them through
+    verify, and this path must reject them too.
+    """
+    families = {
+        "pg-schema-1": (
+            "tests.db.test_bi_query_log_postgres_integration",
+            ci_postgres.SCHEMA_FLOOR,
+        ),
+        "pg-suite-1": (
+            "tests.credit.api.test_credit_route_authorization_integration",
+            ci_postgres.SUITE_FLOOR,
+        ),
+        "storage-tests": ("tests.storage.test_s3_compatible_contract_integration", 1),
+    }
+    for family, (classname, count) in families.items():
+        cases = "".join(
+            f'<testcase classname="{classname}" name="test_probe_{n}" time="0.1"/>'
+            for n in range(count)
+        )
+        _ = (tmp_path / family).mkdir()
+        if family == "pg-suite-1":
+            cases += (
+                f'<testcase classname="{classname}" name="test_failed" time="0.1">'
+                "<failure/></testcase>"
+            )
+        _ = (tmp_path / family / "report.xml").write_text(f"<testsuite>{cases}</testsuite>")
+    output = tmp_path / "durations.json"
+    with pytest.raises(ValueError, match="Failed or errored case"):
+        ci_postgres.refresh_durations(tmp_path, "failed-run", output)
+    assert not output.exists()
+
+
 def test_protected_pool_modules_may_neither_skip_nor_vanish(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
