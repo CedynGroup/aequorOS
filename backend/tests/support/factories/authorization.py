@@ -13,7 +13,7 @@ from app.core.authorization import (
     SensitivityScope,
 )
 from app.identity.service import authorization
-from app.models import User
+from tests.support.authorization_fixtures import tenant_user
 
 
 def grant_institution_authority(  # noqa: PLR0913 - the fixture grant sentence is explicit
@@ -47,6 +47,5 @@ def grant_institution_authority(  # noqa: PLR0913 - the fixture grant sentence i
         reason="Authorize the fixture officer's return lifecycle duties",
         commit=False,
     )
-    user = db.get(User, user_id)
-    assert user is not None
+    user = tenant_user(db, organization_id=organization_id, user_id=user_id)
     user.authorization_version = 1

@@ -20,7 +20,6 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.core.authorization import (
-    BindingStatus,
     GrantorType,
     InstitutionScope,
     ModuleScope,
@@ -32,12 +31,11 @@ from app.db.session import get_sessionmaker
 from app.identity.service import authorization
 from app.models import (
     AuditEvent,
-    AuthorizationBinding,
     ReturnSignaturePlacement,
     ReturnSigningPolicy,
-    User,
 )
 from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID, materialize_canonical_test_book
+from tests.support.authorization_fixtures import current_authorization_version, suspend_all_bindings
 from tests.support.helpers import ORG_1, USER_1, error_envelope, headers
 
 POLICY_URL = "/api/v1/attestation/signing-policies"
@@ -127,9 +125,7 @@ def _bank_scope() -> authorization.BindingScope:
 
 def _current_version() -> int:
     with _session() as db:
-        user = db.get(User, USER_1)
-        assert user is not None
-        return user.authorization_version
+        return current_authorization_version(db, organization_id=ORG_1, user_id=USER_1)
 
 
 def _auth() -> dict[str, str]:
@@ -175,18 +171,7 @@ def _suspend_all() -> None:
     tenant seeds an organization-scope viewer binding that would otherwise
     keep the bank covered)."""
     with _session() as db:
-        bindings = list(
-            db.scalars(
-                select(AuthorizationBinding).where(
-                    AuthorizationBinding.principal_user_id == USER_1,
-                    AuthorizationBinding.organization_id == ORG_1,
-                    AuthorizationBinding.status == BindingStatus.ACTIVE.value,
-                )
-            )
-        )
-        for binding in bindings:
-            binding.status = BindingStatus.SUSPENDED.value
-        authorization.invalidate_user_authorization(
+        suspend_all_bindings(
             db,
             organization_id=ORG_1,
             user_id=USER_1,

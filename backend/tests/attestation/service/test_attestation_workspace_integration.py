@@ -83,6 +83,7 @@ from tests.fixtures.canonical_bank_fixture import (
     SAMPLE_BANK_ID,
     materialize_canonical_test_book,
 )
+from tests.support.authorization_fixtures import tenant_user
 from tests.support.inmemory_storage import InMemoryStorageClient
 
 MAKER = TenantContext(
@@ -155,8 +156,7 @@ def _users(db: Session) -> None:
     # The preparer holds an Approver grant too, as in a small treasury team.
     # The self-nomination test must reach maker-checker with real authority,
     # rather than pass because the preparer lacks the required permission.
-    preparer = db.scalar(select(User).where(User.id == DEMO_USER_ID))
-    assert preparer is not None
+    preparer = tenant_user(db, organization_id=DEMO_ORG_ID, user_id=DEMO_USER_ID)
     preparer.role = "approver"
     preparer.job_title = "Chief Financial Officer"
     db.flush()
@@ -183,8 +183,7 @@ def _users(db: Session) -> None:
             reason="Authorize the real ceremony under scoped return authority",
             commit=False,
         )
-        user = db.get(User, user_id)
-        assert user is not None
+        user = tenant_user(db, organization_id=DEMO_ORG_ID, user_id=user_id)
         user.authorization_version = 1
     db.commit()
 

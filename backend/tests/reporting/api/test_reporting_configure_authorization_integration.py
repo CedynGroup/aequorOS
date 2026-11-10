@@ -23,7 +23,6 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.core.authorization import (
-    BindingStatus,
     GrantorType,
     InstitutionScope,
     ModuleScope,
@@ -36,17 +35,20 @@ from app.db.session import get_sessionmaker
 from app.identity.service import authorization
 from app.models import (
     AuditEvent,
-    AuthorizationBinding,
     Bank,
     RegulatoryChannelConfig,
     RegulatoryReportingSettings,
-    User,
 )
 from app.reporting.schemas.packages import (
     ChannelConfigWriteAcknowledgement,
     ReportingSettingsWriteAcknowledgement,
 )
 from tests.fixtures.canonical_bank_fixture import SAMPLE_BANK_ID, materialize_canonical_test_book
+from tests.support.authorization_fixtures import (
+    current_authorization_version,
+    open_tenant_session,
+    suspend_all_bindings,
+)
 from tests.support.helpers import ORG_1, USER_1, error_envelope, headers
 
 BASE = f"/api/v1/banks/{SAMPLE_BANK_ID}"
@@ -114,11 +116,8 @@ def _grant(
 
 
 def _current_version() -> int:
-    with get_sessionmaker()() as db:
-        db.info["organization_id"] = ORG_1
-        user = db.scalar(select(User).where(User.id == USER_1, User.organization_id == ORG_1))
-        assert user is not None
-        return user.authorization_version
+    with open_tenant_session(ORG_1) as db:
+        return current_authorization_version(db, organization_id=ORG_1, user_id=USER_1)
 
 
 def _auth() -> dict[str, str]:
@@ -344,26 +343,12 @@ def _suspend_all(db: Session | None = None) -> None:
     """Suspend EVERY active binding for the fixture actor (the hermetic demo
     tenant seeds an organization-scope viewer binding that would otherwise
     keep the bank covered)."""
-    owned = db is not None
-    session = db if owned else get_sessionmaker()()
-    assert session is not None
-    session.info["organization_id"] = ORG_1
-    bindings = list(
-        session.scalars(
-            select(AuthorizationBinding).where(
-                AuthorizationBinding.principal_user_id == USER_1,
-                AuthorizationBinding.organization_id == ORG_1,
-                AuthorizationBinding.status == BindingStatus.ACTIVE.value,
-            )
-        )
-    )
-    for binding in bindings:
-        binding.status = BindingStatus.SUSPENDED.value
-    authorization.invalidate_user_authorization(
+    session = db if db is not None else open_tenant_session(ORG_1)
+    suspend_all_bindings(
         session,
         organization_id=ORG_1,
         user_id=USER_1,
         reason="suspend every active fixture binding",
     )
-    if not owned:
+    if db is None:
         session.close()

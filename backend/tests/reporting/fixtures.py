@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import pytest
-from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.authorization import (
@@ -15,8 +14,8 @@ from app.core.authorization import (
     SensitivityScope,
 )
 from app.identity.service import authorization
-from app.models import User
 from tests.support.authority import grant_organization_analyst
+from tests.support.authorization_fixtures import tenant_user
 from tests.support.helpers import ORG_1, USER_1
 
 
@@ -55,8 +54,6 @@ def reporting_configure_authority(db_session: Session) -> None:
         reason="Authorize the integration fixture reporting configuration",
         commit=False,
     )
-    user = db_session.scalars(
-        select(User).where(User.id == USER_1, User.organization_id == ORG_1)
-    ).one()
+    user = tenant_user(db_session, organization_id=ORG_1, user_id=USER_1)
     user.authorization_version = 1
     db_session.commit()

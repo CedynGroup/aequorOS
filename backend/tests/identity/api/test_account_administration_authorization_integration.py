@@ -21,6 +21,7 @@ from app.db.session import get_sessionmaker
 from app.identity.service import authorization
 from app.models import AuthorizationBinding, Bank, IntegrationKey, User
 from app.policy.service.institution_types import FALLBACK_TYPE_CODE
+from tests.support.authorization_fixtures import tenant_user
 from tests.support.helpers import ORG_1, ORG_2, USER_1, USER_2, headers
 
 UNKNOWN_ID = UUID("cccccccc-cccc-4ccc-8ccc-cccccccccccc")
@@ -38,9 +39,8 @@ def _start_without_fixture_bindings(db_client: TestClient) -> None:
     session = get_sessionmaker()()
     try:
         session.execute(delete(AuthorizationBinding))
-        for user_id in (USER_1, USER_2):
-            user = session.get(User, user_id)
-            assert user is not None
+        for user_id, organization_id in ((USER_1, ORG_1), (USER_2, ORG_2)):
+            user = tenant_user(session, organization_id=organization_id, user_id=user_id)
             user.authorization_version = 1
         session.commit()
     finally:
@@ -75,8 +75,7 @@ def _grant(  # noqa: PLR0913 - each binding dimension is independently tested
             grantor=authorization.GrantorRef(GrantorType.SYSTEM, "test-suite"),
             reason="exercise scoped Account enforcement",
         )
-        user = session.get(User, user_id)
-        assert user is not None
+        user = tenant_user(session, organization_id=organization_id, user_id=user_id)
         return binding.id, user.authorization_version
     finally:
         session.close()
