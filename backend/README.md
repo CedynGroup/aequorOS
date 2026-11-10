@@ -663,7 +663,7 @@ rejects any skipped test.
 
 The schema workflow command also supplies MinIO for the document cleanup regression. Each
 CI schema shard starts it and creates the document test bucket before pytest;
-the schema aggregate continues to reject every skip.
+the gate's schema verification continues to reject every skip.
 
 CI's [MinIO action](../.github/actions/setup-minio/action.yml) and
 [OpenBao action](../.github/actions/setup-openbao/action.yml) download official

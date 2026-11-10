@@ -88,15 +88,15 @@ name: Risk Service CI
 # and a following step asserts a floor of tests actually executed
 # (.github/scripts/assert_pytest_ran.py or the shard aggregate verifier).
 # The unit owner's execution guard is documented in backend/README.md#run-tests.
-# The storage job, the schema/RLS aggregate
+# The storage job, the gate's schema/RLS shard verification
 # and the lock job additionally allow ZERO skips, because the environment each
 # stands up is supposed to satisfy its whole suite — and an RLS proof can
 # abstain one test at a time (a role that bypasses RLS, a missing CREATEROLE),
-# which a floor of "at least N ran" cannot see (audit A360-4). The Postgres
-# full-suite aggregate sets no skip ceiling, because the opt-in tiers below
-# legitimately skip there. Floors are set so that a whole test MODULE vanishing
-# trips them: at least (collected − the largest module); recount when the suite
-# changes shape.
+# which a floor of "at least N ran" cannot see (audit A360-4). The gate's
+# integration-suite verification sets no skip ceiling, because the opt-in tiers
+# below legitimately skip there. Floors are set so that a whole test MODULE
+# vanishing trips them: at least (collected − the largest module); recount when
+# the suite changes shape.
 #
 # EXCLUDED from every job, with the reason — the honest complement of the list
 # above. None of these is a scheduling oversight:
@@ -528,8 +528,8 @@ jobs:
         working-directory: backend
         run: uv run python scripts/local_services.py run --postgres -- uv run pytest -m integration tests/case/api/test_liquidity_integration.py tests/case/api/test_scenarios_integration.py tests/case/api/test_calculations_integration.py tests/storage/test_key_rotation_concurrency_integration.py
       # Retain the execution floor and require zero skips for the lock owner.
-      # The integration aggregate also checks exact cross-owner coverage;
-      # ownership and service requirements: backend/README.md#run-tests.
+      # The gate's integration-suite verification also checks exact cross-owner
+      # coverage; ownership and service requirements: backend/README.md#run-tests.
       - name: The concurrency tests must have executed, not skipped
         run: python3 .github/scripts/assert_pytest_ran.py "$RUNNER_TEMP/pg-locks/report.xml" --min-executed 60 --max-skipped 0
       - name: Upload lock integration execution evidence
