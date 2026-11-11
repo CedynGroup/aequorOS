@@ -1338,9 +1338,7 @@ def cmd_weekly(args: argparse.Namespace, now: datetime | None = None) -> int:
         cache_dir=cache_dir,
         keep_logs=args.keep_logs,
         deadline=time.monotonic() + WEEKLY_COLLECTION_BUDGET_MINUTES * 60,
-        window_start=(current_time - timedelta(days=window_days)).strftime(
-            "%Y-%m-%dT%H:%M:%SZ"
-        ),
+        window_start=(current_time - timedelta(days=window_days)).strftime("%Y-%m-%dT%H:%M:%SZ"),
     )
     try:
         # Diagnostics go to stderr: stdout is the Markdown step summary.
@@ -1360,15 +1358,9 @@ def cmd_weekly(args: argparse.Namespace, now: datetime | None = None) -> int:
     # were never read (budget exhausted or log unavailable) must not reach the
     # policy thresholds or the ranking as if its failure signature were known.
     # The unfetched and unreadable counts are reported as caveats instead.
-    budget_hits = sum(
-        1 for event in events if event.signature.startswith("log-budget-exhausted:")
-    )
-    unavailable_hits = sum(
-        1 for event in events if event.signature.startswith("log-unavailable:")
-    )
-    unclassified_hits = sum(
-        1 for event in events if event.signature.startswith("unclassified:")
-    )
+    budget_hits = sum(1 for event in events if event.signature.startswith("log-budget-exhausted:"))
+    unavailable_hits = sum(1 for event in events if event.signature.startswith("log-unavailable:"))
+    unclassified_hits = sum(1 for event in events if event.signature.startswith("unclassified:"))
     measured_events = [
         event
         for event in events
@@ -1541,7 +1533,7 @@ def gh_api_json(*endpoint_args: str) -> dict[str, Any]:
     return json.loads(gh_api(*endpoint_args))
 
 
-def list_workflow_runs(
+def list_workflow_runs(  # noqa: PLR0913 - the deadline bounds every page of one listing
     repo: str,
     workflow_file: str,
     min_runs: int,
@@ -1562,10 +1554,7 @@ def list_workflow_runs(
     reason: str | None = None
     while True:
         if deadline is not None and time.monotonic() > deadline:
-            log(
-                "Time budget reached during run listing; the report carries "
-                "what was collected"
-            )
+            log("Time budget reached during run listing; the report carries what was collected")
             reason = "deadline"
             break
         payload = gh_api_json(
@@ -1755,9 +1744,7 @@ def _fetch_attempt_jobs(
     for index, (run_id, attempts) in enumerate(sorted(attempts_needed.items()), 1):
         if options.deadline is not None and time.monotonic() > options.deadline:
             remaining = len(attempts_needed) - fetched
-            notes.append(
-                f"job listings for {remaining} run(s) unfetched at the time budget"
-            )
+            notes.append(f"job listings for {remaining} run(s) unfetched at the time budget")
             break
         for attempt in sorted(attempts):
             if options.deadline is not None and time.monotonic() > options.deadline:

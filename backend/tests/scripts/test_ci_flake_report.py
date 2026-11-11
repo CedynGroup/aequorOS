@@ -1665,13 +1665,16 @@ def test_unreadable_logs_get_their_own_collection_caveat(
     monkeypatch.setattr(
         flake_report,
         "collect_report_data",
-        lambda options, log=print: ([success_run(1)], events),
+        lambda options, log=print, notes=None: ([success_run(1)], events),
     )
     parser = flake_report.build_parser()
     args = parser.parse_args(["weekly", "--cache-dir", str(tmp_path)])
     assert flake_report.cmd_weekly(args, now=datetime(2026, 11, 9, 12, 0, tzinfo=UTC)) == 0
     output = capsys.readouterr()
-    assert "Collection caveat: 2 failed-job log(s) could not be read" in output.out
+    assert "Collection caveat: 2 failed-job log(s) unreadable" in output.out
+    # An unreadable log is not a time-budget cutoff: the caveat must say what
+    # actually happened, and the empty threshold result under it must not read
+    # as conclusive.
     assert "time budget" not in output.out
     assert "this result is inconclusive" in output.out
     assert "No signature reached the policy thresholds in this window" not in output.out
@@ -1740,7 +1743,7 @@ def test_weekly_artifact_writes_fail_independently(
     monkeypatch.setattr(
         flake_report,
         "collect_report_data",
-        lambda options, log=print: ([success_run(1)], events),
+        lambda options, log=print, notes=None: ([success_run(1)], events),
     )
     blocked = tmp_path / "blocked"
     blocked.mkdir()
@@ -1803,7 +1806,9 @@ def test_collection_failure_records_the_unavailable_state_in_requested_artifacts
 ) -> None:
     """Requested files must not keep a stale report when collection fails."""
 
-    def fail(options: Any, log: Any = print) -> tuple[list[Any], list[Any]]:
+    def fail(
+        options: Any, log: Any = print, notes: list[str] | None = None
+    ) -> tuple[list[Any], list[Any]]:
         raise RuntimeError("gh api failed (1): Server Error (HTTP 502)")
 
     monkeypatch.setattr(flake_report, "collect_report_data", fail)
@@ -1885,14 +1890,11 @@ def test_weekly_command_bounds_collection_within_the_runner_budget(
     assert captured["options"].deadline is not None
 
 
-def test_run_listing_refuses_to_start_past_the_deadline(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
+def test_run_listing_skips_past_the_deadline(monkeypatch: pytest.MonkeyPatch) -> None:
     """The budget bounds every collection stage, not only the log fetches.
 
-    A partial run list would render as a silently biased short window, so
-    listing past the deadline raises and the weekly mode falls back to its
-    unavailable note.
+    A workflow whose listing cannot start past the budget is skipped with a
+    visible note instead of a silently biased short window.
     """
     options = flake_report.ReportOptions(
         repo="CedynGroup/aequorOS",
@@ -1907,13 +1909,16 @@ def test_run_listing_refuses_to_start_past_the_deadline(
         raise AssertionError("no listing may start past the deadline")
 
     monkeypatch.setattr(flake_report, "list_workflow_runs", fail)
-    with pytest.raises(RuntimeError, match="time budget reached before listing runs"):
-        flake_report._list_all_runs(options, lambda _m: None)
+    notes: list[str] = []
+    assert flake_report._list_all_runs(options, lambda _m: None, notes) == []
+    assert notes == [
+        "run listing for risk-service.yml skipped at the time budget",
+        "run listing for web.yml skipped at the time budget",
+    ]
 
 
-def test_job_listing_refuses_to_start_past_the_deadline(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
+def test_job_listings_stop_past_the_deadline(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Job listing stops at the budget with a note naming the unfetched runs."""
     options = flake_report.ReportOptions(
         repo="CedynGroup/aequorOS",
         workflow_files=["risk-service.yml"],
@@ -1927,13 +1932,15 @@ def test_job_listing_refuses_to_start_past_the_deadline(
         raise AssertionError("no job listing may start past the deadline")
 
     monkeypatch.setattr(flake_report, "fetch_attempt_jobs", fail)
-    with pytest.raises(RuntimeError, match="time budget reached"):
-        flake_report._fetch_attempt_jobs(
-            "CedynGroup/aequorOS", {1: {1}, 2: {1}}, options, lambda _m: None
-        )
+    notes: list[str] = []
+    jobs_by_run_attempt, jobs_by_run = flake_report._fetch_attempt_jobs(
+        "CedynGroup/aequorOS", {1: {1}, 2: {1}}, options, lambda _m: None, notes
+    )
+    assert jobs_by_run_attempt == {} and jobs_by_run == {}
+    assert notes == ["job listings for 2 run(s) unfetched at the time budget"]
 
 
-def test_run_listing_refuses_pages_past_the_deadline(
+def test_run_listing_reports_the_deadline_reason_between_pages(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Paging continues only while the budget lasts, not once per workflow."""
@@ -1945,22 +1952,22 @@ def test_run_listing_refuses_pages_past_the_deadline(
         cache_dir=Path("/tmp/unused"),
         deadline=time.monotonic() + 0.05,
     )
-    payload = {"total_count": 5000, "workflow_runs": []}
 
-    def fake_gh_api_json(*endpoint_args: str) -> dict[str, Any]:
-        return payload
+    def fail(*args: object, **kwargs: object) -> dict[str, Any]:
+        raise AssertionError("no page may be fetched past the deadline")
 
-    monkeypatch.setattr(flake_report, "gh_api_json", fake_gh_api_json)
+    monkeypatch.setattr(flake_report, "gh_api_json", fail)
     monkeypatch.setattr(flake_report.time, "monotonic", lambda: options.deadline + 1.0)
-    with pytest.raises(RuntimeError, match="time budget reached before page "):
-        flake_report.list_workflow_runs(
-            "CedynGroup/aequorOS",
-            "risk-service.yml",
-            1000,
-            "2026-11-01",
-            lambda _m: None,
-            deadline=options.deadline,
-        )
+    records, reason = flake_report.list_workflow_runs(
+        "CedynGroup/aequorOS",
+        "risk-service.yml",
+        1000,
+        "2026-11-01",
+        lambda _m: None,
+        deadline=options.deadline,
+    )
+    assert records == []
+    assert reason == "deadline"
 
 
 def test_attempt_listing_refuses_the_api_past_the_deadline(
@@ -2101,7 +2108,7 @@ def test_unclassified_logs_also_get_the_collection_caveat(
     monkeypatch.setattr(
         flake_report,
         "collect_report_data",
-        lambda options, log=print: ([success_run(1)], events),
+        lambda options, log=print, notes=None: ([success_run(1)], events),
     )
     parser = flake_report.build_parser()
     args = parser.parse_args(["weekly", "--cache-dir", str(tmp_path)])
@@ -2121,7 +2128,7 @@ def test_the_displayed_weekly_command_is_copy_pasteable(
     monkeypatch.setattr(
         flake_report,
         "collect_report_data",
-        lambda options, log=print: ([success_run(1)], []),
+        lambda options, log=print, notes=None: ([success_run(1)], []),
     )
     parser = flake_report.build_parser()
     args = parser.parse_args(["weekly", "--cache-dir", str(tmp_path)])
@@ -2286,7 +2293,9 @@ def test_weekly_command_warns_when_a_workflow_was_truncated_by_the_run_cap(
     assert flake_report.cmd_weekly(args, now=datetime(2026, 11, 9, 12, 0, tzinfo=UTC)) == 0
     assert "Threshold caveat" not in capsys.readouterr().out
 
-    def scenario_c(options: Any, log: Any = print) -> tuple[list[Any], list[Any]]:
+    def scenario_c(
+        options: Any, log: Any = print, notes: list[str] | None = None
+    ) -> tuple[list[Any], list[Any]]:
         # The cap stopped on the window-start date itself: earlier runs on
         # that date may still be missing, so coverage stays uncertain.
         on_start = flake_report.RunRecord(
@@ -2308,7 +2317,9 @@ def test_weekly_command_warns_when_a_workflow_was_truncated_by_the_run_cap(
     assert flake_report.cmd_weekly(args, now=datetime(2026, 11, 9, 12, 0, tzinfo=UTC)) == 0
     assert "Threshold caveat" in capsys.readouterr().out
 
-    def scenario_d(options: Any, log: Any = print) -> tuple[list[Any], list[Any]]:
+    def scenario_d(
+        options: Any, log: Any = print, notes: list[str] | None = None
+    ) -> tuple[list[Any], list[Any]]:
         # An unlimited listing (cap 0) is never "capped": every workflow
         # satisfies count >= 0.
         return [truncated_run, truncated_run], []
@@ -2630,7 +2641,7 @@ def test_weekly_deadline_is_enforced_through_the_real_collector(
     # The real collector (not a stub) hits the budget during the run listing,
     # and the summary says the collection was cut short instead of presenting
     # the counts as complete.
-    assert "Time-budget caveat" in output.out
+    assert "Collection caveat" in output.out
     assert "time budget" in output.out
     assert "undercounted" in output.out
 
