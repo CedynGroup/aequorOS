@@ -798,6 +798,40 @@ def test_duplicate_same_named_jobs_count_as_separate_rerun_cycles() -> None:
     assert breaches[0].action == "needs flaky-test issue with owner"
 
 
+def test_one_rerun_cycle_across_attempts_counts_once_despite_new_job_ids() -> None:
+    """GitHub assigns fresh job ids on every attempt.
+
+    One job that fails the same signature on attempts 1 and 2 and passes on 3
+    is one rerun cycle, not two: the dedup must identify the instance across
+    attempts while still telling same-named distinct jobs apart.
+    """
+    now = datetime(2026, 11, 9, tzinfo=UTC)
+    events = [
+        event("pytest:tests/a.py", rerun=True, run_id=41, attempt=1, job_id=901),
+        event("pytest:tests/a.py", rerun=True, run_id=41, attempt=2, job_id=902),
+    ]
+    assert flake_report.evaluate_thresholds(events, now) == []
+
+
+def test_two_same_named_jobs_across_attempts_still_count_separately() -> None:
+    """Instance identity survives new per-attempt job ids.
+
+    Two same-named jobs that each fail on attempts 1 and 2 before passing are
+    two rerun cycles, even though all four failed executions carry distinct
+    job ids.
+    """
+    now = datetime(2026, 11, 9, tzinfo=UTC)
+    events = [
+        event("pytest:tests/a.py", rerun=True, run_id=41, attempt=1, job_id=901),
+        event("pytest:tests/a.py", rerun=True, run_id=41, attempt=1, job_id=902),
+        event("pytest:tests/a.py", rerun=True, run_id=41, attempt=2, job_id=903),
+        event("pytest:tests/a.py", rerun=True, run_id=41, attempt=2, job_id=904),
+    ]
+    breaches = flake_report.evaluate_thresholds(events, now)
+    assert len(breaches) == 1
+    assert breaches[0].rerun_passes_in_window == 2
+
+
 def test_attempt_jobs_pager_fetches_every_page(monkeypatch: pytest.MonkeyPatch) -> None:
     """An attempt with more than PER_PAGE jobs must not lose its later pages."""
     endpoints: list[str] = []
@@ -1963,7 +1997,7 @@ def test_run_listing_skips_past_the_deadline(monkeypatch: pytest.MonkeyPatch) ->
         deadline=0.0,
     )
 
-    def fail(*args: object, **kwargs: object) -> list[flake_report.RunRecord]:
+    def fail(*args: object, **kwargs: object) -> list[Any]:
         raise AssertionError("no listing may start past the deadline")
 
     monkeypatch.setattr(flake_report, "list_workflow_runs", fail)
@@ -1986,7 +2020,7 @@ def test_job_listings_stop_past_the_deadline(monkeypatch: pytest.MonkeyPatch) ->
         deadline=0.0,
     )
 
-    def fail(*args: object, **kwargs: object) -> list[flake_report.JobRecord]:
+    def fail(*args: object, **kwargs: object) -> list[Any]:
         raise AssertionError("no job listing may start past the deadline")
 
     monkeypatch.setattr(flake_report, "fetch_attempt_jobs", fail)

@@ -830,20 +830,29 @@ def evaluate_thresholds(
     mode wired in M3.
     """
     window_start = now - timedelta(days=window_days)
-    # One rerun cycle per run/job: a job failing the signature on several
-    # attempts before its pass needed one rerun, not two. Keyed by the job id
-    # (not the name): two same-named jobs that both failed and passed ran
-    # twice, and the policy must count both cycles.
+    # One rerun cycle per run/job instance: a job failing the signature on
+    # several attempts before its pass needed one rerun, not two. GitHub
+    # assigns fresh job ids per attempt, so the instance is identified by its
+    # rank among the attempt's same-named jobs (stable across attempts)
+    # rather than by the raw id: same-named distinct jobs within one attempt
+    # keep separate cycles, one logical job across attempts keeps one.
+    rerun_failed = [
+        event
+        for event in events
+        if event.rerun and not event.signature.startswith(MISSING_LOG_SIGNATURE_PREFIXES)
+    ]
+    ids_by_attempt: dict[tuple[int, str, int], list[int]] = defaultdict(list)
+    for event in rerun_failed:
+        ids_by_attempt[(event.run_id, event.job, event.attempt)].append(event.job_id)
+    rank_by_id: dict[tuple[int, str, int], dict[int, int]] = {
+        key: {job_id: rank for rank, job_id in enumerate(sorted(set(ids)))}
+        for key, ids in ids_by_attempt.items()
+    }
     counted: set[tuple[str, int, str, int]] = set()
     per_signature: dict[str, int] = Counter()
-    for event in events:
-        if not event.rerun:
-            continue
-        if event.signature.startswith(MISSING_LOG_SIGNATURE_PREFIXES):
-            # An unread log is not an identified failure: demanding a
-            # flaky-test issue for it would act on evidence nobody has seen.
-            continue
-        key = (event.signature, event.run_id, event.job, event.job_id)
+    for event in rerun_failed:
+        rank = rank_by_id[(event.run_id, event.job, event.attempt)][event.job_id]
+        key = (event.signature, event.run_id, event.job, rank)
         if key in counted:
             continue
         created = _parse_timestamp(event.created_at)
