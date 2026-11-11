@@ -286,8 +286,8 @@ from app.data_engine.public import (
     CanonicalProduct,
     CanonicalReferenceRow,
     IngestionBatch,
+    reconciliation,
 )
-from app.data_engine.service import reconciliation
 from app.domain.authority.outcomes import NotComputable, OutcomeDetail
 from app.ftp.domain.engine import CurvePoint, CurveResult, build_curve
 from app.identity.public import Bank
