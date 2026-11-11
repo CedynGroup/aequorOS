@@ -225,23 +225,22 @@ function LiveFreshnessPill() {
       : `Refresh delayed${latest ? ` (${fmtRelative(latest)})` : ""}`;
     if (!canRefresh && !refresh.isPending) {
       return (
-        <DisabledWithReason
-          reason="Recomputing the live tier needs DATA · Confidential · Run. Ask your organization owner for the grant."
-          className="mx-1"
-        >
-          {(descriptionId) => (
-            <button
-              type="button"
-              disabled
-              aria-describedby={descriptionId}
-              title="The live tier has not recomputed recently. Recomputing needs DATA · Confidential · Run."
-              className="hidden lg:inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-warning/30 bg-warning-light text-warning text-caption font-medium whitespace-nowrap disabled:opacity-60 disabled:cursor-not-allowed"
-            >
-              <AlertTriangle size={11} aria-hidden />
-              {label} · DATA run required
-            </button>
-          )}
-        </DisabledWithReason>
+        <span className="mx-1 hidden lg:inline-flex">
+          <DisabledWithReason reason="Recomputing the live tier needs DATA · Confidential · Run. Ask your organization owner for the grant.">
+            {(descriptionId) => (
+              <button
+                type="button"
+                disabled
+                aria-describedby={descriptionId}
+                title="The live tier has not recomputed recently. Recomputing needs DATA · Confidential · Run."
+                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full border border-warning/30 bg-warning-light text-warning text-caption font-medium whitespace-nowrap disabled:opacity-60 disabled:cursor-not-allowed"
+              >
+                <AlertTriangle size={11} aria-hidden />
+                {label} · DATA run required
+              </button>
+            )}
+          </DisabledWithReason>
+        </span>
       );
     }
     return (
