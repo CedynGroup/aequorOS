@@ -275,6 +275,32 @@ def test_two_same_named_failures_in_one_attempt_are_both_reported() -> None:
     assert [p.passed_minutes for p in passes] == [6.0, 7.0]
 
 
+def test_unmatched_duplicates_stay_unrecovered_on_later_attempts() -> None:
+    """A duplicate of a multi-job attempt recovers only with a success of its own.
+
+    With two same-named failures on attempt 1, two on attempt 2 and a single
+    success on attempt 3, only one failure pairs with that success. The
+    unmatched duplicates stay unrecovered on every attempt; a later duplicate
+    must not report ``rerun=True`` with zero minutes just because it failed
+    again on the way to the recovery.
+    """
+    attempts = {
+        1: [
+            job("Claude review verdict", "failure", 5.0, 401),
+            job("Claude review verdict", "failure", 4.0, 402),
+        ],
+        2: [
+            job("Claude review verdict", "failure", 5.5, 403),
+            job("Claude review verdict", "failure", 4.5, 404),
+        ],
+        3: [job("Claude review verdict", "success", 6.0, 405)],
+    }
+    passes = flake_report.compare_attempts(attempts)
+    assert [(p.failed_job.job_id, p.passed_attempt, p.passed_minutes) for p in passes] == [
+        (401, 3, 6.0)
+    ]
+
+
 def test_consistent_failure_is_not_flaky() -> None:
     attempts = {
         1: [job("Dashboard journeys shard 4/4", "failure", 20.0)],
@@ -2183,6 +2209,30 @@ def test_weekly_command_survives_api_errors_with_a_visible_note(
     assert "Server Error (HTTP 502)" in output.out
 
 
+def test_weekly_command_survives_api_errors_through_the_real_boundary(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], tmp_path: Path
+) -> None:
+    """The boundary stub, not the collector, is replaced for the failure path.
+
+    ``collect_report_data`` carries the recovery matching, classification and
+    event construction; stubbing it would bypass those contracts. For the API
+    failure case only the external boundary is replaced, so the unavailable
+    note is produced by the real collector.
+    """
+
+    def fail(*endpoint_args: str, **_kwargs: Any) -> Any:
+        raise RuntimeError("gh api failed (1): Server Error (HTTP 502)")
+
+    monkeypatch.setattr(flake_report, "gh_api_json", fail)
+    monkeypatch.setattr(flake_report, "gh_api", fail)
+    parser = flake_report.build_parser()
+    args = parser.parse_args(["weekly", "--cache-dir", str(tmp_path)])
+    assert flake_report.cmd_weekly(args) == 0
+    output = capsys.readouterr()
+    assert "Weekly flake report unavailable" in output.out
+    assert "Server Error (HTTP 502)" in output.out
+
+
 def test_unclassified_logs_also_get_the_collection_caveat(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], tmp_path: Path
 ) -> None:
@@ -2454,10 +2504,13 @@ def test_weekly_command_refuses_a_shared_cache_dir(
         raise AssertionError("no data may be collected into a shared cache dir")
 
     monkeypatch.setattr(flake_report, "collect_report_data", fail)
+    stale_md = tmp_path / "weekly.md"
+    stale_md.write_text("stale ranking", encoding="utf-8")
     parser = flake_report.build_parser()
-    args = parser.parse_args(["weekly", "--cache-dir", str(shared)])
+    args = parser.parse_args(["weekly", "--cache-dir", str(shared), "--out-md", str(stale_md)])
     assert flake_report.cmd_weekly(args) == 2
     assert "not private to the current user" in capsys.readouterr().err
+    assert "Weekly flake report unavailable" in stale_md.read_text(encoding="utf-8")
 
 
 def test_the_collection_deadline_stops_job_listings(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -2470,7 +2523,9 @@ def test_the_collection_deadline_stops_job_listings(monkeypatch: pytest.MonkeyPa
 
     clock = FakeClock()
 
-    def slow_fetch(repo: str, run_id: int, attempt: int, cache_dir: Any) -> list[Any]:
+    def slow_fetch(
+        repo: str, run_id: int, attempt: int, cache_dir: Any, deadline: Any = None
+    ) -> list[Any]:
         clock.now = flake_report.WEEKLY_COLLECTION_BUDGET_MINUTES * 60 + 1
         return []
 
@@ -2593,7 +2648,9 @@ def test_the_collection_deadline_stops_between_attempts(monkeypatch: pytest.Monk
 
     clock = FakeClock()
 
-    def slow_fetch(repo: str, run_id: int, attempt: int, cache_dir: Any) -> list[Any]:
+    def slow_fetch(
+        repo: str, run_id: int, attempt: int, cache_dir: Any, deadline: Any = None
+    ) -> list[Any]:
         if attempt == 1:
             clock.now = flake_report.WEEKLY_COLLECTION_BUDGET_MINUTES * 60 + 1
         return []

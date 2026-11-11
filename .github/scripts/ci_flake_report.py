@@ -193,7 +193,9 @@ class FlakeEvent:
     created_at: str
     test_names: list[str] = field(default_factory=list)
     # The Actions job id: two same-named jobs can share one attempt, and the
-    # dedup keys must keep them distinct. Synthetic events (tests) use 0.
+    # dedup keys must keep them distinct. It changes on every re-execution;
+    # evaluate_thresholds derives the stable cross-attempt instance rank from
+    # it. Synthetic events (tests) use 0.
     job_id: int = 0
 
 
@@ -408,19 +410,20 @@ def compare_attempts(
             # attempt; order the duplicates deterministically by job id.
             successes = sorted(jobs_by_attempt[recovery], key=lambda job: job.job_id)
             first_failure = first_failure_before[recovery]
+            failures_per_attempt = Counter(attempt for attempt, _ in group)
             for position, (fail_attempt, fail_job) in enumerate(group):
                 if position >= len(successes):
-                    if fail_attempt == first_failure:
-                        # A duplicate from the same failed attempt has no
-                        # success of its own to recover at (the recovery
-                        # attempt held fewer same-named jobs than the failing
-                        # one): leave it unrecovered instead of attributing
-                        # another job's success to it or charging its minutes
-                        # twice.
+                    if failures_per_attempt[fail_attempt] == 1:
+                        # A single-job lineage that failed again on the way to
+                        # the recovery ("failed, failed again, passed"): no
+                        # additional re-execution, so no minutes.
+                        minutes = 0.0
+                    else:
+                        # An unmatched duplicate of a multi-job attempt has no
+                        # success of its own to recover at: leave it
+                        # unrecovered instead of attributing another job's
+                        # success to it.
                         continue
-                    # A later failure of the same rerun cycle: no additional
-                    # re-execution, so no minutes.
-                    minutes = 0.0
                 else:
                     minutes = successes[position].minutes
                     if fail_attempt != first_failure:
@@ -1315,6 +1318,19 @@ def render_weekly_unavailable(window_days: int, error: str) -> str:
     )
 
 
+def _emit_unavailable(
+    args: argparse.Namespace, reason: str, window_days: int, error: Exception
+) -> None:
+    """Print the unavailable summary and record it in the requested artifacts.
+
+    Every weekly failure path goes through this: a stale earlier report must
+    never survive a refused or failed run.
+    """
+    note = render_weekly_unavailable(window_days, reason)
+    print(note)
+    _write_unavailable_artifacts(args, note, window_days, error)
+
+
 def cmd_weekly(args: argparse.Namespace, now: datetime | None = None) -> int:
     """Ranking over the rolling window plus the policy threshold crossings.
 
@@ -1329,12 +1345,15 @@ def cmd_weekly(args: argparse.Namespace, now: datetime | None = None) -> int:
     try:
         cache_dir = _private_cache_dir(args.cache_dir)
     except OSError as error:
-        note = render_weekly_unavailable(window_days, str(error))
-        print(note)
+        _emit_unavailable(args, str(error), window_days, error)
         print(f"Weekly flake report unavailable: {error}", file=sys.stderr)
-        _write_unavailable_artifacts(args, note, window_days, error)
         return 0
     if cache_dir is None:
+        # The refusal reason is already on stderr; the summary and the
+        # requested artifacts must still say the report is unavailable, so a
+        # stale earlier report cannot survive a refused run.
+        reason = "cache dir refused: not private to the current user"
+        _emit_unavailable(args, reason, window_days, RuntimeError(reason))
         return 2
     since = (current_time - timedelta(days=window_days)).strftime("%Y-%m-%d")
     workflow_files = args.workflows.split(",") if args.workflows else list(WORKFLOW_FILES)
@@ -1361,12 +1380,8 @@ def cmd_weekly(args: argparse.Namespace, now: datetime | None = None) -> int:
             options, lambda message: print(message, file=sys.stderr), collection_notes
         )
     except (RuntimeError, OSError, ValueError, KeyError, TypeError, AttributeError) as error:
-        note = render_weekly_unavailable(window_days, str(error))
-        print(note)
+        _emit_unavailable(args, str(error), window_days, error)
         print(f"Weekly flake report unavailable: {error}", file=sys.stderr)
-        # The requested artifacts must not keep a stale earlier report: record
-        # the unavailable state in them too, clearly marked as such.
-        _write_unavailable_artifacts(args, note, window_days, error)
         return 0
     # Missing-log placeholders are accounting, not findings: a job whose logs
     # were never read (budget exhausted or log unavailable) must not reach the
@@ -1798,7 +1813,20 @@ def _fetch_attempt_jobs(
                     "run's later attempts were not read"
                 )
                 break
-            jobs = fetch_attempt_jobs(repo, run_id, attempt, options.cache_dir)
+            try:
+                jobs = fetch_attempt_jobs(
+                    repo, run_id, attempt, options.cache_dir, deadline=options.deadline
+                )
+            except RuntimeError as error:
+                if "time budget" not in str(error):
+                    # An API failure is not a time-budget cutoff: let the
+                    # caller's unavailable fallback handle it.
+                    raise
+                # The budget ran out between the pages of one attempt's job
+                # listing: stop with a visible note instead of raising into
+                # the unavailable fallback over a nearly complete collection.
+                notes.append(f"job listing stopped mid-run at the time budget ({error})")
+                break
             jobs_by_run_attempt.setdefault(run_id, {})[attempt] = jobs
             jobs_by_run.setdefault(run_id, []).extend(jobs)
         else:
