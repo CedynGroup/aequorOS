@@ -1,0 +1,12 @@
+2026-11-09T05:14:45.4121793Z   ✓  12 tests/submissions/regulatory-rule-status.e2e.spec.ts:621:5 › ICAAP preparation preserves context and its own draft evidence at alternate Word and PDF downloads (8.4s)
+2026-11-09T05:14:57.9443610Z   ✓  13 tests/submissions/regulatory-rule-status.e2e.spec.ts:687:5 › status disclosure and source stay readable inside the viewport (12.5s)
+2026-11-09T05:15:09.2788434Z   ✓  14 tests/submissions/regulatory-rule-status.e2e.spec.ts:772:5 › an ICAAP rehearsal freeze decision warns that the practice report cannot become a filing (11.3s)
+2026-11-09T05:15:22.5849380Z   ✓  15 tests/submissions/regulatory-rule-status.e2e.spec.ts:864:5 › a 16% SDI exposure uses the statutory 25% ceiling until the 15% directive commences (13.3s)
+2026-11-09T05:15:27.4863812Z   ✓  16 tests/submissions/regulatory-rule-status.e2e.spec.ts:899:5 › light-theme instrument links meet AA and disclosures dismiss without losing full labels (4.9s)
+2026-11-09T05:17:26.8200583Z   ✘  17 tests/submissions/regulatory-rule-status.e2e.spec.ts:1066:5 › status disclosure remains reachable when its badge scrolls out of view (2.0m)
+2026-11-09T05:17:27.1589765Z 
+2026-11-09T05:17:27.1595252Z 
+2026-11-09T05:17:27.1606400Z   1) tests/submissions/regulatory-rule-status.e2e.spec.ts:1066:5 › status disclosure remains reachable when its badge scrolls out of view 
+2026-11-09T05:17:27.1607488Z 
+2026-11-09T05:17:27.1607792Z     Error: expect(received).toBeLessThan(expected)
+2026-11-09T05:17:27.1608222Z 

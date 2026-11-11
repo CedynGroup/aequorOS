@@ -1,0 +1,13 @@
+2026-11-02T07:24:37.9085259Z New type errors. A module without a baseline entry is strict; a legacy module may not add errors (CODEBASE_CONVENTIONS.md §1, Type-check baseline):
+2026-11-02T07:24:37.9087110Z   app.adapters.database_direct.drivers.snowflake reportUnknownMemberType: 1 (baseline 0)
+2026-11-02T07:24:37.9088840Z     app/data_engine/adapters/database_direct/drivers/snowflake.py:87:12 - reportUnknownMemberType: Type of "connector" is unknown
+2026-11-02T07:24:37.9090612Z   app.adapters.database_direct.drivers.snowflake reportUnknownVariableType: 1 (baseline 0)
+2026-11-02T07:24:37.9091603Z     app/data_engine/adapters/database_direct/drivers/snowflake.py:87:12 - reportUnknownVariableType: Return type is unknown
+2026-11-02T07:24:37.9092476Z   app.services.attestation.signers reportUnknownVariableType: 5 (baseline 3)
+2026-11-02T07:24:37.9093159Z     app/attestation/service/signers.py:227:12 - reportUnknownVariableType: Return type is unknown
+2026-11-02T07:24:37.9093957Z     app/attestation/service/signers.py:329:9 - reportUnknownVariableType: Type of "credentials" is partially unknown
+2026-11-02T07:24:37.9094813Z     app/attestation/service/signers.py:330:9 - reportUnknownVariableType: Type of "encoded" is partially unknown
+2026-11-02T07:24:37.9095654Z     app/attestation/service/signers.py:572:17 - reportUnknownVariableType: Type of "encode_ecdsa_signature" is unknown
+2026-11-02T07:24:37.9096741Z     app/attestation/service/signers.py:581:16 - reportUnknownVariableType: Return type, "tuple[Module("pkcs11"), Module("pyhanko.sign.pkcs11"), Unknown]", is partially unknown
+2026-11-02T07:24:37.9370086Z [35m[risk-service:typecheck][0m [31mERROR[0m task failed
+2026-11-02T07:24:37.9396413Z [35m[risk-service:typecheck][0m [31mERROR[0m task failed

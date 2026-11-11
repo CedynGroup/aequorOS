@@ -359,6 +359,58 @@ def test_a_split_module_keeps_its_name_for_the_partition_only() -> None:
     assert rename("tests.test_health") == "tests.test_health"
 
 
+def test_frozen_files_follow_a_ledger_move() -> None:
+    """A frozen file's exemption travels with it when the ledger relocates the file."""
+    rename = Renamer((("tests.scripts.test_ci_flake_report", "tests.reports.test_ci_flake"),))
+    assert feature_moves.frozen_files(rename) == frozenset(
+        {
+            "scripts/feature_moves.py",
+            "tests/scripts/test_feature_moves.py",
+            "tests/reports/test_ci_flake.py",
+        }
+    )
+
+
+def test_frozen_files_survive_a_split_of_their_module() -> None:
+    """A split writes its parts by hand: the frozen file stays at its recorded name."""
+    rename = Renamer(
+        (
+            ("tests.scripts.test_ci_flake_report", "tests.scripts.test_ci_flake_report"),
+            (
+                "tests.scripts.test_ci_flake_report",
+                "tests.scripts.test_ci_flake_report_integration",
+            ),
+        )
+    )
+    assert "tests/scripts/test_ci_flake_report.py" in feature_moves.frozen_files(rename)
+
+
+def test_a_frozen_file_moved_by_the_ledger_keeps_its_recorded_content(
+    repository: Path,
+) -> None:
+    """A move relocates a frozen file but never rewrites its recorded historical data."""
+    # An earlier move renamed app.services.regulatory_fx; the frozen file is
+    # written afterwards and still quotes the old name, as recorded history does.
+    _run(repository, "move", [MOVES[0]])
+    frozen = repository / "backend/tests/scripts/test_ci_flake_report.py"
+    frozen.parent.mkdir(parents=True, exist_ok=True)
+    historical = (
+        "def test_recorded_signatures() -> None:\n"
+        "    assert 'app.services.regulatory_fx' in recorded\n"
+    )
+    frozen.write_text(historical)
+    _git(repository, "add", ".")
+    _run(
+        repository,
+        "move",
+        [("tests.scripts.test_ci_flake_report", "tests.reports.test_ci_flake")],
+    )
+    moved = repository / "backend/tests/reports/test_ci_flake.py"
+    assert moved.is_file()
+    assert moved.read_text() == historical
+    assert _run(repository, "check") == ["exit 0"]
+
+
 def test_the_durations_of_a_split_module_follows_a_later_move(tmp_path: Path) -> None:
     """A later move re-files a split module's keys, instead of leaving them at the old path."""
     backend = tmp_path / "backend"

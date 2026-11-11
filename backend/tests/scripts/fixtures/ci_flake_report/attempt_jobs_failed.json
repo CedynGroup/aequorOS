@@ -1,0 +1,68 @@
+{
+ "total_count": 8,
+ "jobs": [
+  {
+   "id": 128700000001,
+   "run_id": 0,
+   "name": "Detect journey changes",
+   "status": "completed",
+   "conclusion": "success",
+   "started_at": "2026-11-01T09:15:10Z",
+   "completed_at": "2026-11-01T09:15:40Z"
+  },
+  {
+   "id": 128700000002,
+   "run_id": 0,
+   "name": "Dashboard journeys shard 1/4",
+   "status": "completed",
+   "conclusion": "success",
+   "started_at": "2026-11-01T09:15:40Z",
+   "completed_at": "2026-11-01T09:45:00Z"
+  },
+  {
+   "id": 128700000003,
+   "run_id": 0,
+   "name": "Dashboard journeys shard 2/4",
+   "status": "completed",
+   "conclusion": "success",
+   "started_at": "2026-11-01T09:15:40Z",
+   "completed_at": "2026-11-01T09:50:00Z"
+  },
+  {
+   "id": 128700000004,
+   "run_id": 0,
+   "name": "Dashboard journeys shard 3/4",
+   "status": "completed",
+   "conclusion": "success",
+   "started_at": "2026-11-01T09:15:40Z",
+   "completed_at": "2026-11-01T09:48:00Z"
+  },
+  {
+   "id": 128700000005,
+   "run_id": 0,
+   "name": "Dashboard journeys shard 4/4",
+   "status": "completed",
+   "conclusion": "failure",
+   "started_at": "2026-11-01T09:15:40Z",
+   "completed_at": "2026-11-01T09:42:00Z"
+  },
+  {
+   "id": 128700000006,
+   "run_id": 0,
+   "name": "e2e contracts",
+   "status": "completed",
+   "conclusion": "skipped",
+   "started_at": "2026-11-01T09:50:00Z",
+   "completed_at": "2026-11-01T09:50:01Z"
+  },
+  {
+   "id": 128700000007,
+   "run_id": 0,
+   "name": "dashboard-journeys gate",
+   "status": "completed",
+   "conclusion": "failure",
+   "started_at": "2026-11-01T09:50:10Z",
+   "completed_at": "2026-11-01T09:50:20Z"
+  }
+ ]
+}

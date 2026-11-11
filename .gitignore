@@ -44,6 +44,9 @@ data/
 __pycache__/
 *.py[cod]
 *.log
+# Recorded CI log fixtures feed offline unit tests; never let the blanket
+# *.log ignore drop them from a checkout (PR #857 lost them this way).
+!backend/tests/scripts/fixtures/ci_flake_report/*.log
 .idea/
 .vscode/
 coverage/

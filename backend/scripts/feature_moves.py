@@ -34,8 +34,14 @@ _TEXT_SUFFIXES = (
     frozenset({".py", ".md", ".toml", ".yml", ".yaml", ".ini", ".cfg"}) | _SCRIPT_SUFFIXES
 )
 _SKIPPED_PREFIXES = ("packages/",)
-#: Files that name old paths on purpose: this script and its own tests.
-_FROZEN_FILES = frozenset({"scripts/feature_moves.py", "tests/scripts/test_feature_moves.py"})
+#: Files that name old paths on purpose: this script, its own tests, and the
+#: flake-report tests whose recorded typecheck signatures quote historical
+#: module paths from real CI logs.
+_FROZEN_FILES = frozenset({
+    "scripts/feature_moves.py",
+    "tests/scripts/test_feature_moves.py",
+    "tests/scripts/test_ci_flake_report.py",
+})
 #: The architecture guards address source files relative to ``app/``.
 _ARCHITECTURE_DIR = "tests/architecture/"
 _LINE_LENGTH = 100
@@ -738,28 +744,47 @@ def plan_duration_rewrites(backend: Path, rename: Renamer) -> dict[Path, str]:
         return {}
     text = path.read_text(encoding="utf-8")
     data = cast("dict[str, dict[str, object]]", json.loads(text))
+    frozen = frozen_files(rename)
     renames = {
         module: new
         for module in data["durations"]
-        if module not in _FROZEN_FILES and (new := _renamed_module_path(module, rename)) != module
+        if module not in frozen and (new := _renamed_module_path(module, rename)) != module
     }
     updated = _renamed_duration_keys(text, renames)
     return {path: updated} if updated != text else {}
 
 
-def plan_rewrites(backend: Path, rename: Renamer) -> dict[Path, str]:
+def frozen_files(rename: Renamer) -> frozenset[str]:
+    """The frozen file paths, including wherever a ledger move relocates one.
+
+    The frozen files carry recorded historical data (the flake-report tests
+    quote module paths from real CI logs), so a rewrite must never touch them;
+    if the ledger itself relocates one of these files, the exemption has to
+    travel with it instead of staying behind at the old path.
+    """
+    frozen: set[str] = set()
+    for relative in _FROZEN_FILES:
+        renamed = rename(relative[: -len(".py")].replace("/", "."))
+        frozen.add(renamed.replace(".", "/") + ".py")
+    return frozenset(frozen)
+
+
+def plan_rewrites(
+    backend: Path, rename: Renamer, *, previous_frozen_paths: frozenset[str] = frozenset()
+) -> dict[Path, str]:
     """Every tracked text file the passes change, with its rewritten text."""
     planned: dict[Path, str] = {}
     if not rename.moves:
         return planned
     frozen = frozen_identifiers(backend, rename)
+    frozen_paths = frozen_files(rename) | previous_frozen_paths
     for path in tracked_text_files(backend):
         if not path.is_file():
             continue
         relative = (
             path.relative_to(backend).as_posix() if path.is_relative_to(backend) else path.name
         )
-        if relative in _FROZEN_FILES:
+        if relative in frozen_paths:
             continue
         original = path.read_text(encoding="utf-8")
         updated = rewrite_text(relative, original, rename, backend, frozen)
@@ -889,9 +914,13 @@ def move(
     backend = backend.resolve()
     ledger = load_ledger(backend)
     paths, added = plan_moves(backend, requests)
+    # The rewrite plan is built before the files move, so a frozen file sits
+    # at its pre-move path while it is planned: exempt where it is now (the
+    # ledger without the new moves) as well as where it will be.
+    previous_frozen_paths = frozen_files(Renamer(tuple(ledger)))
     ledger += added
     rename = Renamer(tuple(ledger))
-    planned = plan_rewrites(backend, rename)
+    planned = plan_rewrites(backend, rename, previous_frozen_paths=previous_frozen_paths)
     relocated: dict[Path, str] = {}
     for path, text in planned.items():
         target = path

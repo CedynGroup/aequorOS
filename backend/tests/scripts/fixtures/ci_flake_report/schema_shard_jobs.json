@@ -1,0 +1,68 @@
+{
+ "total_count": 10,
+ "jobs": [
+  {
+   "id": 128710000001,
+   "run_id": 0,
+   "name": "static",
+   "status": "completed",
+   "conclusion": "success",
+   "started_at": "2026-11-03T12:00:10Z",
+   "completed_at": "2026-11-03T12:03:00Z"
+  },
+  {
+   "id": 128710000002,
+   "run_id": 0,
+   "name": "architecture",
+   "status": "completed",
+   "conclusion": "success",
+   "started_at": "2026-11-03T12:00:10Z",
+   "completed_at": "2026-11-03T12:05:00Z"
+  },
+  {
+   "id": 128710000003,
+   "run_id": 0,
+   "name": "Postgres schema shard 1/2",
+   "status": "completed",
+   "conclusion": "success",
+   "started_at": "2026-11-03T12:05:00Z",
+   "completed_at": "2026-11-03T12:25:00Z"
+  },
+  {
+   "id": 128710000004,
+   "run_id": 0,
+   "name": "Postgres schema shard 2/2",
+   "status": "completed",
+   "conclusion": "failure",
+   "started_at": "2026-11-03T12:05:00Z",
+   "completed_at": "2026-11-03T12:31:00Z"
+  },
+  {
+   "id": 128710000005,
+   "run_id": 0,
+   "name": "Postgres locks",
+   "status": "completed",
+   "conclusion": "success",
+   "started_at": "2026-11-03T12:05:00Z",
+   "completed_at": "2026-11-03T12:15:00Z"
+  },
+  {
+   "id": 128710000006,
+   "run_id": 0,
+   "name": "Postgres schema, RLS and locks",
+   "status": "completed",
+   "conclusion": "failure",
+   "started_at": "2026-11-03T12:31:10Z",
+   "completed_at": "2026-11-03T12:31:20Z"
+  },
+  {
+   "id": 128710000007,
+   "run_id": 0,
+   "name": "risk-service gate",
+   "status": "completed",
+   "conclusion": "skipped",
+   "started_at": "2026-11-03T12:31:30Z",
+   "completed_at": "2026-11-03T12:31:31Z"
+  }
+ ]
+}
