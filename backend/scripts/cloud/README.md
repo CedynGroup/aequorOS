@@ -15,10 +15,10 @@ have run (the service scripts stop with a message if the toolchain or the `aqs` 
 | Script                                   | Owns                                                                                                                                                                                                        |
 | ---------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `backend/scripts/cloud/toolchain.sh`     | Shared: the checksum-pinned mise, the `mise.toml` toolchain, `mise run setup` (one `pnpm install` over every workspace project, plus the backend `uv sync`), `no-mistakes`, `/etc/profile.d/zz-aequoros.sh` |
-| `backend/scripts/cloud/setup-backend.sh` | `lsof`, PostgreSQL 17, the pinned MinIO and OpenBao releases (checksum-verified), the `aqs` test user (`initdb` refuses root), the CA bundle, `aequoros-services`, `aequoros-openbao`                       |
-| `backend/dashboard/cloud/setup.sh`       | Docker (`docker.io` when missing), Playwright Chromium matching the dashboard's `@playwright/test` pin (`/opt/pw-dashboard`), `aequoros-kms`, `aequoros-dashboard-e2e`                                      |
+| `backend/scripts/cloud/setup-backend.sh` | `lsof`, Docker, PostgreSQL 17, the pinned MinIO and OpenBao releases (checksum-verified), the `aqs` test user (`initdb` refuses root), the CA bundle, `aequoros-services`, `aequoros-openbao`               |
+| `backend/dashboard/cloud/setup.sh`       | Docker (shared with the backend script), Playwright Chromium matching the dashboard's `@playwright/test` pin (`/opt/pw-dashboard`), `aequoros-kms`, `aequoros-dashboard-e2e`                                |
 
-`setup-lib.sh` (the `fetch` checksum helper, `require_base`, `link_wrapper`) is shared by the three;
+`setup-lib.sh` (the `fetch` checksum helper, `ensure_docker`, `require_base`, `link_wrapper`) is shared by the three;
 `lib.sh` is shared by the wrappers. Re-running `setup.sh` re-links every wrapper into `/usr/local/bin`.
 
 ## Services that need no setup script
@@ -38,16 +38,23 @@ The dashboard unit job loads backend contracts through `uv run`, so it needs the
 `mise run setup` already syncs. Builds write `next-env.d.ts` and `.next`; a root-run build leaves
 `next-env.d.ts` root-owned, and `aequoros-dashboard-e2e` hands it back to `aqs`.
 
+## Using the toolchain from a plain shell
+
+`setup.sh` writes `/etc/profile.d/zz-aequoros.sh`, which login shells read. A non-login shell (an agent's
+`bash -c`, for example) starts on the image's own `PATH`, where `uv` and the pinned Node are not visible.
+`git push` then fails in the `api-fresh` pre-push hook with `uv is not a valid shim`. Run
+`export PATH="$(cat /opt/aequoros-tools/toolpath)"` first; the hook then regenerates the client (about 5 minutes).
+
 ## Wrappers
 
-| Command                                           | Runs                                                                          |
-| ------------------------------------------------- | ----------------------------------------------------------------------------- |
-| `aequoros-services --postgres --storage -- <cmd>` | `local_services.py run` as `aqs`; use `.venv/bin/python -m pytest ...` as cmd |
-| `aequoros-dashboard-e2e [playwright args]`        | the dashboard Playwright suite, for example `--shard=1/4 --trace off`         |
-| `aequoros-kms start\|stop`                        | the pinned local-kms emulator on `127.0.0.1:18080` (starts Docker if needed)  |
-| `aequoros-openbao start\|stop`                    | an OpenBao dev server; export the printed `OPENBAO_TEST_*` variables          |
+| Command                                           | Runs                                                                                                                                                                                   |
+| ------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `aequoros-services --postgres --storage -- <cmd>` | `local_services.py run` as `aqs`; use `.venv/bin/python -m pytest ...` as cmd                                                                                                          |
+| `aequoros-dashboard-e2e [playwright args]`        | the dashboard Playwright suite, for example `--shard=1/4 --trace off`; a spec is a name regex, so use `credit-register-authorization`, not `e2e/credit-register-authorization.spec.ts` |
+| `aequoros-kms start\|stop`                        | the pinned local-kms emulator on `127.0.0.1:18080` (starts Docker if needed)                                                                                                           |
+| `aequoros-openbao start\|stop`                    | an OpenBao dev server; export the printed `OPENBAO_TEST_*` variables                                                                                                                   |
 
-`aequoros-kms` (owned by the dashboard, also used by backend tests) needs a Docker daemon: the dashboard script installs `docker.io` when Docker is missing, but `dockerd`
+`aequoros-kms` (kept with the dashboard, used by backend tests too) needs a Docker daemon: both service scripts install `docker.io` when Docker is missing, but `dockerd`
 only starts in a VM or a privileged container. Elsewhere the command stops with that reason, and the
 Postgres, MinIO, OpenBao and dashboard commands keep working without it. A Docker socket mounted from the host also works, but the container then needs the host network namespace, because the emulator's port is published on the host's loopback.
 

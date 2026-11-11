@@ -1,6 +1,7 @@
+# shellcheck shell=bash
 # Shared by the aequoros-* wrappers. Source it; do not run it.
-HERE="$(dirname "$(readlink -f "$0")")"
-ROOT="${AEQUOROS_ROOT:-$(cd "$HERE/../../.." && pwd)}"
+# ROOT comes from this file's own location, so a wrapper may live at any depth.
+ROOT="${AEQUOROS_ROOT:-$(cd "$(dirname "$(readlink -f "${BASH_SOURCE[0]}")")/../../.." && pwd)}"
 T=/opt/aequoros-tools
 
 # Run a command as the unprivileged test user with the toolchain, services and CA bundle on its PATH.

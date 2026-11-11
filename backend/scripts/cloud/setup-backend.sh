@@ -1,6 +1,7 @@
 #!/bin/bash
-# Backend services for the cloud container: PostgreSQL 17, MinIO, OpenBao, the unprivileged aqs user
-# and the aequoros-services and aequoros-openbao wrappers. Needs toolchain.sh to have run (setup.sh does).
+# Backend services for the cloud container: PostgreSQL 17, MinIO, OpenBao, Docker (for aequoros-kms),
+# the unprivileged aqs user, and the aequoros-services and aequoros-openbao wrappers.
+# Needs toolchain.sh to have run (setup.sh does that first).
 set -euo pipefail
 . "$(dirname "$0")/setup-lib.sh"
 [ -f "$T/toolpath" ] || { echo "Run backend/scripts/cloud/setup.sh first: it installs the toolchain this script needs." >&2; exit 1; }
@@ -17,6 +18,9 @@ if ! command -v lsof >/dev/null; then
   apt-get update
   DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends lsof
 fi
+
+# The KMS emulator wrapper lives with the dashboard, but backend tests use it too.
+ensure_docker
 
 # PostgreSQL 17 (CI parity); local_services.py starts its own cluster, so drop the packaged one.
 if [ ! -x /usr/lib/postgresql/17/bin/postgres ]; then

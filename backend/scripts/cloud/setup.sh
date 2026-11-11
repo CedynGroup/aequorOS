@@ -10,7 +10,8 @@
 # frontend/, console/ and packages/risk-service-api need no script: see README.md in this directory.
 set -euo pipefail
 
-export ROOT="$(cd "$(dirname "$0")/../../.." && pwd)"
+ROOT="$(cd "$(dirname "$0")/../../.." && pwd)"
+export ROOT
 HERE="$ROOT/backend/scripts/cloud"
 
 bash "$HERE/toolchain.sh"
