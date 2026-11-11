@@ -29,10 +29,15 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
-# Queue entries retain the required gate; per-PR checks have already run.
+# A merge-queue entry runs both jobs unconditionally: the queued merge result
+# is what lands on main, so its checks must actually run there rather than
+# surfacing for the first time on main after a green queue.
+# `changed_area.sh` already answers "true" for every non-pull_request event,
+# so the same path filter below the trigger serves all three events: a
+# docs-only pull request still skips both jobs, while queue entries and
+# pushes to main always run.
 jobs:
   changes:
-    if: github.event_name != 'merge_group'
     name: Detect changes
     runs-on: ubuntu-24.04
     timeout-minutes: 10
@@ -52,7 +57,7 @@ jobs:
   frontend:
     name: Marketing site
     needs: changes
-    if: github.event_name != 'merge_group' && needs.changes.outputs.web == 'true'
+    if: needs.changes.outputs.web == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
@@ -71,7 +76,7 @@ jobs:
   console:
     name: Operator console
     needs: changes
-    if: github.event_name != 'merge_group' && needs.changes.outputs.web == 'true'
+    if: needs.changes.outputs.web == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     steps:
@@ -89,7 +94,11 @@ jobs:
       - name: Build console
         run: pnpm --filter @aequoros/console build
 
-  # The single context to mark required for this workflow.
+  # The single context to mark required for this workflow. `frontend` and
+  # `console` report `skipped` on a pull request that does not touch them —
+  # acceptable there, where the filtered job was not owed. On a merge_group
+  # entry both jobs are owed (the queue's merge result lands on main), so the
+  # gate refuses a skipped dependency there; see .github/scripts/gate_result.sh.
   gate:
     name: Web gate
     runs-on: ubuntu-24.04
@@ -97,20 +106,11 @@ jobs:
     if: always()
     needs: [changes, frontend, console]
     steps:
-      - name: Require every web gate to have passed or been skipped
+      # The runner workspace starts empty; the gate script lives in the repo.
+      - uses: actions/checkout@v4
+      - name: Require every web gate to have passed
         env:
-          RESULTS: ${{ toJSON(needs) }}
-        run: |
-          set -euo pipefail
-          NOT_PASSED="$(printf '%s\n' "$RESULTS" \
-            | jq -r 'to_entries[] | select(.value.result != "success") | "  \(.key): \(.value.result)"')"
-          if [ -n "$NOT_PASSED" ]; then
-            printf 'Web jobs that did not pass:\n%s\n' "$NOT_PASSED"
-          fi
-          FAILED="$(printf '%s\n' "$RESULTS" \
-            | jq -r 'to_entries[] | select(.value.result == "failure" or .value.result == "cancelled") | .key')"
-          if [ -n "$FAILED" ]; then
-            echo "::error::These web jobs did not pass:${NOT_PASSED//$'\n'/%0A}"
-            exit 1
-          fi
-          echo "Every web job passed or was skipped."
+          GATE_LABEL: Web
+          GATE_EVENT: ${{ github.event_name }}
+          GATE_NEEDS: ${{ toJSON(needs) }}
+        run: .github/scripts/gate_result.sh

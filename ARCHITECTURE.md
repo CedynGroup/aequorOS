@@ -1266,12 +1266,15 @@ and [public ECR authentication](https://docs.aws.amazon.com/AmazonECR/latest/pub
   and dashboard journeys/browser contracts run without PR path filtering;
   [Postgres suite selection](backend/README.md#run-tests) governs shard coverage.
   Backend lint/typecheck and generated-client freshness also run on the queue
-  head. The conditional real-data job skips in the queue, as do the dashboard checks and
-  marketing/console jobs. Secret scanning reports the required `gitleaks`
-  context successfully without repeating its PR scans. The Risk service,
-  Dashboard and Web aggregate gates still report, accepting intentional skips
-  and rejecting failed or cancelled dependencies. Pull requests retain their
-  change-based selection, and checks on pushes to `main` remain enabled.
+  head. Dashboard CI (client + dashboard checks) and Web CI (marketing site,
+  operator console) also run on the queue without PR path filtering — the
+  queued merge result is what lands on `main`, so a green queue must not hide
+  checks that would first fail on `main`. Pull requests keep their
+  change-based selection, and the aggregate gates reject skipped dependencies
+  only on `merge_group` entries (`.github/scripts/gate_result.sh`), accepting
+  them on pull requests where the filtered job was not owed. Secret scanning
+  reports the required `gitleaks` context successfully without repeating its
+  PR scans. Checks on pushes to `main` remain enabled.
   [The merge-queue guard](backend/tests/architecture/test_merge_queue.py) pins
   the triggers and required-check names. Enabling the queue and configuring
   required checks on `main` remain repository-settings work.

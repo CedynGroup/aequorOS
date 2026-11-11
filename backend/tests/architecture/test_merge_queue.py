@@ -90,6 +90,84 @@ def test_queue_head_execution_policy(event: str, preflight: str, enabled: str) -
     )
 
 
+@pytest.mark.parametrize(
+    ("workflow", "area", "real_jobs"),
+    [
+        ("dashboard.yml", "dashboard", ["dashboard"]),
+        ("web.yml", "web", ["frontend", "console"]),
+    ],
+)
+def test_queue_entries_run_the_real_jobs_and_the_gate_refuses_a_skip(
+    workflow: str, area: str, real_jobs: list[str]
+) -> None:
+    """A queued merge result lands on main, so its filtered checks are owed there.
+
+    The dashboard and web jobs used to skip on ``merge_group`` while their gate
+    accepted ``skipped`` as success, so those checks first ran on main — the
+    coverage ratchet failed there after a green queue. The wiring now relies on
+    the detector (which answers ``true`` for every non-pull_request event) and
+    the gate script (which rejects a skipped dependency on the queue).
+    """
+    document = cast(
+        dict[str, dict[str, object]],
+        yaml.load((WORKFLOWS / workflow).read_text(), Loader=yaml.BaseLoader),
+    )
+    jobs = cast(dict[str, dict[str, object]], document["jobs"])
+    assert "if" not in jobs["changes"], "queue entries rely on the detector, not an event filter"
+    for job_id in real_jobs:
+        condition = cast(str, jobs[job_id]["if"])
+        assert "github.event_name" not in condition
+        output = f"needs.changes.outputs.{area}"
+        assert _condition_runs(condition, {output: "true"}) is True
+        assert _condition_runs(condition, {output: "false"}) is False
+    gate = cast(dict[str, object], jobs["gate"])
+    assert gate["if"] == "always()"
+    steps = cast(list[dict[str, object]], gate["steps"])
+    step = next(step for step in steps if "gate_result.sh" in str(step.get("run", "")))
+    env = cast(dict[str, str], step["env"])
+    assert env["GATE_EVENT"] == "${{ github.event_name }}"
+
+
+@pytest.mark.parametrize(
+    "workflow",
+    sorted(path.name for path in WORKFLOWS.glob("*.yml")),
+)
+def test_job_running_a_repo_script_checks_out_first(workflow: str) -> None:
+    """A runner workspace starts empty, so the script is not there yet.
+
+    A job whose ``run`` executes a file from the repository must check the
+    repository out in that job before the step, or the step exits 127: the
+    checkouts in the job's dependencies do not carry over to a fresh runner
+    workspace, so a gate job running ``.github/scripts/gate_result.sh``
+    without ``actions/checkout`` fails with "No such file or directory"
+    before it can report anything about its dependencies.
+    """
+    document = cast(
+        dict[str, dict[str, object]],
+        yaml.load((WORKFLOWS / workflow).read_text(), Loader=yaml.BaseLoader),
+    )
+    jobs = cast(dict[str, dict[str, object]], document["jobs"])
+    for job_id, job in jobs.items():
+        steps = cast(list[dict[str, object]], job.get("steps", []))
+        first_script = next(
+            (
+                index
+                for index, step in enumerate(steps)
+                if ".github/scripts/" in str(step.get("run", ""))
+            ),
+            None,
+        )
+        if first_script is None:
+            continue
+        checked_out = any(
+            "actions/checkout@" in str(step.get("uses", "")) for step in steps[:first_script]
+        )
+        assert checked_out, (
+            f"{workflow} job {job_id!r} runs a repository script without an "
+            "earlier actions/checkout step; the runner workspace starts empty"
+        )
+
+
 def test_disabled_gate_condition_is_rejected() -> None:
     assert not _condition_runs(
         "false && needs.preflight.outputs.backend == 'true'",
