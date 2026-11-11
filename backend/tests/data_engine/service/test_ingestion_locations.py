@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from datetime import date
 from pathlib import Path
+from tempfile import gettempdir
 from typing import cast
 
 import pytest
@@ -17,11 +18,16 @@ from app.data_engine.schemas.ingestion import IngestionBatchCreate, InternalInge
 from app.data_engine.service import ingestion
 from tests.support.inmemory_storage import InMemoryStorageClient
 
+#: The rejection tests feed absolute paths as untrusted input; the platform's
+#: temp directory stands in for any absolute path outside the staging scheme.
+#: It is resolved at import because parametrize values are static.
+UNTRUSTED_ABSOLUTE = Path(gettempdir())
+
 
 @pytest.mark.parametrize(
     "location",
     [
-        "/tmp/synthetic.xlsx",
+        str(UNTRUSTED_ABSOLUTE / "synthetic.xlsx"),
         "relative.xlsx",
         "../synthetic.xlsx",
         r"C:\staging\synthetic.xlsx",
@@ -42,7 +48,7 @@ from tests.support.inmemory_storage import InMemoryStorageClient
         "temp://uploads/source.xlsx#fragment",
         "temp://uploads/source.xlsx\n",
         "temp://uploads/source.xlsx\x00",
-        {"path": "/tmp/source.xlsx"},
+        {"path": str(UNTRUSTED_ABSOLUTE / "source.xlsx")},
         {"root": "temp://uploads/source.xlsx"},
     ],
 )
@@ -80,8 +86,8 @@ def test_staged_handle_roundtrips_as_an_opaque_string(object_path: str) -> None:
 @pytest.mark.parametrize(
     "location",
     [
-        "/tmp/source.xlsx",
-        Path("/tmp/source.xlsx"),
+        str(UNTRUSTED_ABSOLUTE / "source.xlsx"),
+        UNTRUSTED_ABSOLUTE / "source.xlsx",
         StagedIngestionLocation.model_construct(root="temp://uploads/../source.xlsx"),
     ],
 )
@@ -102,11 +108,13 @@ def test_tenant_service_revalidates_bypassed_schema(
     assert failure.value.status_code == 422
 
 
-def test_tenant_service_rejects_an_internal_source(tenant_ctx: TenantContext) -> None:
+def test_tenant_service_rejects_an_internal_source(
+    tenant_ctx: TenantContext, tmp_path: Path
+) -> None:
     internal = InternalIngestionBatchCreate(
         source_system="EXCEL_CSV",
         as_of_date=date(2026, 1, 31),
-        location=Path("/tmp/source.xlsx"),
+        location=tmp_path / "source.xlsx",
         reason="Synthetic internal source.",
     )
     with Session() as db, pytest.raises(HTTPException) as failure:
@@ -120,11 +128,13 @@ def test_tenant_service_rejects_an_internal_source(tenant_ctx: TenantContext) ->
     assert failure.value.status_code == 422
 
 
-def test_internal_ingestion_revalidates_staged_sources(tenant_ctx: TenantContext) -> None:
+def test_internal_ingestion_revalidates_staged_sources(
+    tenant_ctx: TenantContext, tmp_path: Path
+) -> None:
     payload = IngestionBatchCreate.model_construct(
         source_system="EXCEL_CSV",
         as_of_date=date(2026, 1, 31),
-        location=StagedIngestionLocation.model_construct(root="/tmp/source.xlsx"),
+        location=StagedIngestionLocation.model_construct(root=str(tmp_path / "source.xlsx")),
         reason="Synthetic validation bypass.",
     )
     with Session() as db, pytest.raises(ValidationError):

@@ -8,7 +8,7 @@ skipped. Empty windows are a valid 200 with empty lists, never a 500.
 
 from __future__ import annotations
 
-from datetime import date, timedelta
+from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from uuid import UUID, uuid4
 
@@ -278,7 +278,7 @@ def test_daily_stats_appear_only_when_snapshots_exist(db_session: Session) -> No
     db_session.commit()
     pipeline.run_refresh(db_session, job)
 
-    today = date.today()
+    today = datetime.now(tz=UTC).date()
     result = window_analytics.compute_window(
         db_session,
         MAKER,
