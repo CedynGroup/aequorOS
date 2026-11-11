@@ -164,6 +164,8 @@ jobs:
     if: always()
     needs: [changes, dashboard]
     steps:
+      # The runner workspace starts empty; the gate script lives in the repo.
+      - uses: actions/checkout@v4
       - name: Require every dashboard gate to have passed
         env:
           GATE_LABEL: Dashboard

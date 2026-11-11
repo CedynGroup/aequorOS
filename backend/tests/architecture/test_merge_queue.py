@@ -122,10 +122,49 @@ def test_queue_entries_run_the_real_jobs_and_the_gate_refuses_a_skip(
         assert _condition_runs(condition, {output: "false"}) is False
     gate = cast(dict[str, object], jobs["gate"])
     assert gate["if"] == "always()"
-    step = next(iter(cast(list[dict[str, object]], gate["steps"])))
-    assert "gate_result.sh" in cast(str, step["run"])
+    steps = cast(list[dict[str, object]], gate["steps"])
+    step = next(step for step in steps if "gate_result.sh" in str(step.get("run", "")))
     env = cast(dict[str, str], step["env"])
     assert env["GATE_EVENT"] == "${{ github.event_name }}"
+
+
+@pytest.mark.parametrize(
+    "workflow",
+    sorted(path.name for path in WORKFLOWS.glob("*.yml")),
+)
+def test_job_running_a_repo_script_checks_out_first(workflow: str) -> None:
+    """A runner workspace starts empty, so the script is not there yet.
+
+    A job whose ``run`` executes a file from the repository must check the
+    repository out in that job before the step, or the step exits 127 —
+    PR #867's gate jobs failed exactly this way (runs 42929449720 and
+    42929449870) because they ran ``.github/scripts/gate_result.sh`` without
+    ``actions/checkout``.
+    """
+    document = cast(
+        dict[str, dict[str, object]],
+        yaml.load((WORKFLOWS / workflow).read_text(), Loader=yaml.BaseLoader),
+    )
+    jobs = cast(dict[str, dict[str, object]], document["jobs"])
+    for job_id, job in jobs.items():
+        steps = cast(list[dict[str, object]], job.get("steps", []))
+        first_script = next(
+            (
+                index
+                for index, step in enumerate(steps)
+                if ".github/scripts/" in str(step.get("run", ""))
+            ),
+            None,
+        )
+        if first_script is None:
+            continue
+        checked_out = any(
+            "actions/checkout@" in str(step.get("uses", "")) for step in steps[:first_script]
+        )
+        assert checked_out, (
+            f"{workflow} job {job_id!r} runs a repository script without an "
+            "earlier actions/checkout step; the runner workspace starts empty"
+        )
 
 
 def test_disabled_gate_condition_is_rejected() -> None:
