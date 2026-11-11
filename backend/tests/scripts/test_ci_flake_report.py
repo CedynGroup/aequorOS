@@ -936,3 +936,417 @@ def test_cli_accepts_the_three_modes() -> None:
     assert rerun_args.mode == "rerun-summary"
     weekly_args = parser.parse_args(["weekly"])
     assert weekly_args.mode == "weekly"
+
+
+# --- rerun-summary mode -------------------------------------------------------
+
+
+def rerun_row(**overrides: Any) -> Any:
+    values: dict[str, Any] = {
+        "job_name": "Dashboard journeys shard 4/4",
+        "failed_attempts": [1],
+        "passed_attempts": [2],
+        "rerun_minutes": 21.5,
+    }
+    values.update(overrides)
+    return flake_report.RerunSummaryRow(**values)
+
+
+def test_rerun_summary_rows_list_rerun_only_passes() -> None:
+    """The recorded shape of run 42340795777 (attempts 1 and 4): shard 4/4 failed
+    on attempt 1 and the whole run was green on attempt 4."""
+    attempts = {
+        1: flake_report.parse_jobs(fixture_json("attempt_jobs_failed.json")),
+        4: flake_report.parse_jobs(fixture_json("attempt_jobs_passed.json")),
+    }
+    rows = flake_report.rerun_summary_rows(attempts, 4)
+    assert [(row.job_name, row.failed_attempts, row.passed_attempts) for row in rows] == [
+        ("Dashboard journeys shard 4/4", [1], [4])
+    ]
+    assert rows[0].rerun_minutes == 21.5
+
+
+def test_rerun_summary_rows_report_actual_failed_attempts() -> None:
+    """A fail-fail-pass history reports BOTH failed attempt numbers, not just
+    the first (the ranking's first-failure compression must not leak into the
+    rerun summary)."""
+    attempts = {
+        1: [job("Unit tests", "failure", 5.0, 1)],
+        2: [job("Unit tests", "failure", 5.0, 2)],
+        3: [job("Unit tests", "success", 6.0, 3)],
+    }
+    rows = flake_report.rerun_summary_rows(attempts, 3)
+    assert len(rows) == 1
+    assert rows[0].failed_attempts == [1, 2]
+    assert rows[0].passed_attempts == [3]
+
+
+def test_rerun_summary_rows_include_intermediate_passes() -> None:
+    """Fail, pass, fail again, pass again: both failed attempts and both
+    passing attempts are reported as they happened."""
+    attempts = {
+        1: [job("Journeys", "failure", 5.0, 1)],
+        2: [job("Journeys", "success", 5.0, 2)],
+        3: [job("Journeys", "failure", 5.0, 3)],
+        4: [job("Journeys", "success", 5.0, 4)],
+    }
+    rows = flake_report.rerun_summary_rows(attempts, 4)
+    assert rows[0].failed_attempts == [1, 3]
+    assert rows[0].passed_attempts == [2, 4]
+
+
+def test_rerun_summary_rows_exclude_jobs_still_failing_or_never_failing() -> None:
+    attempts = {
+        1: [job("Still failing", "failure", 5.0, 1), job("Always green", "success", 5.0, 2)],
+        2: [job("Still failing", "failure", 5.0, 3), job("Always green", "success", 5.0, 4)],
+    }
+    assert flake_report.rerun_summary_rows(attempts, 2) == []
+
+
+def test_rerun_summary_rows_exclude_aggregate_jobs() -> None:
+    attempts = {
+        1: [job("Dashboard journeys gate", "failure", 0.2, 1)],
+        2: [job("Dashboard journeys gate", "success", 0.2, 2)],
+    }
+    assert flake_report.rerun_summary_rows(attempts, 2) == []
+
+
+def test_rerun_summary_rows_sorted_most_expensive_rerun_first() -> None:
+    attempts = {
+        1: [job("Cheap job", "failure", 1.0, 1), job("Costly job", "failure", 1.0, 2)],
+        2: [job("Cheap job", "success", 2.0, 3), job("Costly job", "success", 30.0, 4)],
+    }
+    rows = flake_report.rerun_summary_rows(attempts, 2)
+    assert [row.job_name for row in rows] == ["Costly job", "Cheap job"]
+
+
+def test_render_rerun_summary_lists_attempts_and_tests() -> None:
+    row = rerun_row(
+        failed_attempts=[1, 2],
+        passed_attempts=[2, 3],
+        findings=[
+            flake_report.Finding(
+                "test",
+                "playwright:tests/submissions/regulatory-rule-status.e2e.spec.ts",
+                ["status disclosure remains reachable when its badge scrolls out of view"],
+            ),
+            flake_report.Finding("infra", "infra:download-curl-22-504"),
+        ],
+    )
+    markdown = flake_report.render_rerun_summary(
+        42340795777,
+        3,
+        [row],
+        {
+            "workflow": "Dashboard Playwright journeys",
+            "event": "pull_request",
+            "branch": "feature/a",
+        },
+    )
+    assert "## Rerun summary — run 42340795777 (attempt 3)" in markdown
+    assert "Dashboard Playwright journeys" in markdown and "pull_request" in markdown
+    assert "Dashboard journeys shard 4/4" in markdown
+    assert "failed on attempts 1, 2" in markdown
+    assert "attempt 3" in markdown
+    assert "playwright:tests/submissions/regulatory-rule-status.e2e.spec.ts" in markdown
+    assert "status disclosure remains reachable when its badge scrolls out of view" in markdown
+    assert "infra:download-curl-22-504" in markdown
+
+
+def test_render_rerun_summary_attempt_one_writes_first_attempt_note() -> None:
+    markdown = flake_report.render_rerun_summary(42340795777, 1, [])
+    assert "first attempt" in markdown.lower()
+    assert "Failed on attempts" not in markdown
+    assert "|" not in markdown
+
+
+def test_render_rerun_summary_without_rows_notes_no_flip() -> None:
+    markdown = flake_report.render_rerun_summary(42340795777, 2, [])
+    assert "No job that failed in an earlier attempt passed on attempt 2" in markdown
+
+
+def test_rerun_summary_command_attempt_one_never_calls_the_api(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    def fail(*args: object) -> dict[str, Any]:
+        raise AssertionError("attempt 1 must not touch the API")
+
+    monkeypatch.setattr(flake_report, "gh_api_json", fail)
+    exit_code = flake_report.main(
+        ["rerun-summary", "--repo", "CedynGroup/aequorOS", "--run-id", "9", "--attempt", "1"]
+    )
+    assert exit_code == 0
+    assert "first attempt" in capsys.readouterr().out.lower()
+
+
+def test_rerun_summary_command_survives_api_errors_with_a_visible_note(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    def fail(*args: object) -> dict[str, Any]:
+        raise RuntimeError("gh api failed (1): Server Error (HTTP 502)")
+
+    monkeypatch.setattr(flake_report, "gh_api_json", fail)
+    exit_code = flake_report.main(
+        ["rerun-summary", "--repo", "CedynGroup/aequorOS", "--run-id", "9", "--attempt", "2"]
+    )
+    assert exit_code == 0
+    output = capsys.readouterr()
+    assert "Rerun summary unavailable" in output.out
+    assert "Server Error (HTTP 502)" in output.out
+
+
+def test_rerun_summary_command_survives_malformed_json(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    def fail(*args: object) -> dict[str, Any]:
+        raise ValueError("Expecting value: line 1 column 1 (char 0)")
+
+    monkeypatch.setattr(flake_report, "gh_api_json", fail)
+    exit_code = flake_report.main(
+        ["rerun-summary", "--repo", "CedynGroup/aequorOS", "--run-id", "9", "--attempt", "2"]
+    )
+    assert exit_code == 0
+    assert "Rerun summary unavailable" in capsys.readouterr().out
+
+
+def test_rerun_summary_command_survives_missing_job_fields(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    def fake_gh_api_json(*endpoint_args: str) -> dict[str, Any]:
+        endpoint = endpoint_args[0]
+        if endpoint.endswith("/actions/runs/9"):
+            return {"name": "Risk Service CI", "event": "push", "head_branch": "feature/a"}
+        raise KeyError("id")
+
+    monkeypatch.setattr(flake_report, "gh_api_json", fake_gh_api_json)
+    exit_code = flake_report.main(
+        ["rerun-summary", "--repo", "CedynGroup/aequorOS", "--run-id", "9", "--attempt", "2"]
+    )
+    assert exit_code == 0
+    assert "Rerun summary unavailable" in capsys.readouterr().out
+
+
+def test_rerun_summary_command_survives_malformed_job_payloads(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    def fake_gh_api_json(*endpoint_args: str) -> dict[str, Any]:
+        endpoint = endpoint_args[0]
+        if endpoint.endswith("/actions/runs/9"):
+            return {"name": "Risk Service CI", "event": "push", "head_branch": "feature/a"}
+        return {"total_count": 0, "jobs": None}
+
+    monkeypatch.setattr(flake_report, "gh_api_json", fake_gh_api_json)
+    exit_code = flake_report.main(
+        ["rerun-summary", "--repo", "CedynGroup/aequorOS", "--run-id", "9", "--attempt", "2"]
+    )
+    assert exit_code == 0
+    assert "Rerun summary unavailable" in capsys.readouterr().out
+
+
+def test_rerun_summary_log_download_diagnostics_stay_off_the_summary(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    def fake_gh_api_json(*endpoint_args: str) -> dict[str, Any]:
+        endpoint = endpoint_args[0]
+        if endpoint.endswith("/actions/runs/9"):
+            return {"name": "Risk Service CI", "event": "push", "head_branch": "feature/a"}
+        if "/attempts/1/jobs" in endpoint:
+            return fixture_json("attempt_jobs_failed.json")
+        if "/attempts/2/jobs" in endpoint:
+            return fixture_json("attempt_jobs_passed.json")
+        return {"total_count": 0, "jobs": []}
+
+    def failing_gh_api(
+        *endpoint_args: str, allow_escape_sequences: bool = False, retries: int = 4
+    ) -> str:
+        raise RuntimeError("gh api failed (1): Server Error (HTTP 502)")
+
+    monkeypatch.setattr(flake_report, "gh_api_json", fake_gh_api_json)
+    monkeypatch.setattr(flake_report, "gh_api", failing_gh_api)
+    exit_code = flake_report.main(
+        ["rerun-summary", "--repo", "CedynGroup/aequorOS", "--run-id", "9", "--attempt", "2"]
+    )
+    assert exit_code == 0
+    output = capsys.readouterr()
+    assert "log unavailable for job" in output.err
+    assert "log unavailable for job" not in output.out
+
+
+def test_rerun_summary_command_lists_fixture_run_rerun_passes(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    failed_payload = fixture_json("attempt_jobs_failed.json")
+    passed_payload = fixture_json("attempt_jobs_passed.json")
+
+    def fake_gh_api_json(*endpoint_args: str) -> dict[str, Any]:
+        endpoint = endpoint_args[0]
+        if endpoint.endswith("/actions/runs/42340795777"):
+            return {
+                "name": "Dashboard Playwright journeys",
+                "event": "pull_request",
+                "head_branch": "mission/ci-flake-measurement",
+                "html_url": "https://github.com/CedynGroup/aequorOS/actions/runs/42340795777",
+            }
+        if "/attempts/1/jobs" in endpoint:
+            return failed_payload
+        if "/attempts/4/jobs" in endpoint:
+            return passed_payload
+        return {"total_count": 0, "jobs": []}
+
+    def fake_gh_api(
+        *endpoint_args: str, allow_escape_sequences: bool = False, retries: int = 4
+    ) -> str:
+        assert "/actions/jobs/128700000005/logs" in endpoint_args[0]
+        return "\n".join(fixture_text("playwright_rule_status.log"))
+
+    monkeypatch.setattr(flake_report, "gh_api_json", fake_gh_api_json)
+    monkeypatch.setattr(flake_report, "gh_api", fake_gh_api)
+    exit_code = flake_report.main(
+        [
+            "rerun-summary",
+            "--repo",
+            "CedynGroup/aequorOS",
+            "--run-id",
+            "42340795777",
+            "--attempt",
+            "4",
+        ]
+    )
+    assert exit_code == 0
+    output = capsys.readouterr().out
+    assert "## Rerun summary — run 42340795777 (attempt 4)" in output
+    assert "Dashboard journeys shard 4/4" in output
+    assert "failed on attempts 1" in output
+    assert "playwright:tests/submissions/regulatory-rule-status.e2e.spec.ts" in output
+    assert "status disclosure remains reachable when its badge scrolls out of view" in output
+
+
+def test_rerun_summary_rows_include_timed_out_earlier_attempts() -> None:
+    """A job-level timeout on the earlier attempt and success on the rerun is
+    a rerun-only pass (the journey shards time out at 40 minutes)."""
+    attempts = {
+        1: [job("Dashboard journeys shard 2/4", "timed_out", 40.0, 1)],
+        2: [job("Dashboard journeys shard 2/4", "success", 21.0, 2)],
+    }
+    rows = flake_report.rerun_summary_rows(attempts, 2)
+    assert [(row.job_name, row.failed_attempts) for row in rows] == [
+        ("Dashboard journeys shard 2/4", [1])
+    ]
+
+
+def test_rerun_summary_command_survives_a_non_object_run_payload(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setattr(flake_report, "gh_api_json", lambda *endpoint: ["not", "an", "object"])
+    exit_code = flake_report.main(
+        ["rerun-summary", "--repo", "CedynGroup/aequorOS", "--run-id", "9", "--attempt", "2"]
+    )
+    assert exit_code == 0
+    assert "Rerun summary unavailable" in capsys.readouterr().out
+
+
+def test_rerun_summary_command_survives_an_unhashable_job_name(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    def fake_gh_api_json(*endpoint_args: str) -> dict[str, Any]:
+        endpoint = endpoint_args[0]
+        if endpoint.endswith("/actions/runs/9"):
+            return {"name": "Risk Service CI", "event": "push", "head_branch": "feature/a"}
+        return {
+            "total_count": 1,
+            "jobs": [
+                {
+                    "id": 1,
+                    "name": {"unhashable": True},
+                    "conclusion": "success",
+                    "started_at": "2026-11-08T10:00:00Z",
+                    "completed_at": "2026-11-08T10:01:00Z",
+                }
+            ],
+        }
+
+    monkeypatch.setattr(flake_report, "gh_api_json", fake_gh_api_json)
+    exit_code = flake_report.main(
+        ["rerun-summary", "--repo", "CedynGroup/aequorOS", "--run-id", "9", "--attempt", "2"]
+    )
+    assert exit_code == 0
+    assert "Rerun summary unavailable" in capsys.readouterr().out
+
+
+def test_rerun_summary_enrichment_deadline_stops_log_reads_and_still_prints(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    class FakeClock:
+        def __init__(self) -> None:
+            self.now = 0.0
+
+        def monotonic(self) -> float:
+            return self.now
+
+    clock = FakeClock()
+
+    def fake_gh_api_json(*endpoint_args: str) -> dict[str, Any]:
+        endpoint = endpoint_args[0]
+        if endpoint.endswith("/actions/runs/9"):
+            return {"name": "Risk Service CI", "event": "push", "head_branch": "feature/a"}
+        if "/attempts/1/jobs" in endpoint:
+            return {
+                "total_count": 1,
+                "jobs": [
+                    {
+                        "id": 11,
+                        "name": "Journeys shard",
+                        "conclusion": "failure",
+                        "started_at": "2026-11-08T10:00:00Z",
+                        "completed_at": "2026-11-08T10:01:00Z",
+                    }
+                ],
+            }
+        if "/attempts/2/jobs" in endpoint:
+            return {
+                "total_count": 1,
+                "jobs": [
+                    {
+                        "id": 12,
+                        "name": "Journeys shard",
+                        "conclusion": "failure",
+                        "started_at": "2026-11-08T11:00:00Z",
+                        "completed_at": "2026-11-08T11:01:00Z",
+                    }
+                ],
+            }
+        return {
+            "total_count": 1,
+            "jobs": [
+                {
+                    "id": 13,
+                    "name": "Journeys shard",
+                    "conclusion": "success",
+                    "started_at": "2026-11-08T12:00:00Z",
+                    "completed_at": "2026-11-08T12:01:00Z",
+                }
+            ],
+        }
+
+    reads: list[int] = []
+
+    def slow_gh_api(
+        *endpoint_args: str, allow_escape_sequences: bool = False, retries: int = 4
+    ) -> str:
+        reads.append(len(reads))
+        clock.now = 10_000.0  # one optional read eats the whole enrichment budget
+        return "pytest failure in tests/a.py"
+
+    monkeypatch.setattr(flake_report, "time", clock)
+    monkeypatch.setattr(flake_report, "gh_api_json", fake_gh_api_json)
+    monkeypatch.setattr(flake_report, "gh_api", slow_gh_api)
+    exit_code = flake_report.main(
+        ["rerun-summary", "--repo", "CedynGroup/aequorOS", "--run-id", "9", "--attempt", "3"]
+    )
+    assert exit_code == 0
+    output = capsys.readouterr()
+    # The summary still prints, with at most one log read spent before the
+    # deadline stopped the optional enrichment.
+    assert "Journeys shard" in output.out
+    assert len(reads) == 1
+    assert "deadline" in output.out

@@ -2,7 +2,8 @@ name: Risk Service CI
 
 # Gate inventory (audit §1.4 / §5; D-32 re-measured 2026-08-22). Every job below
 # fails the run when it fails — but read the BRANCH PROTECTION note at the bottom
-# before reading "blocking" as "cannot merge".
+# before reading "blocking" as "cannot merge". The exception is the `Rerun
+# summary` job (visibility-only, `continue-on-error`), which never blocks.
 #
 # READ FIRST, because it reframes everything under it: backend CI on `main` ran
 # NO test between 2026-08-03 and 2026-08-22, and it was TWO unrelated failures,
@@ -693,3 +694,30 @@ jobs:
         run: |
           python3 backend/scripts/test_suites.py "$RUNNER_TEMP/postgres-reports"
           python3 backend/scripts/database_observation_check.py "$RUNNER_TEMP/postgres-reports"
+
+  # On a rerun, compare this run's earlier attempts and list the jobs (and
+  # tests, where the logs identify them) that failed earlier and passed only
+  # now. Visibility only, by design: it runs after the gate so this attempt's
+  # job results are complete, reads nothing but Actions history (read-only
+  # permissions), appends to the step summary, and can never fail the run —
+  # the script exits 0 with a visible note when the API cannot be read, and
+  # the job-level continue-on-error covers anything unexpected on top of that.
+  rerun-summary:
+    name: Rerun summary
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    needs: [gate]
+    if: always() && github.run_attempt > 1
+    continue-on-error: true
+    permissions:
+      actions: read
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - name: List what passed only on rerun
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python3 .github/scripts/ci_flake_report.py rerun-summary \
+            --run-id "$GITHUB_RUN_ID" --attempt "$GITHUB_RUN_ATTEMPT" \
+            >> "$GITHUB_STEP_SUMMARY"

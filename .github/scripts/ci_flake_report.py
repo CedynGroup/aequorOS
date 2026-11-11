@@ -14,8 +14,9 @@ Modes
 ``rerun-summary``
     Compare the attempts of one run and list every job (and test, where the
     logs identify it) that failed earlier and passed only on a rerun. Wired
-    into the workflows by the M3 rerun-summary feature; the pure building
-    block (``compare_attempts``) already exists here and is unit-tested.
+    into the four test workflows as the ``Rerun summary`` job (runs only when
+    ``github.run_attempt > 1``, appends to ``$GITHUB_STEP_SUMMARY``, and exits
+    0 with a visible note when the API cannot be read).
 ``weekly``
     Ranking over a rolling window plus threshold evaluation (>=2 rerun-only
     passes in 14 days => "needs flaky-test issue with owner"; >=3 => "fix or
@@ -47,6 +48,7 @@ import os
 import re
 import subprocess
 import sys
+import tempfile
 import time
 from collections import Counter, defaultdict
 from dataclasses import dataclass, field
@@ -70,6 +72,15 @@ API_TIMEOUT_SECONDS = 120
 API_RETRIES = 4
 API_RETRY_WAIT_SECONDS = 5
 TRANSIENT_API_ERROR = re.compile(r"Server Error \(HTTP 5\d\d\)|HTTP 429|rate limit|secondary rate")
+
+# Upper bound on failed-job logs one rerun summary may download. A rerun is a
+# handful of failed jobs in practice; the cap only exists so a pathological
+# history (many attempts, many failures) cannot turn a summary step into a log
+# download campaign. Past the cap the row says its signature is uninspected.
+RERUN_SUMMARY_LOG_BUDGET = 40
+# Overall wall-clock budget for the optional log enrichment, well under the
+# 10-minute workflow job timeout even with one worst-case single read.
+RERUN_SUMMARY_ENRICHMENT_SECONDS = 240
 
 # Jobs that aggregate other jobs' results or detect changes carry no test
 # signal of their own.
@@ -130,6 +141,19 @@ class RerunPass:
     failed_attempt: int
     passed_attempt: int
     passed_minutes: float
+
+
+@dataclass
+class RerunSummaryRow:
+    """One job of one run: failed earlier, passed on the attempt being reported."""
+
+    job_name: str
+    # The actual attempt numbers, not a compressed "first failure": a job that
+    # failed on attempts 1 and 2 and passed on 3 reports [1, 2].
+    failed_attempts: list[int]
+    passed_attempts: list[int]
+    rerun_minutes: float
+    findings: list[Finding] = field(default_factory=list)
 
 
 @dataclass
@@ -363,6 +387,207 @@ def compare_attempts(
                 )
             )
     return passes
+
+
+def rerun_summary_rows(
+    attempts: dict[int, list[JobRecord]],
+    current_attempt: int,
+) -> list[RerunSummaryRow]:
+    """Jobs that failed in an earlier attempt and passed on ``current_attempt``.
+
+    Unlike the ranking (which compresses a history to its first failure and
+    first pass) this reports the actual attempt numbers: every earlier attempt
+    that failed the job, and every attempt up to and including the current one
+    that passed it. Aggregate/gate jobs are excluded — they carry no test
+    signal of their own (see ``compare_attempts`` for the counting rule the
+    ranking uses). Rows are ordered by the minutes the current attempt spent
+    re-executing the job, most expensive first.
+    """
+    rows: list[RerunSummaryRow] = []
+    names = {
+        job.name for jobs in attempts.values() for job in jobs if not is_aggregate_job(job.name)
+    }
+    for name in names:
+        failed_attempts = sorted(
+            {
+                attempt
+                for attempt, jobs in attempts.items()
+                if attempt < current_attempt
+                for job in jobs
+                if job.name == name and is_failed_job_conclusion(job.conclusion)
+            }
+        )
+        passed_attempts = sorted(
+            {
+                attempt
+                for attempt, jobs in attempts.items()
+                if attempt <= current_attempt
+                for job in jobs
+                if job.name == name and job.conclusion == "success"
+            }
+        )
+        if not failed_attempts or current_attempt not in passed_attempts:
+            continue
+        rerun_minutes = max(
+            (job.minutes for job in attempts.get(current_attempt, []) if job.name == name),
+            default=0.0,
+        )
+        rows.append(
+            RerunSummaryRow(
+                job_name=name,
+                failed_attempts=failed_attempts,
+                passed_attempts=passed_attempts,
+                rerun_minutes=rerun_minutes,
+            )
+        )
+    rows.sort(key=lambda row: (-row.rerun_minutes, row.job_name))
+    return rows
+
+
+def render_rerun_summary(
+    run_id: int,
+    attempt: int,
+    rows: list[RerunSummaryRow],
+    context: dict[str, str] | None = None,
+) -> str:
+    """Markdown for ``$GITHUB_STEP_SUMMARY``: what a rerun turned green."""
+    lines = [f"## Rerun summary — run {run_id} (attempt {attempt})", ""]
+    if context:
+        parts = [context.get("workflow") or "", context.get("event") or ""]
+        if context.get("branch"):
+            parts.append(f"branch `{context['branch']}`")
+        lines.append(" · ".join(part for part in parts if part))
+        lines.append("")
+    if attempt <= 1:
+        lines.append(
+            "First attempt — nothing to compare yet. This summary lists the jobs "
+            "(and tests, where the logs identify them) that failed earlier in this "
+            "run and passed only on a rerun; it appears when the run is re-executed."
+        )
+        return "\n".join(lines) + "\n"
+    if not rows:
+        lines.append(
+            f"No job that failed in an earlier attempt passed on attempt {attempt}: "
+            "the rerun did not turn any earlier failure green."
+        )
+        return "\n".join(lines) + "\n"
+    lines.append(f"{len(rows)} job(s) failed earlier in this run and passed on attempt {attempt}:")
+    lines += [
+        "",
+        "| Job | Failed on attempts | Passed on attempts | Re-executed (min) |",
+        "| --- | --- | --- | --- |",
+    ]
+    for row in rows:
+        lines.append(
+            f"| {row.job_name} "
+            f"| {', '.join(str(a) for a in row.failed_attempts)} "
+            f"| {', '.join(str(a) for a in row.passed_attempts)} "
+            f"| {row.rerun_minutes:g} |"
+        )
+    lines += ["", "What the earlier failures were (from the failed attempts' logs):"]
+    for row in rows:
+        lines.append(
+            f"- **{row.job_name}** — failed on attempts "
+            f"{', '.join(str(a) for a in row.failed_attempts)}"
+        )
+        if not row.findings:
+            lines.append("  - no recognised failure signature in the failed attempts' logs")
+        for finding in row.findings:
+            if finding.test_names:
+                lines.append(f"  - `{finding.signature}` — {', '.join(finding.test_names)}")
+            else:
+                lines.append(f"  - `{finding.signature}`")
+    lines += ["", "A rerun-only pass is reported, never retried silently."]
+    return "\n".join(lines) + "\n"
+
+
+def render_rerun_unavailable(run_id: int, attempt: int, error: str) -> str:
+    """The never-failing fallback: say so in the summary and move on."""
+    return (
+        "\n".join(
+            [
+                f"## Rerun summary — run {run_id} (attempt {attempt})",
+                "",
+                "Rerun summary unavailable: the GitHub Actions API could not be read, "
+                "so nothing was concluded about this rerun.",
+                f"Reason: {error}",
+                "",
+                "The run itself is unaffected — this summary is visibility only.",
+            ]
+        )
+        + "\n"
+    )
+
+
+def _attach_rerun_findings(
+    repo: str,
+    rows: list[RerunSummaryRow],
+    attempts: dict[int, list[JobRecord]],
+    cache_dir: Path,
+    log: Any,
+) -> None:
+    """Give each row the failure signatures its earlier attempts' logs contain.
+
+    Log reads are budgeted (RERUN_SUMMARY_LOG_BUDGET) and individually
+    non-fatal: an unreadable log degrades that job's row to "signature
+    unavailable" instead of failing the summary. They are also bounded by an
+    overall deadline well under the workflow job timeout, so a slow API can
+    never starve the summary itself: when the deadline passes, the remaining
+    failures are noted as uninspected and the summary prints with what was
+    gathered.
+    """
+    budget = RERUN_SUMMARY_LOG_BUDGET
+    deadline = time.monotonic() + RERUN_SUMMARY_ENRICHMENT_SECONDS
+    for row in rows:
+        findings: list[Finding] = []
+        seen: set[tuple[str, tuple[str, ...]]] = set()
+        budget_spent = False
+        deadline_hit = False
+        for attempt in row.failed_attempts:
+            for job in attempts.get(attempt, []):
+                if job.name != row.job_name or not is_failed_job_conclusion(job.conclusion):
+                    continue
+                if budget <= 0:
+                    budget_spent = True
+                    break
+                if time.monotonic() >= deadline:
+                    deadline_hit = True
+                    break
+                budget -= 1
+                try:
+                    # Optional visibility: read each log once, without the
+                    # measurement path's retry budget, so a failing read
+                    # cannot consume the job timeout.
+                    text = fetch_job_log(
+                        repo, job.job_id, cache_dir, keep_logs=False, retries=1
+                    )
+                    job_findings = extract_findings(clean_lines(text))
+                    delete_large_log(cache_dir, job.job_id, keep_logs=False)
+                except (RuntimeError, OSError) as error:
+                    log(f"  ! log unavailable for job {job.job_id}: {error}")
+                    job_findings = [Finding("unclassified", f"log-unavailable:{job.name}")]
+                for finding in job_findings:
+                    key = (finding.signature, tuple(finding.test_names))
+                    if key not in seen:
+                        seen.add(key)
+                        findings.append(finding)
+        if budget_spent:
+            findings.append(
+                Finding(
+                    "unclassified",
+                    "log budget reached "
+                    f"({RERUN_SUMMARY_LOG_BUDGET}); remaining failures not inspected",
+                )
+            )
+        if deadline_hit:
+            findings.append(
+                Finding(
+                    "unclassified",
+                    f"log enrichment deadline reached "
+                    f"({RERUN_SUMMARY_ENRICHMENT_SECONDS}s); remaining failures not inspected",
+                )
+            )
+        row.findings = findings
 
 
 def same_sha_mixed_outcomes(
@@ -899,18 +1124,22 @@ def _parse_timestamp(value: str | None) -> datetime | None:
         return None
 
 
-def gh_api(*endpoint_args: str, allow_escape_sequences: bool = False) -> str:
+def gh_api(
+    *endpoint_args: str, allow_escape_sequences: bool = False, retries: int = API_RETRIES
+) -> str:
     """Read-only gh api call; transient server errors are retried a few times.
 
     (This is API-call resilience for the measurement tool, not a job retry:
-    nothing about CI jobs or tests is ever re-run.)
+    nothing about CI jobs or tests is ever re-run. Optional reads pass a
+    smaller ``retries`` count so a failing enrichment cannot eat a job
+    timeout.)
     """
     cmd = ["gh", "api"]
     if allow_escape_sequences:
         cmd.append("--allow-escape-sequences")
     cmd.extend(endpoint_args)
     last_error = ""
-    for attempt in range(1, API_RETRIES + 1):
+    for attempt in range(1, retries + 1):
         try:
             result = subprocess.run(
                 cmd,
@@ -923,14 +1152,14 @@ def gh_api(*endpoint_args: str, allow_escape_sequences: bool = False) -> str:
             )
         except subprocess.TimeoutExpired as error:
             last_error = f"gh api timed out after {API_TIMEOUT_SECONDS}s: {error.cmd[-1]}"
-            if attempt == API_RETRIES:
+            if attempt == retries:
                 raise RuntimeError(last_error) from error
             time.sleep(API_RETRY_WAIT_SECONDS * attempt)
             continue
         if result.returncode == 0:
             return result.stdout
         last_error = f"gh api failed ({result.returncode}): {result.stderr[:400]}"
-        if not TRANSIENT_API_ERROR.search(result.stderr) or attempt == API_RETRIES:
+        if not TRANSIENT_API_ERROR.search(result.stderr) or attempt == retries:
             raise RuntimeError(last_error)
         time.sleep(API_RETRY_WAIT_SECONDS * attempt)
     raise RuntimeError(last_error)
@@ -999,11 +1228,17 @@ def fetch_attempt_jobs(
     return parse_jobs(payload)
 
 
-def fetch_job_log(repo: str, job_id: int, cache_dir: Path, keep_logs: bool) -> str:
+def fetch_job_log(
+    repo: str, job_id: int, cache_dir: Path, keep_logs: bool, retries: int = API_RETRIES
+) -> str:
     cache_path = cache_dir / f"{job_id}.log"
     if cache_path.exists():
         return cache_path.read_text(encoding="utf-8", errors="replace")
-    text = gh_api(f"repos/{repo}/actions/jobs/{job_id}/logs", allow_escape_sequences=True)
+    text = gh_api(
+        f"repos/{repo}/actions/jobs/{job_id}/logs",
+        allow_escape_sequences=True,
+        retries=retries,
+    )
     _write_cache(cache_path, text)
     return text
 
@@ -1244,6 +1479,66 @@ def cmd_report(args: argparse.Namespace) -> int:
 
 
 # ---------------------------------------------------------------------------
+# rerun-summary mode
+# ---------------------------------------------------------------------------
+
+
+def cmd_rerun_summary(args: argparse.Namespace) -> int:
+    """Compare this run's earlier attempts and report what passed only on rerun.
+
+    Written for the CI step: it never raises, and every API failure becomes a
+    visible note with exit code 0 so a summary outage can never fail the run.
+    Attempt 1 is a no-op note and touches no API at all. Output goes to stdout
+    (the workflow step appends it to ``$GITHUB_STEP_SUMMARY``).
+    """
+    run_id, attempt = args.run_id, args.attempt
+    if attempt <= 1:
+        print(render_rerun_summary(run_id, attempt, []))
+        return 0
+
+    context: dict[str, str] | None = None
+    try:
+        payload = gh_api_json(f"repos/{args.repo}/actions/runs/{run_id}")
+        context = {
+            "workflow": payload.get("name") or "",
+            "event": payload.get("event") or "",
+            "branch": payload.get("head_branch") or "",
+        }
+    except (RuntimeError, OSError, ValueError, AttributeError, TypeError) as error:
+        # Cosmetic only; the summary still renders without the context line.
+        print(f"Run context unavailable: {error}", file=sys.stderr)
+
+    try:
+        attempts = {
+            earlier: fetch_attempt_jobs(args.repo, run_id, earlier)
+            for earlier in range(1, attempt + 1)
+        }
+        # Parsing and row selection stay inside the fallback: a malformed
+        # payload shape (for example an unhashable job name) must reach the
+        # visible unavailable note, not escape the command.
+        rows = rerun_summary_rows(attempts, attempt)
+    except (RuntimeError, OSError, ValueError, KeyError, TypeError, AttributeError) as error:
+        print(render_rerun_unavailable(run_id, attempt, str(error)))
+        print(f"Rerun summary unavailable: {error}", file=sys.stderr)
+        return 0
+    try:
+        with tempfile.TemporaryDirectory(prefix="ci-flake-rerun-") as cache_name:
+            # Diagnostics go to stderr: stdout is the Markdown step summary.
+            _attach_rerun_findings(
+                args.repo,
+                rows,
+                attempts,
+                Path(cache_name),
+                lambda message: print(message, file=sys.stderr),
+            )
+    except (RuntimeError, OSError) as error:
+        # Cosmetic only; the summary still renders without the signatures.
+        print(f"Failure signatures unavailable: {error}", file=sys.stderr)
+    print(render_rerun_summary(run_id, attempt, rows, context))
+    return 0
+
+
+# ---------------------------------------------------------------------------
 # CLI
 # ---------------------------------------------------------------------------
 
@@ -1292,12 +1587,7 @@ def main(argv: list[str] | None = None) -> int:
     if args.mode == "report":
         return cmd_report(args)
     if args.mode == "rerun-summary":
-        print(
-            "rerun-summary is wired by the M3 rerun-summary feature; the pure "
-            "building block is compare_attempts() in this module.",
-            file=sys.stderr,
-        )
-        return 2
+        return cmd_rerun_summary(args)
     # weekly
     print(
         "weekly is wired by the M3 weekly-flake-workflow feature; the pure "
