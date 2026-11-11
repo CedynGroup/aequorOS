@@ -346,6 +346,12 @@ def compare_attempts(
     charges its minutes once, to the first failed attempt recovering at it
     (a run that failed, failed again and then passed needed one rerun, not
     two).
+
+    Two same-named jobs can share one attempt; the name is not a reliable
+    cross-attempt identity there, so failures recovering at the same passing
+    attempt share that attempt's successes positionally (each re-execution
+    charges its own minutes) instead of Python ever comparing JobRecord
+    objects.
     """
     passes: list[RerunPass] = []
     for name in {job.name for jobs in attempts.values() for job in jobs}:
@@ -378,29 +384,46 @@ def compare_attempts(
             )
             if recovery is not None:
                 first_failure_before.setdefault(recovery, fail_attempt)
+        # Emit one RerunPass per failure, grouped by the passing attempt each
+        # failure recovers at. Duplicate same-named jobs in one attempt (the
+        # job name is not a reliable cross-attempt identity, but each is a
+        # separately executed job) share that recovery attempt's successes
+        # positionally, so each re-execution charges its own minutes instead
+        # of the first success's minutes being charged twice.
+        failures_by_recovery: dict[int, list[tuple[int, JobRecord]]] = {}
         for fail_attempt, fail_job in failed:
             recovery = next(
-                (
-                    (pass_attempt, pass_job)
-                    for pass_attempt, pass_job in passed
-                    if pass_attempt > fail_attempt
-                ),
+                (pass_attempt for pass_attempt, _ in passed if pass_attempt > fail_attempt),
                 None,
             )
-            if recovery is None:
-                continue
-            passes.append(
-                RerunPass(
-                    failed_job=fail_job,
-                    failed_attempt=fail_attempt,
-                    passed_attempt=recovery[0],
-                    passed_minutes=(
-                        recovery[1].minutes
-                        if first_failure_before[recovery[0]] == fail_attempt
-                        else 0.0
-                    ),
-                )
+            if recovery is not None:
+                failures_by_recovery.setdefault(recovery, []).append((fail_attempt, fail_job))
+        for recovery, group in failures_by_recovery.items():
+            successes = sorted(
+                (job for pass_attempt, job in passed if pass_attempt == recovery),
+                key=lambda job: job.job_id,
             )
+            first_failure = first_failure_before[recovery]
+            for position, (fail_attempt, fail_job) in enumerate(group):
+                minutes = (
+                    successes[position].minutes
+                    if position < len(successes)
+                    else successes[0].minutes
+                )
+                if fail_attempt != first_failure:
+                    # Later failures of one rerun cycle are additional lost
+                    # minutes but not additional re-executed ones: the pass
+                    # charges its minutes once, to the first failed attempt
+                    # recovering at it.
+                    minutes = 0.0
+                passes.append(
+                    RerunPass(
+                        failed_job=fail_job,
+                        failed_attempt=fail_attempt,
+                        passed_attempt=recovery,
+                        passed_minutes=minutes,
+                    )
+                )
     return passes
 
 
@@ -1274,8 +1297,10 @@ def cmd_weekly(args: argparse.Namespace, now: datetime | None = None) -> int:
     try:
         cache_dir = _private_cache_dir(args.cache_dir)
     except OSError as error:
-        print(render_weekly_unavailable(window_days, str(error)))
+        note = render_weekly_unavailable(window_days, str(error))
+        print(note)
         print(f"Weekly flake report unavailable: {error}", file=sys.stderr)
+        _write_unavailable_artifacts(args, note, window_days, error)
         return 0
     if cache_dir is None:
         return 2
@@ -1311,11 +1336,7 @@ def cmd_weekly(args: argparse.Namespace, now: datetime | None = None) -> int:
         print(f"Weekly flake report unavailable: {error}", file=sys.stderr)
         # The requested artifacts must not keep a stale earlier report: record
         # the unavailable state in them too, clearly marked as such.
-        if args.out_md:
-            _write_weekly_artifact(args.out_md, note, "markdown artifact")
-        if args.out_json:
-            payload = {"status": "unavailable", "window_days": window_days, "error": str(error)}
-            _write_weekly_artifact(args.out_json, json.dumps(payload, indent=1), "JSON artifact")
+        _write_unavailable_artifacts(args, note, window_days, error)
         return 0
     # Missing-log placeholders are accounting, not findings: a job whose logs
     # were never read (budget exhausted or log unavailable) must not reach the
@@ -1397,10 +1418,31 @@ def cmd_weekly(args: argparse.Namespace, now: datetime | None = None) -> int:
                 }
                 for breach in breaches
             ],
+            # Collection status: a JSON reader must be able to tell an empty
+            # threshold result from a complete measurement.
+            "collection": {
+                "caveat": collection_cutoff,
+                "truncated_workflows": [workflow for workflow, _ in truncated],
+            },
             "report": report,
         }
         _write_weekly_artifact(args.out_json, json.dumps(payload, indent=1), "JSON artifact")
     return 0
+
+
+def _write_unavailable_artifacts(
+    args: argparse.Namespace, note: str, window_days: int, error: Exception
+) -> None:
+    """Record the unavailable state in the requested artifacts.
+
+    The artifacts must not keep a stale earlier report after a measurement
+    failure, and the state must be clearly marked, never shaped like a report.
+    """
+    if args.out_md:
+        _write_weekly_artifact(args.out_md, note, "markdown artifact")
+    if args.out_json:
+        payload = {"status": "unavailable", "window_days": window_days, "error": str(error)}
+        _write_weekly_artifact(args.out_json, json.dumps(payload, indent=1), "JSON artifact")
 
 
 def _write_weekly_artifact(path: str, text: str, label: str) -> None:

@@ -238,9 +238,10 @@ def test_two_same_named_failures_in_one_attempt_are_both_reported() -> None:
         (1, 201, 2),
         (1, 202, 2),
     ]
-    # Each failed attempt that is the first failure before the recovery
-    # carries the re-executed minutes; both duplicates share attempt 1.
-    assert [p.passed_minutes for p in passes] == [6.0, 6.0]
+    # Each re-execution charges its own minutes: the duplicates share the
+    # recovery attempt's successes positionally (201 -> 203, 202 -> 204),
+    # instead of the first success's minutes being charged twice.
+    assert [p.passed_minutes for p in passes] == [6.0, 7.0]
 
 
 def test_consistent_failure_is_not_flaky() -> None:
@@ -1659,6 +1660,39 @@ def test_weekly_artifact_writes_fail_independently(
     assert payload["thresholds"][0]["signature"] == (
         "pytest:tests/db/test_document_deletion_timeout_integration.py"
     )
+    assert payload["collection"] == {"caveat": None, "truncated_workflows": []}
+
+
+def test_cache_setup_failure_also_replaces_requested_artifacts(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], tmp_path: Path
+) -> None:
+    """A refused cache setup must not leave a stale report in the artifacts."""
+
+    def fail(raw: str) -> None:
+        raise OSError("cannot create cache dir")
+
+    monkeypatch.setattr(flake_report, "_private_cache_dir", fail)
+    stale_md = tmp_path / "weekly.md"
+    stale_json = tmp_path / "weekly.json"
+    stale_md.write_text("stale ranking", encoding="utf-8")
+    stale_json.write_text('{"stale": true}', encoding="utf-8")
+    parser = flake_report.build_parser()
+    args = parser.parse_args(
+        [
+            "weekly",
+            "--cache-dir",
+            str(tmp_path),
+            "--out-md",
+            str(stale_md),
+            "--out-json",
+            str(stale_json),
+        ]
+    )
+    assert flake_report.cmd_weekly(args, now=datetime(2026, 11, 9, 12, 0, tzinfo=UTC)) == 0
+    assert "Weekly flake report unavailable" in stale_md.read_text(encoding="utf-8")
+    payload = json.loads(stale_json.read_text(encoding="utf-8"))
+    assert payload["status"] == "unavailable"
+    assert "cannot create cache dir" in payload["error"]
 
 
 def test_collection_failure_records_the_unavailable_state_in_requested_artifacts(
