@@ -4,7 +4,11 @@ import Link from "next/link";
 import { Info, Search } from "lucide-react";
 import { Suspense, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { useBankContext, useModuleScope } from "@/components/shell/BankContext";
+import {
+  NoAuthorizedInstitutionsPanel,
+  useBankContext,
+  useModuleScope,
+} from "@/components/shell/BankContext";
 import { isHrefVisible } from "@/lib/modules";
 import PageContainer from "@/components/ui/PageContainer";
 import PageHeader from "@/components/ui/PageHeader";
@@ -113,7 +117,7 @@ export default function InstrumentsRegister(props: { upcoming?: boolean }) {
 }
 
 function RegisterContents({ upcoming = false }: { upcoming?: boolean }) {
-  const { bank, banks } = useBankContext();
+  const { bank, banks, isEmpty: noAuthorizedBank } = useBankContext();
   const requestedBankId = useSearchParams().get("bankId");
   const bankId = requestedBankId ?? bank?.id;
   const institution =
@@ -170,6 +174,13 @@ function RegisterContents({ upcoming = false }: { upcoming?: boolean }) {
       (statusCounts.get(value) ?? 0) > 0,
   );
   const filtered = Boolean(search.trim()) || Boolean(status);
+  // A settled resolution with no authorized bank is a state, not a loading
+  // state: the disabled templates query would otherwise hold the skeleton
+  // forever. isEmpty only turns true once the bank context stopped loading,
+  // so the skeleton still covers the resolution itself.
+  if (noAuthorizedBank && !requestedBankId) {
+    return <NoAuthorizedInstitutionsPanel />;
+  }
   return (
     <>
       <PageHeader
@@ -282,7 +293,11 @@ function RegisterContents({ upcoming = false }: { upcoming?: boolean }) {
         </div>
         <QueryBoundary
           contained
-          isLoading={query.isLoading}
+          // isPending, not isLoading: until the bank context resolves the
+          // query is enabled-but-idle, and the register must hold its
+          // skeleton instead of flashing an empty register that would then
+          // collapse into a second loading swap once the bank arrives.
+          isLoading={query.isPending}
           error={query.error}
           onRetry={() => void query.refetch()}
         >

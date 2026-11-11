@@ -66,7 +66,10 @@ export default function TemplatesPage() {
 
         <QueryBoundary
           contained
-          isLoading={query.isLoading}
+          // isPending, not isLoading: with the banked templates query gated on
+          // the resolved bank, a disabled query is not "loaded and empty" —
+          // the page must hold its skeleton until the bank context resolves.
+          isLoading={query.isPending}
           error={query.error}
           onRetry={() => query.refetch()}
           skeleton={
