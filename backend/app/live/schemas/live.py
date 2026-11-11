@@ -42,7 +42,7 @@ class LiveReconciliationRead(ClosedModel):
     Present only when the control has something to say — a plug was applied, an
     approved exception is carrying the book, or the identity FAILS. Its absence
     means the ingested book balanced exactly, because a plug of any size is
-    recorded (``app/services/reconciliation.py``).
+    recorded (``app/data_engine/service/reconciliation.py``).
 
     Amounts are strings: they are exact decimals, and JSON floats are not.
     """
