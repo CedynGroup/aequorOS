@@ -221,6 +221,37 @@ def test_duplicate_same_named_jobs_in_one_attempt_do_not_crash() -> None:
     assert passes[0].passed_minutes == 5.0
 
 
+def test_a_partially_passing_attempt_does_not_count_as_recovery() -> None:
+    """With duplicate names, one success must not recover the other's failure.
+
+    Attempt 2 has one success and one failure of the same name: no identity
+    ties attempt 1's failures to that one success, so the recovery is the
+    attempt where every job of the name succeeded (attempt 3).
+    """
+    attempts = {
+        1: [
+            job("Claude review verdict", "failure", 5.0, 301),
+            job("Claude review verdict", "failure", 4.0, 302),
+        ],
+        2: [
+            job("Claude review verdict", "success", 6.0, 303),
+            job("Claude review verdict", "failure", 4.5, 304),
+        ],
+        3: [
+            job("Claude review verdict", "success", 6.5, 305),
+            job("Claude review verdict", "success", 7.0, 306),
+        ],
+    }
+    passes = flake_report.compare_attempts(attempts)
+    # Attempt 3 is the first fully-passing attempt. The attempt-2 failure is
+    # part of the same rerun cycle: it counts, but charges no minutes again.
+    assert [(p.failed_job.job_id, p.passed_attempt, p.passed_minutes) for p in passes] == [
+        (301, 3, 6.5),
+        (302, 3, 7.0),
+        (304, 3, 0.0),
+    ]
+
+
 def test_two_same_named_failures_in_one_attempt_are_both_reported() -> None:
     """Duplicate names keep deterministic ordering and one pass per failure."""
     attempts = {
@@ -1619,7 +1650,7 @@ def test_a_truncated_workflow_caveat_names_the_requested_window_start() -> None:
         window_days=14,
         truncated=[("Web CI", "2026-11-05")],
     )
-    assert "later than 2026-10-11" in markdown
+    assert "does not precede the requested window start 2026-10-11" in markdown
 
 
 def test_weekly_artifact_writes_fail_independently(
@@ -2179,6 +2210,40 @@ def test_weekly_command_warns_when_a_workflow_was_truncated_by_the_run_cap(
     monkeypatch.setattr(flake_report, "collect_report_data", scenario_b)
     args = parser.parse_args(
         ["weekly", "--min-runs-per-workflow", "2", "--cache-dir", str(tmp_path / "b")]
+    )
+    assert flake_report.cmd_weekly(args, now=datetime(2026, 11, 9, 12, 0, tzinfo=UTC)) == 0
+    assert "Threshold caveat" not in capsys.readouterr().out
+
+    def scenario_c(options: Any, log: Any = print) -> tuple[list[Any], list[Any]]:
+        # The cap stopped on the window-start date itself: earlier runs on
+        # that date may still be missing, so coverage stays uncertain.
+        on_start = flake_report.RunRecord(
+            run_id=2,
+            workflow="Risk Service CI",
+            event="push",
+            head_branch="main",
+            head_sha="a" * 40,
+            run_attempt=1,
+            conclusion="success",
+            created_at="2026-10-26T23:00:00Z",
+        )
+        return [on_start, on_start], []
+
+    monkeypatch.setattr(flake_report, "collect_report_data", scenario_c)
+    args = parser.parse_args(
+        ["weekly", "--min-runs-per-workflow", "2", "--cache-dir", str(tmp_path / "c")]
+    )
+    assert flake_report.cmd_weekly(args, now=datetime(2026, 11, 9, 12, 0, tzinfo=UTC)) == 0
+    assert "Threshold caveat" in capsys.readouterr().out
+
+    def scenario_d(options: Any, log: Any = print) -> tuple[list[Any], list[Any]]:
+        # An unlimited listing (cap 0) is never "capped": every workflow
+        # satisfies count >= 0.
+        return [truncated_run, truncated_run], []
+
+    monkeypatch.setattr(flake_report, "collect_report_data", scenario_d)
+    args = parser.parse_args(
+        ["weekly", "--min-runs-per-workflow", "0", "--cache-dir", str(tmp_path / "d")]
     )
     assert flake_report.cmd_weekly(args, now=datetime(2026, 11, 9, 12, 0, tzinfo=UTC)) == 0
     assert "Threshold caveat" not in capsys.readouterr().out

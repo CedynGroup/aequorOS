@@ -348,10 +348,14 @@ def compare_attempts(
     two).
 
     Two same-named jobs can share one attempt; the name is not a reliable
-    cross-attempt identity there, so failures recovering at the same passing
-    attempt share that attempt's successes positionally (each re-execution
-    charges its own minutes) instead of Python ever comparing JobRecord
-    objects.
+    cross-attempt identity there. Two rules keep the accounting honest when
+    that happens: a recovery must be an attempt where *every* job of the name
+    succeeded (with one success and one failure in the same attempt, no
+    identity ties an earlier failure to that one success, so recovering there
+    would attribute one job's success to another), and the failures recovering
+    at one attempt share that attempt's successes positionally, so each
+    re-execution charges its own minutes. Tuple comparison never reaches the
+    JobRecord objects (they are not orderable).
     """
     passes: list[RerunPass] = []
     for name in {job.name for jobs in attempts.values() for job in jobs}:
@@ -368,41 +372,38 @@ def compare_attempts(
             # it.
             key=lambda pair: (pair[0], pair[1].name, pair[1].job_id),
         )
+        jobs_by_attempt: dict[int, list[JobRecord]] = {}
+        for attempt, job in timeline:
+            jobs_by_attempt.setdefault(attempt, []).append(job)
         failed = [
-            (attempt, job) for attempt, job in timeline if is_failed_job_conclusion(job.conclusion)
+            (attempt, job)
+            for attempt, jobs in sorted(jobs_by_attempt.items())
+            for job in jobs
+            if is_failed_job_conclusion(job.conclusion)
         ]
-        passed = [(attempt, job) for attempt, job in timeline if job.conclusion == "success"]
         if not failed:
             continue
+        # A recovery is a fully-passing attempt for this name; see the
+        # docstring on why a partially passing attempt does not qualify.
+        recoveries = [
+            attempt
+            for attempt, jobs in sorted(jobs_by_attempt.items())
+            if all(job.conclusion == "success" for job in jobs)
+        ]
         # First failed attempt recovering at each passing attempt: that one
         # carries the re-executed minutes for the pass.
         first_failure_before: dict[int, int] = {}
-        for fail_attempt, _ in failed:
-            recovery = next(
-                (pass_attempt for pass_attempt, _ in passed if pass_attempt > fail_attempt),
-                None,
-            )
-            if recovery is not None:
-                first_failure_before.setdefault(recovery, fail_attempt)
-        # Emit one RerunPass per failure, grouped by the passing attempt each
-        # failure recovers at. Duplicate same-named jobs in one attempt (the
-        # job name is not a reliable cross-attempt identity, but each is a
-        # separately executed job) share that recovery attempt's successes
-        # positionally, so each re-execution charges its own minutes instead
-        # of the first success's minutes being charged twice.
         failures_by_recovery: dict[int, list[tuple[int, JobRecord]]] = {}
         for fail_attempt, fail_job in failed:
-            recovery = next(
-                (pass_attempt for pass_attempt, _ in passed if pass_attempt > fail_attempt),
-                None,
-            )
-            if recovery is not None:
-                failures_by_recovery.setdefault(recovery, []).append((fail_attempt, fail_job))
+            recovery = next((a for a in recoveries if a > fail_attempt), None)
+            if recovery is None:
+                continue
+            first_failure_before.setdefault(recovery, fail_attempt)
+            failures_by_recovery.setdefault(recovery, []).append((fail_attempt, fail_job))
         for recovery, group in failures_by_recovery.items():
-            successes = sorted(
-                (job for pass_attempt, job in passed if pass_attempt == recovery),
-                key=lambda job: job.job_id,
-            )
+            # By construction every job of the name succeeded on a recovery
+            # attempt; order the duplicates deterministically by job id.
+            successes = sorted(jobs_by_attempt[recovery], key=lambda job: job.job_id)
             first_failure = first_failure_before[recovery]
             for position, (fail_attempt, fail_job) in enumerate(group):
                 minutes = (
@@ -1227,7 +1228,8 @@ def render_weekly_report(
     for workflow, oldest in truncated or []:
         caveats.append(
             f"- Threshold caveat: `{workflow}` hit the run cap before covering "
-            f"the full window (its oldest collected run is {oldest}, later than "
+            f"the full window (its oldest collected run is {oldest}, which does "
+            f"not precede the requested window start "
             f"{window.get('requested_since') or window['since']}), so its "
             "rerun-only passes may be undercounted."
         )
@@ -1398,7 +1400,10 @@ def cmd_weekly(args: argparse.Namespace, now: datetime | None = None) -> int:
     truncated = sorted(
         (workflow, oldest)
         for workflow, oldest in oldest_by_workflow.items()
-        if runs_per_workflow[workflow] >= args.min_runs_per_workflow
+        # An unlimited listing (cap 0) is never "capped": every workflow
+        # satisfies count >= 0.
+        if args.min_runs_per_workflow > 0
+        and runs_per_workflow[workflow] >= args.min_runs_per_workflow
         and oldest > window_start_iso
     )
     breaches = evaluate_thresholds(measured_events, current_time, window_days)

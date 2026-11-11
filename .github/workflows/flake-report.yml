@@ -15,9 +15,10 @@ name: Weekly flake report
 
 on:
   schedule:
-    # Mondays 06:00 UTC, so the window covers the full previous week including
-    # the weekend's runs.
-    - cron: "0 6 * * 1"
+    # Mondays 06:23 UTC, so the window covers the full previous week including
+    # the weekend's runs. Off the top of the hour on purpose: GitHub warns
+    # that hourly-start schedules are delayed or dropped under load.
+    - cron: "23 6 * * 1"
   workflow_dispatch:
     inputs:
       window_days:
