@@ -36,7 +36,15 @@ jobs:
     timeout-minutes: 60
     continue-on-error: true
     steps:
+      # Read-only history is all this job needs, so the checkout persists no
+      # credentials.
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Note the unavailable report when checkout failed
+        if: failure()
+        run: |
+          echo "Weekly flake report unavailable: the checkout failed, so there is no report to write. The run itself is unaffected — this report is visibility only." >> "$GITHUB_STEP_SUMMARY"
       - name: Write the ranking and threshold crossings to the step summary
         env:
           GH_TOKEN: ${{ github.token }}

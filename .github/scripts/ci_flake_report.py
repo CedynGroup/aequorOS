@@ -1271,24 +1271,38 @@ def cmd_weekly(args: argparse.Namespace, now: datetime | None = None) -> int:
     )
     try:
         # Diagnostics go to stderr: stdout is the Markdown step summary.
-        runs, events = collect_report_data(options, lambda message: print(message, file=sys.stderr))
+        collection_notes: list[str] = []
+        runs, events = collect_report_data(
+            options, lambda message: print(message, file=sys.stderr), collection_notes
+        )
     except (RuntimeError, OSError, ValueError, KeyError, TypeError, AttributeError) as error:
         print(render_weekly_unavailable(window_days, str(error)))
         print(f"Weekly flake report unavailable: {error}", file=sys.stderr)
         return 0
+    # Missing-log placeholders are accounting, not findings: a job whose logs
+    # were never read must not reach the policy thresholds or the ranking as
+    # if its failure signature were known. The unfetched count is reported as
+    # a caveat instead.
     budget_hits = sum(
         1 for event in events if event.signature.startswith("log-budget-exhausted:")
     )
+    measured_events = [
+        event
+        for event in events
+        if not event.signature.startswith("log-budget-exhausted:")
+    ]
+    cutoff_parts = list(collection_notes)
+    if budget_hits:
+        cutoff_parts.append(f"{budget_hits} failed-job log(s) unfetched")
     collection_cutoff = (
-        f"collection stopped at the time budget with {budget_hits} failed-job "
-        "log(s) unfetched"
-        if budget_hits
+        "collection stopped at the time budget: " + "; ".join(cutoff_parts)
+        if cutoff_parts
         else None
     )
 
     report = build_report(
         runs=runs,
-        events=events,
+        events=measured_events,
         meta={
             "repo": args.repo,
             "workflow_files": workflow_files,
@@ -1302,15 +1316,22 @@ def cmd_weekly(args: argparse.Namespace, now: datetime | None = None) -> int:
     # cap. RunRecord.workflow carries the API workflow name (e.g. "Web CI"),
     # which is what the caveat shows. A workflow is flagged only when the cap
     # was actually reached: a low-traffic workflow with no runs early in the
-    # window is not truncated.
+    # window is not truncated. The comparison uses the full timestamps, so a
+    # cap hit hours inside the window's first day is still caught.
+    window_start = current_time - timedelta(days=window_days)
+    window_start_iso = window_start.strftime("%Y-%m-%dT%H:%M:%SZ")
     runs_per_workflow = Counter(run.workflow for run in runs)
+    oldest_by_workflow = {
+        workflow: min(run.created_at for run in runs if run.workflow == workflow)
+        for workflow in runs_per_workflow
+    }
     truncated = sorted(
-        (workflow, min(run.created_at[:10] for run in runs if run.workflow == workflow))
-        for workflow, count in runs_per_workflow.items()
-        if count >= args.min_runs_per_workflow
-        and min(run.created_at[:10] for run in runs if run.workflow == workflow) > since
+        (workflow, oldest)
+        for workflow, oldest in oldest_by_workflow.items()
+        if runs_per_workflow[workflow] >= args.min_runs_per_workflow
+        and oldest > window_start_iso
     )
-    breaches = evaluate_thresholds(events, current_time, window_days)
+    breaches = evaluate_thresholds(measured_events, current_time, window_days)
     markdown = render_weekly_report(report, breaches, window_days, truncated, collection_cutoff)
     # stdout always carries the Markdown: the workflow step redirects it into
     # the step summary whether or not artifact paths were also given.
@@ -1402,12 +1423,30 @@ def gh_api_json(*endpoint_args: str) -> dict[str, Any]:
 
 
 def list_workflow_runs(
-    repo: str, workflow_file: str, min_runs: int, since: str, log: Any
-) -> list[RunRecord]:
-    """Page through one workflow's runs (newest first) until enough are collected."""
+    repo: str,
+    workflow_file: str,
+    min_runs: int,
+    since: str,
+    log: Any,
+    deadline: float | None = None,
+) -> tuple[list[RunRecord], bool]:
+    """Page through one workflow's runs (newest first) until enough are collected.
+
+    Returns the collected runs and whether the listing stopped early: either
+    the run cap was reached before covering the window, or the time budget
+    passed between pages. Both mean the counts may be undercounted.
+    """
     records: list[RunRecord] = []
     page = 1
+    stopped = False
     while True:
+        if deadline is not None and time.monotonic() > deadline:
+            log(
+                "Time budget reached during run listing; the report carries "
+                "what was collected"
+            )
+            stopped = True
+            break
         payload = gh_api_json(
             f"repos/{repo}/actions/workflows/{workflow_file}/runs?per_page={PER_PAGE}&page={page}"
         )
@@ -1418,10 +1457,11 @@ def list_workflow_runs(
         oldest = page_records[-1].created_at
         log(f"    {workflow_file} page {page}: {len(page_records)} runs (oldest {oldest[:10]})")
         if (min_runs and len(records) >= min_runs) or oldest[:10] < since:
+            stopped = True
             break
         page += 1
     records = [run for run in records if run.created_at[:10] >= since]
-    return records[:min_runs] if min_runs else records
+    return records[:min_runs] if min_runs else records, stopped
 
 
 def _write_cache(path: Path, text: str) -> None:
@@ -1505,22 +1545,29 @@ class ReportOptions:
     deadline: float | None = None
 
 
-def _list_all_runs(options: ReportOptions, log: Any) -> list[RunRecord]:
+def _list_all_runs(options: ReportOptions, log: Any, notes: list[str]) -> list[RunRecord]:
     all_runs: list[RunRecord] = []
     for workflow_file in options.workflow_files:
+        if options.deadline is not None and time.monotonic() > options.deadline:
+            notes.append(f"run listing for {workflow_file} skipped at the time budget")
+            continue
         log(
             f"Listing runs for {workflow_file} "
             f"(target {options.min_runs_per_workflow}, since {options.since})"
         )
-        all_runs.extend(
-            list_workflow_runs(
-                options.repo,
-                workflow_file,
-                options.min_runs_per_workflow,
-                options.since,
-                log,
-            )
+        records, stopped = list_workflow_runs(
+            options.repo,
+            workflow_file,
+            options.min_runs_per_workflow,
+            options.since,
+            log,
+            deadline=options.deadline,
         )
+        if stopped:
+            notes.append(
+                f"run listing for {workflow_file} stopped early; its counts may be undercounted"
+            )
+        all_runs.extend(records)
     log(f"Collected {len(all_runs)} runs total")
     return all_runs
 
@@ -1549,15 +1596,24 @@ def _fetch_attempt_jobs(
     attempts_needed: dict[int, set[int]],
     options: ReportOptions,
     log: Any,
+    notes: list[str],
 ) -> tuple[dict[int, dict[int, list[JobRecord]]], dict[int, list[JobRecord]]]:
     jobs_by_run_attempt: dict[int, dict[int, list[JobRecord]]] = {}
     jobs_by_run: dict[int, list[JobRecord]] = {}
     total = len(attempts_needed)
+    fetched = 0
     for index, (run_id, attempts) in enumerate(sorted(attempts_needed.items()), 1):
+        if options.deadline is not None and time.monotonic() > options.deadline:
+            remaining = len(attempts_needed) - fetched
+            notes.append(
+                f"job listings for {remaining} run(s) unfetched at the time budget"
+            )
+            break
         for attempt in sorted(attempts):
             jobs = fetch_attempt_jobs(repo, run_id, attempt, options.cache_dir)
             jobs_by_run_attempt.setdefault(run_id, {})[attempt] = jobs
             jobs_by_run.setdefault(run_id, []).extend(jobs)
+        fetched += 1
         if index % 25 == 0 or index == total:
             log(f"  job listings: {index}/{total} runs")
     return jobs_by_run_attempt, jobs_by_run
@@ -1645,15 +1701,21 @@ def _build_events(
 
 
 def collect_report_data(
-    options: ReportOptions, log: Any = print
+    options: ReportOptions, log: Any = print, notes: list[str] | None = None
 ) -> tuple[list[RunRecord], list[FlakeEvent]]:
-    """Fetch everything the report needs from the GitHub Actions API."""
-    all_runs = _list_all_runs(options, log)
+    """Fetch everything the report needs from the GitHub Actions API.
+
+    ``notes`` collects the collection-stage cutoffs (run listing or job
+    listing stopped at the time budget) so the caller can state them in the
+    report instead of letting the counts shrink silently.
+    """
+    stage_notes: list[str] = [] if notes is None else notes
+    all_runs = _list_all_runs(options, log, stage_notes)
     runs_by_id = {run.run_id: run for run in all_runs}
 
     attempts_needed = _attempts_needed(all_runs)
     jobs_by_run_attempt, jobs_by_run = _fetch_attempt_jobs(
-        options.repo, attempts_needed, options, log
+        options.repo, attempts_needed, options, log, stage_notes
     )
 
     rerun_passes: dict[tuple[int, int, str], RerunPass] = {}

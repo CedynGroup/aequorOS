@@ -1521,7 +1521,11 @@ def test_weekly_command_bounds_collection_within_the_runner_budget(
 ) -> None:
     captured: dict[str, Any] = {}
 
-    def fake_collect(options: Any, log: Any = print) -> tuple[list[Any], list[Any]]:
+    def fake_collect(
+        options: Any,
+        log: Any = print,
+        notes: list[str] | None = None,
+    ) -> tuple[list[Any], list[Any]]:
         captured["options"] = options
         return [], []
 
@@ -1547,7 +1551,7 @@ def test_weekly_command_flags_the_time_budget_cutoff_in_the_summary(
     monkeypatch.setattr(
         flake_report,
         "collect_report_data",
-        lambda options, log=print: ([success_run(1)], events),
+        lambda options, log=print, notes=None: ([success_run(1)], events),
     )
     parser = flake_report.build_parser()
     args = parser.parse_args(["weekly", "--cache-dir", str(tmp_path)])
@@ -1571,7 +1575,11 @@ def test_weekly_command_renders_thresholds_and_the_ranking(
     ]
     captured: dict[str, Any] = {}
 
-    def fake_collect(options: Any, log: Any = print) -> tuple[list[Any], list[Any]]:
+    def fake_collect(
+        options: Any,
+        log: Any = print,
+        notes: list[str] | None = None,
+    ) -> tuple[list[Any], list[Any]]:
         captured["options"] = options
         log("  job listings: 25/25 runs")
         return runs, events
@@ -1599,7 +1607,11 @@ def test_weekly_command_window_days_override(
 ) -> None:
     captured: dict[str, Any] = {}
 
-    def fake_collect(options: Any, log: Any = print) -> tuple[list[Any], list[Any]]:
+    def fake_collect(
+        options: Any,
+        log: Any = print,
+        notes: list[str] | None = None,
+    ) -> tuple[list[Any], list[Any]]:
         captured["options"] = options
         return [], []
 
@@ -1613,7 +1625,11 @@ def test_weekly_command_window_days_override(
 def test_weekly_command_survives_api_errors_with_a_visible_note(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], tmp_path: Path
 ) -> None:
-    def fail(options: Any, log: Any = print) -> tuple[list[Any], list[Any]]:
+    def fail(
+        options: Any,
+        log: Any = print,
+        notes: list[str] | None = None,
+    ) -> tuple[list[Any], list[Any]]:
         raise RuntimeError("gh api failed (1): Server Error (HTTP 502)")
 
     monkeypatch.setattr(flake_report, "collect_report_data", fail)
@@ -1631,7 +1647,7 @@ def test_weekly_command_writes_markdown_and_json_files(
     monkeypatch.setattr(
         flake_report,
         "collect_report_data",
-        lambda options, log=print: (
+        lambda options, log=print, notes=None: (
             [success_run(1)],
             [event("flake:a", rerun=True, run_id=1), event("flake:a", rerun=True, run_id=2)],
         ),
@@ -1681,7 +1697,11 @@ def test_weekly_command_warns_when_a_workflow_was_truncated_by_the_run_cap(
         created_at="2026-11-05T00:00:00Z",
     )
 
-    def scenario_a(options: Any, log: Any = print) -> tuple[list[Any], list[Any]]:
+    def scenario_a(
+        options: Any,
+        log: Any = print,
+        notes: list[str] | None = None,
+    ) -> tuple[list[Any], list[Any]]:
         assert options.min_runs_per_workflow == 2
         return [truncated_run, truncated_run], []
 
@@ -1702,7 +1722,11 @@ def test_weekly_command_warns_when_a_workflow_was_truncated_by_the_run_cap(
     assert "Risk Service CI" in output
     assert "undercounted" in output
 
-    def scenario_b(options: Any, log: Any = print) -> tuple[list[Any], list[Any]]:
+    def scenario_b(
+        options: Any,
+        log: Any = print,
+        notes: list[str] | None = None,
+    ) -> tuple[list[Any], list[Any]]:
         # Same late-oldest run, but the cap was not reached: no caveat.
         return [truncated_run], []
 
@@ -1748,3 +1772,129 @@ def test_weekly_command_refuses_a_shared_cache_dir(
     args = parser.parse_args(["weekly", "--cache-dir", str(shared)])
     assert flake_report.cmd_weekly(args) == 2
     assert "not private to the current user" in capsys.readouterr().err
+
+
+def test_the_collection_deadline_stops_job_listings(monkeypatch: pytest.MonkeyPatch) -> None:
+    class FakeClock:
+        def __init__(self) -> None:
+            self.now = 0.0
+
+        def monotonic(self) -> float:
+            return self.now
+
+    clock = FakeClock()
+
+    def slow_fetch(repo: str, run_id: int, attempt: int, cache_dir: Any) -> list[Any]:
+        clock.now = flake_report.WEEKLY_COLLECTION_BUDGET_MINUTES * 60 + 1
+        return []
+
+    monkeypatch.setattr(flake_report, "time", clock)
+    monkeypatch.setattr(flake_report, "fetch_attempt_jobs", slow_fetch)
+    options = flake_report.ReportOptions(
+        repo="CedynGroup/aequorOS",
+        workflow_files=["risk-service.yml"],
+        min_runs_per_workflow=1,
+        since="2026-10-26",
+        cache_dir=Path("/tmp/unused-cache"),
+        deadline=1.0,
+    )
+    notes: list[str] = []
+    jobs_by_run_attempt, _jobs_by_run = flake_report._fetch_attempt_jobs(
+        "CedynGroup/aequorOS", {1: {1}, 2: {1}}, options, lambda message: None, notes
+    )
+    # The second run's listing is not fetched once the budget passed, and the
+    # cutoff is reported so the summary can say the counts are undercounted.
+    assert list(jobs_by_run_attempt) == [1]
+    assert notes and "time budget" in notes[0]
+
+
+def test_the_collection_deadline_stops_run_pagination(monkeypatch: pytest.MonkeyPatch) -> None:
+    class FakeClock:
+        def __init__(self) -> None:
+            self.now = 0.0
+
+        def monotonic(self) -> float:
+            return self.now
+
+    clock = FakeClock()
+    pages: list[int] = []
+
+    def fake_gh_api_json(*endpoint_args: str) -> dict[str, Any]:
+        pages.append(len(pages))
+        clock.now = 10_000.0  # one page read eats the whole remaining budget
+        return {
+            "workflow_runs": [
+                {
+                    "id": 1,
+                    "name": "Risk Service CI",
+                    "event": "push",
+                    "head_branch": "main",
+                    "head_sha": "a" * 40,
+                    "run_attempt": 1,
+                    "conclusion": "success",
+                    "created_at": "2026-11-08T10:00:00Z",
+                }
+            ],
+            "total_count": 100,
+        }
+
+    monkeypatch.setattr(flake_report, "time", clock)
+    monkeypatch.setattr(flake_report, "gh_api_json", fake_gh_api_json)
+    records, stopped = flake_report.list_workflow_runs(
+        "CedynGroup/aequorOS",
+        "risk-service.yml",
+        min_runs=100,
+        since="2026-10-01",
+        log=lambda message: None,
+        deadline=clock.now + 5.0,
+    )
+    # The second page is not fetched once the budget passed, and the stop is
+    # reported so the summary can say the counts are undercounted.
+    assert len(records) == 1
+    assert stopped is True
+
+
+def test_log_budget_placeholders_do_not_cross_policy_thresholds(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], tmp_path: Path
+) -> None:
+    events = [
+        event("log-budget-exhausted:Dashboard journeys shard 4/4", kind="unclassified", run_id=1),
+        event("log-budget-exhausted:Dashboard journeys shard 4/4", kind="unclassified", run_id=2),
+        event("pytest:tests/a.py", rerun=True, run_id=3),
+    ]
+
+    def fake_collect(options: Any, log: Any = print, notes: list[str] | None = None) -> Any:
+        return [success_run(1)], events
+
+    monkeypatch.setattr(flake_report, "collect_report_data", fake_collect)
+    parser = flake_report.build_parser()
+    args = parser.parse_args(["weekly", "--cache-dir", str(tmp_path)])
+    assert flake_report.cmd_weekly(args, now=datetime(2026, 11, 9, 12, 0, tzinfo=UTC)) == 0
+    output = capsys.readouterr()
+    # Two uninspected logs must not read as two rerun-only passes of a
+    # signature, and the missing logs stay accounted for as a caveat.
+    assert "needs flaky-test issue with owner" not in output.out
+    assert "log-budget-exhausted" not in output.out
+    assert "2 failed-job log(s) unfetched" in output.out
+
+
+def test_run_cap_truncation_uses_the_full_window_boundary(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], tmp_path: Path
+) -> None:
+    runs = [
+        success_run(1, created_at="2026-10-26T14:00:00Z"),
+        success_run(2, created_at="2026-11-08T10:00:00Z"),
+    ]
+
+    def fake_collect(options: Any, log: Any = print, notes: list[str] | None = None) -> Any:
+        return runs, []
+
+    monkeypatch.setattr(flake_report, "collect_report_data", fake_collect)
+    parser = flake_report.build_parser()
+    args = parser.parse_args(
+        ["weekly", "--min-runs-per-workflow", "2", "--cache-dir", str(tmp_path)]
+    )
+    assert flake_report.cmd_weekly(args, now=datetime(2026, 11, 9, 12, 0, tzinfo=UTC)) == 0
+    # The cap was reached and the oldest run is two hours inside the window
+    # (same date as the window start): the caveat must say so.
+    assert "2026-10-26T14:00:00Z" in capsys.readouterr().out
