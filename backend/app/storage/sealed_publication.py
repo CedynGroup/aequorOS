@@ -21,6 +21,7 @@ from uuid import UUID, uuid4
 from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.db.base import utc_now
@@ -102,13 +103,7 @@ def publish_sealed_document(
     """
     digest = hashlib.sha256(request.payload).hexdigest()
     identity = object_id or uuid4()
-    existing = db.scalar(
-        select(SealedDocumentObject).where(
-            SealedDocumentObject.id == identity,
-            SealedDocumentObject.organization_id == request.organization_id,
-            SealedDocumentObject.bank_id == request.bank_id,
-        )
-    )
+    existing = _catalogued(db, identity, request)
     if existing is not None:
         _require_same_document(existing, request, digest)
         _bind(db, binding, request, existing)
@@ -136,32 +131,39 @@ def publish_sealed_document(
     if descriptor.location != physical or descriptor.metadata.checksum_sha256 != digest:
         raise StorageValidationError("Sealed publication did not store the expected object.")
     insert = sqlite_insert if db.get_bind().dialect.name == "sqlite" else pg_insert
-    _ = db.execute(
-        insert(SealedDocumentObject)
-        .values(
-            id=identity,
-            organization_id=request.organization_id,
-            bank_id=request.bank_id,
-            storage_slug=request.storage_slug,
-            storage_tier="outputs",
-            physical_key=physical.object_path,
-            sha256=digest,
-            byte_length=len(request.payload),
-            context_format=publication.context_format,
-            context_path=request.context_path,
-            envelope_id=publication.envelope_id,
-            original_version_id=descriptor.version_id,
-            published_by=request.published_by,
-        )
-        .on_conflict_do_nothing(index_elements=["id"])
-    )
-    document = db.scalar(
-        select(SealedDocumentObject).where(
-            SealedDocumentObject.id == identity,
-            SealedDocumentObject.organization_id == request.organization_id,
-            SealedDocumentObject.bank_id == request.bank_id,
-        )
-    )
+    try:
+        with db.begin_nested():
+            _ = db.execute(
+                insert(SealedDocumentObject)
+                .values(
+                    id=identity,
+                    organization_id=request.organization_id,
+                    bank_id=request.bank_id,
+                    storage_slug=request.storage_slug,
+                    storage_tier="outputs",
+                    physical_key=physical.object_path,
+                    sha256=digest,
+                    byte_length=len(request.payload),
+                    context_format=publication.context_format,
+                    context_path=request.context_path,
+                    envelope_id=publication.envelope_id,
+                    original_version_id=descriptor.version_id,
+                    published_by=request.published_by,
+                )
+                .on_conflict_do_nothing(index_elements=["id"])
+            )
+    except IntegrityError:
+        # A concurrent publication of the same identity can commit its row
+        # between this transaction's existence check and this insert. The
+        # duplicate then surfaces on the composite scope constraint, which is
+        # not this insert's arbiter, so the database raises instead of taking
+        # the ignored-conflict path. The winner is committed by now, so the
+        # re-read below returns it and the content check still refuses
+        # different bytes; a conflict that leaves no row behind is not a lost
+        # race and re-raises.
+        if _catalogued(db, identity, request) is None:
+            raise
+    document = _catalogued(db, identity, request)
     if document is None:
         raise StorageValidationError("Sealed publication identity belongs to another scope.")
     _require_same_document(document, request, digest)
@@ -232,6 +234,19 @@ def bind_sealed_document(  # noqa: PLR0913 - a binding is its full identity
     )
     if existing != document.id:
         raise StorageValidationError("Sealed document is already bound to another object.")
+
+
+def _catalogued(
+    db: Session, identity: UUID, request: PublicationRequest
+) -> SealedDocumentObject | None:
+    """Read the catalogue row this identity records inside this bank's scope."""
+    return db.scalar(
+        select(SealedDocumentObject).where(
+            SealedDocumentObject.id == identity,
+            SealedDocumentObject.organization_id == request.organization_id,
+            SealedDocumentObject.bank_id == request.bank_id,
+        )
+    )
 
 
 def _require_same_document(
