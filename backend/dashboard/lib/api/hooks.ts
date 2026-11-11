@@ -3203,7 +3203,10 @@ export function useReturnAnchors(
   });
 }
 
-export function useReturnTemplates(bankId?: string) {
+export function useReturnTemplates(
+  bankId?: string,
+  opts?: { registry?: boolean },
+) {
   const queryClient = useQueryClient();
   const queryKey = ["rr-templates", bankId];
   return useQuery({
@@ -3237,7 +3240,10 @@ export function useReturnTemplates(bankId?: string) {
     // Never fetch with an unresolved bank: the un-scoped response would
     // render the register once, then the resolved key would re-run the query
     // and swap the surface through its loading skeleton (the #846 remount).
-    enabled: Boolean(bankId),
+    // The exception is the deliberate registry read (signing policies): its
+    // query key never changes with the bank, and the offer must list the full
+    // BoG registry independent of capital read authority.
+    enabled: opts?.registry ? true : Boolean(bankId),
     staleTime: 60_000,
     refetchInterval: 60_000,
     refetchOnWindowFocus: "always",

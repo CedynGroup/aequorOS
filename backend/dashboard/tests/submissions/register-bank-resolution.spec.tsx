@@ -5,7 +5,7 @@
 // resolved late. The templates query must wait for the bank, and the
 // register must never collapse back to loading after it has rendered.
 import "@testing-library/jest-dom/vitest";
-import { act, cleanup, render, waitFor } from "@testing-library/react";
+import { act, cleanup, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { http, HttpResponse } from "msw";
@@ -19,12 +19,21 @@ import { setActiveJurisdiction } from "@/lib/format";
 
 const bankStore = vi.hoisted(() => {
   type Bank = { id: string; name: string };
-  let bank: Bank | null = null;
+  // A versioned snapshot object: useSyncExternalStore only re-renders when
+  // getSnapshot returns a different value, so "settled with no bank" (which
+  // keeps bank null) must still produce a new snapshot.
+  type Snapshot = { bank: Bank | null; resolved: boolean };
+  let snapshot: Snapshot = { bank: null, resolved: false };
   const listeners = new Set<() => void>();
   return {
-    get: () => bank,
+    get: () => snapshot.bank,
+    getSnapshot: () => snapshot,
     set(value: Bank | null) {
-      bank = value;
+      snapshot = { bank: value, resolved: true };
+      for (const listener of listeners) listener();
+    },
+    reset() {
+      snapshot = { bank: null, resolved: false };
       for (const listener of listeners) listener();
     },
     subscribe(listener: () => void) {
@@ -57,20 +66,28 @@ vi.mock("@/components/shell/BankContext", async () => {
   };
   return {
     useBankContext: () => {
-      const bank = useSyncExternalStore(
+      const snapshot = useSyncExternalStore(
         bankStore.subscribe,
-        bankStore.get,
-        bankStore.get,
+        bankStore.getSnapshot,
+        bankStore.getSnapshot,
       );
+      const bank = snapshot.bank;
       return {
         bank: bank
           ? { ...bank, institutionType: null, jurisdiction: null }
           : null,
         banks: bank ? [bank] : undefined,
         moduleScope: scope,
+        // Mirrors BankContext: isEmpty is true only once resolution settled
+        // with no bank and no errors — never while still loading.
+        isEmpty: snapshot.resolved && !bank,
       };
     },
     useModuleScope: () => scope,
+    // Stand-in for the real panel (mocked module): same heading text.
+    NoAuthorizedInstitutionsPanel: () => (
+      <p>No authorized institutions yet</p>
+    ),
   };
 });
 
@@ -80,6 +97,7 @@ let client: QueryClient;
 const templateCalls: Array<string | null> = [];
 
 beforeEach(() => {
+  bankStore.reset();
   templateCalls.length = 0;
   client = new QueryClient({
     defaultOptions: { queries: { retry: false, refetchOnWindowFocus: false } },
@@ -205,4 +223,21 @@ it("does not hide the rendered register when the bank resolves after first rende
   } finally {
     observer.disconnect();
   }
+});
+
+it("shows a no-bank state once resolution settles without an authorized bank", async () => {
+  render(view(<InstrumentsRegister />));
+  // Resolution in progress: the register holds its skeleton, and the
+  // disabled templates query stays idle.
+  expect(document.querySelector('[aria-label="Loading"]')).not.toBeNull();
+  // Resolution settles with no authorized bank and no bankId parameter:
+  // the register must say so instead of skeletons forever.
+  act(() => bankStore.set(null));
+  await waitFor(() =>
+    expect(
+      screen.getByText("No authorized institutions yet"),
+    ).toBeInTheDocument(),
+  );
+  expect(document.querySelector('[aria-label="Loading"]')).toBeNull();
+  expect(templateCalls).toEqual([]);
 });
