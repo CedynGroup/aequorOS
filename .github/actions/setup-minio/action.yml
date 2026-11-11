@@ -12,12 +12,12 @@ runs:
       uses: actions/cache@v6
       with:
         path: ${{ runner.temp }}/aequoros-ci-minio/minio
-        # Keyed by release, platform and the pinned binary checksum; when the
-        # release CDN answers 504, the cache restores the verified binary
-        # instead of failing every job of the run. Only the binary file is
-        # cached: the runtime directory below holds the server's data, certs
-        # and log, whose state belongs to the job that created it.
-        key: minio-${{ runner.os }}-${{ runner.arch }}-RELEASE.2025-09-07T16-13-09Z-7c5bd8512c6e966455b1d198209358b2d191c77a83ab377c4073281065fb855f
+        # The key namespace holds only the verified binary file (the path
+        # above): an entry saved while the cache path was the whole runtime
+        # directory must never be restored. Keyed by release, platform and the
+        # pinned binary checksum; when the release CDN answers 504, the cache
+        # restores the verified binary instead of failing every job of the run.
+        key: minio-binary-${{ runner.os }}-${{ runner.arch }}-RELEASE.2025-09-07T16-13-09Z-7c5bd8512c6e966455b1d198209358b2d191c77a83ab377c4073281065fb855f
     - name: Download MinIO
       if: steps.minio-cache.outputs.cache-hit != 'true'
       shell: bash
