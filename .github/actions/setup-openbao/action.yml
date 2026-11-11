@@ -11,10 +11,11 @@ runs:
       id: openbao-cache
       uses: actions/cache@v6
       with:
-        path: ${{ runner.temp }}/aequoros-ci-openbao
+        path: ${{ runner.temp }}/aequoros-ci-openbao/bao
         # Keyed by release, platform and the pinned `bao` binary checksum; when
         # the release CDN answers 504, the cache restores the verified binary
-        # instead of failing every job of the run.
+        # instead of failing every job of the run. Only the binary file is
+        # cached, never the runtime directory the server log lands in below.
         key: openbao-${{ runner.os }}-${{ runner.arch }}-v2.6.1-736b8ecf354fda6b2af62e4ae064f12fe6c52d7db8425b9c6de22f286a5485ec
     - name: Download OpenBao
       if: steps.openbao-cache.outputs.cache-hit != 'true'

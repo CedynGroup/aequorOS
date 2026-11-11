@@ -1,12 +1,12 @@
 """Exercise the release-binary cache contract of the composite CI setup actions.
 
-The MinIO and OpenBao setup actions download a pinned release binary. When the
-release CDN answers 504 (run 42567029227), the whole CI job dies with it. These
-tests pin the contract the fix relies on: the binary is restored from
-`actions/cache` keyed by version, platform and checksum; the download runs only
-on a cache miss; a checksum-verified binary is the only artifact that ever
-enters the cache path; and the checksum is enforced on every run, cache hit or
-not, with a failed download failing the step loudly.
+The MinIO and OpenBao setup actions download a pinned release binary, and a 504
+from the release CDN takes down every job of a run. These tests pin the contract
+the cache relies on: the binary is restored from `actions/cache` keyed by
+version, platform and checksum; the download runs only on a cache miss; the
+cache path is the binary file itself, so no runtime state the server writes
+beside it can ever enter the cache; and the checksum is enforced on every run,
+cache hit or not, with a failed download failing the step loudly.
 """
 
 from __future__ import annotations
@@ -27,11 +27,13 @@ ACTIONS = REPO / ".github/actions"
 EXPECTED: dict[str, dict[str, str]] = {
     "setup-minio": {
         "directory": "aequoros-ci-minio",
+        "binary": "minio",
         "version": "RELEASE.2025-09-07T16-13-09Z",
         "verify_sha256": "7c5bd8512c6e966455b1d198209358b2d191c77a83ab377c4073281065fb855f",
     },
     "setup-openbao": {
         "directory": "aequoros-ci-openbao",
+        "binary": "bao",
         "version": "v2.6.1",
         "verify_sha256": "736b8ecf354fda6b2af62e4ae064f12fe6c52d7db8425b9c6de22f286a5485ec",
     },
@@ -69,7 +71,12 @@ def test_the_binary_is_restored_from_actions_cache(action: str) -> None:
         "the setup actions must pin actions/cache the way the workflows do"
     )
     inputs = cast(dict[str, str], cache["with"])
-    assert inputs["path"] == "${{ runner.temp }}/" + expected["directory"]
+    assert inputs["path"] == (
+        "${{ runner.temp }}/" + expected["directory"] + "/" + expected["binary"]
+    ), (
+        "only the binary file is cached: the runtime directory beside it holds "
+        "server state whose lifetime is one job"
+    )
     key = inputs["key"]
     assert expected["version"] in key, "the cache key must pin the tool version"
     assert "${{ runner.os }}" in key and "${{ runner.arch }}" in key, (
