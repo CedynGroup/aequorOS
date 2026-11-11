@@ -876,3 +876,299 @@ def test_rerun_summary_command_lists_fixture_run_rerun_passes(
     assert "failed on attempts 1" in output
     assert "playwright:tests/submissions/regulatory-rule-status.e2e.spec.ts" in output
     assert "status disclosure remains reachable when its badge scrolls out of view" in output
+
+
+# --- weekly mode --------------------------------------------------------------
+
+
+def success_run(run_id: int, created_at: str = "2026-11-08T10:00:00Z") -> Any:
+    return flake_report.RunRecord(
+        run_id=run_id,
+        workflow="Risk Service CI",
+        event="push",
+        head_branch="main",
+        head_sha="a" * 40,
+        run_attempt=1,
+        conclusion="success",
+        created_at=created_at,
+    )
+
+
+def test_thresholds_count_only_rerun_only_passes() -> None:
+    """The policy counts rerun-only passes; same-SHA passes elsewhere and plain
+    failures on one attempt do not move a signature across a threshold."""
+    now = datetime(2026, 11, 9, tzinfo=UTC)
+    recent = "2026-11-08T10:00:00Z"
+    events = [
+        event("flake:a", rerun=True, created_at=recent, run_id=1),
+        event("flake:a", rerun=True, created_at=recent, run_id=2),
+        event("flake:a", rerun=False, same_sha_pass=True, created_at=recent, run_id=3),
+        event("flake:a", rerun=False, created_at=recent, run_id=4),
+    ]
+    breaches = flake_report.evaluate_thresholds(events, now)
+    assert len(breaches) == 1
+    assert breaches[0].rerun_passes_in_window == 2
+    assert breaches[0].action == "needs flaky-test issue with owner"
+
+
+def test_thresholds_window_boundary_is_inclusive() -> None:
+    """An event exactly 14 days back is inside the window; one second earlier is
+    outside, so a long-lived signature does not stay escalated forever."""
+    now = datetime(2026, 11, 9, 12, 0, tzinfo=UTC)
+    at_start = "2026-10-26T12:00:00Z"
+    before_start = "2026-10-26T11:59:59Z"
+    events = [
+        event("flake:a", rerun=True, created_at=at_start, run_id=1),
+        event("flake:a", rerun=True, created_at=at_start, run_id=2),
+        event("flake:a", rerun=True, created_at=before_start, run_id=3),
+    ]
+    breaches = flake_report.evaluate_thresholds(events, now)
+    assert [breach.rerun_passes_in_window for breach in breaches] == [2]
+
+
+def test_thresholds_above_three_stay_at_fix_or_quarantine() -> None:
+    now = datetime(2026, 11, 9, tzinfo=UTC)
+    recent = "2026-11-08T10:00:00Z"
+    five = [event("flake:x", rerun=True, created_at=recent, run_id=i) for i in range(5)]
+    breaches = flake_report.evaluate_thresholds(five, now)
+    assert len(breaches) == 1
+    assert breaches[0].rerun_passes_in_window == 5
+    assert breaches[0].action == "fix or quarantine within 7 days"
+
+
+def test_threshold_breach_names_its_signature() -> None:
+    now = datetime(2026, 11, 9, tzinfo=UTC)
+    two = [
+        event(
+            "pytest:tests/db/test_document_deletion_timeout_integration.py",
+            rerun=True,
+            created_at="2026-11-08T10:00:00Z",
+            run_id=i,
+        )
+        for i in range(2)
+    ]
+    breaches = flake_report.evaluate_thresholds(two, now)
+    assert [breach.signature for breach in breaches] == [
+        "pytest:tests/db/test_document_deletion_timeout_integration.py"
+    ]
+
+
+def test_render_weekly_report_lists_breaches_and_the_ranking() -> None:
+    runs = [success_run(1)]
+    events = [
+        event(
+            "pytest:tests/db/test_document_deletion_timeout_integration.py", rerun=True, run_id=1
+        ),
+        event(
+            "pytest:tests/db/test_document_deletion_timeout_integration.py", rerun=True, run_id=2
+        ),
+    ]
+    report = flake_report.build_report(runs=runs, events=events, meta=REPORT_META)
+    breaches = flake_report.evaluate_thresholds(events, datetime(2026, 11, 9, tzinfo=UTC))
+    markdown = flake_report.render_weekly_report(report, breaches, window_days=14)
+    assert "# Weekly CI flake report" in markdown
+    assert "## Threshold crossings (approved flake policy)" in markdown
+    assert "needs flaky-test issue with owner" in markdown
+    assert "pytest:tests/db/test_document_deletion_timeout_integration.py" in markdown
+    assert "This report never creates issues or comments" in markdown
+    assert "# CI flake ranking" in markdown
+
+
+def test_render_weekly_report_without_breaches_says_so() -> None:
+    report = flake_report.build_report(runs=[success_run(1)], events=[], meta=REPORT_META)
+    markdown = flake_report.render_weekly_report(report, [], window_days=14)
+    assert "## Threshold crossings (approved flake policy)" in markdown
+    assert "No signature reached the policy thresholds" in markdown
+
+
+def test_weekly_command_renders_thresholds_and_the_ranking(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], tmp_path: Path
+) -> None:
+    runs = [success_run(1)]
+    events = [
+        event(
+            "pytest:tests/db/test_document_deletion_timeout_integration.py", rerun=True, run_id=1
+        ),
+        event(
+            "pytest:tests/db/test_document_deletion_timeout_integration.py", rerun=True, run_id=2
+        ),
+    ]
+    captured: dict[str, Any] = {}
+
+    def fake_collect(options: Any, log: Any = print) -> tuple[list[Any], list[Any]]:
+        captured["options"] = options
+        log("  job listings: 25/25 runs")
+        return runs, events
+
+    monkeypatch.setattr(flake_report, "collect_report_data", fake_collect)
+    parser = flake_report.build_parser()
+    args = parser.parse_args(
+        ["weekly", "--repo", "CedynGroup/aequorOS", "--cache-dir", str(tmp_path)]
+    )
+    exit_code = flake_report.cmd_weekly(args, now=datetime(2026, 11, 9, 12, 0, tzinfo=UTC))
+    assert exit_code == 0
+    output = capsys.readouterr()
+    assert "# Weekly CI flake report" in output.out
+    assert "needs flaky-test issue with owner" in output.out
+    assert "pytest:tests/db/test_document_deletion_timeout_integration.py" in output.out
+    # Collection progress is a diagnostic: stdout is the Markdown step summary.
+    assert "job listings: 25/25 runs" in output.err
+    assert "job listings" not in output.out
+    # The data window matches the policy window (14 days back from `now`).
+    assert captured["options"].since == "2026-10-26"
+
+
+def test_weekly_command_window_days_override(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    captured: dict[str, Any] = {}
+
+    def fake_collect(options: Any, log: Any = print) -> tuple[list[Any], list[Any]]:
+        captured["options"] = options
+        return [], []
+
+    monkeypatch.setattr(flake_report, "collect_report_data", fake_collect)
+    parser = flake_report.build_parser()
+    args = parser.parse_args(["weekly", "--window-days", "7", "--cache-dir", str(tmp_path)])
+    assert flake_report.cmd_weekly(args, now=datetime(2026, 11, 9, 12, 0, tzinfo=UTC)) == 0
+    assert captured["options"].since == "2026-11-02"
+
+
+def test_weekly_command_survives_api_errors_with_a_visible_note(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], tmp_path: Path
+) -> None:
+    def fail(options: Any, log: Any = print) -> tuple[list[Any], list[Any]]:
+        raise RuntimeError("gh api failed (1): Server Error (HTTP 502)")
+
+    monkeypatch.setattr(flake_report, "collect_report_data", fail)
+    parser = flake_report.build_parser()
+    args = parser.parse_args(["weekly", "--cache-dir", str(tmp_path)])
+    assert flake_report.cmd_weekly(args) == 0
+    output = capsys.readouterr()
+    assert "Weekly flake report unavailable" in output.out
+    assert "Server Error (HTTP 502)" in output.out
+
+
+def test_weekly_command_writes_markdown_and_json_files(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], tmp_path: Path
+) -> None:
+    monkeypatch.setattr(
+        flake_report,
+        "collect_report_data",
+        lambda options, log=print: (
+            [success_run(1)],
+            [event("flake:a", rerun=True, run_id=1), event("flake:a", rerun=True, run_id=2)],
+        ),
+    )
+    out_md = tmp_path / "weekly.md"
+    out_json = tmp_path / "weekly.json"
+    parser = flake_report.build_parser()
+    args = parser.parse_args(
+        [
+            "weekly",
+            "--cache-dir",
+            str(tmp_path / "cache"),
+            "--out-md",
+            str(out_md),
+            "--out-json",
+            str(out_json),
+        ]
+    )
+    assert flake_report.cmd_weekly(args, now=datetime(2026, 11, 9, 12, 0, tzinfo=UTC)) == 0
+    assert "# Weekly CI flake report" in out_md.read_text()
+    payload = json.loads(out_json.read_text())
+    assert payload["thresholds"][0]["action"] == "needs flaky-test issue with owner"
+    assert payload["report"]["meta"]["repo"]
+    # The step summary keeps working even with artifact paths given: stdout
+    # always carries the Markdown, write status goes to stderr.
+    output = capsys.readouterr()
+    assert "# Weekly CI flake report" in output.out
+    assert f"Wrote {out_md}" in output.err
+
+
+def test_weekly_command_warns_when_a_workflow_was_truncated_by_the_run_cap(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], tmp_path: Path
+) -> None:
+    """A workflow stopped by the run cap before the window start must not let
+    the empty threshold list read as a complete measurement. Runs are keyed by
+    the API workflow name (e.g. "Web CI"), and only a workflow that actually
+    reached the cap is flagged — a low-traffic workflow with no runs early in
+    the window is not truncated."""
+    truncated_run = flake_report.RunRecord(
+        run_id=1,
+        workflow="Risk Service CI",
+        event="push",
+        head_branch="main",
+        head_sha="a" * 40,
+        run_attempt=1,
+        conclusion="success",
+        created_at="2026-11-05T00:00:00Z",
+    )
+
+    def scenario_a(options: Any, log: Any = print) -> tuple[list[Any], list[Any]]:
+        assert options.min_runs_per_workflow == 2
+        return [truncated_run, truncated_run], []
+
+    monkeypatch.setattr(flake_report, "collect_report_data", scenario_a)
+    parser = flake_report.build_parser()
+    args = parser.parse_args(
+        [
+            "weekly",
+            "--min-runs-per-workflow",
+            "2",
+            "--cache-dir",
+            str(tmp_path / "a"),
+        ]
+    )
+    assert flake_report.cmd_weekly(args, now=datetime(2026, 11, 9, 12, 0, tzinfo=UTC)) == 0
+    output = capsys.readouterr().out
+    assert "Threshold caveat" in output
+    assert "Risk Service CI" in output
+    assert "undercounted" in output
+
+    def scenario_b(options: Any, log: Any = print) -> tuple[list[Any], list[Any]]:
+        # Same late-oldest run, but the cap was not reached: no caveat.
+        return [truncated_run], []
+
+    monkeypatch.setattr(flake_report, "collect_report_data", scenario_b)
+    args = parser.parse_args(
+        ["weekly", "--min-runs-per-workflow", "2", "--cache-dir", str(tmp_path / "b")]
+    )
+    assert flake_report.cmd_weekly(args, now=datetime(2026, 11, 9, 12, 0, tzinfo=UTC)) == 0
+    assert "Threshold caveat" not in capsys.readouterr().out
+
+
+def test_weekly_command_survives_an_unwritable_cache_dir(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], tmp_path: Path
+) -> None:
+    """The report is a visibility job: a cache error becomes a visible note,
+    never a failed run."""
+
+    def refuse(raw: str) -> Path:
+        raise OSError("disk full while creating cache dir")
+
+    monkeypatch.setattr(flake_report, "_private_cache_dir", refuse)
+    parser = flake_report.build_parser()
+    args = parser.parse_args(["weekly", "--cache-dir", str(tmp_path / "cache")])
+    assert flake_report.cmd_weekly(args) == 0
+    output = capsys.readouterr()
+    assert "Weekly flake report unavailable" in output.out
+    assert "disk full while creating cache dir" in output.out
+
+
+def test_weekly_command_refuses_a_shared_cache_dir(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], tmp_path: Path
+) -> None:
+    """The cache dir must stay private to the current user, as in report mode."""
+    shared = tmp_path / "shared-cache"
+    shared.mkdir()
+    shared.chmod(0o755)
+
+    def fail(*args: object) -> tuple[list[Any], list[Any]]:
+        raise AssertionError("no data may be collected into a shared cache dir")
+
+    monkeypatch.setattr(flake_report, "collect_report_data", fail)
+    parser = flake_report.build_parser()
+    args = parser.parse_args(["weekly", "--cache-dir", str(shared)])
+    assert flake_report.cmd_weekly(args) == 2
+    assert "not private to the current user" in capsys.readouterr().err

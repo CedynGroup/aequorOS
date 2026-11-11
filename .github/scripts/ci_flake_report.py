@@ -20,8 +20,9 @@ Modes
 ``weekly``
     Ranking over a rolling window plus threshold evaluation (>=2 rerun-only
     passes in 14 days => "needs flaky-test issue with owner"; >=3 => "fix or
-    quarantine within 7 days"). Wired by the M3 weekly-flake-workflow feature;
-    the pure ``evaluate_thresholds`` block already exists and is unit-tested.
+    quarantine within 7 days"). Wired by the scheduled
+    ``.github/workflows/flake-report.yml`` workflow, which appends the report
+    to ``$GITHUB_STEP_SUMMARY``; it creates no issues or comments.
 
 Pure functions (parsing, signature extraction, attempt comparison,
 classification, ranking, thresholds) are separated from all I/O so they can be
@@ -1036,6 +1037,195 @@ def render_markdown(report: dict[str, Any]) -> str:
 
 
 # ---------------------------------------------------------------------------
+# weekly mode
+# ---------------------------------------------------------------------------
+
+
+def render_threshold_section(breaches: list[ThresholdBreach], window_days: int) -> list[str]:
+    """The approved policy's threshold crossings for the rolling window.
+
+    Reporting only: this never creates issues or comments; a person files the
+    flaky-test issue and picks its owner.
+    """
+    lines = [
+        "## Threshold crossings (approved flake policy)",
+        "",
+        f">=2 rerun-only passes in {window_days} days need a flaky-test issue "
+        "with an owner; >=3 need a fix or quarantine within 7 days. A "
+        "rerun-only pass is a job that failed on an attempt and passed only "
+        "because the run was retried.",
+        "",
+        "This report never creates issues or comments; a person files the "
+        "flaky-test issue and picks its owner. The window bounds runs by "
+        "their creation date, so a rerun of a run created before the window "
+        "is not counted.",
+        "",
+    ]
+    if not breaches:
+        lines.append("No signature reached the policy thresholds in this window.")
+        return lines
+    lines += [
+        "| Signature | Rerun-only passes in window | Required action |",
+        "| --- | --- | --- |",
+    ]
+    for breach in breaches:
+        lines.append(
+            f"| `{breach.signature}` | {breach.rerun_passes_in_window} | {breach.action} |"
+        )
+    return lines
+
+
+def render_weekly_report(
+    report: dict[str, Any],
+    breaches: list[ThresholdBreach],
+    window_days: int,
+    truncated: list[tuple[str, str]] | None = None,
+) -> str:
+    """Weekly summary: the policy thresholds first, then the full ranking."""
+    meta = report["meta"]
+    window = meta["window"]
+    header = [
+        "# Weekly CI flake report",
+        "",
+        f"- Repository: `{meta['repo']}`",
+        f"- Generated: {meta['generated_at']}",
+        f"- Command: `{meta['commands']}`",
+        f"- Data window: {window['since']} .. {window['until']}",
+        "",
+        *render_threshold_section(breaches, window_days),
+        "",
+    ]
+    for workflow, oldest in truncated or []:
+        header.append(
+            f"- Threshold caveat: `{workflow}` hit the run cap before covering "
+            f"the full window (its oldest collected run is {oldest}, later than "
+            f"{window['since']}), so its rerun-only passes may be undercounted."
+        )
+    if truncated:
+        header.append("")
+    return "\n".join(header) + "\n---\n" + render_markdown(report)
+
+
+def render_weekly_unavailable(window_days: int, error: str) -> str:
+    """The never-failing fallback: say so in the summary and move on."""
+    return (
+        "\n".join(
+            [
+                "# Weekly CI flake report",
+                "",
+                "Weekly flake report unavailable: the ranking for the last "
+                f"{window_days} days could not be collected this week; "
+                "nothing is silently retried and no thresholds are claimed.",
+                "",
+                f"Reason: `{error}`",
+                "",
+                "Re-run the `Weekly flake report` workflow (workflow_dispatch) "
+                "once the Actions API is readable again.",
+            ]
+        )
+        + "\n"
+    )
+
+
+def cmd_weekly(args: argparse.Namespace, now: datetime | None = None) -> int:
+    """Ranking over the rolling window plus the policy threshold crossings.
+
+    Written for the scheduled workflow: it never raises, and every data
+    failure becomes a visible note with exit code 0 so a measurement outage
+    can never turn the report red. Output goes to stdout (the workflow step
+    appends it to ``$GITHUB_STEP_SUMMARY``); ``--out-md``/``--out-json``
+    record the same content for the mission's evidence trail.
+    """
+    current_time = now or datetime.now(UTC)
+    window_days = args.window_days
+    try:
+        cache_dir = _private_cache_dir(args.cache_dir)
+    except OSError as error:
+        print(render_weekly_unavailable(window_days, str(error)))
+        print(f"Weekly flake report unavailable: {error}", file=sys.stderr)
+        return 0
+    if cache_dir is None:
+        return 2
+    since = (current_time - timedelta(days=window_days)).strftime("%Y-%m-%d")
+    workflow_files = args.workflows.split(",") if args.workflows else list(WORKFLOW_FILES)
+    commands = (
+        f"python3 .github/scripts/ci_flake_report.py weekly --repo {args.repo} "
+        f"--window-days {window_days} --min-runs-per-workflow {args.min_runs_per_workflow} "
+        f"--since {since}"
+    )
+    options = ReportOptions(
+        repo=args.repo,
+        workflow_files=workflow_files,
+        min_runs_per_workflow=args.min_runs_per_workflow,
+        since=since,
+        cache_dir=cache_dir,
+        keep_logs=args.keep_logs,
+    )
+    try:
+        # Diagnostics go to stderr: stdout is the Markdown step summary.
+        runs, events = collect_report_data(options, lambda message: print(message, file=sys.stderr))
+    except (RuntimeError, OSError, ValueError, KeyError, TypeError, AttributeError) as error:
+        print(render_weekly_unavailable(window_days, str(error)))
+        print(f"Weekly flake report unavailable: {error}", file=sys.stderr)
+        return 0
+
+    report = build_report(
+        runs=runs,
+        events=events,
+        meta={
+            "repo": args.repo,
+            "workflow_files": workflow_files,
+            "since": since,
+            "commands": commands,
+            "generated_at": current_time.strftime("%Y-%m-%dT%H:%M:%SZ"),
+        },
+    )
+    # Per-workflow truncation check: the ranking's window line uses the global
+    # oldest run, which can hide one workflow having been stopped by the run
+    # cap. RunRecord.workflow carries the API workflow name (e.g. "Web CI"),
+    # which is what the caveat shows. A workflow is flagged only when the cap
+    # was actually reached: a low-traffic workflow with no runs early in the
+    # window is not truncated.
+    runs_per_workflow = Counter(run.workflow for run in runs)
+    truncated = sorted(
+        (workflow, min(run.created_at[:10] for run in runs if run.workflow == workflow))
+        for workflow, count in runs_per_workflow.items()
+        if count >= args.min_runs_per_workflow
+        and min(run.created_at[:10] for run in runs if run.workflow == workflow) > since
+    )
+    breaches = evaluate_thresholds(events, current_time, window_days)
+    markdown = render_weekly_report(report, breaches, window_days, truncated)
+    # stdout always carries the Markdown: the workflow step redirects it into
+    # the step summary whether or not artifact paths were also given.
+    print(markdown)
+    try:
+        if args.out_md:
+            Path(args.out_md).parent.mkdir(parents=True, exist_ok=True)
+            Path(args.out_md).write_text(markdown, encoding="utf-8")
+            print(f"Wrote {args.out_md}", file=sys.stderr)
+        if args.out_json:
+            payload = {
+                "thresholds": [
+                    {
+                        "signature": breach.signature,
+                        "rerun_passes_in_window": breach.rerun_passes_in_window,
+                        "action": breach.action,
+                    }
+                    for breach in breaches
+                ],
+                "report": report,
+            }
+            Path(args.out_json).parent.mkdir(parents=True, exist_ok=True)
+            Path(args.out_json).write_text(json.dumps(payload, indent=1), encoding="utf-8")
+            print(f"Wrote {args.out_json}", file=sys.stderr)
+    except OSError as error:
+        # The summary was already published on stdout; a failed artifact write
+        # must not turn the scheduled report red.
+        print(f"Weekly flake report artifact write failed: {error}", file=sys.stderr)
+    return 0
+
+
+# ---------------------------------------------------------------------------
 # I/O helpers (gh CLI)
 # ---------------------------------------------------------------------------
 
@@ -1326,8 +1516,9 @@ def collect_report_data(
     return all_runs, events
 
 
-def cmd_report(args: argparse.Namespace) -> int:
-    cache_dir = Path(args.cache_dir)
+def _private_cache_dir(raw: str) -> Path | None:
+    """Create/validate the log cache dir; private, or refused (None)."""
+    cache_dir = Path(raw)
     # Private: the cache is read back trusting earlier runs of this script.
     cache_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
     cache_stat = cache_dir.stat()
@@ -1336,6 +1527,13 @@ def cmd_report(args: argparse.Namespace) -> int:
             f"Refusing cache dir {cache_dir}: not private to the current user",
             file=sys.stderr,
         )
+        return None
+    return cache_dir
+
+
+def cmd_report(args: argparse.Namespace) -> int:
+    cache_dir = _private_cache_dir(args.cache_dir)
+    if cache_dir is None:
         return 2
     workflow_files = args.workflows.split(",") if args.workflows else list(WORKFLOW_FILES)
     since = args.since or (datetime.now(UTC) - timedelta(days=90)).strftime("%Y-%m-%d")
@@ -1478,6 +1676,18 @@ def build_parser() -> argparse.ArgumentParser:
     )
     weekly_parser.add_argument("--repo", default=REPO)
     weekly_parser.add_argument("--window-days", type=int, default=14)
+    weekly_parser.add_argument("--min-runs-per-workflow", type=int, default=1000)
+    weekly_parser.add_argument(
+        "--workflows",
+        default=None,
+        help="comma-separated workflow file names; default: the four test workflows",
+    )
+    weekly_parser.add_argument("--out-md", default=None)
+    weekly_parser.add_argument("--out-json", default=None)
+    weekly_parser.add_argument("--cache-dir", default=LOG_CACHE_DEFAULT)
+    weekly_parser.add_argument(
+        "--keep-logs", action="store_true", help="keep large logs after extraction"
+    )
     return parser
 
 
@@ -1487,13 +1697,7 @@ def main(argv: list[str] | None = None) -> int:
         return cmd_report(args)
     if args.mode == "rerun-summary":
         return cmd_rerun_summary(args)
-    # weekly
-    print(
-        "weekly is wired by the M3 weekly-flake-workflow feature; the pure "
-        "threshold logic is evaluate_thresholds() in this module.",
-        file=sys.stderr,
-    )
-    return 2
+    return cmd_weekly(args)
 
 
 if __name__ == "__main__":

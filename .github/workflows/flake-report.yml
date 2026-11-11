@@ -1,0 +1,50 @@
+name: Weekly flake report
+
+# The weekly view of the CI flake measurement (.github/scripts/ci_flake_report.py,
+# `weekly` mode): the ranking over a rolling window plus the approved policy's
+# threshold crossings, written to this run's step summary.
+#
+# Visibility only, by design: the workflow creates no issues and no comments —
+# a person files the flaky-test issue and picks its owner (>=2 rerun-only
+# passes in 14 days; the third recurrence means fix or quarantine within 7
+# days). It reads nothing but Actions history, so its permissions are
+# read-only, and the script exits 0 with a visible note when the data cannot
+# be collected; job-level continue-on-error covers anything unexpected on top
+# of that. A red weekly report is never a gate, and the report never gates a
+# merge.
+
+on:
+  schedule:
+    # Mondays 06:00 UTC, so the window covers the full previous week including
+    # the weekend's runs.
+    - cron: "0 6 * * 1"
+  workflow_dispatch:
+    inputs:
+      window_days:
+        description: "Rolling window in days (policy thresholds count rerun-only passes inside it)"
+        required: false
+        default: "14"
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  weekly-report:
+    name: Weekly flake ranking
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+      - name: Write the ranking and threshold crossings to the step summary
+        env:
+          GH_TOKEN: ${{ github.token }}
+          # Via env, not template expansion: a workflow_dispatch caller could
+          # otherwise break out of the shell quoting.
+          WINDOW_DAYS: ${{ github.event.inputs.window_days || '14' }}
+        run: |
+          python3 .github/scripts/ci_flake_report.py weekly \
+            --repo "$GITHUB_REPOSITORY" \
+            --window-days "$WINDOW_DAYS" \
+            >> "$GITHUB_STEP_SUMMARY"
