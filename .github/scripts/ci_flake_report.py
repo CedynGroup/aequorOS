@@ -301,42 +301,67 @@ def compare_attempts(
 ) -> list[RerunPass]:
     """Jobs that failed and then passed on a later attempt of the same run.
 
-    One RerunPass per run job: the first failed attempt before the first
-    passing attempt AFTER that failure. A job that succeeded before it failed
-    and then recovered again (rerun the whole workflow and it passes on the
-    third attempt) still needed its rerun, so the recovery that matters is the
-    one that follows the failure. Later failures before that pass are
-    additional lost minutes but not additional rerun-only passes (a run that
-    failed, failed again and then passed needed one rerun, not two).
+    One RerunPass per failed attempt: its recovery is the first passing
+    attempt after that failure. A job that succeeded before it failed and
+    then recovered again (rerun the whole workflow and it passes on the
+    third attempt) still needed its rerun, so the recovery that matters is
+    the one that follows the failure. Later failures before that pass are
+    additional lost minutes but not additional re-executed ones: a pass
+    charges its minutes once, to the first failed attempt recovering at it
+    (a run that failed, failed again and then passed needed one rerun, not
+    two).
     """
     passes: list[RerunPass] = []
     for name in {job.name for jobs in attempts.values() for job in jobs}:
+        timeline = sorted(
+            (attempt, job)
+            for attempt, jobs in attempts.items()
+            for job in jobs
+            if job.name == name
+        )
         failed = [
             (attempt, job)
-            for attempt, jobs in sorted(attempts.items())
-            for job in jobs
-            if job.name == name and is_failed_job_conclusion(job.conclusion)
+            for attempt, job in timeline
+            if is_failed_job_conclusion(job.conclusion)
         ]
         passed = [
-            (attempt, job)
-            for attempt, jobs in sorted(attempts.items())
-            for job in jobs
-            if job.name == name and job.conclusion == "success"
+            (attempt, job) for attempt, job in timeline if job.conclusion == "success"
         ]
         if not failed:
             continue
-        first_fail = failed[0]
-        recovery = next(((attempt, job) for attempt, job in passed if attempt > first_fail[0]), None)
-        if recovery is None:
-            continue
-        passes.append(
-            RerunPass(
-                failed_job=first_fail[1],
-                failed_attempt=first_fail[0],
-                passed_attempt=recovery[0],
-                passed_minutes=recovery[1].minutes,
+        # First failed attempt recovering at each passing attempt: that one
+        # carries the re-executed minutes for the pass.
+        first_failure_before: dict[int, int] = {}
+        for fail_attempt, _ in failed:
+            recovery = next(
+                (pass_attempt for pass_attempt, _ in passed if pass_attempt > fail_attempt),
+                None,
             )
-        )
+            if recovery is not None:
+                first_failure_before.setdefault(recovery, fail_attempt)
+        for fail_attempt, fail_job in failed:
+            recovery = next(
+                (
+                    (pass_attempt, pass_job)
+                    for pass_attempt, pass_job in passed
+                    if pass_attempt > fail_attempt
+                ),
+                None,
+            )
+            if recovery is None:
+                continue
+            passes.append(
+                RerunPass(
+                    failed_job=fail_job,
+                    failed_attempt=fail_attempt,
+                    passed_attempt=recovery[0],
+                    passed_minutes=(
+                        recovery[1].minutes
+                        if first_failure_before[recovery[0]] == fail_attempt
+                        else 0.0
+                    ),
+                )
+            )
     return passes
 
 
@@ -1095,25 +1120,12 @@ def _failed_leaf_jobs(
 def _build_events(
     failed_jobs: list[tuple[RunRecord, int, JobRecord]],
     rerun_passes: dict[tuple[int, int, str], RerunPass],
-    recoveries: dict[tuple[int, str], RerunPass],
     mixed_flags: set[tuple[int, str]],
     findings_by_job: dict[int, list[Finding]],
 ) -> list[FlakeEvent]:
     events: list[FlakeEvent] = []
     for run, attempt, job in failed_jobs:
         rerun = rerun_passes.get((run.run_id, attempt, job.name))
-        if rerun is None:
-            # A failure between the first one and the eventual pass carries
-            # the same recovery evidence; only the first failed attempt
-            # carries the re-executed minutes, so the rerun stays one rerun.
-            recovery = recoveries.get((run.run_id, job.name))
-            if recovery is not None and attempt < recovery.passed_attempt:
-                rerun = RerunPass(
-                    failed_job=job,
-                    failed_attempt=attempt,
-                    passed_attempt=recovery.passed_attempt,
-                    passed_minutes=0.0,
-                )
         findings = findings_by_job.get(job.job_id, [])
         if not findings:
             findings = [Finding("unclassified", f"unclassified:{job.name}")]
@@ -1153,11 +1165,9 @@ def collect_report_data(
     )
 
     rerun_passes: dict[tuple[int, int, str], RerunPass] = {}
-    recoveries: dict[tuple[int, str], RerunPass] = {}
     for run_id, attempts in jobs_by_run_attempt.items():
         for rerun in compare_attempts(attempts):
             rerun_passes[(run_id, rerun.failed_attempt, rerun.failed_job.name)] = rerun
-            recoveries[(run_id, rerun.failed_job.name)] = rerun
     mixed = same_sha_mixed_outcomes(all_runs, jobs_by_run)
     mixed_flags = {(outcome.failed_run_id, outcome.job_name) for outcome in mixed}
 
@@ -1165,7 +1175,7 @@ def collect_report_data(
     log(f"Fetching logs for {len(failed_jobs)} failed job(s)")
     findings_by_job = _fetch_findings(options.repo, failed_jobs, options, log)
 
-    events = _build_events(failed_jobs, rerun_passes, recoveries, mixed_flags, findings_by_job)
+    events = _build_events(failed_jobs, rerun_passes, mixed_flags, findings_by_job)
     log(f"Built {len(events)} event(s) from {len(failed_jobs)} failed job(s)")
     return all_runs, events
 
