@@ -339,44 +339,32 @@ def parse_runs(payload: dict[str, Any], workflow: str) -> list[RunRecord]:
     return runs
 
 
-def _instance_rank(attempt_jobs: list[JobRecord], job: JobRecord) -> int:
-    """Position of a job among its attempt's same-named jobs (job id order).
-
-    Same rank definition the rerun-cycle dedup carries on the events (derived
-    there from the complete attempt listing); compare_attempts uses it so the
-    recovery pairing and the threshold counting identify instances the same
-    way.
-    """
-    return sorted(candidate.job_id for candidate in attempt_jobs).index(job.job_id)
-
-
 def compare_attempts(
     attempts: dict[int, list[JobRecord]],
 ) -> list[RerunPass]:
     """Jobs that failed and then passed on a later attempt of the same run.
 
-    One RerunPass per failed attempt: its recovery is the first passing
-    attempt after that failure. A job that succeeded before it failed and
-    then recovered again (rerun the whole workflow and it passes on the
-    third attempt) still needed its rerun, so the recovery that matters is
-    the one that follows the failure. Later failures before that pass are
-    additional lost minutes but not additional re-executed ones: a pass
-    charges its minutes once, to the first failed attempt recovering at it
-    (a run that failed, failed again and then passed needed one rerun, not
-    two).
+    One RerunPass per failed execution: its recovery is the first later
+    attempt where that instance succeeded. A job that succeeded before it
+    failed and then recovered again (rerun the whole workflow and it passes
+    on the third attempt) still needed its rerun, so the recovery that
+    matters is the one that follows the failure. Later failures before that
+    pass are additional lost minutes but not additional re-executed ones:
+    the pass charges its minutes once per instance, to the instance's first
+    failed execution (a run that failed, failed again and then passed needed
+    one rerun, not two).
 
-    Two same-named jobs can share one attempt; the name is not a reliable
-    cross-attempt identity there. Two rules keep the accounting honest when
-    that happens: a recovery must be an attempt where *every* job of the name
-    succeeded (with one success and one failure in the same attempt, no
-    identity ties an earlier failure to that one success, so recovering there
-    would attribute one job's success to another), and the failures recovering
-    at one attempt are matched to that attempt's successes by their instance
-    rank (position among the attempt's same-named jobs, job id order), so the
-    pairing is deterministic and consistent with the threshold dedup. The
-    pass's minutes are charged once per instance, to the first failed attempt
-    in which that instance failed. Tuple comparison never reaches the
-    JobRecord objects (they are not orderable).
+    Instances are walked attempt by attempt. A full listing (as many
+    same-named jobs as the largest listing seen so far) identifies its jobs
+    by their rank among the attempt's same-named jobs (job id order), so a
+    success closes exactly its own instance's cycle and never a sibling's.
+    A subset listing (fewer same-named jobs than the largest seen so far -
+    a "re-run failed jobs" rerun lists only the re-run jobs, which are by
+    definition the previously failed instances) pairs its entries with the
+    still-open cycles in rank order: its successes close those cycles and
+    its failures add lost executions. Entries an ambiguous subset cannot
+    tie to an open cycle stay unrecovered. Tuple comparison never reaches
+    the JobRecord objects (they are not orderable).
     """
     passes: list[RerunPass] = []
     for name in {job.name for jobs in attempts.values() for job in jobs}:
@@ -396,116 +384,52 @@ def compare_attempts(
         jobs_by_attempt: dict[int, list[JobRecord]] = {}
         for attempt, job in timeline:
             jobs_by_attempt.setdefault(attempt, []).append(job)
-        failed = [
-            (attempt, job)
-            for attempt, jobs in sorted(jobs_by_attempt.items())
+        if not any(
+            is_failed_job_conclusion(job.conclusion)
+            for jobs in jobs_by_attempt.values()
             for job in jobs
-            if is_failed_job_conclusion(job.conclusion)
-        ]
-        if not failed:
+        ):
             continue
-        # A recovery is a fully-passing attempt for this name; see the
-        # docstring on why a partially passing attempt does not qualify.
-        recoveries = [
-            attempt
-            for attempt, jobs in sorted(jobs_by_attempt.items())
-            if all(job.conclusion == "success" for job in jobs)
-        ]
-        # First failed attempt recovering at each passing attempt: that one
-        # carries the re-executed minutes for the pass.
-        failures_by_recovery: dict[int, list[tuple[int, JobRecord]]] = {}
-        for fail_attempt, fail_job in failed:
-            recovery = next((a for a in recoveries if a > fail_attempt), None)
-            if recovery is None:
-                continue
-            failures_by_recovery.setdefault(recovery, []).append((fail_attempt, fail_job))
-        for recovery, group in failures_by_recovery.items():
-            # By construction every job of the name succeeded on a recovery
-            # attempt; order the duplicates deterministically by job id. The
-            # instance rank is the position among the same-named jobs of an
-            # attempt (sorted by job id), the same rank the rerun-cycle dedup
-            # carries: matching by it keeps the pairing consistent with the
-            # threshold counting even when a same-named sibling succeeded in
-            # the failing attempt.
-            successes = sorted(jobs_by_attempt[recovery], key=lambda job: job.job_id)
-            max_same_named = max(len(jobs) for jobs in jobs_by_attempt.values())
-            if len(successes) < max_same_named:
-                # A subset rerun ("re-run failed jobs") lists only the jobs
-                # that were re-run - by definition the ones that failed
-                # earlier - so the recovery attempt holds fewer same-named
-                # jobs than the failing attempts did, and a full listing's
-                # ranks do not carry across the subset boundary. Instances
-                # are then identified by their rank among the attempt's
-                # FAILED same-named jobs (the order the subset listing
-                # carries), and each success closes one instance's cycle:
-                # every failed execution of a recovered instance keeps its
-                # recovery evidence (minutes charged once), while an
-                # instance with no success of its own stays unrecovered.
-                failed_rank_by_id: dict[tuple[int, int], int] = {}
-                for attempt in sorted(jobs_by_attempt):
-                    attempt_failed = [
-                        job
-                        for job in jobs_by_attempt[attempt]
-                        if is_failed_job_conclusion(job.conclusion)
-                    ]
-                    for rank, failed_job in enumerate(
-                        sorted(attempt_failed, key=lambda job: job.job_id)
-                    ):
-                        failed_rank_by_id[(attempt, failed_job.job_id)] = rank
-                charged_ranks: set[int] = set()
-                for fail_attempt, fail_job in sorted(
-                    group, key=lambda pair: (pair[0], pair[1].job_id)
-                ):
-                    rank = failed_rank_by_id[(fail_attempt, fail_job.job_id)]
-                    if rank >= len(successes):
-                        # More failed instances than the rerun re-executed:
-                        # no success of its own to recover at.
-                        continue
-                    minutes = 0.0 if rank in charged_ranks else successes[rank].minutes
-                    charged_ranks.add(rank)
-                    passes.append(
-                        RerunPass(
-                            failed_job=fail_job,
-                            failed_attempt=fail_attempt,
-                            passed_attempt=recovery,
-                            passed_minutes=minutes,
-                        )
+        # Open cycles keyed by instance rank; each carries every failed
+        # execution of the instance in attempt order. A success closes the
+        # cycle: the first execution charges the pass's minutes, later ones
+        # ride along without charging again.
+        open_cycles: dict[int, list[tuple[int, JobRecord]]] = {}
+
+        def close(rank: int, recovery: int, minutes: float) -> None:
+            for index, (fail_attempt, fail_job) in enumerate(
+                open_cycles.pop(rank)
+            ):
+                passes.append(
+                    RerunPass(
+                        failed_job=fail_job,
+                        failed_attempt=fail_attempt,
+                        passed_attempt=recovery,
+                        passed_minutes=minutes if index == 0 else 0.0,
                     )
-                continue
-            first_failure_by_rank: dict[int, int] = {}
-            for fail_attempt, fail_job in group:
-                rank = _instance_rank(jobs_by_attempt[fail_attempt], fail_job)
-                known = first_failure_by_rank.get(rank)
-                if known is None or fail_attempt < known:
-                    first_failure_by_rank[rank] = fail_attempt
-            for fail_attempt in sorted({attempt for attempt, _ in group}):
-                attempt_failures = [job for attempt, job in group if attempt == fail_attempt]
-                for fail_job in sorted(attempt_failures, key=lambda job: job.job_id):
-                    rank = _instance_rank(jobs_by_attempt[fail_attempt], fail_job)
-                    if rank >= len(successes):
-                        # The recovery attempt held fewer same-named jobs than
-                        # this rank: no success of its own to recover at, so
-                        # leave the failure unrecovered instead of attributing
-                        # another instance's success to it.
-                        continue
-                    # The pass charges its minutes once per instance, to the
-                    # first failed attempt in which that instance failed; a
-                    # later failed execution of the same instance is
-                    # additional lost minutes but not an additional
-                    # re-execution.
-                    minutes = (
-                        successes[rank].minutes
-                        if fail_attempt == first_failure_by_rank[rank]
-                        else 0.0
-                    )
-                    passes.append(
-                        RerunPass(
-                            failed_job=fail_job,
-                            failed_attempt=fail_attempt,
-                            passed_attempt=recovery,
-                            passed_minutes=minutes,
-                        )
-                    )
+                )
+
+        largest_seen = 0
+        for attempt in sorted(jobs_by_attempt):
+            jobs = sorted(jobs_by_attempt[attempt], key=lambda job: job.job_id)
+            largest_seen = max(largest_seen, len(jobs))
+            if len(jobs) >= largest_seen:
+                for rank, job in enumerate(jobs):
+                    if is_failed_job_conclusion(job.conclusion):
+                        open_cycles.setdefault(rank, []).append((attempt, job))
+                    elif job.conclusion == "success" and rank in open_cycles:
+                        close(rank, attempt, job.minutes)
+            elif open_cycles:
+                # A subset listing pairs with the still-open cycles in rank
+                # order; entries beyond the open cycles are ambiguous and
+                # stay unrecovered.
+                open_keys = sorted(open_cycles)
+                for job, rank in zip(jobs, open_keys):
+                    if is_failed_job_conclusion(job.conclusion):
+                        open_cycles[rank].append((attempt, job))
+                    elif job.conclusion == "success":
+                        close(rank, attempt, job.minutes)
+    passes.sort(key=lambda p: (p.failed_attempt, p.failed_job.job_id))
     return passes
 
 

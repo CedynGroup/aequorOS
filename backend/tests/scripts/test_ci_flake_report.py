@@ -222,11 +222,13 @@ def test_duplicate_same_named_jobs_in_one_attempt_do_not_crash() -> None:
 
 
 def test_a_partially_passing_attempt_does_not_count_as_recovery() -> None:
-    """With duplicate names, one success must not recover the other's failure.
+    """A same-named instance is recovered by the attempt where IT passed.
 
-    Attempt 2 has one success and one failure of the same name: no identity
-    ties attempt 1's failures to that one success, so the recovery is the
-    attempt where every job of the name succeeded (attempt 3).
+    Attempt 2 is a full listing holding every instance of the name, so its
+    ranks identify the instances: the rank-0 success recovers the rank-0
+    failure (which passed again right there), while the rank-1 instance is
+    still failing and only recovers on the fully-passing attempt 3. The
+    success never recovers a sibling instance's failure.
     """
     attempts = {
         1: [
@@ -243,10 +245,11 @@ def test_a_partially_passing_attempt_does_not_count_as_recovery() -> None:
         ],
     }
     passes = flake_report.compare_attempts(attempts)
-    # Attempt 3 is the first fully-passing attempt. The attempt-2 failure is
-    # part of the same rerun cycle: it counts, but charges no minutes again.
+    # The rank-0 instance recovered on attempt 2 (6.0 re-executed minutes);
+    # the rank-1 instance recovered on attempt 3, its first failure carrying
+    # the 7.0 minutes and its attempt-2 failure riding along uncharged.
     assert [(p.failed_job.job_id, p.passed_attempt, p.passed_minutes) for p in passes] == [
-        (301, 3, 6.5),
+        (301, 2, 6.0),
         (302, 3, 7.0),
         (304, 3, 0.0),
     ]
