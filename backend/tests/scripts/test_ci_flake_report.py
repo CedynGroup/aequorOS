@@ -196,6 +196,52 @@ def test_rerun_pass_is_classified_flaky() -> None:
     assert rerun_passes[0].passed_attempt == 4
 
 
+def test_duplicate_same_named_jobs_in_one_attempt_do_not_crash() -> None:
+    """Two same-named jobs in one attempt must not make Python compare JobRecords.
+
+    Real trigger: run 42465955513 (Web CI, branch mission/rbac-185-signer,
+    created 2026-11-08T09:09:16Z) had attempt 1 carrying two jobs named
+    "Claude review verdict". The unkeyed sort of ``(attempt, job)`` tuples
+    then fell through to comparing JobRecord objects and raised TypeError,
+    which the weekly mode swallowed into an "unavailable" note.
+    """
+    attempts = {
+        1: [
+            job("Claude review verdict", "failure", 5.0, 101),
+            job("Claude review verdict", "success", 6.0, 102),
+        ],
+        2: [job("Claude review verdict", "success", 5.0, 103)],
+    }
+    passes = flake_report.compare_attempts(attempts)
+    assert len(passes) == 1
+    assert passes[0].failed_attempt == 1
+    assert passes[0].failed_job.job_id == 101
+    assert passes[0].passed_attempt == 2
+    assert passes[0].passed_minutes == 5.0
+
+
+def test_two_same_named_failures_in_one_attempt_are_both_reported() -> None:
+    """Duplicate names keep deterministic ordering and one pass per failure."""
+    attempts = {
+        1: [
+            job("Claude review verdict", "failure", 5.0, 201),
+            job("Claude review verdict", "failure", 4.0, 202),
+        ],
+        2: [
+            job("Claude review verdict", "success", 6.0, 203),
+            job("Claude review verdict", "success", 7.0, 204),
+        ],
+    }
+    passes = flake_report.compare_attempts(attempts)
+    assert [(p.failed_attempt, p.failed_job.job_id, p.passed_attempt) for p in passes] == [
+        (1, 201, 2),
+        (1, 202, 2),
+    ]
+    # Each failed attempt that is the first failure before the recovery
+    # carries the re-executed minutes; both duplicates share attempt 1.
+    assert [p.passed_minutes for p in passes] == [6.0, 6.0]
+
+
 def test_consistent_failure_is_not_flaky() -> None:
     attempts = {
         1: [job("Dashboard journeys shard 4/4", "failure", 20.0)],
@@ -427,10 +473,7 @@ def test_a_job_listing_is_not_cacheable_before_it_has_jobs() -> None:
     # the attempt produces later.
     assert flake_report._jobs_are_complete([]) is False
     assert flake_report._jobs_are_complete([{"status": "completed"}]) is True
-    assert (
-        flake_report._jobs_are_complete([{"status": "completed"}, {"status": "queued"}])
-        is False
-    )
+    assert flake_report._jobs_are_complete([{"status": "completed"}, {"status": "queued"}]) is False
 
 
 def test_fail_fail_pass_is_one_rerun_pass() -> None:
@@ -587,9 +630,7 @@ def test_a_second_fail_pass_cycle_recovers_with_its_own_evidence() -> None:
     row = flake_report.build_ranking(events, {})[0]
     assert row["rerun_count"] == 1
     assert row["rerun_minutes"] == pytest.approx(43.0)
-    assert flake_report.evaluate_thresholds(
-        events, datetime(2026, 11, 9, tzinfo=UTC)
-    ) == []
+    assert flake_report.evaluate_thresholds(events, datetime(2026, 11, 9, tzinfo=UTC)) == []
 
 
 # --- ranking ------------------------------------------------------------------
@@ -1483,9 +1524,7 @@ def test_fetch_findings_stops_at_the_deadline(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     calls: list[Any] = []
-    monkeypatch.setattr(
-        flake_report, "fetch_job_log", lambda *args: calls.append(args) or ""
-    )
+    monkeypatch.setattr(flake_report, "fetch_job_log", lambda *args: calls.append(args) or "")
     run = flake_report.RunRecord(
         run_id=1,
         workflow="Risk Service CI",

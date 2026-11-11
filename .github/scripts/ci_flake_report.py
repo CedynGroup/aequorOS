@@ -345,19 +345,22 @@ def compare_attempts(
     passes: list[RerunPass] = []
     for name in {job.name for jobs in attempts.values() for job in jobs}:
         timeline = sorted(
-            (attempt, job)
-            for attempt, jobs in attempts.items()
-            for job in jobs
-            if job.name == name
+            (
+                (attempt, job)
+                for attempt, jobs in attempts.items()
+                for job in jobs
+                if job.name == name
+            ),
+            # Explicit key: two same-named jobs can share one attempt (run
+            # 42465955513 attempt 1 had two "Claude review verdict" jobs), and
+            # JobRecord is not orderable, so tuple comparison must never reach
+            # it.
+            key=lambda pair: (pair[0], pair[1].name, pair[1].job_id),
         )
         failed = [
-            (attempt, job)
-            for attempt, job in timeline
-            if is_failed_job_conclusion(job.conclusion)
+            (attempt, job) for attempt, job in timeline if is_failed_job_conclusion(job.conclusion)
         ]
-        passed = [
-            (attempt, job) for attempt, job in timeline if job.conclusion == "success"
-        ]
+        passed = [(attempt, job) for attempt, job in timeline if job.conclusion == "success"]
         if not failed:
             continue
         # First failed attempt recovering at each passing attempt: that one
@@ -565,9 +568,7 @@ def _attach_rerun_findings(
                     # Optional visibility: read each log once, without the
                     # measurement path's retry budget, so a failing read
                     # cannot consume the job timeout.
-                    text = fetch_job_log(
-                        repo, job.job_id, cache_dir, keep_logs=False, retries=1
-                    )
+                    text = fetch_job_log(repo, job.job_id, cache_dir, keep_logs=False, retries=1)
                     job_findings = extract_findings(clean_lines(text))
                     delete_large_log(cache_dir, job.job_id, keep_logs=False)
                 except (RuntimeError, OSError) as error:
