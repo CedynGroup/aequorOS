@@ -1343,8 +1343,7 @@ def cmd_weekly(args: argparse.Namespace, now: datetime | None = None) -> int:
     print(markdown)
     try:
         if args.out_md:
-            Path(args.out_md).parent.mkdir(parents=True, exist_ok=True)
-            Path(args.out_md).write_text(markdown, encoding="utf-8")
+            _atomic_write_text(Path(args.out_md), markdown)
             print(f"Wrote {args.out_md}", file=sys.stderr)
         if args.out_json:
             payload = {
@@ -1358,8 +1357,7 @@ def cmd_weekly(args: argparse.Namespace, now: datetime | None = None) -> int:
                 ],
                 "report": report,
             }
-            Path(args.out_json).parent.mkdir(parents=True, exist_ok=True)
-            Path(args.out_json).write_text(json.dumps(payload, indent=1), encoding="utf-8")
+            _atomic_write_text(Path(args.out_json), json.dumps(payload, indent=1))
             print(f"Wrote {args.out_json}", file=sys.stderr)
     except OSError as error:
         # The summary was already published on stdout; a failed artifact write
@@ -1477,6 +1475,15 @@ def list_workflow_runs(
 
 def _write_cache(path: Path, text: str) -> None:
     """Write a cache file atomically (an interrupt must not leave a truncated file)."""
+    tmp_path = path.with_name(f"{path.name}.{os.getpid()}.tmp")
+    tmp_path.write_text(text, encoding="utf-8")
+    os.replace(tmp_path, path)
+
+
+def _atomic_write_text(path: Path, text: str) -> None:
+    """Write a report file atomically: a failed or interrupted write leaves no
+    partial file that a later check could mistake for the complete report."""
+    path.parent.mkdir(parents=True, exist_ok=True)
     tmp_path = path.with_name(f"{path.name}.{os.getpid()}.tmp")
     tmp_path.write_text(text, encoding="utf-8")
     os.replace(tmp_path, path)

@@ -2110,3 +2110,40 @@ def test_pre_window_runs_are_dropped_before_classification(monkeypatch: pytest.M
     # The run from before the exact window boundary is not collected, so it
     # cannot leak into the mixed-outcome classification or the ranking.
     assert [run.run_id for run in runs] == [2]
+
+
+def test_a_failed_report_write_leaves_no_partial_file(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], tmp_path: Path
+) -> None:
+    out_md = tmp_path / "weekly.md"
+    out_json = tmp_path / "weekly.json"
+
+    def failing_replace(src: str, dst: str) -> None:
+        raise OSError("disk full")
+
+    # Fail the atomic publish: the temp file may be written, but the
+    # destination must never receive a partial report.
+    monkeypatch.setattr(flake_report.os, "replace", failing_replace)
+    monkeypatch.setattr(
+        flake_report,
+        "collect_report_data",
+        lambda options, log=print, notes=None: ([success_run(1)], []),
+    )
+    parser = flake_report.build_parser()
+    args = parser.parse_args(
+        [
+            "weekly",
+            "--cache-dir",
+            str(tmp_path / "cache"),
+            "--out-md",
+            str(out_md),
+            "--out-json",
+            str(out_json),
+        ]
+    )
+    assert flake_report.cmd_weekly(args, now=datetime(2026, 11, 9, 12, 0, tzinfo=UTC)) == 0
+    # A failed write must not leave a partial file that a later check could
+    # mistake for the complete report.
+    assert not out_md.exists()
+    assert not out_json.exists()
+    assert "artifact write failed" in capsys.readouterr().err
