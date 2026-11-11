@@ -792,6 +792,11 @@ function PackageWorkspace({
   // signature pinned. It is what a filing sends, so it is what Download hands over.
   const filedVersion =
     versionsQuery.data?.versions.find((version) => version.isFiled) ?? null;
+  const chainHoldReason = versionsQuery.isPending
+    ? "The version chain that names the filed document is still loading."
+    : versionsQuery.isError
+      ? "The version chain that names the filed document could not be loaded."
+      : null;
   const resubmissions = resubmissionsQuery.data?.requests ?? [];
   const submissionRevision =
     pkg?.submissionRevision ?? summary.submissionRevision;
@@ -870,12 +875,13 @@ function PackageWorkspace({
   }, [comparison.data]);
 
   const takeArtifact = (kind: ArtifactKind) => {
-    if (!pkg) {
-      setDownloadError(
-        "The pack's legal basis is still loading. Try again once it has loaded.",
-      );
-      return;
-    }
+    // No guard on the package detail here: the act reads only inputs keyed by
+    // the summary on screen — the package id, the minted artifacts and the
+    // filed version — and the bar renders it from that summary the moment a
+    // version exists. What decides WHICH document the act hands over is the
+    // version chain, and the buttons hold with a visible reason until that
+    // chain has landed (see ArtifactGroup's pendingReason), so a rendered
+    // button never refuses the click it invites.
     setDownloadError(null);
     const fail = (error: unknown) =>
       setDownloadError(
@@ -987,6 +993,7 @@ function PackageWorkspace({
         canExport={authority.mayExport}
         onTake={takeArtifact}
         filedVersion={filedVersion}
+        chainHoldReason={chainHoldReason}
         action={action}
         actionPending={actionPending}
         actionIcon={action ? actionIcon[action.kind] : null}
@@ -1019,6 +1026,13 @@ function PackageWorkspace({
       />
 
       {summary.isRehearsal && <RehearsalNotice />}
+      {versionsQuery.isError ? (
+        <ErrorPanel
+          error={versionsQuery.error}
+          title="Could not load the version chain"
+          onRetry={() => void versionsQuery.refetch()}
+        />
+      ) : null}
       {regenerateError ? (
         <ErrorPanel error={regenerateError} title="Could not regenerate" />
       ) : null}
@@ -1341,6 +1355,7 @@ function ReturnCommandBarBlock({
   canExport,
   onTake,
   filedVersion,
+  chainHoldReason,
   action,
   actionPending,
   actionIcon,
@@ -1360,6 +1375,8 @@ function ReturnCommandBarBlock({
   canExport: boolean;
   onTake: (kind: ArtifactKind) => void;
   filedVersion: RegulatoryArtifactVersionRead | null;
+  /** Why the act cannot name its document yet, or null once the chain landed. */
+  chainHoldReason: string | null;
   action: ReturnType<typeof primaryFilingAction>;
   actionPending: boolean;
   actionIcon: ReactNode;
@@ -1418,6 +1435,7 @@ function ReturnCommandBarBlock({
                 kind === "pdf" && filedVersion ? "Signed PDF" : null
               }
               unavailableReason="This document has not been produced yet, and producing it is the preparer's act."
+              pendingReason={chainHoldReason}
             />
             {filedVersion && <SignedReturnLine version={filedVersion} />}
           </>
