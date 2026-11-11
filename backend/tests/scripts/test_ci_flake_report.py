@@ -580,7 +580,9 @@ def test_fail_pass_fail_later_failure_is_not_a_rerun() -> None:
         (run, 3, job("Dashboard journeys shard 4/4", "failure", 20.0, 23)),
     ]
     rerun_passes = {
-        (7, 1, "Dashboard journeys shard 4/4"): flake_report.RerunPass(
+        # Keyed by job id, not the job name: two same-named jobs can fail in
+        # one attempt and a name key would keep only the last one's recovery.
+        (7, 1, 21): flake_report.RerunPass(
             failed_job=failed_jobs[0][2],
             failed_attempt=1,
             passed_attempt=2,
@@ -1554,14 +1556,84 @@ def test_render_weekly_report_without_breaches_says_so() -> None:
     assert "No signature reached the policy thresholds" in markdown
 
 
+def test_a_duplicate_with_no_success_of_its_own_stays_unrecovered() -> None:
+    """Two failures cannot share one success when the recovery attempt held
+    fewer same-named jobs: the unmatched failure is left unrecovered instead
+    of attributing another job's success (and minutes) to it."""
+    attempts = {
+        1: [
+            job("Claude review verdict", "failure", 5.0, 401),
+            job("Claude review verdict", "failure", 4.0, 402),
+        ],
+        # The recovery attempt holds only one job of the name: the other
+        # duplicate vanished, so its recovery cannot be attributed.
+        2: [job("Claude review verdict", "success", 6.0, 403)],
+    }
+    passes = flake_report.compare_attempts(attempts)
+    assert [(p.failed_job.job_id, p.passed_attempt, p.passed_minutes) for p in passes] == [
+        (401, 2, 6.0)
+    ]
+
+
+def test_duplicate_rerun_passes_stay_distinct_through_event_creation() -> None:
+    """The rerun-pass lookup is keyed by job id, so two same-named failures in
+    one attempt each keep their own recovery minutes in the events."""
+    run = flake_report.RunRecord(
+        run_id=7,
+        workflow="Web CI",
+        event="push",
+        head_branch="main",
+        head_sha="a" * 40,
+        run_attempt=2,
+        conclusion="success",
+        created_at="2026-11-08T10:00:00Z",
+    )
+    attempts = {
+        1: [
+            job("Claude review verdict", "failure", 5.0, 501),
+            job("Claude review verdict", "failure", 4.0, 502),
+        ],
+        2: [
+            job("Claude review verdict", "success", 6.0, 503),
+            job("Claude review verdict", "success", 7.0, 504),
+        ],
+    }
+    rerun_passes = {
+        (7, p.failed_attempt, p.failed_job.job_id): p
+        for p in flake_report.compare_attempts(attempts)
+    }
+    findings_by_job = {
+        501: [flake_report.Finding("unclassified", "unclassified:Claude review verdict")],
+        502: [flake_report.Finding("unclassified", "unclassified:Claude review verdict")],
+    }
+    events = flake_report._build_events(
+        [
+            (run, 1, job("Claude review verdict", "failure", 5.0, 501)),
+            (run, 1, job("Claude review verdict", "failure", 4.0, 502)),
+        ],
+        rerun_passes,
+        set(),
+        findings_by_job,
+    )
+    minutes = sorted(e.rerun_minutes for e in events)
+    assert minutes == [6.0, 7.0]
+
+
 def test_an_off_policy_window_labels_its_thresholds_exploratory() -> None:
+    """A non-policy window reads as a reading, not an obligation."""
     report = flake_report.build_report(runs=[success_run(1)], events=[], meta=REPORT_META)
-    markdown = flake_report.render_weekly_report(report, [], window_days=30)
+    breaches = [flake_report.ThresholdBreach("flake:a", 3, "fix or quarantine within 7 days")]
+    markdown = flake_report.render_weekly_report(report, breaches, window_days=30)
     assert (
         "## Threshold crossings (exploratory 30-day window, "
         "not the approved 14-day policy)" in markdown
     )
     assert "exploratory reading, not policy determinations" in markdown
+    assert "Action the 14-day policy would require (exploratory)" in markdown
+    assert "| Required action |" not in markdown
+    # The policy window keeps the binding wording.
+    policy = flake_report.render_weekly_report(report, breaches, window_days=14)
+    assert "| Required action |" in policy
 
 
 def test_a_collection_cutoff_adds_the_time_budget_caveat() -> None:

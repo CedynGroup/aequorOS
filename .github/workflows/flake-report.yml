@@ -22,7 +22,7 @@ on:
   workflow_dispatch:
     inputs:
       window_days:
-        description: "Rolling window in days (policy thresholds count rerun-only passes inside it)"
+        description: "Rolling window in days; any value other than 14 renders exploratory crossings, not policy determinations"
         required: false
         default: "14"
 

@@ -406,17 +406,26 @@ def compare_attempts(
             successes = sorted(jobs_by_attempt[recovery], key=lambda job: job.job_id)
             first_failure = first_failure_before[recovery]
             for position, (fail_attempt, fail_job) in enumerate(group):
-                minutes = (
-                    successes[position].minutes
-                    if position < len(successes)
-                    else successes[0].minutes
-                )
-                if fail_attempt != first_failure:
-                    # Later failures of one rerun cycle are additional lost
-                    # minutes but not additional re-executed ones: the pass
-                    # charges its minutes once, to the first failed attempt
-                    # recovering at it.
+                if position >= len(successes):
+                    if fail_attempt == first_failure:
+                        # A duplicate from the same failed attempt has no
+                        # success of its own to recover at (the recovery
+                        # attempt held fewer same-named jobs than the failing
+                        # one): leave it unrecovered instead of attributing
+                        # another job's success to it or charging its minutes
+                        # twice.
+                        continue
+                    # A later failure of the same rerun cycle: no additional
+                    # re-execution, so no minutes.
                     minutes = 0.0
+                else:
+                    minutes = successes[position].minutes
+                    if fail_attempt != first_failure:
+                        # Later failures of one rerun cycle are additional
+                        # lost minutes but not additional re-executed ones:
+                        # the pass charges its minutes once, to the first
+                        # failed attempt recovering at it.
+                        minutes = 0.0
                 passes.append(
                     RerunPass(
                         failed_job=fail_job,
@@ -1198,8 +1207,15 @@ def render_threshold_section(breaches: list[ThresholdBreach], window_days: int) 
     if not breaches:
         lines.append("No signature reached the policy thresholds in this window.")
         return lines
+    # A non-policy window's crossings are readings, not obligations: the
+    # column says what the 14-day policy would require, not what does.
+    action_column = (
+        "Required action"
+        if policy_window
+        else "Action the 14-day policy would require (exploratory)"
+    )
     lines += [
-        "| Signature | Rerun-only passes in window | Required action |",
+        f"| Signature | Rerun-only passes in window | {action_column} |",
         "| --- | --- | --- |",
     ]
     for breach in breaches:
@@ -1813,13 +1829,13 @@ def _failed_leaf_jobs(
 
 def _build_events(
     failed_jobs: list[tuple[RunRecord, int, JobRecord]],
-    rerun_passes: dict[tuple[int, int, str], RerunPass],
+    rerun_passes: dict[tuple[int, int, int], RerunPass],
     mixed_flags: set[tuple[int, str]],
     findings_by_job: dict[int, list[Finding]],
 ) -> list[FlakeEvent]:
     events: list[FlakeEvent] = []
     for run, attempt, job in failed_jobs:
-        rerun = rerun_passes.get((run.run_id, attempt, job.name))
+        rerun = rerun_passes.get((run.run_id, attempt, job.job_id))
         findings = findings_by_job.get(job.job_id, [])
         if not findings:
             findings = [Finding("unclassified", f"unclassified:{job.name}")]
@@ -1864,10 +1880,13 @@ def collect_report_data(
         options.repo, attempts_needed, options, log, stage_notes
     )
 
-    rerun_passes: dict[tuple[int, int, str], RerunPass] = {}
+    rerun_passes: dict[tuple[int, int, int], RerunPass] = {}
     for run_id, attempts in jobs_by_run_attempt.items():
         for rerun in compare_attempts(attempts):
-            rerun_passes[(run_id, rerun.failed_attempt, rerun.failed_job.name)] = rerun
+            # Keyed by job id, not the job name: two same-named jobs can fail
+            # in one attempt, and a name key would keep only the last one's
+            # recovery (and charge its minutes to both).
+            rerun_passes[(run_id, rerun.failed_attempt, rerun.failed_job.job_id)] = rerun
     mixed = same_sha_mixed_outcomes(all_runs, jobs_by_run)
     mixed_flags = {(outcome.failed_run_id, outcome.job_name) for outcome in mixed}
 
