@@ -970,6 +970,16 @@ def _write_cache(path: Path, text: str) -> None:
     os.replace(tmp_path, path)
 
 
+def _jobs_are_complete(jobs: list[dict[str, Any]]) -> bool:
+    """A job listing is cacheable only once every job completed.
+
+    An empty listing means the attempt has not reported jobs yet (e.g. a
+    queued rerun): caching it would hide the failure or recovery evidence
+    the attempt produces later, so it must be fetched again.
+    """
+    return bool(jobs) and all(raw.get("status") == "completed" for raw in jobs)
+
+
 def fetch_attempt_jobs(
     repo: str, run_id: int, attempt: int, cache_dir: Path | None = None
 ) -> list[JobRecord]:
@@ -980,10 +990,10 @@ def fetch_attempt_jobs(
     payload = gh_api_json(
         f"repos/{repo}/actions/runs/{run_id}/attempts/{attempt}/jobs?per_page={PER_PAGE}"
     )
-    # Never cache an attempt that is still running: a partial job list would
-    # be reused forever and hide the rerun pass it has not produced yet.
-    jobs_complete = all(raw.get("status") == "completed" for raw in payload.get("jobs", []))
-    if cache_path is not None and jobs_complete:
+    # Never cache an attempt that is still running: a partial or empty job
+    # list would be reused forever and hide the rerun pass it has not
+    # produced yet.
+    if cache_path is not None and _jobs_are_complete(payload.get("jobs", [])):
         cache_path.parent.mkdir(parents=True, exist_ok=True)
         _write_cache(cache_path, json.dumps(payload))
     return parse_jobs(payload)

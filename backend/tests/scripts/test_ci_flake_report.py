@@ -421,6 +421,18 @@ def test_a_timed_out_run_pulls_its_sha_into_the_attempt_plan() -> None:
     assert flake_report._attempts_needed(runs) == {1: {1}, 2: {1}}
 
 
+def test_a_job_listing_is_not_cacheable_before_it_has_jobs() -> None:
+    # An empty listing means the attempt has not reported jobs yet (e.g. a
+    # queued rerun): caching it would hide the failure or recovery evidence
+    # the attempt produces later.
+    assert flake_report._jobs_are_complete([]) is False
+    assert flake_report._jobs_are_complete([{"status": "completed"}]) is True
+    assert (
+        flake_report._jobs_are_complete([{"status": "completed"}, {"status": "queued"}])
+        is False
+    )
+
+
 def test_fail_fail_pass_is_one_rerun_pass() -> None:
     attempts = {
         1: [job("Dashboard journeys shard 4/4", "failure", 20.0, 11)],
