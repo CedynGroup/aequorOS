@@ -6,6 +6,7 @@ one-second budget keeps the regression fast; dedicated storage probes exceed it.
 
 from __future__ import annotations
 
+import gc
 import os
 import time
 from collections.abc import Iterator
@@ -25,7 +26,6 @@ from sqlalchemy.orm import Session
 from app.api.deps import TenantContext
 from app.case.service import documents
 from app.core.config import Settings, get_settings
-from app.db.base import utc_now
 from app.integrations.storage.base import StoredObjectHead
 from app.integrations.storage.s3 import S3ObjectStorage
 from app.models import AuditEvent, Document, Job, StoredObject
@@ -60,6 +60,31 @@ def timeout_role_engines(
     finally:
         for engine in engines.values():
             engine.dispose()
+
+
+@pytest.fixture(scope="module", autouse=True)
+def no_gc_pauses_inside_idle_budget_scenarios() -> Iterator[None]:
+    """Keep interpreter pauses out of the accelerated idle-budget scenarios.
+
+    By the time this module runs, the shard process has accumulated a very large
+    tracked heap. Measured with gc.callbacks during a CI-like schema-shard run
+    (#847): a gen-2 collection then pauses the whole interpreter for 1.0-2.1 s,
+    recurring every ~15-60 s, far beyond the one-second
+    idle_in_transaction_session_timeout these engines run with. A pause that
+    starts while a scenario transaction is open idles the session past the
+    budget and the server terminates the connection, failing the scenario on
+    interpreter bookkeeping rather than on the storage behaviour it exists to
+    regression-test. Automatic collection is suspended for the module and one
+    explicit pass runs where no scenario transaction can be open; the budget
+    itself is unchanged.
+    """
+    gc.collect()
+    gc.disable()
+    try:
+        yield
+    finally:
+        gc.enable()
+        gc.collect()
 
 
 class BlockingHeadStorage(FakeStorage):
@@ -373,7 +398,18 @@ def test_deletion_commits_before_storage_and_retries_under_role_timeouts(
 
     with Session(worker_engine, expire_on_commit=False) as worker:
         worker.info["organization_id"] = ORG_1
-        job = job_queue.claim_next(worker, utc_now(), ("document_delete",))
+        # Claim only this test's own job: claim_next would take the oldest queued
+        # document_delete job, which a failed earlier test may have left behind.
+        # The predicates mirror what claim_next would accept, so the test never
+        # acts on a job the worker itself could not claim.
+        job = worker.scalar(
+            select(Job).where(
+                Job.entity_id == str(document_id),
+                Job.organization_id == ORG_1,
+                Job.job_type == "document_delete",
+                Job.status == "queued",
+            )
+        )
         assert job is not None
         pid = cast(int, worker.scalar(text("SELECT pg_backend_pid()")))
         calls = 0
@@ -453,7 +489,19 @@ def test_cleanup_deletes_real_minio_object_and_reruns_safely(
             monkeypatch.setattr(documents, "get_object_storage", lambda: storage)
             with Session(role_engines["aqs_worker"], expire_on_commit=False) as worker:
                 worker.info["organization_id"] = ORG_1
-                job = job_queue.claim_next(worker, utc_now(), ("document_delete",))
+                # Claim only this test's own job: claim_next would take the
+                # oldest queued document_delete job, which a failed earlier
+                # test may have left behind. The predicates mirror what
+                # claim_next would accept, so the test never acts on a job the
+                # worker itself could not claim.
+                job = worker.scalar(
+                    select(Job).where(
+                        Job.entity_id == str(document_id),
+                        Job.organization_id == ORG_1,
+                        Job.job_type == "document_delete",
+                        Job.status == "queued",
+                    )
+                )
                 assert job is not None
                 documents.run_document_delete(worker, job)
                 job_queue.complete(worker, job)
