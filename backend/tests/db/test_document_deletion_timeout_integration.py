@@ -400,7 +400,16 @@ def test_deletion_commits_before_storage_and_retries_under_role_timeouts(
         worker.info["organization_id"] = ORG_1
         # Claim only this test's own job: claim_next would take the oldest queued
         # document_delete job, which a failed earlier test may have left behind.
-        job = worker.scalar(select(Job).where(Job.entity_id == str(document_id)))
+        # The predicates mirror what claim_next would accept, so the test never
+        # acts on a job the worker itself could not claim.
+        job = worker.scalar(
+            select(Job).where(
+                Job.entity_id == str(document_id),
+                Job.organization_id == ORG_1,
+                Job.job_type == "document_delete",
+                Job.status == "queued",
+            )
+        )
         assert job is not None
         pid = cast(int, worker.scalar(text("SELECT pg_backend_pid()")))
         calls = 0
@@ -482,8 +491,17 @@ def test_cleanup_deletes_real_minio_object_and_reruns_safely(
                 worker.info["organization_id"] = ORG_1
                 # Claim only this test's own job: claim_next would take the
                 # oldest queued document_delete job, which a failed earlier
-                # test may have left behind.
-                job = worker.scalar(select(Job).where(Job.entity_id == str(document_id)))
+                # test may have left behind. The predicates mirror what
+                # claim_next would accept, so the test never acts on a job the
+                # worker itself could not claim.
+                job = worker.scalar(
+                    select(Job).where(
+                        Job.entity_id == str(document_id),
+                        Job.organization_id == ORG_1,
+                        Job.job_type == "document_delete",
+                        Job.status == "queued",
+                    )
+                )
                 assert job is not None
                 documents.run_document_delete(worker, job)
                 job_queue.complete(worker, job)
