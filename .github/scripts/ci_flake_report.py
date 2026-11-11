@@ -1280,25 +1280,27 @@ def cmd_weekly(args: argparse.Namespace, now: datetime | None = None) -> int:
         print(f"Weekly flake report unavailable: {error}", file=sys.stderr)
         return 0
     # Missing-log placeholders are accounting, not findings: a job whose logs
-    # were never read must not reach the policy thresholds or the ranking as
-    # if its failure signature were known. The unfetched count is reported as
-    # a caveat instead.
+    # were never read (budget exhausted or log unavailable) must not reach the
+    # policy thresholds or the ranking as if its failure signature were known.
+    # The unfetched and unreadable counts are reported as caveats instead.
     budget_hits = sum(
         1 for event in events if event.signature.startswith("log-budget-exhausted:")
+    )
+    unavailable_hits = sum(
+        1 for event in events if event.signature.startswith("log-unavailable:")
     )
     measured_events = [
         event
         for event in events
         if not event.signature.startswith("log-budget-exhausted:")
+        and not event.signature.startswith("log-unavailable:")
     ]
     cutoff_parts = list(collection_notes)
     if budget_hits:
         cutoff_parts.append(f"{budget_hits} failed-job log(s) unfetched")
-    collection_cutoff = (
-        "collection stopped at the time budget: " + "; ".join(cutoff_parts)
-        if cutoff_parts
-        else None
-    )
+    if unavailable_hits:
+        cutoff_parts.append(f"{unavailable_hits} failed-job log(s) unreadable")
+    collection_cutoff = "; ".join(cutoff_parts) if cutoff_parts else None
 
     report = build_report(
         runs=runs,
@@ -1429,23 +1431,25 @@ def list_workflow_runs(
     since: str,
     log: Any,
     deadline: float | None = None,
-) -> tuple[list[RunRecord], bool]:
+) -> tuple[list[RunRecord], str | None]:
     """Page through one workflow's runs (newest first) until enough are collected.
 
-    Returns the collected runs and whether the listing stopped early: either
-    the run cap was reached before covering the window, or the time budget
-    passed between pages. Both mean the counts may be undercounted.
+    Returns the collected runs and why the listing stopped early: "deadline"
+    when the time budget passed between pages, "run-cap" when the cap was
+    reached before the window was covered, and None when the listing covered
+    the window or ran out of pages. Only the deadline stop means the counts
+    may be undercounted because collection was cut short.
     """
     records: list[RunRecord] = []
     page = 1
-    stopped = False
+    reason: str | None = None
     while True:
         if deadline is not None and time.monotonic() > deadline:
             log(
                 "Time budget reached during run listing; the report carries "
                 "what was collected"
             )
-            stopped = True
+            reason = "deadline"
             break
         payload = gh_api_json(
             f"repos/{repo}/actions/workflows/{workflow_file}/runs?per_page={PER_PAGE}&page={page}"
@@ -1456,12 +1460,16 @@ def list_workflow_runs(
         records.extend(page_records)
         oldest = page_records[-1].created_at
         log(f"    {workflow_file} page {page}: {len(page_records)} runs (oldest {oldest[:10]})")
-        if (min_runs and len(records) >= min_runs) or oldest[:10] < since:
-            stopped = True
+        if oldest[:10] < since:
+            # The requested window is fully covered; this is completion, not
+            # a cutoff.
+            break
+        if min_runs and len(records) >= min_runs:
+            reason = "run-cap"
             break
         page += 1
     records = [run for run in records if run.created_at[:10] >= since]
-    return records[:min_runs] if min_runs else records, stopped
+    return (records[:min_runs] if min_runs else records), reason
 
 
 def _write_cache(path: Path, text: str) -> None:
@@ -1555,7 +1563,7 @@ def _list_all_runs(options: ReportOptions, log: Any, notes: list[str]) -> list[R
             f"Listing runs for {workflow_file} "
             f"(target {options.min_runs_per_workflow}, since {options.since})"
         )
-        records, stopped = list_workflow_runs(
+        records, reason = list_workflow_runs(
             options.repo,
             workflow_file,
             options.min_runs_per_workflow,
@@ -1563,9 +1571,10 @@ def _list_all_runs(options: ReportOptions, log: Any, notes: list[str]) -> list[R
             log,
             deadline=options.deadline,
         )
-        if stopped:
+        if reason == "deadline":
             notes.append(
-                f"run listing for {workflow_file} stopped early; its counts may be undercounted"
+                f"run listing for {workflow_file} stopped at the time budget; "
+                "its counts may be undercounted"
             )
         all_runs.extend(records)
     log(f"Collected {len(all_runs)} runs total")
@@ -1610,12 +1619,24 @@ def _fetch_attempt_jobs(
             )
             break
         for attempt in sorted(attempts):
+            if options.deadline is not None and time.monotonic() > options.deadline:
+                # A partially listed run is not complete rerun evidence: the
+                # unfetched later attempts cannot be read as passes, and the
+                # cutoff is reported so the counts stay honest.
+                notes.append(
+                    "job listings stopped mid-run at the time budget; the "
+                    "run's later attempts were not read"
+                )
+                break
             jobs = fetch_attempt_jobs(repo, run_id, attempt, options.cache_dir)
             jobs_by_run_attempt.setdefault(run_id, {})[attempt] = jobs
             jobs_by_run.setdefault(run_id, []).extend(jobs)
-        fetched += 1
-        if index % 25 == 0 or index == total:
-            log(f"  job listings: {index}/{total} runs")
+        else:
+            fetched += 1
+            if index % 25 == 0 or index == total:
+                log(f"  job listings: {index}/{total} runs")
+            continue
+        break
     return jobs_by_run_attempt, jobs_by_run
 
 

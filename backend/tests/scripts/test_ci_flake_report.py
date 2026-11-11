@@ -1840,7 +1840,7 @@ def test_the_collection_deadline_stops_run_pagination(monkeypatch: pytest.Monkey
 
     monkeypatch.setattr(flake_report, "time", clock)
     monkeypatch.setattr(flake_report, "gh_api_json", fake_gh_api_json)
-    records, stopped = flake_report.list_workflow_runs(
+    records, reason = flake_report.list_workflow_runs(
         "CedynGroup/aequorOS",
         "risk-service.yml",
         min_runs=100,
@@ -1849,9 +1849,87 @@ def test_the_collection_deadline_stops_run_pagination(monkeypatch: pytest.Monkey
         deadline=clock.now + 5.0,
     )
     # The second page is not fetched once the budget passed, and the stop is
-    # reported so the summary can say the counts are undercounted.
+    # reported as a time-budget cutoff so the summary can say the counts are
+    # undercounted.
     assert len(records) == 1
-    assert stopped is True
+    assert reason == "deadline"
+
+
+def test_a_window_covered_listing_reports_no_cutoff(monkeypatch: pytest.MonkeyPatch) -> None:
+    class FakeClock:
+        def __init__(self) -> None:
+            self.now = 0.0
+
+        def monotonic(self) -> float:
+            return self.now
+
+    def fake_gh_api_json(*endpoint_args: str) -> dict[str, Any]:
+        return {
+            "workflow_runs": [
+                {
+                    "id": 1,
+                    "name": "Risk Service CI",
+                    "event": "push",
+                    "head_branch": "main",
+                    "head_sha": "a" * 40,
+                    "run_attempt": 1,
+                    "conclusion": "success",
+                    # Older than the window start: the listing has covered
+                    # the requested window completely.
+                    "created_at": "2026-09-01T10:00:00Z",
+                }
+            ],
+            "total_count": 100,
+        }
+
+    monkeypatch.setattr(flake_report, "time", FakeClock())
+    monkeypatch.setattr(flake_report, "gh_api_json", fake_gh_api_json)
+    records, reason = flake_report.list_workflow_runs(
+        "CedynGroup/aequorOS",
+        "risk-service.yml",
+        min_runs=100,
+        since="2026-10-01",
+        log=lambda message: None,
+    )
+    # A complete window coverage is not a cutoff of any kind; the pre-window
+    # run itself is filtered out of the collected records.
+    assert records == []
+    assert reason is None
+
+
+def test_the_collection_deadline_stops_between_attempts(monkeypatch: pytest.MonkeyPatch) -> None:
+    class FakeClock:
+        def __init__(self) -> None:
+            self.now = 0.0
+
+        def monotonic(self) -> float:
+            return self.now
+
+    clock = FakeClock()
+
+    def slow_fetch(repo: str, run_id: int, attempt: int, cache_dir: Any) -> list[Any]:
+        if attempt == 1:
+            clock.now = flake_report.WEEKLY_COLLECTION_BUDGET_MINUTES * 60 + 1
+        return []
+
+    monkeypatch.setattr(flake_report, "time", clock)
+    monkeypatch.setattr(flake_report, "fetch_attempt_jobs", slow_fetch)
+    options = flake_report.ReportOptions(
+        repo="CedynGroup/aequorOS",
+        workflow_files=["risk-service.yml"],
+        min_runs_per_workflow=1,
+        since="2026-10-26",
+        cache_dir=Path("/tmp/unused-cache"),
+        deadline=1.0,
+    )
+    notes: list[str] = []
+    jobs_by_run_attempt, _jobs_by_run = flake_report._fetch_attempt_jobs(
+        "CedynGroup/aequorOS", {1: {1, 2}}, options, lambda message: None, notes
+    )
+    # A run whose later attempts were not fetched before the budget passed is
+    # not silently treated as complete rerun evidence.
+    assert list(jobs_by_run_attempt[1]) == [1]
+    assert notes and "time budget" in notes[0]
 
 
 def test_log_budget_placeholders_do_not_cross_policy_thresholds(
@@ -1898,3 +1976,77 @@ def test_run_cap_truncation_uses_the_full_window_boundary(
     # The cap was reached and the oldest run is two hours inside the window
     # (same date as the window start): the caveat must say so.
     assert "2026-10-26T14:00:00Z" in capsys.readouterr().out
+
+
+def test_log_unavailable_placeholders_do_not_cross_policy_thresholds(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], tmp_path: Path
+) -> None:
+    events = [
+        event("log-unavailable:Dashboard journeys shard 4/4", kind="unclassified", run_id=1),
+        event("log-unavailable:Dashboard journeys shard 4/4", kind="unclassified", run_id=2),
+        event("pytest:tests/a.py", rerun=True, run_id=3),
+    ]
+
+    def fake_collect(options: Any, log: Any = print, notes: list[str] | None = None) -> Any:
+        return [success_run(1)], events
+
+    monkeypatch.setattr(flake_report, "collect_report_data", fake_collect)
+    parser = flake_report.build_parser()
+    args = parser.parse_args(["weekly", "--cache-dir", str(tmp_path)])
+    assert flake_report.cmd_weekly(args, now=datetime(2026, 11, 9, 12, 0, tzinfo=UTC)) == 0
+    output = capsys.readouterr()
+    # Two unreadable logs must not read as two rerun-only passes of a
+    # signature; the unreadable count stays visible as a collection caveat.
+    assert "needs flaky-test issue with owner" not in output.out
+    assert "log-unavailable" not in output.out
+    assert "2 failed-job log(s) unreadable" in output.out
+
+
+def test_weekly_deadline_is_enforced_through_the_real_collector(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], tmp_path: Path
+) -> None:
+    class FakeClock:
+        def __init__(self) -> None:
+            self.now = 0.0
+
+        def monotonic(self) -> float:
+            return self.now
+
+    clock = FakeClock()
+
+    def slow_gh_api_json(*endpoint_args: str) -> dict[str, Any]:
+        endpoint = endpoint_args[0]
+        if "/actions/workflows/" in endpoint:
+            # One slow listing page eats the whole remaining budget.
+            clock.now = flake_report.WEEKLY_COLLECTION_BUDGET_MINUTES * 60 + 1
+            return {
+                "workflow_runs": [
+                    {
+                        "id": 1,
+                        "name": "Risk Service CI",
+                        "event": "push",
+                        "head_branch": "main",
+                        "head_sha": "a" * 40,
+                        "run_attempt": 1,
+                        "conclusion": "success",
+                        "created_at": "2026-11-08T10:00:00Z",
+                    }
+                ],
+                "total_count": 100,
+            }
+        return {"total_count": 0, "jobs": []}
+
+    monkeypatch.setattr(flake_report, "time", clock)
+    monkeypatch.setattr(flake_report, "gh_api_json", slow_gh_api_json)
+    parser = flake_report.build_parser()
+    args = parser.parse_args(
+        ["weekly", "--repo", "CedynGroup/aequorOS", "--cache-dir", str(tmp_path)]
+    )
+    assert flake_report.cmd_weekly(args, now=datetime(2026, 11, 9, 12, 0, tzinfo=UTC)) == 0
+    output = capsys.readouterr()
+    # The real collector (not a stub) hits the budget during the run listing,
+    # and the summary says the collection was cut short instead of presenting
+    # the counts as complete.
+    assert "Time-budget caveat" in output.out
+    assert "time budget" in output.out
+    assert "undercounted" in output.out

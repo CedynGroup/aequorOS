@@ -63,8 +63,26 @@ jobs:
           python3 .github/scripts/ci_flake_report.py weekly \
             --repo "$GITHUB_REPOSITORY" \
             --window-days "$WINDOW_DAYS" \
-            >> "$GITHUB_STEP_SUMMARY" || {
+            --out-md "$RUNNER_TEMP/weekly-flake-report.md" \
+            --out-json "$RUNNER_TEMP/weekly-flake-report.json" \
+            > "$RUNNER_TEMP/weekly-summary.md" || {
               status=$?
               echo "Weekly flake report unavailable: the report command failed. See the step log for details." >> "$GITHUB_STEP_SUMMARY"
               exit "$status"
             }
+          # GitHub rejects a step summary over 1 MiB wholesale: write the
+          # clipped summary here and keep the full report in the artifact.
+          head -c 900000 "$RUNNER_TEMP/weekly-summary.md" >> "$GITHUB_STEP_SUMMARY"
+          if [ "$(wc -c < "$RUNNER_TEMP/weekly-summary.md")" -gt 900000 ]; then
+            printf '\n\n_Summary clipped at 900000 bytes; the full report is in the uploaded artifact._\n' >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - name: Upload the full report as an artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: weekly-flake-report
+          path: |
+            ${{ runner.temp }}/weekly-flake-report.md
+            ${{ runner.temp }}/weekly-flake-report.json
+          if-no-files-found: ignore
+          retention-days: 30
