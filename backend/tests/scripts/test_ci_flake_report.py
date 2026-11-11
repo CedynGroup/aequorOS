@@ -361,6 +361,38 @@ def test_swapped_shard_failures_between_failing_runs_are_mixed_outcomes() -> Non
     ]
 
 
+def test_a_job_failing_in_both_runs_is_not_passing_evidence() -> None:
+    runs = [
+        flake_report.RunRecord(
+            run_id=1,
+            workflow="Dashboard Playwright journeys",
+            event="pull_request",
+            head_branch="feature/a",
+            head_sha="abc123",
+            run_attempt=1,
+            conclusion="failure",
+            created_at="2026-11-08T10:00:00Z",
+        ),
+        flake_report.RunRecord(
+            run_id=2,
+            workflow="Dashboard Playwright journeys",
+            event="pull_request",
+            head_branch="feature/a",
+            head_sha="abc123",
+            run_attempt=2,
+            conclusion="failure",
+            created_at="2026-11-08T12:00:00Z",
+        ),
+    ]
+    # The same shard failed in both runs of the SHA: deterministic breakage,
+    # not mixed evidence, however the runs themselves concluded.
+    jobs_by_run = {
+        1: [job("Dashboard journeys shard 4/4", "failure", 20.0)],
+        2: [job("Dashboard journeys shard 4/4", "failure", 20.0)],
+    }
+    assert flake_report.same_sha_mixed_outcomes(runs, jobs_by_run) == []
+
+
 def test_fail_fail_pass_is_one_rerun_pass() -> None:
     attempts = {
         1: [job("Dashboard journeys shard 4/4", "failure", 20.0, 11)],

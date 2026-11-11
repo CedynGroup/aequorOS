@@ -371,10 +371,13 @@ def same_sha_mixed_outcomes(
             for passed_run in group:
                 if passed_run.run_id == failed_run.run_id:
                     continue
+                # Only an explicit success is passing evidence: a job that
+                # failed in both runs of one SHA is deterministic breakage,
+                # not a mixed outcome.
                 passed_names = {
                     job.name
                     for job in jobs_by_run.get(passed_run.run_id, [])
-                    if is_test_job_conclusion(job.conclusion) and not is_aggregate_job(job.name)
+                    if job.conclusion == "success" and not is_aggregate_job(job.name)
                 }
                 for name in sorted(failed_names & passed_names):
                     key = (name, failed_run.run_id, passed_run.run_id)

@@ -769,13 +769,15 @@ def frozen_files(rename: Renamer) -> frozenset[str]:
     return frozenset(frozen)
 
 
-def plan_rewrites(backend: Path, rename: Renamer) -> dict[Path, str]:
+def plan_rewrites(
+    backend: Path, rename: Renamer, *, previous_frozen_paths: frozenset[str] = frozenset()
+) -> dict[Path, str]:
     """Every tracked text file the passes change, with its rewritten text."""
     planned: dict[Path, str] = {}
     if not rename.moves:
         return planned
     frozen = frozen_identifiers(backend, rename)
-    frozen_paths = frozen_files(rename)
+    frozen_paths = frozen_files(rename) | previous_frozen_paths
     for path in tracked_text_files(backend):
         if not path.is_file():
             continue
@@ -912,9 +914,13 @@ def move(
     backend = backend.resolve()
     ledger = load_ledger(backend)
     paths, added = plan_moves(backend, requests)
+    # The rewrite plan is built before the files move, so a frozen file sits
+    # at its pre-move path while it is planned: exempt where it is now (the
+    # ledger without the new moves) as well as where it will be.
+    previous_frozen_paths = frozen_files(Renamer(tuple(ledger)))
     ledger += added
     rename = Renamer(tuple(ledger))
-    planned = plan_rewrites(backend, rename)
+    planned = plan_rewrites(backend, rename, previous_frozen_paths=previous_frozen_paths)
     relocated: dict[Path, str] = {}
     for path, text in planned.items():
         target = path
