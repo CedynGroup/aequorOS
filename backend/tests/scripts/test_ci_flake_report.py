@@ -1455,6 +1455,108 @@ def test_render_weekly_report_without_breaches_says_so() -> None:
     assert "No signature reached the policy thresholds" in markdown
 
 
+def test_an_off_policy_window_labels_its_thresholds_exploratory() -> None:
+    report = flake_report.build_report(runs=[success_run(1)], events=[], meta=REPORT_META)
+    markdown = flake_report.render_weekly_report(report, [], window_days=30)
+    assert (
+        "## Threshold crossings (exploratory 30-day window, "
+        "not the approved 14-day policy)" in markdown
+    )
+    assert "exploratory reading, not policy determinations" in markdown
+
+
+def test_a_collection_cutoff_adds_the_time_budget_caveat() -> None:
+    report = flake_report.build_report(runs=[success_run(1)], events=[], meta=REPORT_META)
+    markdown = flake_report.render_weekly_report(
+        report,
+        [],
+        window_days=14,
+        collection_cutoff=(
+            "collection stopped at the time budget with 3 failed-job log(s) unfetched"
+        ),
+    )
+    assert "Time-budget caveat" in markdown
+    assert "3 failed-job log(s) unfetched" in markdown
+
+
+def test_fetch_findings_stops_at_the_deadline(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    calls: list[Any] = []
+    monkeypatch.setattr(
+        flake_report, "fetch_job_log", lambda *args: calls.append(args) or ""
+    )
+    run = flake_report.RunRecord(
+        run_id=1,
+        workflow="Risk Service CI",
+        event="pull_request",
+        head_branch="feature/a",
+        head_sha="abc123",
+        run_attempt=1,
+        conclusion="failure",
+        created_at="2026-11-08T10:00:00Z",
+    )
+    failed_jobs = [
+        (run, 1, job("Risk Service CI shard 1/6", "failure", 20.0, 1)),
+        (run, 1, job("Risk Service CI shard 2/6", "failure", 20.0, 2)),
+    ]
+    options = flake_report.ReportOptions(
+        repo="CedynGroup/aequorOS",
+        workflow_files=["risk-service.yml"],
+        min_runs_per_workflow=1,
+        since="2026-11-01",
+        cache_dir=tmp_path,
+        deadline=0.0,
+    )
+    findings = flake_report._fetch_findings(
+        "CedynGroup/aequorOS", failed_jobs, options, lambda _m: None
+    )
+    assert calls == []
+    assert [f.signature for f in findings[1]] == ["log-budget-exhausted:Risk Service CI shard 1/6"]
+    assert [f.signature for f in findings[2]] == ["log-budget-exhausted:Risk Service CI shard 2/6"]
+
+
+def test_weekly_command_bounds_collection_within_the_runner_budget(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    captured: dict[str, Any] = {}
+
+    def fake_collect(options: Any, log: Any = print) -> tuple[list[Any], list[Any]]:
+        captured["options"] = options
+        return [], []
+
+    monkeypatch.setattr(flake_report, "collect_report_data", fake_collect)
+    parser = flake_report.build_parser()
+    args = parser.parse_args(["weekly", "--cache-dir", str(tmp_path)])
+    assert flake_report.cmd_weekly(args, now=datetime(2026, 11, 9, 12, 0, tzinfo=UTC)) == 0
+    assert captured["options"].deadline is not None
+
+
+def test_weekly_command_flags_the_time_budget_cutoff_in_the_summary(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], tmp_path: Path
+) -> None:
+    events = [
+        event("log-budget-exhausted:Dashboard journeys shard 4/4", kind="unclassified", run_id=1),
+        event(
+            "pytest:tests/db/test_document_deletion_timeout_integration.py", rerun=True, run_id=1
+        ),
+        event(
+            "pytest:tests/db/test_document_deletion_timeout_integration.py", rerun=True, run_id=2
+        ),
+    ]
+    monkeypatch.setattr(
+        flake_report,
+        "collect_report_data",
+        lambda options, log=print: ([success_run(1)], events),
+    )
+    parser = flake_report.build_parser()
+    args = parser.parse_args(["weekly", "--cache-dir", str(tmp_path)])
+    assert flake_report.cmd_weekly(args, now=datetime(2026, 11, 9, 12, 0, tzinfo=UTC)) == 0
+    output = capsys.readouterr()
+    assert "Time-budget caveat" in output.out
+    assert "1 failed-job log(s) unfetched" in output.out
+
+
 def test_weekly_command_renders_thresholds_and_the_ranking(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], tmp_path: Path
 ) -> None:

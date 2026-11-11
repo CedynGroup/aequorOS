@@ -44,7 +44,19 @@ jobs:
           # otherwise break out of the shell quoting.
           WINDOW_DAYS: ${{ github.event.inputs.window_days || '14' }}
         run: |
+          set -euo pipefail
+          # A dispatch caller can send a non-numeric or non-positive window;
+          # argument parsing would then exit before any summary exists. The
+          # note keeps the run's outcome visible either way.
+          if ! [[ "$WINDOW_DAYS" =~ ^[1-9][0-9]*$ ]]; then
+            echo "Weekly flake report unavailable: the window-days override is not a positive integer (got \"$WINDOW_DAYS\"); the scheduled window is 14 days." >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
           python3 .github/scripts/ci_flake_report.py weekly \
             --repo "$GITHUB_REPOSITORY" \
             --window-days "$WINDOW_DAYS" \
-            >> "$GITHUB_STEP_SUMMARY"
+            >> "$GITHUB_STEP_SUMMARY" || {
+              status=$?
+              echo "Weekly flake report unavailable: the report command failed. See the step log for details." >> "$GITHUB_STEP_SUMMARY"
+              exit "$status"
+            }
