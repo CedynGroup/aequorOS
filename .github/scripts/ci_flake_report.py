@@ -1960,13 +1960,34 @@ def _build_events(
     # only B -> B's rank shifts), double-counting one rerun cycle.
     rank_by_job: dict[tuple[int, int, str, int], int] = {}
     for run_id, attempts in jobs_by_run_attempt.items():
+        # A subset rerun ("re-run failed jobs") omits the jobs that were not
+        # re-run from the later attempt listing entirely. When an attempt
+        # lists fewer same-named jobs than the run's fullest attempt, the
+        # lineage's cross-attempt identity is ambiguous, and every rank in
+        # that lineage collapses by name: one logical job stays one cycle,
+        # and the undercount is the conservative direction for the policy
+        # thresholds.
+        counts_by_name: Counter[str] = Counter()
+        ids_by_attempt_name: dict[tuple[int, str], list[int]] = {}
         for attempt, jobs in attempts.items():
             ids_by_name: dict[str, list[int]] = {}
             for job in jobs:
                 ids_by_name.setdefault(job.name, []).append(job.job_id)
             for name, job_ids in ids_by_name.items():
-                for rank, job_id in enumerate(sorted(job_ids)):
-                    rank_by_job[(run_id, attempt, name, job_id)] = rank
+                counts_by_name[name] = max(counts_by_name[name], len(job_ids))
+                ids_by_attempt_name[(attempt, name)] = job_ids
+        ambiguous_names = {
+            name for name, count in counts_by_name.items() if any(
+                len(ids_by_attempt_name[(attempt, name)]) < count
+                for attempt in attempts
+                if (attempt, name) in ids_by_attempt_name
+            )
+        }
+        for (attempt, name), job_ids in ids_by_attempt_name.items():
+            for rank, job_id in enumerate(sorted(job_ids)):
+                rank_by_job[(run_id, attempt, name, job_id)] = (
+                    0 if name in ambiguous_names else rank
+                )
     events: list[FlakeEvent] = []
     for run, attempt, job in failed_jobs:
         rerun = rerun_passes.get((run.run_id, attempt, job.job_id))

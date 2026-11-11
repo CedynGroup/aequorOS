@@ -1034,6 +1034,58 @@ def test_instance_rank_survives_a_passing_sibling_in_one_attempt() -> None:
     assert flake_report.evaluate_thresholds(events, now) == []
 
 
+def test_a_subset_rerun_collapses_ambiguous_instance_identity() -> None:
+    """A partial rerun lists only the re-run jobs, so a same-named job's
+    position among its attempt's same-named jobs shifts between attempts.
+
+    GitHub's subset rerun keeps the jobs that were not re-run out of the
+    later attempt listing entirely. With attempt 1 listing two same-named
+    jobs (A passed, B failed), attempt 2 listing only B (failed again) and
+    attempt 3 only B (passed), which instance B is cannot be told apart, so
+    the lineage collapses by name: one logical job stays one rerun cycle,
+    and the conservative direction for the policy thresholds is the
+    undercount.
+    """
+    run = flake_report.RunRecord(
+        run_id=7,
+        workflow="Dashboard Playwright journeys",
+        event="pull_request",
+        head_branch="feature/a",
+        head_sha="abc123",
+        run_attempt=3,
+        conclusion="failure",
+        created_at="2026-11-08T10:00:00Z",
+    )
+    name = "Dashboard journeys shard 4/4"
+    signature = "playwright:tests/x.e2e.spec.ts"
+    b1 = job(name, "failure", 20.0, 102)
+    b2 = job(name, "failure", 20.0, 103)
+    failed_jobs = [(run, 1, b1), (run, 2, b2)]
+    rerun_passes = {
+        (7, 1, 102): flake_report.RerunPass(
+            failed_job=b1, failed_attempt=1, passed_attempt=3, passed_minutes=20.0
+        ),
+        (7, 2, 103): flake_report.RerunPass(
+            failed_job=b2, failed_attempt=2, passed_attempt=3, passed_minutes=20.0
+        ),
+    }
+    findings_by_job = {
+        102: [flake_report.Finding("test", signature, ["t"])],
+        103: [flake_report.Finding("test", signature, ["t"])],
+    }
+    attempt_jobs = {
+        7: {
+            1: [job(name, "success", 20.0, 101), b1],
+            2: [b2],
+            3: [job(name, "success", 20.0, 104)],
+        }
+    }
+    events = flake_report._build_events(
+        failed_jobs, attempt_jobs, rerun_passes, set(), findings_by_job
+    )
+    assert flake_report.evaluate_thresholds(events, datetime(2026, 11, 9, tzinfo=UTC)) == []
+
+
 def test_two_same_named_jobs_across_attempts_still_count_separately() -> None:
     """Instance identity survives new per-attempt job ids.
 
