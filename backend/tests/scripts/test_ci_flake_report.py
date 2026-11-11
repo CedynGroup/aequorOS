@@ -542,6 +542,48 @@ def test_branch_breakage_excluded_from_baseline_rate() -> None:
     assert len(report["branch_breakage"]) == 1
 
 
+def test_rerun_failing_only_branch_breakage_excluded_from_baseline_rate() -> None:
+    run = flake_report.RunRecord(
+        run_id=21,
+        workflow="Risk Service CI",
+        event="pull_request",
+        head_branch="feature/break",
+        head_sha="abc123",
+        run_attempt=2,
+        conclusion="failure",
+        created_at="2026-11-08T10:00:00Z",
+    )
+    events = [event("flake:branch-break-rerun", branch="feature/break", run_id=21)]
+    report = flake_report.build_report(runs=[run], events=events, meta=REPORT_META)
+    entry = report["baseline"]["Risk Service CI"]
+    assert entry["rerun_runs"] == 1
+    assert entry["flaky_failed_runs"] == 0
+    assert entry["baseline_flake_rate"] == 0.0
+    assert len(report["branch_breakage"]) == 1
+
+
+def test_rerun_with_mixed_breakage_and_flake_still_counts() -> None:
+    run = flake_report.RunRecord(
+        run_id=22,
+        workflow="Risk Service CI",
+        event="pull_request",
+        head_branch="feature/break",
+        head_sha="abc123",
+        run_attempt=2,
+        conclusion="success",
+        created_at="2026-11-08T10:00:00Z",
+    )
+    events = [
+        event("flake:branch-mixed", branch="feature/break", run_id=22),
+        event("flake:real", branch="feature/break", run_id=22, rerun=True),
+    ]
+    report = flake_report.build_report(runs=[run], events=events, meta=REPORT_META)
+    entry = report["baseline"]["Risk Service CI"]
+    assert entry["rerun_runs"] == 1
+    assert entry["baseline_flake_rate"] == 1.0
+    assert len(report["branch_breakage"]) == 1
+
+
 # --- CLI ----------------------------------------------------------------------
 
 

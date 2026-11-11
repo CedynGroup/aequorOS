@@ -534,12 +534,16 @@ def evaluate_thresholds(
 def baseline_rates(
     runs: list[RunRecord],
     events: list[FlakeEvent],
+    excluded_run_ids: frozenset[int] | set[int] = frozenset(),
 ) -> dict[str, Any]:
     """Per-workflow baseline flake rate over the measured window.
 
     A run "needs a rerun" when ``run_attempt > 1``; a run "fails flakily on
     first attempt" when its first attempt failed with a test/typecheck
     signature (infrastructure failures are reported separately).
+    ``excluded_run_ids`` names rerun runs whose failures are all
+    branch-breakage signatures (reported separately, kept out of the flake
+    rate); reruns with no failure events still count.
     """
     runs_by_workflow: dict[str, list[RunRecord]] = defaultdict(list)
     for run in runs:
@@ -564,7 +568,9 @@ def baseline_rates(
         flaky = len(flaky_runs.get(workflow, set()))
         affected = 0
         flaky_run_ids = flaky_runs.get(workflow, set())
-        rerun_run_ids = {run.run_id for run in workflow_runs if run.run_attempt > 1}
+        rerun_run_ids = {
+            run.run_id for run in workflow_runs if run.run_attempt > 1
+        } - excluded_run_ids
         affected = len(flaky_run_ids | rerun_run_ids)
         entry = {
             "total_runs": total,
@@ -584,7 +590,7 @@ def baseline_rates(
         flaky_ids: set[int] = set()
         for workflow in runs_by_workflow:
             flaky_ids |= flaky_runs.get(workflow, set())
-        rerun_ids = {run.run_id for run in runs if run.run_attempt > 1}
+        rerun_ids = {run.run_id for run in runs if run.run_attempt > 1} - set(excluded_run_ids)
         report["overall"] = {
             "total_runs": totals["total_runs"],
             "rerun_runs": totals["rerun_runs"],
@@ -660,6 +666,17 @@ def build_report(
     # Branch breakage is excluded from the baseline flake rate (the report
     # notes say so); it is deterministic failure on its own branch.
     breakage_signatures = {row["signature"] for row in breakage_rows}
+    # A rerun that failed again on nothing but branch-breakage signatures is
+    # not evidence of flakiness either; reruns with no failure events (the
+    # earlier attempt died for an unextracted reason) still count.
+    failures_by_run: dict[int, list[FlakeEvent]] = defaultdict(list)
+    for event in events:
+        failures_by_run[event.run_id].append(event)
+    breakage_only_rerun_ids = frozenset(
+        run_id
+        for run_id, run_events in failures_by_run.items()
+        if all(event.signature in breakage_signatures for event in run_events)
+    )
     baseline_events = [event for event in events if event.signature not in breakage_signatures]
     # The window claims what the data actually covers, which can be shorter
     # than the requested window when a run cap stopped paging early.
@@ -680,7 +697,7 @@ def build_report(
                 for workflow, counts in sorted(run_counts.items())
             },
         },
-        "baseline": baseline_rates(runs, baseline_events),
+        "baseline": baseline_rates(runs, baseline_events, breakage_only_rerun_ids),
         "ranking": flake_rows,
         "infrastructure": infra_rows,
         "branch_breakage": breakage_rows,
