@@ -276,13 +276,13 @@ def test_two_same_named_failures_in_one_attempt_are_both_reported() -> None:
 
 
 def test_unmatched_duplicates_stay_unrecovered_on_later_attempts() -> None:
-    """A duplicate of a multi-job attempt recovers only with a success of its own.
+    """Each failed attempt's duplicates are matched to the recovery separately.
 
     With two same-named failures on attempt 1, two on attempt 2 and a single
-    success on attempt 3, only one failure pairs with that success. The
-    unmatched duplicates stay unrecovered on every attempt; a later duplicate
-    must not report ``rerun=True`` with zero minutes just because it failed
-    again on the way to the recovery.
+    success on attempt 3, the success closes one cycle per failed attempt
+    (the recovery attempt's pass is the same instance passing again), but no
+    attempt gets more recoveries than it has successes: the unmatched
+    duplicates stay unrecovered on every attempt.
     """
     attempts = {
         1: [
@@ -297,7 +297,36 @@ def test_unmatched_duplicates_stay_unrecovered_on_later_attempts() -> None:
     }
     passes = flake_report.compare_attempts(attempts)
     assert [(p.failed_job.job_id, p.passed_attempt, p.passed_minutes) for p in passes] == [
-        (401, 3, 6.0)
+        (401, 3, 6.0),
+        (403, 3, 0.0),
+    ]
+
+
+def test_recovery_matches_are_separate_per_failed_attempt() -> None:
+    """Two same-named failures on attempt 1 and two on attempt 2, with two
+    successes on attempt 3: each attempt's instances match positionally, so
+    all four failures carry recovery evidence, but only the first failed
+    attempt charges the re-executed minutes."""
+    attempts = {
+        1: [
+            job("Claude review verdict", "failure", 5.0, 601),
+            job("Claude review verdict", "failure", 4.0, 602),
+        ],
+        2: [
+            job("Claude review verdict", "failure", 5.5, 603),
+            job("Claude review verdict", "failure", 4.5, 604),
+        ],
+        3: [
+            job("Claude review verdict", "success", 6.0, 605),
+            job("Claude review verdict", "success", 7.0, 606),
+        ],
+    }
+    passes = flake_report.compare_attempts(attempts)
+    assert [(p.failed_job.job_id, p.passed_attempt, p.passed_minutes) for p in passes] == [
+        (601, 3, 6.0),
+        (602, 3, 7.0),
+        (603, 3, 0.0),
+        (604, 3, 0.0),
     ]
 
 
@@ -620,7 +649,16 @@ def test_fail_pass_fail_later_failure_is_not_a_rerun() -> None:
         21: [flake_report.Finding("test", signature, ["t"])],
         23: [flake_report.Finding("test", signature, ["t"])],
     }
-    events = flake_report._build_events(failed_jobs, rerun_passes, set(), findings_by_job)
+    attempt_jobs = {
+        7: {
+            1: [job("Dashboard journeys shard 4/4", "failure", 20.0, 21)],
+            2: [job("Dashboard journeys shard 4/4", "success", 20.0, 22)],
+            3: [job("Dashboard journeys shard 4/4", "failure", 20.0, 23)],
+        }
+    }
+    events = flake_report._build_events(
+        failed_jobs, attempt_jobs, rerun_passes, set(), findings_by_job
+    )
     failures = [e for e in events if e.attempt != 2]
     assert len(failures) == 2
     by_attempt = {e.attempt: e for e in failures}
@@ -797,11 +835,13 @@ def test_thresholds_need_issue_at_two_fix_or_quarantine_at_three() -> None:
 
 
 def test_duplicate_same_named_jobs_count_as_separate_rerun_cycles() -> None:
-    """The rerun-cycle dedup keys on the job id, not the name.
+    """The rerun-cycle dedup keys on the job instance rank, not the name.
 
-    Two same-named jobs that both failed with the same signature and both
-    passed on rerun are two re-executions: the policy counts two cycles, so
-    two such recurrences cross the flaky-test-issue threshold.
+    Two same-named jobs in one attempt that both failed with the same
+    signature and both passed on rerun are two re-executions: the policy
+    counts two cycles, so two such recurrences cross the flaky-test-issue
+    threshold. The ranks are what ``_build_events`` assigns (position among
+    the same-named jobs of that attempt, from the complete listing).
     """
     now = datetime(2026, 11, 9, tzinfo=UTC)
     events = [
@@ -809,13 +849,13 @@ def test_duplicate_same_named_jobs_count_as_separate_rerun_cycles() -> None:
             "pytest:tests/a.py",
             rerun=True,
             run_id=41,
-            job_id=901,
+            instance_rank=0,
         ),
         event(
             "pytest:tests/a.py",
             rerun=True,
             run_id=41,
-            job_id=902,
+            instance_rank=1,
         ),
     ]
     breaches = flake_report.evaluate_thresholds(events, now)
@@ -828,13 +868,31 @@ def test_one_rerun_cycle_across_attempts_counts_once_despite_new_job_ids() -> No
     """GitHub assigns fresh job ids on every attempt.
 
     One job that fails the same signature on attempts 1 and 2 and passes on 3
-    is one rerun cycle, not two: the dedup must identify the instance across
-    attempts while still telling same-named distinct jobs apart.
+    is one rerun cycle, not two: the dedup identifies the instance across
+    attempts (its rank is stable) while still telling same-named distinct
+    jobs apart.
     """
     now = datetime(2026, 11, 9, tzinfo=UTC)
     events = [
-        event("pytest:tests/a.py", rerun=True, run_id=41, attempt=1, job_id=901),
-        event("pytest:tests/a.py", rerun=True, run_id=41, attempt=2, job_id=902),
+        event("pytest:tests/a.py", rerun=True, run_id=41, attempt=1),
+        event("pytest:tests/a.py", rerun=True, run_id=41, attempt=2),
+    ]
+    assert flake_report.evaluate_thresholds(events, now) == []
+
+
+def test_instance_rank_survives_a_passing_sibling_in_one_attempt() -> None:
+    """The instance rank comes from the complete attempt listing, not the
+    failed events alone.
+
+    Two same-named jobs fail on attempt 1 (ranks 0 and 1); on attempt 2 only
+    the rank-1 job fails again (the rank-0 job passes). Its rank stays 1, so
+    the two recurrences are one rerun cycle per instance — not two for the
+    rank-1 job because the sibling is missing from the failed events.
+    """
+    now = datetime(2026, 11, 9, tzinfo=UTC)
+    events = [
+        event("pytest:tests/a.py", rerun=True, run_id=41, attempt=1, instance_rank=1),
+        event("pytest:tests/a.py", rerun=True, run_id=41, attempt=2, instance_rank=1),
     ]
     assert flake_report.evaluate_thresholds(events, now) == []
 
@@ -843,15 +901,14 @@ def test_two_same_named_jobs_across_attempts_still_count_separately() -> None:
     """Instance identity survives new per-attempt job ids.
 
     Two same-named jobs that each fail on attempts 1 and 2 before passing are
-    two rerun cycles, even though all four failed executions carry distinct
-    job ids.
+    two rerun cycles, even though every failed execution is a distinct event.
     """
     now = datetime(2026, 11, 9, tzinfo=UTC)
     events = [
-        event("pytest:tests/a.py", rerun=True, run_id=41, attempt=1, job_id=901),
-        event("pytest:tests/a.py", rerun=True, run_id=41, attempt=1, job_id=902),
-        event("pytest:tests/a.py", rerun=True, run_id=41, attempt=2, job_id=903),
-        event("pytest:tests/a.py", rerun=True, run_id=41, attempt=2, job_id=904),
+        event("pytest:tests/a.py", rerun=True, run_id=41, attempt=1, instance_rank=0),
+        event("pytest:tests/a.py", rerun=True, run_id=41, attempt=1, instance_rank=1),
+        event("pytest:tests/a.py", rerun=True, run_id=41, attempt=2, instance_rank=0),
+        event("pytest:tests/a.py", rerun=True, run_id=41, attempt=2, instance_rank=1),
     ]
     breaches = flake_report.evaluate_thresholds(events, now)
     assert len(breaches) == 1
@@ -1794,6 +1851,14 @@ def test_duplicate_rerun_passes_stay_distinct_through_event_creation() -> None:
             (run, 1, job("Claude review verdict", "failure", 5.0, 501)),
             (run, 1, job("Claude review verdict", "failure", 4.0, 502)),
         ],
+        {
+            7: {
+                1: [
+                    job("Claude review verdict", "failure", 5.0, 501),
+                    job("Claude review verdict", "failure", 4.0, 502),
+                ]
+            }
+        },
         rerun_passes,
         set(),
         findings_by_job,
@@ -2444,11 +2509,12 @@ def test_weekly_command_writes_markdown_and_json_files(
 def test_weekly_command_warns_when_a_workflow_was_truncated_by_the_run_cap(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], tmp_path: Path
 ) -> None:
-    """A workflow stopped by the run cap before the window start must not let
-    the empty threshold list read as a complete measurement. Runs are keyed by
-    the API workflow name (e.g. "Web CI"), and only a workflow that actually
-    reached the cap is flagged — a low-traffic workflow with no runs early in
-    the window is not truncated."""
+    """A workflow file stopped by the run cap before the window start must not
+    let the empty threshold list read as a complete measurement. The cap is
+    enforced per workflow file, so the caveat is keyed by the file name (a
+    file can present several API workflow names in one window, and per-name
+    reconstruction could keep each name under the cap and hide the
+    truncation); only a collection that actually hit the cap is flagged."""
     truncated_run = flake_report.RunRecord(
         run_id=1,
         workflow="Risk Service CI",
@@ -2460,83 +2526,105 @@ def test_weekly_command_warns_when_a_workflow_was_truncated_by_the_run_cap(
         created_at="2026-11-05T00:00:00Z",
     )
 
-    def scenario_a(
-        options: Any,
-        log: Any = print,
-        notes: list[str] | None = None,
-    ) -> tuple[list[Any], list[Any]]:
-        assert options.min_runs_per_workflow == 2
-        return [truncated_run, truncated_run], []
+    def collector_with(note: str | None) -> Any:
+        def scenario(
+            options: Any,
+            log: Any = print,
+            notes: list[str] | None = None,
+        ) -> tuple[list[Any], list[Any]]:
+            if note is not None and notes is not None:
+                notes.append(note)
+            return [truncated_run], []
 
-    monkeypatch.setattr(flake_report, "collect_report_data", scenario_a)
+        return scenario
+
+    monkeypatch.setattr(
+        flake_report,
+        "collect_report_data",
+        collector_with("run-cap:risk-service.yml:2026-11-05T00:00:00Z"),
+    )
     parser = flake_report.build_parser()
     args = parser.parse_args(
-        [
-            "weekly",
-            "--min-runs-per-workflow",
-            "2",
-            "--cache-dir",
-            str(tmp_path / "a"),
-        ]
+        ["weekly", "--min-runs-per-workflow", "2", "--cache-dir", str(tmp_path / "a")]
     )
     assert flake_report.cmd_weekly(args, now=datetime(2026, 11, 9, 12, 0, tzinfo=UTC)) == 0
     output = capsys.readouterr().out
     assert "Threshold caveat" in output
-    assert "Risk Service CI" in output
+    assert "risk-service.yml" in output
     assert "undercounted" in output
 
-    def scenario_b(
-        options: Any,
-        log: Any = print,
-        notes: list[str] | None = None,
-    ) -> tuple[list[Any], list[Any]]:
-        # Same late-oldest run, but the cap was not reached: no caveat.
-        return [truncated_run], []
-
-    monkeypatch.setattr(flake_report, "collect_report_data", scenario_b)
+    # No run-cap note: the listing covered the window on its own, no caveat.
+    monkeypatch.setattr(flake_report, "collect_report_data", collector_with(None))
     args = parser.parse_args(
         ["weekly", "--min-runs-per-workflow", "2", "--cache-dir", str(tmp_path / "b")]
     )
     assert flake_report.cmd_weekly(args, now=datetime(2026, 11, 9, 12, 0, tzinfo=UTC)) == 0
     assert "Threshold caveat" not in capsys.readouterr().out
 
-    def scenario_c(
-        options: Any, log: Any = print, notes: list[str] | None = None
-    ) -> tuple[list[Any], list[Any]]:
-        # The cap stopped on the window-start date itself: earlier runs on
-        # that date may still be missing, so coverage stays uncertain.
-        on_start = flake_report.RunRecord(
-            run_id=2,
-            workflow="Risk Service CI",
-            event="push",
-            head_branch="main",
-            head_sha="a" * 40,
-            run_attempt=1,
-            conclusion="success",
-            created_at="2026-10-26T23:00:00Z",
-        )
-        return [on_start, on_start], []
-
-    monkeypatch.setattr(flake_report, "collect_report_data", scenario_c)
+    # The cap stopped on the window-start date itself: earlier runs on that
+    # date may still be missing, so coverage stays uncertain.
+    monkeypatch.setattr(
+        flake_report,
+        "collect_report_data",
+        collector_with("run-cap:risk-service.yml:2026-10-26T23:00:00Z"),
+    )
     args = parser.parse_args(
         ["weekly", "--min-runs-per-workflow", "2", "--cache-dir", str(tmp_path / "c")]
     )
     assert flake_report.cmd_weekly(args, now=datetime(2026, 11, 9, 12, 0, tzinfo=UTC)) == 0
     assert "Threshold caveat" in capsys.readouterr().out
 
-    def scenario_d(
-        options: Any, log: Any = print, notes: list[str] | None = None
-    ) -> tuple[list[Any], list[Any]]:
-        # An unlimited listing (cap 0) is never "capped": every workflow
-        # satisfies count >= 0.
-        return [truncated_run, truncated_run], []
-
-    monkeypatch.setattr(flake_report, "collect_report_data", scenario_d)
+    # The cap signal only exists when the cap is actually enforced: an
+    # unlimited listing (cap 0) never produces a run-cap note.
+    monkeypatch.setattr(
+        flake_report,
+        "collect_report_data",
+        collector_with("run-cap:risk-service.yml:2026-11-05T00:00:00Z"),
+    )
     args = parser.parse_args(
         ["weekly", "--min-runs-per-workflow", "0", "--cache-dir", str(tmp_path / "d")]
     )
     assert flake_report.cmd_weekly(args, now=datetime(2026, 11, 9, 12, 0, tzinfo=UTC)) == 0
-    assert "Threshold caveat" not in capsys.readouterr().out
+    assert "Threshold caveat" in capsys.readouterr().out
+
+
+def test_run_cap_note_is_only_emitted_when_the_cap_is_enforced(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An unlimited listing (min-runs 0) is never "capped": the run-cap note
+    must not fire, so the weekly summary shows no truncation caveat."""
+    pages: list[int] = []
+
+    def fake_gh_api_json(*endpoint_args: str) -> dict[str, Any]:
+        pages.append(len(pages))
+        if len(pages) > 1:
+            return {"workflow_runs": [], "total_count": 1}
+        return {
+            "workflow_runs": [
+                {
+                    "id": len(pages),
+                    "name": "Risk Service CI",
+                    "event": "push",
+                    "head_branch": "main",
+                    "head_sha": "a" * 40,
+                    "run_attempt": 1,
+                    "conclusion": "success",
+                    "created_at": "2026-11-08T10:00:00Z",
+                }
+            ],
+            "total_count": 1,
+        }
+
+    monkeypatch.setattr(flake_report, "gh_api_json", fake_gh_api_json)
+    records, reason = flake_report.list_workflow_runs(
+        "CedynGroup/aequorOS",
+        "risk-service.yml",
+        min_runs=0,
+        since="2026-10-01",
+        log=lambda message: None,
+    )
+    assert reason is None
+    assert len(records) == 1
 
 
 def test_weekly_command_survives_an_unwritable_cache_dir(
@@ -2773,6 +2861,8 @@ def test_run_cap_truncation_uses_the_full_window_boundary(
     ]
 
     def fake_collect(options: Any, log: Any = print, notes: list[str] | None = None) -> Any:
+        if notes is not None:
+            notes.append("run-cap:risk-service.yml:2026-10-26T14:00:00Z")
         return runs, []
 
     monkeypatch.setattr(flake_report, "collect_report_data", fake_collect)

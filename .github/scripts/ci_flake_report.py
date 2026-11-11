@@ -192,11 +192,13 @@ class FlakeEvent:
     same_sha_pass: bool
     created_at: str
     test_names: list[str] = field(default_factory=list)
-    # The Actions job id: two same-named jobs can share one attempt, and the
-    # dedup keys must keep them distinct. It changes on every re-execution;
-    # evaluate_thresholds derives the stable cross-attempt instance rank from
-    # it. Synthetic events (tests) use 0.
-    job_id: int = 0
+    # Rank of the job among the same-named jobs of its own attempt (ordered
+    # by job id), derived from the complete attempt listing: the Actions job
+    # id changes on every re-execution, so the rerun-cycle dedup needs an
+    # identity that is stable across attempts while still separating
+    # same-attempt duplicates. Synthetic events (tests) use 0, which
+    # collapses by name as before.
+    instance_rank: int = 0
 
 
 @dataclass
@@ -410,36 +412,36 @@ def compare_attempts(
             # attempt; order the duplicates deterministically by job id.
             successes = sorted(jobs_by_attempt[recovery], key=lambda job: job.job_id)
             first_failure = first_failure_before[recovery]
-            failures_per_attempt = Counter(attempt for attempt, _ in group)
-            for position, (fail_attempt, fail_job) in enumerate(group):
-                if position >= len(successes):
-                    if failures_per_attempt[fail_attempt] == 1:
-                        # A single-job lineage that failed again on the way to
-                        # the recovery ("failed, failed again, passed"): no
-                        # additional re-execution, so no minutes.
-                        minutes = 0.0
-                    else:
-                        # An unmatched duplicate of a multi-job attempt has no
-                        # success of its own to recover at: leave it
-                        # unrecovered instead of attributing another job's
-                        # success to it.
+            failures_by_attempt: dict[int, list[JobRecord]] = {}
+            for fail_attempt, fail_job in group:
+                failures_by_attempt.setdefault(fail_attempt, []).append(fail_job)
+            # Each failed attempt's instances are matched to the recovery
+            # attempt's successes separately: the successes represent the
+            # instances themselves (they pass on the recovery), so one success
+            # can close a cycle opened on every earlier failed attempt, but
+            # never more cycles than there are successes for one attempt.
+            for fail_attempt in sorted(failures_by_attempt):
+                for position, fail_job in enumerate(
+                    sorted(failures_by_attempt[fail_attempt], key=lambda job: job.job_id)
+                ):
+                    if position >= len(successes):
+                        # A duplicate of this failed attempt has no success of
+                        # its own to recover at: leave it unrecovered instead
+                        # of attributing another job's success to it.
                         continue
-                else:
-                    minutes = successes[position].minutes
-                    if fail_attempt != first_failure:
-                        # Later failures of one rerun cycle are additional
-                        # lost minutes but not additional re-executed ones:
-                        # the pass charges its minutes once, to the first
-                        # failed attempt recovering at it.
-                        minutes = 0.0
-                passes.append(
-                    RerunPass(
-                        failed_job=fail_job,
-                        failed_attempt=fail_attempt,
-                        passed_attempt=recovery,
-                        passed_minutes=minutes,
+                    # Later failures of one rerun cycle are additional lost
+                    # minutes but not additional re-executed ones: the pass
+                    # charges its minutes once, to the first failed attempt
+                    # recovering at it.
+                    minutes = 0.0 if fail_attempt != first_failure else successes[position].minutes
+                    passes.append(
+                        RerunPass(
+                            failed_job=fail_job,
+                            failed_attempt=fail_attempt,
+                            passed_attempt=recovery,
+                            passed_minutes=minutes,
+                        )
                     )
-                )
     return passes
 
 
@@ -834,28 +836,21 @@ def evaluate_thresholds(
     """
     window_start = now - timedelta(days=window_days)
     # One rerun cycle per run/job instance: a job failing the signature on
-    # several attempts before its pass needed one rerun, not two. GitHub
-    # assigns fresh job ids per attempt, so the instance is identified by its
-    # rank among the attempt's same-named jobs (stable across attempts)
-    # rather than by the raw id: same-named distinct jobs within one attempt
-    # keep separate cycles, one logical job across attempts keeps one.
-    rerun_failed = [
-        event
-        for event in events
-        if event.rerun and not event.signature.startswith(MISSING_LOG_SIGNATURE_PREFIXES)
-    ]
-    ids_by_attempt: dict[tuple[int, str, int], list[int]] = defaultdict(list)
-    for event in rerun_failed:
-        ids_by_attempt[(event.run_id, event.job, event.attempt)].append(event.job_id)
-    rank_by_id: dict[tuple[int, str, int], dict[int, int]] = {
-        key: {job_id: rank for rank, job_id in enumerate(sorted(set(ids)))}
-        for key, ids in ids_by_attempt.items()
-    }
+    # several attempts before its pass needed one rerun, not two. The
+    # instance rank (its position among its attempt's same-named jobs, from
+    # the complete listing) is stable across re-executions, whose Actions
+    # job ids are fresh every attempt, while same-named distinct jobs within
+    # one attempt keep separate cycles.
     counted: set[tuple[str, int, str, int]] = set()
     per_signature: dict[str, int] = Counter()
-    for event in rerun_failed:
-        rank = rank_by_id[(event.run_id, event.job, event.attempt)][event.job_id]
-        key = (event.signature, event.run_id, event.job, rank)
+    for event in events:
+        if not event.rerun:
+            continue
+        if event.signature.startswith(MISSING_LOG_SIGNATURE_PREFIXES):
+            # An unread log is not an identified failure: demanding a
+            # flaky-test issue for it would act on evidence nobody has seen.
+            continue
+        key = (event.signature, event.run_id, event.job, event.instance_rank)
         if key in counted:
             continue
         created = _parse_timestamp(event.created_at)
@@ -1331,6 +1326,52 @@ def _emit_unavailable(
     _write_unavailable_artifacts(args, note, window_days, error)
 
 
+def _weekly_caveats(
+    collection_notes: list[str],
+    budget_hits: int,
+    unavailable_hits: int,
+    unclassified_hits: int,
+    window_start_iso: str,
+) -> tuple[str | None, list[tuple[str, str]]]:
+    """Assemble the weekly summary's collection caveat and truncation list.
+
+    The run-cap signal is keyed by workflow file (the cap is enforced per
+    file; a file can present several API names in one window, so per-name
+    reconstruction could keep each name under the cap and hide the
+    truncation entirely). A cap hit is a caveat only when the oldest
+    collected run for that file does not precede the requested window start;
+    the comparison uses the full timestamps, so a cap hit hours inside the
+    window's first day is still caught.
+    """
+    cap_hits: list[tuple[str, str]] = []
+    cutoff_parts: list[str] = []
+    for note in collection_notes:
+        if note.startswith("run-cap:"):
+            _tag, workflow_file, oldest = note.split(":", 2)
+            cap_hits.append((workflow_file, oldest))
+        else:
+            cutoff_parts.append(note)
+    truncated = sorted(
+        (workflow_file, oldest)
+        for workflow_file, oldest in cap_hits
+        # An unlimited listing (cap 0) never emits a run-cap note, so no
+        # min-runs guard is needed here.
+        if oldest > window_start_iso
+    )
+    if budget_hits:
+        cutoff_parts.append(f"{budget_hits} failed-job log(s) unfetched")
+    if unavailable_hits:
+        cutoff_parts.append(f"{unavailable_hits} failed-job log(s) unreadable")
+    # An unclassified log was read but its failure is still unidentified: it
+    # is incomplete evidence too, so the caveat names it.
+    if unclassified_hits:
+        cutoff_parts.append(
+            f"{unclassified_hits} failed-job log(s) yielded no recognized failure signature"
+        )
+    collection_cutoff = "; ".join(cutoff_parts) if cutoff_parts else None
+    return collection_cutoff, truncated
+
+
 def cmd_weekly(args: argparse.Namespace, now: datetime | None = None) -> int:
     """Ranking over the rolling window plus the policy threshold crossings.
 
@@ -1396,18 +1437,15 @@ def cmd_weekly(args: argparse.Namespace, now: datetime | None = None) -> int:
         if not event.signature.startswith("log-budget-exhausted:")
         and not event.signature.startswith("log-unavailable:")
     ]
-    cutoff_parts = list(collection_notes)
-    if budget_hits:
-        cutoff_parts.append(f"{budget_hits} failed-job log(s) unfetched")
-    if unavailable_hits:
-        cutoff_parts.append(f"{unavailable_hits} failed-job log(s) unreadable")
-    # An unclassified log was read but its failure is still unidentified: it
-    # is incomplete evidence too, so the caveat names it.
-    if unclassified_hits:
-        cutoff_parts.append(
-            f"{unclassified_hits} failed-job log(s) yielded no recognized failure signature"
-        )
-    collection_cutoff = "; ".join(cutoff_parts) if cutoff_parts else None
+    window_start = current_time - timedelta(days=window_days)
+    window_start_iso = window_start.strftime("%Y-%m-%dT%H:%M:%SZ")
+    collection_cutoff, truncated = _weekly_caveats(
+        collection_notes,
+        budget_hits,
+        unavailable_hits,
+        unclassified_hits,
+        window_start_iso,
+    )
 
     report = build_report(
         runs=runs,
@@ -1419,29 +1457,6 @@ def cmd_weekly(args: argparse.Namespace, now: datetime | None = None) -> int:
             "commands": commands,
             "generated_at": current_time.strftime("%Y-%m-%dT%H:%M:%SZ"),
         },
-    )
-    # Per-workflow truncation check: the ranking's window line uses the global
-    # oldest run, which can hide one workflow having been stopped by the run
-    # cap. RunRecord.workflow carries the API workflow name (e.g. "Web CI"),
-    # which is what the caveat shows. A workflow is flagged only when the cap
-    # was actually reached: a low-traffic workflow with no runs early in the
-    # window is not truncated. The comparison uses the full timestamps, so a
-    # cap hit hours inside the window's first day is still caught.
-    window_start = current_time - timedelta(days=window_days)
-    window_start_iso = window_start.strftime("%Y-%m-%dT%H:%M:%SZ")
-    runs_per_workflow = Counter(run.workflow for run in runs)
-    oldest_by_workflow = {
-        workflow: min(run.created_at for run in runs if run.workflow == workflow)
-        for workflow in runs_per_workflow
-    }
-    truncated = sorted(
-        (workflow, oldest)
-        for workflow, oldest in oldest_by_workflow.items()
-        # An unlimited listing (cap 0) is never "capped": every workflow
-        # satisfies count >= 0.
-        if args.min_runs_per_workflow > 0
-        and runs_per_workflow[workflow] >= args.min_runs_per_workflow
-        and oldest > window_start_iso
     )
     breaches = evaluate_thresholds(measured_events, current_time, window_days)
     markdown = render_weekly_report(report, breaches, window_days, truncated, collection_cutoff)
@@ -1768,6 +1783,12 @@ def _list_all_runs(options: ReportOptions, log: Any, notes: list[str]) -> list[R
                 f"run listing for {workflow_file} stopped at the time budget; "
                 "its counts may be undercounted"
             )
+        if reason == "run-cap" and records:
+            # The cap is enforced per workflow file, so the truncation signal
+            # must be per file too: a workflow file can present several API
+            # names in one window, and per-name reconstruction could keep each
+            # name under the cap and hide the truncation entirely.
+            notes.append(f"run-cap:{workflow_file}:{min(run.created_at for run in records)}")
         if options.window_start is not None:
             records = [run for run in records if run.created_at >= options.window_start]
         all_runs.extend(records)
@@ -1893,10 +1914,25 @@ def _failed_leaf_jobs(
 
 def _build_events(
     failed_jobs: list[tuple[RunRecord, int, JobRecord]],
+    jobs_by_run_attempt: dict[int, dict[int, list[JobRecord]]],
     rerun_passes: dict[tuple[int, int, int], RerunPass],
     mixed_flags: set[tuple[int, str]],
     findings_by_job: dict[int, list[Finding]],
 ) -> list[FlakeEvent]:
+    # The rerun-cycle instance rank must come from the COMPLETE attempt
+    # listings, not from the failed events alone: deriving it from failures
+    # only would rank a job differently in two attempts whenever a same-named
+    # sibling passed in one of them (attempt 1 fails A and B, attempt 2 fails
+    # only B -> B's rank shifts), double-counting one rerun cycle.
+    rank_by_job: dict[tuple[int, int, str, int], int] = {}
+    for run_id, attempts in jobs_by_run_attempt.items():
+        for attempt, jobs in attempts.items():
+            ids_by_name: dict[str, list[int]] = {}
+            for job in jobs:
+                ids_by_name.setdefault(job.name, []).append(job.job_id)
+            for name, job_ids in ids_by_name.items():
+                for rank, job_id in enumerate(sorted(job_ids)):
+                    rank_by_job[(run_id, attempt, name, job_id)] = rank
     events: list[FlakeEvent] = []
     for run, attempt, job in failed_jobs:
         rerun = rerun_passes.get((run.run_id, attempt, job.job_id))
@@ -1921,7 +1957,7 @@ def _build_events(
                     same_sha_pass=(run.run_id, job.name) in mixed_flags,
                     created_at=run.created_at,
                     test_names=finding.test_names,
-                    job_id=job.job_id,
+                    instance_rank=rank_by_job[(run.run_id, attempt, job.name, job.job_id)],
                 )
             )
     return events
@@ -1959,7 +1995,9 @@ def collect_report_data(
     log(f"Fetching logs for {len(failed_jobs)} failed job(s)")
     findings_by_job = _fetch_findings(options.repo, failed_jobs, options, log)
 
-    events = _build_events(failed_jobs, rerun_passes, mixed_flags, findings_by_job)
+    events = _build_events(
+        failed_jobs, jobs_by_run_attempt, rerun_passes, mixed_flags, findings_by_job
+    )
     log(f"Built {len(events)} event(s) from {len(failed_jobs)} failed job(s)")
     return all_runs, events
 
