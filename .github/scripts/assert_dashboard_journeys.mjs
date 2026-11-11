@@ -9,7 +9,7 @@ const floor = 213;
 // add up to this pinned count, so a shard silently dropping journeys fails the
 // gate instead of passing a quietly smaller suite. Bump this count in the same
 // change that adds or removes journeys.
-const expectedDiscovered = 235;
+const expectedDiscovered = 236;
 const files = process.argv.slice(2);
 const problems = [];
 const ids = new Set();
