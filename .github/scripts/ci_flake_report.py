@@ -66,6 +66,12 @@ WORKFLOW_FILES = (
 )
 PER_PAGE = 100
 LOG_CACHE_DEFAULT = "/tmp/ci-flake-logs"
+# The window the approved flake policy defines its thresholds on. The weekly
+# report renders any other window as exploratory rather than policy output.
+POLICY_WINDOW_DAYS = 14
+# The weekly workflow's runner budget is one hour; collection stops well
+# before it so the report (or its unavailable note) is always written.
+WEEKLY_COLLECTION_BUDGET_MINUTES = 45
 # Logs bigger than this are deleted right after extraction (journey shards
 # reach ~15 MB); small ones stay cached for re-runs.
 DELETE_LOG_THRESHOLD_BYTES = 1_000_000
@@ -1042,19 +1048,38 @@ def render_markdown(report: dict[str, Any]) -> str:
 
 
 def render_threshold_section(breaches: list[ThresholdBreach], window_days: int) -> list[str]:
-    """The approved policy's threshold crossings for the rolling window.
+    """The policy threshold crossings for the rolling window.
 
     Reporting only: this never creates issues or comments; a person files the
-    flaky-test issue and picks its owner.
+    flaky-test issue and picks its owner. The approved policy's thresholds are
+    defined on the 14-day window; a report over any other window labels its
+    crossings exploratory rather than policy determinations.
     """
+    policy_window = window_days == POLICY_WINDOW_DAYS
+    heading = (
+        "## Threshold crossings (approved flake policy)"
+        if policy_window
+        else (
+            f"## Threshold crossings (exploratory {window_days}-day window, "
+            f"not the approved {POLICY_WINDOW_DAYS}-day policy)"
+        )
+    )
     lines = [
-        "## Threshold crossings (approved flake policy)",
+        heading,
         "",
         f">=2 rerun-only passes in {window_days} days need a flaky-test issue "
         "with an owner; >=3 need a fix or quarantine within 7 days. A "
         "rerun-only pass is a job that failed on an attempt and passed only "
         "because the run was retried.",
         "",
+    ]
+    if not policy_window:
+        lines.append(
+            "This window differs from the approved policy's window, so these "
+            "crossings are exploratory reading, not policy determinations."
+        )
+        lines.append("")
+    lines += [
         "This report never creates issues or comments; a person files the "
         "flaky-test issue and picks its owner. The window bounds runs by "
         "their creation date, so a rerun of a run created before the window "
@@ -1080,6 +1105,7 @@ def render_weekly_report(
     breaches: list[ThresholdBreach],
     window_days: int,
     truncated: list[tuple[str, str]] | None = None,
+    collection_cutoff: str | None = None,
 ) -> str:
     """Weekly summary: the policy thresholds first, then the full ranking."""
     meta = report["meta"]
@@ -1095,6 +1121,12 @@ def render_weekly_report(
         *render_threshold_section(breaches, window_days),
         "",
     ]
+    if collection_cutoff is not None:
+        header.append(
+            f"- Time-budget caveat: {collection_cutoff} The counts below may be "
+            "undercounted; the next weekly run starts from an empty budget."
+        )
+        header.append("")
     for workflow, oldest in truncated or []:
         header.append(
             f"- Threshold caveat: `{workflow}` hit the run cap before covering "
@@ -1160,6 +1192,7 @@ def cmd_weekly(args: argparse.Namespace, now: datetime | None = None) -> int:
         since=since,
         cache_dir=cache_dir,
         keep_logs=args.keep_logs,
+        deadline=time.monotonic() + WEEKLY_COLLECTION_BUDGET_MINUTES * 60,
     )
     try:
         # Diagnostics go to stderr: stdout is the Markdown step summary.
@@ -1168,6 +1201,15 @@ def cmd_weekly(args: argparse.Namespace, now: datetime | None = None) -> int:
         print(render_weekly_unavailable(window_days, str(error)))
         print(f"Weekly flake report unavailable: {error}", file=sys.stderr)
         return 0
+    budget_hits = sum(
+        1 for event in events if event.signature.startswith("log-budget-exhausted:")
+    )
+    collection_cutoff = (
+        f"collection stopped at the time budget with {budget_hits} failed-job "
+        "log(s) unfetched"
+        if budget_hits
+        else None
+    )
 
     report = build_report(
         runs=runs,
@@ -1194,7 +1236,7 @@ def cmd_weekly(args: argparse.Namespace, now: datetime | None = None) -> int:
         and min(run.created_at[:10] for run in runs if run.workflow == workflow) > since
     )
     breaches = evaluate_thresholds(events, current_time, window_days)
-    markdown = render_weekly_report(report, breaches, window_days, truncated)
+    markdown = render_weekly_report(report, breaches, window_days, truncated, collection_cutoff)
     # stdout always carries the Markdown: the workflow step redirects it into
     # the step summary whether or not artifact paths were also given.
     print(markdown)
@@ -1362,6 +1404,10 @@ class ReportOptions:
     since: str
     cache_dir: Path
     keep_logs: bool = False
+    # A time.monotonic() reading: collection stops log fetches past it so a
+    # slow or retried API never eats the whole runner budget and dies before
+    # the report (or its unavailable note) is written.
+    deadline: float | None = None
 
 
 def _list_all_runs(options: ReportOptions, log: Any) -> list[RunRecord]:
@@ -1427,6 +1473,17 @@ def _fetch_findings(
     """Fetch logs of failed jobs, extract findings, free large logs."""
     findings_by_job: dict[int, list[Finding]] = {}
     for index, (_run, _attempt, job) in enumerate(failed_jobs, 1):
+        if options.deadline is not None and time.monotonic() > options.deadline:
+            remaining = len(failed_jobs) - index + 1
+            log(
+                f"Time budget reached with {remaining} failed-job log(s) unfetched; "
+                "the report carries what was collected"
+            )
+            for _run, _attempt, remaining_job in failed_jobs[index - 1 :]:
+                findings_by_job[remaining_job.job_id] = [
+                    Finding("unclassified", f"log-budget-exhausted:{remaining_job.name}")
+                ]
+            break
         try:
             text = fetch_job_log(options.repo, job.job_id, options.cache_dir, options.keep_logs)
             findings_by_job[job.job_id] = extract_findings(clean_lines(text))
