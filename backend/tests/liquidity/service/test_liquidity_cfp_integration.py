@@ -748,7 +748,7 @@ def test_expired_approval_refuses_activation_without_event_but_allows_stand_down
     )
     plan = db_session.get(ContingencyFundingPlan, approved.id)
     assert plan is not None
-    plan.approval_expires_at = datetime.now(tz=UTC).date() - timedelta(days=1)
+    plan.approval_expires_at = datetime.now(tz=UTC).astimezone().date() - timedelta(days=1)
     db_session.commit()
     payload = CfpActivationCreate(reporting_period_id=period_id, reason="Funding stress")
     with pytest.raises(HTTPException) as refused:

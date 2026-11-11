@@ -382,7 +382,11 @@ def test_a_framework_with_no_method_mandate_asserts_nothing(
     assert others, "the registry publishes at least one non-Ghanaian framework"
     for framework in others:
         decisions = sf_state.method_mandates(
-            db_session, sf_access.bank, framework, as_of=AS_OF, today=datetime.now(tz=UTC).date()
+            db_session,
+            sf_access.bank,
+            framework,
+            as_of=AS_OF,
+            today=datetime.now(tz=UTC).astimezone().date(),
         )
         assert decisions == (), framework.code
 
@@ -519,7 +523,11 @@ def test_the_mandate_seam_still_records_when_a_calculation_asks_for_it(
     """The run that seals immediately after IS the one that owns the row."""
     regulatory_parameters.consume_parameter_provenance(db_session)
     regulatory_irr_sf.sf_mandate(
-        db_session, sf_access.bank, as_of=AS_OF, today=datetime.now(tz=UTC).date(), record=True
+        db_session,
+        sf_access.bank,
+        as_of=AS_OF,
+        today=datetime.now(tz=UTC).astimezone().date(),
+        record=True,
     )
     recorded = {
         entry["param_code"]

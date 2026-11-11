@@ -278,7 +278,7 @@ def test_daily_stats_appear_only_when_snapshots_exist(db_session: Session) -> No
     db_session.commit()
     pipeline.run_refresh(db_session, job)
 
-    today = datetime.now(tz=UTC).date()
+    today = datetime.now(tz=UTC).astimezone().date()
     result = window_analytics.compute_window(
         db_session,
         MAKER,
