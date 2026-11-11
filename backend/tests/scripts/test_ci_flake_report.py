@@ -330,6 +330,102 @@ def test_recovery_matches_are_separate_per_failed_attempt() -> None:
     ]
 
 
+def test_a_duplicate_that_first_fails_later_charges_its_own_minutes() -> None:
+    """The re-executed minutes are charged once per instance, not per name.
+
+    Attempt 1 fails instance A; attempt 2 fails A again and B for the first
+    time; attempt 3 passes both. B's first failure is attempt 2, so B carries
+    its own re-executed minutes; A's re-execution was already charged on
+    attempt 1.
+    """
+    attempts = {
+        1: [job("Claude review verdict", "failure", 5.0, 701)],
+        2: [
+            job("Claude review verdict", "failure", 5.5, 703),
+            job("Claude review verdict", "failure", 4.5, 704),
+        ],
+        3: [
+            job("Claude review verdict", "success", 6.0, 705),
+            job("Claude review verdict", "success", 7.0, 706),
+        ],
+    }
+    passes = flake_report.compare_attempts(attempts)
+    assert [(p.failed_job.job_id, p.passed_minutes) for p in passes] == [
+        (701, 6.0),
+        (703, 0.0),
+        (704, 7.0),
+    ]
+
+
+def test_recovery_minutes_follow_the_complete_listing_rank() -> None:
+    """Matching uses the rank from the complete attempt listing.
+
+    Attempt 1 has two same-named jobs where rank 0 succeeded and rank 1
+    failed; the recovery attempt's successes last 1 and 30 minutes. The
+    failure is rank 1, so it must be recovered by (and charged) the 30-minute
+    success, not the first success in the list.
+    """
+    attempts = {
+        1: [
+            job("Claude review verdict", "success", 3.0, 801),
+            job("Claude review verdict", "failure", 5.0, 802),
+        ],
+        2: [
+            job("Claude review verdict", "success", 1.0, 803),
+            job("Claude review verdict", "success", 30.0, 804),
+        ],
+    }
+    passes = flake_report.compare_attempts(attempts)
+    assert [(p.failed_job.job_id, p.passed_minutes) for p in passes] == [(802, 30.0)]
+
+
+def test_run_cap_reason_survives_a_final_page_with_extra_in_window_runs(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A cap that removes in-window runs from the returned slice is a cap hit.
+
+    The final page carries three in-window runs plus a pre-window one: the
+    loop reports complete coverage, but the returned slice keeps only
+    ``min_runs`` of them, so the listing must still be reported as capped -
+    otherwise the weekly summary presents an incomplete threshold result as
+    complete.
+    """
+
+    def fake_gh_api_json(*endpoint_args: str) -> dict[str, Any]:
+        return {
+            "workflow_runs": [
+                {
+                    "id": run_id,
+                    "name": "Risk Service CI",
+                    "event": "push",
+                    "head_branch": "main",
+                    "head_sha": "a" * 40,
+                    "run_attempt": 1,
+                    "conclusion": "success",
+                    "created_at": created_at,
+                }
+                for run_id, created_at in [
+                    (1, "2026-11-08T10:00:00Z"),
+                    (2, "2026-11-07T10:00:00Z"),
+                    (3, "2026-11-06T10:00:00Z"),
+                    (4, "2026-10-01T10:00:00Z"),
+                ]
+            ],
+            "total_count": 4,
+        }
+
+    monkeypatch.setattr(flake_report, "gh_api_json", fake_gh_api_json)
+    records, reason = flake_report.list_workflow_runs(
+        "CedynGroup/aequorOS",
+        "risk-service.yml",
+        min_runs=2,
+        since="2026-10-26",
+        log=lambda message: None,
+    )
+    assert reason == "run-cap"
+    assert [run.run_id for run in records] == [1, 2]
+
+
 def test_consistent_failure_is_not_flaky() -> None:
     attempts = {
         1: [job("Dashboard journeys shard 4/4", "failure", 20.0)],
@@ -889,10 +985,7 @@ def test_unidentified_failures_do_not_cross_policy_thresholds() -> None:
     and the collection caveats instead.
     """
     now = datetime(2026, 11, 9, tzinfo=UTC)
-    events = [
-        event("unclassified:dashboard", rerun=True, run_id=run_id)
-        for run_id in (41, 42, 43)
-    ]
+    events = [event("unclassified:dashboard", rerun=True, run_id=run_id) for run_id in (41, 42, 43)]
     assert flake_report.evaluate_thresholds(events, now) == []
 
 

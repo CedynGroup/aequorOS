@@ -339,6 +339,17 @@ def parse_runs(payload: dict[str, Any], workflow: str) -> list[RunRecord]:
     return runs
 
 
+def _instance_rank(attempt_jobs: list[JobRecord], job: JobRecord) -> int:
+    """Position of a job among its attempt's same-named jobs (job id order).
+
+    Same rank definition the rerun-cycle dedup carries on the events (derived
+    there from the complete attempt listing); compare_attempts uses it so the
+    recovery pairing and the threshold counting identify instances the same
+    way.
+    """
+    return sorted(candidate.job_id for candidate in attempt_jobs).index(job.job_id)
+
+
 def compare_attempts(
     attempts: dict[int, list[JobRecord]],
 ) -> list[RerunPass]:
@@ -360,8 +371,11 @@ def compare_attempts(
     succeeded (with one success and one failure in the same attempt, no
     identity ties an earlier failure to that one success, so recovering there
     would attribute one job's success to another), and the failures recovering
-    at one attempt share that attempt's successes positionally, so each
-    re-execution charges its own minutes. Tuple comparison never reaches the
+    at one attempt are matched to that attempt's successes by their instance
+    rank (position among the attempt's same-named jobs, job id order), so the
+    pairing is deterministic and consistent with the threshold dedup. The
+    pass's minutes are charged once per instance, to the first failed attempt
+    in which that instance failed. Tuple comparison never reaches the
     JobRecord objects (they are not orderable).
     """
     passes: list[RerunPass] = []
@@ -399,49 +413,47 @@ def compare_attempts(
         ]
         # First failed attempt recovering at each passing attempt: that one
         # carries the re-executed minutes for the pass.
-        first_failure_before: dict[int, int] = {}
         failures_by_recovery: dict[int, list[tuple[int, JobRecord]]] = {}
         for fail_attempt, fail_job in failed:
             recovery = next((a for a in recoveries if a > fail_attempt), None)
             if recovery is None:
                 continue
-            first_failure_before.setdefault(recovery, fail_attempt)
             failures_by_recovery.setdefault(recovery, []).append((fail_attempt, fail_job))
         for recovery, group in failures_by_recovery.items():
             # By construction every job of the name succeeded on a recovery
-            # attempt; order the duplicates deterministically by job id.
+            # attempt; order the duplicates deterministically by job id. The
+            # instance rank is the position among the same-named jobs of an
+            # attempt (sorted by job id), the same rank the rerun-cycle dedup
+            # carries: matching by it keeps the pairing consistent with the
+            # threshold counting even when a same-named sibling succeeded in
+            # the failing attempt.
             successes = sorted(jobs_by_attempt[recovery], key=lambda job: job.job_id)
-            first_failure = first_failure_before[recovery]
-            failures_by_attempt: dict[int, list[JobRecord]] = {}
+            first_failure_by_rank: dict[int, int] = {}
             for fail_attempt, fail_job in group:
-                failures_by_attempt.setdefault(fail_attempt, []).append(fail_job)
-            # Each failed attempt's instances are matched to the recovery
-            # attempt's successes separately: the successes represent the
-            # instances themselves (they pass on the recovery), so one success
-            # can close a cycle opened on every earlier failed attempt, but
-            # never more cycles than there are successes for one attempt.
-            charged_positions: set[int] = set()
-            for fail_attempt in sorted(failures_by_attempt):
-                for position, fail_job in enumerate(
-                    sorted(failures_by_attempt[fail_attempt], key=lambda job: job.job_id)
-                ):
-                    if position >= len(successes):
-                        # A duplicate of this failed attempt has no success of
-                        # its own to recover at: leave it unrecovered instead
-                        # of attributing another job's success to it.
+                rank = _instance_rank(jobs_by_attempt[fail_attempt], fail_job)
+                known = first_failure_by_rank.get(rank)
+                if known is None or fail_attempt < known:
+                    first_failure_by_rank[rank] = fail_attempt
+            for fail_attempt in sorted({attempt for attempt, _ in group}):
+                attempt_failures = [job for attempt, job in group if attempt == fail_attempt]
+                for fail_job in sorted(attempt_failures, key=lambda job: job.job_id):
+                    rank = _instance_rank(jobs_by_attempt[fail_attempt], fail_job)
+                    if rank >= len(successes):
+                        # The recovery attempt held fewer same-named jobs than
+                        # this rank: no success of its own to recover at, so
+                        # leave the failure unrecovered instead of attributing
+                        # another instance's success to it.
                         continue
-                    # Each recovery position is charged once: the first failed
-                    # attempt that maps to it carries the re-executed minutes.
-                    # A later failure mapping to the same position is an
-                    # additional lost attempt of an already-charged instance,
-                    # not a second re-execution; but an instance that first
-                    # fails later (a fresh position) still charges its own
-                    # recovery minutes.
-                    if position not in charged_positions:
-                        minutes = successes[position].minutes
-                        charged_positions.add(position)
-                    else:
-                        minutes = 0.0
+                    # The pass charges its minutes once per instance, to the
+                    # first failed attempt in which that instance failed; a
+                    # later failed execution of the same instance is
+                    # additional lost minutes but not an additional
+                    # re-execution.
+                    minutes = (
+                        successes[rank].minutes
+                        if fail_attempt == first_failure_by_rank[rank]
+                        else 0.0
+                    )
                     passes.append(
                         RerunPass(
                             failed_job=fail_job,
@@ -1633,6 +1645,14 @@ def list_workflow_runs(  # noqa: PLR0913 - the deadline bounds every page of one
             break
         page += 1
     records = [run for run in records if run.created_at[:10] >= since]
+    if reason is None and min_runs and len(records) > min_runs:
+        # The final page carried more in-window runs than the cap keeps, and
+        # the loop had already seen a pre-window run (so it reported
+        # complete coverage): the cap still removed in-window records from
+        # the returned slice, so the listing is truncated and the weekly
+        # summary must carry the caveat instead of a conclusive threshold
+        # result.
+        reason = "run-cap"
     return (records[:min_runs] if min_runs else records), reason
 
 
