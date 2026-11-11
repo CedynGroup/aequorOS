@@ -4,7 +4,8 @@ name: Web CI
 #   frontend — ESLint and production build.
 #   console  — typecheck, unit tests, and production build.
 # Console lint is available locally but is not a step in this workflow.
-# Both jobs are BLOCKING.
+# Both jobs are BLOCKING. The `Rerun summary` job is the exception:
+# visibility-only with `continue-on-error`, it never blocks.
 
 # REQUIRED-CHECK SAFETY (2026-08-22) — same reasoning as dashboard.yml: a
 # `paths:`-filtered workflow cannot supply a required status check, because it

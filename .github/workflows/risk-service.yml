@@ -2,7 +2,8 @@ name: Risk Service CI
 
 # Gate inventory (audit §1.4 / §5; D-32 re-measured 2026-08-22). Every job below
 # fails the run when it fails — but read the BRANCH PROTECTION note at the bottom
-# before reading "blocking" as "cannot merge".
+# before reading "blocking" as "cannot merge". The exception is the `Rerun
+# summary` job (visibility-only, `continue-on-error`), which never blocks.
 #
 # READ FIRST, because it reframes everything under it: backend CI on `main` ran
 # NO test between 2026-08-03 and 2026-08-22, and it was TWO unrelated failures,

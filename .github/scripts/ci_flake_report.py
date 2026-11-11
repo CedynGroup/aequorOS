@@ -451,7 +451,7 @@ def render_rerun_summary(
             f"{', '.join(str(a) for a in row.failed_attempts)}"
         )
         if not row.findings:
-            lines.append("  - failure signature unavailable (log unreadable)")
+            lines.append("  - no recognised failure signature in the failed attempts' logs")
         for finding in row.findings:
             if finding.test_names:
                 lines.append(f"  - `{finding.signature}` — {', '.join(finding.test_names)}")
@@ -1405,7 +1405,7 @@ def cmd_rerun_summary(args: argparse.Namespace) -> int:
             "event": payload.get("event") or "",
             "branch": payload.get("head_branch") or "",
         }
-    except (RuntimeError, OSError) as error:
+    except (RuntimeError, OSError, ValueError) as error:
         # Cosmetic only; the summary still renders without the context line.
         print(f"Run context unavailable: {error}", file=sys.stderr)
 
@@ -1414,14 +1414,25 @@ def cmd_rerun_summary(args: argparse.Namespace) -> int:
             earlier: fetch_attempt_jobs(args.repo, run_id, earlier)
             for earlier in range(1, attempt + 1)
         }
-    except (RuntimeError, OSError) as error:
+    except (RuntimeError, OSError, ValueError, KeyError, TypeError, AttributeError) as error:
         print(render_rerun_unavailable(run_id, attempt, str(error)))
         print(f"Rerun summary unavailable: {error}", file=sys.stderr)
         return 0
 
     rows = rerun_summary_rows(attempts, attempt)
-    with tempfile.TemporaryDirectory(prefix="ci-flake-rerun-") as cache_name:
-        _attach_rerun_findings(args.repo, rows, attempts, Path(cache_name), print)
+    try:
+        with tempfile.TemporaryDirectory(prefix="ci-flake-rerun-") as cache_name:
+            # Diagnostics go to stderr: stdout is the Markdown step summary.
+            _attach_rerun_findings(
+                args.repo,
+                rows,
+                attempts,
+                Path(cache_name),
+                lambda message: print(message, file=sys.stderr),
+            )
+    except (RuntimeError, OSError) as error:
+        # Cosmetic only; the summary still renders without the signatures.
+        print(f"Failure signatures unavailable: {error}", file=sys.stderr)
     print(render_rerun_summary(run_id, attempt, rows, context))
     return 0
 
