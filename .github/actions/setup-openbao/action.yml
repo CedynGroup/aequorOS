@@ -7,18 +7,48 @@ outputs:
 runs:
   using: composite
   steps:
-    - name: Download and verify OpenBao
+    - name: Cache the OpenBao binary
+      id: openbao-cache
+      uses: actions/cache@v6
+      with:
+        path: ${{ runner.temp }}/aequoros-ci-openbao/bao
+        # The key namespace holds only the verified binary file (the path
+        # above): an entry saved while the cache path was the whole runtime
+        # directory must never be restored. Keyed by release, platform and the
+        # pinned `bao` binary checksum; when the release CDN answers 504, the
+        # cache restores the verified binary instead of failing every job of
+        # the run.
+        key: openbao-binary-${{ runner.os }}-${{ runner.arch }}-v2.6.1-736b8ecf354fda6b2af62e4ae064f12fe6c52d7db8425b9c6de22f286a5485ec
+    - name: Download OpenBao
+      if: steps.openbao-cache.outputs.cache-hit != 'true'
+      shell: bash
+      run: |
+        set -euo pipefail
+        staging="$RUNNER_TEMP/aequoros-ci-openbao-staging"
+        mkdir -p "$staging"
+        curl --fail --silent --show-error --location --retry 3 \
+          https://github.com/openbao/openbao/releases/download/v2.6.1/openbao_2.6.1_linux_amd64.tar.gz \
+          --output "$staging/openbao.tar.gz"
+        # SHA256 from the official v2.6.1 release's checksums.txt.
+        echo "ca8d836eb3a5c80407e45e762300b64e7138c419e78826955f2e4ba4ce6d8a6b  $staging/openbao.tar.gz" | sha256sum --check --strict
+        tar --extract --gzip --file "$staging/openbao.tar.gz" --directory "$staging" bao
+        # Only checksum-verified files enter the cache path, so a failed
+        # download can never save a partial artifact under the cache key.
+        mkdir -p "$RUNNER_TEMP/aequoros-ci-openbao"
+        mv "$staging/bao" "$RUNNER_TEMP/aequoros-ci-openbao/bao"
+    - name: Verify OpenBao
       shell: bash
       run: |
         set -euo pipefail
         directory="$RUNNER_TEMP/aequoros-ci-openbao"
-        mkdir -p "$directory"
-        curl --fail --silent --show-error --location --retry 3 \
-          https://github.com/openbao/openbao/releases/download/v2.6.1/openbao_2.6.1_linux_amd64.tar.gz \
-          --output "$directory/openbao.tar.gz"
-        # SHA256 from the official v2.6.1 release's checksums.txt.
-        echo "ca8d836eb3a5c80407e45e762300b64e7138c419e78826955f2e4ba4ce6d8a6b  $directory/openbao.tar.gz" | sha256sum --check --strict
-        tar --extract --gzip --file "$directory/openbao.tar.gz" --directory "$directory" bao
+        if [ ! -f "$directory/bao" ]; then
+          echo "The OpenBao binary is missing: neither the cache nor the download produced $directory/bao" >&2
+          exit 1
+        fi
+        # Enforced on every run, cache hit or not; sha256 of the extracted
+        # `bao` binary from the verified tarball.
+        echo "736b8ecf354fda6b2af62e4ae064f12fe6c52d7db8425b9c6de22f286a5485ec  $directory/bao" | sha256sum --check --strict
+        chmod +x "$directory/bao"
     - name: Start OpenBao in dev mode
       id: start
       shell: bash
