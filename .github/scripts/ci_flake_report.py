@@ -1013,7 +1013,11 @@ def _list_all_runs(options: ReportOptions, log: Any) -> list[RunRecord]:
 def _attempts_needed(all_runs: list[RunRecord]) -> dict[int, set[int]]:
     """Run ids -> attempts to list: failing runs, every attempt of rerun runs,
     and successful runs sharing a SHA with a failing run (mixed outcomes)."""
-    failing_shas = {run.head_sha for run in all_runs if run.conclusion in ("failure", "cancelled")}
+    failing_shas = {
+        run.head_sha
+        for run in all_runs
+        if is_failed_job_conclusion(run.conclusion) or run.conclusion == "cancelled"
+    }
     needed: dict[int, set[int]] = defaultdict(set)
     for run in all_runs:
         if run.conclusion in ("failure", "cancelled", "timed_out"):

@@ -393,6 +393,34 @@ def test_a_job_failing_in_both_runs_is_not_passing_evidence() -> None:
     assert flake_report.same_sha_mixed_outcomes(runs, jobs_by_run) == []
 
 
+def test_a_timed_out_run_pulls_its_sha_into_the_attempt_plan() -> None:
+    runs = [
+        flake_report.RunRecord(
+            run_id=1,
+            workflow="Dashboard Playwright journeys",
+            event="pull_request",
+            head_branch="feature/a",
+            head_sha="abc123",
+            run_attempt=1,
+            conclusion="timed_out",
+            created_at="2026-11-08T10:00:00Z",
+        ),
+        flake_report.RunRecord(
+            run_id=2,
+            workflow="Dashboard Playwright journeys",
+            event="pull_request",
+            head_branch="feature/a",
+            head_sha="abc123",
+            run_attempt=1,
+            conclusion="success",
+            created_at="2026-11-08T12:00:00Z",
+        ),
+    ]
+    # The successful run's jobs must be listed too, or the timed-out run's
+    # recovery can never be recognized as a mixed outcome.
+    assert flake_report._attempts_needed(runs) == {1: {1}, 2: {1}}
+
+
 def test_fail_fail_pass_is_one_rerun_pass() -> None:
     attempts = {
         1: [job("Dashboard journeys shard 4/4", "failure", 20.0, 11)],
