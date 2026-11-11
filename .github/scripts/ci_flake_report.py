@@ -1648,7 +1648,14 @@ def fetch_attempt_jobs(
     """
     cache_path = cache_dir / "jobs" / f"{run_id}-{attempt}.json" if cache_dir else None
     if cache_path is not None and cache_path.exists():
-        return parse_jobs(json.loads(cache_path.read_text(encoding="utf-8")))
+        payload = json.loads(cache_path.read_text(encoding="utf-8"))
+        jobs = payload.get("jobs", [])
+        # A cached listing is trustworthy only once it holds every job the
+        # attempt reported: a page-truncated copy (cached before the cache
+        # write checked completeness across pages) must be refetched, or its
+        # missing jobs would silently vanish from findings and thresholds.
+        if jobs and len(jobs) >= int(payload.get("total_count") or 0):
+            return parse_jobs(payload)
     if deadline is not None and time.monotonic() > deadline:
         raise RuntimeError(
             f"time budget reached before job listing of run {run_id} attempt {attempt}"

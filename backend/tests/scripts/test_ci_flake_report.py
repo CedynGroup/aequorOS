@@ -888,6 +888,71 @@ def test_attempt_jobs_pager_fetches_every_page(monkeypatch: pytest.MonkeyPatch) 
     assert "page=2" in endpoints[1]
 
 
+def test_an_incomplete_cached_job_listing_is_refetched(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """A cached listing that predates its last page must be refetched.
+
+    Reusing a page-truncated copy would silently drop the later jobs from
+    the findings and the thresholds.
+    """
+    cache_dir = tmp_path / "cache"
+    (cache_dir / "jobs").mkdir(parents=True)
+    (cache_dir / "jobs" / "9-1.json").write_text(
+        json.dumps(
+            {
+                "total_count": 3,
+                "jobs": [
+                    {"id": 1, "name": "shard 1/3", "status": "completed", "conclusion": "failure"},
+                    {"id": 2, "name": "shard 2/3", "status": "completed", "conclusion": "success"},
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    def fake_gh_api_json(*endpoint_args: str) -> dict[str, Any]:
+        return {
+            "total_count": 3,
+            "jobs": [
+                {"id": 1, "name": "shard 1/3", "status": "completed", "conclusion": "failure"},
+                {"id": 2, "name": "shard 2/3", "status": "completed", "conclusion": "success"},
+                {"id": 3, "name": "shard 3/3", "status": "completed", "conclusion": "success"},
+            ],
+        }
+
+    monkeypatch.setattr(flake_report, "gh_api_json", fake_gh_api_json)
+    jobs = flake_report.fetch_attempt_jobs("CedynGroup/aequorOS", 9, 1, cache_dir=cache_dir)
+    assert [j.job_id for j in jobs] == [1, 2, 3]
+
+
+def test_a_complete_cached_job_listing_is_reused_without_refetching(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """A cached listing holding every job the attempt reported needs no API
+    traffic: the cache serves it unchanged."""
+    cache_dir = tmp_path / "cache"
+    (cache_dir / "jobs").mkdir(parents=True)
+    (cache_dir / "jobs" / "9-1.json").write_text(
+        json.dumps(
+            {
+                "total_count": 1,
+                "jobs": [
+                    {"id": 1, "name": "ci", "status": "completed", "conclusion": "success"},
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    def fail(*args: object, **kwargs: object) -> dict[str, Any]:
+        raise AssertionError("a complete cache entry must not trigger a refetch")
+
+    monkeypatch.setattr(flake_report, "gh_api_json", fail)
+    jobs = flake_report.fetch_attempt_jobs("CedynGroup/aequorOS", 9, 1, cache_dir=cache_dir)
+    assert [j.job_id for j in jobs] == [1]
+
+
 def test_missing_log_markers_never_cross_the_policy_thresholds() -> None:
     """A log that could not be read names no failure, so it cannot demand one.
 
