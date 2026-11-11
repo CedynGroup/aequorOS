@@ -75,8 +75,8 @@ concurrency:
 
 # A merge-queue entry runs the dashboard job unconditionally: the queued merge
 # result is what lands on main, so its checks must actually run there — a
-# green queue used to hide failures that only surfaced on main (the coverage
-# ratchet, runs 42264663590 and 42113099733). `changed_area.sh` already
+# green queue used to hide failures that only surfaced on main, like the
+# unit-coverage ratchet. `changed_area.sh` already
 # answers "true" for every non-pull_request event, so the same path filter
 # below the trigger serves all three events: a docs-only pull request still
 # skips the expensive job, while queue entries and pushes to main always run.

@@ -10,8 +10,7 @@
 # entry. The queued merge result is what lands on main, so its checks must
 # actually run there; a gate that accepts `skipped` on the queue is what let
 # the Dashboard CI checks (lint, unit tests, coverage, build) first run on
-# main and fail the coverage ratchet after a green queue (runs 42264663590,
-# 42113099733).
+# main and fail the unit-coverage ratchet after a green queue.
 #
 # Usage (from a gate job step):
 #   env:

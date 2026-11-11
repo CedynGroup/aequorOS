@@ -136,10 +136,11 @@ def test_job_running_a_repo_script_checks_out_first(workflow: str) -> None:
     """A runner workspace starts empty, so the script is not there yet.
 
     A job whose ``run`` executes a file from the repository must check the
-    repository out in that job before the step, or the step exits 127 —
-    PR #867's gate jobs failed exactly this way (runs 42929449720 and
-    42929449870) because they ran ``.github/scripts/gate_result.sh`` without
-    ``actions/checkout``.
+    repository out in that job before the step, or the step exits 127: the
+    checkouts in the job's dependencies do not carry over to a fresh runner
+    workspace, so a gate job running ``.github/scripts/gate_result.sh``
+    without ``actions/checkout`` fails with "No such file or directory"
+    before it can report anything about its dependencies.
     """
     document = cast(
         dict[str, dict[str, object]],
