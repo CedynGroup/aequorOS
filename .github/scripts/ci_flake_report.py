@@ -428,6 +428,32 @@ def compare_attempts(
             # threshold counting even when a same-named sibling succeeded in
             # the failing attempt.
             successes = sorted(jobs_by_attempt[recovery], key=lambda job: job.job_id)
+            max_same_named = max(len(jobs) for jobs in jobs_by_attempt.values())
+            if len(successes) < max_same_named and len(successes) == len(group):
+                # A subset rerun ("re-run failed jobs") lists only the jobs
+                # that were re-run - by definition the ones that failed
+                # earlier - so the recovery attempt holds fewer same-named
+                # jobs than the failing attempts did, and exactly one entry
+                # per failed execution. Its successes then pair with the
+                # lineage's failed executions in first-failure order, and a
+                # failure left without a success of its own stays
+                # unrecovered.
+                ordered = sorted(group, key=lambda pair: (pair[0], pair[1].job_id))
+                charged: set[int] = set()
+                for index, (fail_attempt, fail_job) in enumerate(ordered):
+                    if index >= len(successes):
+                        continue
+                    minutes = 0.0 if index in charged else successes[index].minutes
+                    charged.add(index)
+                    passes.append(
+                        RerunPass(
+                            failed_job=fail_job,
+                            failed_attempt=fail_attempt,
+                            passed_attempt=recovery,
+                            passed_minutes=minutes,
+                        )
+                    )
+                continue
             first_failure_by_rank: dict[int, int] = {}
             for fail_attempt, fail_job in group:
                 rank = _instance_rank(jobs_by_attempt[fail_attempt], fail_job)

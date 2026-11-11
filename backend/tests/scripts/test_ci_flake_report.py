@@ -1017,6 +1017,28 @@ def test_each_duplicate_instance_charges_its_own_recovery_minutes() -> None:
     assert sum(p.passed_minutes for p in passes) == 18.0
 
 
+def test_a_subset_rerun_recovery_is_not_discarded() -> None:
+    """A subset rerun lists only the re-run jobs, so the recovery attempt can
+    hold fewer same-named jobs than the failing attempt did.
+
+    With success/failure on attempt 1 and a rerun of only the failed job that
+    passes on attempt 2, the failure's recovery is real evidence: discarding
+    it would lose the rerun's minutes and hide the identified failure from
+    the policy thresholds.
+    """
+    attempts = {
+        1: [
+            flake_report.JobRecord(job_id=1, name="ci", conclusion="success", minutes=4.0),
+            flake_report.JobRecord(job_id=2, name="ci", conclusion="failure", minutes=3.0),
+        ],
+        2: [flake_report.JobRecord(job_id=3, name="ci", conclusion="success", minutes=7.0)],
+    }
+    passes = flake_report.compare_attempts(attempts)
+    assert len(passes) == 1
+    assert passes[0].failed_attempt == 1
+    assert passes[0].passed_minutes == 7.0
+
+
 def test_instance_rank_survives_a_passing_sibling_in_one_attempt() -> None:
     """The instance rank comes from the complete attempt listing, not the
     failed events alone.
