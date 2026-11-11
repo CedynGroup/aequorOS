@@ -17,6 +17,7 @@ from app.api.deps import TenantContext
 from app.core.authorization import Module, Permission, Sensitivity
 from app.data_engine.public import IngestionBatch
 from app.db.base import utc_now
+from app.domain.authority.live_engines import LIVE_ENGINES
 from app.identity import public as scoped_authorization
 from app.identity.public import Bank
 from app.live.models.live import CurrentFinancialFact, LiveMetric, LiveMetricSnapshot
@@ -56,17 +57,28 @@ _MODULE_ORDER = {
 #: Markets implied rating among them. Each is demanded only when the bank's
 #: regime actually runs it (``module_scope.runs_module``). The cutover
 #: projection (``scripts/authorization_access_impact.py``) reads this list so
-#: the gate and the deny-impact report cannot drift.
-MINT_RUN_ENGINES: tuple[tuple[str, Module], ...] = (
-    ("liquidity", Module.LIQUIDITY),
-    ("capital", Module.CAPITAL),
-    ("rating", Module.MARKETS),
-    ("credit", Module.CREDIT),
-    ("irr", Module.IRRBB),
-    ("fx", Module.FX),
-    ("ftp", Module.FTP),
-    ("forecast", Module.FORECASTING),
+#: the gate and the deny-impact report cannot drift. Derived from the one
+#: shared engine table; the pairs keep this gate's pinned iteration order
+#: (the deny-impact projection iterates it), not the table's vocabulary order.
+_MINT_RUN_ORDER: tuple[str, ...] = (
+    "liquidity",
+    "capital",
+    "rating",
+    "credit",
+    "irr",
+    "fx",
+    "ftp",
+    "forecast",
 )
+
+
+def _mint_run_engines() -> tuple[tuple[str, Module], ...]:
+    """The mint gate's (engine, authorization module) pairs, in gate order."""
+    module_by_engine = {row.engine: Module(row.module) for row in LIVE_ENGINES}
+    return tuple((engine, module_by_engine[engine]) for engine in _MINT_RUN_ORDER)
+
+
+MINT_RUN_ENGINES: tuple[tuple[str, Module], ...] = _mint_run_engines()
 
 
 def get_live_summary(db: Session, ctx: TenantContext, bank_id: str) -> LiveSummaryRead:

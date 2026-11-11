@@ -12,22 +12,16 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
 from app.core.authorization import Module, Permission, Sensitivity
+from app.domain.authority.live_engines import LIVE_ENGINES
 from app.identity import public as scoped_authorization
 from app.identity.public import Bank
 
 #: Live-plane module names → the authorization module whose exact VIEW binding
-#: governs them. Reuses the live summary's engine mapping verbatim, including
-#: the implied-rating figures served under MARKETS authority. A module name
+#: governs them, derived from the one shared engine table — including the
+#: implied-rating figures served under MARKETS authority. A module name
 #: missing from this map is unauthorized by construction (default deny).
 FRESHNESS_VIEW_MODULES: dict[str, Module] = {
-    "liquidity": Module.LIQUIDITY,
-    "capital": Module.CAPITAL,
-    "credit": Module.CREDIT,
-    "irr": Module.IRRBB,
-    "fx": Module.FX,
-    "ftp": Module.FTP,
-    "rating": Module.MARKETS,
-    "forecast": Module.FORECASTING,
+    row.engine: Module(row.module) for row in LIVE_ENGINES
 }
 
 

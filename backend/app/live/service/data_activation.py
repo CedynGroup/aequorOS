@@ -42,6 +42,7 @@ from app.data_engine.public import (
     DataActivationSummaryRead,
     resolve_data_bank,
 )
+from app.domain.authority.live_engines import LIVE_ENGINES
 from app.forecasting.schemas.forecasting import ForecastRunCreate
 from app.forecasting.service import regulatory_forecasting
 from app.ftp import service as regulatory_ftp
@@ -206,16 +207,12 @@ def official_module_scope(
     return in_scope, [m for m in every if m not in in_scope]
 
 
-#: Every module the official filing tier knows how to run, in run order. The
-#: subset an institution actually runs is decided by ``module_scope``.
-OFFICIAL_MODULES: tuple[str, ...] = (
-    "liquidity",
-    "capital",
-    "credit",
-    "irr",
-    "fx",
-    "ftp",
-    "forecast",
+#: Every module the official filing tier knows how to run, in run order: the
+#: one shared engine table minus the ``rating`` engine, whose official outcome
+#: is minted separately (``run_official_modules``) under the ``implied_rating``
+#: key. The subset an institution actually runs is decided by ``module_scope``.
+OFFICIAL_MODULES: tuple[str, ...] = tuple(
+    row.engine for row in LIVE_ENGINES if row.engine != "rating"
 )
 
 
