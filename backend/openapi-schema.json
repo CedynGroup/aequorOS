@@ -44297,7 +44297,7 @@
       },
       "LiveReconciliationRead": {
         "additionalProperties": false,
-        "description": "The balance-sheet identity control's verdict on the live book.\n\nPresent only when the control has something to say \u2014 a plug was applied, an\napproved exception is carrying the book, or the identity FAILS. Its absence\nmeans the ingested book balanced exactly, because a plug of any size is\nrecorded (``app/services/reconciliation.py``).\n\nAmounts are strings: they are exact decimals, and JSON floats are not.",
+        "description": "The balance-sheet identity control's verdict on the live book.\n\nPresent only when the control has something to say \u2014 a plug was applied, an\napproved exception is carrying the book, or the identity FAILS. Its absence\nmeans the ingested book balanced exactly, because a plug of any size is\nrecorded (``app/data_engine/service/reconciliation.py``).\n\nAmounts are strings: they are exact decimals, and JSON floats are not.",
         "properties": {
           "assets": {
             "title": "Assets",
