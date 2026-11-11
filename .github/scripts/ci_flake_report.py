@@ -1198,7 +1198,7 @@ def render_weekly_report(
     caveats: list[str] = []
     if collection_cutoff is not None:
         caveats.append(
-            f"- Time-budget caveat: {collection_cutoff} The counts below may be "
+            f"- Collection caveat: {collection_cutoff}. The counts below may be "
             "undercounted; the next weekly run starts from an empty budget."
         )
     for workflow, oldest in truncated or []:
@@ -1211,11 +1211,18 @@ def render_weekly_report(
     incomplete = collection_cutoff is not None or bool(truncated)
     threshold_lines = render_threshold_section(breaches, window_days)
     if incomplete and not breaches:
-        threshold_lines += [
-            "",
-            "Collection was incomplete (see the caveats above), so this empty "
-            "result is inconclusive: runs or logs still missing could contain "
-            "crossings.",
+        # An incomplete collection must not read as a clean bill of health:
+        # the conclusive statement is replaced, not doubled with a footnote.
+        threshold_lines = [
+            (
+                "No signature reached the policy thresholds in the collected "
+                "data, but collection was incomplete (see the caveats above), "
+                "so this result is inconclusive: runs or logs still missing "
+                "could contain crossings."
+                if line.startswith("No signature reached the policy thresholds")
+                else line
+            )
+            for line in threshold_lines
         ]
     header = [
         "# Weekly CI flake report",
@@ -1298,8 +1305,16 @@ def cmd_weekly(args: argparse.Namespace, now: datetime | None = None) -> int:
             options, lambda message: print(message, file=sys.stderr), collection_notes
         )
     except (RuntimeError, OSError, ValueError, KeyError, TypeError, AttributeError) as error:
-        print(render_weekly_unavailable(window_days, str(error)))
+        note = render_weekly_unavailable(window_days, str(error))
+        print(note)
         print(f"Weekly flake report unavailable: {error}", file=sys.stderr)
+        # The requested artifacts must not keep a stale earlier report: record
+        # the unavailable state in them too, clearly marked as such.
+        if args.out_md:
+            _write_weekly_artifact(args.out_md, note, "markdown artifact")
+        if args.out_json:
+            payload = {"status": "unavailable", "window_days": window_days, "error": str(error)}
+            _write_weekly_artifact(args.out_json, json.dumps(payload, indent=1), "JSON artifact")
         return 0
     # Missing-log placeholders are accounting, not findings: a job whose logs
     # were never read (budget exhausted or log unavailable) must not reach the
@@ -1360,29 +1375,38 @@ def cmd_weekly(args: argparse.Namespace, now: datetime | None = None) -> int:
     # stdout always carries the Markdown: the workflow step redirects it into
     # the step summary whether or not artifact paths were also given.
     print(markdown)
-    try:
-        if args.out_md:
-            _atomic_write_text(Path(args.out_md), markdown)
-            print(f"Wrote {args.out_md}", file=sys.stderr)
-        if args.out_json:
-            payload = {
-                "thresholds": [
-                    {
-                        "signature": breach.signature,
-                        "rerun_passes_in_window": breach.rerun_passes_in_window,
-                        "action": breach.action,
-                    }
-                    for breach in breaches
-                ],
-                "report": report,
-            }
-            _atomic_write_text(Path(args.out_json), json.dumps(payload, indent=1))
-            print(f"Wrote {args.out_json}", file=sys.stderr)
-    except OSError as error:
-        # The summary was already published on stdout; a failed artifact write
-        # must not turn the scheduled report red.
-        print(f"Weekly flake report artifact write failed: {error}", file=sys.stderr)
+    if args.out_md:
+        _write_weekly_artifact(args.out_md, markdown, "markdown artifact")
+    if args.out_json:
+        payload = {
+            "thresholds": [
+                {
+                    "signature": breach.signature,
+                    "rerun_passes_in_window": breach.rerun_passes_in_window,
+                    "action": breach.action,
+                }
+                for breach in breaches
+            ],
+            "report": report,
+        }
+        _write_weekly_artifact(args.out_json, json.dumps(payload, indent=1), "JSON artifact")
     return 0
+
+
+def _write_weekly_artifact(path: str, text: str, label: str) -> None:
+    """Write one requested artifact; a failure is a visible note, never a red run.
+
+    Each artifact is attempted independently: an unwritable ``--out-md`` must
+    not stop ``--out-json`` (the summary itself is already on stdout).
+    """
+    try:
+        Path(path).parent.mkdir(parents=True, exist_ok=True)
+        # Atomic (tmp file + rename): an interrupt must not leave a truncated
+        # report file behind.
+        _atomic_write_text(Path(path), text)
+        print(f"Wrote {path}", file=sys.stderr)
+    except OSError as error:
+        print(f"Weekly flake report {label} write failed: {error}", file=sys.stderr)
 
 
 # ---------------------------------------------------------------------------
@@ -1519,12 +1543,20 @@ def _jobs_are_complete(jobs: list[dict[str, Any]]) -> bool:
 
 
 def fetch_attempt_jobs(
-    repo: str, run_id: int, attempt: int, cache_dir: Path | None = None
+    repo: str,
+    run_id: int,
+    attempt: int,
+    cache_dir: Path | None = None,
+    deadline: float | None = None,
 ) -> list[JobRecord]:
     """Jobs of one run attempt; cached on disk so interrupted runs resume."""
     cache_path = cache_dir / "jobs" / f"{run_id}-{attempt}.json" if cache_dir else None
     if cache_path is not None and cache_path.exists():
         return parse_jobs(json.loads(cache_path.read_text(encoding="utf-8")))
+    if deadline is not None and time.monotonic() > deadline:
+        raise RuntimeError(
+            f"time budget reached before job listing of run {run_id} attempt {attempt}"
+        )
     payload = gh_api_json(
         f"repos/{repo}/actions/runs/{run_id}/attempts/{attempt}/jobs?per_page={PER_PAGE}"
     )

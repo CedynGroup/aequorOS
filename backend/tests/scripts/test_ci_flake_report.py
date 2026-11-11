@@ -11,6 +11,7 @@ from __future__ import annotations
 import importlib.util
 import json
 import sys
+import time
 from datetime import UTC, datetime
 from pathlib import Path
 from types import ModuleType
@@ -1541,8 +1542,35 @@ def test_a_collection_cutoff_adds_the_time_budget_caveat() -> None:
             "collection stopped at the time budget with 3 failed-job log(s) unfetched"
         ),
     )
-    assert "Time-budget caveat" in markdown
+    assert "Collection caveat" in markdown
     assert "3 failed-job log(s) unfetched" in markdown
+
+
+def test_unreadable_logs_get_their_own_collection_caveat(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], tmp_path: Path
+) -> None:
+    """A log that could not be read is not a time-budget cutoff.
+
+    The caveat must say what actually happened (unreadable logs), and the
+    empty threshold result under it must not read as conclusive.
+    """
+    events = [
+        event("log-unavailable:Dashboard journeys shard 4/4", kind="unclassified", run_id=1),
+        event("log-unavailable:Dashboard journeys shard 4/4", kind="unclassified", run_id=2),
+    ]
+    monkeypatch.setattr(
+        flake_report,
+        "collect_report_data",
+        lambda options, log=print: ([success_run(1)], events),
+    )
+    parser = flake_report.build_parser()
+    args = parser.parse_args(["weekly", "--cache-dir", str(tmp_path)])
+    assert flake_report.cmd_weekly(args, now=datetime(2026, 11, 9, 12, 0, tzinfo=UTC)) == 0
+    output = capsys.readouterr()
+    assert "Collection caveat: 2 failed-job log(s) could not be read" in output.out
+    assert "time budget" not in output.out
+    assert "this result is inconclusive" in output.out
+    assert "No signature reached the policy thresholds in this window" not in output.out
 
 
 def test_caveats_precede_an_empty_threshold_result_and_label_it_inconclusive() -> None:
@@ -1562,13 +1590,15 @@ def test_caveats_precede_an_empty_threshold_result_and_label_it_inconclusive() -
             "collection stopped at the time budget with 1 failed-job log(s) unfetched"
         ),
     )
-    caveat_position = markdown.index("Time-budget caveat")
+    caveat_position = markdown.index("Collection caveat")
     threshold_position = markdown.index("## Threshold crossings")
     assert caveat_position < threshold_position
-    assert "this empty result is inconclusive" in markdown
+    assert "this result is inconclusive" in markdown
+    assert "No signature reached the policy thresholds in this window" not in markdown
     # A complete collection still renders the plain, conclusive wording.
     complete = flake_report.render_weekly_report(report, [], window_days=14)
     assert "inconclusive" not in complete
+    assert "No signature reached the policy thresholds" in complete
 
 
 def test_a_truncated_workflow_caveat_names_the_requested_window_start() -> None:
@@ -1589,6 +1619,78 @@ def test_a_truncated_workflow_caveat_names_the_requested_window_start() -> None:
         truncated=[("Web CI", "2026-11-05")],
     )
     assert "later than 2026-10-11" in markdown
+
+
+def test_weekly_artifact_writes_fail_independently(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], tmp_path: Path
+) -> None:
+    """An unwritable ``--out-md`` must not stop a writable ``--out-json``."""
+    events = [
+        event(
+            "pytest:tests/db/test_document_deletion_timeout_integration.py", rerun=True, run_id=1
+        ),
+        event(
+            "pytest:tests/db/test_document_deletion_timeout_integration.py", rerun=True, run_id=2
+        ),
+    ]
+    monkeypatch.setattr(
+        flake_report,
+        "collect_report_data",
+        lambda options, log=print: ([success_run(1)], events),
+    )
+    blocked = tmp_path / "blocked"
+    blocked.mkdir()
+    parser = flake_report.build_parser()
+    args = parser.parse_args(
+        [
+            "weekly",
+            "--cache-dir",
+            str(tmp_path),
+            "--out-md",
+            str(blocked),  # a directory: writing raises IsADirectoryError
+            "--out-json",
+            str(tmp_path / "weekly.json"),
+        ]
+    )
+    assert flake_report.cmd_weekly(args, now=datetime(2026, 11, 9, 12, 0, tzinfo=UTC)) == 0
+    output = capsys.readouterr()
+    assert "markdown artifact write failed" in output.err
+    payload = json.loads((tmp_path / "weekly.json").read_text(encoding="utf-8"))
+    assert payload["thresholds"][0]["signature"] == (
+        "pytest:tests/db/test_document_deletion_timeout_integration.py"
+    )
+
+
+def test_collection_failure_records_the_unavailable_state_in_requested_artifacts(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], tmp_path: Path
+) -> None:
+    """Requested files must not keep a stale report when collection fails."""
+
+    def fail(options: Any, log: Any = print) -> tuple[list[Any], list[Any]]:
+        raise RuntimeError("gh api failed (1): Server Error (HTTP 502)")
+
+    monkeypatch.setattr(flake_report, "collect_report_data", fail)
+    stale_md = tmp_path / "weekly.md"
+    stale_json = tmp_path / "weekly.json"
+    stale_md.write_text("stale ranking", encoding="utf-8")
+    stale_json.write_text('{"stale": true}', encoding="utf-8")
+    parser = flake_report.build_parser()
+    args = parser.parse_args(
+        [
+            "weekly",
+            "--cache-dir",
+            str(tmp_path),
+            "--out-md",
+            str(stale_md),
+            "--out-json",
+            str(stale_json),
+        ]
+    )
+    assert flake_report.cmd_weekly(args, now=datetime(2026, 11, 9, 12, 0, tzinfo=UTC)) == 0
+    assert "Weekly flake report unavailable" in stale_md.read_text(encoding="utf-8")
+    payload = json.loads(stale_json.read_text(encoding="utf-8"))
+    assert payload["status"] == "unavailable"
+    assert "Server Error (HTTP 502)" in payload["error"]
 
 
 def test_fetch_findings_stops_at_the_deadline(
@@ -1664,7 +1766,7 @@ def test_run_listing_refuses_to_start_past_the_deadline(
         deadline=0.0,
     )
 
-    def fail(*args: object) -> list[flake_report.RunRecord]:
+    def fail(*args: object, **kwargs: object) -> list[flake_report.RunRecord]:
         raise AssertionError("no listing may start past the deadline")
 
     monkeypatch.setattr(flake_report, "list_workflow_runs", fail)
@@ -1684,13 +1786,59 @@ def test_job_listing_refuses_to_start_past_the_deadline(
         deadline=0.0,
     )
 
-    def fail(*args: object) -> list[flake_report.JobRecord]:
+    def fail(*args: object, **kwargs: object) -> list[flake_report.JobRecord]:
         raise AssertionError("no job listing may start past the deadline")
 
     monkeypatch.setattr(flake_report, "fetch_attempt_jobs", fail)
     with pytest.raises(RuntimeError, match="time budget reached"):
         flake_report._fetch_attempt_jobs(
             "CedynGroup/aequorOS", {1: {1}, 2: {1}}, options, lambda _m: None
+        )
+
+
+def test_run_listing_refuses_pages_past_the_deadline(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Paging continues only while the budget lasts, not once per workflow."""
+    options = flake_report.ReportOptions(
+        repo="CedynGroup/aequorOS",
+        workflow_files=["risk-service.yml"],
+        min_runs_per_workflow=1000,
+        since="2026-11-01",
+        cache_dir=Path("/tmp/unused"),
+        deadline=time.monotonic() + 0.05,
+    )
+    payload = {"total_count": 5000, "workflow_runs": []}
+
+    def fake_gh_api_json(*endpoint_args: str) -> dict[str, Any]:
+        return payload
+
+    monkeypatch.setattr(flake_report, "gh_api_json", fake_gh_api_json)
+    monkeypatch.setattr(flake_report.time, "monotonic", lambda: options.deadline + 1.0)
+    with pytest.raises(RuntimeError, match="time budget reached before page "):
+        flake_report.list_workflow_runs(
+            "CedynGroup/aequorOS",
+            "risk-service.yml",
+            1000,
+            "2026-11-01",
+            lambda _m: None,
+            deadline=options.deadline,
+        )
+
+
+def test_attempt_listing_refuses_the_api_past_the_deadline(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """Cached attempts are free; an uncached attempt never starts past the budget."""
+    deadline = time.monotonic() - 1.0
+
+    def fail(*args: object, **kwargs: object) -> dict[str, Any]:
+        raise AssertionError("the API call must not start past the deadline")
+
+    monkeypatch.setattr(flake_report, "gh_api_json", fail)
+    with pytest.raises(RuntimeError, match="time budget reached before job listing"):
+        flake_report.fetch_attempt_jobs(
+            "CedynGroup/aequorOS", 9, 2, cache_dir=tmp_path, deadline=deadline
         )
 
 
@@ -1715,7 +1863,7 @@ def test_weekly_command_flags_the_time_budget_cutoff_in_the_summary(
     args = parser.parse_args(["weekly", "--cache-dir", str(tmp_path)])
     assert flake_report.cmd_weekly(args, now=datetime(2026, 11, 9, 12, 0, tzinfo=UTC)) == 0
     output = capsys.readouterr()
-    assert "Time-budget caveat" in output.out
+    assert "Collection caveat" in output.out
     assert "1 failed-job log(s) unfetched" in output.out
 
 
