@@ -34,8 +34,14 @@ _TEXT_SUFFIXES = (
     frozenset({".py", ".md", ".toml", ".yml", ".yaml", ".ini", ".cfg"}) | _SCRIPT_SUFFIXES
 )
 _SKIPPED_PREFIXES = ("packages/",)
-#: Files that name old paths on purpose: this script and its own tests.
-_FROZEN_FILES = frozenset({"scripts/feature_moves.py", "tests/scripts/test_feature_moves.py"})
+#: Files that name old paths on purpose: this script, its own tests, and the
+#: flake-report tests whose recorded typecheck signatures quote historical
+#: module paths from real CI logs.
+_FROZEN_FILES = frozenset({
+    "scripts/feature_moves.py",
+    "tests/scripts/test_feature_moves.py",
+    "tests/scripts/test_ci_flake_report.py",
+})
 #: The architecture guards address source files relative to ``app/``.
 _ARCHITECTURE_DIR = "tests/architecture/"
 _LINE_LENGTH = 100
