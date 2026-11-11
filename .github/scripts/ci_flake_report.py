@@ -1268,6 +1268,9 @@ def cmd_weekly(args: argparse.Namespace, now: datetime | None = None) -> int:
         cache_dir=cache_dir,
         keep_logs=args.keep_logs,
         deadline=time.monotonic() + WEEKLY_COLLECTION_BUDGET_MINUTES * 60,
+        window_start=(current_time - timedelta(days=window_days)).strftime(
+            "%Y-%m-%dT%H:%M:%SZ"
+        ),
     )
     try:
         # Diagnostics go to stderr: stdout is the Markdown step summary.
@@ -1551,6 +1554,11 @@ class ReportOptions:
     # slow or retried API never eats the whole runner budget and dies before
     # the report (or its unavailable note) is written.
     deadline: float | None = None
+    # The full rolling-window boundary as an ISO timestamp: runs collected
+    # before it are dropped before any classification, so a report run after
+    # midnight cannot include the pre-window hours of the boundary date and
+    # every section measures the same window.
+    window_start: str | None = None
 
 
 def _list_all_runs(options: ReportOptions, log: Any, notes: list[str]) -> list[RunRecord]:
@@ -1576,6 +1584,8 @@ def _list_all_runs(options: ReportOptions, log: Any, notes: list[str]) -> list[R
                 f"run listing for {workflow_file} stopped at the time budget; "
                 "its counts may be undercounted"
             )
+        if options.window_start is not None:
+            records = [run for run in records if run.created_at >= options.window_start]
         all_runs.extend(records)
     log(f"Collected {len(all_runs)} runs total")
     return all_runs

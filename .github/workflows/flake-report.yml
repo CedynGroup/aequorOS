@@ -71,12 +71,11 @@ jobs:
               exit "$status"
             }
           # GitHub rejects a step summary over 1 MiB wholesale: write the
-          # clipped summary here and keep the full report in the artifact.
+          # clipped summary here; whether the full report survived is noted
+          # after the artifact upload below.
           head -c 900000 "$RUNNER_TEMP/weekly-summary.md" >> "$GITHUB_STEP_SUMMARY"
-          if [ "$(wc -c < "$RUNNER_TEMP/weekly-summary.md")" -gt 900000 ]; then
-            printf '\n\n_Summary clipped at 900000 bytes; the full report is in the uploaded artifact._\n' >> "$GITHUB_STEP_SUMMARY"
-          fi
       - name: Upload the full report as an artifact
+        id: upload
         if: always()
         uses: actions/upload-artifact@v4
         with:
@@ -86,3 +85,21 @@ jobs:
             ${{ runner.temp }}/weekly-flake-report.json
           if-no-files-found: ignore
           retention-days: 30
+      - name: Note whether the full report was preserved
+        if: always()
+        env:
+          UPLOAD_OUTCOME: ${{ steps.upload.outcome }}
+        run: |
+          summary="$RUNNER_TEMP/weekly-summary.md"
+          full_md="$RUNNER_TEMP/weekly-flake-report.md"
+          clipped=0
+          if [ -f "$summary" ] && [ "$(wc -c < "$summary")" -gt 900000 ]; then
+            clipped=1
+          fi
+          if [ "$UPLOAD_OUTCOME" = "success" ] && [ -s "$full_md" ]; then
+            if [ "$clipped" = "1" ]; then
+              printf '\n\n_Summary clipped at 900000 bytes; the full report is in the weekly-flake-report artifact._\n' >> "$GITHUB_STEP_SUMMARY"
+            fi
+          elif [ -f "$summary" ]; then
+            printf '\n\n_The full report artifact could not be uploaded; the summary above may be clipped without a complete copy._\n' >> "$GITHUB_STEP_SUMMARY"
+          fi

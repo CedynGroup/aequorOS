@@ -2050,3 +2050,63 @@ def test_weekly_deadline_is_enforced_through_the_real_collector(
     assert "Time-budget caveat" in output.out
     assert "time budget" in output.out
     assert "undercounted" in output.out
+
+
+def test_the_weekly_window_starts_at_its_exact_boundary(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    captured: dict[str, Any] = {}
+
+    def fake_collect(options: Any, log: Any = print, notes: list[str] | None = None) -> Any:
+        captured["options"] = options
+        return [], []
+
+    monkeypatch.setattr(flake_report, "collect_report_data", fake_collect)
+    parser = flake_report.build_parser()
+    args = parser.parse_args(["weekly", "--cache-dir", str(tmp_path)])
+    assert flake_report.cmd_weekly(args, now=datetime(2026, 11, 9, 12, 0, tzinfo=UTC)) == 0
+    # The window boundary is a full timestamp, not a date: a run from before
+    # 2026-10-26T12:00Z is outside the 14-day window even on that date, and
+    # every section must measure the same window.
+    assert captured["options"].window_start == "2026-10-26T12:00:00Z"
+
+
+def test_pre_window_runs_are_dropped_before_classification(monkeypatch: pytest.MonkeyPatch) -> None:
+    def fake_listing(*args: Any, **kwargs: Any) -> tuple[list[Any], str | None]:
+        runs = [
+            flake_report.RunRecord(
+                run_id=1,
+                workflow="Risk Service CI",
+                event="push",
+                head_branch="main",
+                head_sha="a" * 40,
+                run_attempt=1,
+                conclusion="success",
+                created_at="2026-10-26T01:00:00Z",
+            ),
+            flake_report.RunRecord(
+                run_id=2,
+                workflow="Risk Service CI",
+                event="push",
+                head_branch="main",
+                head_sha="b" * 40,
+                run_attempt=1,
+                conclusion="success",
+                created_at="2026-10-26T14:00:00Z",
+            ),
+        ]
+        return runs, None
+
+    monkeypatch.setattr(flake_report, "list_workflow_runs", fake_listing)
+    options = flake_report.ReportOptions(
+        repo="CedynGroup/aequorOS",
+        workflow_files=["risk-service.yml"],
+        min_runs_per_workflow=10,
+        since="2026-10-26",
+        cache_dir=Path("/tmp/unused-cache"),
+        window_start="2026-10-26T12:00:00Z",
+    )
+    runs = flake_report._list_all_runs(options, lambda message: None, [])
+    # The run from before the exact window boundary is not collected, so it
+    # cannot leak into the mixed-outcome classification or the ranking.
+    assert [run.run_id for run in runs] == [2]
