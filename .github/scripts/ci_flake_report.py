@@ -78,6 +78,9 @@ TRANSIENT_API_ERROR = re.compile(r"Server Error \(HTTP 5\d\d\)|HTTP 429|rate lim
 # history (many attempts, many failures) cannot turn a summary step into a log
 # download campaign. Past the cap the row says its signature is uninspected.
 RERUN_SUMMARY_LOG_BUDGET = 40
+# Overall wall-clock budget for the optional log enrichment, well under the
+# 10-minute workflow job timeout even with one worst-case single read.
+RERUN_SUMMARY_ENRICHMENT_SECONDS = 240
 
 # Jobs that aggregate other jobs' results or detect changes carry no test
 # signal of their own.
@@ -411,7 +414,7 @@ def rerun_summary_rows(
                 for attempt, jobs in attempts.items()
                 if attempt < current_attempt
                 for job in jobs
-                if job.name == name and job.conclusion == "failure"
+                if job.name == name and is_failed_job_conclusion(job.conclusion)
             }
         )
         passed_attempts = sorted(
@@ -527,23 +530,37 @@ def _attach_rerun_findings(
 
     Log reads are budgeted (RERUN_SUMMARY_LOG_BUDGET) and individually
     non-fatal: an unreadable log degrades that job's row to "signature
-    unavailable" instead of failing the summary.
+    unavailable" instead of failing the summary. They are also bounded by an
+    overall deadline well under the workflow job timeout, so a slow API can
+    never starve the summary itself: when the deadline passes, the remaining
+    failures are noted as uninspected and the summary prints with what was
+    gathered.
     """
     budget = RERUN_SUMMARY_LOG_BUDGET
+    deadline = time.monotonic() + RERUN_SUMMARY_ENRICHMENT_SECONDS
     for row in rows:
         findings: list[Finding] = []
         seen: set[tuple[str, tuple[str, ...]]] = set()
         budget_spent = False
+        deadline_hit = False
         for attempt in row.failed_attempts:
             for job in attempts.get(attempt, []):
-                if job.name != row.job_name or job.conclusion != "failure":
+                if job.name != row.job_name or not is_failed_job_conclusion(job.conclusion):
                     continue
                 if budget <= 0:
                     budget_spent = True
                     break
+                if time.monotonic() >= deadline:
+                    deadline_hit = True
+                    break
                 budget -= 1
                 try:
-                    text = fetch_job_log(repo, job.job_id, cache_dir, keep_logs=False)
+                    # Optional visibility: read each log once, without the
+                    # measurement path's retry budget, so a failing read
+                    # cannot consume the job timeout.
+                    text = fetch_job_log(
+                        repo, job.job_id, cache_dir, keep_logs=False, retries=1
+                    )
                     job_findings = extract_findings(clean_lines(text))
                     delete_large_log(cache_dir, job.job_id, keep_logs=False)
                 except (RuntimeError, OSError) as error:
@@ -560,6 +577,14 @@ def _attach_rerun_findings(
                     "unclassified",
                     "log budget reached "
                     f"({RERUN_SUMMARY_LOG_BUDGET}); remaining failures not inspected",
+                )
+            )
+        if deadline_hit:
+            findings.append(
+                Finding(
+                    "unclassified",
+                    f"log enrichment deadline reached "
+                    f"({RERUN_SUMMARY_ENRICHMENT_SECONDS}s); remaining failures not inspected",
                 )
             )
         row.findings = findings
@@ -1099,18 +1124,22 @@ def _parse_timestamp(value: str | None) -> datetime | None:
         return None
 
 
-def gh_api(*endpoint_args: str, allow_escape_sequences: bool = False) -> str:
+def gh_api(
+    *endpoint_args: str, allow_escape_sequences: bool = False, retries: int = API_RETRIES
+) -> str:
     """Read-only gh api call; transient server errors are retried a few times.
 
     (This is API-call resilience for the measurement tool, not a job retry:
-    nothing about CI jobs or tests is ever re-run.)
+    nothing about CI jobs or tests is ever re-run. Optional reads pass a
+    smaller ``retries`` count so a failing enrichment cannot eat a job
+    timeout.)
     """
     cmd = ["gh", "api"]
     if allow_escape_sequences:
         cmd.append("--allow-escape-sequences")
     cmd.extend(endpoint_args)
     last_error = ""
-    for attempt in range(1, API_RETRIES + 1):
+    for attempt in range(1, retries + 1):
         try:
             result = subprocess.run(
                 cmd,
@@ -1123,14 +1152,14 @@ def gh_api(*endpoint_args: str, allow_escape_sequences: bool = False) -> str:
             )
         except subprocess.TimeoutExpired as error:
             last_error = f"gh api timed out after {API_TIMEOUT_SECONDS}s: {error.cmd[-1]}"
-            if attempt == API_RETRIES:
+            if attempt == retries:
                 raise RuntimeError(last_error) from error
             time.sleep(API_RETRY_WAIT_SECONDS * attempt)
             continue
         if result.returncode == 0:
             return result.stdout
         last_error = f"gh api failed ({result.returncode}): {result.stderr[:400]}"
-        if not TRANSIENT_API_ERROR.search(result.stderr) or attempt == API_RETRIES:
+        if not TRANSIENT_API_ERROR.search(result.stderr) or attempt == retries:
             raise RuntimeError(last_error)
         time.sleep(API_RETRY_WAIT_SECONDS * attempt)
     raise RuntimeError(last_error)
@@ -1199,11 +1228,17 @@ def fetch_attempt_jobs(
     return parse_jobs(payload)
 
 
-def fetch_job_log(repo: str, job_id: int, cache_dir: Path, keep_logs: bool) -> str:
+def fetch_job_log(
+    repo: str, job_id: int, cache_dir: Path, keep_logs: bool, retries: int = API_RETRIES
+) -> str:
     cache_path = cache_dir / f"{job_id}.log"
     if cache_path.exists():
         return cache_path.read_text(encoding="utf-8", errors="replace")
-    text = gh_api(f"repos/{repo}/actions/jobs/{job_id}/logs", allow_escape_sequences=True)
+    text = gh_api(
+        f"repos/{repo}/actions/jobs/{job_id}/logs",
+        allow_escape_sequences=True,
+        retries=retries,
+    )
     _write_cache(cache_path, text)
     return text
 
@@ -1469,7 +1504,7 @@ def cmd_rerun_summary(args: argparse.Namespace) -> int:
             "event": payload.get("event") or "",
             "branch": payload.get("head_branch") or "",
         }
-    except (RuntimeError, OSError, ValueError) as error:
+    except (RuntimeError, OSError, ValueError, AttributeError, TypeError) as error:
         # Cosmetic only; the summary still renders without the context line.
         print(f"Run context unavailable: {error}", file=sys.stderr)
 
@@ -1478,12 +1513,14 @@ def cmd_rerun_summary(args: argparse.Namespace) -> int:
             earlier: fetch_attempt_jobs(args.repo, run_id, earlier)
             for earlier in range(1, attempt + 1)
         }
+        # Parsing and row selection stay inside the fallback: a malformed
+        # payload shape (for example an unhashable job name) must reach the
+        # visible unavailable note, not escape the command.
+        rows = rerun_summary_rows(attempts, attempt)
     except (RuntimeError, OSError, ValueError, KeyError, TypeError, AttributeError) as error:
         print(render_rerun_unavailable(run_id, attempt, str(error)))
         print(f"Rerun summary unavailable: {error}", file=sys.stderr)
         return 0
-
-    rows = rerun_summary_rows(attempts, attempt)
     try:
         with tempfile.TemporaryDirectory(prefix="ci-flake-rerun-") as cache_name:
             # Diagnostics go to stderr: stdout is the Markdown step summary.

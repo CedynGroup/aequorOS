@@ -1156,7 +1156,9 @@ def test_rerun_summary_log_download_diagnostics_stay_off_the_summary(
             return fixture_json("attempt_jobs_passed.json")
         return {"total_count": 0, "jobs": []}
 
-    def failing_gh_api(*endpoint_args: str, allow_escape_sequences: bool = False) -> str:
+    def failing_gh_api(
+        *endpoint_args: str, allow_escape_sequences: bool = False, retries: int = 4
+    ) -> str:
         raise RuntimeError("gh api failed (1): Server Error (HTTP 502)")
 
     monkeypatch.setattr(flake_report, "gh_api_json", fake_gh_api_json)
@@ -1191,7 +1193,9 @@ def test_rerun_summary_command_lists_fixture_run_rerun_passes(
             return passed_payload
         return {"total_count": 0, "jobs": []}
 
-    def fake_gh_api(*endpoint_args: str, allow_escape_sequences: bool = False) -> str:
+    def fake_gh_api(
+        *endpoint_args: str, allow_escape_sequences: bool = False, retries: int = 4
+    ) -> str:
         assert "/actions/jobs/128700000005/logs" in endpoint_args[0]
         return "\n".join(fixture_text("playwright_rule_status.log"))
 
@@ -1215,3 +1219,134 @@ def test_rerun_summary_command_lists_fixture_run_rerun_passes(
     assert "failed on attempts 1" in output
     assert "playwright:tests/submissions/regulatory-rule-status.e2e.spec.ts" in output
     assert "status disclosure remains reachable when its badge scrolls out of view" in output
+
+
+def test_rerun_summary_rows_include_timed_out_earlier_attempts() -> None:
+    """A job-level timeout on the earlier attempt and success on the rerun is
+    a rerun-only pass (the journey shards time out at 40 minutes)."""
+    attempts = {
+        1: [job("Dashboard journeys shard 2/4", "timed_out", 40.0, 1)],
+        2: [job("Dashboard journeys shard 2/4", "success", 21.0, 2)],
+    }
+    rows = flake_report.rerun_summary_rows(attempts, 2)
+    assert [(row.job_name, row.failed_attempts) for row in rows] == [
+        ("Dashboard journeys shard 2/4", [1])
+    ]
+
+
+def test_rerun_summary_command_survives_a_non_object_run_payload(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setattr(flake_report, "gh_api_json", lambda *endpoint: ["not", "an", "object"])
+    exit_code = flake_report.main(
+        ["rerun-summary", "--repo", "CedynGroup/aequorOS", "--run-id", "9", "--attempt", "2"]
+    )
+    assert exit_code == 0
+    assert "Rerun summary unavailable" in capsys.readouterr().out
+
+
+def test_rerun_summary_command_survives_an_unhashable_job_name(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    def fake_gh_api_json(*endpoint_args: str) -> dict[str, Any]:
+        endpoint = endpoint_args[0]
+        if endpoint.endswith("/actions/runs/9"):
+            return {"name": "Risk Service CI", "event": "push", "head_branch": "feature/a"}
+        return {
+            "total_count": 1,
+            "jobs": [
+                {
+                    "id": 1,
+                    "name": {"unhashable": True},
+                    "conclusion": "success",
+                    "started_at": "2026-11-08T10:00:00Z",
+                    "completed_at": "2026-11-08T10:01:00Z",
+                }
+            ],
+        }
+
+    monkeypatch.setattr(flake_report, "gh_api_json", fake_gh_api_json)
+    exit_code = flake_report.main(
+        ["rerun-summary", "--repo", "CedynGroup/aequorOS", "--run-id", "9", "--attempt", "2"]
+    )
+    assert exit_code == 0
+    assert "Rerun summary unavailable" in capsys.readouterr().out
+
+
+def test_rerun_summary_enrichment_deadline_stops_log_reads_and_still_prints(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    class FakeClock:
+        def __init__(self) -> None:
+            self.now = 0.0
+
+        def monotonic(self) -> float:
+            return self.now
+
+    clock = FakeClock()
+
+    def fake_gh_api_json(*endpoint_args: str) -> dict[str, Any]:
+        endpoint = endpoint_args[0]
+        if endpoint.endswith("/actions/runs/9"):
+            return {"name": "Risk Service CI", "event": "push", "head_branch": "feature/a"}
+        if "/attempts/1/jobs" in endpoint:
+            return {
+                "total_count": 1,
+                "jobs": [
+                    {
+                        "id": 11,
+                        "name": "Journeys shard",
+                        "conclusion": "failure",
+                        "started_at": "2026-11-08T10:00:00Z",
+                        "completed_at": "2026-11-08T10:01:00Z",
+                    }
+                ],
+            }
+        if "/attempts/2/jobs" in endpoint:
+            return {
+                "total_count": 1,
+                "jobs": [
+                    {
+                        "id": 12,
+                        "name": "Journeys shard",
+                        "conclusion": "failure",
+                        "started_at": "2026-11-08T11:00:00Z",
+                        "completed_at": "2026-11-08T11:01:00Z",
+                    }
+                ],
+            }
+        return {
+            "total_count": 1,
+            "jobs": [
+                {
+                    "id": 13,
+                    "name": "Journeys shard",
+                    "conclusion": "success",
+                    "started_at": "2026-11-08T12:00:00Z",
+                    "completed_at": "2026-11-08T12:01:00Z",
+                }
+            ],
+        }
+
+    reads: list[int] = []
+
+    def slow_gh_api(
+        *endpoint_args: str, allow_escape_sequences: bool = False, retries: int = 4
+    ) -> str:
+        reads.append(len(reads))
+        clock.now = 10_000.0  # one optional read eats the whole enrichment budget
+        return "pytest failure in tests/a.py"
+
+    monkeypatch.setattr(flake_report, "time", clock)
+    monkeypatch.setattr(flake_report, "gh_api_json", fake_gh_api_json)
+    monkeypatch.setattr(flake_report, "gh_api", slow_gh_api)
+    exit_code = flake_report.main(
+        ["rerun-summary", "--repo", "CedynGroup/aequorOS", "--run-id", "9", "--attempt", "3"]
+    )
+    assert exit_code == 0
+    output = capsys.readouterr()
+    # The summary still prints, with at most one log read spent before the
+    # deadline stopped the optional enrichment.
+    assert "Journeys shard" in output.out
+    assert len(reads) == 1
+    assert "deadline" in output.out
