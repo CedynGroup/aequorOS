@@ -1,0 +1,14 @@
+2026-11-07T12:31:08.0509037Z FAILED tests/db/test_document_deletion_timeout_integration.py::test_upload_completion_cannot_resurrect_deletion_during_head[True-True] - sqlalchemy.exc.InternalError: (psycopg.errors.IdleInTransactionSessionTimeout) terminating connection due to idle-in-transaction timeout
+2026-11-07T12:31:08.0510645Z [SQL: SELECT jobs.organization_id, jobs.job_type, jobs.status, jobs.entity_type, jobs.entity_id, jobs.bank_id, jobs.payload, jobs.run_after, jobs.coalesce_key, jobs.attempts, jobs.max_attempts, jobs.progress, jobs.error, jobs.queued_at, jobs.claimed_by, jobs.started_at, jobs.completed_at, jobs.id 
+2026-11-07T12:31:08.0511548Z FROM jobs 
+2026-11-07T12:31:08.0511741Z WHERE jobs.entity_id = %(entity_id_1)s::VARCHAR]
+2026-11-07T12:31:08.0512056Z [parameters: {'entity_id_1': '0950ac9c-168c-44f6-880b-ccd60392b99a'}]
+2026-11-07T12:31:08.0512424Z (Background on this error at: https://sqlalche.me/e/20/2j85)
+2026-11-07T12:31:08.0513136Z FAILED tests/db/test_document_deletion_timeout_integration.py::test_deletion_commits_before_storage_and_retries_under_role_timeouts - AssertionError: assert ('pending_deletion' == 'deleted'
+2026-11-07T12:31:08.0513752Z   
+2026-11-07T12:31:08.0513900Z   - deleted
+2026-11-07T12:31:08.0514067Z   + pending_deletion)
+2026-11-07T12:31:08.0514855Z FAILED tests/db/test_document_deletion_timeout_integration.py::test_cleanup_deletes_real_minio_object_and_reruns_safely - assert StoredObjectHead(content_type='application/pdf', byte_size=18, etag='"ea0ff79ca1b0677674ef44d9f4b63eb4"', version_id=None) is None
+2026-11-07T12:31:08.0516369Z  +  where StoredObjectHead(content_type='application/pdf', byte_size=18, etag='"ea0ff79ca1b0677674ef44d9f4b63eb4"', version_id=None) = head_object(bucket='risk-local', object_key='orgs/OR-DEM00001/documents/c3f6a621-3bb2-49a6-bea7-4242b9ad5888/original/finalized/9b858173-301b-491a-81c8-28c6b4ea16cb')
+2026-11-07T12:31:08.0517750Z  +    where head_object = <app.integrations.storage.s3.S3ObjectStorage object at 0x7f35d5307620>.head_object
+2026-11-07T12:31:08.0518272Z ========== 3 failed, 482 passed, 568 deselected in 289.63s (0:04:49) ===========

@@ -1,0 +1,12 @@
+2026-11-08T08:56:49.1510570Z ##[start-action display=Download and verify MinIO;id=minio.__run]
+2026-11-08T08:56:49.1527885Z ##[group]Run set -euo pipefail
+2026-11-08T08:56:49.1530045Z [36;1mcurl --fail --silent --show-error --location --retry 3 \[0m
+2026-11-08T08:56:49.1530675Z [36;1m  https://github.com/minio/minio/releases/download/RELEASE.2025-09-07T16-13-09Z/minio.linux-amd64.RELEASE.2025-09-07T16-13-09Z \[0m
+2026-11-08T08:56:49.1531022Z [36;1m  --output "$directory/minio"[0m
+2026-11-08T08:56:50.2016680Z curl: (22) The requested URL returned error: 504
+2026-11-08T08:56:50.2054952Z warning: Retrying in 1s
+2026-11-08T08:56:52.2102618Z curl: (22) The requested URL returned error: 504
+2026-11-08T08:56:52.2142618Z warning: Retrying in 2s
+2026-11-08T08:57:10.2175381Z minio.linux-amd64.RELEASE.2025-09-07T16-13-09Z 100%  [=====>        ] 108213128
+2026-11-08T08:57:31.2216094Z 7c5bd8512c6e966455b1d198209358b2d191c77a83ab377c4073281065fb855f  /home/runner/_temp/aequoros-ci-minio/minio: OK
+2026-11-08T08:57:31.2290000Z ##[end-action id=minio.__run;outcome=success;conclusion=success;duration_ms=42181]
