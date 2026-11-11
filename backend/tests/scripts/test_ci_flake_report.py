@@ -462,13 +462,55 @@ def test_fail_pass_fail_later_failure_is_not_a_rerun() -> None:
         21: [flake_report.Finding("test", signature, ["t"])],
         23: [flake_report.Finding("test", signature, ["t"])],
     }
-    events = flake_report._build_events(failed_jobs, rerun_passes, set(), findings_by_job)
+    events = flake_report._build_events(failed_jobs, rerun_passes, {}, set(), findings_by_job)
     failures = [e for e in events if e.attempt != 2]
     assert len(failures) == 2
     by_attempt = {e.attempt: e for e in failures}
     assert by_attempt[1].rerun is True
     assert by_attempt[3].rerun is False
     assert by_attempt[3].rerun_minutes == 0.0
+
+
+def test_a_failure_between_the_first_and_the_pass_carries_recovery_evidence() -> None:
+    run = flake_report.RunRecord(
+        run_id=9,
+        workflow="Dashboard Playwright journeys",
+        event="pull_request",
+        head_branch="feature/a",
+        head_sha="abc123",
+        run_attempt=3,
+        conclusion="failure",
+        created_at="2026-11-08T10:00:00Z",
+    )
+    failed_jobs = [
+        (run, 1, job("Dashboard journeys shard 4/4", "failure", 20.0, 31)),
+        (run, 2, job("Dashboard journeys shard 4/4", "failure", 20.0, 32)),
+    ]
+    rerun_passes = {
+        (9, 1, "Dashboard journeys shard 4/4"): flake_report.RerunPass(
+            failed_job=failed_jobs[0][2],
+            failed_attempt=1,
+            passed_attempt=3,
+            passed_minutes=20.0,
+        ),
+    }
+    recoveries = {
+        (9, "Dashboard journeys shard 4/4"): rerun_passes[(9, 1, "Dashboard journeys shard 4/4")]
+    }
+    findings_by_job = {
+        31: [flake_report.Finding("test", "pytest:tests/a.py", [])],
+        32: [flake_report.Finding("test", "pytest:tests/b.py", [])],
+    }
+    events = flake_report._build_events(
+        failed_jobs, rerun_passes, recoveries, set(), findings_by_job
+    )
+    by_signature = {e.signature: e for e in events}
+    # Both failed attempts recovered on attempt 3, so both signatures are
+    # rerun evidence; only the first failed attempt carries the re-executed
+    # minutes, so the rerun is not counted twice.
+    assert by_signature["pytest:tests/a.py"].rerun is True
+    assert by_signature["pytest:tests/b.py"].rerun is True
+    assert by_signature["pytest:tests/b.py"].rerun_minutes == 0.0
 
 
 # --- ranking ------------------------------------------------------------------
@@ -549,8 +591,17 @@ def test_main_or_queue_hits_counted() -> None:
 def test_thresholds_need_issue_at_two_fix_or_quarantine_at_three() -> None:
     now = datetime(2026, 11, 9, tzinfo=UTC)
     recent = "2026-11-08T10:00:00Z"
-    two = [event("flake:a", rerun=True, created_at=recent) for _ in range(2)]
-    three = [event("flake:x", rerun=True, created_at=recent) for _ in range(3)]
+    # Each distinct run/job pair is one rerun cycle; several attempts of one
+    # run/job count once (covered by the one-rerun-cycle test above).
+    two = [
+        event("flake:a", rerun=True, created_at=recent, run_id=41),
+        event("flake:a", rerun=True, created_at=recent, run_id=42),
+    ]
+    three = [
+        event("flake:x", rerun=True, created_at=recent, run_id=41),
+        event("flake:x", rerun=True, created_at=recent, run_id=42),
+        event("flake:x", rerun=True, created_at=recent, run_id=43),
+    ]
     old = event("flake:old", rerun=True, created_at="2026-10-01T10:00:00Z")
 
     breaches = flake_report.evaluate_thresholds([*two, old], now)
@@ -562,6 +613,47 @@ def test_thresholds_need_issue_at_two_fix_or_quarantine_at_three() -> None:
     assert breaches[0].action == "fix or quarantine within 7 days"
 
     assert flake_report.evaluate_thresholds([old], now) == []
+
+
+def test_one_rerun_cycle_counts_once_per_run_and_job() -> None:
+    now = datetime(2026, 11, 9, tzinfo=UTC)
+    shared = {
+        "signature": "pytest:tests/a.py",
+        "kind": "test",
+        "workflow": "Risk Service CI",
+        "run_id": 42,
+        "event": "pull_request",
+        "branch": "feature/a",
+        "sha": "a" * 40,
+        "job": "Dashboard journeys shard 4/4",
+        "created_at": "2026-11-08T10:00:00Z",
+        "test_names": [],
+    }
+    # The same job failed the same signature on two attempts of one run and
+    # then passed: one rerun cycle, so one rerun count and one threshold hit.
+    events = [
+        flake_report.FlakeEvent(
+            **shared,
+            attempt=1,
+            minutes=10.0,
+            rerun_minutes=8.0,
+            rerun=True,
+            same_sha_pass=False,
+        ),
+        flake_report.FlakeEvent(
+            **shared,
+            attempt=2,
+            minutes=10.0,
+            rerun_minutes=0.0,
+            rerun=True,
+            same_sha_pass=False,
+        ),
+    ]
+    row = flake_report.build_ranking(events, {})[0]
+    assert row["occurrences"] == 2
+    assert row["rerun_count"] == 1
+    assert row["rerun_minutes"] == pytest.approx(8.0)
+    assert flake_report.evaluate_thresholds(events, now) == []
 
 
 # --- report assembly ----------------------------------------------------------

@@ -479,7 +479,9 @@ def build_ranking(
                 "kind": kind,
                 "classification": classification,
                 "occurrences": len(signature_events),
-                "rerun_count": len(rerun_events),
+                # One rerun cycle per run/job: a job failing the signature on
+                # several attempts before its pass needed one rerun.
+                "rerun_count": len({(event.run_id, event.job) for event in rerun_events}),
                 "same_sha_count": sum(1 for event in signature_events if event.same_sha_pass),
                 "lost_minutes": round(minutes, 1),
                 "rerun_minutes": round(rerun_minutes, 1),
@@ -529,13 +531,20 @@ def evaluate_thresholds(
     mode wired in M3.
     """
     window_start = now - timedelta(days=window_days)
+    # One rerun cycle per run/job: a job failing the signature on several
+    # attempts before its pass needed one rerun, not two.
+    counted: set[tuple[str, int, str]] = set()
     per_signature: dict[str, int] = Counter()
     for event in events:
         if not event.rerun:
             continue
+        key = (event.signature, event.run_id, event.job)
+        if key in counted:
+            continue
         created = _parse_timestamp(event.created_at)
         if created is None or created < window_start:
             continue
+        counted.add(key)
         per_signature[event.signature] += 1
 
     breaches: list[ThresholdBreach] = []
@@ -1086,12 +1095,25 @@ def _failed_leaf_jobs(
 def _build_events(
     failed_jobs: list[tuple[RunRecord, int, JobRecord]],
     rerun_passes: dict[tuple[int, int, str], RerunPass],
+    recoveries: dict[tuple[int, str], RerunPass],
     mixed_flags: set[tuple[int, str]],
     findings_by_job: dict[int, list[Finding]],
 ) -> list[FlakeEvent]:
     events: list[FlakeEvent] = []
     for run, attempt, job in failed_jobs:
         rerun = rerun_passes.get((run.run_id, attempt, job.name))
+        if rerun is None:
+            # A failure between the first one and the eventual pass carries
+            # the same recovery evidence; only the first failed attempt
+            # carries the re-executed minutes, so the rerun stays one rerun.
+            recovery = recoveries.get((run.run_id, job.name))
+            if recovery is not None and attempt < recovery.passed_attempt:
+                rerun = RerunPass(
+                    failed_job=job,
+                    failed_attempt=attempt,
+                    passed_attempt=recovery.passed_attempt,
+                    passed_minutes=0.0,
+                )
         findings = findings_by_job.get(job.job_id, [])
         if not findings:
             findings = [Finding("unclassified", f"unclassified:{job.name}")]
@@ -1131,9 +1153,11 @@ def collect_report_data(
     )
 
     rerun_passes: dict[tuple[int, int, str], RerunPass] = {}
+    recoveries: dict[tuple[int, str], RerunPass] = {}
     for run_id, attempts in jobs_by_run_attempt.items():
         for rerun in compare_attempts(attempts):
             rerun_passes[(run_id, rerun.failed_attempt, rerun.failed_job.name)] = rerun
+            recoveries[(run_id, rerun.failed_job.name)] = rerun
     mixed = same_sha_mixed_outcomes(all_runs, jobs_by_run)
     mixed_flags = {(outcome.failed_run_id, outcome.job_name) for outcome in mixed}
 
@@ -1141,7 +1165,7 @@ def collect_report_data(
     log(f"Fetching logs for {len(failed_jobs)} failed job(s)")
     findings_by_job = _fetch_findings(options.repo, failed_jobs, options, log)
 
-    events = _build_events(failed_jobs, rerun_passes, mixed_flags, findings_by_job)
+    events = _build_events(failed_jobs, rerun_passes, recoveries, mixed_flags, findings_by_job)
     log(f"Built {len(events)} event(s) from {len(failed_jobs)} failed job(s)")
     return all_runs, events
 
