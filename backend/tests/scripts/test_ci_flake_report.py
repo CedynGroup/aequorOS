@@ -44,11 +44,11 @@ REPORT_META: dict[str, Any] = {
 
 
 def fixture_text(name: str) -> list[str]:
-    return (FIXTURES / name).read_text().splitlines()
+    return (FIXTURES / name).read_text(encoding="utf-8").splitlines()
 
 
 def fixture_json(name: str) -> dict:
-    with (FIXTURES / name).open() as handle:
+    with (FIXTURES / name).open(encoding="utf-8") as handle:
         return json.load(handle)
 
 
@@ -143,6 +143,31 @@ def test_nonfatal_retry_lines_not_counted() -> None:
     assert findings == []
 
 
+def test_collection_error_without_a_test_name_registers_the_path() -> None:
+    findings = flake_report.extract_findings(
+        ["ERROR tests/db/test_broken_imports.py - ImportError: cannot import name 'x'"]
+    )
+    assert [(f.kind, f.signature, f.test_names) for f in findings] == [
+        ("test", "pytest:tests/db/test_broken_imports.py", [])
+    ]
+
+
+def test_playwright_browser_contract_signature_extraction() -> None:
+    findings = flake_report.extract_findings(
+        [
+            "2026-11-08T08:56:49.2Z ✘  2 tests/submissions/exports.integration.spec.ts:88:7 "
+            "› the artifact act answers while the pack detail loads (15.3s)"
+        ]
+    )
+    assert [(f.kind, f.signature, f.test_names) for f in findings] == [
+        (
+            "test",
+            "playwright:tests/submissions/exports.integration.spec.ts",
+            ["the artifact act answers while the pack detail loads"],
+        )
+    ]
+
+
 def test_clean_lines_strips_timestamps_and_ansi() -> None:
     cleaned = flake_report.clean_lines(
         "\x1b[32m2026-11-08T08:56:49.2016680Z curl: (22) boom\x1b[0m"
@@ -177,6 +202,47 @@ def test_consistent_failure_is_not_flaky() -> None:
         2: [job("Dashboard journeys shard 4/4", "failure", 20.0)],
     }
     assert flake_report.compare_attempts(attempts) == []
+
+
+def test_recovery_after_an_earlier_success_is_a_rerun_pass() -> None:
+    attempts = {
+        1: [job("Dashboard journeys shard 4/4", "success", 20.0)],
+        2: [job("Dashboard journeys shard 4/4", "failure", 20.0)],
+        3: [job("Dashboard journeys shard 4/4", "success", 21.0)],
+    }
+    passes = flake_report.compare_attempts(attempts)
+    assert len(passes) == 1
+    assert passes[0].failed_attempt == 2
+    assert passes[0].passed_attempt == 3
+
+
+def test_a_timed_out_attempt_recovers_as_a_rerun_pass() -> None:
+    attempts = {
+        1: [job("Dashboard journeys shard 2/4", "timed_out", 40.0)],
+        2: [job("Dashboard journeys shard 2/4", "success", 21.0)],
+    }
+    passes = flake_report.compare_attempts(attempts)
+    assert len(passes) == 1
+    assert passes[0].failed_attempt == 1
+
+
+def test_timed_out_job_is_collected_as_failed() -> None:
+    run = flake_report.RunRecord(
+        run_id=1,
+        workflow="Dashboard Playwright journeys",
+        event="pull_request",
+        head_branch="feature/a",
+        head_sha="abc123",
+        run_attempt=1,
+        conclusion="failure",
+        created_at="2026-11-08T10:00:00Z",
+    )
+    failed = flake_report._failed_leaf_jobs(
+        {1: run}, {1: {1: [job("Dashboard journeys shard 2/4", "timed_out", 40.0)]}}
+    )
+    assert [(job_record.name, attempt) for _, attempt, job_record in failed] == [
+        ("Dashboard journeys shard 2/4", 1)
+    ]
 
 
 def test_aggregate_jobs_excluded() -> None:
@@ -251,6 +317,48 @@ def test_merge_group_skipped_jobs_excluded() -> None:
         2: [job("dashboard", "skipped", 0.0)],
     }
     assert flake_report.same_sha_mixed_outcomes(runs, jobs_by_run) == []
+
+
+def test_swapped_shard_failures_between_failing_runs_are_mixed_outcomes() -> None:
+    runs = [
+        flake_report.RunRecord(
+            run_id=1,
+            workflow="Dashboard Playwright journeys",
+            event="pull_request",
+            head_branch="feature/a",
+            head_sha="abc123",
+            run_attempt=1,
+            conclusion="failure",
+            created_at="2026-11-08T10:00:00Z",
+        ),
+        flake_report.RunRecord(
+            run_id=2,
+            workflow="Dashboard Playwright journeys",
+            event="pull_request",
+            head_branch="feature/a",
+            head_sha="abc123",
+            run_attempt=2,
+            conclusion="failure",
+            created_at="2026-11-08T12:00:00Z",
+        ),
+    ]
+    # Both runs end failed, but different shards fail in each: the swap is the
+    # mixed evidence, even though no run of this SHA ever passed.
+    jobs_by_run = {
+        1: [
+            job("Dashboard journeys shard 1/4", "failure", 20.0),
+            job("Dashboard journeys shard 2/4", "success", 20.0),
+        ],
+        2: [
+            job("Dashboard journeys shard 1/4", "success", 20.0),
+            job("Dashboard journeys shard 2/4", "failure", 20.0),
+        ],
+    }
+    mixed = flake_report.same_sha_mixed_outcomes(runs, jobs_by_run)
+    assert sorted((m.failed_run_id, m.job_name) for m in mixed) == [
+        (1, "Dashboard journeys shard 1/4"),
+        (2, "Dashboard journeys shard 2/4"),
+    ]
 
 
 def test_fail_fail_pass_is_one_rerun_pass() -> None:

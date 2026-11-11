@@ -744,13 +744,29 @@ def plan_duration_rewrites(backend: Path, rename: Renamer) -> dict[Path, str]:
         return {}
     text = path.read_text(encoding="utf-8")
     data = cast("dict[str, dict[str, object]]", json.loads(text))
+    frozen = frozen_files(rename)
     renames = {
         module: new
         for module in data["durations"]
-        if module not in _FROZEN_FILES and (new := _renamed_module_path(module, rename)) != module
+        if module not in frozen and (new := _renamed_module_path(module, rename)) != module
     }
     updated = _renamed_duration_keys(text, renames)
     return {path: updated} if updated != text else {}
+
+
+def frozen_files(rename: Renamer) -> frozenset[str]:
+    """The frozen file paths, including wherever a ledger move relocates one.
+
+    The frozen files carry recorded historical data (the flake-report tests
+    quote module paths from real CI logs), so a rewrite must never touch them;
+    if the ledger itself relocates one of these files, the exemption has to
+    travel with it instead of staying behind at the old path.
+    """
+    frozen: set[str] = set()
+    for relative in _FROZEN_FILES:
+        renamed = rename(relative[: -len(".py")].replace("/", "."))
+        frozen.add(renamed.replace(".", "/") + ".py")
+    return frozenset(frozen)
 
 
 def plan_rewrites(backend: Path, rename: Renamer) -> dict[Path, str]:
@@ -759,13 +775,14 @@ def plan_rewrites(backend: Path, rename: Renamer) -> dict[Path, str]:
     if not rename.moves:
         return planned
     frozen = frozen_identifiers(backend, rename)
+    frozen_paths = frozen_files(rename)
     for path in tracked_text_files(backend):
         if not path.is_file():
             continue
         relative = (
             path.relative_to(backend).as_posix() if path.is_relative_to(backend) else path.name
         )
-        if relative in _FROZEN_FILES:
+        if relative in frozen_paths:
             continue
         original = path.read_text(encoding="utf-8")
         updated = rewrite_text(relative, original, rename, backend, frozen)

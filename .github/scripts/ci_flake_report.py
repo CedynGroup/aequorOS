@@ -89,7 +89,7 @@ BOM = "\ufeff"
 PYTEST_FAILED = re.compile(r"^FAILED (?P<path>\S+?\.py)::(?P<name>[^ ]+)")
 PYTEST_COLLECTION_ERROR = re.compile(r"^ERROR (?P<path>tests/\S+?\.py)(?:::(?P<name>[^ ]+))?")
 PLAYWRIGHT_FAILED = re.compile(
-    r"✘\s+\d+\s+(?P<path>\S+?\.e2e\.spec\.ts):(?P<line>\d+):\d+ › (?P<name>.+?)"
+    r"✘\s+\d+\s+(?P<path>\S+?\.(?:e2e|integration)\.spec\.ts):(?P<line>\d+):\d+ › (?P<name>.+?)"
     r"(?:\s+\([^)]*\))?$"
 )
 TYPECHECK_BASELINE = re.compile(r"^(?P<module>\S+) (?P<rule>report\w+): \d+ \(baseline \d+\)")
@@ -182,8 +182,11 @@ def clean_lines(text: str) -> list[str]:
 
 
 def _add_test_name(by_path: dict[str, list[str]], path: str, name: str | None) -> None:
-    if name and name not in by_path[path]:
-        by_path[path].append(name)
+    # The path registers even without a name: a pytest collection error names
+    # no test, but the file that failed to import is still a finding.
+    names = by_path.setdefault(path, [])
+    if name and name not in names:
+        names.append(name)
 
 
 def extract_findings(raw_lines: list[str]) -> list[Finding]:
@@ -251,6 +254,11 @@ def is_test_job_conclusion(conclusion: str) -> bool:
     return conclusion in ("success", "failure")
 
 
+def is_failed_job_conclusion(conclusion: str) -> bool:
+    """Conclusions that mean the job's work failed, including a job-level timeout."""
+    return conclusion in ("failure", "timed_out")
+
+
 def parse_jobs(payload: dict[str, Any]) -> list[JobRecord]:
     jobs = []
     for raw in payload.get("jobs", []):
@@ -294,9 +302,12 @@ def compare_attempts(
     """Jobs that failed and then passed on a later attempt of the same run.
 
     One RerunPass per run job: the first failed attempt before the first
-    passing attempt. Later failures before that pass are additional lost
-    minutes but not additional rerun-only passes (a run that failed, failed
-    again and then passed needed one rerun, not two).
+    passing attempt AFTER that failure. A job that succeeded before it failed
+    and then recovered again (rerun the whole workflow and it passes on the
+    third attempt) still needed its rerun, so the recovery that matters is the
+    one that follows the failure. Later failures before that pass are
+    additional lost minutes but not additional rerun-only passes (a run that
+    failed, failed again and then passed needed one rerun, not two).
     """
     passes: list[RerunPass] = []
     for name in {job.name for jobs in attempts.values() for job in jobs}:
@@ -304,7 +315,7 @@ def compare_attempts(
             (attempt, job)
             for attempt, jobs in sorted(attempts.items())
             for job in jobs
-            if job.name == name and job.conclusion == "failure"
+            if job.name == name and is_failed_job_conclusion(job.conclusion)
         ]
         passed = [
             (attempt, job)
@@ -312,19 +323,20 @@ def compare_attempts(
             for job in jobs
             if job.name == name and job.conclusion == "success"
         ]
-        if not failed or not passed:
+        if not failed:
             continue
         first_fail = failed[0]
-        first_pass = passed[0]
-        if first_fail[0] < first_pass[0]:
-            passes.append(
-                RerunPass(
-                    failed_job=first_fail[1],
-                    failed_attempt=first_fail[0],
-                    passed_attempt=first_pass[0],
-                    passed_minutes=first_pass[1].minutes,
-                )
+        recovery = next(((attempt, job) for attempt, job in passed if attempt > first_fail[0]), None)
+        if recovery is None:
+            continue
+        passes.append(
+            RerunPass(
+                failed_job=first_fail[1],
+                failed_attempt=first_fail[0],
+                passed_attempt=recovery[0],
+                passed_minutes=recovery[1].minutes,
             )
+        )
     return passes
 
 
@@ -334,9 +346,12 @@ def same_sha_mixed_outcomes(
 ) -> list[MixedOutcome]:
     """Same workflow + head SHA where a job failed in one run and passed in another.
 
-    Jobs that were skipped in a run (e.g. Dashboard CI and Web CI skip their
-    test jobs on merge_group) are not counted as passes: a skipped job never
-    ran, so it says nothing about the health of that commit.
+    Outcomes are compared per job, not per run: two runs of one SHA can both
+    end failed while different shards fail in each, and those swapped shards
+    are exactly the mixed evidence a flake leaves behind. Jobs that were
+    skipped in a run (e.g. Dashboard CI and Web CI skip their test jobs on
+    merge_group) are not counted as passes: a skipped job never ran, so it
+    says nothing about the health of that commit.
     """
     by_key: dict[tuple[str, str], list[RunRecord]] = defaultdict(list)
     for run in runs:
@@ -347,17 +362,15 @@ def same_sha_mixed_outcomes(
     for group in by_key.values():
         if len(group) < 2:
             continue
-        failed_runs = [run for run in group if run.conclusion == "failure"]
-        passed_runs = [run for run in group if run.conclusion == "success"]
-        if not failed_runs or not passed_runs:
-            continue
-        for failed_run in failed_runs:
+        for failed_run in group:
             failed_names = {
                 job.name
                 for job in jobs_by_run.get(failed_run.run_id, [])
-                if job.conclusion == "failure" and not is_aggregate_job(job.name)
+                if is_failed_job_conclusion(job.conclusion) and not is_aggregate_job(job.name)
             }
-            for passed_run in passed_runs:
+            for passed_run in group:
+                if passed_run.run_id == failed_run.run_id:
+                    continue
                 passed_names = {
                     job.name
                     for job in jobs_by_run.get(passed_run.run_id, [])
@@ -942,7 +955,7 @@ def fetch_attempt_jobs(
 def fetch_job_log(repo: str, job_id: int, cache_dir: Path, keep_logs: bool) -> str:
     cache_path = cache_dir / f"{job_id}.log"
     if cache_path.exists():
-        return cache_path.read_text(errors="replace")
+        return cache_path.read_text(encoding="utf-8", errors="replace")
     text = gh_api(f"repos/{repo}/actions/jobs/{job_id}/logs", allow_escape_sequences=True)
     _write_cache(cache_path, text)
     return text
@@ -1058,7 +1071,7 @@ def _failed_leaf_jobs(
         run = runs_by_id[run_id]
         for attempt, jobs in attempts.items():
             for job in jobs:
-                if job.conclusion == "failure" and not is_aggregate_job(job.name):
+                if is_failed_job_conclusion(job.conclusion) and not is_aggregate_job(job.name):
                     failed_jobs.append((run, attempt, job))
     return failed_jobs
 
