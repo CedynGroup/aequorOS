@@ -1281,10 +1281,11 @@ def cmd_weekly(args: argparse.Namespace, now: datetime | None = None) -> int:
         return 2
     since = (current_time - timedelta(days=window_days)).strftime("%Y-%m-%d")
     workflow_files = args.workflows.split(",") if args.workflows else list(WORKFLOW_FILES)
+    # Displayed commands must be copy-pasteable: the weekly subcommand derives
+    # --since from --window-days and accepts no --since option itself.
     commands = (
         f"python3 .github/scripts/ci_flake_report.py weekly --repo {args.repo} "
-        f"--window-days {window_days} --min-runs-per-workflow {args.min_runs_per_workflow} "
-        f"--since {since}"
+        f"--window-days {window_days} --min-runs-per-workflow {args.min_runs_per_workflow}"
     )
     options = ReportOptions(
         repo=args.repo,
@@ -1326,6 +1327,9 @@ def cmd_weekly(args: argparse.Namespace, now: datetime | None = None) -> int:
     unavailable_hits = sum(
         1 for event in events if event.signature.startswith("log-unavailable:")
     )
+    unclassified_hits = sum(
+        1 for event in events if event.signature.startswith("unclassified:")
+    )
     measured_events = [
         event
         for event in events
@@ -1337,6 +1341,12 @@ def cmd_weekly(args: argparse.Namespace, now: datetime | None = None) -> int:
         cutoff_parts.append(f"{budget_hits} failed-job log(s) unfetched")
     if unavailable_hits:
         cutoff_parts.append(f"{unavailable_hits} failed-job log(s) unreadable")
+    # An unclassified log was read but its failure is still unidentified: it
+    # is incomplete evidence too, so the caveat names it.
+    if unclassified_hits:
+        cutoff_parts.append(
+            f"{unclassified_hits} failed-job log(s) yielded no recognized failure signature"
+        )
     collection_cutoff = "; ".join(cutoff_parts) if cutoff_parts else None
 
     report = build_report(

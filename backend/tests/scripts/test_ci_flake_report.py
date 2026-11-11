@@ -1947,6 +1947,56 @@ def test_weekly_command_survives_api_errors_with_a_visible_note(
     assert "Server Error (HTTP 502)" in output.out
 
 
+def test_unclassified_logs_also_get_the_collection_caveat(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], tmp_path: Path
+) -> None:
+    """A readable log with no recognized finding is incomplete evidence too.
+
+    One recognized failure on a rerun plus an unclassified recurrence must
+    not read as a conclusive empty threshold result.
+    """
+    events = [
+        # One unclassified rerun pass: below the threshold, so the crossing
+        # table is empty — which must not read as conclusive, because this
+        # failure was never identified.
+        event("unclassified:dashboard", kind="unclassified", rerun=True, run_id=1),
+    ]
+    monkeypatch.setattr(
+        flake_report,
+        "collect_report_data",
+        lambda options, log=print: ([success_run(1)], events),
+    )
+    parser = flake_report.build_parser()
+    args = parser.parse_args(["weekly", "--cache-dir", str(tmp_path)])
+    assert flake_report.cmd_weekly(args, now=datetime(2026, 11, 9, 12, 0, tzinfo=UTC)) == 0
+    output = capsys.readouterr()
+    assert (
+        "Collection caveat: 1 failed-job log(s) yielded no recognized failure signature"
+        in output.out
+    )
+    assert "this result is inconclusive" in output.out
+
+
+def test_the_displayed_weekly_command_is_copy_pasteable(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], tmp_path: Path
+) -> None:
+    """The command line shown in the report must parse with the weekly parser."""
+    monkeypatch.setattr(
+        flake_report,
+        "collect_report_data",
+        lambda options, log=print: ([success_run(1)], []),
+    )
+    parser = flake_report.build_parser()
+    args = parser.parse_args(["weekly", "--cache-dir", str(tmp_path)])
+    assert flake_report.cmd_weekly(args, now=datetime(2026, 11, 9, 12, 0, tzinfo=UTC)) == 0
+    out = capsys.readouterr().out
+    displayed = next(line for line in out.splitlines() if line.startswith("- Command:"))
+    command = displayed.split("`")[1]
+    # Drop "python3 <script>": the remaining tokens must parse as a weekly command.
+    assert flake_report.build_parser().parse_args(command.split()[2:]) is not None
+    assert "--since" not in command
+
+
 def test_weekly_command_collects_through_the_gh_api_boundary(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], tmp_path: Path
 ) -> None:
