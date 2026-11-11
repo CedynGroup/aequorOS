@@ -429,22 +429,40 @@ def compare_attempts(
             # the failing attempt.
             successes = sorted(jobs_by_attempt[recovery], key=lambda job: job.job_id)
             max_same_named = max(len(jobs) for jobs in jobs_by_attempt.values())
-            if len(successes) < max_same_named and len(successes) == len(group):
+            if len(successes) < max_same_named:
                 # A subset rerun ("re-run failed jobs") lists only the jobs
                 # that were re-run - by definition the ones that failed
                 # earlier - so the recovery attempt holds fewer same-named
-                # jobs than the failing attempts did, and exactly one entry
-                # per failed execution. Its successes then pair with the
-                # lineage's failed executions in first-failure order, and a
-                # failure left without a success of its own stays
-                # unrecovered.
-                ordered = sorted(group, key=lambda pair: (pair[0], pair[1].job_id))
-                charged: set[int] = set()
-                for index, (fail_attempt, fail_job) in enumerate(ordered):
-                    if index >= len(successes):
+                # jobs than the failing attempts did, and a full listing's
+                # ranks do not carry across the subset boundary. Instances
+                # are then identified by their rank among the attempt's
+                # FAILED same-named jobs (the order the subset listing
+                # carries), and each success closes one instance's cycle:
+                # every failed execution of a recovered instance keeps its
+                # recovery evidence (minutes charged once), while an
+                # instance with no success of its own stays unrecovered.
+                failed_rank_by_id: dict[tuple[int, int], int] = {}
+                for attempt in sorted(jobs_by_attempt):
+                    attempt_failed = [
+                        job
+                        for job in jobs_by_attempt[attempt]
+                        if is_failed_job_conclusion(job.conclusion)
+                    ]
+                    for rank, failed_job in enumerate(
+                        sorted(attempt_failed, key=lambda job: job.job_id)
+                    ):
+                        failed_rank_by_id[(attempt, failed_job.job_id)] = rank
+                charged_ranks: set[int] = set()
+                for fail_attempt, fail_job in sorted(
+                    group, key=lambda pair: (pair[0], pair[1].job_id)
+                ):
+                    rank = failed_rank_by_id[(fail_attempt, fail_job.job_id)]
+                    if rank >= len(successes):
+                        # More failed instances than the rerun re-executed:
+                        # no success of its own to recover at.
                         continue
-                    minutes = 0.0 if index in charged else successes[index].minutes
-                    charged.add(index)
+                    minutes = 0.0 if rank in charged_ranks else successes[rank].minutes
+                    charged_ranks.add(rank)
                     passes.append(
                         RerunPass(
                             failed_job=fail_job,
