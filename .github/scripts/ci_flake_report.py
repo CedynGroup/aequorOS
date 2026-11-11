@@ -420,6 +420,7 @@ def compare_attempts(
             # instances themselves (they pass on the recovery), so one success
             # can close a cycle opened on every earlier failed attempt, but
             # never more cycles than there are successes for one attempt.
+            charged_positions: set[int] = set()
             for fail_attempt in sorted(failures_by_attempt):
                 for position, fail_job in enumerate(
                     sorted(failures_by_attempt[fail_attempt], key=lambda job: job.job_id)
@@ -429,11 +430,18 @@ def compare_attempts(
                         # its own to recover at: leave it unrecovered instead
                         # of attributing another job's success to it.
                         continue
-                    # Later failures of one rerun cycle are additional lost
-                    # minutes but not additional re-executed ones: the pass
-                    # charges its minutes once, to the first failed attempt
-                    # recovering at it.
-                    minutes = 0.0 if fail_attempt != first_failure else successes[position].minutes
+                    # Each recovery position is charged once: the first failed
+                    # attempt that maps to it carries the re-executed minutes.
+                    # A later failure mapping to the same position is an
+                    # additional lost attempt of an already-charged instance,
+                    # not a second re-execution; but an instance that first
+                    # fails later (a fresh position) still charges its own
+                    # recovery minutes.
+                    if position not in charged_positions:
+                        minutes = successes[position].minutes
+                        charged_positions.add(position)
+                    else:
+                        minutes = 0.0
                     passes.append(
                         RerunPass(
                             failed_job=fail_job,
@@ -849,6 +857,12 @@ def evaluate_thresholds(
         if event.signature.startswith(MISSING_LOG_SIGNATURE_PREFIXES):
             # An unread log is not an identified failure: demanding a
             # flaky-test issue for it would act on evidence nobody has seen.
+            continue
+        if event.signature.startswith("unclassified:"):
+            # A read log whose failure is still unidentified is likewise not
+            # identified evidence: it stays visible in the ranking and the
+            # collection caveats, but threshold policy acts only on actual
+            # failure signatures.
             continue
         key = (event.signature, event.run_id, event.job, event.instance_rank)
         if key in counted:

@@ -880,6 +880,50 @@ def test_one_rerun_cycle_across_attempts_counts_once_despite_new_job_ids() -> No
     assert flake_report.evaluate_thresholds(events, now) == []
 
 
+def test_unidentified_failures_do_not_cross_policy_thresholds() -> None:
+    """A readable log with no recognized failure signature is not an
+    identified failure.
+
+    Three unrelated unidentified failures sharing one job-name placeholder
+    must not demand a fix or quarantine; they stay visible in the ranking
+    and the collection caveats instead.
+    """
+    now = datetime(2026, 11, 9, tzinfo=UTC)
+    events = [
+        event("unclassified:dashboard", rerun=True, run_id=run_id)
+        for run_id in (41, 42, 43)
+    ]
+    assert flake_report.evaluate_thresholds(events, now) == []
+
+
+def test_each_duplicate_instance_charges_its_own_recovery_minutes() -> None:
+    """A same-named instance that first fails on a later attempt still
+    charges the minutes its own recovery spent.
+
+    With failure/success on attempt 1, two failures on attempt 2 and two
+    successes (7 and 11 minutes) on attempt 3, both recovery positions are
+    charged once each (18 minutes total), instead of every failure after
+    the earliest one passing for free.
+    """
+    attempts = {
+        1: [
+            flake_report.JobRecord(job_id=1, name="ci", conclusion="failure", minutes=3.0),
+            flake_report.JobRecord(job_id=2, name="ci", conclusion="success", minutes=4.0),
+        ],
+        2: [
+            flake_report.JobRecord(job_id=3, name="ci", conclusion="failure", minutes=5.0),
+            flake_report.JobRecord(job_id=4, name="ci", conclusion="failure", minutes=6.0),
+        ],
+        3: [
+            flake_report.JobRecord(job_id=5, name="ci", conclusion="success", minutes=7.0),
+            flake_report.JobRecord(job_id=6, name="ci", conclusion="success", minutes=11.0),
+        ],
+    }
+    passes = flake_report.compare_attempts(attempts)
+    assert len(passes) == 3
+    assert sum(p.passed_minutes for p in passes) == 18.0
+
+
 def test_instance_rank_survives_a_passing_sibling_in_one_attempt() -> None:
     """The instance rank comes from the complete attempt listing, not the
     failed events alone.
