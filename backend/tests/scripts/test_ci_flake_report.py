@@ -770,6 +770,64 @@ def test_thresholds_need_issue_at_two_fix_or_quarantine_at_three() -> None:
     assert flake_report.evaluate_thresholds([old], now) == []
 
 
+def test_duplicate_same_named_jobs_count_as_separate_rerun_cycles() -> None:
+    """The rerun-cycle dedup keys on the job id, not the name.
+
+    Two same-named jobs that both failed with the same signature and both
+    passed on rerun are two re-executions: the policy counts two cycles, so
+    two such recurrences cross the flaky-test-issue threshold.
+    """
+    now = datetime(2026, 11, 9, tzinfo=UTC)
+    events = [
+        event(
+            "pytest:tests/a.py",
+            rerun=True,
+            run_id=41,
+            job_id=901,
+        ),
+        event(
+            "pytest:tests/a.py",
+            rerun=True,
+            run_id=41,
+            job_id=902,
+        ),
+    ]
+    breaches = flake_report.evaluate_thresholds(events, now)
+    assert len(breaches) == 1
+    assert breaches[0].rerun_passes_in_window == 2
+    assert breaches[0].action == "needs flaky-test issue with owner"
+
+
+def test_attempt_jobs_pager_fetches_every_page(monkeypatch: pytest.MonkeyPatch) -> None:
+    """An attempt with more than PER_PAGE jobs must not lose its later pages."""
+    endpoints: list[str] = []
+
+    def fake_gh_api_json(*endpoint_args: str) -> dict[str, Any]:
+        endpoint = endpoint_args[0]
+        endpoints.append(endpoint)
+        page = int(endpoint.rsplit("page=", 1)[1])
+        if page == 1:
+            return {
+                "total_count": 3,
+                "jobs": [
+                    {"id": 1, "name": "shard 1/3", "status": "completed", "conclusion": "failure"},
+                    {"id": 2, "name": "shard 2/3", "status": "completed", "conclusion": "success"},
+                ],
+            }
+        return {
+            "total_count": 3,
+            "jobs": [
+                {"id": 3, "name": "shard 3/3", "status": "completed", "conclusion": "success"},
+            ],
+        }
+
+    monkeypatch.setattr(flake_report, "gh_api_json", fake_gh_api_json)
+    jobs = flake_report.fetch_attempt_jobs("CedynGroup/aequorOS", 9, 1)
+    assert [j.job_id for j in jobs] == [1, 2, 3]
+    assert len(endpoints) == 2
+    assert "page=2" in endpoints[1]
+
+
 def test_missing_log_markers_never_cross_the_policy_thresholds() -> None:
     """A log that could not be read names no failure, so it cannot demand one.
 

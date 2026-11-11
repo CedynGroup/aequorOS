@@ -192,6 +192,9 @@ class FlakeEvent:
     same_sha_pass: bool
     created_at: str
     test_names: list[str] = field(default_factory=list)
+    # The Actions job id: two same-named jobs can share one attempt, and the
+    # dedup keys must keep them distinct. Synthetic events (tests) use 0.
+    job_id: int = 0
 
 
 @dataclass
@@ -828,8 +831,10 @@ def evaluate_thresholds(
     """
     window_start = now - timedelta(days=window_days)
     # One rerun cycle per run/job: a job failing the signature on several
-    # attempts before its pass needed one rerun, not two.
-    counted: set[tuple[str, int, str]] = set()
+    # attempts before its pass needed one rerun, not two. Keyed by the job id
+    # (not the name): two same-named jobs that both failed and passed ran
+    # twice, and the policy must count both cycles.
+    counted: set[tuple[str, int, str, int]] = set()
     per_signature: dict[str, int] = Counter()
     for event in events:
         if not event.rerun:
@@ -838,7 +843,7 @@ def evaluate_thresholds(
             # An unread log is not an identified failure: demanding a
             # flaky-test issue for it would act on evidence nobody has seen.
             continue
-        key = (event.signature, event.run_id, event.job)
+        key = (event.signature, event.run_id, event.job, event.job_id)
         if key in counted:
             continue
         created = _parse_timestamp(event.created_at)
@@ -1611,7 +1616,12 @@ def fetch_attempt_jobs(
     cache_dir: Path | None = None,
     deadline: float | None = None,
 ) -> list[JobRecord]:
-    """Jobs of one run attempt; cached on disk so interrupted runs resume."""
+    """Jobs of one run attempt, every page; cached so interrupted runs resume.
+
+    An attempt can hold more than ``PER_PAGE`` jobs (matrix shards); stopping
+    at the first page would silently drop the later jobs from the findings
+    and the thresholds, so the listing pages until ``total_count`` is reached.
+    """
     cache_path = cache_dir / "jobs" / f"{run_id}-{attempt}.json" if cache_dir else None
     if cache_path is not None and cache_path.exists():
         return parse_jobs(json.loads(cache_path.read_text(encoding="utf-8")))
@@ -1619,16 +1629,39 @@ def fetch_attempt_jobs(
         raise RuntimeError(
             f"time budget reached before job listing of run {run_id} attempt {attempt}"
         )
-    payload = gh_api_json(
-        f"repos/{repo}/actions/runs/{run_id}/attempts/{attempt}/jobs?per_page={PER_PAGE}"
-    )
+    # An attempt can hold more than PER_PAGE jobs (matrix shards); stopping at
+    # the first page would silently drop the later jobs from the findings and
+    # the thresholds, so the listing pages until total_count is reached.
+    jobs: list[dict[str, Any]] = []
+    total_count = 0
+    page = 1
+    while True:
+        if deadline is not None and time.monotonic() > deadline:
+            raise RuntimeError(
+                f"time budget reached before page {page} of the job listing of "
+                f"run {run_id} attempt {attempt}"
+            )
+        payload = gh_api_json(
+            f"repos/{repo}/actions/runs/{run_id}/attempts/{attempt}/jobs"
+            f"?per_page={PER_PAGE}&page={page}"
+        )
+        # Index directly: a missing or null job list must fail loudly (the
+        # callers' fallback notes depend on that signal) exactly as the
+        # single-page version did.
+        page_jobs = payload["jobs"]
+        jobs.extend(page_jobs)
+        total_count = int(payload.get("total_count") or len(jobs))
+        if not page_jobs or len(jobs) >= total_count:
+            break
+        page += 1
+    merged = {"total_count": total_count, "jobs": jobs}
     # Never cache an attempt that is still running: a partial or empty job
     # list would be reused forever and hide the rerun pass it has not
     # produced yet.
-    if cache_path is not None and _jobs_are_complete(payload.get("jobs", [])):
+    if cache_path is not None and _jobs_are_complete(jobs):
         cache_path.parent.mkdir(parents=True, exist_ok=True)
-        _write_cache(cache_path, json.dumps(payload))
-    return parse_jobs(payload)
+        _write_cache(cache_path, json.dumps(merged))
+    return parse_jobs(merged)
 
 
 def fetch_job_log(
@@ -1844,6 +1877,7 @@ def _build_events(
                     same_sha_pass=(run.run_id, job.name) in mixed_flags,
                     created_at=run.created_at,
                     test_names=finding.test_names,
+                    job_id=job.job_id,
                 )
             )
     return events
