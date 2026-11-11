@@ -794,7 +794,7 @@ function PackageWorkspace({
     versionsQuery.data?.versions.find((version) => version.isFiled) ?? null;
   const chainHoldReason = versionsQuery.isPending
     ? "The version chain that names the filed document is still loading."
-    : versionsQuery.isError && !versionsQuery.data
+    : versionsQuery.isError
       ? "The version chain that names the filed document could not be loaded."
       : null;
   const resubmissions = resubmissionsQuery.data?.requests ?? [];
@@ -1026,7 +1026,7 @@ function PackageWorkspace({
       />
 
       {summary.isRehearsal && <RehearsalNotice />}
-      {chainHoldReason && versionsQuery.isError ? (
+      {versionsQuery.isError ? (
         <ErrorPanel
           error={versionsQuery.error}
           title="Could not load the version chain"
