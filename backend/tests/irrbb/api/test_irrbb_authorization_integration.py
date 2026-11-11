@@ -646,6 +646,19 @@ def test_mixed_execution_requires_irrbb_only_in_plan(
         module=ModuleScope.FORECASTING,
         sensitivity=SensitivityScope.CONFIDENTIAL,
     )
+    # The mint demands confidential RUN on every planned engine (#177), so the
+    # actor runs the whole universal-bank plan except the IRR dimension under
+    # test — the same authority _mint_authority grants in the live suite.
+    _grant(
+        RoleBundle.ANALYST,
+        module=ModuleScope.CAPITAL,
+        sensitivity=SensitivityScope.CONFIDENTIAL,
+    )
+    _grant(
+        RoleBundle.ANALYST,
+        module=ModuleScope.MARKETS,
+        sensitivity=SensitivityScope.CONFIDENTIAL,
+    )
     _, version = _grant(
         RoleBundle.ANALYST, module=ModuleScope.LIQUIDITY, sensitivity=SensitivityScope.CONFIDENTIAL
     )

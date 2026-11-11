@@ -58,6 +58,21 @@ ICAAP keeps CAPITAL/confidential. A cutover can change what a person SEES withou
 changing which module they may open, and a diff of the module columns alone
 would miss it — this column is what shows a narrowing or a widening on release.
 
+The ``mint`` and ``refresh`` columns answer the live-mutation cutover (#177
+part B): which institutions' ``POST /banks/{id}/refresh`` ("Recompute now")
+and ``POST /banks/{id}/official-runs`` ("Mint for filing") buttons this user's
+bindings unlock. Refresh needs the complete DATA/confidential sentence — the
+monitoring ``view`` the queue reads already demanded (#186) plus the ``run``
+this cutover adds, because a recompute mutates the derived live plane. Mint
+needs the REGULATORY/restricted monitoring view plus confidential ``run`` on
+EVERY module the bank's regime runs (``module_scope.runs_module`` over the
+live mint's engines, Capital's stressed CAR and the Markets implied rating
+included) — a caller who can run all but one planned engine can mint nothing.
+A diff of these columns against the BEFORE run names exactly who loses a
+button, and the least binding each affected user needs is an exact-bank
+``analyst`` row at the named module/confidential sensitivity (REGULATORY/
+restricted ``viewer`` for the monitoring view).
+
 The scope is read off the SAME projection as the modules: each
 ``EffectiveCapabilityRead.data_scope`` is reduced by
 ``authorization.reduce_data_scope`` from the bindings that matched THAT
@@ -97,7 +112,10 @@ from sqlalchemy.orm import Session
 
 from app.core.authorization import DataScope, Module, Permission, Sensitivity
 from app.identity.service import authorization
+from app.live.service.live_view import MINT_RUN_ENGINES
 from app.models import AuthorizationBinding, Bank, Organization, User
+from app.policy.service import module_scope
+from app.policy.service.institution_types import InstitutionTypeUnresolved
 
 INSTITUTION_MODULES = tuple(module.value for module in Module if module is not Module.ACCOUNT)
 
@@ -137,6 +155,13 @@ class UserAccess:
     #: are a second sentence and are deliberately not counted here: this column
     #: answers "who loses the examiner surfaces", which is the cutover question.
     examiner_evidence: list[str] = field(default_factory=list)
+    #: Institutions whose live refresh button this user's complete
+    #: DATA/confidential view+run sentence unlocks (#177 part B).
+    live_refresh_institutions: list[str] = field(default_factory=list)
+    #: Institutions whose "Mint for filing" button this user's REGULATORY/
+    #: restricted monitoring view plus confidential run on EVERY module the
+    #: bank's regime runs unlocks (#177 part B).
+    official_mint_institutions: list[str] = field(default_factory=list)
     flags: list[str] = field(default_factory=list)
 
 
@@ -178,6 +203,64 @@ def _signing_institutions(db: Session, principal: _Principal, banks: list[Bank])
         ):
             result.append(bank.id)
     return sorted(result)
+
+
+def _bank_live_surfaces(
+    db: Session,
+    bank: Bank,
+    held: set[tuple[str, str, str]],
+) -> tuple[bool, bool]:
+    """Whether the bank's refresh and mint buttons unlock for the held capabilities."""
+
+    def holds(module: Module, sensitivity: Sensitivity, permission: Permission) -> bool:
+        return (module.value, sensitivity.value, permission.value) in held
+
+    may_refresh = holds(Module.DATA, Sensitivity.CONFIDENTIAL, Permission.VIEW) and holds(
+        Module.DATA, Sensitivity.CONFIDENTIAL, Permission.RUN
+    )
+    try:
+        required_run = {
+            module.value
+            for engine, module in MINT_RUN_ENGINES
+            if module_scope.runs_module(db, bank, engine)
+        }
+    except InstitutionTypeUnresolved:
+        # Fail closed like the mint gate itself: an unresolved licence class
+        # raises rather than planning engines, so nothing this user holds can
+        # mint for the bank and the projection must not report a mint the
+        # gate denies.
+        return may_refresh, False
+    may_mint = holds(Module.REGULATORY, Sensitivity.RESTRICTED, Permission.VIEW) and all(
+        holds(Module(module_value), Sensitivity.CONFIDENTIAL, Permission.RUN)
+        for module_value in required_run
+    )
+    return may_refresh, may_mint
+
+
+def _live_mutation_surfaces(
+    db: Session,
+    banks: list[Bank],
+    capabilities_by_bank: dict[str, set[tuple[str, str, str]]],
+) -> tuple[list[str], list[str]]:
+    """The institutions whose live refresh and mint buttons the bindings unlock.
+
+    Refresh (#177 part B) is the complete DATA/confidential sentence: the
+    monitoring ``view`` the queue reads already demanded (#186) plus the
+    ``run`` the recompute cutover adds. Mint is the REGULATORY/restricted
+    monitoring view plus confidential ``run`` on EVERY module the bank's
+    regime runs (``MINT_RUN_ENGINES`` through ``module_scope.runs_module``) —
+    one missing planned engine denies the whole request.
+    """
+    refresh: list[str] = []
+    mint: list[str] = []
+    for bank in banks:
+        held = capabilities_by_bank.get(bank.id, set())
+        may_refresh, may_mint = _bank_live_surfaces(db, bank, held)
+        if may_refresh:
+            refresh.append(bank.id)
+        if may_mint:
+            mint.append(bank.id)
+    return sorted(refresh), sorted(mint)
 
 
 def build_report(db: Session, *, organization_id: str) -> list[UserAccess]:
@@ -269,6 +352,19 @@ def build_report(db: Session, *, organization_id: str) -> list[UserAccess]:
                 for capability in entry.capabilities
             )
         )
+        capabilities_by_bank: dict[str, set[tuple[str, str, str]]] = {
+            entry.institution_id: {
+                (capability.module.value, capability.sensitivity.value, capability.permission.value)
+                for capability in entry.capabilities
+                # Both live-mutation gates demand WHOLE-book authority
+                # (require_resolved_bank_permission's whole-institution
+                # check), so a branch- or region-scoped run row is denied by
+                # the gate and must not count here.
+                if capability.data_scope.kind == "all"
+            }
+            for entry in projection.institution_capabilities
+        }
+        live_refresh, official_mint = _live_mutation_surfaces(db, banks, capabilities_by_bank)
         flags: list[str] = []
         if binding_count == 0:
             flags.append("no_bindings")
@@ -299,6 +395,8 @@ def build_report(db: Session, *, organization_id: str) -> list[UserAccess]:
                     if cap.module is Module.RISK and cap.data_scope.kind == "all"
                 ),
                 examiner_evidence=examiner_evidence,
+                live_refresh_institutions=live_refresh,
+                official_mint_institutions=official_mint,
                 flags=flags,
             )
         )
@@ -363,6 +461,8 @@ def render_table(rows: list[UserAccess]) -> str:
         "product view",
         "data scope",
         "filing",
+        "mint",
+        "refresh",
         "signing",
         "case RISK",
         "examiner",
@@ -394,6 +494,8 @@ def render_table(rows: list[UserAccess]) -> str:
                 product,
                 data_scope,
                 ",".join(row.filing_institutions) or "-",
+                ",".join(row.official_mint_institutions) or "-",
+                ",".join(row.live_refresh_institutions) or "-",
                 ",".join(row.signing_institutions) or "-",
                 ",".join(row.case_permissions) or "-",
                 ",".join(row.examiner_evidence) or "-",
@@ -455,10 +557,16 @@ def main(argv: list[str] | None = None) -> int:
     ]
     scoped = [row for row in rows if "scoped_reader" in row.flags]
     filers = [row for row in rows if row.filing_institutions]
+    refreshers = [row for row in rows if row.live_refresh_institutions]
+    minters = [row for row in rows if row.official_mint_institutions]
     print()
     print(
         f"{len(rows)} active human user(s); {len(flagged)} with no product view or no bindings"
         + (" — these people cannot open a module after the cutover." if flagged else ".")
+    )
+    print(
+        f"{len(refreshers)} can recompute the live plane; {len(minters)} can mint official runs"
+        + " — against the BEFORE run, a name that vanishes here is a button they lost (#177)."
     )
     print(
         f"{len(scoped)} read a branch or region slice rather than the whole institution"

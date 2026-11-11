@@ -51,6 +51,24 @@ _MODULE_ORDER = {
 }
 
 
+#: Engines the interactive mint gates at confidential ``run`` (#177 part B):
+#: every engine the official run can include, Capital's stressed CAR and the
+#: Markets implied rating among them. Each is demanded only when the bank's
+#: regime actually runs it (``module_scope.runs_module``). The cutover
+#: projection (``scripts/authorization_access_impact.py``) reads this list so
+#: the gate and the deny-impact report cannot drift.
+MINT_RUN_ENGINES: tuple[tuple[str, Module], ...] = (
+    ("liquidity", Module.LIQUIDITY),
+    ("capital", Module.CAPITAL),
+    ("rating", Module.MARKETS),
+    ("credit", Module.CREDIT),
+    ("irr", Module.IRRBB),
+    ("fx", Module.FX),
+    ("ftp", Module.FTP),
+    ("forecast", Module.FORECASTING),
+)
+
+
 def get_live_summary(db: Session, ctx: TenantContext, bank_id: str) -> LiveSummaryRead:
     """The always-live treasury cockpit.
 
@@ -246,6 +264,18 @@ def refresh_bank_data(
         sensitivity=Sensitivity.CONFIDENTIAL,
         surface="refresh_bank_data",
     )
+    # Recomputing is a mutation of the derived live plane, not a read (#177):
+    # on top of the monitoring view above, the button demands the run sentence,
+    # evaluated before anything is enqueued or audited.
+    scoped_authorization.require_resolved_bank_permission(
+        db,
+        ctx,
+        bank,
+        permission=Permission.RUN,
+        module=Module.DATA,
+        sensitivity=Sensitivity.CONFIDENTIAL,
+        surface="refresh_bank_data",
+    )
     job = job_queue.enqueue(
         db,
         ctx.organization_id,
@@ -274,14 +304,7 @@ def mint_official_run(
 ) -> JobEnqueuedRead:
     """Enqueue an immediate immutable official run (the "Mint for filing" button)."""
     bank = _get_bank_or_404(db, ctx, bank_id)
-    for engine, module in (
-        ("credit", Module.CREDIT),
-        ("liquidity", Module.LIQUIDITY),
-        ("irr", Module.IRRBB),
-        ("fx", Module.FX),
-        ("ftp", Module.FTP),
-        ("forecast", Module.FORECASTING),
-    ):
+    for engine, module in MINT_RUN_ENGINES:
         if module_scope.runs_module(db, bank, engine):
             scoped_authorization.require_resolved_bank_permission(
                 db,

@@ -74,6 +74,22 @@ than a fresh summary with zero modules. A bank with no reporting periods has no
 freshness summary; a per-bank evaluation failure also yields no summary without
 failing the whole board.
 
+## Live mutations: refresh and official runs
+
+`POST /api/v1/banks/{bank_id}/refresh` ("Recompute now") demands the complete
+DATA/confidential sentence: the monitoring `view` the queue reads already
+require, plus `run` — a recompute mutates the derived live plane, it is not a
+read. `POST /api/v1/banks/{id}/official-runs` ("Mint for filing") keeps the
+per-module confidential `run` loop over `live_view.MINT_RUN_ENGINES`, which
+includes Capital and the Markets implied rating beside Credit, Liquidity,
+IRRBB, FX, FTP and Forecasting; each engine is demanded only when
+`module_scope.runs_module` includes it, and one missing planned engine denies
+the whole request. Both checks run after the tenant-owned bank resolution
+(unknown or foreign bank stays 404) and before anything is enqueued or
+audited: a denied request writes no job row, no audit event and no run. The
+scheduler's own official-run enqueue is a system path with its own
+actor-selection run check and is unchanged.
+
 ## Snapshot, alert and window read contract
 
 The live-snapshot ladder (`live_view.list_live_snapshots`), the alerts

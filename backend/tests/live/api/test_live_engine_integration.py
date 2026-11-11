@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import delete, select
+from sqlalchemy import delete, func, select
 
 from app.core.authorization import (
     GrantorType,
@@ -22,7 +22,15 @@ from app.db.session import get_sessionmaker
 from app.identity.models.authorization import AuthorizationBinding
 from app.identity.service import authorization
 from app.live.service import pipeline
-from app.models import Bank, BankReportingPeriod, CurrentFinancialFact, Job, LiveMetric, User
+from app.models import (
+    AuditEvent,
+    Bank,
+    BankReportingPeriod,
+    CurrentFinancialFact,
+    Job,
+    LiveMetric,
+    User,
+)
 from app.policy.service import module_scope
 from app.services import job_queue
 from tests.data_engine.adapters.excel_csv import fixtures
@@ -222,17 +230,110 @@ def test_fx_alert_clears_after_hedges(db_client: TestClient) -> None:
 
 def test_refresh_endpoint_enqueues_and_is_pollable(db_client: TestClient) -> None:
     _seed_and_refresh(db_client)
+    authorization_version = _grant_data_run()
     response = db_client.post(
-        f"{_BASE}/refresh", headers=headers(), json={"as_of_date": AS_OF, "reason": "recompute"}
+        f"{_BASE}/refresh",
+        headers=headers(authorization_version=authorization_version),
+        json={"as_of_date": AS_OF, "reason": "recompute"},
     )
     assert response.status_code == 202, response.text
     body = response.json()
     assert body["job_type"] == "pipeline_refresh"
     assert body["status"] == "queued"
 
-    polled = db_client.get(f"/api/v1/jobs/{body['job_id']}", headers=headers())
+    polled = db_client.get(
+        f"/api/v1/jobs/{body['job_id']}",
+        headers=headers(authorization_version=authorization_version),
+    )
     assert polled.status_code == 200
     assert polled.json()["job_type"] == "pipeline_refresh"
+
+
+def _grant_data_run() -> int:
+    """Grant USER_1 the DATA/confidential run authority the refresh requires (#177).
+
+    The monitoring view (#186) is already covered by the hermetic baseline
+    sentence (viewer/all/all); the recompute itself is a derived-plane mutation
+    and needs the run sentence evaluated before anything is enqueued.
+    """
+    with get_sessionmaker()() as session:
+        authorization.create_role_binding(
+            session,
+            organization_id=ORG_1,
+            principal_user_id=USER_1,
+            principal_type=PrincipalType.HUMAN,
+            role_bundle=RoleBundle.ANALYST,
+            scope=authorization.BindingScope(
+                institution_scope=InstitutionScope.INSTITUTION,
+                institution_id=SAMPLE_BANK_ID,
+                module_scope=ModuleScope.DATA,
+                sensitivity_scope=SensitivityScope.CONFIDENTIAL,
+            ),
+            grantor=authorization.GrantorRef(GrantorType.SYSTEM, "live-engine-test"),
+            reason="Authorize the live-plane recompute",
+        )
+        user = session.get(User, USER_1)
+        assert user is not None
+        version = user.authorization_version
+    return version
+
+
+def _mutation_counts() -> tuple[int, int]:
+    """The enqueue and audit side effects a denied request must leave unchanged."""
+    with get_sessionmaker()() as session:
+        jobs = session.scalar(
+            select(func.count()).select_from(Job).where(Job.bank_id == SAMPLE_BANK_ID)
+        )
+        events = session.scalar(select(func.count()).select_from(AuditEvent))
+    assert jobs is not None
+    assert events is not None
+    return jobs, events
+
+
+@pytest.mark.usefixtures("credit_run_authority")
+def test_refresh_requires_data_run_authority(db_client: TestClient) -> None:
+    """A DATA/confidential VIEW alone cannot refresh: recompute needs run (#177).
+
+    The monitoring view the queue reads demand (#186) is granted exactly; the
+    refusal is the missing run sentence, and it happens before anything is
+    enqueued or audited.
+    """
+    _seed_and_refresh(db_client)
+    with get_sessionmaker()() as session:
+        session.execute(delete(AuthorizationBinding))
+        session.commit()
+        authorization.invalidate_user_authorization(
+            session, organization_id=ORG_1, user_id=USER_1, reason="Clear the baseline sentence"
+        )
+        session.commit()
+        authorization.create_role_binding(
+            session,
+            organization_id=ORG_1,
+            principal_user_id=USER_1,
+            principal_type=PrincipalType.HUMAN,
+            role_bundle=RoleBundle.VIEWER,
+            scope=authorization.BindingScope(
+                institution_scope=InstitutionScope.INSTITUTION,
+                institution_id=SAMPLE_BANK_ID,
+                module_scope=ModuleScope.DATA,
+                sensitivity_scope=SensitivityScope.CONFIDENTIAL,
+            ),
+            grantor=authorization.GrantorRef(GrantorType.SYSTEM, "live-engine-test"),
+            reason="Authorize monitoring of the refresh queue row",
+        )
+        user = session.get(User, USER_1)
+        assert user is not None
+        view_only_version = user.authorization_version
+        session.commit()
+
+    jobs_before, events_before = _mutation_counts()
+    response = db_client.post(
+        f"{_BASE}/refresh",
+        headers=headers(authorization_version=view_only_version),
+        json={"as_of_date": AS_OF, "reason": "recompute"},
+    )
+    assert response.status_code == 403, response.text
+    assert _mutation_counts() == (jobs_before, events_before)
 
 
 @pytest.mark.usefixtures("credit_run_authority")
@@ -263,12 +364,15 @@ def test_refresh_requires_the_view_authority_its_locator_demands(
     assert response.status_code == 403, response.text
 
 
-def _mint_authority(*, view: bool) -> int:
+def _mint_authority(*, view: bool, skip: ModuleScope | None = None) -> int:
     """Grant USER_1 the RUN authority the sample bank's run plan enables.
 
     When ``view`` is set, the grant also carries the bank-scoped regulatory
     view authority the official-run locator demands — the authority the queue
-    reads need to monitor the accepted mint (#186).
+    reads need to monitor the accepted mint (#186). The savings-and-loans plan
+    runs Capital and the Markets implied rating beside IRRBB, so each is
+    granted in turn unless ``skip`` names it — the single missing dimension
+    under test.
     """
     with get_sessionmaker()() as session:
         bank = session.get(Bank, SAMPLE_BANK_ID)
@@ -276,21 +380,31 @@ def _mint_authority(*, view: bool) -> int:
         bank.institution_type = "savings_and_loans"
         session.commit()
         assert module_scope.runs_module(session, bank, "irr")
-        authorization.create_role_binding(
-            session,
-            organization_id=ORG_1,
-            principal_user_id=USER_1,
-            principal_type=PrincipalType.HUMAN,
-            role_bundle=RoleBundle.ANALYST,
-            scope=authorization.BindingScope(
-                institution_scope=InstitutionScope.INSTITUTION,
-                institution_id=SAMPLE_BANK_ID,
-                module_scope=ModuleScope.IRRBB,
-                sensitivity_scope=SensitivityScope.CONFIDENTIAL,
-            ),
-            grantor=authorization.GrantorRef(GrantorType.SYSTEM, "live-engine-test"),
-            reason="Authorize the IRRBB engine in the official run plan",
-        )
+        assert module_scope.runs_module(session, bank, "capital")
+        assert module_scope.runs_module(session, bank, "rating")
+        for module_scope_value in (
+            ModuleScope.IRRBB,
+            ModuleScope.CAPITAL,
+            ModuleScope.MARKETS,
+            ModuleScope.CREDIT,
+        ):
+            if module_scope_value is skip:
+                continue
+            authorization.create_role_binding(
+                session,
+                organization_id=ORG_1,
+                principal_user_id=USER_1,
+                principal_type=PrincipalType.HUMAN,
+                role_bundle=RoleBundle.ANALYST,
+                scope=authorization.BindingScope(
+                    institution_scope=InstitutionScope.INSTITUTION,
+                    institution_id=SAMPLE_BANK_ID,
+                    module_scope=module_scope_value,
+                    sensitivity_scope=SensitivityScope.CONFIDENTIAL,
+                ),
+                grantor=authorization.GrantorRef(GrantorType.SYSTEM, "live-engine-test"),
+                reason="Authorize an engine in the official run plan",
+            )
         if view:
             authorization.create_role_binding(
                 session,
@@ -371,6 +485,41 @@ def test_mint_official_run_requires_monitoring_view(db_client: TestClient) -> No
         json={"as_of_date": AS_OF, "reason": "filing"},
     )
     assert response.status_code == 403, response.text
+
+
+@pytest.mark.usefixtures("credit_run_authority")
+@pytest.mark.parametrize(("skip", "module_label"), [
+    (ModuleScope.CAPITAL, "capital"),
+    (ModuleScope.MARKETS, "rating"),
+])
+def test_mint_official_run_requires_every_planned_module_run(
+    db_client: TestClient, skip: ModuleScope, module_label: str
+) -> None:
+    """One missing planned RUN module denies the whole mint (#177).
+
+    The official run includes every engine the bank's regime runs — Capital's
+    stressed CAR and the Markets implied rating among them — so a caller who
+    can run all but one planned module can mint nothing. The denial precedes
+    the enqueue and the audit event: no job row, no event row.
+    """
+    _seed_and_refresh(db_client)
+    with get_sessionmaker()() as session:
+        session.execute(delete(AuthorizationBinding))
+        session.commit()
+        authorization.invalidate_user_authorization(
+            session, organization_id=ORG_1, user_id=USER_1, reason="Clear the baseline sentence"
+        )
+        session.commit()
+    authorization_version = _mint_authority(view=True, skip=skip)
+
+    jobs_before, events_before = _mutation_counts()
+    response = db_client.post(
+        f"{_BASE}/official-runs",
+        headers=headers(authorization_version=authorization_version),
+        json={"as_of_date": AS_OF, "reason": "filing"},
+    )
+    assert response.status_code == 403, response.text
+    assert _mutation_counts() == (jobs_before, events_before)
 
 
 def test_tenant_isolation_org2_gets_404(db_client: TestClient) -> None:

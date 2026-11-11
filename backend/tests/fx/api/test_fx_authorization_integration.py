@@ -941,6 +941,14 @@ def test_queued_official_run_mints_authorized_fx_results(
     db_client: TestClient, scheduled: bool
 ) -> None:
     period_id = _seed_book()
+    # The mint demands confidential RUN on every planned engine (#177), so the
+    # actor runs the whole universal-bank plan — including the Markets implied
+    # rating, the same authority _mint_authority grants in the live suite.
+    _grant(
+        role_bundle=RoleBundle.ANALYST,
+        module_scope=ModuleScope.MARKETS,
+        sensitivity_scope=SensitivityScope.CONFIDENTIAL,
+    )
     _grant(
         role_bundle=RoleBundle.ANALYST,
         module_scope=ModuleScope.CAPITAL,

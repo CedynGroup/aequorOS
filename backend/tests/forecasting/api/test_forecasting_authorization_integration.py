@@ -635,8 +635,18 @@ def test_mixed_execution_requires_forecasting_only_in_plan(
     _seed_book()
     _grant(RoleBundle.ANALYST, module=ModuleScope.DATA, sensitivity=SensitivityScope.RESTRICTED)
     _grant(RoleBundle.ANALYST, module=ModuleScope.CREDIT, sensitivity=SensitivityScope.CONFIDENTIAL)
+    # The mint demands confidential RUN on every planned engine (#177), so the
+    # actor runs the whole universal-bank plan except the forecast dimension
+    # under test — the same authority _mint_authority grants in the live suite.
     version = 1
-    for module in (ModuleScope.IRRBB, ModuleScope.FX, ModuleScope.FTP, ModuleScope.LIQUIDITY):
+    for module in (
+        ModuleScope.IRRBB,
+        ModuleScope.FX,
+        ModuleScope.FTP,
+        ModuleScope.LIQUIDITY,
+        ModuleScope.CAPITAL,
+        ModuleScope.MARKETS,
+    ):
         _, version = _grant(
             RoleBundle.ANALYST,
             module=module,

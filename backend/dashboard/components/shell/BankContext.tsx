@@ -291,6 +291,35 @@ export default function BankProvider({ children }: { children: ReactNode }) {
         "confidential",
         "run",
       ),
+      // The live-mutation sentences (#177 part B): a recompute is a mutation
+      // of the derived live plane, and an official run also computes Capital,
+      // the Markets implied rating, liquidity and credit beside the engines
+      // already projected below (IRRBB/FX/FTP/FCST). The service re-decides
+      // every enqueue; these flags only decide whether the control is offered.
+      liquidityRun: hasEffectiveCapability(
+        institutionCapabilities,
+        "liq",
+        "confidential",
+        "run",
+      ),
+      creditRun: hasEffectiveCapability(
+        wholeInstitutionCapabilities(institutionCapabilities),
+        "credit",
+        "confidential",
+        "run",
+      ),
+      marketsRun: hasEffectiveCapability(
+        institutionCapabilities,
+        "markets",
+        "confidential",
+        "run",
+      ),
+      dataRun: hasEffectiveCapability(
+        institutionCapabilities,
+        "data",
+        "confidential",
+        "run",
+      ),
       capitalCreate: hasEffectiveCapability(
         institutionCapabilities,
         "cap",
