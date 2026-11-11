@@ -90,6 +90,44 @@ def test_queue_head_execution_policy(event: str, preflight: str, enabled: str) -
     )
 
 
+@pytest.mark.parametrize(
+    ("workflow", "area", "real_jobs"),
+    [
+        ("dashboard.yml", "dashboard", ["dashboard"]),
+        ("web.yml", "web", ["frontend", "console"]),
+    ],
+)
+def test_queue_entries_run_the_real_jobs_and_the_gate_refuses_a_skip(
+    workflow: str, area: str, real_jobs: list[str]
+) -> None:
+    """A queued merge result lands on main, so its filtered checks are owed there.
+
+    The dashboard and web jobs used to skip on ``merge_group`` while their gate
+    accepted ``skipped`` as success, so those checks first ran on main — the
+    coverage ratchet failed there after a green queue. The wiring now relies on
+    the detector (which answers ``true`` for every non-pull_request event) and
+    the gate script (which rejects a skipped dependency on the queue).
+    """
+    document = cast(
+        dict[str, dict[str, object]],
+        yaml.load((WORKFLOWS / workflow).read_text(), Loader=yaml.BaseLoader),
+    )
+    jobs = cast(dict[str, dict[str, object]], document["jobs"])
+    assert "if" not in jobs["changes"], "queue entries rely on the detector, not an event filter"
+    for job_id in real_jobs:
+        condition = cast(str, jobs[job_id]["if"])
+        assert "github.event_name" not in condition
+        output = f"needs.changes.outputs.{area}"
+        assert _condition_runs(condition, {output: "true"}) is True
+        assert _condition_runs(condition, {output: "false"}) is False
+    gate = cast(dict[str, object], jobs["gate"])
+    assert gate["if"] == "always()"
+    step = next(iter(cast(list[dict[str, object]], gate["steps"])))
+    assert "gate_result.sh" in cast(str, step["run"])
+    env = cast(dict[str, str], step["env"])
+    assert env["GATE_EVENT"] == "${{ github.event_name }}"
+
+
 def test_disabled_gate_condition_is_rejected() -> None:
     assert not _condition_runs(
         "false && needs.preflight.outputs.backend == 'true'",
