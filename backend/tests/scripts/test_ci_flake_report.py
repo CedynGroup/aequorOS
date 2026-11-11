@@ -1095,6 +1095,81 @@ def test_rerun_summary_command_survives_api_errors_with_a_visible_note(
     assert "Server Error (HTTP 502)" in output.out
 
 
+def test_rerun_summary_command_survives_malformed_json(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    def fail(*args: object) -> dict[str, Any]:
+        raise ValueError("Expecting value: line 1 column 1 (char 0)")
+
+    monkeypatch.setattr(flake_report, "gh_api_json", fail)
+    exit_code = flake_report.main(
+        ["rerun-summary", "--repo", "CedynGroup/aequorOS", "--run-id", "9", "--attempt", "2"]
+    )
+    assert exit_code == 0
+    assert "Rerun summary unavailable" in capsys.readouterr().out
+
+
+def test_rerun_summary_command_survives_missing_job_fields(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    def fake_gh_api_json(*endpoint_args: str) -> dict[str, Any]:
+        endpoint = endpoint_args[0]
+        if endpoint.endswith("/actions/runs/9"):
+            return {"name": "Risk Service CI", "event": "push", "head_branch": "feature/a"}
+        raise KeyError("id")
+
+    monkeypatch.setattr(flake_report, "gh_api_json", fake_gh_api_json)
+    exit_code = flake_report.main(
+        ["rerun-summary", "--repo", "CedynGroup/aequorOS", "--run-id", "9", "--attempt", "2"]
+    )
+    assert exit_code == 0
+    assert "Rerun summary unavailable" in capsys.readouterr().out
+
+
+def test_rerun_summary_command_survives_malformed_job_payloads(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    def fake_gh_api_json(*endpoint_args: str) -> dict[str, Any]:
+        endpoint = endpoint_args[0]
+        if endpoint.endswith("/actions/runs/9"):
+            return {"name": "Risk Service CI", "event": "push", "head_branch": "feature/a"}
+        return {"total_count": 0, "jobs": None}
+
+    monkeypatch.setattr(flake_report, "gh_api_json", fake_gh_api_json)
+    exit_code = flake_report.main(
+        ["rerun-summary", "--repo", "CedynGroup/aequorOS", "--run-id", "9", "--attempt", "2"]
+    )
+    assert exit_code == 0
+    assert "Rerun summary unavailable" in capsys.readouterr().out
+
+
+def test_rerun_summary_log_download_diagnostics_stay_off_the_summary(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    def fake_gh_api_json(*endpoint_args: str) -> dict[str, Any]:
+        endpoint = endpoint_args[0]
+        if endpoint.endswith("/actions/runs/9"):
+            return {"name": "Risk Service CI", "event": "push", "head_branch": "feature/a"}
+        if "/attempts/1/jobs" in endpoint:
+            return fixture_json("attempt_jobs_failed.json")
+        if "/attempts/2/jobs" in endpoint:
+            return fixture_json("attempt_jobs_passed.json")
+        return {"total_count": 0, "jobs": []}
+
+    def failing_gh_api(*endpoint_args: str, allow_escape_sequences: bool = False) -> str:
+        raise RuntimeError("gh api failed (1): Server Error (HTTP 502)")
+
+    monkeypatch.setattr(flake_report, "gh_api_json", fake_gh_api_json)
+    monkeypatch.setattr(flake_report, "gh_api", failing_gh_api)
+    exit_code = flake_report.main(
+        ["rerun-summary", "--repo", "CedynGroup/aequorOS", "--run-id", "9", "--attempt", "2"]
+    )
+    assert exit_code == 0
+    output = capsys.readouterr()
+    assert "log unavailable for job" in output.err
+    assert "log unavailable for job" not in output.out
+
+
 def test_rerun_summary_command_lists_fixture_run_rerun_passes(
     monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:

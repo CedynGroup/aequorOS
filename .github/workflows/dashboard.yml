@@ -1,6 +1,7 @@
 name: Dashboard CI
 
-# Gate inventory. Everything below is BLOCKING:
+# Gate inventory. Everything below is BLOCKING, except the `Rerun summary`
+# job (visibility-only, `continue-on-error`), which never blocks:
 #
 #   typecheck (client) — the generated API client compiles
 #   test (client) — packages/risk-service-api/tests/generated-contracts.test.ts.
