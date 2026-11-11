@@ -72,6 +72,11 @@ POLICY_WINDOW_DAYS = 14
 # The weekly workflow's runner budget is one hour; collection stops well
 # before it so the report (or its unavailable note) is always written.
 WEEKLY_COLLECTION_BUDGET_MINUTES = 45
+# Signatures emitted when a failed job's log could not be read. They name no
+# identified failure, so they stay out of the policy thresholds (they remain
+# in the ranking and the caveat counts); a threshold crossed only by them
+# would demand action on evidence nobody has seen.
+MISSING_LOG_SIGNATURE_PREFIXES = ("log-budget-exhausted:", "log-unavailable:")
 # Logs bigger than this are deleted right after extraction (journey shards
 # reach ~15 MB); small ones stay cached for re-runs.
 DELETE_LOG_THRESHOLD_BYTES = 1_000_000
@@ -796,6 +801,10 @@ def evaluate_thresholds(
     for event in events:
         if not event.rerun:
             continue
+        if event.signature.startswith(MISSING_LOG_SIGNATURE_PREFIXES):
+            # An unread log is not an identified failure: demanding a
+            # flaky-test issue for it would act on evidence nobody has seen.
+            continue
         key = (event.signature, event.run_id, event.job)
         if key in counted:
             continue
@@ -1183,9 +1192,31 @@ def render_weekly_report(
     truncated: list[tuple[str, str]] | None = None,
     collection_cutoff: str | None = None,
 ) -> str:
-    """Weekly summary: the policy thresholds first, then the full ranking."""
+    """Weekly summary: caveats first, then the policy thresholds, then the ranking."""
     meta = report["meta"]
     window = meta["window"]
+    caveats: list[str] = []
+    if collection_cutoff is not None:
+        caveats.append(
+            f"- Time-budget caveat: {collection_cutoff} The counts below may be "
+            "undercounted; the next weekly run starts from an empty budget."
+        )
+    for workflow, oldest in truncated or []:
+        caveats.append(
+            f"- Threshold caveat: `{workflow}` hit the run cap before covering "
+            f"the full window (its oldest collected run is {oldest}, later than "
+            f"{window.get('requested_since') or window['since']}), so its "
+            "rerun-only passes may be undercounted."
+        )
+    incomplete = collection_cutoff is not None or bool(truncated)
+    threshold_lines = render_threshold_section(breaches, window_days)
+    if incomplete and not breaches:
+        threshold_lines += [
+            "",
+            "Collection was incomplete (see the caveats above), so this empty "
+            "result is inconclusive: runs or logs still missing could contain "
+            "crossings.",
+        ]
     header = [
         "# Weekly CI flake report",
         "",
@@ -1194,23 +1225,10 @@ def render_weekly_report(
         f"- Command: `{meta['commands']}`",
         f"- Data window: {window['since']} .. {window['until']}",
         "",
-        *render_threshold_section(breaches, window_days),
+        *(caveats + [""] if caveats else []),
+        *threshold_lines,
         "",
     ]
-    if collection_cutoff is not None:
-        header.append(
-            f"- Time-budget caveat: {collection_cutoff} The counts below may be "
-            "undercounted; the next weekly run starts from an empty budget."
-        )
-        header.append("")
-    for workflow, oldest in truncated or []:
-        header.append(
-            f"- Threshold caveat: `{workflow}` hit the run cap before covering "
-            f"the full window (its oldest collected run is {oldest}, later than "
-            f"{window['since']}), so its rerun-only passes may be undercounted."
-        )
-    if truncated:
-        header.append("")
     return "\n".join(header) + "\n---\n" + render_markdown(report)
 
 

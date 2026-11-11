@@ -735,6 +735,31 @@ def test_thresholds_need_issue_at_two_fix_or_quarantine_at_three() -> None:
     assert flake_report.evaluate_thresholds([old], now) == []
 
 
+def test_missing_log_markers_never_cross_the_policy_thresholds() -> None:
+    """A log that could not be read names no failure, so it cannot demand one.
+
+    ``log-budget-exhausted:``/``log-unavailable:`` events can be marked as
+    rerun passes (the job did fail and pass again); grouping them as a
+    signature must not produce a policy breach. A real signature in the same
+    events still crosses.
+    """
+    now = datetime(2026, 11, 9, tzinfo=UTC)
+    recent = "2026-11-08T10:00:00Z"
+    markers = [
+        event("log-budget-exhausted:Dashboard journeys shard 4/4", rerun=True, run_id=41),
+        event("log-budget-exhausted:Dashboard journeys shard 4/4", rerun=True, run_id=42),
+        event("log-unavailable:Dashboard journeys shard 4/4", rerun=True, run_id=43),
+        event("log-unavailable:Dashboard journeys shard 4/4", rerun=True, run_id=44),
+    ]
+    assert flake_report.evaluate_thresholds(markers, now) == []
+    real = [
+        event("pytest:tests/a.py", rerun=True, created_at=recent, run_id=41),
+        event("pytest:tests/a.py", rerun=True, created_at=recent, run_id=42),
+    ]
+    breaches = flake_report.evaluate_thresholds([*markers, *real], now)
+    assert [breach.signature for breach in breaches] == ["pytest:tests/a.py"]
+
+
 def test_one_rerun_cycle_counts_once_per_run_and_job() -> None:
     now = datetime(2026, 11, 9, tzinfo=UTC)
     shared = {
@@ -1520,6 +1545,52 @@ def test_a_collection_cutoff_adds_the_time_budget_caveat() -> None:
     assert "3 failed-job log(s) unfetched" in markdown
 
 
+def test_caveats_precede_an_empty_threshold_result_and_label_it_inconclusive() -> None:
+    """An incomplete collection must not read as a clean bill of health.
+
+    The caveats render before the threshold section, and an empty crossing
+    table under an incomplete collection is labelled inconclusive rather
+    than left to look like "no signature reached the thresholds".
+    """
+    report = flake_report.build_report(runs=[success_run(1)], events=[], meta=REPORT_META)
+    markdown = flake_report.render_weekly_report(
+        report,
+        [],
+        window_days=14,
+        truncated=[("Web CI", "2026-11-05")],
+        collection_cutoff=(
+            "collection stopped at the time budget with 1 failed-job log(s) unfetched"
+        ),
+    )
+    caveat_position = markdown.index("Time-budget caveat")
+    threshold_position = markdown.index("## Threshold crossings")
+    assert caveat_position < threshold_position
+    assert "this empty result is inconclusive" in markdown
+    # A complete collection still renders the plain, conclusive wording.
+    complete = flake_report.render_weekly_report(report, [], window_days=14)
+    assert "inconclusive" not in complete
+
+
+def test_a_truncated_workflow_caveat_names_the_requested_window_start() -> None:
+    """The caveat compares against the requested window, not the oldest run.
+
+    ``build_report`` narrows ``window.since`` to the oldest collected run, so
+    comparing the capped workflow against it would compare a workflow with
+    itself; ``requested_since`` names the part of the window that is missing.
+    """
+    late_run = success_run(1, created_at="2026-11-05T10:00:00Z")
+    report = flake_report.build_report(runs=[late_run], events=[], meta=REPORT_META)
+    assert report["meta"]["window"]["since"] == "2026-11-05"
+    assert report["meta"]["window"]["requested_since"] == "2026-10-11"
+    markdown = flake_report.render_weekly_report(
+        report,
+        [],
+        window_days=14,
+        truncated=[("Web CI", "2026-11-05")],
+    )
+    assert "later than 2026-10-11" in markdown
+
+
 def test_fetch_findings_stops_at_the_deadline(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
@@ -1573,6 +1644,54 @@ def test_weekly_command_bounds_collection_within_the_runner_budget(
     args = parser.parse_args(["weekly", "--cache-dir", str(tmp_path)])
     assert flake_report.cmd_weekly(args, now=datetime(2026, 11, 9, 12, 0, tzinfo=UTC)) == 0
     assert captured["options"].deadline is not None
+
+
+def test_run_listing_refuses_to_start_past_the_deadline(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The budget bounds every collection stage, not only the log fetches.
+
+    A partial run list would render as a silently biased short window, so
+    listing past the deadline raises and the weekly mode falls back to its
+    unavailable note.
+    """
+    options = flake_report.ReportOptions(
+        repo="CedynGroup/aequorOS",
+        workflow_files=["risk-service.yml", "web.yml"],
+        min_runs_per_workflow=1,
+        since="2026-11-01",
+        cache_dir=Path("/tmp/unused"),
+        deadline=0.0,
+    )
+
+    def fail(*args: object) -> list[flake_report.RunRecord]:
+        raise AssertionError("no listing may start past the deadline")
+
+    monkeypatch.setattr(flake_report, "list_workflow_runs", fail)
+    with pytest.raises(RuntimeError, match="time budget reached before listing runs"):
+        flake_report._list_all_runs(options, lambda _m: None)
+
+
+def test_job_listing_refuses_to_start_past_the_deadline(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    options = flake_report.ReportOptions(
+        repo="CedynGroup/aequorOS",
+        workflow_files=["risk-service.yml"],
+        min_runs_per_workflow=1,
+        since="2026-11-01",
+        cache_dir=Path("/tmp/unused"),
+        deadline=0.0,
+    )
+
+    def fail(*args: object) -> list[flake_report.JobRecord]:
+        raise AssertionError("no job listing may start past the deadline")
+
+    monkeypatch.setattr(flake_report, "fetch_attempt_jobs", fail)
+    with pytest.raises(RuntimeError, match="time budget reached"):
+        flake_report._fetch_attempt_jobs(
+            "CedynGroup/aequorOS", {1: {1}, 2: {1}}, options, lambda _m: None
+        )
 
 
 def test_weekly_command_flags_the_time_budget_cutoff_in_the_summary(
@@ -1678,6 +1797,62 @@ def test_weekly_command_survives_api_errors_with_a_visible_note(
     output = capsys.readouterr()
     assert "Weekly flake report unavailable" in output.out
     assert "Server Error (HTTP 502)" in output.out
+
+
+def test_weekly_command_collects_through_the_gh_api_boundary(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], tmp_path: Path
+) -> None:
+    """The weekly command runs end to end over mocked ``gh`` endpoints.
+
+    Unlike the tests that stub ``collect_report_data``, this one exercises the
+    command through its real boundary (the ``gh api`` calls): run listing,
+    per-attempt job listing, log reads and the summary rendering, so a break
+    between those stages cannot pass silently.
+    """
+    runs_payload = fixture_json("workflow_runs.json")
+    failed_jobs_payload = fixture_json("attempt_jobs_failed.json")
+    passed_jobs_payload = fixture_json("attempt_jobs_passed.json")
+    log_text = "\n".join(fixture_text("pytest_doc_deletion.log"))
+
+    def fake_gh_api_json(*endpoint_args: str) -> dict[str, Any]:
+        endpoint = endpoint_args[0]
+        if "/actions/workflows/" in endpoint and "/runs?" in endpoint:
+            page = int(endpoint.rsplit("page=", 1)[1])
+            return runs_payload if page == 1 else {"total_count": 0, "workflow_runs": []}
+        if "/attempts/" in endpoint and "/jobs?" in endpoint:
+            attempt = int(endpoint.rsplit("/attempts/", 1)[1].split("/", 1)[0])
+            return passed_jobs_payload if attempt >= 4 else failed_jobs_payload
+        raise AssertionError(f"unexpected endpoint: {endpoint}")
+
+    def fake_gh_api(*endpoint_args: str, **kwargs: Any) -> str:
+        assert "/logs" in endpoint_args[0]
+        return log_text
+
+    monkeypatch.setattr(flake_report, "gh_api_json", fake_gh_api_json)
+    monkeypatch.setattr(flake_report, "gh_api", fake_gh_api)
+    parser = flake_report.build_parser()
+    args = parser.parse_args(
+        [
+            "weekly",
+            "--repo",
+            "CedynGroup/aequorOS",
+            "--workflows",
+            "risk-service.yml",
+            "--cache-dir",
+            str(tmp_path),
+        ]
+    )
+    exit_code = flake_report.cmd_weekly(args, now=datetime(2026, 11, 9, 12, 0, tzinfo=UTC))
+    assert exit_code == 0
+    output = capsys.readouterr()
+    assert "# Weekly CI flake report" in output.out
+    assert "## Threshold crossings" in output.out
+    assert "# CI flake ranking" in output.out
+    assert "unavailable" not in output.out
+    # The collected data came through the API boundary, not a stub.
+    assert "Listing runs for risk-service.yml" in output.err
+    assert "Built " in output.err
+    assert "pytest:tests/db/test_document_deletion_timeout_integration.py" in output.out
 
 
 def test_weekly_command_writes_markdown_and_json_files(
