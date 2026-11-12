@@ -20,8 +20,9 @@ Modes
 ``weekly``
     Ranking over a rolling window plus threshold evaluation (>=2 rerun-only
     passes in 14 days => "needs flaky-test issue with owner"; >=3 => "fix or
-    quarantine within 7 days"). Wired by the M3 weekly-flake-workflow feature;
-    the pure ``evaluate_thresholds`` block already exists and is unit-tested.
+    quarantine within 7 days"). Wired by the scheduled
+    ``.github/workflows/flake-report.yml`` workflow, which appends the report
+    to ``$GITHUB_STEP_SUMMARY``; it creates no issues or comments.
 
 Pure functions (parsing, signature extraction, attempt comparison,
 classification, ranking, thresholds) are separated from all I/O so they can be
@@ -65,6 +66,17 @@ WORKFLOW_FILES = (
 )
 PER_PAGE = 100
 LOG_CACHE_DEFAULT = "/tmp/ci-flake-logs"
+# The window the approved flake policy defines its thresholds on. The weekly
+# report renders any other window as exploratory rather than policy output.
+POLICY_WINDOW_DAYS = 14
+# The weekly workflow's runner budget is one hour; collection stops well
+# before it so the report (or its unavailable note) is always written.
+WEEKLY_COLLECTION_BUDGET_MINUTES = 45
+# Signatures emitted when a failed job's log could not be read. They name no
+# identified failure, so they stay out of the policy thresholds (they remain
+# in the ranking and the caveat counts); a threshold crossed only by them
+# would demand action on evidence nobody has seen.
+MISSING_LOG_SIGNATURE_PREFIXES = ("log-budget-exhausted:", "log-unavailable:")
 # Logs bigger than this are deleted right after extraction (journey shards
 # reach ~15 MB); small ones stay cached for re-runs.
 DELETE_LOG_THRESHOLD_BYTES = 1_000_000
@@ -180,6 +192,13 @@ class FlakeEvent:
     same_sha_pass: bool
     created_at: str
     test_names: list[str] = field(default_factory=list)
+    # Rank of the job among the same-named jobs of its own attempt (ordered
+    # by job id), derived from the complete attempt listing: the Actions job
+    # id changes on every re-execution, so the rerun-cycle dedup needs an
+    # identity that is stable across attempts while still separating
+    # same-attempt duplicates. Synthetic events (tests) use 0, which
+    # collapses by name as before.
+    instance_rank: int = 0
 
 
 @dataclass
@@ -325,67 +344,92 @@ def compare_attempts(
 ) -> list[RerunPass]:
     """Jobs that failed and then passed on a later attempt of the same run.
 
-    One RerunPass per failed attempt: its recovery is the first passing
-    attempt after that failure. A job that succeeded before it failed and
-    then recovered again (rerun the whole workflow and it passes on the
-    third attempt) still needed its rerun, so the recovery that matters is
-    the one that follows the failure. Later failures before that pass are
-    additional lost minutes but not additional re-executed ones: a pass
-    charges its minutes once, to the first failed attempt recovering at it
-    (a run that failed, failed again and then passed needed one rerun, not
-    two).
+    One RerunPass per failed execution: its recovery is the first later
+    attempt where that instance succeeded. A job that succeeded before it
+    failed and then recovered again (rerun the whole workflow and it passes
+    on the third attempt) still needed its rerun, so the recovery that
+    matters is the one that follows the failure. Later failures before that
+    pass are additional lost minutes but not additional re-executed ones:
+    the pass charges its minutes once per instance, to the instance's first
+    failed execution (a run that failed, failed again and then passed needed
+    one rerun, not two).
+
+    Instances are walked attempt by attempt. A full listing (as many
+    same-named jobs as the largest listing seen so far) identifies its jobs
+    by their rank among the attempt's same-named jobs (job id order), so a
+    success closes exactly its own instance's cycle and never a sibling's.
+    A subset listing (fewer same-named jobs than the largest seen so far -
+    a "re-run failed jobs" rerun lists only the re-run jobs, which are by
+    definition the previously failed instances) pairs its entries with the
+    still-open cycles in rank order: its successes close those cycles and
+    its failures add lost executions. Entries an ambiguous subset cannot
+    tie to an open cycle stay unrecovered. Tuple comparison never reaches
+    the JobRecord objects (they are not orderable).
     """
     passes: list[RerunPass] = []
     for name in {job.name for jobs in attempts.values() for job in jobs}:
         timeline = sorted(
-            (attempt, job)
-            for attempt, jobs in attempts.items()
-            for job in jobs
-            if job.name == name
+            (
+                (attempt, job)
+                for attempt, jobs in attempts.items()
+                for job in jobs
+                if job.name == name
+            ),
+            # Explicit key: two same-named jobs can share one attempt (run
+            # 42465955513 attempt 1 had two "Claude review verdict" jobs), and
+            # JobRecord is not orderable, so tuple comparison must never reach
+            # it.
+            key=lambda pair: (pair[0], pair[1].name, pair[1].job_id),
         )
-        failed = [
-            (attempt, job)
-            for attempt, job in timeline
-            if is_failed_job_conclusion(job.conclusion)
-        ]
-        passed = [
-            (attempt, job) for attempt, job in timeline if job.conclusion == "success"
-        ]
-        if not failed:
+        jobs_by_attempt: dict[int, list[JobRecord]] = {}
+        for attempt, job in timeline:
+            jobs_by_attempt.setdefault(attempt, []).append(job)
+        if not any(
+            is_failed_job_conclusion(job.conclusion)
+            for jobs in jobs_by_attempt.values()
+            for job in jobs
+        ):
             continue
-        # First failed attempt recovering at each passing attempt: that one
-        # carries the re-executed minutes for the pass.
-        first_failure_before: dict[int, int] = {}
-        for fail_attempt, _ in failed:
-            recovery = next(
-                (pass_attempt for pass_attempt, _ in passed if pass_attempt > fail_attempt),
-                None,
-            )
-            if recovery is not None:
-                first_failure_before.setdefault(recovery, fail_attempt)
-        for fail_attempt, fail_job in failed:
-            recovery = next(
-                (
-                    (pass_attempt, pass_job)
-                    for pass_attempt, pass_job in passed
-                    if pass_attempt > fail_attempt
-                ),
-                None,
-            )
-            if recovery is None:
-                continue
-            passes.append(
-                RerunPass(
-                    failed_job=fail_job,
-                    failed_attempt=fail_attempt,
-                    passed_attempt=recovery[0],
-                    passed_minutes=(
-                        recovery[1].minutes
-                        if first_failure_before[recovery[0]] == fail_attempt
-                        else 0.0
-                    ),
+        # Open cycles keyed by instance rank; each carries every failed
+        # execution of the instance in attempt order. A success closes the
+        # cycle: the first execution charges the pass's minutes, later ones
+        # ride along without charging again.
+        open_cycles: dict[int, list[tuple[int, JobRecord]]] = {}
+
+        def close(rank: int, recovery: int, minutes: float) -> None:
+            for index, (fail_attempt, fail_job) in enumerate(
+                open_cycles.pop(rank)
+            ):
+                passes.append(
+                    RerunPass(
+                        failed_job=fail_job,
+                        failed_attempt=fail_attempt,
+                        passed_attempt=recovery,
+                        passed_minutes=minutes if index == 0 else 0.0,
+                    )
                 )
-            )
+
+        largest_seen = 0
+        for attempt in sorted(jobs_by_attempt):
+            jobs = sorted(jobs_by_attempt[attempt], key=lambda job: job.job_id)
+            largest_seen = max(largest_seen, len(jobs))
+            if len(jobs) >= largest_seen:
+                for rank, job in enumerate(jobs):
+                    if is_failed_job_conclusion(job.conclusion):
+                        open_cycles.setdefault(rank, []).append((attempt, job))
+                    elif job.conclusion == "success" and rank in open_cycles:
+                        close(rank, attempt, job.minutes)
+            elif open_cycles:
+                # A subset listing pairs with the still-open cycles in rank
+                # order; entries beyond the open cycles are ambiguous and
+                # stay unrecovered.
+                open_keys = sorted(open_cycles)
+                for job, rank in zip(jobs, open_keys):
+                    if is_failed_job_conclusion(job.conclusion):
+                        open_cycles[rank].append((attempt, job))
+                    elif job.conclusion == "success":
+                        close(rank, attempt, job.minutes)
+    passes.sort(key=lambda p: (p.failed_attempt, p.failed_job.job_id))
     return passes
 
 
@@ -558,9 +602,7 @@ def _attach_rerun_findings(
                     # Optional visibility: read each log once, without the
                     # measurement path's retry budget, so a failing read
                     # cannot consume the job timeout.
-                    text = fetch_job_log(
-                        repo, job.job_id, cache_dir, keep_logs=False, retries=1
-                    )
+                    text = fetch_job_log(repo, job.job_id, cache_dir, keep_logs=False, retries=1)
                     job_findings = extract_findings(clean_lines(text))
                     delete_large_log(cache_dir, job.job_id, keep_logs=False)
                 except (RuntimeError, OSError) as error:
@@ -781,14 +823,28 @@ def evaluate_thresholds(
     mode wired in M3.
     """
     window_start = now - timedelta(days=window_days)
-    # One rerun cycle per run/job: a job failing the signature on several
-    # attempts before its pass needed one rerun, not two.
-    counted: set[tuple[str, int, str]] = set()
+    # One rerun cycle per run/job instance: a job failing the signature on
+    # several attempts before its pass needed one rerun, not two. The
+    # instance rank (its position among its attempt's same-named jobs, from
+    # the complete listing) is stable across re-executions, whose Actions
+    # job ids are fresh every attempt, while same-named distinct jobs within
+    # one attempt keep separate cycles.
+    counted: set[tuple[str, int, str, int]] = set()
     per_signature: dict[str, int] = Counter()
     for event in events:
         if not event.rerun:
             continue
-        key = (event.signature, event.run_id, event.job)
+        if event.signature.startswith(MISSING_LOG_SIGNATURE_PREFIXES):
+            # An unread log is not an identified failure: demanding a
+            # flaky-test issue for it would act on evidence nobody has seen.
+            continue
+        if event.signature.startswith("unclassified:"):
+            # A read log whose failure is still unidentified is likewise not
+            # identified evidence: it stays visible in the ranking and the
+            # collection caveats, but threshold policy acts only on actual
+            # failure signatures.
+            continue
+        key = (event.signature, event.run_id, event.job, event.instance_rank)
         if key in counted:
             continue
         created = _parse_timestamp(event.created_at)
@@ -1111,6 +1167,352 @@ def render_markdown(report: dict[str, Any]) -> str:
 
 
 # ---------------------------------------------------------------------------
+# weekly mode
+# ---------------------------------------------------------------------------
+
+
+def render_threshold_section(breaches: list[ThresholdBreach], window_days: int) -> list[str]:
+    """The policy threshold crossings for the rolling window.
+
+    Reporting only: this never creates issues or comments; a person files the
+    flaky-test issue and picks its owner. The approved policy's thresholds are
+    defined on the 14-day window; a report over any other window labels its
+    crossings exploratory rather than policy determinations.
+    """
+    policy_window = window_days == POLICY_WINDOW_DAYS
+    heading = (
+        "## Threshold crossings (approved flake policy)"
+        if policy_window
+        else (
+            f"## Threshold crossings (exploratory {window_days}-day window, "
+            f"not the approved {POLICY_WINDOW_DAYS}-day policy)"
+        )
+    )
+    lines = [
+        heading,
+        "",
+        f">=2 rerun-only passes in {window_days} days need a flaky-test issue "
+        "with an owner; >=3 need a fix or quarantine within 7 days. A "
+        "rerun-only pass is a job that failed on an attempt and passed only "
+        "because the run was retried.",
+        "",
+    ]
+    if not policy_window:
+        lines.append(
+            "This window differs from the approved policy's window, so these "
+            "crossings are exploratory reading, not policy determinations."
+        )
+        lines.append("")
+    lines += [
+        "This report never creates issues or comments; a person files the "
+        "flaky-test issue and picks its owner. The window bounds runs by "
+        "their creation date, so a rerun of a run created before the window "
+        "is not counted.",
+        "",
+    ]
+    if not breaches:
+        lines.append("No signature reached the policy thresholds in this window.")
+        return lines
+    # A non-policy window's crossings are readings, not obligations: the
+    # column says what the 14-day policy would require, not what does.
+    action_column = (
+        "Required action"
+        if policy_window
+        else "Action the 14-day policy would require (exploratory)"
+    )
+    lines += [
+        f"| Signature | Rerun-only passes in window | {action_column} |",
+        "| --- | --- | --- |",
+    ]
+    for breach in breaches:
+        lines.append(
+            f"| `{breach.signature}` | {breach.rerun_passes_in_window} | {breach.action} |"
+        )
+    return lines
+
+
+def render_weekly_report(
+    report: dict[str, Any],
+    breaches: list[ThresholdBreach],
+    window_days: int,
+    truncated: list[tuple[str, str]] | None = None,
+    collection_cutoff: str | None = None,
+) -> str:
+    """Weekly summary: caveats first, then the policy thresholds, then the ranking."""
+    meta = report["meta"]
+    window = meta["window"]
+    caveats: list[str] = []
+    if collection_cutoff is not None:
+        caveats.append(
+            f"- Collection caveat: {collection_cutoff}. The counts below may be "
+            "undercounted; the next weekly run starts from an empty budget."
+        )
+    for workflow, oldest in truncated or []:
+        caveats.append(
+            f"- Threshold caveat: `{workflow}` hit the run cap before covering "
+            f"the full window (its oldest collected run is {oldest}, which does "
+            f"not precede the requested window start "
+            f"{window.get('requested_since') or window['since']}), so its "
+            "rerun-only passes may be undercounted."
+        )
+    incomplete = collection_cutoff is not None or bool(truncated)
+    threshold_lines = render_threshold_section(breaches, window_days)
+    if incomplete and not breaches:
+        # An incomplete collection must not read as a clean bill of health:
+        # the conclusive statement is replaced, not doubled with a footnote.
+        threshold_lines = [
+            (
+                "No signature reached the policy thresholds in the collected "
+                "data, but collection was incomplete (see the caveats above), "
+                "so this result is inconclusive: runs or logs still missing "
+                "could contain crossings."
+                if line.startswith("No signature reached the policy thresholds")
+                else line
+            )
+            for line in threshold_lines
+        ]
+    header = [
+        "# Weekly CI flake report",
+        "",
+        f"- Repository: `{meta['repo']}`",
+        f"- Generated: {meta['generated_at']}",
+        f"- Command: `{meta['commands']}`",
+        f"- Data window: {window['since']} .. {window['until']}",
+        "",
+        *(caveats + [""] if caveats else []),
+        *threshold_lines,
+        "",
+    ]
+    return "\n".join(header) + "\n---\n" + render_markdown(report)
+
+
+def render_weekly_unavailable(window_days: int, error: str) -> str:
+    """The never-failing fallback: say so in the summary and move on."""
+    return (
+        "\n".join(
+            [
+                "# Weekly CI flake report",
+                "",
+                "Weekly flake report unavailable: the ranking for the last "
+                f"{window_days} days could not be collected this week; "
+                "nothing is silently retried and no thresholds are claimed.",
+                "",
+                f"Reason: `{error}`",
+                "",
+                "Re-run the `Weekly flake report` workflow (workflow_dispatch) "
+                "once the Actions API is readable again.",
+            ]
+        )
+        + "\n"
+    )
+
+
+def _emit_unavailable(
+    args: argparse.Namespace, reason: str, window_days: int, error: Exception
+) -> None:
+    """Print the unavailable summary and record it in the requested artifacts.
+
+    Every weekly failure path goes through this: a stale earlier report must
+    never survive a refused or failed run.
+    """
+    note = render_weekly_unavailable(window_days, reason)
+    print(note)
+    _write_unavailable_artifacts(args, note, window_days, error)
+
+
+def _weekly_caveats(
+    collection_notes: list[str],
+    budget_hits: int,
+    unavailable_hits: int,
+    unclassified_hits: int,
+    window_start_iso: str,
+) -> tuple[str | None, list[tuple[str, str]]]:
+    """Assemble the weekly summary's collection caveat and truncation list.
+
+    The run-cap signal is keyed by workflow file (the cap is enforced per
+    file; a file can present several API names in one window, so per-name
+    reconstruction could keep each name under the cap and hide the
+    truncation entirely). A cap hit is a caveat only when the oldest
+    collected run for that file does not precede the requested window start;
+    the comparison uses the full timestamps, so a cap hit hours inside the
+    window's first day is still caught.
+    """
+    cap_hits: list[tuple[str, str]] = []
+    cutoff_parts: list[str] = []
+    for note in collection_notes:
+        if note.startswith("run-cap:"):
+            _tag, workflow_file, oldest = note.split(":", 2)
+            cap_hits.append((workflow_file, oldest))
+        else:
+            cutoff_parts.append(note)
+    truncated = sorted(
+        (workflow_file, oldest)
+        for workflow_file, oldest in cap_hits
+        # An unlimited listing (cap 0) never emits a run-cap note, so no
+        # min-runs guard is needed here.
+        if oldest > window_start_iso
+    )
+    if budget_hits:
+        cutoff_parts.append(f"{budget_hits} failed-job log(s) unfetched")
+    if unavailable_hits:
+        cutoff_parts.append(f"{unavailable_hits} failed-job log(s) unreadable")
+    # An unclassified log was read but its failure is still unidentified: it
+    # is incomplete evidence too, so the caveat names it.
+    if unclassified_hits:
+        cutoff_parts.append(
+            f"{unclassified_hits} failed-job log(s) yielded no recognized failure signature"
+        )
+    collection_cutoff = "; ".join(cutoff_parts) if cutoff_parts else None
+    return collection_cutoff, truncated
+
+
+def cmd_weekly(args: argparse.Namespace, now: datetime | None = None) -> int:
+    """Ranking over the rolling window plus the policy threshold crossings.
+
+    Written for the scheduled workflow: it never raises, and every data
+    failure becomes a visible note with exit code 0 so a measurement outage
+    can never turn the report red. Output goes to stdout (the workflow step
+    appends it to ``$GITHUB_STEP_SUMMARY``); ``--out-md``/``--out-json``
+    record the same content for the mission's evidence trail.
+    """
+    current_time = now or datetime.now(UTC)
+    window_days = args.window_days
+    try:
+        cache_dir = _private_cache_dir(args.cache_dir)
+    except OSError as error:
+        _emit_unavailable(args, str(error), window_days, error)
+        print(f"Weekly flake report unavailable: {error}", file=sys.stderr)
+        return 0
+    if cache_dir is None:
+        # The refusal reason is already on stderr; the summary and the
+        # requested artifacts must still say the report is unavailable, so a
+        # stale earlier report cannot survive a refused run.
+        reason = "cache dir refused: not private to the current user"
+        _emit_unavailable(args, reason, window_days, RuntimeError(reason))
+        return 2
+    since = (current_time - timedelta(days=window_days)).strftime("%Y-%m-%d")
+    workflow_files = args.workflows.split(",") if args.workflows else list(WORKFLOW_FILES)
+    # Displayed commands must be copy-pasteable: the weekly subcommand derives
+    # --since from --window-days and accepts no --since option itself.
+    commands = (
+        f"python3 .github/scripts/ci_flake_report.py weekly --repo {args.repo} "
+        f"--window-days {window_days} --min-runs-per-workflow {args.min_runs_per_workflow}"
+    )
+    options = ReportOptions(
+        repo=args.repo,
+        workflow_files=workflow_files,
+        min_runs_per_workflow=args.min_runs_per_workflow,
+        since=since,
+        cache_dir=cache_dir,
+        keep_logs=args.keep_logs,
+        deadline=time.monotonic() + WEEKLY_COLLECTION_BUDGET_MINUTES * 60,
+        window_start=(current_time - timedelta(days=window_days)).strftime("%Y-%m-%dT%H:%M:%SZ"),
+    )
+    try:
+        # Diagnostics go to stderr: stdout is the Markdown step summary.
+        collection_notes: list[str] = []
+        runs, events = collect_report_data(
+            options, lambda message: print(message, file=sys.stderr), collection_notes
+        )
+    except (RuntimeError, OSError, ValueError, KeyError, TypeError, AttributeError) as error:
+        _emit_unavailable(args, str(error), window_days, error)
+        print(f"Weekly flake report unavailable: {error}", file=sys.stderr)
+        return 0
+    # Missing-log placeholders are accounting, not findings: a job whose logs
+    # were never read (budget exhausted or log unavailable) must not reach the
+    # policy thresholds or the ranking as if its failure signature were known.
+    # The unfetched and unreadable counts are reported as caveats instead.
+    budget_hits = sum(1 for event in events if event.signature.startswith("log-budget-exhausted:"))
+    unavailable_hits = sum(1 for event in events if event.signature.startswith("log-unavailable:"))
+    unclassified_hits = sum(1 for event in events if event.signature.startswith("unclassified:"))
+    measured_events = [
+        event
+        for event in events
+        if not event.signature.startswith("log-budget-exhausted:")
+        and not event.signature.startswith("log-unavailable:")
+    ]
+    window_start = current_time - timedelta(days=window_days)
+    window_start_iso = window_start.strftime("%Y-%m-%dT%H:%M:%SZ")
+    collection_cutoff, truncated = _weekly_caveats(
+        collection_notes,
+        budget_hits,
+        unavailable_hits,
+        unclassified_hits,
+        window_start_iso,
+    )
+
+    report = build_report(
+        runs=runs,
+        events=measured_events,
+        meta={
+            "repo": args.repo,
+            "workflow_files": workflow_files,
+            "since": since,
+            "commands": commands,
+            "generated_at": current_time.strftime("%Y-%m-%dT%H:%M:%SZ"),
+        },
+    )
+    breaches = evaluate_thresholds(measured_events, current_time, window_days)
+    markdown = render_weekly_report(report, breaches, window_days, truncated, collection_cutoff)
+    # stdout always carries the Markdown: the workflow step redirects it into
+    # the step summary whether or not artifact paths were also given.
+    print(markdown)
+    if args.out_md:
+        _write_weekly_artifact(args.out_md, markdown, "markdown artifact")
+    if args.out_json:
+        payload = {
+            "thresholds": [
+                {
+                    "signature": breach.signature,
+                    "rerun_passes_in_window": breach.rerun_passes_in_window,
+                    "action": breach.action,
+                }
+                for breach in breaches
+            ],
+            # Collection status: a JSON reader must be able to tell an empty
+            # threshold result from a complete measurement.
+            "collection": {
+                "caveat": collection_cutoff,
+                "truncated_workflows": [workflow for workflow, _ in truncated],
+            },
+            "report": report,
+        }
+        _write_weekly_artifact(args.out_json, json.dumps(payload, indent=1), "JSON artifact")
+    return 0
+
+
+def _write_unavailable_artifacts(
+    args: argparse.Namespace, note: str, window_days: int, error: Exception
+) -> None:
+    """Record the unavailable state in the requested artifacts.
+
+    The artifacts must not keep a stale earlier report after a measurement
+    failure, and the state must be clearly marked, never shaped like a report.
+    """
+    if args.out_md:
+        _write_weekly_artifact(args.out_md, note, "markdown artifact")
+    if args.out_json:
+        payload = {"status": "unavailable", "window_days": window_days, "error": str(error)}
+        _write_weekly_artifact(args.out_json, json.dumps(payload, indent=1), "JSON artifact")
+
+
+def _write_weekly_artifact(path: str, text: str, label: str) -> None:
+    """Write one requested artifact; a failure is a visible note, never a red run.
+
+    Each artifact is attempted independently: an unwritable ``--out-md`` must
+    not stop ``--out-json`` (the summary itself is already on stdout).
+    """
+    try:
+        Path(path).parent.mkdir(parents=True, exist_ok=True)
+        # Atomic (tmp file + rename): an interrupt must not leave a truncated
+        # report file behind.
+        _atomic_write_text(Path(path), text)
+        print(f"Wrote {path}", file=sys.stderr)
+    except OSError as error:
+        print(f"Weekly flake report {label} write failed: {error}", file=sys.stderr)
+
+
+# ---------------------------------------------------------------------------
 # I/O helpers (gh CLI)
 # ---------------------------------------------------------------------------
 
@@ -1169,13 +1571,30 @@ def gh_api_json(*endpoint_args: str) -> dict[str, Any]:
     return json.loads(gh_api(*endpoint_args))
 
 
-def list_workflow_runs(
-    repo: str, workflow_file: str, min_runs: int, since: str, log: Any
-) -> list[RunRecord]:
-    """Page through one workflow's runs (newest first) until enough are collected."""
+def list_workflow_runs(  # noqa: PLR0913 - the deadline bounds every page of one listing
+    repo: str,
+    workflow_file: str,
+    min_runs: int,
+    since: str,
+    log: Any,
+    deadline: float | None = None,
+) -> tuple[list[RunRecord], str | None]:
+    """Page through one workflow's runs (newest first) until enough are collected.
+
+    Returns the collected runs and why the listing stopped early: "deadline"
+    when the time budget passed between pages, "run-cap" when the cap was
+    reached before the window was covered, and None when the listing covered
+    the window or ran out of pages. Only the deadline stop means the counts
+    may be undercounted because collection was cut short.
+    """
     records: list[RunRecord] = []
     page = 1
+    reason: str | None = None
     while True:
+        if deadline is not None and time.monotonic() > deadline:
+            log("Time budget reached during run listing; the report carries what was collected")
+            reason = "deadline"
+            break
         payload = gh_api_json(
             f"repos/{repo}/actions/workflows/{workflow_file}/runs?per_page={PER_PAGE}&page={page}"
         )
@@ -1185,15 +1604,37 @@ def list_workflow_runs(
         records.extend(page_records)
         oldest = page_records[-1].created_at
         log(f"    {workflow_file} page {page}: {len(page_records)} runs (oldest {oldest[:10]})")
-        if (min_runs and len(records) >= min_runs) or oldest[:10] < since:
+        if oldest[:10] < since:
+            # The requested window is fully covered; this is completion, not
+            # a cutoff.
+            break
+        if min_runs and len(records) >= min_runs:
+            reason = "run-cap"
             break
         page += 1
     records = [run for run in records if run.created_at[:10] >= since]
-    return records[:min_runs] if min_runs else records
+    if reason is None and min_runs and len(records) > min_runs:
+        # The final page carried more in-window runs than the cap keeps, and
+        # the loop had already seen a pre-window run (so it reported
+        # complete coverage): the cap still removed in-window records from
+        # the returned slice, so the listing is truncated and the weekly
+        # summary must carry the caveat instead of a conclusive threshold
+        # result.
+        reason = "run-cap"
+    return (records[:min_runs] if min_runs else records), reason
 
 
 def _write_cache(path: Path, text: str) -> None:
     """Write a cache file atomically (an interrupt must not leave a truncated file)."""
+    tmp_path = path.with_name(f"{path.name}.{os.getpid()}.tmp")
+    tmp_path.write_text(text, encoding="utf-8")
+    os.replace(tmp_path, path)
+
+
+def _atomic_write_text(path: Path, text: str) -> None:
+    """Write a report file atomically: a failed or interrupted write leaves no
+    partial file that a later check could mistake for the complete report."""
+    path.parent.mkdir(parents=True, exist_ok=True)
     tmp_path = path.with_name(f"{path.name}.{os.getpid()}.tmp")
     tmp_path.write_text(text, encoding="utf-8")
     os.replace(tmp_path, path)
@@ -1210,22 +1651,65 @@ def _jobs_are_complete(jobs: list[dict[str, Any]]) -> bool:
 
 
 def fetch_attempt_jobs(
-    repo: str, run_id: int, attempt: int, cache_dir: Path | None = None
+    repo: str,
+    run_id: int,
+    attempt: int,
+    cache_dir: Path | None = None,
+    deadline: float | None = None,
 ) -> list[JobRecord]:
-    """Jobs of one run attempt; cached on disk so interrupted runs resume."""
+    """Jobs of one run attempt, every page; cached so interrupted runs resume.
+
+    An attempt can hold more than ``PER_PAGE`` jobs (matrix shards); stopping
+    at the first page would silently drop the later jobs from the findings
+    and the thresholds, so the listing pages until ``total_count`` is reached.
+    """
     cache_path = cache_dir / "jobs" / f"{run_id}-{attempt}.json" if cache_dir else None
     if cache_path is not None and cache_path.exists():
-        return parse_jobs(json.loads(cache_path.read_text(encoding="utf-8")))
-    payload = gh_api_json(
-        f"repos/{repo}/actions/runs/{run_id}/attempts/{attempt}/jobs?per_page={PER_PAGE}"
-    )
+        payload = json.loads(cache_path.read_text(encoding="utf-8"))
+        jobs = payload.get("jobs", [])
+        # A cached listing is trustworthy only once it holds every job the
+        # attempt reported: a page-truncated copy (cached before the cache
+        # write checked completeness across pages) must be refetched, or its
+        # missing jobs would silently vanish from findings and thresholds.
+        if jobs and len(jobs) >= int(payload.get("total_count") or 0):
+            return parse_jobs(payload)
+    if deadline is not None and time.monotonic() > deadline:
+        raise RuntimeError(
+            f"time budget reached before job listing of run {run_id} attempt {attempt}"
+        )
+    # An attempt can hold more than PER_PAGE jobs (matrix shards); stopping at
+    # the first page would silently drop the later jobs from the findings and
+    # the thresholds, so the listing pages until total_count is reached.
+    jobs: list[dict[str, Any]] = []
+    total_count = 0
+    page = 1
+    while True:
+        if deadline is not None and time.monotonic() > deadline:
+            raise RuntimeError(
+                f"time budget reached before page {page} of the job listing of "
+                f"run {run_id} attempt {attempt}"
+            )
+        payload = gh_api_json(
+            f"repos/{repo}/actions/runs/{run_id}/attempts/{attempt}/jobs"
+            f"?per_page={PER_PAGE}&page={page}"
+        )
+        # Index directly: a missing or null job list must fail loudly (the
+        # callers' fallback notes depend on that signal) exactly as the
+        # single-page version did.
+        page_jobs = payload["jobs"]
+        jobs.extend(page_jobs)
+        total_count = int(payload.get("total_count") or len(jobs))
+        if not page_jobs or len(jobs) >= total_count:
+            break
+        page += 1
+    merged = {"total_count": total_count, "jobs": jobs}
     # Never cache an attempt that is still running: a partial or empty job
     # list would be reused forever and hide the rerun pass it has not
     # produced yet.
-    if cache_path is not None and _jobs_are_complete(payload.get("jobs", [])):
+    if cache_path is not None and _jobs_are_complete(jobs):
         cache_path.parent.mkdir(parents=True, exist_ok=True)
-        _write_cache(cache_path, json.dumps(payload))
-    return parse_jobs(payload)
+        _write_cache(cache_path, json.dumps(merged))
+    return parse_jobs(merged)
 
 
 def fetch_job_log(
@@ -1267,24 +1751,49 @@ class ReportOptions:
     since: str
     cache_dir: Path
     keep_logs: bool = False
+    # A time.monotonic() reading: collection stops log fetches past it so a
+    # slow or retried API never eats the whole runner budget and dies before
+    # the report (or its unavailable note) is written.
+    deadline: float | None = None
+    # The full rolling-window boundary as an ISO timestamp: runs collected
+    # before it are dropped before any classification, so a report run after
+    # midnight cannot include the pre-window hours of the boundary date and
+    # every section measures the same window.
+    window_start: str | None = None
 
 
-def _list_all_runs(options: ReportOptions, log: Any) -> list[RunRecord]:
+def _list_all_runs(options: ReportOptions, log: Any, notes: list[str]) -> list[RunRecord]:
     all_runs: list[RunRecord] = []
     for workflow_file in options.workflow_files:
+        if options.deadline is not None and time.monotonic() > options.deadline:
+            notes.append(f"run listing for {workflow_file} skipped at the time budget")
+            continue
         log(
             f"Listing runs for {workflow_file} "
             f"(target {options.min_runs_per_workflow}, since {options.since})"
         )
-        all_runs.extend(
-            list_workflow_runs(
-                options.repo,
-                workflow_file,
-                options.min_runs_per_workflow,
-                options.since,
-                log,
-            )
+        records, reason = list_workflow_runs(
+            options.repo,
+            workflow_file,
+            options.min_runs_per_workflow,
+            options.since,
+            log,
+            deadline=options.deadline,
         )
+        if reason == "deadline":
+            notes.append(
+                f"run listing for {workflow_file} stopped at the time budget; "
+                "its counts may be undercounted"
+            )
+        if reason == "run-cap" and records:
+            # The cap is enforced per workflow file, so the truncation signal
+            # must be per file too: a workflow file can present several API
+            # names in one window, and per-name reconstruction could keep each
+            # name under the cap and hide the truncation entirely.
+            notes.append(f"run-cap:{workflow_file}:{min(run.created_at for run in records)}")
+        if options.window_start is not None:
+            records = [run for run in records if run.created_at >= options.window_start]
+        all_runs.extend(records)
     log(f"Collected {len(all_runs)} runs total")
     return all_runs
 
@@ -1313,17 +1822,49 @@ def _fetch_attempt_jobs(
     attempts_needed: dict[int, set[int]],
     options: ReportOptions,
     log: Any,
+    notes: list[str],
 ) -> tuple[dict[int, dict[int, list[JobRecord]]], dict[int, list[JobRecord]]]:
     jobs_by_run_attempt: dict[int, dict[int, list[JobRecord]]] = {}
     jobs_by_run: dict[int, list[JobRecord]] = {}
     total = len(attempts_needed)
+    fetched = 0
     for index, (run_id, attempts) in enumerate(sorted(attempts_needed.items()), 1):
+        if options.deadline is not None and time.monotonic() > options.deadline:
+            remaining = len(attempts_needed) - fetched
+            notes.append(f"job listings for {remaining} run(s) unfetched at the time budget")
+            break
         for attempt in sorted(attempts):
-            jobs = fetch_attempt_jobs(repo, run_id, attempt, options.cache_dir)
+            if options.deadline is not None and time.monotonic() > options.deadline:
+                # A partially listed run is not complete rerun evidence: the
+                # unfetched later attempts cannot be read as passes, and the
+                # cutoff is reported so the counts stay honest.
+                notes.append(
+                    "job listings stopped mid-run at the time budget; the "
+                    "run's later attempts were not read"
+                )
+                break
+            try:
+                jobs = fetch_attempt_jobs(
+                    repo, run_id, attempt, options.cache_dir, deadline=options.deadline
+                )
+            except RuntimeError as error:
+                if "time budget" not in str(error):
+                    # An API failure is not a time-budget cutoff: let the
+                    # caller's unavailable fallback handle it.
+                    raise
+                # The budget ran out between the pages of one attempt's job
+                # listing: stop with a visible note instead of raising into
+                # the unavailable fallback over a nearly complete collection.
+                notes.append(f"job listing stopped mid-run at the time budget ({error})")
+                break
             jobs_by_run_attempt.setdefault(run_id, {})[attempt] = jobs
             jobs_by_run.setdefault(run_id, []).extend(jobs)
-        if index % 25 == 0 or index == total:
-            log(f"  job listings: {index}/{total} runs")
+        else:
+            fetched += 1
+            if index % 25 == 0 or index == total:
+                log(f"  job listings: {index}/{total} runs")
+            continue
+        break
     return jobs_by_run_attempt, jobs_by_run
 
 
@@ -1336,6 +1877,17 @@ def _fetch_findings(
     """Fetch logs of failed jobs, extract findings, free large logs."""
     findings_by_job: dict[int, list[Finding]] = {}
     for index, (_run, _attempt, job) in enumerate(failed_jobs, 1):
+        if options.deadline is not None and time.monotonic() > options.deadline:
+            remaining = len(failed_jobs) - index + 1
+            log(
+                f"Time budget reached with {remaining} failed-job log(s) unfetched; "
+                "the report carries what was collected"
+            )
+            for _run, _attempt, remaining_job in failed_jobs[index - 1 :]:
+                findings_by_job[remaining_job.job_id] = [
+                    Finding("unclassified", f"log-budget-exhausted:{remaining_job.name}")
+                ]
+            break
         try:
             text = fetch_job_log(options.repo, job.job_id, options.cache_dir, options.keep_logs)
             findings_by_job[job.job_id] = extract_findings(clean_lines(text))
@@ -1364,13 +1916,49 @@ def _failed_leaf_jobs(
 
 def _build_events(
     failed_jobs: list[tuple[RunRecord, int, JobRecord]],
-    rerun_passes: dict[tuple[int, int, str], RerunPass],
+    jobs_by_run_attempt: dict[int, dict[int, list[JobRecord]]],
+    rerun_passes: dict[tuple[int, int, int], RerunPass],
     mixed_flags: set[tuple[int, str]],
     findings_by_job: dict[int, list[Finding]],
 ) -> list[FlakeEvent]:
+    # The rerun-cycle instance rank must come from the COMPLETE attempt
+    # listings, not from the failed events alone: deriving it from failures
+    # only would rank a job differently in two attempts whenever a same-named
+    # sibling passed in one of them (attempt 1 fails A and B, attempt 2 fails
+    # only B -> B's rank shifts), double-counting one rerun cycle.
+    rank_by_job: dict[tuple[int, int, str, int], int] = {}
+    for run_id, attempts in jobs_by_run_attempt.items():
+        # A subset rerun ("re-run failed jobs") omits the jobs that were not
+        # re-run from the later attempt listing entirely. When an attempt
+        # lists fewer same-named jobs than the run's fullest attempt, the
+        # lineage's cross-attempt identity is ambiguous, and every rank in
+        # that lineage collapses by name: one logical job stays one cycle,
+        # and the undercount is the conservative direction for the policy
+        # thresholds.
+        counts_by_name: Counter[str] = Counter()
+        ids_by_attempt_name: dict[tuple[int, str], list[int]] = {}
+        for attempt, jobs in attempts.items():
+            ids_by_name: dict[str, list[int]] = {}
+            for job in jobs:
+                ids_by_name.setdefault(job.name, []).append(job.job_id)
+            for name, job_ids in ids_by_name.items():
+                counts_by_name[name] = max(counts_by_name[name], len(job_ids))
+                ids_by_attempt_name[(attempt, name)] = job_ids
+        ambiguous_names = {
+            name for name, count in counts_by_name.items() if any(
+                len(ids_by_attempt_name[(attempt, name)]) < count
+                for attempt in attempts
+                if (attempt, name) in ids_by_attempt_name
+            )
+        }
+        for (attempt, name), job_ids in ids_by_attempt_name.items():
+            for rank, job_id in enumerate(sorted(job_ids)):
+                rank_by_job[(run_id, attempt, name, job_id)] = (
+                    0 if name in ambiguous_names else rank
+                )
     events: list[FlakeEvent] = []
     for run, attempt, job in failed_jobs:
-        rerun = rerun_passes.get((run.run_id, attempt, job.name))
+        rerun = rerun_passes.get((run.run_id, attempt, job.job_id))
         findings = findings_by_job.get(job.job_id, [])
         if not findings:
             findings = [Finding("unclassified", f"unclassified:{job.name}")]
@@ -1392,27 +1980,37 @@ def _build_events(
                     same_sha_pass=(run.run_id, job.name) in mixed_flags,
                     created_at=run.created_at,
                     test_names=finding.test_names,
+                    instance_rank=rank_by_job[(run.run_id, attempt, job.name, job.job_id)],
                 )
             )
     return events
 
 
 def collect_report_data(
-    options: ReportOptions, log: Any = print
+    options: ReportOptions, log: Any = print, notes: list[str] | None = None
 ) -> tuple[list[RunRecord], list[FlakeEvent]]:
-    """Fetch everything the report needs from the GitHub Actions API."""
-    all_runs = _list_all_runs(options, log)
+    """Fetch everything the report needs from the GitHub Actions API.
+
+    ``notes`` collects the collection-stage cutoffs (run listing or job
+    listing stopped at the time budget) so the caller can state them in the
+    report instead of letting the counts shrink silently.
+    """
+    stage_notes: list[str] = [] if notes is None else notes
+    all_runs = _list_all_runs(options, log, stage_notes)
     runs_by_id = {run.run_id: run for run in all_runs}
 
     attempts_needed = _attempts_needed(all_runs)
     jobs_by_run_attempt, jobs_by_run = _fetch_attempt_jobs(
-        options.repo, attempts_needed, options, log
+        options.repo, attempts_needed, options, log, stage_notes
     )
 
-    rerun_passes: dict[tuple[int, int, str], RerunPass] = {}
+    rerun_passes: dict[tuple[int, int, int], RerunPass] = {}
     for run_id, attempts in jobs_by_run_attempt.items():
         for rerun in compare_attempts(attempts):
-            rerun_passes[(run_id, rerun.failed_attempt, rerun.failed_job.name)] = rerun
+            # Keyed by job id, not the job name: two same-named jobs can fail
+            # in one attempt, and a name key would keep only the last one's
+            # recovery (and charge its minutes to both).
+            rerun_passes[(run_id, rerun.failed_attempt, rerun.failed_job.job_id)] = rerun
     mixed = same_sha_mixed_outcomes(all_runs, jobs_by_run)
     mixed_flags = {(outcome.failed_run_id, outcome.job_name) for outcome in mixed}
 
@@ -1420,13 +2018,16 @@ def collect_report_data(
     log(f"Fetching logs for {len(failed_jobs)} failed job(s)")
     findings_by_job = _fetch_findings(options.repo, failed_jobs, options, log)
 
-    events = _build_events(failed_jobs, rerun_passes, mixed_flags, findings_by_job)
+    events = _build_events(
+        failed_jobs, jobs_by_run_attempt, rerun_passes, mixed_flags, findings_by_job
+    )
     log(f"Built {len(events)} event(s) from {len(failed_jobs)} failed job(s)")
     return all_runs, events
 
 
-def cmd_report(args: argparse.Namespace) -> int:
-    cache_dir = Path(args.cache_dir)
+def _private_cache_dir(raw: str) -> Path | None:
+    """Create/validate the log cache dir; private, or refused (None)."""
+    cache_dir = Path(raw)
     # Private: the cache is read back trusting earlier runs of this script.
     cache_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
     cache_stat = cache_dir.stat()
@@ -1435,6 +2036,13 @@ def cmd_report(args: argparse.Namespace) -> int:
             f"Refusing cache dir {cache_dir}: not private to the current user",
             file=sys.stderr,
         )
+        return None
+    return cache_dir
+
+
+def cmd_report(args: argparse.Namespace) -> int:
+    cache_dir = _private_cache_dir(args.cache_dir)
+    if cache_dir is None:
         return 2
     workflow_files = args.workflows.split(",") if args.workflows else list(WORKFLOW_FILES)
     since = args.since or (datetime.now(UTC) - timedelta(days=90)).strftime("%Y-%m-%d")
@@ -1579,6 +2187,18 @@ def build_parser() -> argparse.ArgumentParser:
     )
     weekly_parser.add_argument("--repo", default=REPO)
     weekly_parser.add_argument("--window-days", type=int, default=14)
+    weekly_parser.add_argument("--min-runs-per-workflow", type=int, default=1000)
+    weekly_parser.add_argument(
+        "--workflows",
+        default=None,
+        help="comma-separated workflow file names; default: the four test workflows",
+    )
+    weekly_parser.add_argument("--out-md", default=None)
+    weekly_parser.add_argument("--out-json", default=None)
+    weekly_parser.add_argument("--cache-dir", default=LOG_CACHE_DEFAULT)
+    weekly_parser.add_argument(
+        "--keep-logs", action="store_true", help="keep large logs after extraction"
+    )
     return parser
 
 
@@ -1588,13 +2208,7 @@ def main(argv: list[str] | None = None) -> int:
         return cmd_report(args)
     if args.mode == "rerun-summary":
         return cmd_rerun_summary(args)
-    # weekly
-    print(
-        "weekly is wired by the M3 weekly-flake-workflow feature; the pure "
-        "threshold logic is evaluate_thresholds() in this module.",
-        file=sys.stderr,
-    )
-    return 2
+    return cmd_weekly(args)
 
 
 if __name__ == "__main__":
