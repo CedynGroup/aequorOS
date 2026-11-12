@@ -1,10 +1,12 @@
 """The BI domain restates a few service/model facts; these tests keep them true.
 
 ``app.bi.domain`` may not import ``app.models`` or ``app.services``, so it
-carries its own copies of: the live-module vocabulary, the module → entitlement
-slug map, the module → authorization-module map, the read-computed methodologies
-a live module publishes, and the DPD / FX reading rules of the classification
-service. Each copy is pinned here against its owner.
+carries its own copies of: the read-computed methodologies a live module
+publishes, and the DPD / FX reading rules of the classification service. Its
+engine vocabulary, module → entitlement slug map and module → authorization
+module map are derived from the shared engine table
+(``app.domain.authority.live_engines``); each copy is pinned here against its
+owner and that table.
 
 This module's other-suite cases live in ``test_catalogue_parity_integration.py``.
 """
@@ -29,6 +31,7 @@ from app.bi.domain.authority import (
 )
 from app.core.authorization import Module
 from app.credit.service import loan_classification
+from app.domain.authority.live_engines import LIVE_ENGINES
 from app.domain.authority.registry import REGISTRY
 from app.live.domain.positions.families import loan_family
 from app.live.models.live import LIVE_MODULES
@@ -46,9 +49,9 @@ def test_engine_modules_are_the_live_modules() -> None:
 
 
 def test_entitlement_slugs_mirror_module_scope() -> None:
-    for module in ENGINE_MODULES:
-        assert ENTITLEMENT_SLUG[module] == module_scope.MODULE_SCOPE_KEY[module]
-        assert ENTITLEMENT_SLUG[module] == pipeline._MODULE_SCOPE_KEY.get(module, module)
+    for row in LIVE_ENGINES:
+        assert ENTITLEMENT_SLUG[row.engine] == module_scope.MODULE_SCOPE_KEY[row.engine]
+        assert ENTITLEMENT_SLUG[row.engine] == row.entitlement_slug
 
 
 def test_authorization_modules_are_enum_values() -> None:
