@@ -7,6 +7,7 @@ frozen wall clock, and a marker without an instant fails the test.
 
 from __future__ import annotations
 
+import os
 import subprocess
 import sys
 import time
@@ -83,6 +84,23 @@ def test_an_invalid_freeze_time_marker_fails_the_test(
 ) -> None:
     module = tmp_path / "test_invalid_marker.py"
     module.write_text(f"import pytest\n{marker}\ndef {name}() -> None:\n    assert False\n")
+    # The inner pytest must not inherit the CI owner's environment: with
+    # CI_UNIT_REPORT_DIR (or CI_E2E_REPORT_DIR) set, scripts.test_suites_plugin
+    # rejects every run that lacks the matching suite selector, and inherited
+    # PYTEST_ADDOPTS would redirect the inner run's report (the same
+    # controlled-env contract as tests/architecture/test_test_suites_integration.py).
+    environment = {
+        **os.environ,
+        "PYTEST_ADDOPTS": "",
+        "PYTEST_DISABLE_PLUGIN_AUTOLOAD": "1",
+    }
+    for variable in (
+        "CI_UNIT_REPORT_DIR",
+        "CI_E2E_REPORT_DIR",
+        "CI_DATABASE_OBSERVATIONS",
+        "TEST_DATABASE_URL",
+    ):
+        _ = environment.pop(variable, None)
     result = subprocess.run(  # noqa: S603
         [
             sys.executable,
@@ -99,6 +117,7 @@ def test_an_invalid_freeze_time_marker_fails_the_test(
             str(BACKEND / "pyproject.toml"),
         ],
         cwd=BACKEND,
+        env=environment,
         capture_output=True,
         text=True,
         check=False,
