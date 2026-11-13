@@ -17,6 +17,7 @@ import { expect } from "@playwright/test";
 import path from "node:path";
 import { E2E_TMP } from "../playwright.config";
 import { test as identityTest } from "./support/story-identities";
+import { settleForCapture } from "./support/capture";
 
 const CLASSIFICATION = /\/banks\/[^/]+\/loan-classification(?:\?|$)/;
 const LARGE_EXPOSURES = /\/banks\/[^/]+\/sdi\/large-exposures(?:\?|$)/;
@@ -40,9 +41,7 @@ async function screenshot(page: import("@playwright/test").Page, name: string) {
   if (!process.env.E2E_EVIDENCE_DIR) return;
   // Let the page's own reads settle first: a capture taken mid-load shows
   // shimmer skeletons and proves nothing about the panel's final state.
-  await page
-    .waitForLoadState("networkidle", { timeout: 15_000 })
-    .catch(() => {});
+  await settleForCapture(page);
   await page.screenshot({
     path: path.join(process.env.E2E_EVIDENCE_DIR, name),
     fullPage: true,

@@ -65,6 +65,9 @@ importers:
         specifier: 2.3.0
         version: 2.3.0(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
     devDependencies:
+      '@aequoros/oxlint-plugins':
+        specifier: workspace:*
+        version: link:../../packages/oxlint-plugins
       '@auth/core':
         specifier: 0.41.3
         version: 0.41.3
@@ -110,6 +113,9 @@ importers:
       eslint-config-next:
         specifier: 16.4.2
         version: 16.4.2(@typescript-eslint/parser@8.72.1(eslint@10.14.0(jiti@2.7.0))(typescript@5.9.3))(eslint@10.14.0(jiti@2.7.0))(typescript@5.9.3)
+      eslint-plugin-playwright:
+        specifier: 2.12.2
+        version: 2.12.2(eslint@10.14.0(jiti@2.7.0))
       fast-check:
         specifier: ^4.10.2
         version: 4.10.2
@@ -125,6 +131,9 @@ importers:
       msw:
         specifier: ^2.15.0
         version: 2.15.0(@types/node@24.19.2)(typescript@5.9.3)
+      oxlint:
+        specifier: 1.92.0
+        version: 1.92.0
       postcss:
         specifier: ^8.5.28
         version: 8.5.28
@@ -162,6 +171,9 @@ importers:
         specifier: ^3.10.1
         version: 3.10.1(@types/react@19.3.0)(react-dom@19.3.0(react@19.3.0))(react-is@19.3.1)(react@19.3.0)(redux@5.0.1)
     devDependencies:
+      '@aequoros/oxlint-plugins':
+        specifier: workspace:*
+        version: link:../packages/oxlint-plugins
       '@eslint/compat':
         specifier: ^2.1.1
         version: 2.1.1(eslint@10.14.0(jiti@2.7.0))
@@ -183,6 +195,9 @@ importers:
       eslint-config-next:
         specifier: 16.4.2
         version: 16.4.2(eslint@10.14.0(jiti@2.7.0))(typescript@5.9.3)
+      oxlint:
+        specifier: 1.92.0
+        version: 1.92.0
       postcss:
         specifier: ^8.5.28
         version: 8.5.28
@@ -2228,6 +2243,12 @@ packages:
     peerDependencies:
       eslint: ^3 || ^4 || ^5 || ^6 || ^7 || ^8 || ^9
 
+  eslint-plugin-playwright@2.12.2:
+    resolution: {integrity: sha512-sYRCyAEACD3URVoFTfldZcvZNdlJ1r5414gilOTsDCu26PY7l4dUl/3o9ohIEltZgaDS1VXD1mG5xU1KlIGJSw==}
+    engines: {node: '>=16.9.0'}
+    peerDependencies:
+      eslint: '>=8.40.0'
+
   eslint-plugin-react-hooks@7.1.1:
     resolution: {integrity: sha512-f2I7Gw6JbvCexzIInuSbZpfdQ44D7iqdWX01FKLvrPgqxoE7oMj8clOfto8U6vYiz4yd5oKu39rRSVOe1zRu0g==}
     engines: {node: '>=18'}
@@ -2425,6 +2446,10 @@ packages:
 
   globals@16.4.0:
     resolution: {integrity: sha512-ob/2LcVVaVGCYN+r14cnwnoDPUufjiYgSqRhiFD0Q1iI4Odora5RE8Iv1D24hAz5oMophRGkGz+yuvQmmUMnMw==}
+    engines: {node: '>=18'}
+
+  globals@17.14.0:
+    resolution: {integrity: sha512-UtdkTVyAJePQv0J2M9Xe4L0ruNSDV314XiIJsADI2Zf40bcdAonE/D/OhAU8AT99oij9mhLByb+NvA3QWZYgCg==}
     engines: {node: '>=18'}
 
   globalthis@1.0.4:
@@ -5783,6 +5808,11 @@ snapshots:
       safe-regex-test: 1.1.0
       string.prototype.includes: 2.0.1
 
+  eslint-plugin-playwright@2.12.2(eslint@10.14.0(jiti@2.7.0)):
+    dependencies:
+      eslint: 10.14.0(jiti@2.7.0)
+      globals: 17.14.0
+
   eslint-plugin-react-hooks@7.1.1(eslint@10.14.0(jiti@2.7.0)):
     dependencies:
       '@babel/core': 7.29.7
@@ -6032,6 +6062,8 @@ snapshots:
       path-scurry: 2.0.2
 
   globals@16.4.0: {}
+
+  globals@17.14.0: {}
 
   globalthis@1.0.4:
     dependencies:

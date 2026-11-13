@@ -58,6 +58,10 @@ beforeAll(() => {
   setAccessToken("test-token");
 });
 beforeEach(() => {
+  // computed_at feeds the freshness display; freeze the clock so the fixture
+  // reads a deterministic instant instead of the wall clock.
+  vi.useFakeTimers({ toFake: ["Date"] });
+  vi.setSystemTime(new Date("2026-10-01T12:00:00Z"));
   client = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
@@ -107,6 +111,7 @@ beforeEach(() => {
   );
 });
 afterEach(() => {
+  vi.useRealTimers();
   cleanup();
   client.clear();
   server.resetHandlers();

@@ -334,7 +334,7 @@ it("records only an explicit bank confirmation and labels scheduling unverified"
   boundary.confirm.mockResolvedValue({
     ...connected,
     rotationPeriodDays: 365,
-    rotationConfirmedAt: new Date(),
+    rotationConfirmedAt: new Date("2026-10-01T09:00:00Z"),
   });
   mount();
   const button = await screen.findByRole("button", {

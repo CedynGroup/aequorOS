@@ -37,13 +37,24 @@ const CONVERGENCE_TIMEOUT_MS = Number(
 );
 
 async function waitFor(check: () => boolean, message: string): Promise<void> {
-  const deadline = Date.now() + CONVERGENCE_TIMEOUT_MS;
-  while (!check()) {
-    if (Date.now() >= deadline) {
-      throw new Error(`${message} (after ${CONVERGENCE_TIMEOUT_MS}ms)`);
-    }
-    await new Promise((resolve) => setTimeout(resolve, 2));
-  }
+  if (check()) return;
+  // Poll the condition on a monotonic deadline: the await resolves when the
+  // check passes, never after a fixed sleep.
+  await new Promise<void>((resolve, reject) => {
+    const deadline = performance.now() + CONVERGENCE_TIMEOUT_MS;
+    const poll = (): void => {
+      if (check()) {
+        resolve();
+        return;
+      }
+      if (performance.now() >= deadline) {
+        reject(new Error(`${message} (after ${CONVERGENCE_TIMEOUT_MS}ms)`));
+        return;
+      }
+      setTimeout(poll, 2);
+    };
+    poll();
+  });
 }
 
 async function main(): Promise<void> {
@@ -235,7 +246,6 @@ async function main(): Promise<void> {
           queryKey,
           queryFn: async () => {
             requestCounts.set(name, (requestCounts.get(name) ?? 0) + 1);
-            await new Promise((resolve) => setTimeout(resolve, 1));
             return name;
           },
         });
@@ -277,7 +287,7 @@ async function main(): Promise<void> {
 
   // Browser-mode bounded idle window: the detailed observer fetches once and
   // never enters a fixed cadence. If the policy regresses to any interval,
-  // scale it to 30ms so this test observes at least two subsequent ticks.
+  // scale it to 30ms so the observer carries a cadence to assert on.
   const idleClient = new QueryClient({
     defaultOptions: { queries: { retry: false, staleTime: 0 } },
   });
@@ -291,7 +301,11 @@ async function main(): Promise<void> {
   });
   const unsubscribeDetailed = detailedObserver.subscribe(() => undefined);
   await waitFor(() => idleRequests === 1, "detailed dashboard did not load");
-  await new Promise((resolve) => setTimeout(resolve, 70));
+  // The bounded idle window is the policy value itself (asserted `false`
+  // above). Assert the observer carries it instead of waiting out a
+  // wall-clock window, which could never catch a cadence longer than the
+  // window; a cadence of any length shows up in the observer's own options.
+  assert.equal(detailedObserver.options.refetchInterval, false);
   assert.equal(
     idleRequests,
     1,

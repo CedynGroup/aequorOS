@@ -1,0 +1,17 @@
+{
+  "$schema": "https://oxc.rs/oxlint/schema.json",
+  "plugins": [],
+  "jsPlugins": ["@aequoros/oxlint-plugins/index.js"],
+  "categories": {
+    "correctness": "off"
+  },
+  "overrides": [
+    {
+      "files": ["tests/**/*.test.ts"],
+      "rules": {
+        "acts/require-frozen-time": "error",
+        "acts/no-weak-test-awaits": "error"
+      }
+    }
+  ]
+}

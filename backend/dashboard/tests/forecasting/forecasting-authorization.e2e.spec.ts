@@ -1,6 +1,7 @@
 // Set E2E_EVIDENCE_DIR to write reviewer-visible screenshots outside version control.
 import { expect, type Page } from "@playwright/test";
 import { test } from "../../e2e/support/story-identities";
+import { settleForCapture } from "../../e2e/support/capture";
 import {
   currentBankPeriod,
   expectBankStatus,
@@ -131,7 +132,7 @@ test.describe("Forecasting reader without run permission", () => {
     ).toBeVisible(FIRST_PAINT);
     await expectDisabledWithReason(page, "Run forecast", RUN_REASON);
     if (evidenceDir) {
-      await page.waitForLoadState("networkidle");
+      await settleForCapture(page);
       await page.screenshot({
         path: path.join(evidenceDir, "forecasting-reader-disabled-run.png"),
         fullPage: true,
@@ -160,16 +161,18 @@ test.describe("Forecasting reader without run permission", () => {
     const whatIfRun = page.getByRole("button", { name: /^(Run|Re-run) / });
     await expect(whatIfRun.first()).toBeVisible(FIRST_PAINT);
     await expect(whatIfRun.first()).toBeDisabled();
-    // Initial data can replace the control and discard focus during rendering.
-    await page.waitForLoadState("networkidle");
-    await whatIfRun.first().locator("..").focus();
-    await expect(whatIfRun.first().locator("..")).toHaveAccessibleDescription(
-      RUN_REASON,
-    );
+    // Initial data can replace the control and discard focus during rendering;
+    // re-apply focus until it sticks instead of waiting out the network.
+    await expect(async () => {
+      await whatIfRun.first().locator("..").focus();
+      await expect(whatIfRun.first().locator("..")).toHaveAccessibleDescription(
+        RUN_REASON,
+      );
+    }).toPass();
 
     expect(mutations).toEqual([]);
     if (evidenceDir) {
-      await page.waitForLoadState("networkidle");
+      await settleForCapture(page);
       await page.screenshot({
         path: path.join(evidenceDir, "forecasting-reader-whatif.png"),
         fullPage: true,
@@ -288,7 +291,7 @@ test.describe("Forecasting aggregated-only reader", () => {
       await expect(
         page.getByRole("link", { name: "NII Forecast", exact: true }),
       ).toHaveAttribute("aria-disabled", "true", FIRST_PAINT);
-      await page.waitForLoadState("networkidle");
+      await settleForCapture(page);
       await page.screenshot({
         path: path.join(evidenceDir, "forecasting-aggregated-reader.png"),
         fullPage: true,

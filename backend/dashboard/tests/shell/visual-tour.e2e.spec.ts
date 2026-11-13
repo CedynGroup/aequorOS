@@ -7,7 +7,7 @@
  *
  * Output: e2e/.tmp/visual-tour/<route>.png
  */
-import { test } from "@playwright/test";
+import { expect, test } from "@playwright/test";
 import { mkdirSync } from "fs";
 import path from "path";
 import { E2E_TMP } from "../../playwright.config";
@@ -104,14 +104,20 @@ test.describe("visual tour", () => {
     test.setTimeout(ROUTES.length * 20_000);
     mkdirSync(OUT, { recursive: true });
     for (const route of ROUTES) {
-      await page.goto(route, { waitUntil: "networkidle" }).catch(() => {});
-      // settle bank profile fetch, skeletons and chart animations
-      await page.waitForTimeout(1600);
+      await page.goto(route, { waitUntil: "load" }).catch(() => {});
+      // Capture once the route's own data has rendered: every loading
+      // skeleton in the app carries the `animate-pulse` shimmer and clears
+      // when its query lands, and charts render with `animation: false`
+      // (lib/echartsOptions.ts), so no animation settling is needed.
+      await expect(page.locator(".animate-pulse")).toHaveCount(0, {
+        timeout: 20_000,
+      });
       const name =
         route === "/" ? "home" : route.slice(1).replaceAll("/", "__");
       await page.screenshot({
         path: path.join(OUT, `${name}.png`),
         fullPage: true,
+        animations: "disabled",
       });
     }
   });

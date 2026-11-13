@@ -270,3 +270,46 @@ test("reports time reads outside any test callback in a test file", async () => 
   `);
   assertFlagged(result, "frozenTime");
 });
+
+test("allows Date reads frozen by node:test's mock.timers with Date mocked", async () => {
+  const result = await runOxlint(["frozenTime"], `
+    test('t', async (t) => {
+      t.mock.timers.enable({ apis: ['Date'], now: 1_700_000_000_000 });
+      expect(Date.now()).toBe(1_700_000_000_000);
+    });
+  `);
+  assertClean(result, "frozenTime");
+});
+
+test("allows Date reads frozen by node:test's mock.timers with default apis", async () => {
+  const result = await runOxlint(["frozenTime"], `
+    test('t', async (t) => {
+      t.mock.timers.enable();
+      expect(new Date()).toBeTruthy();
+    });
+  `);
+  assertClean(result, "frozenTime");
+});
+
+test("still flags Date reads when node:test's mock.timers excludes Date", async () => {
+  const result = await runOxlint(["frozenTime"], `
+    test('t', async (t) => {
+      t.mock.timers.enable({ apis: ['setTimeout'] });
+      expect(Date.now()).toBeGreaterThan(0);
+    });
+  `);
+  assertFlagged(result, "frozenTime");
+});
+
+test("node:test mock.timers freeze covers only its own test", async () => {
+  const result = await runOxlint(["frozenTime"], `
+    test('frozen', async (t) => {
+      t.mock.timers.enable({ apis: ['Date'] });
+      expect(Date.now()).toBeGreaterThan(0);
+    });
+    test('unfrozen', () => {
+      expect(Date.now()).toBeGreaterThan(0);
+    });
+  `);
+  assertFlagged(result, "frozenTime");
+});
