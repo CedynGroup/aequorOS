@@ -12,11 +12,14 @@ name: Dashboard CI
 #                assertions the client is regenerated against had never been
 #                enforced anywhere.
 #   typecheck (dashboard) — the product surface compiles against it
+#   test (oxlint plugins) — packages/oxlint-plugins: the acts rules (ACTS001-003)
+#                are exercised against fixtures through the pinned oxlint
+#                binary; the dashboard/console lint gates consume that plugin.
 #   lint       — ESLint (next/core-web-vitals). Added 2026-08-22; it had never
 #                run in CI, and the tree carried one committed
 #                react/no-unescaped-entities error, fixed in the same change so
 #                this can be a gate rather than a warning nobody reads.
-#   test       — isolated Node suites + Vitest behavior suites and coverage.
+#   test (dashboard) — isolated Node suites + Vitest behavior suites and coverage.
 #                The legacy suites are CONTROLS, not unit trivia, and were
 #                the reason this job existed at all without enforcing them:
 #                  * lib/api/fail-open-guard.test.ts — a static guard over 374
@@ -102,7 +105,7 @@ jobs:
           PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: >-
           .github/scripts/changed_area.sh dashboard
-          '^(backend/dashboard/|backend/app/|backend/pyproject\.toml$|backend/uv\.lock$|backend/tests/fixtures/icaap/editor_schema_samples\.json$|backend/alembic/versions/202608280046_initial_org_owner_assignment\.py$|packages/risk-service-api/|pnpm-lock\.yaml$|pnpm-workspace\.yaml$|package\.json$|\.github/workflows/dashboard\.yml$|\.github/scripts/)'
+          '^(backend/dashboard/|backend/app/|backend/pyproject\.toml$|backend/uv\.lock$|backend/tests/fixtures/icaap/editor_schema_samples\.json$|backend/alembic/versions/202608280046_initial_org_owner_assignment\.py$|packages/risk-service-api/|packages/oxlint-plugins/|pnpm-lock\.yaml$|pnpm-workspace\.yaml$|package\.json$|\.github/workflows/dashboard\.yml$|\.github/scripts/)'
 
   dashboard:
     needs: changes
@@ -121,6 +124,11 @@ jobs:
         run: uv sync --frozen
       - name: Install workspace dependencies
         run: pnpm install --frozen-lockfile
+      # The acts plugin's own tests run the pinned oxlint binary on fixtures.
+      # The rules light up in the dashboard/console lint gates once those
+      # packages wire .oxlintrc.json to this plugin.
+      - name: Test oxlint plugins
+        run: pnpm --filter @aequoros/oxlint-plugins test
       - name: Typecheck generated API client
         run: pnpm --filter @aequoros/risk-service-api exec tsc --noEmit
       - name: Test generated API client
