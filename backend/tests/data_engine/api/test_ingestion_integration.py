@@ -8,7 +8,7 @@ from datetime import date
 from decimal import Decimal
 from pathlib import Path
 from threading import Event
-from time import monotonic, sleep
+from time import monotonic
 from typing import Any, cast
 
 import openpyxl
@@ -769,12 +769,13 @@ def test_concurrent_identity_correction_observes_the_first_acceptance(  # noqa: 
                 assert second_started.wait(timeout=5)
                 with session_factory() as observer:
                     deadline = monotonic() + 5
+                    tick = Event()
                     while (
                         first_pid
                         not in observer.scalars(select(func.pg_blocking_pids(second_pids[0]))).one()
                     ):
                         assert monotonic() < deadline, "The second correction did not wait."
-                        sleep(0.01)
+                        tick.wait(0.01)
                 assert not second_validation_started.is_set()
                 first_session.commit()
                 second = future.result(timeout=10)

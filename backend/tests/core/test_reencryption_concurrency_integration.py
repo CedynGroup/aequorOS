@@ -3,7 +3,7 @@ from __future__ import annotations
 from concurrent.futures import Future, ThreadPoolExecutor
 from datetime import timedelta
 from threading import Barrier, Event, local
-from time import monotonic, sleep
+from time import monotonic
 from typing import cast
 from uuid import UUID
 
@@ -111,6 +111,7 @@ def assert_duplicate_job_finishes(
 def assert_worker_blocked(db_session: Session, backend_b: list[int], second: Future[bool]) -> None:
     deadline = monotonic() + 10
     blocked = False
+    tick = Event()
     while monotonic() < deadline:
         blocked = bool(
             cast(
@@ -123,7 +124,7 @@ def assert_worker_blocked(db_session: Session, backend_b: list[int], second: Fut
         )
         if blocked:
             break
-        sleep(0.01)
+        tick.wait(0.01)
     assert blocked and not second.done()
 
 

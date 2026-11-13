@@ -98,9 +98,19 @@ Legacy diagnostic allowances may only shrink.
 (`backend/scripts/lint_baseline.py check` against `backend/scripts/lint_baseline.json`).
 
 - **Zero-violation rules live in the main select.** `ASYNC`, the pytest-hygiene codes
-  (`PT010`, `PT015`, `PT016`, `PT027`, `PT030`, `PT031`), `RUF006`, `S108` and `DTZ` are
-  selected in `backend/pyproject.toml`; any new violation fails the main run. Fix it — do not
-  add a baseline entry for a code the main select already enforces.
+  (`PT010`, `PT015`, `PT016`, `PT027`, `PT030`, `PT031`), `RUF006`, `S108`, `DTZ` and the
+  sleep ban `TID251` are selected in `backend/pyproject.toml`; any new violation fails the
+  main run. Fix it — do not add a baseline entry for a code the main select already enforces.
+- **Test code never sleeps.** `TID251` bans `time.sleep` and `asyncio.sleep` under `tests/`
+  (banned via `flake8-tidy-imports.banned-api`). Poll a condition, event or deadline instead —
+  a `threading.Event.wait(interval)` tick inside a deadline loop that re-checks the real
+  condition, or a server-side age/deadline column when the clock that matters lives in
+  PostgreSQL. App retry backoff keeps its sleeps: every non-test tree is per-file-ignored
+  (`"!tests/**"` also carries `TID251`). A test that must wait past a server-side timeout
+  (for example a storage stall outlasting `idle_in_transaction_session_timeout`) keeps the
+  sleep with `# noqa: TID251 - <reason> (#<issue>)`; the guard in
+  `tests/architecture/test_ruff_sleep_ban.py` rejects a suppression without a reason and a
+  tracking issue.
 - **Ratcheted codes are enforced only by the ratchet.** `PT011`, `PT012`, `PT017` and `RUF043`
   (pytest pattern hygiene with a large existing stock) are not in the main select at all —
   this is deliberate, so they cannot double-fail — and are counted over `tests/`.

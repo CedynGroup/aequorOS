@@ -7,7 +7,7 @@ import shutil
 import subprocess
 import time
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from threading import Thread
+from threading import Event, Thread
 
 import pytest
 
@@ -45,9 +45,10 @@ def test_native_minio_bind_collision_never_provisions_the_existing_server(
     try:
         services.start_minio("native")
         deadline = time.monotonic() + 10
+        tick = Event()
         while wait_for_exit and services.owns_process("minio"):
             assert time.monotonic() < deadline, (tmp_path / "minio.log").read_text()
-            time.sleep(0.05)
+            tick.wait(0.05)
         with pytest.raises(RuntimeError, match="MinIO.*(exited|owned)"):
             services.provision_minio()
         assert requests == []

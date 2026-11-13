@@ -464,7 +464,6 @@ def test_listener_runtime_requires_tls12(
 def test_next_container_gateway_terminates_verified_tls(tmp_path: Path, kind: str) -> None:
     import os  # noqa: PLC0415
     import subprocess  # noqa: PLC0415
-    import time  # noqa: PLC0415
 
     import httpx  # noqa: PLC0415
 
@@ -513,6 +512,7 @@ server.listen(Number(process.env.PORT), process.env.HOSTNAME);
         text=True,
     )
     try:
+        tick = threading.Event()
         with httpx.Client(verify=client_context(str(cert)), trust_env=False) as client:
             response = None
             for _attempt in range(100):
@@ -524,7 +524,7 @@ server.listen(Number(process.env.PORT), process.env.HOSTNAME);
                         break
                 except httpx.ConnectError:
                     pass
-                time.sleep(0.05)
+                tick.wait(0.05)
             assert response is not None and response.status_code == 200
             assert response.text == "/synthetic?proof=1:https"
             with pytest.raises(httpx.RemoteProtocolError):

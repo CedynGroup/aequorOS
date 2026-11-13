@@ -37,6 +37,7 @@ def _assert_reader_waits_for_writer(
 ) -> None:
     blocked = False
     deadline = time.monotonic() + 10
+    tick = Event()
     with administrator.connect() as observer:
         while not blocked and time.monotonic() < deadline:
             blocked = cast(
@@ -47,7 +48,7 @@ def _assert_reader_waits_for_writer(
                 ),
             )
             if not blocked:
-                time.sleep(0.01)
+                tick.wait(0.01)
     assert blocked
 
 

@@ -12,6 +12,7 @@ import subprocess
 import sys
 import time
 from pathlib import Path
+from threading import Event
 
 import pytest
 from botocore.exceptions import ClientError
@@ -238,10 +239,11 @@ def test_sigterm_stops_child_before_returning(tmp_path: Path) -> None:
     wrapper = subprocess.Popen([sys.executable, "-c", program], env=env)
     try:
         deadline = time.monotonic() + 10
+        tick = Event()
         while not pidfile.exists():
             assert wrapper.poll() is None
             assert time.monotonic() < deadline
-            time.sleep(0.05)
+            tick.wait(0.05)
         pid = int(pidfile.read_text())
         wrapper.send_signal(signal.SIGTERM)
         assert wrapper.wait(timeout=10) == 130
