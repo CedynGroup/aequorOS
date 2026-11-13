@@ -51,6 +51,12 @@ name: Risk Service CI
 #                 backend/README.md#run-tests; parallel execution and schema
 #                 isolation in backend/README.md#test-databases-and-the-primary-database.
 #   postgres-locks — dedicated row-lock and advisory-lock coverage.
+#   quarantine  — NON-BLOCKING runner for quarantined tests only (not in the
+#                 gate's needs; continue-on-error). Quarantined tests are
+#                 deselected from every blocking job by the collection plugin;
+#                 this job is where they still execute and report their results
+#                 into the job summary. CODEBASE_CONVENTIONS.md §6 owns the
+#                 policy.
 #   gate        — depends DIRECTLY on every real job (no chained summary jobs),
 #                 verifies the pool's exact shard coverage and execution
 #                 guards plus the aggregate cross-owner check, and aggregates
@@ -586,6 +592,148 @@ jobs:
           name: pg-locks
           path: ${{ runner.temp }}/pg-locks/
           if-no-files-found: error
+
+  # NON-BLOCKING quarantine owner (CODEBASE_CONVENTIONS.md §6). The collection
+  # plugin deselects every quarantined test from the blocking jobs above, so the
+  # only place a quarantined test executes is here — and its result must stay
+  # visible, which is why the JUnit outcomes land in the job summary even when
+  # they are red. continue-on-error keeps the job out of every gate on purpose;
+  # it is a report, not a pass. Detection is pytest collection itself, not a
+  # scan for marker spelling: any import style that registers the mark is
+  # found, and a text scan can never under-run. The ordinary case — an empty
+  # quarantine — costs one checkout, one dependency sync and one collection
+  # pass; PostgreSQL, MinIO and the runner are paid only when a quarantined
+  # test exists. OpenBao is not started here: a quarantined test that needs it
+  # self-skips and is reported as skipped, not hidden.
+  quarantine:
+    name: Quarantined tests (non-blocking)
+    runs-on: ubuntu-24.04
+    needs: preflight
+    if: needs.preflight.outputs.backend == 'true'
+    continue-on-error: true
+    timeout-minutes: 30
+    services:
+      bank-kms:
+        image: nsmithuk/local-kms:3.11.7@sha256:360d7377b6f3687c89a622236791e4fa3f7316366267b437829edbdfa8a5fc60
+        env:
+          KMS_REGION: us-east-1
+          KMS_ACCOUNT_ID: "111122223333"
+        ports:
+          - 18080:8080
+    env:
+      S3_ENDPOINT: http://127.0.0.1:9000
+      S3_ACCESS_KEY: ciminio
+      S3_SECRET_KEY: ciminio123
+      S3_BUCKET: risk-local
+      S3_REGION: us-east-1
+      STORAGE_BACKEND: minio
+      STORAGE_ENV: mvp
+      STORAGE_RETIRE_AFTER: "2099-01-01"
+      STORAGE_KMS_KEY_ID: aequoros-key
+      TEST_KMS_ENDPOINT_URL: http://127.0.0.1:18080
+    steps:
+      - uses: actions/checkout@v4
+      - uses: jdx/mise-action@v5
+        with:
+          # Pinned — see MISE VERSION in the header. Bump deliberately.
+          version: 2026.7.7
+          install_args: python@3.13 uv@0.11.18 node@24 pnpm@11.2.2
+      - name: Detect quarantined tests
+        id: detect
+        working-directory: backend
+        run: |
+          # Pytest collection is the authoritative detector: the marker is a
+          # real pytest mark, so every spelling that registers it — aliased
+          # imports included — is selected here, exactly as the quarantine
+          # owner would select it, and an invalid marker fails collection in
+          # this step the same way it fails every run. Exit 5 is pytest's "no
+          # tests collected": the ordinary empty quarantine, and the only
+          # cheap path. Any other non-zero exit is an error, never a quiet
+          # "no quarantined tests": a detection that broke must fail loudly,
+          # not skip the run.
+          set +e
+          uv run pytest --quarantine-only --collect-only -q
+          rc=$?
+          set -e
+          if [ "$rc" -eq 0 ]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          elif [ "$rc" -eq 5 ]; then
+            echo "No quarantined tests: the quarantine runner has nothing to do." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "::error::Quarantine detection failed with pytest exit code $rc"
+            exit "$rc"
+          fi
+      - name: Install risk service dependencies
+        if: steps.detect.outputs.present == 'true'
+        run: mise run risk-service:sync
+      - name: Set up PostgreSQL
+        if: steps.detect.outputs.present == 'true'
+        uses: ./.github/actions/setup-postgres
+      # Same NOBYPASSRLS role contract as postgres-pool: a quarantined
+      # integration contract must run against the same enforced environment the
+      # blocking gate uses, or its result is not comparable. See the pool job's
+      # role creation for the reasoning.
+      - name: Create restricted test role
+        if: steps.detect.outputs.present == 'true'
+        env:
+          PGPASSWORD: postgres
+        run: |
+          psql --host localhost --username postgres --dbname risk_service --set ON_ERROR_STOP=1 <<'SQL'
+          CREATE ROLE risk_service_test
+            LOGIN PASSWORD 'risk_service_test'
+            NOSUPERUSER NOCREATEDB CREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS;
+          GRANT CONNECT, CREATE, TEMPORARY ON DATABASE risk_service TO risk_service_test;
+          GRANT aqs_owner TO risk_service_test WITH ADMIN TRUE, INHERIT TRUE, SET TRUE;
+          GRANT aequoros_audit_owner TO risk_service_test WITH ADMIN TRUE, INHERIT TRUE, SET TRUE;
+          SQL
+      - name: Start MinIO for quarantined storage contracts
+        id: minio
+        if: steps.detect.outputs.present == 'true'
+        uses: ./.github/actions/setup-minio
+      - name: Create document test bucket
+        if: steps.detect.outputs.present == 'true'
+        working-directory: backend
+        run: |
+          uv run python - <<'PY'
+          import os
+          import boto3
+
+          client = boto3.client(
+              "s3",
+              endpoint_url=os.environ["S3_ENDPOINT"],
+              aws_access_key_id=os.environ["S3_ACCESS_KEY"],
+              aws_secret_access_key=os.environ["S3_SECRET_KEY"],
+              region_name=os.environ["S3_REGION"],
+          )
+          client.create_bucket(Bucket=os.environ["S3_BUCKET"])
+          PY
+      - name: Run quarantined tests
+        if: steps.detect.outputs.present == 'true'
+        env:
+          TEST_DATABASE_URL: ${{ env.POSTGRES_TEST_URL }}
+          CI_DATABASE_OBSERVATIONS: ${{ runner.temp }}/quarantine/database-observations
+          PYTEST_ADDOPTS: --junitxml=${{ runner.temp }}/quarantine/report.xml
+        working-directory: backend
+        run: |
+          set +e
+          uv run python scripts/local_services.py run --postgres --storage --role-admin -- uv run pytest --quarantine-only
+          status=$?
+          set -e
+          # Exit code 5 is pytest's "no tests collected": every quarantined test
+          # was deselected and the run is legitimately empty.
+          if [ "$status" -eq 5 ]; then
+            echo "No quarantined tests were selected; nothing to run." >> "$GITHUB_STEP_SUMMARY"
+            exit 0
+          fi
+          exit "$status"
+      - name: Report quarantined results in the job summary
+        if: always() && steps.detect.outputs.present == 'true'
+        run: python3 .github/scripts/quarantine_summary.py "$RUNNER_TEMP/quarantine/report.xml" >> "$GITHUB_STEP_SUMMARY"
+      - name: Stop MinIO
+        if: always() && steps.minio.outputs.pid != ''
+        env:
+          SERVICE_PID: ${{ steps.minio.outputs.pid }}
+        run: kill "$SERVICE_PID" 2>/dev/null || true
 
   real-data:
     name: Real-data API surface

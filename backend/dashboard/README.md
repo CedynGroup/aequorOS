@@ -993,9 +993,16 @@ Each shard also requires at least 20 executed journeys and the quarantine in
 `e2e/support/quarantine.ts` to match the size the workflow pins. A journey may only be parked there by name,
 declared with `test.fail` and a reason beside it, and with both the workflow's
 shard gate and `.github/scripts/assert_dashboard_journeys.mjs` edited to admit
-it. The aggregate currently refuses any quarantine. The custom reporter fails
-the run for any non-quarantined failure, unexpected quarantine pass, skipped or
-undiscovered quarantine entry,
+it. Every entry must also carry the issue number that tracks its flake: the
+custom reporter refuses a quarantine entry without a positive integer issue,
+alongside its other checks (undiscovered or skipped entries, undeclared
+`test.fail`, unexpected quarantine passes), and records the issue numbers in its
+JSON report; `scripts/quarantine.test.mjs` pins the contract. The aggregate
+currently refuses any quarantine. Quarantine is temporary and issue-backed, part
+of the repo-wide flake policy in
+[CODEBASE_CONVENTIONS.md §6](../../CODEBASE_CONVENTIONS.md#6-flaky-tests-and-quarantine);
+the reporter fails the run for any non-quarantined failure,
+unexpected quarantine pass, skipped or undiscovered quarantine entry,
 or `test.fail` declaration missing from that list.
 
 Reporting-date selection and exact snapshot matching are governed by

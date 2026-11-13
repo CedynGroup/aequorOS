@@ -526,6 +526,15 @@ suite. Split a mixed module rather than adding a marker override. New cases and
 parametrizations inherit their file's suite without a registration step.
 Collection rejects duplicates and conflicting suite markers.
 
+A known-flaky unit or integration test may carry
+`@pytest.mark.quarantine(issue=N, reason="...")` while its repair is in flight:
+blocking runs deselect it and a separate non-blocking CI job runs only
+quarantined tests and reports their outcomes in the job summary. The marker must
+name a positive integer issue and a non-empty reason, and e2e tests cannot be
+quarantined. The full policy — rerun reporting, the `flaky-test` issue and its
+7-day rule, and the dashboard's Playwright quarantine — lives in
+[CODEBASE_CONVENTIONS.md §6](../CODEBASE_CONVENTIONS.md#6-flaky-tests-and-quarantine).
+
 [`scripts/database_contracts.json`](scripts/database_contracts.json) remains a
 separate reviewed catalogue of PostgreSQL guarantees, with exact identities and
 grouped reasons. It does not select tests. A moved or renamed protected case must

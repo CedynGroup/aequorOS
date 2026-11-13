@@ -174,6 +174,7 @@ new topic, add a row here.
 | Audit chains, filed-input seals and compliance retention           | [backend/docs/tamper_evident_records.md](backend/docs/tamper_evident_records.md)                                                         |
 | Coolify deployment rules                                           | [deploy/README.md](deploy/README.md#coolify-compose-rules)                                                                               |
 | Host change to `bank.aequoros.com`                                 | [backend/dashboard/README.md](backend/dashboard/README.md#deploy-to-bankaequoroscom)                                                     |
+| Flaky tests: rerun reporting, `flaky-test` policy, quarantine      | [CODEBASE_CONVENTIONS.md §6](CODEBASE_CONVENTIONS.md#6-flaky-tests-and-quarantine)                                                       |
 
 ## Maintaining this file
 

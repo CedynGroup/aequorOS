@@ -650,3 +650,65 @@ feature. New code goes in the target layout; existing code moves one feature per
   target module and feature after reversing the move ledger; all other imports use current
   ownership. Its importer lists may only shrink, and the scanner rejects resolved entries
   until they are removed. The JSON stays outside the codemod's rewrite scope.
+
+## 6. Flaky tests and quarantine
+
+A red check must mean a real defect, and a green one must not be an illusion.
+CI has **no automatic retries anywhere**: pytest runs no rerun plugin, Playwright
+`retries` stays 0, and no workflow step retries a failing test command. A test
+that passes only on a rerun is never silently forgiven — every test workflow
+reports rerun-only passes in its step summary, and the weekly flake report ranks
+them.
+
+### The policy
+
+- **Every rerun-only pass is reported** in the run's step summary, naming the
+  jobs and tests that failed in an earlier attempt and passed on the rerun.
+- **Two recurrences within 14 days** open a `flaky-test` issue that names an
+  owner. The assignee is chosen by a human, never automatically.
+- **The third recurrence** means the owner must fix the test or quarantine it
+  **within 7 days**.
+- **Never retry silently.** Re-running a failed job by hand is allowed; what is
+  forbidden is letting a green rerun close the story without recording the flake
+  against the `flaky-test` issue.
+
+### Quarantine (backend pytest)
+
+- A test is quarantined with `@pytest.mark.quarantine(issue=N, reason="...")`
+  on a unit or integration test. The collection plugin
+  (`scripts/test_suites_plugin.py`) refuses a marker without a positive integer
+  `issue` and a non-empty `reason` at collection time — an invalid marker fails
+  every run loudly. `backend/tests/architecture/test_quarantine_contract.py`
+  pins the contract both statically and through real pytest subprocesses.
+- Blocking runs (unit, Postgres pool, locks, e2e) deselect quarantined tests
+  before suite evidence is written, so the cross-owner gate verification never
+  expects them to execute. Local runs behave the same; run a quarantined test
+  locally with `pytest --quarantine-only <selection>`.
+- The non-blocking **Quarantined tests** job in `risk-service.yml` runs only
+  quarantined tests (`--quarantine-only`) with PostgreSQL, MinIO and the test
+  KMS, and writes their real outcomes — pass, fail or skip — into the job
+  summary. It is `continue-on-error` and sits in no gate's `needs`: it is a
+  report, not a pass. Detection is pytest collection itself
+  (`pytest --quarantine-only --collect-only`, exit 5 when nothing is
+  quarantined), so any spelling of the marker — aliased imports included — is
+  found, and PostgreSQL, MinIO and the runner are paid only when a quarantined
+  test exists. It does
+  not start OpenBao; a quarantined OpenBao test reports as skipped.
+- Backend e2e tests cannot be quarantined (they have no non-blocking runner
+  here); browser journeys use the dashboard mechanism below.
+- Quarantine is temporary: fix the flake and delete the marker in the same PR.
+  Never quarantine without a tracking issue, and never add a second exclusion
+  layer (no skip, no xfail) on top of it.
+
+### Quarantine (dashboard Playwright)
+
+- `e2e/support/quarantine.ts` entries are `{ name, issue }` records. The custom
+  reporter refuses an entry without a positive integer issue number, in addition
+  to its existing checks (entry discovered, declared with `test.fail`, reason
+  beside the declaration, unexpected pass fails the run), and reports the issue
+  numbers in its JSON report. `scripts/quarantine.test.mjs` pins the contract.
+  The journeys aggregate still refuses any quarantine; admitting one requires
+  editing the shard gate and `.github/scripts/assert_dashboard_journeys.mjs`.
+- The same policy governs admission: two recurrences in 14 days open the
+  `flaky-test` issue, the third means fix or quarantine within 7 days, and the
+  quarantine comes out as soon as the flake is fixed.
