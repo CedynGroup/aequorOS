@@ -93,6 +93,15 @@ class RequiredGrant:
     data_scope_kind: str = "all"
     status: str = "active"
     approval_required: bool = True
+    permission: str = "configure"
+
+
+#: The least bundle that carries each permission a cutover demands.
+_LEAST_BUNDLE: dict[Permission, str] = {
+    Permission.CONFIGURE: "configurator",
+    Permission.APPROVE: "approver",
+    Permission.VIEW: "viewer",
+}
 
 
 @dataclass(frozen=True)
@@ -150,6 +159,8 @@ class ConfigureReport:
             "limitations": [
                 "Not HTTP success: visibility, entitlements and workflow conditions still apply.",
                 "Required grants need operator approval. No grants are created or backfilled.",
+                "Workflow conditions (maker-checker, step-up) are assessed per act with the "
+                "workflow's own context; this inventory judges the static binding sentence only.",
                 "Machines cannot hold Configurator or call these human-only routes.",
                 "LIQ threshold/haircut effects are bank-local after migrations 202611040109/110; "
                 "this inventory does not verify deployed storage or persisted state.",
@@ -162,25 +173,44 @@ class ConfigureReport:
         }
 
 
-def _eligibility(
+def _eligibility(  # noqa: PLR0913 - one complete authorization sentence
     principal: PrincipalLocator,
     resource: ResourceLocator,
     bindings: list[AuthorizationBinding],
     now: datetime,
     *,
+    permission: Permission = Permission.CONFIGURE,
     owner_only: bool = False,
 ) -> Eligibility:
     """Evaluate complete bindings and whole-institution scope, failing closed."""
     try:
+        # Permissions with required runtime conditions (approve, submit,
+        # sign-off) are judged here on the static binding sentence only: the
+        # workflow's own context (who prepared the row, step-up) is checked at
+        # action time and cannot be known in an inventory.
+        demanded = {
+            check.kind
+            for check in authorization.runtime_condition_checks(permission, resource, ())
+            if not check.passed
+        }
+        supplied = tuple(
+            authorization.ConditionCheck(
+                kind=kind,
+                passed=True,
+                reason="workflow condition assessed per act, not in this inventory",
+            )
+            for kind in sorted(demanded, key=lambda kind: kind.value)
+        )
         decision = authorization.evaluate_prefetched_permission(
             principal,
-            Permission.ADMINISTER if owner_only else Permission.CONFIGURE,
+            Permission.ADMINISTER if owner_only else permission,
             resource,
             [row for row in bindings if row.role_bundle == RoleBundle.ORG_OWNER]
             if owner_only
             else bindings,
             principal_active=True,
             now=now,
+            conditions=supplied,
         )
         # Match runtime's whole-institution requirement, using only THIS
         # resource's matches. A broad grant on a different resource cannot help.
@@ -234,7 +264,7 @@ def _impact(
             before = Eligibility(
                 has_role([user.role], route.baseline), "legacy_scalar_" + route.baseline
             )
-        after = _eligibility(principal, resource, bindings, now)
+        after = _eligibility(principal, resource, bindings, now, permission=route.permission)
     required = None
     if (
         user.is_active
@@ -253,6 +283,8 @@ def _impact(
             route.institution_scope.value,
             bank_id,
             route.module.value,
+            permission=route.permission.value,
+            role_bundle=_LEAST_BUNDLE[route.permission],
         )
     return ConfigureImpact(
         user.organization_id,
@@ -271,6 +303,7 @@ def _impact(
         affected_institution_ids=[bank_id]
         if route.effect_scope == "bank_local" and bank_id is not None
         else [],
+        permission=route.permission.value,
     )
 
 

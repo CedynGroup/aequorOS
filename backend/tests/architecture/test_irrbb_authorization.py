@@ -33,7 +33,6 @@ def test_irrbb_run_uses_scoped_mutation_principal_without_role_fallback() -> Non
 
     assert "get_scoped_mutation_tenant_context" in dependencies
     assert "get_mutation_tenant_context" not in dependencies
-    assert "get_approver_tenant_context" not in dependencies
     assert not any(name.startswith("require_role_") for name in dependencies)
 
 
@@ -47,5 +46,4 @@ def test_irrbb_reads_leave_authority_to_the_exact_service_gate() -> None:
         dependencies = _dependency_names(_route(path, "GET"))
         assert "get_tenant_context" in dependencies, path
         assert "get_mutation_tenant_context" not in dependencies, path
-        assert "get_approver_tenant_context" not in dependencies, path
         assert not any(name.startswith("require_role_") for name in dependencies), path

@@ -828,6 +828,51 @@ time is still the stage engine's later work. The authoritative contract is
 [filing_submit_authority_rollout.md](filing_submit_authority_rollout.md); the
 design it implements is [filing_workflow_redesign.md](filing_workflow_redesign.md).
 
+## Filing review-chain template authority (built 2026-11-13)
+
+The routes that maintain the review chain itself — list, propose, update, submit
+and decide on `filing_workflow_templates` — no longer lean on the scalar role
+ladder; the approver scalar-tenancy dependency is retired. Each route first
+requires an active human session with institution coverage of the target bank
+(an out-of-coverage caller gets the opaque 404, so bank existence is not
+disclosed), then the exact Regulatory Reporting / restricted sentence at that
+bank: `VIEW` for the list, `CONFIGURE` for propose, update and submit, and
+`APPROVE` for decide. Machine principals and impersonated sessions are refused
+on all five routes.
+
+Maker-checker stays enforced through the evaluator: the decide gate carries the
+template's stored `approval_conditions` (built by
+`app.reporting.service.filing_workflow.templates.approval_conditions`), so the
+officer who proposed the current version is refused even when they hold
+`APPROVE`, and the `ck_filing_workflow_templates_four_eyes` CHECK remains the
+last line.
+
+Write responses are write-only acknowledgements (identity, bank, version, status
+and timestamps), not the full row, so a configure-only officer cannot pivot the
+gate into a read. The decide response is one flat schema: the acknowledgement
+fields always, and the decided row embedded under `template` only when the
+caller also holds REG/restricted `VIEW` (`null` otherwise), so deciding never
+becomes a read ladder. The flat shape is deliberate: the generated client
+decodes one schema safely, where a response union would flatten into a decoder
+that assumes the row is always present.
+
+Nothing is backfilled: an officer who maintained the chain through a scalar
+role alone loses the surface on this cutover. Enumerate affected principals
+with `scripts/authorization_access_impact.py` and retain the dated output
+outside the repository.
+
+Executable evidence:
+`tests/reporting/api/test_filing_template_authorization_integration.py` probes
+the exact-`CONFIGURE` allow with the acknowledgement shape, the 403 without the
+sentence, the sibling-bank refusal, the opaque out-of-coverage 404, the
+impersonated-session refusal, the exact-`VIEW` list gate, the non-proposer
+decide, the proposer refusal with `APPROVE` held, the view-else-acknowledge
+projection and the database CHECK;
+`tests/reporting/service/test_template_state_machine_integration.py` drives the
+same gates and the maker-checker 409 through the shared state machine;
+`tests/api/test_impersonation_boundary_integration.py` pins the scoped decide
+gate in the impersonation boundary.
+
 ## Institution register enforcement
 
 The [Institution rollout contract](institution_enforcement_rollout.md) owns the

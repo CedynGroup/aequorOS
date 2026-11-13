@@ -336,6 +336,5 @@ def test_every_icaap_route_is_on_a_scoped_dependency() -> None:
         scoped = {name for name in names if name.startswith("require_icaap_")}
         assert len(scoped) == 1, f"{route.methods} {route.path}: {sorted(scoped)}"
         assert "get_mutation_tenant_context" not in names
-        assert "get_approver_tenant_context" not in names
         assert not any(name.startswith("require_role_") for name in names)
         assert "require_module_access" not in names

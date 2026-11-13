@@ -36,7 +36,6 @@ def test_behavioral_writes_use_scoped_mutation_principal_without_role_fallback()
 
         assert "get_scoped_mutation_tenant_context" in dependencies
         assert "get_mutation_tenant_context" not in dependencies
-        assert "get_approver_tenant_context" not in dependencies
         assert not any(name.startswith("require_role_") for name in dependencies)
 
 
@@ -50,5 +49,4 @@ def test_behavioral_reads_leave_authority_to_the_exact_service_gate() -> None:
 
         assert "get_tenant_context" in dependencies
         assert "get_mutation_tenant_context" not in dependencies
-        assert "get_approver_tenant_context" not in dependencies
         assert not any(name.startswith("require_role_") for name in dependencies)
