@@ -353,10 +353,12 @@ class ClockVisitor(ast.NodeVisitor):
         if ticking:
             self.frozen = False
         elif entered:
-            # A deterministic travel really freezes everything the block runs,
-            # including bodies of functions first defined inside it.
+            # A deterministic travel freezes every statement the block runs.
+            # It must NOT reach deferred bodies: a function or lambda defined
+            # here can be called after the block exits, when the travel is
+            # gone; only a marker or the frozen_clock fixture freezes a test's
+            # whole execution.
             self.frozen = True
-            self.deferred_frozen = True
         for statement in node.body:
             self.visit(statement)
         self.frozen, self.deferred_frozen = previous_frozen, previous_deferred
@@ -392,7 +394,10 @@ class ClockVisitor(ast.NodeVisitor):
 
     def visit_Lambda(self, node: ast.Lambda) -> None:
         self._visit_arguments(node.args)
-        frozen = self.deferred_frozen or self.frozen
+        # A lambda body runs at call time, which may be long after the
+        # enclosing block exited, so only marker-derived deferred freeze
+        # covers it — not the run-time ``frozen`` of the defining scope.
+        frozen = self.deferred_frozen
         self.functions.append((node, self.child_table(node, "lambda"), self.enclosing, frozen))
 
     def visit_ClassDef(self, node: ast.ClassDef) -> None:
