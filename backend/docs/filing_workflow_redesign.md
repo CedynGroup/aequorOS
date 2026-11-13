@@ -185,6 +185,26 @@ refresh-family revocation happen in the existing binding-creation primitive when
 Owner writes the Validator sentence. Measured consequence on the primary: one identity
 could transmit before, zero can after, and no package anywhere was mid-filing.
 
+**Chain maintenance is a scoped-binding gate too (as built 2026-11-13).** The
+routes that maintain the review chain itself — list, propose, update, submit and
+decide on `filing_workflow_templates` — used to lean on the scalar role ladder
+alone, the same lost-at-a-seam shape: the engine is maker-checker, but anyone
+the tenancy dependency let through could rewrite the chain that then vouches
+for the filing. Each route now first requires an active human session with
+institution coverage of the target bank (an out-of-coverage caller gets the
+opaque 404, so bank existence is not disclosed), then the exact REG/restricted
+sentence at that bank: `VIEW` for the list, `CONFIGURE` for propose, update and
+submit, `APPROVE` for decide. The maker-checker condition is carried into the
+evaluator itself (`approval_conditions`, stored on the row and re-checked under
+the row lock): whoever proposed the current version cannot decide it, even with
+`APPROVE`, and the `ck_filing_workflow_templates_four_eyes` CHECK stays the last
+line. Write responses are write-only acknowledgements, and decide returns the
+decided row only when the caller also holds REG/restricted `VIEW` — so neither
+the configure nor the approve authority silently becomes a read authority.
+The approver scalar-tenancy dependency is retired. Nothing is backfilled; the
+[authorization foundation](authorization_foundation.md#filing-review-chain-template-authority-built-2026-11-13)
+owns the enforcement contract.
+
 ### 3.4 Decisions carry evidence
 
 Each stage decision records: actor, role, stage, **round**, decision
