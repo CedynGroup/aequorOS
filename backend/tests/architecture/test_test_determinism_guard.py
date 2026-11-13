@@ -73,6 +73,21 @@ UNFROZEN_READS = [
     "        import time as clock\n"
     "    if not use_datetime:\n"
     "        clock.time()\n",
+    # A loop body may run zero times, so its assignments never clear a
+    # clock binding.
+    "from datetime import datetime\n"
+    "clock = datetime.now\n"
+    "for replacement in ():\n"
+    "    clock = replacement\n"
+    "clock()\n",
+    # A ticking travel inside a frozen travel advances the clock from real
+    # elapsed time; its reads are not pinned to an instant.
+    "import time_machine\n"
+    "from datetime import datetime\n"
+    "def test_ticking_inside_frozen():\n"
+    f"    with time_machine.travel({INSTANT}, tick=False):\n"
+    f"        with time_machine.travel({INSTANT}):\n"
+    "            datetime.now()\n",
 ]
 
 #: The same reads are accepted once the clock is frozen at function, class or
@@ -175,6 +190,17 @@ def test_the_guard_accepts_frozen_clock_reads(tmp_path: Path, source: str) -> No
     allowlist.write_text("{}")
     assert guard.main(["--root", str(tmp_path), "--allowlist", str(allowlist)]) == 0
     assert guard.main(["--root", str(tmp_path), "--strict"]) == 0
+
+
+def test_postponed_annotation_scopes_do_not_crash_the_guard() -> None:
+    """A lambda inside a postponed annotation has no symtable scope to find."""
+    source = (
+        "from __future__ import annotations\n"
+        "from typing import Annotated\n"
+        "def helper(value: Annotated[int, lambda x: x]) -> None:\n"
+        "    pass\n"
+    )
+    assert guard.clock_findings(source).reads == []
 
 
 def test_the_guard_scans_support_and_module_level_reads(tmp_path: Path) -> None:
