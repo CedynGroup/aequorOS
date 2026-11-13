@@ -50,6 +50,20 @@ UNFROZEN_READS = [
     "from datetime import datetime, UTC\n"
     f"pytestmark = pytest.mark.freeze_time({INSTANT})\n"
     "STAMP = datetime.now(UTC)\n",
+    # A conditional rebinding keeps the clock binding until every reachable
+    # path replaces it: the fall-through path still reads the wall clock.
+    "import time as clock\n"
+    "import fake_clock\n"
+    "if use_fake():\n"
+    "    clock = fake_clock\n"
+    "def test_conditional_rebind():\n"
+    "    clock.time()\n",
+    "import fake_clock\n"
+    "def test_local_conditional_rebind(use_fake):\n"
+    "    import time as clock\n"
+    "    if use_fake:\n"
+    "        clock = fake_clock\n"
+    "    clock.time()\n",
 ]
 
 #: The same reads are accepted once the clock is frozen at function, class or
@@ -97,6 +111,14 @@ FROZEN_READS = [
     f"    with time_machine.travel({INSTANT}, tick=False):\n"
     "        return lambda: datetime.now()\n",
     "import time\ndef test_shadowed_time():\n    time = load_time()\n    return time.time()\n",
+    # Every reachable path replaces the clock binding, so nothing is reported.
+    "import time as clock\n"
+    "def pick(fake):\n"
+    "    if fake:\n"
+    "        clock = fake\n"
+    "    else:\n"
+    "        clock = fake_other\n"
+    "    return clock.time()\n",
     # Declaration order does not matter: the marker covers functions and
     # methods regardless of where pytestmark appears.
     "from app.db.base import utc_now\n"

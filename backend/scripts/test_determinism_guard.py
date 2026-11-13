@@ -82,6 +82,27 @@ SUPERSEDED = re.compile(
 GUARDED_CODES = frozenset({AQPY001, TID251})
 
 
+def _clock_capable(value: str) -> bool:
+    """Whether reads through a binding with this prefix can name a clock member."""
+    return any(
+        member == value or member.startswith(f"{value}.")
+        for member in (*CLOCK_MEMBERS, *UTC_NOW_SOURCES)
+    )
+
+
+def _merge_paths(body_value: str, else_value: str) -> str:
+    """The binding a read may see after a conditional rebind of one name.
+
+    A path that may still hold a clock binding keeps it detectable: the merge
+    only drops the clock binding once every reachable path replaces it.
+    """
+    if body_value == else_value:
+        return body_value
+    if _clock_capable(body_value):
+        return body_value
+    return else_value
+
+
 class ClockVisitor(ast.NodeVisitor):
     """Resolve clock-call bindings within each lexical scope in statement order.
 
@@ -228,6 +249,27 @@ class ClockVisitor(ast.NodeVisitor):
             self.visit(statement)
         if node.name is not None:
             self.aliases[node.name] = ""
+
+    def visit_If(self, node: ast.If) -> None:
+        self.visit(node.test)
+        before = dict(self.aliases)
+        for statement in node.body:
+            self.visit(statement)
+        after_body = dict(self.aliases)
+        # Mutate in place: ``module_aliases`` and ``enclosing`` share this dict,
+        # so a rebound map would leave them seeing the unmerged state.
+        self.aliases.clear()
+        self.aliases.update(before)
+        for statement in node.orelse:
+            self.visit(statement)
+        after_else = dict(self.aliases)
+        self.aliases.clear()
+        for key in set(before) | set(after_body) | set(after_else):
+            # Without an ``else`` the fall-through path keeps the pre-branch
+            # bindings; with one, only the two branch states are reachable.
+            body_value = after_body.get(key, before.get(key, ""))
+            else_value = after_else.get(key, "") if node.orelse else before.get(key, "")
+            self.aliases[key] = _merge_paths(body_value, else_value)
 
     def visit_With(self, node: ast.With | ast.AsyncWith) -> None:
         previous_frozen, previous_deferred = self.frozen, self.deferred_frozen
