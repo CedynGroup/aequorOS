@@ -32,8 +32,8 @@ from app.api.deps import (
 from app.reporting.schemas.filing_workflow import (
     FilingWorkflowTemplateCreate,
     FilingWorkflowTemplateDecision,
+    FilingWorkflowTemplateDecisionRead,
     FilingWorkflowTemplateListRead,
-    FilingWorkflowTemplateRead,
     FilingWorkflowTemplateSubmit,
     FilingWorkflowTemplateUpdate,
     FilingWorkflowTemplateWriteAcknowledgement,
@@ -128,7 +128,7 @@ def submit_filing_workflow_template(
 
 @router.post(
     f"{_TEMPLATE}/decision",
-    response_model=FilingWorkflowTemplateRead | FilingWorkflowTemplateWriteAcknowledgement,
+    response_model=FilingWorkflowTemplateDecisionRead,
     operation_id="decideFilingWorkflowTemplate",
     responses=_ERRORS,
 )
@@ -138,11 +138,11 @@ def decide_filing_workflow_template(
     payload: FilingWorkflowTemplateDecision,
     db: DbSession,
     ctx: ScopedMutationTenant,
-) -> FilingWorkflowTemplateRead | FilingWorkflowTemplateWriteAcknowledgement:
+) -> FilingWorkflowTemplateDecisionRead:
     """Approve or reject a proposed chain. Never by whoever proposed it.
 
-    The decided row comes back only when the decider may also read the chain;
-    otherwise the answer is the write-only acknowledgement.
+    The write acknowledgement is always the answer; the decided row rides along
+    in ``template`` only when the decider may also read the chain.
     """
     return filing_templates.decide_template(db, ctx, bank_id, template_id, payload)
 

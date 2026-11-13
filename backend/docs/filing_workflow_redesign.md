@@ -198,8 +198,9 @@ submit, `APPROVE` for decide. The maker-checker condition is carried into the
 evaluator itself (`approval_conditions`, stored on the row and re-checked under
 the row lock): whoever proposed the current version cannot decide it, even with
 `APPROVE`, and the `ck_filing_workflow_templates_four_eyes` CHECK stays the last
-line. Write responses are write-only acknowledgements, and decide returns the
-decided row only when the caller also holds REG/restricted `VIEW` — so neither
+line. Write responses are write-only acknowledgements, and decide answers with
+the acknowledgement fields always plus the decided row embedded under
+`template` only when the caller also holds REG/restricted `VIEW` — so neither
 the configure nor the approve authority silently becomes a read authority.
 The approver scalar-tenancy dependency is retired. Nothing is backfilled; the
 [authorization foundation](authorization_foundation.md#filing-review-chain-template-authority-built-2026-11-13)

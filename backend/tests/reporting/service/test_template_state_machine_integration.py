@@ -201,13 +201,17 @@ class TemplateMachine(DatabaseMachine):
                     template_id,
                     FilingWorkflowTemplateSubmit(reason=REASON),
                 )
-            return filing.decide_template(
+            decided = filing.decide_template(
                 self.db,
                 access.ctx,
                 access.bank.id,
                 template_id,
                 FilingWorkflowTemplateDecision(decision=decision, reason=REASON),
             )
+            # The machine's actors hold restricted view, so the decided row is
+            # always embedded; a null would mean view authority broke.
+            assert decided.template is not None
+            return decided.template
         if action == "update":
             return icaap.update_template(
                 self.db,

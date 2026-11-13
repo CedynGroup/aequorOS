@@ -21,6 +21,7 @@ import type {
   FilingSetPreviewRead,
   FilingWorkflowTemplateCreate,
   FilingWorkflowTemplateDecision,
+  FilingWorkflowTemplateDecisionRead,
   FilingWorkflowTemplateListRead,
   FilingWorkflowTemplateSubmit,
   FilingWorkflowTemplateUpdate,
@@ -48,7 +49,6 @@ import type {
   ReportingSettingsPut,
   ReportingSettingsRead,
   ReportingSettingsWriteAcknowledgement,
-  ResponseDecidefilingworkflowtemplate,
   ResubmissionDecisionCreate,
   ResubmissionRequestCreate,
   ResubmissionRequestListRead,
@@ -77,6 +77,8 @@ import {
   FilingWorkflowTemplateCreateToJSON,
   FilingWorkflowTemplateDecisionFromJSON,
   FilingWorkflowTemplateDecisionToJSON,
+  FilingWorkflowTemplateDecisionReadFromJSON,
+  FilingWorkflowTemplateDecisionReadToJSON,
   FilingWorkflowTemplateListReadFromJSON,
   FilingWorkflowTemplateListReadToJSON,
   FilingWorkflowTemplateSubmitFromJSON,
@@ -131,8 +133,6 @@ import {
   ReportingSettingsReadToJSON,
   ReportingSettingsWriteAcknowledgementFromJSON,
   ReportingSettingsWriteAcknowledgementToJSON,
-  ResponseDecidefilingworkflowtemplateFromJSON,
-  ResponseDecidefilingworkflowtemplateToJSON,
   ResubmissionDecisionCreateFromJSON,
   ResubmissionDecisionCreateToJSON,
   ResubmissionRequestCreateFromJSON,
@@ -670,13 +670,13 @@ export class RegulatoryReportingApi extends runtime.BaseAPI {
   }
 
   /**
-   * Approve or reject a proposed chain. Never by whoever proposed it.  The decided row comes back only when the decider may also read the chain; otherwise the answer is the write-only acknowledgement.
+   * Approve or reject a proposed chain. Never by whoever proposed it.  The write acknowledgement is always the answer; the decided row rides along in ``template`` only when the decider may also read the chain.
    * Decide Filing Workflow Template
    */
   async decideFilingWorkflowTemplateRaw(
     requestParameters: DecideFilingWorkflowTemplateRequest,
     initOverrides?: RequestInit | runtime.InitOverrideFunction,
-  ): Promise<runtime.ApiResponse<ResponseDecidefilingworkflowtemplate>> {
+  ): Promise<runtime.ApiResponse<FilingWorkflowTemplateDecisionRead>> {
     if (requestParameters["bankId"] == null) {
       throw new runtime.RequiredError(
         "bankId",
@@ -734,18 +734,18 @@ export class RegulatoryReportingApi extends runtime.BaseAPI {
     );
 
     return new runtime.JSONApiResponse(response, (jsonValue) =>
-      ResponseDecidefilingworkflowtemplateFromJSON(jsonValue),
+      FilingWorkflowTemplateDecisionReadFromJSON(jsonValue),
     );
   }
 
   /**
-   * Approve or reject a proposed chain. Never by whoever proposed it.  The decided row comes back only when the decider may also read the chain; otherwise the answer is the write-only acknowledgement.
+   * Approve or reject a proposed chain. Never by whoever proposed it.  The write acknowledgement is always the answer; the decided row rides along in ``template`` only when the decider may also read the chain.
    * Decide Filing Workflow Template
    */
   async decideFilingWorkflowTemplate(
     requestParameters: DecideFilingWorkflowTemplateRequest,
     initOverrides?: RequestInit | runtime.InitOverrideFunction,
-  ): Promise<ResponseDecidefilingworkflowtemplate> {
+  ): Promise<FilingWorkflowTemplateDecisionRead> {
     const response = await this.decideFilingWorkflowTemplateRaw(
       requestParameters,
       initOverrides,

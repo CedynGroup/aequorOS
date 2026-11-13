@@ -32,13 +32,6 @@ import {
   FilingStageInputToJSON,
   FilingStageInputToJSONTyped,
 } from "./FilingStageInput";
-import type { FilingWorkflowTemplateWriteAcknowledgement } from "./FilingWorkflowTemplateWriteAcknowledgement";
-import {
-  FilingWorkflowTemplateWriteAcknowledgementFromJSON,
-  FilingWorkflowTemplateWriteAcknowledgementFromJSONTyped,
-  FilingWorkflowTemplateWriteAcknowledgementToJSON,
-  FilingWorkflowTemplateWriteAcknowledgementToJSONTyped,
-} from "./FilingWorkflowTemplateWriteAcknowledgement";
 import type { SubmittedAt } from "./SubmittedAt";
 import {
   SubmittedAtFromJSON,
@@ -78,101 +71,101 @@ import {
 /**
  *
  * @export
- * @interface ResponseDecidefilingworkflowtemplate
+ * @interface FilingWorkflowTemplateDecisionReadTemplate
  */
-export interface ResponseDecidefilingworkflowtemplate {
+export interface FilingWorkflowTemplateDecisionReadTemplate {
   /**
    *
    * @type {string}
-   * @memberof ResponseDecidefilingworkflowtemplate
+   * @memberof FilingWorkflowTemplateDecisionReadTemplate
    */
   bankId: string;
   /**
    *
    * @type {Date}
-   * @memberof ResponseDecidefilingworkflowtemplate
+   * @memberof FilingWorkflowTemplateDecisionReadTemplate
    */
   createdAt: Date;
   /**
    *
    * @type {DecidedAt}
-   * @memberof ResponseDecidefilingworkflowtemplate
+   * @memberof FilingWorkflowTemplateDecisionReadTemplate
    */
   decidedAt?: DecidedAt;
   /**
    *
    * @type {DecidedBy}
-   * @memberof ResponseDecidefilingworkflowtemplate
+   * @memberof FilingWorkflowTemplateDecisionReadTemplate
    */
   decidedBy?: DecidedBy;
   /**
    *
    * @type {DecisionReason}
-   * @memberof ResponseDecidefilingworkflowtemplate
+   * @memberof FilingWorkflowTemplateDecisionReadTemplate
    */
   decisionReason?: DecisionReason;
   /**
    *
    * @type {string}
-   * @memberof ResponseDecidefilingworkflowtemplate
+   * @memberof FilingWorkflowTemplateDecisionReadTemplate
    */
   id: string;
   /**
    *
    * @type {string}
-   * @memberof ResponseDecidefilingworkflowtemplate
+   * @memberof FilingWorkflowTemplateDecisionReadTemplate
    */
   proposedBy: string;
   /**
    *
    * @type {string}
-   * @memberof ResponseDecidefilingworkflowtemplate
+   * @memberof FilingWorkflowTemplateDecisionReadTemplate
    */
   reason: string;
   /**
    *
    * @type {Array<FilingStageInput>}
-   * @memberof ResponseDecidefilingworkflowtemplate
+   * @memberof FilingWorkflowTemplateDecisionReadTemplate
    */
   stages: Array<FilingStageInput>;
   /**
    *
    * @type {FilingWorkflowTemplateStatus}
-   * @memberof ResponseDecidefilingworkflowtemplate
+   * @memberof FilingWorkflowTemplateDecisionReadTemplate
    */
   status: FilingWorkflowTemplateStatus;
   /**
    *
    * @type {SubmittedAt}
-   * @memberof ResponseDecidefilingworkflowtemplate
+   * @memberof FilingWorkflowTemplateDecisionReadTemplate
    */
   submittedAt?: SubmittedAt;
   /**
    *
    * @type {SupersededAt}
-   * @memberof ResponseDecidefilingworkflowtemplate
+   * @memberof FilingWorkflowTemplateDecisionReadTemplate
    */
   supersededAt?: SupersededAt;
   /**
    *
    * @type {Date}
-   * @memberof ResponseDecidefilingworkflowtemplate
+   * @memberof FilingWorkflowTemplateDecisionReadTemplate
    */
   updatedAt: Date;
   /**
    *
    * @type {number}
-   * @memberof ResponseDecidefilingworkflowtemplate
+   * @memberof FilingWorkflowTemplateDecisionReadTemplate
    */
   version: number;
 }
 
 /**
- * Check if a given object implements the ResponseDecidefilingworkflowtemplate interface.
+ * Check if a given object implements the FilingWorkflowTemplateDecisionReadTemplate interface.
  */
-export function instanceOfResponseDecidefilingworkflowtemplate(
+export function instanceOfFilingWorkflowTemplateDecisionReadTemplate(
   value: object,
-): value is ResponseDecidefilingworkflowtemplate {
+): value is FilingWorkflowTemplateDecisionReadTemplate {
   if (!("bankId" in value) || value["bankId"] === undefined) return false;
   if (!("createdAt" in value) || value["createdAt"] === undefined) return false;
   if (!("id" in value) || value["id"] === undefined) return false;
@@ -186,16 +179,16 @@ export function instanceOfResponseDecidefilingworkflowtemplate(
   return true;
 }
 
-export function ResponseDecidefilingworkflowtemplateFromJSON(
+export function FilingWorkflowTemplateDecisionReadTemplateFromJSON(
   json: any,
-): ResponseDecidefilingworkflowtemplate {
-  return ResponseDecidefilingworkflowtemplateFromJSONTyped(json, false);
+): FilingWorkflowTemplateDecisionReadTemplate {
+  return FilingWorkflowTemplateDecisionReadTemplateFromJSONTyped(json, false);
 }
 
-export function ResponseDecidefilingworkflowtemplateFromJSONTyped(
+export function FilingWorkflowTemplateDecisionReadTemplateFromJSONTyped(
   json: any,
   ignoreDiscriminator: boolean,
-): ResponseDecidefilingworkflowtemplate {
+): FilingWorkflowTemplateDecisionReadTemplate {
   if (json == null) {
     return json;
   }
@@ -232,14 +225,14 @@ export function ResponseDecidefilingworkflowtemplateFromJSONTyped(
   };
 }
 
-export function ResponseDecidefilingworkflowtemplateToJSON(
+export function FilingWorkflowTemplateDecisionReadTemplateToJSON(
   json: any,
-): ResponseDecidefilingworkflowtemplate {
-  return ResponseDecidefilingworkflowtemplateToJSONTyped(json, false);
+): FilingWorkflowTemplateDecisionReadTemplate {
+  return FilingWorkflowTemplateDecisionReadTemplateToJSONTyped(json, false);
 }
 
-export function ResponseDecidefilingworkflowtemplateToJSONTyped(
-  value?: ResponseDecidefilingworkflowtemplate | null,
+export function FilingWorkflowTemplateDecisionReadTemplateToJSONTyped(
+  value?: FilingWorkflowTemplateDecisionReadTemplate | null,
   ignoreDiscriminator: boolean = false,
 ): any {
   if (value == null) {

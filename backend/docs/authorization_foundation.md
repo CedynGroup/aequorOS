@@ -849,9 +849,12 @@ last line.
 
 Write responses are write-only acknowledgements (identity, bank, version, status
 and timestamps), not the full row, so a configure-only officer cannot pivot the
-gate into a read. The decide response returns the decided row only when the
-caller also holds REG/restricted `VIEW`; without it the caller gets the same
-acknowledgement, so deciding never becomes a read ladder.
+gate into a read. The decide response is one flat schema: the acknowledgement
+fields always, and the decided row embedded under `template` only when the
+caller also holds REG/restricted `VIEW` (`null` otherwise), so deciding never
+becomes a read ladder. The flat shape is deliberate: the generated client
+decodes one schema safely, where a response union would flatten into a decoder
+that assumes the row is always present.
 
 Nothing is backfilled: an officer who maintained the chain through a scalar
 role alone loses the surface on this cutover. Enumerate affected principals

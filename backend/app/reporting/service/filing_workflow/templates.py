@@ -40,6 +40,7 @@ from app.reporting.schemas.filing_workflow import (
     FilingStageInput,
     FilingWorkflowTemplateCreate,
     FilingWorkflowTemplateDecision,
+    FilingWorkflowTemplateDecisionRead,
     FilingWorkflowTemplateListRead,
     FilingWorkflowTemplateRead,
     FilingWorkflowTemplateSubmit,
@@ -181,13 +182,13 @@ def _ack(row: FilingWorkflowTemplate) -> FilingWorkflowTemplateWriteAcknowledgem
 
 def decision_payload(
     db: Session, ctx: TenantContext, bank: Bank, row: FilingWorkflowTemplate
-) -> FilingWorkflowTemplateRead | FilingWorkflowTemplateWriteAcknowledgement:
-    """The decided row for a decider who may read the chain; otherwise the ack.
+) -> FilingWorkflowTemplateDecisionRead:
+    """The write evidence of the decision, plus the row for a decider who may read it.
 
     Approval authority and read authority are separate sentences. Today's
-    approver bundle carries both, so a decided row is the ordinary answer; a
-    future approval authority without view falls back to the write-only
-    acknowledgement rather than borrowing read access.
+    approver bundle carries both, so the decided row rides along on the
+    response; a future approval authority without view receives the write-only
+    acknowledgement alone rather than borrowing read access.
     """
     decision = evaluate_bank_permission(
         db,
@@ -198,9 +199,17 @@ def decision_payload(
         sensitivity=Sensitivity.RESTRICTED,
         surface="filing_template_decision_read",
     )
-    if decision is not None and decision.allowed:
-        return _read(row)
-    return _ack(row)
+    readable = decision is not None and decision.allowed
+    return FilingWorkflowTemplateDecisionRead(
+        id=row.id,
+        bank_id=row.bank_id,
+        version=row.version,
+        status=row.status,  # pyright: ignore[reportArgumentType]
+        created_at=row.created_at,
+        updated_at=row.updated_at,
+        submitted_at=row.submitted_at,
+        template=_read(row) if readable else None,
+    )
 
 
 def list_templates(db: Session, ctx: TenantContext, bank_id: str) -> FilingWorkflowTemplateListRead:
@@ -379,7 +388,7 @@ def decide_template(
     bank_id: str,
     template_id: UUID,
     payload: FilingWorkflowTemplateDecision,
-) -> FilingWorkflowTemplateRead | FilingWorkflowTemplateWriteAcknowledgement:
+) -> FilingWorkflowTemplateDecisionRead:
     bank = _decide_access(db, ctx, bank_id, template_id)
     row = _open_or_404(db, ctx, bank, template_id)
     if row.status != "pending_approval":

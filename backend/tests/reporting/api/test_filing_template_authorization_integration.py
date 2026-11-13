@@ -364,9 +364,10 @@ def test_decide_allowed_for_a_different_officer_with_exact_approve(
     )
     assert decided.status_code == 200, decided.text
     body = decided.json()
-    # The decider holds restricted view, so the decided row comes back.
+    # The decider holds restricted view, so the decided row rides along.
     assert body["status"] == "approved"
-    assert body["decided_by"] == str(CHECKER_ID)
+    assert body["template"] is not None
+    assert body["template"]["decided_by"] == str(CHECKER_ID)
     with get_sessionmaker()() as db:
         row = db.get(FilingWorkflowTemplate, template_id)
         assert row is not None
@@ -495,7 +496,7 @@ def test_decided_row_requires_view_otherwise_acknowledgement(
         json={"decision": "approved", "reason": "Approved with view authority."},
     )
     assert allowed.status_code == 200, allowed.text
-    assert "proposed_by" in allowed.json()
+    assert allowed.json()["template"] is not None
 
     second_id = _pending_chain(db_client, configured)
 
@@ -526,9 +527,10 @@ def test_decided_row_requires_view_otherwise_acknowledgement(
         monkeypatch.undo()
     assert acked.status_code == 200, acked.text
     body = acked.json()
-    assert set(body) == ACK_FIELDS
+    assert set(body) == ACK_FIELDS | {"template"}
     assert body["status"] == "approved"
-    assert "proposed_by" not in body and "stages" not in body and "reason" not in body
+    # Write-only: the stored chain (stages, proposer, reason) is never echoed.
+    assert body["template"] is None
 
 
 def test_database_check_forbids_self_approval(db_client: TestClient) -> None:
