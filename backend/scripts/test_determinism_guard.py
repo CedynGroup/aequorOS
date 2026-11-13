@@ -230,12 +230,18 @@ class ClockVisitor(ast.NodeVisitor):
             self.aliases[node.name] = ""
 
     def visit_With(self, node: ast.With | ast.AsyncWith) -> None:
+        previous_frozen, previous_deferred = self.frozen, self.deferred_frozen
+        entered = False
         for item in node.items:
+            # Context managers evaluate in entry order: a later manager runs
+            # inside an earlier travel, so its expressions are already frozen.
+            if entered and not self.frozen:
+                self.frozen = True
             self.visit(item.context_expr)
             if item.optional_vars is not None:
                 self.bind(item.optional_vars, item.context_expr)
-        previous_frozen, previous_deferred = self.frozen, self.deferred_frozen
-        if any(self._enters_travel(item.context_expr) for item in node.items):
+            entered = entered or self._enters_travel(item.context_expr)
+        if entered:
             # A deterministic travel really freezes everything the block runs,
             # including bodies of functions first defined inside it.
             self.frozen = True
@@ -265,7 +271,9 @@ class ClockVisitor(ast.NodeVisitor):
         self.functions.append((node, self.child_table(node, "lambda"), self.enclosing, frozen))
 
     def visit_ClassDef(self, node: ast.ClassDef) -> None:
-        own = self._decorator_freezes(node.decorator_list)
+        own = self._decorator_freezes(node.decorator_list) or any(
+            self._pytestmark_statement(statement) for statement in node.body
+        )
         for expression in [*node.decorator_list, *node.bases, *node.keywords]:
             self.visit(expression)
         previous_table, previous_aliases = self.table, self.aliases
@@ -321,6 +329,25 @@ class ClockVisitor(ast.NodeVisitor):
             for decorator in decorators
         )
 
+    def _pytestmark_statement(self, statement: ast.stmt) -> bool:
+        """Whether the statement assigns a freeze marker to ``pytestmark``.
+
+        Markers govern test execution regardless of where they appear, so a
+        scope's ``pytestmark`` is resolved before its functions are recorded,
+        not only when the assignment is visited.
+        """
+        if isinstance(statement, ast.Assign):
+            targets, value = statement.targets, statement.value
+        elif isinstance(statement, ast.AnnAssign):
+            targets, value = [statement.target], statement.value
+        else:
+            return False
+        return (
+            any(isinstance(target, ast.Name) and target.id == "pytestmark" for target in targets)
+            and value is not None
+            and self._carries_freeze_marker(value)
+        )
+
     def _carries_freeze_marker(self, value: ast.expr) -> bool:
         if isinstance(value, (ast.List, ast.Tuple, ast.Set)):
             return any(
@@ -360,6 +387,14 @@ class ClockVisitor(ast.NodeVisitor):
         return non_none_destination and ticks_false
 
     def scan(self, tree: ast.Module) -> list[tuple[str, int]]:
+        # Resolve module markers before the main pass so a ``pytestmark``
+        # declared after the test functions still covers them; imports come
+        # first so the marker expressions resolve through the alias map.
+        for statement in tree.body:
+            if isinstance(statement, (ast.Import, ast.ImportFrom)):
+                self.visit(statement)
+        if any(self._pytestmark_statement(statement) for statement in tree.body):
+            self.deferred_frozen = True
         self.visit(tree)
         for node, table, enclosing, frozen in self.functions:
             self.table = table
