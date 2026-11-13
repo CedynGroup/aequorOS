@@ -94,8 +94,10 @@ Legacy diagnostic allowances may only shrink.
 
 ### Lint baselines
 
-`mise run risk-service:lint` is two steps: `ruff check .`, then the count ratchet
-(`backend/scripts/lint_baseline.py check` against `backend/scripts/lint_baseline.json`).
+`mise run risk-service:lint` is three steps: `ruff check .`, the count ratchet
+(`backend/scripts/lint_baseline.py check` against `backend/scripts/lint_baseline.json`),
+and the determinism guard (`backend/scripts/test_determinism_guard.py` against
+`backend/tests/architecture/test_determinism_allowlist.json`).
 
 - **Zero-violation rules live in the main select.** `ASYNC`, the pytest-hygiene codes
   (`PT010`, `PT015`, `PT016`, `PT027`, `PT030`, `PT031`), `RUF006`, `S108`, `DTZ` and the
@@ -125,6 +127,47 @@ Legacy diagnostic allowances may only shrink.
 - Deliberate-naive values (a test that must feed a naive timestamp) are built with
   `datetime.fromisoformat(...)`; deliberate temp paths in rejection tests come from `tmp_path`
   or `tempfile.gettempdir()`, never a hardcoded `/tmp` literal.
+
+#### Clock determinism in tests (`AQPY`)
+
+Tests read the wall clock only through a frozen clock — an unfrozen read turns
+any assertion about timestamps into a date-boundary flake. The custom codes are
+not Ruff plugins; Ruff knows the prefix through `external = ["AQPY"]` in
+`backend/pyproject.toml` (so `noqa: AQPY001` parses and RUF100 stays silent),
+and both codes are enforced by `backend/scripts/test_determinism_guard.py`, the
+third step of `mise run risk-service:lint`:
+
+- **AQPY001** flags wall-clock reads — `datetime.now/utcnow/today`,
+  `date.today`, `time.time`, and the platform helpers
+  `app.db.base.utc_now` / `app.attestation.service.api.utc_now`, however they
+  are imported or rebound — anywhere under `backend/tests/`, including
+  fixtures, `tests/support` and module-level reads. A read is accepted when the
+  clock is frozen:
+  - `@pytest.mark.freeze_time("<ISO-8601 UTC>")` on the test function or class,
+    or in the module `pytestmark` (`backend/scripts/freeze_clock_plugin.py`,
+    loaded for every suite through `addopts`; the marker freezes setup, call
+    and teardown, and a marker without an instant fails the test);
+  - inside `with time_machine.travel(...)` for the body of that `with`;
+  - in a function or fixture that takes the `frozen_clock` fixture, which
+    freezes at `2026-01-01T00:00:00+00:00` (or at the marker's instant when the
+    test also carries the marker) and yields the `time_machine.Traveller` so
+    the test can `traveller.move_to(...)`.
+  Both freeze at a fixed instant (`tick=False`). `time.monotonic` and
+  `time.perf_counter` measure elapsed time, not the calendar; they keep running
+  under a frozen wall clock and are never flagged.
+- **AQPY000** flags a `# noqa: AQPY001` or `# noqa: TID251` comment that does
+  not carry the reason-and-issue tail `- <reason> (#<issue>)` — a suppression
+  must say why it exists and track its issue. The check is tokenize-based, so
+  the same text inside a docstring or a test fixture string is not a comment
+  and is not flagged.
+- **Existing reads are baselined, not rewritten.** Current unfrozen reads live
+  in `backend/tests/architecture/test_determinism_allowlist.json`
+  (`{path: {rule: count}}`), a shrink-only ratchet with the same contract as
+  the lint ratchet: growth fails, a count below the baseline fails as stale
+  until it is lowered, `--strict` rejects even allowlisted reads, and
+  `tests/architecture/test_test_determinism_guard.py` pins the snippets, the
+  baseline behaviour and the task wiring. New test code freezes the clock
+  instead of adding baseline entries.
 
 ### Data truth in calculations
 
