@@ -345,10 +345,10 @@ def _assert_configure_cutover(db: Session, owner: User, analyst: User) -> None:
         "credit-thresholds": "bank_credit_threshold",
         # The filing review-chain template writes (propose, update, submit and
         # the approve/reject decision) each store one template version row.
-        "filing-workflow-templates": "filing_workflow_template",
-        "{template_id}": "filing_workflow_template",
-        "submit": "filing_workflow_template",
-        "decision": "filing_workflow_template",
+        "filing-workflow-templates": "filing_workflow_templates",
+        "{template_id}": "filing_workflow_templates",
+        "submit": "filing_workflow_templates",
+        "decision": "filing_workflow_templates",
     }
     for row in before.impacts:
         if row.path.rsplit("/", 1)[-1] in local_routes:

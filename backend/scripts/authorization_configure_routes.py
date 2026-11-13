@@ -115,7 +115,7 @@ CONFIGURE_ROUTES: tuple[ConfigureRoute, ...] = (
         Module.REGULATORY,
         "analyst",
         effect_scope="bank_local",
-        storage_table="filing_workflow_template",
+        storage_table="filing_workflow_templates",
         permission=Permission.CONFIGURE,
     ),
     ConfigureRoute(
@@ -124,7 +124,7 @@ CONFIGURE_ROUTES: tuple[ConfigureRoute, ...] = (
         Module.REGULATORY,
         "analyst",
         effect_scope="bank_local",
-        storage_table="filing_workflow_template",
+        storage_table="filing_workflow_templates",
         permission=Permission.CONFIGURE,
     ),
     ConfigureRoute(
@@ -133,7 +133,7 @@ CONFIGURE_ROUTES: tuple[ConfigureRoute, ...] = (
         Module.REGULATORY,
         "analyst",
         effect_scope="bank_local",
-        storage_table="filing_workflow_template",
+        storage_table="filing_workflow_templates",
         permission=Permission.CONFIGURE,
     ),
     ConfigureRoute(
@@ -142,7 +142,7 @@ CONFIGURE_ROUTES: tuple[ConfigureRoute, ...] = (
         Module.REGULATORY,
         "approver",
         effect_scope="bank_local",
-        storage_table="filing_workflow_template",
+        storage_table="filing_workflow_templates",
         permission=Permission.APPROVE,
     ),
     ConfigureRoute(
