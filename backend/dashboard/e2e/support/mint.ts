@@ -262,6 +262,10 @@ export async function mintSessionCookie(
       email: e2eEmail(role),
       accessToken,
       refreshToken: accessToken,
+      // Session credentials are the one deliberate wall-clock input: the
+      // backend validates the embedded token's exp against its own clock, so
+      // the window must be anchored to the moment of minting.
+      // oxlint-disable-next-line acts/require-frozen-time -- a minted session's exp is wall-clock data, not a timing source (#905)
       accessTokenExpires: Date.now() + 2 * 60 * 60 * 1000,
       organizationId: user.organizationId ?? E2E_ORG_ID,
       roles: user.roles,
@@ -289,6 +293,9 @@ export async function writeStorageState(
         value: cookie,
         domain: hostname,
         path: "/",
+        // Same deliberate wall-clock input as accessTokenExpires above: a real
+        // cookie's browser expiry, anchored to the moment of minting.
+        // oxlint-disable-next-line acts/require-frozen-time -- a minted session's browser expiry is wall-clock data, not a timing source (#905)
         expires: Math.floor(Date.now() / 1000) + 2 * 60 * 60,
         httpOnly: true,
         secure: false,

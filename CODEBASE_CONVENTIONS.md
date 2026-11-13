@@ -480,6 +480,42 @@ screen, regulatory-copy, arithmetic, and local-development rules live in
 - Validate with `pnpm --filter @aequoros/dashboard typecheck`, `lint`, `test`,
   and `build`; run the package's Playwright suite for end-to-end changes.
 
+### Test lint rules (oxlint, ACTS001–003)
+
+Both UI packages' `lint` script runs `oxlint . && eslint .`. oxlint carries the
+test-hygiene rules: the `acts/*` rules from `packages/oxlint-plugins`
+(ACTS001–003), `vitest/no-focused-tests`, and, for Playwright specs,
+`eslint-plugin-playwright`'s no-wait-for-timeout / no-networkidle /
+no-focused-test. They are enabled only through each package's
+`.oxlintrc.json` overrides on the test globs (`tests/**/*.spec.{ts,tsx}`,
+`tests/**/*.test.ts`, `tests/**/*.e2e.spec.ts`, `e2e/**`); all default oxlint
+categories are off, so unrelated rules stay ESLint's business. ESLint keeps the
+Next.js rules and the feature-boundary `no-restricted-imports` pattern
+(oxlint's regex support lacks lookahead, which the boundary pattern needs).
+
+- **ACTS001 `acts/require-frozen-time`** — an argless `Date.now()` / `new
+  Date()` in test code must run against a frozen clock: `vi.useFakeTimers({
+  toFake: ["Date"] })` + `vi.setSystemTime(...)` in Vitest,
+  `mock.timers.enable({ apis: ["Date"] })` in node:test suites, or
+  `page.clock.install()/setFixedTime(...)` in Playwright. `new Date(<args>)`
+  and pinned ISO strings are always fine.
+- **ACTS002 `acts/no-weak-test-awaits`** — never await a promise that a
+  `setTimeout` resolves; wait for an observable condition instead:
+  `vi.waitFor`/`expect.poll`, a `findBy*` query, or a locator assertion.
+- **ACTS003 `acts/prefer-e2e-stability`** — no `page.waitForTimeout()` and no
+  `waitUntil: "networkidle"` in Playwright tests; assert the condition the
+  wait was papering over (response, locator, `expect(...).toPass()`), settle
+  capture-style waits on a locator assertion, and shift time with
+  `page.clock` instead of sleeping through staleness windows.
+- **Focused tests are banned** in both stacks (`test.only` / `describe.only` /
+  `fit` / `fdescribe`).
+
+Intentional exceptions exist only where the wall clock is the data under test
+(credential `iat`/`exp`, queue-expiry cutoffs); suppress with
+`// oxlint-disable-next-line acts/<rule> -- <reason> (#<issue>)` and reference
+an issue. No bulk-suppression file; fix the test instead. CI runs the lint
+through the dashboard job (`dashboard.yml`) and the console job (`web.yml`).
+
 ---
 
 ## 3. Reusable inventory

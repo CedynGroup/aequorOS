@@ -14,6 +14,7 @@ import {
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { E2E_API_ORIGIN, E2E_BASE_URL, E2E_TMP } from "../../playwright.config";
+import { e2eRunDate } from "./run-date";
 import {
   E2E_AUTH_SECRET,
   E2E_ORG_ID,
@@ -161,7 +162,7 @@ book.save(sys.argv[1])
     const accepted = (await post(bank, "/ingestion-batches", {
       source_system: "EXCEL_CSV",
       mapping_config_id: mapping.id,
-      as_of_date: new Date().toISOString().slice(0, 10),
+      as_of_date: e2eRunDate(),
       location: upload.location,
       reason: "Accept the synthetic branch register through Data Engine",
     })) as { batch: { status: string; records_accepted: number } };

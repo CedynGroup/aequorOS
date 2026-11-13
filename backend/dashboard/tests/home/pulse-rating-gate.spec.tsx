@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import "@testing-library/jest-dom/vitest";
 import { afterAll, afterEach, beforeAll, expect, it, vi } from "vitest";
-import { cleanup, render, screen, waitFor, act } from "@testing-library/react";
+import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { http, HttpResponse } from "msw";
 import { setupServer } from "msw/node";
@@ -173,14 +173,11 @@ function renderWall() {
 const snapshotCalls = (module: string) =>
   snapshotRequests.filter((requested) => requested === module).length;
 
-/** Waits until the wall has rendered the rating card, then lets the query
- * microtask queue drain so a zero request count is a settled fact, not a
- * race. */
+/** Waits until the wall has rendered the rating card: the gate decision and
+ * any ladder request it admits fire synchronously with the mount, so the
+ * rendered card is the settled fact the zero request count asserts against. */
 async function awaitRatingCard() {
   await screen.findByRole("link", { name: "Credit Assessment — open module" });
-  await act(async () => {
-    await new Promise((resolve) => setTimeout(resolve, 100));
-  });
 }
 
 beforeAll(() => server.listen({ onUnhandledRequest: "error" }));
@@ -227,9 +224,6 @@ it("keeps gating the liquidity ladder on its aggregated view", async () => {
   // Without the aggregated view the wall hides the card entirely and raises
   // no ladder request.
   await screen.findByText(/regulatory engines/);
-  await act(async () => {
-    await new Promise((resolve) => setTimeout(resolve, 100));
-  });
   expect(
     screen.queryByRole("link", { name: "Liquidity — open module" }),
   ).toBeNull();

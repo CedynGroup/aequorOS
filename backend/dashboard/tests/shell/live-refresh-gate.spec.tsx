@@ -74,6 +74,11 @@ beforeAll(() => {
   setAccessToken("test-token");
 });
 beforeEach(() => {
+  // The Header derives staleness from the gap between the current instant and
+  // computed_at; freeze the clock so the fixture is an exact offset, not a
+  // moving one.
+  vi.useFakeTimers({ toFake: ["Date"] });
+  vi.setSystemTime(new Date("2026-10-01T12:00:00Z"));
   client = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
@@ -83,7 +88,7 @@ beforeEach(() => {
     organizationModules: new Set(),
     hasInstitutionAuthority: true,
   };
-  const aged = new Date(Date.now() - 3 * 60 * 60 * 1000).toISOString();
+  const aged = new Date("2026-10-01T09:00:00Z").toISOString();
   server.use(
     http.get(`${base}/live-summary`, () =>
       HttpResponse.json({
@@ -124,6 +129,7 @@ beforeEach(() => {
   );
 });
 afterEach(() => {
+  vi.useRealTimers();
   cleanup();
   client.clear();
   server.resetHandlers();

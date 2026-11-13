@@ -1,0 +1,40 @@
+{
+  "$schema": "https://oxc.rs/oxlint/schema.json",
+  "plugins": ["vitest"],
+  "jsPlugins": [
+    "@aequoros/oxlint-plugins/index.js",
+    "eslint-plugin-playwright"
+  ],
+  "categories": {
+    "correctness": "off"
+  },
+  "overrides": [
+    {
+      "files": ["tests/**/*.spec.{ts,tsx}"],
+      "rules": {
+        "acts/require-frozen-time": "error",
+        "acts/no-weak-test-awaits": "error",
+        "vitest/no-focused-tests": "error"
+      }
+    },
+    {
+      "files": ["tests/**/*.test.ts"],
+      "rules": {
+        "acts/require-frozen-time": "error",
+        "acts/no-weak-test-awaits": "error"
+      }
+    },
+    {
+      "files": ["tests/**/*.e2e.spec.ts", "e2e/**/*.ts"],
+      "rules": {
+        "acts/require-frozen-time": "error",
+        "acts/no-weak-test-awaits": "error",
+        "acts/prefer-e2e-stability": "error",
+        "playwright/no-wait-for-timeout": "error",
+        "playwright/no-networkidle": "error",
+        "playwright/no-focused-test": "error",
+        "vitest/no-focused-tests": "off"
+      }
+    }
+  ]
+}

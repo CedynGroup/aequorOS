@@ -2,8 +2,7 @@ name: Web CI
 
 # Gate inventory:
 #   frontend — ESLint and production build.
-#   console  — typecheck, unit tests, and production build.
-# Console lint is available locally but is not a step in this workflow.
+#   console  — lint, typecheck, unit tests, and production build.
 # Both jobs are BLOCKING. The `Rerun summary` job is the exception:
 # visibility-only with `continue-on-error`, it never blocks.
 
@@ -88,6 +87,8 @@ jobs:
       - run: corepack enable
       - name: Install workspace dependencies
         run: pnpm install --frozen-lockfile
+      - name: Lint console
+        run: pnpm --filter @aequoros/console lint
       - name: Typecheck console
         run: pnpm --filter @aequoros/console typecheck
       - name: Test console

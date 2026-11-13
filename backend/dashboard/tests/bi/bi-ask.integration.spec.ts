@@ -60,6 +60,9 @@ test.describe("bi-ask HTTP contracts", () => {
           payload: { question: QUESTION },
           offered_member_ids: ["loans.balance_rc"],
         }),
+        // The seeded job must read as "just queued" against the backend's
+        // AI_QUEUE_EXPIRY_SECONDS cutoff, so queued_at is live wall-clock data.
+        // oxlint-disable-next-line acts/require-frozen-time -- queued_at must read as freshly queued against the backend's expiry cutoff (#905)
         new Date().toISOString(),
       );
       const route = `/banks/${SAMPLE_BANK_ID}/bi/ask/${id}`;

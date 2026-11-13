@@ -22,9 +22,12 @@ async function signIn(
 ): Promise<void> {
   let submitted = false;
   for (let attempt = 0; attempt < 2 && !submitted; attempt += 1) {
-    await page.waitForLoadState("networkidle");
     const email = page.getByLabel("Email");
     const password = page.getByLabel("Password");
+    // The form is the readiness signal: its fields become editable once the
+    // login page's own reads have rendered it.
+    await expect(email).toBeEditable();
+    await expect(password).toBeEditable();
     await email.fill(`e2e.${role}@aequoros.example`);
     await password.fill(E2E_PASSWORD);
     await expect(email).toHaveValue(`e2e.${role}@aequoros.example`);
@@ -162,7 +165,6 @@ test.describe("session cookie hygiene", () => {
     );
     await expect(page).toHaveURL(/\/login$/);
     expect(new URL(page.url()).hostname).toBe("127.0.0.1");
-    await page.waitForLoadState("networkidle");
 
     await signIn(page, "approver");
     await expectIdentity(page, "approver");
@@ -176,7 +178,9 @@ test.describe("session cookie hygiene", () => {
     page,
   }) => {
     await page.goto("/login");
-    await page.waitForLoadState("networkidle");
+    // The editable form is the readiness signal for the login page.
+    await expect(page.getByLabel("Email")).toBeEditable();
+    await expect(page.getByLabel("Password")).toBeEditable();
     await page.getByLabel("Email").fill("e2e.analyst@aequoros.example");
     await page.getByLabel("Password").fill("wrong-password");
     await page.getByRole("button", { name: "Sign in", exact: true }).click();

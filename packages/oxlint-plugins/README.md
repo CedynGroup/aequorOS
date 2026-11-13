@@ -49,6 +49,9 @@ A read is accepted when any of these runs before it:
 - `vi.useFakeTimers()` / `vi.setSystemTime()` (jest equivalents too) inside the
   same test, or inside a `beforeEach`/`beforeAll` enclosing it — including a
   top-level hook, which freezes the whole file;
+- node:test's timer mock `mock.timers.enable(...)` (as `t.mock.timers.enable`)
+  in the same test or an enclosing hook, when the mocked apis include `Date`
+  (the default does; an explicit `apis` list without `Date` does not);
 - `page.clock.install()` / `page.clock.setFixedTime()` (Playwright, any
   `*.clock` receiver) in the same places.
 

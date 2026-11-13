@@ -13,6 +13,7 @@ import { writeFile } from "node:fs/promises";
 import path from "path";
 import { E2E_TMP } from "../../playwright.config";
 import { requireObjectStorage } from "../../e2e/support/object-storage";
+import { e2eRunDate } from "../../e2e/support/run-date";
 
 const evidenceDir = process.env.E2E_EVIDENCE_DIR;
 const BACKEND_DIR = path.join(__dirname, "..", "..", "..");
@@ -303,7 +304,9 @@ test.describe("Markets confidential reader", () => {
     expect(overlays.length).toBeGreaterThan(0);
     await expectBankStatus(`/market-data/overlays/${overlays[0].id}/end`, 403, {
       method: "POST",
-      data: { effective_to: new Date().toISOString().slice(0, 10) },
+      // The run's pinned anchor date: the request is refused on authority and
+      // the body must stay deterministic across runs.
+      data: { effective_to: e2eRunDate() },
     });
     await expectBankStatus("/market-data/overlays", 403, {
       method: "POST",
