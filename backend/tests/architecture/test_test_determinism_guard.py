@@ -97,6 +97,27 @@ FROZEN_READS = [
     f"    with time_machine.travel({INSTANT}, tick=False):\n"
     "        return lambda: datetime.now()\n",
     "import time\ndef test_shadowed_time():\n    time = load_time()\n    return time.time()\n",
+    # Declaration order does not matter: the marker covers functions and
+    # methods regardless of where pytestmark appears.
+    "from app.db.base import utc_now\n"
+    "import pytest\n"
+    "def test_declared_before_the_marker():\n"
+    "    utc_now()\n"
+    f"pytestmark = pytest.mark.freeze_time({INSTANT})\n",
+    "import pytest\n"
+    "from datetime import datetime\n"
+    "class Late:\n"
+    "    def test_method(self):\n"
+    "        datetime.now()\n"
+    f"    pytestmark = pytest.mark.freeze_time({INSTANT})\n",
+    # Context managers evaluate in entry order: an expression passed to a
+    # later manager runs inside the earlier travel.
+    "from contextlib import nullcontext\n"
+    "import time_machine\n"
+    "from datetime import datetime\n"
+    "def test_manager_order():\n"
+    "    with time_machine.travel(DESTINATION, tick=False), nullcontext(datetime.now()):\n"
+    "        pass\n",
 ]
 
 
