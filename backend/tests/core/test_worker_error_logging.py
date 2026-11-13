@@ -45,10 +45,67 @@ def configure_stderr_logging(monkeypatch: pytest.MonkeyPatch) -> Iterator[Callab
         logger.configure(patcher=None)
 
 
+_LOGURU_HEADER_TIME = re.compile(r"^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}\.\d+ \| ")
+_LOGURU_CLOCK_KEYS = ("time", "elapsed")
+
+
+def _scannable(line: str) -> str:
+    """Return the line's scan target with loguru's own clock metadata removed.
+
+    The privacy property covers application content. Loguru's serialized
+    envelope always carries clock fields the application does not control —
+    ``record["elapsed"]`` is the process uptime (Risk Service CI run
+    42942245063 rendered ``"0:03:13.751519"``, whose ``13.75`` coincided with
+    the synthetic rate) — and ``record["time"]`` plus the rendered ``text``
+    header embed the wall-clock timestamp. Any digit pattern can occur in
+    those fields, so they are excluded from the scan while everything else
+    (message, extra, exception, file, process/thread identity) stays scanned.
+    """
+    try:
+        payload = cast(dict[str, object], json.loads(line))
+    except json.JSONDecodeError:
+        return _LOGURU_HEADER_TIME.sub("", line, count=1)
+    record = payload.get("record")
+    if isinstance(record, dict):
+        for key in _LOGURU_CLOCK_KEYS:
+            record.pop(key, None)
+    text = payload.get("text")
+    if isinstance(text, str):
+        payload["text"] = _LOGURU_HEADER_TIME.sub("", text, count=1)
+    return json.dumps(payload)
+
+
 def _assert_private(output: str) -> None:
+    scanned = "\n".join(_scannable(line) for line in output.splitlines())
     for secret in ("Jane Private", "123456789012", "9876543.21", "13.75", str(_JOB_ID)):
-        assert secret not in output
-    assert re.search(r"\b\d{12}\b", output) is None
+        assert secret not in scanned
+    assert re.search(r"\b\d{12}\b", scanned) is None
+
+
+def _loguru_envelope(message: str) -> str:
+    """A serialized loguru line whose clock metadata embeds the digit pattern
+    that collided in Risk Service CI run 42942245063 (``0:03:13.751519``)."""
+    return json.dumps(
+        {
+            "text": f"2026-11-11 13:45:13.751 | ERROR    | app.worker:run_once:12 - {message}\n",
+            "record": {
+                "elapsed": {"repr": "0:03:13.751519", "seconds": 193.751519},
+                "exception": None,
+                "extra": {"error_code": "unexpected_error", "tenant_id": _TENANT_ID},
+                "message": message,
+                "time": {"repr": "2026-11-11 13:45:13.751519+00:00", "timestamp": 1.0},
+            },
+        }
+    )
+
+
+def test_assert_private_ignores_loguru_clock_metadata_containing_secret_digits() -> None:
+    assert _assert_private(_loguru_envelope("Unexpected application error")) is None
+
+
+def test_assert_private_still_rejects_customer_data_in_log_content() -> None:
+    with pytest.raises(AssertionError):
+        _assert_private(_loguru_envelope(_CUSTOMER_DATA))
 
 
 @dataclass
