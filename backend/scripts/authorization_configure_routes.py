@@ -10,7 +10,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Literal
 
-from app.core.authorization import InstitutionScope, Module
+from app.core.authorization import InstitutionScope, Module, Permission
 
 Baseline = Literal["analyst", "approver", "org_owner"]
 
@@ -24,6 +24,10 @@ class ConfigureRoute:
     institution_scope: InstitutionScope = InstitutionScope.INSTITUTION
     effect_scope: Literal["bank_local"] | None = None
     storage_table: str | None = None
+    #: The permission the cutover demands. Configuration duties take CONFIGURE;
+    #  a cutover that moved an approval or a read onto scoped authority names its
+    #  own verb so the projected eligibility matches the runtime gate.
+    permission: Permission = Permission.CONFIGURE
 
 
 _BANK = "/api/v1/banks/{bank_id}"
@@ -101,6 +105,46 @@ CONFIGURE_ROUTES: tuple[ConfigureRoute, ...] = (
         "PUT", f"{_BANK}/regulatory-reporting/channel-configs/{{channel}}", Module.REGULATORY
     ),
     ConfigureRoute("PUT", f"{_BANK}/regulatory-reporting/settings", Module.REGULATORY),
+    # The filing review-chain templates: proposing, editing and submitting the
+    # bank's chain are configuration duties; deciding one is the approval duty
+    # the maker-checker condition governs. All four moved off the scalar
+    # mutation/approval dependencies onto the exact REG sentence.
+    ConfigureRoute(
+        "POST",
+        f"{_BANK}/filing-workflow-templates",
+        Module.REGULATORY,
+        "analyst",
+        effect_scope="bank_local",
+        storage_table="filing_workflow_template",
+        permission=Permission.CONFIGURE,
+    ),
+    ConfigureRoute(
+        "PATCH",
+        f"{_BANK}/filing-workflow-templates/{{template_id}}",
+        Module.REGULATORY,
+        "analyst",
+        effect_scope="bank_local",
+        storage_table="filing_workflow_template",
+        permission=Permission.CONFIGURE,
+    ),
+    ConfigureRoute(
+        "POST",
+        f"{_BANK}/filing-workflow-templates/{{template_id}}/submit",
+        Module.REGULATORY,
+        "analyst",
+        effect_scope="bank_local",
+        storage_table="filing_workflow_template",
+        permission=Permission.CONFIGURE,
+    ),
+    ConfigureRoute(
+        "POST",
+        f"{_BANK}/filing-workflow-templates/{{template_id}}/decision",
+        Module.REGULATORY,
+        "approver",
+        effect_scope="bank_local",
+        storage_table="filing_workflow_template",
+        permission=Permission.APPROVE,
+    ),
     ConfigureRoute(
         "PUT",
         "/api/v1/attestation/signing-policies",

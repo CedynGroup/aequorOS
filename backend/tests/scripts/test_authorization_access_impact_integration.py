@@ -291,8 +291,8 @@ def test_report_flags_users_the_dashboard_would_show_nothing(
 def _assert_configure_cutover(db: Session, owner: User, analyst: User) -> None:
     """The same cutover inventory must include machines and never infer grants."""
     before = build_configure_report(db, organization_id=ORG)
-    assert len(CONFIGURE_ROUTES) == 32
-    assert len({(route.method, route.path) for route in CONFIGURE_ROUTES}) == 32
+    assert len(CONFIGURE_ROUTES) == 36
+    assert len({(route.method, route.path) for route in CONFIGURE_ROUTES}) == 36
     mounted = {
         (method, route.path)
         for route in app.routes
@@ -343,6 +343,12 @@ def _assert_configure_cutover(db: Session, owner: User, analyst: User) -> None:
         "crm-haircuts": "bank_crm_haircut",
         "concentration-limits": "bank_concentration_limit",
         "credit-thresholds": "bank_credit_threshold",
+        # The filing review-chain template writes (propose, update, submit and
+        # the approve/reject decision) each store one template version row.
+        "filing-workflow-templates": "filing_workflow_template",
+        "{template_id}": "filing_workflow_template",
+        "submit": "filing_workflow_template",
+        "decision": "filing_workflow_template",
     }
     for row in before.impacts:
         if row.path.rsplit("/", 1)[-1] in local_routes:
