@@ -49,7 +49,7 @@ from app.ftp.schemas import FtpScenarioBatchCreate
 from app.fx import service as regulatory_fx
 from app.fx.schemas import FxScenarioBatchCreate
 from app.identity import public as scoped_authorization
-from app.identity.public import Bank
+from app.identity.public import Bank, get_bank_or_404
 from app.irrbb.schemas.regulatory_irr import IrrScenarioBatchCreate
 from app.irrbb.service import regulatory_irr
 from app.liquidity.schemas.regulatory_liquidity import LiquidityScenarioBatchCreate
@@ -186,7 +186,7 @@ def run_official_modules(
     activation.
     """
     runs = _run_all_modules(db, ctx, bank_id, period_id)
-    bank = _get_bank_or_404(db, ctx, bank_id)
+    bank = get_bank_or_404(db, ctx, bank_id)
     if module_scope.runs_module(db, bank, "implied_rating"):
         runs.append(_implied_rating_outcome(db, ctx, bank_id, period_id))
     return runs
@@ -200,7 +200,7 @@ def official_module_scope(
     Read-only. Lets the caller record WHY a run carries fewer modules than the
     full set instead of leaving the omission silent.
     """
-    bank = _get_bank_or_404(db, ctx, bank_id)
+    bank = get_bank_or_404(db, ctx, bank_id)
     every = (*OFFICIAL_MODULES, "implied_rating")
     in_scope = [m for m in every if module_scope.runs_module(db, bank, m)]
     return in_scope, [m for m in every if m not in in_scope]
@@ -301,7 +301,7 @@ def _run_all_modules(
     # be generated — which read as a broken tenant rather than as modules that
     # do not apply to it. Out-of-regime modules are OMITTED, exactly as the live
     # tier omits them, and named on the audit event by ``pipeline.run_official``.
-    bank = _get_bank_or_404(db, ctx, bank_id)
+    bank = get_bank_or_404(db, ctx, bank_id)
     modules = tuple(
         (module, run) for module, run in modules if module_scope.runs_module(db, bank, module)
     )
@@ -439,15 +439,6 @@ def _read(
         runs=runs,
         warnings=derivation.warnings,
     )
-
-
-def _get_bank_or_404(db: Session, ctx: TenantContext, bank_id: str) -> Bank:
-    bank = db.scalar(
-        select(Bank).where(Bank.id == bank_id, Bank.organization_id == ctx.organization_id)
-    )
-    if bank is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Bank not found.")
-    return bank
 
 
 def _require_actor(ctx: TenantContext) -> None:

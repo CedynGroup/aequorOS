@@ -79,7 +79,7 @@ from app.fx.schemas import (
     FxValidationRead,
 )
 from app.identity import public as scoped_authorization
-from app.identity.public import Bank, BankRead, BankReportingPeriodRead
+from app.identity.public import Bank, BankRead, BankReportingPeriodRead, get_bank_or_404
 from app.liquidity.public import (
     RegulatoryRunBatchRead,
     RegulatoryRunRead,
@@ -228,7 +228,7 @@ def run_all_fx_scenarios(
     db: Session, ctx: TenantContext, bank_id: str, payload: FxScenarioBatchCreate
 ) -> RegulatoryRunBatchRead:
     _require_actor(ctx)
-    bank = _get_bank_or_404(db, ctx, bank_id)
+    bank = get_bank_or_404(db, ctx, bank_id)
     scoped_authorization.require_resolved_bank_permission(
         db,
         ctx,
@@ -256,7 +256,7 @@ def run_all_fx_scenarios(
 def get_fx_dashboard(
     db: Session, ctx: TenantContext, bank_id: str, reporting_period_id: UUID | None = None
 ) -> FxDashboardRead:
-    bank = _get_bank_or_404(db, ctx, bank_id)
+    bank = get_bank_or_404(db, ctx, bank_id)
     periods = _list_periods_ascending(db, ctx, bank)
     period = (
         current_fact_period_or_409(db, ctx, bank, MODULE_FX)
@@ -1704,15 +1704,6 @@ def _list_periods_ascending(
             .order_by(BankReportingPeriod.period_end)
         )
     )
-
-
-def _get_bank_or_404(db: Session, ctx: TenantContext, bank_id: str) -> Bank:
-    bank = db.scalar(
-        select(Bank).where(Bank.id == bank_id, Bank.organization_id == ctx.organization_id)
-    )
-    if bank is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Bank not found.")
-    return bank
 
 
 def _get_period_or_404(

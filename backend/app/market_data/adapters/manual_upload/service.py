@@ -14,12 +14,11 @@ from typing import TYPE_CHECKING
 from uuid import UUID, uuid4
 
 from fastapi import HTTPException, status
-from sqlalchemy import select
 
 from app.data_engine.public import IngestionBatch, stage_source
 from app.data_engine.service import ingestion
 from app.db.base import utc_now
-from app.identity.public import Bank
+from app.identity.public import get_bank_or_404
 from app.market_data.adapters.base import CredentialSet
 from app.market_data.adapters.errors import MarketDataError
 from app.market_data.adapters.manual_upload.adapter import VENDOR, ManualUploadAdapter
@@ -46,7 +45,7 @@ def upload_market_data(  # noqa: PLR0913 - one call carries the full upload cont
     as_of_date: date,
 ) -> MarketDataUploadRead:
     """Stage an uploaded template file and run it as a manual market data pull."""
-    bank = _get_bank_or_404(db, ctx, bank_id)
+    bank = get_bank_or_404(db, ctx, bank_id)
     slug = ingestion.bank_slug(db, bank)
 
     try:
@@ -92,12 +91,3 @@ def upload_market_data(  # noqa: PLR0913 - one call carries the full upload cont
         warnings=list(result.warnings),
         errors=list(result.errors),
     )
-
-
-def _get_bank_or_404(db: Session, ctx: TenantContext, bank_id: str) -> Bank:
-    bank = db.scalar(
-        select(Bank).where(Bank.id == bank_id, Bank.organization_id == ctx.organization_id)
-    )
-    if bank is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Bank not found.")
-    return bank

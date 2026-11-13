@@ -58,7 +58,7 @@ from app.data_engine.public import (
     CanonicalProduct,
     CanonicalReferenceRow,
 )
-from app.identity.public import Bank
+from app.identity.public import Bank, get_bank_or_404
 from app.irrbb.domain import IrrRunError
 from app.irrbb.domain import standardised as sf
 from app.irrbb.domain import standardised_cash_flows as sfcf
@@ -473,7 +473,7 @@ def run_standardised_framework(
 ) -> RegulatoryRunRead:
     """Mint one immutable Standardised Framework run."""
     _require_actor(ctx)
-    bank = _get_bank_or_404(db, ctx, bank_id)
+    bank = get_bank_or_404(db, ctx, bank_id)
     period = _get_period_or_404(db, ctx, bank, payload.reporting_period_id)
     # Every immutable run is filing evidence, so the balance-sheet control
     # gates this mint exactly as it gates capital, liquidity and legacy IRRBB.
@@ -494,7 +494,7 @@ def get_standardised_framework(
     resolved_bank: Bank | None = None,
 ) -> IrrbbSfRead:
     """The latest Standardised Framework result for one reporting period."""
-    bank = resolved_bank or _get_bank_or_404(db, ctx, bank_id)
+    bank = resolved_bank or get_bank_or_404(db, ctx, bank_id)
     period = _get_period_or_404(db, ctx, bank, reporting_period_id)
     run = latest_sf_run(db, ctx, bank, period)
     if run is None:
@@ -607,7 +607,7 @@ def get_standardised_framework_attempts(  # noqa: PLR0913 - the read names its f
     it" is an ANSWER, and the one a preparer most needs to tell apart from a
     refusal.
     """
-    bank = resolved_bank or _get_bank_or_404(db, ctx, bank_id)
+    bank = resolved_bank or get_bank_or_404(db, ctx, bank_id)
     period = _get_period_or_404(db, ctx, bank, reporting_period_id)
     rows = list(
         db.scalars(
@@ -2365,18 +2365,6 @@ def _require_actor(ctx: TenantContext) -> None:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED, detail="X-User-Id header is required."
         )
-
-
-def _get_bank_or_404(db: Session, ctx: TenantContext, bank_id: str) -> Bank:
-    bank = db.scalar(
-        select(Bank).where(
-            Bank.id == bank_id,
-            Bank.organization_id == ctx.organization_id,
-        )
-    )
-    if bank is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Bank not found.")
-    return bank
 
 
 def _get_period_or_404(

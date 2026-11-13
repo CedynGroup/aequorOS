@@ -14,7 +14,7 @@ from app.liquidity.schemas.regulatory_liquidity import (
 )
 from app.liquidity.service import regulatory_liquidity
 from app.liquidity.service.liquidity_cfp import get_cfp
-from app.liquidity.service.liquidity_ewi import get_bank_or_404, get_period_or_404
+from app.liquidity.service.liquidity_ewi import get_period_or_404
 from app.liquidity.service.liquidity_thresholds import BANK_MINIMUM_PCT
 from app.liquidity.service.regulatory_liquidity import (
     get_regulatory_run,
@@ -35,7 +35,6 @@ __all__ = [
     "RegulatoryRunStatus",
     "RegulatoryValidationRead",
     "RegulatoryValidationSeverity",
-    "get_bank_or_404",
     "get_cfp",
     "get_period_or_404",
     "get_regulatory_run",

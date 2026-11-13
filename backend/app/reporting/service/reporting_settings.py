@@ -15,14 +15,14 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
-from app.identity.public import Bank
+from app.identity.public import Bank, get_bank_or_404
 from app.reporting.models.packages import RegulatoryReportingSettings
 from app.reporting.schemas.packages import (
     ReportingSettingsPut,
     ReportingSettingsRead,
     ReportingSettingsWriteAcknowledgement,
 )
-from app.reporting.service.common import get_bank_or_404, require_actor
+from app.reporting.service.common import require_actor
 from app.reporting.service.configure_access import require_reporting_configure_access
 from app.services.audit import record_event
 

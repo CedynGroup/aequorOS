@@ -30,7 +30,7 @@ from fastapi import HTTPException, status
 from sqlalchemy import select
 
 from app.db.base import utc_now
-from app.identity.public import Bank, User
+from app.identity.public import User, get_bank_or_404
 from app.market_data.schemas.market_data_overlays import (
     MarketDataOverlayCreate,
     MarketDataOverlayEnd,
@@ -133,7 +133,7 @@ def list_overlays(  # noqa: PLR0913 - tenant scope + read filters are the contra
     include_history: bool = False,
     base_curve_name: str | None = None,
 ) -> MarketDataOverlayListRead:
-    _get_bank_or_404(db, ctx, bank_id)
+    get_bank_or_404(db, ctx, bank_id)
     query = select(MarketDataOverlay).where(
         MarketDataOverlay.organization_id == ctx.organization_id,
         MarketDataOverlay.bank_id == bank_id,
@@ -156,7 +156,7 @@ def create_overlay(
     bank_id: str,
     payload: MarketDataOverlayCreate,
 ) -> MarketDataOverlayRead:
-    _get_bank_or_404(db, ctx, bank_id)
+    get_bank_or_404(db, ctx, bank_id)
     _validate_shape(payload)
 
     superseded: MarketDataOverlay | None = None
@@ -217,7 +217,7 @@ def end_overlay(
     overlay_id: UUID,
     payload: MarketDataOverlayEnd,
 ) -> MarketDataOverlayRead:
-    _get_bank_or_404(db, ctx, bank_id)
+    get_bank_or_404(db, ctx, bank_id)
     overlay = _get_overlay_or_404(db, ctx, bank_id, overlay_id)
     if overlay.superseded_by is not None:
         raise HTTPException(
@@ -315,15 +315,6 @@ def _emails_by_user_id(
         )
     ).all()
     return {user_id: email for user_id, email in pairs}
-
-
-def _get_bank_or_404(db: Session, ctx: TenantContext, bank_id: str) -> Bank:
-    bank = db.scalar(
-        select(Bank).where(Bank.id == bank_id, Bank.organization_id == ctx.organization_id)
-    )
-    if bank is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Bank not found.")
-    return bank
 
 
 def _get_overlay_or_404(

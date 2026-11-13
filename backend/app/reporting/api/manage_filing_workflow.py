@@ -30,6 +30,7 @@ from app.api.deps import (
     PackageView,
     Tenant,
 )
+from app.identity.public import get_bank_or_404
 from app.reporting.schemas.filing_workflow import (
     FilingWorkflowTemplateCreate,
     FilingWorkflowTemplateDecision,
@@ -42,7 +43,6 @@ from app.reporting.schemas.filing_workflow import (
     PackageStageDecisionCreate,
 )
 from app.reporting.service import workflow as reporting_workflow
-from app.reporting.service.common import get_bank_or_404
 from app.reporting.service.filing_workflow import chain as filing_chain
 from app.reporting.service.filing_workflow import templates as filing_templates
 from app.schemas.common import ErrorResponse

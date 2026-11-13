@@ -44,7 +44,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
-from app.identity.public import Bank
+from app.identity.public import Bank, get_bank_or_404
 from app.liquidity.public import regulatory_liquidity
 from app.live.public import BankReportingPeriod, RegulatoryRun
 from app.reporting.schemas.report_comparison import (
@@ -618,15 +618,6 @@ def _diff_runs(
 # ---------------------------------------------------------------------------
 
 
-def _get_bank_or_404(db: Session, ctx: TenantContext, bank_id: str) -> Bank:
-    bank = db.scalar(
-        select(Bank).where(Bank.id == bank_id, Bank.organization_id == ctx.organization_id)
-    )
-    if bank is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Bank not found.")
-    return bank
-
-
 def _get_run_or_404(
     db: Session, ctx: TenantContext, bank: Bank, run_id: UUID, module: str
 ) -> RegulatoryRun:
@@ -759,7 +750,7 @@ def build_comparison(
     db: Session, ctx: TenantContext, bank_id: str, req: ReportComparisonRequest
 ) -> ReportComparisonRead:
     """Resolve both sides per mode, then diff their metrics into favorability-scored lines."""
-    bank = _get_bank_or_404(db, ctx, bank_id)
+    bank = get_bank_or_404(db, ctx, bank_id)
     regulatory_liquidity.require_regulatory_run_read(db, ctx, bank, req.module)
     if req.mode == "version":
         left_side, right_side, left_run, right_run = _resolve_version_mode(db, ctx, bank, req)

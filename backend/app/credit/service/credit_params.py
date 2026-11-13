@@ -53,7 +53,7 @@ from app.credit.schemas.regulatory_credit import (
 )
 from app.db.base import utc_now
 from app.identity import public as scoped_authorization
-from app.identity.public import Bank
+from app.identity.public import Bank, get_bank_or_404
 from app.live.domain.positions.families import LOAN_EXPOSURE_CATEGORIES
 from app.live.public import live_refresh_triggers
 from app.policy.public import (
@@ -66,15 +66,6 @@ from app.policy.public import (
 from app.services.audit import record_event
 
 _HUNDRED = Decimal("100")
-
-
-def _get_bank_or_404(db: Session, ctx: TenantContext, bank_id: str) -> Bank:
-    bank = db.scalar(
-        select(Bank).where(Bank.id == bank_id, Bank.organization_id == ctx.organization_id)
-    )
-    if bank is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Bank not found.")
-    return bank
 
 
 def _require_configure(db: Session, ctx: TenantContext, bank: Bank, surface: str) -> None:
@@ -111,7 +102,7 @@ def _ecl_read(row: ParamEclAssumption) -> EclAssumptionRead:
 def get_ecl_register(
     db: Session, ctx: TenantContext, bank_id: str, as_of: date
 ) -> EclAssumptionRegisterRead:
-    bank = _get_bank_or_404(db, ctx, bank_id)
+    bank = get_bank_or_404(db, ctx, bank_id)
     jurisdiction = bank.jurisdiction_code
     active = [
         _ecl_read(row)
@@ -173,7 +164,7 @@ def _require_ecl_segment(raw: str) -> str:
 def update_ecl_register(
     db: Session, ctx: TenantContext, bank_id: str, payload: EclAssumptionUpdate
 ) -> EclAssumptionWriteAcknowledgement:
-    bank = _get_bank_or_404(db, ctx, bank_id)
+    bank = get_bank_or_404(db, ctx, bank_id)
     _require_configure(db, ctx, bank, surface="credit_params.update_ecl_register")
     jurisdiction = bank.jurisdiction_code
     seen: set[tuple[str, int]] = set()
@@ -295,7 +286,7 @@ def update_ecl_register(
 def get_crm_register(
     db: Session, ctx: TenantContext, bank_id: str, as_of: date
 ) -> CrmHaircutRegisterRead:
-    bank = _get_bank_or_404(db, ctx, bank_id)
+    bank = get_bank_or_404(db, ctx, bank_id)
     jurisdiction = bank.jurisdiction_code
     rows = get_active_bank_params(
         db, ctx.organization_id, bank.id, jurisdiction, ParamCrmHaircut, as_of
@@ -349,7 +340,7 @@ def get_crm_register(
 def update_crm_register(
     db: Session, ctx: TenantContext, bank_id: str, payload: CrmHaircutUpdate
 ) -> CrmHaircutWriteAcknowledgement:
-    bank = _get_bank_or_404(db, ctx, bank_id)
+    bank = get_bank_or_404(db, ctx, bank_id)
     _require_configure(db, ctx, bank, surface="credit_params.update_crm_register")
     jurisdiction = bank.jurisdiction_code
     out_of_range = sorted(
@@ -473,7 +464,7 @@ CREDIT_THRESHOLD_CODES = (
 def get_concentration_limit_register(
     db: Session, ctx: TenantContext, bank_id: str, as_of: date
 ) -> ConcentrationLimitRegisterRead:
-    bank = _get_bank_or_404(db, ctx, bank_id)
+    bank = get_bank_or_404(db, ctx, bank_id)
     rows = get_active_bank_params(
         db, ctx.organization_id, bank.id, bank.jurisdiction_code, ParamConcentrationLimit, as_of
     )
@@ -518,7 +509,7 @@ def update_concentration_limit_register(
     STRUCTURE, not values — so every row here is a Board decision with approver
     evidence, exactly like the CRM/ECL registers.
     """
-    bank = _get_bank_or_404(db, ctx, bank_id)
+    bank = get_bank_or_404(db, ctx, bank_id)
     _require_configure(db, ctx, bank, surface="credit_params.update_concentration_limit_register")
     jurisdiction = bank.jurisdiction_code
     problems = sorted(
@@ -558,8 +549,7 @@ def update_concentration_limit_register(
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
                 detail=(
-                    "An open generation already starts on or after the requested "
-                    "effective date."
+                    "An open generation already starts on or after the requested effective date."
                 ),
             )
         previous_limits.append(
@@ -661,7 +651,7 @@ def update_concentration_limit_register(
 def get_credit_threshold_register(
     db: Session, ctx: TenantContext, bank_id: str, as_of: date
 ) -> CreditThresholdRegisterRead:
-    bank = _get_bank_or_404(db, ctx, bank_id)
+    bank = get_bank_or_404(db, ctx, bank_id)
     rows = get_active_bank_params(
         db, ctx.organization_id, bank.id, bank.jurisdiction_code, ParamCreditThreshold, as_of
     )
@@ -682,7 +672,7 @@ def get_credit_threshold_register(
 def update_credit_threshold_register(
     db: Session, ctx: TenantContext, bank_id: str, payload: CreditThresholdUpdate
 ) -> CreditThresholdWriteAcknowledgement:
-    bank = _get_bank_or_404(db, ctx, bank_id)
+    bank = get_bank_or_404(db, ctx, bank_id)
     _require_configure(db, ctx, bank, surface="credit_params.update_credit_threshold_register")
     jurisdiction = bank.jurisdiction_code
     unknown = sorted(code for code in payload.thresholds if code not in CREDIT_THRESHOLD_CODES)

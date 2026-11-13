@@ -90,7 +90,7 @@ def test_every_read_surface_gates_the_same_closed_engine_map() -> None:
         captured: list[object] = []
         db = _rows_free_session(captured)
         with (
-            patch.object(_SURFACE_MODULES[surface], "_get_bank_or_404", return_value=_bank()),
+            patch.object(_SURFACE_MODULES[surface], "get_bank_or_404", return_value=_bank()),
             patch.object(
                 live_access, "allowed_modules", wraps=live_access.allowed_modules
             ) as allowed,

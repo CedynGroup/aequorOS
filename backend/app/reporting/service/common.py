@@ -40,15 +40,6 @@ def require_actor(ctx: TenantContext) -> UUID:
     return ctx.actor_user_id
 
 
-def get_bank_or_404(db: Session, ctx: TenantContext, bank_id: str) -> Bank:
-    bank = db.scalar(
-        select(Bank).where(Bank.id == bank_id, Bank.organization_id == ctx.organization_id)
-    )
-    if bank is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Bank not found.")
-    return bank
-
-
 #: Human wording for each cadence, used in the refusal below so the message
 #: explains WHY a particular date is required rather than only that it is.
 _CADENCE_WORDING = {

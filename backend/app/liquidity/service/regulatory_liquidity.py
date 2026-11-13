@@ -31,7 +31,7 @@ from app.data_engine.public import CanonicalPosition, CanonicalPositionSnapshot
 from app.data_engine.service import withdrawal_impact
 from app.domain.authority.results import Computed, FigureResult, Refused
 from app.identity import public as scoped_authorization
-from app.identity.public import Bank, BankRead, BankReportingPeriodRead
+from app.identity.public import Bank, BankRead, BankReportingPeriodRead, get_bank_or_404
 from app.liquidity.domain.engine import (
     FACT_GROUP_SECURITIES,
     HQLA_LEVEL_1,
@@ -306,7 +306,7 @@ def create_liquidity_run(
     db: Session, ctx: TenantContext, bank_id: str, payload: RegulatoryRunCreate
 ) -> RegulatoryRunRead:
     _require_actor(ctx)
-    bank = _get_bank_or_404(db, ctx, bank_id)
+    bank = get_bank_or_404(db, ctx, bank_id)
     period = _get_period_or_404(db, ctx, bank, payload.reporting_period_id)
     # Audit 2026-08-22 D-3(b): this endpoint mints the same immutable runs as an
     # activation but never went through ``derive_facts``, so the balance-sheet
@@ -321,7 +321,7 @@ def run_all_liquidity_scenarios(
     db: Session, ctx: TenantContext, bank_id: str, payload: LiquidityScenarioBatchCreate
 ) -> RegulatoryRunBatchRead:
     _require_actor(ctx)
-    bank = _get_bank_or_404(db, ctx, bank_id)
+    bank = get_bank_or_404(db, ctx, bank_id)
     period = _get_period_or_404(db, ctx, bank, payload.reporting_period_id)
     # See ``create_liquidity_run``: the 22-scenario batch is the same mint.
     filing_reconciliation.assert_filing_reconciled(
@@ -345,7 +345,7 @@ def list_regulatory_runs(  # noqa: PLR0913
     limit: int = 25,
     offset: int = 0,
 ) -> RegulatoryRunListRead:
-    bank = _get_bank_or_404(db, ctx, bank_id)
+    bank = get_bank_or_404(db, ctx, bank_id)
     conditions = (
         RegulatoryRun.organization_id == ctx.organization_id,
         RegulatoryRun.bank_id == bank.id,
@@ -465,7 +465,7 @@ def require_regulatory_run_read(db: Session, ctx: TenantContext, bank: Bank, mod
 def get_regulatory_run(
     db: Session, ctx: TenantContext, bank_id: str, run_id: UUID
 ) -> RegulatoryRunRead:
-    bank = _get_bank_or_404(db, ctx, bank_id)
+    bank = get_bank_or_404(db, ctx, bank_id)
     run = _run_or_404(db, ctx, bank.id, run_id)
     require_regulatory_run_read(db, ctx, bank, run.module)
     response = _read_run(db, run)
@@ -504,7 +504,7 @@ def get_liquidity_dashboard(
     *,
     resolved_bank: Bank | None = None,
 ) -> LiquidityDashboardRead:
-    bank = resolved_bank or _get_bank_or_404(db, ctx, bank_id)
+    bank = resolved_bank or get_bank_or_404(db, ctx, bank_id)
     periods = _list_periods_ascending(db, ctx, bank)
     if reporting_period_id is None:
         period = current_fact_period_or_409(db, ctx, bank, MODULE_LIQUIDITY)
@@ -2200,15 +2200,6 @@ def _list_periods_ascending(
             .order_by(BankReportingPeriod.period_end)
         )
     )
-
-
-def _get_bank_or_404(db: Session, ctx: TenantContext, bank_id: str) -> Bank:
-    bank = db.scalar(
-        select(Bank).where(Bank.id == bank_id, Bank.organization_id == ctx.organization_id)
-    )
-    if bank is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Bank not found.")
-    return bank
 
 
 def _get_period_or_404(

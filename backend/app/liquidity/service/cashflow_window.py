@@ -32,7 +32,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
 from app.data_engine.public import CanonicalPosition, CanonicalPositionSnapshot
-from app.identity.public import Bank
+from app.identity.public import Bank, get_bank_or_404
 from app.liquidity.schemas.cashflow_window import (
     CashflowWindowCurrencyTotalRead,
     CashflowWindowMonthRead,
@@ -40,7 +40,6 @@ from app.liquidity.schemas.cashflow_window import (
     CashflowWindowRead,
 )
 from app.policy.public import base_currency
-from app.stress.service.stress_scenarios import _get_bank_or_404  # noqa: PLC2701 - shared guard
 
 _MAX_WINDOW_MONTHS = 36
 # Side classification mirrors regulatory_liquidity._CCY_ASSET_TYPES /
@@ -62,7 +61,7 @@ def compute_cashflow_window(
     end_date: date,
 ) -> CashflowWindowRead:
     """Per-currency monthly contractual flows maturing inside [start, end]."""
-    bank = _get_bank_or_404(db, ctx, bank_id)
+    bank = get_bank_or_404(db, ctx, bank_id)
     _validate_window(start_date, end_date)
     rows = _current_book(db, ctx, bank)
 

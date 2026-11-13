@@ -18,7 +18,7 @@ from app.core.authorization import Module, Permission, Sensitivity
 from app.data_engine.public import IngestionBatch
 from app.db.base import utc_now
 from app.identity import public as scoped_authorization
-from app.identity.public import Bank
+from app.identity.public import Bank, get_bank_or_404
 from app.live.models.live import CurrentFinancialFact, LiveMetric, LiveMetricSnapshot
 from app.live.models.regulatory import BankReportingPeriod
 from app.live.schemas.live import (
@@ -95,7 +95,7 @@ def get_live_summary(db: Session, ctx: TenantContext, bank_id: str) -> LiveSumma
     so the block is REPORTED here and on every module's ``pipeline_state``
     rather than withheld.
     """
-    bank = _get_bank_or_404(db, ctx, bank_id)
+    bank = get_bank_or_404(db, ctx, bank_id)
     period = _latest_period(db, ctx, bank)
     # The one closed engine-to-module map decides what this caller may read.
     # A positive include list hides new or unknown modules by default; with
@@ -251,7 +251,7 @@ def refresh_bank_data(
     db: Session, ctx: TenantContext, bank_id: str, payload: RefreshRequest
 ) -> JobEnqueuedRead:
     """Enqueue an immediate live refresh (the "Recompute now" button)."""
-    bank = _get_bank_or_404(db, ctx, bank_id)
+    bank = get_bank_or_404(db, ctx, bank_id)
     # The accepted refresh must be monitorable: the queue reads admit a row
     # only under the caller's CURRENT view authority (#186), and the row's
     # locator is DATA/confidential, so enqueueing requires that view.
@@ -303,7 +303,7 @@ def mint_official_run(
     db: Session, ctx: TenantContext, bank_id: str, payload: OfficialRunRequest
 ) -> JobEnqueuedRead:
     """Enqueue an immediate immutable official run (the "Mint for filing" button)."""
-    bank = _get_bank_or_404(db, ctx, bank_id)
+    bank = get_bank_or_404(db, ctx, bank_id)
     for engine, module in MINT_RUN_ENGINES:
         if module_scope.runs_module(db, bank, engine):
             scoped_authorization.require_resolved_bank_permission(
@@ -370,15 +370,6 @@ def _latest_period(db: Session, ctx: TenantContext, bank: Bank) -> BankReporting
     )
 
 
-def _get_bank_or_404(db: Session, ctx: TenantContext, bank_id: str) -> Bank:
-    bank = db.scalar(
-        select(Bank).where(Bank.id == bank_id, Bank.organization_id == ctx.organization_id)
-    )
-    if bank is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Bank not found.")
-    return bank
-
-
 def list_live_snapshots(
     db: Session,
     ctx: TenantContext,
@@ -399,7 +390,7 @@ def list_live_snapshots(
     like the shared resolver the route's old gate used, so the case-insensitive
     spellings it accepted still resolve.
     """
-    bank = _get_bank_or_404(db, ctx, normalize_public_id(bank_id))
+    bank = get_bank_or_404(db, ctx, normalize_public_id(bank_id))
     authorized_module = live_access.module_for(module)
     if authorized_module is None:
         raise HTTPException(

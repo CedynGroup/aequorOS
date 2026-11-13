@@ -36,7 +36,6 @@ from app.core.key_management.presentation import (
 from app.core.key_management.types import KeyUnavailableError
 from app.core.tenancy import TenantContext
 from app.db.base import utc_now
-from app.identity.models.bank import Bank
 from app.identity.models.institution_profile import (
     BankLicense,
     BankNameHistory,
@@ -76,6 +75,7 @@ from app.identity.schemas.institution_profile import (
     ShareholdingUpdate,
 )
 from app.identity.service import institution_profile_access
+from app.identity.service.banks import get_bank_or_404
 from app.policy.models.jurisdiction import Jurisdiction
 from app.services.audit import record_event
 
@@ -83,15 +83,6 @@ _OWNERSHIP_SUM_TOLERANCE = Decimal("0.01")
 
 
 # --- shared lookups ------------------------------------------------------------
-
-
-def _get_bank_or_404(db: Session, ctx: TenantContext, bank_id: str) -> Bank:
-    bank = db.scalar(
-        select(Bank).where(Bank.id == bank_id, Bank.organization_id == ctx.organization_id)
-    )
-    if bank is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Bank not found.")
-    return bank
 
 
 def _get_party_or_404(
@@ -381,7 +372,7 @@ def _bank_children[T](db: Session, model: type[T], ctx: TenantContext, bank_id: 
 
 def get_full_profile(db: Session, ctx: TenantContext, bank_id: str) -> InstitutionProfileFullRead:
     """Trusted regulatory source; interactive reads use the authorized projection."""
-    bank = _get_bank_or_404(db, ctx, bank_id)
+    bank = get_bank_or_404(db, ctx, bank_id)
     profile = _profile_row(db, ctx, bank.id)
     parties = _bank_children(db, RelatedParty, ctx, bank.id)
     roles_by_party, holdings_by_party = _party_children(db, [party.id for party in parties])
@@ -450,7 +441,7 @@ def upsert_profile(
     db: Session, ctx: TenantContext, bank_id: str, payload: InstitutionProfilePut
 ) -> InstitutionProfileGeneralRead:
     # Existence selects only the stable row id, before choosing CREATE versus EDIT.
-    bank = _get_bank_or_404(db, ctx, bank_id)
+    bank = get_bank_or_404(db, ctx, bank_id)
     existing_id = db.scalar(
         select(InstitutionProfile.id).where(
             InstitutionProfile.organization_id == ctx.organization_id,
