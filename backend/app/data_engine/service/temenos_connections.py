@@ -72,7 +72,7 @@ from app.data_engine.schemas.temenos_connections import (
 from app.data_engine.service.access import require_data_access
 from app.data_engine.service.ingestion import create_mapping_config
 from app.db.base import utc_now
-from app.identity.public import Bank
+from app.identity.public import get_bank_or_404
 from app.market_data.public import derive_status
 from app.models import MappingConfigRecord
 from app.services import job_queue
@@ -138,7 +138,7 @@ def _guard_endpoint_or_400(endpoint: str) -> None:
 
 def list_connections(db: Session, ctx: TenantContext, bank_id: str) -> TemenosConnectionListRead:
     require_data_access(db, ctx, bank_id, Permission.VIEW, Sensitivity.RESTRICTED)
-    _get_bank_or_404(db, ctx, bank_id)
+    get_bank_or_404(db, ctx, bank_id)
     rows = db.scalars(
         select(TemenosConnection)
         .where(
@@ -156,7 +156,7 @@ def list_domains(db: Session, ctx: TenantContext, bank_id: str, mode: str) -> Te
     """The core-banking domain catalog for a connection mode: category, canonical
     entity type, default cadence, and whether the mode catalog supports it."""
     require_data_access(db, ctx, bank_id, Permission.VIEW, Sensitivity.RESTRICTED)
-    _get_bank_or_404(db, ctx, bank_id)
+    get_bank_or_404(db, ctx, bank_id)
     try:
         catalog = load_mode_catalog(mode)
     except CatalogError as exc:
@@ -187,7 +187,7 @@ def create_connection(
     # Configuration duty: exact data/configure/restricted authority BEFORE any
     # vault write, credential check or default-mapping seed.
     require_data_access(db, ctx, bank_id, Permission.CONFIGURE, Sensitivity.RESTRICTED)
-    _get_bank_or_404(db, ctx, bank_id)
+    get_bank_or_404(db, ctx, bank_id)
     mode = payload.connection_mode
     domains = _validated_domains(mode, payload.domains)
     schedule = _validated_schedule(payload.schedule)
@@ -307,7 +307,7 @@ def validate_connection(
     # Credential validation is a configuration duty (D2): deny before the
     # stored-credential check or any status mutation.
     require_data_access(db, ctx, bank_id, Permission.CONFIGURE, Sensitivity.RESTRICTED, opaque=True)
-    _get_bank_or_404(db, ctx, bank_id)
+    get_bank_or_404(db, ctx, bank_id)
     connection = _get_connection_or_404(db, ctx, bank_id, connection_id)
     _ensure_not_revoked(connection)
     _ensure_not_disabled(connection)
@@ -351,7 +351,7 @@ def test_connection(
     imply that it reached a core or resolve a tenant-provided endpoint.
     """
     require_data_access(db, ctx, bank_id, Permission.VALIDATE, Sensitivity.RESTRICTED, opaque=True)
-    _get_bank_or_404(db, ctx, bank_id)
+    get_bank_or_404(db, ctx, bank_id)
     connection = _get_connection_or_404(db, ctx, bank_id, connection_id)
     _ensure_not_revoked(connection)
     _ensure_not_disabled(connection)
@@ -372,7 +372,7 @@ def update_connection(
     """Post-onboarding edits and credential rotation (validate new first)."""
     # Configuration duty (incl. credential rotation): deny before any vault write.
     require_data_access(db, ctx, bank_id, Permission.CONFIGURE, Sensitivity.RESTRICTED, opaque=True)
-    _get_bank_or_404(db, ctx, bank_id)
+    get_bank_or_404(db, ctx, bank_id)
     connection = _get_connection_or_404(db, ctx, bank_id, connection_id)
     _ensure_not_revoked(connection)
 
@@ -455,7 +455,7 @@ def disable_connection(
     db: Session, ctx: TenantContext, bank_id: str, connection_id: UUID
 ) -> TemenosConnectionWriteAcknowledgement:
     require_data_access(db, ctx, bank_id, Permission.CONFIGURE, Sensitivity.RESTRICTED, opaque=True)
-    _get_bank_or_404(db, ctx, bank_id)
+    get_bank_or_404(db, ctx, bank_id)
     connection = _get_connection_or_404(db, ctx, bank_id, connection_id)
     _ensure_not_revoked(connection)
     if connection.status != "DISABLED":
@@ -479,7 +479,7 @@ def enable_connection(
     db: Session, ctx: TenantContext, bank_id: str, connection_id: UUID
 ) -> TemenosConnectionWriteAcknowledgement:
     require_data_access(db, ctx, bank_id, Permission.CONFIGURE, Sensitivity.RESTRICTED, opaque=True)
-    _get_bank_or_404(db, ctx, bank_id)
+    get_bank_or_404(db, ctx, bank_id)
     connection = _get_connection_or_404(db, ctx, bank_id, connection_id)
     if connection.status != "DISABLED":
         raise HTTPException(
@@ -572,7 +572,7 @@ def revoke_connection(
     db: Session, ctx: TenantContext, bank_id: str, connection_id: UUID
 ) -> TemenosConnectionWriteAcknowledgement:
     require_data_access(db, ctx, bank_id, Permission.CONFIGURE, Sensitivity.RESTRICTED, opaque=True)
-    _get_bank_or_404(db, ctx, bank_id)
+    get_bank_or_404(db, ctx, bank_id)
     connection = _get_connection_or_404(db, ctx, bank_id, connection_id)
     if connection.status == "REVOKED" and connection.credential_ciphertext is None:
         # Already revoked and wiped (a pull/validation failure can set REVOKED
@@ -593,15 +593,6 @@ def revoke_connection(
 
 
 # --- Internals -------------------------------------------------------------
-
-
-def _get_bank_or_404(db: Session, ctx: TenantContext, bank_id: str) -> Bank:
-    bank = db.scalar(
-        select(Bank).where(Bank.id == bank_id, Bank.organization_id == ctx.organization_id)
-    )
-    if bank is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Bank not found.")
-    return bank
 
 
 def _get_connection_or_404(

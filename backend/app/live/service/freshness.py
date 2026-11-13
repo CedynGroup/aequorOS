@@ -18,7 +18,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
-from app.identity.public import Bank
+from app.identity.public import Bank, get_bank_or_404
 from app.live.models.live import LiveMetric
 from app.live.models.regulatory import BankReportingPeriod
 from app.live.models.regulatory_run import RegulatoryRun
@@ -73,7 +73,7 @@ def get_bank_freshness(
         "rating": implied_rating.current_input_hash,
     }
 
-    bank = _get_bank_or_404(db, ctx, bank_id)
+    bank = get_bank_or_404(db, ctx, bank_id)
     period = _resolve_period(db, ctx, bank, reporting_period_id)
     if period is None:
         return BankFreshnessRead(
@@ -221,12 +221,3 @@ def _resolve_period(
         .order_by(BankReportingPeriod.period_end.desc())
         .limit(1)
     )
-
-
-def _get_bank_or_404(db: Session, ctx: TenantContext, bank_id: str) -> Bank:
-    bank = db.scalar(
-        select(Bank).where(Bank.id == bank_id, Bank.organization_id == ctx.organization_id)
-    )
-    if bank is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Bank not found.")
-    return bank

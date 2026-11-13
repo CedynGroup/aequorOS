@@ -36,14 +36,13 @@ from sqlalchemy.orm import Session
 from app.api.deps import TenantContext
 from app.attestation.public import AttestationSignature, RegulatoryArtifactVersion
 from app.data_engine.public import bank_slug
-from app.identity.public import Bank
+from app.identity.public import Bank, get_bank_or_404
 from app.reporting.models.packages import RegulatoryPackage, RegulatoryPackageArtifact
 from app.reporting.service.bog_forms.catalog import form_spec
 from app.reporting.service.bog_forms.engine import FormResult
 from app.reporting.service.bog_forms.registry_entries import is_bog_official_template
 from app.reporting.service.bog_forms.render import render_form_xlsx
 from app.reporting.service.bog_forms.render_pdf import render_form_pdf
-from app.reporting.service.common import get_bank_or_404
 from app.reporting.service.exports.csv import render_csv
 from app.reporting.service.exports.pdf import AttestedOfficer, render_pdf
 from app.reporting.service.exports.xlsx import render_xlsx

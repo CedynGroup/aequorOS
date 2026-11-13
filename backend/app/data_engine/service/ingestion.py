@@ -93,7 +93,7 @@ from app.data_engine.schemas.ingestion import (
 )
 from app.data_engine.service.access import require_data_access
 from app.db.base import utc_now
-from app.identity.public import Bank, evaluate_bank_permission
+from app.identity.public import Bank, evaluate_bank_permission, get_bank_or_404
 from app.models import (
     AuditEvent,
     CanonicalCounterparty,
@@ -160,7 +160,7 @@ def stage_source(  # noqa: PLR0913 - trusted connector staging context
     files that never get ingested.
     """
     storage = storage.for_session(db)
-    bank = _get_bank_or_404(db, ctx, bank_id)
+    bank = get_bank_or_404(db, ctx, bank_id)
     slug = bank_slug(db, bank)
     storage.ensure_institution(slug)
 
@@ -226,7 +226,7 @@ def create_mapping_config(
     *,
     commit: bool = True,
 ) -> MappingConfigRead:
-    bank = _get_bank_or_404(db, ctx, bank_id)
+    bank = get_bank_or_404(db, ctx, bank_id)
     # Versions and the single-active guarantee are scoped per (bank, source_system,
     # source_ref) so each data source of a bank has its own independent mapping.
     next_version = (
@@ -290,7 +290,7 @@ def create_mapping_config(
 
 def list_mapping_configs(db: Session, ctx: TenantContext, bank_id: str) -> MappingConfigListRead:
     require_data_access(db, ctx, bank_id, Permission.VIEW, Sensitivity.CONFIDENTIAL)
-    bank = _get_bank_or_404(db, ctx, bank_id)
+    bank = get_bank_or_404(db, ctx, bank_id)
     records = db.scalars(
         select(MappingConfigRecord)
         .where(
@@ -445,7 +445,7 @@ def start_ingestion(  # noqa: PLR0912, PLR0913, PLR0915 - lifecycle and transact
     else:
         payload = IngestionBatchCreate.model_validate(payload)
     storage = storage.for_session(db)
-    bank = _get_bank_or_404(db, ctx, bank_id)
+    bank = get_bank_or_404(db, ctx, bank_id)
     try:
         adapter, mapping_record, mapping, source_path, extraction = _prepare_extraction(
             db, ctx, bank, payload, storage, commit=commit
@@ -827,7 +827,7 @@ def list_batches(
     source_system: SourceSystem | None = None,
 ) -> IngestionBatchListRead:
     require_data_access(db, ctx, bank_id, Permission.VIEW, Sensitivity.CONFIDENTIAL)
-    bank = _get_bank_or_404(db, ctx, bank_id)
+    bank = get_bank_or_404(db, ctx, bank_id)
     query = select(IngestionBatch).where(
         IngestionBatch.organization_id == ctx.organization_id,
         IngestionBatch.bank_id == bank.id,
@@ -851,7 +851,7 @@ def get_ingestion_summary(db: Session, ctx: TenantContext, bank_id: str) -> Inge
     activation history the data-activation listing reads.
     """
     require_data_access(db, ctx, bank_id, Permission.VIEW, Sensitivity.AGGREGATED)
-    bank = _get_bank_or_404(db, ctx, bank_id)
+    bank = get_bank_or_404(db, ctx, bank_id)
     org_id = ctx.organization_id
 
     rollups = db.execute(
@@ -1048,7 +1048,7 @@ def list_positions(  # noqa: PLR0913 - one keyword-only filter per blotter contr
     (``source_reference``, then id) so pages are stable and disjoint.
     """
     require_data_access(db, ctx, bank_id, Permission.VIEW, Sensitivity.RESTRICTED)
-    bank = _get_bank_or_404(db, ctx, bank_id)
+    bank = get_bank_or_404(db, ctx, bank_id)
     filters = [
         CanonicalPosition.organization_id == ctx.organization_id,
         CanonicalPosition.bank_id == bank.id,
@@ -1182,7 +1182,7 @@ def list_position_facets(
 ) -> CanonicalPositionFacetsRead:
     """Distinct position types and currencies with current-generation counts."""
     require_data_access(db, ctx, bank_id, Permission.VIEW, Sensitivity.RESTRICTED)
-    bank = _get_bank_or_404(db, ctx, bank_id)
+    bank = get_bank_or_404(db, ctx, bank_id)
     current = (
         CanonicalPosition.organization_id == ctx.organization_id,
         CanonicalPosition.bank_id == bank.id,
@@ -1273,7 +1273,7 @@ def override_position_snapshot(
     generation can be overridden.
     """
     require_data_access(db, ctx, bank_id, Permission.EDIT, Sensitivity.RESTRICTED, opaque=True)
-    bank = _get_bank_or_404(db, ctx, bank_id)
+    bank = get_bank_or_404(db, ctx, bank_id)
     snapshot = db.scalar(
         select(CanonicalPositionSnapshot).where(
             CanonicalPositionSnapshot.id == snapshot_id,
@@ -1458,15 +1458,6 @@ def walk_lineage(db: Session, ctx: TenantContext, lineage_id: UUID) -> LineageWa
             parent for parent in node.input_lineage_ids if parent in authorized_ids
         ]
     return LineageWalkRead(nodes=nodes)
-
-
-def _get_bank_or_404(db: Session, ctx: TenantContext, bank_id: str) -> Bank:
-    bank = db.scalar(
-        select(Bank).where(Bank.id == bank_id, Bank.organization_id == ctx.organization_id)
-    )
-    if bank is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Bank not found.")
-    return bank
 
 
 def _get_batch_or_404(

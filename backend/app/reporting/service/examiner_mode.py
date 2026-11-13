@@ -34,8 +34,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
-from app.identity.public import Bank, count_attributable_events
-from app.liquidity.public import get_bank_or_404 as _get_bank_or_404
+from app.identity.public import Bank, count_attributable_events, get_bank_or_404
 from app.liquidity.public import get_cfp
 from app.liquidity.public import get_period_or_404 as _get_period_or_404
 from app.live.public import RegulatoryRun
@@ -81,7 +80,7 @@ def list_runs(
     reporting_period_id: UUID,
     module: str | None = None,
 ) -> ExaminerRunsRead:
-    bank = _get_bank_or_404(db, ctx, bank_id)
+    bank = get_bank_or_404(db, ctx, bank_id)
     examiner_access.require_evidence_view(db, ctx, bank)
     period = _get_period_or_404(db, ctx, bank, reporting_period_id)
     authority = examiner_access.EvidenceAuthority(db, ctx, bank)
@@ -111,7 +110,7 @@ def reproduce_run(
     db: Session, ctx: TenantContext, bank_id: str, run_id: UUID
 ) -> RunReproductionRead:
     """Recompute the canonical hash over the stored snapshot, live."""
-    bank = _get_bank_or_404(db, ctx, bank_id)
+    bank = get_bank_or_404(db, ctx, bank_id)
     examiner_access.require_evidence_view(db, ctx, bank)
     authority = examiner_access.EvidenceAuthority(db, ctx, bank)
     run = db.scalar(
@@ -146,7 +145,7 @@ def reproduce_run(
 def documentation_package(
     db: Session, ctx: TenantContext, bank_id: str, reporting_period_id: UUID
 ) -> ExaminerDocumentationRead:
-    bank = _get_bank_or_404(db, ctx, bank_id)
+    bank = get_bank_or_404(db, ctx, bank_id)
     examiner_access.require_evidence_view(db, ctx, bank)
     period = _get_period_or_404(db, ctx, bank, reporting_period_id)
     authority = examiner_access.EvidenceAuthority(db, ctx, bank)

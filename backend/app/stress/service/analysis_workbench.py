@@ -47,7 +47,7 @@ from app.fx.domain.engine import (
     MissingParameterError as FxMissingParameter,
 )
 from app.fx.public import regulatory_fx
-from app.identity.public import Bank
+from app.identity.public import Bank, get_bank_or_404
 from app.irrbb.domain.engine import (
     IrrComputationError,
 )
@@ -79,7 +79,6 @@ from app.stress.schemas.scenario_workbench import (
 )
 from app.stress.service import scenario_workbench_authorization
 from app.stress.service.scenario_catalog import SYSTEM_SCENARIOS, system_shocks, validate_shocks
-from app.stress.service.stress_scenarios import _get_bank_or_404  # noqa: PLC2701 - shared guard
 
 _ENGINE_VERSIONS = {
     "liquidity": regulatory_liquidity.ENGINE_VERSION,
@@ -373,7 +372,7 @@ def run_analysis(
     payload: AnalysisRunCreate,
 ) -> AnalysisRunRead:
     """Compute the requested scenarios side by side. Writes nothing."""
-    bank = _get_bank_or_404(db, ctx, bank_id)
+    bank = get_bank_or_404(db, ctx, bank_id)
     scenario_workbench_authorization.require_module_permission(
         db,
         ctx,
@@ -436,7 +435,7 @@ def save_analysis(
     payload: SavedAnalysisCreate,
 ) -> SavedAnalysisRead:
     """Recompute server-side and snapshot — clients never supply numbers."""
-    bank = _get_bank_or_404(db, ctx, bank_id)
+    bank = get_bank_or_404(db, ctx, bank_id)
     scenario_workbench_authorization.require_module_permission(
         db,
         ctx,
@@ -492,7 +491,7 @@ def list_analyses(  # noqa: PLR0913 - one read carries its full scoping
     limit: int = 25,
     offset: int = 0,
 ) -> SavedAnalysisListRead:
-    bank = _get_bank_or_404(db, ctx, bank_id)
+    bank = get_bank_or_404(db, ctx, bank_id)
     scenario_workbench_authorization.require_module_permission(
         db,
         ctx,
@@ -525,7 +524,7 @@ def list_analyses(  # noqa: PLR0913 - one read carries its full scoping
 def get_analysis(
     db: Session, ctx: TenantContext, bank_id: str, module: WorkbenchModule, analysis_id: UUID
 ) -> SavedAnalysisRead:
-    bank = _get_bank_or_404(db, ctx, bank_id)
+    bank = get_bank_or_404(db, ctx, bank_id)
     scenario_workbench_authorization.require_module_permission(
         db,
         ctx,
@@ -553,7 +552,7 @@ def get_analysis(
 def delete_analysis(
     db: Session, ctx: TenantContext, bank_id: str, module: WorkbenchModule, analysis_id: UUID
 ) -> None:
-    bank = _get_bank_or_404(db, ctx, bank_id)
+    bank = get_bank_or_404(db, ctx, bank_id)
     scenario_workbench_authorization.require_module_permission(
         db,
         ctx,

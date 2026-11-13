@@ -35,6 +35,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
 from app.attestation.public import AttestationSignature
+from app.identity.public import get_bank_or_404
 from app.reporting.models.packages import RegulatoryPackage
 from app.reporting.schemas.packages import (
     PackageComparisonRead,
@@ -50,7 +51,6 @@ from app.reporting.service import (
     workflow,
 )
 from app.reporting.service.common import (
-    get_bank_or_404,
     get_package_or_404,
     validation_passed,
 )

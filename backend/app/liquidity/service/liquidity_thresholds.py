@@ -29,7 +29,7 @@ from app.core.authorization import Module, Permission, Sensitivity
 from app.db.base import utc_now
 from app.domain.authority.outcomes import OutcomeState, outcome
 from app.identity import public as scoped_authorization
-from app.identity.public import Bank
+from app.identity.public import Bank, get_bank_or_404
 from app.liquidity.schemas.liquidity_thresholds import (
     InstitutionClass,
     LiquidityHaircutRead,
@@ -83,15 +83,6 @@ EXTRA_THRESHOLD_CODES = ("currency_mismatch_limit_pct",)
 _INSTITUTION_CLASSES = ("bank", "sdi")
 
 
-def _get_bank_or_404(db: Session, ctx: TenantContext, bank_id: str) -> Bank:
-    bank = db.scalar(
-        select(Bank).where(Bank.id == bank_id, Bank.organization_id == ctx.organization_id)
-    )
-    if bank is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Bank not found.")
-    return bank
-
-
 def _jurisdiction(bank: Bank) -> str:
     # Fail-closed (enterprise audit 2026-08-20 §6): ``or "GH"`` here would file a
     # Nigerian tenant's board register under Ghana's jurisdiction key.
@@ -130,7 +121,7 @@ def get_register(
     db: Session, ctx: TenantContext, bank_id: str, as_of: date
 ) -> LiquidityThresholdRegisterRead:
     """The resolved register on ``as_of`` plus the full generation history."""
-    bank = _get_bank_or_404(db, ctx, bank_id)
+    bank = get_bank_or_404(db, ctx, bank_id)
     jurisdiction = _jurisdiction(bank)
 
     # Resolve the tenant's institution class (docs/sdi.md §4.1): the Monitoring
@@ -263,7 +254,7 @@ def update_register(
     minute reference or officer — and ``approval_timestamp`` is stamped
     server-side). The write is audited; history keeps every generation.
     """
-    bank = _get_bank_or_404(db, ctx, bank_id)
+    bank = get_bank_or_404(db, ctx, bank_id)
     scoped_authorization.require_resolved_bank_permission(
         db,
         ctx,
@@ -398,7 +389,7 @@ def get_haircut_schedule(
     db: Session, ctx: TenantContext, bank_id: str, as_of: date
 ) -> LiquidityHaircutScheduleRead:
     """The active liquidity-value schedule (LRMD ¶60–63) plus history."""
-    bank = _get_bank_or_404(db, ctx, bank_id)
+    bank = get_bank_or_404(db, ctx, bank_id)
     jurisdiction = _jurisdiction(bank)
     active = [
         LiquidityHaircutRead(
@@ -448,7 +439,7 @@ def update_haircut_schedule(
     db: Session, ctx: TenantContext, bank_id: str, payload: LiquidityHaircutUpdate
 ) -> LiquidityHaircutWriteAcknowledgement:
     """Record a reviewed liquidity-value generation (LRMD ¶62(b) evidence)."""
-    bank = _get_bank_or_404(db, ctx, bank_id)
+    bank = get_bank_or_404(db, ctx, bank_id)
     scoped_authorization.require_resolved_bank_permission(
         db,
         ctx,

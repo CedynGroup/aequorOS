@@ -52,8 +52,8 @@ from app.attestation.service.document_access import artifact_view_decision
 from app.attestation.service.workflow import AttestationConflict
 from app.core.config import Settings, get_settings
 from app.data_engine.public import bank_slug
+from app.identity.public import get_bank_or_404
 from app.reporting.models.packages import RegulatoryPackage
-from app.reporting.service.common import get_bank_or_404
 from app.reporting.service.exports import export_package_version
 from app.services.audit import record_event
 from app.storage import StorageClient, StorageError, StorageLocation, StorageValidationError

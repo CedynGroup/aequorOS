@@ -264,7 +264,6 @@ from decimal import ROUND_HALF_UP, Decimal
 from typing import Any, Literal, Self
 from uuid import UUID
 
-from fastapi import HTTPException, status
 from sqlalchemy import delete, func, select
 from sqlalchemy.orm import Session
 
@@ -290,7 +289,7 @@ from app.data_engine.public import (
 )
 from app.domain.authority.outcomes import NotComputable, OutcomeDetail
 from app.ftp.domain.engine import CurvePoint, CurveResult, build_curve
-from app.identity.public import Bank
+from app.identity.public import Bank, get_bank_or_404
 from app.irrbb.domain.buckets import REPRICING_BUCKETS as _IRR_BUCKETS
 from app.irrbb.domain.buckets import bucket_for_days as _bucket_for_days
 from app.irrbb.domain.buckets import repricing_bucket as _repricing_bucket
@@ -728,7 +727,7 @@ def derive_facts(
     db: Session, ctx: TenantContext, bank_id: str, as_of_date: date
 ) -> DerivationResult:
     """Derive the full module fact set for ``as_of_date`` from canonical data."""
-    bank = _get_bank_or_404(db, ctx, bank_id)
+    bank = get_bank_or_404(db, ctx, bank_id)
     canonical = _load_canonical(db, ctx, bank, as_of_date)
     if not canonical.positions:
         raise DerivationError(
@@ -782,7 +781,7 @@ def derive_current_facts(
     This is the live-plane derivation entry point. It never creates or mutates
     a reporting period, `BankFinancialFact`, `RegulatoryRun`, or package.
     """
-    bank = _get_bank_or_404(db, ctx, bank_id)
+    bank = get_bank_or_404(db, ctx, bank_id)
     canonical = _load_canonical(db, ctx, bank, as_of_date)
     if not canonical.positions:
         raise DerivationError(
@@ -863,15 +862,6 @@ def _derive_specs(
 # ---------------------------------------------------------------------------
 
 
-def _get_bank_or_404(db: Session, ctx: TenantContext, bank_id: str) -> Bank:
-    bank = db.scalar(
-        select(Bank).where(Bank.id == bank_id, Bank.organization_id == ctx.organization_id)
-    )
-    if bank is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Bank not found.")
-    return bank
-
-
 def _load_position_rows(
     db: Session, ctx: TenantContext, bank: Bank, as_of: date, base_currency: str
 ) -> list[_PositionRow]:
@@ -919,7 +909,7 @@ def diagnose_source_overlap(
     ``determined=False`` with ``MISSING_REQUIRED_INPUT`` — "not assessed" is
     never dressed up as "no overlap".
     """
-    bank = _get_bank_or_404(db, ctx, bank_id)
+    bank = get_bank_or_404(db, ctx, bank_id)
     positions = _load_position_rows(db, ctx, bank, as_of_date, jurisdictions.base_currency(bank))
     policy = reconciliation.load_policy(db, ctx.organization_id, bank, as_of_date)
     return _source_overlap(positions, policy)

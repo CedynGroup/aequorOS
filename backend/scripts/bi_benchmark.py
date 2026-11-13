@@ -23,7 +23,7 @@ command line:
 
 Why the tenant is scaffolded and not seeded
 -------------------------------------------
-Ingestion requires the institution to exist (``_get_bank_or_404``) and there is
+Ingestion requires the institution to exist (``get_bank_or_404``) and there is
 no bank-creation route in the product, so the bank, its organization, its
 principal and its governed registers come from the hermetic fixture
 ``tests/fixtures/canonical_bank_fixture.py`` — the same seam

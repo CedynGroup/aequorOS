@@ -7,12 +7,11 @@ finding lifecycle (open on breach, superseded on clear).
 
 from __future__ import annotations
 
-from fastapi import HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
-from app.identity.public import Bank
+from app.identity.public import get_bank_or_404
 from app.live.models.live import LiveFinding
 from app.live.schemas.live import AlertItemRead, BankAlertsRead
 from app.live.service import live_access
@@ -27,7 +26,7 @@ _OPEN_STATUSES = ("open", "needs_review")
 def get_bank_alerts(
     db: Session, ctx: TenantContext, bank_id: str, *, limit: int = 50
 ) -> BankAlertsRead:
-    bank = _get_bank_or_404(db, ctx, bank_id)
+    bank = get_bank_or_404(db, ctx, bank_id)
 
     # The one closed engine-to-module map decides what this caller may read;
     # the positive include list filters counts, the limit and every item in
@@ -83,12 +82,3 @@ def get_bank_alerts(
         by_module=by_module,
         items=items,
     )
-
-
-def _get_bank_or_404(db: Session, ctx: TenantContext, bank_id: str) -> Bank:
-    bank = db.scalar(
-        select(Bank).where(Bank.id == bank_id, Bank.organization_id == ctx.organization_id)
-    )
-    if bank is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Bank not found.")
-    return bank

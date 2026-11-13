@@ -40,6 +40,7 @@ from app.core.authorization import (
     RoleBundle,
     SensitivityScope,
 )
+from app.identity.public import get_bank_or_404
 from app.identity.service import authorization
 from app.liquidity.schemas.liquidity_cfp import (
     CfpActivationCreate,
@@ -236,7 +237,7 @@ def test_starters_evaluate_with_honest_gaps_and_no_invented_rag(db_session: Sess
         for entry in liquidity_ewi.evaluate_ewis(
             db_session,
             MAKER,
-            liquidity_ewi._get_bank_or_404(db_session, MAKER, SAMPLE_BANK_ID),  # noqa: SLF001
+            get_bank_or_404(db_session, MAKER, SAMPLE_BANK_ID),
             db_session.get(BankReportingPeriod, _period_id(db_session)),  # type: ignore[index]
         )
     }
