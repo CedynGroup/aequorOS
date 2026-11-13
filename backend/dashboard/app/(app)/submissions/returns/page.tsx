@@ -875,13 +875,17 @@ function PackageWorkspace({
   }, [comparison.data]);
 
   const takeArtifact = (kind: ArtifactKind) => {
-    // No guard on the package detail here: the act reads only inputs keyed by
-    // the summary on screen — the package id, the minted artifacts and the
-    // filed version — and the bar renders it from that summary the moment a
-    // version exists. What decides WHICH document the act hands over is the
-    // version chain, and the buttons hold with a visible reason until that
-    // chain has landed (see ArtifactGroup's pendingReason), so a rendered
-    // button never refuses the click it invites.
+    // No guard on the package detail here: every input this act reads — the
+    // package id, the minted artifacts and the filed version — is keyed by the
+    // summary on screen, and the bar renders the act from that summary the
+    // moment a version exists. Refusing to act until the detail had also
+    // landed made the freshly generated return's artifact buttons dead for the
+    // fraction of a second a regulator-facing user could click straight into
+    // (regenerate, then take the file), with nothing on screen but an error
+    // line they were not looking at. What decides WHICH document the act hands
+    // over is the version chain, and the buttons hold with a visible reason
+    // until that chain has landed (see ArtifactGroup's pendingReason), so a
+    // rendered button never refuses the click it invites.
     setDownloadError(null);
     const fail = (error: unknown) =>
       setDownloadError(

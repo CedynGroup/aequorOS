@@ -686,4 +686,39 @@ test.describe("the filed document", () => {
     expect(download.headers()["content-type"]).toContain("application/pdf");
     expect((await download.body()).length).toBe(latest.size_bytes);
   });
+
+  test("the artifact act answers while the pack detail is still loading", async ({
+    page,
+  }) => {
+    // Regeneration puts the new version on screen from the packages list a
+    // moment before the package detail lands behind it — and the export act
+    // reads only what is keyed by the summary on screen. There was a window
+    // where the button was rendered and live but the act refused it with an
+    // invisible "try again" (CI run 42543882345: the click beat the detail,
+    // no export was ever requested, and the button never became Download).
+    // Holding the detail and the auto-run checks response back makes that
+    // window seconds wide, so this clicks into it deterministically.
+    await page.route(
+      /\/regulatory-packages\/[^/]+(\/validate)?$/,
+      async (route) => {
+        await new Promise((resolve) => setTimeout(resolve, 2500));
+        await route.continue();
+      },
+    );
+
+    await page.goto(GATED_RETURN);
+    await generateCurrentVersion(page);
+    await expect(page.getByText(/Generated|Checks passed/).first()).toBeVisible(
+      { timeout: 60_000 },
+    );
+
+    await page
+      .getByRole("button", { name: /produce and download pdf/i })
+      .click();
+    await expect(
+      page.getByRole("button", { name: /^download pdf$/i }),
+    ).toBeVisible({ timeout: 30_000 });
+    // Still the unsigned return: the export exists, the signature claim does not.
+    await expect(page.getByText(/Signed PDF/i)).toHaveCount(0);
+  });
 });

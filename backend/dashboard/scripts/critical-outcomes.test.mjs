@@ -73,7 +73,7 @@ test("accepts the complete catalogue across four journey shards and the contract
 
 test("a passing numeric floor cannot hide an omitted critical scenario", () =>
   fixture((root) => {
-    const counts = [59, 58, 58, 58].map((count, index) => ({
+    const counts = [60, 58, 58, 58].map((count, index) => ({
       shard: { current: index + 1, total: 4 },
       status: "passed",
       discovered: count,
