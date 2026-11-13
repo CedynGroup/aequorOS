@@ -527,6 +527,16 @@ run_state_machine_as_test(
   `headers(org_id=ORG_2, user_id=USER_2)` for both reads and mutations. DB-level scoping checks
   live in `tests/case/api/test_scoping_integration.py`.
 - OpenAPI contract regression: `tests/api/test_openapi_contract.py`.
+- **A test that spawns an inner `pytest` subprocess passes a controlled env.** CI
+  exports `CI_UNIT_REPORT_DIR`, `CI_E2E_REPORT_DIR` and `CI_DATABASE_OBSERVATIONS`
+  and drives pytest through `PYTEST_ADDOPTS`; an inherited value makes
+  `scripts.test_suites_plugin` reject the bare inner run (`exit 4`) or redirect its
+  report. Copy `os.environ`, set `PYTEST_ADDOPTS: ""` and
+  `PYTEST_DISABLE_PLUGIN_AUTOLOAD: "1"`, and pop the CI owner variables
+  (`CI_UNIT_REPORT_DIR`, `CI_E2E_REPORT_DIR`, `CI_DATABASE_OBSERVATIONS`,
+  `TEST_DATABASE_URL`) — the pattern lives in
+  `tests/architecture/test_test_suites_integration.py` and
+  `tests/test_freeze_clock_plugin.py`.
 
 ---
 
