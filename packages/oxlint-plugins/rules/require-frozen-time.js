@@ -48,111 +48,14 @@ function isNodeTestTimersEnableCall(callee) {
 }
 
 /**
- * Top-level `const` bindings whose value is a plain array of string literals,
- * collected once per program so an `apis: <identifier>` option can be resolved
- * one level deep (module-scoped lists are the common shape). Returns the
- * literal string elements, or null when the binding is missing or unresolvable.
- */
-function constStringArrayElements(program, name, depth = 0) {
-  if (!program || depth > 1) return null;
-  for (const statement of program.body) {
-    if (statement.type !== "VariableDeclaration" || statement.kind !== "const") {
-      continue;
-    }
-    for (const declaration of statement.declarations) {
-      if (
-        declaration.id.type !== "Identifier" ||
-        declaration.id.name !== name ||
-        declaration.init?.type !== "ArrayExpression"
-      ) {
-        continue;
-      }
-      const elements = [];
-      for (const element of declaration.init.elements) {
-        if (element == null) continue;
-        if (element.type === "Literal" && typeof element.value === "string") {
-          elements.push(element.value);
-          continue;
-        }
-        if (
-          element.type === "SpreadElement" &&
-          element.argument.type === "Identifier"
-        ) {
-          const spread = constStringArrayElements(
-            program,
-            element.argument.name,
-            depth + 1,
-          );
-          if (spread) elements.push(...spread);
-        }
-      }
-      return elements;
-    }
-  }
-  return null;
-}
-
-/**
- * Whether a declaration of `name` exists anywhere inside `container`
- * (bindings only: variable declarators and named function declarations).
- */
-function declaresName(container, name) {
-  const stack = [container];
-  while (stack.length) {
-    const current = stack.pop();
-    if (!current || typeof current.type !== "string") continue;
-    if (
-      (current.type === "VariableDeclarator" &&
-        current.id?.type === "Identifier" &&
-        current.id.name === name) ||
-      (current.type === "FunctionDeclaration" &&
-        current.id?.type === "Identifier" &&
-        current.id.name === name)
-    ) {
-      return true;
-    }
-    for (const key of Object.keys(current)) {
-      if (key === "parent" || key === "loc" || key === "range") continue;
-      const value = current[key];
-      if (Array.isArray(value)) {
-        stack.push(...value.filter((item) => item && typeof item.type === "string"));
-      } else if (value && typeof value.type === "string") {
-        stack.push(value);
-      }
-    }
-  }
-  return false;
-}
-
-/**
- * Whether a binding of `name` sits in any scope between the program root and
- * `node`: a shadowing binding makes the module-level const lookup unreliable,
- * so an `apis: <identifier>` reference must stay unresolved.
- */
-function nameIsShadowedAbove(node, name) {
-  for (let current = node.parent; current; current = current.parent) {
-    if (current.type === "Program") break;
-    if (
-      current.type === "FunctionDeclaration" ||
-      current.type === "FunctionExpression" ||
-      current.type === "ArrowFunctionExpression" ||
-      current.type === "BlockStatement"
-    ) {
-      if (declaresName(current, name)) return true;
-    }
-  }
-  return false;
-}
-
-/**
  * Whether a node:test `timers.enable(...)` call also freezes `Date`: either
  * with no options (the default mocked apis include "Date") or with an `apis`
- * value that provably names "Date" — an array of literals or a resolvable
- * top-level const array. Options that exclude "Date", or whose `apis` value
- * the rule cannot resolve to literals naming "Date", leave the wall clock
- * live and must not silence the rule.
+ * value that is an array of literals naming "Date". An identifier reference
+ * is never resolved: resolving it without real scope analysis risks reading
+ * a shadowed or reassigned binding, so an unresolvable `apis` value leaves
+ * the wall clock live and must not silence the rule.
  */
-function nodeTestTimersEnableFreezesDate(node, program) {
+function nodeTestTimersEnableFreezesDate(node) {
   const options = node.arguments[0];
   // No options at all: node:test's default mocked apis include "Date".
   if (!options) return true;
@@ -180,21 +83,9 @@ function nodeTestTimersEnableFreezesDate(node, program) {
   // override it, so the final value is not provable.
   if (options.properties.slice(apisIndex + 1).some(canOverride)) return false;
   const apis = options.properties[apisIndex];
-  let elements = null;
-  if (apis.value.type === "ArrayExpression") {
-    elements = apis.value.elements;
-  } else if (
-    apis.value.type === "Identifier" &&
-    !nameIsShadowedAbove(node, apis.value.name)
-  ) {
-    const resolved = constStringArrayElements(program, apis.value.name);
-    if (!resolved) return false;
-    elements = resolved.map((value) => ({ type: "Literal", value }));
-  } else {
-    return false;
-  }
+  if (apis.value.type !== "ArrayExpression") return false;
   // Spread or hole elements are not proof that "Date" is mocked.
-  return elements.some(
+  return apis.value.elements.some(
     (element) => element?.type === "Literal" && element.value === "Date",
   );
 }
@@ -323,14 +214,7 @@ const rule = {
     const timeDependentNodes = [];
     // True when a top-level beforeEach/beforeAll (outside any describe) has a freeze call.
     let hasFileLevelFreezing = false;
-    // The program root, for resolving top-level const `apis` lists.
-    let programNode = null;
-
     return {
-      Program(node) {
-        programNode = node;
-      },
-
       CallExpression(node) {
         const callee = node.callee;
 
@@ -357,7 +241,7 @@ const rule = {
 
         // Detect node:test's timer mock freezing Date.
         if (isNodeTestTimersEnableCall(callee)) {
-          if (nodeTestTimersEnableFreezesDate(node, programNode)) {
+          if (nodeTestTimersEnableFreezesDate(node)) {
             const enclosing = findEnclosingTestCallback(node);
             freezeCalls.push({ node, enclosing });
           }

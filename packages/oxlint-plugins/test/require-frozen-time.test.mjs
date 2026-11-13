@@ -322,7 +322,7 @@ test("still flags Date reads when apis is an identifier whose value excludes Dat
   assertFlagged(result, "frozenTime");
 });
 
-test("allows Date reads when apis is an identifier whose value names Date", async () => {
+test("still flags Date reads when apis is an identifier, even if its value names Date", async () => {
   const result = await runOxlint(["frozenTime"], `
     const clockApis = ['setTimeout', 'Date'];
     test('t', async (t) => {
@@ -330,10 +330,10 @@ test("allows Date reads when apis is an identifier whose value names Date", asyn
       expect(Date.now()).toBeGreaterThan(0);
     });
   `);
-  assertClean(result, "frozenTime");
+  assertFlagged(result, "frozenTime");
 });
 
-test("still flags Date reads when a test-local binding shadows the resolvable apis list", async () => {
+test("still flags Date reads when apis is a shadowed identifier", async () => {
   const result = await runOxlint(["frozenTime"], `
     const clockApis = ['setTimeout', 'Date'];
     test('t', async (t) => {
