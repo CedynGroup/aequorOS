@@ -276,7 +276,9 @@ def test_upload_completion_succeeds_after_head_exceeds_idle_budget(
         class SlowStorage(FakeStorage):
             def head_object(self, *, bucket: str, object_key: str) -> StoredObjectHead | None:
                 assert not api.in_transaction()
-                time.sleep(1.5)
+                # The stall must outlast the engine's 1 s idle-in-transaction
+                # budget to reproduce the server-side termination under test.
+                time.sleep(1.5)  # noqa: TID251 - deliberate stall past the idle-in-transaction timeout (#847)
                 return super().head_object(bucket=bucket, object_key=object_key)
 
         storage = SlowStorage()
@@ -427,7 +429,9 @@ def test_deletion_commits_before_storage_and_retries_under_role_timeouts(
                         )
                         is None
                     )
-                time.sleep(1.5)
+                # The stall must outlast the engine's 1 s idle-in-transaction
+                # budget to reproduce the server-side termination under test.
+                time.sleep(1.5)  # noqa: TID251 - deliberate stall past the idle-in-transaction timeout (#847)
                 if calls == 1:
                     raise TimeoutError("ambiguous storage failure")
                 super().delete_object(bucket=bucket, object_key=object_key)

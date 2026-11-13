@@ -10,6 +10,7 @@ from contextlib import contextmanager
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime
 from datetime import time as clock_time
+from threading import Event
 from typing import Annotated, Any, cast
 
 import pytest
@@ -108,22 +109,38 @@ class ExportScenario:
             )
             future = jobs.submit(self.request, query)
             try:
+                blocked = (
+                    "SELECT EXISTS (SELECT 1 FROM pg_stat_activity "
+                    "WHERE usename=:login AND application_name='aequoros-bi' "
+                    "AND wait_event_type='Lock')"
+                )
+                # The blocked read's own server-side age is the dwell clock: once
+                # it exceeds the API engine's 1 s idle-in-transaction budget, an
+                # API session that drifted into an open transaction is already
+                # terminated server-side.
+                aged = (
+                    "SELECT EXISTS (SELECT 1 FROM pg_stat_activity "
+                    "WHERE usename=:login AND application_name='aequoros-bi' "
+                    "AND wait_event_type='Lock' "
+                    "AND now() - query_start >= interval '1.5 seconds')"
+                )
                 deadline = time.monotonic() + 15
-                while not observer.scalar(
-                    text(
-                        "SELECT EXISTS (SELECT 1 FROM pg_stat_activity "
-                        "WHERE usename=:login AND application_name='aequoros-bi' "
-                        "AND wait_event_type='Lock')"
-                    ),
-                    {"login": self.bi_login},
-                ):
+                tick = Event()
+                while not observer.scalar(text(blocked), {"login": self.bi_login}):
                     observer.rollback()
                     assert not future.done(), "Export did not reach the BI pool"
                     assert time.monotonic() < deadline, "BI read did not wait on the mart lock"
-                    time.sleep(0.05)
+                    tick.wait(0.05)
                 self.idle_observations.append(self._api_state(observer))
-                # Keep BI blocked while verifying the API stays outside a transaction.
-                time.sleep(1.5)
+                # Keep BI blocked past the idle budget while verifying the API
+                # stays outside a transaction.
+                while not observer.scalar(text(aged), {"login": self.bi_login}):
+                    observer.rollback()
+                    assert not future.done(), "The API session died during the blocked export"
+                    assert time.monotonic() < deadline, (
+                        "BI lock wait never outlasted the API idle budget"
+                    )
+                    tick.wait(0.05)
                 self.idle_observations.append(self._api_state(observer))
             finally:
                 blocker.rollback()

@@ -11,6 +11,7 @@ import subprocess
 import sys
 import time
 from pathlib import Path
+from threading import Event
 
 import pytest
 
@@ -60,9 +61,10 @@ def test_has_exited_treats_an_unreaped_zombie_as_stopped():
     child = subprocess.Popen([sys.executable, "-c", "pass"])
     try:
         deadline = time.monotonic() + 10
+        tick = Event()
         while not _has_exited(child.pid):
             assert time.monotonic() < deadline, "child never exited"
-            time.sleep(0.05)
+            tick.wait(0.05)
         # Not yet waited on, so the kernel still lists it as a zombie.
         os.kill(child.pid, 0)
     finally:
@@ -119,10 +121,11 @@ def test_cancellation_allows_playwright_to_stop_detached_web_server(tmp_path):
         )
         try:
             deadline = time.monotonic() + 30
+            tick = Event()
             while not ready.exists():
                 assert wrapper.poll() is None, (tmp_path / "output.log").read_text()
                 assert time.monotonic() < deadline, (tmp_path / "output.log").read_text()
-                time.sleep(0.1)
+                tick.wait(0.1)
             pid = int(server_pid.read_text())
             wrapper.send_signal(signal.SIGTERM)
             assert wrapper.wait(timeout=30) == 130

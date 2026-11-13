@@ -15,7 +15,7 @@ from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from queue import Queue
 from threading import Event
-from time import monotonic, sleep
+from time import monotonic
 from typing import Literal, cast
 from uuid import UUID
 
@@ -597,6 +597,7 @@ def test_cfp_api_refuses_unseen_revisions_until_checker_reloads(
 
 def _wait_for_plan_row_lock(database: Engine, pid: int) -> None:
     deadline = monotonic() + 10
+    tick = Event()
     while monotonic() < deadline:
         with Session(database) as observer:
             blocked = cast(
@@ -608,7 +609,7 @@ def _wait_for_plan_row_lock(database: Engine, pid: int) -> None:
             )
         if blocked is True:
             break
-        sleep(0.01)
+        tick.wait(0.01)
     else:
         pytest.fail("The second CFP action did not wait for the plan row lock.")
 
