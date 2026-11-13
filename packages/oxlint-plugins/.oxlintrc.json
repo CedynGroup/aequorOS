@@ -1,0 +1,7 @@
+{
+  "$schema": "https://oxc.rs/oxlint/schema.json",
+  "plugins": [],
+  "categories": {
+    "correctness": "error"
+  }
+}
