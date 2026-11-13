@@ -2376,7 +2376,9 @@ def test_weekly_command_bounds_collection_within_the_runner_budget(
     assert captured["options"].deadline is not None
 
 
-def test_run_listing_skips_past_the_deadline(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_run_listing_skips_past_the_deadline(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     """The budget bounds every collection stage, not only the log fetches.
 
     A workflow whose listing cannot start past the budget is skipped with a
@@ -2387,7 +2389,7 @@ def test_run_listing_skips_past_the_deadline(monkeypatch: pytest.MonkeyPatch) ->
         workflow_files=["risk-service.yml", "web.yml"],
         min_runs_per_workflow=1,
         since="2026-11-01",
-        cache_dir=Path("/tmp/unused"),
+        cache_dir=tmp_path / "unused",
         deadline=0.0,
     )
 
@@ -2403,14 +2405,16 @@ def test_run_listing_skips_past_the_deadline(monkeypatch: pytest.MonkeyPatch) ->
     ]
 
 
-def test_job_listings_stop_past_the_deadline(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_job_listings_stop_past_the_deadline(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     """Job listing stops at the budget with a note naming the unfetched runs."""
     options = flake_report.ReportOptions(
         repo="CedynGroup/aequorOS",
         workflow_files=["risk-service.yml"],
         min_runs_per_workflow=1,
         since="2026-11-01",
-        cache_dir=Path("/tmp/unused"),
+        cache_dir=tmp_path / "unused",
         deadline=0.0,
     )
 
@@ -2427,7 +2431,7 @@ def test_job_listings_stop_past_the_deadline(monkeypatch: pytest.MonkeyPatch) ->
 
 
 def test_run_listing_reports_the_deadline_reason_between_pages(
-    monkeypatch: pytest.MonkeyPatch,
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     """Paging continues only while the budget lasts, not once per workflow."""
     options = flake_report.ReportOptions(
@@ -2435,7 +2439,7 @@ def test_run_listing_reports_the_deadline_reason_between_pages(
         workflow_files=["risk-service.yml"],
         min_runs_per_workflow=1000,
         since="2026-11-01",
-        cache_dir=Path("/tmp/unused"),
+        cache_dir=tmp_path / "unused",
         deadline=time.monotonic() + 0.05,
     )
 
@@ -2904,7 +2908,9 @@ def test_weekly_command_refuses_a_shared_cache_dir(
     assert "Weekly flake report unavailable" in stale_md.read_text(encoding="utf-8")
 
 
-def test_the_collection_deadline_stops_job_listings(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_the_collection_deadline_stops_job_listings(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     class FakeClock:
         def __init__(self) -> None:
             self.now = 0.0
@@ -2927,7 +2933,7 @@ def test_the_collection_deadline_stops_job_listings(monkeypatch: pytest.MonkeyPa
         workflow_files=["risk-service.yml"],
         min_runs_per_workflow=1,
         since="2026-10-26",
-        cache_dir=Path("/tmp/unused-cache"),
+        cache_dir=tmp_path / "unused-cache",
         deadline=1.0,
     )
     notes: list[str] = []
@@ -3029,7 +3035,9 @@ def test_a_window_covered_listing_reports_no_cutoff(monkeypatch: pytest.MonkeyPa
     assert reason is None
 
 
-def test_the_collection_deadline_stops_between_attempts(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_the_collection_deadline_stops_between_attempts(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     class FakeClock:
         def __init__(self) -> None:
             self.now = 0.0
@@ -3053,7 +3061,7 @@ def test_the_collection_deadline_stops_between_attempts(monkeypatch: pytest.Monk
         workflow_files=["risk-service.yml"],
         min_runs_per_workflow=1,
         since="2026-10-26",
-        cache_dir=Path("/tmp/unused-cache"),
+        cache_dir=tmp_path / "unused-cache",
         deadline=1.0,
     )
     notes: list[str] = []
@@ -3207,7 +3215,9 @@ def test_the_weekly_window_starts_at_its_exact_boundary(
     assert captured["options"].window_start == "2026-10-26T12:00:00Z"
 
 
-def test_pre_window_runs_are_dropped_before_classification(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_pre_window_runs_are_dropped_before_classification(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
     def fake_listing(*args: Any, **kwargs: Any) -> tuple[list[Any], str | None]:
         runs = [
             flake_report.RunRecord(
@@ -3239,7 +3249,7 @@ def test_pre_window_runs_are_dropped_before_classification(monkeypatch: pytest.M
         workflow_files=["risk-service.yml"],
         min_runs_per_workflow=10,
         since="2026-10-26",
-        cache_dir=Path("/tmp/unused-cache"),
+        cache_dir=tmp_path / "unused-cache",
         window_start="2026-10-26T12:00:00Z",
     )
     runs = flake_report._list_all_runs(options, lambda message: None, [])

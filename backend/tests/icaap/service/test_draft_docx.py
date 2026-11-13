@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import io
 import zipfile
-from datetime import date, datetime
+from datetime import UTC, date, datetime
 
 import pytest
 from docx import Document as read_document
@@ -40,7 +40,7 @@ from app.icaap.domain.document import (
 from app.icaap.service.render import format as fmt
 from app.icaap.service.render.docx import render_docx
 
-GENERATED_AT = datetime(2026, 9, 19, 12, 0, 0)
+GENERATED_AT = datetime(2026, 9, 19, 12, 0, 0, tzinfo=UTC)
 
 #: Everything the python-docx default template ships that this renderer uses.
 #: A style outside this set means the document opens with a missing style in
@@ -181,8 +181,8 @@ class TestDeterminism:
         # OOXML stores these as UTC instants; python-docx reads them back aware.
         assert properties.created is not None
         assert properties.modified is not None
-        assert properties.created.replace(tzinfo=None) == GENERATED_AT
-        assert properties.modified.replace(tzinfo=None) == GENERATED_AT
+        assert properties.created.replace(tzinfo=None) == GENERATED_AT.replace(tzinfo=None)
+        assert properties.modified.replace(tzinfo=None) == GENERATED_AT.replace(tzinfo=None)
         assert properties.author == "AequorOS"
         assert properties.revision == 1
 

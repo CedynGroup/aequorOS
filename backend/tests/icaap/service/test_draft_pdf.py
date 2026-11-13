@@ -19,7 +19,7 @@ rotated watermark and the page furniture in the same stream as the body.
 from __future__ import annotations
 
 import io
-from datetime import date, datetime
+from datetime import UTC, date, datetime
 
 import pdfplumber
 import pytest
@@ -42,7 +42,7 @@ from app.icaap.domain.document import (
 from app.icaap.service.render import format as fmt
 from app.icaap.service.render.pdf import render_pdf, render_pdf_with_report
 
-GENERATED_AT = datetime(2026, 9, 19, 12, 0, 0)
+GENERATED_AT = datetime(2026, 9, 19, 12, 0, 0, tzinfo=UTC)
 
 
 def text_of(payload: bytes) -> str:
@@ -165,7 +165,7 @@ class TestDeterminism:
         # else in the render may read a clock.
         first = build_document()
         second = build_document()
-        object.__setattr__(second, "generated_at", datetime(2026, 9, 20, 9, 0, 0))
+        object.__setattr__(second, "generated_at", datetime(2026, 9, 20, 9, 0, 0, tzinfo=UTC))
         assert render_pdf(first) != render_pdf(second)
 
 

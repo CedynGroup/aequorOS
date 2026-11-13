@@ -258,7 +258,7 @@ def test_cached_forecast_views_and_alert_counts_drop_reference_checks(
             bank_id=bank.id,
             module="forecast",
             reporting_period_id=period.id,
-            snapshot_date=date.today(),
+            snapshot_date=datetime.now(tz=UTC).astimezone().date(),
             metrics=metrics,
             status="red",
             computed_at=datetime.now(UTC),
@@ -358,7 +358,8 @@ def test_forecast_history_reuses_legacy_thresholds_only_within_bank_and_source_d
                     bank_id=owner.id,
                     module="forecast",
                     reporting_period_id=periods[source_date],
-                    snapshot_date=date.today() - timedelta(days=6 - index),
+                    snapshot_date=datetime.now(tz=UTC).astimezone().date()
+                    - timedelta(days=6 - index),
                     metrics={
                         "year5_car_pct": car,
                         "year5_lcr_pct": "80",

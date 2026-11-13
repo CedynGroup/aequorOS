@@ -110,8 +110,39 @@ line-length = 100
 target-version = "py313"
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "UP", "B", "SIM", "PL"]
+# ASYNC (async blocking calls), the pytest.raises/warns hygiene PT codes,
+# RUF006 (unstored async results), DTZ (naive clocks) and S108 (hardcoded temp
+# paths) block the flake patterns this rule set exists for. See
+# CODEBASE_CONVENTIONS.md §1, "Lint baselines", for which codes are enforced
+# here and which are enforced by the count ratchet.
+select = [
+  "E",
+  "F",
+  "I",
+  "UP",
+  "B",
+  "SIM",
+  "PL",
+  "ASYNC",
+  "DTZ",
+  "S108",
+  "RUF006",
+  "PT010",
+  "PT015",
+  "PT016",
+  "PT027",
+  "PT030",
+  "PT031",
+]
 ignore = ["PLR2004"]
+
+# DTZ is held at zero in tests by the select above. Every other tree is
+# per-file-ignored here and counted instead by scripts/lint_baseline.py, the
+# shrink-only ratchet, so existing app-side naive clocks are tracked rather
+# than suppressed. PT011, PT012, PT017 and RUF043 are not selected at all:
+# they are enforced only by the same ratchet, over tests/.
+[tool.ruff.lint.per-file-ignores]
+"!tests/**" = ["DTZ"]
 
 [tool.basedpyright]
 pythonVersion = "3.13"
