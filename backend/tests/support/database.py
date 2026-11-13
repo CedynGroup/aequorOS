@@ -29,7 +29,7 @@ from sqlalchemy.pool import Pool, PoolProxiedConnection
 # Importing the application's listener makes session.info the authority for
 # transaction-local tenant context, just as it is for application sessions.
 from app.db import session as _app_session
-from tests.support.advisory_locks import isolate_encryption_locks
+from tests.support.advisory_locks import isolate_advisory_locks
 
 _ = _app_session
 
@@ -185,7 +185,7 @@ class TestDatabaseConnections:
     def _configure(self, engine: Engine) -> None:
         event.listen(engine, "checkout", self._checkout)
         if engine.dialect.name == "postgresql" and self.context.schema is not None:
-            isolate_encryption_locks(engine, self.context.schema)
+            isolate_advisory_locks(engine, self.context.schema)
         for hook in self._hooks:
             hook(engine)
 
