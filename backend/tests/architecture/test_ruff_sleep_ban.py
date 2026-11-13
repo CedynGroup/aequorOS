@@ -17,6 +17,7 @@ import re
 import subprocess
 import sys
 import tomllib
+import uuid
 from pathlib import Path
 from typing import Any
 
@@ -97,7 +98,9 @@ PROBE = (
 
 def test_ruff_actually_flags_sleep_waits_under_tests() -> None:
     """Run Ruff itself: config-verified bans stay executable, both members."""
-    probe = BACKEND / "tests" / "_ruff_sleep_ban_probe.py"
+    # A unique probe name keeps concurrent runs on one checkout from deleting
+    # each other's file; the ban only applies under tests/, so it stays there.
+    probe = BACKEND / "tests" / f"_ruff_sleep_ban_probe_{uuid.uuid4().hex}.py"
     probe.write_text(PROBE)
     try:
         result = subprocess.run(  # noqa: S603
@@ -117,6 +120,6 @@ def test_ruff_actually_flags_sleep_waits_under_tests() -> None:
             timeout=120,
         )
     finally:
-        probe.unlink()
+        probe.unlink(missing_ok=True)
     assert result.returncode == 1
     assert result.stdout.count(SLEEP_BAN) == len(BANNED_MEMBERS)
