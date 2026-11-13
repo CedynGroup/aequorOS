@@ -93,6 +93,58 @@ function constStringArrayElements(program, name, depth = 0) {
 }
 
 /**
+ * Whether a declaration of `name` exists anywhere inside `container`
+ * (bindings only: variable declarators and named function declarations).
+ */
+function declaresName(container, name) {
+  const stack = [container];
+  while (stack.length) {
+    const current = stack.pop();
+    if (!current || typeof current.type !== "string") continue;
+    if (
+      (current.type === "VariableDeclarator" &&
+        current.id?.type === "Identifier" &&
+        current.id.name === name) ||
+      (current.type === "FunctionDeclaration" &&
+        current.id?.type === "Identifier" &&
+        current.id.name === name)
+    ) {
+      return true;
+    }
+    for (const key of Object.keys(current)) {
+      if (key === "parent" || key === "loc" || key === "range") continue;
+      const value = current[key];
+      if (Array.isArray(value)) {
+        stack.push(...value.filter((item) => item && typeof item.type === "string"));
+      } else if (value && typeof value.type === "string") {
+        stack.push(value);
+      }
+    }
+  }
+  return false;
+}
+
+/**
+ * Whether a binding of `name` sits in any scope between the program root and
+ * `node`: a shadowing binding makes the module-level const lookup unreliable,
+ * so an `apis: <identifier>` reference must stay unresolved.
+ */
+function nameIsShadowedAbove(node, name) {
+  for (let current = node.parent; current; current = current.parent) {
+    if (current.type === "Program") break;
+    if (
+      current.type === "FunctionDeclaration" ||
+      current.type === "FunctionExpression" ||
+      current.type === "ArrowFunctionExpression" ||
+      current.type === "BlockStatement"
+    ) {
+      if (declaresName(current, name)) return true;
+    }
+  }
+  return false;
+}
+
+/**
  * Whether a node:test `timers.enable(...)` call also freezes `Date`: either
  * with no options (the default mocked apis include "Date") or with an `apis`
  * value that provably names "Date" — an array of literals or a resolvable
@@ -111,21 +163,33 @@ function nodeTestTimersEnableFreezesDate(node, program) {
     !property.computed &&
     ((property.key.type === "Identifier" && property.key.name === "apis") ||
       (property.key.type === "Literal" && property.key.value === "apis"));
-  const apis = options.properties.find(namesApis);
-  // No `apis` option: node:test's default mocked apis include "Date".
-  if (!apis) {
-    return !options.properties.some(
-      (property) => property.type === "SpreadElement",
-    );
+  // Object precedence: the LAST `apis` property is the effective one.
+  let apisIndex = -1;
+  options.properties.forEach((property, index) => {
+    if (namesApis(property)) apisIndex = index;
+  });
+  const canOverride = (property) =>
+    property.type === "SpreadElement" ||
+    (property.type === "Property" && property.computed);
+  if (apisIndex === -1) {
+    // No explicit `apis`: the default mocked apis include "Date", unless a
+    // spread or computed key could override the defaults.
+    return !options.properties.some(canOverride);
   }
+  // A spread or computed key after the effective `apis` property could
+  // override it, so the final value is not provable.
+  if (options.properties.slice(apisIndex + 1).some(canOverride)) return false;
+  const apis = options.properties[apisIndex];
   let elements = null;
   if (apis.value.type === "ArrayExpression") {
     elements = apis.value.elements;
-  } else if (apis.value.type === "Identifier") {
-    elements = constStringArrayElements(program, apis.value.name)?.map(
-      (value) => ({ type: "Literal", value }),
-    );
-    if (!elements) return false;
+  } else if (
+    apis.value.type === "Identifier" &&
+    !nameIsShadowedAbove(node, apis.value.name)
+  ) {
+    const resolved = constStringArrayElements(program, apis.value.name);
+    if (!resolved) return false;
+    elements = resolved.map((value) => ({ type: "Literal", value }));
   } else {
     return false;
   }
