@@ -333,6 +333,40 @@ test("allows Date reads when apis is an identifier whose value names Date", asyn
   assertClean(result, "frozenTime");
 });
 
+test("still flags Date reads when a test-local binding shadows the resolvable apis list", async () => {
+  const result = await runOxlint(["frozenTime"], `
+    const clockApis = ['setTimeout', 'Date'];
+    test('t', async (t) => {
+      const clockApis = ['setTimeout'];
+      t.mock.timers.enable({ apis: clockApis });
+      expect(Date.now()).toBeGreaterThan(0);
+    });
+  `);
+  assertFlagged(result, "frozenTime");
+});
+
+test("still flags Date reads when a later spread overrides the apis list", async () => {
+  const result = await runOxlint(["frozenTime"], `
+    const override = { apis: ['setTimeout'] };
+    test('t', async (t) => {
+      t.mock.timers.enable({ apis: ['Date'], ...override });
+      expect(Date.now()).toBeGreaterThan(0);
+    });
+  `);
+  assertFlagged(result, "frozenTime");
+});
+
+test("allows Date reads when the apis list comes after the spread", async () => {
+  const result = await runOxlint(["frozenTime"], `
+    const defaults = { interval: 1_000 };
+    test('t', async (t) => {
+      t.mock.timers.enable({ ...defaults, apis: ['Date'] });
+      expect(Date.now()).toBeGreaterThan(0);
+    });
+  `);
+  assertClean(result, "frozenTime");
+});
+
 test("node:test mock.timers freeze covers only its own test", async () => {
   const result = await runOxlint(["frozenTime"], `
     test('frozen', async (t) => {
