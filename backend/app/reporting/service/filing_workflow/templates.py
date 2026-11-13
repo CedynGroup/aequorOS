@@ -21,12 +21,19 @@ from __future__ import annotations
 
 from uuid import UUID
 
+from fastapi import HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
+from app.core.authorization import ConditionCheck, ConditionKind, Module, Permission, Sensitivity
 from app.db.base import utc_now
-from app.identity.public import Bank
+from app.identity.public import (
+    Bank,
+    evaluate_bank_permission,
+    require_institution_coverage,
+    require_resolved_bank_permission,
+)
 from app.reporting.domain import workflow as domain
 from app.reporting.models.filing_workflow import FilingWorkflowTemplate
 from app.reporting.schemas.filing_workflow import (
@@ -37,11 +44,69 @@ from app.reporting.schemas.filing_workflow import (
     FilingWorkflowTemplateRead,
     FilingWorkflowTemplateSubmit,
     FilingWorkflowTemplateUpdate,
+    FilingWorkflowTemplateWriteAcknowledgement,
+)
+from app.reporting.service.configure_access import (
+    REG_DENIAL_DETAIL,
+    require_reporting_configure_access,
 )
 from app.reporting.service.filing_workflow.errors import conflict, not_found, unprocessable
 from app.services.audit import record_event
 
 _EDITABLE = frozenset({"draft"})
+
+
+def _require_reg_human(ctx: TenantContext) -> None:
+    """Governance of the filing chain is a human duty of this institution.
+
+    Machine principals and impersonated sessions never hold it — the same rule
+    the REG configuration cutovers enforce — so the refusal is explicit here and
+    does not depend on which route dependency resolved the caller.
+    """
+    if ctx.integration_key_id is not None or ctx.impersonation_context is not None:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=REG_DENIAL_DETAIL)
+
+
+def _list_access(db: Session, ctx: TenantContext, bank_id: str) -> Bank:
+    """Resolve the bank for the template list, then require REG/restricted view."""
+    _require_reg_human(ctx)
+    bank, _ = require_institution_coverage(db, ctx, bank_id)
+    require_resolved_bank_permission(
+        db,
+        ctx,
+        bank,
+        permission=Permission.VIEW,
+        module=Module.REGULATORY,
+        sensitivity=Sensitivity.RESTRICTED,
+        surface="filing_template_list",
+        denial_detail=REG_DENIAL_DETAIL,
+    )
+    return bank
+
+
+def _decide_access(db: Session, ctx: TenantContext, bank_id: str, template_id: UUID) -> Bank:
+    """Resolve the bank, then require REG/restricted approval with four eyes.
+
+    The maker-checker condition reaches the evaluator like the ICAAP chain's
+    does, so the proposer's refusal is a scoped denial with its reason in the
+    binding trace — evaluated before the row is locked or any state is read as
+    decided. A template that does not exist cannot make the condition fail, so
+    an unknown id still answers 404 after the gate, never before it.
+    """
+    _require_reg_human(ctx)
+    bank, _ = require_institution_coverage(db, ctx, bank_id)
+    require_resolved_bank_permission(
+        db,
+        ctx,
+        bank,
+        permission=Permission.APPROVE,
+        module=Module.REGULATORY,
+        sensitivity=Sensitivity.RESTRICTED,
+        surface="filing_template_decision",
+        conditions=approval_conditions(db, ctx, bank.id, template_id),
+        denial_detail=REG_DENIAL_DETAIL,
+    )
+    return bank
 
 
 def stage_inputs(stages: tuple[domain.FilingStage, ...]) -> list[FilingStageInput]:
@@ -97,7 +162,49 @@ def effective_stages(
     return domain.default_stages(), "platform_default", None
 
 
-def list_templates(db: Session, ctx: TenantContext, bank: Bank) -> FilingWorkflowTemplateListRead:
+def _ack(row: FilingWorkflowTemplate) -> FilingWorkflowTemplateWriteAcknowledgement:
+    """Write-only evidence: the written identity, status and server timestamps.
+
+    The chain the caller submitted is their own input; the stored row is never
+    echoed through a write response.
+    """
+    return FilingWorkflowTemplateWriteAcknowledgement(
+        id=row.id,
+        bank_id=row.bank_id,
+        version=row.version,
+        status=row.status,  # pyright: ignore[reportArgumentType]
+        created_at=row.created_at,
+        updated_at=row.updated_at,
+        submitted_at=row.submitted_at,
+    )
+
+
+def decision_payload(
+    db: Session, ctx: TenantContext, bank: Bank, row: FilingWorkflowTemplate
+) -> FilingWorkflowTemplateRead | FilingWorkflowTemplateWriteAcknowledgement:
+    """The decided row for a decider who may read the chain; otherwise the ack.
+
+    Approval authority and read authority are separate sentences. Today's
+    approver bundle carries both, so a decided row is the ordinary answer; a
+    future approval authority without view falls back to the write-only
+    acknowledgement rather than borrowing read access.
+    """
+    decision = evaluate_bank_permission(
+        db,
+        ctx,
+        bank,
+        permission=Permission.VIEW,
+        module=Module.REGULATORY,
+        sensitivity=Sensitivity.RESTRICTED,
+        surface="filing_template_decision_read",
+    )
+    if decision is not None and decision.allowed:
+        return _read(row)
+    return _ack(row)
+
+
+def list_templates(db: Session, ctx: TenantContext, bank_id: str) -> FilingWorkflowTemplateListRead:
+    bank = _list_access(db, ctx, bank_id)
     stages, source, _template = effective_stages(db, ctx, bank.id)
     rows = list(
         db.scalars(
@@ -136,8 +243,11 @@ def _next_version(db: Session, ctx: TenantContext, bank_id: str) -> int:
 
 
 def propose_template(
-    db: Session, ctx: TenantContext, bank: Bank, payload: FilingWorkflowTemplateCreate
-) -> FilingWorkflowTemplateRead:
+    db: Session, ctx: TenantContext, bank_id: str, payload: FilingWorkflowTemplateCreate
+) -> FilingWorkflowTemplateWriteAcknowledgement:
+    # Proposing a chain is a configuration duty (exact reg/configure/restricted
+    # on this bank), evaluated before any row, version number or audit event.
+    bank = require_reporting_configure_access(db, ctx, bank_id)
     stages = validate(payload.stages)
     open_draft = db.scalar(
         select(FilingWorkflowTemplate).where(
@@ -180,7 +290,7 @@ def propose_template(
     )
     db.commit()
     db.refresh(row)
-    return _read(row)
+    return _ack(row)
 
 
 def _open_or_404(
@@ -203,10 +313,11 @@ def _open_or_404(
 def update_template(
     db: Session,
     ctx: TenantContext,
-    bank: Bank,
+    bank_id: str,
     template_id: UUID,
     payload: FilingWorkflowTemplateUpdate,
-) -> FilingWorkflowTemplateRead:
+) -> FilingWorkflowTemplateWriteAcknowledgement:
+    bank = require_reporting_configure_access(db, ctx, bank_id)
     row = _open_or_404(db, ctx, bank, template_id)
     if row.status not in _EDITABLE:
         raise conflict(
@@ -227,16 +338,17 @@ def update_template(
     )
     db.commit()
     db.refresh(row)
-    return _read(row)
+    return _ack(row)
 
 
 def submit_template(
     db: Session,
     ctx: TenantContext,
-    bank: Bank,
+    bank_id: str,
     template_id: UUID,
     payload: FilingWorkflowTemplateSubmit,
-) -> FilingWorkflowTemplateRead:
+) -> FilingWorkflowTemplateWriteAcknowledgement:
+    bank = require_reporting_configure_access(db, ctx, bank_id)
     row = _open_or_404(db, ctx, bank, template_id)
     if row.status not in _EDITABLE:
         raise conflict(
@@ -258,16 +370,17 @@ def submit_template(
     )
     db.commit()
     db.refresh(row)
-    return _read(row)
+    return _ack(row)
 
 
 def decide_template(
     db: Session,
     ctx: TenantContext,
-    bank: Bank,
+    bank_id: str,
     template_id: UUID,
     payload: FilingWorkflowTemplateDecision,
-) -> FilingWorkflowTemplateRead:
+) -> FilingWorkflowTemplateRead | FilingWorkflowTemplateWriteAcknowledgement:
+    bank = _decide_access(db, ctx, bank_id, template_id)
     row = _open_or_404(db, ctx, bank, template_id)
     if row.status != "pending_approval":
         raise conflict(
@@ -275,6 +388,8 @@ def decide_template(
             "Only a filing chain that has been submitted can be decided.",
             status=row.status,
         )
+    # Re-checked under the row lock, because two requests can race between the
+    # evaluator's condition and this act; the database CHECK is the last line.
     actor = _actor(ctx)
     if row.proposed_by == actor:
         raise conflict(
@@ -306,15 +421,13 @@ def decide_template(
     )
     db.commit()
     db.refresh(row)
-    return _read(row)
+    return decision_payload(db, ctx, bank, row)
 
 
 def approval_conditions(
     db: Session, ctx: TenantContext, bank_id: str, template_id: UUID | None
-) -> tuple[object, ...]:
+) -> tuple[ConditionCheck, ...]:
     """Four eyes on the chain itself: the proposer may not approve it."""
-    from app.core.authorization import ConditionCheck, ConditionKind  # noqa: PLC0415
-
     if template_id is None:
         return ()
     row = db.scalar(
@@ -342,6 +455,7 @@ __all__ = [
     "approval_conditions",
     "approved_template",
     "decide_template",
+    "decision_payload",
     "effective_stages",
     "list_templates",
     "propose_template",

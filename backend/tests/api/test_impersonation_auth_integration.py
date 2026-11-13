@@ -133,7 +133,7 @@ def test_impersonation_blocks_every_mutation(db_client: TestClient) -> None:
     empty body still exercises the gate.
 
     This sample originally held only the first five entries — all of them already
-    behind ``MutationTenant``/``ApproverTenant`` — so it agreed with a broken
+    behind ``MutationTenant`` or the scalar approver dependency — so it agreed with a broken
     boundary: audit P0-2 found 14 mutations declared ``ctx: Tenant``, which this
     dependency never sees, and P0-3 an irreversible object-storage delete among
     them. The second block below is that blind spot, sampled directly; the

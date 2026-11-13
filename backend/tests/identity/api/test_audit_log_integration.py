@@ -1128,8 +1128,9 @@ def test_real_connection_and_template_writers_are_visible(
     db_client: TestClient, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     grant(RoleBundle.SECURITY_OFFICER)
-    # Connection lifecycle is a configure duty; the fixture officer holds it
-    # explicitly, never through the security-officer bundle.
+    # Connection lifecycle and the filing chain are configure duties; the
+    # fixture officer holds each explicitly, never through the security-officer
+    # bundle.
     with _session() as db:
         grant_institution_authority(
             db,
@@ -1138,6 +1139,15 @@ def test_real_connection_and_template_writers_are_visible(
             user_id=USER_1,
             bundle=RoleBundle.CONFIGURATOR,
             module=ModuleScope.DATA,
+            sensitivity=SensitivityScope.RESTRICTED,
+        )
+        grant_institution_authority(
+            db,
+            organization_id=ORG_1,
+            bank_id=BANK,
+            user_id=USER_1,
+            bundle=RoleBundle.CONFIGURATOR,
+            module=ModuleScope.REGULATORY,
             sensitivity=SensitivityScope.RESTRICTED,
         )
         db.commit()
@@ -1173,30 +1183,44 @@ def test_real_connection_and_template_writers_are_visible(
         proposed = templates.propose_template(
             db,
             ctx,
-            bank,
+            BANK,
             FilingWorkflowTemplateCreate(stages=stages, reason="Propose audit review chain"),
         )
         templates.update_template(
             db,
             ctx,
-            bank,
+            BANK,
             proposed.id,
             FilingWorkflowTemplateUpdate(stages=stages, reason="Review audit filing chain"),
         )
         templates.submit_template(
             db,
             ctx,
-            bank,
+            BANK,
             proposed.id,
             FilingWorkflowTemplateSubmit(reason="Submit reviewed audit chain"),
         )
         checker = User(organization_id=ORG_1, email="audit-checker@example.test")
         db.add(checker)
         db.flush()
+        grant_institution_authority(
+            db,
+            organization_id=ORG_1,
+            bank_id=BANK,
+            user_id=checker.id,
+            bundle=RoleBundle.APPROVER,
+            module=ModuleScope.REGULATORY,
+            sensitivity=SensitivityScope.RESTRICTED,
+        )
+        db.refresh(checker)
         templates.decide_template(
             db,
-            TenantContext(ORG_1, actor_user_id=checker.id),
-            bank,
+            TenantContext(
+                ORG_1,
+                actor_user_id=checker.id,
+                authorization_version=checker.authorization_version,
+            ),
+            BANK,
             proposed.id,
             FilingWorkflowTemplateDecision(
                 decision="approved", reason="Approve reviewed audit chain"

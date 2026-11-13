@@ -80,6 +80,24 @@ class FilingWorkflowTemplateRead(ClosedModel):
     updated_at: datetime
 
 
+class FilingWorkflowTemplateWriteAcknowledgement(ClosedModel):
+    """Write-only evidence of a filing-chain template write.
+
+    Carries the written row's id, the bank, the version and the status value this
+    request wrote, plus the server timestamps. The chain itself — its stages,
+    its proposer, its decision record — is stored governance content and is
+    never echoed through a write response; read it through the view-gated list.
+    """
+
+    id: UUID
+    bank_id: str
+    version: int
+    status: FilingWorkflowTemplateStatus
+    created_at: datetime
+    updated_at: datetime
+    submitted_at: datetime | None = None
+
+
 class FilingWorkflowTemplateListRead(ClosedModel):
     templates: list[FilingWorkflowTemplateRead]
     #: The chain a return sent for approval today would pin, whatever its source.
@@ -190,6 +208,7 @@ __all__ = [
     "FilingWorkflowTemplateStatus",
     "FilingWorkflowTemplateSubmit",
     "FilingWorkflowTemplateUpdate",
+    "FilingWorkflowTemplateWriteAcknowledgement",
     "PackageChainRead",
     "PackageChainViewerRead",
     "PackageSendForApproval",

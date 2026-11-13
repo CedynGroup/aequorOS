@@ -331,9 +331,10 @@ def get_tenant_context(
     (Was demo header-trust; now every request is authenticated by JWT signature.)
 
     This dependency applies NO role check: it admits ``viewer`` and ``examiner``.
-    A route that changes state must declare :data:`MutationTenant` (or
-    :data:`ApproverTenant`) — declaring :data:`Tenant` on a mutation is the P0-2
-    defect and hands ``viewer`` a write. Impersonation is refused structurally
+    A route that changes state must declare :data:`MutationTenant` (or, for a
+    service-enforced scoped write, :data:`ScopedMutationTenant`) — declaring
+    :data:`Tenant` on a mutation is the P0-2 defect and hands ``viewer`` a write.
+    Impersonation is refused structurally
     upstream (``refuse_impersonated_mutation``), but the ROLE ladder is not: it
     is the route's declaration that carries it.
     """
@@ -2321,34 +2322,9 @@ def require_liquidity_confidential_view(
     )
 
 
-def get_approver_tenant_context(
-    principal: Annotated[TenantContext, Depends(get_mutation_tenant_context)],
-) -> TenantContext:
-    """Mutation context that additionally requires the ``approver`` role.
-
-    Guards the control actions of the submission pipeline (approval decisions,
-    channel submissions, regulator polls, resubmission decisions) — mirroring
-    the ORASS split where only the Principal user may submit; analysts prepare,
-    approvers release.
-    """
-    if not security.has_role(list(principal.roles), "approver"):
-        authorization_denied(
-            reason="insufficient_role",
-            required_role="approver",
-            held_roles=",".join(principal.roles),
-            organization_id=principal.organization_id,
-        )
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="This action requires the 'approver' role or higher.",
-        )
-    return principal
-
-
 # ---------------------------------------------------------------------------
 # Regulatory package routes: family-dispatching authorization (ICAAP P3, C-4)
 # ---------------------------------------------------------------------------
-#
 # Every return read requires whole-institution family authority: Regulatory
 # Reporting/restricted by default, Capital/confidential for ICAAP. Missing VIEW
 # hides the object (404); missing action permission explains the refusal (403).
@@ -2752,7 +2728,6 @@ JobVisibility = Annotated[ColumnElement[bool], Depends(get_tenant_job_visibility
 
 MutationTenant = Annotated[TenantContext, Depends(get_mutation_tenant_context)]
 ScopedMutationTenant = Annotated[TenantContext, Depends(get_scoped_mutation_tenant_context)]
-ApproverTenant = Annotated[TenantContext, Depends(get_approver_tenant_context)]
 GrantAdminTenant = Annotated[TenantContext, Depends(require_grant_administration)]
 LiquidityMonitoringResource = Annotated[
     LiquidityMonitoringAccess, Depends(require_liquidity_monitoring_view)

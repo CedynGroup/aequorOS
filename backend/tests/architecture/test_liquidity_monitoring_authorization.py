@@ -36,7 +36,6 @@ def test_liquidity_monitoring_route_cannot_revert_to_legacy_authorization() -> N
     assert "require_liquidity_monitoring_view" in dependencies
     assert not any(name.startswith("require_role_") for name in dependencies)
     assert "get_mutation_tenant_context" not in dependencies
-    assert "get_approver_tenant_context" not in dependencies
 
 
 def test_remaining_liquidity_reads_use_scoped_dependencies_without_role_fallback() -> None:
@@ -56,7 +55,6 @@ def test_remaining_liquidity_reads_use_scoped_dependencies_without_role_fallback
         assert "require_liquidity_confidential_view" in dependencies, path
         assert not any(name.startswith("require_role_") for name in dependencies), path
         assert "get_mutation_tenant_context" not in dependencies, path
-        assert "get_approver_tenant_context" not in dependencies, path
 
     dashboard_dependencies = _dependency_names(
         _route("/api/v1/banks/{bank_id}/liquidity/dashboard", "GET")
@@ -96,7 +94,6 @@ def test_liquidity_mutations_use_service_enforced_scoped_principal_boundary() ->
             path,
         )
         assert "get_mutation_tenant_context" not in dependencies, (method, path)
-        assert "get_approver_tenant_context" not in dependencies, (method, path)
 
 
 def test_configuration_puts_require_service_enforced_scoped_authority() -> None:
@@ -108,5 +105,4 @@ def test_configuration_puts_require_service_enforced_scoped_authority() -> None:
     for path in held_routes:
         dependencies = _dependency_names(_route(path, "PUT"))
         assert "get_scoped_mutation_tenant_context" in dependencies, path
-        assert "get_approver_tenant_context" not in dependencies, path
         assert "get_mutation_tenant_context" not in dependencies, path

@@ -11,9 +11,9 @@ mutation:
    ``ctx`` dependency a route declares. The one documented exemption is
    ``deps.IMPERSONATION_READ_ONLY_ROUTES``.
 2. **Role ladder.** ``viewer`` and ``examiner`` are read-only. This one is NOT
-   structural — it is carried by the route's own ``MutationTenant`` /
-   ``ApproverTenant`` declaration — so the route-table sweep below is what keeps
-   it honest: it is the test that would have caught P0-2.
+   structural — it is carried by the route's own ``MutationTenant`` declaration —
+   so the route-table sweep below is what keeps it honest: it is the test that
+   would have caught P0-2.
 
 The earlier suite (``test_impersonation_auth.py``) sampled five paths that all
 already used ``MutationTenant``, so it could not see the defect. This one walks
@@ -226,8 +226,8 @@ def test_account_admin_cannot_use_the_regulatory_submission_route(
 
     REWRITTEN 2026-09-20. This test used to assert 403 on a package that does
     not exist, and its docstring said why: "the role dependency runs before the
-    workflow lookup". That was true while submit was gated by the scalar
-    ``ApproverTenant``, and it is the contract the filing cutover removed —
+    workflow lookup". That was true while submit was gated by the scalar approver
+    dependency, and it is the contract the filing cutover removed —
     transmission is now a scoped authority, so the route resolves the resource
     first like every other binding-enforced package route.
 
@@ -544,8 +544,8 @@ def test_analyst_can_record_a_case_decision(
     """``POST /cases/{id}/decisions`` preserves scoped Analyst preparation authority.
 
     The endpoint is mixed: ``needs_more_info`` and ``escalated`` are triage acts
-    an analyst must be able to perform. Promoting the whole route to
-    ``ApproverTenant`` would take case triage away from analysts, so the
+    an analyst must be able to perform. Promoting the whole route to the approver
+    ladder would take case triage away from analysts, so the
     four-eyes split on the terminal approve/reject belongs in a separate,
     approver-gated route — a product change, not this authorization fix.
     """
@@ -559,15 +559,49 @@ def test_analyst_can_record_a_case_decision(
     assert response.json()["decision"] == "needs_more_info"
 
 
-def test_approver_ladder_still_gates_an_approval_action(db_client: TestClient) -> None:
-    """``ApproverTenant`` remains distinct from the analyst floor."""
+def test_filing_chain_decision_is_scoped_approve_gated(db_client: TestClient) -> None:
+    """Deciding a filing chain needs the exact REG/restricted APPROVE binding,
+    not a scalar ``approver`` role.
+
+    The decision route no longer declares a scalar approval ladder: the mutation
+    boundary here is the service's scoped gate, so a token that carries the
+    ``approver`` role but no binding is refused with the shared denial, and the
+    exact binding admits the caller to the (here unknown) object.
+    """
     _materialize_sample_bank()
     path = f"/api/v1/banks/{SAMPLE_BANK_ID}/filing-workflow-templates/{uuid4()}/decision"
-    payload = {"decision": "approved", "reason": "Exercise the approval role boundary."}
-    refused = db_client.post(path, headers=headers(roles=("analyst",)), json=payload)
+    payload = {"decision": "approved", "reason": "Exercise the scoped approval boundary."}
+    refused = db_client.post(path, headers=headers(roles=("approver",)), json=payload)
     assert refused.status_code == 403, refused.text
 
-    admitted = db_client.post(path, headers=headers(roles=("approver",)), json=payload)
+    session = get_sessionmaker()()
+    session.info["organization_id"] = ORG_1
+    try:
+        authorization.create_role_binding(
+            session,
+            organization_id=ORG_1,
+            principal_user_id=USER_1,
+            principal_type=PrincipalType.HUMAN,
+            role_bundle=RoleBundle.APPROVER,
+            scope=authorization.BindingScope(
+                InstitutionScope.INSTITUTION,
+                SAMPLE_BANK_ID,
+                ModuleScope.REGULATORY,
+                SensitivityScope.RESTRICTED,
+            ),
+            grantor=authorization.GrantorRef(GrantorType.SYSTEM, "test-suite"),
+            reason="exercise the filing decision scoped gate",
+        )
+        user = session.get(User, USER_1)
+        assert user is not None
+        session.refresh(user)
+        version = user.authorization_version
+    finally:
+        session.close()
+    assert version is not None
+    admitted = db_client.post(
+        path, headers=headers(authorization_version=version), json=payload
+    )
     assert admitted.status_code == 404, admitted.text
 
 

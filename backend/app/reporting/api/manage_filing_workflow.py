@@ -22,12 +22,11 @@ from uuid import UUID
 from fastapi import APIRouter, status
 
 from app.api.deps import (
-    ApproverTenant,
     DbSession,
-    MutationTenant,
     PackageEdit,
     PackageStageDecide,
     PackageView,
+    ScopedMutationTenant,
     Tenant,
 )
 from app.reporting.schemas.filing_workflow import (
@@ -37,12 +36,12 @@ from app.reporting.schemas.filing_workflow import (
     FilingWorkflowTemplateRead,
     FilingWorkflowTemplateSubmit,
     FilingWorkflowTemplateUpdate,
+    FilingWorkflowTemplateWriteAcknowledgement,
     PackageChainRead,
     PackageSendForApproval,
     PackageStageDecisionCreate,
 )
 from app.reporting.service import workflow as reporting_workflow
-from app.reporting.service.common import get_bank_or_404
 from app.reporting.service.filing_workflow import chain as filing_chain
 from app.reporting.service.filing_workflow import templates as filing_templates
 from app.schemas.common import ErrorResponse
@@ -75,12 +74,12 @@ def list_filing_workflow_templates(
     bank_id: str, db: DbSession, ctx: Tenant
 ) -> FilingWorkflowTemplateListRead:
     """Every proposed chain, plus the one a return sent for approval now would pin."""
-    return filing_templates.list_templates(db, ctx, get_bank_or_404(db, ctx, bank_id))
+    return filing_templates.list_templates(db, ctx, bank_id)
 
 
 @router.post(
     _TEMPLATES,
-    response_model=FilingWorkflowTemplateRead,
+    response_model=FilingWorkflowTemplateWriteAcknowledgement,
     status_code=status.HTTP_201_CREATED,
     operation_id="proposeFilingWorkflowTemplate",
     responses=_ERRORS,
@@ -89,15 +88,15 @@ def propose_filing_workflow_template(
     bank_id: str,
     payload: FilingWorkflowTemplateCreate,
     db: DbSession,
-    ctx: MutationTenant,
-) -> FilingWorkflowTemplateRead:
+    ctx: ScopedMutationTenant,
+) -> FilingWorkflowTemplateWriteAcknowledgement:
     """Propose a filing chain. It governs nothing until somebody else approves it."""
-    return filing_templates.propose_template(db, ctx, get_bank_or_404(db, ctx, bank_id), payload)
+    return filing_templates.propose_template(db, ctx, bank_id, payload)
 
 
 @router.patch(
     _TEMPLATE,
-    response_model=FilingWorkflowTemplateRead,
+    response_model=FilingWorkflowTemplateWriteAcknowledgement,
     operation_id="updateFilingWorkflowTemplate",
     responses=_ERRORS,
 )
@@ -106,16 +105,14 @@ def update_filing_workflow_template(
     template_id: UUID,
     payload: FilingWorkflowTemplateUpdate,
     db: DbSession,
-    ctx: MutationTenant,
-) -> FilingWorkflowTemplateRead:
-    return filing_templates.update_template(
-        db, ctx, get_bank_or_404(db, ctx, bank_id), template_id, payload
-    )
+    ctx: ScopedMutationTenant,
+) -> FilingWorkflowTemplateWriteAcknowledgement:
+    return filing_templates.update_template(db, ctx, bank_id, template_id, payload)
 
 
 @router.post(
     f"{_TEMPLATE}/submit",
-    response_model=FilingWorkflowTemplateRead,
+    response_model=FilingWorkflowTemplateWriteAcknowledgement,
     operation_id="submitFilingWorkflowTemplate",
     responses=_ERRORS,
 )
@@ -124,16 +121,14 @@ def submit_filing_workflow_template(
     template_id: UUID,
     payload: FilingWorkflowTemplateSubmit,
     db: DbSession,
-    ctx: MutationTenant,
-) -> FilingWorkflowTemplateRead:
-    return filing_templates.submit_template(
-        db, ctx, get_bank_or_404(db, ctx, bank_id), template_id, payload
-    )
+    ctx: ScopedMutationTenant,
+) -> FilingWorkflowTemplateWriteAcknowledgement:
+    return filing_templates.submit_template(db, ctx, bank_id, template_id, payload)
 
 
 @router.post(
     f"{_TEMPLATE}/decision",
-    response_model=FilingWorkflowTemplateRead,
+    response_model=FilingWorkflowTemplateRead | FilingWorkflowTemplateWriteAcknowledgement,
     operation_id="decideFilingWorkflowTemplate",
     responses=_ERRORS,
 )
@@ -142,12 +137,14 @@ def decide_filing_workflow_template(
     template_id: UUID,
     payload: FilingWorkflowTemplateDecision,
     db: DbSession,
-    ctx: ApproverTenant,
-) -> FilingWorkflowTemplateRead:
-    """Approve or reject a proposed chain. Never by whoever proposed it."""
-    return filing_templates.decide_template(
-        db, ctx, get_bank_or_404(db, ctx, bank_id), template_id, payload
-    )
+    ctx: ScopedMutationTenant,
+) -> FilingWorkflowTemplateRead | FilingWorkflowTemplateWriteAcknowledgement:
+    """Approve or reject a proposed chain. Never by whoever proposed it.
+
+    The decided row comes back only when the decider may also read the chain;
+    otherwise the answer is the write-only acknowledgement.
+    """
+    return filing_templates.decide_template(db, ctx, bank_id, template_id, payload)
 
 
 # ---------------------------------------------------------------------------

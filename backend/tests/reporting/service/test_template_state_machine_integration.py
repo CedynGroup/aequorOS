@@ -18,6 +18,13 @@ from hypothesis.stateful import initialize, invariant, rule
 from sqlalchemy.orm import Session
 
 from app.api.deps import IcaapAccess, TenantContext
+from app.core.authorization import (
+    InstitutionScope,
+    ModuleScope,
+    PrincipalType,
+    RoleBundle,
+    SensitivityScope,
+)
 from app.icaap.domain.frameworks import registry
 from app.icaap.schemas.workspace import (
     IcaapWorkflowTemplateCreate,
@@ -28,6 +35,7 @@ from app.icaap.schemas.workspace import (
     IcaapWorkflowTemplateUpdate,
 )
 from app.icaap.service import workflow_templates as icaap
+from app.identity.service import authorization
 from app.models import Bank
 from app.reporting.schemas.filing_workflow import (
     FilingWorkflowTemplateCreate,
@@ -36,6 +44,7 @@ from app.reporting.schemas.filing_workflow import (
     FilingWorkflowTemplateRead,
     FilingWorkflowTemplateSubmit,
     FilingWorkflowTemplateUpdate,
+    FilingWorkflowTemplateWriteAcknowledgement,
 )
 from app.reporting.service.filing_workflow import templates as filing
 from tests.icaap.service.p3_support import FRAMEWORK_ROOT
@@ -54,7 +63,11 @@ from tests.reporting.testing.generators import filing_stages, stage_titles
 from tests.support.helpers import ORG_1, ORG_2, USER_1, USER_2
 from tests.support.stateful import DatabaseMachine, run_database_machine, success_events
 
-type TemplateRead = FilingWorkflowTemplateRead | IcaapWorkflowTemplateRead
+type TemplateRead = (
+    FilingWorkflowTemplateRead
+    | FilingWorkflowTemplateWriteAcknowledgement
+    | IcaapWorkflowTemplateRead
+)
 type TemplateList = FilingWorkflowTemplateListRead | IcaapWorkflowTemplateListRead
 type Kind = Literal["filing", "icaap"]
 type Decision = Literal["approved", "rejected"]
@@ -82,6 +95,51 @@ class TemplateMachine(DatabaseMachine):
         self.prefix = (
             "filing_workflow_template." if kind == "filing" else "icaap.workflow_template."
         )
+        if kind == "filing":
+            # The filing service enforces the exact REG sentence itself, so its
+            # direct callers hold the bindings a route caller would need: both
+            # officers may propose, edit and submit, and either may decide the
+            # other's chain (the maker-checker condition still separates them).
+            # An organisation-wide REG view keeps the sibling bank covered, so a
+            # sibling-bank command is refused with the scoped denial (403)
+            # rather than hidden.
+            for actor in ACTORS:
+                authorization.create_role_binding(
+                    self.db,
+                    organization_id=ORG_1,
+                    principal_user_id=actor,
+                    principal_type=PrincipalType.HUMAN,
+                    role_bundle=RoleBundle.VIEWER,
+                    scope=authorization.BindingScope(
+                        InstitutionScope.ORGANIZATION,
+                        None,
+                        ModuleScope.REGULATORY,
+                        SensitivityScope.RESTRICTED,
+                    ),
+                    grantor=authorization.GrantorRef(
+                        authorization.GrantorType.SYSTEM, "template-machine"
+                    ),
+                    reason="filing template machine actors",
+                )
+                for bundle in (RoleBundle.CONFIGURATOR, RoleBundle.APPROVER):
+                    authorization.create_role_binding(
+                        self.db,
+                        organization_id=ORG_1,
+                        principal_user_id=actor,
+                        principal_type=PrincipalType.HUMAN,
+                        role_bundle=bundle,
+                        scope=authorization.BindingScope(
+                            InstitutionScope.INSTITUTION,
+                            BANK_A,
+                            ModuleScope.REGULATORY,
+                            SensitivityScope.RESTRICTED,
+                        ),
+                        grantor=authorization.GrantorRef(
+                            authorization.GrantorType.SYSTEM, "template-machine"
+                        ),
+                        reason="filing template machine actors",
+                    )
+            self.db.commit()
 
     def scope(self, actor: int = 0, wrong: str = "none") -> IcaapAccess:
         bank = self.db.get(Bank, BANK_B if wrong == "bank" else BANK_A)
@@ -98,7 +156,7 @@ class TemplateMachine(DatabaseMachine):
     def listing(self, wrong: str = "none") -> TemplateList:
         access = self.scope(wrong=wrong)
         if self.kind == "filing":
-            return filing.list_templates(self.db, access.ctx, access.bank)
+            return filing.list_templates(self.db, access.ctx, access.bank.id)
         return icaap.list_templates(self.db, access, self.framework)
 
     def command(  # noqa: PLR0911, PLR0913 - two public service contracts, one model
@@ -116,7 +174,7 @@ class TemplateMachine(DatabaseMachine):
                 return filing.propose_template(
                     self.db,
                     access.ctx,
-                    access.bank,
+                    access.bank.id,
                     FilingWorkflowTemplateCreate(stages=filing_stages(title), reason=REASON),
                 )
             return icaap.propose_template(
@@ -131,7 +189,7 @@ class TemplateMachine(DatabaseMachine):
                 return filing.update_template(
                     self.db,
                     access.ctx,
-                    access.bank,
+                    access.bank.id,
                     template_id,
                     FilingWorkflowTemplateUpdate(stages=filing_stages(title), reason=REASON),
                 )
@@ -139,14 +197,14 @@ class TemplateMachine(DatabaseMachine):
                 return filing.submit_template(
                     self.db,
                     access.ctx,
-                    access.bank,
+                    access.bank.id,
                     template_id,
                     FilingWorkflowTemplateSubmit(reason=REASON),
                 )
             return filing.decide_template(
                 self.db,
                 access.ctx,
-                access.bank,
+                access.bank.id,
                 template_id,
                 FilingWorkflowTemplateDecision(decision=decision, reason=REASON),
             )
@@ -178,6 +236,31 @@ class TemplateMachine(DatabaseMachine):
             tuple((key, success_events(self.db, key, self.prefix)) for key in self.expected),
         )
 
+    def _refusal_status(
+        self,
+        action: str,
+        actor: int,
+        expected: ExpectedTemplate | None,
+        wrong: str,
+    ) -> int:
+        # The filing service evaluates the exact REG sentence itself: a
+        # sibling-bank caller is refused with the scoped denial (403), a caller
+        # without coverage stays hidden (404), the maker-checker condition
+        # refuses the proposer before the row lock (403), and the status
+        # conflicts keep their 409. The ICAAP twin keeps its pre-authorized
+        # service contract (404 for a wrong scope, 409 otherwise).
+        if self.kind != "filing":
+            return 404 if wrong != "none" else 409
+        maker_refusal = (
+            wrong == "none"
+            and action == "decide"
+            and expected is not None
+            and expected.maker == ACTORS[actor]
+        )
+        if wrong == "bank" or maker_refusal:
+            return 403
+        return 404 if wrong == "tenant" else 409
+
     def apply(  # noqa: PLR0913 - independently generated command dimensions
         self,
         action: str,
@@ -206,7 +289,8 @@ class TemplateMachine(DatabaseMachine):
             result = self.command(action, actor, key, title, decision, wrong)
         except HTTPException as exc:
             self.db.rollback()
-            assert not legal and exc.status_code == (404 if wrong != "none" else 409)
+            expected_status = self._refusal_status(action, actor, expected, wrong)
+            assert not legal and exc.status_code == expected_status
             assert_refused_approval_unchanged(self.evidence(), before)
             return
         assert legal
@@ -222,6 +306,9 @@ class TemplateMachine(DatabaseMachine):
             elif action == "submit":
                 expected.status = "pending_approval"
             else:
+                assert isinstance(
+                    result, (FilingWorkflowTemplateRead, IcaapWorkflowTemplateRead)
+                )
                 expected.status = decision
                 assert result.decided_by == ACTORS[actor] and result.decided_at is not None
                 assert result.decision_reason == REASON
@@ -310,8 +397,17 @@ class TemplateMachine(DatabaseMachine):
             assert tuple(stage.model_dump_json() for stage in listing.effective_stages) == tuple(
                 stage.model_dump_json() for stage in selected.stages
             )
+        # Both services scope the listing to the one bank: the sibling has no
+        # templates (the filing actors' organisation-wide view binding keeps the
+        # sibling covered, so its answer is an empty list, not a refusal). A
+        # foreign tenant is hidden — refused outright by the filing gate.
         assert self.listing("bank").templates == []
-        assert self.listing("tenant").templates == []
+        if self.kind == "filing":
+            with pytest.raises(HTTPException) as foreign:
+                self.listing("tenant")
+            assert foreign.value.status_code == 404
+        else:
+            assert self.listing("tenant").templates == []
 
 
 @pytest.mark.parametrize("kind", ("filing", "icaap"))

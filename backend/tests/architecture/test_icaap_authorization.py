@@ -212,7 +212,6 @@ def test_no_icaap_route_falls_back_to_the_scalar_role_ladder() -> None:
         scoped = {name for name in names if name.startswith("require_icaap_")}
         assert len(scoped) == 1, f"{route.methods} {route.path}: {sorted(scoped)}"
         assert "get_mutation_tenant_context" not in names
-        assert "get_approver_tenant_context" not in names
         assert not any(name.startswith("require_role_") for name in names)
         # ``require_module_access`` answers 403; an institution outside the
         # ICAAP regime must see 404, and the class guard lives in the
