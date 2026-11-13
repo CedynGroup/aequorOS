@@ -7,10 +7,11 @@
  *
  * Output: e2e/.tmp/visual-tour/<route>.png
  */
-import { expect, test } from "@playwright/test";
+import { test } from "@playwright/test";
 import { mkdirSync } from "fs";
 import path from "path";
 import { E2E_TMP } from "../../playwright.config";
+import { settleForCapture } from "../../e2e/support/capture";
 import { requireObjectStorage } from "../../e2e/support/object-storage";
 
 const OUT = path.join(E2E_TMP, "visual-tour");
@@ -105,13 +106,13 @@ test.describe("visual tour", () => {
     mkdirSync(OUT, { recursive: true });
     for (const route of ROUTES) {
       await page.goto(route, { waitUntil: "load" }).catch(() => {});
-      // Capture once the route's own data has rendered: every loading
+      // Capture once the route's visible data has rendered: every loading
       // skeleton in the app carries the `animate-pulse` shimmer and clears
       // when its query lands, and charts render with `animation: false`
-      // (lib/echartsOptions.ts), so no animation settling is needed.
-      await expect(page.locator(".animate-pulse")).toHaveCount(0, {
-        timeout: 20_000,
-      });
+      // (lib/echartsOptions.ts). Below-the-fold placeholders (the home page's
+      // deferred trend-chart chips) are permanent by design, so the settle
+      // watches the viewport only. Evidence-only: never fails the tour.
+      await settleForCapture(page, 20_000);
       const name =
         route === "/" ? "home" : route.slice(1).replaceAll("/", "__");
       await page.screenshot({

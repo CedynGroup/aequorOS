@@ -301,6 +301,38 @@ test("still flags Date reads when node:test's mock.timers excludes Date", async 
   assertFlagged(result, "frozenTime");
 });
 
+test("still flags Date reads when the apis key is quoted and excludes Date", async () => {
+  const result = await runOxlint(["frozenTime"], `
+    test('t', async (t) => {
+      t.mock.timers.enable({ 'apis': ['setTimeout'] });
+      expect(Date.now()).toBeGreaterThan(0);
+    });
+  `);
+  assertFlagged(result, "frozenTime");
+});
+
+test("still flags Date reads when apis is an identifier whose value excludes Date", async () => {
+  const result = await runOxlint(["frozenTime"], `
+    const timerApis = ['setTimeout'];
+    test('t', async (t) => {
+      t.mock.timers.enable({ apis: timerApis });
+      expect(Date.now()).toBeGreaterThan(0);
+    });
+  `);
+  assertFlagged(result, "frozenTime");
+});
+
+test("allows Date reads when apis is an identifier whose value names Date", async () => {
+  const result = await runOxlint(["frozenTime"], `
+    const clockApis = ['setTimeout', 'Date'];
+    test('t', async (t) => {
+      t.mock.timers.enable({ apis: clockApis });
+      expect(Date.now()).toBeGreaterThan(0);
+    });
+  `);
+  assertClean(result, "frozenTime");
+});
+
 test("node:test mock.timers freeze covers only its own test", async () => {
   const result = await runOxlint(["frozenTime"], `
     test('frozen', async (t) => {

@@ -48,23 +48,89 @@ function isNodeTestTimersEnableCall(callee) {
 }
 
 /**
+ * Top-level `const` bindings whose value is a plain array of string literals,
+ * collected once per program so an `apis: <identifier>` option can be resolved
+ * one level deep (module-scoped lists are the common shape). Returns the
+ * literal string elements, or null when the binding is missing or unresolvable.
+ */
+function constStringArrayElements(program, name, depth = 0) {
+  if (!program || depth > 1) return null;
+  for (const statement of program.body) {
+    if (statement.type !== "VariableDeclaration" || statement.kind !== "const") {
+      continue;
+    }
+    for (const declaration of statement.declarations) {
+      if (
+        declaration.id.type !== "Identifier" ||
+        declaration.id.name !== name ||
+        declaration.init?.type !== "ArrayExpression"
+      ) {
+        continue;
+      }
+      const elements = [];
+      for (const element of declaration.init.elements) {
+        if (element == null) continue;
+        if (element.type === "Literal" && typeof element.value === "string") {
+          elements.push(element.value);
+          continue;
+        }
+        if (
+          element.type === "SpreadElement" &&
+          element.argument.type === "Identifier"
+        ) {
+          const spread = constStringArrayElements(
+            program,
+            element.argument.name,
+            depth + 1,
+          );
+          if (spread) elements.push(...spread);
+        }
+      }
+      return elements;
+    }
+  }
+  return null;
+}
+
+/**
  * Whether a node:test `timers.enable(...)` call also freezes `Date`: either
  * with no options (the default mocked apis include "Date") or with an `apis`
- * array that names it. Options that explicitly exclude "Date" leave the wall
- * clock live and must not silence the rule.
+ * value that provably names "Date" — an array of literals or a resolvable
+ * top-level const array. Options that exclude "Date", or whose `apis` value
+ * the rule cannot resolve to literals naming "Date", leave the wall clock
+ * live and must not silence the rule.
  */
-function nodeTestTimersEnableFreezesDate(node) {
+function nodeTestTimersEnableFreezesDate(node, program) {
   const options = node.arguments[0];
-  if (!options || options.type !== "ObjectExpression") return true;
-  const apis = options.properties.find(
-    (property) =>
-      property.type === "Property" &&
-      !property.computed &&
-      property.key.type === "Identifier" &&
-      property.key.name === "apis",
-  );
-  if (!apis || apis.value.type !== "ArrayExpression") return true;
-  return apis.value.elements.some(
+  // No options at all: node:test's default mocked apis include "Date".
+  if (!options) return true;
+  // A non-object first argument (identifier, spread call, ...) is not proof.
+  if (options.type !== "ObjectExpression") return false;
+  const namesApis = (property) =>
+    property.type === "Property" &&
+    !property.computed &&
+    ((property.key.type === "Identifier" && property.key.name === "apis") ||
+      (property.key.type === "Literal" && property.key.value === "apis"));
+  const apis = options.properties.find(namesApis);
+  // No `apis` option: node:test's default mocked apis include "Date".
+  if (!apis) {
+    return !options.properties.some(
+      (property) => property.type === "SpreadElement",
+    );
+  }
+  let elements = null;
+  if (apis.value.type === "ArrayExpression") {
+    elements = apis.value.elements;
+  } else if (apis.value.type === "Identifier") {
+    elements = constStringArrayElements(program, apis.value.name)?.map(
+      (value) => ({ type: "Literal", value }),
+    );
+    if (!elements) return false;
+  } else {
+    return false;
+  }
+  // Spread or hole elements are not proof that "Date" is mocked.
+  return elements.some(
     (element) => element?.type === "Literal" && element.value === "Date",
   );
 }
@@ -193,8 +259,14 @@ const rule = {
     const timeDependentNodes = [];
     // True when a top-level beforeEach/beforeAll (outside any describe) has a freeze call.
     let hasFileLevelFreezing = false;
+    // The program root, for resolving top-level const `apis` lists.
+    let programNode = null;
 
     return {
+      Program(node) {
+        programNode = node;
+      },
+
       CallExpression(node) {
         const callee = node.callee;
 
@@ -221,7 +293,7 @@ const rule = {
 
         // Detect node:test's timer mock freezing Date.
         if (isNodeTestTimersEnableCall(callee)) {
-          if (nodeTestTimersEnableFreezesDate(node)) {
+          if (nodeTestTimersEnableFreezesDate(node, programNode)) {
             const enclosing = findEnclosingTestCallback(node);
             freezeCalls.push({ node, enclosing });
           }
