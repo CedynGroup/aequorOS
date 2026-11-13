@@ -7,7 +7,7 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime, timedelta
 from queue import Queue
 from threading import Event
-from time import monotonic, sleep
+from time import monotonic
 from typing import cast
 from uuid import UUID, uuid4
 
@@ -141,6 +141,7 @@ def test_scheduler_enqueues_purge_without_other_features_and_handler_rechecks_sw
 
 def _wait_for_purge_lock(bind: Engine | Connection, pid: int) -> None:
     deadline = monotonic() + 10
+    tick = Event()
     while monotonic() < deadline:
         with Session(bind) as observer:
             if (
@@ -151,7 +152,7 @@ def _wait_for_purge_lock(bind: Engine | Connection, pid: int) -> None:
                 is True
             ):
                 return
-        sleep(0.01)
+        tick.wait(0.01)
     pytest.fail("The concurrent tenant tick did not wait for the transaction lock.")
 
 

@@ -127,6 +127,7 @@ select = [
   "DTZ",
   "S108",
   "RUF006",
+  "TID251",
   "PT010",
   "PT015",
   "PT016",
@@ -136,13 +137,18 @@ select = [
 ]
 ignore = ["PLR2004"]
 
+[tool.ruff.lint.flake8-tidy-imports.banned-api]
+"time.sleep".msg = "Sleep-based waits hide the condition actually being waited for; poll the condition, event or deadline instead (tests) — app retry backoff is exempt via per-file-ignores."
+"asyncio.sleep".msg = "Sleep-based waits hide the condition actually being waited for; await the condition, event or deadline instead (tests) — app retry backoff is exempt via per-file-ignores."
+
 # DTZ is held at zero in tests by the select above. Every other tree is
 # per-file-ignored here and counted instead by scripts/lint_baseline.py, the
 # shrink-only ratchet, so existing app-side naive clocks are tracked rather
 # than suppressed. PT011, PT012, PT017 and RUF043 are not selected at all:
-# they are enforced only by the same ratchet, over tests/.
+# they are enforced only by the same ratchet, over tests/. TID251 bans
+# sleep-based waits in tests only; app retry backoff keeps its sleeps.
 [tool.ruff.lint.per-file-ignores]
-"!tests/**" = ["DTZ"]
+"!tests/**" = ["DTZ", "TID251"]
 
 [tool.basedpyright]
 pythonVersion = "3.13"

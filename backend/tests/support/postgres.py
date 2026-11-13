@@ -1,7 +1,8 @@
 """Observe real PostgreSQL lock contention before releasing a test's holder."""
 
 from concurrent.futures import Future
-from time import monotonic, sleep
+from threading import Event
+from time import monotonic
 from typing import cast
 
 from sqlalchemy import Engine, text
@@ -14,6 +15,7 @@ def wait_for_blocker[T](
     contender: Future[T],
 ) -> None:
     deadline = monotonic() + 10
+    tick = Event()
     with engine.connect() as observer:
         while monotonic() < deadline:
             if contender.done():
@@ -30,5 +32,5 @@ def wait_for_blocker[T](
             if blocked is True:
                 assert not contender.done(), "Contender completed while its holder was locked"
                 return
-            sleep(0.01)
+            tick.wait(0.01)
     raise AssertionError(f"Backend {contender_pid} never waited for holder {blocker_pid}")
