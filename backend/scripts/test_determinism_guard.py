@@ -3,12 +3,17 @@
 AQPY001 flags clock reads (``datetime.now/utcnow/today``, ``date.today``,
 ``time.time`` and the platform's ``utc_now`` helpers) anywhere under
 ``tests/`` — fixtures, ``tests/support`` and module level included — that are
-not frozen: reads are accepted under a ``freeze_time`` marker on the function,
-class or module ``pytestmark``, inside ``with time_machine.travel(...)``, or in
-a function that takes the ``frozen_clock`` fixture. ``time.monotonic`` and
-``time.perf_counter`` measure elapsed time, not the calendar, and are never
-flagged. AQPY000 flags a ``# noqa: AQPY001`` or ``# noqa: TID251`` comment that
-lacks the ``- <reason> (#<issue>)`` tail.
+not frozen. Test-execution reads are accepted under a ``freeze_time`` marker on
+the function, class or module ``pytestmark``, inside
+``with time_machine.travel(..., tick=False)`` (a ticking or ``None``-targeted
+travel is not a deterministic instant), or in a function that takes the
+``frozen_clock`` fixture. Import-time reads (module and class body statements,
+default arguments) run before any travel starts, so a marker never covers them.
+``time.monotonic`` and ``time.perf_counter`` measure elapsed time, not the
+calendar, and are never flagged. A read carrying a valid
+``# noqa: AQPY001 - <reason> (#<issue>)`` is excluded from the count. AQPY000
+flags a ``# noqa: AQPY001`` or ``# noqa: TID251`` comment that lacks the
+``- <reason> (#<issue>)`` tail.
 
 The allowlist records counts by path and rule, not line numbers. New reads fail
 immediately; removing reads requires shrinking the allowlist (stale counts fail
@@ -19,11 +24,11 @@ from __future__ import annotations
 
 import argparse
 import ast
+import dataclasses
 import io
 import re
 import symtable
 import tokenize
-from collections import Counter
 from collections.abc import Sequence
 from pathlib import Path
 
@@ -84,6 +89,13 @@ class ClockVisitor(ast.NodeVisitor):
     assignments feed a per-scope alias map, ``symtable`` separates locals from
     globals, and function bodies are scanned after the module pass so calls are
     judged with the bindings visible at their use site.
+
+    Two freeze states are tracked. ``frozen`` applies to statements that
+    execute now (a ``time_machine.travel`` block entered in this scope);
+    ``deferred_frozen`` applies to function bodies, which run later under a
+    test's markers — a ``freeze_time`` marker or ``pytestmark`` contributes to
+    the deferred state only, because import-time reads run before any travel
+    starts.
     """
 
     def __init__(self, source: str) -> None:
@@ -91,9 +103,10 @@ class ClockVisitor(ast.NodeVisitor):
         self.aliases: dict[str, str] = {}
         self.enclosing = self.aliases
         self.module_aliases = self.aliases
-        self.calls: Counter[str] = Counter()
+        self.reads: list[tuple[str, int]] = []
         self.children: dict[symtable.SymbolTable, list[symtable.SymbolTable]] = {}
         self.frozen = False
+        self.deferred_frozen = False
         self.functions: list[
             tuple[
                 ast.FunctionDef | ast.AsyncFunctionDef | ast.Lambda,
@@ -129,7 +142,7 @@ class ClockVisitor(ast.NodeVisitor):
     def visit_Call(self, node: ast.Call) -> None:
         name = self.qualified(node.func)
         if (name in CLOCK_MEMBERS or name in UTC_NOW_SOURCES) and not self.frozen:
-            self.calls[name] += 1
+            self.reads.append((name, node.lineno))
         self.generic_visit(node)
 
     def visit_Import(self, node: ast.Import) -> None:
@@ -175,7 +188,8 @@ class ClockVisitor(ast.NodeVisitor):
             if isinstance(target, ast.Name):
                 self.aliases[target.id] = name
                 if target.id == "pytestmark" and self._carries_freeze_marker(node.value):
-                    self.frozen = True
+                    # A marker freezes test execution, not import time.
+                    self.deferred_frozen = True
 
     def visit_AnnAssign(self, node: ast.AnnAssign) -> None:
         self.visit(node.annotation)
@@ -187,7 +201,7 @@ class ClockVisitor(ast.NodeVisitor):
                 and node.target.id == "pytestmark"
                 and self._carries_freeze_marker(node.value)
             ):
-                self.frozen = True
+                self.deferred_frozen = True
 
     def visit_AugAssign(self, node: ast.AugAssign) -> None:
         self.visit(node.value)
@@ -220,13 +234,15 @@ class ClockVisitor(ast.NodeVisitor):
             self.visit(item.context_expr)
             if item.optional_vars is not None:
                 self.bind(item.optional_vars, item.context_expr)
-        previous, self.frozen = (
-            self.frozen,
-            self.frozen or any(self._enters_travel(item.context_expr) for item in node.items),
-        )
+        previous_frozen, previous_deferred = self.frozen, self.deferred_frozen
+        if any(self._enters_travel(item.context_expr) for item in node.items):
+            # A deterministic travel really freezes everything the block runs,
+            # including bodies of functions first defined inside it.
+            self.frozen = True
+            self.deferred_frozen = True
         for statement in node.body:
             self.visit(statement)
-        self.frozen = previous
+        self.frozen, self.deferred_frozen = previous_frozen, previous_deferred
 
     visit_AsyncWith = visit_With
 
@@ -237,7 +253,7 @@ class ClockVisitor(ast.NodeVisitor):
         self.visit(node.args)
         if node.returns is not None:
             self.visit(node.returns)
-        frozen = own or self.frozen
+        frozen = own or self.deferred_frozen
         self.functions.append((node, self.child_table(node, node.name), self.enclosing, frozen))
         self.aliases[node.name] = ""
 
@@ -245,19 +261,24 @@ class ClockVisitor(ast.NodeVisitor):
 
     def visit_Lambda(self, node: ast.Lambda) -> None:
         self.visit(node.args)
-        self.functions.append((node, self.child_table(node, "lambda"), self.enclosing, self.frozen))
+        frozen = self.deferred_frozen or self.frozen
+        self.functions.append((node, self.child_table(node, "lambda"), self.enclosing, frozen))
 
     def visit_ClassDef(self, node: ast.ClassDef) -> None:
         own = self._decorator_freezes(node.decorator_list)
         for expression in [*node.decorator_list, *node.bases, *node.keywords]:
             self.visit(expression)
-        previous_table, previous_aliases, previous_frozen = self.table, self.aliases, self.frozen
+        previous_table, previous_aliases = self.table, self.aliases
+        previous_frozen, previous_deferred = self.frozen, self.deferred_frozen
         self.table = self.child_table(node, node.name)
         self.aliases = self.aliases.copy()
-        self.frozen = self.frozen or own
+        # Class-body statements run at import; only the deferred methods run
+        # under the class marker.
+        self.deferred_frozen = self.deferred_frozen or own
         for statement in node.body:
             self.visit(statement)
-        self.table, self.aliases, self.frozen = previous_table, previous_aliases, previous_frozen
+        self.table, self.aliases = previous_table, previous_aliases
+        self.frozen, self.deferred_frozen = previous_frozen, previous_deferred
         self.aliases[node.name] = ""
 
     def visit_comprehension_scope(
@@ -309,9 +330,36 @@ class ClockVisitor(ast.NodeVisitor):
         return isinstance(value, ast.Call) and self.qualified(value.func) == FREEZE_MARKER
 
     def _enters_travel(self, context_expr: ast.expr) -> bool:
-        return isinstance(context_expr, ast.Call) and self.qualified(context_expr.func) == TRAVEL
+        """Only a fixed, non-ticking travel is a deterministic instant.
 
-    def scan(self, tree: ast.Module) -> Counter[str]:
+        ``travel(...)`` defaults to ``tick=True`` (the clock advances from the
+        destination) and ``travel(None)`` freezes at the host time read on
+        entry — neither pins a repeatable instant, so neither suppresses.
+        """
+        if not (isinstance(context_expr, ast.Call) and self.qualified(context_expr.func) == TRAVEL):
+            return False
+        destination = (
+            context_expr.args[0]
+            if context_expr.args
+            else next(
+                (
+                    keyword.value
+                    for keyword in context_expr.keywords
+                    if keyword.arg == "destination"
+                ),
+                None,
+            )
+        )
+        tick = next(
+            (keyword.value for keyword in context_expr.keywords if keyword.arg == "tick"), None
+        )
+        non_none_destination = not (
+            isinstance(destination, ast.Constant) and destination.value is None
+        )
+        ticks_false = isinstance(tick, ast.Constant) and tick.value is False
+        return non_none_destination and ticks_false
+
+    def scan(self, tree: ast.Module) -> list[tuple[str, int]]:
         self.visit(tree)
         for node, table, enclosing, frozen in self.functions:
             self.table = table
@@ -323,12 +371,13 @@ class ClockVisitor(ast.NodeVisitor):
                     self.aliases[symbol.get_name()] = self.module_aliases.get(symbol.get_name(), "")
             self.enclosing = self.aliases
             self.frozen = frozen
+            self.deferred_frozen = frozen
             if isinstance(node, ast.Lambda):
                 self.visit(node.body)
             else:
                 for statement in node.body:
                     self.visit(statement)
-        return self.calls
+        return self.reads
 
 
 def _takes_frozen_clock(args: ast.arguments) -> bool:
@@ -336,14 +385,26 @@ def _takes_frozen_clock(args: ast.arguments) -> bool:
     return FROZEN_CLOCK in names
 
 
-def clock_reads(source: str) -> Counter[str]:
-    """Resolve clock-read bindings within each lexical scope in statement order."""
-    return ClockVisitor(source).scan(ast.parse(source))
+@dataclasses.dataclass(frozen=True)
+class ClockFindings:
+    """Clock reads with their line numbers, plus the AQPY000 suppression tally."""
+
+    reads: list[tuple[str, int]]
+    suppressed_read_lines: frozenset[int]
+    unreasoned_suppressions: int
 
 
-def unreasoned_suppressions(source: str) -> int:
-    """Count ``noqa`` comments for guarded codes that lack a reason and issue."""
-    count = 0
+def clock_findings(source: str) -> ClockFindings:
+    """Resolve clock-read bindings within each lexical scope in statement order.
+
+    A read whose line carries a valid ``# noqa: AQPY001 - <reason> (#<issue>)``
+    is reported in ``suppressed_read_lines`` and excluded from the count;
+    AQPY000 validation stays separate.
+    """
+    visitor = ClockVisitor(source)
+    reads = visitor.scan(ast.parse(source))
+    unreasoned = 0
+    suppressed: set[int] = set()
     for token in tokenize.generate_tokens(io.StringIO(source).readline):
         if token.type != tokenize.COMMENT:
             continue
@@ -351,18 +412,26 @@ def unreasoned_suppressions(source: str) -> int:
         if codes is None:
             continue
         named = {*codes.group("codes").replace(" ", "").split(",")}
-        if named & GUARDED_CODES and SUPERSEDED.search(token.string) is None:
-            count += 1
-    return count
+        if not named & GUARDED_CODES:
+            continue
+        if SUPERSEDED.search(token.string) is None:
+            unreasoned += 1
+        elif AQPY001 in named:
+            suppressed.add(token.start[0])
+    return ClockFindings(
+        reads=reads,
+        suppressed_read_lines=frozenset(suppressed),
+        unreasoned_suppressions=unreasoned,
+    )
 
 
 def inventory(root: Path) -> dict[str, dict[str, int]]:
     counts: dict[str, dict[str, int]] = {}
     for path in sorted((root / "tests").rglob("*.py")):
         source = path.read_text(encoding="utf-8")
-        reads: Counter[str] = clock_reads(source)
-        suppressions = unreasoned_suppressions(source)
-        found = {AQPY001: sum(reads.values()), AQPY000: suppressions}
+        report = clock_findings(source)
+        unfrozen = [name for name, line in report.reads if line not in report.suppressed_read_lines]
+        found = {AQPY001: len(unfrozen), AQPY000: report.unreasoned_suppressions}
         found = {rule: count for rule, count in found.items() if count}
         if found:
             counts[path.relative_to(root).as_posix()] = found

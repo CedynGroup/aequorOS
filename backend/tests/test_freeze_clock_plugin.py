@@ -70,14 +70,19 @@ def test_frozen_clock_reuses_the_marker_traveller(
     assert utc_now() == datetime(2026, 3, 1, 13, 0, tzinfo=UTC)
 
 
-def test_a_freeze_time_marker_without_an_instant_fails_the_test(tmp_path: Path) -> None:
-    module = tmp_path / "test_missing_instant.py"
-    module.write_text(
-        "import pytest\n"
-        "@pytest.mark.freeze_time\n"
-        "def test_marker_needs_an_instant() -> None:\n"
-        "    assert False\n"
-    )
+@pytest.mark.parametrize(
+    ("marker", "name"),
+    [
+        ("@pytest.mark.freeze_time", "test_marker_needs_an_instant"),
+        ('@pytest.mark.freeze_time("2026-01-01T00:00:00")', "test_marker_naive_instant"),
+        ('@pytest.mark.freeze_time("not a timestamp")', "test_marker_not_a_timestamp"),
+    ],
+)
+def test_an_invalid_freeze_time_marker_fails_the_test(
+    tmp_path: Path, marker: str, name: str
+) -> None:
+    module = tmp_path / "test_invalid_marker.py"
+    module.write_text(f"import pytest\n{marker}\ndef {name}() -> None:\n    assert False\n")
     result = subprocess.run(  # noqa: S603
         [
             sys.executable,
@@ -100,4 +105,4 @@ def test_a_freeze_time_marker_without_an_instant_fails_the_test(tmp_path: Path) 
         timeout=120,
     )
     assert result.returncode == 1
-    assert "freeze_time requires an ISO-8601 UTC string" in result.stdout
+    assert "freeze_time requires an ISO-8601 string with an explicit UTC offset" in result.stdout

@@ -12,13 +12,16 @@ Wall-clock reads (``datetime.now``, ``time.time``, ``app.db.base.utc_now``) then
 return a constant, while ``time.monotonic`` and ``time.perf_counter`` keep
 running: they measure elapsed time, not the calendar, and freezing them would
 hide real hangs. ``scripts/test_determinism_guard.py`` (AQPY001) accepts clock
-reads in tests that carry the marker, sit inside ``time_machine.travel`` or take
-the ``frozen_clock`` fixture.
+reads in tests that carry the marker, sit inside ``time_machine.travel(...,
+tick=False)`` or take the ``frozen_clock`` fixture. The marker instant must
+carry an explicit UTC offset: a naive ISO string would freeze at the host's
+local timezone.
 """
 
 from __future__ import annotations
 
 from collections.abc import Iterator
+from datetime import datetime
 
 import pytest
 import time_machine
@@ -44,17 +47,30 @@ def pytest_configure(config: pytest.Config) -> None:
 
 
 def _marked_instant(item: pytest.Item) -> str | None:
+    """The marker's instant, or None when absent or not a UTC-pinned instant.
+
+    A naive ISO string would make time-machine freeze at the host's local
+    timezone, so the same marker could freeze different instants on different
+    hosts; an explicit UTC offset is required.
+    """
     marker = item.get_closest_marker(_MARKER)
     if marker is None:
         return None
     instant = marker.args[0] if marker.args else marker.kwargs.get("iso")
-    return instant if isinstance(instant, str) else None
+    if isinstance(instant, str):
+        try:
+            parsed = datetime.fromisoformat(instant)
+        except ValueError:
+            parsed = None
+        if parsed is not None and parsed.tzinfo is not None:
+            return instant
+    return None
 
 
 def pytest_runtest_setup(item: pytest.Item) -> None:
     if item.get_closest_marker(_MARKER) is not None and _marked_instant(item) is None:
         pytest.fail(
-            "freeze_time requires an ISO-8601 UTC string, "
+            "freeze_time requires an ISO-8601 string with an explicit UTC offset, "
             "e.g. @pytest.mark.freeze_time('2026-01-01T00:00:00+00:00')",
             pytrace=False,
         )

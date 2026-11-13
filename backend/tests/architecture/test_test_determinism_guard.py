@@ -32,6 +32,24 @@ UNFROZEN_READS = [
     "def test_attestation():\n"
     "    attestation_api.utc_now()\n",
     "def test_rebinding():\n    from app.db.base import utc_now\n    read = utc_now\n    read()\n",
+    # A ticking travel does not pin an instant, and travel(None, tick=False)
+    # freezes at the host clock read on entry; neither accepts its reads.
+    "import time_machine\n"
+    "from datetime import datetime\n"
+    "def test_ticking_travel():\n"
+    "    with time_machine.travel(DESTINATION):\n"
+    "        datetime.now()\n",
+    "import time_machine\n"
+    "from datetime import datetime\n"
+    "def test_host_frozen_travel():\n"
+    "    with time_machine.travel(None, tick=False):\n"
+    "        datetime.now()\n",
+    # A marker freezes test execution, not import time: a module-level read
+    # still runs against the host clock.
+    "import pytest\n"
+    "from datetime import datetime, UTC\n"
+    f"pytestmark = pytest.mark.freeze_time({INSTANT})\n"
+    "STAMP = datetime.now(UTC)\n",
 ]
 
 #: The same reads are accepted once the clock is frozen at function, class or
@@ -57,12 +75,12 @@ FROZEN_READS = [
     f"import pytest\nfrom datetime import datetime\n"
     f"import time_machine\n"
     f"def test_travel():\n"
-    f"    with time_machine.travel({INSTANT}):\n"
+    f"    with time_machine.travel({INSTANT}, tick=False):\n"
     "        datetime.now()\n",
     "from time_machine import travel as travel_to\n"
     "from app.db.base import utc_now\n"
     f"def test_travel_alias():\n"
-    f"    with travel_to({INSTANT}):\n"
+    f"    with travel_to({INSTANT}, tick=False):\n"
     "        utc_now()\n",
     "from app.db.base import utc_now\ndef test_fixture_argument(frozen_clock):\n    utc_now()\n",
     "from app.db.base import utc_now\n"
@@ -76,7 +94,7 @@ FROZEN_READS = [
     "import time_machine\n"
     "from datetime import datetime\n"
     f"def test_lambda_inside_travel():\n"
-    f"    with time_machine.travel({INSTANT}):\n"
+    f"    with time_machine.travel({INSTANT}, tick=False):\n"
     "        return lambda: datetime.now()\n",
     "import time\ndef test_shadowed_time():\n    time = load_time()\n    return time.time()\n",
 ]
@@ -171,6 +189,22 @@ def test_aqpy000_counts_only_unreasoned_guarded_suppressions(
     assert inventory == ({"tests/test_example.py": {guard.AQPY000: expected}} if expected else {})
 
 
+def test_a_valid_suppression_excludes_the_read_but_a_bare_one_does_not(
+    tmp_path: Path,
+) -> None:
+    tests = tmp_path / "tests"
+    tests.mkdir()
+    (tests / "test_example.py").write_text(
+        "from app.db.base import utc_now\n"
+        "def test_reasoned():\n"
+        "    utc_now()  # noqa: AQPY001 - compares against a service-side clock (#847)\n"
+        "def test_bare():\n"
+        "    utc_now()  # noqa: AQPY001\n"
+    )
+    inventory = guard.inventory(tmp_path)
+    assert inventory == {"tests/test_example.py": {guard.AQPY001: 1, guard.AQPY000: 1}}
+
+
 def test_the_ruff_config_declares_the_aqpy_prefix() -> None:
     config: dict[str, Any] = tomllib.loads((BACKEND / "pyproject.toml").read_text())
     assert "AQPY" in config["tool"]["ruff"]["lint"]["external"]
@@ -210,7 +244,7 @@ def test_the_root_lint_task_delegates_to_the_backend() -> None:
             from datetime import datetime
             import time_machine
             def test_mixed():
-                with time_machine.travel(START):
+                with time_machine.travel(START, tick=False):
                     datetime.now()
                 datetime.now()
             """
