@@ -688,7 +688,11 @@ them.
   quarantined tests (`--quarantine-only`) with PostgreSQL, MinIO and the test
   KMS, and writes their real outcomes — pass, fail or skip — into the job
   summary. It is `continue-on-error` and sits in no gate's `needs`: it is a
-  report, not a pass. An empty quarantine costs one checkout and a grep. It does
+  report, not a pass. Detection is pytest collection itself
+  (`pytest --quarantine-only --collect-only`, exit 5 when nothing is
+  quarantined), so any spelling of the marker — aliased imports included — is
+  found, and PostgreSQL, MinIO and the runner are paid only when a quarantined
+  test exists. It does
   not start OpenBao; a quarantined OpenBao test reports as skipped.
 - Backend e2e tests cannot be quarantined (they have no non-blocking runner
   here); browser journeys use the dashboard mechanism below.

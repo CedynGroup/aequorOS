@@ -99,6 +99,27 @@ def test_blocking_run_deselects_and_quarantine_only_selects(tmp_path: Path) -> N
     ]
 
 
+def test_aliased_marker_is_collected_by_quarantine_only(tmp_path: Path) -> None:
+    """Collection is the authoritative quarantine detector.
+
+    A marker imported under an alias must still be selected by
+    ``--quarantine-only``: CI detection runs this same collection, so a text
+    scan for marker spelling can never decide whether the quarantine owner
+    runs — an aliased marker would otherwise be deselected from blocking runs
+    and executed nowhere.
+    """
+    _ = (tmp_path / "pytest.ini").write_text("[pytest]\naddopts = -p scripts.test_suites_plugin\n")
+    _ = (tmp_path / "test_probe.py").write_text(
+        "from pytest import mark as m\n\n\n"
+        "@m.quarantine(issue=847, reason='aliased marker')\n"
+        "def test_aliased_quarantine() -> None:\n"
+        "    assert True\n"
+    )
+    result = _pytest_runner(tmp_path)(["--quarantine-only", "--collect-only", "-q"])
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "test_aliased_quarantine" in result.stdout, result.stdout
+
+
 @pytest.mark.parametrize(
     ("filename", "marker", "complaint"),
     [

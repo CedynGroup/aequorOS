@@ -598,10 +598,12 @@ jobs:
   # only place a quarantined test executes is here — and its result must stay
   # visible, which is why the JUnit outcomes land in the job summary even when
   # they are red. continue-on-error keeps the job out of every gate on purpose;
-  # it is a report, not a pass. The cheap grep first means the ordinary case —
-  # an empty quarantine — costs one checkout and nothing else; a comment that
-  # merely mentions the marker over-runs into a collection-only pass, never
-  # under-runs. OpenBao is not started here: a quarantined test that needs it
+  # it is a report, not a pass. Detection is pytest collection itself, not a
+  # scan for marker spelling: any import style that registers the mark is
+  # found, and a text scan can never under-run. The ordinary case — an empty
+  # quarantine — costs one checkout, one dependency sync and one collection
+  # pass; PostgreSQL, MinIO and the runner are paid only when a quarantined
+  # test exists. OpenBao is not started here: a quarantined test that needs it
   # self-skips and is reported as skipped, not hidden.
   quarantine:
     name: Quarantined tests (non-blocking)
@@ -631,34 +633,36 @@ jobs:
       TEST_KMS_ENDPOINT_URL: http://127.0.0.1:18080
     steps:
       - uses: actions/checkout@v4
-      - name: Detect quarantined tests
-        id: detect
-        run: |
-          # The quarantine contract test quotes marker text in its fixtures, so
-          # it is excluded by name. The pattern matches the marker across a
-          # backslash or bracket newline too, so a quarantined test can never
-          # be deselected everywhere yet run nowhere; prose that merely mentions
-          # quarantine over-runs into one collection-only pass. Grep exit 2 is
-          # an error, never a quiet "no quarantined tests": a detection that
-          # broke must fail loudly, not skip the run.
-          set +e
-          grep -rqzP --include='*.py' --exclude='test_quarantine_contract.py' 'mark[.\\\s]*quarantine' backend/tests
-          rc=$?
-          set -e
-          if [ "$rc" -eq 0 ]; then
-            echo "present=true" >> "$GITHUB_OUTPUT"
-          elif [ "$rc" -eq 1 ]; then
-            echo "No quarantined tests: the quarantine runner has nothing to do." >> "$GITHUB_STEP_SUMMARY"
-          else
-            echo "::error::Quarantine detection failed with grep exit code $rc"
-            exit "$rc"
-          fi
       - uses: jdx/mise-action@v5
-        if: steps.detect.outputs.present == 'true'
         with:
           # Pinned — see MISE VERSION in the header. Bump deliberately.
           version: 2026.7.7
           install_args: python@3.13 uv@0.11.18 node@24 pnpm@11.2.2
+      - name: Detect quarantined tests
+        id: detect
+        working-directory: backend
+        run: |
+          # Pytest collection is the authoritative detector: the marker is a
+          # real pytest mark, so every spelling that registers it — aliased
+          # imports included — is selected here, exactly as the quarantine
+          # owner would select it, and an invalid marker fails collection in
+          # this step the same way it fails every run. Exit 5 is pytest's "no
+          # tests collected": the ordinary empty quarantine, and the only
+          # cheap path. Any other non-zero exit is an error, never a quiet
+          # "no quarantined tests": a detection that broke must fail loudly,
+          # not skip the run.
+          set +e
+          uv run pytest --quarantine-only --collect-only -q
+          rc=$?
+          set -e
+          if [ "$rc" -eq 0 ]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          elif [ "$rc" -eq 5 ]; then
+            echo "No quarantined tests: the quarantine runner has nothing to do." >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "::error::Quarantine detection failed with pytest exit code $rc"
+            exit "$rc"
+          fi
       - name: Install risk service dependencies
         if: steps.detect.outputs.present == 'true'
         run: mise run risk-service:sync
