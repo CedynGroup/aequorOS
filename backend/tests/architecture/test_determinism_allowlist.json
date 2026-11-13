@@ -1,0 +1,575 @@
+{
+  "tests/ai/api/test_ai_settings_routes_integration.py": {
+    "AQPY001": 3
+  },
+  "tests/ai/fixtures.py": {
+    "AQPY001": 1
+  },
+  "tests/ai/service/test_gates_integration.py": {
+    "AQPY001": 6
+  },
+  "tests/api/test_authorization_object_reference_coverage_integration.py": {
+    "AQPY001": 1
+  },
+  "tests/api/test_examiner_register_reads_integration.py": {
+    "AQPY001": 1
+  },
+  "tests/api/test_impersonation_auth_integration.py": {
+    "AQPY001": 1
+  },
+  "tests/api/test_impersonation_boundary_integration.py": {
+    "AQPY001": 3
+  },
+  "tests/api/test_markets_authorization_integration.py": {
+    "AQPY001": 5
+  },
+  "tests/api/test_sdi_diagnostics_integration.py": {
+    "AQPY001": 1
+  },
+  "tests/attestation/service/test_attestation_board_slot_integration.py": {
+    "AQPY001": 1
+  },
+  "tests/attestation/service/test_attestation_openbao.py": {
+    "AQPY001": 2
+  },
+  "tests/attestation/service/test_attestation_openbao_integration.py": {
+    "AQPY001": 2
+  },
+  "tests/attestation/service/test_attestation_pdf_signing.py": {
+    "AQPY001": 1
+  },
+  "tests/attestation/service/test_attestation_phase0_integration.py": {
+    "AQPY001": 2
+  },
+  "tests/attestation/service/test_attestation_signer_authorization_integration.py": {
+    "AQPY001": 6
+  },
+  "tests/attestation/service/test_attestation_signing_structure_pin.py": {
+    "AQPY001": 1
+  },
+  "tests/attestation/service/test_attestation_spine.py": {
+    "AQPY001": 2
+  },
+  "tests/attestation/service/test_attestation_stepup_oidc_failure_integration.py": {
+    "AQPY001": 1
+  },
+  "tests/attestation/service/test_attestation_stepup_throttle_integration.py": {
+    "AQPY001": 7
+  },
+  "tests/attestation/service/test_attestation_three_signer_chain.py": {
+    "AQPY001": 1
+  },
+  "tests/attestation/service/test_attestation_verify_integration.py": {
+    "AQPY001": 1
+  },
+  "tests/behavioral/api/test_behavioral_application_integration.py": {
+    "AQPY001": 4
+  },
+  "tests/behavioral/api/test_behavioral_authorization_integration.py": {
+    "AQPY001": 4
+  },
+  "tests/bi/api/test_bi_ask_routes_integration.py": {
+    "AQPY001": 2
+  },
+  "tests/bi/api/test_bi_commentary_routes_integration.py": {
+    "AQPY001": 3
+  },
+  "tests/bi/api/test_bi_exports_integration.py": {
+    "AQPY001": 1
+  },
+  "tests/bi/jobs/test_bi_jobs_integration.py": {
+    "AQPY001": 3
+  },
+  "tests/bi/models/test_bi_commentary_model_integration.py": {
+    "AQPY001": 3
+  },
+  "tests/bi/models/test_bi_notification_models_integration.py": {
+    "AQPY001": 6
+  },
+  "tests/bi/route_support.py": {
+    "AQPY001": 1
+  },
+  "tests/bi/service/test_alerts_integration.py": {
+    "AQPY001": 1
+  },
+  "tests/bi/service/test_bi_enqueue_integration.py": {
+    "AQPY001": 2
+  },
+  "tests/bi/service/test_commentary_fallback.py": {
+    "AQPY001": 2
+  },
+  "tests/bi/service/test_commentary_job_integration.py": {
+    "AQPY001": 5
+  },
+  "tests/bi/service/test_commentary_payload_integration.py": {
+    "AQPY001": 2
+  },
+  "tests/bi/service/test_compiler_calculated_integration.py": {
+    "AQPY001": 1
+  },
+  "tests/bi/service/test_data_scope_integration.py": {
+    "AQPY001": 1
+  },
+  "tests/bi/service/test_insights_digest.py": {
+    "AQPY001": 2
+  },
+  "tests/bi/service/test_insights_rules.py": {
+    "AQPY001": 2
+  },
+  "tests/bi/service/test_nlq_job_integration.py": {
+    "AQPY001": 5
+  },
+  "tests/capital/api/test_capital_authorization_integration.py": {
+    "AQPY001": 3
+  },
+  "tests/capital/service/test_ecl_and_crm_integration.py": {
+    "AQPY001": 1
+  },
+  "tests/case/api/test_calculations_integration.py": {
+    "AQPY001": 2
+  },
+  "tests/case/api/test_case_authorization_integration.py": {
+    "AQPY001": 9
+  },
+  "tests/case/api/test_financial_workspace_mapping_integration.py": {
+    "AQPY001": 1
+  },
+  "tests/case/api/test_liquidity_integration.py": {
+    "AQPY001": 1
+  },
+  "tests/case/api/test_scenarios_integration.py": {
+    "AQPY001": 2
+  },
+  "tests/case/api/test_taxonomy_authentication_integration.py": {
+    "AQPY001": 1
+  },
+  "tests/case/service/test_document_deletion_integration.py": {
+    "AQPY001": 4
+  },
+  "tests/case/service/test_financial_mapping_integration.py": {
+    "AQPY001": 1
+  },
+  "tests/case/service/test_findings_integration.py": {
+    "AQPY001": 2
+  },
+  "tests/core/test_bank_field_encryption_integration.py": {
+    "AQPY001": 5
+  },
+  "tests/core/test_bank_key_version_revision_integration.py": {
+    "AQPY001": 1
+  },
+  "tests/core/test_bank_reencryption_integration.py": {
+    "AQPY001": 13
+  },
+  "tests/core/test_reencryption_concurrency_integration.py": {
+    "AQPY001": 1
+  },
+  "tests/core/test_security.py": {
+    "AQPY001": 1
+  },
+  "tests/core/test_tls.py": {
+    "AQPY001": 2
+  },
+  "tests/credit/api/test_bank_local_parameters_integration.py": {
+    "AQPY001": 2
+  },
+  "tests/credit/api/test_credit_authorization_integration.py": {
+    "AQPY001": 2
+  },
+  "tests/credit/api/test_credit_configure_authorization_integration.py": {
+    "AQPY001": 3
+  },
+  "tests/data_engine/api/test_data_authorization_integration.py": {
+    "AQPY001": 5
+  },
+  "tests/data_engine/api/test_data_configure_authorization_integration.py": {
+    "AQPY001": 4
+  },
+  "tests/data_engine/api/test_ingestion_integration.py": {
+    "AQPY001": 1
+  },
+  "tests/data_engine/api/test_system_of_record_bank_scope_integration.py": {
+    "AQPY001": 2
+  },
+  "tests/data_engine/service/test_database_direct_jobs_integration.py": {
+    "AQPY001": 4
+  },
+  "tests/data_engine/service/test_withdrawn_evidence_gate_integration.py": {
+    "AQPY001": 1
+  },
+  "tests/db/test_append_only_sweep_integration.py": {
+    "AQPY001": 1
+  },
+  "tests/db/test_authorization_migration_integration.py": {
+    "AQPY001": 3
+  },
+  "tests/db/test_bank_key_versions_integration.py": {
+    "AQPY001": 2
+  },
+  "tests/db/test_bank_sensitive_fields_integration.py": {
+    "AQPY001": 4
+  },
+  "tests/db/test_bank_stress_defaults_migration_integration.py": {
+    "AQPY001": 1
+  },
+  "tests/db/test_baseline_membership_migration_integration.py": {
+    "AQPY001": 1
+  },
+  "tests/db/test_behavioral_model_proposals_migration_integration.py": {
+    "AQPY001": 1
+  },
+  "tests/db/test_bi_query_log_postgres_integration.py": {
+    "AQPY001": 2
+  },
+  "tests/db/test_crd_capital_floor_parameters_migration_integration.py": {
+    "AQPY001": 1
+  },
+  "tests/db/test_credit_module_migration_integration.py": {
+    "AQPY001": 1
+  },
+  "tests/db/test_data_scope_check_constraints_integration.py": {
+    "AQPY001": 3
+  },
+  "tests/db/test_forecast_assumption_versions_migration_integration.py": {
+    "AQPY001": 1
+  },
+  "tests/db/test_icaap_jurisdiction_parameters_migration_integration.py": {
+    "AQPY001": 1
+  },
+  "tests/db/test_icaap_p5_migration_integration.py": {
+    "AQPY001": 1
+  },
+  "tests/db/test_icaap_pillar2_parameters_migration_integration.py": {
+    "AQPY001": 1
+  },
+  "tests/db/test_initial_owner_migration_integration.py": {
+    "AQPY001": 3
+  },
+  "tests/db/test_integration_key_migration_integration.py": {
+    "AQPY001": 2
+  },
+  "tests/db/test_locator_visibility_integration.py": {
+    "AQPY001": 4
+  },
+  "tests/db/test_notification_job_locator_migration_integration.py": {
+    "AQPY001": 2
+  },
+  "tests/db/test_operator_audit_pagination_integration.py": {
+    "AQPY001": 1
+  },
+  "tests/db/test_owner_read_access_migration_integration.py": {
+    "AQPY001": 1
+  },
+  "tests/db/test_performance_targets_migration_integration.py": {
+    "AQPY001": 1
+  },
+  "tests/db/test_restore_unowned_account_administration_migration_integration.py": {
+    "AQPY001": 1
+  },
+  "tests/db/test_retained_filing_evidence_integration.py": {
+    "AQPY001": 1
+  },
+  "tests/db/test_schema_defaults_integration.py": {
+    "AQPY001": 13
+  },
+  "tests/db/test_signed_filing_locks_integration.py": {
+    "AQPY001": 3
+  },
+  "tests/forecasting/api/test_forecasting_authorization_integration.py": {
+    "AQPY001": 6
+  },
+  "tests/forecasting/api/test_manage_forecast_assumptions_integration.py": {
+    "AQPY001": 1
+  },
+  "tests/ftp/api/test_ftp_authorization_integration.py": {
+    "AQPY001": 6
+  },
+  "tests/ftp/api/test_ftp_recompute_integration.py": {
+    "AQPY001": 1
+  },
+  "tests/fx/api/test_fx_authorization_integration.py": {
+    "AQPY001": 6
+  },
+  "tests/icaap/api/test_icaap_ai_routes_integration.py": {
+    "AQPY001": 1
+  },
+  "tests/icaap/service/p0_qa/test_capital_plan_p0_qa_integration.py": {
+    "AQPY001": 1
+  },
+  "tests/icaap/service/test_ai_drafting_integration.py": {
+    "AQPY001": 1
+  },
+  "tests/icaap/service/test_attachments_integration.py": {
+    "AQPY001": 1
+  },
+  "tests/icaap/service/test_cycles_integration.py": {
+    "AQPY001": 1
+  },
+  "tests/icaap/service/test_p3_clone_and_disclosure_integration.py": {
+    "AQPY001": 5
+  },
+  "tests/icaap/service/test_p3_hooks_and_rules_integration.py": {
+    "AQPY001": 1
+  },
+  "tests/icaap/service/test_p5_irrbb_sf_integration.py": {
+    "AQPY001": 2
+  },
+  "tests/icaap/service/test_sealed_by_reference_integration.py": {
+    "AQPY001": 2
+  },
+  "tests/identity/api/test_account_administration_authorization_integration.py": {
+    "AQPY001": 3
+  },
+  "tests/identity/api/test_audit_log_integration.py": {
+    "AQPY001": 1
+  },
+  "tests/identity/api/test_grant_administration_integration.py": {
+    "AQPY001": 1
+  },
+  "tests/identity/api/test_institution_authorization_integration.py": {
+    "AQPY001": 3
+  },
+  "tests/identity/api/test_integration_keys_integration.py": {
+    "AQPY001": 3
+  },
+  "tests/identity/api/test_refresh_tokens_integration.py": {
+    "AQPY001": 5
+  },
+  "tests/identity/service/test_authorization_integration.py": {
+    "AQPY001": 8
+  },
+  "tests/identity/service/test_effective_data_scope_integration.py": {
+    "AQPY001": 4
+  },
+  "tests/identity/service/test_sso_tenant_binding_integration.py": {
+    "AQPY001": 1
+  },
+  "tests/irrbb/api/test_irrbb_authorization_integration.py": {
+    "AQPY001": 6
+  },
+  "tests/liquidity/api/test_bank_local_parameters_integration.py": {
+    "AQPY001": 1
+  },
+  "tests/liquidity/api/test_liquidity_configure_authorization_integration.py": {
+    "AQPY001": 3
+  },
+  "tests/liquidity/api/test_liquidity_monitoring_integration.py": {
+    "AQPY001": 3
+  },
+  "tests/liquidity/api/test_liquidity_scoped_authorization_integration.py": {
+    "AQPY001": 3
+  },
+  "tests/liquidity/configure_helpers.py": {
+    "AQPY001": 1
+  },
+  "tests/liquidity/service/test_liquidity_cfp_integration.py": {
+    "AQPY001": 1
+  },
+  "tests/liquidity/service/test_liquidity_currency_gaps_integration.py": {
+    "AQPY001": 1
+  },
+  "tests/liquidity/service/test_window_analytics_integration.py": {
+    "AQPY001": 5
+  },
+  "tests/live/api/test_live_engine_authorization_integration.py": {
+    "AQPY001": 1
+  },
+  "tests/live/api/test_live_read_scope_integration.py": {
+    "AQPY001": 4
+  },
+  "tests/live/service/test_pipeline_integration.py": {
+    "AQPY001": 3
+  },
+  "tests/market_data/adapters/aequor_desk/test_contract_integration.py": {
+    "AQPY001": 1
+  },
+  "tests/market_data/adapters/bloomberg/test_hardening.py": {
+    "AQPY001": 2
+  },
+  "tests/market_data/adapters/manual_upload/fixtures.py": {
+    "AQPY001": 2
+  },
+  "tests/market_data/adapters/refinitiv/test_auth.py": {
+    "AQPY001": 3
+  },
+  "tests/market_data/api/test_markets_configure_authorization_integration.py": {
+    "AQPY001": 8
+  },
+  "tests/market_data/service/test_desk_capture_job_integration.py": {
+    "AQPY001": 1
+  },
+  "tests/market_data/service/test_market_data_jobs_integration.py": {
+    "AQPY001": 2
+  },
+  "tests/market_data/service/test_market_desk_publication_integration.py": {
+    "AQPY001": 1
+  },
+  "tests/models/test_nullable_json_is_sql_null_integration.py": {
+    "AQPY001": 2
+  },
+  "tests/notifications/api/test_notification_authorization_integration.py": {
+    "AQPY001": 2
+  },
+  "tests/notifications/service/test_notification_email_mirror_integration.py": {
+    "AQPY001": 1
+  },
+  "tests/operator/test_audit_api_integration.py": {
+    "AQPY001": 1
+  },
+  "tests/operator/test_bank_encryption_integration.py": {
+    "AQPY001": 1
+  },
+  "tests/operator/test_google_sign_in_integration.py": {
+    "AQPY001": 2
+  },
+  "tests/operator/test_inspector_act_token_api_integration.py": {
+    "AQPY001": 2
+  },
+  "tests/operator/test_inspector_fix_api_integration.py": {
+    "AQPY001": 3
+  },
+  "tests/operator/test_inspector_reads_api_integration.py": {
+    "AQPY001": 2
+  },
+  "tests/operator/test_jobs_api_integration.py": {
+    "AQPY001": 1
+  },
+  "tests/operator/test_operator_auth_integration.py": {
+    "AQPY001": 4
+  },
+  "tests/operator/test_operator_freshness_plane_integration.py": {
+    "AQPY001": 3
+  },
+  "tests/operator/test_provisioning_integration.py": {
+    "AQPY001": 1
+  },
+  "tests/operator/test_regulatory_parameter_shapes_integration.py": {
+    "AQPY001": 2
+  },
+  "tests/operator/test_worker_health_api_integration.py": {
+    "AQPY001": 1
+  },
+  "tests/operator/test_workforce_integration.py": {
+    "AQPY001": 5
+  },
+  "tests/reporting/api/test_examiner_authorization_integration.py": {
+    "AQPY001": 6
+  },
+  "tests/reporting/api/test_narrowed_institution_figures_integration.py": {
+    "AQPY001": 2
+  },
+  "tests/reporting/api/test_package_authorization_integration.py": {
+    "AQPY001": 3
+  },
+  "tests/reporting/api/test_regulatory_reporting_integration.py": {
+    "AQPY001": 2
+  },
+  "tests/reporting/service/bog_forms/test_real_bank_forms_integration.py": {
+    "AQPY001": 1
+  },
+  "tests/reporting/service/bog_forms/test_reporting_currency_sums_integration.py": {
+    "AQPY001": 3
+  },
+  "tests/reporting/service/bog_forms/test_unvalidated_book_disclosure_integration.py": {
+    "AQPY001": 1
+  },
+  "tests/reporting/service/test_orass_api_channel.py": {
+    "AQPY001": 1
+  },
+  "tests/reporting/service/test_package_plane_integration.py": {
+    "AQPY001": 1
+  },
+  "tests/reporting/service/test_regulatory_reporting_fidelity_integration.py": {
+    "AQPY001": 1
+  },
+  "tests/reporting/service/test_regulatory_version_chain_integration.py": {
+    "AQPY001": 1
+  },
+  "tests/reporting/service/test_reporting_totals_authority_integration.py": {
+    "AQPY001": 1
+  },
+  "tests/reporting/service/test_reporting_validation_honesty_integration.py": {
+    "AQPY001": 1
+  },
+  "tests/scripts/test_authorization_access_impact_integration.py": {
+    "AQPY001": 9
+  },
+  "tests/scripts/test_authorization_signoff_impact_integration.py": {
+    "AQPY001": 4
+  },
+  "tests/services/test_audit_integrity_schedule_integration.py": {
+    "AQPY001": 1
+  },
+  "tests/services/test_job_enqueue_locator_provenance_integration.py": {
+    "AQPY001": 1
+  },
+  "tests/services/test_job_queue_integration.py": {
+    "AQPY001": 24
+  },
+  "tests/services/test_job_read_visibility_integration.py": {
+    "AQPY001": 3
+  },
+  "tests/services/test_le_and_lmt_integration.py": {
+    "AQPY001": 2
+  },
+  "tests/services/test_nop_currency_coverage_integration.py": {
+    "AQPY001": 1
+  },
+  "tests/services/test_rule_applicability_integration.py": {
+    "AQPY001": 5
+  },
+  "tests/services/test_scheduler_integration.py": {
+    "AQPY001": 33
+  },
+  "tests/services/test_system_of_record_integration.py": {
+    "AQPY001": 3
+  },
+  "tests/services/test_validation_status_fail_closed_integration.py": {
+    "AQPY001": 2
+  },
+  "tests/services/test_worker_lanes_integration.py": {
+    "AQPY001": 6
+  },
+  "tests/storage/contract.py": {
+    "AQPY001": 1
+  },
+  "tests/storage/test_bank_encryption_integration.py": {
+    "AQPY001": 3
+  },
+  "tests/storage/test_key_rotation_concurrency_integration.py": {
+    "AQPY001": 1
+  },
+  "tests/storage/test_object_lock_integration.py": {
+    "AQPY001": 8
+  },
+  "tests/storage/test_reencryption_integration.py": {
+    "AQPY001": 5
+  },
+  "tests/storage/test_s3_compatible_contract_integration.py": {
+    "AQPY001": 1
+  },
+  "tests/stress/api/test_enterprise_stress_integration.py": {
+    "AQPY001": 3
+  },
+  "tests/stress/api/test_enterprise_stress_signer_integration.py": {
+    "AQPY001": 6
+  },
+  "tests/stress/api/test_scoped_authorization_integration.py": {
+    "AQPY001": 4
+  },
+  "tests/stress/service/test_enterprise_stress_crm_parity_integration.py": {
+    "AQPY001": 2
+  },
+  "tests/support/factories/reconciliation.py": {
+    "AQPY001": 2
+  },
+  "tests/support/inmemory_storage.py": {
+    "AQPY001": 1
+  },
+  "tests/support/reencryption.py": {
+    "AQPY001": 1
+  },
+  "tests/test_uuid_generation.py": {
+    "AQPY001": 2
+  }
+}
