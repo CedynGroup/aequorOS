@@ -26,7 +26,7 @@ export function quarantineProblems(
     }
     if (
       typeof entry.issue !== "number" ||
-      !Number.isInteger(entry.issue) ||
+      !Number.isSafeInteger(entry.issue) ||
       entry.issue <= 0
     ) {
       problems.push(

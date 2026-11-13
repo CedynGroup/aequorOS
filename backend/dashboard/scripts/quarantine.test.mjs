@@ -119,3 +119,24 @@ test("a non-integer issue number is refused like a missing one", () =>
       result.report.integrityErrors,
     );
   }));
+
+test("an issue number past MAX_SAFE_INTEGER is refused, not rounded", () =>
+  fixture((root) => {
+    const result = runQuarantined(
+      root,
+      [
+        {
+          name: "report.spec.cjs › parked journey",
+          issue: 9007199254740993,
+        },
+      ],
+      parkedJourney,
+    );
+    assert.equal(result.status, 1, result.stdout + result.stderr);
+    assert.ok(
+      result.report.integrityErrors.some((error) =>
+        error.includes("no positive issue number"),
+      ),
+      result.report.integrityErrors,
+    );
+  }));

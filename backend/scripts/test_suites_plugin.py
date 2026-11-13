@@ -231,18 +231,29 @@ def _check_module_inventory(
         raise pytest.UsageError("CI must collect every module in its filename suite")
 
 
-def quarantine_problem(issue: object, reason: object, suite: str) -> str | None:
+def quarantine_problem(
+    issue: object, reason: object, suite: str, *, protected: bool = False
+) -> str | None:
     """Return why a quarantine marker is unusable, or None when it may deselect a run.
 
     A quarantine exists only while a linked repair is in flight, so it must name the
     issue that carries the flake evidence and state the failure mode. Backend e2e
     contracts have no non-blocking runner here; the dashboard's Playwright quarantine
-    (``e2e/support/quarantine.ts``) owns browser journeys instead.
+    (``e2e/support/quarantine.ts``) owns browser journeys instead. Protected database
+    contracts (``database_contracts.json`` and the ``database_contract`` marker) are
+    the platform's identity and storage guarantees: the blocking validators require
+    them in every collection, so they cannot be quarantined — the underlying defect
+    is fixed instead.
     """
     if suite == "e2e":
         return (
             "backend e2e tests cannot be quarantined; "
             "park the dashboard journey in e2e/support/quarantine.ts instead"
+        )
+    if protected:
+        return (
+            "protected database contracts must execute and cannot be quarantined; "
+            "fix the contract instead (CODEBASE_CONVENTIONS.md §6)"
         )
     if isinstance(issue, bool) or not isinstance(issue, int) or issue <= 0:
         return "quarantine requires a positive int issue"
@@ -321,7 +332,15 @@ def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item
         quarantine_mark = item.get_closest_marker("quarantine")
         if quarantine_mark is not None:
             issue, reason = _marker_arguments(quarantine_mark)
-            problem = quarantine_problem(issue, reason, suite)
+            problem = quarantine_problem(
+                issue,
+                reason,
+                suite,
+                protected=database_contracts.is_protected(
+                    item.nodeid,
+                    marked=item.get_closest_marker("database_contract") is not None,
+                ),
+            )
             if problem:
                 raise pytest.UsageError(f"{item.nodeid}: {problem}")
             quarantined_nodes.add(item.nodeid)

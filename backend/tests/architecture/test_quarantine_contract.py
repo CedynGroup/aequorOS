@@ -100,20 +100,38 @@ def test_blocking_run_deselects_and_quarantine_only_selects(tmp_path: Path) -> N
 
 
 @pytest.mark.parametrize(
-    ("marker", "complaint"),
+    ("filename", "marker", "complaint"),
     [
-        ("@pytest.mark.quarantine(reason='scroll race')", "positive int issue"),
-        ("@pytest.mark.quarantine(issue=0, reason='scroll race')", "positive int issue"),
-        ("@pytest.mark.quarantine(issue=-3, reason='scroll race')", "positive int issue"),
-        ("@pytest.mark.quarantine(issue=847)", "non-empty reason"),
-        ("@pytest.mark.quarantine(issue=847, reason='   ')", "non-empty reason"),
+        ("test_probe.py", "@pytest.mark.quarantine(reason='scroll race')", "positive int issue"),
+        (
+            "test_probe.py",
+            "@pytest.mark.quarantine(issue=0, reason='scroll race')",
+            "positive int issue",
+        ),
+        (
+            "test_probe.py",
+            "@pytest.mark.quarantine(issue=-3, reason='scroll race')",
+            "positive int issue",
+        ),
+        ("test_probe.py", "@pytest.mark.quarantine(issue=847)", "non-empty reason"),
+        (
+            "test_probe.py",
+            "@pytest.mark.quarantine(issue=847, reason='   ')",
+            "non-empty reason",
+        ),
+        (
+            "test_probe_integration.py",
+            "@pytest.mark.database_contract\n"
+            "@pytest.mark.quarantine(issue=847, reason='scroll race')",
+            "cannot be quarantined",
+        ),
     ],
 )
 def test_invalid_marker_fails_collection_at_every_run(
-    tmp_path: Path, marker: str, complaint: str
+    tmp_path: Path, filename: str, marker: str, complaint: str
 ) -> None:
     _ = (tmp_path / "pytest.ini").write_text("[pytest]\naddopts = -p scripts.test_suites_plugin\n")
-    _ = (tmp_path / "test_probe.py").write_text(
+    _ = (tmp_path / filename).write_text(
         "import pytest\n\n\n" + f"{marker}\n" + "def test_quarantined() -> None:\n    assert True\n"
     )
     result = _pytest_runner(tmp_path)(["-q"])
@@ -132,6 +150,10 @@ def test_quarantine_problem_decides_every_shape() -> None:
     assert "non-empty reason" in cast(str, quarantine_problem(847, "", "unit"))
     assert "non-empty reason" in cast(str, quarantine_problem(847, None, "unit"))
     assert "e2e tests cannot be quarantined" in cast(str, quarantine_problem(847, "race", "e2e"))
+    assert "cannot be quarantined" in cast(
+        str, quarantine_problem(847, "race", "integration", protected=True)
+    )
+    assert quarantine_problem(847, "scroll race", "integration", protected=False) is None
 
 
 def _quarantine_marker_calls(tree: ast.Module) -> list[ast.Call]:
