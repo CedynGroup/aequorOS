@@ -101,24 +101,24 @@ def _clock_capable(value: str) -> bool:
     )
 
 
-def _merge_paths(body_value: str, else_value: str) -> str:
-    """The binding a read may see after a conditional rebind of one name.
+def _merge_values(values: list[str]) -> str:
+    """The binding a read may see across the reachable paths of a branch or loop.
 
     A path that may still hold a clock binding keeps it detectable: the merge
     keeps every clock-capable possibility until every reachable path replaces
     the binding, and drops the clock binding only when all paths agree.
     """
-    if body_value == else_value:
-        return body_value
+    if len(set(values)) == 1:
+        return values[0]
     possibilities = [
         alternative
-        for value in (body_value, else_value)
+        for value in values
         for alternative in _alternatives(value)
         if _clock_capable(alternative)
     ]
     if possibilities:
         return AMBIGUOUS.join(dict.fromkeys(possibilities))
-    return body_value
+    return values[0]
 
 
 class ClockVisitor(ast.NodeVisitor):
@@ -146,6 +146,7 @@ class ClockVisitor(ast.NodeVisitor):
         self.children: dict[symtable.SymbolTable, list[symtable.SymbolTable]] = {}
         self.frozen = False
         self.deferred_frozen = False
+        self.postponed = False
         self.functions: list[
             tuple[
                 ast.FunctionDef | ast.AsyncFunctionDef | ast.Lambda,
@@ -247,7 +248,8 @@ class ClockVisitor(ast.NodeVisitor):
                     self.deferred_frozen = True
 
     def visit_AnnAssign(self, node: ast.AnnAssign) -> None:
-        self.visit(node.annotation)
+        if not self.postponed:
+            self.visit(node.annotation)
         if node.value is not None:
             self.visit(node.value)
             self.bind(node.target, node.value)
@@ -266,14 +268,6 @@ class ClockVisitor(ast.NodeVisitor):
         self.visit(node.value)
         self.bind(node.target, node.value)
 
-    def visit_For(self, node: ast.For | ast.AsyncFor) -> None:
-        self.visit(node.iter)
-        self.bind(node.target)
-        for statement in [*node.body, *node.orelse]:
-            self.visit(statement)
-
-    visit_AsyncFor = visit_For
-
     def visit_ExceptHandler(self, node: ast.ExceptHandler) -> None:
         if node.type is not None:
             self.visit(node.type)
@@ -284,40 +278,81 @@ class ClockVisitor(ast.NodeVisitor):
         if node.name is not None:
             self.aliases[node.name] = ""
 
+    def _merge_states(self, states: list[dict[str, str]]) -> None:
+        """Rebuild ``self.aliases`` as the union of the reachable path states.
+
+        The mutation is in place: ``module_aliases`` and ``enclosing`` share
+        this dict, so a rebound map would leave them seeing the unmerged state.
+        """
+        keys: set[str] = set()
+        for state in states:
+            keys.update(state)
+        merged = {key: _merge_values([state.get(key, "") for state in states]) for key in keys}
+        self.aliases.clear()
+        self.aliases.update(merged)
+
     def visit_If(self, node: ast.If) -> None:
         self.visit(node.test)
         before = dict(self.aliases)
         for statement in node.body:
             self.visit(statement)
         after_body = dict(self.aliases)
-        # Mutate in place: ``module_aliases`` and ``enclosing`` share this dict,
-        # so a rebound map would leave them seeing the unmerged state.
         self.aliases.clear()
         self.aliases.update(before)
         for statement in node.orelse:
             self.visit(statement)
-        after_else = dict(self.aliases)
+        # Without an ``else`` the fall-through path keeps the pre-branch
+        # bindings; with one, only the two branch states are reachable.
+        self._merge_states([after_body, dict(self.aliases) if node.orelse else before])
+
+    def visit_For(self, node: ast.For | ast.AsyncFor) -> None:
+        self.visit(node.iter)
+        self.bind(node.target)
+        self._visit_loop(node)
+
+    visit_AsyncFor = visit_For
+
+    def visit_While(self, node: ast.While) -> None:
+        self.visit(node.test)
+        self._visit_loop(node)
+
+    def _visit_loop(self, node: ast.For | ast.AsyncFor | ast.While) -> None:
+        # A loop body may run zero times, so its assignments must not clear a
+        # binding: merge the pre-loop state with the body and ``else`` states.
+        before = dict(self.aliases)
+        for statement in node.body:
+            self.visit(statement)
+        after_body = dict(self.aliases)
         self.aliases.clear()
-        for key in set(before) | set(after_body) | set(after_else):
-            # Without an ``else`` the fall-through path keeps the pre-branch
-            # bindings; with one, only the two branch states are reachable.
-            body_value = after_body.get(key, before.get(key, ""))
-            else_value = after_else.get(key, "") if node.orelse else before.get(key, "")
-            self.aliases[key] = _merge_paths(body_value, else_value)
+        self.aliases.update(before)
+        for statement in node.orelse:
+            self.visit(statement)
+        self._merge_states([before, after_body, dict(self.aliases)])
 
     def visit_With(self, node: ast.With | ast.AsyncWith) -> None:
         previous_frozen, previous_deferred = self.frozen, self.deferred_frozen
         entered = False
+        ticking = False
         for item in node.items:
             # Context managers evaluate in entry order: a later manager runs
-            # inside an earlier travel, so its expressions are already frozen.
+            # inside an earlier travel, so a deterministic one freezes its
+            # expressions and a ticking one un-freezes them.
             if entered and not self.frozen:
                 self.frozen = True
             self.visit(item.context_expr)
             if item.optional_vars is not None:
                 self.bind(item.optional_vars, item.context_expr)
-            entered = entered or self._enters_travel(item.context_expr)
-        if entered:
+            if self._is_travel(item.context_expr):
+                if self._enters_travel(item.context_expr):
+                    entered = True
+                elif not self._keeps_inherited_freeze(item.context_expr):
+                    # A ticking travel advances the clock from real elapsed
+                    # time, so reads inside it are not pinned to an instant.
+                    self.frozen = False
+                    ticking = True
+        if ticking:
+            self.frozen = False
+        elif entered:
             # A deterministic travel really freezes everything the block runs,
             # including bodies of functions first defined inside it.
             self.frozen = True
@@ -328,12 +363,26 @@ class ClockVisitor(ast.NodeVisitor):
 
     visit_AsyncWith = visit_With
 
+    def _visit_arguments(self, arguments: ast.arguments) -> None:
+        """Visit defaults always; annotations only when they execute."""
+        for default in [*arguments.defaults, *arguments.kw_defaults]:
+            if default is not None:
+                self.visit(default)
+        if self.postponed:
+            return
+        for argument in (*arguments.posonlyargs, *arguments.args, *arguments.kwonlyargs):
+            if argument.annotation is not None:
+                self.visit(argument.annotation)
+        for extra in (arguments.vararg, arguments.kwarg):
+            if extra is not None and extra.annotation is not None:
+                self.visit(extra.annotation)
+
     def visit_FunctionDef(self, node: ast.FunctionDef | ast.AsyncFunctionDef) -> None:
         own = self._decorator_freezes(node.decorator_list) or _takes_frozen_clock(node.args)
         for decorator in node.decorator_list:
             self.visit(decorator)
-        self.visit(node.args)
-        if node.returns is not None:
+        self._visit_arguments(node.args)
+        if node.returns is not None and not self.postponed:
             self.visit(node.returns)
         frozen = own or self.deferred_frozen
         self.functions.append((node, self.child_table(node, node.name), self.enclosing, frozen))
@@ -342,7 +391,7 @@ class ClockVisitor(ast.NodeVisitor):
     visit_AsyncFunctionDef = visit_FunctionDef
 
     def visit_Lambda(self, node: ast.Lambda) -> None:
-        self.visit(node.args)
+        self._visit_arguments(node.args)
         frozen = self.deferred_frozen or self.frozen
         self.functions.append((node, self.child_table(node, "lambda"), self.enclosing, frozen))
 
@@ -432,6 +481,37 @@ class ClockVisitor(ast.NodeVisitor):
             )
         return isinstance(value, ast.Call) and self.qualified(value.func) == FREEZE_MARKER
 
+    def _is_travel(self, context_expr: ast.expr) -> bool:
+        return isinstance(context_expr, ast.Call) and self.qualified(context_expr.func) == TRAVEL
+
+    def _keeps_inherited_freeze(self, context_expr: ast.expr) -> bool:
+        """Whether ``travel(None, tick=False)`` keeps an inherited freeze.
+
+        Inside a frozen travel the host-clock read on entry already sees the
+        mocked clock, so the nested block stays deterministic; at the top level
+        ``frozen`` is False anyway and the block stays reported.
+        """
+        if not (isinstance(context_expr, ast.Call) and self.qualified(context_expr.func) == TRAVEL):
+            return False
+        destination = (
+            context_expr.args[0]
+            if context_expr.args
+            else next(
+                (
+                    keyword.value
+                    for keyword in context_expr.keywords
+                    if keyword.arg == "destination"
+                ),
+                None,
+            )
+        )
+        tick = next(
+            (keyword.value for keyword in context_expr.keywords if keyword.arg == "tick"), None
+        )
+        destination_is_none = isinstance(destination, ast.Constant) and destination.value is None
+        ticks_false = isinstance(tick, ast.Constant) and tick.value is False
+        return destination_is_none and ticks_false
+
     def _enters_travel(self, context_expr: ast.expr) -> bool:
         """Only a fixed, non-ticking travel is a deterministic instant.
 
@@ -469,6 +549,15 @@ class ClockVisitor(ast.NodeVisitor):
         for statement in tree.body:
             if isinstance(statement, (ast.Import, ast.ImportFrom)):
                 self.visit(statement)
+                if (
+                    isinstance(statement, ast.ImportFrom)
+                    and statement.module == "__future__"
+                    and any(alias.name == "annotations" for alias in statement.names)
+                ):
+                    # Postponed annotations never execute, so their scopes do
+                    # not exist in the symbol table; visiting their expressions
+                    # would look up symtable children that are not there.
+                    self.postponed = True
         if any(self._pytestmark_statement(statement) for statement in tree.body):
             self.deferred_frozen = True
         self.visit(tree)
