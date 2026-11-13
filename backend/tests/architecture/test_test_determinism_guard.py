@@ -88,6 +88,25 @@ UNFROZEN_READS = [
     f"    with time_machine.travel({INSTANT}, tick=False):\n"
     f"        with time_machine.travel({INSTANT}):\n"
     "            datetime.now()\n",
+    # A deferred body defined inside a travel block may be called after the
+    # block exits, when the travel is gone; only a marker or the frozen_clock
+    # fixture covers a whole test execution.
+    "import time_machine\n"
+    "from datetime import datetime\n"
+    f"def test_lambda_inside_travel():\n"
+    f"    with time_machine.travel({INSTANT}, tick=False):\n"
+    "        return lambda: datetime.now()\n",
+    "import time_machine\n"
+    "from datetime import datetime\n"
+    f"with time_machine.travel({INSTANT}, tick=False):\n"
+    "    def test_defined_inside_travel():\n"
+    "        datetime.now()\n",
+    "import time_machine\n"
+    "from datetime import datetime\n"
+    "def test_callback_after_the_block():\n"
+    f"    with time_machine.travel({INSTANT}, tick=False):\n"
+    "        callback = lambda: datetime.now()\n"
+    "    callback()\n",
 ]
 
 #: The same reads are accepted once the clock is frozen at function, class or
@@ -129,11 +148,6 @@ FROZEN_READS = [
     "import time\n"
     "def test_elapsed_measures_are_not_clock_reads():\n"
     "    return time.monotonic(), time.perf_counter()\n",
-    "import time_machine\n"
-    "from datetime import datetime\n"
-    f"def test_lambda_inside_travel():\n"
-    f"    with time_machine.travel({INSTANT}, tick=False):\n"
-    "        return lambda: datetime.now()\n",
     "import time\ndef test_shadowed_time():\n    time = load_time()\n    return time.time()\n",
     # Every reachable path replaces the clock binding, so nothing is reported.
     "import time as clock\n"
