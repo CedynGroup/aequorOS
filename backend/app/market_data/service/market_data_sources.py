@@ -37,7 +37,7 @@ from app.data_engine.public import (
     CanonicalYieldCurve,
     CanonicalYieldCurvePoint,
 )
-from app.identity.public import Bank
+from app.identity.public import get_bank_or_404
 from app.market_data.schemas.market_data_sources import (
     Category,
     CategoryPreferenceRead,
@@ -173,7 +173,7 @@ def load_preference(db: Session, organization_id: str, bank_id: str) -> Resolved
 
 def get_preference(db: Session, ctx: TenantContext, bank_id: str) -> SourcePreferencesRead:
     """API read: the resolved preference (spec §4 GET)."""
-    _get_bank_or_404(db, ctx, bank_id)
+    get_bank_or_404(db, ctx, bank_id)
     return _to_read(bank_id, load_preference(db, ctx.organization_id, bank_id))
 
 
@@ -190,7 +190,7 @@ def set_preference(
     # Configuration duty: exact markets/configure/restricted authority BEFORE any
     # preference mutation or audit row.
     require_markets_access(db, ctx, bank_id, Permission.CONFIGURE, Sensitivity.RESTRICTED)
-    _get_bank_or_404(db, ctx, bank_id)
+    get_bank_or_404(db, ctx, bank_id)
     row = _load_preference_row(db, ctx.organization_id, bank_id)
     created = row is None
     if row is None:
@@ -784,7 +784,7 @@ def resolve_planes(  # noqa: PLR0913
             detail=f"Unknown category {category!r}; expected one of {CATEGORIES}.",
         )
     category = cast("Category", category)
-    _get_bank_or_404(db, ctx, bank_id)
+    get_bank_or_404(db, ctx, bank_id)
     org = ctx.organization_id
     choice = load_preference(db, org, bank_id).choice(category)
     present = _present_sources(db, org, bank_id, category, as_of)
@@ -1011,7 +1011,7 @@ def get_forward_grid(  # noqa: PLR0913 - tenant scope plus optional as-of/freque
     reconstructed from those buckets (see ``_forward_grid_rows``). Calibrating
     pillars come from the determination's ``input_snapshot``.
     """
-    _get_bank_or_404(db, ctx, bank_id)
+    get_bank_or_404(db, ctx, bank_id)
     if curve_name.startswith("AEQ."):
         from app.market_data.service.market_desk import (  # noqa: PLC0415
             entitlements as desk_entitlements,
@@ -1222,12 +1222,3 @@ def _dec_str(value: Decimal) -> str:
 # ---------------------------------------------------------------------------
 # Internals
 # ---------------------------------------------------------------------------
-
-
-def _get_bank_or_404(db: Session, ctx: TenantContext, bank_id: str) -> Bank:
-    bank = db.scalar(
-        select(Bank).where(Bank.id == bank_id, Bank.organization_id == ctx.organization_id)
-    )
-    if bank is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Bank not found.")
-    return bank

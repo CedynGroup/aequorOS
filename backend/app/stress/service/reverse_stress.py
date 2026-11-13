@@ -26,7 +26,7 @@ from app.api.deps import TenantContext
 from app.capital.public import regulatory_capital
 from app.core.authorization import Module, Permission, Sensitivity
 from app.identity import public as scoped_authorization
-from app.identity.public import Bank
+from app.identity.public import Bank, get_bank_or_404
 from app.liquidity.public import regulatory_liquidity
 from app.live.public import BankReportingPeriod, RegulatoryRun
 from app.policy.public import regulatory_parameters
@@ -41,15 +41,6 @@ FRONTIER_SCENARIO = "frontier"
 
 _LIQUIDITY_AXIS_SCENARIO = "combined"
 _CAPITAL_AXIS_SCENARIO = "severe"
-
-
-def _get_bank_or_404(db: Session, ctx: TenantContext, bank_id: str) -> Bank:
-    bank = db.scalar(
-        select(Bank).where(Bank.id == bank_id, Bank.organization_id == ctx.organization_id)
-    )
-    if bank is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Bank not found.")
-    return bank
 
 
 def _get_period_or_404(
@@ -78,7 +69,7 @@ def run_reverse_stress(
     db: Session, ctx: TenantContext, bank_id: str, payload: ReverseStressRunCreate
 ) -> ReverseStressRead:
     """Compute and persist the reverse-stress frontier for one period."""
-    bank = _get_bank_or_404(db, ctx, bank_id)
+    bank = get_bank_or_404(db, ctx, bank_id)
     # The frontier is a Forecasting run: one complete confidential/run binding
     # decides it here, before the period lookup and before either engine searches.
     scoped_authorization.require_resolved_bank_permission(
@@ -192,7 +183,7 @@ def run_reverse_stress(
 def get_latest_reverse_stress(
     db: Session, ctx: TenantContext, bank_id: str, reporting_period_id: UUID
 ) -> ReverseStressRead:
-    bank = _get_bank_or_404(db, ctx, bank_id)
+    bank = get_bank_or_404(db, ctx, bank_id)
     run = db.scalar(
         select(RegulatoryRun)
         .where(

@@ -71,7 +71,7 @@ from app.ftp.schemas import (
     FtpValidationRead,
 )
 from app.identity import public as scoped_authorization
-from app.identity.public import Bank, BankRead, BankReportingPeriodRead
+from app.identity.public import Bank, BankRead, BankReportingPeriodRead, get_bank_or_404
 from app.liquidity.public import (
     RegulatoryRunBatchRead,
     RegulatoryRunRead,
@@ -210,7 +210,7 @@ def run_all_ftp_scenarios(
     resolved_bank: Bank | None = None,
 ) -> RegulatoryRunBatchRead:
     _require_actor(ctx)
-    bank = resolved_bank or _get_bank_or_404(db, ctx, bank_id)
+    bank = resolved_bank or get_bank_or_404(db, ctx, bank_id)
     scoped_authorization.require_resolved_bank_permission(
         db,
         ctx,
@@ -243,7 +243,7 @@ def get_ftp_dashboard(
     *,
     resolved_bank: Bank | None = None,
 ) -> FtpDashboardRead:
-    bank = resolved_bank or _get_bank_or_404(db, ctx, bank_id)
+    bank = resolved_bank or get_bank_or_404(db, ctx, bank_id)
     periods = _list_periods_ascending(db, ctx, bank)
     period = (
         current_fact_period_or_409(db, ctx, bank, MODULE_FTP)
@@ -1498,15 +1498,6 @@ def _list_periods_ascending(
             .order_by(BankReportingPeriod.period_end)
         )
     )
-
-
-def _get_bank_or_404(db: Session, ctx: TenantContext, bank_id: str) -> Bank:
-    bank = db.scalar(
-        select(Bank).where(Bank.id == bank_id, Bank.organization_id == ctx.organization_id)
-    )
-    if bank is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Bank not found.")
-    return bank
 
 
 def _get_period_or_404(

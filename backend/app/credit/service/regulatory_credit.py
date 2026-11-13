@@ -91,7 +91,13 @@ from app.data_engine.public import (
     CanonicalReferenceRow,
 )
 from app.identity import public as scoped_authorization
-from app.identity.public import Bank, BankRead, BankReportingPeriodRead, EffectiveDataScope
+from app.identity.public import (
+    Bank,
+    BankRead,
+    BankReportingPeriodRead,
+    EffectiveDataScope,
+    get_bank_or_404,
+)
 from app.liquidity.public import (
     RegulatoryRunBatchRead,
     RegulatoryRunRead,
@@ -992,7 +998,7 @@ def _persist_failure(db: Session, ctx: TenantContext, run_id: UUID, error: Credi
 def get_credit_dashboard(
     db: Session, ctx: TenantContext, bank_id: str, reporting_period_id: UUID | None = None
 ) -> CreditDashboardRead:
-    bank = _get_bank_or_404(db, ctx, bank_id)
+    bank = get_bank_or_404(db, ctx, bank_id)
     period = (
         current_fact_period_or_409(db, ctx, bank, MODULE_CREDIT)
         if reporting_period_id is None
@@ -1088,7 +1094,7 @@ def get_credit_concentration(db: Session, ctx: TenantContext, bank_id: str):
     """The standing concentration monitor read (credit PR-3)."""
     from app.credit.service import credit_concentration  # noqa: PLC0415 - service cycle
 
-    bank = _get_bank_or_404(db, ctx, bank_id)
+    bank = get_bank_or_404(db, ctx, bank_id)
     period = current_fact_period_or_409(db, ctx, bank, MODULE_CREDIT)
     return credit_concentration.concentration_read(db, ctx, bank, period.period_end)
 
@@ -1432,7 +1438,7 @@ def list_credit_loans(  # noqa: PLR0913 - one keyword per blotter filter
     """
     stage = _require_stage(stage)
     dpd_band = _require_dpd_band(dpd_band)
-    bank = _get_bank_or_404(db, ctx, bank_id)
+    bank = get_bank_or_404(db, ctx, bank_id)
     period = _blotter_period(db, ctx, bank, as_of)
     resolved_as_of = period.period_end
     scope = resolve_data_scope(db, ctx, bank, resolved_as_of, data_scope)
@@ -1480,7 +1486,7 @@ def get_credit_loan_facets(
     would — including the ``branches`` facet, which would otherwise enumerate
     every branch the institution has.
     """
-    bank = _get_bank_or_404(db, ctx, bank_id)
+    bank = get_bank_or_404(db, ctx, bank_id)
     period = current_fact_period_or_409(db, ctx, bank, MODULE_CREDIT)
     scope = resolve_data_scope(db, ctx, bank, period.period_end, data_scope)
     rows = [
@@ -1661,15 +1667,6 @@ def _latest_succeeded_baseline_run(
     )
 
 
-def _get_bank_or_404(db: Session, ctx: TenantContext, bank_id: str) -> Bank:
-    bank = db.scalar(
-        select(Bank).where(Bank.organization_id == ctx.organization_id, Bank.id == bank_id)
-    )
-    if bank is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Bank not found")
-    return bank
-
-
 def _get_period_or_404(
     db: Session, ctx: TenantContext, bank: Bank, reporting_period_id: UUID
 ) -> BankReportingPeriod:
@@ -1832,7 +1829,7 @@ def get_credit_activity(
     """
     from datetime import timedelta  # noqa: PLC0415
 
-    bank = _get_bank_or_404(db, ctx, bank_id)
+    bank = get_bank_or_404(db, ctx, bank_id)
     period = current_fact_period_or_409(db, ctx, bank, MODULE_CREDIT)
     as_of = period.period_end
     base_ccy = jurisdictions.base_currency(bank)
@@ -1938,7 +1935,7 @@ def get_credit_migration(db: Session, ctx: TenantContext, bank_id: str) -> Credi
     False + reason), not the module-unavailable envelope — one missing prior
     month must not take the whole credit view down.
     """
-    bank = _get_bank_or_404(db, ctx, bank_id)
+    bank = get_bank_or_404(db, ctx, bank_id)
     period = current_fact_period_or_409(db, ctx, bank, MODULE_CREDIT)
     as_of = period.period_end
     opening_as_of = _previous_month_end_as_of(db, ctx, bank, as_of)
@@ -2039,7 +2036,7 @@ def get_credit_vintages(db: Session, ctx: TenantContext, bank_id: str) -> Credit
         compute_vintages,
     )
 
-    bank = _get_bank_or_404(db, ctx, bank_id)
+    bank = get_bank_or_404(db, ctx, bank_id)
     period = current_fact_period_or_409(db, ctx, bank, MODULE_CREDIT)
     as_ofs = _month_end_as_ofs(db, ctx, bank, period.period_end)
     if len(as_ofs) < _VINTAGE_MIN_MONTHS:
@@ -2162,7 +2159,7 @@ def get_credit_pd(db: Session, ctx: TenantContext, bank_id: str) -> CreditPdRead
         estimate_pd,
     )
 
-    bank = _get_bank_or_404(db, ctx, bank_id)
+    bank = get_bank_or_404(db, ctx, bank_id)
     period = current_fact_period_or_409(db, ctx, bank, MODULE_CREDIT)
     ordered = sorted(_month_end_as_ofs(db, ctx, bank, period.period_end))
     pairs = [

@@ -68,7 +68,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import TenantContext
 from app.core import observability
 from app.data_engine.public import reconciliation, withdrawal_impact
-from app.identity.public import Bank
+from app.identity.public import Bank, get_bank_or_404
 from app.live.public import BankFinancialFact, fact_derivation
 from app.reporting.models.packages import RegulatoryPackage
 
@@ -230,7 +230,6 @@ def assert_package_reconciled(
     withdrawal_impact.assert_package_source_runs_current(db, package, purpose=purpose)
 
     from app.reporting.service.common import (  # noqa: PLC0415 - breaks an import cycle
-        get_bank_or_404,
         get_snapshot_for_reporting_date,
     )
     from app.reporting.service.registry import (  # noqa: PLC0415 - same cycle

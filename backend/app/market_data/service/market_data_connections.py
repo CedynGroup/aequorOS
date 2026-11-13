@@ -34,7 +34,7 @@ import app.market_data.adapters  # noqa: F401 - registers shipped vendor adapter
 from app.core.authorization import Module, Permission, Sensitivity
 from app.data_engine.public import bank_slug
 from app.db.base import utc_now
-from app.identity.public import Bank, evaluate_bank_permission
+from app.identity.public import Bank, evaluate_bank_permission, get_bank_or_404
 from app.market_data.adapters.base import (
     AuthResult,
     CredentialSet,
@@ -104,7 +104,7 @@ class _AdapterFactory(Protocol):
 
 
 def list_connections(db: Session, ctx: TenantContext, bank_id: str) -> MarketDataConnectionListRead:
-    _get_bank_or_404(db, ctx, bank_id)
+    get_bank_or_404(db, ctx, bank_id)
     rows = list(
         db.scalars(
             select(MarketDataConnection)
@@ -121,7 +121,7 @@ def list_connections(db: Session, ctx: TenantContext, bank_id: str) -> MarketDat
 
 def list_scopes(db: Session, ctx: TenantContext, bank_id: str) -> MarketDataScopeListRead:
     """Every taxonomy scope with per-vendor support and quota impact (§9.2 step 4)."""
-    bank = _get_bank_or_404(db, ctx, bank_id)
+    bank = get_bank_or_404(db, ctx, bank_id)
     slug = bank_slug(db, bank)
 
     supported_by: dict[DataScope, list[str]] = {scope: [] for scope in DataScope}
@@ -153,7 +153,7 @@ def list_scopes(db: Session, ctx: TenantContext, bank_id: str) -> MarketDataScop
 def get_quota(db: Session, ctx: TenantContext, bank_id: str) -> MarketDataQuotaListRead:
     """Current-month quota ledger per vendor (§11.1). Vendors without a ledger
     row report zero consumption and no cap."""
-    _get_bank_or_404(db, ctx, bank_id)
+    get_bank_or_404(db, ctx, bank_id)
     month = month_key(utc_now())
     rows = {
         row.vendor: row
@@ -196,7 +196,7 @@ def create_connection(
     # Configuration duty: exact markets/configure/restricted authority BEFORE any
     # vault write, credential check or vendor call.
     require_markets_access(db, ctx, bank_id, Permission.CONFIGURE, Sensitivity.RESTRICTED)
-    bank = _get_bank_or_404(db, ctx, bank_id)
+    bank = get_bank_or_404(db, ctx, bank_id)
     slug = bank_slug(db, bank)
     scopes = _validated_scopes(db, bank, slug, payload.vendor, payload.scopes)
     schedule = _validated_schedule(payload.schedule)
@@ -300,7 +300,7 @@ def validate_connection(
     require_markets_access(
         db, ctx, bank_id, Permission.CONFIGURE, Sensitivity.RESTRICTED, opaque=True
     )
-    bank = _get_bank_or_404(db, ctx, bank_id)
+    bank = get_bank_or_404(db, ctx, bank_id)
     connection = _get_connection_or_404(db, ctx, bank_id, connection_id)
     _ensure_not_revoked(connection)
     _ensure_not_disabled(connection)
@@ -352,7 +352,7 @@ def test_connection(
     require_markets_access(
         db, ctx, bank_id, Permission.CONFIGURE, Sensitivity.RESTRICTED, opaque=True
     )
-    bank = _get_bank_or_404(db, ctx, bank_id)
+    bank = get_bank_or_404(db, ctx, bank_id)
     connection = _get_connection_or_404(db, ctx, bank_id, connection_id)
     if connection.vendor == MANUAL_UPLOAD_VENDOR:
         raise HTTPException(
@@ -406,7 +406,7 @@ def update_connection(  # noqa: PLR0913
     require_markets_access(
         db, ctx, bank_id, Permission.CONFIGURE, Sensitivity.RESTRICTED, opaque=True
     )
-    bank = _get_bank_or_404(db, ctx, bank_id)
+    bank = get_bank_or_404(db, ctx, bank_id)
     connection = _get_connection_or_404(db, ctx, bank_id, connection_id)
     _ensure_not_revoked(connection)
     slug = bank_slug(db, bank)
@@ -491,7 +491,7 @@ def disable_connection(
     require_markets_access(
         db, ctx, bank_id, Permission.CONFIGURE, Sensitivity.RESTRICTED, opaque=True
     )
-    _get_bank_or_404(db, ctx, bank_id)
+    get_bank_or_404(db, ctx, bank_id)
     connection = _get_connection_or_404(db, ctx, bank_id, connection_id)
     _ensure_not_revoked(connection)
     if connection.status != "DISABLED":
@@ -518,7 +518,7 @@ def enable_connection(
     require_markets_access(
         db, ctx, bank_id, Permission.CONFIGURE, Sensitivity.RESTRICTED, opaque=True
     )
-    bank = _get_bank_or_404(db, ctx, bank_id)
+    bank = get_bank_or_404(db, ctx, bank_id)
     connection = _get_connection_or_404(db, ctx, bank_id, connection_id)
     if connection.status != "DISABLED":
         raise HTTPException(
@@ -567,7 +567,7 @@ def revoke_connection(
     require_markets_access(
         db, ctx, bank_id, Permission.CONFIGURE, Sensitivity.RESTRICTED, opaque=True
     )
-    _get_bank_or_404(db, ctx, bank_id)
+    get_bank_or_404(db, ctx, bank_id)
     connection = _get_connection_or_404(db, ctx, bank_id, connection_id)
     if connection.status == "REVOKED" and connection.credential_ciphertext is None:
         # Already revoked and wiped (a pull failure can set REVOKED without a
@@ -595,15 +595,6 @@ def revoke_connection(
 # ---------------------------------------------------------------------------
 # Internals
 # ---------------------------------------------------------------------------
-
-
-def _get_bank_or_404(db: Session, ctx: TenantContext, bank_id: str) -> Bank:
-    bank = db.scalar(
-        select(Bank).where(Bank.id == bank_id, Bank.organization_id == ctx.organization_id)
-    )
-    if bank is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Bank not found.")
-    return bank
 
 
 def _get_connection_or_404(

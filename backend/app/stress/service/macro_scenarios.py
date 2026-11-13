@@ -33,7 +33,7 @@ from app.api.deps import TenantContext
 from app.core.authorization import ConditionCheck, ConditionKind, Module, Permission
 from app.db.base import utc_now
 from app.domain.authority.outcomes import NotComputable
-from app.identity.public import Bank
+from app.identity.public import get_bank_or_404
 from app.models import MacroScenario, MacroScenarioPath
 from app.services.audit import record_event
 from app.stress.domain.translation import MacroPathPoint, translate
@@ -71,15 +71,6 @@ class ResolvedMacroScenario:
     paths: tuple[MacroPathPoint, ...]
     owner: str
     is_runnable: bool
-
-
-def _get_bank_or_404(db: Session, ctx: TenantContext, bank_id: str) -> Bank:
-    bank = db.scalar(
-        select(Bank).where(Bank.id == bank_id, Bank.organization_id == ctx.organization_id)
-    )
-    if bank is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Bank not found.")
-    return bank
 
 
 def _get_scenario_or_404(db: Session, ctx: TenantContext, scenario_id: UUID) -> MacroScenario:
@@ -307,7 +298,7 @@ def create_scenario(
 ) -> MacroScenarioRead:
     scope_authorization.require_permission(db, ctx, payload.bank_id, Permission.CREATE)
     if payload.bank_id is not None:
-        _get_bank_or_404(db, ctx, payload.bank_id)
+        get_bank_or_404(db, ctx, payload.bank_id)
     if _duplicate_code_exists(db, ctx, payload.bank_id, payload.code):
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
@@ -381,7 +372,7 @@ def list_scenarios(  # noqa: PLR0913 - the filter surface of one read
     status_filter: str | None = None,
     include_archived: bool = False,
 ) -> MacroScenarioListRead:
-    bank = _get_bank_or_404(db, ctx, bank_id) if bank_id is not None else None
+    bank = get_bank_or_404(db, ctx, bank_id) if bank_id is not None else None
     organization_visible, bank_ids = scope_authorization.visible_scopes(db, ctx)
     conditions = [
         MacroScenario.organization_id == ctx.organization_id,

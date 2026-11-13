@@ -10,7 +10,7 @@ from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
-from app.identity.public import require_institution_coverage
+from app.identity.public import get_bank_or_404, require_institution_coverage
 from app.policy.domain.regulatory_instruments import instrument_status_on
 from app.policy.public import regulatory_parameters
 from app.reporting.models.filing_workflow import PackageWorkflowStage
@@ -23,7 +23,6 @@ from app.reporting.schemas.packages import (
 )
 from app.reporting.service import family_access
 from app.reporting.service.common import (
-    get_bank_or_404,
     get_package_or_404,
     read_package,
     read_summary,

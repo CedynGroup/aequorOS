@@ -18,6 +18,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
 from app.core.config import get_settings
+from app.identity.public import get_bank_or_404
 from app.market_data.public import (
     credential_fingerprint,
     decrypt_credential_envelope,
@@ -31,7 +32,7 @@ from app.reporting.schemas.packages import (
     ChannelConfigRead,
     ChannelConfigWriteAcknowledgement,
 )
-from app.reporting.service.common import get_bank_or_404, require_actor
+from app.reporting.service.common import require_actor
 from app.reporting.service.configure_access import require_reporting_configure_access
 from app.services.audit import record_event
 
