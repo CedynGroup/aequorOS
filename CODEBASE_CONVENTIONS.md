@@ -147,14 +147,22 @@ third step of `mise run risk-service:lint`:
     or in the module `pytestmark` (`backend/scripts/freeze_clock_plugin.py`,
     loaded for every suite through `addopts`; the marker freezes setup, call
     and teardown, and a marker without an instant fails the test);
-  - inside `with time_machine.travel(...)` for the body of that `with`;
+  - inside `with time_machine.travel(<instant>, tick=False)` for the body of
+    that `with` — a ticking travel (the default) or `travel(None, tick=False)`
+    (host-clock freeze) does not pin a repeatable instant and is not accepted;
   - in a function or fixture that takes the `frozen_clock` fixture, which
     freezes at `2026-01-01T00:00:00+00:00` (or at the marker's instant when the
     test also carries the marker) and yields the `time_machine.Traveller` so
     the test can `traveller.move_to(...)`.
-  Both freeze at a fixed instant (`tick=False`). `time.monotonic` and
-  `time.perf_counter` measure elapsed time, not the calendar; they keep running
-  under a frozen wall clock and are never flagged.
+  Both freeze at a fixed instant (`tick=False`). A marker freezes test
+  execution only: module- and class-body statements (and default arguments)
+  run at import, before any travel starts, so an unfrozen read there is still
+  flagged. The marker instant must carry an explicit UTC offset — a naive
+  string freezes at the host's local timezone and fails the test.
+  `time.monotonic` and `time.perf_counter` measure elapsed time, not the
+  calendar; they keep running under a frozen wall clock and are never flagged.
+  A read on a line carrying a valid `# noqa: AQPY001 - <reason> (#<issue>)` is
+  excluded from the count.
 - **AQPY000** flags a `# noqa: AQPY001` or `# noqa: TID251` comment that does
   not carry the reason-and-issue tail `- <reason> (#<issue>)` — a suppression
   must say why it exists and track its issue. The check is tokenize-based, so
