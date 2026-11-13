@@ -29,7 +29,7 @@ import io
 import re
 import symtable
 import tokenize
-from collections.abc import Sequence
+from collections.abc import Iterator, Sequence
 from pathlib import Path
 
 from pydantic import TypeAdapter
@@ -82,10 +82,21 @@ SUPERSEDED = re.compile(
 GUARDED_CODES = frozenset({AQPY001, TID251})
 
 
+#: Separates the alternative bindings a conditional merge could not decide
+#: between (``import time as clock`` vs ``import datetime as clock`` on
+#: different branches). No module path contains ``|``.
+AMBIGUOUS = "|"
+
+
+def _alternatives(value: str) -> list[str]:
+    return value.split(AMBIGUOUS) if AMBIGUOUS in value else [value]
+
+
 def _clock_capable(value: str) -> bool:
     """Whether reads through a binding with this prefix can name a clock member."""
     return any(
-        member == value or member.startswith(f"{value}.")
+        member == alternative or member.startswith(f"{alternative}.")
+        for alternative in _alternatives(value)
         for member in (*CLOCK_MEMBERS, *UTC_NOW_SOURCES)
     )
 
@@ -94,13 +105,20 @@ def _merge_paths(body_value: str, else_value: str) -> str:
     """The binding a read may see after a conditional rebind of one name.
 
     A path that may still hold a clock binding keeps it detectable: the merge
-    only drops the clock binding once every reachable path replaces it.
+    keeps every clock-capable possibility until every reachable path replaces
+    the binding, and drops the clock binding only when all paths agree.
     """
     if body_value == else_value:
         return body_value
-    if _clock_capable(body_value):
-        return body_value
-    return else_value
+    possibilities = [
+        alternative
+        for value in (body_value, else_value)
+        for alternative in _alternatives(value)
+        if _clock_capable(alternative)
+    ]
+    if possibilities:
+        return AMBIGUOUS.join(dict.fromkeys(possibilities))
+    return body_value
 
 
 class ClockVisitor(ast.NodeVisitor):
@@ -144,6 +162,21 @@ class ClockVisitor(ast.NodeVisitor):
             return f"{self.qualified(node.value)}.{node.attr}"
         return ""
 
+    def possible_names(self, node: ast.expr) -> Iterator[str]:
+        """Every dotted name a call through ``node`` may resolve to.
+
+        A conditionally rebound alias carries ``AMBIGUOUS``-separated
+        possibilities; a call is a clock read when any of them names a clock
+        member, because any path may hold that binding at the call.
+        """
+        if isinstance(node, ast.Name):
+            yield from _alternatives(self.aliases.get(node.id, ""))
+        elif isinstance(node, ast.Attribute):
+            for base in self.possible_names(node.value):
+                yield f"{base}.{node.attr}"
+        else:
+            yield ""
+
     def child_table(self, node: ast.expr | ast.stmt, name: str) -> symtable.SymbolTable:
         children = self.children.setdefault(self.table, self.table.get_children())
         index = next(
@@ -161,9 +194,10 @@ class ClockVisitor(ast.NodeVisitor):
         return child
 
     def visit_Call(self, node: ast.Call) -> None:
-        name = self.qualified(node.func)
-        if (name in CLOCK_MEMBERS or name in UTC_NOW_SOURCES) and not self.frozen:
-            self.reads.append((name, node.lineno))
+        for name in self.possible_names(node.func):
+            if (name in CLOCK_MEMBERS or name in UTC_NOW_SOURCES) and not self.frozen:
+                self.reads.append((name, node.lineno))
+                break
         self.generic_visit(node)
 
     def visit_Import(self, node: ast.Import) -> None:

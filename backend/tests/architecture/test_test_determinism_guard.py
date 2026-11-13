@@ -64,6 +64,15 @@ UNFROZEN_READS = [
     "    if use_fake:\n"
     "        clock = fake_clock\n"
     "    clock.time()\n",
+    # Two branches may hold different clock bindings; every clock-capable
+    # possibility stays reported until all paths replace the binding.
+    "def test_two_clock_bindings(use_datetime):\n"
+    "    if use_datetime:\n"
+    "        import datetime as clock\n"
+    "    else:\n"
+    "        import time as clock\n"
+    "    if not use_datetime:\n"
+    "        clock.time()\n",
 ]
 
 #: The same reads are accepted once the clock is frozen at function, class or
