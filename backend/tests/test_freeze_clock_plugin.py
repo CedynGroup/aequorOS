@@ -1,0 +1,127 @@
+"""The freeze_time marker and the frozen_clock fixture freeze the wall clock.
+
+These tests are themselves the demonstration AQPY001 asks for: every clock read
+below sits inside a frozen context, ``time.monotonic`` keeps running under a
+frozen wall clock, and a marker without an instant fails the test.
+"""
+
+from __future__ import annotations
+
+import os
+import subprocess
+import sys
+import time
+from datetime import UTC, datetime
+from pathlib import Path
+
+import pytest
+import time_machine
+
+from app.db.base import utc_now
+from scripts.freeze_clock_plugin import DEFAULT_FROZEN_TIME
+
+BACKEND = Path(__file__).resolve().parents[1]
+MARKER_INSTANT = datetime(2026, 3, 1, 12, 0, 0, tzinfo=UTC)
+DEFAULT_INSTANT = datetime.fromisoformat(DEFAULT_FROZEN_TIME)
+
+
+def _monotonic_later_than(first: float) -> float:
+    value = first
+    for _ in range(100_000):
+        value = time.monotonic()
+        if value > first:
+            return value
+    return value
+
+
+@pytest.mark.freeze_time("2026-03-01T12:00:00+00:00")
+def test_freeze_time_marker_freezes_wall_clock_reads() -> None:
+    assert datetime.now(tz=UTC) == MARKER_INSTANT
+    assert datetime.now(tz=UTC) == datetime.now(tz=UTC)
+    assert time.time() == time.time()
+    assert utc_now() == MARKER_INSTANT
+
+
+@pytest.mark.freeze_time("2026-03-01T12:00:00+00:00")
+def test_freeze_time_marker_leaves_monotonic_running() -> None:
+    first = time.monotonic()
+    assert _monotonic_later_than(first) > first
+
+
+def test_frozen_clock_fixture_freezes_at_the_default_instant(
+    frozen_clock: time_machine.Traveller,
+) -> None:
+    assert datetime.now(tz=UTC) == DEFAULT_INSTANT
+    assert time.time() == DEFAULT_INSTANT.timestamp()
+    assert utc_now() == DEFAULT_INSTANT
+
+
+def test_frozen_clock_fixture_yields_a_traveller_that_moves_the_clock(
+    frozen_clock: time_machine.Traveller,
+) -> None:
+    frozen_clock.move_to("2027-06-01T00:00:00+00:00")
+    assert utc_now() == datetime(2027, 6, 1, tzinfo=UTC)
+
+
+@pytest.mark.freeze_time("2026-03-01T12:00:00+00:00")
+def test_frozen_clock_reuses_the_marker_traveller(
+    frozen_clock: time_machine.Traveller,
+) -> None:
+    frozen_clock.move_to("2026-03-01T13:00:00+00:00")
+    assert utc_now() == datetime(2026, 3, 1, 13, 0, tzinfo=UTC)
+
+
+@pytest.mark.parametrize(
+    ("marker", "name"),
+    [
+        ("@pytest.mark.freeze_time", "test_marker_needs_an_instant"),
+        ('@pytest.mark.freeze_time("2026-01-01T00:00:00")', "test_marker_naive_instant"),
+        ('@pytest.mark.freeze_time("not a timestamp")', "test_marker_not_a_timestamp"),
+    ],
+)
+def test_an_invalid_freeze_time_marker_fails_the_test(
+    tmp_path: Path, marker: str, name: str
+) -> None:
+    module = tmp_path / "test_invalid_marker.py"
+    module.write_text(f"import pytest\n{marker}\ndef {name}() -> None:\n    assert False\n")
+    # The inner pytest must not inherit the CI owner's environment: with
+    # CI_UNIT_REPORT_DIR (or CI_E2E_REPORT_DIR) set, scripts.test_suites_plugin
+    # rejects every run that lacks the matching suite selector, and inherited
+    # PYTEST_ADDOPTS would redirect the inner run's report (the same
+    # controlled-env contract as tests/architecture/test_test_suites_integration.py).
+    environment = {
+        **os.environ,
+        "PYTEST_ADDOPTS": "",
+        "PYTEST_DISABLE_PLUGIN_AUTOLOAD": "1",
+    }
+    for variable in (
+        "CI_UNIT_REPORT_DIR",
+        "CI_E2E_REPORT_DIR",
+        "CI_DATABASE_OBSERVATIONS",
+        "TEST_DATABASE_URL",
+    ):
+        _ = environment.pop(variable, None)
+    result = subprocess.run(  # noqa: S603
+        [
+            sys.executable,
+            "-m",
+            "pytest",
+            str(module),
+            "-q",
+            "--no-header",
+            "-p",
+            "no:cacheprovider",
+            # The config owns addopts, so the plugin only loads when pytest is
+            # pointed at it; a bare tmp_path run would pick /tmp as rootdir.
+            "-c",
+            str(BACKEND / "pyproject.toml"),
+        ],
+        cwd=BACKEND,
+        env=environment,
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=120,
+    )
+    assert result.returncode == 1
+    assert "freeze_time requires an ISO-8601 string with an explicit UTC offset" in result.stdout
