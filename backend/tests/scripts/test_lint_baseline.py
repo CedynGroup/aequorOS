@@ -19,7 +19,11 @@ from __future__ import annotations
 import json
 import shutil
 import subprocess
+import tempfile
 from pathlib import Path
+
+from hypothesis import given
+from hypothesis import strategies as st
 
 from scripts.lint_baseline import (
     SCOPES,
@@ -28,9 +32,12 @@ from scripts.lint_baseline import (
     Scope,
     compare,
     count,
+    load_baseline,
     parse_report,
+    render,
     update,
     violation,
+    write_baseline,
 )
 
 VIOLATIONS: Counts = {
@@ -41,6 +48,44 @@ BASELINE: Counts = {
     "tests/db/test_a.py": {"PT011": 3, "PT012": 2},
     "tests/services/test_b.py": {"RUF043": 1},
 }
+
+# Bounded properties over valid nested count mappings: real test paths, the
+# ratcheted rule codes, positive counts. The ci profile bounds the examples.
+_paths = st.text(alphabet=st.sampled_from("abcdefmrstx_/.0123456789"), min_size=1, max_size=24).map(
+    lambda name: f"tests/{name}.py"
+)
+_codes = st.sampled_from(("PT011", "PT012", "PT017", "RUF043", "DTZ"))
+_counts = st.dictionaries(
+    _paths,
+    st.dictionaries(_codes, st.integers(min_value=1, max_value=50), max_size=4),
+    max_size=6,
+)
+_violation_groups = st.dictionaries(
+    st.tuples(_paths, _codes),
+    st.lists(st.integers(min_value=1, max_value=1000), min_size=1, max_size=6),
+    max_size=8,
+)
+
+
+def _oracle(current: Counts, baseline: Counts) -> tuple[frozenset[Drift], frozenset[Drift]]:
+    """An independent restatement of the ratchet comparison.
+
+    Written as two straightforward loops over each mapping's own entries, so it
+    shares no code path with ``compare``'s key-union walk.
+    """
+    grown: set[Drift] = set()
+    stale: set[Drift] = set()
+    for path, codes in current.items():
+        for code, found in codes.items():
+            allowed = baseline.get(path, {}).get(code, 0)
+            if found > allowed:
+                grown.add(Drift(path, code, found, allowed))
+    for path, codes in baseline.items():
+        for code, allowed in codes.items():
+            found = current.get(path, {}).get(code, 0)
+            if found < allowed:
+                stale.add(Drift(path, code, found, allowed))
+    return frozenset(grown), frozenset(stale)
 
 
 class TestCompare:
@@ -112,6 +157,80 @@ class TestUpdate:
         lowered: Counts = {"tests/db/test_a.py": {"PT011": 2, "PT012": 2}}
         assert update(lowered, baseline_file) == 0
         assert json.loads(baseline_file.read_text(encoding="utf-8")) == lowered
+
+
+class TestCompareProperties:
+    @given(current=_counts, baseline=_counts)
+    def test_compare_matches_an_independent_oracle(self, current: Counts, baseline: Counts) -> None:
+        comparison = compare(current, baseline)
+        grown, stale = _oracle(current, baseline)
+        assert frozenset(comparison.grown) == grown
+        assert frozenset(comparison.stale) == stale
+        assert comparison.passes == (not grown and not stale)
+
+
+class TestCountProperties:
+    @given(groups=_violation_groups)
+    def test_count_preserves_every_violation(
+        self, groups: dict[tuple[str, str], list[int]]
+    ) -> None:
+        violations = tuple(
+            violation(path, code, row, "message")
+            for (path, code), rows in groups.items()
+            for row in rows
+        )
+        counts = count(violations)
+        assert sum(total for codes in counts.values() for total in codes.values()) == len(
+            violations
+        )
+        for (path, code), rows in groups.items():
+            assert counts[path][code] == len(rows)
+
+
+class TestSerializationProperties:
+    @given(counts=_counts)
+    def test_the_baseline_survives_a_write_read_round_trip(self, counts: Counts) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            baseline_file = Path(directory) / "lint_baseline.json"
+            write_baseline(counts, baseline_file)
+            assert load_baseline(baseline_file) == counts
+
+    @given(counts=_counts)
+    def test_render_is_canonical_regardless_of_key_order(self, counts: Counts) -> None:
+        scrambled = {
+            path: dict(reversed(list(codes.items())))
+            for path, codes in reversed(list(counts.items()))
+        }
+        assert render(scrambled) == render(counts)
+
+
+class TestUpdateProperties:
+    @given(baseline=_counts, data=st.data())
+    def test_update_never_persists_a_grown_count(
+        self, baseline: Counts, data: st.DataObject
+    ) -> None:
+        entries = [(path, code) for path, codes in baseline.items() for code in codes]
+        grown = {path: dict(codes) for path, codes in baseline.items()}
+        if entries:
+            path, code = data.draw(st.sampled_from(entries))
+            grown[path][code] += 1
+        else:
+            grown = {"tests/new/test_x.py": {"PT011": 1}}
+        with tempfile.TemporaryDirectory() as directory:
+            baseline_file = Path(directory) / "lint_baseline.json"
+            write_baseline(baseline, baseline_file)
+            before = baseline_file.read_text(encoding="utf-8")
+            assert update(grown, baseline_file) == 1
+            assert baseline_file.read_text(encoding="utf-8") == before
+
+    @given(counts=_counts)
+    def test_update_lowers_a_stale_baseline_to_the_recorded_counts(self, counts: Counts) -> None:
+        current = {path: codes for path, codes in counts.items() if path != "tests/seed/test_y.py"}
+        with tempfile.TemporaryDirectory() as directory:
+            baseline_file = Path(directory) / "lint_baseline.json"
+            write_baseline({**counts, "tests/seed/test_y.py": {"DTZ": 2}}, baseline_file)
+            assert update(current, baseline_file) == 0
+            assert load_baseline(baseline_file) == current
 
 
 class TestScopes:
