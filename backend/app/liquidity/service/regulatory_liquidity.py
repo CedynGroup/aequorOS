@@ -468,7 +468,7 @@ def get_regulatory_run(
     bank = _get_bank_or_404(db, ctx, bank_id)
     run = _run_or_404(db, ctx, bank.id, run_id)
     require_regulatory_run_read(db, ctx, bank, run.module)
-    response = _read_run(db, run)
+    response = _read_run(db, ctx, bank, run)
     if run.module == "enterprise_stress":
         return enterprise_run_visibility.project_response(
             db,
@@ -488,7 +488,7 @@ def _read_regulatory_run_execution_result(
 ) -> RegulatoryRunRead:
     """Read the run just executed by a module service without re-authorizing."""
 
-    return _read_run(db, _run_or_404(db, ctx, bank.id, run_id))
+    return _read_run(db, ctx, bank, _run_or_404(db, ctx, bank.id, run_id))
 
 
 #: The stable public name the sibling engines reach through ``app.liquidity.public``.
@@ -953,7 +953,7 @@ def _create_and_execute(
             ),
         )
     db.expire_all()
-    return _read_run(db, _run_or_404(db, ctx, bank.id, run_id))
+    return _read_run(db, ctx, bank, _run_or_404(db, ctx, bank.id, run_id))
 
 
 def _persist_success(  # noqa: PLR0913, PLR0915
@@ -2102,7 +2102,69 @@ def _read_summary(
     )
 
 
-def _read_run(db: Session, run: RegulatoryRun) -> RegulatoryRunRead:
+#: Why a run's ``inputs`` are withheld from a reader below restricted VIEW.
+#: One stable token so callers (and the dashboard fallback) can match it.
+RESTRICTED_INPUTS_UNAVAILABLE_REASON = "restricted_view_required"
+UNKNOWN_MODULE_INPUTS_UNAVAILABLE_REASON = "unknown_run_module"
+
+
+class _RunInputAuthority:
+    """Whether one reader may see the stored input snapshot of a run.
+
+    Run inputs are the restricted tier of run content: the run detail stays
+    readable at confidential VIEW, and the snapshot is served only to a reader
+    who also holds the run module's restricted VIEW on the run's bank. The
+    decision uses the same canonical run-module map as every other run
+    surface, is evaluated once per distinct run module (a same-module batch is
+    one decision), and denies closed — an evaluator that cannot answer has not
+    said yes, and an unknown run module has no established authority.
+    """
+
+    def __init__(self, db: Session, ctx: TenantContext, bank: Bank) -> None:
+        self._db = db
+        self._ctx = ctx
+        self._bank = bank
+        self._decisions: dict[str, bool] = {}
+
+    def allows(self, run_module: str) -> bool:
+        cached = self._decisions.get(run_module)
+        if cached is not None:
+            return cached
+        module = run_authorization_module(run_module)
+        if module is None:
+            allowed = False
+        else:
+            decision = scoped_authorization.evaluate_bank_permission(
+                self._db,
+                self._ctx,
+                self._bank,
+                permission=Permission.VIEW,
+                module=module,
+                sensitivity=Sensitivity.RESTRICTED,
+                surface=(
+                    "regulatory_run_inputs_"
+                    f"{_REGULATORY_RUN_AUTHORIZATION[run_module].surface_prefix}"
+                ),
+            )
+            allowed = decision is not None and decision.allowed
+        self._decisions[run_module] = allowed
+        return allowed
+
+
+def _inputs_fields(
+    authority: _RunInputAuthority, run: RegulatoryRun
+) -> tuple[dict[str, Any] | None, bool, str | None]:
+    if authority.allows(run.module):
+        return run.inputs, True, None
+    reason = (
+        RESTRICTED_INPUTS_UNAVAILABLE_REASON
+        if run_authorization_module(run.module) is not None
+        else UNKNOWN_MODULE_INPUTS_UNAVAILABLE_REASON
+    )
+    return None, False, reason
+
+
+def _read_run(db: Session, ctx: TenantContext, bank: Bank, run: RegulatoryRun) -> RegulatoryRunRead:
     metric_results = list(
         db.scalars(
             select(RegulatoryMetricResult)
@@ -2126,6 +2188,9 @@ def _read_run(db: Session, run: RegulatoryRun) -> RegulatoryRunRead:
         )
     )
     validations = _stored_validations(db, run)
+    inputs, inputs_available, inputs_unavailable_reason = _inputs_fields(
+        _RunInputAuthority(db, ctx, bank), run
+    )
     return RegulatoryRunRead(
         id=run.id,
         organization_id=run.organization_id,
@@ -2138,7 +2203,9 @@ def _read_run(db: Session, run: RegulatoryRun) -> RegulatoryRunRead:
         input_schema_version=run.input_schema_version,
         output_schema_version=run.output_schema_version,
         input_hash=run.input_hash,
-        inputs=run.inputs,
+        inputs=inputs,
+        inputs_available=inputs_available,
+        inputs_unavailable_reason=inputs_unavailable_reason,
         metrics=run.metrics,
         assumption_provenance=run.assumption_provenance,
         started_at=run.started_at,

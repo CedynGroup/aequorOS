@@ -52871,9 +52871,31 @@
             "type": "string"
           },
           "inputs": {
-            "additionalProperties": true,
-            "title": "Inputs",
-            "type": "object"
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Inputs"
+          },
+          "inputs_available": {
+            "title": "Inputs Available",
+            "type": "boolean"
+          },
+          "inputs_unavailable_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Inputs Unavailable Reason"
           },
           "line_items": {
             "items": {
@@ -52956,6 +52978,8 @@
           "output_schema_version",
           "input_hash",
           "inputs",
+          "inputs_available",
+          "inputs_unavailable_reason",
           "metrics",
           "assumption_provenance",
           "started_at",

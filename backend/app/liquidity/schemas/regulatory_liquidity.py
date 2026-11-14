@@ -240,7 +240,14 @@ class RegulatoryRunRead(ClosedModel):
     input_schema_version: str
     output_schema_version: str
     input_hash: str
-    inputs: dict[str, Any]
+    #: The stored input snapshot travels only to a reader holding the run
+    #: module's restricted VIEW on the run's bank (2026-11-14 inputs decision).
+    #: Below that authority the run stays readable and ``inputs`` is ``None``
+    #: with :attr:`inputs_available` ``False``; the reason names the rule.
+    inputs: dict[str, Any] | None
+    inputs_available: bool
+    #: Why :attr:`inputs` is withheld — ``None`` whenever it is served.
+    inputs_unavailable_reason: str | None
     metrics: dict[str, Any]
     #: Forecasting runs only: the approved assumption version that supplied the
     #: presets, as recorded beside the snapshot (the forecasting reads type it

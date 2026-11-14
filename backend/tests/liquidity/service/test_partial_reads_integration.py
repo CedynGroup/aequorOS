@@ -279,7 +279,10 @@ def _assert_official_refusal(
             }
             for index in dashboard.metrics.refusals[figure].row_ref
         ]
-        snapshot = cast(list[dict[str, object]], run.inputs["facts"])
+        # The fixture reader holds all-sensitivity VIEW, so the snapshot is served.
+        snapshot_inputs = run.inputs
+        assert snapshot_inputs is not None
+        snapshot = cast(list[dict[str, object]], snapshot_inputs["facts"])
         indices = cast(list[int], details["row_ref"])
         assert sorted([snapshot[index - 1] for index in indices], key=str) == sorted(
             affected, key=str
