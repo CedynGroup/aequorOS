@@ -21,6 +21,7 @@ from __future__ import annotations
 from functools import cache
 from typing import Literal
 
+from app.domain.authority.live_engines import LIVE_ENGINES
 from app.domain.authority.registry import (
     REGISTRY,
     InstitutionClass,
@@ -33,19 +34,10 @@ from app.domain.authority.registry import AdvisoryDesignation as RegistryDesigna
 #: BI designations; Basel references map to internal advisory analysis.
 AdvisoryDesignation = Literal["filed", "supervisory_monitoring", "advisory_only", "unregistered"]
 
-#: The live-engine module vocabulary (``app.live.models.live.LIVE_MODULES``), restated
-#: here because the domain may not import the model. Parity is pinned by
-#: ``tests/bi/service/test_catalogue_parity.py``.
-ENGINE_MODULES: tuple[str, ...] = (
-    "liquidity",
-    "capital",
-    "credit",
-    "irr",
-    "fx",
-    "ftp",
-    "rating",
-    "forecast",
-)
+#: The live-engine module vocabulary (``app.live.models.live.LIVE_MODULES``),
+#: derived from the one shared engine table. Parity with the DB CHECK
+#: vocabulary is pinned by ``tests/bi/service/test_catalogue_parity.py``.
+ENGINE_MODULES: tuple[str, ...] = tuple(row.engine for row in LIVE_ENGINES)
 
 #: Methodologies whose metrics are computed on read (no sealed run, so the
 #: registry's ``authoritative_run_type`` is ``None``) yet ARE published by a live
@@ -78,32 +70,15 @@ CLASS_NEUTRAL_REGIMES: frozenset[Regime] = frozenset(
     {Regime.LMTD, Regime.IFRS9, Regime.ADVISORY_INTERNAL}
 )
 
-#: Live-module key → authorization ``Module`` value. Restated from the
-#: dashboard's ``CAPABILITY_MODULES`` / ``module_scope.MODULE_SCOPE_KEY`` shape;
-#: the architecture test resolves every value through the enum.
-AUTHORIZATION_MODULE: dict[str, str] = {
-    "liquidity": "liq",
-    "capital": "cap",
-    "credit": "credit",
-    "irr": "irrbb",
-    "fx": "fx",
-    "ftp": "ftp",
-    "rating": "markets",
-    "forecast": "fcst",
-}
+#: Live-module key → authorization ``Module`` value, derived from the one
+#: shared engine table (its module column carries the enum value); the
+#: architecture test resolves every value through the enum.
+AUTHORIZATION_MODULE: dict[str, str] = {row.engine: row.module for row in LIVE_ENGINES}
 
 #: Live-module key → ``institution_types.default_modules`` entitlement slug.
-#: Mirror of ``module_scope.MODULE_SCOPE_KEY`` (parity-tested).
-ENTITLEMENT_SLUG: dict[str, str] = {
-    "liquidity": "liquidity",
-    "capital": "capital",
-    "credit": "credit",
-    "irr": "irrbb",
-    "fx": "fx",
-    "ftp": "ftp",
-    "rating": "markets",
-    "forecast": "forecasting",
-}
+#: Derived from the shared engine table (parity-tested against
+#: ``module_scope.MODULE_SCOPE_KEY``, which derives from the same rows).
+ENTITLEMENT_SLUG: dict[str, str] = {row.engine: row.entitlement_slug for row in LIVE_ENGINES}
 
 UNREGISTERED: AdvisoryDesignation = "unregistered"
 

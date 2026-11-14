@@ -36,7 +36,6 @@ from app.capital.service import regulatory_capital
 from app.core.authorization import Module, Permission, Sensitivity
 from app.credit.service import regulatory_credit
 from app.db.base import utc_now
-from app.domain.authority.registry import MetricFamily
 from app.forecasting.service import regulatory_forecasting
 from app.ftp import service as regulatory_ftp
 from app.fx import service as regulatory_fx
@@ -83,32 +82,6 @@ _CHEAP_MODULES: tuple[tuple[str, _ComputeLive], ...] = (
     ("credit", regulatory_credit.compute_live),
     ("forecast", regulatory_forecasting.compute_live),
 )
-
-#: Live-engine module key → the institution_types ``default_modules`` slug it is
-#: scoped by (docs/sdi.md §3.2). A module absent from the tenant's set is not
-#: computed — an SDI does not run FX/FTP, so no empty FX/FTP live-metric or finding
-#: reaches its Alerts / live-summary. A universal bank has every slug, so the filter
-#: is a no-op (byte-identical). ``rating`` (implied rating) rides the market-data set.
-_MODULE_SCOPE_KEY: dict[str, str] = {
-    "liquidity": "liquidity",
-    "capital": "capital",
-    "irr": "irrbb",
-    "fx": "fx",
-    "ftp": "ftp",
-    "rating": "markets",
-    "forecast": "forecasting",
-}
-
-
-#: Live modules whose outputs are authoritative only for a declared institution
-#: class. The declaration itself lives in WS-A's metric authority registry; this
-#: maps the live module key onto the metric family to look up there, so the live
-#: tier can never disagree with the registry about who a metric belongs to.
-_MODULE_METRIC_FAMILY: dict[str, MetricFamily] = {
-    "forecast": MetricFamily.FORECAST,
-    "credit": MetricFamily.CREDIT,
-}
-
 
 def _scoped_modules(db: Session, bank: Bank) -> tuple[tuple[str, _ComputeLive], ...]:
     """The cheap-tier modules the tenant's institution type is entitled to run.

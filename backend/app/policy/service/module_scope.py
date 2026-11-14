@@ -50,25 +50,19 @@ from __future__ import annotations
 
 from sqlalchemy.orm import Session
 
+from app.domain.authority.live_engines import ENTITLEMENT_SLUG_ALIASES, LIVE_ENGINES
 from app.domain.authority.registry import MetricFamily
 from app.identity.public import Bank
 from app.policy.service import institution_types, sdi_regime
 
 #: Calculation-module key → the ``institution_types.default_modules`` slug that
-#: entitles it (docs/sdi.md §3.2). A module absent from the tenant's set is not
-#: computed — an SDI does not run FX/FTP, so no empty FX/FTP live-metric,
-#: finding, or official run reaches it.
+#: entitles it (docs/sdi.md §3.2), derived from the one shared engine table
+#: (plus the official tier's ``implied_rating`` alias). A module absent from
+#: the tenant's set is not computed — an SDI does not run FX/FTP, so no empty
+#: FX/FTP live-metric, finding, or official run reaches it.
 MODULE_SCOPE_KEY: dict[str, str] = {
-    "liquidity": "liquidity",
-    "capital": "capital",
-    "irr": "irrbb",
-    "fx": "fx",
-    "ftp": "ftp",
-    "rating": "markets",
-    "credit": "credit",
-    "implied_rating": "markets",
-    "forecast": "forecasting",
-}
+    row.engine: row.entitlement_slug for row in LIVE_ENGINES
+} | ENTITLEMENT_SLUG_ALIASES
 
 #: Modules whose outputs are authoritative only for a declared institution class.
 #: The declaration lives in WS-A's metric authority registry; this maps the
