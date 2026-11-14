@@ -633,9 +633,9 @@ Derivation-only activation remains unchanged. No grants are backfilled or widene
    record-level blotter CSV would need CREDIT/`restricted` `export` and would be
    unavailable to Viewers, Auditors and Approvers without a bundle change. There is
    no credit export route today; decide before adding one.
-2. **The credit register writes** (`manage_credit_params.py` PUTs) stay on the
-   scalar `ApproverTenant` gate. Their reads were cut over in Phase 5 below; a
-   dedicated Configurator authority for the writes is issue 184.
+2. **The credit register writes** (`manage_credit_params.py` PUTs) stayed on the
+   scalar approver gate until their own Configurator cutover (issue 184); their
+   reads were cut over in Phase 5 below.
 3. **Branch-level credit figures.** §Why four surfaces refuse a narrowed data
    scope explains why a sliced dashboard, migration matrix, vintage curve or PD is
    refused rather than computed. If a bank wants them, they need their own limit

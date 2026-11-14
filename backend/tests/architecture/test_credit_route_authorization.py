@@ -151,7 +151,6 @@ def test_credit_routes_cannot_revert_to_legacy_authorization(
     assert required in dependencies
     # The scalar gates the cutover removed.
     assert "get_mutation_tenant_context" not in dependencies
-    assert "get_approver_tenant_context" not in dependencies
     assert not any(name.startswith("require_role_") for name in dependencies)
     # Visibility still decides first: a bank of another tenant is 404 before any
     # sentence is evaluated.
@@ -189,7 +188,6 @@ def test_credit_authorized_reads_outside_credit_cut_over(
     assert required in dependencies
     assert "resolve_tenant_bank" in dependencies
     assert "get_mutation_tenant_context" not in dependencies
-    assert "get_approver_tenant_context" not in dependencies
     assert not any(name.startswith("require_role_") for name in dependencies)
     # Capital authority is a different sentence; its dependency must not appear
     # on a credit read, or the cutover would silently keep admitting Capital.
@@ -214,7 +212,6 @@ def test_register_writes_are_configurator_authority(key: tuple[str, str], requir
     assert len(matches) == 1, f"{method} {path} must have exactly one route"
     dependencies = _dependency_names(matches[0])
     assert required in dependencies
-    assert "get_approver_tenant_context" not in dependencies
     assert "get_mutation_tenant_context" not in dependencies
     assert not any(name.startswith("require_role_") for name in dependencies)
     # Configure authority is write authority: no read-gate dependency may sit on

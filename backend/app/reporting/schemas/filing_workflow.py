@@ -80,6 +80,45 @@ class FilingWorkflowTemplateRead(ClosedModel):
     updated_at: datetime
 
 
+class FilingWorkflowTemplateWriteAcknowledgement(ClosedModel):
+    """Write-only evidence of a filing-chain template write.
+
+    Carries the written row's id, the bank, the version and the status value this
+    request wrote, plus the server timestamps. The chain itself — its stages,
+    its proposer, its decision record — is stored governance content and is
+    never echoed through a write response; read it through the view-gated list.
+    """
+
+    id: UUID
+    bank_id: str
+    version: int
+    status: FilingWorkflowTemplateStatus
+    created_at: datetime
+    updated_at: datetime
+    submitted_at: datetime | None = None
+
+
+class FilingWorkflowTemplateDecisionRead(ClosedModel):
+    """Write evidence of a recorded decision, plus the chain when readable.
+
+    The acknowledgement fields are always present: a decision was recorded.
+    ``template`` carries the decided row only when the decider also holds
+    REGULATORY/restricted VIEW on the bank; ``null`` means the caller may not
+    read the chain and reads it through the view-gated list instead. One flat
+    schema rather than a response union: the generated client decodes it
+    without guessing which shape arrived.
+    """
+
+    id: UUID
+    bank_id: str
+    version: int
+    status: FilingWorkflowTemplateStatus
+    created_at: datetime
+    updated_at: datetime
+    submitted_at: datetime | None = None
+    template: FilingWorkflowTemplateRead | None = None
+
+
 class FilingWorkflowTemplateListRead(ClosedModel):
     templates: list[FilingWorkflowTemplateRead]
     #: The chain a return sent for approval today would pin, whatever its source.
@@ -185,11 +224,13 @@ __all__ = [
     "FilingStageState",
     "FilingWorkflowTemplateCreate",
     "FilingWorkflowTemplateDecision",
+    "FilingWorkflowTemplateDecisionRead",
     "FilingWorkflowTemplateListRead",
     "FilingWorkflowTemplateRead",
     "FilingWorkflowTemplateStatus",
     "FilingWorkflowTemplateSubmit",
     "FilingWorkflowTemplateUpdate",
+    "FilingWorkflowTemplateWriteAcknowledgement",
     "PackageChainRead",
     "PackageChainViewerRead",
     "PackageSendForApproval",

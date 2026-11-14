@@ -48,5 +48,4 @@ def test_capital_routes_cannot_revert_to_legacy_authorization() -> None:
         dependencies = _dependency_names(matches[0])
         assert required_dependency in dependencies
         assert "get_mutation_tenant_context" not in dependencies
-        assert "get_approver_tenant_context" not in dependencies
         assert not any(name.startswith("require_role_") for name in dependencies)

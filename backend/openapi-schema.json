@@ -21712,6 +21712,70 @@
         "title": "FilingWorkflowTemplateDecision",
         "type": "object"
       },
+      "FilingWorkflowTemplateDecisionRead": {
+        "additionalProperties": false,
+        "description": "Write evidence of a recorded decision, plus the chain when readable.\n\nThe acknowledgement fields are always present: a decision was recorded.\n``template`` carries the decided row only when the decider also holds\nREGULATORY/restricted VIEW on the bank; ``null`` means the caller may not\nread the chain and reads it through the view-gated list instead. One flat\nschema rather than a response union: the generated client decodes it\nwithout guessing which shape arrived.",
+        "properties": {
+          "bank_id": {
+            "title": "Bank Id",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/FilingWorkflowTemplateStatus"
+          },
+          "submitted_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Submitted At"
+          },
+          "template": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/FilingWorkflowTemplateRead"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "bank_id",
+          "version",
+          "status",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "FilingWorkflowTemplateDecisionRead",
+        "type": "object"
+      },
       "FilingWorkflowTemplateListRead": {
         "additionalProperties": false,
         "properties": {
@@ -21910,6 +21974,60 @@
           "reason"
         ],
         "title": "FilingWorkflowTemplateUpdate",
+        "type": "object"
+      },
+      "FilingWorkflowTemplateWriteAcknowledgement": {
+        "additionalProperties": false,
+        "description": "Write-only evidence of a filing-chain template write.\n\nCarries the written row's id, the bank, the version and the status value this\nrequest wrote, plus the server timestamps. The chain itself \u2014 its stages,\nits proposer, its decision record \u2014 is stored governance content and is\nnever echoed through a write response; read it through the view-gated list.",
+        "properties": {
+          "bank_id": {
+            "title": "Bank Id",
+            "type": "string"
+          },
+          "created_at": {
+            "format": "date-time",
+            "title": "Created At",
+            "type": "string"
+          },
+          "id": {
+            "format": "uuid",
+            "title": "Id",
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/FilingWorkflowTemplateStatus"
+          },
+          "submitted_at": {
+            "anyOf": [
+              {
+                "format": "date-time",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Submitted At"
+          },
+          "updated_at": {
+            "format": "date-time",
+            "title": "Updated At",
+            "type": "string"
+          },
+          "version": {
+            "title": "Version",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "id",
+          "bank_id",
+          "version",
+          "status",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "FilingWorkflowTemplateWriteAcknowledgement",
         "type": "object"
       },
       "FinancialAccountCreate": {
@@ -80736,7 +80854,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/FilingWorkflowTemplateRead"
+                  "$ref": "#/components/schemas/FilingWorkflowTemplateWriteAcknowledgement"
                 }
               }
             },
@@ -80863,7 +80981,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/FilingWorkflowTemplateRead"
+                  "$ref": "#/components/schemas/FilingWorkflowTemplateWriteAcknowledgement"
                 }
               }
             },
@@ -80953,7 +81071,7 @@
     },
     "/api/v1/banks/{bank_id}/filing-workflow-templates/{template_id}/decision": {
       "post": {
-        "description": "Approve or reject a proposed chain. Never by whoever proposed it.",
+        "description": "Approve or reject a proposed chain. Never by whoever proposed it.\n\nThe write acknowledgement is always the answer; the decided row rides along\nin ``template`` only when the decider may also read the chain.",
         "operationId": "decideFilingWorkflowTemplate",
         "parameters": [
           {
@@ -80991,7 +81109,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/FilingWorkflowTemplateRead"
+                  "$ref": "#/components/schemas/FilingWorkflowTemplateDecisionRead"
                 }
               }
             },
@@ -81118,7 +81236,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/FilingWorkflowTemplateRead"
+                  "$ref": "#/components/schemas/FilingWorkflowTemplateWriteAcknowledgement"
                 }
               }
             },

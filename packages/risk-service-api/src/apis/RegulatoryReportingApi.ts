@@ -21,10 +21,11 @@ import type {
   FilingSetPreviewRead,
   FilingWorkflowTemplateCreate,
   FilingWorkflowTemplateDecision,
+  FilingWorkflowTemplateDecisionRead,
   FilingWorkflowTemplateListRead,
-  FilingWorkflowTemplateRead,
   FilingWorkflowTemplateSubmit,
   FilingWorkflowTemplateUpdate,
+  FilingWorkflowTemplateWriteAcknowledgement,
   PackageApprovalDecisionCreate,
   PackageApprovalRequestCreate,
   PackageAttachmentListRead,
@@ -76,14 +77,16 @@ import {
   FilingWorkflowTemplateCreateToJSON,
   FilingWorkflowTemplateDecisionFromJSON,
   FilingWorkflowTemplateDecisionToJSON,
+  FilingWorkflowTemplateDecisionReadFromJSON,
+  FilingWorkflowTemplateDecisionReadToJSON,
   FilingWorkflowTemplateListReadFromJSON,
   FilingWorkflowTemplateListReadToJSON,
-  FilingWorkflowTemplateReadFromJSON,
-  FilingWorkflowTemplateReadToJSON,
   FilingWorkflowTemplateSubmitFromJSON,
   FilingWorkflowTemplateSubmitToJSON,
   FilingWorkflowTemplateUpdateFromJSON,
   FilingWorkflowTemplateUpdateToJSON,
+  FilingWorkflowTemplateWriteAcknowledgementFromJSON,
+  FilingWorkflowTemplateWriteAcknowledgementToJSON,
   PackageApprovalDecisionCreateFromJSON,
   PackageApprovalDecisionCreateToJSON,
   PackageApprovalRequestCreateFromJSON,
@@ -667,13 +670,13 @@ export class RegulatoryReportingApi extends runtime.BaseAPI {
   }
 
   /**
-   * Approve or reject a proposed chain. Never by whoever proposed it.
+   * Approve or reject a proposed chain. Never by whoever proposed it.  The write acknowledgement is always the answer; the decided row rides along in ``template`` only when the decider may also read the chain.
    * Decide Filing Workflow Template
    */
   async decideFilingWorkflowTemplateRaw(
     requestParameters: DecideFilingWorkflowTemplateRequest,
     initOverrides?: RequestInit | runtime.InitOverrideFunction,
-  ): Promise<runtime.ApiResponse<FilingWorkflowTemplateRead>> {
+  ): Promise<runtime.ApiResponse<FilingWorkflowTemplateDecisionRead>> {
     if (requestParameters["bankId"] == null) {
       throw new runtime.RequiredError(
         "bankId",
@@ -731,18 +734,18 @@ export class RegulatoryReportingApi extends runtime.BaseAPI {
     );
 
     return new runtime.JSONApiResponse(response, (jsonValue) =>
-      FilingWorkflowTemplateReadFromJSON(jsonValue),
+      FilingWorkflowTemplateDecisionReadFromJSON(jsonValue),
     );
   }
 
   /**
-   * Approve or reject a proposed chain. Never by whoever proposed it.
+   * Approve or reject a proposed chain. Never by whoever proposed it.  The write acknowledgement is always the answer; the decided row rides along in ``template`` only when the decider may also read the chain.
    * Decide Filing Workflow Template
    */
   async decideFilingWorkflowTemplate(
     requestParameters: DecideFilingWorkflowTemplateRequest,
     initOverrides?: RequestInit | runtime.InitOverrideFunction,
-  ): Promise<FilingWorkflowTemplateRead> {
+  ): Promise<FilingWorkflowTemplateDecisionRead> {
     const response = await this.decideFilingWorkflowTemplateRaw(
       requestParameters,
       initOverrides,
@@ -2749,7 +2752,7 @@ export class RegulatoryReportingApi extends runtime.BaseAPI {
   async proposeFilingWorkflowTemplateRaw(
     requestParameters: ProposeFilingWorkflowTemplateRequest,
     initOverrides?: RequestInit | runtime.InitOverrideFunction,
-  ): Promise<runtime.ApiResponse<FilingWorkflowTemplateRead>> {
+  ): Promise<runtime.ApiResponse<FilingWorkflowTemplateWriteAcknowledgement>> {
     if (requestParameters["bankId"] == null) {
       throw new runtime.RequiredError(
         "bankId",
@@ -2795,7 +2798,7 @@ export class RegulatoryReportingApi extends runtime.BaseAPI {
     );
 
     return new runtime.JSONApiResponse(response, (jsonValue) =>
-      FilingWorkflowTemplateReadFromJSON(jsonValue),
+      FilingWorkflowTemplateWriteAcknowledgementFromJSON(jsonValue),
     );
   }
 
@@ -2806,7 +2809,7 @@ export class RegulatoryReportingApi extends runtime.BaseAPI {
   async proposeFilingWorkflowTemplate(
     requestParameters: ProposeFilingWorkflowTemplateRequest,
     initOverrides?: RequestInit | runtime.InitOverrideFunction,
-  ): Promise<FilingWorkflowTemplateRead> {
+  ): Promise<FilingWorkflowTemplateWriteAcknowledgement> {
     const response = await this.proposeFilingWorkflowTemplateRaw(
       requestParameters,
       initOverrides,
@@ -3224,7 +3227,7 @@ export class RegulatoryReportingApi extends runtime.BaseAPI {
   async submitFilingWorkflowTemplateRaw(
     requestParameters: SubmitFilingWorkflowTemplateRequest,
     initOverrides?: RequestInit | runtime.InitOverrideFunction,
-  ): Promise<runtime.ApiResponse<FilingWorkflowTemplateRead>> {
+  ): Promise<runtime.ApiResponse<FilingWorkflowTemplateWriteAcknowledgement>> {
     if (requestParameters["bankId"] == null) {
       throw new runtime.RequiredError(
         "bankId",
@@ -3282,7 +3285,7 @@ export class RegulatoryReportingApi extends runtime.BaseAPI {
     );
 
     return new runtime.JSONApiResponse(response, (jsonValue) =>
-      FilingWorkflowTemplateReadFromJSON(jsonValue),
+      FilingWorkflowTemplateWriteAcknowledgementFromJSON(jsonValue),
     );
   }
 
@@ -3292,7 +3295,7 @@ export class RegulatoryReportingApi extends runtime.BaseAPI {
   async submitFilingWorkflowTemplate(
     requestParameters: SubmitFilingWorkflowTemplateRequest,
     initOverrides?: RequestInit | runtime.InitOverrideFunction,
-  ): Promise<FilingWorkflowTemplateRead> {
+  ): Promise<FilingWorkflowTemplateWriteAcknowledgement> {
     const response = await this.submitFilingWorkflowTemplateRaw(
       requestParameters,
       initOverrides,
@@ -3390,7 +3393,7 @@ export class RegulatoryReportingApi extends runtime.BaseAPI {
   async updateFilingWorkflowTemplateRaw(
     requestParameters: UpdateFilingWorkflowTemplateRequest,
     initOverrides?: RequestInit | runtime.InitOverrideFunction,
-  ): Promise<runtime.ApiResponse<FilingWorkflowTemplateRead>> {
+  ): Promise<runtime.ApiResponse<FilingWorkflowTemplateWriteAcknowledgement>> {
     if (requestParameters["bankId"] == null) {
       throw new runtime.RequiredError(
         "bankId",
@@ -3448,7 +3451,7 @@ export class RegulatoryReportingApi extends runtime.BaseAPI {
     );
 
     return new runtime.JSONApiResponse(response, (jsonValue) =>
-      FilingWorkflowTemplateReadFromJSON(jsonValue),
+      FilingWorkflowTemplateWriteAcknowledgementFromJSON(jsonValue),
     );
   }
 
@@ -3458,7 +3461,7 @@ export class RegulatoryReportingApi extends runtime.BaseAPI {
   async updateFilingWorkflowTemplate(
     requestParameters: UpdateFilingWorkflowTemplateRequest,
     initOverrides?: RequestInit | runtime.InitOverrideFunction,
-  ): Promise<FilingWorkflowTemplateRead> {
+  ): Promise<FilingWorkflowTemplateWriteAcknowledgement> {
     const response = await this.updateFilingWorkflowTemplateRaw(
       requestParameters,
       initOverrides,

@@ -19,7 +19,6 @@ _ROUTES = tuple(route for route in app.routes if isinstance(route, APIRoute))
 _LEGACY_GATES = frozenset(
     {
         "get_mutation_tenant_context",
-        "get_approver_tenant_context",
         "get_scoped_mutation_tenant_context",
     }
 )

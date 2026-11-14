@@ -1126,24 +1126,6 @@
       "routes": [
         {
           "application": "tenant",
-          "method": "PATCH",
-          "path": "/api/v1/banks/{bank_id}/filing-workflow-templates/{template_id}",
-          "endpoint": "app.reporting.api.manage_filing_workflow:update_filing_workflow_template"
-        },
-        {
-          "application": "tenant",
-          "method": "POST",
-          "path": "/api/v1/banks/{bank_id}/filing-workflow-templates",
-          "endpoint": "app.reporting.api.manage_filing_workflow:propose_filing_workflow_template"
-        },
-        {
-          "application": "tenant",
-          "method": "POST",
-          "path": "/api/v1/banks/{bank_id}/filing-workflow-templates/{template_id}/submit",
-          "endpoint": "app.reporting.api.manage_filing_workflow:submit_filing_workflow_template"
-        },
-        {
-          "application": "tenant",
           "method": "POST",
           "path": "/api/v1/banks/{bank_id}/official-runs",
           "endpoint": "app.live.api.manage_live_engine:mint_official_run"
@@ -1254,22 +1236,20 @@
       ]
     },
     {
-      "name": "tenant-dependencies-19089ad33392",
+      "name": "tenant-dependencies-filing-templates-scoped",
       "kind": "dependency",
-      "basis": "Existing tenant authentication boundary and exact registered dependency calls listed here. Named scoped/legacy gates remain unchanged; handler and service checks can narrow this access further. Presence is not policy correctness.",
+      "basis": "The filing review-chain template writes require scoped mutation tenancy; the service layer enforces the complete REG/restricted sentence (configure for propose/update/submit, approve with the maker-checker condition for the decision).",
       "references": [
-        "app/api/deps.py:get_approver_tenant_context",
         "app/api/deps.py:get_current_principal",
-        "app/api/deps.py:get_mutation_tenant_context",
+        "app/api/deps.py:get_scoped_mutation_tenant_context",
         "app/api/deps.py:get_tenant_context",
         "app/api/deps.py:get_tenant_db_session",
         "app/api/deps.py:resolve_tenant_bank"
       ],
       "authentication": "tenant",
       "dependencies": [
-        "app.api.deps:get_approver_tenant_context",
         "app.api.deps:get_current_principal",
-        "app.api.deps:get_mutation_tenant_context",
+        "app.api.deps:get_scoped_mutation_tenant_context",
         "app.api.deps:get_tenant_context",
         "app.api.deps:get_tenant_db_session",
         "app.api.deps:resolve_tenant_bank",
@@ -1278,9 +1258,27 @@
       "routes": [
         {
           "application": "tenant",
+          "method": "PATCH",
+          "path": "/api/v1/banks/{bank_id}/filing-workflow-templates/{template_id}",
+          "endpoint": "app.reporting.api.manage_filing_workflow:update_filing_workflow_template"
+        },
+        {
+          "application": "tenant",
+          "method": "POST",
+          "path": "/api/v1/banks/{bank_id}/filing-workflow-templates",
+          "endpoint": "app.reporting.api.manage_filing_workflow:propose_filing_workflow_template"
+        },
+        {
+          "application": "tenant",
           "method": "POST",
           "path": "/api/v1/banks/{bank_id}/filing-workflow-templates/{template_id}/decision",
           "endpoint": "app.reporting.api.manage_filing_workflow:decide_filing_workflow_template"
+        },
+        {
+          "application": "tenant",
+          "method": "POST",
+          "path": "/api/v1/banks/{bank_id}/filing-workflow-templates/{template_id}/submit",
+          "endpoint": "app.reporting.api.manage_filing_workflow:submit_filing_workflow_template"
         }
       ]
     },

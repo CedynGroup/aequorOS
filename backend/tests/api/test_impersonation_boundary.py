@@ -11,9 +11,9 @@ mutation:
    ``ctx`` dependency a route declares. The one documented exemption is
    ``deps.IMPERSONATION_READ_ONLY_ROUTES``.
 2. **Role ladder.** ``viewer`` and ``examiner`` are read-only. This one is NOT
-   structural — it is carried by the route's own ``MutationTenant`` /
-   ``ApproverTenant`` declaration — so the route-table sweep below is what keeps
-   it honest: it is the test that would have caught P0-2.
+   structural — it is carried by the route's own ``MutationTenant`` declaration —
+   so the route-table sweep below is what keeps it honest: it is the test that
+   would have caught P0-2.
 
 The earlier suite (``test_impersonation_auth.py``) sampled five paths that all
 already used ``MutationTenant``, so it could not see the defect. This one walks
@@ -55,11 +55,10 @@ _UNFIXED_READ_GUARDED_UNSAFE_ROUTES: frozenset[tuple[str, str]] = frozenset(
 
 
 def _is_role_guarded(names: set[str]) -> bool:
-    """True if the route requires a write role — via ``MutationTenant`` /
-    ``ApproverTenant``, or via an explicit ``require_role`` of analyst or above."""
+    """True if the route requires a write role — via ``MutationTenant``, or via
+    an explicit ``require_role`` of analyst or above."""
     return bool(
-        names & {"get_mutation_tenant_context", "get_approver_tenant_context"}
-        or names & MUTATION_ROLE_DEPENDENCY_NAMES
+        names & {"get_mutation_tenant_context"} or names & MUTATION_ROLE_DEPENDENCY_NAMES
     )
 
 
