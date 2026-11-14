@@ -66,6 +66,10 @@ _REFERENCE_ROLE_PERMISSIONS: dict[RoleBundle, frozenset[Permission]] = {
     # deliberately as it is in the production map: the two authorities were one
     # until 2026-09-20 and must never be re-merged.
     RoleBundle.VALIDATOR: frozenset({Permission.VIEW, Permission.SUBMIT}),
+    # Read-only export: see the finished return and take it away, and nothing
+    # that could change, approve, sign or file it. EXPORT without CREATE keeps
+    # the holder outside the preparation ladder.
+    RoleBundle.EXPORTER: frozenset({Permission.VIEW, Permission.EXPORT}),
     RoleBundle.CONFIGURATOR: frozenset({Permission.CONFIGURE}),
     RoleBundle.SIGNER: frozenset({Permission.SIGN_OFF}),
     RoleBundle.ACCOUNT_ADMIN: frozenset({Permission.ADMINISTER}),

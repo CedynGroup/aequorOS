@@ -102,6 +102,10 @@ export const ROLE_OPTIONS = [
   // Validator reinstates that, and the server's assignment-time SoD decision
   // blocks it until the stage engine's per-object condition lands.
   ["validator", "Validator"],
+  // Read-only export of finished returns: see them and take the files away,
+  // and never prepare, approve, sign or transmit. Only an explicit grant
+  // creates one — provisioning, invitations and migrations never do.
+  ["exporter", "Exporter"],
   ["account_admin", "Organization Administrator"],
 ] as const;
 
