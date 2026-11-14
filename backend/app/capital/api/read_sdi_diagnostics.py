@@ -112,10 +112,12 @@ def get_sdi_readiness(
     as_of: Annotated[date | None, Query()] = None,
 ) -> SdiReadinessRead:
     """Per-module readiness (READY/PARTIAL/BLOCKED) with the specific missing-data
-    reasons — the onboarding data-quality view (docs/sdi.md §11)."""
+    reasons — the onboarding data-quality view (docs/sdi.md §11). Each row is
+    disclosed only to a caller who may view that module at aggregated
+    sensitivity; a caller with no qualifying module view gets an empty report."""
     bank = banks_service.resolve_bank_reference(db, ctx, bank_id)
     when = _effective_as_of(db, ctx, bank, as_of)
-    modules = sdi_readiness.assess_sdi_readiness(db, ctx, bank, when)
+    modules = sdi_readiness.readiness_for_caller(db, ctx, bank, when)
     return SdiReadinessRead(
         as_of=when.isoformat(),
         modules=[
