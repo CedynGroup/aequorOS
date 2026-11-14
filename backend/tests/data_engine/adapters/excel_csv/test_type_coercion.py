@@ -87,7 +87,8 @@ class TestRate:
 class TestDate:
     def test_passthrough_and_datetime(self) -> None:
         assert coerce_date(date(2026, 6, 30)) == date(2026, 6, 30)
-        assert coerce_date(datetime(2026, 6, 30, 14, 5)) == date(2026, 6, 30)
+        # The naive timestamp is the database-column shape coerce_date sees.
+        assert coerce_date(datetime.fromisoformat("2026-06-30T14:05")) == date(2026, 6, 30)
 
     def test_excel_serial_round_trip(self) -> None:
         serial = excel_serial_for(date(2031, 3, 15))

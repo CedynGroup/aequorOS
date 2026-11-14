@@ -104,7 +104,7 @@ dir = "backend"
 run = "mise run risk-service:test"
 
 [tasks."risk-service:lint"]
-description = "Run risk service Ruff checks"
+description = "Run risk service Ruff checks and the lint count ratchet"
 dir = "backend"
 run = "mise run risk-service:lint"
 

@@ -13,7 +13,8 @@ Paths below describe the existing layered tree; new feature code follows
 ### Tooling (from `pyproject.toml`)
 
 - **ruff**: `line-length = 100`, `target-version = "py313"`. Lint rule set:
-  `select = ["E", "F", "I", "UP", "B", "SIM", "PL"]`, `ignore = ["PLR2004"]`. When a function
+  `select = ["E", "F", "I", "UP", "B", "SIM", "PL", "ASYNC", "DTZ", "S108", "RUF006", "PT010",
+  "PT015", "PT016", "PT027", "PT030", "PT031"]`, `ignore = ["PLR2004"]`. When a function
   legitimately needs many parameters, the existing code suppresses per-line with
   `# noqa: PLR0913` (and `PLR0915` for long orchestration functions) rather than restructuring.
 - **basedpyright**: `typeCheckingMode = "strict"`, `pythonVersion = "3.13"`, with included paths
@@ -90,6 +91,30 @@ Legacy diagnostic allowances may only shrink.
   legacy ones included, and is
   not a gate. Narrow `Any` with `isinstance`, a pydantic `TypeAdapter` or a typed SQLAlchemy result
   (`.tuples()`, `.scalars()`) rather than silencing it.
+
+### Lint baselines
+
+`mise run risk-service:lint` is two steps: `ruff check .`, then the count ratchet
+(`backend/scripts/lint_baseline.py check` against `backend/scripts/lint_baseline.json`).
+
+- **Zero-violation rules live in the main select.** `ASYNC`, the pytest-hygiene codes
+  (`PT010`, `PT015`, `PT016`, `PT027`, `PT030`, `PT031`), `RUF006`, `S108` and `DTZ` are
+  selected in `backend/pyproject.toml`; any new violation fails the main run. Fix it — do not
+  add a baseline entry for a code the main select already enforces.
+- **Ratcheted codes are enforced only by the ratchet.** `PT011`, `PT012`, `PT017` and `RUF043`
+  (pytest pattern hygiene with a large existing stock) are not in the main select at all —
+  this is deliberate, so they cannot double-fail — and are counted over `tests/`.
+  `DTZ` is in the main select for `tests/` (tests must hold zero naive clocks) while every
+  non-test tree is per-file-ignored there (`"!tests/**" = ["DTZ"]`) and counted by the ratchet
+  over the whole backend, so existing app-side naive clocks are tracked rather than silently
+  ignored.
+- **The ratchet is strict in both directions.** Growth fails; a count below the baseline also
+  fails (stale) until you run `uv run python scripts/lint_baseline.py update`, so a reduction is
+  recorded in the same change that made it. The baseline maps file → code → count and never
+  grows; `tests/scripts/test_lint_baseline.py` pins growth, stale and pass behaviour.
+- Deliberate-naive values (a test that must feed a naive timestamp) are built with
+  `datetime.fromisoformat(...)`; deliberate temp paths in rejection tests come from `tmp_path`
+  or `tempfile.gettempdir()`, never a hardcoded `/tmp` literal.
 
 ### Data truth in calculations
 

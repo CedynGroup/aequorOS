@@ -26,9 +26,10 @@ class TestCharset:
 
 class TestTimezone:
     def test_naive_timestamp_localized_then_converted_to_utc(self) -> None:
-        # UTC+1 wall clock 09:30 -> 08:30Z.
+        # UTC+1 wall clock 09:30 -> 08:30Z. The input is deliberately naive;
+        # fromisoformat builds it without tripping the naive-constructor rule.
         policy = NormalizationPolicy(source_utc_offset_minutes=60)
-        result = normalize_value(datetime(2026, 6, 30, 9, 30), policy)
+        result = normalize_value(datetime.fromisoformat("2026-06-30T09:30"), policy)
         assert result == "2026-06-30T08:30:00+00:00"
 
     def test_aware_timestamp_converted_to_utc(self) -> None:
@@ -38,7 +39,10 @@ class TestTimezone:
 
     def test_naive_without_offset_stays_naive_iso(self) -> None:
         policy = NormalizationPolicy(source_utc_offset_minutes=None)
-        assert normalize_value(datetime(2026, 6, 30, 9, 30), policy) == "2026-06-30T09:30:00"
+        assert (
+            normalize_value(datetime.fromisoformat("2026-06-30T09:30"), policy)
+            == "2026-06-30T09:30:00"
+        )
 
 
 class TestLocaleNumbers:

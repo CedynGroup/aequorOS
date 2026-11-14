@@ -157,7 +157,8 @@ def test_the_data_sheet_keeps_the_compilers_column_order_and_native_types() -> N
     rows = list(sheet.iter_rows(values_only=True))
     assert list(rows[0]) == [column.label for column in COLUMNS]
     assert rows[1][1] == 400.0
-    assert rows[1][3] == dt.datetime(AS_OF.year, AS_OF.month, AS_OF.day)
+    # openpyxl reads a date cell back as a naive datetime at midnight.
+    assert rows[1][3] == dt.datetime.combine(AS_OF, dt.time())
     # A NULL measure stays NULL. A zero would say the branch has no balance.
     assert rows[3][1] is None
 

@@ -46,8 +46,11 @@ description = "Run bounded unit-only feedback; add --lf for cached unit failures
 run = "uv run python -m scripts.test_fast"
 
 [tasks."risk-service:lint"]
-description = "Run Ruff checks"
-run = "uv run ruff check ."
+description = "Run Ruff checks and the lint count ratchet"
+run = [
+  "uv run ruff check .",
+  "uv run python scripts/lint_baseline.py check",
+]
 
 [tasks."risk-service:format"]
 description = "Format Python files with Ruff"

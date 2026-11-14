@@ -1,0 +1,297 @@
+{
+ "app/capital/api/read_sdi_diagnostics.py": {
+  "DTZ011": 2
+ },
+ "app/forecasting/service/regulatory_forecasting.py": {
+  "DTZ011": 1
+ },
+ "app/icaap/service/clone.py": {
+  "DTZ011": 1
+ },
+ "app/icaap/service/cycles.py": {
+  "DTZ011": 3
+ },
+ "app/icaap/service/pillar2.py": {
+  "DTZ011": 1
+ },
+ "app/icaap/service/pillar2_irrbb_hook.py": {
+  "DTZ011": 1
+ },
+ "app/icaap/service/readiness.py": {
+  "DTZ011": 2
+ },
+ "app/irrbb/service/regulatory_irr.py": {
+  "DTZ011": 1
+ },
+ "app/liquidity/api/read_liquidity_monitoring.py": {
+  "DTZ011": 1
+ },
+ "app/market_data/service/market_desk/sources/bog_apr_pdf.py": {
+  "DTZ007": 1
+ },
+ "app/market_data/service/market_desk/sources/bog_auctions.py": {
+  "DTZ007": 2
+ },
+ "app/market_data/service/market_desk/sources/bog_wdt.py": {
+  "DTZ007": 1
+ },
+ "app/market_data/service/market_desk/sources/fetch.py": {
+  "DTZ007": 1
+ },
+ "app/market_data/service/market_desk/sources/gfim.py": {
+  "DTZ007": 2
+ },
+ "app/notifications/service/reporting_deadline_scan.py": {
+  "DTZ011": 1
+ },
+ "app/operator/services/regulatory_parameters.py": {
+  "DTZ011": 1
+ },
+ "app/policy/applicability.py": {
+  "DTZ011": 1
+ },
+ "app/policy/service/regulatory_parameters.py": {
+  "DTZ011": 3
+ },
+ "app/reporting/service/calendar.py": {
+  "DTZ011": 2
+ },
+ "app/reporting/service/eligibility.py": {
+  "DTZ011": 1
+ },
+ "app/reporting/service/packages.py": {
+  "DTZ011": 1
+ },
+ "app/storage/config.py": {
+  "DTZ011": 1
+ },
+ "scripts/audit_required_attachment_policies.py": {
+  "DTZ011": 1
+ },
+ "scripts/bi_benchmark.py": {
+  "DTZ011": 1
+ },
+ "scripts/e2e_bootstrap.py": {
+  "DTZ011": 1
+ },
+ "tests/architecture/test_bi_compiler_injection_integration.py": {
+  "PT017": 1
+ },
+ "tests/architecture/test_ci_postgres.py": {
+  "PT011": 1
+ },
+ "tests/architecture/test_database_observation.py": {
+  "PT011": 2
+ },
+ "tests/architecture/test_test_suites.py": {
+  "PT011": 1
+ },
+ "tests/attestation/service/test_attestation_signers.py": {
+  "RUF043": 1
+ },
+ "tests/bi/api/test_bi_content_metering_integration.py": {
+  "PT012": 1
+ },
+ "tests/bi/service/test_compiler.py": {
+  "RUF043": 1
+ },
+ "tests/capital/api/test_capital_authorization_integration.py": {
+  "PT012": 1
+ },
+ "tests/core/test_bank_field_encryption_integration.py": {
+  "PT012": 4
+ },
+ "tests/core/test_bank_field_readers_integration.py": {
+  "RUF043": 1
+ },
+ "tests/core/test_counterparty_group_bounds_integration.py": {
+  "PT012": 1
+ },
+ "tests/core/test_data_truth.py": {
+  "PT011": 5
+ },
+ "tests/core/test_oidc_discovery_ssrf.py": {
+  "RUF043": 1
+ },
+ "tests/core/test_tls.py": {
+  "PT012": 1
+ },
+ "tests/data_engine/adapters/temenos_t24/test_live_transports.py": {
+  "PT017": 4
+ },
+ "tests/data_engine/adapters/temenos_t24/test_transport.py": {
+  "PT017": 3
+ },
+ "tests/data_engine/domain/ingestion/test_reference_row_enforcement.py": {
+  "PT011": 3
+ },
+ "tests/db/test_append_only_sweep_integration.py": {
+  "RUF043": 1
+ },
+ "tests/db/test_audit_integrity_integration.py": {
+  "RUF043": 2
+ },
+ "tests/db/test_bank_credit_parameters_migration_integration.py": {
+  "PT012": 1,
+  "RUF043": 2
+ },
+ "tests/db/test_bank_liquidity_parameters_migration_integration.py": {
+  "PT012": 1,
+  "RUF043": 2
+ },
+ "tests/db/test_behavioral_model_proposals_migration_integration.py": {
+  "PT012": 3
+ },
+ "tests/db/test_bi_foundation_migration_integration.py": {
+  "PT012": 1
+ },
+ "tests/db/test_bi_partition_adoption_integration.py": {
+  "PT012": 1
+ },
+ "tests/db/test_bi_partition_rls_integration.py": {
+  "PT012": 1
+ },
+ "tests/db/test_bi_phase3_migration_integration.py": {
+  "PT012": 1
+ },
+ "tests/db/test_current_financial_facts_rls_integration.py": {
+  "PT012": 1
+ },
+ "tests/db/test_data_engine_models_integration.py": {
+  "PT012": 3
+ },
+ "tests/db/test_database_roles_integration.py": {
+  "PT012": 1
+ },
+ "tests/db/test_inspector_session_retention_integration.py": {
+  "RUF043": 1
+ },
+ "tests/db/test_live_financial_link_integrity_integration.py": {
+  "PT012": 1
+ },
+ "tests/db/test_loan_event_lineage_integrity_integration.py": {
+  "RUF043": 1
+ },
+ "tests/db/test_performance_targets_migration_integration.py": {
+  "PT012": 1
+ },
+ "tests/db/test_regulatory_event_append_only_integration.py": {
+  "PT012": 3
+ },
+ "tests/db/test_schema_defaults_integration.py": {
+  "PT012": 7
+ },
+ "tests/db/test_storage_version_recovery_integration.py": {
+  "RUF043": 7
+ },
+ "tests/icaap/domain/test_prosemirror_fuzz.py": {
+  "PT017": 3
+ },
+ "tests/icaap/service/test_freeze_state_machine_integration.py": {
+  "PT017": 8
+ },
+ "tests/identity/api/test_audit_log_integration.py": {
+  "PT012": 1
+ },
+ "tests/live/api/test_live_read_scope_integration.py": {
+  "PT012": 3
+ },
+ "tests/market_data/adapters/manual_upload/test_parser.py": {
+  "RUF043": 1
+ },
+ "tests/market_data/domain/curves/test_calendars.py": {
+  "PT011": 1
+ },
+ "tests/market_data/domain/curves/test_instruments.py": {
+  "PT011": 1
+ },
+ "tests/market_data/domain/curves/test_objects.py": {
+  "RUF043": 1
+ },
+ "tests/market_data/service/test_market_desk_calculation.py": {
+  "RUF043": 1
+ },
+ "tests/operator/test_google_sign_in.py": {
+  "PT011": 1
+ },
+ "tests/operator/test_workspace_directory.py": {
+  "PT012": 2
+ },
+ "tests/policy/service/test_jurisdiction_neutrality_integration.py": {
+  "PT011": 1,
+  "PT012": 1
+ },
+ "tests/policy/service/test_sdi_regime_boundary_integration.py": {
+  "PT011": 2
+ },
+ "tests/reporting/api/test_narrowed_institution_figures_integration.py": {
+  "PT012": 1
+ },
+ "tests/reporting/service/test_filing_state_machine_integration.py": {
+  "PT017": 7
+ },
+ "tests/reporting/service/test_template_state_machine_integration.py": {
+  "PT017": 1
+ },
+ "tests/scripts/test_dr_tooling.py": {
+  "RUF043": 1
+ },
+ "tests/scripts/test_e2e_bank_encryption.py": {
+  "RUF043": 1
+ },
+ "tests/scripts/test_e2e_bank_encryption_integration.py": {
+  "RUF043": 1
+ },
+ "tests/scripts/test_fix_api_client_package.py": {
+  "RUF043": 2
+ },
+ "tests/scripts/test_local_services.py": {
+  "PT012": 1
+ },
+ "tests/scripts/test_local_services_integration.py": {
+  "RUF043": 1
+ },
+ "tests/scripts/test_reconcile_storage_versions.py": {
+  "PT011": 1
+ },
+ "tests/scripts/test_storage_recovery.py": {
+  "RUF043": 1
+ },
+ "tests/services/test_capital_register_refusal_integration.py": {
+  "PT012": 3
+ },
+ "tests/services/test_capital_structure_tiers.py": {
+  "RUF043": 1
+ },
+ "tests/services/test_capital_structure_tiers_integration.py": {
+  "PT012": 1
+ },
+ "tests/services/test_nop_currency_coverage_integration.py": {
+  "PT012": 1
+ },
+ "tests/storage/test_bank_encryption_integration.py": {
+  "PT012": 1,
+  "RUF043": 1
+ },
+ "tests/storage/test_key_providers.py": {
+  "RUF043": 2
+ },
+ "tests/storage/test_key_rotation_concurrency_integration.py": {
+  "RUF043": 1
+ },
+ "tests/storage/test_object_lock_integration.py": {
+  "RUF043": 4
+ },
+ "tests/storage/test_s3_compatible_contract_integration.py": {
+  "RUF043": 1
+ },
+ "tests/stress/domain/test_stress_scenario_fail_closed.py": {
+  "PT012": 1
+ },
+ "tests/stress/service/test_enterprise_stress_controls.py": {
+  "PT011": 1
+ },
+ "tests/test_e2e_story_identities_integration.py": {
+  "PT012": 1
+ }
+}

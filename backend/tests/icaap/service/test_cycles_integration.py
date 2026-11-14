@@ -5,7 +5,7 @@ This module's other-suite cases live in ``test_cycles.py``.
 
 from __future__ import annotations
 
-from datetime import date, timedelta
+from datetime import UTC, date, datetime, timedelta
 from typing import Any
 
 import pytest
@@ -206,7 +206,9 @@ def test_a_position_date_in_the_future_is_refused(
                 framework_code=one.code,
                 framework_version=one.version,
                 cycle_kind="material_change",
-                as_of_date=date.today() + timedelta(days=1),
+                # The service compares against the host-local date; astimezone()
+                # makes that explicit instead of the banned naive date.today().
+                as_of_date=datetime.now(tz=UTC).astimezone().date() + timedelta(days=1),
                 change_trigger="other",
                 reason="Future",
             ),
