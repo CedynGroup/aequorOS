@@ -37,12 +37,17 @@ export default function FxHedgesPage() {
 function HedgesBody({ ctx }: { ctx: FxFrameContext }) {
   const { data, metrics: m, run } = ctx;
   const params = useMemo(() => fxRunParameters(run), [run]);
+  // A stored run whose parameter snapshot is withheld below restricted view is
+  // a different fact from "no snapshot yet": the governed bands that decided
+  // effectiveness stay unreadable, so nothing is substituted for them — the
+  // engine's own Effective/Ineffective verdicts remain on every row.
+  const bandsWithheld = run !== undefined && run.inputsAvailable === false;
 
-  const bands = params?.hedgeBands ?? {
+  const bands = params?.hedgeBands ?? (bandsWithheld ? null : {
     r2MinPct: DEFAULT_R2_MIN,
     offsetLowPct: DEFAULT_OFFSET_LOW,
     offsetHighPct: DEFAULT_OFFSET_HIGH,
-  };
+  });
   const bandsSource = params?.hedgeBands
     ? 'from the stored run parameter snapshot'
     : 'IFRS 9 defaults cited by the hedge validation rule';
@@ -68,12 +73,16 @@ function HedgesBody({ ctx }: { ctx: FxFrameContext }) {
     { key: 'instrument', header: 'Instrument', render: (r) => r.instrument },
     {
       key: 'r2',
-      header: `Prospective R² (≥ ${fmtPct(bands.r2MinPct, 0)})`,
+      header: bands ? `Prospective R² (≥ ${fmtPct(bands.r2MinPct, 0)})` : 'Prospective R²',
       numeric: true,
       render: (r) => {
         const v = num(r.prospectiveR2Pct);
         return (
-          <span className={v < bands.r2MinPct ? 'text-critical font-medium' : undefined}>
+          <span
+            className={
+              bands !== null && v < bands.r2MinPct ? 'text-critical font-medium' : undefined
+            }
+          >
             {fmtPct(v, 1)}
           </span>
         );
@@ -81,14 +90,14 @@ function HedgesBody({ ctx }: { ctx: FxFrameContext }) {
     },
     {
       key: 'offset',
-      header: `Dollar offset (${fmtPct(bands.offsetLowPct, 0)}–${fmtPct(
-        bands.offsetHighPct,
-        0
-      )})`,
+      header: bands
+        ? `Dollar offset (${fmtPct(bands.offsetLowPct, 0)}–${fmtPct(bands.offsetHighPct, 0)})`
+        : 'Dollar offset',
       numeric: true,
       render: (r) => {
         const v = num(r.dollarOffsetPct);
-        const outside = v < bands.offsetLowPct || v > bands.offsetHighPct;
+        const outside =
+          bands !== null && (v < bands.offsetLowPct || v > bands.offsetHighPct);
         return (
           <span className={outside ? 'text-critical font-medium' : undefined}>
             {fmtPct(v, 1)}
@@ -140,10 +149,14 @@ function HedgesBody({ ctx }: { ctx: FxFrameContext }) {
         />
         <KpiStat
           label="Dual-test bands"
-          value={`R² ≥ ${bands.r2MinPct.toFixed(0)}%`}
-          hint={`Offset ${bands.offsetLowPct.toFixed(0)}–${bands.offsetHighPct.toFixed(
-            0
-          )}% · ${bandsSource}`}
+          value={bands ? `R² ≥ ${bands.r2MinPct.toFixed(0)}%` : 'Unavailable'}
+          hint={
+            bands
+              ? `Offset ${bands.offsetLowPct.toFixed(0)}–${bands.offsetHighPct.toFixed(
+                  0
+                )}% · ${bandsSource}`
+              : 'Run parameters are not available at your access level'
+          }
         />
       </div>
 
@@ -154,17 +167,19 @@ function HedgesBody({ ctx }: { ctx: FxFrameContext }) {
           height={300}
           footer={
             <span>
-              Pass region: offset {bands.offsetLowPct.toFixed(0)}–
-              {bands.offsetHighPct.toFixed(0)}% and R² ≥ {bands.r2MinPct.toFixed(0)}% (
-              {bandsSource})
+              {bands
+                ? `Pass region: offset ${bands.offsetLowPct.toFixed(0)}–${bands.offsetHighPct.toFixed(
+                    0
+                  )}% and R² ≥ ${bands.r2MinPct.toFixed(0)}% (${bandsSource})`
+                : 'Pass region: not shown — the run parameter snapshot is withheld at your access level'}
             </span>
           }
         >
           <HedgeScatter
             data={points}
-            r2MinPct={bands.r2MinPct}
-            offsetLowPct={bands.offsetLowPct}
-            offsetHighPct={bands.offsetHighPct}
+            r2MinPct={bands?.r2MinPct}
+            offsetLowPct={bands?.offsetLowPct}
+            offsetHighPct={bands?.offsetHighPct}
           />
         </ChartFrame>
 
