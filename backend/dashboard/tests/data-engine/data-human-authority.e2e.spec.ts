@@ -286,6 +286,10 @@ test.describe("exact human DATA grants", () => {
 
   test("verified examiners read covered periods and facts while foreign, expired and invalid sessions fail closed", async () => {
     async function examiner(org: string, expired = false) {
+      // Examiner credentials are the one deliberate wall-clock input: the
+      // backend validates exp against its own clock, so the window must be
+      // anchored to the moment of minting.
+      // oxlint-disable-next-line acts/require-frozen-time -- a minted examiner token's iat/exp is wall-clock data, not a timing source (#905)
       const now = Math.floor(Date.now() / 1000);
       return new SignJWT({
         typ: "impersonation",

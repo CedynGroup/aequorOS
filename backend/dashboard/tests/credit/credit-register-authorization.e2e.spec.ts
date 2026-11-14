@@ -17,6 +17,7 @@ import { expect } from "@playwright/test";
 import path from "node:path";
 import { E2E_TMP } from "../../playwright.config";
 import { test as identityTest } from "../../e2e/support/story-identities";
+import { settleForCapture } from "../../e2e/support/capture";
 
 const REGISTERS = "/institution/registers";
 
@@ -42,9 +43,7 @@ function recordCreditRegisterRequests(page: import("@playwright/test").Page) {
 /** Capture after the page's own reads settle, so no shimmer reaches the image. */
 async function screenshot(page: import("@playwright/test").Page, name: string) {
   if (!process.env.E2E_EVIDENCE_DIR) return;
-  await page
-    .waitForLoadState("networkidle", { timeout: 15_000 })
-    .catch(() => {});
+  await settleForCapture(page);
   await page.screenshot({
     path: path.join(process.env.E2E_EVIDENCE_DIR, name),
     fullPage: true,

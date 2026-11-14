@@ -6,6 +6,10 @@ const IMPERSONATION_SECRET = "e2e-impersonation-secret-not-production-000";
 test("examiner inspection loads read-only navigation without tenant profile", async ({
   page,
 }) => {
+  // Inspection credentials are the one deliberate wall-clock input: the
+  // backend validates exp against its own clock, so the window must be
+  // anchored to the moment of minting.
+  // oxlint-disable-next-line acts/require-frozen-time -- a minted inspection token's iat/exp is wall-clock data, not a timing source (#905)
   const now = Math.floor(Date.now() / 1000);
   const token = await new SignJWT({
     typ: "impersonation",

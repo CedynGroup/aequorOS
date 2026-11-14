@@ -416,9 +416,10 @@ test.describe("the signing workspace", () => {
       // The page cached the package's pre-routing status (staleTime 30s), and a
       // reload would serve the workspace's fonts from Chromium's memory cache,
       // which emits no network responses for the font-hash assertion below to
-      // read. Waiting out the staleness makes the ceremony's own mount refetch
+      // read. Shift the browser clock just past the staleness window instead
+      // of waiting out 31 real seconds: the ceremony's own mount then refetches
       // the routed status — what a preparer's page does within a minute anyway.
-      await page.waitForTimeout(31_000);
+      await page.clock.setFixedTime(new Date(Date.now() + 31_000));
       await page.getByRole("button", { name: "Certify and freeze" }).click();
       const workspace = page.getByTestId("signing-workspace");
       await expect(workspace).toBeVisible({ timeout: 30_000 });
@@ -495,9 +496,12 @@ test.describe("the signing workspace", () => {
         '[data-signing-role="approver"][data-field-type="date_signed"]',
       );
       await expect(dateField).toBeVisible();
-      await expect(dateField).toContainText(
-        new Date().toISOString().slice(0, 10),
-      );
+      // The stamp preview renders the browser's clock, which this test fixed
+      // above — read the frozen instant back from the page so the expected
+      // string is the one the workspace actually renders, with no wall clock
+      // and no midnight-crossing race.
+      const signedOn = await page.evaluate(() => new Date().toISOString());
+      await expect(dateField).toContainText(signedOn.slice(0, 10));
 
       // --- moving a field --------------------------------------------------
       // The workspace opens at 100%, where one CSS pixel is exactly one PDF

@@ -98,7 +98,10 @@ test("invalid session configuration redirects and clears the scoped transaction 
   }
 });
 
-test("valid callback caps the session and clears the transaction at its original path", async () => {
+test("valid callback caps the session and clears the transaction at its original path", async (t) => {
+  // Freeze the clock so the fixture token's iat/exp and the route's own
+  // expiry checks read the same instant on every run.
+  t.mock.timers.enable({ apis: ["Date"] });
   const { GET } = await import("../../app/api/auth/callback/route");
   const originalFetch = globalThis.fetch;
   const issued = Math.floor(Date.now() / 1000);
@@ -185,7 +188,10 @@ test("deployed console refuses mock Google policy before contacting an issuer", 
   }
 });
 
-test("console completes login through an HTTP mock provider with Google policy", async () => {
+test("console completes login through an HTTP mock provider with Google policy", async (t) => {
+  // The mock provider mints the fixture id token against the same frozen
+  // clock the callback route validates it with.
+  t.mock.timers.enable({ apis: ["Date"] });
   const { GET: login } = await import("../../app/api/auth/login/route");
   const { GET: callback } = await import("../../app/api/auth/callback/route");
   const { privateKey } = generateKeyPairSync("rsa", { modulusLength: 2048 });

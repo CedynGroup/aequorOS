@@ -26,13 +26,24 @@ const CONVERGENCE_TIMEOUT_MS = Number(
 );
 
 async function waitFor(check: () => boolean, message: string): Promise<void> {
-  const deadline = Date.now() + CONVERGENCE_TIMEOUT_MS;
-  while (!check()) {
-    if (Date.now() >= deadline) {
-      throw new Error(`${message} (after ${CONVERGENCE_TIMEOUT_MS}ms)`);
-    }
-    await new Promise((resolve) => setTimeout(resolve, 2));
-  }
+  if (check()) return;
+  // Poll the condition on a monotonic deadline: the await resolves when the
+  // check passes, never after a fixed sleep.
+  await new Promise<void>((resolve, reject) => {
+    const deadline = performance.now() + CONVERGENCE_TIMEOUT_MS;
+    const poll = (): void => {
+      if (check()) {
+        resolve();
+        return;
+      }
+      if (performance.now() >= deadline) {
+        reject(new Error(`${message} (after ${CONVERGENCE_TIMEOUT_MS}ms)`));
+        return;
+      }
+      setTimeout(poll, 2);
+    };
+    poll();
+  });
 }
 
 async function main(): Promise<void> {
@@ -176,8 +187,16 @@ async function main(): Promise<void> {
     () => Object.keys(refreshed).every((name) => counts.get(name) === 2),
     "applying a behavioral model did not refresh every affected surface",
   );
-  // Give any stray invalidation a chance to surface before asserting silence.
-  await new Promise((resolve) => setTimeout(resolve, 20));
+  // A stray invalidation is a state, not a timing window: once every expected
+  // refetch has settled, any invalidated-but-unrefreshed key would still read
+  // isInvalidated, so assert it directly instead of sleeping out a window.
+  for (const [name, key] of Object.entries(untouched)) {
+    assert.equal(
+      client.getQueryState(key)?.isInvalidated ?? false,
+      false,
+      `${name} must not be invalidated`,
+    );
+  }
   for (const name of Object.keys(refreshed)) {
     assert.equal(counts.get(name), 2, `${name} refreshed exactly once`);
   }

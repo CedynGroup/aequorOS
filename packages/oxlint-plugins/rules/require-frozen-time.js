@@ -3,8 +3,9 @@
  *
  * Warns when test files use time-dependent APIs (`new Date()`, `Date.now()`)
  * without freezing time via `vi.useFakeTimers()`/`vi.setSystemTime()` (or the
- * jest equivalents), or via `page.clock.install()`/`page.clock.setFixedTime()`
- * in Playwright tests.
+ * jest equivalents), via node:test's `mock.timers.enable(...)` (which freezes
+ * `Date` when its mocked apis include it), or via
+ * `page.clock.install()`/`page.clock.setFixedTime()` in Playwright tests.
  *
  * The check is scoped per test/hook callback: a freeze call in one test does
  * not silence warnings in a sibling test. `beforeEach`/`beforeAll` freezes
@@ -28,6 +29,66 @@ const BEFORE_HOOKS = new Set(["beforeEach", "beforeAll"]);
 
 /** Clock methods on a Playwright `page.clock` (or context/browser clock) that fix time. */
 const CLOCK_METHODS = new Set(["install", "setFixedTime"]);
+
+/**
+ * node:test's timer mock: `<t.mock.|mock.>timers.enable(...)` — node:test's
+ * equivalent of `vi.useFakeTimers()`, used by node:test suites (the console's
+ * tests) that have no `vi`/`jest` to freeze `Date` with.
+ */
+function isNodeTestTimersEnableCall(callee) {
+  return (
+    callee.type === "MemberExpression" &&
+    callee.property.type === "Identifier" &&
+    callee.property.name === "enable" &&
+    callee.object.type === "MemberExpression" &&
+    !callee.object.computed &&
+    callee.object.property.type === "Identifier" &&
+    callee.object.property.name === "timers"
+  );
+}
+
+/**
+ * Whether a node:test `timers.enable(...)` call also freezes `Date`: either
+ * with no options (the default mocked apis include "Date") or with an `apis`
+ * value that is an array of literals naming "Date". An identifier reference
+ * is never resolved: resolving it without real scope analysis risks reading
+ * a shadowed or reassigned binding, so an unresolvable `apis` value leaves
+ * the wall clock live and must not silence the rule.
+ */
+function nodeTestTimersEnableFreezesDate(node) {
+  const options = node.arguments[0];
+  // No options at all: node:test's default mocked apis include "Date".
+  if (!options) return true;
+  // A non-object first argument (identifier, spread call, ...) is not proof.
+  if (options.type !== "ObjectExpression") return false;
+  const namesApis = (property) =>
+    property.type === "Property" &&
+    !property.computed &&
+    ((property.key.type === "Identifier" && property.key.name === "apis") ||
+      (property.key.type === "Literal" && property.key.value === "apis"));
+  // Object precedence: the LAST `apis` property is the effective one.
+  let apisIndex = -1;
+  options.properties.forEach((property, index) => {
+    if (namesApis(property)) apisIndex = index;
+  });
+  const canOverride = (property) =>
+    property.type === "SpreadElement" ||
+    (property.type === "Property" && property.computed);
+  if (apisIndex === -1) {
+    // No explicit `apis`: the default mocked apis include "Date", unless a
+    // spread or computed key could override the defaults.
+    return !options.properties.some(canOverride);
+  }
+  // A spread or computed key after the effective `apis` property could
+  // override it, so the final value is not provable.
+  if (options.properties.slice(apisIndex + 1).some(canOverride)) return false;
+  const apis = options.properties[apisIndex];
+  if (apis.value.type !== "ArrayExpression") return false;
+  // Spread or hole elements are not proof that "Date" is mocked.
+  return apis.value.elements.some(
+    (element) => element?.type === "Literal" && element.value === "Date",
+  );
+}
 
 /**
  * Extract the test-framework scope name from a callee, unwrapping variants
@@ -142,7 +203,7 @@ const rule = {
     },
     messages: {
       missingFreezeTime:
-        "ACTS001: {{ api }} reads the real wall clock. Freeze time with vi.useFakeTimers() + vi.setSystemTime() in a beforeEach/beforeAll or in the test itself, or with page.clock.install()/page.clock.setFixedTime() in Playwright tests.",
+        "ACTS001: {{ api }} reads the real wall clock. Freeze time with vi.useFakeTimers() + vi.setSystemTime() in a beforeEach/beforeAll or in the test itself, with mock.timers.enable({ apis: ['Date'] }) in node:test suites, or with page.clock.install()/page.clock.setFixedTime() in Playwright tests.",
     },
     schema: [],
   },
@@ -153,7 +214,6 @@ const rule = {
     const timeDependentNodes = [];
     // True when a top-level beforeEach/beforeAll (outside any describe) has a freeze call.
     let hasFileLevelFreezing = false;
-
     return {
       CallExpression(node) {
         const callee = node.callee;
@@ -176,6 +236,15 @@ const rule = {
         if (isClockFreezeCall(callee)) {
           const enclosing = findEnclosingTestCallback(node);
           freezeCalls.push({ node, enclosing });
+          return;
+        }
+
+        // Detect node:test's timer mock freezing Date.
+        if (isNodeTestTimersEnableCall(callee)) {
+          if (nodeTestTimersEnableFreezesDate(node)) {
+            const enclosing = findEnclosingTestCallback(node);
+            freezeCalls.push({ node, enclosing });
+          }
           return;
         }
 
