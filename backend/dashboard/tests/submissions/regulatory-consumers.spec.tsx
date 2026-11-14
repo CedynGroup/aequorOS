@@ -14,6 +14,7 @@ import {
   ReturnTemplateReadFromJSON,
   RegulatoryRunReadFromJSON,
   CapitalDashboardReadFromJSON,
+  type RegulatoryRunRead,
 } from "@aequoros/risk-service-api";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { QueryAuthorityScopeProvider } from "@/lib/api/useQueryScope";
@@ -804,6 +805,45 @@ it("uses legal evidence in pure Risk limit extraction", () => {
       instrumentStatus: "in_force",
     }),
   ).toHaveLength(2);
+});
+it("keeps the liquidity limit rows readable when the run snapshot is withheld", () => {
+  const withheld = RegulatoryRunReadFromJSON({
+    inputs: null,
+    inputs_available: false,
+    inputs_unavailable_reason: "restricted_view_required",
+    line_items: [],
+    metric_results: [
+      {
+        metric_code: "lcr_pct",
+        metric_value: "105",
+        unit: "pct",
+        threshold_min: "100",
+        status: "green",
+        position: 1,
+      },
+      {
+        metric_code: "nsfr_pct",
+        metric_value: "110",
+        unit: "pct",
+        threshold_min: "100",
+        status: "green",
+        position: 2,
+      },
+    ],
+    validations: [],
+    results: {},
+    status: "succeeded",
+    created_at: "2026-01-31",
+  }) as unknown as RegulatoryRunRead;
+  const rows = liquidityLimits(liquidityDashboard(), withheld, {
+    instrumentStatus: "in_force",
+  });
+  // The governed minima survive through the permitted metric results; the
+  // amber floors exist only in the withheld snapshot and stay absent.
+  expect(rows.map((row) => [row.limit, row.threshold, row.warnAt])).toEqual([
+    ["Liquidity Coverage Ratio", 100, undefined],
+    ["Net Stable Funding Ratio", 100, undefined],
+  ]);
 });
 it("keeps draft ratios in an explicit SDI preparation cockpit", () => {
   state.preparing = true;
