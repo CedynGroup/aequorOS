@@ -552,7 +552,7 @@ export class SdiDiagnosticsApi extends runtime.BaseAPI {
   }
 
   /**
-   * Per-module readiness (READY/PARTIAL/BLOCKED) with the specific missing-data reasons — the onboarding data-quality view (docs/sdi.md §11).
+   * Per-module readiness (READY/PARTIAL/BLOCKED) with the specific missing-data reasons — the onboarding data-quality view (docs/sdi.md §11). Each row is disclosed only to a caller who may view that module at aggregated sensitivity; a caller with no qualifying module view gets an empty report.
    * Get Sdi Readiness
    */
   async getSdiReadinessRaw(
@@ -603,7 +603,7 @@ export class SdiDiagnosticsApi extends runtime.BaseAPI {
   }
 
   /**
-   * Per-module readiness (READY/PARTIAL/BLOCKED) with the specific missing-data reasons — the onboarding data-quality view (docs/sdi.md §11).
+   * Per-module readiness (READY/PARTIAL/BLOCKED) with the specific missing-data reasons — the onboarding data-quality view (docs/sdi.md §11). Each row is disclosed only to a caller who may view that module at aggregated sensitivity; a caller with no qualifying module view gets an empty report.
    * Get Sdi Readiness
    */
   async getSdiReadiness(

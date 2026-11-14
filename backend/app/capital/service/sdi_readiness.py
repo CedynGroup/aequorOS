@@ -16,7 +16,9 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
 from app.capital.service import sdi_capital, sdi_capital_checks
+from app.core.authorization import Module, Permission, Sensitivity
 from app.data_engine.public import CanonicalPosition, CanonicalPositionSnapshot
+from app.identity import public as scoped_authorization
 from app.identity.public import Bank
 from app.policy.public import base_currency
 
@@ -26,6 +28,24 @@ _EXPOSURE_TYPES = frozenset({"LOAN", "INTERBANK_PLACEMENT", "SECURITY_HOLDING"})
 READY = "ready"
 PARTIAL = "partial"
 BLOCKED = "blocked"
+
+#: Readiness module name → the authorization module whose exact aggregated
+#: ``view`` binding governs seeing that row. The report says, per module, what
+#: still has to be fed — so each row is disclosed to exactly the authority that
+#: may view that module. A name missing from this map is denied by
+#: construction: it is filtered for every caller and never reaches the
+#: evaluator, the same default-deny the live freshness map applies.
+READINESS_VIEW_MODULES: dict[str, Module] = {
+    "liquidity_table1": Module.LIQUIDITY,
+    "maturity_ladder": Module.LIQUIDITY,
+    "funding_concentration": Module.LIQUIDITY,
+    "capital": Module.CAPITAL,
+    "exposures": Module.CREDIT,
+    "provisioning": Module.CREDIT,
+}
+
+#: The surface these read decisions are recorded under.
+READINESS_SURFACE = "sdi_readiness"
 
 
 @dataclass
@@ -113,6 +133,54 @@ def _summarize(db: Session, ctx: TenantContext, bank: Bank, as_of: date) -> _Boo
         unconverted_fx_currencies=tuple(sorted(unconverted_currencies)),
         **counters,
     )
+
+
+def module_for(module_name: str) -> Module | None:
+    """The authorization module governing one readiness row's disclosure.
+
+    Unknown names return ``None`` — denied by construction.
+    """
+    return READINESS_VIEW_MODULES.get(module_name)
+
+
+def can_view_module(db: Session, ctx: TenantContext, bank: Bank, module_name: str) -> bool:
+    """One complete active aggregated-VIEW decision for one readiness row.
+
+    Unknown names deny without touching the evaluator.
+    """
+    module = module_for(module_name)
+    if module is None:
+        return False
+    decision = scoped_authorization.evaluate_bank_permission(
+        db,
+        ctx,
+        bank,
+        permission=Permission.VIEW,
+        module=module,
+        sensitivity=Sensitivity.AGGREGATED,
+        surface=READINESS_SURFACE,
+    )
+    return decision is not None and decision.allowed
+
+
+def readiness_for_caller(
+    db: Session, ctx: TenantContext, bank: Bank, as_of: date
+) -> list[ModuleReadiness]:
+    """``assess_sdi_readiness`` narrowed to the rows this caller may view.
+
+    The route gate: evaluated per row right after the bank lookup, before any
+    row content reaches the response. A caller with no qualifying view gets an
+    empty report, not a denial — the caller outside the organization is the one
+    the bank lookup refuses. Internal callers (implied rating, liquidity
+    monitoring, the liquidity position) keep the full rows through
+    :func:`assess_sdi_readiness`; their own gates have already decided who is
+    asking.
+    """
+    return [
+        row
+        for row in assess_sdi_readiness(db, ctx, bank, as_of)
+        if can_view_module(db, ctx, bank, row.module)
+    ]
 
 
 def assess_sdi_readiness(  # noqa: PLR0912, PLR0915 - one linear per-module readiness pass
