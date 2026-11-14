@@ -1141,18 +1141,6 @@
           "method": "POST",
           "path": "/api/v1/banks/{bank_id}/filing-workflow-templates/{template_id}/submit",
           "endpoint": "app.reporting.api.manage_filing_workflow:submit_filing_workflow_template"
-        },
-        {
-          "application": "tenant",
-          "method": "POST",
-          "path": "/api/v1/banks/{bank_id}/official-runs",
-          "endpoint": "app.live.api.manage_live_engine:mint_official_run"
-        },
-        {
-          "application": "tenant",
-          "method": "POST",
-          "path": "/api/v1/banks/{bank_id}/refresh",
-          "endpoint": "app.live.api.manage_live_engine:refresh_bank_data"
         }
       ]
     },
@@ -3416,6 +3404,12 @@
         {
           "application": "tenant",
           "method": "POST",
+          "path": "/api/v1/banks/{bank_id}/official-runs",
+          "endpoint": "app.live.api.manage_live_engine:mint_official_run"
+        },
+        {
+          "application": "tenant",
+          "method": "POST",
           "path": "/api/v1/banks/{bank_id}/outlets",
           "endpoint": "app.identity.api.manage_institution_profile:create_outlet"
         },
@@ -3460,6 +3454,12 @@
           "method": "POST",
           "path": "/api/v1/banks/{bank_id}/reconciliation/exceptions/{exception_id}/revoke",
           "endpoint": "app.data_engine.api.manage_reconciliation:revoke_reconciliation_exception"
+        },
+        {
+          "application": "tenant",
+          "method": "POST",
+          "path": "/api/v1/banks/{bank_id}/refresh",
+          "endpoint": "app.live.api.manage_live_engine:refresh_bank_data"
         },
         {
           "application": "tenant",
