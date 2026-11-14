@@ -42,7 +42,7 @@ type Configuration = {
   institutionType?: string;
   bindings?: {
     role?: string;
-    bundle: "viewer" | "analyst" | "approver" | "configurator";
+    bundle: "viewer" | "analyst" | "approver" | "configurator" | "exporter";
     module: string;
     sensitivity: string;
     branches?: string[];

@@ -50,6 +50,11 @@ export const CHAIN_DECISION_SENSITIVITY = "restricted";
 const CHAIN_DECISION_BUNDLES: Record<string, string> = {
   approver: "approve returns or send them back",
   validator: "file returns with the regulator",
+  // The exporter's whole purpose is the finished return itself: the export
+  // surface is evaluated against Regulatory Reporting / RESTRICTED, exactly
+  // like the chain decision, so a narrower scope grants a role that cannot
+  // download anything.
+  exporter: "download finished returns",
 };
 
 function coversModule(scope: string): boolean {

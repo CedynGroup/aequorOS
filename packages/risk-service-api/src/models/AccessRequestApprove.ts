@@ -159,6 +159,7 @@ export const AccessRequestApproveRoleBundleEnum = {
   Analyst: "analyst",
   Approver: "approver",
   Validator: "validator",
+  Exporter: "exporter",
   Configurator: "configurator",
   Signer: "signer",
   AccountAdmin: "account_admin",

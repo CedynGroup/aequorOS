@@ -39,13 +39,13 @@ SOURCE_BANK = "BK-SAMP0001"
 SOURCE_ADMIN = UUID("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa")
 #: The story officers who must take a return away: the Approver reads the page
 #: they sign, and the Validator sends the downtime email bundle. Both are
-#: refused REG/restricted EXPORT by the 2026-11-03 export cutover, and only the
-#: ``analyst`` bundle carries it for a human (there is no read-only exporter
-#: bundle for returns yet), so a signing story grants it rather than run the
+#: refused REG/restricted EXPORT by the 2026-11-03 export cutover, and the
+#: read-only exporter bundle is the grant that restores exactly that authority
+#: without preparation — so a signing story grants it rather than run the
 #: ceremony against an officer the backend would refuse. This is the documented
 #: remediation, not a fixture relaxation: the exports it enables are exactly the
 #: ones the policy requires those officers to hold
-#: (backend/docs/authorization_foundation.md, "Export cutover").
+#: (backend/docs/authorization_foundation.md, export section).
 RETURN_EXPORT_ROLES = frozenset({"approver", "validator"})
 BASELINE_ROLES = frozenset(
     {
@@ -181,8 +181,9 @@ def _apply_scoped_bindings(db: Session, request: StoryRequest, users: dict[str, 
             RoleBundle.ANALYST,
             RoleBundle.APPROVER,
             RoleBundle.CONFIGURATOR,
+            RoleBundle.EXPORTER,
         }:
-            raise ValueError("Scoped story bindings must use an operational human bundle")
+            raise ValueError("Scoped story bindings must use an explicit human bundle")
         user = users[binding.actor_role]
         _ = authorization.create_role_binding(
             db,
@@ -324,12 +325,14 @@ def _grant_story_signer_bindings(
         if spec.role in RETURN_EXPORT_ROLES:
             # Return export on the story's own bank, on top of the
             # officer's own bundle, which the ceremony keeps requiring for
-            # the action. Institution-scoped so it cannot reach a sibling
-            # bank of the same tenant.
+            # the action. The read-only exporter bundle carries VIEW and
+            # EXPORT and nothing else, so the grant no longer rides on the
+            # analyst's preparation authority. Institution-scoped so it
+            # cannot reach a sibling bank of the same tenant.
             _grant(
                 db,
                 user,
-                RoleBundle.ANALYST,
+                RoleBundle.EXPORTER,
                 ModuleScope.REGULATORY,
                 SensitivityScope.RESTRICTED,
                 institution_id=request.bank_id,

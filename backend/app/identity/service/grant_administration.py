@@ -91,6 +91,7 @@ _ROLE_LABELS = {
     RoleBundle.ANALYST: "Analyst",
     RoleBundle.APPROVER: "Approver",
     RoleBundle.VALIDATOR: "Validator",
+    RoleBundle.EXPORTER: "Exporter",
     RoleBundle.CONFIGURATOR: "Configurator",
     RoleBundle.SIGNER: "Signer",
     RoleBundle.ACCOUNT_ADMIN: "Organization Administrator",

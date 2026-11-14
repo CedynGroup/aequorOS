@@ -165,6 +165,7 @@ export const BindingCreateRequestRoleBundleEnum = {
   Analyst: "analyst",
   Approver: "approver",
   Validator: "validator",
+  Exporter: "exporter",
   Configurator: "configurator",
   Signer: "signer",
   AccountAdmin: "account_admin",

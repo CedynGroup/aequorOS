@@ -1040,27 +1040,29 @@ to their bundle permissions; an Org Owner must explicitly issue an appropriate
 whole-institution reporting grant for a former scalar-only reader or preparer.
 Valid Credit grants remain valid for Credit, and never grant reporting access.
 
-**Export cutover (2026-11-03; uniform ICAAP policy 2026-11-04).** This is a
-deliberate production behavior change: every return family, including ICAAP,
-requires REG/restricted EXPORT. ICAAP retains Capital/confidential visibility,
-and a Capital-only grant no longer exports its return artifacts. The analyst
-bundle remains the only shipped human exporter.
+**Export cutover (2026-11-03; uniform ICAAP policy 2026-11-04; read-only
+exporter bundle 2026-11-14).** This is a deliberate production behavior
+change: every return family, including ICAAP, requires REG/restricted EXPORT.
+ICAAP retains Capital/confidential visibility, and a Capital-only grant no
+longer exports its return artifacts. The shipped human export bundles are
+`analyst` (which also prepares) and, since 2026-11-14, `exporter` — a
+read-only bundle carrying exactly `view` + `export`, issued only through
+grant administration in whole-institution REG/restricted sentences like any
+other bundle.
 
 The EXPORT requirement denies artifact
 generation, artifact/revision download and the downtime email bundle to every
 active human whose REG/restricted binding carries only VIEW — the `viewer`,
 `auditor`, `approver` and `validator` bundles. Reads, lists, history,
-attestation and comparisons are unchanged. Nothing is backfilled. The only
-human bundle that carries EXPORT with Regulatory Reporting authority today is
-`analyst`, so an officer who must take the return away needs one whole-institution
-binding with `role_bundle='analyst'`, the exact `institution_id='BK-…'`,
-`module_scope='reg'`, `sensitivity_scope='restricted'` and
-`data_scope_kind='all'`; that row also grants preparation. There is no
-read-only exporter bundle for returns yet, so a viewer who needs the file must
-be granted preparation as well until a dedicated bundle exists — a known gap,
-not a reason to infer EXPORT from VIEW. Enumerate affected principals and
-retain the dated `scripts/authorization_access_impact.py` output outside the
-repository; do not auto-grant.
+attestation and comparisons are unchanged. Nothing is backfilled. A human who
+must take the return away without preparation authority needs one
+whole-institution binding with `role_bundle='exporter'`, the exact
+`institution_id='BK-…'`, `module_scope='reg'`, `sensitivity_scope='restricted'`
+and `data_scope_kind='all'`; the `analyst` row remains the choice when
+preparation is wanted too. EXPORT is never inferred from VIEW. Enumerate
+affected principals and retain the dated `scripts/authorization_access_impact.py`
+output outside the repository; do not auto-grant. The impact report names who
+may export per institution in its own column, empty until a grant exists.
 
 The signing workspace reads the document through those same artifact and
 archived-revision download routes, so a signing officer needs REG/restricted
@@ -1071,14 +1073,13 @@ not served the document, and the workspace says which grant is missing instead
 of attempting a refused read or a dead export. The action permissions
 themselves are unchanged.
 
-The downtime email bundle deserves its own warning: it is the fallback channel
-the Validator uses when ORASS is unreachable, and the `validator` bundle carries
-`view` + `submit` only. After this cutover a bank that relies on email fallback
-needs its Validator to hold an export-capable binding as well (today that means
-an `analyst` REG/restricted row, which also confers preparation). That is a
-real tension with the approved three-role design and is recorded as a gap for a
-dedicated read-only exporter bundle, not resolved by inferring `export` from
-`view` or `submit`.
+The downtime email bundle is the fallback channel the Validator uses when
+ORASS is unreachable, and the `validator` bundle carries `view` + `submit`
+only. A bank relying on email fallback grants its Validator an `exporter`
+REG/restricted row beside the validator bundle; the two bundles are
+separation-of-duties compatible by design (one takes finished returns away,
+the other files), so the grant adds no preparation authority and the
+compose-time shortfall message says what the narrow scope would withhold.
 
 The permission verbs the older matrix names are reconciled here, not changed:
 ordinary package generation and regeneration remain `RUN`, and a resubmission

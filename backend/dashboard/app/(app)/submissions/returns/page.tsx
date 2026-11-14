@@ -765,12 +765,12 @@ function PackageWorkspace({
   const filingRefusal = filingRefusalMessage(submit.error);
   // The instructions preview is part of the export surface, not the filing act:
   // asking for it without EXPORT is a guaranteed 403, so it is not requested.
+  // It does NOT need transmission authority — the read-only exporter reads it
+  // too, which is why mayTransmit is deliberately absent here.
   const instructionsQuery = useEmailFallbackInstructions(
     bankId,
     summary.id,
-    authority.mayExport &&
-      authority.mayTransmit &&
-      (Boolean(filingRefusal) || channel === "email"),
+    authority.mayExport && (Boolean(filingRefusal) || channel === "email"),
   );
 
   const attestation = attestationQuery.data ?? null;
