@@ -53,3 +53,15 @@ export function ftpRunParameters(
     fundingStressAddBps: finite(overlays['funding_stress']),
   };
 }
+
+/**
+ * Whether the stored run HAS an input snapshot but this reader may not see it
+ * (restricted-tier content: the run itself stays readable). Distinct from "no
+ * run stored yet", so the page can say the inputs are withheld instead of
+ * implying the parameters were never recorded.
+ */
+export function ftpRunInputsUnavailable(
+  run: RegulatoryRunRead | undefined
+): boolean {
+  return run !== undefined && run.inputsAvailable === false;
+}

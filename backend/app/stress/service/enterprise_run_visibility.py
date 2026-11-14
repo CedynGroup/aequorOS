@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any, cast
+
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
@@ -51,13 +53,17 @@ def project_response[ResponseModel: BaseModel](
         metrics["plan_provenance"]["platform_default_fields"] = [
             field for field in defaults if field != "fx_depreciation_pct"
         ]
-    inputs = payload.get("inputs", {})
-    inputs.pop("include_fx", None)
-    inputs.pop("fx_evaluated", None)
-    inputs.get("plan", {}).pop("fx_depreciation_pct", None)
-    scenario = inputs.get("scenario", {})
-    if "paths" in scenario:
-        scenario["paths"] = [
-            point for point in scenario["paths"] if point.get("variable") != "fx_usd_ghs"
-        ]
+    # A reader below the run module's restricted VIEW holds no input snapshot
+    # at all (the run read already withheld it); the FX scrub then has nothing
+    # to remove and must not treat that as a missing mapping.
+    inputs = cast("dict[str, Any] | None", payload.get("inputs"))
+    if inputs is not None:
+        inputs.pop("include_fx", None)
+        inputs.pop("fx_evaluated", None)
+        inputs.get("plan", {}).pop("fx_depreciation_pct", None)
+        scenario = inputs.get("scenario", {})
+        if "paths" in scenario:
+            scenario["paths"] = [
+                point for point in scenario["paths"] if point.get("variable") != "fx_usd_ghs"
+            ]
     return type(response).model_validate(payload)

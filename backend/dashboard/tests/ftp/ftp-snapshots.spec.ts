@@ -3,11 +3,13 @@ import fc from "fast-check";
 import { RegulatoryRunReadFromJSON } from "@aequoros/risk-service-api";
 import { adversarialFtpParameters } from "./testing/generators";
 import { assertFtpStored } from "./testing/assertions";
-import { ftpRunParameters } from "../../components/ftp/params";
+import { ftpRunInputsUnavailable, ftpRunParameters } from "../../components/ftp/params";
 
 function storedRun(inputs: unknown) {
   return RegulatoryRunReadFromJSON({
     inputs,
+    inputs_available: inputs !== null,
+    inputs_unavailable_reason: inputs === null ? "restricted_view_required" : null,
     metrics: {},
     line_items: [],
     metric_results: [],
@@ -106,5 +108,19 @@ describe("stored FTP pricing assumptions", () => {
         storedRun({ parameters: { thresholds: [], stress_overlays_bps: [] } }),
       ),
     ).toEqual(absent);
+  });
+
+  it("tells a withheld snapshot apart from a run without one", () => {
+    // The backend withholds the stored snapshot below restricted view: the
+    // run is readable, `inputs` is null, and the availability flag says why.
+    const withheld = storedRun(null);
+    expect(ftpRunInputsUnavailable(withheld)).toBe(true);
+    expect(ftpRunParameters(withheld)).toBeNull();
+
+    const stored = storedRun({ parameters: {} });
+    expect(ftpRunInputsUnavailable(stored)).toBe(false);
+    expect(ftpRunParameters(stored)).toEqual(absent);
+
+    expect(ftpRunInputsUnavailable(undefined)).toBe(false);
   });
 });

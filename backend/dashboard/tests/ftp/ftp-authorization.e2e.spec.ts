@@ -74,6 +74,13 @@ test.describe("FTP reader without run permission", () => {
       method: "POST",
       data: { reporting_period_id: await currentBankPeriod() },
     });
+    // A stored run gives the rules page a snapshot to withhold: this reader
+    // reads the run at confidential but holds no restricted view.
+    await expectBankStatus("/ftp/run-all-scenarios", 201, {
+      method: "POST",
+      role: "admin",
+      data: { reporting_period_id: await currentBankPeriod("admin") },
+    });
     await page.goto("/ftp");
     await expect(
       page.getByRole("heading", { name: "Transfer Curve" }),
@@ -109,6 +116,15 @@ test.describe("FTP reader without run permission", () => {
     await expect(preview.locator("..")).toHaveAccessibleDescription(
       /Requires FTP · Confidential · Run/i,
     );
+
+    // The rules page says the stored inputs are withheld for this access
+    // level instead of implying the parameters were never recorded.
+    await page.goto("/ftp/rules");
+    await expect(
+      page
+        .getByText("Run inputs are not available for your access level")
+        .first(),
+    ).toBeVisible();
     if (evidenceDir) {
       await page.screenshot({
         path: path.join(evidenceDir, "ftp-reader-disabled-run.png"),
