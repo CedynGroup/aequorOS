@@ -53,7 +53,9 @@ CTX = TenantContext(organization_id=ORG_1, actor_user_id=USER_1, authorization_v
 def _drop_bindings() -> None:
     session = get_sessionmaker()()
     try:
-        session.execute(delete(AuthorizationBinding))
+        session.execute(
+            delete(AuthorizationBinding).where(AuthorizationBinding.organization_id == ORG_1)
+        )
         session.commit()
     finally:
         session.close()
@@ -172,7 +174,12 @@ def _mint_baseline_run() -> UUID:
 def _stored_run(run_id: UUID) -> dict[str, Any]:
     session = get_sessionmaker()()
     try:
-        run = session.scalar(select(RegulatoryRun).where(RegulatoryRun.id == run_id))
+        run = session.scalar(
+            select(RegulatoryRun).where(
+                RegulatoryRun.organization_id == ORG_1,
+                RegulatoryRun.id == run_id,
+            )
+        )
         assert run is not None
         return {
             "id": str(run.id),
