@@ -73,6 +73,22 @@ UNFROZEN_READS = [
     "        import time as clock\n"
     "    if not use_datetime:\n"
     "        clock.time()\n",
+    # A conditional expression selects the clock the same way an if statement
+    # rebinds a name; the unselected path must not hide the clock callable.
+    "from datetime import datetime\n"
+    "def test_conditional_expression(use_real):\n"
+    "    clock = datetime.now if use_real else fake_clock\n"
+    "    clock()\n",
+    # An attribute alias through a conditionally bound name resolves
+    # alternative by alternative, so an intermediate variable cannot drop the
+    # clock member.
+    "def test_attribute_alias(use_time):\n"
+    "    if use_time:\n"
+    "        import time as clock\n"
+    "    else:\n"
+    "        import datetime as clock\n"
+    "    read = clock.time\n"
+    "    read()\n",
     # A loop body may run zero times, so its assignments never clear a
     # clock binding.
     "from datetime import datetime\n"
@@ -88,6 +104,15 @@ UNFROZEN_READS = [
     f"    with time_machine.travel({INSTANT}, tick=False):\n"
     f"        with time_machine.travel({INSTANT}):\n"
     "            datetime.now()\n",
+    # Entry order decides the freeze state: after a ticking travel un-freezes
+    # the entry list, a later manager runs against the live clock again.
+    "from contextlib import nullcontext\n"
+    "import time_machine\n"
+    "from datetime import datetime\n"
+    "def test_manager_after_ticking_travel():\n"
+    f"    with time_machine.travel({INSTANT}, tick=False), time_machine.travel({INSTANT}), "
+    "nullcontext(datetime.now()):\n"
+    "        pass\n",
     # A deferred body defined inside a travel block may be called after the
     # block exits, when the travel is gone; only a marker or the frozen_clock
     # fixture covers a whole test execution.
@@ -177,6 +202,15 @@ FROZEN_READS = [
     "from datetime import datetime\n"
     "def test_manager_order():\n"
     "    with time_machine.travel(DESTINATION, tick=False), nullcontext(datetime.now()):\n"
+    "        pass\n",
+    # The most recently entered travel decides: a deterministic travel
+    # re-freezes the entry list and the block after a ticking one.
+    "from contextlib import nullcontext\n"
+    "import time_machine\n"
+    "from datetime import datetime\n"
+    "def test_deterministic_travel_after_ticking():\n"
+    f"    with time_machine.travel(DESTINATION), time_machine.travel({INSTANT}, tick=False), "
+    "nullcontext(datetime.now()):\n"
     "        pass\n",
 ]
 

@@ -160,7 +160,17 @@ class ClockVisitor(ast.NodeVisitor):
         if isinstance(node, ast.Name):
             return self.aliases.get(node.id, "")
         if isinstance(node, ast.Attribute):
-            return f"{self.qualified(node.value)}.{node.attr}"
+            # Qualify each conditional alternative separately: appending the
+            # attribute to the merged string would lose the member names.
+            return AMBIGUOUS.join(
+                f"{alternative}.{node.attr}"
+                for alternative in _alternatives(self.qualified(node.value))
+            )
+        if isinstance(node, ast.IfExp):
+            # A conditional expression selects its callable the same way an if
+            # statement rebinds a name: keep every clock-capable alternative
+            # so neither path escapes the guard.
+            return _merge_values([self.qualified(node.body), self.qualified(node.orelse)])
         return ""
 
     def possible_names(self, node: ast.expr) -> Iterator[str]:
@@ -331,34 +341,22 @@ class ClockVisitor(ast.NodeVisitor):
 
     def visit_With(self, node: ast.With | ast.AsyncWith) -> None:
         previous_frozen, previous_deferred = self.frozen, self.deferred_frozen
-        entered = False
-        ticking = False
         for item in node.items:
             # Context managers evaluate in entry order: a later manager runs
-            # inside an earlier travel, so a deterministic one freezes its
-            # expressions and a ticking one un-freezes them.
-            if entered and not self.frozen:
-                self.frozen = True
+            # inside the travels entered before it, and the most recently
+            # entered travel decides whether its expressions are pinned.
             self.visit(item.context_expr)
             if item.optional_vars is not None:
                 self.bind(item.optional_vars, item.context_expr)
             if self._is_travel(item.context_expr):
                 if self._enters_travel(item.context_expr):
-                    entered = True
+                    # A deterministic travel freezes every later expression in
+                    # the entry list and the block itself.
+                    self.frozen = True
                 elif not self._keeps_inherited_freeze(item.context_expr):
                     # A ticking travel advances the clock from real elapsed
-                    # time, so reads inside it are not pinned to an instant.
+                    # time, so reads after it are not pinned to an instant.
                     self.frozen = False
-                    ticking = True
-        if ticking:
-            self.frozen = False
-        elif entered:
-            # A deterministic travel freezes every statement the block runs.
-            # It must NOT reach deferred bodies: a function or lambda defined
-            # here can be called after the block exits, when the travel is
-            # gone; only a marker or the frozen_clock fixture freezes a test's
-            # whole execution.
-            self.frozen = True
         for statement in node.body:
             self.visit(statement)
         self.frozen, self.deferred_frozen = previous_frozen, previous_deferred
