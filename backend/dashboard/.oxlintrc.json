@@ -21,7 +21,8 @@
       "files": ["tests/**/*.test.ts"],
       "rules": {
         "acts/require-frozen-time": "error",
-        "acts/no-weak-test-awaits": "error"
+        "acts/no-weak-test-awaits": "error",
+        "vitest/no-focused-tests": "error"
       }
     },
     {

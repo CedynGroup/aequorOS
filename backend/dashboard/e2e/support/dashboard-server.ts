@@ -69,6 +69,12 @@ export async function stopServer(child: ChildProcess): Promise<void> {
     delay(5_000),
   ]);
   if (child.exitCode === null && child.pid) {
-    process.kill(-child.pid, "SIGKILL");
+    // A signal exit resolves the race with exitCode still null; the group may
+    // already be gone, so only ESRCH is tolerated — anything else is real.
+    try {
+      process.kill(-child.pid, "SIGKILL");
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "ESRCH") throw error;
+    }
   }
 }

@@ -167,17 +167,27 @@ function renderWall() {
       </QueryAuthorityScopeProvider>
     </QueryClientProvider>,
   );
-  return view;
+  return { view, client };
 }
 
 const snapshotCalls = (module: string) =>
   snapshotRequests.filter((requested) => requested === module).length;
 
-/** Waits until the wall has rendered the rating card: the gate decision and
- * any ladder request it admits fire synchronously with the mount, so the
- * rendered card is the settled fact the zero request count asserts against. */
+/** Waits until the wall has rendered the rating card. Rendering is NOT proof
+ * that an admitted ladder request has settled: the snapshots query function
+ * awaits the dashboard signals before it sends, so a query the gate admitted
+ * can still be in flight when the card appears. Tests that assert a request
+ * count must first wait for the live-snapshot queries to finish (prefix-
+ * matched, so every module-scoped snapshots query is covered); a denied gate
+ * starts no query, so the wait returns immediately. */
 async function awaitRatingCard() {
   await screen.findByRole("link", { name: "Credit Assessment — open module" });
+}
+
+async function awaitSnapshotQueriesSettled(client: QueryClient) {
+  await waitFor(() =>
+    expect(client.isFetching({ queryKey: ["live-snapshots"] })).toBe(0),
+  );
 }
 
 beforeAll(() => server.listen({ onUnhandledRequest: "error" }));
@@ -197,8 +207,12 @@ it("sends no rating ladder request without MARKETS aggregated view", async () =>
   // only the aggregated gate can hold the ladder back.
   setAccessToken("fixture-access-token");
   scope.grants.marketsPublishedView = true;
-  renderWall();
+  const { client } = renderWall();
   await awaitRatingCard();
+  // An in-flight snapshots query can still be inside its signal wait; the
+  // zero-count assertion is only settled once every live-snapshot query
+  // finished. A denied gate starts none, so this returns at once.
+  await awaitSnapshotQueriesSettled(client);
   expect(snapshotCalls("rating")).toBe(0);
 });
 
@@ -220,10 +234,11 @@ it("keeps gating the liquidity ladder on its aggregated view", async () => {
   cleanup();
   snapshotRequests.length = 0;
   scope.grants.liquidityAggregatedView = false;
-  renderWall();
+  const { client } = renderWall();
   // Without the aggregated view the wall hides the card entirely and raises
-  // no ladder request.
+  // no ladder request; settle any in-flight snapshots query first.
   await screen.findByText(/regulatory engines/);
+  await awaitSnapshotQueriesSettled(client);
   expect(
     screen.queryByRole("link", { name: "Liquidity — open module" }),
   ).toBeNull();
