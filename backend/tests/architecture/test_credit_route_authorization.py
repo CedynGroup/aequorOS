@@ -53,8 +53,7 @@ _REGISTER_READS: dict[tuple[str, str], str] = {
 }
 
 #: SDI diagnostics that disclose the credit book, now governed by Credit rather
-#: than Capital. ``/sdi/readiness`` is deliberately absent: it reports which data
-#: each module still needs, not the loan book.
+#: than Capital.
 _SDI_CREDIT_READS: dict[tuple[str, str], str] = {
     ("GET", f"{_BANK_PREFIX}/loan-classification"): "require_credit_aggregated_view",
     ("GET", f"{_BANK_PREFIX}/sdi/loan-classification"): "require_credit_aggregated_view",

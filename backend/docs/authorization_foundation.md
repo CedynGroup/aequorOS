@@ -1097,3 +1097,52 @@ narrowed bindings through both shared gates and family visibility;
 and downgrade/re-upgrade on Postgres;
 `tests/db/test_data_scope_check_constraints_integration.py` verifies stored-scope refusal on
 both database dialects. The existing Credit and BI suites prove row filtering on their surfaces.
+
+## SDI readiness module disclosure
+
+Corrected 2026-11-14. `GET /banks/{bank_id}/sdi/readiness` used to return every
+module's readiness row to every organization member. The report says, per
+module, what still has to be fed into the position book — counts, currency
+codes and dataset presence — so each row is now disclosed to exactly the
+authority that may view that module at aggregated sensitivity
+(`app/capital/service/sdi_readiness.py` `READINESS_VIEW_MODULES`):
+`liquidity_table1`, `maturity_ladder` and `funding_concentration` under
+LIQUIDITY, `capital` under CAPITAL, `exposures` and `provisioning` under
+CREDIT. A module name outside the map is filtered for every caller before any
+authority is consulted. A caller with no qualifying view answers 200 with an
+empty `modules` list (the live summary's behavior, recorded deliberately);
+a bank outside the caller's organization keeps the opaque 404. The route
+dependency stays `Tenant`: the service-level filter right after the bank
+lookup is the gate. Internal callers — implied rating, liquidity monitoring and
+the `/sdi/liquidity-position` embedding — keep the full rows through
+`assess_sdi_readiness`; their own gates have already decided who is asking.
+
+Executable evidence: `tests/api/test_sdi_diagnostics_integration.py` (module-only,
+capital-only, credit-only, no-binding, account-admin-only and full actors, plus
+the foreign-organization 404 and the unchanged internal embedding) and
+`tests/capital/service/test_sdi_readiness_module_authority.py` (the map pin and
+the unknown-module default deny). The change is response-level; the per-user
+route projection of `scripts/authorization_access_impact.py` is unchanged, and
+the dated before/after decision matrix lives with the change's impact artifacts.
+
+## Tenant-only route census
+
+`tests/architecture/test_tenant_only_route_census.py` lists every route whose
+dependency set carries identity only — no permission dependency and no scalar
+role dependency, the same derivation the registered endpoint declarations use,
+legacy `/api/v1/cases` and the framework docs surfaces excepted — and requires
+each to carry a reviewed reason: `scoped_in_service` (citing the service
+function that evaluates the scoped binding) or `benign` (stating why no bank or
+configuration data is exposed). Routes declaring
+`get_scoped_mutation_tenant_context` are outside the census by construction:
+that dependency's documented contract is that the product service requires the
+exact stored binding before any write.
+
+Two failure modes are pinned, because both are how a gap ships. A new
+tenant-only route without a recorded reason fails the census with its name
+(proved by a committed unit case that injects a synthetic route), and a stale
+entry — a recorded reason or known gap whose route no longer exists or has
+gained a route-level gate — fails too. Gaps that are still open live in
+`KNOWN_GAPS`, each naming the pull request that closes it, and the set only
+shrinks: when a gap PR lands, its routes move into the reviewed table and its
+gap entries are deleted in the same change.

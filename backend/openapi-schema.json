@@ -112843,7 +112843,7 @@
     },
     "/api/v1/banks/{bank_id}/sdi/readiness": {
       "get": {
-        "description": "Per-module readiness (READY/PARTIAL/BLOCKED) with the specific missing-data\nreasons \u2014 the onboarding data-quality view (docs/sdi.md \u00a711).",
+        "description": "Per-module readiness (READY/PARTIAL/BLOCKED) with the specific missing-data\nreasons \u2014 the onboarding data-quality view (docs/sdi.md \u00a711). Each row is\ndisclosed only to a caller who may view that module at aggregated\nsensitivity; a caller with no qualifying module view gets an empty report.",
         "operationId": "getSdiReadiness",
         "parameters": [
           {
