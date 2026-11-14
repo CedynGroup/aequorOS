@@ -37,6 +37,9 @@ function ExposureBody({ ctx }: { ctx: FxFrameContext }) {
   const singleLimit = num(m.nopSingleLimitPct);
 
   const splits = useMemo(() => fxPositionSplits(run), [run]);
+  // A stored run with its fact snapshot withheld below restricted view is a
+  // different fact from "no stored results yet" — say which one applies.
+  const splitsWithheld = run !== undefined && run.inputsAvailable === false;
 
   const trend = data.trend;
   const nopSpark = trend.map((p) => num(p.nopPctTier1));
@@ -167,10 +170,17 @@ function ExposureBody({ ctx }: { ctx: FxFrameContext }) {
           noPadding
           footer={
             splits.size === 0 ? (
-              <span>
-                The asset / liability / derivative split per currency appears once
-                stored results exist for this period.
-              </span>
+              splitsWithheld ? (
+                <span>
+                  The asset / liability / derivative split per currency is not
+                  available at your access level.
+                </span>
+              ) : (
+                <span>
+                  The asset / liability / derivative split per currency appears once
+                  stored results exist for this period.
+                </span>
+              )
             ) : (
               <span>Select a row for the asset / liability / derivative split.</span>
             )
