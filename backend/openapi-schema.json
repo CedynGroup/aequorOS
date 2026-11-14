@@ -70,6 +70,7 @@
               "analyst",
               "approver",
               "validator",
+              "exporter",
               "configurator",
               "signer",
               "account_admin"
@@ -8979,6 +8980,7 @@
               "analyst",
               "approver",
               "validator",
+              "exporter",
               "configurator",
               "signer",
               "account_admin"
@@ -9135,6 +9137,7 @@
               "analyst",
               "approver",
               "validator",
+              "exporter",
               "configurator",
               "signer",
               "account_admin"
@@ -59074,6 +59077,7 @@
               "analyst",
               "approver",
               "validator",
+              "exporter",
               "configurator",
               "signer",
               "account_admin"

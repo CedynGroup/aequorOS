@@ -74,6 +74,13 @@ ROLE_EXPECTATIONS: tuple[
         RoleBundle.VALIDATOR,
         frozenset({Permission.VIEW, Permission.SUBMIT}),
     ),
+    (
+        PrincipalType.HUMAN,
+        RoleBundle.EXPORTER,
+        # Read-only export is exactly two permissions: see the finished return
+        # and take it away. Nothing that could change, approve, sign or file it.
+        frozenset({Permission.VIEW, Permission.EXPORT}),
+    ),
     (PrincipalType.HUMAN, RoleBundle.ACCOUNT_ADMIN, frozenset({Permission.ADMINISTER})),
     (PrincipalType.HUMAN, RoleBundle.CONFIGURATOR, frozenset({Permission.CONFIGURE})),
     (PrincipalType.HUMAN, RoleBundle.SIGNER, frozenset({Permission.SIGN_OFF})),

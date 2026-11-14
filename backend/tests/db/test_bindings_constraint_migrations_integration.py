@@ -125,11 +125,19 @@ def test_the_bindings_constraint_accepts_every_vocabulary_value(
     )
 
 
-def _authority_snapshot(schema: MigratedPostgresSchema) -> tuple[str, ...]:
-    """Capture tenant identity, binding, session and audit state for exact comparison."""
+def _authority_snapshot(
+    schema: MigratedPostgresSchema, organization_id: str | None = None
+) -> tuple[str, ...]:
+    """Capture tenant identity, binding, session and audit state for exact comparison.
+
+    The RLS GUC names the tenant, so each caller passes the organization whose
+    rows it seeded — a snapshot of the wrong tenant is vacuously stable.
+    Defaults to the shared fixture organization.
+    """
     with schema.app_engine.begin() as connection:
         connection.execute(
-            text("SELECT set_config('app.organization_id', :org, true)"), {"org": ORG}
+            text("SELECT set_config('app.organization_id', :org, true)"),
+            {"org": organization_id or ORG},
         )
         snapshots: list[str] = []
         for table in ("users", "authorization_bindings", "refresh_tokens", "audit_events"):
@@ -328,4 +336,116 @@ def test_signer_migration_grants_nothing_and_preserves_existing_authority(
             )
     command.downgrade(config, "202611070111")
     assert _authority_snapshot(schema) == before
+    command.upgrade(config, "head")
+
+
+EXPORTER_MIGRATION_TEST_ORG = "OR-EXPM0001"
+
+
+def test_exporter_migration_grants_nothing_and_preserves_existing_authority(
+    forward_migrated_postgres_schema: MigratedPostgresSchema,
+) -> None:
+    """Widen only the exporter CHECK; upgrade, downgrade and upgrade again.
+
+    The migration is structural: it inserts no binding, so right after the
+    upgrade no exporter authority exists anywhere — the role only becomes real
+    when an administrator grants it from the composer.
+    """
+    schema = forward_migrated_postgres_schema
+    config = alembic_config_for_app()
+    command.downgrade(config, "202611090117")
+    principal_ids: list[UUID] = []
+    with Session(schema.app_engine) as db:
+        db.info["organization_id"] = EXPORTER_MIGRATION_TEST_ORG
+        db.add(Organization(id=EXPORTER_MIGRATION_TEST_ORG, name="Exporter migration test"))
+        db.flush()
+        for bundle in (
+            RoleBundle.ANALYST,
+            RoleBundle.APPROVER,
+            RoleBundle.ACCOUNT_ADMIN,
+            RoleBundle.ORG_OWNER,
+        ):
+            user = User(
+                id=uuid4(),
+                organization_id=EXPORTER_MIGRATION_TEST_ORG,
+                email=f"exporter-{bundle.value}@example.test",
+                role="account_admin" if bundle is RoleBundle.ORG_OWNER else bundle.value,
+            )
+            db.add(user)
+            db.flush()
+            authorization.create_role_binding(
+                db,
+                organization_id=EXPORTER_MIGRATION_TEST_ORG,
+                principal_user_id=user.id,
+                principal_type=PrincipalType.HUMAN,
+                role_bundle=bundle,
+                scope=authorization.BindingScope(
+                    InstitutionScope.ORGANIZATION, None, ModuleScope.ALL, SensitivityScope.ALL
+                ),
+                grantor=authorization.GrantorRef(GrantorType.SYSTEM, "migration-test"),
+                reason="Existing explicit authority",
+                commit=False,
+            )
+            _ = authentication.issue_tokens(db, user)
+            principal_ids.append(user.id)
+        db.commit()
+    before = _authority_snapshot(schema, EXPORTER_MIGRATION_TEST_ORG)
+    command.upgrade(config, "head")
+    assert _authority_snapshot(schema, EXPORTER_MIGRATION_TEST_ORG) == before
+    with schema.app_engine.begin() as connection:
+        connection.execute(
+            text("SELECT set_config('app.organization_id', :org, true)"),
+            {"org": EXPORTER_MIGRATION_TEST_ORG},
+        )
+        assert (
+            connection.scalar(
+                text(
+                    "SELECT count(*) FROM authorization_bindings "
+                    "WHERE role_bundle = 'exporter' AND organization_id = :org"
+                ),
+                {"org": EXPORTER_MIGRATION_TEST_ORG},
+            )
+            == 0
+        )
+        # Insert a new generation: authoritative binding rows are sealed.
+        candidate = text(
+            "INSERT INTO authorization_bindings "
+            "(id, organization_id, principal_user_id, principal_type, role_bundle, "
+            "institution_scope, institution_id, module_scope, sensitivity_scope, "
+            "granted_by_type, granted_by_id, grant_reason_category, grant_reason, "
+            "granted_at, status, valid_from, created_at, updated_at) "
+            "SELECT :id, organization_id, principal_user_id, principal_type, :bundle, "
+            "institution_scope, institution_id, module_scope, sensitivity_scope, "
+            "granted_by_type, granted_by_id, grant_reason_category, grant_reason, "
+            "granted_at, status, valid_from, created_at, updated_at "
+            "FROM authorization_bindings "
+            "WHERE principal_user_id = :user AND organization_id = :org"
+        )
+        with connection.begin_nested() as savepoint:
+            inserted = connection.execute(
+                candidate,
+                {
+                    "id": uuid4(),
+                    "bundle": "exporter",
+                    "user": principal_ids[0],
+                    "org": EXPORTER_MIGRATION_TEST_ORG,
+                },
+            )
+            assert inserted.rowcount == 1
+            savepoint.rollback()
+        with (
+            pytest.raises(IntegrityError, match="ck_authorization_bindings_role_bundle"),
+            connection.begin_nested(),
+        ):
+            connection.execute(
+                candidate,
+                {
+                    "id": uuid4(),
+                    "bundle": "unknown_bundle",
+                    "user": principal_ids[0],
+                    "org": EXPORTER_MIGRATION_TEST_ORG,
+                },
+            )
+    command.downgrade(config, "202611090117")
+    assert _authority_snapshot(schema, EXPORTER_MIGRATION_TEST_ORG) == before
     command.upgrade(config, "head")

@@ -1020,6 +1020,76 @@ def test_the_report_names_who_may_transmit_a_return(db_session: Session) -> None
     assert BANK in render_table(list(rows.values()))
 
 
+def test_the_report_names_who_may_export_a_return(db_session: Session) -> None:
+    """The exporter cutover's column: empty until a grant, the actor after it.
+
+    The `export` column answers "who can take a finished return away", which is
+    the REG/restricted EXPORT sentence — the dedicated exporter bundle and the
+    analyst bundle alike. An Approver, however complete the grant, cannot take
+    the file, so their cell stays empty; before the owner's composer grant the
+    exporter-holder's cell is empty too, which is the before-picture the diff
+    reads.
+    """
+    db_session.add(Organization(id=ORG, name="Export impact"))
+    db_session.add(
+        Bank(
+            id=BANK,
+            organization_id=ORG,
+            name="Impact Bank",
+            short_name="Impact",
+            currency="GHS",
+            jurisdiction_code="GH",
+            license_type="universal_bank",
+            institution_type=FALLBACK_TYPE_CODE,
+        )
+    )
+    exporter = _user(db_session, "exporter@impact.example", role="viewer")
+    analyst = _user(db_session, "preparer@impact.example", role="analyst")
+    approver = _user(db_session, "checker@impact.example", role="approver")
+    db_session.commit()
+
+    # The before-picture: the future exporter holder has no grant yet.
+    rows = {row.email: row for row in build_report(db_session, organization_id=ORG)}
+    assert rows["exporter@impact.example"].export_institutions == []
+
+    _grant(
+        db_session,
+        exporter,
+        RoleBundle.EXPORTER,
+        institution_scope=InstitutionScope.INSTITUTION,
+        institution_id=BANK,
+        module_scope=ModuleScope.REGULATORY,
+        sensitivity_scope=SensitivityScope.RESTRICTED,
+    )
+    _grant(
+        db_session,
+        analyst,
+        RoleBundle.ANALYST,
+        institution_scope=InstitutionScope.INSTITUTION,
+        institution_id=BANK,
+        module_scope=ModuleScope.REGULATORY,
+        sensitivity_scope=SensitivityScope.RESTRICTED,
+    )
+    _grant(
+        db_session,
+        approver,
+        RoleBundle.APPROVER,
+        institution_scope=InstitutionScope.INSTITUTION,
+        institution_id=BANK,
+        module_scope=ModuleScope.REGULATORY,
+        sensitivity_scope=SensitivityScope.RESTRICTED,
+    )
+    db_session.commit()
+
+    rows = {row.email: row for row in build_report(db_session, organization_id=ORG)}
+    assert rows["exporter@impact.example"].export_institutions == [BANK]
+    assert rows["preparer@impact.example"].export_institutions == [BANK]
+    assert rows["checker@impact.example"].export_institutions == []
+    cells = _rendered_cells(list(rows.values()))
+    assert cells["exporter@impact.example"]["export"] == BANK
+    assert cells["checker@impact.example"]["export"] == "-"
+
+
 def test_the_report_names_who_may_read_examiner_evidence(db_session: Session) -> None:
     """The examiner cutover's gate (issue 180): who keeps the evidence bundle.
 

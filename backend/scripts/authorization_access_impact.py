@@ -146,6 +146,10 @@ class UserAccess:
     data_scopes: dict[str, dict[str, dict[str, object]]] = field(default_factory=dict)
     #: Institutions this user may transmit a return to the regulator for.
     filing_institutions: list[str] = field(default_factory=list)
+    #: Institutions whose finished returns this user may take away: the
+    #: REG/restricted EXPORT sentence, which the read-only exporter bundle and
+    #: the analyst bundle both carry. Empty until an administrator grants one.
+    export_institutions: list[str] = field(default_factory=list)
     #: Exact-bank REG/restricted SIGN_OFF grant holders, not execution authority.
     signing_institutions: list[str] = field(default_factory=list)
     #: Organization-wide case authority; bank RISK grants cannot open a case.
@@ -341,6 +345,16 @@ def build_report(db: Session, *, organization_id: str) -> list[UserAccess]:
                 for capability in entry.capabilities
             )
         )
+        export_institutions = sorted(
+            entry.institution_id
+            for entry in projection.institution_capabilities
+            if any(
+                capability.module == Module.REGULATORY.value
+                and capability.sensitivity == Sensitivity.RESTRICTED.value
+                and capability.permission == Permission.EXPORT.value
+                for capability in entry.capabilities
+            )
+        )
         examiner_evidence = sorted(
             entry.institution_id
             for entry in projection.institution_capabilities
@@ -388,6 +402,7 @@ def build_report(db: Session, *, organization_id: str) -> list[UserAccess]:
                 institutions=institutions,
                 data_scopes=data_scopes,
                 filing_institutions=filing_institutions,
+                export_institutions=export_institutions,
                 signing_institutions=_signing_institutions(db, principal, banks),
                 case_permissions=sorted(
                     f"{cap.sensitivity.value}/{cap.permission.value}"
@@ -461,6 +476,7 @@ def render_table(rows: list[UserAccess]) -> str:
         "product view",
         "data scope",
         "filing",
+        "export",
         "mint",
         "refresh",
         "signing",
@@ -494,6 +510,7 @@ def render_table(rows: list[UserAccess]) -> str:
                 product,
                 data_scope,
                 ",".join(row.filing_institutions) or "-",
+                ",".join(row.export_institutions) or "-",
                 ",".join(row.official_mint_institutions) or "-",
                 ",".join(row.live_refresh_institutions) or "-",
                 ",".join(row.signing_institutions) or "-",
@@ -584,6 +601,16 @@ def main(argv: list[str] | None = None) -> int:
             if filers
             else " — no return can be filed until an Org Owner grants Validator"
             " authority (docs/filing_submit_authority_rollout.md)."
+        )
+    )
+    exporters = [row for row in rows if row.export_institutions]
+    print(
+        f"{len(exporters)} can take a finished return away (REG/restricted EXPORT)"
+        + (
+            "; a name that appears here only after a grant is the read-only"
+            " exporter role doing its job."
+            if exporters
+            else " — nobody holds the read-only exporter sentence yet."
         )
     )
     return 0
