@@ -53,7 +53,15 @@ def _start_without_fixture_authority(db_client: TestClient) -> None:
         session.execute(
             delete(AuthorizationBinding).where(AuthorizationBinding.organization_id == ORG_1)
         )
-        if session.get(Bank, SAMPLE_BANK_ID) is None:
+        bank_exists = (
+            session.scalar(
+                select(Bank.id).where(
+                    Bank.id == SAMPLE_BANK_ID, Bank.organization_id == ORG_1
+                )
+            )
+            is not None
+        )
+        if not bank_exists:
             session.add(
                 Bank(
                     id=SAMPLE_BANK_ID,
@@ -121,7 +129,9 @@ def _grant(
     session = get_sessionmaker()()
     session.info["organization_id"] = ORG_1
     try:
-        user = session.get(User, USER_1)
+        user = session.scalar(
+            select(User).where(User.id == USER_1, User.organization_id == ORG_1)
+        )
         assert user is not None
         authorization.create_role_binding(
             session,
