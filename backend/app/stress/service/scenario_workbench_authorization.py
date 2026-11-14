@@ -1,14 +1,21 @@
-"""Transitional authorization helpers for shared scenario-workbench routes."""
+"""Shared scenario-workbench authorization: one scoped policy per engine module.
+
+A module may ride the shared workbench routes only with an explicit scoped
+policy here. A module without one is denied: the shared routes never fall back
+to a scalar role ladder, because authority comes from complete scoped bindings
+(module x permission x sensitivity x institution scope), never from token
+roles.
+"""
 
 from __future__ import annotations
 
 from collections.abc import Sequence
 from dataclasses import dataclass
 
-from fastapi import status
+from fastapi import HTTPException, status
 from sqlalchemy.orm import Session
 
-from app.api.deps import TenantContext, get_mutation_tenant_context
+from app.api.deps import TenantContext
 from app.core.authorization import ConditionCheck, Module, Permission, Sensitivity
 from app.identity import public as scoped_authorization
 from app.identity.public import Bank
@@ -28,6 +35,13 @@ _WORKBENCH_POLICIES: dict[WorkbenchModule, _WorkbenchAuthorizationPolicy] = {
         "liquidity",
         Sensitivity.AGGREGATED,
     ),
+    "capital": _WorkbenchAuthorizationPolicy(
+        Module.CAPITAL,
+        "capital",
+        # Saved workbench analyses are engine snapshots; the capital rollout
+        # contract pins workbench entries at confidential, like the IRR policy.
+        Sensitivity.CONFIDENTIAL,
+    ),
     "fx": _WorkbenchAuthorizationPolicy(
         Module.FX,
         "fx",
@@ -46,12 +60,25 @@ _WORKBENCH_POLICIES: dict[WorkbenchModule, _WorkbenchAuthorizationPolicy] = {
 }
 
 
-def mutation_context(module: WorkbenchModule, ctx: TenantContext) -> TenantContext:
-    """Use exact-binding mutation authority for cut-over workbench modules."""
+def _policy(module: WorkbenchModule) -> _WorkbenchAuthorizationPolicy:
+    policy = _WORKBENCH_POLICIES.get(module)
+    if policy is None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail=scoped_authorization.DEFAULT_DENIAL_DETAIL,
+        )
+    return policy
 
-    if module in _WORKBENCH_POLICIES:
-        return ctx
-    return get_mutation_tenant_context(ctx)
+
+def mutation_context(module: WorkbenchModule, ctx: TenantContext) -> TenantContext:
+    """Carry identity only; an unknown module is denied, never role-gated.
+
+    The scoped decision itself happens in the service, after the bank lookup
+    and before any side effect.
+    """
+
+    _policy(module)
+    return ctx
 
 
 def surface(module: WorkbenchModule, action: str) -> str:
@@ -62,10 +89,9 @@ def surface(module: WorkbenchModule, action: str) -> str:
 
 
 def saved_analysis_list_sensitivity(module: WorkbenchModule) -> Sensitivity:
-    """Return the sensitivity of each cut-over module's saved-analysis index."""
+    """Return the sensitivity of each module's saved-analysis index."""
 
-    policy = _WORKBENCH_POLICIES.get(module)
-    return policy.saved_analysis_list_sensitivity if policy is not None else Sensitivity.AGGREGATED
+    return _policy(module).saved_analysis_list_sensitivity
 
 
 def require_module_permission(  # noqa: PLR0913 - complete authorization sentence
@@ -81,11 +107,9 @@ def require_module_permission(  # noqa: PLR0913 - complete authorization sentenc
     denial_status: int = status.HTTP_403_FORBIDDEN,
     denial_detail: str = scoped_authorization.DEFAULT_DENIAL_DETAIL,
 ) -> None:
-    """Enforce exact authority for cut-over modules and preserve legacy gates."""
+    """Enforce the module's exact scoped binding; deny closed without a policy."""
 
-    policy = _WORKBENCH_POLICIES.get(module)
-    if policy is None:
-        return
+    policy = _policy(module)
     scoped_authorization.require_resolved_bank_permission(
         db,
         ctx,
