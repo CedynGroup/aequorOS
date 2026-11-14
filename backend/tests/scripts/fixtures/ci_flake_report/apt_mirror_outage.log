@@ -1,0 +1,43 @@
+2026-11-11T14:21:45.5827603Z ##[group]Run mise exec -- pnpm --filter @aequoros/dashboard exec playwright install-deps chromium
+2026-11-11T14:21:45.5828359Z [36;1mmise exec -- pnpm --filter @aequoros/dashboard exec playwright install-deps chromium[0m
+2026-11-11T14:21:45.5848856Z shell: /usr/bin/bash -e {0}
+2026-11-11T14:21:45.5849012Z env:
+2026-11-11T14:21:45.5849132Z   MISE_LOG_LEVEL: info
+2026-11-11T14:22:06.4096275Z Ign:2 http://azure.archive.ubuntu.com/ubuntu noble InRelease
+2026-11-11T14:22:26.4349986Z Ign:3 http://azure.archive.ubuntu.com/ubuntu noble-updates InRelease
+2026-11-11T14:22:46.4737569Z Ign:4 http://azure.archive.ubuntu.com/ubuntu noble-backports InRelease
+2026-11-11T14:23:06.5027358Z Ign:5 http://azure.archive.ubuntu.com/ubuntu noble-security InRelease
+2026-11-11T14:24:05.7922361Z Err:2 https://security.ubuntu.com/ubuntu noble InRelease
+2026-11-11T14:24:05.7924126Z   Temporary failure resolving 'azure.archive.ubuntu.com'
+2026-11-11T14:24:06.5972138Z Ign:3 https://archive.ubuntu.com/ubuntu noble-updates InRelease
+2026-11-11T14:24:25.6549036Z Ign:5 http://azure.archive.ubuntu.com/ubuntu noble-security InRelease
+2026-11-11T14:24:26.6258910Z Ign:4 https://archive.ubuntu.com/ubuntu noble-backports InRelease
+2026-11-11T14:24:26.6368603Z Err:3 https://security.ubuntu.com/ubuntu noble-updates InRelease
+2026-11-11T14:24:26.6368998Z   Temporary failure resolving 'azure.archive.ubuntu.com'
+2026-11-11T14:25:09.7399835Z W: Failed to fetch mirror+file:/etc/apt/apt-mirrors.txt/dists/noble/InRelease  Temporary failure resolving 'azure.archive.ubuntu.com'
+2026-11-11T14:25:09.7400783Z W: Failed to fetch mirror+file:/etc/apt/apt-mirrors.txt/dists/noble-updates/InRelease  Temporary failure resolving 'azure.archive.ubuntu.com'
+2026-11-11T14:25:09.7401603Z W: Failed to fetch mirror+file:/etc/apt/apt-mirrors.txt/dists/noble-backports/InRelease  Temporary failure resolving 'azure.archive.ubuntu.com'
+2026-11-11T14:25:09.7402863Z W: Failed to fetch mirror+file:/etc/apt/apt-mirrors.txt/dists/noble-security/InRelease  Temporary failure resolving 'azure.archive.ubuntu.com'
+2026-11-11T14:25:30.1508308Z Ign:2 http://azure.archive.ubuntu.com/ubuntu noble/universe amd64 fonts-ipafont-gothic all 00303-21ubuntu1
+2026-11-11T14:25:50.1274135Z Ign:3 http://azure.archive.ubuntu.com/ubuntu noble/main amd64 fonts-freefont-ttf all 20211204+svn4273-2
+2026-11-11T14:29:10.4408730Z Err:2 https://security.ubuntu.com/ubuntu noble/universe amd64 fonts-ipafont-gothic all 00303-21ubuntu1
+2026-11-11T14:29:10.4409120Z   Temporary failure resolving 'azure.archive.ubuntu.com'
+2026-11-11T14:29:30.4825841Z Err:3 https://security.ubuntu.com/ubuntu noble/main amd64 fonts-freefont-ttf all 20211204+svn4273-2
+2026-11-11T14:29:30.4826335Z   Temporary failure resolving 'azure.archive.ubuntu.com'
+2026-11-11T14:31:50.6999334Z E: Failed to fetch https://security.ubuntu.com/ubuntu/pool/universe/f/fonts-ipafont/fonts-ipafont-gothic_00303-21ubuntu1_all.deb  Temporary failure resolving 'azure.archive.ubuntu.com'
+2026-11-11T14:31:50.7000508Z E: Failed to fetch https://security.ubuntu.com/ubuntu/pool/main/f/fonts-freefont/fonts-freefont-ttf_20211204%2bsvn4273-2_all.deb  Temporary failure resolving 'azure.archive.ubuntu.com'
+2026-11-11T14:31:50.7001564Z E: Failed to fetch https://security.ubuntu.com/ubuntu/pool/universe/f/fonts-tlwg/fonts-tlwg-loma-otf_0.7.3-1_all.deb  Temporary failure resolving 'azure.archive.ubuntu.com'
+2026-11-11T14:31:50.7002595Z E: Failed to fetch https://security.ubuntu.com/ubuntu/pool/universe/u/unifont/fonts-unifont_15.1.01-1build1_all.deb  Temporary failure resolving 'azure.archive.ubuntu.com'
+2026-11-11T14:31:50.7003612Z E: Failed to fetch https://security.ubuntu.com/ubuntu/pool/universe/f/fonts-wqy-zenhei/fonts-wqy-zenhei_0.9.45-8_all.deb  Temporary failure resolving 'azure.archive.ubuntu.com'
+2026-11-11T14:31:50.7004649Z E: Failed to fetch https://security.ubuntu.com/ubuntu/pool/main/x/xfonts-encodings/xfonts-encodings_1.0.5-0ubuntu2_all.deb  Temporary failure resolving 'azure.archive.ubuntu.com'
+2026-11-11T14:31:50.7005765Z E: Failed to fetch https://security.ubuntu.com/ubuntu/pool/main/x/xfonts-utils/xfonts-utils_7.7%2b6build3_amd64.deb  Temporary failure resolving 'azure.archive.ubuntu.com'
+2026-11-11T14:31:50.7006841Z E: Failed to fetch https://security.ubuntu.com/ubuntu/pool/universe/x/xfonts-cyrillic/xfonts-cyrillic_1.0.5%2bnmu1_all.deb  Temporary failure resolving 'azure.archive.ubuntu.com'
+2026-11-11T14:31:50.7008326Z E: Failed to fetch https://security.ubuntu.com/ubuntu/pool/main/x/xfonts-scalable/xfonts-scalable_1.0.3-1.3_all.deb  Temporary failure resolving 'azure.archive.ubuntu.com'
+2026-11-11T14:31:50.7009254Z E: Unable to fetch some archives, maybe run apt-get update or try with --fix-missing?
+2026-11-11T14:31:50.7027044Z Failed to install browser dependencies
+2026-11-11T14:31:50.7027351Z Error: Installation process exited with code: 100
+2026-11-11T14:31:50.7239104Z undefined
+2026-11-11T14:31:50.7245643Z /home/runner/work/aequorOS/aequorOS/backend/dashboard:
+2026-11-11T14:31:50.7246064Z [ERR_PNPM_RECURSIVE_EXEC_FIRST_FAIL] Command failed with exit code 1: playwright install-deps chromium
+2026-11-11T14:31:50.7494032Z ##[error]Process completed with exit code 1.
+2026-11-11T14:31:50.7558178Z ##[group]Run actions/upload-artifact@v7

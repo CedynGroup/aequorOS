@@ -1,0 +1,14 @@
+2026-11-11T14:18:12.4096275Z Ign:2 http://azure.archive.ubuntu.com/ubuntu noble InRelease
+2026-11-11T14:18:15.7922361Z Err:2 https://security.ubuntu.com/ubuntu noble InRelease
+2026-11-11T14:18:15.7924126Z   Temporary failure resolving 'azure.archive.ubuntu.com'
+2026-11-11T14:18:16.7399835Z W: Failed to fetch mirror+file:/etc/apt/apt-mirrors.txt/dists/noble/InRelease  Temporary failure resolving 'azure.archive.ubuntu.com'
+2026-11-11T14:18:40.1508308Z Get:3 https://security.ubuntu.com/ubuntu noble/universe amd64 fonts-ipafont-gothic all 00303-21ubuntu1 [1,234 kB]
+2026-11-11T14:19:00.1508308Z Fetched 1,234 kB in 1s (1,234 kB/s)
+2026-11-11T14:19:10.1508308Z Chromium 143.0.0.0 downloaded successfully.
+2026-11-11T14:25:41.0907155Z   1 failed
+2026-11-11T14:25:41.0907355Z   46 passed
+2026-11-11T14:25:41.1016680Z [31m  1) [chromium] › tests/attestation/attestation.e2e.spec.ts:621:7 › signing ceremony keeps the ceremony reachable while the pack detail loads[0m
+2026-11-11T14:25:41.2054952Z [31m✘  1 tests/attestation/attestation.e2e.spec.ts:621:7 › signing ceremony keeps the ceremony reachable while the pack detail loads (30.1s)[0m
+2026-11-11T14:25:41.2102618Z [31m  1 failed[0m
+2026-11-11T14:25:41.2216094Z [31m  46 passed[0m
+2026-11-11T14:25:41.7494032Z ##[error]Process completed with exit code 1.

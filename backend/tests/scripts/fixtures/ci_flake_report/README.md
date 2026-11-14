@@ -28,6 +28,22 @@ and trimmed to the fields the measurement script reads. Provenance per file:
   setup-minio download lines as `setup_minio_504.log` but in a job whose
   `curl --retry` recovered and the step finished successfully, so nothing may be
   counted.
+- `apt_mirror_outage.log` — excerpt of the real Dashboard journeys shard 1/4 log
+  (job 130580527090, run 43037570348, 2026-11-11 apt-mirror outage): the
+  `playwright install-deps chromium` step's apt retries (`Ign:`/`Err:`/`W:`
+  lines), the fatal `E: Failed to fetch` block, `Error: Installation process
+  exited with code: 100` and the step's exit code 1. Middle sections of the
+  `Ign:` retry list are omitted; every kept line is verbatim.
+- `passing_apt_retry.log` — reconstructed in the recorded format: the same
+  azure-mirror retry shape as `apt_mirror_outage.log` but the fetches recover,
+  `install-deps` completes and the step finishes successfully, so nothing may
+  be counted.
+- `test_failure_with_apt_warnings.log` — reconstructed in the recorded format:
+  a genuine Playwright test failure in a shard whose apt phase printed only
+  transient mirror warnings (`Ign:`/`Err:`/`W:` lines, packages fetched on
+  retry) and whose step aborted with the test runner's exit code 1, not apt's
+  100; the test failure stays a flake and no infrastructure finding is
+  produced.
 
 Logs keep their raw timestamps so the timestamp-stripping logic is exercised on
 real input. No credentials appear: runner logs mask secrets, and the trimmed

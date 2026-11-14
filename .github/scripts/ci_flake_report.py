@@ -117,7 +117,31 @@ PLAYWRIGHT_FAILED = re.compile(
 )
 TYPECHECK_BASELINE = re.compile(r"^(?P<module>\S+) (?P<rule>report\w+): \d+ \(baseline \d+\)")
 CURL_22 = re.compile(r"^curl: \(22\) The requested URL returned error: (?P<code>\d+)")
-CURL_EXIT_MARKER = re.compile(r"Process completed with exit code 22\b")
+# The runner prints "Process completed with exit code N." when a step's
+# process aborts; a download failure counts as infrastructure only when its
+# fatal lines and the failing end of that step come from the SAME step (a
+# recovered step's retry lines must not pair with a later step's exit code).
+PROCESS_EXIT = re.compile(r"Process completed with exit code (?P<code>\d+)\b")
+# Step-boundary lines reset pending download evidence: a step starts at
+# ##[start-action or the runner's "##[group]Run <script>" echo and ends at
+# ##[end-action. Plain ##[group] lines are free-form log groups INSIDE a
+# step and must not reset anything.
+STEP_BOUNDARY = re.compile(r"^##\[(?:start-action|end-action)\b|^##\[group\]Run ")
+# apt/package-mirror failures: apt prints "E: Failed to fetch ..." /
+# "E: Unable to fetch some archives" when package downloads fail fatally and
+# "E: Some index files failed to download" when apt-get update cannot fetch
+# indexes; "Err:<n> <url>" lines mark the individual failing fetches. The
+# fatal step markers are playwright's "Installation process exited with code:
+# 100" (it propagates apt's exit code 100) and the runner's exit-code-100
+# marker when a step runs apt directly. Transient retries ("Ign:" lines),
+# per-mirror warnings ("W: Failed to fetch ...") and "Err:" lines in a step
+# that recovered are NOT counted: without the exit-100 marker they produce
+# nothing.
+APT_FATAL = re.compile(
+    r"^(?:E: (?:Failed to fetch |Unable to fetch some archives"
+    r"|Some index files failed to download)|Err:\d+ )"
+)
+APT_INSTALL_EXIT = re.compile(r"Installation process exited with code: 100\b")
 
 
 @dataclass
@@ -232,21 +256,80 @@ def _add_test_name(by_path: dict[str, list[str]], path: str, name: str | None) -
         names.append(name)
 
 
+def extract_infra_findings(lines: list[str]) -> list[Finding]:
+    """Infrastructure download findings from cleaned job-log lines.
+
+    Each fatal download line is paired with the failing end of the SAME
+    step: pending evidence resets at step-boundary lines (##[start-action,
+    the runner's "##[group]Run <script>" echo, ##[end-action) and at every
+    "Process completed with exit code" marker. The installer's own exit-100
+    marker ("Installation process exited with code: 100") is pending
+    evidence too: it emits only when the enclosing step actually fails, so a
+    step that recovers with a successful retry discards it. A signature is
+    emitted at most once per job even when several steps fail the same way.
+    """
+    findings: list[Finding] = []
+    emitted: set[str] = set()
+    curl_22_code: str | None = None
+    apt_fatal_pending = False
+    apt_install_exit_pending = False
+
+    def emit(signature: str) -> None:
+        if signature not in emitted:
+            emitted.add(signature)
+            findings.append(Finding("infra", signature))
+
+    def close_step(failed: bool, exit_code: str | None) -> None:
+        if failed:
+            if curl_22_code is not None and exit_code == "22":
+                emit(f"infra:download-curl-22-{curl_22_code}")
+            if apt_fatal_pending and (apt_install_exit_pending or exit_code == "100"):
+                emit("infra:apt-mirror-100")
+
+    for line in lines:
+        if STEP_BOUNDARY.match(line):
+            curl_22_code = None
+            apt_fatal_pending = False
+            apt_install_exit_pending = False
+            continue
+        exit_match = PROCESS_EXIT.search(line)
+        if exit_match:
+            code = exit_match.group("code")
+            close_step(code != "0", code)
+            curl_22_code = None
+            apt_fatal_pending = False
+            apt_install_exit_pending = False
+            continue
+        match = CURL_22.match(line)
+        if match:
+            curl_22_code = match.group("code")
+            continue
+        if APT_FATAL.match(line):
+            apt_fatal_pending = True
+            continue
+        if APT_INSTALL_EXIT.search(line):
+            apt_install_exit_pending = True
+    return findings
+
+
 def extract_findings(raw_lines: list[str]) -> list[Finding]:
     """Extract failure findings from raw job-log lines.
 
     Only fatal occurrences are reported: a curl exit 22 counts as an
     infrastructure download failure only when the step actually aborted with
-    it (the "Process completed with exit code 22" marker); retry lines in
-    logs where the download recovered produce nothing.
+    it (the "Process completed with exit code 22" marker), and an apt or
+    package-mirror failure ("E: Failed to fetch", "E: Unable to fetch some
+    archives", "E: Some index files failed to download", "Err:" lines) counts
+    only when the same step aborted with apt's exit code 100 ("Installation
+    process exited with code: 100" or the runner's exit-code-100 marker).
+    Retry lines ("Ign:"), per-mirror warnings ("W: Failed to fetch") and
+    "Err:" lines in a step that recovered produce nothing.
     """
     lines = clean_lines("\n".join(raw_lines))
 
     pytest_by_path: dict[str, list[str]] = defaultdict(list)
     playwright_by_path: dict[str, list[str]] = defaultdict(list)
     typecheck_keys: list[tuple[str, str]] = []
-    curl_22_code: str | None = None
-    has_curl_exit_marker = False
 
     for line in lines:
         match = PYTEST_FAILED.match(line) or PYTEST_COLLECTION_ERROR.match(line)
@@ -262,23 +345,14 @@ def extract_findings(raw_lines: list[str]) -> list[Finding]:
             key = (match.group("module"), match.group("rule"))
             if key not in typecheck_keys:
                 typecheck_keys.append(key)
-            continue
-        match = CURL_22.match(line)
-        if match:
-            curl_22_code = match.group("code")
-            continue
-        if CURL_EXIT_MARKER.search(line):
-            has_curl_exit_marker = True
 
-    findings: list[Finding] = []
+    findings = extract_infra_findings(lines)
     for path, names in pytest_by_path.items():
         findings.append(Finding("test", f"pytest:{path}", names))
     for path, names in playwright_by_path.items():
         findings.append(Finding("test", f"playwright:{path}", names))
     for module, rule in typecheck_keys:
         findings.append(Finding("typecheck", f"typecheck:{module}:{rule}"))
-    if curl_22_code is not None and has_curl_exit_marker:
-        findings.append(Finding("infra", f"infra:download-curl-22-{curl_22_code}"))
 
     return findings
 
