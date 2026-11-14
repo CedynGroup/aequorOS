@@ -5,6 +5,8 @@ routes only with an explicit scoped policy; a module without one is denied —
 never silently passed to the scalar role ladder.
 """
 
+from __future__ import annotations
+
 from pathlib import Path
 from typing import get_args
 
