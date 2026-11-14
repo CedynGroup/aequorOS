@@ -2115,9 +2115,11 @@ class _RunInputAuthority:
     readable at confidential VIEW, and the snapshot is served only to a reader
     who also holds the run module's restricted VIEW on the run's bank. The
     decision uses the same canonical run-module map as every other run
-    surface, is evaluated once per distinct run module (a same-module batch is
-    one decision), and denies closed — an evaluator that cannot answer has not
-    said yes, and an unknown run module has no established authority.
+    surface, and denies closed — an evaluator that cannot answer has not said
+    yes, and an unknown run module has no established authority. Probes are
+    cached per run module on the instance, so a reader that constructs one
+    authority per run read probes once per run, and a reader that shares one
+    instance across a same-module batch probes once for the whole batch.
     """
 
     def __init__(self, db: Session, ctx: TenantContext, bank: Bank) -> None:
@@ -2162,6 +2164,19 @@ def _inputs_fields(
         else UNKNOWN_MODULE_INPUTS_UNAVAILABLE_REASON
     )
     return None, False, reason
+
+
+def run_inputs_fields(
+    db: Session, ctx: TenantContext, bank: Bank, run: RegulatoryRun
+) -> tuple[dict[str, Any] | None, bool, str | None]:
+    """The stored inputs of one run for one reader, under the shared rule.
+
+    Run-reading engines whose read schema embeds the stored snapshot ask here
+    instead of restating the restricted-VIEW probe, so every run surface
+    redacts through the one canonical run-module authority map.
+    """
+
+    return _inputs_fields(_RunInputAuthority(db, ctx, bank), run)
 
 
 def _read_run(db: Session, ctx: TenantContext, bank: Bank, run: RegulatoryRun) -> RegulatoryRunRead:
