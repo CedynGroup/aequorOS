@@ -125,11 +125,19 @@ def test_the_bindings_constraint_accepts_every_vocabulary_value(
     )
 
 
-def _authority_snapshot(schema: MigratedPostgresSchema) -> tuple[str, ...]:
-    """Capture tenant identity, binding, session and audit state for exact comparison."""
+def _authority_snapshot(
+    schema: MigratedPostgresSchema, organization_id: str | None = None
+) -> tuple[str, ...]:
+    """Capture tenant identity, binding, session and audit state for exact comparison.
+
+    The RLS GUC names the tenant, so each caller passes the organization whose
+    rows it seeded — a snapshot of the wrong tenant is vacuously stable.
+    Defaults to the shared fixture organization.
+    """
     with schema.app_engine.begin() as connection:
         connection.execute(
-            text("SELECT set_config('app.organization_id', :org, true)"), {"org": ORG}
+            text("SELECT set_config('app.organization_id', :org, true)"),
+            {"org": organization_id or ORG},
         )
         snapshots: list[str] = []
         for table in ("users", "authorization_bindings", "refresh_tokens", "audit_events"):
@@ -381,9 +389,9 @@ def test_exporter_migration_grants_nothing_and_preserves_existing_authority(
             _ = authentication.issue_tokens(db, user)
             principal_ids.append(user.id)
         db.commit()
-    before = _authority_snapshot(schema)
+    before = _authority_snapshot(schema, EXPORTER_MIGRATION_TEST_ORG)
     command.upgrade(config, "head")
-    assert _authority_snapshot(schema) == before
+    assert _authority_snapshot(schema, EXPORTER_MIGRATION_TEST_ORG) == before
     with schema.app_engine.begin() as connection:
         connection.execute(
             text("SELECT set_config('app.organization_id', :org, true)"),
@@ -426,5 +434,5 @@ def test_exporter_migration_grants_nothing_and_preserves_existing_authority(
                 {"id": uuid4(), "bundle": "unknown_bundle", "user": principal_ids[0]},
             )
     command.downgrade(config, "202611090117")
-    assert _authority_snapshot(schema) == before
+    assert _authority_snapshot(schema, EXPORTER_MIGRATION_TEST_ORG) == before
     command.upgrade(config, "head")
