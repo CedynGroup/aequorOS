@@ -124,6 +124,7 @@ def test_an_exporter_reads_and_takes_away_a_finished_ordinary_return(
         session.info["organization_id"] = ORG_1
         session.execute(
             delete(RegulatoryPackageArtifact).where(
+                RegulatoryPackageArtifact.organization_id == ORG_1,
                 RegulatoryPackageArtifact.package_id == package_id,
                 RegulatoryPackageArtifact.kind == "xlsx",
             )
@@ -194,7 +195,12 @@ def _deny_state(db_client: TestClient, package_id: UUID) -> dict[str, Any]:
     """The observable state a refused exporter must leave exactly as it was."""
     with get_sessionmaker()() as session:
         session.info["organization_id"] = ORG_1
-        package = session.get(RegulatoryPackage, package_id)
+        package = session.scalar(
+            select(RegulatoryPackage).where(
+                RegulatoryPackage.organization_id == ORG_1,
+                RegulatoryPackage.id == package_id,
+            )
+        )
         assert package is not None
         artifacts = list(
             session.scalars(
@@ -375,7 +381,8 @@ def test_the_migration_and_provisioning_never_issue_the_exporter(
         rows = list(
             session.scalars(
                 select(AuthorizationBinding).where(
-                    AuthorizationBinding.role_bundle == RoleBundle.EXPORTER.value
+                    AuthorizationBinding.organization_id == ORG_1,
+                    AuthorizationBinding.role_bundle == RoleBundle.EXPORTER.value,
                 )
             )
         )
@@ -388,7 +395,8 @@ def _package_counts(package_id: UUID) -> tuple[list[UUID], list[UUID]]:
         artifacts = list(
             session.scalars(
                 select(RegulatoryPackageArtifact.id).where(
-                    RegulatoryPackageArtifact.package_id == package_id
+                    RegulatoryPackageArtifact.organization_id == ORG_1,
+                    RegulatoryPackageArtifact.package_id == package_id,
                 )
             )
         )
@@ -438,9 +446,12 @@ def test_the_exporter_surface_never_mints_or_writes_on_a_refusal(
         "write",
         Mock(side_effect=AssertionError("an unauthorized storage write was attempted")),
     )
+    artifacts_before, events_before = _package_counts(package_id)
     refused = db_client.post(f"{base}/export", headers=auth, params={"kind": "pdf"})
     assert refused.status_code == 403, refused.text
 
-    artifacts, _events = _package_counts(package_id)
+    artifacts, events = _package_counts(package_id)
+    assert artifacts == artifacts_before
     assert artifacts == [artifact_id]
+    assert events == events_before
     assert _audit_events(str(artifact_id), "regulatory_artifact_version.downloaded") == []

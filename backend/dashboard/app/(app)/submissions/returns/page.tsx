@@ -149,6 +149,7 @@ import ChecksPanel, {
 } from "@/components/submissions/ChecksPanel";
 import EventsFeed from "@/components/submissions/EventsFeed";
 import TransmissionCard, {
+  EmailBundleExport,
   REUPLOAD_CHANNEL,
   TransmissionNotice,
   filingRefusalMessage,
@@ -1196,6 +1197,24 @@ function PackageWorkspace({
             pollStatus={poll.data?.pollStatus ?? null}
             pollError={poll.error}
             fallbackPending={submit.isPending}
+          />
+        </DisclosureRow>
+      )}
+
+      {/* The read-only export of the channel: an officer who may take the
+          bundle away but not file it sees this row instead of the filing card.
+          The channel never asked anything of them, so the row exists only when
+          the return is filed by email — otherwise there is nothing to take. */}
+      {showSection("export") && (
+        <DisclosureRow
+          title="Email bundle"
+          testId="export-row"
+          summary="Subject, instructions and attachments, ready to open in your mail client and send."
+        >
+          <EmailBundleExport
+            instructions={instructionsQuery.data?.instructions ?? null}
+            onDownloadEml={handleEmlDownload}
+            emlError={emlError}
           />
         </DisclosureRow>
       )}
