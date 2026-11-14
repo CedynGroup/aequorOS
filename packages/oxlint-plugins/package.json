@@ -1,0 +1,14 @@
+{
+  "name": "@aequoros/oxlint-plugins",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Custom oxlint plugin (acts) with the ACTS test-hygiene rules for AequorOS test suites",
+  "type": "module",
+  "scripts": {
+    "test": "node --test \"test/*.test.mjs\"",
+    "lint": "oxlint ."
+  },
+  "devDependencies": {
+    "oxlint": "1.92.0"
+  }
+}
