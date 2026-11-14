@@ -297,6 +297,16 @@ const RULES: Rule[] = [
     // audit view) is a legitimate use: add it to this rule's `allow` map with
     // that reason, so the exception is recorded rather than assumed.
     id: "NEW-53 stored-run threshold used as the current floor",
+    allow: {
+      // The 2026-11-14 inputs decision withholds a run's stored snapshot
+      // below restricted view. `runThresholds` recovers the same run's
+      // execution-time minimum from its still-readable metric results so the
+      // limit wall and the cockpit headroom keep the floor that run applied;
+      // both surfaces classify with the payload's server-computed status and
+      // never compare a live ratio against this floor client-side.
+      "features/liquidity/components/runData.ts":
+        "runThresholds recovers the same run's execution-time minimum from its metric results only when the stored snapshot is withheld; consumers classify with the payload status, not this floor",
+    },
     // Calls only — the lookbehind lets the helper's own definition (and its
     // docstring, which names this trap) stay in `features/liquidity/components/runData.ts`.
     pattern: /(?<!function\s)\brunMetricThreshold\s*\(/,
