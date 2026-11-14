@@ -186,8 +186,9 @@ in the organization. Reading the configured lists back
 (`GET /attestation/signing-policies`, `GET /attestation/signature-placements`)
 demands the same sentence at `view`, so the once-open signing-policy list read
 is gone: a bank-scoped grant is refused on the read exactly as it is on the
-write, and only an organization-scope Regulatory Reporting binding — at `view`
-or better — sees the configured rows.
+write, and only an organization-scope Regulatory Reporting binding that
+independently grants `reg/view/restricted` sees the configured rows —
+`configure` alone still reads nothing.
 
 ### 1.4 Identity: OIDC → platform user
 

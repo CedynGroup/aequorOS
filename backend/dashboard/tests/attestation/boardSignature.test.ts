@@ -544,6 +544,36 @@ test("the Board control is refused, with its reason, while the switch is off", (
   panel.unmount();
 });
 
+test("an unreadable policy list leaves the Board control refused, without claiming either state", () => {
+  resetSwitches();
+  // The suspension switches ride on the policy-list response; a caller the
+  // list is hidden from (organization view sentence missing) must see the
+  // control refused as UNKNOWN, not silently operable or told signing is off.
+  policyList = { policies: [], signingSuspendedDeploymentWide: false };
+  const panel = mount(component("SigningPolicyPanel.tsx"));
+  panel.change("policy-return-family", "icaap");
+  const text = panel.text();
+  assert.ok(
+    text.includes("A member of the Board must sign the assessment"),
+    "the Board control vanished while the suspension status was merely unknown",
+  );
+  assert.ok(
+    text.includes("not readable for you"),
+    "an unknown suspension status was presented as if it were known",
+  );
+  assert.ok(
+    !text.includes("is not signed in this installation"),
+    "the unknown state was worded as the switch being off",
+  );
+  const boardBox = panel.checkbox(0).props;
+  assert.equal(
+    boardBox.disabled,
+    true,
+    "the Board control was operable while the suspension status was unknown",
+  );
+  panel.unmount();
+});
+
 test("ordered signing is offered, and forced once the Board signs", () => {
   resetSwitches();
   const panel = mount(component("SigningPolicyPanel.tsx"));
