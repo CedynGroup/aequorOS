@@ -97,7 +97,11 @@ function main() {
     child.kill("SIGTERM");
     process.exit(1);
   });
-  server.listen(Number(process.env.PORT || "3000"), "0.0.0.0");
+  server.listen(Number(process.env.PORT || "3000"), "0.0.0.0", () => {
+    // Readiness signal for orchestrators and log scrapers: the TLS listener
+    // accepts connections from this moment.
+    process.stdout.write(`tls gateway listening on ${process.env.PORT || "3000"}\n`);
+  });
 }
 
 module.exports = { validateEnvironment };
