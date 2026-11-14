@@ -7,12 +7,13 @@ from __future__ import annotations
 
 import socket
 import ssl
+import subprocess
 import threading
 from collections.abc import Generator, Iterable
 from contextlib import contextmanager
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import Protocol, cast
+from typing import NamedTuple, Protocol, cast
 
 import pytest
 from cryptography import x509
@@ -460,10 +461,90 @@ def test_listener_runtime_requires_tls12(
     assert context.minimum_version >= ssl.TLSVersion.TLSv1_2
 
 
+class _GatewayLauncher(NamedTuple):
+    """The serve-next.cjs launcher with the reader threads that own its pipes."""
+
+    process: subprocess.Popen[str]
+    stdout_lines: list[str]
+    stderr_lines: list[str]
+    reader: threading.Thread
+    errors: threading.Thread
+    listening: threading.Event
+
+
+def _start_tls_gateway(
+    upstream: Path, cert: Path, key: Path, port: int, loopback_port: int
+) -> _GatewayLauncher:
+    """Start serve-next.cjs with readers that own its stdout and stderr pipes."""
+    import os  # noqa: PLC0415
+
+    launcher = Path(__file__).resolve().parents[3] / "deploy/tls/serve-next.cjs"
+    process = subprocess.Popen(
+        ["node", str(launcher), str(upstream)],
+        env={
+            "PATH": os.environ["PATH"],
+            "NODE_ENV": "production",
+            "TLS_CERT_FILE": str(cert),
+            "TLS_KEY_FILE": str(key),
+            "NEXT_PUBLIC_RISK_API_BASE_URL": "https://api.example",
+            "OPERATOR_API_URL": "https://operator.example",
+            "PORT": str(port),
+            "NEXT_LOOPBACK_PORT": str(loopback_port),
+        },
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+    # Readiness is driven by the launcher's own signal, not a fixed poll budget:
+    # serve-next.cjs reports the moment its TLS listener accepts connections, so
+    # a slow start under CI load waits instead of expiring an attempt budget.
+    # The readers are the only consumers of the pipes, so no communicate() call
+    # can race them or discard a diagnostic line.
+    listening = threading.Event()
+    stdout_lines: list[str] = []
+    stderr_lines: list[str] = []
+
+    def consume_launcher_output() -> None:
+        stream = process.stdout
+        assert stream is not None
+        for line in stream:
+            stdout_lines.append(line)
+            if "tls gateway listening on" in line:
+                listening.set()
+
+    def consume_launcher_errors() -> None:
+        stream = process.stderr
+        assert stream is not None
+        for line in stream:
+            stderr_lines.append(line)
+
+    reader = threading.Thread(target=consume_launcher_output, daemon=True)
+    errors = threading.Thread(target=consume_launcher_errors, daemon=True)
+    reader.start()
+    errors.start()
+    return _GatewayLauncher(process, stdout_lines, stderr_lines, reader, errors, listening)
+
+
+def _await_gateway_readiness(launcher: _GatewayLauncher) -> None:
+    """Block until the gateway reports its TLS listener; surface launcher failures."""
+    import time  # noqa: PLC0415
+
+    # The deadline only bounds a hung launcher: measured start-to-listening stays
+    # near 1 s even pinned to a single contended core, so 60 s is anti-hang
+    # headroom, and every expiry reports the launcher's own output.
+    wait_deadline = time.monotonic() + 60.0
+    while not launcher.listening.wait(timeout=0.5):
+        if launcher.process.poll() is not None:
+            raise AssertionError("".join(launcher.stderr_lines))
+        if time.monotonic() >= wait_deadline:
+            raise AssertionError(
+                f"the tls gateway never reported readiness; "
+                f"stdout={launcher.stdout_lines!r} stderr={launcher.stderr_lines!r}"
+            )
+
+
 @pytest.mark.parametrize("kind", ["dashboard", "console"])
 def test_next_container_gateway_terminates_verified_tls(tmp_path: Path, kind: str) -> None:
-    import os  # noqa: PLC0415
-    import subprocess  # noqa: PLC0415
     import time  # noqa: PLC0415
 
     import httpx  # noqa: PLC0415
@@ -495,29 +576,14 @@ server.listen(Number(process.env.PORT), process.env.HOSTNAME);
         inner.bind(("127.0.0.1", 0))
         port = cast(int, outer.getsockname()[1])
         loopback_port = cast(int, inner.getsockname()[1])
-    launcher = Path(__file__).resolve().parents[3] / "deploy/tls/serve-next.cjs"
-    process = subprocess.Popen(
-        ["node", str(launcher), str(upstream)],
-        env={
-            "PATH": os.environ["PATH"],
-            "NODE_ENV": "production",
-            "TLS_CERT_FILE": str(cert),
-            "TLS_KEY_FILE": str(key),
-            "NEXT_PUBLIC_RISK_API_BASE_URL": "https://api.example",
-            "OPERATOR_API_URL": "https://operator.example",
-            "PORT": str(port),
-            "NEXT_LOOPBACK_PORT": str(loopback_port),
-        },
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        text=True,
-    )
+    launcher = _start_tls_gateway(upstream, cert, key, port, loopback_port)
     try:
         with httpx.Client(verify=client_context(str(cert)), trust_env=False) as client:
+            _await_gateway_readiness(launcher)
             response = None
             for _attempt in range(100):
-                if process.poll() is not None:
-                    raise AssertionError(process.communicate()[1])
+                if launcher.process.poll() is not None:
+                    raise AssertionError("".join(launcher.stderr_lines))
                 try:
                     response = client.get(f"https://localhost:{port}/synthetic?proof=1")
                     if response.status_code == 200:
@@ -525,7 +591,11 @@ server.listen(Number(process.env.PORT), process.env.HOSTNAME);
                 except httpx.ConnectError:
                     pass
                 time.sleep(0.05)
-            assert response is not None and response.status_code == 200
+            assert response is not None and response.status_code == 200, (
+                f"the verified-tls gateway never served a request after reporting "
+                f"readiness (last response: {response}); launcher stdout: "
+                f"{launcher.stdout_lines!r} stderr: {launcher.stderr_lines!r}"
+            )
             assert response.text == "/synthetic?proof=1:https"
             with pytest.raises(httpx.RemoteProtocolError):
                 client.get(f"https://localhost:{port}/fail-during-stream", timeout=2)
@@ -550,12 +620,14 @@ server.listen(Number(process.env.PORT), process.env.HOSTNAME);
             except httpx.RemoteProtocolError:
                 pass
     finally:
-        process.terminate()
+        launcher.process.terminate()
         try:
-            process.communicate(timeout=5)
+            launcher.process.wait(timeout=5)
         except subprocess.TimeoutExpired:
-            process.kill()
-            process.communicate(timeout=5)
+            launcher.process.kill()
+            launcher.process.wait(timeout=5)
+        launcher.reader.join(timeout=5)
+        launcher.errors.join(timeout=5)
 
 
 class _EncodedCertificate(Protocol):
