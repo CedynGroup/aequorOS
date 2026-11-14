@@ -15,14 +15,19 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
-from app.identity.public import Bank
+from app.core.authorization import Module, Permission, Sensitivity
+from app.identity.public import (
+    Bank,
+    require_institution_coverage,
+    require_resolved_bank_permission,
+)
 from app.reporting.models.packages import RegulatoryReportingSettings
 from app.reporting.schemas.packages import (
     ReportingSettingsPut,
     ReportingSettingsRead,
     ReportingSettingsWriteAcknowledgement,
 )
-from app.reporting.service.common import get_bank_or_404, require_actor
+from app.reporting.service.common import require_actor
 from app.reporting.service.configure_access import require_reporting_configure_access
 from app.services.audit import record_event
 
@@ -72,7 +77,20 @@ def get_or_create_reporting_settings(
 
 
 def get_reporting_settings(db: Session, ctx: TenantContext, bank_id: str) -> ReportingSettingsRead:
-    bank = get_bank_or_404(db, ctx, bank_id)
+    # The deadline-override map is restricted-surface configuration of this
+    # bank: reading it demands the same exact-bank reg/restricted sentence its
+    # write does, at view. Coverage first, then the scoped denial; the empty-map
+    # fallback below is answered only once authorization has passed.
+    bank, _ = require_institution_coverage(db, ctx, bank_id)
+    require_resolved_bank_permission(
+        db,
+        ctx,
+        bank,
+        permission=Permission.VIEW,
+        module=Module.REGULATORY,
+        sensitivity=Sensitivity.RESTRICTED,
+        surface="reporting_settings_read",
+    )
     settings = _settings_row(db, ctx, bank.id)
     if settings is None:
         # An unconfigured bank simply has no overrides — return the empty view

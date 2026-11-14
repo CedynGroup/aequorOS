@@ -182,7 +182,12 @@ and review-stage separation follows the
 Configuring signing policies and placement templates requires organization-scope
 `reg/configure/restricted` authority (VAL-CFG-008) — a bank-scoped Configurator
 binding is deliberately insufficient, since a signing policy governs every bank
-in the organization.
+in the organization. Reading the configured lists back
+(`GET /attestation/signing-policies`, `GET /attestation/signature-placements`)
+demands the same sentence at `view`, so the once-open signing-policy list read
+is gone: a bank-scoped grant is refused on the read exactly as it is on the
+write, and only an organization-scope Regulatory Reporting binding — at `view`
+or better — sees the configured rows.
 
 ### 1.4 Identity: OIDC → platform user
 

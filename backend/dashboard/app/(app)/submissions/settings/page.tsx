@@ -36,7 +36,7 @@ import {
 import { fmtTimestamp, shortId } from "@/lib/api/values";
 import { CHANNEL_LABELS } from "@/components/submissions/shared";
 import SigningPolicyPanel from "@/components/attestation/SigningPolicyPanel";
-import { useConfigureEligibility } from "@/lib/api/configureAccess";
+import { useConfigureEligibility, useViewEligibility } from "@/lib/api/configureAccess";
 import { regShort } from "@/lib/format";
 
 const CHANNELS: ChannelCode[] = [
@@ -196,6 +196,30 @@ function UnconfiguredStatus() {
   );
 }
 
+/**
+ * The stored channel configuration is restricted-surface configuration: the
+ * backend answers it only to an exact reg/restricted view binding for this
+ * bank. Without it the page refuses before it fetches, with a denial that is
+ * visibly NOT the unconfigured state ("No credentials stored") and not an
+ * outage panel either.
+ */
+function DeniedChannelAccess({ reason }: { reason: string }) {
+  return (
+    <SectionCard
+      title="Channel configuration"
+      subtitle="Restricted configuration"
+    >
+      <div className="space-y-2 max-w-3xl" data-testid="channel-config-denied">
+        <StatusPill tone="critical">Access denied</StatusPill>
+        <p className="text-body text-navy leading-relaxed">
+          You do not have access to these settings.
+        </p>
+        <p className="text-caption text-slate leading-relaxed">{reason}</p>
+      </div>
+    </SectionCard>
+  );
+}
+
 function ChannelForm({
   bankId,
   channel,
@@ -203,10 +227,17 @@ function ChannelForm({
   bankId: string;
   channel: ChannelCode;
 }) {
-  const configQuery = useChannelConfig(bankId, channel);
+  // The read and the write are separate sentences (the backend decides both
+  // exactly this way): a configure-only caller can still save but the stored
+  // row is read only by the exact reg/restricted view binding.
+  const { allowed: canView, reason: viewReason } = useViewEligibility(
+    bankId,
+    "reg",
+  );
+  const configQuery = useChannelConfig(bankId, channel, { enabled: canView });
   const save = useSaveChannelConfig(bankId);
   // The PUT demands an exact reg / configure / restricted binding for this
-  // bank (the read stays available to every viewer of the page).
+  // bank, on top of the read sentence above.
   const { allowed: canConfigure, reason: configureReason } =
     useConfigureEligibility(bankId, "reg");
   const configureReasonId = useId();
@@ -227,6 +258,9 @@ function ChannelForm({
     }
   }, [config, unconfigured, hydrated]);
 
+  if (!canView) {
+    return <DeniedChannelAccess reason={viewReason} />;
+  }
   if (configQuery.isLoading || !hydrated) {
     return <SkeletonCard />;
   }

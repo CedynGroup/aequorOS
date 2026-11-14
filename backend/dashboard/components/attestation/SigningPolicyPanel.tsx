@@ -43,7 +43,10 @@ import {
   useSigningPolicies,
   useUpsertSigningPolicy,
 } from "@/lib/api/hooks";
-import { useOrganizationConfigureEligibility } from "@/lib/api/configureAccess";
+import {
+  useOrganizationConfigureEligibility,
+  useOrganizationViewEligibility,
+} from "@/lib/api/configureAccess";
 import { fmtDateUTC, fmtTimestamp, isoDate } from "@/lib/api/values";
 import { SIGNING_ROLE_LABELS, roleNoun } from "./shared";
 
@@ -115,15 +118,18 @@ function emptyForm(): FormState {
 }
 
 export default function SigningPolicyPanel() {
-  // The policy list is a tenant read; only the save is configure-gated, and it
-  // explains itself rather than hiding — a reader who can see the policies can
-  // also be told why they cannot change them.
+  // The policy list is itself organization-scoped configuration — the same
+  // sentence its save demands, at view — so the read is gated on it and a
+  // reader without the sentence sees the denial, not the rows and not an
+  // outage. The save keeps its own configure gate and explains itself.
   return <SigningPolicyPanelInner />;
 }
 
 function SigningPolicyPanelInner() {
   const { bank } = useBankContext();
-  const policiesQuery = useSigningPolicies();
+  const { allowed: canViewPolicies, reason: viewPoliciesReason } =
+    useOrganizationViewEligibility("reg");
+  const policiesQuery = useSigningPolicies(canViewPolicies);
   // The offer reads the full un-scoped registry on purpose: capital read
   // authority must not decide which returns can carry a signing policy, and
   // this key never changes with the bank (see useReturnTemplates).
@@ -252,7 +258,12 @@ function SigningPolicyPanelInner() {
         subtitle="Who must sign which return — resolved most-specific-first, as at the reporting date"
         noPadding
       >
-        {policiesQuery.isLoading ? (
+        {!canViewPolicies ? (
+          <p className="px-5 py-4 text-caption text-slate leading-relaxed">
+            You do not have access to the signing policies.{" "}
+            {viewPoliciesReason}
+          </p>
+        ) : policiesQuery.isLoading ? (
           <div className="p-5">
             <SkeletonCard />
           </div>

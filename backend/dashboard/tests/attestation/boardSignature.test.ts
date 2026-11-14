@@ -213,6 +213,7 @@ function stubFor(specifier: string): unknown | undefined {
           allowed: true,
           reason: "",
         }),
+        useOrganizationViewEligibility: () => ({ allowed: true, reason: "" }),
       };
     case "@/lib/api/client":
       return {
