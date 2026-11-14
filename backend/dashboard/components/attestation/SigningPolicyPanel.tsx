@@ -172,8 +172,11 @@ function SigningPolicyPanelInner() {
    * with its own message instead of claiming the installation signs. */
   const signingSuspendedEverywhere =
     policiesQuery.data?.signingSuspendedDeploymentWide ?? false;
+  // Retained data from an earlier read must not answer while the list is denied or failing.
   const icaapSigningSuspended: boolean | undefined =
-    policiesQuery.data?.icaapSigningSuspended;
+    canViewPolicies && !policiesQuery.error
+      ? policiesQuery.data?.icaapSigningSuspended
+      : undefined;
 
   // A return code is the more specific scope, so it decides; otherwise the
   // family does. Same order the server resolves the artifact layout in.
