@@ -199,14 +199,16 @@ def _deny_state(db_client: TestClient, package_id: UUID) -> dict[str, Any]:
         artifacts = list(
             session.scalars(
                 select(RegulatoryPackageArtifact.id).where(
-                    RegulatoryPackageArtifact.package_id == package_id
+                    RegulatoryPackageArtifact.organization_id == ORG_1,
+                    RegulatoryPackageArtifact.package_id == package_id,
                 )
             )
         )
         recipients = list(
             session.scalars(
                 select(PackageSignatureRecipient.id).where(
-                    PackageSignatureRecipient.package_id == package_id
+                    PackageSignatureRecipient.organization_id == ORG_1,
+                    PackageSignatureRecipient.package_id == package_id,
                 )
             )
         )
