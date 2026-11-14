@@ -400,8 +400,10 @@ def test_exporter_migration_grants_nothing_and_preserves_existing_authority(
         assert (
             connection.scalar(
                 text(
-                    "SELECT count(*) FROM authorization_bindings WHERE role_bundle = 'exporter'"
-                )
+                    "SELECT count(*) FROM authorization_bindings "
+                    "WHERE role_bundle = 'exporter' AND organization_id = :org"
+                ),
+                {"org": EXPORTER_MIGRATION_TEST_ORG},
             )
             == 0
         )
@@ -416,12 +418,18 @@ def test_exporter_migration_grants_nothing_and_preserves_existing_authority(
             "institution_scope, institution_id, module_scope, sensitivity_scope, "
             "granted_by_type, granted_by_id, grant_reason_category, grant_reason, "
             "granted_at, status, valid_from, created_at, updated_at "
-            "FROM authorization_bindings WHERE principal_user_id = :user"
+            "FROM authorization_bindings "
+            "WHERE principal_user_id = :user AND organization_id = :org"
         )
         with connection.begin_nested() as savepoint:
             inserted = connection.execute(
                 candidate,
-                {"id": uuid4(), "bundle": "exporter", "user": principal_ids[0]},
+                {
+                    "id": uuid4(),
+                    "bundle": "exporter",
+                    "user": principal_ids[0],
+                    "org": EXPORTER_MIGRATION_TEST_ORG,
+                },
             )
             assert inserted.rowcount == 1
             savepoint.rollback()
@@ -431,7 +439,12 @@ def test_exporter_migration_grants_nothing_and_preserves_existing_authority(
         ):
             connection.execute(
                 candidate,
-                {"id": uuid4(), "bundle": "unknown_bundle", "user": principal_ids[0]},
+                {
+                    "id": uuid4(),
+                    "bundle": "unknown_bundle",
+                    "user": principal_ids[0],
+                    "org": EXPORTER_MIGRATION_TEST_ORG,
+                },
             )
     command.downgrade(config, "202611090117")
     assert _authority_snapshot(schema, EXPORTER_MIGRATION_TEST_ORG) == before

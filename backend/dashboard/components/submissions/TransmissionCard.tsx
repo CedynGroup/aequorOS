@@ -107,6 +107,54 @@ export function TransmissionNotice({
   );
 }
 
+/**
+ * The email bundle taken away read-only.
+ *
+ * The export cutover made the bundle's download and its instructions pure
+ * export authority, so an officer who holds export but not transmission sees
+ * this instead of the filing card: nothing here reaches the regulator. The
+ * workspace mounts it in its own row so the channel vocabulary stays in this
+ * file.
+ */
+export function EmailBundleExport({
+  instructions,
+  onDownloadEml,
+  emlError,
+}: {
+  instructions: string | null;
+  onDownloadEml: () => void;
+  emlError: string | null;
+}) {
+  return (
+    <div className="space-y-1.5">
+      <button
+        type="button"
+        onClick={onDownloadEml}
+        data-testid="export-email-bundle"
+        className="inline-flex items-center gap-1.5 rounded-md border border-border px-3 py-2 text-caption font-medium text-navy hover:bg-surface"
+      >
+        <Download size={13} aria-hidden />
+        Download the email bundle
+      </button>
+      <p className="text-micro leading-relaxed text-slate">
+        Subject, instructions and attachments, ready to open in your mail
+        client and send. Filing the return stays with the officer who holds it.
+      </p>
+      {instructions && (
+        <details className="text-caption text-navy/80">
+          <summary className="cursor-pointer font-medium text-navy">
+            Read the send-ready instructions
+          </summary>
+          <pre className="mt-2 max-h-64 overflow-auto whitespace-pre-wrap rounded-sm border border-border-light bg-surface p-3 font-mono text-micro leading-relaxed">
+            {instructions}
+          </pre>
+        </details>
+      )}
+      {emlError && <p className="text-caption text-critical">{emlError}</p>}
+    </div>
+  );
+}
+
 export default function TransmissionCard({
   channel,
   defaultChannel,

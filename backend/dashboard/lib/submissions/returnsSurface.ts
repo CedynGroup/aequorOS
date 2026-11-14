@@ -21,6 +21,11 @@ export type SurfaceSection =
   | "certification"
   /** The regulator's channel: transmit, poll, downtime bundle. */
   | "transmission"
+  /**
+   * The email bundle taken away read-only: the export surface of the channel,
+   * held by every export-carrying officer who cannot file.
+   */
+  | "export"
   /** The submission trail — channel interactions, in order. */
   | "events"
   /** Asking the regulator to accept a correction. */
@@ -136,6 +141,11 @@ export function surfaceSections(input: SurfaceInput): SurfaceSection[] {
     ) {
       sections.push("resubmission");
     }
+  } else if (authority.mayExport) {
+    // The email bundle without the filing act: the read-only export officer
+    // takes the bundle away but never files it (the export cutover made the
+    // bundle's download and its instructions pure export authority).
+    sections.push("export");
   }
   sections.push("versions");
   return sections;

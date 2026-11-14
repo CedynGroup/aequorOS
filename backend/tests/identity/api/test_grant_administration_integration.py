@@ -2454,7 +2454,10 @@ def test_exporter_is_explicit_exact_and_invalidates_sign_ins(grant_client: TestC
         version = user.authorization_version
         assert not list(
             db.scalars(
-                select(AuthorizationBinding).where(AuthorizationBinding.role_bundle == "exporter")
+                select(AuthorizationBinding).where(
+                    AuthorizationBinding.organization_id == ORG_1,
+                    AuthorizationBinding.role_bundle == "exporter",
+                )
             )
         )
     grantee_headers = {"Authorization": f"Bearer {issued.access_token}"}
