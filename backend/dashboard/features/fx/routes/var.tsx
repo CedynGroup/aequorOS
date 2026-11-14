@@ -57,11 +57,16 @@ function VarBody({ ctx }: { ctx: FxFrameContext }) {
       : [{ label: p.label, value: num(p.var991dGhs), stored: p.stored }],
   );
 
+  // A stored run with its parameter snapshot withheld below restricted view is
+  // a different fact from "no run yet" — say which one applies.
+  const snapshotWithheld = run !== undefined && run.inputsAvailable === false;
   const stressedNote = params?.crisis
     ? `Historical VaR re-run on the currency-crisis slice of the return history ` +
       `(observations ${params.crisis.windowStart}–${params.crisis.windowEnd}), scaled by a ` +
       `+${(params.crisis.correlationUplift * 100).toFixed(0)}% correlation uplift.`
-    : "Historical VaR re-run on the currency-crisis slice of the return history with a supervisory correlation uplift — persist a run to surface the exact window parameters.";
+    : snapshotWithheld
+      ? "Historical VaR re-run on the currency-crisis slice of the return history with a supervisory correlation uplift — the exact window parameters are not available at your access level."
+      : "Historical VaR re-run on the currency-crisis slice of the return history with a supervisory correlation uplift — persist a run to surface the exact window parameters.";
 
   const columns: Column<FxStandaloneVarRead>[] = [
     { key: "ccy", header: "Currency", render: (r) => r.currency, width: "22%" },

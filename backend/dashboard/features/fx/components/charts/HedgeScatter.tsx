@@ -32,17 +32,26 @@ export default function HedgeScatter({
   height = 300,
 }: {
   data: HedgePoint[];
-  r2MinPct: number;
-  offsetLowPct: number;
-  offsetHighPct: number;
+  /** Band edges from the stored run's parameter snapshot. Undefined when the
+   * snapshot is withheld from the caller — no pass region is drawn from
+   * substituted bands, because the engine's governed thresholds can differ. */
+  r2MinPct?: number;
+  offsetLowPct?: number;
+  offsetHighPct?: number;
   height?: number;
 }) {
   const tokens = useChartTokens();
   const xValues = data.map((point) => point.offsetPct);
   const yValues = data.map((point) => point.r2Pct);
-  const xMin = Math.min(offsetLowPct - 15, ...xValues, 60);
-  const xMax = Math.max(offsetHighPct + 15, ...xValues, 140);
-  const yMin = Math.max(0, Math.min(r2MinPct - 25, ...yValues));
+  const banded =
+    r2MinPct !== undefined && offsetLowPct !== undefined && offsetHighPct !== undefined;
+  const xMin = banded ? Math.min(offsetLowPct - 15, ...xValues, 60) : Math.min(60, ...xValues);
+  const xMax = banded
+    ? Math.max(offsetHighPct + 15, ...xValues, 140)
+    : Math.max(140, ...xValues);
+  const yMin = banded
+    ? Math.max(0, Math.min(r2MinPct - 25, ...yValues))
+    : Math.max(0, Math.min(...yValues, 100));
   const yMax = 100;
 
   const option: BiEChartsOption = {
@@ -98,35 +107,41 @@ export default function HedgeScatter({
             opacity: 0.85,
           },
         })),
-        // The IFRS 9 pass region: offset within the band AND R² above the floor.
-        markArea: {
-          silent: true,
-          animation: false,
-          itemStyle: {
-            color: tokens.favourable,
-            opacity: 0.08,
-            borderColor: tokens.favourable,
-            borderWidth: 1,
-            borderType: "dashed",
-          },
-          data: [
-            [
-              { xAxis: offsetLowPct, yAxis: r2MinPct },
-              { xAxis: offsetHighPct, yAxis: yMax },
-            ],
-          ],
-        },
-        markLine: thresholdMarkLine([
-          {
-            axis: "y",
-            value: r2MinPct,
-            color: tokens.favourable,
-            // A markLine label is painted on the CANVAS, not rendered as HTML,
-            // so it is not escaped here — escaping belongs to `tooltipHtml`.
-            label: `R² floor ${r2MinPct}%`,
-            labelPosition: "insideEndTop",
-          },
-        ]),
+        // The IFRS 9 pass region: offset within the band AND R² above the
+        // floor. Drawn only from the run's own parameter snapshot — never
+        // from substituted defaults.
+        ...(banded
+          ? {
+              markArea: {
+                silent: true,
+                animation: false,
+                itemStyle: {
+                  color: tokens.favourable,
+                  opacity: 0.08,
+                  borderColor: tokens.favourable,
+                  borderWidth: 1,
+                  borderType: "dashed",
+                },
+                data: [
+                  [
+                    { xAxis: offsetLowPct, yAxis: r2MinPct },
+                    { xAxis: offsetHighPct, yAxis: yMax },
+                  ],
+                ],
+              },
+              markLine: thresholdMarkLine([
+                {
+                  axis: "y",
+                  value: r2MinPct,
+                  color: tokens.favourable,
+                  // A markLine label is painted on the CANVAS, not rendered as HTML,
+                  // so it is not escaped here — escaping belongs to `tooltipHtml`.
+                  label: `R² floor ${r2MinPct}%`,
+                  labelPosition: "insideEndTop",
+                },
+              ]),
+            }
+          : {}),
       },
     ],
   } as BiEChartsOption;
@@ -138,8 +153,8 @@ export default function HedgeScatter({
       option={option}
       height={height}
       ariaLabel={`Hedge effectiveness for ${data.length} relationships plotted by dollar-offset ratio and prospective R squared${
-        ineffective > 0 ? `; ${ineffective} fall outside the pass region` : ""
-      }`}
+        banded && ineffective > 0 ? `; ${ineffective} fall outside the pass region` : ""
+      }${!banded && ineffective > 0 ? `; ${ineffective} classified ineffective by the engine` : ""}`}
     />
   );
 }

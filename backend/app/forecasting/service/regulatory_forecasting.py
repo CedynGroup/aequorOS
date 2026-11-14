@@ -109,6 +109,7 @@ from app.liquidity.public import (
     RegulatoryMetricResultRead,
     RegulatoryRunErrorRead,
     RegulatoryValidationRead,
+    run_inputs_fields,
 )
 from app.live.public import (
     BankFinancialFact,
@@ -357,6 +358,8 @@ def create_forecast_run(
     db.expire_all()
     return _read_forecast_run(
         db,
+        ctx,
+        bank,
         _run_or_404(db, ctx, bank.id, run_id, module=MODULE_FORECAST),
         liquidity_in_force=rule_in_force(db, ctx, bank, "LCR-NSFR"),
     )
@@ -501,6 +504,8 @@ def get_forecast_run(
     bank = _get_bank_or_404(db, ctx, bank_id)
     return _read_forecast_run(
         db,
+        ctx,
+        bank,
         _run_or_404(db, ctx, bank.id, run_id, module=MODULE_FORECAST),
         liquidity_in_force=rule_in_force(db, ctx, bank, "LCR-NSFR"),
     )
@@ -1367,7 +1372,12 @@ def _comparison_payload(comparison: WhatIfMetricComparison) -> dict[str, str]:
 
 
 def _read_forecast_run(
-    db: Session, run: RegulatoryRun, *, liquidity_in_force: bool
+    db: Session,
+    ctx: TenantContext,
+    bank: Bank,
+    run: RegulatoryRun,
+    *,
+    liquidity_in_force: bool,
 ) -> ForecastRunRead:
     metric_results = list(
         db.scalars(
@@ -1391,6 +1401,7 @@ def _read_forecast_run(
             .order_by(RegulatoryValidation.position)
         )
     )
+    inputs, inputs_available, inputs_unavailable_reason = run_inputs_fields(db, ctx, bank, run)
     return ForecastRunRead(
         id=run.id,
         organization_id=run.organization_id,
@@ -1403,7 +1414,9 @@ def _read_forecast_run(
         input_schema_version=run.input_schema_version,
         output_schema_version=run.output_schema_version,
         input_hash=run.input_hash,
-        inputs=run.inputs,
+        inputs=inputs,
+        inputs_available=inputs_available,
+        inputs_unavailable_reason=inputs_unavailable_reason,
         assumptions=_assumptions_read(run.inputs.get("assumptions")),
         assumption_version=assumption_register.provenance_read(run.assumption_provenance),
         path=_path_read(run.metrics.get("path")),

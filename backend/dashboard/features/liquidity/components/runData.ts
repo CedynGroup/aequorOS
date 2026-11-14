@@ -53,9 +53,27 @@ export function runMetricThreshold(
 }
 
 /**
+ * Metric results that record the same execution-time minimum the snapshot
+ * carries, used when the snapshot itself is withheld: below restricted view
+ * the run response nulls `inputs` while `metric_results` stays readable
+ * (2026-11-14 inputs decision). Same run, same floor — not the floor in force
+ * today (NEW-53 still applies).
+ */
+const METRIC_RESULT_FALLBACK_THRESHOLDS: ReadonlyArray<
+  readonly [metricCode: string, thresholdKey: string]
+> = [
+  ["lcr_pct", "lcr_min"],
+  ["nsfr_pct", "nsfr_min"],
+];
+
+/**
  * The active threshold parameter set snapshotted into the run inputs
  * (`inputs.parameters.thresholds_pct`): lcr_min, lcr_amber_floor, nsfr_min,
  * lcr_inflow_cap_pct (+ capital equivalents on capital runs).
+ *
+ * When the stored snapshot is withheld from the caller, the governed minima
+ * are recovered from the run's own metric results so limit rows and headroom
+ * stay visible; the amber floors exist only in the snapshot and stay absent.
  */
 export function runThresholds(
   run: RegulatoryRunRead | undefined
@@ -66,9 +84,15 @@ export function runThresholds(
       | undefined
   )?.parameters;
   const raw = parameters?.thresholds_pct ?? {};
-  return Object.fromEntries(
+  const thresholds: Record<string, number> = Object.fromEntries(
     Object.entries(raw).map(([key, value]) => [key, num(value)])
   );
+  for (const [metricCode, thresholdKey] of METRIC_RESULT_FALLBACK_THRESHOLDS) {
+    if (thresholds[thresholdKey] !== undefined) continue;
+    const floor = runMetricThreshold(run, metricCode);
+    if (floor !== null) thresholds[thresholdKey] = floor;
+  }
+  return thresholds;
 }
 
 /**

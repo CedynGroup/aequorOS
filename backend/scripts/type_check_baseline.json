@@ -625,11 +625,9 @@
  },
  "app.features.read_behavioral_models": {
   "reportAny": 18,
-  "reportMissingParameterType": 1,
-  "reportUnknownArgumentType": 8,
-  "reportUnknownMemberType": 6,
-  "reportUnknownParameterType": 1,
-  "reportUnknownVariableType": 2
+  "reportUnknownArgumentType": 3,
+  "reportUnknownMemberType": 5,
+  "reportUnknownVariableType": 1
  },
  "app.features.read_liquidity_monitoring": {
   "reportAny": 1
@@ -682,7 +680,7 @@
   "reportUnknownMemberType": 1
  },
  "app.jobs.bi_alerts": {
-  "reportAny": 41
+  "reportAny": 1
  },
  "app.jobs.bi_commentary": {
   "reportAny": 64,
@@ -702,7 +700,7 @@
   "reportAny": 13
  },
  "app.jobs.bi_nlq": {
-  "reportAny": 41,
+  "reportAny": 40,
   "reportUnknownArgumentType": 2,
   "reportUnknownMemberType": 1,
   "reportUnknownVariableType": 2
@@ -1103,11 +1101,11 @@
  },
  "app.services.behavioral_models": {
   "reportAny": 8,
-  "reportMissingTypeArgument": 4,
-  "reportUnknownArgumentType": 20,
-  "reportUnknownMemberType": 4,
-  "reportUnknownParameterType": 4,
-  "reportUnknownVariableType": 9
+  "reportMissingTypeArgument": 2,
+  "reportUnknownArgumentType": 19,
+  "reportUnknownMemberType": 2,
+  "reportUnknownParameterType": 2,
+  "reportUnknownVariableType": 6
  },
  "app.services.bi.commentary.payload": {
   "reportAny": 2,
@@ -1233,7 +1231,7 @@
   "reportAny": 12
  },
  "app.services.enterprise_run_visibility": {
-  "reportAny": 33,
+  "reportAny": 28,
   "reportUnknownVariableType": 1
  },
  "app.services.enterprise_stress": {
@@ -1622,7 +1620,7 @@
   "reportAny": 2
  },
  "app.services.market_data_sources": {
-  "reportAny": 28,
+  "reportAny": 23,
   "reportUnknownArgumentType": 11,
   "reportUnknownMemberType": 9,
   "reportUnknownVariableType": 9,

@@ -21,6 +21,7 @@ from app.liquidity.service.regulatory_liquidity import (
     read_regulatory_run_execution_result,
     run_authorization_module,
     run_authorization_modules,
+    run_inputs_fields,
 )
 
 __all__ = [
@@ -43,4 +44,5 @@ __all__ = [
     "regulatory_liquidity",
     "run_authorization_module",
     "run_authorization_modules",
+    "run_inputs_fields",
 ]

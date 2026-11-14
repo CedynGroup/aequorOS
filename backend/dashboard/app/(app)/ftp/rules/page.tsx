@@ -8,7 +8,7 @@ import StatusPill from '@/components/ui/StatusPill';
 import ValidationList from '@/components/ui/ValidationList';
 import DataTable, { type Column } from '@/components/ui/DataTable';
 import FtpModuleFrame, { type FtpFrameContext } from '@/components/ftp/FtpModuleFrame';
-import { ftpRunParameters } from '@/components/ftp/params';
+import { ftpRunInputsUnavailable, ftpRunParameters } from '@/components/ftp/params';
 import { labelize, num, statusTone } from '@/lib/api/values';
 import { fmtCurrency, fmtNum, fmtPct } from '@/lib/format';
 
@@ -25,6 +25,7 @@ export default function FtpRulesPage() {
 function RulesBody({ ctx }: { ctx: FtpFrameContext }) {
   const { data, metrics: m, run } = ctx;
   const params = useMemo(() => ftpRunParameters(run), [run]);
+  const inputsUnavailable = useMemo(() => ftpRunInputsUnavailable(run), [run]);
 
   const marginFloor = num(m.minProductMarginPct);
   const nmdMin = num(m.nmdCoreMinPct);
@@ -36,7 +37,9 @@ function RulesBody({ ctx }: { ctx: FtpFrameContext }) {
 
   const snapshotHint = params
     ? 'From the stored run parameter snapshot'
-    : 'Parameters appear once results are stored for this period';
+    : inputsUnavailable
+      ? 'Run inputs are not available for your access level'
+      : 'Parameters appear once results are stored for this period';
 
   return (
     <>

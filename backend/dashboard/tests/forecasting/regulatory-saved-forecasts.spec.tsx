@@ -5,7 +5,7 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { ForecastRunReadFromJSON } from "@aequoros/risk-service-api";
 import ForecastingPage from "@/app/(app)/forecasting/page";
 
-const state = vi.hoisted(() => ({ inForce: false, capitalBreach: true }));
+const state = vi.hoisted(() => ({ inForce: false, capitalBreach: true, withheld: false }));
 function query<T>(data: T) {
   return { data, error: null, isLoading: false, refetch: vi.fn() };
 }
@@ -15,7 +15,9 @@ function savedRun() {
     status: "succeeded",
     scenario_code: "base",
     created_at: "2026-10-23T12:00:00Z",
-    inputs: {},
+    inputs: state.withheld ? null : {},
+    inputs_available: !state.withheld,
+    inputs_unavailable_reason: state.withheld ? "restricted_view_required" : null,
     summary: {
       year5_car_pct: state.capitalBreach ? "8" : "20",
       year5_lcr_pct: "80",
@@ -103,6 +105,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
   state.inForce = false;
   state.capitalBreach = true;
+  state.withheld = false;
 });
 
 it.each([false, true])(
@@ -129,3 +132,18 @@ it.each([false, true])(
     expect(within(row).getByText("90.0%")).toHaveClass("text-critical");
   },
 );
+
+it("renders a run whose stored inputs are withheld from the saved projection alone", () => {
+  // Below the restricted tier the run detail now arrives with `inputs: null`
+  // and an availability flag; the saved-forecast view is built from the
+  // persisted metric results and validations, so it renders unchanged and
+  // never substitutes a fabricated snapshot.
+  state.withheld = true;
+  state.inForce = true;
+  render(<ForecastingPage />);
+  expect(screen.getByText("Recorded car assessment")).toBeVisible();
+  const row = screen.getByText("Synthetic Y5").closest("tr")!;
+  expect(within(row).getByText("80.0%")).toHaveClass("text-critical");
+  expect(within(row).getByText("90.0%")).toHaveClass("text-critical");
+  expect(screen.queryAllByText("Error")).toHaveLength(3);
+});
