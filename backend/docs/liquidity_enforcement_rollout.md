@@ -17,7 +17,7 @@ migration; the later bank-local register cutover requires the migrations below.
 | ---------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
 | Liquidity dashboard, live summaries/history, analytics windows, alerts, saved-analysis summaries, and regulatory-run list rows                             | LIQ / `aggregated` / `view`                                                           |
 | Full regulatory-run and saved-analysis detail                                                                                                              | LIQ / `confidential` / `view`                                                         |
-| Stored regulatory-run input snapshot (run detail, run POST responses, embedded IRRBB run)                                                                   | The run module's authority / `restricted` / `view`, exact bank                         |
+| Stored regulatory-run input snapshot (run detail, run POST responses, embedded IRRBB run, forecasting run detail and run POST responses)                       | The run module's authority / `restricted` / `view`, exact bank                         |
 | BSD-3 preview                                                                                                                                              | Whole-institution REG / `restricted` / `view`                                         |
 | Monitoring Tools, EWI dashboard, CFP reads/events, forecasts/history, cash-flow window, thresholds, haircuts, SDI liquidity position, and scenario details | LIQ / `confidential` / `view`                                                         |
 | Create one or all Liquidity regulatory runs; execute scenario analysis                                                                                     | LIQ / `confidential` / `run`                                                          |
@@ -52,8 +52,12 @@ module's restricted view on the run's bank (the same canonical run-module
 authority map the run registry already uses; an unknown run module is
 withheld, never guessed). The rule applies to run detail, to every run POST
 response (the single-run mint and the run-all-scenarios batches across
-liquidity, capital, credit, FX, FTP and IRRBB), and to the run embedded in the
-IRRBB Standardised Framework read. A restricted grant on a sibling bank does
+liquidity, capital, credit, FX, FTP and IRRBB), to the run embedded in the
+IRRBB Standardised Framework read, and to the dedicated Forecasting surfaces —
+`GET /banks/{bank_id}/forecast/runs/{run_id}` and the
+`POST /banks/{bank_id}/forecast/runs` response read the same stored snapshot,
+so they withhold it under the same Forecasting restricted view. A restricted
+grant on a sibling bank does
 not reveal another bank's snapshot. Server-side attestation verification and
 the examiner evidence bundle read the stored run directly, so verification is
 unchanged. The dashboard FTP Rules page labels the withheld snapshot ("Run

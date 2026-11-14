@@ -26194,9 +26194,31 @@
             "type": "string"
           },
           "inputs": {
-            "additionalProperties": true,
-            "title": "Inputs",
-            "type": "object"
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Inputs"
+          },
+          "inputs_available": {
+            "title": "Inputs Available",
+            "type": "boolean"
+          },
+          "inputs_unavailable_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Inputs Unavailable Reason"
           },
           "metric_results": {
             "items": {
@@ -26285,6 +26307,8 @@
           "output_schema_version",
           "input_hash",
           "inputs",
+          "inputs_available",
+          "inputs_unavailable_reason",
           "assumptions",
           "assumption_version",
           "path",
