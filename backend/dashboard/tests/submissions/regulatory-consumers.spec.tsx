@@ -301,7 +301,7 @@ function alerts() {
       message: "Synthetic IRR alert",
       findingId: "irr",
       severity: "high",
-      createdAt: new Date(),
+      createdAt: new Date("2026-01-31T12:00:00Z"),
       ruleId: "irr",
       metric: null,
     },
@@ -310,7 +310,7 @@ function alerts() {
       message: "Synthetic LCR alert",
       findingId: "liquidity",
       severity: "critical",
-      createdAt: new Date(),
+      createdAt: new Date("2026-01-31T12:00:00Z"),
       ruleId: "lcr",
       metric: null,
     },
@@ -321,7 +321,7 @@ function alerts() {
             message: `Synthetic forecast ${ratio} alert`,
             findingId: `forecast-${ratio}`,
             severity: "critical",
-            createdAt: new Date(),
+            createdAt: new Date("2026-01-31T12:00:00Z"),
             ruleId: `year5_${ratio}_above_minimum`,
             metric: null,
           })),
@@ -332,7 +332,7 @@ function alerts() {
                   message: "Synthetic forecast capital alert",
                   findingId: "forecast-car",
                   severity: "critical",
-                  createdAt: new Date(),
+                  createdAt: new Date("2026-01-31T12:00:00Z"),
                   ruleId: "year5_car_above_minimum",
                   metric: null,
                 },
@@ -347,7 +347,7 @@ function alerts() {
             message: "Synthetic capital alert",
             findingId: "capital",
             severity: "critical",
-            createdAt: new Date(),
+            createdAt: new Date("2026-01-31T12:00:00Z"),
             ruleId: "car",
             metric: null,
           },
@@ -368,7 +368,7 @@ function alerts() {
 function summary() {
   return {
     bankId: "BK-SYNTH001",
-    computedAt: new Date(),
+    computedAt: new Date("2026-01-31T12:00:00Z"),
     sourceAsOfDate: new Date("2026-01-31T00:00:00Z"),
     isStale: false,
     modules: [
@@ -384,7 +384,7 @@ function summary() {
             ? "red"
             : state.forecast
           : "green",
-      computedAt: new Date(),
+      computedAt: new Date("2026-01-31T12:00:00Z"),
       metrics: {
         lcr_pct: "105",
         worst_eve_change_pct_tier1: "5",

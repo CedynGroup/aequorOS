@@ -27,6 +27,7 @@ import {
   runEnterpriseStress,
 } from "../../e2e/support/stress";
 import { openTab } from "../../e2e/support/navigation";
+import { e2eRunDate } from "../../e2e/support/run-date";
 
 const evidenceDir = process.env.E2E_EVIDENCE_DIR;
 
@@ -103,10 +104,7 @@ const NSFR_PCT = (ASF_M / RSF_M) * 100;
  * Match the bootstrap's anchor (H-015, scripts/e2e_bootstrap.py) using the
  * shared run date. Override usage is in ../README.md#end-to-end-playwright.
  */
-const anchorToday = (): Date =>
-  process.env.E2E_TODAY
-    ? new Date(`${process.env.E2E_TODAY}T00:00:00`)
-    : new Date();
+const anchorToday = (): Date => new Date(`${e2eRunDate()}T00:00:00`);
 
 const latestMonthEndOnOrBefore = (today: Date): Date => {
   const lastOfMonth = new Date(

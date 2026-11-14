@@ -1,5 +1,6 @@
 import { expect, type APIRequestContext } from "@playwright/test";
 import { biApi } from "./bi";
+import { e2eRunDate } from "./run-date";
 import { requireObjectStorage } from "./object-storage";
 
 /** Persist a failed source attempt in an owned institution, without financial rows. */
@@ -24,7 +25,7 @@ export async function createFailedIngestion(
     method: "POST",
     data: {
       source_system: "EXCEL_CSV",
-      as_of_date: new Date().toISOString().slice(0, 10),
+      as_of_date: e2eRunDate(),
       location: "temp://uploads/never-staged/missing-navigation-source.csv",
       reason: "Inspect a missing source attempt",
     },

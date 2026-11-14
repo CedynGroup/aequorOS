@@ -12,11 +12,22 @@ test.describe("unbound IRRBB user", () => {
   test.use({ storageState: path.join(E2E_TMP, "liquidity_viewer.json") });
 
   test("denies the deep link without product queries", async ({ page }) => {
-    // Bank discovery can finish before effective authority resolves. Exercise
-    // that ordering with a real, delayed profile response.
+    // Bank discovery can finish before effective authority resolves. Make the
+    // ordering deterministic instead of timed: the profile response is held
+    // until the bank discovery read has actually responded, so authority
+    // cannot resolve before discovery completes. The response wait is
+    // registered before the navigation because discovery starts with the
+    // shell (BankProvider), not from the profile response.
+    const discoveryResponded = page.waitForResponse(
+      (response) => new URL(response.url()).pathname === "/api/v1/banks",
+    );
+    let releaseProfile: () => void = () => {};
+    const profileGate = new Promise<void>((resolve) => {
+      releaseProfile = resolve;
+    });
     await page.route("**/auth/me", async (route) => {
       const response = await route.fetch();
-      await new Promise((resolve) => setTimeout(resolve, 1_000));
+      await profileGate;
       await route.fulfill({ response });
     });
     const irrRequests: string[] = [];
@@ -27,6 +38,8 @@ test.describe("unbound IRRBB user", () => {
     });
 
     await page.goto("/irr?preparing=1");
+    await discoveryResponded;
+    releaseProfile();
     await expect(
       page.getByRole("heading", { name: "Access required" }),
     ).toBeVisible();
