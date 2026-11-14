@@ -228,8 +228,11 @@ function ChannelForm({
   channel: ChannelCode;
 }) {
   // The read and the write are separate sentences (the backend decides both
-  // exactly this way): a configure-only caller can still save but the stored
-  // row is read only by the exact reg/restricted view binding.
+  // exactly this way): the stored row is read only by the exact reg/restricted
+  // view binding. The form is offered only to that reader — the PUT replaces
+  // the whole stored map, so a configure-only caller who cannot read what is
+  // stored must not be handed a form hydrated blank that would overwrite it.
+  // The API keeps the write for callers that already know the stored values.
   const { allowed: canView, reason: viewReason } = useViewEligibility(
     bankId,
     "reg",

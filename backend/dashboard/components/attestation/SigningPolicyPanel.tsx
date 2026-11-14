@@ -166,11 +166,14 @@ function SigningPolicyPanelInner() {
   const reasonMissing = form.reason.trim().length === 0;
   const slotsMissing = form.slots.length === 0;
 
-  /** Whether the deployment is currently suspending the signing it configures. */
+  /** Whether the deployment is currently suspending the signing it configures.
+   * ICAAP's switch rides on the policy-list response, so it is UNKNOWN — not
+   * "on" — whenever the list is not readable: the Board control then refuses
+   * with its own message instead of claiming the installation signs. */
   const signingSuspendedEverywhere =
     policiesQuery.data?.signingSuspendedDeploymentWide ?? false;
-  const icaapSigningSuspended =
-    policiesQuery.data?.icaapSigningSuspended ?? false;
+  const icaapSigningSuspended: boolean | undefined =
+    policiesQuery.data?.icaapSigningSuspended;
 
   // A return code is the more specific scope, so it decides; otherwise the
   // family does. Same order the server resolves the artifact layout in.
@@ -737,9 +740,10 @@ function SuspensionNotices({
   icaap,
 }: {
   everywhere: boolean;
-  icaap: boolean;
+  /** undefined = unknown (the policy read did not report it): no notice. */
+  icaap: boolean | undefined;
 }) {
-  if (!everywhere && !icaap) return null;
+  if (!everywhere && icaap !== true) return null;
   return (
     <div className="px-5 pt-4 space-y-2">
       {everywhere && (
@@ -784,7 +788,10 @@ function SuspensionNotices({
  * Shown only for the ICAAP assessment, which is the only report with a third
  * signature block to fill. Refusing rather than hiding it while the
  * installation has ICAAP signing switched off is deliberate: a control that
- * silently did nothing would be worse than one that says why it cannot.
+ * silently did nothing would be worse than one that says why it cannot. The
+ * switch's state rides on the policy-list read, so an unreadable list leaves
+ * it UNKNOWN — the control refuses with that state's own message rather than
+ * claiming either that signing is on or that it is off.
  */
 function BoardSignatureControl({
   required,
@@ -792,9 +799,11 @@ function BoardSignatureControl({
   onChange,
 }: {
   required: boolean;
-  suspended: boolean;
+  /** undefined = unknown: the policy list is not readable for this caller. */
+  suspended: boolean | undefined;
   onChange: (value: boolean) => void;
 }) {
+  const unknown = suspended === undefined;
   return (
     <div
       data-testid="board-signature-control"
@@ -803,18 +812,20 @@ function BoardSignatureControl({
       <p className="text-caption font-medium text-navy">Board signature</p>
       <div className="mt-1.5">
         <Toggle
-          checked={required && !suspended}
-          disabled={suspended}
+          checked={required && suspended === false}
+          disabled={suspended !== false}
           onChange={onChange}
           label="A member of the Board must sign the assessment"
           hint={
-            suspended
-              ? "Unavailable: the ICAAP assessment is not signed in this installation. Ask your AequorOS administrator to switch ICAAP signing on first."
-              : "Adds a third signature block to the assessment, signed after the approver. The Board resolution is still filed with the report either way — turning this on does not replace it, and turning it off never relaxes it."
+            unknown
+              ? "Unavailable: whether this installation signs the ICAAP assessment is not readable for you. The signing-policies list states it; ask for Regulatory Reporting view access with Restricted data to see it."
+              : suspended
+                ? "Unavailable: the ICAAP assessment is not signed in this installation. Ask your AequorOS administrator to switch ICAAP signing on first."
+                : "Adds a third signature block to the assessment, signed after the approver. The Board resolution is still filed with the report either way — turning this on does not replace it, and turning it off never relaxes it."
           }
         />
       </div>
-      {!suspended && (
+      {suspended === false && (
         <p className="mt-1 text-micro text-slate leading-relaxed">
           The Bank of Ghana&apos;s ICAAP directive asks for the Board&apos;s
           challenge, its approval and its resolution — not for a Board member to
