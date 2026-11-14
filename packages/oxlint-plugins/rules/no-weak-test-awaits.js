@@ -111,6 +111,87 @@ function isSetTimeoutPromise(node) {
   );
 }
 
+/** Binding kinds: a weak timer-promise VALUE, or a function RETURNING one. */
+const WEAK_PROMISE = "promise";
+const WEAK_HELPER = "helper";
+
+/** Look a name up along a chain of binding maps, innermost last. */
+function resolveInChain(chain, name) {
+  for (let index = chain.length - 1; index >= 0; index -= 1) {
+    if (chain[index].has(name)) {
+      return chain[index].get(name);
+    }
+  }
+  return false;
+}
+
+/**
+ * Whether `node` uses a weak timer promise, resolved against `chain` (an
+ * array of binding maps, innermost last). In `classify` mode (a function body
+ * being classified as a helper) any reference to a weak binding counts; in
+ * `await` mode (an awaited expression) a weak HELPER counts only when it is
+ * INVOKED — a bare reference such as `expect(sleep).toBeDefined()` asserts on
+ * the helper, it does not wait on a timer — and a noncomputed property named
+ * like a helper (`state.sleep`) is a property name, never a reference.
+ */
+function weakUseIn(node, chain, awaitMode) {
+  if (!node || typeof node !== "object") {
+    return false;
+  }
+
+  if (isSetTimeoutPromise(node)) {
+    return true;
+  }
+
+  if (node.type === "Identifier") {
+    const kind = resolveInChain(chain, node.name);
+    if (!kind) return false;
+    return !awaitMode || kind === WEAK_PROMISE;
+  }
+
+  if (node.type === "CallExpression") {
+    const callee = node.callee;
+    if (callee.type === "Identifier" && resolveInChain(chain, callee.name)) {
+      return true;
+    }
+    if (callee.type === "MemberExpression" && !callee.computed) {
+      // `obj.sleep()`: the property name is not a helper reference; only the
+      // receiver can carry a weak binding.
+      if (weakUseIn(callee.object, chain, awaitMode)) return true;
+    } else if (weakUseIn(callee, chain, awaitMode)) {
+      return true;
+    }
+    return node.arguments.some((argument) => weakUseIn(argument, chain, awaitMode));
+  }
+
+  if (node.type === "MemberExpression") {
+    if (weakUseIn(node.object, chain, awaitMode)) return true;
+    // A noncomputed property name never references an outer binding.
+    return node.computed ? weakUseIn(node.property, chain, awaitMode) : false;
+  }
+
+  if (
+    node.type === "Property" ||
+    node.type === "MethodDefinition" ||
+    node.type === "PropertyDefinition"
+  ) {
+    // The value is always live code (a computed key may be too); only a
+    // noncomputed key is a mere name.
+    if (weakUseIn(node.value, chain, awaitMode)) return true;
+    return node.computed ? weakUseIn(node.key, chain, awaitMode) : false;
+  }
+
+  return Object.entries(node).some(([key, value]) => {
+    if (key === "parent" || key === "label") {
+      return false;
+    }
+    if (Array.isArray(value)) {
+      return value.some((child) => weakUseIn(child, chain, awaitMode));
+    }
+    return weakUseIn(value, chain, awaitMode);
+  });
+}
+
 const rule = {
   meta: {
     type: "problem",
@@ -125,6 +206,11 @@ const rule = {
   },
   create(context) {
     const scopes = [];
+    // Awaits that looked clean when visited, kept with the binding-map chain
+    // they were seen under. A helper declared or assigned LATER can make them
+    // weak (forward-declared helpers wrap timer helpers), so every weak
+    // declaration re-evaluates the pending awaits against their own chain.
+    const pendingAwaits = [];
 
     function pushScope(type = "block") {
       scopes.push({ type, bindings: new Map() });
@@ -134,13 +220,22 @@ const rule = {
       scopes.pop();
     }
 
-    function declareIdentifier(node, isWeakTimerPromise, kind) {
+    function currentChain() {
+      return scopes.map((scope) => scope.bindings);
+    }
+
+    function resolveKind(name) {
+      return resolveInChain(currentChain(), name);
+    }
+
+    function declareIdentifier(node, kind, varKind) {
       if (node?.type === "Identifier") {
         const targetScope =
-          kind === "var"
+          varKind === "var"
             ? scopes.findLast((scope) => scope.type === "function" || scope.type === "program")
             : scopes.at(-1);
-        targetScope?.bindings.set(node.name, isWeakTimerPromise);
+        targetScope?.bindings.set(node.name, kind);
+        if (kind) reevaluatePendingAwaits();
       }
     }
 
@@ -150,51 +245,56 @@ const rule = {
       }
     }
 
-    function assignIdentifier(node, isWeakTimerPromise) {
+    function assignIdentifier(node, kind) {
       if (node?.type !== "Identifier") {
         return;
       }
 
-      for (let index = scopes.length - 1; index >= 0; index -= 1) {
+      // Confine write effects to the function whose body the assignment sits
+      // in: an assignment inside an uncalled function must not change the
+      // classification the enclosing scopes already have.
+      let boundary = scopes.length - 1;
+      while (
+        boundary >= 0 &&
+        scopes[boundary].type !== "function" &&
+        scopes[boundary].type !== "program"
+      ) {
+        boundary -= 1;
+      }
+      for (let index = scopes.length - 1; index >= boundary; index -= 1) {
         if (scopes[index].bindings.has(node.name)) {
-          scopes[index].bindings.set(node.name, isWeakTimerPromise);
+          scopes[index].bindings.set(node.name, kind);
+          if (kind) reevaluatePendingAwaits();
           return;
         }
       }
     }
 
-    function isWeakTimerPromiseAlias(node) {
-      if (node?.type !== "Identifier") {
-        return false;
-      }
-
-      for (let index = scopes.length - 1; index >= 0; index -= 1) {
-        if (scopes[index].bindings.has(node.name)) {
-          return scopes[index].bindings.get(node.name);
-        }
-      }
-
-      return false;
+    /** The kind an alias inherits: helpers alias to helpers, promises to promises. */
+    function aliasedKind(init) {
+      if (init?.type !== "Identifier") return null;
+      const kind = resolveKind(init.name);
+      return kind === WEAK_HELPER || kind === WEAK_PROMISE ? kind : null;
     }
 
-    function containsWeakTimerPromise(node) {
-      if (!node || typeof node !== "object") {
-        return false;
+    /** Classify the kind a declarator/assignment binds, from its right side. */
+    function boundKind(right) {
+      const alias = aliasedKind(right);
+      if (alias) return alias;
+      if (isFunctionNode(right)) {
+        return functionContainsWeakTimerPromise(right) ? WEAK_HELPER : false;
       }
+      return weakUseIn(right, currentChain(), false) ? WEAK_PROMISE : false;
+    }
 
-      if (isSetTimeoutPromise(node) || isWeakTimerPromiseAlias(node)) {
-        return true;
+    function reevaluatePendingAwaits() {
+      for (let index = pendingAwaits.length - 1; index >= 0; index -= 1) {
+        const pending = pendingAwaits[index];
+        if (weakUseIn(pending.argument, pending.chain, true)) {
+          context.report({ node: pending.node, messageId: "weakAwait" });
+          pendingAwaits.splice(index, 1);
+        }
       }
-
-      return Object.entries(node).some(([key, value]) => {
-        if (key === "parent") {
-          return false;
-        }
-        if (Array.isArray(value)) {
-          return value.some((child) => containsWeakTimerPromise(child));
-        }
-        return containsWeakTimerPromise(value);
-      });
     }
 
     // Classify a function's own body with its parameters already bound, so a
@@ -204,7 +304,7 @@ const rule = {
     function functionContainsWeakTimerPromise(fn) {
       pushScope("function");
       declareParameters(fn);
-      const contains = containsWeakTimerPromise(fn.body);
+      const contains = weakUseIn(fn.body, currentChain(), false);
       popScope();
       return contains;
     }
@@ -235,10 +335,10 @@ const rule = {
         let changed = false;
         for (const declaration of declarations) {
           if (
-            !isWeakTimerPromiseAlias(declaration.id) &&
+            !resolveKind(declaration.id.name) &&
             functionContainsWeakTimerPromise(declaration)
           ) {
-            declareIdentifier(declaration.id, true, "function");
+            declareIdentifier(declaration.id, WEAK_HELPER, "function");
             changed = true;
           }
         }
@@ -268,7 +368,11 @@ const rule = {
       SwitchStatement: pushScope,
       "SwitchStatement:exit": popScope,
       FunctionDeclaration(node) {
-        declareIdentifier(node.id, functionContainsWeakTimerPromise(node), "function");
+        declareIdentifier(
+          node.id,
+          functionContainsWeakTimerPromise(node) ? WEAK_HELPER : false,
+          "function",
+        );
         pushScope("function");
         declareParameters(node);
       },
@@ -289,27 +393,29 @@ const rule = {
       },
       "CatchClause:exit": popScope,
       VariableDeclarator(node) {
-        const isWeak = isFunctionNode(node.init)
-          ? functionContainsWeakTimerPromise(node.init)
-          : containsWeakTimerPromise(node.init);
-        declareIdentifier(node.id, isWeak, node.parent?.kind);
+        declareIdentifier(node.id, boundKind(node.init), node.parent?.kind);
       },
       AssignmentExpression(node) {
         if (node.operator === "=") {
-          const isWeak = isFunctionNode(node.right)
-            ? functionContainsWeakTimerPromise(node.right)
-            : containsWeakTimerPromise(node.right);
-          assignIdentifier(node.left, isWeak);
+          assignIdentifier(node.left, boundKind(node.right));
         }
       },
       AwaitExpression(node) {
         const isBarePromiseResolve =
           node.parent?.type === "ExpressionStatement" && isPromiseResolveCall(node.argument);
-        if (!isBarePromiseResolve && !containsWeakTimerPromise(node.argument)) {
+        if (isBarePromiseResolve) {
+          context.report({ node, messageId: "weakAwait" });
           return;
         }
 
-        context.report({ node, messageId: "weakAwait" });
+        const chain = currentChain();
+        if (weakUseIn(node.argument, chain, true)) {
+          context.report({ node, messageId: "weakAwait" });
+          return;
+        }
+
+        // Clean for now: a later weak declaration can still make it weak.
+        pendingAwaits.push({ node, argument: node.argument, chain });
       },
     };
   },

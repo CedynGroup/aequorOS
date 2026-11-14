@@ -92,17 +92,22 @@ function nodeTestTimersEnableFreezesDate(node) {
 
 /**
  * Extract the test-framework scope name from a callee, unwrapping variants
- * like `describe.only(...)`, `it.each(data)(...)`, `it.each`...`(...)`, and
- * the Playwright member forms `test.describe(...)` / `test.beforeEach(...)`.
+ * like `describe.only(...)`, `it.each(data)(...)`, `it.each`...`(...)`, the
+ * Playwright member forms `test.describe(...)` / `test.beforeEach(...)`, and
+ * chained suite modifiers like `test.describe.serial(...)`.
  * For a member callee the property name wins when it is itself a scope name,
- * so `test.beforeEach` is classified as a hook rather than a test.
+ * so `test.beforeEach` is classified as a hook rather than a test; otherwise
+ * the object is resolved recursively, so `test.describe.serial` still yields
+ * the `describe` scope its callbacks belong to.
  * Returns the scope name (e.g. "describe", "beforeEach") or `null`.
  */
 function getCalleeBaseName(callee) {
   if (callee.type === "Identifier") return callee.name;
-  if (callee.type === "MemberExpression" && callee.property.type === "Identifier") {
-    if (SCOPE_NAMES.has(callee.property.name)) return callee.property.name;
-    if (callee.object.type === "Identifier") return callee.object.name;
+  if (callee.type === "MemberExpression") {
+    if (callee.property.type === "Identifier" && SCOPE_NAMES.has(callee.property.name)) {
+      return callee.property.name;
+    }
+    return getCalleeBaseName(callee.object);
   }
   if (callee.type === "CallExpression") return getCalleeBaseName(callee.callee);
   if (callee.type === "TaggedTemplateExpression") return getCalleeBaseName(callee.tag);
@@ -208,12 +213,16 @@ const rule = {
     schema: [],
   },
   create(context) {
-    // Freeze calls recorded with their enclosing test/hook callback info.
+    // Freeze/unfreeze calls recorded with their enclosing test/hook callback
+    // info. A freeze is `vi.useFakeTimers()`/`vi.setSystemTime()` (or the jest
+    // equivalents), `page.clock.install()`/`page.clock.setFixedTime()`, or
+    // node:test's Date-freezing `mock.timers.enable(...)`; an unfreeze is
+    // `vi.useRealTimers()`/`jest.useRealTimers()`, which restores the wall
+    // clock and invalidates an earlier freeze in the same callback.
     const freezeCalls = [];
+    const unfreezeCalls = [];
     // Time-dependent API usages to validate at the end.
     const timeDependentNodes = [];
-    // True when a top-level beforeEach/beforeAll (outside any describe) has a freeze call.
-    let hasFileLevelFreezing = false;
     return {
       CallExpression(node) {
         const callee = node.callee;
@@ -226,24 +235,34 @@ const rule = {
           callee.property.type === "Identifier" &&
           (callee.property.name === "useFakeTimers" || callee.property.name === "setSystemTime")
         ) {
-          const enclosing = findEnclosingTestCallback(node);
-          freezeCalls.push({ node, enclosing });
+          freezeCalls.push({ node, enclosing: findEnclosingTestCallback(node) });
+          return;
+        }
+
+        // Detect vi.useRealTimers() / jest.useRealTimers(): the wall clock is
+        // back, so any earlier freeze no longer covers later reads.
+        if (
+          callee.type === "MemberExpression" &&
+          callee.object.type === "Identifier" &&
+          RUNNER_OBJECTS.has(callee.object.name) &&
+          callee.property.type === "Identifier" &&
+          callee.property.name === "useRealTimers"
+        ) {
+          unfreezeCalls.push({ node, enclosing: findEnclosingTestCallback(node) });
           return;
         }
 
         // Detect page.clock.install(), context.clock.setFixedTime(), ... —
         // Playwright's clock API freezes both timers and Date.
         if (isClockFreezeCall(callee)) {
-          const enclosing = findEnclosingTestCallback(node);
-          freezeCalls.push({ node, enclosing });
+          freezeCalls.push({ node, enclosing: findEnclosingTestCallback(node) });
           return;
         }
 
         // Detect node:test's timer mock freezing Date.
         if (isNodeTestTimersEnableCall(callee)) {
           if (nodeTestTimersEnableFreezesDate(node)) {
-            const enclosing = findEnclosingTestCallback(node);
-            freezeCalls.push({ node, enclosing });
+            freezeCalls.push({ node, enclosing: findEnclosingTestCallback(node) });
           }
           return;
         }
@@ -275,75 +294,150 @@ const rule = {
       "Program:exit"() {
         if (timeDependentNodes.length === 0) return;
 
-        // Build a set of describe callback nodes that have a beforeEach/beforeAll with freezing.
-        const frozenDescribeScopes = new Set();
-        // Build a set of individual test/hook callback nodes that contain a freeze call.
-        const frozenCallbackScopes = new Set();
-
-        for (const { enclosing } of freezeCalls) {
-          if (!enclosing) {
-            // Freeze at file/module scope — not scoped to any test callback.
-            continue;
+        // Timer-state transitions grouped by where they execute, each list
+        // ordered by source position:
+        //  - per enclosing test/hook callback (its own body);
+        //  - module level (no enclosing callback) for collection-time reads.
+        const transitionsByCallback = new Map();
+        const moduleTransitions = [];
+        const recordTransition = (call, frozen) => {
+          const entry = { node: call.node, frozen };
+          if (!call.enclosing) {
+            moduleTransitions.push(entry);
+            return;
           }
+          const list = transitionsByCallback.get(call.enclosing.fn) ?? [];
+          list.push(entry);
+          transitionsByCallback.set(call.enclosing.fn, list);
+        };
+        for (const call of freezeCalls) recordTransition(call, true);
+        for (const call of unfreezeCalls) recordTransition(call, false);
+        for (const list of transitionsByCallback.values()) {
+          list.sort((a, b) => a.node.range[0] - b.node.range[0]);
+        }
+        moduleTransitions.sort((a, b) => a.node.range[0] - b.node.range[0]);
 
-          frozenCallbackScopes.add(enclosing.fn);
+        /**
+         * Lifecycle phases: beforeAll < beforeEach < test < afterEach <
+         * afterAll. A freeze in an earlier phase covers callbacks in the same
+         * or a LATER phase; describe bodies (collection) and module scope run
+         * before every hook, so no hook ever covers them.
+         */
+        const phaseRank = (callType) => {
+          if (callType === "beforeAll") return 0;
+          if (callType === "beforeEach") return 1;
+          if (TEST_NAMES.has(callType)) return 2;
+          if (callType === "afterEach") return 3;
+          if (callType === "afterAll") return 4;
+          return undefined;
+        };
 
-          // If the freeze is in a hook that runs before tests, mark the parent
-          // describe as frozen; a top-level such hook freezes the entire file.
-          // Teardown hooks (afterEach/afterAll) run after the tests, so their
-          // freezes never cover them.
-          if (BEFORE_HOOKS.has(enclosing.callType)) {
-            const parentDescribe = findEnclosingDescribe(enclosing.callNode);
-            if (parentDescribe) {
-              frozenDescribeScopes.add(parentDescribe);
-            } else {
-              hasFileLevelFreezing = true;
-            }
+        // Every before-hook (beforeAll/beforeEach) whose callback touches the
+        // timer state, keyed by the describe it is registered in (`null` =
+        // file level). `netFrozen` is the state the hook LEAVES behind: a
+        // hook that freezes and then restores provides no coverage, and a
+        // restoring hook actively undoes an earlier hook's freeze.
+        const hooksByDescribe = new Map();
+        const fileLevelHooks = [];
+        for (const { enclosing } of [...freezeCalls, ...unfreezeCalls]) {
+          if (!enclosing || !BEFORE_HOOKS.has(enclosing.callType)) continue;
+          const transitions = transitionsByCallback.get(enclosing.fn) ?? [];
+          const hook = {
+            hookType: enclosing.callType,
+            callNode: enclosing.callNode,
+            netFrozen: transitions.length > 0 ? transitions.at(-1).frozen : null,
+          };
+          const parentDescribe = findEnclosingDescribe(enclosing.callNode);
+          if (parentDescribe) {
+            const hooks = hooksByDescribe.get(parentDescribe) ?? [];
+            hooks.push(hook);
+            hooksByDescribe.set(parentDescribe, hooks);
+          } else {
+            fileLevelHooks.push(hook);
           }
         }
+        for (const hooks of hooksByDescribe.values()) {
+          hooks.sort((a, b) => a.callNode.range[0] - b.callNode.range[0]);
+        }
+        fileLevelHooks.sort((a, b) => a.callNode.range[0] - b.callNode.range[0]);
 
         for (const { node, api } of timeDependentNodes) {
           const enclosing = findEnclosingTestCallback(node);
+          const report = () =>
+            context.report({ node, messageId: "missingFreezeTime", data: { api } });
 
-          // 0) A top-level beforeEach/beforeAll covers the tests that run after
-          //    it. Module-level and describe-body reads execute during
-          //    collection, before any hook, so they stay reported.
-          if (hasFileLevelFreezing && enclosing && TEST_NAMES.has(enclosing.callType)) {
+          /**
+           * The timer state at a read = the last transition that executed
+           * before it. Hooks contribute through the hook sequence below (a
+           * hook runs entirely before the callbacks it precedes, so its net
+           * end state is what the next callback inherits); the read's own
+           * callback contributes its transitions up to the read.
+           */
+          const stateAt = (transitions) => {
+            const own = transitions.filter((t) => t.node.range[0] < node.range[0]);
+            return own.length > 0 ? own.at(-1).frozen : null;
+          };
+
+          if (!enclosing || enclosing.callType === "describe") {
+            // Collection callbacks (describe bodies) and module-level reads
+            // execute during module evaluation: no hook covers them, but an
+            // explicit module-level freeze that already executed does.
+            const candidates = [...moduleTransitions];
+            if (enclosing) {
+              candidates.push(...(transitionsByCallback.get(enclosing.fn) ?? []));
+            }
+            const before = candidates
+              .filter((t) => t.node.range[0] < node.range[0])
+              .sort((a, b) => a.node.range[0] - b.node.range[0]);
+            if (before.length === 0 || !before.at(-1).frozen) {
+              report();
+            }
             continue;
           }
 
-          // 1) Node is inside a callback that itself contains a freeze call, and
-          //    the freeze occurs before this node.
-          if (enclosing && frozenCallbackScopes.has(enclosing.fn)) {
-            const freezeBefore = freezeCalls.some(
-              (fc) => fc.enclosing?.fn === enclosing.fn && fc.node.range[0] < node.range[0]
-            );
-            if (freezeBefore) continue;
-          }
-
-          // 2) Node is inside a test/hook whose ancestor describe has a frozen
-          //    beforeEach/beforeAll (check all ancestor describes, not just immediate parent).
-          if (enclosing) {
-            const ancestors = findAllEnclosingDescribes(enclosing.callNode);
-            if (ancestors.some((d) => frozenDescribeScopes.has(d))) {
-              continue;
+          // Hooks and tests: replay the hook sequence that runs before this
+          // callback. Execution order is phase (beforeAll before beforeEach),
+          // then outer describes before inner ones, then registration order
+          // within a describe. An equal-phase hook of the SAME describe runs
+          // before this callback only when it is registered earlier.
+          const rank = phaseRank(enclosing.callType);
+          const enclosingDescribes = findAllEnclosingDescribes(enclosing.callNode);
+          const sequence = [];
+          const consider = (hook, depth) => {
+            const hookRank = phaseRank(hook.hookType);
+            if (hookRank < rank) {
+              sequence.push({ hook, depth });
+            } else if (
+              hookRank === rank &&
+              (depth !== 0 || hook.callNode.range[0] < enclosing.callNode.range[0])
+            ) {
+              sequence.push({ hook, depth });
+            }
+          };
+          // File level sits outside every describe, so it is the outermost.
+          for (const hook of fileLevelHooks) consider(hook, enclosingDescribes.length);
+          for (let depth = enclosingDescribes.length - 1; depth >= 0; depth -= 1) {
+            for (const hook of hooksByDescribe.get(enclosingDescribes[depth]) ?? []) {
+              consider(hook, depth);
             }
           }
+          sequence.sort(
+            (a, b) =>
+              phaseRank(a.hook.hookType) - phaseRank(b.hook.hookType) ||
+              b.depth - a.depth ||
+              a.hook.callNode.range[0] - b.hook.callNode.range[0],
+          );
 
-          // 3) Node is directly inside a describe callback (not in any it/beforeEach)
-          //    — check if any ancestor describe is frozen.
-          if (!enclosing) {
-            const ancestors = findAllEnclosingDescribes(node);
-            if (ancestors.some((d) => frozenDescribeScopes.has(d))) {
-              continue;
-            }
+          let frozen = false;
+          for (const { hook } of sequence) {
+            if (hook.netFrozen !== null) frozen = hook.netFrozen;
           }
+          const ownState = stateAt(transitionsByCallback.get(enclosing.fn) ?? []);
+          if (ownState !== null) frozen = ownState;
 
-          context.report({
-            node,
-            messageId: "missingFreezeTime",
-            data: { api },
-          });
+          if (!frozen) {
+            report();
+          }
         }
       },
     };

@@ -379,3 +379,168 @@ test("node:test mock.timers freeze covers only its own test", async () => {
   `);
   assertFlagged(result, "frozenTime");
 });
+
+// -- Hardening findings (PR #899 review round) ------------------------------
+
+// 4567941824: `test.describe.serial(...)` chains must resolve to the describe
+// scope, so its freezing beforeEach covers only that suite — never the sibling
+// suites via a bogus file-level freeze.
+test("resolves chained describe modifiers so a serial suite's freeze stays scoped", async () => {
+  const result = await runOxlint(["frozenTime"], `
+    test.describe.serial('serial suite', () => {
+      test.beforeEach(() => {
+        vi.useFakeTimers();
+      });
+      test('frozen', () => {
+        expect(Date.now()).toBeGreaterThan(0);
+      });
+    });
+    test.describe('sibling suite', () => {
+      test('unfrozen', () => {
+        expect(Date.now()).toBeGreaterThan(0);
+      });
+    });
+  `);
+  assertFlagged(result, "frozenTime");
+});
+
+// 4567895297 + 4567941842: describe bodies execute during collection, before
+// any hook, so an ancestor's freezing beforeEach must not exempt them.
+test("reports a collection-time read in a nested describe body", async () => {
+  const result = await runOxlint(["frozenTime"], `
+    describe('outer', () => {
+      beforeEach(() => {
+        vi.useFakeTimers();
+      });
+      describe('inner', () => {
+        const stamp = Date.now();
+        it('t', () => {
+          expect(stamp).toBeGreaterThan(0);
+        });
+      });
+    });
+  `);
+  assertFlagged(result, "frozenTime");
+});
+
+// 4567941842: a beforeEach freeze must not cover a beforeAll read — beforeAll
+// runs before beforeEach.
+test("does not let a beforeEach freeze cover a beforeAll read", async () => {
+  const result = await runOxlint(["frozenTime"], `
+    describe('suite', () => {
+      beforeAll(() => {
+        expect(Date.now()).toBeGreaterThan(0);
+      });
+      beforeEach(() => {
+        vi.useFakeTimers();
+      });
+      it('t', () => {
+        expect(new Date()).toBeTruthy();
+      });
+    });
+  `);
+  assertFlagged(result, "frozenTime");
+});
+
+// 4567941829: a file-level beforeAll freeze runs before a later file-level
+// beforeEach, so the beforeEach read is covered — no false positive.
+test("lets a file-level beforeAll freeze cover a later beforeEach read", async () => {
+  const result = await runOxlint(["frozenTime"], `
+    beforeAll(() => {
+      vi.setSystemTime(new Date('2026-01-01'));
+    });
+    beforeEach(() => {
+      expect(Date.now()).toBeGreaterThan(0);
+    });
+    it('t', () => {
+      expect(new Date()).toBeTruthy();
+    });
+  `);
+  assertClean(result, "frozenTime");
+});
+
+// 4567941832: restoring real timers invalidates an earlier freeze in the same
+// callback; the read after useRealTimers() sees the wall clock again.
+test("reports a read after useRealTimers restored the wall clock", async () => {
+  const result = await runOxlint(["frozenTime"], `
+    it('t', () => {
+      vi.useFakeTimers();
+      vi.useRealTimers();
+      expect(Date.now()).toBeGreaterThan(0);
+    });
+  `);
+  assertFlagged(result, "frozenTime");
+});
+
+test("still allows a read after a freeze with no restoration in between", async () => {
+  const result = await runOxlint(["frozenTime"], `
+    it('t', () => {
+      vi.useFakeTimers();
+      vi.useRealTimers();
+      vi.useFakeTimers();
+      expect(Date.now()).toBeGreaterThan(0);
+    });
+  `);
+  assertClean(result, "frozenTime");
+});
+
+// CodeRabbit hardening round: an explicit module-level freeze that already
+// executed covers the collection-time reads that follow it, until restoration.
+test("lets an explicit module-level freeze cover collection-time reads", async () => {
+  const result = await runOxlint(["frozenTime"], `
+    vi.useFakeTimers();
+    describe('suite', () => {
+      const stamp = Date.now();
+      it('t', () => {
+        expect(stamp).toBeGreaterThan(0);
+      });
+    });
+  `);
+  assertClean(result, "frozenTime");
+});
+
+test("reports a collection-time read made before the module-level freeze", async () => {
+  const result = await runOxlint(["frozenTime"], `
+    describe('suite', () => {
+      const stamp = Date.now();
+      it('t', () => {
+        expect(stamp).toBeGreaterThan(0);
+      });
+    });
+    vi.useFakeTimers();
+  `);
+  assertFlagged(result, "frozenTime");
+});
+
+test("reports a collection-time read after a module-level restoration", async () => {
+  const result = await runOxlint(["frozenTime"], `
+    vi.useFakeTimers();
+    vi.useRealTimers();
+    describe('suite', () => {
+      const stamp = Date.now();
+      it('t', () => {
+        expect(stamp).toBeGreaterThan(0);
+      });
+    });
+  `);
+  assertFlagged(result, "frozenTime");
+});
+
+// CodeRabbit hardening round: a restoring beforeEach undoes an earlier
+// freezing beforeEach, so the test it precedes reads the real clock.
+test("does not let a restoring beforeEach keep an earlier freeze", async () => {
+  const result = await runOxlint(["frozenTime"], `
+    describe('suite', () => {
+      beforeEach(() => {
+        vi.useFakeTimers();
+      });
+      beforeEach(() => {
+        vi.useRealTimers();
+      });
+      it('t', () => {
+        expect(Date.now()).toBeGreaterThan(0);
+      });
+    });
+  `);
+  assertFlagged(result, "frozenTime");
+});

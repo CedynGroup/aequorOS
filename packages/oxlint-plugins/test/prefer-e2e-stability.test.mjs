@@ -120,3 +120,60 @@ test("a disable comment with a reason suppresses the finding", async () => {
   `);
   assertClean(result, "e2eStability");
 });
+
+// -- Hardening findings (PR #899 review round) ------------------------------
+
+// 4567941801: TypeScript wrappers around the string argument must be unwrapped
+// before classification, in both the call argument and constant initializers.
+test("reports waitForLoadState('networkidle' as const)", async () => {
+  const result = await runOxlint(["e2eStability"], `
+    test('journey', async ({ page }) => {
+      await page.waitForLoadState('networkidle' as const);
+    });
+  `);
+  assertFlagged(result, "e2eStability");
+});
+
+test("reports waitForLoadState with a TS-wrapped networkidle constant", async () => {
+  const result = await runOxlint(["e2eStability"], `
+    const READINESS = 'networkidle' as const;
+    test('journey', async ({ page }) => {
+      await page.waitForLoadState(READINESS);
+    });
+  `);
+  assertFlagged(result, "e2eStability");
+});
+
+// 4567941811: computed member names are resolved to their static value before
+// matching; an unresolved computed identifier is not treated as a method name.
+test("reports page['waitForTimeout'](100)", async () => {
+  const result = await runOxlint(["e2eStability"], `
+    test('journey', async ({ page }) => {
+      await page['waitForTimeout'](100);
+    });
+  `);
+  assertFlagged(result, "e2eStability");
+});
+
+test("does not flag a computed member whose resolved name is not a wait method", async () => {
+  const result = await runOxlint(["e2eStability"], `
+    const waitForTimeout = 'waitForURL';
+    test('journey', async ({ page }) => {
+      await page[waitForTimeout]('**/banks');
+    });
+  `);
+  assertClean(result, "e2eStability");
+});
+
+// 4567941816: a page-like member-expression initializer marks the alias
+// page-like even when the alias name itself is not page-like.
+test("reports waitForTimeout through a page-like member-expression alias", async () => {
+  const result = await runOxlint(["e2eStability"], `
+    test('journey', async ({ fixtures }) => {
+      const tab = fixtures.page;
+      await tab.waitForTimeout(100);
+    });
+  `);
+  assertFlagged(result, "e2eStability");
+});
+

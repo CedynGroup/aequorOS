@@ -131,3 +131,73 @@ test("a disable comment with a reason suppresses the finding", async () => {
   `);
   assertClean(result, "weakAwaits");
 });
+
+// -- Hardening findings (PR #899 review round) ------------------------------
+
+// 4567895306: a declared sleep helper that is only REFERENCED (never called)
+// inside an awaited expression is not a weak wait.
+test("does not flag a helper that is only referenced, never invoked", async () => {
+  const result = await runOxlint(["weakAwaits"], `
+    const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+    it('t', async () => {
+      await vi.waitFor(() => expect(sleep).toBeDefined());
+      expect(true).toBe(true);
+    });
+  `);
+  assertClean(result, "weakAwaits");
+});
+
+// 4567941738: a noncomputed property named like the helper is a property name,
+// not a reference to the helper.
+test("does not flag a property that shares a weak helper's name", async () => {
+  const result = await runOxlint(["weakAwaits"], `
+    const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+    it('t', async () => {
+      await vi.waitFor(() => expect(state.sleep).toBe(false));
+      expect(true).toBe(true);
+    });
+  `);
+  assertClean(result, "weakAwaits");
+});
+
+// 4567941776: a forward-declared helper wrapping a later-resolved timer helper
+// must be reported regardless of declaration order.
+test("reports a forward-declared helper wrapping a timer helper", async () => {
+  const result = await runOxlint(["weakAwaits"], `
+    const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+    it('t', async () => {
+      await wait(100);
+    });
+    function wait(ms) {
+      return sleep(ms);
+    }
+  `);
+  assertFlagged(result, "weakAwaits");
+});
+
+// 4567941793: assignments inside uncalled functions do not change the
+// enclosing helper classification.
+test("does not let an uncalled function's reassignment clear a weak helper", async () => {
+  const result = await runOxlint(["weakAwaits"], `
+    let sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+    function reset() {
+      sleep = loadReady;
+    }
+    it('t', async () => {
+      await sleep(100);
+    });
+  `);
+  assertFlagged(result, "weakAwaits");
+});
+
+// CodeRabbit hardening round: a computed property's VALUE is live code, so a
+// timer promise stored under a computed key is still a weak wait.
+test("reports a timer promise held in a computed property value", async () => {
+  const result = await runOxlint(["weakAwaits"], `
+    it('t', async () => {
+      await ({ ['pending']: new Promise((r) => setTimeout(r, 100)) }).pending;
+    });
+  `);
+  assertFlagged(result, "weakAwaits");
+});
+

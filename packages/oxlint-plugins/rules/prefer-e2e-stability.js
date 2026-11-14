@@ -191,27 +191,47 @@ function isPageLikeObject(node, scopeStack) {
 }
 
 function isNetworkIdleArgument(arg, scopeStack) {
-  const directValue = getStaticString(arg);
+  // TypeScript wrappers (`"networkidle" as const`, non-null, parentheses) are
+  // unwrapped before classification so the literal underneath is seen.
+  const directValue = getStaticString(unwrapExpression(arg));
   if (directValue === "networkidle") {
     return true;
   }
 
-  if (arg.type === "Identifier") {
-    const resolved = resolveConstant(scopeStack, arg.name);
+  const unwrapped = unwrapExpression(arg);
+  if (unwrapped.type === "Identifier") {
+    const resolved = resolveConstant(scopeStack, unwrapped.name);
     return resolved === "networkidle";
   }
 
   return false;
 }
 
-function getMemberCall(node, methodName) {
+/**
+ * The member name a call's callee refers to, with computed properties resolved
+ * to their static value: `page["waitForTimeout"]` matches by its literal, and
+ * `page[TIMEOUT]` by the constant it resolves to. An unresolved computed
+ * identifier is NOT a method name — its spelling proves nothing.
+ */
+function resolvedMemberName(callee, scopeStack) {
+  const unwrapped = unwrapExpression(callee);
+  if (!unwrapped || unwrapped.type !== "MemberExpression") return null;
+  const property = unwrapped.property;
+  if (!unwrapped.computed) {
+    return property.type === "Identifier" ? property.name : null;
+  }
+  const literal = getStaticString(unwrapExpression(property));
+  if (literal !== null) return literal;
+  if (property.type === "Identifier") {
+    const resolved = resolveConstant(scopeStack, property.name);
+    return typeof resolved === "string" ? resolved : null;
+  }
+  return null;
+}
+
+function getMemberCall(node, methodName, scopeStack) {
   const callee = unwrapExpression(node.callee);
-  if (
-    callee &&
-    callee.type === "MemberExpression" &&
-    callee.property.type === "Identifier" &&
-    callee.property.name === methodName
-  ) {
+  if (callee && callee.type === "MemberExpression" && resolvedMemberName(callee, scopeStack) === methodName) {
     return callee;
   }
   return null;
@@ -360,8 +380,9 @@ const rule = {
           }
 
           // Track string constants so `waitForLoadState(READINESS)` with
-          // `const READINESS = "networkidle"` is still recognised.
-          const value = getStaticString(declaration.init);
+          // `const READINESS = "networkidle"` is still recognised; TypeScript
+          // wrappers around the literal are unwrapped first.
+          const value = getStaticString(unwrapExpression(declaration.init));
           if (value !== null) {
             currentScope().set(declaration.id.name, value);
             continue;
@@ -377,12 +398,16 @@ const rule = {
             if (typeof aliased === "string" || aliased === PAGE_LIKE_ALIAS) {
               currentScope().set(declaration.id.name, aliased);
             }
+          } else if (isPageLikeObject(declaration.init, scopeStack)) {
+            // A page-like member expression (`const tab = fixtures.page`)
+            // makes the alias a page even when its name is not page-like.
+            currentScope().set(declaration.id.name, PAGE_LIKE_ALIAS);
           }
         }
       },
 
       CallExpression(node) {
-        const timeoutCall = getMemberCall(node, "waitForTimeout");
+        const timeoutCall = getMemberCall(node, "waitForTimeout", scopeStack);
         if (timeoutCall && isPageLikeObject(timeoutCall.object, scopeStack)) {
           context.report({
             node,
@@ -391,7 +416,7 @@ const rule = {
           return;
         }
 
-        const loadStateCall = getMemberCall(node, "waitForLoadState");
+        const loadStateCall = getMemberCall(node, "waitForLoadState", scopeStack);
         if (loadStateCall && isPageLikeObject(loadStateCall.object, scopeStack)) {
           const firstArg = node.arguments[0];
           if (firstArg && isNetworkIdleArgument(firstArg, scopeStack)) {
