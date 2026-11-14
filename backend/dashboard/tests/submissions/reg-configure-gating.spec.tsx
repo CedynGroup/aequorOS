@@ -355,8 +355,12 @@ it("reads the stored channel for an exact-bank reg/restricted viewer", async () 
 it("hides the configured signing policies without the organization view sentence", async () => {
   state.bankCapabilities = [capability("reg", { permission: "view" })];
   mountPage();
+  // Wait for the settled organization-scope requirement, not the shared denial
+  // prefix, so a regression that fetches once the profile has loaded cannot hide.
   expect(
-    await screen.findByText(/You do not have access to the signing policies/),
+    await screen.findByText(
+      /Requires organization-scoped Regulatory Reporting view access/,
+    ),
   ).toBeVisible();
   expect(state.reads.signingPolicies).toBe(0);
 });
