@@ -101,7 +101,12 @@ def _stored_inputs(run_id: str) -> dict[str, Any]:
     session = get_sessionmaker()()
     session.info["organization_id"] = ORG_1
     try:
-        run = session.scalar(select(RegulatoryRun).where(RegulatoryRun.id == UUID(run_id)))
+        run = session.scalar(
+            select(RegulatoryRun).where(
+                RegulatoryRun.organization_id == ORG_1,
+                RegulatoryRun.id == UUID(run_id),
+            )
+        )
         assert run is not None
         return deepcopy(run.inputs)
     finally:
