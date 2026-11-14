@@ -403,7 +403,7 @@ def test_official_enqueue_denies_before_job_or_audit(
 
 
 @pytest.mark.parametrize("role", ["viewer", "analyst"])
-def test_official_enqueue_preserves_mixed_module_gate(
+def test_official_enqueue_accepts_the_full_sentence_for_viewer_and_analyst_claims(
     db_client: TestClient,
     role: str,
 ) -> None:
@@ -438,8 +438,11 @@ def test_official_enqueue_preserves_mixed_module_gate(
     )
     # The official-run row is stamped REGULATORY/restricted and the queue reads
     # admit a row only under the caller's current view authority (#186), so the
-    # minting analyst holds exactly that monitoring view. The viewer role still
-    # refuses the mint at the write-side role gate.
+    # minting actor holds exactly that monitoring view. The mint sentence is
+    # decided entirely by the stored bindings: a caller whose token still
+    # claims the legacy viewer scalar role but holds the complete sentence mints
+    # exactly like an analyst-claimed caller, and a caller without the sentence
+    # is refused either way.
     version = _grant(
         RoleBundle.VIEWER,
         module=ModuleScope.REGULATORY,
@@ -456,16 +459,11 @@ def test_official_enqueue_preserves_mixed_module_gate(
         json={"as_of_date": "2026-03-31", "reason": "authorized filing request"},
     )
 
-    if role == "viewer":
-        assert response.status_code == 403, response.text
-        with get_sessionmaker()() as session:
-            assert [
-                session.scalar(select(func.count()).select_from(model))
-                for model in (Job, AuditEvent)
-            ] == before
-        return
     assert response.status_code == 202, response.text
     with get_sessionmaker()() as session:
+        assert [
+            session.scalar(select(func.count()).select_from(model)) for model in (Job, AuditEvent)
+        ] != before
         job = session.get(Job, UUID(response.json()["job_id"]))
         assert job is not None
         assert job.job_type == "official_run"

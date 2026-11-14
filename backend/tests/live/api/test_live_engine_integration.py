@@ -249,6 +249,26 @@ def test_refresh_endpoint_enqueues_and_is_pollable(db_client: TestClient) -> Non
     assert polled.json()["job_type"] == "pipeline_refresh"
 
 
+def test_refresh_accepts_a_scoped_runner_whose_scalar_role_is_viewer(
+    db_client: TestClient,
+) -> None:
+    """The scoped DATA/confidential sentence authorizes the recompute by itself.
+
+    The route's write declaration carries identity, not the legacy scalar role
+    ladder: a caller whose token still claims the viewer scalar role but who
+    holds the exact monitoring view and run sentence may refresh, while the
+    service refuses any caller without that sentence regardless of claims.
+    """
+    _seed_and_refresh(db_client)
+    authorization_version = _grant_data_run()
+    response = db_client.post(
+        f"{_BASE}/refresh",
+        headers=headers(roles=("viewer",), authorization_version=authorization_version),
+        json={"as_of_date": AS_OF, "reason": "recompute"},
+    )
+    assert response.status_code == 202, response.text
+
+
 def _grant_data_run() -> int:
     """Grant USER_1 the DATA/confidential run authority the refresh requires (#177).
 
@@ -520,6 +540,32 @@ def test_mint_official_run_requires_every_planned_module_run(
     )
     assert response.status_code == 403, response.text
     assert _mutation_counts() == (jobs_before, events_before)
+
+
+@pytest.mark.usefixtures("credit_run_authority")
+def test_mint_official_run_accepts_a_scoped_runner_whose_scalar_role_is_viewer(
+    db_client: TestClient,
+) -> None:
+    """The mint's per-module run sentences and monitoring view decide alone.
+
+    The scalar role in the token claims is not part of the mint sentence: a
+    caller whose token still claims the viewer scalar role but who holds the
+    run authority for every planned module plus the regulatory monitoring view
+    may mint, and the accepted run stays monitorable under the same authority.
+    """
+    _seed_and_refresh(db_client)
+    authorization_version = _mint_authority(view=True)
+    response = db_client.post(
+        f"{_BASE}/official-runs",
+        headers=headers(roles=("viewer",), authorization_version=authorization_version),
+        json={"as_of_date": AS_OF, "reason": "filing"},
+    )
+    assert response.status_code == 202, response.text
+    polled = db_client.get(
+        f"/api/v1/jobs/{response.json()['job_id']}",
+        headers=headers(roles=("viewer",), authorization_version=authorization_version),
+    )
+    assert polled.status_code == 200, polled.text
 
 
 def test_tenant_isolation_org2_gets_404(db_client: TestClient) -> None:
