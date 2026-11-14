@@ -178,6 +178,7 @@ def _add_forecast_run(period_id: UUID) -> UUID:
 
 def _stored_run(run_id: UUID) -> dict[str, Any]:
     session = get_sessionmaker()()
+    session.info["organization_id"] = ORG_1
     try:
         run = session.scalar(
             select(RegulatoryRun).where(
