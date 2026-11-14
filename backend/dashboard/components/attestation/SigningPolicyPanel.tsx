@@ -43,7 +43,10 @@ import {
   useSigningPolicies,
   useUpsertSigningPolicy,
 } from "@/lib/api/hooks";
-import { useOrganizationConfigureEligibility } from "@/lib/api/configureAccess";
+import {
+  useOrganizationConfigureEligibility,
+  useOrganizationViewEligibility,
+} from "@/lib/api/configureAccess";
 import { fmtDateUTC, fmtTimestamp, isoDate } from "@/lib/api/values";
 import { SIGNING_ROLE_LABELS, roleNoun } from "./shared";
 
@@ -115,15 +118,18 @@ function emptyForm(): FormState {
 }
 
 export default function SigningPolicyPanel() {
-  // The policy list is a tenant read; only the save is configure-gated, and it
-  // explains itself rather than hiding — a reader who can see the policies can
-  // also be told why they cannot change them.
+  // The policy list is itself organization-scoped configuration — the same
+  // sentence its save demands, at view — so the read is gated on it and a
+  // reader without the sentence sees the denial, not the rows and not an
+  // outage. The save keeps its own configure gate and explains itself.
   return <SigningPolicyPanelInner />;
 }
 
 function SigningPolicyPanelInner() {
   const { bank } = useBankContext();
-  const policiesQuery = useSigningPolicies();
+  const { allowed: canViewPolicies, reason: viewPoliciesReason } =
+    useOrganizationViewEligibility("reg");
+  const policiesQuery = useSigningPolicies(canViewPolicies);
   // The offer reads the full un-scoped registry on purpose: capital read
   // authority must not decide which returns can carry a signing policy, and
   // this key never changes with the bank (see useReturnTemplates).
@@ -160,11 +166,17 @@ function SigningPolicyPanelInner() {
   const reasonMissing = form.reason.trim().length === 0;
   const slotsMissing = form.slots.length === 0;
 
-  /** Whether the deployment is currently suspending the signing it configures. */
+  /** Whether the deployment is currently suspending the signing it configures.
+   * ICAAP's switch rides on the policy-list response, so it is UNKNOWN — not
+   * "on" — whenever the list is not readable: the Board control then refuses
+   * with its own message instead of claiming the installation signs. */
   const signingSuspendedEverywhere =
     policiesQuery.data?.signingSuspendedDeploymentWide ?? false;
-  const icaapSigningSuspended =
-    policiesQuery.data?.icaapSigningSuspended ?? false;
+  // Retained data from an earlier read must not answer while the list is denied or failing.
+  const icaapSigningSuspended: boolean | undefined =
+    canViewPolicies && !policiesQuery.error
+      ? policiesQuery.data?.icaapSigningSuspended
+      : undefined;
 
   // A return code is the more specific scope, so it decides; otherwise the
   // family does. Same order the server resolves the artifact layout in.
@@ -252,7 +264,12 @@ function SigningPolicyPanelInner() {
         subtitle="Who must sign which return — resolved most-specific-first, as at the reporting date"
         noPadding
       >
-        {policiesQuery.isLoading ? (
+        {!canViewPolicies ? (
+          <p className="px-5 py-4 text-caption text-slate leading-relaxed">
+            You do not have access to the signing policies.{" "}
+            {viewPoliciesReason}
+          </p>
+        ) : policiesQuery.isLoading ? (
           <div className="p-5">
             <SkeletonCard />
           </div>
@@ -726,9 +743,10 @@ function SuspensionNotices({
   icaap,
 }: {
   everywhere: boolean;
-  icaap: boolean;
+  /** undefined = unknown (the policy read did not report it): no notice. */
+  icaap: boolean | undefined;
 }) {
-  if (!everywhere && !icaap) return null;
+  if (!everywhere && icaap !== true) return null;
   return (
     <div className="px-5 pt-4 space-y-2">
       {everywhere && (
@@ -773,7 +791,10 @@ function SuspensionNotices({
  * Shown only for the ICAAP assessment, which is the only report with a third
  * signature block to fill. Refusing rather than hiding it while the
  * installation has ICAAP signing switched off is deliberate: a control that
- * silently did nothing would be worse than one that says why it cannot.
+ * silently did nothing would be worse than one that says why it cannot. The
+ * switch's state rides on the policy-list read, so an unreadable list leaves
+ * it UNKNOWN — the control refuses with that state's own message rather than
+ * claiming either that signing is on or that it is off.
  */
 function BoardSignatureControl({
   required,
@@ -781,9 +802,11 @@ function BoardSignatureControl({
   onChange,
 }: {
   required: boolean;
-  suspended: boolean;
+  /** undefined = unknown: the policy list is not readable for this caller. */
+  suspended: boolean | undefined;
   onChange: (value: boolean) => void;
 }) {
+  const unknown = suspended === undefined;
   return (
     <div
       data-testid="board-signature-control"
@@ -792,18 +815,20 @@ function BoardSignatureControl({
       <p className="text-caption font-medium text-navy">Board signature</p>
       <div className="mt-1.5">
         <Toggle
-          checked={required && !suspended}
-          disabled={suspended}
+          checked={required && suspended === false}
+          disabled={suspended !== false}
           onChange={onChange}
           label="A member of the Board must sign the assessment"
           hint={
-            suspended
-              ? "Unavailable: the ICAAP assessment is not signed in this installation. Ask your AequorOS administrator to switch ICAAP signing on first."
-              : "Adds a third signature block to the assessment, signed after the approver. The Board resolution is still filed with the report either way — turning this on does not replace it, and turning it off never relaxes it."
+            unknown
+              ? "Unavailable: whether this installation signs the ICAAP assessment is not readable for you. The signing-policies list states it; ask for Regulatory Reporting view access with Restricted data to see it."
+              : suspended
+                ? "Unavailable: the ICAAP assessment is not signed in this installation. Ask your AequorOS administrator to switch ICAAP signing on first."
+                : "Adds a third signature block to the assessment, signed after the approver. The Board resolution is still filed with the report either way — turning this on does not replace it, and turning it off never relaxes it."
           }
         />
       </div>
-      {!suspended && (
+      {suspended === false && (
         <p className="mt-1 text-micro text-slate leading-relaxed">
           The Bank of Ghana&apos;s ICAAP directive asks for the Board&apos;s
           challenge, its approval and its resolution — not for a Board member to

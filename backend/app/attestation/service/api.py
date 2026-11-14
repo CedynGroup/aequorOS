@@ -452,6 +452,18 @@ def verify(
 
 
 def list_policies(db: Session, ctx: TenantContext) -> PolicyListRead:
+    # The policy list is the organization's attestation configuration — who
+    # must sign which return for EVERY bank — so reading it demands the same
+    # organization-scope reg/restricted sentence its write does, at view. The
+    # once-open read is deliberately gone; no row is read before the gate.
+    require_organization_permission(
+        db,
+        ctx,
+        permission=Permission.VIEW,
+        module=Module.REGULATORY,
+        sensitivity=Sensitivity.RESTRICTED,
+        surface="signing_policy_list",
+    )
     rows = db.scalars(
         select(ReturnSigningPolicy)
         .where(ReturnSigningPolicy.organization_id == ctx.organization_id)
@@ -736,6 +748,18 @@ def _template_read(
 def list_placement_templates(
     db: Session, ctx: TenantContext, *, return_code: str | None = None
 ) -> SignaturePlacementTemplateListRead:
+    # The placement templates are the organization's reusable signature layout
+    # for every future filing of a return: the same organization-scope
+    # reg/restricted sentence their write demands, at view, before any row is
+    # read.
+    require_organization_permission(
+        db,
+        ctx,
+        permission=Permission.VIEW,
+        module=Module.REGULATORY,
+        sensitivity=Sensitivity.RESTRICTED,
+        surface="signature_placement_template_list",
+    )
     grouped: dict[tuple[str, str | None], list[ReturnSignaturePlacement]] = {}
     for row in placements.list_templates(db, ctx, return_code=return_code):
         grouped.setdefault((row.return_code, row.bank_id), []).append(row)

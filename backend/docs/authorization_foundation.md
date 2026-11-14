@@ -842,6 +842,36 @@ list, while the hermetic schema derives it from the enum;
 a migrated schema. Credit retains its own module and
 [rollout contract](credit_enforcement_rollout.md).
 
+## Configuration read authority
+
+Restricted-surface configuration reads demand the same scoped sentence their
+writes demand, at `view`, decided in the service before any stored row is
+touched:
+
+- `GET /banks/{bank_id}/regulatory-reporting/channel-configs/{channel}` and
+  `GET /banks/{bank_id}/regulatory-reporting/settings` read per-bank rows, so
+  they require exact-bank `reg/restricted/view`: `require_institution_coverage`
+  first (a principal with no effective authority for the bank in any module
+  gets the opaque 404), then `require_resolved_bank_permission`. The channel's
+  "not configured" 404 and the settings' empty-map response are answered only
+  once authorization has passed. The writes keep their
+  `reg/configure/restricted` duty (`reporting_configure`); configure alone
+  confers no read.
+- `GET /attestation/signing-policies` and
+  `GET /attestation/signature-placements` read organization-shared rows, so
+  they require organization-scope `reg/restricted/view` through
+  `require_organization_permission` — the same scope rule their PUTs enforce
+  (which refuse machine principals and impersonated sessions outright), with
+  `configure` conferring no read. This reverses the earlier open read of the
+  signing-policy list.
+
+The denial is the shared `DEFAULT_DENIAL_DETAIL` on all four reads; the writes
+keep their REG-specific details. Dashboard surfaces ask first through the
+projected capabilities (`useViewEligibility` /
+`useOrganizationViewEligibility` in `backend/dashboard/lib/api/configureAccess.ts`)
+and render a denied state that is distinct from the unconfigured state, so no
+guaranteed-403 request is sent.
+
 ## Product rollout boundary
 
 Liquidity enforcement scope and held configuration routes are owned by the
