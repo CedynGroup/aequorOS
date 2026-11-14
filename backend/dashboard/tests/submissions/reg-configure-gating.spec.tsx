@@ -304,6 +304,18 @@ function gateAdmits(
   );
 }
 
+/** The row the stored-configuration read admits (the same sentence, at view). */
+function viewAdmits(row: EffectiveCapabilityRead, bankId: string): boolean {
+  return (
+    !row.requiresContextualAuthorization &&
+    row.module === "reg" &&
+    row.sensitivity === "restricted" &&
+    row.permission === "view" &&
+    row.dataScope.kind === "all" &&
+    bankId === BANK
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Channel configuration: exact-bank reg configure
 // ---------------------------------------------------------------------------
@@ -312,6 +324,41 @@ it("explains a disabled channel-config save for a reader", async () => {
   state.bankCapabilities = [capability("reg", { permission: "view" })];
   mountPage();
   await expectChannelSaveDisabled(BANK_GATE_REASON);
+});
+
+it("denies the channel configuration without the reg restricted view sentence", async () => {
+  // Covered for the bank (a Liquidity read row), but the stored channel
+  // configuration is restricted-surface: the page refuses before it fetches,
+  // with a denial that is not the unconfigured state.
+  state.bankCapabilities = [
+    capability("liq", { permission: "view", sensitivity: "confidential" }),
+  ];
+  mountPage();
+  expect(
+    await screen.findByText("You do not have access to these settings."),
+  ).toBeVisible();
+  expect(screen.queryByText("No credentials stored")).not.toBeInTheDocument();
+  expect(
+    screen.queryByRole("button", { name: "Save configuration" }),
+  ).not.toBeInTheDocument();
+  expect(state.reads.channelConfig).toBe(0);
+});
+
+it("reads the stored channel for an exact-bank reg/restricted viewer", async () => {
+  state.bankCapabilities = [capability("reg", { permission: "view" })];
+  state.storedConfig = true;
+  mountPage();
+  expect(await screen.findByText("Credentials stored")).toBeVisible();
+  expect(state.reads.channelConfig).toBeGreaterThanOrEqual(1);
+});
+
+it("hides the configured signing policies without the organization view sentence", async () => {
+  state.bankCapabilities = [capability("reg", { permission: "view" })];
+  mountPage();
+  expect(
+    await screen.findByText(/You do not have access to the signing policies/),
+  ).toBeVisible();
+  expect(state.reads.signingPolicies).toBe(0);
 });
 
 it("saves the channel configuration and refetches the view-gated read", async () => {
@@ -338,11 +385,22 @@ it("saves the channel configuration and refetches the view-gated read", async ()
 });
 
 it("never offers the channel-config save while inspecting as another principal", async () => {
-  state.bankCapabilities = [capability("reg")];
+  state.bankCapabilities = [
+    capability("reg"),
+    capability("reg", { permission: "view" }),
+  ];
   state.impersonating = true;
   plantImpersonationMarker();
   mountPage();
-  await expectChannelSaveDisabled(IMPERSONATION_REASON);
+  // The inspection guard refuses the stored-configuration read before it is
+  // sent, so the page shows the denial instead of the form and its save.
+  expect(
+    await screen.findByText("You do not have access to these settings."),
+  ).toBeVisible();
+  expect(
+    screen.queryByRole("button", { name: "Save configuration" }),
+  ).not.toBeInTheDocument();
+  expect(state.reads.channelConfig).toBe(0);
 });
 
 it("shows the shell's unreachable panel when the profile read fails", async () => {
@@ -434,6 +492,19 @@ it("enables the channel save exactly for a whole-institution reg/configure/restr
         if (holderBank === BANK) state.bankCapabilities = row;
         else state.otherBankCapabilities = row;
         const expected = row.some((r) => gateAdmits(r, holderBank));
+        // The stored-configuration read is its own sentence now: without it
+        // the page shows the denial and offers no save control at all.
+        if (!row.some((r) => viewAdmits(r, holderBank))) {
+          mountPage();
+          expect(
+            await screen.findByText("You do not have access to these settings."),
+          ).toBeVisible();
+          expect(
+            screen.queryByRole("button", { name: "Save configuration" }),
+          ).not.toBeInTheDocument();
+          cleanup();
+          return;
+        }
         mountPage();
         const save = await screen.findByRole("button", {
           name: "Save configuration",

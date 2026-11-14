@@ -58,6 +58,62 @@ export function useConfigureEligibility(
 }
 
 /**
+ * Exact-bank view eligibility for restricted-surface configuration reads: the
+ * backend refuses a stored configuration read to a caller without the
+ * whole-institution read sentence, so the page asks before it fetches and
+ * shows a denied state that is distinct from "not configured".
+ */
+export function useViewEligibility(
+  bankId: string | undefined,
+  module: ConfigureModule,
+) {
+  const profile = useUserProfile();
+  const inspection = useImpersonation();
+  const capabilities =
+    profile.effectiveAuthority?.institutionCapabilities.find(
+      (entry) => entry.institutionId === bankId,
+    )?.capabilities ?? [];
+  const guard = useEligibilityGuard(profile, inspection.impersonating);
+  const allowed =
+    !guard &&
+    Boolean(bankId) &&
+    hasEffectiveCapability(
+      wholeInstitutionCapabilities(capabilities),
+      module,
+      "restricted",
+      "view",
+    );
+  const reason =
+    guard ??
+    `Requires ${MODULE_LABELS[module]} view access with Restricted data for this institution.`;
+  return { allowed, reason };
+}
+
+/**
+ * Organization-wide view eligibility, the mirror of
+ * `useOrganizationConfigureEligibility`: reading a configuration that governs
+ * EVERY bank's filings demands the organization-scope sentence, so a
+ * bank-scoped grant never qualifies and the page does not fetch.
+ */
+export function useOrganizationViewEligibility(module: ConfigureModule) {
+  const profile = useUserProfile();
+  const inspection = useImpersonation();
+  const guard = useEligibilityGuard(profile, inspection.impersonating);
+  const allowed =
+    !guard &&
+    hasEffectiveCapability(
+      profile.effectiveAuthority?.organizationCapabilities ?? [],
+      module,
+      "restricted",
+      "view",
+    );
+  const reason =
+    guard ??
+    `Requires organization-scoped ${MODULE_LABELS[module]} view access with Restricted data.`;
+  return { allowed, reason };
+}
+
+/**
  * The BEH proposal queue contains restricted estimate evidence and provenance.
  * Viewing that queue and offering its contextual approval control are separate
  * exact-bank capabilities; neither follows from the aggregated model read or

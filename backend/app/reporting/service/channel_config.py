@@ -17,8 +17,12 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
+from app.core.authorization import Module, Permission, Sensitivity
 from app.core.config import get_settings
-from app.identity.public import get_bank_or_404
+from app.identity.public import (
+    require_institution_coverage,
+    require_resolved_bank_permission,
+)
 from app.market_data.public import (
     credential_fingerprint,
     decrypt_credential_envelope,
@@ -65,7 +69,22 @@ def _config_row(
 def get_channel_config(
     db: Session, ctx: TenantContext, bank_id: str, channel: str
 ) -> ChannelConfigRead:
-    bank = get_bank_or_404(db, ctx, bank_id)
+    # The stored channel configuration — endpoint, contacts, the credential
+    # fingerprint — is restricted-surface configuration of this bank: reading it
+    # demands the same exact-bank reg/restricted sentence its write does, at
+    # view. Coverage first (an uncovered principal is told nothing about the
+    # bank), then the scoped denial; the "not configured" 404 below is answered
+    # only once authorization has passed.
+    bank, _ = require_institution_coverage(db, ctx, bank_id)
+    require_resolved_bank_permission(
+        db,
+        ctx,
+        bank,
+        permission=Permission.VIEW,
+        module=Module.REGULATORY,
+        sensitivity=Sensitivity.RESTRICTED,
+        surface="reporting_channel_config_read",
+    )
     config = _config_row(db, ctx, bank.id, channel)
     if config is None:
         raise HTTPException(
