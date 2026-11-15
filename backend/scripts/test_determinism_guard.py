@@ -573,12 +573,18 @@ class ClockVisitor(ast.NodeVisitor):
     def _visit_annotations(self, arguments: ast.arguments) -> None:
         if self.postponed:
             return
-        for argument in (*arguments.posonlyargs, *arguments.args, *arguments.kwonlyargs):
+        # Annotations evaluate in declaration order: positional parameters,
+        # then the vararg, then keyword-only parameters and the kwarg.
+        for argument in (*arguments.posonlyargs, *arguments.args):
             if argument.annotation is not None:
                 self.visit(argument.annotation)
-        for extra in (arguments.vararg, arguments.kwarg):
-            if extra is not None and extra.annotation is not None:
-                self.visit(extra.annotation)
+        if arguments.vararg is not None and arguments.vararg.annotation is not None:
+            self.visit(arguments.vararg.annotation)
+        for argument in arguments.kwonlyargs:
+            if argument.annotation is not None:
+                self.visit(argument.annotation)
+        if arguments.kwarg is not None and arguments.kwarg.annotation is not None:
+            self.visit(arguments.kwarg.annotation)
 
     def _visit_arguments(self, arguments: ast.arguments) -> None:
         """Visit defaults always; annotations only when they execute."""

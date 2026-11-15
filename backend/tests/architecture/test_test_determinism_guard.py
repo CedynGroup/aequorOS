@@ -433,6 +433,16 @@ def test_function_local_annotations_are_not_evaluated() -> None:
     assert guard.clock_findings(source).reads == []
 
 
+def test_vararg_annotation_visits_in_declaration_order() -> None:
+    """The vararg annotation evaluates before the keyword-only ones."""
+    source = (
+        "from typing import Annotated\n"
+        "def helper(*args: Annotated[int, lambda: None],\n"
+        "           value: Annotated[int, lambda: lambda: None]): pass\n"
+    )
+    assert guard.clock_findings(source).reads == []
+
+
 def test_generic_class_bases_resolve_inside_the_wrapper_scope() -> None:
     """A generic class's bases are evaluated inside its type-parameter scope."""
     source = (
