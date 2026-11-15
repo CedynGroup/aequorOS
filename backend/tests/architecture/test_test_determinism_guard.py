@@ -208,6 +208,12 @@ UNFROZEN_READS = [
     "    match time.time:\n"
     "        case clock:\n"
     "            clock()\n",
+    # Dictionary entries evaluate key and value in order, so a later key's
+    # walrus cannot mask an earlier value's read.
+    "import time\n"
+    "def test_dict_entry_order():\n"
+    "    clock = time.time\n"
+    "    d = {0: clock(), (clock := lambda: 0): 1}\n",
 ]
 
 #: The same reads are accepted once the clock is frozen at function, class or
@@ -328,6 +334,17 @@ FROZEN_READS = [
     "    match (lambda: 0):\n"
     "        case clock:\n"
     "            return clock()\n",
+    # A break inside a nested loop belongs to that loop, so the outer loop
+    # still exhausts and its else rebinds the alias.
+    "import time\n"
+    "def test_nested_loop_break_stays_inner():\n"
+    "    clock = time.time\n"
+    "    for _ in (1,):\n"
+    "        for _ in (2,):\n"
+    "            break\n"
+    "    else:\n"
+    "        clock = lambda: 0\n"
+    "    clock()\n",
 ]
 
 

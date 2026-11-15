@@ -118,6 +118,8 @@ def _loop_has_break(statements: list[ast.stmt]) -> bool:
     for statement in statements:
         if isinstance(statement, ast.Break):
             return True
+        if isinstance(statement, (ast.For, ast.AsyncFor, ast.While)):
+            continue
         for child in ast.iter_child_nodes(statement):
             if isinstance(child, ast.Break):
                 return True
@@ -465,6 +467,14 @@ class ClockVisitor(ast.NodeVisitor):
         else:
             self.aliases.clear()
             self.aliases.update(carried)
+
+    def visit_Dict(self, node: ast.Dict) -> None:
+        # Each entry evaluates its key before its value, so a later entry's
+        # bindings cannot mask an earlier entry's reads.
+        for key, value in zip(node.keys, node.values, strict=True):
+            if key is not None:
+                self.visit(key)
+            self.visit(value)
 
     def visit_Compare(self, node: ast.Compare) -> None:
         self.visit(node.left)
