@@ -400,11 +400,18 @@ class ClockVisitor(ast.NodeVisitor):
         after_body = dict(self.aliases)
         del self.reads[probe_start:]
         self._merge_states([before, after_body])
-        carried = dict(self.aliases)
         if recheck is not None:
             # A while condition is re-evaluated every iteration, so the
-            # evaluations after the first run under the carried bindings.
-            self.visit(recheck)
+            # evaluations after the first run under the carried bindings. The
+            # silent mode leaves the already-recorded definitions and their
+            # tables alone.
+            outer_probing = self.probing
+            self.probing = True
+            try:
+                self.visit(recheck)
+            finally:
+                self.probing = outer_probing
+        carried = dict(self.aliases)
         for statement in node.body:
             self.visit(statement)
         after_visit = dict(self.aliases)

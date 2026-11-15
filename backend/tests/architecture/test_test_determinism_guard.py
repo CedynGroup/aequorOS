@@ -321,6 +321,12 @@ def test_comprehension_walrus_binds_in_the_containing_scope() -> None:
     assert guard.clock_findings(source).reads != []
 
 
+def test_while_condition_rescan_leaves_definitions_alone() -> None:
+    """Re-evaluating a while condition must not consume its scopes twice."""
+    source = "def test_generator_condition():\n    while any(x for x in []):\n        pass\n"
+    assert guard.clock_findings(source).reads == []
+
+
 def test_the_guard_scans_support_and_module_level_reads(tmp_path: Path) -> None:
     tests = tmp_path / "tests"
     support = tests / "support"
