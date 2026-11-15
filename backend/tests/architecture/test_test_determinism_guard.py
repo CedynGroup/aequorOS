@@ -143,6 +143,11 @@ UNFROZEN_READS = [
     "    clock = time.time\n"
     "    value = (clock := lambda: 0) if flag else None\n"
     "    clock()\n",
+    # An annotated assignment evaluates its value before its annotation, so
+    # the annotation's walrus cannot mask the value's own read.
+    "import time\n"
+    "clock = time.time\n"
+    "stamp: (clock := lambda: 0) = clock()\n",
     # A loop body may run zero times, so its assignments never clear a
     # clock binding.
     "from datetime import datetime\n"
@@ -287,6 +292,16 @@ FROZEN_READS = [
     "            clock = fake_clock\n"
     "        case _:\n"
     "            clock = fake_other\n"
+    "    clock()\n",
+    # A loop that completes always runs its else, so an else-side rebinding
+    # makes the pre-loop binding unreachable.
+    "import time\n"
+    "def test_loop_else_rebinds():\n"
+    "    clock = time.time\n"
+    "    for _ in []:\n"
+    "        pass\n"
+    "    else:\n"
+    "        clock = lambda: 0\n"
     "    clock()\n",
 ]
 

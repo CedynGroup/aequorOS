@@ -108,6 +108,24 @@ def _descendants(table: symtable.SymbolTable) -> Iterator[symtable.SymbolTable]:
         yield from _descendants(child)
 
 
+def _loop_has_break(statements: list[ast.stmt]) -> bool:
+    """Whether a ``break`` at this loop's own level runs inside the body.
+
+    A break inside a nested loop belongs to that loop, so the walk skips
+    nested loop statements; a break inside a nested function is a syntax
+    error, so statements are the only places to search.
+    """
+    for statement in statements:
+        for child in ast.iter_child_nodes(statement):
+            if isinstance(child, ast.Break):
+                return True
+            if isinstance(child, (ast.For, ast.AsyncFor, ast.While)):
+                continue
+            if isinstance(child, ast.stmt) and _loop_has_break([child]):
+                return True
+    return False
+
+
 def _merge_values(values: list[str]) -> str:
     """The binding a read may see across the reachable paths of a branch or loop.
 
@@ -313,10 +331,8 @@ class ClockVisitor(ast.NodeVisitor):
                     self.deferred_frozen = True
 
     def visit_AnnAssign(self, node: ast.AnnAssign) -> None:
-        if not self.postponed and not self.deferred_body:
-            # Module and class bodies evaluate their annotations; a
-            # function-local one never runs.
-            self.visit(node.annotation)
+        # Python assigns the value before evaluating the annotation, so the
+        # annotation's bindings cannot mask the value's own reads.
         if node.value is not None:
             self.visit(node.value)
             self.bind(node.target, node.value)
@@ -326,6 +342,10 @@ class ClockVisitor(ast.NodeVisitor):
                 and self._carries_freeze_marker(node.value)
             ):
                 self.deferred_frozen = True
+        if not self.postponed and not self.deferred_body:
+            # Module and class bodies evaluate their annotations; a
+            # function-local one never runs.
+            self.visit(node.annotation)
 
     def visit_AugAssign(self, node: ast.AugAssign) -> None:
         self.visit(node.value)
@@ -421,13 +441,28 @@ class ClockVisitor(ast.NodeVisitor):
         for statement in node.body:
             self.visit(statement)
         after_visit = dict(self.aliases)
-        # The ``else`` block runs only after a full iteration, so it sees the
-        # carried bindings too.
-        self.aliases.clear()
-        self.aliases.update(carried)
-        for statement in node.orelse:
-            self.visit(statement)
-        self._merge_states([before, carried, after_visit, dict(self.aliases)])
+        if _loop_has_break(node.body):
+            # A break jumps past the else block, so both exit states stay
+            # reachable; the else block itself still sees the carried
+            # bindings when the loop completes.
+            if node.orelse:
+                self.aliases.clear()
+                self.aliases.update(carried)
+                for statement in node.orelse:
+                    self.visit(statement)
+                self._merge_states([after_visit, dict(self.aliases)])
+            else:
+                self._merge_states([before, carried, after_visit])
+        elif node.orelse:
+            # Without a break the loop always completes, so the else block
+            # runs and its state is the only exit state.
+            self.aliases.clear()
+            self.aliases.update(carried)
+            for statement in node.orelse:
+                self.visit(statement)
+        else:
+            self.aliases.clear()
+            self.aliases.update(carried)
 
     def visit_Compare(self, node: ast.Compare) -> None:
         self.visit(node.left)
