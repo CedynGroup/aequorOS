@@ -155,6 +155,10 @@ class ClockVisitor(ast.NodeVisitor):
         # definitions can share a line (lambdas in one annotation) and a match
         # must not hand out twice, and ids of collected tables would be reused.
         self.consumed: dict[int, symtable.SymbolTable] = {}
+        self.probing = False
+        #: Names bound by assignment expressions in the currently visited
+        # comprehension; the comprehension hands them to its containing scope.
+        self.walrus: set[str] = set()
         self.frozen = False
         self.deferred_frozen = False
         self.postponed = False
@@ -324,6 +328,9 @@ class ClockVisitor(ast.NodeVisitor):
     def visit_NamedExpr(self, node: ast.NamedExpr) -> None:
         self.visit(node.value)
         self.bind(node.target, node.value)
+        # An assignment expression binds in the containing scope even inside
+        # a comprehension; the comprehension hands the record on.
+        self.walrus.add(node.target.id)
 
     def visit_ExceptHandler(self, node: ast.ExceptHandler) -> None:
         if node.type is not None:
@@ -376,15 +383,32 @@ class ClockVisitor(ast.NodeVisitor):
     def _visit_loop(self, node: ast.For | ast.AsyncFor | ast.While) -> None:
         # A loop body may run zero times, so its assignments must not clear a
         # binding: merge the pre-loop state with the body and ``else`` states.
+        # A body assignment also carries into later iterations, so a read
+        # before the assignment is judged with the binding any iteration may
+        # hold: a silent pass collects the body's assignments first.
         before = dict(self.aliases)
+        probe_start = len(self.reads)
+        outer_probing = self.probing
+        self.probing = True
+        try:
+            for statement in node.body:
+                self.visit(statement)
+        finally:
+            self.probing = outer_probing
+        after_body = dict(self.aliases)
+        del self.reads[probe_start:]
+        self._merge_states([before, after_body])
+        carried = dict(self.aliases)
         for statement in node.body:
             self.visit(statement)
-        after_body = dict(self.aliases)
+        after_visit = dict(self.aliases)
+        # The ``else`` block runs only after a full iteration, so it sees the
+        # carried bindings too.
         self.aliases.clear()
-        self.aliases.update(before)
+        self.aliases.update(carried)
         for statement in node.orelse:
             self.visit(statement)
-        self._merge_states([before, after_body, dict(self.aliases)])
+        self._merge_states([before, carried, after_visit, dict(self.aliases)])
 
     def visit_With(self, node: ast.With | ast.AsyncWith) -> None:
         previous_frozen, previous_deferred = self.frozen, self.deferred_frozen
@@ -425,6 +449,10 @@ class ClockVisitor(ast.NodeVisitor):
                 self.visit(extra.annotation)
 
     def visit_FunctionDef(self, node: ast.FunctionDef | ast.AsyncFunctionDef) -> None:
+        if self.probing:
+            # The silent loop pass only collects bindings; the real pass
+            # records the definitions.
+            return
         own = self._decorator_freezes(node.decorator_list) or _takes_frozen_clock(node.args)
         for decorator in node.decorator_list:
             self.visit(decorator)
@@ -438,6 +466,8 @@ class ClockVisitor(ast.NodeVisitor):
     visit_AsyncFunctionDef = visit_FunctionDef
 
     def visit_Lambda(self, node: ast.Lambda) -> None:
+        if self.probing:
+            return
         self._visit_arguments(node.args)
         # A lambda body runs at call time, which may be long after the
         # enclosing block exited, so only marker-derived deferred freeze
@@ -446,6 +476,8 @@ class ClockVisitor(ast.NodeVisitor):
         self.functions.append((node, self.child_table(node, "lambda"), self.enclosing, frozen))
 
     def visit_ClassDef(self, node: ast.ClassDef) -> None:
+        if self.probing:
+            return
         own = self._decorator_freezes(node.decorator_list) or any(
             self._pytestmark_statement(statement) for statement in node.body
         )
@@ -473,10 +505,13 @@ class ClockVisitor(ast.NodeVisitor):
             self.aliases,
             self.enclosing,
         )
-        if isinstance(node, ast.GeneratorExp):
+        if isinstance(node, ast.GeneratorExp) and not self.probing:
+            # The silent loop pass leaves the table for the real pass.
             self.table = self.child_table(node, "genexpr")
         self.aliases = self.enclosing.copy()
         self.enclosing = self.aliases
+        assigned = self.walrus
+        self.walrus = set()
         for generator in node.generators:
             self.bind(generator.target)
         for index, generator in enumerate(node.generators):
@@ -487,11 +522,19 @@ class ClockVisitor(ast.NodeVisitor):
                 self.visit(condition)
         for expression in [node.key, node.value] if isinstance(node, ast.DictComp) else [node.elt]:
             self.visit(expression)
+        leaked, self.walrus = self.walrus, assigned
+        # An assignment expression binds in the containing scope, so the
+        # comprehension's copy hands its walrus bindings back before the
+        # temporary map is discarded.
+        temporary = self.aliases
         self.table, self.aliases, self.enclosing = (
             previous_table,
             previous_aliases,
             previous_enclosing,
         )
+        for name in leaked:
+            if name in temporary:
+                previous_aliases[name] = temporary[name]
 
     visit_ListComp = visit_comprehension_scope
     visit_SetComp = visit_comprehension_scope

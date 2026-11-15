@@ -99,6 +99,13 @@ UNFROZEN_READS = [
     "import time\n"
     "def test_direct_boolop_call():\n"
     "    (time.time or None)()\n",
+    # A body assignment carries into later iterations: a read before the
+    # assignment still executes against the assigned clock.
+    "import time\n"
+    "clock = lambda: 0\n"
+    "for _ in (1, 2):\n"
+    "    clock()\n"
+    "    clock = time.time\n",
     # A loop body may run zero times, so its assignments never clear a
     # clock binding.
     "from datetime import datetime\n"
@@ -285,6 +292,17 @@ def test_same_line_definitions_resolve_to_distinct_tables() -> None:
         "    ...\n"
     )
     assert guard.clock_findings(source).reads == []
+
+
+def test_comprehension_walrus_binds_in_the_containing_scope() -> None:
+    """A walrus inside a comprehension updates the enclosing scope's aliases."""
+    source = (
+        "import time\n"
+        "def test_walrus_leak():\n"
+        "    stamps = [(clock := time.time) for _ in (1,)]\n"
+        "    return clock()\n"
+    )
+    assert guard.clock_findings(source).reads != []
 
 
 def test_the_guard_scans_support_and_module_level_reads(tmp_path: Path) -> None:
