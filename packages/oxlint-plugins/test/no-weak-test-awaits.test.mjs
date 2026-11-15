@@ -160,6 +160,34 @@ test("lets a helper's local declaration shadow an outer weak helper", async () =
   assertClean(result, "weakAwaits");
 });
 
+test("resolves an alias created by assignment without crashing", async () => {
+  const result = await runOxlint(["weakAwaits"], `
+    function loadData() {
+      return fetch('/data');
+    }
+    it('t', async () => {
+      let alias;
+      alias = loadData;
+      await alias();
+    });
+  `);
+  assertClean(result, "weakAwaits");
+});
+
+test("classifies an alias against its target's defining scope", async () => {
+  const result = await runOxlint(["weakAwaits"], `
+    function load() {
+      return fetchData();
+    }
+    it('t', async () => {
+      const fetchData = () => new Promise((resolve) => setTimeout(resolve, 100));
+      const alias = load;
+      await alias();
+    });
+  `);
+  assertClean(result, "weakAwaits");
+});
+
 test("preserves a helper's defining scope through an alias", async () => {
   const result = await runOxlint(["weakAwaits"], `
     function ready() {

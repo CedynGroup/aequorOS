@@ -167,9 +167,9 @@ function parameterBindings(fn) {
 function unresolvedDeclaration(name, chain, scopeChain) {
   for (let index = chain.length - 1; index >= 0; index -= 1) {
     if (chain[index].get(name) === WEAK_UNRESOLVED) {
-      const fn = scopeChain?.[index]?.declarations.get(name);
-      if (fn) {
-        return { fn, slot: index };
+      const entry = scopeChain?.[index]?.declarations?.get(name);
+      if (entry) {
+        return entry;
       }
     }
   }
@@ -410,7 +410,14 @@ const rule = {
       if (!scope.declarations) {
         scope.declarations = new Map();
       }
-      scope.declarations.set(declaration.id.name, declaration);
+      // The entry carries the declaration's DEFINING scope: an alias
+      // registered in a deeper scope must still be classified against the
+      // scope its function was declared in, or a shadowing dependency in
+      // the alias's scope would hide the real one.
+      scope.declarations.set(declaration.id.name, {
+        fn: declaration,
+        slot: scopes.length - 1,
+      });
     }
 
     /** The declaration an unresolved alias forwards to, if one is visible. */
@@ -421,6 +428,19 @@ const rule = {
         }
       }
       return null;
+    }
+
+    /**
+     * Record an alias of an unresolved helper under the alias's name. The
+     * entry is stored as-is, so it keeps the target function and its
+     * original defining scope.
+     */
+    function registerAliasDeclaration(name, entry) {
+      const scope = scopes[scopes.length - 1];
+      if (!scope.declarations) {
+        scope.declarations = new Map();
+      }
+      scope.declarations.set(name, entry);
     }
 
     function pushScope(type = "block") {
@@ -730,18 +750,28 @@ const rule = {
           // dependency when it becomes known.
           const target = unresolvedAliasTarget(node.init.name);
           if (target) {
-            const scope = scopes[scopes.length - 1];
-            if (!scope.declarations) {
-              scope.declarations = new Map();
-            }
-            scope.declarations.set(node.id.name, target);
+            registerAliasDeclaration(node.id.name, target);
           }
         }
         declareIdentifier(node.id, kind, node.parent?.kind, true);
       },
       AssignmentExpression(node) {
         if (node.operator === "=") {
-          assignIdentifier(node.left, boundKind(node.right));
+          const kind = boundKind(node.right);
+          if (
+            kind === WEAK_UNRESOLVED &&
+            node.left.type === "Identifier" &&
+            node.right.type === "Identifier"
+          ) {
+            // An assigned alias forwards to an unresolved helper the same
+            // way a declarator alias does, so reads through it resolve the
+            // dependency when it becomes known.
+            const target = unresolvedAliasTarget(node.right.name);
+            if (target) {
+              registerAliasDeclaration(node.left.name, target);
+            }
+          }
+          assignIdentifier(node.left, kind);
         }
       },
       AwaitExpression(node) {
