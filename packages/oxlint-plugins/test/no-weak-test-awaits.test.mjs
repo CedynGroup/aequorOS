@@ -96,6 +96,83 @@ test("allows an unresolved pure helper handed to a callback invoker", async () =
   assertClean(result, "weakAwaits");
 });
 
+test("allows a clean helper invoked through .call and as a map callback", async () => {
+  const result = await runOxlint(["weakAwaits"], `
+    function loadData() {
+      return fetch('/data');
+    }
+    it('t', async () => {
+      await loadData.call(null);
+      await Promise.all(urls.map(loadData));
+    });
+  `);
+  assertClean(result, "weakAwaits");
+});
+
+test("keeps same-name helpers in sibling suites apart", async () => {
+  // The second suite's wait is weak (its known finding is suppressed); the
+  // first suite's await must stay clean even though the second helper
+  // reuses the name.
+  const result = await runOxlint(["weakAwaits"], `
+    describe('a', () => {
+      function wait() {
+        return Promise.resolve('ready');
+      }
+      it('first', async () => {
+        await wait();
+      });
+    });
+    describe('b', () => {
+      function wait() {
+        return new Promise((resolve) => setTimeout(resolve, 100));
+      }
+      it('second', async () => {
+        // oxlint-disable-next-line acts/no-weak-test-awaits -- pinned weak wait
+        await wait();
+      });
+    });
+  `);
+  assertClean(result, "weakAwaits");
+});
+
+test("does not crash on an anonymous default-exported function", async () => {
+  const result = await runOxlint(["weakAwaits"], `
+    export default function () {}
+    it('t', async () => {
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    });
+  `);
+  assertFlagged(result, "weakAwaits");
+});
+
+test("lets a helper's local declaration shadow an outer weak helper", async () => {
+  const result = await runOxlint(["weakAwaits"], `
+    const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+    void sleep;
+    function ready() {
+      const sleep = () => Promise.resolve('ready');
+      return sleep();
+    }
+    it('t', async () => {
+      await ready();
+    });
+  `);
+  assertClean(result, "weakAwaits");
+});
+
+test("preserves a helper's defining scope through an alias", async () => {
+  const result = await runOxlint(["weakAwaits"], `
+    function ready() {
+      return loadReady();
+    }
+    const loadReady = () => Promise.resolve('ready');
+    it('t', async () => {
+      await ready();
+    });
+  `);
+  assertClean(result, "weakAwaits");
+});
+
 test("keeps same-name helpers in different scopes apart", async () => {
   // The nested describe-level wait shadows the module-level one; the outer
   // test awaits the clean module helper and must not inherit the nested

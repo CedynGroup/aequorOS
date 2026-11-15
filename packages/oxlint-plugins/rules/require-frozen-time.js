@@ -420,6 +420,44 @@ const rule = {
         }
         fileLevelHooks.sort((a, b) => a.callNode.range[0] - b.callNode.range[0]);
 
+        /**
+         * Whether a transition executes before a read `node`. Source order is
+         * the base, but a transition inside an immediately-invoked function
+         * runs when the invocation's BODY runs — after its arguments. A read
+         * inside an argument of that same invocation therefore happens before
+         * the transition, not after it.
+         */
+        const executesBefore = (transitionNode, readNode) => {
+          if (transitionNode.range[0] >= readNode.range[0]) {
+            return false;
+          }
+          let current = readNode.parent;
+          while (current) {
+            if (
+              (current.type === "CallExpression" &&
+                (current.callee.type === "ArrowFunctionExpression" ||
+                  current.callee.type === "FunctionExpression")) ||
+              (current.type === "NewExpression" &&
+                (current.callee.type === "ArrowFunctionExpression" ||
+                  current.callee.type === "FunctionExpression"))
+            ) {
+              for (const sub of [current.callee.body]) {
+                let inner = sub;
+                while (inner) {
+                  if (inner === transitionNode) {
+                    // The read sits in an argument of the invocation whose
+                    // body holds the transition: the body runs later.
+                    return false;
+                  }
+                  inner = inner.parent;
+                }
+              }
+            }
+            current = current.parent;
+          }
+          return true;
+        };
+
         for (const { node, api } of timeDependentNodes) {
           const enclosing = findEnclosingTestCallback(node);
           const report = () =>
@@ -434,7 +472,7 @@ const rule = {
            */
           const stateAt = (transitions) => {
             const own = transitions.filter(
-              (t) => t.immediate && t.node.range[0] < node.range[0],
+              (t) => t.immediate && executesBefore(t.node, node),
             );
             return own.length > 0 ? own.at(-1).frozen : null;
           };
@@ -442,13 +480,19 @@ const rule = {
           if (!enclosing || enclosing.callType === "describe") {
             // Collection callbacks (describe bodies) and module-level reads
             // execute during module evaluation: no hook covers them, but an
-            // explicit module-level freeze that already executed does.
+            // explicit module-level freeze that already executed does — and
+            // every enclosing describe body's transitions ran before this
+            // read too (outer describes collect before inner ones).
             const candidates = [...moduleTransitions];
+            const chain = enclosing ? findAllEnclosingDescribes(node) : [];
             if (enclosing) {
-              candidates.push(...(transitionsByCallback.get(enclosing.fn) ?? []));
+              chain.unshift(enclosing.fn);
+            }
+            for (const describeCallback of [...chain].reverse()) {
+              candidates.push(...(transitionsByCallback.get(describeCallback) ?? []));
             }
             const before = candidates
-              .filter((t) => t.node.range[0] < node.range[0])
+              .filter((t) => executesBefore(t.node, node))
               .sort((a, b) => a.node.range[0] - b.node.range[0]);
             if (before.length === 0 || !before.at(-1).frozen) {
               report();
@@ -458,9 +502,12 @@ const rule = {
 
           // Hooks and tests: replay the hook sequence that runs before this
           // callback. Execution order is phase (beforeAll before beforeEach),
-          // then outer describes before inner ones, then registration order
-          // within a describe. An equal-phase hook of the SAME describe runs
-          // before this callback only when it is registered earlier.
+          // then, within a phase, outer describes before inner ones for setup
+          // phases and inner describes before outer ones for teardown phases
+          // (an inner afterEach runs before the file-level one), then
+          // registration order within a describe. An equal-phase hook of the
+          // SAME describe runs before this callback only when it is
+          // registered earlier.
           const rank = phaseRank(enclosing.callType);
           const enclosingDescribes = findAllEnclosingDescribes(enclosing.callNode);
           const sequence = [];
@@ -482,17 +529,27 @@ const rule = {
               consider(hook, depth);
             }
           }
+          const isTeardown = (hookType) => hookType === "afterEach" || hookType === "afterAll";
           sequence.sort(
             (a, b) =>
               phaseRank(a.hook.hookType) - phaseRank(b.hook.hookType) ||
-              b.depth - a.depth ||
+              (isTeardown(a.hook.hookType) ? a.depth - b.depth : b.depth - a.depth) ||
               a.hook.callNode.range[0] - b.hook.callNode.range[0],
           );
 
           // Module-level transitions all execute before any registered
-          // callback runs, wherever they sit in the source.
+          // callback runs, wherever they sit in the source — and so do the
+          // enclosing describe bodies (collection): a restoration in a
+          // describe body invalidates an earlier module freeze for every
+          // test nested in it.
           let frozen =
             moduleTransitions.length > 0 ? moduleTransitions.at(-1).frozen : false;
+          for (const describeCallback of [...enclosingDescribes].reverse()) {
+            const transitions = transitionsByCallback.get(describeCallback) ?? [];
+            if (transitions.length > 0) {
+              frozen = transitions.at(-1).frozen;
+            }
+          }
           for (const { hook } of sequence) {
             if (hook.netFrozen !== null) frozen = hook.netFrozen;
           }

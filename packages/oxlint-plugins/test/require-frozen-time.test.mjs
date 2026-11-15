@@ -674,3 +674,49 @@ test("lets a module-level immediately invoked freeze cover a read", async () => 
   `);
   assertClean(result, "frozenTime");
 });
+
+// -- Hardening review round (nested teardown order, describe-body restores,
+// IIFE argument evaluation) -------------------------------------------------
+
+test("reports a nested afterAll read when the outer afterEach restores last", async () => {
+  const result = await runOxlint(["frozenTime"], `
+    beforeEach(() => {
+      vi.useFakeTimers();
+    });
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+    describe('suite', () => {
+      afterEach(() => {
+        vi.useFakeTimers();
+      });
+      afterAll(() => {
+        new Date();
+      });
+      it('t', () => {
+        new Date();
+      });
+    });
+  `);
+  assertFlagged(result, "frozenTime");
+});
+
+test("reports a test read when a describe body restores real timers", async () => {
+  const result = await runOxlint(["frozenTime"], `
+    vi.useFakeTimers();
+    describe('suite', () => {
+      vi.useRealTimers();
+      it('t', () => {
+        new Date();
+      });
+    });
+  `);
+  assertFlagged(result, "frozenTime");
+});
+
+test("reports a read in an IIFE argument that evaluates before the freeze", async () => {
+  const result = await runOxlint(["frozenTime"], `
+    (() => vi.useFakeTimers())(Date.now());
+  `);
+  assertFlagged(result, "frozenTime");
+});
