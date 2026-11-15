@@ -201,3 +201,78 @@ test("reports a timer promise held in a computed property value", async () => {
   assertFlagged(result, "weakAwaits");
 });
 
+// -- Review wave (2026-11-14/15, PR #922) ----------------------------------
+
+// PRRT_kwDOSK8LJc63jdsC: a reassignment AFTER an awaited expression must not
+// retroactively make the earlier await weak.
+test("does not retroactively report an await of a later-reassigned binding", async () => {
+  const result = await runOxlint(["weakAwaits"], `
+    it('t', async () => {
+      let wait = loadData;
+      await wait();
+      wait = () => new Promise((r) => setTimeout(r, 10));
+      expect(wait).toBeDefined();
+    });
+  `);
+  assertClean(result, "weakAwaits");
+});
+
+// PRRT_kwDOSK8LJc63jdsE: a setup hook's assignment to an outer binding executes
+// before the tests, so the hook-initialized helper stays enforced.
+test("reports a weak helper assigned by a setup hook", async () => {
+  const result = await runOxlint(["weakAwaits"], `
+    let sleep;
+    beforeEach(() => {
+      sleep = () => new Promise((r) => setTimeout(r, 10));
+    });
+    it('t', async () => {
+      await sleep();
+    });
+  `);
+  assertFlagged(result, "weakAwaits");
+});
+
+// PRRT_kwDOSK8LJc63jdsJ: a timer helper passed to a callback-invoking array method
+// waits exclusively on timer promises.
+test("reports a weak helper invoked as an array callback", async () => {
+  const result = await runOxlint(["weakAwaits"], `
+    const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+    it('t', async () => {
+      await Promise.all([10, 20].map(sleep));
+    });
+  `);
+  assertFlagged(result, "weakAwaits");
+});
+
+// PRRT_kwDOSK8LJc63jg-M + PRRT_kwDOSK8LJc63jzd2: sleep.call/sleep.apply invoke the helper
+// and return its timer promise.
+test("reports a weak helper invoked through call and apply", async () => {
+  const flagged = await runOxlint(["weakAwaits"], `
+    const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+    it('t', async () => {
+      await sleep.call(null, 100);
+    });
+  `);
+  assertFlagged(flagged, "weakAwaits");
+  const applied = await runOxlint(["weakAwaits"], `
+    const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+    it('t', async () => {
+      await sleep.apply(null, [10]);
+    });
+  `);
+  assertFlagged(applied, "weakAwaits");
+});
+
+// PRRT_kwDOSK8LJc63jg-Q: an assignment inside the test body reclassifies the
+// captured binding for the awaits that follow it.
+test("reports a captured helper reassigned inside the test body", async () => {
+  const result = await runOxlint(["weakAwaits"], `
+    let pause = () => loadReady();
+    it('t', async () => {
+      pause = (ms) => new Promise((r) => setTimeout(r, ms));
+      await pause(100);
+    });
+  `);
+  assertFlagged(result, "weakAwaits");
+});
+

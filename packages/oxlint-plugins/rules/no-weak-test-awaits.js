@@ -115,6 +115,21 @@ function isSetTimeoutPromise(node) {
 const WEAK_PROMISE = "promise";
 const WEAK_HELPER = "helper";
 
+/** Array methods whose first argument is invoked as a callback. */
+const CALLBACK_INVOKERS = new Set([
+  "map",
+  "filter",
+  "forEach",
+  "some",
+  "every",
+  "find",
+  "findIndex",
+  "flatMap",
+]);
+
+/** Setup hooks whose callbacks run before the tests they precede. */
+const SETUP_HOOKS = new Set(["beforeEach", "beforeAll"]);
+
 /** Look a name up along a chain of binding maps, innermost last. */
 function resolveInChain(chain, name) {
   for (let index = chain.length - 1; index >= 0; index -= 1) {
@@ -155,6 +170,24 @@ function weakUseIn(node, chain, awaitMode) {
       return true;
     }
     if (callee.type === "MemberExpression" && !callee.computed) {
+      const methodName = callee.property.type === "Identifier" ? callee.property.name : null;
+      // `sleep.call(...)`/`sleep.apply(...)` invoke the helper and return its
+      // timer promise.
+      if (
+        (methodName === "call" || methodName === "apply") &&
+        resolveInChain(chain, callee.object.name ?? "")
+      ) {
+        return true;
+      }
+      // A timer helper handed to a callback-invoking array method waits
+      // exclusively on timer promises.
+      if (
+        CALLBACK_INVOKERS.has(methodName) &&
+        node.arguments[0]?.type === "Identifier" &&
+        resolveInChain(chain, node.arguments[0].name)
+      ) {
+        return true;
+      }
       // `obj.sleep()`: the property name is not a helper reference; only the
       // receiver can carry a weak binding.
       if (weakUseIn(callee.object, chain, awaitMode)) return true;
@@ -224,18 +257,35 @@ const rule = {
       return scopes.map((scope) => scope.bindings);
     }
 
+    /** The index of the innermost function/program scope. */
+    function functionDepth() {
+      for (let index = scopes.length - 1; index >= 0; index -= 1) {
+        if (scopes[index].type === "function" || scopes[index].type === "program") {
+          return index;
+        }
+      }
+      return 0;
+    }
+
     function resolveKind(name) {
       return resolveInChain(currentChain(), name);
     }
 
-    function declareIdentifier(node, kind, varKind) {
+    function declareIdentifier(node, kind, varKind, ordered = false) {
       if (node?.type === "Identifier") {
         const targetScope =
           varKind === "var"
             ? scopes.findLast((scope) => scope.type === "function" || scope.type === "program")
             : scopes.at(-1);
         targetScope?.bindings.set(node.name, kind);
-        if (kind) reevaluatePendingAwaits();
+        if (kind) {
+          // A `const`/`let` initializer executes in source order: an await
+          // that already ran in the same function saw the previous value. A
+          // function-declaration classification is hoisted and covers every
+          // pending await.
+          if (ordered) reevaluatePendingAwaits(functionDepth(), node);
+          else reevaluatePendingAwaits();
+        }
       }
     }
 
@@ -252,21 +302,41 @@ const rule = {
 
       // Confine write effects to the function whose body the assignment sits
       // in: an assignment inside an uncalled function must not change the
-      // classification the enclosing scopes already have.
+      // classification the enclosing scopes already have. A setup hook is
+      // the exception — its callback runs before the tests, so its
+      // assignment to an outer binding propagates outward.
       let boundary = scopes.length - 1;
       while (
         boundary >= 0 &&
         scopes[boundary].type !== "function" &&
-        scopes[boundary].type !== "program"
+        scopes[boundary].type !== "program" &&
+        scopes[boundary].type !== "hook"
       ) {
         boundary -= 1;
+      }
+      if (boundary >= 0 && scopes[boundary].type === "hook") {
+        for (let index = 0; index <= boundary; index += 1) {
+          if (scopes[index].bindings.has(node.name)) {
+            scopes[index].bindings.set(node.name, kind);
+            if (kind) reevaluatePendingAwaits(boundary, node);
+            return;
+          }
+        }
       }
       for (let index = scopes.length - 1; index >= boundary; index -= 1) {
         if (scopes[index].bindings.has(node.name)) {
           scopes[index].bindings.set(node.name, kind);
-          if (kind) reevaluatePendingAwaits();
+          if (kind) reevaluatePendingAwaits(boundary, node);
           return;
         }
+      }
+      // A captured outer binding reassigned inside this function: record a
+      // function-local override so the awaits that follow it see the new
+      // kind, without changing the classification the enclosing scopes
+      // already have.
+      if (boundary >= 0) {
+        scopes[boundary].bindings.set(node.name, kind);
+        if (kind) reevaluatePendingAwaits(boundary, node);
       }
     }
 
@@ -287,9 +357,24 @@ const rule = {
       return weakUseIn(right, currentChain(), false) ? WEAK_PROMISE : false;
     }
 
-    function reevaluatePendingAwaits() {
+    function reevaluatePendingAwaits(boundary) {
       for (let index = pendingAwaits.length - 1; index >= 0; index -= 1) {
         const pending = pendingAwaits[index];
+        if (boundary !== undefined) {
+          // An update that executes in source order cannot retroactively
+          // reach an await that already ran in the same function: skip
+          // pendings inside that function recorded before the update. A
+          // pending in a SIBLING function (a test beside the hook that
+          // assigned, or vice versa) has its own binding map, so it is
+          // reevaluated; so is a pending in a function nested inside the
+          // assigning one, which may be called after the update.
+          const sameFunction =
+            pending.depth <= boundary &&
+            pending.chain[boundary] === scopes[boundary]?.bindings;
+          if (sameFunction) {
+            continue;
+          }
+        }
         if (weakUseIn(pending.argument, pending.chain, true)) {
           context.report({ node: pending.node, messageId: "weakAwait" });
           pendingAwaits.splice(index, 1);
@@ -348,6 +433,19 @@ const rule = {
       }
     }
 
+    /** The scope type a function pushes: a setup hook's callback or a plain function. */
+    function scopeTypeFor(node) {
+      const callee = node.parent?.callee;
+      if (
+        node.parent?.type === "CallExpression" &&
+        callee?.type === "Identifier" &&
+        SETUP_HOOKS.has(callee.name)
+      ) {
+        return "hook";
+      }
+      return "function";
+    }
+
     return {
       Program(node) {
         pushScope("program");
@@ -373,17 +471,17 @@ const rule = {
           functionContainsWeakTimerPromise(node) ? WEAK_HELPER : false,
           "function",
         );
-        pushScope("function");
+        pushScope(scopeTypeFor(node));
         declareParameters(node);
       },
       "FunctionDeclaration:exit": popScope,
       FunctionExpression(node) {
-        pushScope("function");
+        pushScope(scopeTypeFor(node));
         declareParameters(node);
       },
       "FunctionExpression:exit": popScope,
       ArrowFunctionExpression(node) {
-        pushScope("function");
+        pushScope(scopeTypeFor(node));
         declareParameters(node);
       },
       "ArrowFunctionExpression:exit": popScope,
@@ -393,7 +491,7 @@ const rule = {
       },
       "CatchClause:exit": popScope,
       VariableDeclarator(node) {
-        declareIdentifier(node.id, boundKind(node.init), node.parent?.kind);
+        declareIdentifier(node.id, boundKind(node.init), node.parent?.kind, true);
       },
       AssignmentExpression(node) {
         if (node.operator === "=") {
@@ -415,7 +513,12 @@ const rule = {
         }
 
         // Clean for now: a later weak declaration can still make it weak.
-        pendingAwaits.push({ node, argument: node.argument, chain });
+        pendingAwaits.push({
+          node,
+          argument: node.argument,
+          chain,
+          depth: functionDepth(),
+        });
       },
     };
   },

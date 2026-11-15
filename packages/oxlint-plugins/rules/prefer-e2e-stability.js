@@ -177,7 +177,17 @@ function getMemberName(node) {
 
 function isPageLikeObject(node, scopeStack) {
   const unwrapped = unwrapExpression(node);
-  const name = getMemberName(unwrapped);
+  let name;
+  if (unwrapped.type === "MemberExpression") {
+    // A computed property's VALUE decides, not the key's spelling:
+    // `fixtures[page]` with `const page = 'scheduler'` names the scheduler,
+    // never the page.
+    name = unwrapped.computed
+      ? resolvedMemberName(unwrapped, scopeStack)
+      : getMemberName(unwrapped);
+  } else {
+    name = getMemberName(unwrapped);
+  }
   if (typeof name !== "string") return false;
 
   if (unwrapped.type === "Identifier") {
@@ -220,10 +230,13 @@ function resolvedMemberName(callee, scopeStack) {
   if (!unwrapped.computed) {
     return property.type === "Identifier" ? property.name : null;
   }
-  const literal = getStaticString(unwrapExpression(property));
+  // TypeScript wrappers around the identifier must be unwrapped before both
+  // the literal extraction and the constant lookup.
+  const bare = unwrapExpression(property);
+  const literal = getStaticString(bare);
   if (literal !== null) return literal;
-  if (property.type === "Identifier") {
-    const resolved = resolveConstant(scopeStack, property.name);
+  if (bare.type === "Identifier") {
+    const resolved = resolveConstant(scopeStack, bare.name);
     return typeof resolved === "string" ? resolved : null;
   }
   return null;

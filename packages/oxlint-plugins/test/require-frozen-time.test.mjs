@@ -544,3 +544,96 @@ test("does not let a restoring beforeEach keep an earlier freeze", async () => {
   `);
   assertFlagged(result, "frozenTime");
 });
+
+// -- Review wave (2026-11-14/15, PR #922) ----------------------------------
+
+// PRRT_kwDOSK8LJc63jg-g: a module-level freeze executes before every
+// registered callback, so test-body reads are covered regardless of where the
+// freeze sits in the source.
+test("lets a module-level freeze cover a test-body read", async () => {
+  const result = await runOxlint(["frozenTime"], `
+    vi.useFakeTimers();
+    it('t', () => {
+      expect(Date.now()).toBeGreaterThan(0);
+    });
+  `);
+  assertClean(result, "frozenTime");
+});
+
+test("lets a module-level freeze declared after the test cover its read", async () => {
+  const result = await runOxlint(["frozenTime"], `
+    it('t', () => {
+      expect(Date.now()).toBeGreaterThan(0);
+    });
+    vi.useFakeTimers();
+  `);
+  assertClean(result, "frozenTime");
+});
+
+test("reports a test-body read when module-level timers were restored", async () => {
+  const result = await runOxlint(["frozenTime"], `
+    vi.useFakeTimers();
+    vi.useRealTimers();
+    it('t', () => {
+      expect(Date.now()).toBeGreaterThan(0);
+    });
+  `);
+  assertFlagged(result, "frozenTime");
+});
+
+// PRRT_kwDOSK8LJc63jpat: a restoration captured in a nested closure the hook
+// never calls executes only if invoked, so the hook's freeze still covers.
+test("does not let an uncalled nested restoration undo a hook freeze", async () => {
+  const result = await runOxlint(["frozenTime"], `
+    beforeEach(() => {
+      vi.useFakeTimers();
+      const restore = () => vi.useRealTimers();
+    });
+    it('t', () => {
+      expect(Date.now()).toBeGreaterThan(0);
+    });
+  `);
+  assertClean(result, "frozenTime");
+});
+
+test("still lets a hook's own restoration undo its freeze", async () => {
+  const result = await runOxlint(["frozenTime"], `
+    beforeEach(() => {
+      vi.useFakeTimers();
+      vi.useRealTimers();
+    });
+    it('t', () => {
+      expect(Date.now()).toBeGreaterThan(0);
+    });
+  `);
+  assertFlagged(result, "frozenTime");
+});
+
+// PRRT_kwDOSK8LJc63jzd6: an afterEach restoration executes before afterAll,
+// so a later afterAll read sees the real wall clock again.
+test("replays an afterEach restoration before an afterAll read", async () => {
+  const result = await runOxlint(["frozenTime"], `
+    beforeEach(() => {
+      vi.useFakeTimers();
+    });
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+    afterAll(() => {
+      expect(Date.now()).toBeGreaterThan(0);
+    });
+  `);
+  assertFlagged(result, "frozenTime");
+});
+
+test("still lets a beforeEach freeze cover an afterAll read with no teardown", async () => {
+  const result = await runOxlint(["frozenTime"], `
+    beforeEach(() => {
+      vi.useFakeTimers();
+    });
+    afterAll(() => {
+      expect(Date.now()).toBeGreaterThan(0);
+    });
+  `);
+  assertClean(result, "frozenTime");
+});

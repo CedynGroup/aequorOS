@@ -177,3 +177,42 @@ test("reports waitForTimeout through a page-like member-expression alias", async
   assertFlagged(result, "e2eStability");
 });
 
+// -- Review wave (2026-11-14/15, PR #922) ----------------------------------
+
+// PRRT_kwDOSK8LJc63jg-U: a TS-wrapped computed identifier must be unwrapped
+// before the constant lookup, so page[METHOD as typeof METHOD](100) resolves.
+test("reports waitForTimeout through a TS-wrapped computed constant", async () => {
+  const result = await runOxlint(["e2eStability"], `
+    const METHOD = 'waitForTimeout';
+    test('journey', async ({ page }) => {
+      await page[METHOD as typeof METHOD](100);
+    });
+  `);
+  assertFlagged(result, "e2eStability");
+});
+
+// PRRT_kwDOSK8LJc63jg-Y: a computed property's VALUE resolves before the
+// page-name check, so `fixtures[page]` with a non-page string stays clean.
+test("does not flag a computed alias whose property value is not page-like", async () => {
+  const result = await runOxlint(["e2eStability"], `
+    const page = 'scheduler';
+    const fixtures = { scheduler: { waitForTimeout: (ms) => ms } };
+    test('journey', async () => {
+      const tab = fixtures[page];
+      tab.waitForTimeout(5);
+    });
+  `);
+  assertClean(result, "e2eStability");
+});
+
+test("still reports a computed alias whose property value names page", async () => {
+  const result = await runOxlint(["e2eStability"], `
+    const key = 'page';
+    test('journey', async ({ fixtures }) => {
+      const tab = fixtures[key];
+      await tab.waitForTimeout(100);
+    });
+  `);
+  assertFlagged(result, "e2eStability");
+});
+

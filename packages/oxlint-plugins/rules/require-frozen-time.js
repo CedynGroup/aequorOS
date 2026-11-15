@@ -115,6 +115,26 @@ function getCalleeBaseName(callee) {
 }
 
 /**
+ * The nearest function node around `node`, or `null` at module level. Used to
+ * tell transitions a hook/test callback executes itself from transitions
+ * captured inside a nested closure it merely defines.
+ */
+function nearestFunction(node) {
+  let current = node.parent;
+  while (current) {
+    if (
+      current.type === "FunctionExpression" ||
+      current.type === "ArrowFunctionExpression" ||
+      current.type === "FunctionDeclaration"
+    ) {
+      return current;
+    }
+    current = current.parent;
+  }
+  return null;
+}
+
+/**
  * Walk up from `node` to find the nearest enclosing callback that is a direct
  * argument of a test-framework call (it/test/describe/beforeEach/…).
  * Handles variants like describe.only, it.each(data)("name", fn), etc.
@@ -223,6 +243,15 @@ const rule = {
     const unfreezeCalls = [];
     // Time-dependent API usages to validate at the end.
     const timeDependentNodes = [];
+    const recordFreezeState = (node, calls) => {
+      const enclosing = findEnclosingTestCallback(node);
+      // A transition directly in the callback's body executes when the
+      // callback runs; one captured inside a nested closure runs only if
+      // that closure is invoked, so it does not describe the callback's own
+      // timer state. Module-level transitions always execute.
+      const immediate = !enclosing || nearestFunction(node) === enclosing.fn;
+      calls.push({ node, enclosing, immediate });
+    };
     return {
       CallExpression(node) {
         const callee = node.callee;
@@ -235,7 +264,7 @@ const rule = {
           callee.property.type === "Identifier" &&
           (callee.property.name === "useFakeTimers" || callee.property.name === "setSystemTime")
         ) {
-          freezeCalls.push({ node, enclosing: findEnclosingTestCallback(node) });
+          recordFreezeState(node, freezeCalls);
           return;
         }
 
@@ -248,21 +277,21 @@ const rule = {
           callee.property.type === "Identifier" &&
           callee.property.name === "useRealTimers"
         ) {
-          unfreezeCalls.push({ node, enclosing: findEnclosingTestCallback(node) });
+          recordFreezeState(node, unfreezeCalls);
           return;
         }
 
         // Detect page.clock.install(), context.clock.setFixedTime(), ... —
         // Playwright's clock API freezes both timers and Date.
         if (isClockFreezeCall(callee)) {
-          freezeCalls.push({ node, enclosing: findEnclosingTestCallback(node) });
+          recordFreezeState(node, freezeCalls);
           return;
         }
 
         // Detect node:test's timer mock freezing Date.
         if (isNodeTestTimersEnableCall(callee)) {
           if (nodeTestTimersEnableFreezesDate(node)) {
-            freezeCalls.push({ node, enclosing: findEnclosingTestCallback(node) });
+            recordFreezeState(node, freezeCalls);
           }
           return;
         }
@@ -301,7 +330,7 @@ const rule = {
         const transitionsByCallback = new Map();
         const moduleTransitions = [];
         const recordTransition = (call, frozen) => {
-          const entry = { node: call.node, frozen };
+          const entry = { node: call.node, frozen, immediate: call.immediate };
           if (!call.enclosing) {
             moduleTransitions.push(entry);
             return;
@@ -340,8 +369,11 @@ const rule = {
         const hooksByDescribe = new Map();
         const fileLevelHooks = [];
         for (const { enclosing } of [...freezeCalls, ...unfreezeCalls]) {
-          if (!enclosing || !BEFORE_HOOKS.has(enclosing.callType)) continue;
-          const transitions = transitionsByCallback.get(enclosing.fn) ?? [];
+          if (!enclosing || !(BEFORE_HOOKS.has(enclosing.callType) || enclosing.callType === "afterEach"))
+            continue;
+          const transitions = (transitionsByCallback.get(enclosing.fn) ?? []).filter(
+            (t) => t.immediate,
+          );
           const hook = {
             hookType: enclosing.callType,
             callNode: enclosing.callNode,
@@ -374,7 +406,9 @@ const rule = {
            * callback contributes its transitions up to the read.
            */
           const stateAt = (transitions) => {
-            const own = transitions.filter((t) => t.node.range[0] < node.range[0]);
+            const own = transitions.filter(
+              (t) => t.immediate && t.node.range[0] < node.range[0],
+            );
             return own.length > 0 ? own.at(-1).frozen : null;
           };
 
@@ -428,7 +462,10 @@ const rule = {
               a.hook.callNode.range[0] - b.hook.callNode.range[0],
           );
 
-          let frozen = false;
+          // Module-level transitions all execute before any registered
+          // callback runs, wherever they sit in the source.
+          let frozen =
+            moduleTransitions.length > 0 ? moduleTransitions.at(-1).frozen : false;
           for (const { hook } of sequence) {
             if (hook.netFrozen !== null) frozen = hook.netFrozen;
           }
