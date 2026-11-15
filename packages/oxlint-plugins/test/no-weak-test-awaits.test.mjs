@@ -696,3 +696,28 @@ test("a sibling suite's hook does not taint an earlier suite's await", async () 
   `);
   assertFlagged(result, "weakAwaits");
 });
+
+test("two sibling hooks keep each suite's own write", async () => {
+  const result = await runOxlint(["weakAwaits"], `
+    function load() {
+      return fetch('/data');
+    }
+    describe('first', () => {
+      beforeEach(() => {
+        load = () => fetch('/clean');
+      });
+      it('t', async () => {
+        await load();
+      });
+    });
+    describe('second', () => {
+      beforeEach(() => {
+        load = () => fetch('/also-clean');
+      });
+      it('t', async () => {
+        await load();
+      });
+    });
+  `);
+  assertClean(result, "weakAwaits");
+});

@@ -691,28 +691,54 @@ const rule = {
         // the writes whose describes are not a prefix of this pending's
         // describes (a sibling suite's beforeEach never ran for it), judge
         // the await, then restore them for the next pending.
-        const undone = [];
-        for (let index = hookWrites.length - 1; index >= 0; index -= 1) {
-          const entry = hookWrites[index];
+        // Reconstruct the value each logged binding holds for THIS pending's
+        // suite: start from the pre-log value the log's first write recorded
+        // and apply only the writes whose describes are a prefix of the
+        // pending's describes, in order (a sibling suite's beforeEach never
+        // ran for it). Judge the await, then restore the live state exactly
+        // — restoring historical values per write instead would erase a
+        // later applicable write that shares the binding.
+        const targets = new Map();
+        const snapshot = new Map();
+        for (const entry of hookWrites) {
+          if (!targets.has(entry.scope)) {
+            targets.set(entry.scope, new Map());
+            snapshot.set(entry.scope, new Map());
+          }
+          const targetValues = targets.get(entry.scope);
+          const snapshotted = snapshot.get(entry.scope);
+          if (!targetValues.has(entry.name)) {
+            targetValues.set(entry.name, entry.had ? entry.previous : undefined);
+            snapshotted.set(entry.name, entry.scope.bindings.get(entry.name));
+          }
           const applies =
             entry.describeChain.length <= pending.describeChain.length &&
             entry.describeChain.every(
               (describe, position) => pending.describeChain[position] === describe,
             );
-          if (!applies) {
-            undone.push(entry);
-            if (entry.had) {
-              entry.scope.bindings.set(entry.name, entry.previous);
+          if (applies) {
+            targetValues.set(entry.name, entry.kind);
+          }
+        }
+        for (const [scope, values] of targets) {
+          for (const [name, value] of values) {
+            if (value === undefined) {
+              scope.bindings.delete(name);
             } else {
-              entry.scope.bindings.delete(entry.name);
+              scope.bindings.set(name, value);
             }
           }
         }
         const evaluationChain = [...pending.chain.slice(0, pending.depth), ...pending.own];
         const weak = weakUseIn(pending.argument, evaluationChain, true, pending.scopeChain);
-        for (let index = undone.length - 1; index >= 0; index -= 1) {
-          const entry = undone[index];
-          entry.scope.bindings.set(entry.name, entry.kind);
+        for (const [scope, values] of snapshot) {
+          for (const [name, value] of values) {
+            if (value === undefined) {
+              scope.bindings.delete(name);
+            } else {
+              scope.bindings.set(name, value);
+            }
+          }
         }
         if (weak) {
           context.report({ node: pending.node, messageId: "weakAwait" });

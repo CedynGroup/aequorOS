@@ -906,3 +906,43 @@ test("nested IIFE argument ordering survives an outer invocation frame", async (
   `);
   assertClean(result, "frozenTime");
 });
+
+test("a preceding teardown refreeze covers the final teardown read", async () => {
+  const result = await runOxlint(["frozenTime"], `
+    describe('s', () => {
+      beforeEach(() => {
+        vi.useFakeTimers();
+      });
+      afterEach(() => {
+        vi.useRealTimers();
+      });
+      afterEach(() => {
+        vi.useFakeTimers();
+      });
+      afterEach(() => {
+        Date.now();
+      });
+      it('t', () => {
+        Date.now();
+      });
+    });
+  `);
+  assertClean(result, "frozenTime");
+});
+
+test("a sibling suite's hook write does not cover its own suite only", async () => {
+  const result = await runOxlint(["frozenTime"], `
+    beforeEach(() => {
+      vi.useFakeTimers();
+    });
+    describe('s', () => {
+      afterEach(() => {
+        Date.now();
+      });
+      it('t', () => {
+        vi.useRealTimers();
+      });
+    });
+  `);
+  assertFlagged(result, "frozenTime");
+});

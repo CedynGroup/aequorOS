@@ -715,22 +715,39 @@ const rule = {
             collectionTransitions.length > 0
               ? collectionTransitions.at(-1).frozen
               : false;
-          for (const { hook } of sequence) {
-            if (hook.netFrozen !== null) frozen = hook.netFrozen;
-          }
           // A teardown callback runs after every test of its suite — its
-          // own describe and every suite nested inside it — so each covered
-          // test's own transitions start from the hook-covered state, and
-          // the teardown only stays covered while EVERY covered test ends
-          // frozen. A teardown's describe chain must appear in the test's
-          // chain, contiguous and in order; a file-level teardown covers
-          // every test in the file.
+          // own describe and every suite nested inside it — so the state it
+          // observes is, per test run: the setup hooks, then that test's own
+          // transitions, then any teardown hooks registered before it. The
+          // read stays covered only while that state is frozen for EVERY
+          // covered test. A teardown's describe chain must appear in the
+          // test's chain, contiguous and in order; a file-level teardown
+          // covers every test in the file.
           if (isTeardown(enclosing.callType)) {
+            let setupState = frozen;
+            for (const { hook } of sequence) {
+              if (!isTeardown(hook.hookType) && hook.netFrozen !== null) {
+                setupState = hook.netFrozen;
+              }
+            }
+            let precedingTeardownState = null;
+            for (const { hook } of sequence) {
+              if (isTeardown(hook.hookType) && hook.netFrozen !== null) {
+                precedingTeardownState = hook.netFrozen;
+              }
+            }
             const suiteTests = collectedTests.filter((test) =>
               coversDescribes(test.describes, enclosingDescribes),
             );
+            if (suiteTests.length === 0) {
+              // No test of this suite touches the timer state: the hooks
+              // alone decide the state the read observes.
+              for (const { hook } of sequence) {
+                if (hook.netFrozen !== null) frozen = hook.netFrozen;
+              }
+            }
             for (const test of suiteTests) {
-              let testState = frozen;
+              let testState = setupState;
               for (const transition of transitionsByCallback.get(test.fn) ?? []) {
                 // Lifecycle order, not source order: a teardown registered
                 // above a test still runs after it, so every immediate
@@ -740,10 +757,16 @@ const rule = {
                   testState = transition.frozen;
                 }
               }
-              if (!testState) {
+              const stateAtRead =
+                precedingTeardownState !== null ? precedingTeardownState : testState;
+              if (!stateAtRead) {
                 frozen = false;
                 break;
               }
+            }
+          } else {
+            for (const { hook } of sequence) {
+              if (hook.netFrozen !== null) frozen = hook.netFrozen;
             }
           }
           const ownState = stateAt(transitionsByCallback.get(enclosing.fn) ?? []);
