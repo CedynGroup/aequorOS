@@ -486,17 +486,19 @@ class ClockVisitor(ast.NodeVisitor):
         if target is not None:
             self.bind(target)
         self.break_states.append([])
+        self.continue_states.append([])
         try:
             for statement in node.body:
                 self.visit(statement)
         finally:
             break_states = self.break_states.pop()
+            real_continue_states = self.continue_states.pop()
         after_visit = dict(self.aliases)
         # A loop that runs zero iterations exits with the pre-target state,
         # and a continue hands its bindings to the next iteration and thus
         # to every later exit.
         entry = [carried] if pre_target is None else [carried, pre_target]
-        entry = [*entry, *continue_states]
+        entry = [*entry, *continue_states, *real_continue_states]
         self._merge_loop_exit(node, entry, after_visit, break_states)
 
     def _merge_loop_exit(
@@ -600,9 +602,11 @@ class ClockVisitor(ast.NodeVisitor):
             return
         # A break or continue crosses the finally block, so each pending
         # jump state must include the finally's assignments. The re-visits
-        # run silently to spare the consumed tables, and their reads
-        # duplicate the normal pass's, so they are dropped.
+        # run silently to spare the consumed tables; a read that only the
+        # jump path reaches is new evidence and stays, while reads the
+        # normal pass already recorded are dropped as duplicates.
         normal_state = dict(self.aliases)
+        known_reads = set(self.reads)
         read_mark = len(self.reads)
         outer_probing = self.probing
         self.probing = True
@@ -623,7 +627,9 @@ class ClockVisitor(ast.NodeVisitor):
                 transformed_continues.append(dict(self.aliases))
         finally:
             self.probing = outer_probing
+            fresh = [read for read in self.reads[read_mark:] if read not in known_reads]
             del self.reads[read_mark:]
+            self.reads.extend(dict.fromkeys(fresh))
             self.aliases.clear()
             self.aliases.update(normal_state)
         if self.break_states:
@@ -1026,6 +1032,11 @@ class ClockVisitor(ast.NodeVisitor):
             previous_entry = entry_state
             scan_start = len(self.reads)
         leaked, self.walrus = self.walrus, assigned
+        if not isinstance(node, ast.GeneratorExp):
+            # A nested eager comprehension's walrus names must reach the
+            # containing scope through the enclosing comprehension's own
+            # handback.
+            self.walrus.update(leaked)
         # An assignment expression binds in the containing scope, so the
         # comprehension's copy hands its walrus bindings back before the
         # temporary map is discarded.

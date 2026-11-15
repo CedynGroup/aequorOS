@@ -356,6 +356,24 @@ UNFROZEN_READS = [
     "        finally:\n"
     "            pass\n"
     "    clock()\n",
+    # A finally read reached only through a jump state is still reported.
+    "import time\n"
+    "def test_finally_read_through_break(flag):\n"
+    "    clock = lambda: 0\n"
+    "    for _ in (1,):\n"
+    "        try:\n"
+    "            clock = time.time\n"
+    "            if flag:\n"
+    "                break\n"
+    "            clock = lambda: 0\n"
+    "        finally:\n"
+    "            clock()\n",
+    # A nested comprehension's walrus reaches the containing scope.
+    "import time\n"
+    "def test_nested_comprehension_walrus():\n"
+    "    clock = lambda: 0\n"
+    "    [[(clock := time.time) for y in (1,)] for x in (1,)]\n"
+    "    clock()\n",
 ]
 
 #: The same reads are accepted once the clock is frozen at function, class or
@@ -535,6 +553,16 @@ FROZEN_READS = [
     "            continue\n"
     "        finally:\n"
     "            clock = lambda: 0\n",
+    # An inner loop's continue stays scoped to that loop.
+    "import time\n"
+    "def test_inner_continue_stays_scoped():\n"
+    "    clock = lambda: 0\n"
+    "    for _ in (1, 2):\n"
+    "        clock()\n"
+    "        for _ in (1,):\n"
+    "            clock = time.time\n"
+    "            continue\n"
+    "        clock = lambda: 0\n",
     # A break inside a nested loop belongs to that loop, so the outer loop
     # still exhausts and its else rebinds the alias.
     "import time\n"
