@@ -339,6 +339,15 @@ def test_generic_defaults_resolve_in_the_enclosing_scope() -> None:
     assert guard.clock_findings(source).reads == []
 
 
+def test_generic_class_bases_resolve_inside_the_wrapper_scope() -> None:
+    """A generic class's bases are evaluated inside its type-parameter scope."""
+    source = (
+        "class Base: pass\n"
+        "class Helper[T: (lambda: None)]((lambda: lambda: Base)()()): pass\n"
+    )
+    assert guard.clock_findings(source).reads == []
+
+
 def test_the_guard_scans_support_and_module_level_reads(tmp_path: Path) -> None:
     tests = tmp_path / "tests"
     support = tests / "support"

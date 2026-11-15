@@ -552,8 +552,18 @@ class ClockVisitor(ast.NodeVisitor):
         own = self._decorator_freezes(node.decorator_list) or any(
             self._pytestmark_statement(statement) for statement in node.body
         )
-        for expression in [*node.decorator_list, *node.bases, *node.keywords]:
+        for decorator in node.decorator_list:
+            self.visit(decorator)
+        previous_standing_table = self.table
+        entered = self._enter_wrapper_scopes(node.name, node.lineno)
+        if entered:
+            # The bases and keywords of a generic class are evaluated inside
+            # its type-parameter scope; its decorators run outside it.
+            self.table = entered[-1]
+        for expression in [*node.bases, *node.keywords]:
             self.visit(expression)
+        if entered:
+            self.table = previous_standing_table
         previous_table, previous_aliases = self.table, self.aliases
         previous_frozen, previous_deferred = self.frozen, self.deferred_frozen
         self.table = self.child_table(node, node.name)
