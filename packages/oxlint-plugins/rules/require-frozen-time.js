@@ -179,16 +179,12 @@ function executionKey(node) {
   const key = [];
   for (let index = chain.length - 1; index >= 0; index -= 1) {
     const invocation = chain[index];
+    // What this frame contains: the next inner invocation, or the node
+    // itself at the innermost frame. Body membership decides the frame
+    // marker (an argument evaluates before the body).
+    const contained = index > 0 ? chain[index - 1] : node;
     key.push(invocation.range[0]);
-    key.push(
-      index === chain.length - 1
-        ? inBody(invocation, node)
-          ? 1
-          : 0
-        : inBody(invocation, chain[index + 1])
-          ? 1
-          : 0,
-    );
+    key.push(inBody(invocation, contained) ? 1 : 0);
   }
   key.push(node.range[0]);
   return key;
@@ -278,6 +274,32 @@ function findAllEnclosingDescribes(node) {
     current = current.parent;
   }
   return describes;
+}
+
+/**
+ * Whether `testDescribes` (innermost first) contains `suiteDescribes`
+ * (innermost first) as a contiguous, ordered slice — the teardown registered
+ * in those describes runs after every test of that suite and of the suites
+ * nested inside it. An empty `suiteDescribes` is a file-level teardown: it
+ * runs after every test in the file.
+ */
+function coversDescribes(testDescribes, suiteDescribes) {
+  if (suiteDescribes.length === 0) {
+    return true;
+  }
+  for (let start = 0; start + suiteDescribes.length <= testDescribes.length; start += 1) {
+    let matches = true;
+    for (let index = 0; index < suiteDescribes.length; index += 1) {
+      if (testDescribes[start + index] !== suiteDescribes[index]) {
+        matches = false;
+        break;
+      }
+    }
+    if (matches) {
+      return true;
+    }
+  }
+  return false;
 }
 
 /**
@@ -494,12 +516,11 @@ const rule = {
           return undefined;
         };
 
-        // Test callbacks that touch the timer state, keyed by the describe
-        // they are registered in (`null` = file level): a teardown callback
-        // runs after every test of its suite, so each test's own transitions
-        // shape the state the teardown sees.
-        const testsByDescribe = new Map();
-        const fileLevelTests = [];
+        // Test callbacks that touch the timer state, each with its chain of
+        // enclosing describes: a teardown callback runs after every test of
+        // its suite — including tests registered in suites nested inside it —
+        // so each test's own transitions shape the state the teardown sees.
+        const collectedTests = [];
         // Every before-hook (beforeAll/beforeEach) whose callback touches the
         // timer state, keyed by the describe it is registered in (`null` =
         // file level). `netFrozen` is the state the hook LEAVES behind: a
@@ -539,14 +560,10 @@ const rule = {
           if (!enclosing || !TEST_NAMES.has(enclosing.callType)) {
             continue;
           }
-          const parentDescribe = findEnclosingDescribe(enclosing.callNode);
-          if (parentDescribe) {
-            const tests = testsByDescribe.get(parentDescribe) ?? [];
-            tests.push({ fn: enclosing.fn });
-            testsByDescribe.set(parentDescribe, tests);
-          } else {
-            fileLevelTests.push({ fn: enclosing.fn });
-          }
+          collectedTests.push({
+            fn: enclosing.fn,
+            describes: findAllEnclosingDescribes(enclosing.callNode),
+          });
         }
         for (const hooks of hooksByDescribe.values()) {
           hooks.sort((a, b) => a.callNode.range[0] - b.callNode.range[0]);
@@ -701,14 +718,17 @@ const rule = {
           for (const { hook } of sequence) {
             if (hook.netFrozen !== null) frozen = hook.netFrozen;
           }
-          // A teardown callback runs after every test of its suite: each
+          // A teardown callback runs after every test of its suite — its
+          // own describe and every suite nested inside it — so each covered
           // test's own transitions start from the hook-covered state, and
-          // the teardown only stays covered while EVERY test ends frozen.
+          // the teardown only stays covered while EVERY covered test ends
+          // frozen. A teardown's describe chain must appear in the test's
+          // chain, contiguous and in order; a file-level teardown covers
+          // every test in the file.
           if (isTeardown(enclosing.callType)) {
-            const suiteTests =
-              enclosingDescribes.length > 0
-                ? enclosingDescribes.flatMap((describe) => testsByDescribe.get(describe) ?? [])
-                : fileLevelTests;
+            const suiteTests = collectedTests.filter((test) =>
+              coversDescribes(test.describes, enclosingDescribes),
+            );
             for (const test of suiteTests) {
               let testState = frozen;
               for (const transition of transitionsByCallback.get(test.fn) ?? []) {

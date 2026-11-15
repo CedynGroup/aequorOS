@@ -674,3 +674,25 @@ test("lets a hook replace an unresolved helper with a clean one", async () => {
   `);
   assertClean(result, "weakAwaits");
 });
+
+test("a sibling suite's hook does not taint an earlier suite's await", async () => {
+  const result = await runOxlint(["weakAwaits"], `
+    function load() {
+      return fetch('/data');
+    }
+    describe('first', () => {
+      it('t', async () => {
+        await load();
+      });
+    });
+    describe('second', () => {
+      beforeEach(() => {
+        load = () => new Promise((resolve) => setTimeout(resolve, 10));
+      });
+      it('t', async () => {
+        await load();
+      });
+    });
+  `);
+  assertFlagged(result, "weakAwaits");
+});

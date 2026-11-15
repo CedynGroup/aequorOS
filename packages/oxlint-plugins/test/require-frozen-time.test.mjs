@@ -877,3 +877,32 @@ test("orders nested IIFE transitions by their invocation statements", async () =
   `);
   assertClean(result, "frozenTime");
 });
+
+test("a file-level teardown sees restores from tests inside describes", async () => {
+  const result = await runOxlint(["frozenTime"], `
+    beforeEach(() => {
+      vi.useFakeTimers();
+    });
+    afterEach(() => {
+      Date.now();
+    });
+    describe('s', () => {
+      it('t', () => {
+        vi.useRealTimers();
+      });
+    });
+  `);
+  assertFlagged(result, "frozenTime");
+});
+
+test("nested IIFE argument ordering survives an outer invocation frame", async () => {
+  const result = await runOxlint(["frozenTime"], `
+    it('t', () => {
+      (() => {
+        (() => vi.useFakeTimers())(vi.useRealTimers());
+      })();
+      Date.now();
+    });
+  `);
+  assertClean(result, "frozenTime");
+});

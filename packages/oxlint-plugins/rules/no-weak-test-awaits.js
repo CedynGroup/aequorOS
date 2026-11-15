@@ -470,6 +470,11 @@ const rule = {
     // weak (forward-declared helpers wrap timer helpers), so every weak
     // declaration re-evaluates the pending awaits against their own chain.
     const pendingAwaits = [];
+    // Setup-hook writes to shared bindings, in traversal order: each entry
+    // records the value the binding held before the write and the describes
+    // the hook was registered in, so a pending await from a suite the hook
+    // does not cover can be re-evaluated without it.
+    const hookWrites = [];
 
     /** Record a declaration in the registry of its binding's scope. */
     function registerFunctionDeclaration(declaration) {
@@ -616,7 +621,32 @@ const rule = {
       // classification the enclosing scopes already have. A setup hook is
       // the exception — its callback runs before the tests, so its
       // assignment to an outer binding propagates outward.
-      writeTargetScope(node.name)?.bindings.set(node.name, kind);
+      const target = writeTargetScope(node.name);
+      if (target) {
+        // A hook's write to a shared binding applies only to the suites the
+        // hook covers: log it so a pending await from another suite can be
+        // re-evaluated without it.
+        const hookScope = [...scopes].reverse().find((scope) => scope.type === "hook");
+        if (hookScope && !isOrContains(hookScope, target)) {
+          hookWrites.push({
+            scope: target,
+            name: node.name,
+            kind,
+            had: target.bindings.has(node.name),
+            previous: target.bindings.get(node.name),
+            describeChain: hookScope.describeChain ?? [],
+          });
+        }
+        target.bindings.set(node.name, kind);
+      }
+    }
+
+    /** Whether `scope` is `outer` or sits above it on the scope stack: a
+     * write landing there stays inside the hook's own scopes. */
+    function isOrContains(outer, scope) {
+      const outerIndex = scopes.indexOf(outer);
+      const scopeIndex = scopes.indexOf(scope);
+      return scopeIndex >= outerIndex;
     }
 
     /** The kind an alias inherits: helpers alias to helpers, promises to
@@ -656,12 +686,40 @@ const rule = {
         // assignments still reach it. The scope objects are live references,
         // so a helper registered later is still resolvable; only the binding
         // VALUES are frozen per scope through `own`.
+        //
+        // A hook write applies only to the suites the hook covers: roll back
+        // the writes whose describes are not a prefix of this pending's
+        // describes (a sibling suite's beforeEach never ran for it), judge
+        // the await, then restore them for the next pending.
+        const undone = [];
+        for (let index = hookWrites.length - 1; index >= 0; index -= 1) {
+          const entry = hookWrites[index];
+          const applies =
+            entry.describeChain.length <= pending.describeChain.length &&
+            entry.describeChain.every(
+              (describe, position) => pending.describeChain[position] === describe,
+            );
+          if (!applies) {
+            undone.push(entry);
+            if (entry.had) {
+              entry.scope.bindings.set(entry.name, entry.previous);
+            } else {
+              entry.scope.bindings.delete(entry.name);
+            }
+          }
+        }
         const evaluationChain = [...pending.chain.slice(0, pending.depth), ...pending.own];
-        if (weakUseIn(pending.argument, evaluationChain, true, pending.scopeChain)) {
+        const weak = weakUseIn(pending.argument, evaluationChain, true, pending.scopeChain);
+        for (let index = undone.length - 1; index >= 0; index -= 1) {
+          const entry = undone[index];
+          entry.scope.bindings.set(entry.name, entry.kind);
+        }
+        if (weak) {
           context.report({ node: pending.node, messageId: "weakAwait" });
         }
       }
       pendingAwaits.length = 0;
+      hookWrites.length = 0;
     }
 
     // Classify a function's own body with its parameters already bound, so a
@@ -727,6 +785,32 @@ const rule = {
           break;
         }
       }
+    }
+
+    /** The describe calls enclosing `node`, outermost first: a hook
+     * registered in those describes runs for the tests they contain. */
+    function describeChainOf(node) {
+      const chain = [];
+      let current = node;
+      while (current) {
+        if (
+          (current.type === "FunctionExpression" || current.type === "ArrowFunctionExpression") &&
+          current.parent?.type === "CallExpression"
+        ) {
+          const callee = current.parent.callee;
+          const baseName =
+            callee?.type === "Identifier"
+              ? callee.name
+              : callee?.type === "MemberExpression" && !callee.computed && callee.property?.type === "Identifier"
+                ? callee.property.name
+                : null;
+          if (baseName !== null && DESCRIBE_NAMES.has(baseName)) {
+            chain.push(current.parent);
+          }
+        }
+        current = current.parent;
+      }
+      return chain.reverse();
     }
 
     /** The scope type a function pushes: a setup hook's callback or a plain function. */
@@ -806,6 +890,9 @@ const rule = {
       "FunctionDeclaration:exit": popScope,
       FunctionExpression(node) {
         pushScope(scopeTypeFor(node));
+        if (scopes[scopes.length - 1].type === "hook") {
+          scopes[scopes.length - 1].describeChain = describeChainOf(node);
+        }
         // A synchronously executed function (IIFE, describe callback) runs
         // where it sits: its writes to captured bindings reach the
         // enclosing scopes like a hook's do.
@@ -817,6 +904,9 @@ const rule = {
       "FunctionExpression:exit": popScope,
       ArrowFunctionExpression(node) {
         pushScope(scopeTypeFor(node));
+        if (scopes[scopes.length - 1].type === "hook") {
+          scopes[scopes.length - 1].describeChain = describeChainOf(node);
+        }
         if (executesWhereDefined(node)) {
           scopes[scopes.length - 1].iife = true;
         }
@@ -887,6 +977,7 @@ const rule = {
           node,
           argument: node.argument,
           chain,
+          describeChain: describeChainOf(node),
           depth: functionDepth(),
           own: chain.slice(functionDepth()).map((map) => new Map(map)),
           // Live scope objects parallel to `chain`: the declaration registry
