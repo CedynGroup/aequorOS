@@ -122,6 +122,20 @@ UNFROZEN_READS = [
     "while clock() and iteration < 2:\n"
     "    clock = time.time\n"
     "    iteration += 1\n",
+    # A short-circuited operand may not execute, so its walrus assignment
+    # cannot mask the pre-expression clock binding.
+    "import time\n"
+    "def test_boolop_walrus(enabled):\n"
+    "    clock = time.time\n"
+    "    enabled and (clock := lambda: 0)\n"
+    "    clock()\n",
+    # Either branch of a conditional expression may run, so a walrus in one
+    # branch cannot mask the pre-expression clock binding either.
+    "import time\n"
+    "def test_ifexp_walrus(flag):\n"
+    "    clock = time.time\n"
+    "    value = (clock := lambda: 0) if flag else None\n"
+    "    clock()\n",
     # A loop body may run zero times, so its assignments never clear a
     # clock binding.
     "from datetime import datetime\n"

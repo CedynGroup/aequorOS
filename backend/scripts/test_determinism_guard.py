@@ -423,6 +423,27 @@ class ClockVisitor(ast.NodeVisitor):
             self.visit(statement)
         self._merge_states([before, carried, after_visit, dict(self.aliases)])
 
+    def visit_BoolOp(self, node: ast.BoolOp) -> None:
+        before = dict(self.aliases)
+        states: list[dict[str, str]] = [before]
+        for operand in node.values:
+            self.visit(operand)
+            states.append(dict(self.aliases))
+        # Short-circuiting may skip any trailing operand, so every prefix's
+        # bindings stay reachable at the join.
+        self._merge_states(states)
+
+    def visit_IfExp(self, node: ast.IfExp) -> None:
+        self.visit(node.test)
+        before = dict(self.aliases)
+        self.visit(node.body)
+        after_body = dict(self.aliases)
+        self.aliases.clear()
+        self.aliases.update(before)
+        self.visit(node.orelse)
+        # Either branch may run, so the pre-expression bindings survive.
+        self._merge_states([after_body, dict(self.aliases), before])
+
     def visit_Match(self, node: ast.Match) -> None:
         self.visit(node.subject)
         before = dict(self.aliases)
