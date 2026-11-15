@@ -63,7 +63,7 @@
     "AQPY001": 1
   },
   "tests/behavioral/api/test_behavioral_application_integration.py": {
-    "AQPY001": 4
+    "AQPY001": 3
   },
   "tests/behavioral/api/test_behavioral_authorization_integration.py": {
     "AQPY001": 4
@@ -528,7 +528,7 @@
     "AQPY001": 2
   },
   "tests/services/test_worker_lanes_integration.py": {
-    "AQPY001": 6
+    "AQPY001": 5
   },
   "tests/storage/contract.py": {
     "AQPY001": 1

@@ -380,6 +380,20 @@ UNFROZEN_READS = [
     "    clock = lambda: 0\n"
     "    [[(clock := time.time) for y in (1,)] for x in (1,)]\n"
     "    clock()\n",
+    # A generator's filters also run at consumption time, so a filter read
+    # is reported even when created inside a frozen travel.
+    "import time\n"
+    "import time_machine\n"
+    "from datetime import datetime\n"
+    f"with time_machine.travel({INSTANT}, tick=False):\n"
+    "    values = (0 for _ in (1,) if time.time())\n"
+    "next(values)\n",
+    # An inner comprehension iteration keeps its own carried bindings
+    # against the outer filter's reassignment.
+    "import time\n"
+    "def test_nested_comprehension_levels():\n"
+    "    clock = lambda: 0\n"
+    "    [(clock(), (clock := time.time)) for x in (1,) if (clock := lambda: 0) for y in (1, 2)]\n",
 ]
 
 #: The same reads are accepted once the clock is frozen at function, class or

@@ -112,6 +112,17 @@ def _descendants(table: symtable.SymbolTable) -> Iterator[symtable.SymbolTable]:
         yield from _descendants(child)
 
 
+def _unique_reads(reads: list[tuple[str, int]]) -> list[tuple[str, int]]:
+    """Drop repeated reads; the findings count one read per line and name."""
+    unique: list[tuple[str, int]] = []
+    seen: set[tuple[str, int]] = set()
+    for read in reads:
+        if read not in seen:
+            seen.add(read)
+            unique.append(read)
+    return unique
+
+
 def _loop_has_break(statements: list[ast.stmt]) -> bool:
     """Whether a ``break`` at this loop's own level runs inside the body.
 
@@ -657,26 +668,52 @@ class ClockVisitor(ast.NodeVisitor):
             self.visit(value)
 
     def _scan_comprehension_pass(
-        self, node: ast.ListComp | ast.SetComp | ast.DictComp | ast.GeneratorExp
+        self,
+        node: ast.ListComp | ast.SetComp | ast.DictComp | ast.GeneratorExp,
+        level: int,
     ) -> list[dict[str, str]]:
-        """Scan one comprehension iteration and return its filter exits."""
+        """Scan one comprehension iteration from ``level`` down.
+
+        Deeper generator levels repeat within an outer iteration without
+        rerunning the outer filters, so each level settles the levels below
+        it; a pass whose entry state equals the previous pass's entry state
+        only repeats the tail that pass already recorded.
+        """
         rejected: list[dict[str, str]] = []
-        for index, generator in enumerate(node.generators):
-            if index:
-                self.visit(generator.iter)
-            self.bind(generator.target)
-            for condition in generator.ifs:
-                self.visit(condition)
-                # A false filter rejects the iteration, so its
-                # post-condition state stays reachable.
-                rejected.append(dict(self.aliases))
-        if not isinstance(node, ast.GeneratorExp):
-            # A generator's element runs at consumption time and scans
-            # deferred instead.
-            for expression in (
-                [node.key, node.value] if isinstance(node, ast.DictComp) else [node.elt]
-            ):
-                self.visit(expression)
+        generator = node.generators[level]
+        if level:
+            self.visit(generator.iter)
+        self.bind(generator.target)
+        for condition in generator.ifs:
+            self.visit(condition)
+            # A false filter rejects the iteration, so its post-condition
+            # state stays reachable.
+            rejected.append(dict(self.aliases))
+        deeper = level + 1
+        previous_entry: dict[str, str] | None = None
+        scan_start = len(self.reads)
+        for _ in range(_PROBE_LIMIT):
+            entry_state = dict(self.aliases)
+            outer_probing = self.probing
+            # Later passes re-visit definitions whose tables are already
+            # consumed, so they scan silently; an inherited silent pass
+            # stays silent throughout.
+            self.probing = outer_probing or previous_entry is not None
+            try:
+                if deeper < len(node.generators):
+                    rejected.extend(self._scan_comprehension_pass(node, deeper))
+                elif not isinstance(node, ast.GeneratorExp):
+                    for expression in (
+                        [node.key, node.value] if isinstance(node, ast.DictComp) else [node.elt]
+                    ):
+                        self.visit(expression)
+            finally:
+                self.probing = outer_probing
+            if entry_state == previous_entry:
+                del self.reads[scan_start:]
+                break
+            previous_entry = entry_state
+            scan_start = len(self.reads)
         return rejected
 
     def _preassign_expression_tables(self, expression: ast.expr) -> None:
@@ -1017,6 +1054,16 @@ class ClockVisitor(ast.NodeVisitor):
         self.walrus = set()
         for generator in node.generators:
             self.bind(generator.target)
+        if isinstance(node, ast.GeneratorExp):
+            # The filters and later iterables also run at consumption time,
+            # so the deferred scan covers them with the element.
+            self.walrus = assigned
+            self.table, self.aliases, self.enclosing = (
+                previous_table,
+                previous_aliases,
+                previous_enclosing,
+            )
+            return
         # Each iteration rebinds the targets and re-evaluates the filters
         # under the previous iteration's bindings, so the scans repeat until
         # the bindings stabilize. Every pass's reads stay recorded, because
@@ -1033,7 +1080,7 @@ class ClockVisitor(ast.NodeVisitor):
             # stays silent throughout.
             self.probing = outer_probing or previous_entry is not None
             try:
-                rejected = self._scan_comprehension_pass(node)
+                rejected = self._scan_comprehension_pass(node, 0)
             finally:
                 self.probing = outer_probing
             if rejected:
@@ -1192,6 +1239,13 @@ class ClockVisitor(ast.NodeVisitor):
         if any(self._pytestmark_statement(statement) for statement in tree.body):
             self.deferred_frozen = True
         self.visit(tree)
+        self._scan_deferred_functions()
+        # Repeated passes and nested levels can record the same read twice;
+        # the findings count one read per line and name.
+        return _unique_reads(self.reads)
+
+    def _scan_deferred_functions(self) -> None:
+        """Scan every recorded function, lambda and generator body."""
         for node, table, enclosing, frozen in self.functions:
             self.table = table
             self.aliases = enclosing.copy()
@@ -1208,12 +1262,18 @@ class ClockVisitor(ast.NodeVisitor):
             if isinstance(node, ast.Lambda):
                 self.visit(node.body)
             elif isinstance(node, ast.GeneratorExp):
+                # The filters and later iterables run per consumption too.
+                for index, generator in enumerate(node.generators):
+                    if index:
+                        self.visit(generator.iter)
+                    self.bind(generator.target)
+                    for condition in generator.ifs:
+                        self.visit(condition)
                 self.visit(node.elt)
             else:
                 for statement in node.body:
                     self.visit(statement)
             self.deferred_body = previous_body_flag
-        return self.reads
 
 
 def _takes_frozen_clock(args: ast.arguments) -> bool:
