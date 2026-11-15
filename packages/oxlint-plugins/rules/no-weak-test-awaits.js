@@ -230,44 +230,89 @@ function unresolvedHelperIsWeak(name, chain, scopeChain, ctx) {
 }
 
 /**
- * Names bound by declarations directly in `body`, not counting names bound
- * inside nested functions (their scopes end at the function boundary).
+ * Names bound by declarations directly in the helper's top-level body. A
+ * `const`/`let` declared in a nested block ends at that block, so it must
+ * not shadow an outer binding for the whole body; `var` declarations are
+ * function-scoped and are collected wherever they sit. Nested functions'
+ * declarations end at their own boundary and never leak out.
  */
 function bodyDeclaredNames(body) {
   const names = new Set();
-  const walk = (node, isRoot) => {
-    if (!node || typeof node !== "object" || !node.type) {
+  const collect = (statement) => {
+    if (!statement || typeof statement !== "object" || !statement.type) {
       return;
     }
-    if (node.type === "VariableDeclarator" && node.id.type === "Identifier") {
-      names.add(node.id.name);
-    }
-    if (node.type === "FunctionDeclaration" && node.id) {
-      names.add(node.id.name);
-    }
-    if (
-      !isRoot &&
-      (node.type === "FunctionDeclaration" ||
-        node.type === "FunctionExpression" ||
-        node.type === "ArrowFunctionExpression")
-    ) {
-      // A nested function's declarations end at its own boundary.
-      return;
-    }
-    for (const [key, value] of Object.entries(node)) {
-      if (key === "parent") {
-        // The parent back-reference would make the walk cyclical.
-        continue;
+    if (statement.type === "VariableDeclaration") {
+      for (const declarator of statement.declarations ?? []) {
+        if (declarator.id?.type === "Identifier") {
+          names.add(declarator.id.name);
+        }
       }
-      if (Array.isArray(value)) {
-        value.forEach((child) => walk(child, false));
-      } else {
-        walk(value, false);
+      return;
+    }
+    if (statement.type === "FunctionDeclaration") {
+      if (statement.id) {
+        names.add(statement.id.name);
+      }
+      return;
+    }
+    // A `var` inside a nested block or function-level statement is still
+    // function-scoped: find one anywhere below this statement.
+    if (hasVarDeclaration(statement)) {
+      for (const name of varDeclarations(statement)) {
+        names.add(name);
       }
     }
   };
-  walk(body, true);
+  if (body?.type === "BlockStatement") {
+    for (const statement of body.body ?? []) {
+      collect(statement);
+    }
+  }
   return names;
+}
+
+/** Whether any statement below `node` declares a function-scoped `var`. */
+function hasVarDeclaration(node) {
+  for (const _ of varDeclarations(node)) {
+    return true;
+  }
+  return false;
+}
+
+/** Names declared by `var` declarations anywhere below `node`. */
+function* varDeclarations(node) {
+  if (!node || typeof node !== "object" || !node.type) {
+    return;
+  }
+  if (node.type === "VariableDeclaration" && node.kind === "var") {
+    for (const declarator of node.declarations ?? []) {
+      if (declarator.id?.type === "Identifier") {
+        yield declarator.id.name;
+      }
+    }
+    return;
+  }
+  if (
+    node.type === "FunctionDeclaration" ||
+    node.type === "FunctionExpression" ||
+    node.type === "ArrowFunctionExpression"
+  ) {
+    // A nested function's `var` ends at its own boundary.
+    return;
+  }
+  for (const [key, value] of Object.entries(node)) {
+    if (key === "parent") {
+      continue;
+    }
+    if (Array.isArray(value)) {
+      for (const child of value) {
+        yield* varDeclarations(child);
+      }
+    } else {
+      yield* varDeclarations(value);
+    }
+  }
 }
 
 /**

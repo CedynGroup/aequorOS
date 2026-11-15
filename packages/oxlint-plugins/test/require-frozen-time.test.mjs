@@ -720,3 +720,23 @@ test("reports a read in an IIFE argument that evaluates before the freeze", asyn
   `);
   assertFlagged(result, "frozenTime");
 });
+
+test("reports a test read when a module-level restore follows the describe freeze", async () => {
+  const result = await runOxlint(["frozenTime"], `
+    describe('s', () => {
+      vi.useFakeTimers();
+      it('t', () => Date.now());
+    });
+    vi.useRealTimers();
+  `);
+  assertFlagged(result, "frozenTime");
+});
+
+test("reports a read in a block-bodied IIFE argument evaluated before the freeze", async () => {
+  const result = await runOxlint(["frozenTime"], `
+    (() => {
+      vi.useFakeTimers();
+    })(Date.now());
+  `);
+  assertFlagged(result, "frozenTime");
+});

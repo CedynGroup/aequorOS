@@ -174,6 +174,22 @@ test("resolves an alias created by assignment without crashing", async () => {
   assertClean(result, "weakAwaits");
 });
 
+test("does not let a block-local declaration shadow the whole helper body", async () => {
+  const result = await runOxlint(["weakAwaits"], `
+    const sleep = () => new Promise((resolve) => setTimeout(resolve, 10));
+    function wait() {
+      {
+        const sleep = () => Promise.resolve('ready');
+      }
+      return sleep();
+    }
+    it('t', async () => {
+      await wait();
+    });
+  `);
+  assertFlagged(result, "weakAwaits");
+});
+
 test("classifies an alias against its target's defining scope", async () => {
   const result = await runOxlint(["weakAwaits"], `
     function load() {

@@ -441,16 +441,17 @@ const rule = {
                 (current.callee.type === "ArrowFunctionExpression" ||
                   current.callee.type === "FunctionExpression"))
             ) {
-              for (const sub of [current.callee.body]) {
-                let inner = sub;
-                while (inner) {
-                  if (inner === transitionNode) {
-                    // The read sits in an argument of the invocation whose
-                    // body holds the transition: the body runs later.
-                    return false;
-                  }
-                  inner = inner.parent;
+              const body = current.callee.body;
+              // A block-bodied IIFE nests the transition below the body, so
+              // walk up from the transition itself.
+              let inner = transitionNode;
+              while (inner) {
+                if (inner === body) {
+                  // The read sits in an argument of the invocation whose
+                  // body holds the transition: the body runs later.
+                  return false;
                 }
+                inner = inner.parent;
               }
             }
             current = current.parent;
@@ -537,19 +538,22 @@ const rule = {
               a.hook.callNode.range[0] - b.hook.callNode.range[0],
           );
 
-          // Module-level transitions all execute before any registered
-          // callback runs, wherever they sit in the source — and so do the
-          // enclosing describe bodies (collection): a restoration in a
-          // describe body invalidates an earlier module freeze for every
-          // test nested in it.
-          let frozen =
-            moduleTransitions.length > 0 ? moduleTransitions.at(-1).frozen : false;
+          // Module-level transitions and enclosing describe bodies all run
+          // during module evaluation, in source order: a describe freeze
+          // before a later module-level restoration does not cover the
+          // tests, and a module freeze before a describe-body restoration
+          // does. Merge them in source order and take the last state.
+          const collectionTransitions = [...moduleTransitions];
           for (const describeCallback of [...enclosingDescribes].reverse()) {
-            const transitions = transitionsByCallback.get(describeCallback) ?? [];
-            if (transitions.length > 0) {
-              frozen = transitions.at(-1).frozen;
-            }
+            collectionTransitions.push(
+              ...(transitionsByCallback.get(describeCallback) ?? []),
+            );
           }
+          collectionTransitions.sort((a, b) => a.node.range[0] - b.node.range[0]);
+          let frozen =
+            collectionTransitions.length > 0
+              ? collectionTransitions.at(-1).frozen
+              : false;
           for (const { hook } of sequence) {
             if (hook.netFrozen !== null) frozen = hook.netFrozen;
           }
