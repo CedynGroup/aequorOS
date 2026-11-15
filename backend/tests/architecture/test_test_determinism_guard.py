@@ -343,6 +343,19 @@ UNFROZEN_READS = [
     "    else:\n"
     "        clock = lambda: 0\n"
     "    clock()\n",
+    # The normal path through a try keeps its own bindings after the
+    # break-state transform.
+    "import time\n"
+    "def test_normal_path_after_break_transform(flag):\n"
+    "    clock = lambda: 0\n"
+    "    for _ in (1,):\n"
+    "        try:\n"
+    "            if flag:\n"
+    "                break\n"
+    "            clock = time.time\n"
+    "        finally:\n"
+    "            pass\n"
+    "    clock()\n",
 ]
 
 #: The same reads are accepted once the clock is frozen at function, class or
@@ -511,6 +524,17 @@ FROZEN_READS = [
     "    else:\n"
     "        clock = lambda: 0\n"
     "    clock()\n",
+    # A continue crosses the finally block the same way.
+    "import time\n"
+    "def test_finally_covers_continue_exit():\n"
+    "    clock = lambda: 0\n"
+    "    for _ in (1, 2):\n"
+    "        clock()\n"
+    "        try:\n"
+    "            clock = time.time\n"
+    "            continue\n"
+    "        finally:\n"
+    "            clock = lambda: 0\n",
     # A break inside a nested loop belongs to that loop, so the outer loop
     # still exhausts and its else rebinds the alias.
     "import time\n"

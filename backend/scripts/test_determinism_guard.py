@@ -546,8 +546,9 @@ class ClockVisitor(ast.NodeVisitor):
 
     def visit_Try(self, node: ast.Try | ast.TryStar) -> None:
         before = dict(self.aliases)
-        # Only breaks recorded from here on cross this try's finally.
+        # Only jumps recorded from here on cross this try's finally.
         break_mark = len(self.break_states[-1]) if self.break_states else 0
+        continue_mark = len(self.continue_states[-1]) if self.continue_states else 0
         # An exception may surface at any point of the body, so collect the
         # state after each statement for the handlers to start from.
         prefixes = [before]
@@ -583,34 +584,52 @@ class ClockVisitor(ast.NodeVisitor):
         self._merge_states(states)
         for statement in node.finalbody:
             self.visit(statement)
-        self._apply_finally_to_breaks(node, break_mark)
+        self._apply_finally_to_jumps(node, break_mark, continue_mark)
 
-    def _apply_finally_to_breaks(self, node: ast.Try | ast.TryStar, break_mark: int) -> None:
-        """Fold the finally block's assignments into pending break states."""
-        if not node.finalbody or not self.break_states:
+    def _apply_finally_to_jumps(
+        self, node: ast.Try | ast.TryStar, break_mark: int, continue_mark: int
+    ) -> None:
+        """Fold the finally block's assignments into pending jump states."""
+        if not node.finalbody:
             return
-        pending = self.break_states[-1][break_mark:]
-        if not pending:
+        pending_breaks = self.break_states[-1][break_mark:] if self.break_states else []
+        pending_continues = (
+            self.continue_states[-1][continue_mark:] if self.continue_states else []
+        )
+        if not pending_breaks and not pending_continues:
             return
-        # A break crosses the finally block, so each pending break exit
-        # state must include the finally's assignments. The re-visits run
-        # silently to spare the consumed tables, and their reads duplicate
-        # the normal pass's, so they are dropped.
+        # A break or continue crosses the finally block, so each pending
+        # jump state must include the finally's assignments. The re-visits
+        # run silently to spare the consumed tables, and their reads
+        # duplicate the normal pass's, so they are dropped.
+        normal_state = dict(self.aliases)
         read_mark = len(self.reads)
         outer_probing = self.probing
         self.probing = True
-        transformed: list[dict[str, str]] = []
+        transformed_breaks: list[dict[str, str]] = []
+        transformed_continues: list[dict[str, str]] = []
         try:
-            for state in pending:
+            for state in pending_breaks:
                 self.aliases.clear()
                 self.aliases.update(state)
                 for statement in node.finalbody:
                     self.visit(statement)
-                transformed.append(dict(self.aliases))
+                transformed_breaks.append(dict(self.aliases))
+            for state in pending_continues:
+                self.aliases.clear()
+                self.aliases.update(state)
+                for statement in node.finalbody:
+                    self.visit(statement)
+                transformed_continues.append(dict(self.aliases))
         finally:
             self.probing = outer_probing
             del self.reads[read_mark:]
-        self.break_states[-1][break_mark:] = transformed
+            self.aliases.clear()
+            self.aliases.update(normal_state)
+        if self.break_states:
+            self.break_states[-1][break_mark:] = transformed_breaks
+        if self.continue_states:
+            self.continue_states[-1][continue_mark:] = transformed_continues
 
     visit_TryStar = visit_Try
 
