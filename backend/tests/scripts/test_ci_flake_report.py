@@ -216,6 +216,56 @@ def test_inner_log_group_does_not_reset_pending_apt_evidence() -> None:
     assert infra[0].signature == "infra:apt-mirror-100"
 
 
+def test_recovered_install_retry_within_one_step_not_infra() -> None:
+    # A step that installs dependencies and then runs tests (no step boundary
+    # between them): the first install attempt fails, a retry starts and
+    # succeeds, and the later test failure keeps its test signature without
+    # any infrastructure finding.
+    findings = flake_report.extract_findings(
+        [
+            "2026-11-11T14:20:00.0000000Z "
+            "##[group]Run mise exec -- pnpm exec playwright install-deps chromium "
+            "&& mise exec -- pnpm exec playwright test",
+            "2026-11-11T14:20:05.0000000Z Installing dependencies...",
+            "2026-11-11T14:20:10.0000000Z E: Failed to fetch "
+            "https://security.ubuntu.com/ubuntu/pool/x.deb  "
+            "Temporary failure resolving 'azure.archive.ubuntu.com'",
+            "2026-11-11T14:20:15.0000000Z Error: Installation process exited with code: 100",
+            "2026-11-11T14:20:40.0000000Z Retrying dependency installation",
+            "2026-11-11T14:20:45.0000000Z Installing dependencies...",
+            "2026-11-11T14:21:00.0000000Z Fetched 13.1 MB in 1s (9839 kB/s)",
+            "2026-11-11T14:25:41.2054952Z "
+            "✘  1 tests/attestation/attestation.e2e.spec.ts:621:7 › a test (30.1s)",
+            "2026-11-11T14:25:41.7494032Z ##[error]Process completed with exit code 1.",
+        ]
+    )
+    assert [f.kind for f in findings] == ["test"]
+
+
+def test_failed_retry_within_one_step_still_infra() -> None:
+    # A second attempt inside the same step that fails again re-arms the
+    # pending evidence: the step's abort still classifies as infrastructure.
+    findings = flake_report.extract_findings(
+        [
+            "2026-11-11T14:20:00.0000000Z "
+            "##[group]Run mise exec -- pnpm exec playwright install-deps chromium",
+            "2026-11-11T14:20:05.0000000Z Installing dependencies...",
+            "2026-11-11T14:20:10.0000000Z E: Failed to fetch "
+            "https://security.ubuntu.com/ubuntu/pool/x.deb  "
+            "Temporary failure resolving 'azure.archive.ubuntu.com'",
+            "2026-11-11T14:20:15.0000000Z Error: Installation process exited with code: 100",
+            "2026-11-11T14:20:45.0000000Z Installing dependencies...",
+            "2026-11-11T14:20:50.0000000Z E: Unable to fetch some archives, maybe you "
+            "ran apt-get update?",
+            "2026-11-11T14:20:55.0000000Z Error: Installation process exited with code: 100",
+            "2026-11-11T14:20:56.7494032Z ##[error]Process completed with exit code 1.",
+        ]
+    )
+    infra = [f for f in findings if f.kind == "infra"]
+    assert len(infra) == 1
+    assert infra[0].signature == "infra:apt-mirror-100"
+
+
 def test_successful_install_retry_then_test_failure_not_infra() -> None:
     # The installer's exit-100 marker is pending evidence only: a step whose
     # retry succeeds discards it, and the later unrelated test failure keeps

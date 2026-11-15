@@ -142,6 +142,11 @@ APT_FATAL = re.compile(
     r"|Some index files failed to download)|Err:\d+ )"
 )
 APT_INSTALL_EXIT = re.compile(r"Installation process exited with code: 100\b")
+# A new install attempt inside the same step (playwright prints this at the
+# start of every install-deps run, including a retry): any pending apt
+# evidence belongs to the earlier attempt, so it resets; the new attempt
+# re-arms the evidence itself if it fails again.
+APT_INSTALL_START = re.compile(r"^Installing dependencies\.\.\.")
 
 
 @dataclass
@@ -265,8 +270,11 @@ def extract_infra_findings(lines: list[str]) -> list[Finding]:
     "Process completed with exit code" marker. The installer's own exit-100
     marker ("Installation process exited with code: 100") is pending
     evidence too: it emits only when the enclosing step actually fails, so a
-    step that recovers with a successful retry discards it. A signature is
-    emitted at most once per job even when several steps fail the same way.
+    step that recovers with a successful retry discards it. A new install
+    attempt inside the same step ("Installing dependencies...") also resets
+    the pending apt evidence — a failed attempt re-arms it with its own
+    fatal lines and exit-100 marker. A signature is emitted at most once per
+    job even when several steps fail the same way.
     """
     findings: list[Finding] = []
     emitted: set[str] = set()
@@ -309,6 +317,10 @@ def extract_infra_findings(lines: list[str]) -> list[Finding]:
             continue
         if APT_INSTALL_EXIT.search(line):
             apt_install_exit_pending = True
+            continue
+        if APT_INSTALL_START.match(line):
+            apt_fatal_pending = False
+            apt_install_exit_pending = False
     return findings
 
 
