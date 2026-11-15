@@ -476,6 +476,12 @@ def test_vararg_annotation_visits_in_declaration_order() -> None:
     assert guard.clock_findings(source).reads == []
 
 
+def test_dict_scopes_preassign_in_symbol_table_order() -> None:
+    """Dictionary-key scopes precede value scopes in the symbol table."""
+    source = "mapping = {0: lambda: lambda: None, (lambda: None): 1}\n"
+    assert guard.clock_findings(source).reads == []
+
+
 def test_generic_class_bases_resolve_inside_the_wrapper_scope() -> None:
     """A generic class's bases are evaluated inside its type-parameter scope."""
     source = (

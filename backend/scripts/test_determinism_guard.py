@@ -181,6 +181,9 @@ class ClockVisitor(ast.NodeVisitor):
         # definitions can share a line (lambdas in one annotation) and a match
         # must not hand out twice, and ids of collected tables would be reused.
         self.consumed: dict[int, symtable.SymbolTable] = {}
+        #: Tables assigned to dictionary subexpressions before the visit, in
+        #: the symbol table's key-before-value order.
+        self.preassigned: dict[int, symtable.SymbolTable] = {}
         self.probing = False
         #: Whether the visited statements run inside a deferred function or
         # lambda body: Python evaluates function-local variable annotations
@@ -488,12 +491,43 @@ class ClockVisitor(ast.NodeVisitor):
             self.aliases.update(carried)
 
     def visit_Dict(self, node: ast.Dict) -> None:
+        if not self.probing:
+            # Python's symbol table lists dictionary-key scopes before value
+            # scopes, while the entries evaluate interleaved; assign each
+            # entry's tables in symbol-table order before the visit.
+            for key in node.keys:
+                if key is not None:
+                    self._preassign_expression_tables(key)
+            for value in node.values:
+                self._preassign_expression_tables(value)
         # Each entry evaluates its key before its value, so a later entry's
         # bindings cannot mask an earlier entry's reads.
         for key, value in zip(node.keys, node.values, strict=True):
             if key is not None:
                 self.visit(key)
             self.visit(value)
+
+    def _preassign_expression_tables(self, expression: ast.expr) -> None:
+        """Consume an expression's tables in the symbol table's order."""
+        if isinstance(expression, ast.Lambda):
+            if id(expression) not in self.preassigned:
+                self.preassigned[id(expression)] = self.child_table(expression, "lambda")
+            # The body's own tables belong to the lambda's scope.
+            return
+        if isinstance(expression, ast.GeneratorExp):
+            if id(expression) not in self.preassigned:
+                self.preassigned[id(expression)] = self.child_table(expression, "genexpr")
+            return
+        if isinstance(expression, ast.Dict):
+            for key in expression.keys:
+                if key is not None:
+                    self._preassign_expression_tables(key)
+            for value in expression.values:
+                self._preassign_expression_tables(value)
+            return
+        for child in ast.iter_child_nodes(expression):
+            if isinstance(child, ast.expr):
+                self._preassign_expression_tables(child)
 
     def visit_Compare(self, node: ast.Compare) -> None:
         self.visit(node.left)
@@ -680,7 +714,10 @@ class ClockVisitor(ast.NodeVisitor):
         # enclosing block exited, so only marker-derived deferred freeze
         # covers it — not the run-time ``frozen`` of the defining scope.
         frozen = self.deferred_frozen
-        self.functions.append((node, self.child_table(node, "lambda"), self.enclosing, frozen))
+        table = self.preassigned.pop(id(node), None)
+        if table is None:
+            table = self.child_table(node, "lambda")
+        self.functions.append((node, table, self.enclosing, frozen))
 
     def visit_ClassDef(self, node: ast.ClassDef) -> None:
         if self.probing:
@@ -740,7 +777,12 @@ class ClockVisitor(ast.NodeVisitor):
         )
         if isinstance(node, ast.GeneratorExp) and not self.probing:
             # The silent loop pass leaves the table for the real pass.
-            self.table = self.child_table(node, "genexpr")
+            preassigned = self.preassigned.pop(id(node), None)
+            self.table = (
+                preassigned
+                if preassigned is not None
+                else self.child_table(node, "genexpr")
+            )
         self.aliases = self.enclosing.copy()
         self.enclosing = self.aliases
         assigned = self.walrus
