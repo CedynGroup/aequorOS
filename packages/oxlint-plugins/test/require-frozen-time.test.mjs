@@ -811,3 +811,13 @@ test("allows a read in an inner afterAll before the outer restoration", async ()
   `);
   assertClean(result, "frozenTime");
 });
+
+test("allows a read after an IIFE whose argument restores first", async () => {
+  const result = await runOxlint(["frozenTime"], `
+    it('t', () => {
+      (() => vi.useFakeTimers())(vi.useRealTimers());
+      Date.now();
+    });
+  `);
+  assertClean(result, "frozenTime");
+});

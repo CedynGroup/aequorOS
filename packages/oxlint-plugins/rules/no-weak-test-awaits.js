@@ -193,9 +193,16 @@ function unresolvedHelperIsWeak(name, chain, scopeChain, ctx) {
   if (!found || ctx.visiting.has(found.fn)) {
     return false;
   }
-  const atDefiningScope = found.slot === chain.length - 1;
-  if (atDefiningScope && ctx.memo.has(found.fn)) {
-    return ctx.memo.get(found.fn);
+  // The classification of a helper depends only on its body and the scope
+  // chain from the root to its defining scope — the site's own scopes above
+  // the defining one are sliced away, and the parameters and body locals are
+  // synthesized from the declaration itself. A chain that reaches the same
+  // defining scope (from any site, including through recursive
+  // classifications that appended local maps) therefore produces the same
+  // result, so the memo keys on the defining scope's binding map.
+  const cached = ctx.memo.get(found.fn);
+  if (cached && cached.definingChain === chain[found.slot]) {
+    return cached.result;
   }
   // The helper's body sees its parameters and its own declared names before
   // anything in the enclosing scopes: a local `sleep` must not resolve to a
@@ -223,9 +230,7 @@ function unresolvedHelperIsWeak(name, chain, scopeChain, ctx) {
   } finally {
     ctx.visiting.delete(found.fn);
   }
-  if (atDefiningScope) {
-    ctx.memo.set(found.fn, result);
-  }
+  ctx.memo.set(found.fn, { definingChain: chain[found.slot], result });
   return result;
 }
 
@@ -369,6 +374,20 @@ function weakUseIn(node, chain, awaitMode, scopeChain = null, ctx = null) {
         const receiverKind = resolveInChain(chain, callee.object.name ?? "");
         if (receiverKind === WEAK_UNRESOLVED) {
           if (unresolvedHelperIsWeak(callee.object.name ?? "", chain, scopeChain, ctx)) {
+            return true;
+          }
+        } else if (receiverKind) {
+          return true;
+        }
+      }
+      // `sleep.bind(null, 10)(...)` invokes the bound helper at the outer
+      // call: the bound expression carries the helper's timer promise, so a
+      // weak binding must survive the bind — like `.call`/`.apply`, any
+      // weak receiver kind counts.
+      if (methodName === "bind" && callee.object.type === "Identifier") {
+        const receiverKind = resolveInChain(chain, callee.object.name);
+        if (receiverKind === WEAK_UNRESOLVED) {
+          if (unresolvedHelperIsWeak(callee.object.name, chain, scopeChain, ctx)) {
             return true;
           }
         } else if (receiverKind) {

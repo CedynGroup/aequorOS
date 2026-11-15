@@ -135,6 +135,36 @@ function nearestFunction(node) {
 }
 
 /**
+ * When `node` executes, as a source position. Code inside an
+ * immediately-invoked function runs when the invocation's body runs — after
+ * its arguments — so its execution point is the end of the invocation, not
+ * the position of the code itself.
+ */
+function executionPosition(node) {
+  let current = node.parent;
+  while (current) {
+    if (
+      (current.type === "CallExpression" || current.type === "NewExpression") &&
+      (current.callee.type === "ArrowFunctionExpression" ||
+        current.callee.type === "FunctionExpression")
+    ) {
+      let inner = node;
+      while (inner && inner !== current) {
+        if (inner === current.callee.body) {
+          return current.range[1];
+        }
+        inner = inner.parent;
+      }
+    }
+    current = current.parent;
+  }
+  return node.range[0];
+}
+
+/** Ordering key for timer-state transitions. */
+const transitionOrder = (transition) => transition.order ?? transition.node.range[0];
+
+/**
  * Walk up from `node` to find the nearest enclosing callback that is a direct
  * argument of a test-framework call (it/test/describe/beforeEach/…).
  * Handles variants like describe.only, it.each(data)("name", fn), etc.
@@ -363,6 +393,9 @@ const rule = {
             // freeze still covers the reads inside that same helper, even
             // though the helper's transitions say nothing about its caller.
             fn: nearestFunction(call.node),
+            // Execution point: an IIFE body's transition runs when the
+            // invocation completes, after its arguments.
+            order: executionPosition(call.node),
           };
           // A transition trapped inside a closure that nothing here invokes
           // (an uncalled helper, a hook's unused restoration) executes only
@@ -390,9 +423,10 @@ const rule = {
         for (const call of freezeCalls) recordTransition(call, true);
         for (const call of unfreezeCalls) recordTransition(call, false);
         for (const list of transitionsByCallback.values()) {
-          list.sort((a, b) => a.node.range[0] - b.node.range[0]);
+          list.sort((a, b) => transitionOrder(a) - transitionOrder(b));
         }
-        moduleTransitions.sort((a, b) => a.node.range[0] - b.node.range[0]);
+        moduleTransitions.sort((a, b) => transitionOrder(a) - transitionOrder(b));
+        describeTransitions.sort((a, b) => transitionOrder(a) - transitionOrder(b));
 
         /**
          * Lifecycle phases: beforeAll < beforeEach < test < afterEach <
@@ -532,7 +566,7 @@ const rule = {
             const candidates = [...moduleTransitions, ...describeTransitions];
             const before = candidates
               .filter((t) => executesBefore(t.node, node))
-              .sort((a, b) => a.node.range[0] - b.node.range[0]);
+              .sort((a, b) => transitionOrder(a) - transitionOrder(b));
             if (before.length === 0 || !before.at(-1).frozen) {
               report();
             }
@@ -589,7 +623,7 @@ const rule = {
           // tests, and a module freeze before a describe-body restoration
           // does. Merge them in source order and take the last state.
           const collectionTransitions = [...moduleTransitions, ...describeTransitions];
-          collectionTransitions.sort((a, b) => a.node.range[0] - b.node.range[0]);
+          collectionTransitions.sort((a, b) => transitionOrder(a) - transitionOrder(b));
           let frozen =
             collectionTransitions.length > 0
               ? collectionTransitions.at(-1).frozen

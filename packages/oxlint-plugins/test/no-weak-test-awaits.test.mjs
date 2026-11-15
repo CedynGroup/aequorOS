@@ -595,3 +595,28 @@ test("does not report an await when a hook replaces its temporary assignment", a
   `);
   assertClean(result, "weakAwaits");
 });
+
+test("flags an await of a bound timer helper", async () => {
+  const result = await runOxlint(["weakAwaits"], `
+    it('t', async () => {
+      const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+      await sleep.bind(null, 10)();
+    });
+  `);
+  assertFlagged(result, "weakAwaits");
+});
+
+test("classifies long forwarding chains without exponential work", async () => {
+  const helpers = Array.from({ length: 16 }, (_, index) =>
+    index === 0
+      ? "function f0() { return fetch('/data'); }"
+      : `function f${index}() { return f${index - 1}() || f${index - 1}(); }`,
+  ).join("\n");
+  const result = await runOxlint(["weakAwaits"], `
+    ${helpers}
+    it('t', async () => {
+      await f16();
+    });
+  `);
+  assertClean(result, "weakAwaits");
+});
