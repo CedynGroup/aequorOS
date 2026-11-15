@@ -378,9 +378,11 @@ class ClockVisitor(ast.NodeVisitor):
 
     def visit_While(self, node: ast.While) -> None:
         self.visit(node.test)
-        self._visit_loop(node)
+        self._visit_loop(node, node.test)
 
-    def _visit_loop(self, node: ast.For | ast.AsyncFor | ast.While) -> None:
+    def _visit_loop(
+        self, node: ast.For | ast.AsyncFor | ast.While, recheck: ast.expr | None = None
+    ) -> None:
         # A loop body may run zero times, so its assignments must not clear a
         # binding: merge the pre-loop state with the body and ``else`` states.
         # A body assignment also carries into later iterations, so a read
@@ -399,6 +401,10 @@ class ClockVisitor(ast.NodeVisitor):
         del self.reads[probe_start:]
         self._merge_states([before, after_body])
         carried = dict(self.aliases)
+        if recheck is not None:
+            # A while condition is re-evaluated every iteration, so the
+            # evaluations after the first run under the carried bindings.
+            self.visit(recheck)
         for statement in node.body:
             self.visit(statement)
         after_visit = dict(self.aliases)

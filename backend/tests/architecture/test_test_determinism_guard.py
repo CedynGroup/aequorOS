@@ -114,6 +114,14 @@ UNFROZEN_READS = [
     "        case 'fake':\n"
     "            clock = fake_clock\n"
     "    clock()\n",
+    # A while condition is re-evaluated every iteration under the body's
+    # assignments.
+    "import time\n"
+    "clock = lambda: True\n"
+    "iteration = 0\n"
+    "while clock() and iteration < 2:\n"
+    "    clock = time.time\n"
+    "    iteration += 1\n",
     # A loop body may run zero times, so its assignments never clear a
     # clock binding.
     "from datetime import datetime\n"
