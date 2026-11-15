@@ -184,6 +184,9 @@ class ClockVisitor(ast.NodeVisitor):
         #: Tables assigned to dictionary subexpressions before the visit, in
         #: the symbol table's key-before-value order.
         self.preassigned: dict[int, symtable.SymbolTable] = {}
+        #: Snapshots of the bindings at each reachable ``break``, one list
+        #: per enclosing loop, innermost last.
+        self.break_states: list[list[dict[str, str]]] = []
         self.probing = False
         #: Whether the visited statements run inside a deferred function or
         # lambda body: Python evaluates function-local variable annotations
@@ -467,32 +470,38 @@ class ClockVisitor(ast.NodeVisitor):
         # body runs.
         if target is not None:
             self.bind(target)
-        for statement in node.body:
-            self.visit(statement)
+        self.break_states.append([])
+        try:
+            for statement in node.body:
+                self.visit(statement)
+        finally:
+            break_states = self.break_states.pop()
         after_visit = dict(self.aliases)
         # A loop that runs zero iterations exits with the pre-target state.
         entry = [carried] if pre_target is None else [carried, pre_target]
-        self._merge_loop_exit(node, entry, after_visit)
+        self._merge_loop_exit(node, entry, after_visit, break_states)
 
     def _merge_loop_exit(
         self,
         node: ast.For | ast.AsyncFor | ast.While,
         entry: list[dict[str, str]],
         after_visit: dict[str, str],
+        break_states: list[dict[str, str]],
     ) -> None:
         """Join the loop's exit states into ``self.aliases``."""
         if _loop_has_break(node.body):
-            # A break jumps past the else block, so both exit states stay
-            # reachable; the else block itself still sees the entry states
-            # when the loop completes.
+            # A break jumps past the else block, so only the break-time
+            # states and the completed exit stay reachable; the else block
+            # itself still sees the entry states when the loop completes.
+            exits = break_states or [after_visit]
             if node.orelse:
                 self.aliases.clear()
                 self._merge_states(entry)
                 for statement in node.orelse:
                     self.visit(statement)
-                self._merge_states([after_visit, dict(self.aliases)])
+                self._merge_states([*exits, dict(self.aliases)])
             else:
-                self._merge_states([*entry, after_visit])
+                self._merge_states([*exits, *entry])
         elif node.orelse:
             # Without a break the loop always completes, so the else block
             # runs and its state is the only exit state.
@@ -503,6 +512,13 @@ class ClockVisitor(ast.NodeVisitor):
         else:
             self.aliases.clear()
             self._merge_states([*entry, after_visit])
+
+    def visit_Break(self, node: ast.Break) -> None:
+        # A break exits its innermost loop with the bindings at that point;
+        # the silent passes re-visit the same breaks, so only the reporting
+        # pass records them.
+        if not self.probing and self.break_states:
+            self.break_states[-1].append(dict(self.aliases))
 
     def visit_Try(self, node: ast.Try | ast.TryStar) -> None:
         before = dict(self.aliases)
@@ -560,6 +576,26 @@ class ClockVisitor(ast.NodeVisitor):
             if key is not None:
                 self.visit(key)
             self.visit(value)
+
+    def _scan_comprehension_pass(
+        self, node: ast.ListComp | ast.SetComp | ast.DictComp | ast.GeneratorExp
+    ) -> list[dict[str, str]]:
+        """Scan one comprehension iteration and return its filter exits."""
+        rejected: list[dict[str, str]] = []
+        for index, generator in enumerate(node.generators):
+            if index:
+                self.visit(generator.iter)
+            self.bind(generator.target)
+            for condition in generator.ifs:
+                self.visit(condition)
+                # A false filter rejects the iteration, so its
+                # post-condition state stays reachable.
+                rejected.append(dict(self.aliases))
+        for expression in (
+            [node.key, node.value] if isinstance(node, ast.DictComp) else [node.elt]
+        ):
+            self.visit(expression)
+        return rejected
 
     def _preassign_expression_tables(self, expression: ast.expr) -> None:
         """Consume an expression's tables in the symbol table's order."""
@@ -890,18 +926,13 @@ class ClockVisitor(ast.NodeVisitor):
             # stays silent throughout.
             self.probing = outer_probing or previous_entry is not None
             try:
-                for index, generator in enumerate(node.generators):
-                    if index:
-                        self.visit(generator.iter)
-                    self.bind(generator.target)
-                    for condition in generator.ifs:
-                        self.visit(condition)
-                for expression in (
-                    [node.key, node.value] if isinstance(node, ast.DictComp) else [node.elt]
-                ):
-                    self.visit(expression)
+                rejected = self._scan_comprehension_pass(node)
             finally:
                 self.probing = outer_probing
+            if rejected:
+                # Assignments in a skipped element cannot overwrite the
+                # filter-exit states.
+                self._merge_states(rejected)
             if entry_state == previous_entry:
                 del self.reads[scan_start:]
                 break
@@ -918,6 +949,10 @@ class ClockVisitor(ast.NodeVisitor):
             previous_enclosing,
         )
         for name in leaked:
+            if isinstance(node, ast.GeneratorExp):
+                # An unconsumed generator never runs its body, so its walrus
+                # bindings do not reach the containing scope yet.
+                break
             if name in temporary:
                 # The comprehension may run zero iterations or skip them all,
                 # so its walrus bindings merge with the incoming ones instead

@@ -278,6 +278,23 @@ UNFROZEN_READS = [
     "def test_comprehension_first_iteration_read():\n"
     "    clock = time.time\n"
     "    [(clock(), (clock := lambda: 0)) for _ in range(1)]\n",
+    # A break exits with the bindings at the break, not the body's end.
+    "import time\n"
+    "def test_break_keeps_its_binding(flag):\n"
+    "    clock = lambda: 0\n"
+    "    for _ in (1,):\n"
+    "        clock = time.time\n"
+    "        if flag:\n"
+    "            break\n"
+    "        clock = lambda: 0\n"
+    "    clock()\n",
+    # A false filter rejects the iteration, so the element's walrus cannot
+    # overwrite the filter's binding.
+    "import time\n"
+    "def test_filter_exit_keeps_its_binding():\n"
+    "    clock = lambda: 0\n"
+    "    [(clock := lambda: 0) for _ in (1,) if (clock := time.time) and False]\n"
+    "    clock()\n",
 ]
 
 #: The same reads are accepted once the clock is frozen at function, class or
@@ -426,6 +443,13 @@ FROZEN_READS = [
     "    for clock in [lambda: 0, lambda: 0]:\n"
     "        clock()\n"
     "        clock = time.time\n",
+    # An unconsumed generator never runs its body, so its walrus does not
+    # reach the containing scope.
+    "import time\n"
+    "def test_unconsumed_generator_walrus():\n"
+    "    clock = lambda: 0\n"
+    "    unused = ((clock := time.time) for _ in (1,))\n"
+    "    clock()\n",
     # A break inside a nested loop belongs to that loop, so the outer loop
     # still exhausts and its else rebinds the alias.
     "import time\n"
