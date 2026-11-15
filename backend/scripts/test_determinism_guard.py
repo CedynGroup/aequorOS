@@ -73,6 +73,10 @@ FREEZE_MARKER = "pytest.mark.freeze_time"
 TRAVEL = "time_machine.travel"
 FROZEN_CLOCK = "frozen_clock"
 
+#: Upper bound on the silent probe passes a loop runs while its carried
+#: bindings settle; real chains stabilize in one or two rounds.
+_PROBE_LIMIT = 8
+
 #: A surviving suppression must name its reason and its tracking issue:
 #: ``# noqa: AQPY001 - <reason> (#<issue>)``.
 NOQA_CODES = re.compile(r"noqa:\s*(?P<codes>[A-Z]+\d+(?:\s*,\s*[A-Z]+\d+)*)")
@@ -423,13 +427,18 @@ class ClockVisitor(ast.NodeVisitor):
         outer_probing = self.probing
         self.probing = True
         try:
-            for statement in node.body:
-                self.visit(statement)
+            # Assignment chains settle across iterations, so the silent pass
+            # repeats until the carried bindings stabilize.
+            for _ in range(_PROBE_LIMIT):
+                start_state = dict(self.aliases)
+                for statement in node.body:
+                    self.visit(statement)
+                del self.reads[probe_start:]
+                self._merge_states([before, dict(self.aliases)])
+                if self.aliases == start_state:
+                    break
         finally:
             self.probing = outer_probing
-        after_body = dict(self.aliases)
-        del self.reads[probe_start:]
-        self._merge_states([before, after_body])
         if recheck is not None:
             # A while condition is re-evaluated every iteration, so the
             # evaluations after the first run under the carried bindings. The
@@ -445,6 +454,16 @@ class ClockVisitor(ast.NodeVisitor):
         for statement in node.body:
             self.visit(statement)
         after_visit = dict(self.aliases)
+        self._merge_loop_exit(node, before, carried, after_visit)
+
+    def _merge_loop_exit(
+        self,
+        node: ast.For | ast.AsyncFor | ast.While,
+        before: dict[str, str],
+        carried: dict[str, str],
+        after_visit: dict[str, str],
+    ) -> None:
+        """Join the loop's exit states into ``self.aliases``."""
         if _loop_has_break(node.body):
             # A break jumps past the else block, so both exit states stay
             # reachable; the else block itself still sees the carried
@@ -748,7 +767,12 @@ class ClockVisitor(ast.NodeVisitor):
         )
         for name in leaked:
             if name in temporary:
-                previous_aliases[name] = temporary[name]
+                # The comprehension may run zero iterations or skip them all,
+                # so its walrus bindings merge with the incoming ones instead
+                # of replacing them.
+                previous_aliases[name] = _merge_values(
+                    [previous_aliases.get(name, ""), temporary[name]]
+                )
 
     visit_ListComp = visit_comprehension_scope
     visit_SetComp = visit_comprehension_scope

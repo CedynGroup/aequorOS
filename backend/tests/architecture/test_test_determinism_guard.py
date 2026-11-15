@@ -214,6 +214,22 @@ UNFROZEN_READS = [
     "def test_dict_entry_order():\n"
     "    clock = time.time\n"
     "    d = {0: clock(), (clock := lambda: 0): 1}\n",
+    # Assignment chains settle across iterations, so a later iteration can
+    # read a clock binding propagated through another alias.
+    "import time\n"
+    "def test_alias_chain_across_iterations():\n"
+    "    a = b = lambda: 0\n"
+    "    for _ in range(3):\n"
+    "        a()\n"
+    "        a = b\n"
+    "        b = time.time\n",
+    # A comprehension may run zero iterations, so its walrus cannot replace
+    # the incoming binding.
+    "import time\n"
+    "def test_empty_comprehension_walrus():\n"
+    "    clock = time.time\n"
+    "    [(clock := lambda: 0) for _ in []]\n"
+    "    clock()\n",
 ]
 
 #: The same reads are accepted once the clock is frozen at function, class or
