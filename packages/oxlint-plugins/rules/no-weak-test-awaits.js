@@ -232,20 +232,27 @@ function weakUseIn(node, chain, awaitMode, functions = null, visiting = null) {
       const methodName = callee.property.type === "Identifier" ? callee.property.name : null;
       // `sleep.call(...)`/`sleep.apply(...)` invoke the helper and return its
       // timer promise.
-      if (
-        (methodName === "call" || methodName === "apply") &&
-        resolveInChain(chain, callee.object.name ?? "")
-      ) {
-        return true;
+      if (methodName === "call" || methodName === "apply") {
+        const receiverKind = resolveInChain(chain, callee.object.name ?? "");
+        if (receiverKind === WEAK_UNRESOLVED) {
+          if (unresolvedHelperIsWeak(callee.object.name ?? "", chain, functions, visiting)) {
+            return true;
+          }
+        } else if (receiverKind) {
+          return true;
+        }
       }
       // A timer helper handed to a callback-invoking array method waits
       // exclusively on timer promises.
-      if (
-        CALLBACK_INVOKERS.has(methodName) &&
-        node.arguments[0]?.type === "Identifier" &&
-        resolveInChain(chain, node.arguments[0].name)
-      ) {
-        return true;
+      if (CALLBACK_INVOKERS.has(methodName) && node.arguments[0]?.type === "Identifier") {
+        const callbackKind = resolveInChain(chain, node.arguments[0].name);
+        if (callbackKind === WEAK_UNRESOLVED) {
+          if (unresolvedHelperIsWeak(node.arguments[0].name, chain, functions, visiting)) {
+            return true;
+          }
+        } else if (callbackKind) {
+          return true;
+        }
       }
       // `obj.sleep()`: the property name is not a helper reference; only the
       // receiver can carry a weak binding.

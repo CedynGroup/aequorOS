@@ -81,6 +81,21 @@ test("resolves an unresolved helper's dependency in its defining scope", async (
   assertFlagged(result, "weakAwaits");
 });
 
+test("allows an unresolved pure helper handed to a callback invoker", async () => {
+  const result = await runOxlint(["weakAwaits"], `
+    function toCapability(value) {
+      return { module: value };
+    }
+    it('t', async () => {
+      await Promise.all([1, 2].map(toCapability));
+      await fc.assert(fc.asyncProperty(fc.integers(), async (n) => {
+        await screen.findAllByText(String(n));
+      }));
+    });
+  `);
+  assertClean(result, "weakAwaits");
+});
+
 test("still allows a parameter that shadows an unresolved helper's name", async () => {
   const result = await runOxlint(["weakAwaits"], `
     const wait = (ms) => new Promise((r) => setTimeout(r, ms));
