@@ -96,6 +96,69 @@ test("allows an unresolved pure helper handed to a callback invoker", async () =
   assertClean(result, "weakAwaits");
 });
 
+test("keeps same-name helpers in different scopes apart", async () => {
+  // The nested describe-level wait shadows the module-level one; the outer
+  // test awaits the clean module helper and must not inherit the nested
+  // classification (the nested weak body is never awaited, so nothing else
+  // fires).
+  const clean = await runOxlint(["weakAwaits"], `
+    function wait(ms) {
+      return loadReady(ms);
+    }
+    describe('suite', () => {
+      function wait(ms) {
+        return sleep(ms);
+      }
+      const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+      const tainted = () => wait(100);
+    });
+    it('outer', async () => {
+      await wait(100);
+    });
+  `);
+  assertClean(clean, "weakAwaits");
+  // The nested helper itself is weak where it is in scope.
+  const flagged = await runOxlint(["weakAwaits"], `
+    describe('suite', () => {
+      function wait(ms) {
+        return sleep(ms);
+      }
+      const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+      it('inner', async () => {
+        await wait(100);
+      });
+    });
+  `);
+  assertFlagged(flagged, "weakAwaits");
+});
+
+test("resolves an unresolved alias's dependency when it becomes known", async () => {
+  const result = await runOxlint(["weakAwaits"], `
+    function wait(ms) {
+      return sleep(ms);
+    }
+    const pause = wait;
+    const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+    it('t', async () => {
+      await pause(100);
+    });
+  `);
+  assertFlagged(result, "weakAwaits");
+});
+
+test("lets a helper see a dependency declared later in its own scope", async () => {
+  const result = await runOxlint(["weakAwaits"], `
+    it('t', async () => {
+      function wait(ms) {
+        return sleep(ms);
+      }
+      const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+      await wait(100);
+    });
+  `);
+  assertFlagged(result, "weakAwaits");
+});
+
 test("still allows a parameter that shadows an unresolved helper's name", async () => {
   const result = await runOxlint(["weakAwaits"], `
     const wait = (ms) => new Promise((r) => setTimeout(r, ms));

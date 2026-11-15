@@ -158,32 +158,49 @@ function parameterBindings(fn) {
 }
 
 /**
+ * The declaration bound as unresolved for `name` at a site whose bindings
+ * are `chain`: the innermost scope holding an unresolved binding for the
+ * name, and the declaration registered for that scope. Keying by scope
+ * keeps a nested helper from shadowing an outer one in the registry.
+ */
+function unresolvedDeclaration(name, chain, functions) {
+  for (let index = chain.length - 1; index >= 0; index -= 1) {
+    if (chain[index].get(name) === WEAK_UNRESOLVED) {
+      const fn = functions?.get(index)?.get(name);
+      if (fn) {
+        return { fn, slot: index };
+      }
+    }
+  }
+  return null;
+}
+
+/**
  * Whether an unresolved function declaration (one whose body references
  * helpers that may be declared after it) reads as a weak helper at a site
  * whose bindings are `chain`. The body is classified against the helper's
- * DEFINING scope — `functions` maps names to `{ fn, depth }` — so a caller
- * that shadows a dependency's name cannot hide the dependency, with the
- * parameters bound on top; `visiting` breaks recursion on self-referencing
- * helpers.
+ * DEFINING scope — everything up to and including the scope its binding
+ * lives in — so a caller that shadows a dependency's name cannot hide the
+ * dependency, with the parameters bound on top; `visiting` breaks recursion
+ * on self-referencing helpers.
  */
 function unresolvedHelperIsWeak(name, chain, functions, visiting) {
-  const entry = functions?.get(name);
+  const found = unresolvedDeclaration(name, chain, functions);
   visiting ??= new Set();
-  if (!entry || visiting.has(entry.fn)) {
+  if (!found || visiting.has(found.fn)) {
     return false;
   }
-  visiting.add(entry.fn);
+  visiting.add(found.fn);
   try {
-    const definingChain = chain.slice(0, (entry.depth ?? 0) + 1);
     return weakUseIn(
-      entry.fn.body,
-      [...definingChain, parameterBindings(entry.fn)],
+      found.fn.body,
+      [...chain.slice(0, found.slot + 1), parameterBindings(found.fn)],
       false,
       functions,
       visiting,
     );
   } finally {
-    visiting.delete(entry.fn);
+    visiting.delete(found.fn);
   }
 }
 
@@ -221,6 +238,10 @@ function weakUseIn(node, chain, awaitMode, functions = null, visiting = null) {
     if (callee.type === "Identifier") {
       const kind = resolveInChain(chain, callee.name);
       if (kind === WEAK_UNRESOLVED) {
+        // The identifier branch fully decides the callee's contribution;
+        // resolving it again in the fallback below would repeat the body
+        // classification and compound exponentially through chains of
+        // forwarding declarations.
         if (unresolvedHelperIsWeak(callee.name, chain, functions, visiting)) {
           return true;
         }
@@ -257,7 +278,7 @@ function weakUseIn(node, chain, awaitMode, functions = null, visiting = null) {
       // `obj.sleep()`: the property name is not a helper reference; only the
       // receiver can carry a weak binding.
       if (weakUseIn(callee.object, chain, awaitMode, functions, visiting)) return true;
-    } else if (weakUseIn(callee, chain, awaitMode, functions, visiting)) {
+    } else if (callee.type !== "Identifier" && weakUseIn(callee, chain, awaitMode, functions, visiting)) {
       return true;
     }
     return node.arguments.some((argument) => weakUseIn(argument, chain, awaitMode, functions, visiting));
@@ -305,15 +326,39 @@ const rule = {
   },
   create(context) {
     const scopes = [];
-    // Every function declaration in the file, keyed by name. Unresolved
-    // helper chains resolve through it at each read site, so a helper whose
-    // body calls a weak helper declared after it is still classified.
+    // Function declarations by the scope their binding lives in: the outer
+    // map keys a scope index of the current stack, the inner maps a name to
+    // its declaration. Unresolved helper chains resolve through it at each
+    // read site, so a helper whose body calls a weak helper declared after
+    // it is still classified — and a helper nested in an inner scope never
+    // shadows an outer one of the same name.
     const functionDeclarations = new Map();
     // Awaits that looked clean when visited, kept with the binding-map chain
     // they were seen under. A helper declared or assigned LATER can make them
     // weak (forward-declared helpers wrap timer helpers), so every weak
     // declaration re-evaluates the pending awaits against their own chain.
     const pendingAwaits = [];
+
+    /** Record a declaration in the registry slot of its binding's scope. */
+    function registerFunctionDeclaration(declaration) {
+      const index = scopes.length - 1;
+      let byName = functionDeclarations.get(index);
+      if (!byName) {
+        byName = new Map();
+        functionDeclarations.set(index, byName);
+      }
+      byName.set(declaration.id.name, declaration);
+    }
+
+    /** The declaration an unresolved alias forwards to, if one is visible. */
+    function unresolvedAliasTarget(name) {
+      for (let index = scopes.length - 1; index >= 0; index -= 1) {
+        if (scopes[index].bindings.get(name) === WEAK_UNRESOLVED) {
+          return functionDeclarations.get(index)?.get(name) ?? null;
+        }
+      }
+      return null;
+    }
 
     function pushScope(type = "block") {
       scopes.push({ type, bindings: new Map() });
@@ -394,9 +439,11 @@ const rule = {
         boundary -= 1;
       }
       if (boundary >= 0 && scopes[boundary].type === "hook") {
-        // Innermost first: a hook assignment updates the nearest visible
-        // binding, so a suite-level shadow wins over the module binding.
-        for (let index = boundary; index >= 0; index -= 1) {
+        // Innermost first, from the current scope (a hook-local block
+        // binding wins over everything) out to the module binding: a hook
+        // assignment updates the nearest visible binding, so a suite-level
+        // shadow wins over the module binding.
+        for (let index = scopes.length - 1; index >= 0; index -= 1) {
           if (scopes[index].bindings.has(node.name)) {
             scopes[index].bindings.set(node.name, kind);
             if (kind) reevaluatePendingAwaits(boundary, node);
@@ -421,11 +468,15 @@ const rule = {
       }
     }
 
-    /** The kind an alias inherits: helpers alias to helpers, promises to promises. */
+    /** The kind an alias inherits: helpers alias to helpers, promises to
+     * promises, and an unresolved helper stays unresolved through aliases so
+     * its dependency is resolved when it becomes known. */
     function aliasedKind(init) {
       if (init?.type !== "Identifier") return null;
       const kind = resolveKind(init.name);
-      return kind === WEAK_HELPER || kind === WEAK_PROMISE ? kind : null;
+      return kind === WEAK_HELPER || kind === WEAK_PROMISE || kind === WEAK_UNRESOLVED
+        ? kind
+        : null;
     }
 
     /** Classify the kind a declarator/assignment binds, from its right side. */
@@ -499,7 +550,7 @@ const rule = {
             : statement;
         if (declaration?.type === "FunctionDeclaration") {
           declarations.push(declaration);
-          functionDeclarations.set(declaration.id.name, { fn: declaration, depth: null });
+          registerFunctionDeclaration(declaration);
           declareIdentifier(declaration.id, WEAK_UNRESOLVED, "function");
         }
       }
@@ -558,10 +609,10 @@ const rule = {
       FunctionDeclaration(node) {
         // A weak body is cached as a helper; anything else stays unresolved
         // (its helpers may be declared later) and is re-classified at each
-        // read site against its defining scope's bindings. The registry
-        // records the defining scope's depth so a caller that shadows a
-        // dependency's name cannot hide the dependency.
-        functionDeclarations.set(node.id.name, { fn: node, depth: functionDepth() });
+        // read site against its defining scope's bindings — the registry
+        // slot is the scope the binding lives in, so a helper nested in an
+        // inner scope never shadows an outer one of the same name.
+        registerFunctionDeclaration(node);
         declareIdentifier(
           node.id,
           functionContainsWeakTimerPromise(node) ? WEAK_HELPER : WEAK_UNRESOLVED,
@@ -587,7 +638,27 @@ const rule = {
       },
       "CatchClause:exit": popScope,
       VariableDeclarator(node) {
-        declareIdentifier(node.id, boundKind(node.init), node.parent?.kind, true);
+        const kind = boundKind(node.init);
+        if (
+          kind === WEAK_UNRESOLVED &&
+          node.id.type === "Identifier" &&
+          node.init.type === "Identifier"
+        ) {
+          // The alias forwards to an unresolved helper: record the same
+          // declaration under the alias so reads through it resolve the
+          // dependency when it becomes known.
+          const target = unresolvedAliasTarget(node.init.name);
+          if (target) {
+            const index = scopes.length - 1;
+            let byName = functionDeclarations.get(index);
+            if (!byName) {
+              byName = new Map();
+              functionDeclarations.set(index, byName);
+            }
+            byName.set(node.id.name, target);
+          }
+        }
+        declareIdentifier(node.id, kind, node.parent?.kind, true);
       },
       AssignmentExpression(node) {
         if (node.operator === "=") {
