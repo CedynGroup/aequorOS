@@ -135,6 +135,7 @@ const CALLBACK_INVOKERS = new Set([
 
 /** Setup hooks whose callbacks run before the tests they precede. */
 const SETUP_HOOKS = new Set(["beforeEach", "beforeAll"]);
+const DESCRIBE_NAMES = new Set(["describe"]);
 
 /** Look a name up along a chain of binding maps, innermost last. */
 function resolveInChain(chain, name) {
@@ -568,16 +569,13 @@ const rule = {
       }
     }
 
-    function assignIdentifier(node, kind) {
-      if (node?.type !== "Identifier") {
-        return;
-      }
-
-      // Confine write effects to the function whose body the assignment sits
-      // in: an assignment inside an uncalled function must not change the
-      // classification the enclosing scopes already have. A setup hook is
-      // the exception — its callback runs before the tests, so its
-      // assignment to an outer binding propagates outward.
+    /**
+     * The scope an assignment to `name` updates, and where an alias of an
+     * unresolved helper must be registered: innermost first when the write
+     * propagates (a setup hook or a synchronously executed callback),
+     * otherwise confined to the current function.
+     */
+    function writeTargetScope(name) {
       let boundary = scopes.length - 1;
       while (
         boundary >= 0 &&
@@ -593,25 +591,32 @@ const rule = {
         // assignment updates the nearest visible binding, so a suite-level
         // shadow wins over the module binding.
         for (let index = scopes.length - 1; index >= 0; index -= 1) {
-          if (scopes[index].bindings.has(node.name)) {
-            scopes[index].bindings.set(node.name, kind);
-            return;
+          if (scopes[index].bindings.has(name)) {
+            return scopes[index];
           }
         }
       }
       for (let index = scopes.length - 1; index >= boundary; index -= 1) {
-        if (scopes[index].bindings.has(node.name)) {
-          scopes[index].bindings.set(node.name, kind);
-          return;
+        if (scopes[index].bindings.has(name)) {
+          return scopes[index];
         }
       }
-      // A captured outer binding reassigned inside this function: record a
-      // function-local override so the awaits that follow it see the new
-      // kind, without changing the classification the enclosing scopes
-      // already have.
-      if (boundary >= 0) {
-        scopes[boundary].bindings.set(node.name, kind);
+      // A captured outer binding reassigned inside this function: the
+      // function-local override is where the awaits that follow it look.
+      return boundary >= 0 ? scopes[boundary] : null;
+    }
+
+    function assignIdentifier(node, kind) {
+      if (node?.type !== "Identifier") {
+        return;
       }
+
+      // Confine write effects to the function whose body the assignment sits
+      // in: an assignment inside an uncalled function must not change the
+      // classification the enclosing scopes already have. A setup hook is
+      // the exception — its callback runs before the tests, so its
+      // assignment to an outer binding propagates outward.
+      writeTargetScope(node.name)?.bindings.set(node.name, kind);
     }
 
     /** The kind an alias inherits: helpers alias to helpers, promises to
@@ -739,6 +744,28 @@ const rule = {
       return hookName !== null && SETUP_HOOKS.has(hookName) ? "hook" : "function";
     }
 
+    /** Whether the function's parent call runs it where it sits: an IIFE
+     * (the function is the callee) or a describe callback (a synchronously
+     * executed callback argument). */
+    function executesWhereDefined(node) {
+      const call = node.parent;
+      if (call?.type !== "CallExpression") {
+        return false;
+      }
+      if (call.callee === node) {
+        // Immediately invoked: the function is the callee.
+        return node.type === "ArrowFunctionExpression" || node.type === "FunctionExpression";
+      }
+      const callee = call.callee;
+      const baseName =
+        callee?.type === "Identifier"
+          ? callee.name
+          : callee?.type === "MemberExpression" && !callee.computed && callee.property?.type === "Identifier"
+            ? callee.property.name
+            : null;
+      return baseName !== null && DESCRIBE_NAMES.has(baseName);
+    }
+
     return {
       Program(node) {
         pushScope("program");
@@ -779,9 +806,10 @@ const rule = {
       "FunctionDeclaration:exit": popScope,
       FunctionExpression(node) {
         pushScope(scopeTypeFor(node));
-        // An immediately invoked function runs where it sits: its writes to
-        // captured bindings reach the enclosing scopes like a hook's do.
-        if (node.parent?.type === "CallExpression" && node.parent.callee === node) {
+        // A synchronously executed function (IIFE, describe callback) runs
+        // where it sits: its writes to captured bindings reach the
+        // enclosing scopes like a hook's do.
+        if (executesWhereDefined(node)) {
           scopes[scopes.length - 1].iife = true;
         }
         declareParameters(node);
@@ -789,7 +817,7 @@ const rule = {
       "FunctionExpression:exit": popScope,
       ArrowFunctionExpression(node) {
         pushScope(scopeTypeFor(node));
-        if (node.parent?.type === "CallExpression" && node.parent.callee === node) {
+        if (executesWhereDefined(node)) {
           scopes[scopes.length - 1].iife = true;
         }
         declareParameters(node);
@@ -820,20 +848,24 @@ const rule = {
       AssignmentExpression(node) {
         if (node.operator === "=") {
           const kind = boundKind(node.right);
-          if (
-            kind === WEAK_UNRESOLVED &&
-            node.left.type === "Identifier" &&
-            node.right.type === "Identifier"
-          ) {
+          if (node.left.type === "Identifier") {
             // An assigned alias forwards to an unresolved helper the same
             // way a declarator alias does, so reads through it resolve the
-            // dependency when it becomes known.
-            const target = unresolvedAliasTarget(node.right.name);
-            if (target) {
-              registerAliasDeclaration(node.left.name, target);
+            // dependency when it becomes known. The registry entry belongs
+            // in the scope the binding was updated in — a hook assigning to
+            // an outer binding registers there, not in the hook's scope.
+            const scope = writeTargetScope(node.left.name);
+            if (kind === WEAK_UNRESOLVED && node.right.type === "Identifier") {
+              const target = unresolvedAliasTarget(node.right.name);
+              if (target && scope) {
+                if (!scope.declarations) {
+                  scope.declarations = new Map();
+                }
+                scope.declarations.set(node.left.name, target);
+              }
             }
+            assignIdentifier(node.left, kind);
           }
-          assignIdentifier(node.left, kind);
         }
       },
       AwaitExpression(node) {

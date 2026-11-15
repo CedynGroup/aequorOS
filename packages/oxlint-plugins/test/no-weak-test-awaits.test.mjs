@@ -643,3 +643,34 @@ test("reports an await of a sequence-expression callee", async () => {
   `);
   assertFlagged(result, "weakAwaits");
 });
+
+test("reports an await covered by a describe-callback assignment", async () => {
+  const result = await runOxlint(["weakAwaits"], `
+    let sleep;
+    describe('setup', () => {
+      sleep = () => new Promise((resolve) => setTimeout(resolve, 10));
+    });
+    it('t', async () => {
+      await sleep();
+    });
+  `);
+  assertFlagged(result, "weakAwaits");
+});
+
+test("lets a hook replace an unresolved helper with a clean one", async () => {
+  const result = await runOxlint(["weakAwaits"], `
+    function wait() {
+      return new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    function load() {
+      return fetch('/data');
+    }
+    beforeEach(() => {
+      wait = load;
+    });
+    it('t', async () => {
+      await wait();
+    });
+  `);
+  assertClean(result, "weakAwaits");
+});

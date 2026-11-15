@@ -447,6 +447,12 @@ const rule = {
           return undefined;
         };
 
+        // Test callbacks that touch the timer state, keyed by the describe
+        // they are registered in (`null` = file level): a teardown callback
+        // runs after every test of its suite, so each test's own transitions
+        // shape the state the teardown sees.
+        const testsByDescribe = new Map();
+        const fileLevelTests = [];
         // Every before-hook (beforeAll/beforeEach) whose callback touches the
         // timer state, keyed by the describe it is registered in (`null` =
         // file level). `netFrozen` is the state the hook LEAVES behind: a
@@ -480,6 +486,19 @@ const rule = {
             hooksByDescribe.set(parentDescribe, hooks);
           } else {
             fileLevelHooks.push(hook);
+          }
+        }
+        for (const { enclosing } of [...freezeCalls, ...unfreezeCalls]) {
+          if (!enclosing || !TEST_NAMES.has(enclosing.callType)) {
+            continue;
+          }
+          const parentDescribe = findEnclosingDescribe(enclosing.callNode);
+          if (parentDescribe) {
+            const tests = testsByDescribe.get(parentDescribe) ?? [];
+            tests.push({ fn: enclosing.fn });
+            testsByDescribe.set(parentDescribe, tests);
+          } else {
+            fileLevelTests.push({ fn: enclosing.fn });
           }
         }
         for (const hooks of hooksByDescribe.values()) {
@@ -642,6 +661,27 @@ const rule = {
               : false;
           for (const { hook } of sequence) {
             if (hook.netFrozen !== null) frozen = hook.netFrozen;
+          }
+          // A teardown callback runs after every test of its suite: each
+          // test's own transitions start from the hook-covered state, and
+          // the teardown only stays covered while EVERY test ends frozen.
+          if (isTeardown(enclosing.callType)) {
+            const suiteTests =
+              enclosingDescribes.length > 0
+                ? enclosingDescribes.flatMap((describe) => testsByDescribe.get(describe) ?? [])
+                : fileLevelTests;
+            for (const test of suiteTests) {
+              let testState = frozen;
+              for (const transition of transitionsByCallback.get(test.fn) ?? []) {
+                if (transition.immediate && executesBefore(transition.node, node)) {
+                  testState = transition.frozen;
+                }
+              }
+              if (!testState) {
+                frozen = false;
+                break;
+              }
+            }
           }
           const ownState = stateAt(transitionsByCallback.get(enclosing.fn) ?? []);
           if (ownState !== null) frozen = ownState;

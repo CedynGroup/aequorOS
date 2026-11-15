@@ -834,3 +834,18 @@ test("allows a read after an IIFE that restores and then freezes", async () => {
   `);
   assertClean(result, "frozenTime");
 });
+
+test("reports a teardown read after a test restores real timers", async () => {
+  const result = await runOxlint(["frozenTime"], `
+    beforeEach(() => {
+      vi.useFakeTimers();
+    });
+    it('t', () => {
+      vi.useRealTimers();
+    });
+    afterEach(() => {
+      Date.now();
+    });
+  `);
+  assertFlagged(result, "frozenTime");
+});
