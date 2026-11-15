@@ -156,6 +156,10 @@ class ClockVisitor(ast.NodeVisitor):
         # must not hand out twice, and ids of collected tables would be reused.
         self.consumed: dict[int, symtable.SymbolTable] = {}
         self.probing = False
+        #: Whether the visited statements run inside a deferred function or
+        # lambda body: Python evaluates function-local variable annotations
+        # never, while module and class bodies evaluate theirs at execution.
+        self.deferred_body = False
         #: Names bound by assignment expressions in the currently visited
         # comprehension; the comprehension hands them to its containing scope.
         self.walrus: set[str] = set()
@@ -309,7 +313,9 @@ class ClockVisitor(ast.NodeVisitor):
                     self.deferred_frozen = True
 
     def visit_AnnAssign(self, node: ast.AnnAssign) -> None:
-        if not self.postponed:
+        if not self.postponed and not self.deferred_body:
+            # Module and class bodies evaluate their annotations; a
+            # function-local one never runs.
             self.visit(node.annotation)
         if node.value is not None:
             self.visit(node.value)
@@ -422,6 +428,16 @@ class ClockVisitor(ast.NodeVisitor):
         for statement in node.orelse:
             self.visit(statement)
         self._merge_states([before, carried, after_visit, dict(self.aliases)])
+
+    def visit_Compare(self, node: ast.Compare) -> None:
+        self.visit(node.left)
+        # Every comparison after the first may be short-circuited away, so
+        # each evaluated prefix's bindings stay reachable at the join.
+        states: list[dict[str, str]] = []
+        for comparator in node.comparators:
+            self.visit(comparator)
+            states.append(dict(self.aliases))
+        self._merge_states(states)
 
     def visit_BoolOp(self, node: ast.BoolOp) -> None:
         # The first operand always evaluates; later ones may be skipped, so
@@ -599,10 +615,14 @@ class ClockVisitor(ast.NodeVisitor):
         self.table = self.child_table(node, node.name)
         self.aliases = self.aliases.copy()
         # Class-body statements run at import; only the deferred methods run
-        # under the class marker.
+        # under the class marker. A class statement executes wherever it
+        # stands, so its body evaluates its own annotations again.
+        previous_body_flag = self.deferred_body
+        self.deferred_body = False
         self.deferred_frozen = self.deferred_frozen or own
         for statement in node.body:
             self.visit(statement)
+        self.deferred_body = previous_body_flag
         self.table, self.aliases = previous_table, previous_aliases
         self.frozen, self.deferred_frozen = previous_frozen, previous_deferred
         self.aliases[node.name] = ""
@@ -788,11 +808,14 @@ class ClockVisitor(ast.NodeVisitor):
             self.enclosing = self.aliases
             self.frozen = frozen
             self.deferred_frozen = frozen
+            previous_body_flag = self.deferred_body
+            self.deferred_body = True
             if isinstance(node, ast.Lambda):
                 self.visit(node.body)
             else:
                 for statement in node.body:
                     self.visit(statement)
+            self.deferred_body = previous_body_flag
         return self.reads
 
 

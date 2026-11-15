@@ -129,6 +129,13 @@ UNFROZEN_READS = [
     "    clock = time.time\n"
     "    enabled and (clock := lambda: 0)\n"
     "    clock()\n",
+    # A chained comparison short-circuits the same way: a skipped
+    # comparator's walrus cannot mask the clock binding either.
+    "import time\n"
+    "def test_chained_comparison_walrus():\n"
+    "    clock = time.time\n"
+    "    chained = 1 > 2 > (clock := lambda: 0)\n"
+    "    clock()\n",
     # Either branch of a conditional expression may run, so a walrus in one
     # branch cannot mask the pre-expression clock binding either.
     "import time\n"
@@ -372,6 +379,17 @@ def test_type_parameter_bounds_do_not_confuse_annotation_lookups() -> None:
 def test_generic_defaults_resolve_in_the_enclosing_scope() -> None:
     """A default expression of a generic function is not inside the wrapper scope."""
     source = "def helper[T](value=lambda: None): pass\n"
+    assert guard.clock_findings(source).reads == []
+
+
+def test_function_local_annotations_are_not_evaluated() -> None:
+    """Python never evaluates a function-local variable annotation."""
+    source = (
+        "import time\n"
+        "from typing import Annotated\n"
+        "def test_local_annotation():\n"
+        "    value: Annotated[int, time.time()] = 1\n"
+    )
     assert guard.clock_findings(source).reads == []
 
 
