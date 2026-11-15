@@ -266,6 +266,18 @@ UNFROZEN_READS = [
     "    for clock in []:\n"
     "        pass\n"
     "    clock()\n",
+    # A comprehension's walrus feeds the next iteration, so the second
+    # iteration's read is reported.
+    "import time\n"
+    "def test_comprehension_walrus_feeds_back():\n"
+    "    clock = lambda: 0\n"
+    "    [(clock(), (clock := time.time)) for _ in range(2)]\n",
+    # A first-iteration read stays reported even when the element's walrus
+    # replaces the clock for later iterations.
+    "import time\n"
+    "def test_comprehension_first_iteration_read():\n"
+    "    clock = time.time\n"
+    "    [(clock(), (clock := lambda: 0)) for _ in range(1)]\n",
 ]
 
 #: The same reads are accepted once the clock is frozen at function, class or
@@ -407,6 +419,13 @@ FROZEN_READS = [
     "        pass\n"
     "    except ValueError as clock:\n"
     "        clock()\n",
+    # Each iteration reassigns the loop target before the body runs, so a
+    # body-end rebinding never reaches the next iteration's read.
+    "import time\n"
+    "def test_target_rebinds_each_iteration():\n"
+    "    for clock in [lambda: 0, lambda: 0]:\n"
+    "        clock()\n"
+    "        clock = time.time\n",
     # A break inside a nested loop belongs to that loop, so the outer loop
     # still exhausts and its else rebinds the alias.
     "import time\n"

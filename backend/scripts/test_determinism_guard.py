@@ -411,7 +411,7 @@ class ClockVisitor(ast.NodeVisitor):
         # Zero iterations leave the target holding its incoming value.
         pre_target = dict(self.aliases)
         self.bind(node.target)
-        self._visit_loop(node, pre_target=pre_target)
+        self._visit_loop(node, pre_target=pre_target, target=node.target)
 
     visit_AsyncFor = visit_For
 
@@ -424,6 +424,7 @@ class ClockVisitor(ast.NodeVisitor):
         node: ast.For | ast.AsyncFor | ast.While,
         recheck: ast.expr | None = None,
         pre_target: dict[str, str] | None = None,
+        target: ast.expr | None = None,
     ) -> None:
         # A loop body may run zero times, so its assignments must not clear a
         # binding: merge the pre-loop state with the body and ``else`` states.
@@ -436,9 +437,12 @@ class ClockVisitor(ast.NodeVisitor):
         self.probing = True
         try:
             # Assignment chains settle across iterations, so the silent pass
-            # repeats until the carried bindings stabilize.
+            # repeats until the carried bindings stabilize. Each iteration
+            # reassigns the target from the iterable first.
             for _ in range(_PROBE_LIMIT):
                 start_state = dict(self.aliases)
+                if target is not None:
+                    self.bind(target)
                 for statement in node.body:
                     self.visit(statement)
                 del self.reads[probe_start:]
@@ -459,6 +463,10 @@ class ClockVisitor(ast.NodeVisitor):
             finally:
                 self.probing = outer_probing
         carried = dict(self.aliases)
+        # Each iteration reassigns the target from the iterable before the
+        # body runs.
+        if target is not None:
+            self.bind(target)
         for statement in node.body:
             self.visit(statement)
         after_visit = dict(self.aliases)
@@ -866,14 +874,39 @@ class ClockVisitor(ast.NodeVisitor):
         self.walrus = set()
         for generator in node.generators:
             self.bind(generator.target)
-        for index, generator in enumerate(node.generators):
-            if index:
-                self.visit(generator.iter)
-            self.bind(generator.target)
-            for condition in generator.ifs:
-                self.visit(condition)
-        for expression in [node.key, node.value] if isinstance(node, ast.DictComp) else [node.elt]:
-            self.visit(expression)
+        # Each iteration rebinds the targets and re-evaluates the filters
+        # under the previous iteration's bindings, so the scans repeat until
+        # the bindings stabilize. Every pass's reads stay recorded, because
+        # each iteration may see a different state; a pass whose entry state
+        # equals the previous pass's entry state only repeats the tail that
+        # the previous pass already recorded.
+        previous_entry: dict[str, str] | None = None
+        scan_start = len(self.reads)
+        for _ in range(_PROBE_LIMIT):
+            entry_state = dict(self.aliases)
+            outer_probing = self.probing
+            # Later passes re-visit definitions whose tables are already
+            # consumed, so they scan silently; an inherited silent pass
+            # stays silent throughout.
+            self.probing = outer_probing or previous_entry is not None
+            try:
+                for index, generator in enumerate(node.generators):
+                    if index:
+                        self.visit(generator.iter)
+                    self.bind(generator.target)
+                    for condition in generator.ifs:
+                        self.visit(condition)
+                for expression in (
+                    [node.key, node.value] if isinstance(node, ast.DictComp) else [node.elt]
+                ):
+                    self.visit(expression)
+            finally:
+                self.probing = outer_probing
+            if entry_state == previous_entry:
+                del self.reads[scan_start:]
+                break
+            previous_entry = entry_state
+            scan_start = len(self.reads)
         leaked, self.walrus = self.walrus, assigned
         # An assignment expression binds in the containing scope, so the
         # comprehension's copy hands its walrus bindings back before the
