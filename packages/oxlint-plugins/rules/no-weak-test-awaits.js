@@ -114,6 +114,12 @@ function isSetTimeoutPromise(node) {
 /** Binding kinds: a weak timer-promise VALUE, or a function RETURNING one. */
 const WEAK_PROMISE = "promise";
 const WEAK_HELPER = "helper";
+/**
+ * A function declaration whose body references helpers that may be declared
+ * after it. Its weakness is resolved at each read site against the bindings
+ * standing there, so a weak helper declared later still taints the chain.
+ */
+const WEAK_UNRESOLVED = "unresolved";
 
 /** Array methods whose first argument is invoked as a callback. */
 const CALLBACK_INVOKERS = new Set([
@@ -140,6 +146,38 @@ function resolveInChain(chain, name) {
   return false;
 }
 
+/** Parameter bindings for a function, as an extra innermost scope map. */
+function parameterBindings(fn) {
+  const bindings = new Map();
+  for (const parameter of fn.params ?? []) {
+    if (parameter.type === "Identifier") {
+      bindings.set(parameter.name, false);
+    }
+  }
+  return bindings;
+}
+
+/**
+ * Whether an unresolved function declaration (one whose body references
+ * helpers that may be declared after it) reads as a weak helper at a site
+ * whose bindings are `chain`. The body is classified with the parameters
+ * bound, so a parameter shadowing an outer helper name wins over the
+ * registry; `visiting` breaks recursion on self-referencing helpers.
+ */
+function unresolvedHelperIsWeak(name, chain, functions, visiting) {
+  const fn = functions?.get(name);
+  visiting ??= new Set();
+  if (!fn || visiting.has(fn)) {
+    return false;
+  }
+  visiting.add(fn);
+  try {
+    return weakUseIn(fn.body, [...chain, parameterBindings(fn)], false, functions, visiting);
+  } finally {
+    visiting.delete(fn);
+  }
+}
+
 /**
  * Whether `node` uses a weak timer promise, resolved against `chain` (an
  * array of binding maps, innermost last). In `classify` mode (a function body
@@ -148,8 +186,10 @@ function resolveInChain(chain, name) {
  * INVOKED — a bare reference such as `expect(sleep).toBeDefined()` asserts on
  * the helper, it does not wait on a timer — and a noncomputed property named
  * like a helper (`state.sleep`) is a property name, never a reference.
+ * `functions` (a name → FunctionDeclaration map) resolves unresolved helper
+ * chains at the read site; `visiting` breaks recursion.
  */
-function weakUseIn(node, chain, awaitMode) {
+function weakUseIn(node, chain, awaitMode, functions = null, visiting = null) {
   if (!node || typeof node !== "object") {
     return false;
   }
@@ -161,13 +201,23 @@ function weakUseIn(node, chain, awaitMode) {
   if (node.type === "Identifier") {
     const kind = resolveInChain(chain, node.name);
     if (!kind) return false;
+    if (kind === WEAK_UNRESOLVED) {
+      return !awaitMode && unresolvedHelperIsWeak(node.name, chain, functions, visiting);
+    }
     return !awaitMode || kind === WEAK_PROMISE;
   }
 
   if (node.type === "CallExpression") {
     const callee = node.callee;
-    if (callee.type === "Identifier" && resolveInChain(chain, callee.name)) {
-      return true;
+    if (callee.type === "Identifier") {
+      const kind = resolveInChain(chain, callee.name);
+      if (kind === WEAK_UNRESOLVED) {
+        if (unresolvedHelperIsWeak(callee.name, chain, functions, visiting)) {
+          return true;
+        }
+      } else if (kind) {
+        return true;
+      }
     }
     if (callee.type === "MemberExpression" && !callee.computed) {
       const methodName = callee.property.type === "Identifier" ? callee.property.name : null;
@@ -190,17 +240,17 @@ function weakUseIn(node, chain, awaitMode) {
       }
       // `obj.sleep()`: the property name is not a helper reference; only the
       // receiver can carry a weak binding.
-      if (weakUseIn(callee.object, chain, awaitMode)) return true;
-    } else if (weakUseIn(callee, chain, awaitMode)) {
+      if (weakUseIn(callee.object, chain, awaitMode, functions, visiting)) return true;
+    } else if (weakUseIn(callee, chain, awaitMode, functions, visiting)) {
       return true;
     }
-    return node.arguments.some((argument) => weakUseIn(argument, chain, awaitMode));
+    return node.arguments.some((argument) => weakUseIn(argument, chain, awaitMode, functions, visiting));
   }
 
   if (node.type === "MemberExpression") {
-    if (weakUseIn(node.object, chain, awaitMode)) return true;
+    if (weakUseIn(node.object, chain, awaitMode, functions, visiting)) return true;
     // A noncomputed property name never references an outer binding.
-    return node.computed ? weakUseIn(node.property, chain, awaitMode) : false;
+    return node.computed ? weakUseIn(node.property, chain, awaitMode, functions, visiting) : false;
   }
 
   if (
@@ -210,8 +260,8 @@ function weakUseIn(node, chain, awaitMode) {
   ) {
     // The value is always live code (a computed key may be too); only a
     // noncomputed key is a mere name.
-    if (weakUseIn(node.value, chain, awaitMode)) return true;
-    return node.computed ? weakUseIn(node.key, chain, awaitMode) : false;
+    if (weakUseIn(node.value, chain, awaitMode, functions, visiting)) return true;
+    return node.computed ? weakUseIn(node.key, chain, awaitMode, functions, visiting) : false;
   }
 
   return Object.entries(node).some(([key, value]) => {
@@ -219,9 +269,9 @@ function weakUseIn(node, chain, awaitMode) {
       return false;
     }
     if (Array.isArray(value)) {
-      return value.some((child) => weakUseIn(child, chain, awaitMode));
+      return value.some((child) => weakUseIn(child, chain, awaitMode, functions, visiting));
     }
-    return weakUseIn(value, chain, awaitMode);
+    return weakUseIn(value, chain, awaitMode, functions, visiting);
   });
 }
 
@@ -239,6 +289,10 @@ const rule = {
   },
   create(context) {
     const scopes = [];
+    // Every function declaration in the file, keyed by name. Unresolved
+    // helper chains resolve through it at each read site, so a helper whose
+    // body calls a weak helper declared after it is still classified.
+    const functionDeclarations = new Map();
     // Awaits that looked clean when visited, kept with the binding-map chain
     // they were seen under. A helper declared or assigned LATER can make them
     // weak (forward-declared helpers wrap timer helpers), so every weak
@@ -354,7 +408,7 @@ const rule = {
       if (isFunctionNode(right)) {
         return functionContainsWeakTimerPromise(right) ? WEAK_HELPER : false;
       }
-      return weakUseIn(right, currentChain(), false) ? WEAK_PROMISE : false;
+      return weakUseIn(right, currentChain(), false, functionDeclarations) ? WEAK_PROMISE : false;
     }
 
     function reevaluatePendingAwaits(boundary) {
@@ -375,7 +429,7 @@ const rule = {
             continue;
           }
         }
-        if (weakUseIn(pending.argument, pending.chain, true)) {
+        if (weakUseIn(pending.argument, pending.chain, true, functionDeclarations)) {
           context.report({ node: pending.node, messageId: "weakAwait" });
           pendingAwaits.splice(index, 1);
         }
@@ -389,7 +443,7 @@ const rule = {
     function functionContainsWeakTimerPromise(fn) {
       pushScope("function");
       declareParameters(fn);
-      const contains = weakUseIn(fn.body, currentChain(), false);
+      const contains = weakUseIn(fn.body, currentChain(), false, functionDeclarations);
       popScope();
       return contains;
     }
@@ -412,7 +466,8 @@ const rule = {
             : statement;
         if (declaration?.type === "FunctionDeclaration") {
           declarations.push(declaration);
-          declareIdentifier(declaration.id, false, "function");
+          functionDeclarations.set(declaration.id.name, declaration);
+          declareIdentifier(declaration.id, WEAK_UNRESOLVED, "function");
         }
       }
 
@@ -420,7 +475,7 @@ const rule = {
         let changed = false;
         for (const declaration of declarations) {
           if (
-            !resolveKind(declaration.id.name) &&
+            resolveKind(declaration.id.name) !== WEAK_HELPER &&
             functionContainsWeakTimerPromise(declaration)
           ) {
             declareIdentifier(declaration.id, WEAK_HELPER, "function");
@@ -466,9 +521,12 @@ const rule = {
       SwitchStatement: pushScope,
       "SwitchStatement:exit": popScope,
       FunctionDeclaration(node) {
+        // A weak body is cached as a helper; anything else stays unresolved
+        // (its helpers may be declared later) and is re-classified at each
+        // read site against the bindings standing there.
         declareIdentifier(
           node.id,
-          functionContainsWeakTimerPromise(node) ? WEAK_HELPER : false,
+          functionContainsWeakTimerPromise(node) ? WEAK_HELPER : WEAK_UNRESOLVED,
           "function",
         );
         pushScope(scopeTypeFor(node));
@@ -507,7 +565,7 @@ const rule = {
         }
 
         const chain = currentChain();
-        if (weakUseIn(node.argument, chain, true)) {
+        if (weakUseIn(node.argument, chain, true, functionDeclarations)) {
           context.report({ node, messageId: "weakAwait" });
           return;
         }

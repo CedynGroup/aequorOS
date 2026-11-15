@@ -54,6 +54,32 @@ test("reports awaits through a chain of aliases", async () => {
   assertFlagged(result, "weakAwaits");
 });
 
+test("reports a helper declared before its weak dependency", async () => {
+  const result = await runOxlint(["weakAwaits"], `
+    function wait(ms) {
+      return sleep(ms);
+    }
+    const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+    it('t', async () => {
+      await wait(100);
+    });
+  `);
+  assertFlagged(result, "weakAwaits");
+});
+
+test("still allows a parameter that shadows an unresolved helper's name", async () => {
+  const result = await runOxlint(["weakAwaits"], `
+    const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+    function ready(wait) {
+      return wait();
+    }
+    it('t', async () => {
+      await ready(loadReady());
+    });
+  `);
+  assertClean(result, "weakAwaits");
+});
+
 test("reports a bare await Promise.resolve() statement", async () => {
   const result = await runOxlint(["weakAwaits"], `
     it('t', async () => {
