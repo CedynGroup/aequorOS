@@ -95,6 +95,10 @@ UNFROZEN_READS = [
     "def test_boolop_fallback(fake):\n"
     "    clock = fake_clock or datetime.now\n"
     "    clock()\n",
+    # A boolean expression may also be the invoked callable itself.
+    "import time\n"
+    "def test_direct_boolop_call():\n"
+    "    (time.time or None)()\n",
     # A loop body may run zero times, so its assignments never clear a
     # clock binding.
     "from datetime import datetime\n"
@@ -264,6 +268,12 @@ def test_generic_type_parameter_scopes_do_not_crash_the_guard() -> None:
         "def helper[T](value: Annotated[T, lambda: None]) -> T:\n"
         "    ...\n"
     )
+    assert guard.clock_findings(source).reads == []
+
+
+def test_nested_type_alias_scopes_do_not_crash_the_guard() -> None:
+    """A lambda in a type-alias value sits below two wrapper scopes."""
+    source = "from typing import Annotated\ntype Alias[T] = Annotated[T, lambda: None]\n"
     assert guard.clock_findings(source).reads == []
 
 

@@ -101,6 +101,13 @@ def _clock_capable(value: str) -> bool:
     )
 
 
+def _descendants(table: symtable.SymbolTable) -> Iterator[symtable.SymbolTable]:
+    """Every table in the subtree below ``table``, depth first."""
+    for child in table.get_children():
+        yield child
+        yield from _descendants(child)
+
+
 def _merge_values(values: list[str]) -> str:
     """The binding a read may see across the reachable paths of a branch or loop.
 
@@ -189,6 +196,16 @@ class ClockVisitor(ast.NodeVisitor):
         elif isinstance(node, ast.Attribute):
             for base in self.possible_names(node.value):
                 yield f"{base}.{node.attr}"
+        elif isinstance(node, ast.IfExp):
+            # A call through a conditional expression may select either
+            # branch's callable.
+            yield from self.possible_names(node.body)
+            yield from self.possible_names(node.orelse)
+        elif isinstance(node, ast.BoolOp):
+            # A call through a boolean expression may select any operand's
+            # callable, such as ``(time.time or None)()``.
+            for operand in node.values:
+                yield from self.possible_names(operand)
         else:
             yield ""
 
@@ -203,13 +220,13 @@ class ClockVisitor(ast.NodeVisitor):
             None,
         )
         if index is None:
-            # A definition inside a type-parameter scope (PEP 695) is not a
-            # direct child of the visiting scope: the wrapper table sits
-            # between, so search the nested tables for the definition.
+            # A definition inside a wrapper scope (PEP 695 type parameters, a
+            # type alias) is not a direct child of the visiting scope; search
+            # the nested tables for it.
             child = next(
                 nested
                 for wrapper in children
-                for nested in wrapper.get_children()
+                for nested in _descendants(wrapper)
                 if nested.get_name() == name and nested.get_lineno() == node.lineno
             )
         else:
