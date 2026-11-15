@@ -311,6 +311,15 @@ UNFROZEN_READS = [
     "        if flag:\n"
     "            continue\n"
     "        clock = lambda: 0\n",
+    # A failed guard's bindings carry into the later cases.
+    "import time\n"
+    "def test_failed_guard_carries_binding():\n"
+    "    clock = lambda: 0\n"
+    "    match 1:\n"
+    "        case 1 if (clock := time.time) and False:\n"
+    "            pass\n"
+    "        case _:\n"
+    "            clock()\n",
 ]
 
 #: The same reads are accepted once the clock is frozen at function, class or
@@ -466,6 +475,19 @@ FROZEN_READS = [
     "    clock = lambda: 0\n"
     "    unused = ((clock := time.time) for _ in (1,))\n"
     "    clock()\n",
+    # A break crosses the finally block, so the finally's assignments cover
+    # the break exit too.
+    "import time\n"
+    "def test_finally_covers_break_exit():\n"
+    "    clock = time.time\n"
+    "    for _ in (1,):\n"
+    "        try:\n"
+    "            break\n"
+    "        finally:\n"
+    "            clock = lambda: 0\n"
+    "    else:\n"
+    "        clock = lambda: 0\n"
+    "    clock()\n",
     # A break inside a nested loop belongs to that loop, so the outer loop
     # still exhausts and its else rebinds the alias.
     "import time\n"
@@ -619,6 +641,12 @@ def test_eager_comprehension_scopes_preassign_in_order() -> None:
 def test_dict_comprehension_value_scope_precedes_the_key() -> None:
     """A dictionary comprehension's value scope precedes its key scope."""
     source = "mapping = {(lambda: lambda: None): (lambda: None) for _ in []}\n"
+    assert guard.clock_findings(source).reads == []
+
+
+def test_annotated_assignment_scopes_preassign_in_order() -> None:
+    """An annotated assignment's annotation scopes precede the value's."""
+    source = "stamp: (lambda: None) = lambda: lambda: None\n"
     assert guard.clock_findings(source).reads == []
 
 

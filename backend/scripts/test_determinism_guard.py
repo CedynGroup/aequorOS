@@ -348,6 +348,12 @@ class ClockVisitor(ast.NodeVisitor):
                     self.deferred_frozen = True
 
     def visit_AnnAssign(self, node: ast.AnnAssign) -> None:
+        if not self.probing:
+            # The symbol table lists the annotation's scopes before the
+            # value's, while the value evaluates first.
+            self._preassign_expression_tables(node.annotation)
+            if node.value is not None:
+                self._preassign_expression_tables(node.value)
         # Python assigns the value before evaluating the annotation, so the
         # annotation's bindings cannot mask the value's own reads.
         if node.value is not None:
@@ -573,6 +579,31 @@ class ClockVisitor(ast.NodeVisitor):
         self._merge_states(states)
         for statement in node.finalbody:
             self.visit(statement)
+        self._apply_finally_to_breaks(node)
+
+    def _apply_finally_to_breaks(self, node: ast.Try | ast.TryStar) -> None:
+        """Fold the finally block's assignments into pending break states."""
+        if not node.finalbody or not self.break_states or not self.break_states[-1]:
+            return
+        # A break crosses the finally block, so each pending break exit
+        # state must include the finally's assignments. The re-visits run
+        # silently to spare the consumed tables, and their reads duplicate
+        # the normal pass's, so they are dropped.
+        read_mark = len(self.reads)
+        outer_probing = self.probing
+        self.probing = True
+        transformed: list[dict[str, str]] = []
+        try:
+            for state in self.break_states[-1]:
+                self.aliases.clear()
+                self.aliases.update(state)
+                for statement in node.finalbody:
+                    self.visit(statement)
+                transformed.append(dict(self.aliases))
+        finally:
+            self.probing = outer_probing
+            del self.reads[read_mark:]
+        self.break_states[-1] = transformed
 
     visit_TryStar = visit_Try
 
@@ -705,16 +736,20 @@ class ClockVisitor(ast.NodeVisitor):
         before = dict(self.aliases)
         subject_value = self.qualified(node.subject)
         states: list[dict[str, str]] = []
+        guard_states: list[dict[str, str]] = []
         exhaustive = False
         for case in node.cases:
             self.aliases.clear()
-            self.aliases.update(before)
+            # A failed guard's bindings carry into the later cases, because
+            # the guard expression ran before rejecting its case.
+            self._merge_states([before, *guard_states])
             # A pattern captures the matched value before the guard or the
             # case body runs; a bare capture holds the subject itself, while
             # any other capture holds an unknown value.
             self._bind_pattern_captures(case.pattern, subject_value)
             if case.guard is not None:
                 self.visit(case.guard)
+                guard_states.append(dict(self.aliases))
             for statement in case.body:
                 self.visit(statement)
             states.append(dict(self.aliases))
