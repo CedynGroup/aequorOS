@@ -187,6 +187,9 @@ class ClockVisitor(ast.NodeVisitor):
         #: Snapshots of the bindings at each reachable ``break``, one list
         #: per enclosing loop, innermost last.
         self.break_states: list[list[dict[str, str]]] = []
+        #: Snapshots of the bindings at each reachable ``continue``, one
+        #: list per enclosing loop, innermost last.
+        self.continue_states: list[list[dict[str, str]]] = []
         self.probing = False
         #: Whether the visited statements run inside a deferred function or
         # lambda body: Python evaluates function-local variable annotations
@@ -438,6 +441,8 @@ class ClockVisitor(ast.NodeVisitor):
         probe_start = len(self.reads)
         outer_probing = self.probing
         self.probing = True
+        self.break_states.append([])
+        self.continue_states.append([])
         try:
             # Assignment chains settle across iterations, so the silent pass
             # repeats until the carried bindings stabilize. Each iteration
@@ -449,11 +454,13 @@ class ClockVisitor(ast.NodeVisitor):
                 for statement in node.body:
                     self.visit(statement)
                 del self.reads[probe_start:]
-                self._merge_states([before, dict(self.aliases)])
+                self._merge_states([before, dict(self.aliases), *self.continue_states[-1]])
                 if self.aliases == start_state:
                     break
         finally:
             self.probing = outer_probing
+            self.break_states.pop()
+            continue_states = self.continue_states.pop()
         if recheck is not None:
             # A while condition is re-evaluated every iteration, so the
             # evaluations after the first run under the carried bindings. The
@@ -477,8 +484,11 @@ class ClockVisitor(ast.NodeVisitor):
         finally:
             break_states = self.break_states.pop()
         after_visit = dict(self.aliases)
-        # A loop that runs zero iterations exits with the pre-target state.
+        # A loop that runs zero iterations exits with the pre-target state,
+        # and a continue hands its bindings to the next iteration and thus
+        # to every later exit.
         entry = [carried] if pre_target is None else [carried, pre_target]
+        entry = [*entry, *continue_states]
         self._merge_loop_exit(node, entry, after_visit, break_states)
 
     def _merge_loop_exit(
@@ -519,6 +529,12 @@ class ClockVisitor(ast.NodeVisitor):
         # pass records them.
         if not self.probing and self.break_states:
             self.break_states[-1].append(dict(self.aliases))
+
+    def visit_Continue(self, node: ast.Continue) -> None:
+        # A continue hands the current bindings to the next iteration; the
+        # silent passes record them for the loop-carried merge.
+        if self.continue_states:
+            self.continue_states[-1].append(dict(self.aliases))
 
     def visit_Try(self, node: ast.Try | ast.TryStar) -> None:
         before = dict(self.aliases)
@@ -645,8 +661,10 @@ class ClockVisitor(ast.NodeVisitor):
             for condition in generator.ifs:
                 self._preassign_expression_tables(condition)
         if isinstance(expression, ast.DictComp):
-            self._preassign_expression_tables(expression.key)
+            # The symbol table lists a dictionary comprehension's value
+            # scope before its key scope.
             self._preassign_expression_tables(expression.value)
+            self._preassign_expression_tables(expression.key)
         else:
             self._preassign_expression_tables(expression.elt)
 
@@ -906,6 +924,11 @@ class ClockVisitor(ast.NodeVisitor):
             )
         self.aliases = self.enclosing.copy()
         self.enclosing = self.aliases
+        if isinstance(node, ast.DictComp) and not self.probing:
+            # The symbol table lists the value scope before the key scope,
+            # while the entries evaluate key first.
+            self._preassign_expression_tables(node.value)
+            self._preassign_expression_tables(node.key)
         assigned = self.walrus
         self.walrus = set()
         for generator in node.generators:
@@ -931,8 +954,9 @@ class ClockVisitor(ast.NodeVisitor):
                 self.probing = outer_probing
             if rejected:
                 # Assignments in a skipped element cannot overwrite the
-                # filter-exit states.
-                self._merge_states(rejected)
+                # filter-exit states, and the successful element's own
+                # assignments stay reachable too.
+                self._merge_states([dict(self.aliases), *rejected])
             if entry_state == previous_entry:
                 del self.reads[scan_start:]
                 break

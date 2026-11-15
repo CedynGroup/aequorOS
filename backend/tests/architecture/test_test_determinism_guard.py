@@ -295,6 +295,22 @@ UNFROZEN_READS = [
     "    clock = lambda: 0\n"
     "    [(clock := lambda: 0) for _ in (1,) if (clock := time.time) and False]\n"
     "    clock()\n",
+    # A passing filter keeps the element's own assignment reachable too.
+    "import time\n"
+    "def test_successful_iteration_keeps_its_binding():\n"
+    "    clock = lambda: 0\n"
+    "    [(clock := time.time) for _ in (1,) if True]\n"
+    "    clock()\n",
+    # A continue hands its bindings to the next iteration.
+    "import time\n"
+    "def test_continue_carries_its_binding(flag):\n"
+    "    clock = lambda: 0\n"
+    "    for _ in (1, 2):\n"
+    "        clock()\n"
+    "        clock = time.time\n"
+    "        if flag:\n"
+    "            continue\n"
+    "        clock = lambda: 0\n",
 ]
 
 #: The same reads are accepted once the clock is frozen at function, class or
@@ -597,6 +613,12 @@ def test_generator_iterable_precedes_the_generator_scope() -> None:
 def test_eager_comprehension_scopes_preassign_in_order() -> None:
     """An eager comprehension inlines with its iterables' tables first."""
     source = "mapping = {0: [lambda: lambda: None for x in (lambda: None,)]}\n"
+    assert guard.clock_findings(source).reads == []
+
+
+def test_dict_comprehension_value_scope_precedes_the_key() -> None:
+    """A dictionary comprehension's value scope precedes its key scope."""
+    source = "mapping = {(lambda: lambda: None): (lambda: None) for _ in []}\n"
     assert guard.clock_findings(source).reads == []
 
 
