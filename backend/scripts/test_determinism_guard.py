@@ -464,11 +464,12 @@ class ClockVisitor(ast.NodeVisitor):
 
     visit_AsyncWith = visit_With
 
-    def _visit_arguments(self, arguments: ast.arguments) -> None:
-        """Visit defaults always; annotations only when they execute."""
+    def _visit_defaults(self, arguments: ast.arguments) -> None:
         for default in [*arguments.defaults, *arguments.kw_defaults]:
             if default is not None:
                 self.visit(default)
+
+    def _visit_annotations(self, arguments: ast.arguments) -> None:
         if self.postponed:
             return
         for argument in (*arguments.posonlyargs, *arguments.args, *arguments.kwonlyargs):
@@ -477,6 +478,11 @@ class ClockVisitor(ast.NodeVisitor):
         for extra in (arguments.vararg, arguments.kwarg):
             if extra is not None and extra.annotation is not None:
                 self.visit(extra.annotation)
+
+    def _visit_arguments(self, arguments: ast.arguments) -> None:
+        """Visit defaults always; annotations only when they execute."""
+        self._visit_defaults(arguments)
+        self._visit_annotations(arguments)
 
     def _enter_wrapper_scopes(self, name: str, lineno: int) -> list[symtable.SymbolTable]:
         """The wrapper tables a PEP 695 definition evaluates its contents in.
@@ -513,13 +519,14 @@ class ClockVisitor(ast.NodeVisitor):
         own = self._decorator_freezes(node.decorator_list) or _takes_frozen_clock(node.args)
         for decorator in node.decorator_list:
             self.visit(decorator)
+        self._visit_defaults(node.args)
         entered = self._enter_wrapper_scopes(node.name, node.lineno)
         previous_table = self.table
         if entered:
             # Annotations of a generic function are evaluated inside its
-            # type-parameter scope, so its definitions are direct children.
+            # type-parameter scope; its defaults stay in the enclosing one.
             self.table = entered[-1]
-        self._visit_arguments(node.args)
+        self._visit_annotations(node.args)
         if node.returns is not None and not self.postponed:
             self.visit(node.returns)
         self.table = previous_table

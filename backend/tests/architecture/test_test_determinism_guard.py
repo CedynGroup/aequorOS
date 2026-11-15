@@ -333,6 +333,12 @@ def test_type_parameter_bounds_do_not_confuse_annotation_lookups() -> None:
     assert guard.clock_findings(source).reads == []
 
 
+def test_generic_defaults_resolve_in_the_enclosing_scope() -> None:
+    """A default expression of a generic function is not inside the wrapper scope."""
+    source = "def helper[T](value=lambda: None): pass\n"
+    assert guard.clock_findings(source).reads == []
+
+
 def test_the_guard_scans_support_and_module_level_reads(tmp_path: Path) -> None:
     tests = tmp_path / "tests"
     support = tests / "support"
