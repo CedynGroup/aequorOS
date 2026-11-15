@@ -637,3 +637,40 @@ test("still lets a beforeEach freeze cover an afterAll read with no teardown", a
   `);
   assertClean(result, "frozenTime");
 });
+
+test("reports a freeze inside an uncalled module-level helper", async () => {
+  const result = await runOxlint(["frozenTime"], `
+    function installClock() {
+      vi.useFakeTimers();
+    }
+    it('t', () => {
+      expect(Date.now()).toBeGreaterThan(0);
+    });
+  `);
+  assertFlagged(result, "frozenTime");
+});
+
+test("counts an immediately invoked restoration inside a hook", async () => {
+  const result = await runOxlint(["frozenTime"], `
+    beforeEach(() => {
+      vi.useFakeTimers();
+      (() => vi.useRealTimers())();
+    });
+    it('t', () => {
+      expect(Date.now()).toBeGreaterThan(0);
+    });
+  `);
+  assertFlagged(result, "frozenTime");
+});
+
+test("lets a module-level immediately invoked freeze cover a read", async () => {
+  const result = await runOxlint(["frozenTime"], `
+    (() => {
+      vi.useFakeTimers();
+    })();
+    it('t', () => {
+      expect(Date.now()).toBeGreaterThan(0);
+    });
+  `);
+  assertClean(result, "frozenTime");
+});

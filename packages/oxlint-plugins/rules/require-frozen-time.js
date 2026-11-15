@@ -219,6 +219,26 @@ function isClockFreezeCall(callee) {
   );
 }
 
+/**
+ * Whether the transition at `node` executes when `top` — the enclosing test
+ * or hook callback, or null for module evaluation — runs. Every function
+ * boundary between the transition and `top` must be immediately invoked
+ * where it sits (an IIFE); a closure the callback merely defines executes
+ * only if something later calls it, so its transitions say nothing about
+ * the callback's own timer state.
+ */
+function executesWhenEnclosingRuns(node, top) {
+  let current = nearestFunction(node);
+  while (current && current !== top) {
+    const parent = current.parent;
+    if (!(parent?.type === "CallExpression" && parent.callee === current)) {
+      return false;
+    }
+    current = nearestFunction(parent);
+  }
+  return true;
+}
+
 const rule = {
   meta: {
     type: "problem",
@@ -245,11 +265,12 @@ const rule = {
     const timeDependentNodes = [];
     const recordFreezeState = (node, calls) => {
       const enclosing = findEnclosingTestCallback(node);
-      // A transition directly in the callback's body executes when the
-      // callback runs; one captured inside a nested closure runs only if
-      // that closure is invoked, so it does not describe the callback's own
-      // timer state. Module-level transitions always execute.
-      const immediate = !enclosing || nearestFunction(node) === enclosing.fn;
+      // A transition directly in the callback's body (or inside a closure
+      // the body immediately invokes) executes when the callback runs; one
+      // captured inside a closure nobody invokes here runs only if that
+      // closure is called later, so it does not describe the callback's own
+      // timer state — nor, for uncalled module-level helpers, the module's.
+      const immediate = executesWhenEnclosingRuns(node, enclosing ? enclosing.fn : null);
       calls.push({ node, enclosing, immediate });
     };
     return {
@@ -330,6 +351,12 @@ const rule = {
         const transitionsByCallback = new Map();
         const moduleTransitions = [];
         const recordTransition = (call, frozen) => {
+          // A transition trapped inside a closure that nothing here invokes
+          // (an uncalled helper, a hook's unused restoration) executes only
+          // if that closure is called later; it contributes no state here.
+          if (!call.immediate) {
+            return;
+          }
           const entry = { node: call.node, frozen, immediate: call.immediate };
           if (!call.enclosing) {
             moduleTransitions.push(entry);
