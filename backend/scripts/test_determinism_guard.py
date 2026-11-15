@@ -478,6 +478,33 @@ class ClockVisitor(ast.NodeVisitor):
             if extra is not None and extra.annotation is not None:
                 self.visit(extra.annotation)
 
+    def _enter_wrapper_scopes(self, name: str, lineno: int) -> list[symtable.SymbolTable]:
+        """The wrapper tables a PEP 695 definition evaluates its contents in.
+
+        A generic function evaluates its annotations inside its type-parameter
+        scope, and a type alias nests its value inside the alias scope as
+        well; the wrappers are returned outermost first. A plain definition
+        has none.
+        """
+        entered: list[symtable.SymbolTable] = []
+        table = self.table
+        while True:
+            children = self.children.setdefault(table, table.get_children())
+            wrapper = next(
+                (
+                    child
+                    for child in children
+                    if child.get_name() == name
+                    and child.get_lineno() == lineno
+                    and child.get_type() not in {"function", "class"}
+                ),
+                None,
+            )
+            if wrapper is None:
+                return entered
+            entered.append(wrapper)
+            table = wrapper
+
     def visit_FunctionDef(self, node: ast.FunctionDef | ast.AsyncFunctionDef) -> None:
         if self.probing:
             # The silent loop pass only collects bindings; the real pass
@@ -486,9 +513,16 @@ class ClockVisitor(ast.NodeVisitor):
         own = self._decorator_freezes(node.decorator_list) or _takes_frozen_clock(node.args)
         for decorator in node.decorator_list:
             self.visit(decorator)
+        entered = self._enter_wrapper_scopes(node.name, node.lineno)
+        previous_table = self.table
+        if entered:
+            # Annotations of a generic function are evaluated inside its
+            # type-parameter scope, so its definitions are direct children.
+            self.table = entered[-1]
         self._visit_arguments(node.args)
         if node.returns is not None and not self.postponed:
             self.visit(node.returns)
+        self.table = previous_table
         frozen = own or self.deferred_frozen
         self.functions.append((node, self.child_table(node, node.name), self.enclosing, frozen))
         self.aliases[node.name] = ""
@@ -525,6 +559,18 @@ class ClockVisitor(ast.NodeVisitor):
         self.table, self.aliases = previous_table, previous_aliases
         self.frozen, self.deferred_frozen = previous_frozen, previous_deferred
         self.aliases[node.name] = ""
+
+    def visit_TypeAlias(self, node: ast.TypeAlias) -> None:
+        entered = self._enter_wrapper_scopes(node.name.id, node.lineno)
+        if not entered:
+            self.visit(node.value)
+            return
+        # The alias value is evaluated inside the type-parameter scope and
+        # the alias scope nested in it; enter both before visiting it.
+        previous_table = self.table
+        self.table = entered[-1]
+        self.visit(node.value)
+        self.table = previous_table
 
     def visit_comprehension_scope(
         self, node: ast.ListComp | ast.SetComp | ast.DictComp | ast.GeneratorExp

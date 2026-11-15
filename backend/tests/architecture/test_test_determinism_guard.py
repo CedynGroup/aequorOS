@@ -327,6 +327,12 @@ def test_while_condition_rescan_leaves_definitions_alone() -> None:
     assert guard.clock_findings(source).reads == []
 
 
+def test_type_parameter_bounds_do_not_confuse_annotation_lookups() -> None:
+    """A bound lambda and an annotation lambda share a line but not a scope."""
+    source = "def helper[T: (lambda: None)](x: (lambda: lambda: None)): pass\n"
+    assert guard.clock_findings(source).reads == []
+
+
 def test_the_guard_scans_support_and_module_level_reads(tmp_path: Path) -> None:
     tests = tmp_path / "tests"
     support = tests / "support"
