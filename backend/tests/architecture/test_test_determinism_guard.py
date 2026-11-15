@@ -249,6 +249,16 @@ UNFROZEN_READS = [
     "        pass\n"
     "    except ValueError:\n"
     "        clock()\n",
+    # An exception raised after a body rebind reaches the handler with that
+    # binding, so the handler's read is reported.
+    "import time\n"
+    "def test_handler_sees_intermediate_binding():\n"
+    "    clock = lambda: 0\n"
+    "    try:\n"
+    "        clock = time.time\n"
+    "        raise ValueError\n"
+    "    except ValueError:\n"
+    "        clock()\n",
 ]
 
 #: The same reads are accepted once the clock is frozen at function, class or
@@ -369,6 +379,18 @@ FROZEN_READS = [
     "    match (lambda: 0):\n"
     "        case clock:\n"
     "            return clock()\n",
+    # A try with an else block passes successful execution through it, so
+    # an unconditional else-side rebinding covers every successful exit.
+    "import time\n"
+    "def test_try_else_covers_success():\n"
+    "    clock = time.time\n"
+    "    try:\n"
+    "        pass\n"
+    "    except ValueError:\n"
+    "        clock = lambda: 0\n"
+    "    else:\n"
+    "        clock = lambda: 0\n"
+    "    clock()\n",
     # A break inside a nested loop belongs to that loop, so the outer loop
     # still exhausts and its else rebinds the alias.
     "import time\n"
@@ -504,6 +526,12 @@ def test_dict_scopes_preassign_in_symbol_table_order() -> None:
 def test_lambda_default_precedes_the_lambda_scope() -> None:
     """A lambda default's table precedes the lambda's own in its scope."""
     source = "mapping = {0: lambda x=(lambda: None): lambda: None}\n"
+    assert guard.clock_findings(source).reads == []
+
+
+def test_generator_iterable_precedes_the_generator_scope() -> None:
+    """A generator's first iterable's table precedes the generator's own."""
+    source = "mapping = {0: ((lambda: lambda: None) for x in (y for y in []))}\n"
     assert guard.clock_findings(source).reads == []
 
 

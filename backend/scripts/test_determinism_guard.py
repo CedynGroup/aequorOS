@@ -492,27 +492,32 @@ class ClockVisitor(ast.NodeVisitor):
 
     def visit_Try(self, node: ast.Try | ast.TryStar) -> None:
         before = dict(self.aliases)
+        # An exception may surface at any point of the body, so collect the
+        # state after each statement for the handlers to start from.
+        prefixes = [before]
         for statement in node.body:
             self.visit(statement)
-        after_body = dict(self.aliases)
-        states = [after_body]
+            prefixes.append(dict(self.aliases))
+        after_body = prefixes[-1]
+        states: list[dict[str, str]] = []
         for handler in node.handlers:
-            # An exception may surface at any point of the body, so each
-            # handler starts from the pre-try bindings.
             self.aliases.clear()
-            self.aliases.update(before)
+            self._merge_states(prefixes)
             if handler.type is not None:
                 self.visit(handler.type)
             for statement in handler.body:
                 self.visit(statement)
             states.append(dict(self.aliases))
-        # The else block runs only after the body completed, so it sees the
-        # body's bindings.
-        self.aliases.clear()
-        self.aliases.update(after_body)
-        for statement in node.orelse:
-            self.visit(statement)
-        states.append(dict(self.aliases))
+        if node.orelse:
+            # Successful execution always passes through the else block, so
+            # its state is the only successful exit state.
+            self.aliases.clear()
+            self.aliases.update(after_body)
+            for statement in node.orelse:
+                self.visit(statement)
+            states.append(dict(self.aliases))
+        else:
+            states.append(after_body)
         self._merge_states(states)
         for statement in node.finalbody:
             self.visit(statement)
@@ -550,6 +555,9 @@ class ClockVisitor(ast.NodeVisitor):
             return
         if isinstance(expression, ast.GeneratorExp):
             if id(expression) not in self.preassigned:
+                # The first iterable evaluates in the enclosing scope, so
+                # its tables precede the generator's own.
+                self._preassign_expression_tables(expression.generators[0].iter)
                 self.preassigned[id(expression)] = self.child_table(expression, "genexpr")
             return
         if isinstance(expression, ast.Dict):
