@@ -946,3 +946,38 @@ test("a sibling suite's hook write does not cover its own suite only", async () 
   `);
   assertFlagged(result, "frozenTime");
 });
+
+test("a nested afterEach restoration unfreezes a file-level teardown read", async () => {
+  const result = await runOxlint(["frozenTime"], `
+    beforeEach(() => {
+      vi.useFakeTimers();
+    });
+    afterEach(() => {
+      Date.now();
+    });
+    describe('s', () => {
+      afterEach(() => {
+        vi.useRealTimers();
+      });
+      it('t', () => {});
+    });
+  `);
+  assertFlagged(result, "frozenTime");
+});
+
+test("a test's own freeze keeps the teardown read covered", async () => {
+  const result = await runOxlint(["frozenTime"], `
+    describe('s', () => {
+      beforeEach(() => {
+        vi.useFakeTimers();
+      });
+      it('t', () => {
+        vi.useFakeTimers();
+      });
+      afterEach(() => {
+        Date.now();
+      });
+    });
+  `);
+  assertClean(result, "frozenTime");
+});

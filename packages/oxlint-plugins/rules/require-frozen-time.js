@@ -363,6 +363,8 @@ const rule = {
     const unfreezeCalls = [];
     // Time-dependent API usages to validate at the end.
     const timeDependentNodes = [];
+    // Every registered test callback, with its describe chain.
+    const allTestCallbacks = [];
     const recordFreezeState = (node, calls) => {
       const enclosing = findEnclosingTestCallback(node);
       // A transition directly in the callback's body (or inside a closure
@@ -376,6 +378,24 @@ const rule = {
     return {
       CallExpression(node) {
         const callee = node.callee;
+
+        // Every test callback, timer-touching or not: a teardown's state is
+        // shaped by each covered test's own transitions, and a test without
+        // any still runs between the setup and teardown hooks.
+        const testBaseName = getCalleeBaseName(callee);
+        if (testBaseName !== null && TEST_NAMES.has(testBaseName)) {
+          const callback = node.arguments.find(
+            (argument) =>
+              argument.type === "FunctionExpression" ||
+              argument.type === "ArrowFunctionExpression",
+          );
+          if (callback) {
+            allTestCallbacks.push({
+              fn: callback,
+              describes: findAllEnclosingDescribes(node),
+            });
+          }
+        }
 
         // Detect vi.useFakeTimers(), jest.useFakeTimers(), vi.setSystemTime(), jest.setSystemTime()
         if (
@@ -556,15 +576,7 @@ const rule = {
             fileLevelHooks.push(hook);
           }
         }
-        for (const { enclosing } of [...freezeCalls, ...unfreezeCalls]) {
-          if (!enclosing || !TEST_NAMES.has(enclosing.callType)) {
-            continue;
-          }
-          collectedTests.push({
-            fn: enclosing.fn,
-            describes: findAllEnclosingDescribes(enclosing.callNode),
-          });
-        }
+        collectedTests.push(...allTestCallbacks);
         for (const hooks of hooksByDescribe.values()) {
           hooks.sort((a, b) => a.callNode.range[0] - b.callNode.range[0]);
         }
@@ -716,26 +728,16 @@ const rule = {
               ? collectionTransitions.at(-1).frozen
               : false;
           // A teardown callback runs after every test of its suite — its
-          // own describe and every suite nested inside it — so the state it
-          // observes is, per test run: the setup hooks, then that test's own
-          // transitions, then any teardown hooks registered before it. The
-          // read stays covered only while that state is frozen for EVERY
-          // covered test. A teardown's describe chain must appear in the
-          // test's chain, contiguous and in order; a file-level teardown
-          // covers every test in the file.
+          // own describe and every suite nested inside it. Per test run the
+          // state it observes is: the setup hooks (file level, then each
+          // enclosing describe outermost first), that test's own
+          // transitions, then the teardown hooks of the suites nested inside
+          // the read's suite (innermost first) and the read's suite's own
+          // earlier-registered teardowns. The read stays covered only while
+          // that state is frozen for EVERY covered test. A teardown's
+          // describe chain must appear in the test's chain, contiguous and
+          // in order; a file-level teardown covers every test in the file.
           if (isTeardown(enclosing.callType)) {
-            let setupState = frozen;
-            for (const { hook } of sequence) {
-              if (!isTeardown(hook.hookType) && hook.netFrozen !== null) {
-                setupState = hook.netFrozen;
-              }
-            }
-            let precedingTeardownState = null;
-            for (const { hook } of sequence) {
-              if (isTeardown(hook.hookType) && hook.netFrozen !== null) {
-                precedingTeardownState = hook.netFrozen;
-              }
-            }
             const suiteTests = collectedTests.filter((test) =>
               coversDescribes(test.describes, enclosingDescribes),
             );
@@ -745,23 +747,95 @@ const rule = {
               for (const { hook } of sequence) {
                 if (hook.netFrozen !== null) frozen = hook.netFrozen;
               }
-            }
-            for (const test of suiteTests) {
-              let testState = setupState;
-              for (const transition of transitionsByCallback.get(test.fn) ?? []) {
-                // Lifecycle order, not source order: a teardown registered
-                // above a test still runs after it, so every immediate
-                // transition the test body executes shapes the state the
-                // teardown callback sees.
-                if (transition.immediate) {
-                  testState = transition.frozen;
+            } else {
+              frozen = true;
+              for (const test of suiteTests) {
+                let state = true;
+                for (const hook of fileLevelHooks) {
+                  if (!isTeardown(hook.hookType) && hook.netFrozen !== null) {
+                    state = hook.netFrozen;
+                  }
                 }
-              }
-              const stateAtRead =
-                precedingTeardownState !== null ? precedingTeardownState : testState;
-              if (!stateAtRead) {
-                frozen = false;
-                break;
+                for (let depth = test.describes.length - 1; depth >= 0; depth -= 1) {
+                  for (const hook of hooksByDescribe.get(test.describes[depth]) ?? []) {
+                    if (!isTeardown(hook.hookType) && hook.netFrozen !== null) {
+                      state = hook.netFrozen;
+                    }
+                  }
+                }
+                for (const transition of transitionsByCallback.get(test.fn) ?? []) {
+                  // Lifecycle order, not source order: a teardown registered
+                  // above a test still runs after it, so every immediate
+                  // transition the test body executes shapes the state the
+                  // teardown callback sees.
+                  if (transition.immediate) {
+                    state = transition.frozen;
+                  }
+                }
+                // The teardown hooks that run before the read. An
+                // afterEach read sees the nested suites' afterEach hooks
+                // (innermost first) and its own suite's earlier
+                // registrations; an afterAll read additionally sees every
+                // afterEach hook (ancestor describes and file level run
+                // last) and the afterAll hooks of the nested suites and of
+                // its own suite registered above it.
+                const applyTeardown = (hook) => {
+                  if (hook.netFrozen !== null) {
+                    state = hook.netFrozen;
+                  }
+                };
+                const readDepth = test.describes.length - enclosingDescribes.length;
+                const nestedHooks = (depth, phase) => {
+                  for (const hook of hooksByDescribe.get(test.describes[depth]) ?? []) {
+                    if (hook.hookType === phase) {
+                      applyTeardown(hook);
+                    }
+                  }
+                };
+                const ownEarlierHooks = (phase) => {
+                  if (enclosingDescribes.length > 0) {
+                    for (const hook of hooksByDescribe.get(enclosingDescribes[0]) ?? []) {
+                      if (
+                        hook.hookType === phase &&
+                        hook.callNode.range[0] < enclosing.callNode.range[0]
+                      ) {
+                        applyTeardown(hook);
+                      }
+                    }
+                  } else if (enclosing.callType === "afterEach") {
+                    for (const hook of fileLevelHooks) {
+                      if (
+                        hook.hookType === phase &&
+                        hook.callNode.range[0] < enclosing.callNode.range[0]
+                      ) {
+                        applyTeardown(hook);
+                      }
+                    }
+                  }
+                };
+                if (enclosing.callType === "afterAll") {
+                  for (let depth = 0; depth < test.describes.length; depth += 1) {
+                    nestedHooks(depth, "afterEach");
+                  }
+                  for (const hook of fileLevelHooks) {
+                    if (hook.hookType === "afterEach") {
+                      applyTeardown(hook);
+                    }
+                  }
+                  for (let depth = 0; depth < readDepth; depth += 1) {
+                    nestedHooks(depth, "afterAll");
+                  }
+                  ownEarlierHooks("afterAll");
+                } else {
+                  for (let depth = 0; depth < readDepth; depth += 1) {
+                    nestedHooks(depth, "afterEach");
+                  }
+                  ownEarlierHooks("afterEach");
+                }
+                if (!state) {
+                  frozen = false;
+                  break;
+                }
               }
             }
           } else {
