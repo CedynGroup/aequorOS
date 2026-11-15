@@ -106,6 +106,14 @@ UNFROZEN_READS = [
     "for _ in (1, 2):\n"
     "    clock()\n"
     "    clock = time.time\n",
+    # A match case may be skipped, so the pre-match binding stays reachable.
+    "import time\n"
+    "def test_match_case(mode):\n"
+    "    clock = time.time\n"
+    "    match mode:\n"
+    "        case 'fake':\n"
+    "            clock = fake_clock\n"
+    "    clock()\n",
     # A loop body may run zero times, so its assignments never clear a
     # clock binding.
     "from datetime import datetime\n"

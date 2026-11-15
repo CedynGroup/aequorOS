@@ -410,6 +410,23 @@ class ClockVisitor(ast.NodeVisitor):
             self.visit(statement)
         self._merge_states([before, carried, after_visit, dict(self.aliases)])
 
+    def visit_Match(self, node: ast.Match) -> None:
+        self.visit(node.subject)
+        before = dict(self.aliases)
+        states: list[dict[str, str]] = []
+        for case in node.cases:
+            if case.guard is not None:
+                self.visit(case.guard)
+            for statement in case.body:
+                self.visit(statement)
+            states.append(dict(self.aliases))
+            self.aliases.clear()
+            self.aliases.update(before)
+        # Every case may be skipped, so the pre-match bindings stay reachable
+        # at the join.
+        states.append(before)
+        self._merge_states(states)
+
     def visit_With(self, node: ast.With | ast.AsyncWith) -> None:
         previous_frozen, previous_deferred = self.frozen, self.deferred_frozen
         for item in node.items:
