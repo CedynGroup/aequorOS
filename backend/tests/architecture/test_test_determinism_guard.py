@@ -89,6 +89,12 @@ UNFROZEN_READS = [
     "        import datetime as clock\n"
     "    read = clock.time\n"
     "    read()\n",
+    # A boolean fallback yields one of its operands, so the real-clock
+    # operand keeps the binding detectable.
+    "from datetime import datetime\n"
+    "def test_boolop_fallback(fake):\n"
+    "    clock = fake_clock or datetime.now\n"
+    "    clock()\n",
     # A loop body may run zero times, so its assignments never clear a
     # clock binding.
     "from datetime import datetime\n"
@@ -247,6 +253,16 @@ def test_postponed_annotation_scopes_do_not_crash_the_guard() -> None:
         "from typing import Annotated\n"
         "def helper(value: Annotated[int, lambda x: x]) -> None:\n"
         "    pass\n"
+    )
+    assert guard.clock_findings(source).reads == []
+
+
+def test_generic_type_parameter_scopes_do_not_crash_the_guard() -> None:
+    """A lambda in a generic function's annotation lives in the type-parameter scope."""
+    source = (
+        "from typing import Annotated\n"
+        "def helper[T](value: Annotated[T, lambda: None]) -> T:\n"
+        "    ...\n"
     )
     assert guard.clock_findings(source).reads == []
 

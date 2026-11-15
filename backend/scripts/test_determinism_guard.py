@@ -171,6 +171,10 @@ class ClockVisitor(ast.NodeVisitor):
             # statement rebinds a name: keep every clock-capable alternative
             # so neither path escapes the guard.
             return _merge_values([self.qualified(node.body), self.qualified(node.orelse)])
+        if isinstance(node, ast.BoolOp):
+            # A boolean expression yields one of its operands: a fallback such
+            # as ``fake_clock or datetime.now`` may still read the wall clock.
+            return _merge_values([self.qualified(operand) for operand in node.values])
         return ""
 
     def possible_names(self, node: ast.expr) -> Iterator[str]:
@@ -191,11 +195,25 @@ class ClockVisitor(ast.NodeVisitor):
     def child_table(self, node: ast.expr | ast.stmt, name: str) -> symtable.SymbolTable:
         children = self.children.setdefault(self.table, self.table.get_children())
         index = next(
-            index
-            for index, child in enumerate(children)
-            if child.get_name() == name and child.get_lineno() == node.lineno
+            (
+                index
+                for index, child in enumerate(children)
+                if child.get_name() == name and child.get_lineno() == node.lineno
+            ),
+            None,
         )
-        child = children.pop(index)
+        if index is None:
+            # A definition inside a type-parameter scope (PEP 695) is not a
+            # direct child of the visiting scope: the wrapper table sits
+            # between, so search the nested tables for the definition.
+            child = next(
+                nested
+                for wrapper in children
+                for nested in wrapper.get_children()
+                if nested.get_name() == name and nested.get_lineno() == node.lineno
+            )
+        else:
+            child = children.pop(index)
         if child.get_type() not in {"function", "class"}:
             child = next(
                 nested
