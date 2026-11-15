@@ -151,6 +151,10 @@ class ClockVisitor(ast.NodeVisitor):
         self.module_aliases = self.aliases
         self.reads: list[tuple[str, int]] = []
         self.children: dict[symtable.SymbolTable, list[symtable.SymbolTable]] = {}
+        # Symbol tables already handed out, kept alive by reference: two
+        # definitions can share a line (lambdas in one annotation) and a match
+        # must not hand out twice, and ids of collected tables would be reused.
+        self.consumed: dict[int, symtable.SymbolTable] = {}
         self.frozen = False
         self.deferred_frozen = False
         self.postponed = False
@@ -215,7 +219,9 @@ class ClockVisitor(ast.NodeVisitor):
             (
                 index
                 for index, child in enumerate(children)
-                if child.get_name() == name and child.get_lineno() == node.lineno
+                if id(child) not in self.consumed
+                and child.get_name() == name
+                and child.get_lineno() == node.lineno
             ),
             None,
         )
@@ -227,16 +233,22 @@ class ClockVisitor(ast.NodeVisitor):
                 nested
                 for wrapper in children
                 for nested in _descendants(wrapper)
-                if nested.get_name() == name and nested.get_lineno() == node.lineno
+                if id(nested) not in self.consumed
+                and nested.get_name() == name
+                and nested.get_lineno() == node.lineno
             )
         else:
             child = children.pop(index)
+        self.consumed[id(child)] = child
         if child.get_type() not in {"function", "class"}:
             child = next(
                 nested
                 for nested in child.get_children()
-                if nested.get_name() == name and nested.get_lineno() == node.lineno
+                if id(nested) not in self.consumed
+                and nested.get_name() == name
+                and nested.get_lineno() == node.lineno
             )
+            self.consumed[id(child)] = child
         return child
 
     def visit_Call(self, node: ast.Call) -> None:

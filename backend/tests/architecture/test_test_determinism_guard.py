@@ -277,6 +277,16 @@ def test_nested_type_alias_scopes_do_not_crash_the_guard() -> None:
     assert guard.clock_findings(source).reads == []
 
 
+def test_same_line_definitions_resolve_to_distinct_tables() -> None:
+    """Two lambdas in one annotation share a line and must not share a table."""
+    source = (
+        "from typing import Annotated\n"
+        "def helper[T](x: Annotated[T, lambda: None, lambda: lambda: None]) -> T:\n"
+        "    ...\n"
+    )
+    assert guard.clock_findings(source).reads == []
+
+
 def test_the_guard_scans_support_and_module_level_reads(tmp_path: Path) -> None:
     tests = tmp_path / "tests"
     support = tests / "support"
