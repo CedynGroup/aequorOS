@@ -116,6 +116,8 @@ def _loop_has_break(statements: list[ast.stmt]) -> bool:
     error, so statements are the only places to search.
     """
     for statement in statements:
+        if isinstance(statement, ast.Break):
+            return True
         for child in ast.iter_child_nodes(statement):
             if isinstance(child, ast.Break):
                 return True
@@ -499,16 +501,21 @@ class ClockVisitor(ast.NodeVisitor):
     def visit_Match(self, node: ast.Match) -> None:
         self.visit(node.subject)
         before = dict(self.aliases)
+        subject_value = self.qualified(node.subject)
         states: list[dict[str, str]] = []
         exhaustive = False
         for case in node.cases:
+            self.aliases.clear()
+            self.aliases.update(before)
+            # A pattern captures the matched value before the guard or the
+            # case body runs; a bare capture holds the subject itself, while
+            # any other capture holds an unknown value.
+            self._bind_pattern_captures(case.pattern, subject_value)
             if case.guard is not None:
                 self.visit(case.guard)
             for statement in case.body:
                 self.visit(statement)
             states.append(dict(self.aliases))
-            self.aliases.clear()
-            self.aliases.update(before)
             if (
                 isinstance(case.pattern, ast.MatchAs)
                 and case.pattern.pattern is None
@@ -520,6 +527,19 @@ class ClockVisitor(ast.NodeVisitor):
         if not exhaustive:
             states.append(before)
         self._merge_states(states)
+
+    def _bind_pattern_captures(self, pattern: ast.pattern, subject_value: str) -> None:
+        """Apply a case pattern's capture bindings against ``self.aliases``."""
+        for inner in ast.walk(pattern):
+            if isinstance(inner, ast.MatchAs):
+                if inner.pattern is None and inner.name is not None:
+                    self.aliases[inner.name] = subject_value
+                elif inner.name is not None:
+                    self.aliases[inner.name] = ""
+            elif isinstance(inner, ast.MatchStar) and inner.name is not None:
+                self.aliases[inner.name] = ""
+            elif isinstance(inner, ast.MatchMapping) and inner.rest is not None:
+                self.aliases[inner.rest] = ""
 
     def visit_With(self, node: ast.With | ast.AsyncWith) -> None:
         previous_frozen, previous_deferred = self.frozen, self.deferred_frozen

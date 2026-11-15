@@ -191,6 +191,23 @@ UNFROZEN_READS = [
     f"    with time_machine.travel({INSTANT}, tick=False):\n"
     "        callback = lambda: datetime.now()\n"
     "    callback()\n",
+    # A direct break keeps the else block unreachable, so the pre-loop clock
+    # binding survives.
+    "import time\n"
+    "def test_direct_break_skips_else():\n"
+    "    clock = time.time\n"
+    "    for _ in (1,):\n"
+    "        break\n"
+    "    else:\n"
+    "        clock = lambda: 0\n"
+    "    clock()\n",
+    # A capture inherits the matched subject, so a clock subject's capture
+    # still reads the wall clock.
+    "import time\n"
+    "def test_match_capture_inherits_subject():\n"
+    "    match time.time:\n"
+    "        case clock:\n"
+    "            clock()\n",
 ]
 
 #: The same reads are accepted once the clock is frozen at function, class or
@@ -303,6 +320,14 @@ FROZEN_READS = [
     "    else:\n"
     "        clock = lambda: 0\n"
     "    clock()\n",
+    # A match capture rebinds the captured name to the matched value before
+    # the case runs, so a non-clock subject's capture cannot read the clock.
+    "import time\n"
+    "def test_match_capture_binds_subject():\n"
+    "    clock = time.time\n"
+    "    match (lambda: 0):\n"
+    "        case clock:\n"
+    "            return clock()\n",
 ]
 
 
