@@ -259,6 +259,13 @@ UNFROZEN_READS = [
     "        raise ValueError\n"
     "    except ValueError:\n"
     "        clock()\n",
+    # Zero iterations leave the loop target holding its incoming value.
+    "import time\n"
+    "def test_zero_iterations_keep_the_target():\n"
+    "    clock = time.time\n"
+    "    for clock in []:\n"
+    "        pass\n"
+    "    clock()\n",
 ]
 
 #: The same reads are accepted once the clock is frozen at function, class or
@@ -391,6 +398,15 @@ FROZEN_READS = [
     "    else:\n"
     "        clock = lambda: 0\n"
     "    clock()\n",
+    # An ``except ... as`` target holds the exception object, not the
+    # previous binding, and Python deletes it when the block exits.
+    "import time\n"
+    "def test_except_as_binds_the_exception():\n"
+    "    clock = time.time\n"
+    "    try:\n"
+    "        pass\n"
+    "    except ValueError as clock:\n"
+    "        clock()\n",
     # A break inside a nested loop belongs to that loop, so the outer loop
     # still exhausts and its else rebinds the alias.
     "import time\n"
@@ -532,6 +548,12 @@ def test_lambda_default_precedes_the_lambda_scope() -> None:
 def test_generator_iterable_precedes_the_generator_scope() -> None:
     """A generator's first iterable's table precedes the generator's own."""
     source = "mapping = {0: ((lambda: lambda: None) for x in (y for y in []))}\n"
+    assert guard.clock_findings(source).reads == []
+
+
+def test_eager_comprehension_scopes_preassign_in_order() -> None:
+    """An eager comprehension inlines with its iterables' tables first."""
+    source = "mapping = {0: [lambda: lambda: None for x in (lambda: None,)]}\n"
     assert guard.clock_findings(source).reads == []
 
 

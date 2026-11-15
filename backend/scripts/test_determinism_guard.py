@@ -408,8 +408,10 @@ class ClockVisitor(ast.NodeVisitor):
 
     def visit_For(self, node: ast.For | ast.AsyncFor) -> None:
         self.visit(node.iter)
+        # Zero iterations leave the target holding its incoming value.
+        pre_target = dict(self.aliases)
         self.bind(node.target)
-        self._visit_loop(node)
+        self._visit_loop(node, pre_target=pre_target)
 
     visit_AsyncFor = visit_For
 
@@ -418,7 +420,10 @@ class ClockVisitor(ast.NodeVisitor):
         self._visit_loop(node, node.test)
 
     def _visit_loop(
-        self, node: ast.For | ast.AsyncFor | ast.While, recheck: ast.expr | None = None
+        self,
+        node: ast.For | ast.AsyncFor | ast.While,
+        recheck: ast.expr | None = None,
+        pre_target: dict[str, str] | None = None,
     ) -> None:
         # A loop body may run zero times, so its assignments must not clear a
         # binding: merge the pre-loop state with the body and ``else`` states.
@@ -457,38 +462,39 @@ class ClockVisitor(ast.NodeVisitor):
         for statement in node.body:
             self.visit(statement)
         after_visit = dict(self.aliases)
-        self._merge_loop_exit(node, before, carried, after_visit)
+        # A loop that runs zero iterations exits with the pre-target state.
+        entry = [carried] if pre_target is None else [carried, pre_target]
+        self._merge_loop_exit(node, entry, after_visit)
 
     def _merge_loop_exit(
         self,
         node: ast.For | ast.AsyncFor | ast.While,
-        before: dict[str, str],
-        carried: dict[str, str],
+        entry: list[dict[str, str]],
         after_visit: dict[str, str],
     ) -> None:
         """Join the loop's exit states into ``self.aliases``."""
         if _loop_has_break(node.body):
             # A break jumps past the else block, so both exit states stay
-            # reachable; the else block itself still sees the carried
-            # bindings when the loop completes.
+            # reachable; the else block itself still sees the entry states
+            # when the loop completes.
             if node.orelse:
                 self.aliases.clear()
-                self.aliases.update(carried)
+                self._merge_states(entry)
                 for statement in node.orelse:
                     self.visit(statement)
                 self._merge_states([after_visit, dict(self.aliases)])
             else:
-                self._merge_states([before, carried, after_visit])
+                self._merge_states([*entry, after_visit])
         elif node.orelse:
             # Without a break the loop always completes, so the else block
             # runs and its state is the only exit state.
             self.aliases.clear()
-            self.aliases.update(carried)
+            self._merge_states(entry)
             for statement in node.orelse:
                 self.visit(statement)
         else:
             self.aliases.clear()
-            self.aliases.update(carried)
+            self._merge_states([*entry, after_visit])
 
     def visit_Try(self, node: ast.Try | ast.TryStar) -> None:
         before = dict(self.aliases)
@@ -505,8 +511,14 @@ class ClockVisitor(ast.NodeVisitor):
             self._merge_states(prefixes)
             if handler.type is not None:
                 self.visit(handler.type)
+            if handler.name is not None:
+                # The handler body sees the exception object, and Python
+                # deletes the name when the block exits.
+                self.aliases[handler.name] = ""
             for statement in handler.body:
                 self.visit(statement)
+            if handler.name is not None:
+                self.aliases[handler.name] = ""
             states.append(dict(self.aliases))
         if node.orelse:
             # Successful execution always passes through the else block, so
@@ -554,11 +566,10 @@ class ClockVisitor(ast.NodeVisitor):
             # The body's own tables belong to the lambda's scope.
             return
         if isinstance(expression, ast.GeneratorExp):
-            if id(expression) not in self.preassigned:
-                # The first iterable evaluates in the enclosing scope, so
-                # its tables precede the generator's own.
-                self._preassign_expression_tables(expression.generators[0].iter)
-                self.preassigned[id(expression)] = self.child_table(expression, "genexpr")
+            self._preassign_generator_tables(expression)
+            return
+        if isinstance(expression, (ast.ListComp, ast.SetComp, ast.DictComp)):
+            self._preassign_eager_comprehension_tables(expression)
             return
         if isinstance(expression, ast.Dict):
             for key in expression.keys:
@@ -570,6 +581,30 @@ class ClockVisitor(ast.NodeVisitor):
         for child in ast.iter_child_nodes(expression):
             if isinstance(child, ast.expr):
                 self._preassign_expression_tables(child)
+
+    def _preassign_generator_tables(self, expression: ast.GeneratorExp) -> None:
+        """Assign a generator expression's tables in symbol-table order."""
+        if id(expression) not in self.preassigned:
+            # The first iterable evaluates in the enclosing scope, so its
+            # tables precede the generator's own.
+            self._preassign_expression_tables(expression.generators[0].iter)
+            self.preassigned[id(expression)] = self.child_table(expression, "genexpr")
+
+    def _preassign_eager_comprehension_tables(
+        self, expression: ast.ListComp | ast.SetComp | ast.DictComp
+    ) -> None:
+        """Assign an eager comprehension's tables in symbol-table order."""
+        # An eager comprehension inlines into the enclosing scope, and the
+        # symbol table lists the iterables and filters first.
+        for generator in expression.generators:
+            self._preassign_expression_tables(generator.iter)
+            for condition in generator.ifs:
+                self._preassign_expression_tables(condition)
+        if isinstance(expression, ast.DictComp):
+            self._preassign_expression_tables(expression.key)
+            self._preassign_expression_tables(expression.value)
+        else:
+            self._preassign_expression_tables(expression.elt)
 
     def visit_Compare(self, node: ast.Compare) -> None:
         self.visit(node.left)
