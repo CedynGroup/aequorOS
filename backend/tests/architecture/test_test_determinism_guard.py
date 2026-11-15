@@ -180,6 +180,12 @@ UNFROZEN_READS = [
     f"def test_lambda_inside_travel():\n"
     f"    with time_machine.travel({INSTANT}, tick=False):\n"
     "        return lambda: datetime.now()\n",
+    "import time\n"
+    "import time_machine\n"
+    "from datetime import datetime\n"
+    f"with time_machine.travel({INSTANT}, tick=False):\n"
+    "    values = (time.time() for _ in (1,))\n"
+    "next(values)\n",
     "import time_machine\n"
     "from datetime import datetime\n"
     f"with time_machine.travel({INSTANT}, tick=False):\n"
@@ -732,6 +738,12 @@ def test_postponed_annotations_have_no_scope() -> None:
         "from typing import Annotated\n"
         "stamp: Annotated[int, lambda: None] = 0\n"
     )
+    assert guard.clock_findings(source).reads == []
+
+
+def test_keyword_arguments_preassign_in_order() -> None:
+    """A call's keyword arguments keep their own scopes."""
+    source = "mapping = {0: f(x=lambda: lambda: None) or (lambda: None)}\n"
     assert guard.clock_findings(source).reads == []
 
 

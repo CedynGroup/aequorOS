@@ -203,7 +203,7 @@ class ClockVisitor(ast.NodeVisitor):
         self.postponed = False
         self.functions: list[
             tuple[
-                ast.FunctionDef | ast.AsyncFunctionDef | ast.Lambda,
+                ast.FunctionDef | ast.AsyncFunctionDef | ast.Lambda | ast.GeneratorExp,
                 symtable.SymbolTable,
                 dict[str, str],
                 bool,
@@ -670,10 +670,13 @@ class ClockVisitor(ast.NodeVisitor):
                 # A false filter rejects the iteration, so its
                 # post-condition state stays reachable.
                 rejected.append(dict(self.aliases))
-        for expression in (
-            [node.key, node.value] if isinstance(node, ast.DictComp) else [node.elt]
-        ):
-            self.visit(expression)
+        if not isinstance(node, ast.GeneratorExp):
+            # A generator's element runs at consumption time and scans
+            # deferred instead.
+            for expression in (
+                [node.key, node.value] if isinstance(node, ast.DictComp) else [node.elt]
+            ):
+                self.visit(expression)
         return rejected
 
     def _preassign_expression_tables(self, expression: ast.expr) -> None:
@@ -695,15 +698,21 @@ class ClockVisitor(ast.NodeVisitor):
             self._preassign_eager_comprehension_tables(expression)
             return
         if isinstance(expression, ast.Dict):
-            for key in expression.keys:
-                if key is not None:
-                    self._preassign_expression_tables(key)
-            for value in expression.values:
-                self._preassign_expression_tables(value)
+            self._preassign_dict_tables(expression)
             return
         for child in ast.iter_child_nodes(expression):
-            if isinstance(child, ast.expr):
+            if isinstance(child, ast.keyword):
+                self._preassign_expression_tables(child.value)
+            elif isinstance(child, ast.expr):
                 self._preassign_expression_tables(child)
+
+    def _preassign_dict_tables(self, expression: ast.Dict) -> None:
+        """Assign a dictionary literal's tables, keys before values."""
+        for key in expression.keys:
+            if key is not None:
+                self._preassign_expression_tables(key)
+        for value in expression.values:
+            self._preassign_expression_tables(value)
 
     def _preassign_generator_tables(self, expression: ast.GeneratorExp) -> None:
         """Assign a generator expression's tables in symbol-table order."""
@@ -991,6 +1000,12 @@ class ClockVisitor(ast.NodeVisitor):
                 if preassigned is not None
                 else self.child_table(node, "genexpr")
             )
+            # The body runs at consumption time, which may be long after the
+            # enclosing block exited, so only the marker-derived freeze
+            # covers it and its element scans with the deferred functions.
+            self.functions.append(
+                (node, self.table, previous_enclosing, self.deferred_frozen)
+            )
         self.aliases = self.enclosing.copy()
         self.enclosing = self.aliases
         if isinstance(node, ast.DictComp) and not self.probing:
@@ -1192,6 +1207,8 @@ class ClockVisitor(ast.NodeVisitor):
             self.deferred_body = True
             if isinstance(node, ast.Lambda):
                 self.visit(node.body)
+            elif isinstance(node, ast.GeneratorExp):
+                self.visit(node.elt)
             else:
                 for statement in node.body:
                     self.visit(statement)
