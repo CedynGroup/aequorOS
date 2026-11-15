@@ -424,13 +424,12 @@ class ClockVisitor(ast.NodeVisitor):
         self._merge_states([before, carried, after_visit, dict(self.aliases)])
 
     def visit_BoolOp(self, node: ast.BoolOp) -> None:
-        before = dict(self.aliases)
-        states: list[dict[str, str]] = [before]
+        # The first operand always evaluates; later ones may be skipped, so
+        # every evaluated prefix's bindings stay reachable at the join.
+        states: list[dict[str, str]] = []
         for operand in node.values:
             self.visit(operand)
             states.append(dict(self.aliases))
-        # Short-circuiting may skip any trailing operand, so every prefix's
-        # bindings stay reachable at the join.
         self._merge_states(states)
 
     def visit_IfExp(self, node: ast.IfExp) -> None:
@@ -441,13 +440,16 @@ class ClockVisitor(ast.NodeVisitor):
         self.aliases.clear()
         self.aliases.update(before)
         self.visit(node.orelse)
-        # Either branch may run, so the pre-expression bindings survive.
-        self._merge_states([after_body, dict(self.aliases), before])
+        # Exactly one branch runs, like an if statement with an else: the
+        # pre-expression binding survives only through the branch that
+        # leaves it untouched.
+        self._merge_states([after_body, dict(self.aliases)])
 
     def visit_Match(self, node: ast.Match) -> None:
         self.visit(node.subject)
         before = dict(self.aliases)
         states: list[dict[str, str]] = []
+        exhaustive = False
         for case in node.cases:
             if case.guard is not None:
                 self.visit(case.guard)
@@ -456,9 +458,16 @@ class ClockVisitor(ast.NodeVisitor):
             states.append(dict(self.aliases))
             self.aliases.clear()
             self.aliases.update(before)
-        # Every case may be skipped, so the pre-match bindings stay reachable
-        # at the join.
-        states.append(before)
+            if (
+                isinstance(case.pattern, ast.MatchAs)
+                and case.pattern.pattern is None
+                and case.guard is None
+            ):
+                exhaustive = True
+        # A match may fall through every case, so the pre-match bindings
+        # stay reachable unless a wildcard case covers the subject.
+        if not exhaustive:
+            states.append(before)
         self._merge_states(states)
 
     def visit_With(self, node: ast.With | ast.AsyncWith) -> None:

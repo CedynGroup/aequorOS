@@ -259,6 +259,28 @@ FROZEN_READS = [
     f"    with time_machine.travel(DESTINATION), time_machine.travel({INSTANT}, tick=False), "
     "nullcontext(datetime.now()):\n"
     "        pass\n",
+    # A false positive is as wrong as a miss: when every branch of an
+    # exhaustive expression rebinds the alias, the pre-expression binding is
+    # unreachable and nothing reads the wall clock.
+    "import time\n"
+    "def test_ifexp_both_branches_rebind(flag):\n"
+    "    clock = time.time\n"
+    "    value = (clock := lambda: 0) if flag else (clock := lambda: 1)\n"
+    "    clock()\n",
+    "import time\n"
+    "def test_boolop_first_operand_rebinds(flag):\n"
+    "    clock = time.time\n"
+    "    (clock := lambda: 0) and flag\n"
+    "    clock()\n",
+    "import time\n"
+    "def test_match_wildcard_covers(mode):\n"
+    "    clock = time.time\n"
+    "    match mode:\n"
+    "        case 'fake':\n"
+    "            clock = fake_clock\n"
+    "        case _:\n"
+    "            clock = fake_other\n"
+    "    clock()\n",
 ]
 
 
