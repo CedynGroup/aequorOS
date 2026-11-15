@@ -320,6 +320,29 @@ UNFROZEN_READS = [
     "            pass\n"
     "        case _:\n"
     "            clock()\n",
+    # A failed guard's bindings also survive a fall-through match.
+    "import time\n"
+    "def test_failed_guard_survives_fallthrough():\n"
+    "    clock = lambda: 0\n"
+    "    match 1:\n"
+    "        case 1 if (clock := time.time) and False:\n"
+    "            clock = lambda: 0\n"
+    "    clock()\n",
+    # A break recorded before a try statement does not cross its finally.
+    "import time\n"
+    "def test_break_before_try_skips_finally(flag):\n"
+    "    clock = lambda: 0\n"
+    "    for _ in (1,):\n"
+    "        clock = time.time\n"
+    "        if flag:\n"
+    "            break\n"
+    "        try:\n"
+    "            pass\n"
+    "        finally:\n"
+    "            clock = lambda: 0\n"
+    "    else:\n"
+    "        clock = lambda: 0\n"
+    "    clock()\n",
 ]
 
 #: The same reads are accepted once the clock is frozen at function, class or
@@ -647,6 +670,16 @@ def test_dict_comprehension_value_scope_precedes_the_key() -> None:
 def test_annotated_assignment_scopes_preassign_in_order() -> None:
     """An annotated assignment's annotation scopes precede the value's."""
     source = "stamp: (lambda: None) = lambda: lambda: None\n"
+    assert guard.clock_findings(source).reads == []
+
+
+def test_postponed_annotations_have_no_scope() -> None:
+    """A postponed annotation creates no scope to preassign."""
+    source = (
+        "from __future__ import annotations\n"
+        "from typing import Annotated\n"
+        "stamp: Annotated[int, lambda: None] = 0\n"
+    )
     assert guard.clock_findings(source).reads == []
 
 

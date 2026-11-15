@@ -350,8 +350,10 @@ class ClockVisitor(ast.NodeVisitor):
     def visit_AnnAssign(self, node: ast.AnnAssign) -> None:
         if not self.probing:
             # The symbol table lists the annotation's scopes before the
-            # value's, while the value evaluates first.
-            self._preassign_expression_tables(node.annotation)
+            # value's, while the value evaluates first; a postponed or
+            # function-local annotation has no scope at all.
+            if not self.postponed and not self.deferred_body:
+                self._preassign_expression_tables(node.annotation)
             if node.value is not None:
                 self._preassign_expression_tables(node.value)
         # Python assigns the value before evaluating the annotation, so the
@@ -544,6 +546,8 @@ class ClockVisitor(ast.NodeVisitor):
 
     def visit_Try(self, node: ast.Try | ast.TryStar) -> None:
         before = dict(self.aliases)
+        # Only breaks recorded from here on cross this try's finally.
+        break_mark = len(self.break_states[-1]) if self.break_states else 0
         # An exception may surface at any point of the body, so collect the
         # state after each statement for the handlers to start from.
         prefixes = [before]
@@ -579,11 +583,14 @@ class ClockVisitor(ast.NodeVisitor):
         self._merge_states(states)
         for statement in node.finalbody:
             self.visit(statement)
-        self._apply_finally_to_breaks(node)
+        self._apply_finally_to_breaks(node, break_mark)
 
-    def _apply_finally_to_breaks(self, node: ast.Try | ast.TryStar) -> None:
+    def _apply_finally_to_breaks(self, node: ast.Try | ast.TryStar, break_mark: int) -> None:
         """Fold the finally block's assignments into pending break states."""
-        if not node.finalbody or not self.break_states or not self.break_states[-1]:
+        if not node.finalbody or not self.break_states:
+            return
+        pending = self.break_states[-1][break_mark:]
+        if not pending:
             return
         # A break crosses the finally block, so each pending break exit
         # state must include the finally's assignments. The re-visits run
@@ -594,7 +601,7 @@ class ClockVisitor(ast.NodeVisitor):
         self.probing = True
         transformed: list[dict[str, str]] = []
         try:
-            for state in self.break_states[-1]:
+            for state in pending:
                 self.aliases.clear()
                 self.aliases.update(state)
                 for statement in node.finalbody:
@@ -603,7 +610,7 @@ class ClockVisitor(ast.NodeVisitor):
         finally:
             self.probing = outer_probing
             del self.reads[read_mark:]
-        self.break_states[-1] = transformed
+        self.break_states[-1][break_mark:] = transformed
 
     visit_TryStar = visit_Try
 
@@ -760,9 +767,11 @@ class ClockVisitor(ast.NodeVisitor):
             ):
                 exhaustive = True
         # A match may fall through every case, so the pre-match bindings
-        # stay reachable unless a wildcard case covers the subject.
+        # stay reachable unless a wildcard case covers the subject; the
+        # failed guards' bindings persist either way.
         if not exhaustive:
             states.append(before)
+            states.extend(guard_states)
         self._merge_states(states)
 
     def _bind_pattern_captures(self, pattern: ast.pattern, subject_value: str) -> None:
