@@ -160,21 +160,30 @@ function parameterBindings(fn) {
 /**
  * Whether an unresolved function declaration (one whose body references
  * helpers that may be declared after it) reads as a weak helper at a site
- * whose bindings are `chain`. The body is classified with the parameters
- * bound, so a parameter shadowing an outer helper name wins over the
- * registry; `visiting` breaks recursion on self-referencing helpers.
+ * whose bindings are `chain`. The body is classified against the helper's
+ * DEFINING scope — `functions` maps names to `{ fn, depth }` — so a caller
+ * that shadows a dependency's name cannot hide the dependency, with the
+ * parameters bound on top; `visiting` breaks recursion on self-referencing
+ * helpers.
  */
 function unresolvedHelperIsWeak(name, chain, functions, visiting) {
-  const fn = functions?.get(name);
+  const entry = functions?.get(name);
   visiting ??= new Set();
-  if (!fn || visiting.has(fn)) {
+  if (!entry || visiting.has(entry.fn)) {
     return false;
   }
-  visiting.add(fn);
+  visiting.add(entry.fn);
   try {
-    return weakUseIn(fn.body, [...chain, parameterBindings(fn)], false, functions, visiting);
+    const definingChain = chain.slice(0, (entry.depth ?? 0) + 1);
+    return weakUseIn(
+      entry.fn.body,
+      [...definingChain, parameterBindings(entry.fn)],
+      false,
+      functions,
+      visiting,
+    );
   } finally {
-    visiting.delete(fn);
+    visiting.delete(entry.fn);
   }
 }
 
@@ -483,7 +492,7 @@ const rule = {
             : statement;
         if (declaration?.type === "FunctionDeclaration") {
           declarations.push(declaration);
-          functionDeclarations.set(declaration.id.name, declaration);
+          functionDeclarations.set(declaration.id.name, { fn: declaration, depth: null });
           declareIdentifier(declaration.id, WEAK_UNRESOLVED, "function");
         }
       }
@@ -542,7 +551,10 @@ const rule = {
       FunctionDeclaration(node) {
         // A weak body is cached as a helper; anything else stays unresolved
         // (its helpers may be declared later) and is re-classified at each
-        // read site against the bindings standing there.
+        // read site against its defining scope's bindings. The registry
+        // records the defining scope's depth so a caller that shadows a
+        // dependency's name cannot hide the dependency.
+        functionDeclarations.set(node.id.name, { fn: node, depth: functionDepth() });
         declareIdentifier(
           node.id,
           functionContainsWeakTimerPromise(node) ? WEAK_HELPER : WEAK_UNRESOLVED,
