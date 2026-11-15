@@ -350,6 +350,10 @@ const rule = {
         //  - module level (no enclosing callback) for collection-time reads.
         const transitionsByCallback = new Map();
         const moduleTransitions = [];
+        // Transitions inside describe callbacks: they all execute during
+        // module evaluation, wherever the describe sits, so they shape the
+        // timer state of everything collected after them.
+        const describeTransitions = [];
         const recordTransition = (call, frozen) => {
           // A transition trapped inside a closure that nothing here invokes
           // (an uncalled helper, a hook's unused restoration) executes only
@@ -361,6 +365,9 @@ const rule = {
           if (!call.enclosing) {
             moduleTransitions.push(entry);
             return;
+          }
+          if (DESCRIBE_NAMES.has(call.enclosing.callType)) {
+            describeTransitions.push(entry);
           }
           const list = transitionsByCallback.get(call.enclosing.fn) ?? [];
           list.push(entry);
@@ -396,8 +403,16 @@ const rule = {
         const hooksByDescribe = new Map();
         const fileLevelHooks = [];
         for (const { enclosing } of [...freezeCalls, ...unfreezeCalls]) {
-          if (!enclosing || !(BEFORE_HOOKS.has(enclosing.callType) || enclosing.callType === "afterEach"))
+          if (
+            !enclosing ||
+            !(
+              BEFORE_HOOKS.has(enclosing.callType) ||
+              enclosing.callType === "afterEach" ||
+              enclosing.callType === "afterAll"
+            )
+          ) {
             continue;
+          }
           const transitions = (transitionsByCallback.get(enclosing.fn) ?? []).filter(
             (t) => t.immediate,
           );
@@ -432,6 +447,7 @@ const rule = {
             return false;
           }
           let current = readNode.parent;
+          let previous = readNode;
           while (current) {
             if (
               (current.type === "CallExpression" &&
@@ -447,13 +463,21 @@ const rule = {
               let inner = transitionNode;
               while (inner) {
                 if (inner === body) {
-                  // The read sits in an argument of the invocation whose
-                  // body holds the transition: the body runs later.
-                  return false;
+                  if (previous !== current.callee) {
+                    // The read reached this invocation through an argument:
+                    // the body — and the transition — runs after it.
+                    return false;
+                  }
+                  // The read is inside the invocation body itself: source
+                  // order within the body decides, so keep scanning upward
+                  // for an outer invocation that might wrap the read in an
+                  // argument.
+                  break;
                 }
                 inner = inner.parent;
               }
             }
+            previous = current;
             current = current.parent;
           }
           return true;
@@ -484,14 +508,7 @@ const rule = {
             // explicit module-level freeze that already executed does — and
             // every enclosing describe body's transitions ran before this
             // read too (outer describes collect before inner ones).
-            const candidates = [...moduleTransitions];
-            const chain = enclosing ? findAllEnclosingDescribes(node) : [];
-            if (enclosing) {
-              chain.unshift(enclosing.fn);
-            }
-            for (const describeCallback of [...chain].reverse()) {
-              candidates.push(...(transitionsByCallback.get(describeCallback) ?? []));
-            }
+            const candidates = [...moduleTransitions, ...describeTransitions];
             const before = candidates
               .filter((t) => executesBefore(t.node, node))
               .sort((a, b) => a.node.range[0] - b.node.range[0]);
@@ -543,12 +560,7 @@ const rule = {
           // before a later module-level restoration does not cover the
           // tests, and a module freeze before a describe-body restoration
           // does. Merge them in source order and take the last state.
-          const collectionTransitions = [...moduleTransitions];
-          for (const describeCallback of [...enclosingDescribes].reverse()) {
-            collectionTransitions.push(
-              ...(transitionsByCallback.get(describeCallback) ?? []),
-            );
-          }
+          const collectionTransitions = [...moduleTransitions, ...describeTransitions];
           collectionTransitions.sort((a, b) => a.node.range[0] - b.node.range[0]);
           let frozen =
             collectionTransitions.length > 0

@@ -740,3 +740,41 @@ test("reports a read in a block-bodied IIFE argument evaluated before the freeze
   `);
   assertFlagged(result, "frozenTime");
 });
+
+test("allows a read inside an IIFE body that follows the freeze", async () => {
+  const result = await runOxlint(["frozenTime"], `
+    it('t', () => {
+      (() => {
+        vi.useFakeTimers();
+        Date.now();
+      })();
+    });
+  `);
+  assertClean(result, "frozenTime");
+});
+
+test("reports a read in an afterAll that follows a restoring afterAll", async () => {
+  const result = await runOxlint(["frozenTime"], `
+    beforeAll(() => {
+      vi.useFakeTimers();
+    });
+    afterAll(() => {
+      vi.useRealTimers();
+    });
+    afterAll(() => {
+      Date.now();
+    });
+  `);
+  assertFlagged(result, "frozenTime");
+});
+
+test("reports a file-level read when a sibling describe restores real timers", async () => {
+  const result = await runOxlint(["frozenTime"], `
+    vi.useFakeTimers();
+    describe('setup', () => {
+      vi.useRealTimers();
+    });
+    it('t', () => Date.now());
+  `);
+  assertFlagged(result, "frozenTime");
+});
