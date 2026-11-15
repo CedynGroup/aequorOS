@@ -135,34 +135,82 @@ function nearestFunction(node) {
 }
 
 /**
- * When `node` executes, as a source position. Code inside an
- * immediately-invoked function runs when the invocation's body runs — after
- * its arguments — so its execution point is the end of the invocation, not
- * the position of the code itself.
+ * When `node` executes, as a lexicographic ordering key (an array of source
+ * positions compared element-wise). Each immediately-invoked function the
+ * code sits in opens a sub-frame: an invocation's code is ordered after the
+ * statements before the call and its own arguments (frame marker 0) and
+ * before the statements after the call (the body is frame marker 1 at the
+ * call's start), so nested invocations interleave with the surrounding
+ * statements that invoke them instead of all collapsing onto the outermost
+ * invocation's end, while a body still always runs after its arguments.
  */
-function executionPosition(node) {
-  let current = node.parent;
+function executionKey(node) {
+  // Innermost-to-outermost chain of invocations containing the node.
+  const chain = [];
+  let current = node;
   while (current) {
+    const parent = current.parent;
     if (
-      (current.type === "CallExpression" || current.type === "NewExpression") &&
-      (current.callee.type === "ArrowFunctionExpression" ||
-        current.callee.type === "FunctionExpression")
+      parent &&
+      (parent.type === "CallExpression" || parent.type === "NewExpression") &&
+      (parent.callee.type === "ArrowFunctionExpression" ||
+        parent.callee.type === "FunctionExpression")
     ) {
-      let inner = node;
-      while (inner && inner !== current) {
-        if (inner === current.callee.body) {
-          return current.range[1];
-        }
-        inner = inner.parent;
-      }
+      chain.push(parent);
     }
-    current = current.parent;
+    current = parent;
   }
-  return node.range[0];
+  if (chain.length === 0) {
+    return [node.range[0]];
+  }
+  // The invocation frame a node sits in: frame marker 0 for an argument
+  // (evaluated before the body), 1 for the body. `node.range[0]` inside an
+  // invocation's body or arguments orders code within that frame.
+  const inBody = (outer, inner) => {
+    let probe = inner;
+    while (probe && probe !== outer) {
+      if (probe === outer.callee.body) {
+        return true;
+      }
+      probe = probe.parent;
+    }
+    return false;
+  };
+  const key = [];
+  for (let index = chain.length - 1; index >= 0; index -= 1) {
+    const invocation = chain[index];
+    key.push(invocation.range[0]);
+    key.push(
+      index === chain.length - 1
+        ? inBody(invocation, node)
+          ? 1
+          : 0
+        : inBody(invocation, chain[index + 1])
+          ? 1
+          : 0,
+    );
+  }
+  key.push(node.range[0]);
+  return key;
 }
 
 /** Ordering key for timer-state transitions. */
-const transitionOrder = (transition) => transition.order ?? transition.node.range[0];
+const transitionOrder = (transition) => transition.order ?? [transition.node.range[0]];
+
+/** Lexicographic comparison of two transitions' execution keys. */
+const compareExecution = (a, b) => {
+  const keyA = transitionOrder(a);
+  const keyB = transitionOrder(b);
+  const length = Math.max(keyA.length, keyB.length);
+  for (let index = 0; index < length; index += 1) {
+    const valueA = keyA[index] ?? -1;
+    const valueB = keyB[index] ?? -1;
+    if (valueA !== valueB) {
+      return valueA - valueB;
+    }
+  }
+  return a.node.range[0] - b.node.range[0];
+};
 
 /**
  * Walk up from `node` to find the nearest enclosing callback that is a direct
@@ -394,8 +442,8 @@ const rule = {
             // though the helper's transitions say nothing about its caller.
             fn: nearestFunction(call.node),
             // Execution point: an IIFE body's transition runs when the
-            // invocation completes, after its arguments.
-            order: executionPosition(call.node),
+            // invocation's body runs, after its arguments.
+            order: executionKey(call.node),
           };
           // A transition trapped inside a closure that nothing here invokes
           // (an uncalled helper, a hook's unused restoration) executes only
@@ -424,8 +472,7 @@ const rule = {
         for (const call of unfreezeCalls) recordTransition(call, false);
         // Equal execution positions (transitions inside one IIFE body)
         // keep source order.
-        const byExecution = (a, b) =>
-          transitionOrder(a) - transitionOrder(b) || a.node.range[0] - b.node.range[0];
+        const byExecution = compareExecution;
         for (const list of transitionsByCallback.values()) {
           list.sort(byExecution);
         }
@@ -589,11 +636,7 @@ const rule = {
             const candidates = [...moduleTransitions, ...describeTransitions];
             const before = candidates
               .filter((t) => executesBefore(t.node, node))
-              .sort(
-                (a, b) =>
-                  transitionOrder(a) - transitionOrder(b) ||
-                  a.node.range[0] - b.node.range[0],
-              );
+              .sort(compareExecution);
             if (before.length === 0 || !before.at(-1).frozen) {
               report();
             }
@@ -650,11 +693,7 @@ const rule = {
           // tests, and a module freeze before a describe-body restoration
           // does. Merge them in source order and take the last state.
           const collectionTransitions = [...moduleTransitions, ...describeTransitions];
-          collectionTransitions.sort(
-            (a, b) =>
-              transitionOrder(a) - transitionOrder(b) ||
-              a.node.range[0] - b.node.range[0],
-          );
+          collectionTransitions.sort(compareExecution);
           let frozen =
             collectionTransitions.length > 0
               ? collectionTransitions.at(-1).frozen
@@ -673,7 +712,11 @@ const rule = {
             for (const test of suiteTests) {
               let testState = frozen;
               for (const transition of transitionsByCallback.get(test.fn) ?? []) {
-                if (transition.immediate && executesBefore(transition.node, node)) {
+                // Lifecycle order, not source order: a teardown registered
+                // above a test still runs after it, so every immediate
+                // transition the test body executes shapes the state the
+                // teardown callback sees.
+                if (transition.immediate) {
                   testState = transition.frozen;
                 }
               }

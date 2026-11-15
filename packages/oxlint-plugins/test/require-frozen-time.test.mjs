@@ -849,3 +849,31 @@ test("reports a teardown read after a test restores real timers", async () => {
   `);
   assertFlagged(result, "frozenTime");
 });
+
+test("reports a teardown read when the teardown is declared above the test", async () => {
+  const result = await runOxlint(["frozenTime"], `
+    beforeEach(() => {
+      vi.useFakeTimers();
+    });
+    afterEach(() => {
+      Date.now();
+    });
+    it('t', () => {
+      vi.useRealTimers();
+    });
+  `);
+  assertFlagged(result, "frozenTime");
+});
+
+test("orders nested IIFE transitions by their invocation statements", async () => {
+  const result = await runOxlint(["frozenTime"], `
+    it('t', () => {
+      (() => {
+        vi.useRealTimers();
+        (() => vi.useFakeTimers())();
+      })();
+      Date.now();
+    });
+  `);
+  assertClean(result, "frozenTime");
+});
