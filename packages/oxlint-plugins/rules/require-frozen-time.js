@@ -355,13 +355,27 @@ const rule = {
         // timer state of everything collected after them.
         const describeTransitions = [];
         const recordTransition = (call, frozen) => {
+          const entry = {
+            node: call.node,
+            frozen,
+            immediate: call.immediate,
+            // The function the transition sits in: a deferred helper's own
+            // freeze still covers the reads inside that same helper, even
+            // though the helper's transitions say nothing about its caller.
+            fn: nearestFunction(call.node),
+          };
           // A transition trapped inside a closure that nothing here invokes
           // (an uncalled helper, a hook's unused restoration) executes only
-          // if that closure is called later; it contributes no state here.
+          // if that closure is called later; it contributes no state to the
+          // enclosing callback or to module evaluation.
           if (!call.immediate) {
+            if (call.enclosing && !DESCRIBE_NAMES.has(call.enclosing.callType)) {
+              const list = transitionsByCallback.get(call.enclosing.fn) ?? [];
+              list.push(entry);
+              transitionsByCallback.set(call.enclosing.fn, list);
+            }
             return;
           }
-          const entry = { node: call.node, frozen, immediate: call.immediate };
           if (!call.enclosing) {
             moduleTransitions.push(entry);
             return;
@@ -495,9 +509,16 @@ const rule = {
            * end state is what the next callback inherits); the read's own
            * callback contributes its transitions up to the read.
            */
+          const readFunction = nearestFunction(node);
           const stateAt = (transitions) => {
             const own = transitions.filter(
-              (t) => t.immediate && executesBefore(t.node, node),
+              (t) =>
+                // A transition the callback executes directly, or one inside
+                // the same deferred function the read sits in (its own
+                // freeze covers its own reads), and one that executed
+                // before the read.
+                (t.immediate || t.fn === readFunction) &&
+                executesBefore(t.node, node),
             );
             return own.length > 0 ? own.at(-1).frozen : null;
           };
@@ -529,13 +550,21 @@ const rule = {
           const rank = phaseRank(enclosing.callType);
           const enclosingDescribes = findAllEnclosingDescribes(enclosing.callNode);
           const sequence = [];
+          const isTeardown = (hookType) => hookType === "afterEach" || hookType === "afterAll";
           const consider = (hook, depth) => {
             const hookRank = phaseRank(hook.hookType);
             if (hookRank < rank) {
               sequence.push({ hook, depth });
             } else if (
               hookRank === rank &&
-              (depth !== 0 || hook.callNode.range[0] < enclosing.callNode.range[0])
+              // Teardown hooks run inner describe first, so a same-phase
+              // hook from an OUTER describe executes after this callback
+              // and contributes nothing; only an earlier-registered hook of
+              // the same describe runs before it. Setup hooks run outer
+              // describe first, so any outer hook of the same phase counts.
+              (isTeardown(hook.hookType)
+                ? depth === 0 && hook.callNode.range[0] < enclosing.callNode.range[0]
+                : depth !== 0 || hook.callNode.range[0] < enclosing.callNode.range[0])
             ) {
               sequence.push({ hook, depth });
             }
@@ -547,7 +576,6 @@ const rule = {
               consider(hook, depth);
             }
           }
-          const isTeardown = (hookType) => hookType === "afterEach" || hookType === "afterAll";
           sequence.sort(
             (a, b) =>
               phaseRank(a.hook.hookType) - phaseRank(b.hook.hookType) ||

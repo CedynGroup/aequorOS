@@ -578,3 +578,20 @@ test("updates a suite-level shadow before the module binding from a hook", async
   assertFlagged(result, "weakAwaits");
 });
 
+
+test("does not report an await when a hook replaces its temporary assignment", async () => {
+  const result = await runOxlint(["weakAwaits"], `
+    let sleep;
+    function loadData() {
+      return fetch('/data');
+    }
+    beforeEach(() => {
+      sleep = () => new Promise((resolve) => setTimeout(resolve, 10));
+      sleep = loadData;
+    });
+    it('t', async () => {
+      await sleep();
+    });
+  `);
+  assertClean(result, "weakAwaits");
+});

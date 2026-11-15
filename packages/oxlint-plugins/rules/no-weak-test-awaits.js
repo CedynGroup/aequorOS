@@ -521,7 +521,7 @@ const rule = {
       return resolveInChain(currentChain(), name);
     }
 
-    function declareIdentifier(node, kind, varKind, ordered = false) {
+    function declareIdentifier(node, kind, varKind) {
       if (node?.type === "Identifier") {
         const targetScope =
           varKind === "var"
@@ -533,14 +533,6 @@ const rule = {
               )
             : scopes.at(-1);
         targetScope?.bindings.set(node.name, kind);
-        if (kind) {
-          // A `const`/`let` initializer executes in source order: an await
-          // that already ran in the same function saw the previous value. A
-          // function-declaration classification is hoisted and covers every
-          // pending await.
-          if (ordered) reevaluatePendingAwaits(functionDepth(), node);
-          else reevaluatePendingAwaits();
-        }
       }
     }
 
@@ -577,7 +569,6 @@ const rule = {
         for (let index = scopes.length - 1; index >= 0; index -= 1) {
           if (scopes[index].bindings.has(node.name)) {
             scopes[index].bindings.set(node.name, kind);
-            if (kind) reevaluatePendingAwaits(boundary, node);
             return;
           }
         }
@@ -585,7 +576,6 @@ const rule = {
       for (let index = scopes.length - 1; index >= boundary; index -= 1) {
         if (scopes[index].bindings.has(node.name)) {
           scopes[index].bindings.set(node.name, kind);
-          if (kind) reevaluatePendingAwaits(boundary, node);
           return;
         }
       }
@@ -595,7 +585,6 @@ const rule = {
       // already have.
       if (boundary >= 0) {
         scopes[boundary].bindings.set(node.name, kind);
-        if (kind) reevaluatePendingAwaits(boundary, node);
       }
     }
 
@@ -620,24 +609,15 @@ const rule = {
       return weakUseIn(right, currentChain(), false, [...scopes]) ? WEAK_PROMISE : false;
     }
 
-    function reevaluatePendingAwaits(boundary) {
-      for (let index = pendingAwaits.length - 1; index >= 0; index -= 1) {
-        const pending = pendingAwaits[index];
-        if (boundary !== undefined) {
-          // An update that executes in source order cannot retroactively
-          // reach an await that already ran in the same function: skip
-          // pendings inside that function recorded before the update. A
-          // pending in a SIBLING function (a test beside the hook that
-          // assigned, or vice versa) has its own binding map, so it is
-          // reevaluated; so is a pending in a function nested inside the
-          // assigning one, which may be called after the update.
-          const sameFunction =
-            pending.depth <= boundary &&
-            pending.chain[boundary] === scopes[boundary]?.bindings;
-          if (sameFunction) {
-            continue;
-          }
-        }
+    /**
+     * Pending awaits are only judged once the whole file has been visited:
+     * a setup hook registered after a test may assign a timer helper and
+     * then replace it with a real operation, and the test only ever runs
+     * with the final assignment. Judging earlier would report on state the
+     * test never observes.
+     */
+    function flushPendingAwaits() {
+      for (const pending of pendingAwaits) {
         // The pending's own function scopes are evaluated with the binding
         // values as they stood at the await: reassignments that happened
         // after it in the same function must not reclassify it, while
@@ -648,9 +628,9 @@ const rule = {
         const evaluationChain = [...pending.chain.slice(0, pending.depth), ...pending.own];
         if (weakUseIn(pending.argument, evaluationChain, true, pending.scopeChain)) {
           context.report({ node: pending.node, messageId: "weakAwait" });
-          pendingAwaits.splice(index, 1);
         }
       }
+      pendingAwaits.length = 0;
     }
 
     // Classify a function's own body with its parameters already bound, so a
@@ -738,7 +718,10 @@ const rule = {
         pushScope("program");
         declareFunctionDeclarations(node.body);
       },
-      "Program:exit": popScope,
+      "Program:exit"() {
+        popScope();
+        flushPendingAwaits();
+      },
       BlockStatement(node) {
         pushScope();
         declareFunctionDeclarations(node.body);
@@ -798,7 +781,7 @@ const rule = {
             registerAliasDeclaration(node.id.name, target);
           }
         }
-        declareIdentifier(node.id, kind, node.parent?.kind, true);
+        declareIdentifier(node.id, kind, node.parent?.kind);
       },
       AssignmentExpression(node) {
         if (node.operator === "=") {

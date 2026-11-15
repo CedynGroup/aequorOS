@@ -778,3 +778,36 @@ test("reports a file-level read when a sibling describe restores real timers", a
   `);
   assertFlagged(result, "frozenTime");
 });
+
+test("allows a read covered by a freeze inside the same helper", async () => {
+  const result = await runOxlint(["frozenTime"], `
+    it('t', () => {
+      function helper() {
+        vi.useFakeTimers();
+        Date.now();
+      }
+      helper();
+    });
+  `);
+  assertClean(result, "frozenTime");
+});
+
+test("allows a read in an inner afterAll before the outer restoration", async () => {
+  const result = await runOxlint(["frozenTime"], `
+    describe('outer', () => {
+      beforeAll(() => {
+        vi.useFakeTimers();
+      });
+      afterAll(() => {
+        vi.useRealTimers();
+      });
+      describe('inner', () => {
+        afterAll(() => {
+          Date.now();
+        });
+        it('t', () => Date.now());
+      });
+    });
+  `);
+  assertClean(result, "frozenTime");
+});
