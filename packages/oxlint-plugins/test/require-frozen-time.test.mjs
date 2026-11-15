@@ -821,3 +821,16 @@ test("allows a read after an IIFE whose argument restores first", async () => {
   `);
   assertClean(result, "frozenTime");
 });
+
+test("allows a read after an IIFE that restores and then freezes", async () => {
+  const result = await runOxlint(["frozenTime"], `
+    it('t', () => {
+      (() => {
+        vi.useRealTimers();
+        vi.useFakeTimers();
+      })();
+      Date.now();
+    });
+  `);
+  assertClean(result, "frozenTime");
+});

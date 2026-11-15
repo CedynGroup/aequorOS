@@ -422,11 +422,15 @@ const rule = {
         };
         for (const call of freezeCalls) recordTransition(call, true);
         for (const call of unfreezeCalls) recordTransition(call, false);
+        // Equal execution positions (transitions inside one IIFE body)
+        // keep source order.
+        const byExecution = (a, b) =>
+          transitionOrder(a) - transitionOrder(b) || a.node.range[0] - b.node.range[0];
         for (const list of transitionsByCallback.values()) {
-          list.sort((a, b) => transitionOrder(a) - transitionOrder(b));
+          list.sort(byExecution);
         }
-        moduleTransitions.sort((a, b) => transitionOrder(a) - transitionOrder(b));
-        describeTransitions.sort((a, b) => transitionOrder(a) - transitionOrder(b));
+        moduleTransitions.sort(byExecution);
+        describeTransitions.sort(byExecution);
 
         /**
          * Lifecycle phases: beforeAll < beforeEach < test < afterEach <
@@ -566,7 +570,11 @@ const rule = {
             const candidates = [...moduleTransitions, ...describeTransitions];
             const before = candidates
               .filter((t) => executesBefore(t.node, node))
-              .sort((a, b) => transitionOrder(a) - transitionOrder(b));
+              .sort(
+                (a, b) =>
+                  transitionOrder(a) - transitionOrder(b) ||
+                  a.node.range[0] - b.node.range[0],
+              );
             if (before.length === 0 || !before.at(-1).frozen) {
               report();
             }
@@ -623,7 +631,11 @@ const rule = {
           // tests, and a module freeze before a describe-body restoration
           // does. Merge them in source order and take the last state.
           const collectionTransitions = [...moduleTransitions, ...describeTransitions];
-          collectionTransitions.sort((a, b) => transitionOrder(a) - transitionOrder(b));
+          collectionTransitions.sort(
+            (a, b) =>
+              transitionOrder(a) - transitionOrder(b) ||
+              a.node.range[0] - b.node.range[0],
+          );
           let frozen =
             collectionTransitions.length > 0
               ? collectionTransitions.at(-1).frozen

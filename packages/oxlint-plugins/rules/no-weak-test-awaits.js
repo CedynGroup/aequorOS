@@ -409,7 +409,14 @@ function weakUseIn(node, chain, awaitMode, scopeChain = null, ctx = null) {
       // `obj.sleep()`: the property name is not a helper reference; only the
       // receiver can carry a weak binding.
       if (weakUseIn(callee.object, chain, awaitMode, scopeChain, ctx)) return true;
-    } else if (callee.type !== "Identifier" && weakUseIn(callee, chain, awaitMode, scopeChain, ctx)) {
+    } else if (
+      callee.type !== "Identifier" &&
+      // The callee of an awaited call is INVOKED, whatever expression
+      // produces it — `await (0, sleep)(10)` waits on sleep's timer promise
+      // — so the callee expression is resolved in reference mode, not
+      // await mode.
+      weakUseIn(callee, chain, false, scopeChain, ctx)
+    ) {
       return true;
     }
     return node.arguments.some((argument) => weakUseIn(argument, chain, awaitMode, scopeChain, ctx));
@@ -580,7 +587,7 @@ const rule = {
       ) {
         boundary -= 1;
       }
-      if (boundary >= 0 && scopes[boundary].type === "hook") {
+      if (boundary >= 0 && (scopes[boundary].type === "hook" || scopes[boundary].iife)) {
         // Innermost first, from the current scope (a hook-local block
         // binding wins over everything) out to the module binding: a hook
         // assignment updates the nearest visible binding, so a suite-level
@@ -772,11 +779,19 @@ const rule = {
       "FunctionDeclaration:exit": popScope,
       FunctionExpression(node) {
         pushScope(scopeTypeFor(node));
+        // An immediately invoked function runs where it sits: its writes to
+        // captured bindings reach the enclosing scopes like a hook's do.
+        if (node.parent?.type === "CallExpression" && node.parent.callee === node) {
+          scopes[scopes.length - 1].iife = true;
+        }
         declareParameters(node);
       },
       "FunctionExpression:exit": popScope,
       ArrowFunctionExpression(node) {
         pushScope(scopeTypeFor(node));
+        if (node.parent?.type === "CallExpression" && node.parent.callee === node) {
+          scopes[scopes.length - 1].iife = true;
+        }
         declareParameters(node);
       },
       "ArrowFunctionExpression:exit": popScope,

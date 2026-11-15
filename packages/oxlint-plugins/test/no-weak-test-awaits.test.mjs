@@ -620,3 +620,26 @@ test("classifies long forwarding chains without exponential work", async () => {
   `);
   assertClean(result, "weakAwaits");
 });
+
+test("reports an await covered by an IIFE assignment before the test", async () => {
+  const result = await runOxlint(["weakAwaits"], `
+    let sleep;
+    (() => {
+      sleep = () => new Promise((resolve) => setTimeout(resolve, 10));
+    })();
+    it('t', async () => {
+      await sleep();
+    });
+  `);
+  assertFlagged(result, "weakAwaits");
+});
+
+test("reports an await of a sequence-expression callee", async () => {
+  const result = await runOxlint(["weakAwaits"], `
+    it('t', async () => {
+      const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+      await (0, sleep)(10);
+    });
+  `);
+  assertFlagged(result, "weakAwaits");
+});
