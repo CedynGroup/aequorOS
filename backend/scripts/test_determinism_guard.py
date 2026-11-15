@@ -490,6 +490,35 @@ class ClockVisitor(ast.NodeVisitor):
             self.aliases.clear()
             self.aliases.update(carried)
 
+    def visit_Try(self, node: ast.Try | ast.TryStar) -> None:
+        before = dict(self.aliases)
+        for statement in node.body:
+            self.visit(statement)
+        after_body = dict(self.aliases)
+        states = [after_body]
+        for handler in node.handlers:
+            # An exception may surface at any point of the body, so each
+            # handler starts from the pre-try bindings.
+            self.aliases.clear()
+            self.aliases.update(before)
+            if handler.type is not None:
+                self.visit(handler.type)
+            for statement in handler.body:
+                self.visit(statement)
+            states.append(dict(self.aliases))
+        # The else block runs only after the body completed, so it sees the
+        # body's bindings.
+        self.aliases.clear()
+        self.aliases.update(after_body)
+        for statement in node.orelse:
+            self.visit(statement)
+        states.append(dict(self.aliases))
+        self._merge_states(states)
+        for statement in node.finalbody:
+            self.visit(statement)
+
+    visit_TryStar = visit_Try
+
     def visit_Dict(self, node: ast.Dict) -> None:
         if not self.probing:
             # Python's symbol table lists dictionary-key scopes before value
@@ -511,6 +540,11 @@ class ClockVisitor(ast.NodeVisitor):
         """Consume an expression's tables in the symbol table's order."""
         if isinstance(expression, ast.Lambda):
             if id(expression) not in self.preassigned:
+                # A default's table precedes the lambda's own in the
+                # enclosing scope, because defaults evaluate first.
+                for default in (*expression.args.defaults, *expression.args.kw_defaults):
+                    if default is not None:
+                        self._preassign_expression_tables(default)
                 self.preassigned[id(expression)] = self.child_table(expression, "lambda")
             # The body's own tables belong to the lambda's scope.
             return

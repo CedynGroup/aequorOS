@@ -230,6 +230,25 @@ UNFROZEN_READS = [
     "    clock = time.time\n"
     "    [(clock := lambda: 0) for _ in []]\n"
     "    clock()\n",
+    # A handler may run without the exception, so its rebinding cannot
+    # clear the normal path's binding.
+    "import time\n"
+    "def test_handler_rebind_keeps_normal_path():\n"
+    "    clock = time.time\n"
+    "    try:\n"
+    "        pass\n"
+    "    except ValueError:\n"
+    "        clock = lambda: 0\n"
+    "    clock()\n",
+    # An exception may surface before the body rebinds, so a handler read
+    # still sees the pre-try binding.
+    "import time\n"
+    "def test_handler_read_keeps_pre_try_binding():\n"
+    "    clock = time.time\n"
+    "    try:\n"
+    "        pass\n"
+    "    except ValueError:\n"
+    "        clock()\n",
 ]
 
 #: The same reads are accepted once the clock is frozen at function, class or
@@ -479,6 +498,12 @@ def test_vararg_annotation_visits_in_declaration_order() -> None:
 def test_dict_scopes_preassign_in_symbol_table_order() -> None:
     """Dictionary-key scopes precede value scopes in the symbol table."""
     source = "mapping = {0: lambda: lambda: None, (lambda: None): 1}\n"
+    assert guard.clock_findings(source).reads == []
+
+
+def test_lambda_default_precedes_the_lambda_scope() -> None:
+    """A lambda default's table precedes the lambda's own in its scope."""
+    source = "mapping = {0: lambda x=(lambda: None): lambda: None}\n"
     assert guard.clock_findings(source).reads == []
 
 
