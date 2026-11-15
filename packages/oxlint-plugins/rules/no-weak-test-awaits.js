@@ -311,10 +311,14 @@ const rule = {
       return scopes.map((scope) => scope.bindings);
     }
 
-    /** The index of the innermost function/program scope. */
+    /** The index of the innermost function/hook/program scope. */
     function functionDepth() {
       for (let index = scopes.length - 1; index >= 0; index -= 1) {
-        if (scopes[index].type === "function" || scopes[index].type === "program") {
+        if (
+          scopes[index].type === "function" ||
+          scopes[index].type === "program" ||
+          scopes[index].type === "hook"
+        ) {
           return index;
         }
       }
@@ -329,7 +333,12 @@ const rule = {
       if (node?.type === "Identifier") {
         const targetScope =
           varKind === "var"
-            ? scopes.findLast((scope) => scope.type === "function" || scope.type === "program")
+            ? scopes.findLast(
+                (scope) =>
+                  scope.type === "function" ||
+                  scope.type === "program" ||
+                  scope.type === "hook",
+              )
             : scopes.at(-1);
         targetScope?.bindings.set(node.name, kind);
         if (kind) {
@@ -369,7 +378,9 @@ const rule = {
         boundary -= 1;
       }
       if (boundary >= 0 && scopes[boundary].type === "hook") {
-        for (let index = 0; index <= boundary; index += 1) {
+        // Innermost first: a hook assignment updates the nearest visible
+        // binding, so a suite-level shadow wins over the module binding.
+        for (let index = boundary; index >= 0; index -= 1) {
           if (scopes[index].bindings.has(node.name)) {
             scopes[index].bindings.set(node.name, kind);
             if (kind) reevaluatePendingAwaits(boundary, node);
@@ -429,7 +440,13 @@ const rule = {
             continue;
           }
         }
-        if (weakUseIn(pending.argument, pending.chain, true, functionDeclarations)) {
+        // The pending's own function scopes are evaluated with the binding
+        // values as they stood at the await: reassignments that happened
+        // after it in the same function must not reclassify it, while
+        // enclosing scopes stay live so later helper declarations and hook
+        // assignments still reach it.
+        const evaluationChain = [...pending.chain.slice(0, pending.depth), ...pending.own];
+        if (weakUseIn(pending.argument, evaluationChain, true, functionDeclarations)) {
           context.report({ node: pending.node, messageId: "weakAwait" });
           pendingAwaits.splice(index, 1);
         }
@@ -491,14 +508,16 @@ const rule = {
     /** The scope type a function pushes: a setup hook's callback or a plain function. */
     function scopeTypeFor(node) {
       const callee = node.parent?.callee;
-      if (
-        node.parent?.type === "CallExpression" &&
-        callee?.type === "Identifier" &&
-        SETUP_HOOKS.has(callee.name)
-      ) {
-        return "hook";
-      }
-      return "function";
+      // Hooks are invoked as bare calls (`beforeEach(...)`) and as members of
+      // the runner object (`test.beforeEach(...)`); both name the hook in the
+      // callee's last identifier.
+      const hookName =
+        callee?.type === "Identifier"
+          ? callee.name
+          : callee?.type === "MemberExpression" && !callee.computed && callee.property?.type === "Identifier"
+            ? callee.property.name
+            : null;
+      return hookName !== null && SETUP_HOOKS.has(hookName) ? "hook" : "function";
     }
 
     return {
@@ -576,6 +595,7 @@ const rule = {
           argument: node.argument,
           chain,
           depth: functionDepth(),
+          own: chain.slice(functionDepth()).map((map) => new Map(map)),
         });
       },
     };

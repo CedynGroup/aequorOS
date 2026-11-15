@@ -302,3 +302,66 @@ test("reports a captured helper reassigned inside the test body", async () => {
   assertFlagged(result, "weakAwaits");
 });
 
+// Review round: a `var` inside a hook callback must not clear the module
+// helper's classification.
+test("keeps a module helper visible beside a var redeclaration in a hook", async () => {
+  const result = await runOxlint(["weakAwaits"], `
+    const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+    beforeEach(() => {
+      var sleep = loadReady;
+    });
+    it('t', async () => {
+      await sleep(100);
+    });
+  `);
+  assertFlagged(result, "weakAwaits");
+});
+
+// Review round: a later helper declaration must not reclassify an await that
+// already ran under the earlier binding value.
+test("keeps the earlier binding value for an await before a reassignment", async () => {
+  const result = await runOxlint(["weakAwaits"], `
+    it('t', async () => {
+      let wait = loadData;
+      await wait();
+      wait = (ms) => new Promise((r) => setTimeout(r, 10));
+      function other() {
+        return new Promise((r) => setTimeout(r, 10));
+      }
+    });
+  `);
+  assertClean(result, "weakAwaits");
+});
+
+// Review round: member-style hooks isolate their assignments like bare hooks.
+test("reports an assignment inside a member-style setup hook", async () => {
+  const result = await runOxlint(["weakAwaits"], `
+    let sleep;
+    test.beforeEach(() => {
+      sleep = (ms) => new Promise((r) => setTimeout(r, 10));
+    });
+    it('t', async () => {
+      await sleep(100);
+    });
+  `);
+  assertFlagged(result, "weakAwaits");
+});
+
+// Review round: a hook assignment updates the nearest visible binding, so a
+// suite-level shadow wins over the module binding.
+test("updates a suite-level shadow before the module binding from a hook", async () => {
+  const result = await runOxlint(["weakAwaits"], `
+    let sleep = () => loadReady();
+    describe('suite', () => {
+      let sleep = () => loadReady();
+      beforeEach(() => {
+        sleep = (ms) => new Promise((r) => setTimeout(r, 10));
+      });
+      it('t', async () => {
+        await sleep(100);
+      });
+    });
+  `);
+  assertFlagged(result, "weakAwaits");
+});
+
