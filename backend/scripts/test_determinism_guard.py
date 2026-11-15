@@ -30,6 +30,17 @@ constructions, and a read it cannot attribute is missed rather than guessed:
 * An immediately invoked lambda at module level, such as
   ``STAMP = (lambda: time.time())()``, is not tracked as an import-time call,
   so a module ``pytestmark`` freeze marker can exempt its read.
+* A generator handed to a builtin consumer such as ``list`` is accepted as
+  consumed in place only while the consumer's name is never rebound in that
+  scope. An annotation-only declaration, a binding later in a class body or a
+  module-level assignment expression counts as a rebinding whatever its
+  position, so the guard reports such a read instead of accepting it. That
+  over-reports and never hides a read.
+* Only a ``for`` loop and the builtin consumers count as consuming a generator
+  in place. Unpacking one, as in ``[*(time.time() for _ in (0,))]``, a tuple
+  or set display, or a starred call argument, is not recognised, so a frozen
+  read it exhausts is reported instead of accepted. That also over-reports and
+  never hides a read.
 """
 
 from __future__ import annotations
@@ -84,6 +95,10 @@ UTC_NOW_SOURCES = frozenset(
 
 FREEZE_MARKER = "pytest.mark.freeze_time"
 TRAVEL = "time_machine.travel"
+#: Builtins that exhaust a single iterable argument before returning.
+EAGER_CONSUMERS = frozenset(
+    {"list", "tuple", "set", "frozenset", "dict", "sorted", "sum", "min", "max"}
+)
 FIXTURE_DECORATORS = frozenset({"pytest.fixture", "pytest_asyncio.fixture"})
 PARAMETRIZE = "pytest.mark.parametrize"
 FROZEN_CLOCK = "frozen_clock"
@@ -127,15 +142,28 @@ def _descendants(table: symtable.SymbolTable) -> Iterator[symtable.SymbolTable]:
         yield from _descendants(child)
 
 
-def _unique_reads(reads: list[tuple[str, int]]) -> list[tuple[str, int]]:
-    """Drop repeated reads; the findings count one read per line and name."""
-    unique: list[tuple[str, int]] = []
-    seen: set[tuple[str, int]] = set()
+def _unique_reads(reads: list[tuple[str, int, int]]) -> list[tuple[str, int, int]]:
+    """Drop repeated reads; the findings count one read per call site."""
+    unique: dict[tuple[int, int], tuple[str, int, int]] = {}
     for read in reads:
-        if read not in seen:
-            seen.add(read)
-            unique.append(read)
-    return unique
+        unique.setdefault((read[1], read[2]), read)
+    return list(unique.values())
+
+
+def _exits_early(node: ast.For | ast.AsyncFor) -> bool:
+    """Whether the loop body can leave before its iterable is exhausted."""
+    if _loop_has_break(node.body):
+        return True
+    stack: list[ast.AST] = list(node.body)
+    while stack:
+        current = stack.pop()
+        if isinstance(current, (ast.Return, ast.Yield, ast.YieldFrom)):
+            return True
+        if not isinstance(
+            current, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda, ast.ClassDef)
+        ):
+            stack.extend(ast.iter_child_nodes(current))
+    return False
 
 
 def _loop_has_break(statements: list[ast.stmt]) -> bool:
@@ -204,6 +232,18 @@ def _merge_values(values: list[str]) -> str:
 #: its first iterable supplied at creation or the later iterable to resolve at
 #: consumption.
 GeneratorBinding = tuple[str, ast.expr, list[tuple[ast.expr, dict[str, str] | ast.expr]]]
+
+
+def _module_walrus_names(tree: ast.Module) -> Iterator[str]:
+    """The names assignment expressions bind in the module's own scope."""
+    stack: list[ast.AST] = [tree]
+    while stack:
+        for child in ast.iter_child_nodes(stack.pop()):
+            if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda, ast.ClassDef)):
+                continue
+            if isinstance(child, ast.NamedExpr):
+                yield child.target.id
+            stack.append(child)
 
 
 def _target_names(target: ast.expr) -> list[str]:
@@ -317,7 +357,7 @@ class ClockVisitor(ast.NodeVisitor):
         self.aliases: dict[str, str] = {}
         self.enclosing = self.aliases
         self.module_aliases = self.aliases
-        self.reads: list[tuple[str, int]] = []
+        self.reads: list[tuple[str, int, int]] = []
         self.children: dict[symtable.SymbolTable, list[symtable.SymbolTable]] = {}
         # Symbol tables already handed out, kept alive by reference: two
         # definitions can share a line (lambdas in one annotation) and a match
@@ -368,7 +408,7 @@ class ClockVisitor(ast.NodeVisitor):
         self.callable_frozen_refs: dict[int, dict[int, bool]] = {}
         self.scan_key = 0
         #: The reads each recorded body's latest scan found.
-        self.scanned_reads: dict[int, list[tuple[str, int]]] = {}
+        self.scanned_reads: dict[int, list[tuple[str, int, int]]] = {}
         #: The functions pytest runs on its own, as tests or fixtures.
         self.collected_callables: set[int] = set()
         #: The scope each function or lambda is defined in.
@@ -384,6 +424,14 @@ class ClockVisitor(ast.NodeVisitor):
         self.deferred_callables: set[int] = set()
         #: The state each recorded body was last scanned under.
         self.scanned_states: dict[int, tuple[tuple[tuple[str, str], ...], bool]] = {}
+        #: Whether a finalizer is being replayed under a pending jump, so the
+        #: jumps it executes are recorded as exits.
+        self.replaying = False
+        #: The generator expressions the statement that creates them runs to
+        #: the end, so they execute under the freeze active there.
+        self.eager_generators: set[int] = set()
+        #: Names an assignment expression binds at module level, anywhere.
+        self.module_walrus_names: frozenset[str] = frozenset()
         #: Whether the visited statements run inside a function body, where
         #: nothing is collected or registered by pytest.
         self.in_function_body = False
@@ -529,14 +577,40 @@ class ClockVisitor(ast.NodeVisitor):
         called, self.deferred_references = self.deferred_references, outer_references
         for name in self.possible_names(node.func):
             if (name in CLOCK_MEMBERS or name in UTC_NOW_SOURCES) and not self.frozen:
-                self.reads.append((name, node.lineno))
+                self.reads.append((name, node.lineno, node.col_offset))
                 break
+        if self._exhausts_first_argument(node):
+            self.eager_generators.add(id(node.args[0]))
         for argument in node.args:
             self.visit(argument)
         for keyword in node.keywords:
             self.visit(keyword)
         for function in called:
             self._reference_callable(function)
+
+    def _exhausts_first_argument(self, node: ast.Call) -> bool:
+        """Whether the call provably exhausts a generator given as its argument.
+
+        Only a lone iterable that a builtin eager consumer, or a literal
+        string's ``join``, runs to the end inside this very statement counts:
+        a lazy or short-circuiting consumer, a user-defined name or a further
+        argument may leave the generator to run later.
+        """
+        if not node.args or not isinstance(node.args[0], ast.GeneratorExp):
+            return False
+        func = node.func
+        if isinstance(func, ast.Attribute):
+            return (
+                func.attr == "join"
+                and isinstance(func.value, ast.Constant)
+                and isinstance(func.value.value, str)
+                and len(node.args) == 1
+            )
+        if not (isinstance(func, ast.Name) and func.id in EAGER_CONSUMERS):
+            return False
+        if func.id in {"min", "max"} and len(node.args) != 1:
+            return False
+        return self._is_builtin(func.id)
 
     def visit_Import(self, node: ast.Import) -> None:
         for alias in node.names:
@@ -650,17 +724,16 @@ class ClockVisitor(ast.NodeVisitor):
         self.callable_frozen[callable_id] = all(refs.values())
 
     def _consume_generator(self, generator: int) -> None:
-        """Scan a generator's body under the bindings at its consumption."""
+        """Scan a generator's body under the bindings at its consumption.
+
+        The freeze stays what its creation gave it: a name-bound generator may
+        run long after its block exited, so only a marker freezes it.
+        """
         current = dict(self.aliases)
         known = self.generator_scopes.get(generator)
-        frozen = self.frozen
         if known is None or generator not in self.consumed_generators:
             self.generator_scopes[generator] = current
-            self.generator_frozen[generator] = frozen
         else:
-            self.generator_frozen[generator] = (
-                self.generator_frozen.get(generator, False) and frozen
-            )
             self.generator_scopes[generator] = {
                 name: _merge_values([known.get(name, ""), current.get(name, "")])
                 for name in (*known, *current)
@@ -817,6 +890,9 @@ class ClockVisitor(ast.NodeVisitor):
         self._preassign_targets_before([node.target], annotation, node.value)
         # Python assigns the value before evaluating the annotation, so the
         # annotation's bindings cannot mask the value's own reads.
+        if node.value is None and isinstance(node.target, ast.Name):
+            # A bare annotation declares the name without binding it.
+            self.aliases.setdefault(node.target.id, "")
         if node.value is not None:
             held = self._held_generator(node.value)
             held_callable = self._held_callable(node.value)
@@ -912,13 +988,17 @@ class ClockVisitor(ast.NodeVisitor):
             # iterable's, while the iterable evaluates first.
             self._preassign_expression_tables(node.target)
             self._preassign_expression_tables(node.iter)
+        if isinstance(node.iter, ast.GeneratorExp) and not _exits_early(node):
+            self.eager_generators.add(id(node.iter))
         self._visit_iterable(node.iter)
         # Zero iterations leave the target holding its incoming value.
         pre_target = dict(self.aliases)
         target_bindings = _loop_bindings(node.target, node.iter, self)
         self._bind_targets_silently([(node.target, target_bindings)])
         self._visit_loop(
-            node, pre_target=pre_target, target=node.target, target_bindings=target_bindings
+            node,
+            pre_target=pre_target,
+            target=(node.target, target_bindings),
         )
 
     visit_AsyncFor = visit_For
@@ -927,6 +1007,25 @@ class ClockVisitor(ast.NodeVisitor):
         """Bind a loop target, keeping known clock callables resolvable."""
         self.bind(target)
         self.aliases.update(bindings)
+
+    def _is_builtin(self, name: str) -> bool:
+        """Whether ``name`` still resolves to the builtin at the visited point.
+
+        A deferred body runs after its module executed, so any module binding
+        shadows; module-level code only sees the bindings placed above it,
+        except an assignment expression, which always shadows.
+        """
+        if name in self.module_walrus_names:
+            return False
+        if not self.in_function_body:
+            return name not in self.aliases
+        try:
+            symbol = self.table.lookup(name)
+        except KeyError:
+            symbol = None
+        if symbol is not None and (symbol.is_local() or symbol.is_free()):
+            return False
+        return name not in self.module_aliases
 
     def visit_While(self, node: ast.While) -> None:
         self.visit(node.test)
@@ -937,8 +1036,7 @@ class ClockVisitor(ast.NodeVisitor):
         node: ast.For | ast.AsyncFor | ast.While,
         recheck: ast.expr | None = None,
         pre_target: dict[str, str] | None = None,
-        target: ast.expr | None = None,
-        target_bindings: dict[str, str] | None = None,
+        target: tuple[ast.expr, dict[str, str]] | None = None,
     ) -> None:
         # A loop body may run zero times, so its assignments must not clear a
         # binding: merge the pre-loop state with the body and ``else`` states.
@@ -958,7 +1056,7 @@ class ClockVisitor(ast.NodeVisitor):
             for _ in range(_PROBE_LIMIT):
                 start_state = dict(self.aliases)
                 if target is not None:
-                    self._bind_loop_target(target, target_bindings or {})
+                    self._bind_loop_target(*target)
                 for statement in node.body:
                     self.visit(statement)
                 del self.reads[probe_start:]
@@ -984,7 +1082,7 @@ class ClockVisitor(ast.NodeVisitor):
         # Each iteration reassigns the target from the iterable before the
         # body runs.
         if target is not None:
-            self._bind_loop_target(target, target_bindings or {})
+            self._bind_loop_target(*target)
         self.break_states.append([])
         self.continue_states.append([])
         try:
@@ -997,7 +1095,9 @@ class ClockVisitor(ast.NodeVisitor):
         # A loop that runs zero iterations exits with the pre-target state,
         # and a continue hands its bindings to the next iteration and thus
         # to every later exit.
-        entry = [carried] if pre_target is None else [carried, pre_target]
+        entry = [carried]
+        if pre_target is not None:
+            entry.append(pre_target)
         entry = [*entry, *continue_states, *real_continue_states]
         self._merge_loop_exit(node, entry, after_visit, break_states)
 
@@ -1009,7 +1109,7 @@ class ClockVisitor(ast.NodeVisitor):
         break_states: list[dict[str, str]],
     ) -> None:
         """Join the loop's exit states into ``self.aliases``."""
-        if _loop_has_break(node.body):
+        if _loop_has_break(node.body) and (break_states or self.probing):
             # A break jumps past the else block, so only the break-time
             # states and the completed exit stay reachable; the else block
             # itself still sees the entry states when the loop completes.
@@ -1037,7 +1137,7 @@ class ClockVisitor(ast.NodeVisitor):
         # A break exits its innermost loop with the bindings at that point;
         # the silent passes re-visit the same breaks, so only the reporting
         # pass records them.
-        if not self.probing and self.break_states:
+        if (not self.probing or self.replaying) and self.break_states:
             self.break_states[-1].append(dict(self.aliases))
 
     def visit_Continue(self, node: ast.Continue) -> None:
@@ -1051,7 +1151,7 @@ class ClockVisitor(ast.NodeVisitor):
             self.visit(node.value)
         # The silent passes re-visit the same returns, so only the reporting
         # pass records them.
-        if not self.probing:
+        if not self.probing or self.replaying:
             self.return_states.append(dict(self.aliases))
 
     def _jump_stacks(self) -> list[list[dict[str, str]]]:
@@ -1110,9 +1210,12 @@ class ClockVisitor(ast.NodeVisitor):
             states.append(after_body)
         self._merge_states(states)
         self.exception_snapshots = outer_snapshots
+        # Only the jumps recorded before the finalizer cross it; the ones the
+        # finalizer itself executes already carry its assignments.
+        ends = [len(stack) for stack in self._jump_stacks()]
         for statement in node.finalbody:
             self.visit(statement)
-        escaping = self._apply_finally_to_jumps(node, marks, exception_states)
+        escaping = self._apply_finally_to_jumps(node, marks, ends, exception_states)
         if outer_snapshots is not None:
             # A body exception reaches the enclosing statement unless a
             # catch-all handler stops it, and the handler and else states
@@ -1124,6 +1227,7 @@ class ClockVisitor(ast.NodeVisitor):
         self,
         node: ast.Try | ast.TryStar,
         marks: list[int],
+        ends: list[int],
         exception_states: list[dict[str, str]],
     ) -> list[dict[str, str]]:
         """Fold the finally block's assignments into pending jump states.
@@ -1134,42 +1238,58 @@ class ClockVisitor(ast.NodeVisitor):
         if not node.finalbody:
             return exception_states
         stacks = self._jump_stacks()
-        pending = [stack[mark:] for stack, mark in zip(stacks, marks, strict=True)]
+        pending = [stack[mark:end] for stack, mark, end in zip(stacks, marks, ends, strict=True)]
+        # A finalizer that jumps unconditionally never lets a pending jump
+        # complete: a ``continue`` cancels a pending ``break``.
+        diverts = any(
+            isinstance(statement, (ast.Break, ast.Continue, ast.Return))
+            for statement in node.finalbody
+        )
         # A break, continue or return crosses the finally block, so each
-        # pending jump state must include the finally's assignments. The
-        # re-visits run silently to spare the consumed tables; a read that
-        # only the jump path reaches is new evidence and stays, while reads
-        # the normal pass already recorded are dropped as duplicates.
+        # pending jump state must include the finally's assignments, and the
+        # jumps the finalizer executes itself are further exits. The re-visits
+        # run silently to spare the consumed tables; a read that only the jump
+        # path reaches is new evidence and stays, while reads the normal pass
+        # already recorded are dropped as duplicates.
         normal_state = dict(self.aliases)
         known_reads = set(self.reads)
         read_mark = len(self.reads)
-        outer_probing = self.probing
-        self.probing = True
-        transformed: list[list[dict[str, str]]] = [[] for _ in pending]
+        outer_probing, self.probing = self.probing, True
+        outer_replaying, self.replaying = self.replaying, True
+        resulting: list[list[dict[str, str]]] = [[] for _ in pending]
         escaping: list[dict[str, str]] = []
         try:
-            for states, folded in zip(pending, transformed, strict=True):
+            for kind, states in enumerate(pending):
                 for state in states:
+                    lengths = [len(stack) for stack in stacks]
                     self.aliases.clear()
                     self.aliases.update(state)
                     for statement in node.finalbody:
                         self.visit(statement)
-                    folded.append(dict(self.aliases))
+                    if not diverts:
+                        resulting[kind].append(dict(self.aliases))
+                    for index, stack in enumerate(stacks):
+                        resulting[index].extend(stack[lengths[index] :])
+                        del stack[lengths[index] :]
+            lengths = [len(stack) for stack in stacks]
             for state in exception_states:
                 self.aliases.clear()
                 self.aliases.update(state)
                 for statement in node.finalbody:
                     self.visit(statement)
                 escaping.append(dict(self.aliases))
+            for stack, length in zip(stacks, lengths, strict=True):
+                del stack[length:]
         finally:
             self.probing = outer_probing
+            self.replaying = outer_replaying
             fresh = [read for read in self.reads[read_mark:] if read not in known_reads]
             del self.reads[read_mark:]
             self.reads.extend(dict.fromkeys(fresh))
             self.aliases.clear()
             self.aliases.update(normal_state)
-        for stack, mark, folded in zip(stacks, marks, transformed, strict=True):
-            stack[mark:] = folded
+        for stack, mark, end, folded in zip(stacks, marks, ends, resulting, strict=True):
+            stack[mark:end] = folded
         return escaping
 
     visit_TryStar = visit_Try
@@ -1601,9 +1721,7 @@ class ClockVisitor(ast.NodeVisitor):
             # The silent loop pass only collects bindings; the real pass
             # records the definitions. The name still holds the function, so
             # references through it keep marking where its body may run.
-            self.aliases[node.name] = ""
-            self.aliases[GENERATOR_KEY + node.name] = ""
-            self.aliases[CALLABLE_KEY + node.name] = str(id(node))
+            self._bind_definition(node.name, str(id(node)))
             return
         # A mark or a fixture parameter only reaches what pytest manages: the
         # collected tests and the registered fixtures, not their helpers.
@@ -1660,6 +1778,12 @@ class ClockVisitor(ast.NodeVisitor):
             table = self.child_table(node, "lambda")
         self.functions.append((node, table, self.enclosing, frozen))
         self.callable_tables[id(node)] = table
+
+    def _bind_definition(self, name: str, function: str = "") -> None:
+        """A definition replaces whatever binding its name held."""
+        self.aliases[name] = ""
+        self.aliases[GENERATOR_KEY + name] = ""
+        self.aliases[CALLABLE_KEY + name] = function
 
     def visit_ClassDef(self, node: ast.ClassDef) -> None:
         if self.probing:
@@ -1731,7 +1855,7 @@ class ClockVisitor(ast.NodeVisitor):
                 self.visit(statement)
             self.table, self.aliases = previous_table, previous_aliases
             self.deferred_body = previous_body_flag
-        self.aliases[node.name] = ""
+        self._bind_definition(node.name)
 
     def visit_TypeAlias(self, node: ast.TypeAlias) -> None:
         entered = self._enter_wrapper_scopes(node.name.id, node.lineno)
@@ -1811,6 +1935,12 @@ class ClockVisitor(ast.NodeVisitor):
     def visit_comprehension_scope(
         self, node: ast.ListComp | ast.SetComp | ast.DictComp | ast.GeneratorExp
     ) -> None:
+        if (
+            not isinstance(node, ast.GeneratorExp) or id(node) in self.eager_generators
+        ) and isinstance(node.generators[0].iter, ast.GeneratorExp):
+            # An eager comprehension, or a generator this statement exhausts,
+            # exhausts a generator it iterates.
+            self.eager_generators.add(id(node.generators[0].iter))
         self._visit_iterable(node.generators[0].iter)
         if isinstance(node, ast.GeneratorExp) and not self.probing:
             first = node.generators[0]
@@ -1831,9 +1961,12 @@ class ClockVisitor(ast.NodeVisitor):
             # covers it and its element scans with the deferred functions.
             self.functions.append((node, self.table, previous_enclosing, self.deferred_frozen))
             self.generator_scopes[id(node)] = dict(previous_aliases)
-            if id(node) != self.assigned_generator:
-                # Consumed in place, under the freeze active here.
-                self.generator_frozen[id(node)] = self.frozen
+            # The body runs where the generator is consumed: under the freeze
+            # active here when this statement exhausts it, else under the
+            # freeze a marker gives the whole test.
+            self.generator_frozen[id(node)] = (
+                self.frozen if id(node) in self.eager_generators else self.deferred_frozen
+            )
         self.aliases = self.enclosing.copy()
         self.enclosing = self.aliases
         if not isinstance(node, ast.GeneratorExp) and not self.probing:
@@ -2055,7 +2188,7 @@ class ClockVisitor(ast.NodeVisitor):
         ticks_false = isinstance(tick, ast.Constant) and tick.value is False
         return non_none_destination and ticks_false
 
-    def scan(self, tree: ast.Module) -> list[tuple[str, int]]:
+    def scan(self, tree: ast.Module) -> list[tuple[str, int, int]]:
         # Resolve module markers before the main pass so a ``pytestmark``
         # declared after the test functions still covers them; imports come
         # first so the marker expressions resolve through the alias map.
@@ -2074,6 +2207,7 @@ class ClockVisitor(ast.NodeVisitor):
         if self.module_marker_applies and self._scope_marker_freezes(tree.body):
             self.deferred_frozen = True
         self.inherited_parametrization = self._scope_parametrizes_directly(tree.body, [])
+        self.module_walrus_names = frozenset(_module_walrus_names(tree))
         self.visit(tree)
         self._scan_deferred_functions()
         # Repeated passes and nested levels can record the same read twice;
@@ -2160,7 +2294,9 @@ class ClockVisitor(ast.NodeVisitor):
         self.enclosing = self.aliases
         self.return_states = []
         self.frozen = frozen
-        self.deferred_frozen = frozen
+        # A generator that this statement froze still creates its own inner
+        # generators under the marker freeze alone.
+        self.deferred_frozen = recorded_frozen if isinstance(node, ast.GeneratorExp) else frozen
         previous_body_flag = self.deferred_body
         self.deferred_body = True
         self.in_function_body = True
@@ -2330,7 +2466,7 @@ def _takes_frozen_clock(args: ast.arguments) -> bool:
 class ClockFindings:
     """Clock reads with their line numbers, plus the AQPY000 suppression tally."""
 
-    reads: list[tuple[str, int]]
+    reads: list[tuple[str, int, int]]
     suppressed_read_lines: frozenset[int]
     unreasoned_suppressions: int
 
@@ -2371,7 +2507,9 @@ def inventory(root: Path) -> dict[str, dict[str, int]]:
     for path in sorted((root / "tests").rglob("*.py")):
         source = path.read_text(encoding="utf-8")
         report = clock_findings(source, module_marker_applies=path.name != "conftest.py")
-        unfrozen = [name for name, line in report.reads if line not in report.suppressed_read_lines]
+        unfrozen = [
+            name for name, line, _ in report.reads if line not in report.suppressed_read_lines
+        ]
         found = {AQPY001: len(unfrozen), AQPY000: report.unreasoned_suppressions}
         found = {rule: count for rule, count in found.items() if count}
         if found:

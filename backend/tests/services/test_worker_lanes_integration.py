@@ -119,8 +119,9 @@ def test_healthcheck_filters_to_this_workers_own_heartbeat(
     from app.db.base import utc_now  # noqa: PLC0415
     from app.models import WorkerHeartbeat  # noqa: PLC0415
 
+    seen_at = utc_now()
     db_session.add(
-        WorkerHeartbeat(worker_id="risk-worker", started_at=utc_now(), last_seen_at=utc_now())
+        WorkerHeartbeat(worker_id="risk-worker", started_at=seen_at, last_seen_at=seen_at)
     )
     db_session.commit()
 
