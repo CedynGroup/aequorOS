@@ -765,6 +765,20 @@ UNFROZEN_READS = [
     "    for values in ((clock() for _ in (1,)),):\n"
     "        clock = time.time\n"
     "        list(values)\n",
+    # A sequence nested in a dictionary value is captured as it evaluates.
+    "import time\n"
+    "match {'clock': (time.time,), 'other': (time := None)}:\n"
+    "    case {'clock': (clock,)}:\n"
+    "        clock()\n",
+    # A class defined inside a function is not collected.
+    "import pytest\n"
+    "import time\n"
+    "def test_outer():\n"
+    f"    @pytest.mark.freeze_time({INSTANT})\n"
+    "    class TestInner:\n"
+    "        def test_read(self):\n"
+    "            return time.time()\n"
+    "    TestInner().test_read()\n",
     # The same holds for a comprehension target over a literal iterable.
     "import time\n"
     "def test_comprehension_target_known_elements():\n"

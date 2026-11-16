@@ -336,6 +336,9 @@ class ClockVisitor(ast.NodeVisitor):
         #: Whether each generator's body runs under a freeze: the freeze
         #: active where it is consumed.
         self.generator_frozen: dict[int, bool] = {}
+        #: Whether the visited statements run inside a function body, where
+        #: nothing is collected or registered by pytest.
+        self.in_function_body = False
         #: Whether an enclosing class or module parametrizes ``frozen_clock``
         #: directly for the tests inside it.
         self.inherited_parametrization = False
@@ -589,6 +592,14 @@ class ClockVisitor(ast.NodeVisitor):
             self._evaluate_captured(iterable)
         else:
             self.visit(iterable)
+
+    def _evaluate_captured_value(self, value: ast.expr) -> None:
+        """Evaluate a dictionary value, capturing it and any literal elements."""
+        if isinstance(value, (ast.Tuple, ast.List)):
+            self._evaluate_captured(value)
+        else:
+            self.visit(value)
+        self.captured_elements[id(value)] = self.qualified(value)
 
     def _evaluate_captured(self, value: ast.expr) -> None:
         """Evaluate an unpacked value, capturing each element as it evaluates."""
@@ -1020,8 +1031,7 @@ class ClockVisitor(ast.NodeVisitor):
         for key, value in zip(node.keys, node.values, strict=True):
             if key is not None:
                 self.visit(key)
-            self.visit(value)
-            self.captured_elements[id(value)] = self.qualified(value)
+            self._evaluate_captured_value(value)
 
     def _scan_comprehension_pass(
         self,
@@ -1422,8 +1432,8 @@ class ClockVisitor(ast.NodeVisitor):
         # collected tests and the registered fixtures, not their helpers.
         # A function nested in another body is neither collected nor
         # registered.
-        collected = node.name.startswith("test") and not self.deferred_body
-        fixture = self._is_fixture(node.decorator_list) and not self.deferred_body
+        collected = node.name.startswith("test") and not self.in_function_body
+        fixture = self._is_fixture(node.decorator_list) and not self.in_function_body
         own = (self._decorator_freezes(node.decorator_list) and collected and not fixture) or (
             (collected or fixture)
             and _takes_frozen_clock(node.args)
@@ -1467,8 +1477,13 @@ class ClockVisitor(ast.NodeVisitor):
             return
         # A class mark reaches only the tests of a class pytest collects; a
         # helper class called from an unmarked test stays unfrozen.
-        own = node.name.startswith("Test") and (
-            self._decorator_freezes(node.decorator_list) or self._scope_marker_freezes(node.body)
+        own = (
+            node.name.startswith("Test")
+            and not self.in_function_body
+            and (
+                self._decorator_freezes(node.decorator_list)
+                or self._scope_marker_freezes(node.body)
+            )
         )
         for decorator in node.decorator_list:
             self.visit(decorator)
@@ -1879,6 +1894,7 @@ class ClockVisitor(ast.NodeVisitor):
             self.deferred_frozen = frozen
             previous_body_flag = self.deferred_body
             self.deferred_body = True
+            self.in_function_body = True
             if isinstance(node, ast.Lambda):
                 self.visit(node.body)
             elif isinstance(node, ast.GeneratorExp):
@@ -1890,6 +1906,7 @@ class ClockVisitor(ast.NodeVisitor):
                 for statement in node.body:
                     self.visit(statement)
             self.deferred_body = previous_body_flag
+            self.in_function_body = False
 
 
 def _named_expressions(node: ast.AST) -> Iterator[ast.NamedExpr]:
