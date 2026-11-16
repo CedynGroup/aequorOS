@@ -587,6 +587,9 @@ UNFROZEN_READS = [
     "    clock = lambda: 0\n",
     # Unpacking captures each element as it evaluates.
     "import time\nclock, ignored = time.time, (time := None)\nclock()\n",
+    # A module-level generator consumed before the alias is replaced reads
+    # the real clock at import.
+    "import time\nclock = time.time\nlist(clock() for _ in (1,))\nclock = lambda: 0\n",
     # The same holds for a comprehension target over a literal iterable.
     "import time\n"
     "def test_comprehension_target_known_elements():\n"
@@ -791,6 +794,12 @@ FROZEN_READS = [
     "    else:\n"
     "        clock = lambda: 0\n"
     "    clock()\n",
+    # A generator consumed inside a travel runs under the fixed clock.
+    "import time\n"
+    "import time_machine\n"
+    "def test_generator_consumed_in_travel():\n"
+    f"    with time_machine.travel({INSTANT}, tick=False):\n"
+    "        list(time.time() for _ in (1,))\n",
 ]
 
 

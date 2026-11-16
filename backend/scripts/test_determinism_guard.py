@@ -248,6 +248,9 @@ class ClockVisitor(ast.NodeVisitor):
         self.generator_scopes: dict[int, dict[str, str]] = {}
         #: The generators whose consumption has set their scan bindings.
         self.consumed_generators: set[int] = set()
+        #: Whether each generator's body runs under a freeze: the freeze
+        #: active where it is consumed.
+        self.generator_frozen: dict[int, bool] = {}
         #: Bindings of the elements of the unpacked value being evaluated,
         #: captured as each element evaluates.
         self.captured_elements: dict[int, str] = {}
@@ -419,9 +422,14 @@ class ClockVisitor(ast.NodeVisitor):
         """Scan a generator's body under the bindings at its consumption."""
         current = dict(self.aliases)
         known = self.generator_scopes.get(generator)
+        frozen = self.frozen or self.deferred_frozen
         if known is None or generator not in self.consumed_generators:
             self.generator_scopes[generator] = current
+            self.generator_frozen[generator] = frozen
         else:
+            self.generator_frozen[generator] = (
+                self.generator_frozen.get(generator, False) and frozen
+            )
             self.generator_scopes[generator] = {
                 name: _merge_values([known.get(name, ""), current.get(name, "")])
                 for name in (*known, *current)
@@ -1337,6 +1345,9 @@ class ClockVisitor(ast.NodeVisitor):
             # covers it and its element scans with the deferred functions.
             self.functions.append((node, self.table, previous_enclosing, self.deferred_frozen))
             self.generator_scopes[id(node)] = dict(previous_aliases)
+            if id(node) != self.assigned_generator:
+                # Consumed in place, under the freeze active here.
+                self.generator_frozen[id(node)] = self.frozen or self.deferred_frozen
         self.aliases = self.enclosing.copy()
         self.enclosing = self.aliases
         if not isinstance(node, ast.GeneratorExp) and not self.probing:
@@ -1547,19 +1558,23 @@ class ClockVisitor(ast.NodeVisitor):
 
     def _scan_deferred_functions(self) -> None:
         """Scan every recorded function, lambda and generator body."""
-        for node, table, enclosing, frozen in self.functions:
+        for node, table, enclosing, recorded_frozen in self.functions:
             self.table = table
-            scope = (
-                self.generator_scopes.get(id(node), enclosing)
-                if isinstance(node, ast.GeneratorExp)
-                else enclosing
+            captured = isinstance(node, ast.GeneratorExp) and id(node) in self.generator_scopes
+            self.aliases = (self.generator_scopes[id(node)] if captured else enclosing).copy()
+            frozen = (
+                self.generator_frozen.get(id(node), recorded_frozen)
+                if captured
+                else recorded_frozen
             )
-            self.aliases = scope.copy()
             for symbol in table.get_symbols():
+                name = symbol.get_name()
                 if symbol.is_local():
-                    self.aliases[symbol.get_name()] = ""
-                elif symbol.is_global():
-                    self.aliases[symbol.get_name()] = self.module_aliases.get(symbol.get_name(), "")
+                    self.aliases[name] = ""
+                elif symbol.is_global() and not (captured and name in self.aliases):
+                    # A captured generator scope already holds the module
+                    # bindings at consumption.
+                    self.aliases[name] = self.module_aliases.get(name, "")
             self.aliases.update(self.default_bindings.get(id(node), {}))
             self.enclosing = self.aliases
             self.pending_generators = {}
