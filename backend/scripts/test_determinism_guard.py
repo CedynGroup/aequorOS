@@ -647,17 +647,16 @@ class ClockVisitor(ast.NodeVisitor):
         self.exception_snapshots = exception_states
         # Only jumps recorded from here on cross this try's finally.
         marks = [len(stack) for stack in self._jump_stacks()]
-        # An exception may surface at any point of the body, so collect the
-        # state after each statement for the handlers to start from.
-        prefixes = [before]
         for statement in node.body:
             self.visit(statement)
-            prefixes.append(dict(self.aliases))
-        after_body = prefixes[-1]
+        after_body = dict(self.aliases)
+        # An exception may surface at any point of the body, at any nesting
+        # depth, so the handlers start from the state after each statement.
+        body_states = list(exception_states)
         states: list[dict[str, str]] = []
         for handler in node.handlers:
             self.aliases.clear()
-            self._merge_states(prefixes)
+            self._merge_states(body_states)
             if handler.type is not None:
                 self.visit(handler.type)
             if handler.name is not None:

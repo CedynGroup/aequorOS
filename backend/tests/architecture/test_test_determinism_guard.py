@@ -467,6 +467,20 @@ UNFROZEN_READS = [
     "        clock()\n",
     # Each default is captured before the later defaults evaluate.
     "import time\ndef test_earlier_default(clock=time.time, other=(time := None)):\n    clock()\n",
+    # A handler starts from the bindings at every point of the try body,
+    # including inside its compound statements.
+    "import time\n"
+    "from contextlib import nullcontext\n"
+    "def test_raise_in_with_into_handler(flag):\n"
+    "    clock = lambda: 0\n"
+    "    try:\n"
+    "        with nullcontext():\n"
+    "            clock = time.time\n"
+    "            if flag:\n"
+    "                raise ValueError\n"
+    "            clock = lambda: 0\n"
+    "    except ValueError:\n"
+    "        clock()\n",
     # The same holds for a comprehension target over a literal iterable.
     "import time\n"
     "def test_comprehension_target_known_elements():\n"
