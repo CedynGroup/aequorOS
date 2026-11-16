@@ -451,6 +451,22 @@ UNFROZEN_READS = [
     "        clock = lambda: 0\n"
     "    finally:\n"
     "        clock()\n",
+    # An exception raised inside a compound statement of the try body runs
+    # the finally block under the bindings at the raise point.
+    "import time\n"
+    "from contextlib import nullcontext\n"
+    "def test_raise_in_with_through_finally(flag):\n"
+    "    clock = lambda: 0\n"
+    "    try:\n"
+    "        with nullcontext():\n"
+    "            clock = time.time\n"
+    "            if flag:\n"
+    "                raise ValueError\n"
+    "            clock = lambda: 0\n"
+    "    finally:\n"
+    "        clock()\n",
+    # Each default is captured before the later defaults evaluate.
+    "import time\ndef test_earlier_default(clock=time.time, other=(time := None)):\n    clock()\n",
     # The same holds for a comprehension target over a literal iterable.
     "import time\n"
     "def test_comprehension_target_known_elements():\n"

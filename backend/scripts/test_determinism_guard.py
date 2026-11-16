@@ -31,6 +31,7 @@ import symtable
 import tokenize
 from collections.abc import Iterator, Sequence
 from pathlib import Path
+from typing import override
 
 from pydantic import TypeAdapter
 
@@ -223,6 +224,10 @@ class ClockVisitor(ast.NodeVisitor):
         #: visited function body.
         self.return_states: list[dict[str, str]] = []
         self.probing = False
+        #: Snapshots of the bindings after each statement of the ``try``
+        #: being visited, at any nesting depth: an exception may leave the
+        #: statement list at any of them.
+        self.exception_snapshots: list[dict[str, str]] | None = None
         #: Whether the visited statements run inside a deferred function or
         # lambda body: Python evaluates function-local variable annotations
         # never, while module and class bodies evaluate theirs at execution.
@@ -627,8 +632,19 @@ class ClockVisitor(ast.NodeVisitor):
             self.return_states,
         ]
 
+    @override
+    def visit(self, node: ast.AST) -> None:
+        super().visit(node)
+        if isinstance(node, ast.stmt) and self.exception_snapshots is not None and not self.probing:
+            self.exception_snapshots.append(dict(self.aliases))
+
     def visit_Try(self, node: ast.Try | ast.TryStar) -> None:
         before = dict(self.aliases)
+        outer_snapshots = self.exception_snapshots
+        # An exception that no handler stops, or one raised inside a handler,
+        # still runs the finally block under the bindings at its raise point.
+        exception_states = [before]
+        self.exception_snapshots = exception_states
         # Only jumps recorded from here on cross this try's finally.
         marks = [len(stack) for stack in self._jump_stacks()]
         # An exception may surface at any point of the body, so collect the
@@ -638,9 +654,6 @@ class ClockVisitor(ast.NodeVisitor):
             self.visit(statement)
             prefixes.append(dict(self.aliases))
         after_body = prefixes[-1]
-        # An exception that no handler stops, or one raised inside a handler,
-        # still runs the finally block under the bindings at its raise point.
-        exception_states = list(prefixes)
         states: list[dict[str, str]] = []
         for handler in node.handlers:
             self.aliases.clear()
@@ -653,7 +666,6 @@ class ClockVisitor(ast.NodeVisitor):
                 self.aliases[handler.name] = ""
             for statement in handler.body:
                 self.visit(statement)
-                exception_states.append(dict(self.aliases))
             if handler.name is not None:
                 self.aliases[handler.name] = ""
             states.append(dict(self.aliases))
@@ -664,11 +676,11 @@ class ClockVisitor(ast.NodeVisitor):
             self.aliases.update(after_body)
             for statement in node.orelse:
                 self.visit(statement)
-                exception_states.append(dict(self.aliases))
             states.append(dict(self.aliases))
         else:
             states.append(after_body)
         self._merge_states(states)
+        self.exception_snapshots = outer_snapshots
         for statement in node.finalbody:
             self.visit(statement)
         self._apply_finally_to_jumps(node, marks, exception_states)
@@ -975,31 +987,27 @@ class ClockVisitor(ast.NodeVisitor):
 
     visit_AsyncWith = visit_With
 
-    def _visit_defaults(self, arguments: ast.arguments) -> None:
-        for default in [*arguments.defaults, *arguments.kw_defaults]:
-            if default is not None:
-                self.visit(default)
+    def _visit_defaults(self, arguments: ast.arguments) -> dict[str, str]:
+        """Evaluate the parameter defaults and return the bindings they capture.
 
-    def _capture_defaults(self, node: ast.FunctionDef | ast.AsyncFunctionDef | ast.Lambda) -> None:
-        """Record the clock bindings the parameter defaults capture.
-
-        Defaults evaluate once at definition time, so a parameter that
-        defaults to a clock callable holds it when the body starts.
+        Defaults evaluate once, in order, at definition time, so a parameter
+        that defaults to a clock callable holds it when the body starts, even
+        if a later default rebinds the alias.
         """
-        arguments = node.args
+        captured: dict[str, str] = {}
         positional = [*arguments.posonlyargs, *arguments.args]
-        captured = {
-            parameter.arg: self.qualified(default)
-            for parameter, default in zip(
-                positional[len(positional) - len(arguments.defaults) :],
-                arguments.defaults,
-                strict=True,
-            )
-        }
+        for parameter, default in zip(
+            positional[len(positional) - len(arguments.defaults) :],
+            arguments.defaults,
+            strict=True,
+        ):
+            self.visit(default)
+            captured[parameter.arg] = self.qualified(default)
         for parameter, default in zip(arguments.kwonlyargs, arguments.kw_defaults, strict=True):
             if default is not None:
+                self.visit(default)
                 captured[parameter.arg] = self.qualified(default)
-        self.default_bindings[id(node)] = captured
+        return captured
 
     def _visit_annotations(self, arguments: ast.arguments) -> None:
         if self.postponed:
@@ -1017,10 +1025,11 @@ class ClockVisitor(ast.NodeVisitor):
         if arguments.kwarg is not None and arguments.kwarg.annotation is not None:
             self.visit(arguments.kwarg.annotation)
 
-    def _visit_arguments(self, arguments: ast.arguments) -> None:
+    def _visit_arguments(self, arguments: ast.arguments) -> dict[str, str]:
         """Visit defaults always; annotations only when they execute."""
-        self._visit_defaults(arguments)
+        captured = self._visit_defaults(arguments)
         self._visit_annotations(arguments)
+        return captured
 
     def _enter_wrapper_scopes(self, name: str, lineno: int) -> list[symtable.SymbolTable]:
         """The wrapper tables a PEP 695 definition evaluates its contents in.
@@ -1060,8 +1069,7 @@ class ClockVisitor(ast.NodeVisitor):
         ) or _takes_frozen_clock(node.args)
         for decorator in node.decorator_list:
             self.visit(decorator)
-        self._visit_defaults(node.args)
-        self._capture_defaults(node)
+        self.default_bindings[id(node)] = self._visit_defaults(node.args)
         entered = self._enter_wrapper_scopes(node.name, node.lineno)
         previous_table = self.table
         if entered:
@@ -1081,8 +1089,7 @@ class ClockVisitor(ast.NodeVisitor):
     def visit_Lambda(self, node: ast.Lambda) -> None:
         if self.probing:
             return
-        self._visit_arguments(node.args)
-        self._capture_defaults(node)
+        self.default_bindings[id(node)] = self._visit_arguments(node.args)
         # A lambda body runs at call time, which may be long after the
         # enclosing block exited, so only marker-derived deferred freeze
         # covers it — not the run-time ``frozen`` of the defining scope.
