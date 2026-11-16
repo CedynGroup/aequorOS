@@ -167,6 +167,11 @@ def _merge_values(values: list[str]) -> str:
     return values[0]
 
 
+#: An assignment expression inside a generator: the name it binds, its value
+#: expression and the bindings of the generator's own iteration targets.
+GeneratorBinding = tuple[str, ast.expr, dict[str, str]]
+
+
 def _iterable_element_value(iterable: ast.expr, visitor: ClockVisitor) -> str:
     """The binding a loop or comprehension target takes from a literal iterable.
 
@@ -232,9 +237,9 @@ class ClockVisitor(ast.NodeVisitor):
         #: The generator that is the value of the assignment being visited.
         self.assigned_generator: int | None = None
         #: The bindings that generator's assignment expressions may make.
-        self.generator_bindings: list[tuple[str, ast.expr]] = []
+        self.generator_bindings: list[GeneratorBinding] = []
         #: Per generator variable, the bindings consuming it may make.
-        self.pending_generators: dict[str, list[tuple[str, ast.expr]]] = {}
+        self.pending_generators: dict[str, list[GeneratorBinding]] = {}
         #: Whether the visited statements run inside a deferred function or
         # lambda body: Python evaluates function-local variable annotations
         # never, while module and class bodies evaluate theirs at execution.
@@ -393,13 +398,36 @@ class ClockVisitor(ast.NodeVisitor):
         elif node.id in self.pending_generators:
             self._apply_generator_bindings(self.pending_generators[node.id])
 
-    def _apply_generator_bindings(self, bindings: list[tuple[str, ast.expr]]) -> None:
+    def _apply_generator_bindings(self, bindings: list[GeneratorBinding]) -> None:
         """Merge the bindings a consumed generator may have made.
 
-        The assigned values resolve under the bindings at consumption.
+        The assigned values resolve under the bindings at consumption, with
+        the generator's own iteration targets holding what they held when it
+        was created.
         """
-        for name, value in bindings:
-            self.aliases[name] = _merge_values([self.aliases.get(name, ""), self.qualified(value)])
+        for name, value, targets in bindings:
+            current = {target: self.aliases.get(target) for target in targets}
+            self.aliases.update(targets)
+            resolved = self.qualified(value)
+            for target, previous in current.items():
+                if previous is None:
+                    self.aliases.pop(target, None)
+                else:
+                    self.aliases[target] = previous
+            self.aliases[name] = _merge_values([self.aliases.get(name, ""), resolved])
+
+    def _visit_assigned_value(self, value: ast.expr) -> None:
+        """Visit an assignment's value; a generator waits for its consumer."""
+        if isinstance(value, ast.GeneratorExp):
+            self.assigned_generator = id(value)
+            self.generator_bindings = []
+        self.visit(value)
+        self.assigned_generator = None
+
+    def _hold_generator(self, target: ast.expr, value: ast.expr) -> None:
+        """Keep a generator's effects for where its variable is consumed."""
+        if isinstance(value, ast.GeneratorExp) and isinstance(target, ast.Name):
+            self.pending_generators[target.id] = self.generator_bindings
 
     def _preassign_targets_before(self, targets: list[ast.expr], *later: ast.expr | None) -> None:
         """Reserve target scopes ahead of the expressions that follow them.
@@ -415,18 +443,13 @@ class ClockVisitor(ast.NodeVisitor):
 
     def visit_Assign(self, node: ast.Assign) -> None:
         self._preassign_targets_before(node.targets, node.value)
-        if isinstance(node.value, ast.GeneratorExp):
-            self.assigned_generator = id(node.value)
-            self.generator_bindings = []
-        self.visit(node.value)
-        self.assigned_generator = None
+        self._visit_assigned_value(node.value)
         name = self.qualified(node.value)
         for target in node.targets:
             self.bind(target, node.value)
             if isinstance(target, ast.Name):
                 self.aliases[target.id] = name
-                if isinstance(node.value, ast.GeneratorExp):
-                    self.pending_generators[target.id] = self.generator_bindings
+            self._hold_generator(target, node.value)
 
     def visit_AnnAssign(self, node: ast.AnnAssign) -> None:
         # The symbol table lists the target's scopes, then the annotation's,
@@ -437,8 +460,9 @@ class ClockVisitor(ast.NodeVisitor):
         # Python assigns the value before evaluating the annotation, so the
         # annotation's bindings cannot mask the value's own reads.
         if node.value is not None:
-            self.visit(node.value)
+            self._visit_assigned_value(node.value)
             self.bind(node.target, node.value)
+            self._hold_generator(node.target, node.value)
         if not self.postponed and not self.deferred_body:
             # Module and class bodies evaluate their annotations; a
             # function-local one never runs.
@@ -1300,7 +1324,18 @@ class ClockVisitor(ast.NodeVisitor):
             # the containing scope may hold their bindings from then on. A
             # generator bound to a name is consumed where the name is read;
             # any other generator is consumed in place.
-            bindings = [(named.target.id, named.value) for named in _named_expressions(node)]
+            targets = {
+                generator.target.id: (
+                    self.first_iterable_values.get(id(node), "")
+                    if index == 0
+                    else _iterable_element_value(generator.iter, self)
+                )
+                for index, generator in enumerate(node.generators)
+                if isinstance(generator.target, ast.Name)
+            }
+            bindings = [
+                (named.target.id, named.value, targets) for named in _named_expressions(node)
+            ]
             if id(node) == self.assigned_generator:
                 self.generator_bindings = bindings
             else:

@@ -571,6 +571,13 @@ UNFROZEN_READS = [
     "    reader = time.time\n"
     "    list(values)\n"
     "    clock()\n",
+    # The generator's assigned value resolves its own iteration target.
+    "import time\n"
+    "def test_generator_walrus_iteration_target():\n"
+    "    clock = lambda: 0\n"
+    "    values = ((clock := reader) for reader in (time.time,))\n"
+    "    list(values)\n"
+    "    clock()\n",
     # The same holds for a comprehension target over a literal iterable.
     "import time\n"
     "def test_comprehension_target_known_elements():\n"
@@ -1057,6 +1064,18 @@ def test_the_final_pytestmark_assignment_decides() -> None:
         "    time.time()\n"
     )
     assert guard.clock_findings(source).reads != []
+
+
+def test_annotated_generator_waits_for_its_consumer() -> None:
+    """An annotated generator variable keeps its assignments until consumed."""
+    source = (
+        "import time\n"
+        "def test_unconsumed():\n"
+        "    clock = lambda: 0\n"
+        "    values: object = ((clock := time.time) for _ in (1,))\n"
+        "    clock()\n"
+    )
+    assert guard.clock_findings(source).reads == []
 
 
 def test_annotated_assignment_scopes_preassign_in_order() -> None:
