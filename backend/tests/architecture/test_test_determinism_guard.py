@@ -547,6 +547,20 @@ UNFROZEN_READS = [
     "            clock = lambda: 0\n"
     "    except SystemExit:\n"
     "        clock()\n",
+    # Consuming a generator may run its assignment expressions, so the
+    # enclosing scope holds their bindings afterwards.
+    "import time\n"
+    "def test_generator_walrus_after_consumption():\n"
+    "    clock = lambda: 0\n"
+    "    values = ((clock := time.time) for _ in (1,))\n"
+    "    list(values)\n"
+    "    clock()\n",
+    # A generator consumed in place binds in the enclosing scope too.
+    "import time\n"
+    "def test_generator_walrus_consumed_in_place():\n"
+    "    clock = lambda: 0\n"
+    "    list((clock := time.time) for _ in (1,))\n"
+    "    clock()\n",
     # The same holds for a comprehension target over a literal iterable.
     "import time\n"
     "def test_comprehension_target_known_elements():\n"
