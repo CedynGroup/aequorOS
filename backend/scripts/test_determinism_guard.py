@@ -151,6 +151,9 @@ def _loop_has_break(statements: list[ast.stmt]) -> bool:
 #: Prefix of the alias-map keys that record which generators a name may hold,
 #: so the branch, loop and exception joins merge them with the bindings.
 GENERATOR_KEY = "\x00generator:"
+#: Prefix of the keys recording which function or lambda a name may hold, so a
+#: reference to the name marks a point where its body may run.
+CALLABLE_KEY = "\x00callable:"
 
 
 def _merge_generators(values: list[str]) -> str:
@@ -336,6 +339,9 @@ class ClockVisitor(ast.NodeVisitor):
         #: Whether each generator's body runs under a freeze: the freeze
         #: active where it is consumed.
         self.generator_frozen: dict[int, bool] = {}
+        #: The bindings each nested function or lambda is scanned under: the
+        #: merge of the states at the points where it is referenced.
+        self.callable_scopes: dict[int, dict[str, str]] = {}
         #: Whether the visited statements run inside a function body, where
         #: nothing is collected or registered by pytest.
         self.in_function_body = False
@@ -499,11 +505,12 @@ class ClockVisitor(ast.NodeVisitor):
         if isinstance(target, ast.Name):
             # Rebinding the name discards the generator it held.
             if value is None:
-                return {target.id: "", GENERATOR_KEY + target.id: ""}
+                return {target.id: "", GENERATOR_KEY + target.id: "", CALLABLE_KEY + target.id: ""}
             captured = self.captured_elements.get(id(value))
             return {
                 target.id: captured if captured is not None else self.qualified(value),
                 GENERATOR_KEY + target.id: self.captured_generators.get(id(value), ""),
+                CALLABLE_KEY + target.id: "",
             }
         if isinstance(target, (ast.Tuple, ast.List)):
             aligned = (
@@ -527,12 +534,22 @@ class ClockVisitor(ast.NodeVisitor):
         if isinstance(node.ctx, (ast.Store, ast.Del)):
             self.aliases[node.id] = ""
             self.aliases[GENERATOR_KEY + node.id] = ""
+            self.aliases[CALLABLE_KEY + node.id] = ""
             return
+        for held in _alternatives(self.aliases.get(CALLABLE_KEY + node.id, "")):
+            if held:
+                self._reference_callable(int(held))
         for held in _alternatives(self.aliases.get(GENERATOR_KEY + node.id, "")):
             if held:
                 generator = int(held)
                 self._apply_generator_bindings(self.generator_effects.get(generator, []))
                 self._consume_generator(generator)
+
+    def _reference_callable(self, callable_id: int) -> None:
+        """Note a point where a nested function's body may run."""
+        known = self.callable_scopes.get(callable_id)
+        current = dict(self.aliases)
+        self.callable_scopes[callable_id] = self._merged([known, current] if known else [current])
 
     def _consume_generator(self, generator: int) -> None:
         """Scan a generator's body under the bindings at its consumption."""
@@ -631,9 +648,15 @@ class ClockVisitor(ast.NodeVisitor):
         return None
 
     def _hold_generator(self, target: ast.expr, value: ast.expr, held: str | None = None) -> None:
-        """Keep a generator's effects for where its variable is consumed."""
+        """Keep a generator's effects for where its variable is consumed.
+
+        A lambda bound to a name is held the same way, so its references mark
+        where its body may run.
+        """
         if not isinstance(target, ast.Name):
             return
+        if isinstance(value, ast.Lambda):
+            self.aliases[CALLABLE_KEY + target.id] = str(id(value))
         if held is not None:
             self.aliases[GENERATOR_KEY + target.id] = held
         elif isinstance(value, ast.GeneratorExp):
@@ -719,21 +742,28 @@ class ClockVisitor(ast.NodeVisitor):
         if node.name is not None:
             self.aliases[node.name] = ""
 
+    @staticmethod
+    def _merged(states: list[dict[str, str]]) -> dict[str, str]:
+        """The union of the bindings the reachable ``states`` may hold."""
+        keys: set[str] = set()
+        for state in states:
+            keys.update(state)
+        return {
+            key: (
+                _merge_generators
+                if key.startswith((GENERATOR_KEY, CALLABLE_KEY))
+                else _merge_values
+            )([state.get(key, "") for state in states])
+            for key in keys
+        }
+
     def _merge_states(self, states: list[dict[str, str]]) -> None:
         """Rebuild ``self.aliases`` as the union of the reachable path states.
 
         The mutation is in place: ``module_aliases`` and ``enclosing`` share
         this dict, so a rebound map would leave them seeing the unmerged state.
         """
-        keys: set[str] = set()
-        for state in states:
-            keys.update(state)
-        merged = {
-            key: (_merge_generators if key.startswith(GENERATOR_KEY) else _merge_values)(
-                [state.get(key, "") for state in states]
-            )
-            for key in keys
-        }
+        merged = self._merged(states)
         self.aliases.clear()
         self.aliases.update(merged)
 
@@ -1464,6 +1494,8 @@ class ClockVisitor(ast.NodeVisitor):
         frozen = own or self.deferred_frozen
         self.functions.append((node, self.child_table(node, node.name), self.enclosing, frozen))
         self.aliases[node.name] = ""
+        self.aliases[GENERATOR_KEY + node.name] = ""
+        self.aliases[CALLABLE_KEY + node.name] = str(id(node))
 
     visit_AsyncFunctionDef = visit_FunctionDef
 
@@ -1883,8 +1915,13 @@ class ClockVisitor(ast.NodeVisitor):
         """Scan every recorded function, lambda and generator body."""
         for node, table, enclosing, recorded_frozen in self.functions:
             self.table = table
-            captured = isinstance(node, ast.GeneratorExp) and id(node) in self.generator_scopes
-            self.aliases = (self.generator_scopes[id(node)] if captured else enclosing).copy()
+            scopes = (
+                self.generator_scopes
+                if isinstance(node, ast.GeneratorExp)
+                else self.callable_scopes
+            )
+            captured = id(node) in scopes
+            self.aliases = (scopes[id(node)] if captured else enclosing).copy()
             frozen = (
                 self.generator_frozen.get(id(node), recorded_frozen)
                 if captured
@@ -1895,6 +1932,7 @@ class ClockVisitor(ast.NodeVisitor):
                 if symbol.is_local():
                     self.aliases[name] = ""
                     self.aliases[GENERATOR_KEY + name] = ""
+                    self.aliases[CALLABLE_KEY + name] = ""
                 elif symbol.is_global() and not (captured and name in self.aliases):
                     # A captured generator scope already holds the module
                     # bindings at consumption.

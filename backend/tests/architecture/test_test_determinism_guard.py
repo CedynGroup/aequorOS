@@ -802,6 +802,15 @@ UNFROZEN_READS = [
     "    class TestNested:\n"
     "        def test_read(self):\n"
     "            return time.time()\n",
+    # A nested function runs under the bindings where it is called, not
+    # those left by a later rebinding.
+    "import time\n"
+    "def test_closure_called_before_rebinding():\n"
+    "    clock = time.time\n"
+    "    def read():\n"
+    "        return clock()\n"
+    "    read()\n"
+    "    clock = lambda: 0\n",
     # The same holds for a comprehension target over a literal iterable.
     "import time\n"
     "def test_comprehension_target_known_elements():\n"
@@ -1329,6 +1338,20 @@ def test_indirect_parametrization_keeps_the_fixture() -> None:
         "@pytest.mark.parametrize('frozen_clock', [None], indirect=['frozen_clock'])\n"
         "def test_indirect(frozen_clock):\n"
         "    return time.time()\n"
+    )
+    assert guard.clock_findings(source).reads == []
+
+
+def test_closure_called_after_rebinding_reads_the_replacement() -> None:
+    """A nested function called after a rebinding reads the replacement."""
+    source = (
+        "import time\n"
+        "def test_closure_called_late():\n"
+        "    clock = time.time\n"
+        "    def read():\n"
+        "        return clock()\n"
+        "    clock = lambda: 0\n"
+        "    read()\n"
     )
     assert guard.clock_findings(source).reads == []
 
