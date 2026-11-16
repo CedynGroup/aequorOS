@@ -231,7 +231,13 @@ def _destructure(
     """Bind ``target`` to the merge of ``elements``, position by position."""
     if isinstance(target, ast.Name):
         value = _merge_values([visitor.element_value(element) for element in elements])
-        return {target.id: value} if value else {}
+        generators = _merge_generators(
+            [visitor.captured_generators.get(id(element), "") for element in elements]
+        )
+        return {
+            **({target.id: value} if value else {}),
+            **({GENERATOR_KEY + target.id: generators} if generators else {}),
+        }
     if not isinstance(target, (ast.Tuple, ast.List)):
         return {}
     alignments = [

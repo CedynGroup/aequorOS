@@ -758,6 +758,13 @@ UNFROZEN_READS = [
     "    def test_inner():\n"
     "        return time.time()\n"
     "    test_inner()\n",
+    # A generator in a literal iterable reaches the loop target unconsumed.
+    "import time\n"
+    "def test_generator_through_loop_target():\n"
+    "    clock = lambda: 0\n"
+    "    for values in ((clock() for _ in (1,)),):\n"
+    "        clock = time.time\n"
+    "        list(values)\n",
     # The same holds for a comprehension target over a literal iterable.
     "import time\n"
     "def test_comprehension_target_known_elements():\n"
