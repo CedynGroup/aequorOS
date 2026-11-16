@@ -357,6 +357,11 @@ class ClockVisitor(ast.NodeVisitor):
         self.collected_callables: set[int] = set()
         #: The scope each function or lambda is defined in.
         self.callable_owners: dict[int, int] = {}
+        #: The symbol table of each class body.
+        self.class_tables: dict[int, symtable.SymbolTable] = {}
+        #: The functions referenced while a call's callee evaluates, which
+        #: run only after the arguments evaluated.
+        self.deferred_references: list[int] | None = None
         #: The symbol table of each function or lambda.
         self.callable_tables: dict[int, symtable.SymbolTable] = {}
         #: The functions whose calls only create a coroutine or generator.
@@ -501,8 +506,11 @@ class ClockVisitor(ast.NodeVisitor):
 
     def visit_Call(self, node: ast.Call) -> None:
         # The callable resolves after its own expression evaluated, and before
-        # the arguments can rebind anything.
+        # the arguments can rebind anything; the function it names runs only
+        # once the arguments evaluated.
+        outer_references, self.deferred_references = self.deferred_references, []
         self.visit(node.func)
+        called, self.deferred_references = self.deferred_references, outer_references
         for name in self.possible_names(node.func):
             if (name in CLOCK_MEMBERS or name in UTC_NOW_SOURCES) and not self.frozen:
                 self.reads.append((name, node.lineno))
@@ -511,6 +519,8 @@ class ClockVisitor(ast.NodeVisitor):
             self.visit(argument)
         for keyword in node.keywords:
             self.visit(keyword)
+        for function in called:
+            self._reference_callable(function)
 
     def visit_Import(self, node: ast.Import) -> None:
         for alias in node.names:
@@ -608,6 +618,9 @@ class ClockVisitor(ast.NodeVisitor):
 
     def _reference_callable(self, callable_id: int) -> None:
         """Note a point where a nested function's body may run."""
+        if self.deferred_references is not None:
+            self.deferred_references.append(callable_id)
+            return
         known = self.callable_scopes.get(callable_id)
         current = dict(self.aliases)
         for name in self._foreign_names(callable_id):
@@ -1634,6 +1647,7 @@ class ClockVisitor(ast.NodeVisitor):
 
     def visit_ClassDef(self, node: ast.ClassDef) -> None:
         if self.probing:
+            self._replay_class_body(node)
             return
         # A class mark reaches only the tests of a class pytest collects; a
         # helper class called from an unmarked test stays unfrozen.
@@ -1661,6 +1675,7 @@ class ClockVisitor(ast.NodeVisitor):
         previous_table, previous_aliases = self.table, self.aliases
         previous_frozen, previous_deferred = self.frozen, self.deferred_frozen
         self.table = self.child_table(node, node.name)
+        self.class_tables[id(node)] = self.table
         self.aliases = self.aliases.copy()
         # Class-body statements run at import; only the deferred methods run
         # under the class marker. A class statement executes wherever it
@@ -1682,6 +1697,24 @@ class ClockVisitor(ast.NodeVisitor):
         self.deferred_body = previous_body_flag
         self.table, self.aliases = previous_table, previous_aliases
         self.frozen, self.deferred_frozen = previous_frozen, previous_deferred
+        self.aliases[node.name] = ""
+
+    def _replay_class_body(self, node: ast.ClassDef) -> None:
+        """Run a class body again, silently, whenever its enclosing code reruns.
+
+        A class body executes inline, so its expressions read the bindings
+        the rescan brings; the definitions inside it were already recorded.
+        """
+        table = self.class_tables.get(id(node))
+        if table is not None:
+            previous_table, previous_aliases = self.table, self.aliases
+            previous_body_flag = self.deferred_body
+            self.table, self.aliases = table, self.aliases.copy()
+            self.deferred_body = False
+            for statement in node.body:
+                self.visit(statement)
+            self.table, self.aliases = previous_table, previous_aliases
+            self.deferred_body = previous_body_flag
         self.aliases[node.name] = ""
 
     def visit_TypeAlias(self, node: ast.TypeAlias) -> None:

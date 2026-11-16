@@ -980,6 +980,27 @@ UNFROZEN_READS = [
     "    clock = time.time\n"
     "    caller()\n"
     "    clock = lambda: 0\n",
+    # A helper runs once its arguments evaluated, so an argument that rebinds
+    # a closure variable decides what the helper reads.
+    "import time\n"
+    "def test_argument_rebinds_a_closure_variable():\n"
+    "    clock = lambda: 0\n"
+    "    def read(_):\n"
+    "        return clock()\n"
+    "    result = read(clock := time.time)\n"
+    "    clock = lambda: 0\n",
+    # A class body executes whenever the helper that defines it runs.
+    "import time\n"
+    "def test_class_body_in_a_rescanned_callee():\n"
+    "    clock = lambda: 0\n"
+    "    def middle():\n"
+    "        class Value:\n"
+    "            stamp = clock()\n"
+    "    def caller():\n"
+    "        return middle()\n"
+    "    clock = time.time\n"
+    "    caller()\n"
+    "    clock = lambda: 0\n",
     # The same holds for a comprehension target over a literal iterable.
     "import time\n"
     "def test_comprehension_target_known_elements():\n"
