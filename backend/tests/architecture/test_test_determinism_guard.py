@@ -501,6 +501,29 @@ UNFROZEN_READS = [
     "def test_named_expression_alias():\n"
     "    clock = (reader := time.time)\n"
     "    clock()\n",
+    # A handler that does not match leaves the nested exception escaping
+    # under the bindings at its raise point.
+    "import time\n"
+    "def test_nonmatching_inner_handler(flag):\n"
+    "    clock = lambda: 0\n"
+    "    try:\n"
+    "        try:\n"
+    "            clock = time.time\n"
+    "            if flag:\n"
+    "                raise ValueError\n"
+    "            clock = lambda: 0\n"
+    "        except TypeError:\n"
+    "            clock = lambda: 0\n"
+    "    except ValueError:\n"
+    "        clock()\n",
+    # A generator's first iterable evaluates at creation, so its element
+    # binding survives a later rebinding of the alias.
+    "import time\n"
+    "def test_first_iterable_captured_at_creation():\n"
+    "    clock = time.time\n"
+    "    values = (reader() for reader in (clock,))\n"
+    "    clock = lambda: 0\n"
+    "    list(values)\n",
     # The same holds for a comprehension target over a literal iterable.
     "import time\n"
     "def test_comprehension_target_known_elements():\n"

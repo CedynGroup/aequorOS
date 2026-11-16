@@ -228,6 +228,9 @@ class ClockVisitor(ast.NodeVisitor):
         #: being visited, at any nesting depth: an exception may leave the
         #: statement list at any of them.
         self.exception_snapshots: list[dict[str, str]] | None = None
+        #: The binding a generator's first iterable supplies, captured when
+        #: the generator is created: that iterable evaluates eagerly.
+        self.first_iterable_values: dict[int, str] = {}
         #: Whether the visited statements run inside a deferred function or
         # lambda body: Python evaluates function-local variable annotations
         # never, while module and class bodies evaluate theirs at execution.
@@ -689,10 +692,10 @@ class ClockVisitor(ast.NodeVisitor):
             self.visit(statement)
         escaping = self._apply_finally_to_jumps(node, marks, exception_states)
         if outer_snapshots is not None:
-            # A body exception that a handler may stop does not escape; the
-            # handler and else states, and every state of a try without
-            # handlers, reach the enclosing statement after this finally.
-            reaching = escaping if not node.handlers else escaping[len(body_states) :]
+            # A body exception reaches the enclosing statement unless a
+            # catch-all handler stops it, and the handler and else states
+            # always do, each after this finally.
+            reaching = escaping[len(body_states) :] if _catches_everything(node) else escaping
             outer_snapshots.extend(reaching)
 
     def _apply_finally_to_jumps(
@@ -784,7 +787,11 @@ class ClockVisitor(ast.NodeVisitor):
         generator = node.generators[level]
         if level:
             self.visit(generator.iter)
-        self._bind_loop_target(generator.target, _iterable_element_value(generator.iter, self))
+        captured = self.first_iterable_values.get(id(node)) if level == 0 else None
+        self._bind_loop_target(
+            generator.target,
+            captured if captured is not None else _iterable_element_value(generator.iter, self),
+        )
         for condition in generator.ifs:
             self.visit(condition)
             # A false filter rejects the iteration, so its post-condition
@@ -1228,6 +1235,10 @@ class ClockVisitor(ast.NodeVisitor):
         self, node: ast.ListComp | ast.SetComp | ast.DictComp | ast.GeneratorExp
     ) -> None:
         self.visit(node.generators[0].iter)
+        if isinstance(node, ast.GeneratorExp) and not self.probing:
+            self.first_iterable_values[id(node)] = _iterable_element_value(
+                node.generators[0].iter, self
+            )
         previous_table, previous_aliases, previous_enclosing = (
             self.table,
             self.aliases,
@@ -1459,6 +1470,17 @@ class ClockVisitor(ast.NodeVisitor):
                 for statement in node.body:
                     self.visit(statement)
             self.deferred_body = previous_body_flag
+
+
+def _catches_everything(node: ast.Try | ast.TryStar) -> bool:
+    """Whether a handler stops every exception the try body raises."""
+    return any(
+        handler.type is None
+        or (
+            isinstance(handler.type, ast.Name) and handler.type.id in {"Exception", "BaseException"}
+        )
+        for handler in node.handlers
+    )
 
 
 def _takes_frozen_clock(args: ast.arguments) -> bool:
