@@ -743,6 +743,21 @@ UNFROZEN_READS = [
     "    (reader if (reader := time.time) else None)()\n",
     # A mapping pattern captures the literal subject's value for its key.
     "import time\nmatch {'clock': time.time}:\n    case {'clock': clock}:\n        clock()\n",
+    # A direct call through an assignment expression invokes what it bound.
+    "import time\n(time := time.time)()\n",
+    # A dictionary value is captured as it evaluates.
+    "import time\n"
+    "match {'clock': time.time, 'other': (time := None)}:\n"
+    "    case {'clock': clock}:\n"
+    "        clock()\n",
+    # A test-named function nested in another body is not collected.
+    "import pytest\n"
+    "import time\n"
+    "def test_outer():\n"
+    f"    @pytest.mark.freeze_time({INSTANT})\n"
+    "    def test_inner():\n"
+    "        return time.time()\n"
+    "    test_inner()\n",
     # The same holds for a comprehension target over a literal iterable.
     "import time\n"
     "def test_comprehension_target_known_elements():\n"

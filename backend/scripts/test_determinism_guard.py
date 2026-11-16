@@ -412,7 +412,11 @@ class ClockVisitor(ast.NodeVisitor):
             for operand in node.values:
                 yield from self.possible_names(operand)
         elif isinstance(node, ast.NamedExpr):
-            yield from self.possible_names(node.value)
+            result = self.walrus_results.get(id(node))
+            if result is None:
+                yield from self.possible_names(node.value)
+            else:
+                yield from _alternatives(result)
         else:
             yield ""
 
@@ -1011,6 +1015,7 @@ class ClockVisitor(ast.NodeVisitor):
             if key is not None:
                 self.visit(key)
             self.visit(value)
+            self.captured_elements[id(value)] = self.qualified(value)
 
     def _scan_comprehension_pass(
         self,
@@ -1409,8 +1414,10 @@ class ClockVisitor(ast.NodeVisitor):
             return
         # A mark or a fixture parameter only reaches what pytest manages: the
         # collected tests and the registered fixtures, not their helpers.
-        collected = node.name.startswith("test")
-        fixture = self._is_fixture(node.decorator_list)
+        # A function nested in another body is neither collected nor
+        # registered.
+        collected = node.name.startswith("test") and not self.deferred_body
+        fixture = self._is_fixture(node.decorator_list) and not self.deferred_body
         own = (self._decorator_freezes(node.decorator_list) and collected and not fixture) or (
             (collected or fixture)
             and _takes_frozen_clock(node.args)
