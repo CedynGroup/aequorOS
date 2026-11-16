@@ -561,6 +561,16 @@ UNFROZEN_READS = [
     "    clock = lambda: 0\n"
     "    list((clock := time.time) for _ in (1,))\n"
     "    clock()\n",
+    # The generator's assigned value resolves under the bindings at
+    # consumption, not at creation.
+    "import time\n"
+    "def test_generator_walrus_value_at_consumption():\n"
+    "    reader = lambda: 0\n"
+    "    clock = lambda: 0\n"
+    "    values = ((clock := reader) for _ in (1,))\n"
+    "    reader = time.time\n"
+    "    list(values)\n"
+    "    clock()\n",
     # The same holds for a comprehension target over a literal iterable.
     "import time\n"
     "def test_comprehension_target_known_elements():\n"
@@ -1009,6 +1019,20 @@ def test_annotated_conftest_marker_does_not_freeze_fixtures() -> None:
         "    return time.time()\n"
     )
     assert guard.clock_findings(source, module_marker_applies=False).reads != []
+
+
+def test_rebinding_discards_the_pending_generator() -> None:
+    """A rebound generator variable no longer carries its assignments."""
+    source = (
+        "import time\n"
+        "def test_discarded():\n"
+        "    clock = lambda: 0\n"
+        "    values = ((clock := time.time) for _ in (1,))\n"
+        "    values = []\n"
+        "    list(values)\n"
+        "    clock()\n"
+    )
+    assert guard.clock_findings(source).reads == []
 
 
 def test_annotated_assignment_scopes_preassign_in_order() -> None:
