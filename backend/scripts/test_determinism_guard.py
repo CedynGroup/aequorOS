@@ -1281,8 +1281,12 @@ class ClockVisitor(ast.NodeVisitor):
         """
         if isinstance(pattern, ast.MatchAs):
             if pattern.name is not None:
-                # A capture, bare or with ``as``, holds the subject itself.
+                # A capture, bare or with ``as``, holds the subject itself,
+                # including a generator it is.
                 self.aliases[pattern.name] = subject_value
+                self.aliases[GENERATOR_KEY + pattern.name] = (
+                    self.captured_generators.get(id(subject), "") if subject is not None else ""
+                )
             if pattern.pattern is not None:
                 self._bind_pattern_captures(pattern.pattern, subject_value, subject)
         elif isinstance(pattern, ast.MatchSequence):
@@ -1483,6 +1487,7 @@ class ClockVisitor(ast.NodeVisitor):
         # helper class called from an unmarked test stays unfrozen.
         own = (
             node.name.startswith("Test")
+            and self.collectable_scope
             and not self.in_function_body
             and (
                 self._decorator_freezes(node.decorator_list)

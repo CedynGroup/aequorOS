@@ -786,6 +786,22 @@ UNFROZEN_READS = [
     f"    @pytest.mark.freeze_time({INSTANT})\n"
     "    def test_read(self):\n"
     "        return time.time()\n",
+    # A generator in a matched sequence reaches the capture unconsumed.
+    "import time\n"
+    "def test_generator_through_match_capture():\n"
+    "    clock = lambda: 0\n"
+    "    match ((clock() for _ in (1,)),):\n"
+    "        case (values,):\n"
+    "            clock = time.time\n"
+    "            list(values)\n",
+    # A marked collected class nested in a helper class is not collected.
+    "import pytest\n"
+    "import time\n"
+    "class Helper:\n"
+    f"    @pytest.mark.freeze_time({INSTANT})\n"
+    "    class TestNested:\n"
+    "        def test_read(self):\n"
+    "            return time.time()\n",
     # The same holds for a comprehension target over a literal iterable.
     "import time\n"
     "def test_comprehension_target_known_elements():\n"
