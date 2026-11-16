@@ -435,6 +435,22 @@ UNFROZEN_READS = [
     "        clock = lambda: 0\n"
     "    finally:\n"
     "        clock()\n",
+    # An exception raised in the else block runs the finally block under the
+    # bindings at the raise point.
+    "import time\n"
+    "def test_raise_in_else_through_finally(flag):\n"
+    "    clock = lambda: 0\n"
+    "    try:\n"
+    "        pass\n"
+    "    except ValueError:\n"
+    "        pass\n"
+    "    else:\n"
+    "        clock = time.time\n"
+    "        if flag:\n"
+    "            raise ValueError\n"
+    "        clock = lambda: 0\n"
+    "    finally:\n"
+    "        clock()\n",
     # The same holds for a comprehension target over a literal iterable.
     "import time\n"
     "def test_comprehension_target_known_elements():\n"
@@ -859,6 +875,30 @@ def test_filters_rerun_before_each_comprehension_element() -> None:
         "    list(values)\n",
     ):
         assert guard.clock_findings(source).reads == []
+
+
+def test_statement_target_scopes_precede_the_value_scopes() -> None:
+    """A statement lists its target scopes before its value's."""
+    for source in (
+        "obj = {}\nobj[lambda: lambda: None] = lambda: None\n",
+        "obj = {}\nobj[lambda: lambda: None] += lambda: None\n",
+        "obj = {}\nobj[lambda: lambda: None]: (lambda: None) = lambda: None\n",
+        "obj = {}\nobj[lambda: lambda: None] = obj[lambda: None] = lambda: None\n",
+    ):
+        assert guard.clock_findings(source).reads == []
+
+
+def test_annotated_conftest_marker_does_not_freeze_fixtures() -> None:
+    """Annotating ``pytestmark`` does not make a conftest marker apply."""
+    source = (
+        "import pytest\n"
+        "import time\n"
+        f"pytestmark: object = pytest.mark.freeze_time({INSTANT})\n"
+        "@pytest.fixture\n"
+        "def stamp():\n"
+        "    return time.time()\n"
+    )
+    assert guard.clock_findings(source, module_marker_applies=False).reads != []
 
 
 def test_annotated_assignment_scopes_preassign_in_order() -> None:

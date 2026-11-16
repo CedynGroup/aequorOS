@@ -371,7 +371,20 @@ class ClockVisitor(ast.NodeVisitor):
         if isinstance(node.ctx, (ast.Store, ast.Del)):
             self.aliases[node.id] = ""
 
+    def _preassign_targets_before(self, targets: list[ast.expr], *later: ast.expr | None) -> None:
+        """Reserve target scopes ahead of the expressions that follow them.
+
+        The symbol table lists a statement's target scopes before its value's,
+        while the value evaluates first.
+        """
+        if self.probing:
+            return
+        for expression in (*targets, *later):
+            if expression is not None:
+                self._preassign_expression_tables(expression)
+
     def visit_Assign(self, node: ast.Assign) -> None:
+        self._preassign_targets_before(node.targets, node.value)
         self.visit(node.value)
         name = self.qualified(node.value)
         for target in node.targets:
@@ -387,14 +400,11 @@ class ClockVisitor(ast.NodeVisitor):
                     self.deferred_frozen = True
 
     def visit_AnnAssign(self, node: ast.AnnAssign) -> None:
-        if not self.probing:
-            # The symbol table lists the annotation's scopes before the
-            # value's, while the value evaluates first; a postponed or
-            # function-local annotation has no scope at all.
-            if not self.postponed and not self.deferred_body:
-                self._preassign_expression_tables(node.annotation)
-            if node.value is not None:
-                self._preassign_expression_tables(node.value)
+        # The symbol table lists the target's scopes, then the annotation's,
+        # then the value's; a postponed or function-local annotation has no
+        # scope at all.
+        annotation = node.annotation if not self.postponed and not self.deferred_body else None
+        self._preassign_targets_before([node.target], annotation, node.value)
         # Python assigns the value before evaluating the annotation, so the
         # annotation's bindings cannot mask the value's own reads.
         if node.value is not None:
@@ -403,6 +413,7 @@ class ClockVisitor(ast.NodeVisitor):
             if (
                 isinstance(node.target, ast.Name)
                 and node.target.id == "pytestmark"
+                and (self.module_marker_applies or self.class_depth)
                 and self._carries_freeze_marker(node.value)
             ):
                 self.deferred_frozen = True
@@ -412,6 +423,7 @@ class ClockVisitor(ast.NodeVisitor):
             self.visit(node.annotation)
 
     def visit_AugAssign(self, node: ast.AugAssign) -> None:
+        self._preassign_targets_before([node.target], node.value)
         self.visit(node.value)
         self.bind(node.target)
 
@@ -652,6 +664,7 @@ class ClockVisitor(ast.NodeVisitor):
             self.aliases.update(after_body)
             for statement in node.orelse:
                 self.visit(statement)
+                exception_states.append(dict(self.aliases))
             states.append(dict(self.aliases))
         else:
             states.append(after_body)
