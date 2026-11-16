@@ -694,6 +694,20 @@ UNFROZEN_READS = [
     "    return time.time()\n",
     # A starred sequence pattern keeps the fixed positions around the star.
     "import time\nmatch (time.time,):\n    case (clock, *rest):\n        clock()\n",
+    # A helper is not injected with fixtures, whatever its parameter is named.
+    "import time\ndef helper(frozen_clock):\n    return time.time()\n",
+    # Class and module parametrization replace the fixture too.
+    "import pytest\n"
+    "import time\n"
+    "@pytest.mark.parametrize('frozen_clock', [None])\n"
+    "class TestRead:\n"
+    "    def test_read(self, frozen_clock):\n"
+    "        return time.time()\n",
+    "import pytest\n"
+    "import time\n"
+    "pytestmark = pytest.mark.parametrize('frozen_clock', [None])\n"
+    "def test_read(frozen_clock):\n"
+    "    return time.time()\n",
     # The same holds for a comprehension target over a literal iterable.
     "import time\n"
     "def test_comprehension_target_known_elements():\n"

@@ -330,6 +330,9 @@ class ClockVisitor(ast.NodeVisitor):
         #: Whether each generator's body runs under a freeze: the freeze
         #: active where it is consumed.
         self.generator_frozen: dict[int, bool] = {}
+        #: Whether an enclosing class or module parametrizes ``frozen_clock``
+        #: directly for the tests inside it.
+        self.inherited_parametrization = False
         #: What each assignment expression evaluated to, before its target
         #: was bound.
         self.walrus_results: dict[int, str] = {}
@@ -1359,14 +1362,15 @@ class ClockVisitor(ast.NodeVisitor):
             # The silent loop pass only collects bindings; the real pass
             # records the definitions.
             return
-        # A mark only reaches the items pytest collects, so a marked helper or
-        # fixture is not frozen by it.
-        own = (
-            self._decorator_freezes(node.decorator_list)
-            and node.name.startswith("test")
-            and not self._is_fixture(node.decorator_list)
-        ) or (
-            _takes_frozen_clock(node.args) and not self._parametrizes_directly(node.decorator_list)
+        # A mark or a fixture parameter only reaches what pytest manages: the
+        # collected tests and the registered fixtures, not their helpers.
+        collected = node.name.startswith("test")
+        fixture = self._is_fixture(node.decorator_list)
+        own = (self._decorator_freezes(node.decorator_list) and collected and not fixture) or (
+            (collected or fixture)
+            and _takes_frozen_clock(node.args)
+            and not self.inherited_parametrization
+            and not self._parametrizes_directly(node.decorator_list)
         )
         for decorator in node.decorator_list:
             self.visit(decorator)
@@ -1426,8 +1430,14 @@ class ClockVisitor(ast.NodeVisitor):
         previous_body_flag = self.deferred_body
         self.deferred_body = False
         self.deferred_frozen = self.deferred_frozen or own
+        previous_parametrization = self.inherited_parametrization
+        self.inherited_parametrization = (
+            previous_parametrization
+            or self._scope_parametrizes_directly(node.body, node.decorator_list)
+        )
         for statement in node.body:
             self.visit(statement)
+        self.inherited_parametrization = previous_parametrization
         self.deferred_body = previous_body_flag
         self.table, self.aliases = previous_table, previous_aliases
         self.frozen, self.deferred_frozen = previous_frozen, previous_deferred
@@ -1646,8 +1656,8 @@ class ClockVisitor(ast.NodeVisitor):
             for decorator in decorators
         )
 
-    def _scope_marker_freezes(self, statements: list[ast.stmt]) -> bool:
-        """Whether the scope's effective ``pytestmark`` carries a freeze marker.
+    def _effective_pytestmark(self, statements: list[ast.stmt]) -> ast.expr | None:
+        """The value of the scope's last ``pytestmark`` assignment.
 
         Markers govern test execution regardless of where they appear, so a
         scope's ``pytestmark`` is resolved before its functions are recorded;
@@ -1665,7 +1675,26 @@ class ClockVisitor(ast.NodeVisitor):
                 isinstance(target, ast.Name) and target.id == "pytestmark" for target in targets
             ):
                 effective = value
+        return effective
+
+    def _scope_marker_freezes(self, statements: list[ast.stmt]) -> bool:
+        """Whether the scope's effective ``pytestmark`` carries a freeze marker."""
+        effective = self._effective_pytestmark(statements)
         return effective is not None and self._carries_freeze_marker(effective)
+
+    def _scope_parametrizes_directly(
+        self, statements: list[ast.stmt], decorators: list[ast.expr]
+    ) -> bool:
+        """Whether a scope's marks parametrize ``frozen_clock`` for the tests inside."""
+        effective = self._effective_pytestmark(statements)
+        marks = (
+            list(effective.elts)
+            if isinstance(effective, (ast.List, ast.Tuple, ast.Set))
+            else [effective]
+            if effective is not None
+            else []
+        )
+        return self._parametrizes_directly([*decorators, *marks])
 
     def _carries_freeze_marker(self, value: ast.expr) -> bool:
         if isinstance(value, (ast.List, ast.Tuple, ast.Set)):
@@ -1754,6 +1783,7 @@ class ClockVisitor(ast.NodeVisitor):
                     self.postponed = True
         if self.module_marker_applies and self._scope_marker_freezes(tree.body):
             self.deferred_frozen = True
+        self.inherited_parametrization = self._scope_parametrizes_directly(tree.body, [])
         self.visit(tree)
         self._scan_deferred_functions()
         # Repeated passes and nested levels can record the same read twice;
