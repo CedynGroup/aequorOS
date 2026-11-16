@@ -422,7 +422,7 @@ class ClockVisitor(ast.NodeVisitor):
         """Scan a generator's body under the bindings at its consumption."""
         current = dict(self.aliases)
         known = self.generator_scopes.get(generator)
-        frozen = self.frozen or self.deferred_frozen
+        frozen = self.frozen
         if known is None or generator not in self.consumed_generators:
             self.generator_scopes[generator] = current
             self.generator_frozen[generator] = frozen
@@ -482,17 +482,26 @@ class ClockVisitor(ast.NodeVisitor):
 
     def visit_Assign(self, node: ast.Assign) -> None:
         self._preassign_targets_before(node.targets, node.value)
+        # Copying a generator variable passes the generator on unconsumed.
+        source = node.value.id if isinstance(node.value, ast.Name) else None
+        held = (
+            (self.generator_names[source], self.pending_generators.get(source, []))
+            if source in self.generator_names
+            else None
+        )
         if isinstance(node.value, (ast.Tuple, ast.List)):
             for element in node.value.elts:
                 self.visit(element)
                 self.captured_elements[id(element)] = self.qualified(element)
-        else:
+        elif held is None:
             self._visit_assigned_value(node.value)
         name = self.qualified(node.value)
         for target in node.targets:
             self.bind(target, node.value)
             if isinstance(target, ast.Name):
                 self.aliases[target.id] = name
+                if held is not None:
+                    self.generator_names[target.id], self.pending_generators[target.id] = held
             self._hold_generator(target, node.value)
         self.captured_elements.clear()
 
@@ -1347,7 +1356,7 @@ class ClockVisitor(ast.NodeVisitor):
             self.generator_scopes[id(node)] = dict(previous_aliases)
             if id(node) != self.assigned_generator:
                 # Consumed in place, under the freeze active here.
-                self.generator_frozen[id(node)] = self.frozen or self.deferred_frozen
+                self.generator_frozen[id(node)] = self.frozen
         self.aliases = self.enclosing.copy()
         self.enclosing = self.aliases
         if not isinstance(node, ast.GeneratorExp) and not self.probing:

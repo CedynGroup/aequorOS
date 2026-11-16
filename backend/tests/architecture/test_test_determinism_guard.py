@@ -590,6 +590,24 @@ UNFROZEN_READS = [
     # A module-level generator consumed before the alias is replaced reads
     # the real clock at import.
     "import time\nclock = time.time\nlist(clock() for _ in (1,))\nclock = lambda: 0\n",
+    # Copying a generator variable keeps it unconsumed: the read happens
+    # where the copy is consumed.
+    "import time\n"
+    "def test_generator_alias_consumed_late():\n"
+    "    clock = lambda: 0\n"
+    "    values = (clock() for _ in (1,))\n"
+    "    alias = values\n"
+    "    clock = time.time\n"
+    "    list(alias)\n",
+    # A ticking travel does not revive the marker freeze for a generator
+    # consumed inside it.
+    "import pytest\n"
+    "import time\n"
+    "import time_machine\n"
+    f"@pytest.mark.freeze_time({INSTANT})\n"
+    "def test_generator_consumed_in_ticking_travel():\n"
+    f"    with time_machine.travel({INSTANT}, tick=True):\n"
+    "        list(time.time() for _ in (1,))\n",
     # The same holds for a comprehension target over a literal iterable.
     "import time\n"
     "def test_comprehension_target_known_elements():\n"
