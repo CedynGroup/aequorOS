@@ -751,7 +751,13 @@ class ClockVisitor(ast.NodeVisitor):
     def visit_NamedExpr(self, node: ast.NamedExpr) -> None:
         self.visit(node.value)
         self.walrus_results[id(node)] = self.qualified(node.value)
+        held_callable = self._held_callable(node.value)
         self.bind(node.target, node.value)
+        if isinstance(node.value, ast.Lambda):
+            self.aliases[CALLABLE_KEY + node.target.id] = str(id(node.value))
+        elif held_callable is not None:
+            # A copy of a function variable passes the function on.
+            self.aliases[CALLABLE_KEY + node.target.id] = held_callable
         if self.exception_snapshots is not None and not self.probing:
             # An exception may surface right after the binding, before the
             # statement that holds the expression completes.
@@ -1962,7 +1968,9 @@ class ClockVisitor(ast.NodeVisitor):
             # enclosing scope's final bindings stay reachable.
             scope = self._merged([scope, enclosing])
         frozen = recorded_frozen
-        if captured:
+        if captured and not _runs_later(node):
+            # A coroutine or generator body runs at a later await or
+            # iteration, outside whatever freeze its creation was under.
             frozen = (
                 self.generator_frozen
                 if isinstance(node, ast.GeneratorExp)

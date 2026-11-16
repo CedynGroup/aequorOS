@@ -890,6 +890,25 @@ UNFROZEN_READS = [
     "    clock = time.time\n"
     "    second()\n"
     "    clock = lambda: 0\n",
+    # An assignment expression copies a function identity too.
+    "import time\n"
+    "def test_function_through_walrus():\n"
+    "    clock = lambda: 0\n"
+    "    def read():\n"
+    "        return clock()\n"
+    "    (alias := read)\n"
+    "    clock = time.time\n"
+    "    alias()\n"
+    "    clock = lambda: 0\n",
+    # A coroutine created under a travel runs at its await, outside it.
+    "import time\n"
+    "import time_machine\n"
+    "async def test_coroutine_awaited_outside_travel():\n"
+    "    async def read():\n"
+    "        return time.time()\n"
+    f"    with time_machine.travel({INSTANT}, tick=False):\n"
+    "        pending = read()\n"
+    "    await pending\n",
     # The same holds for a comprehension target over a literal iterable.
     "import time\n"
     "def test_comprehension_target_known_elements():\n"
