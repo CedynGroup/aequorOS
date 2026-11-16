@@ -199,7 +199,9 @@ def _target_names(target: ast.expr) -> list[str]:
     return []
 
 
-def _aligned(targets: list[ast.expr], values: list[ast.expr]) -> list[ast.expr | None] | None:
+def _aligned(
+    targets: Sequence[ast.AST], values: Sequence[ast.expr]
+) -> list[ast.expr | None] | None:
     """The value each target position receives, or ``None`` if unknowable.
 
     A starred target absorbs the surplus, so the fixed positions around it
@@ -208,7 +210,12 @@ def _aligned(targets: list[ast.expr], values: list[ast.expr]) -> list[ast.expr |
     if any(isinstance(value, ast.Starred) for value in values):
         return None
     starred = next(
-        (index for index, target in enumerate(targets) if isinstance(target, ast.Starred)), None
+        (
+            index
+            for index, target in enumerate(targets)
+            if isinstance(target, (ast.Starred, ast.MatchStar))
+        ),
+        None,
     )
     if starred is None:
         return list(values) if len(values) == len(targets) else None
@@ -1188,10 +1195,8 @@ class ClockVisitor(ast.NodeVisitor):
     def _bind_sequence_captures(self, pattern: ast.MatchSequence, subject: ast.expr | None) -> None:
         """Bind each capture of a sequence pattern to its matched element."""
         elements = (
-            subject.elts
+            _aligned(pattern.patterns, subject.elts)
             if isinstance(subject, (ast.Tuple, ast.List))
-            and len(subject.elts) == len(pattern.patterns)
-            and not any(isinstance(item, ast.MatchStar) for item in pattern.patterns)
             else None
         )
         for index, item in enumerate(pattern.patterns):
@@ -1619,9 +1624,7 @@ class ClockVisitor(ast.NodeVisitor):
             indirect = next(
                 (keyword.value for keyword in decorator.keywords if keyword.arg == "indirect"), None
             )
-            if FROZEN_CLOCK in names and (
-                indirect is None or (isinstance(indirect, ast.Constant) and not indirect.value)
-            ):
+            if FROZEN_CLOCK in names and not _indirect_covers(indirect):
                 return True
         return False
 
@@ -1836,6 +1839,21 @@ def _catches_everything(node: ast.Try | ast.TryStar) -> bool:
         or (isinstance(handler.type, ast.Name) and handler.type.id == "BaseException")
         for handler in node.handlers
     )
+
+
+def _indirect_covers(indirect: ast.expr | None) -> bool:
+    """Whether a parametrize ``indirect`` argument routes ``frozen_clock`` to the fixture."""
+    if indirect is None:
+        return False
+    if isinstance(indirect, ast.Constant):
+        return bool(indirect.value)
+    if isinstance(indirect, (ast.List, ast.Tuple)):
+        return any(
+            isinstance(element, ast.Constant) and element.value == FROZEN_CLOCK
+            for element in indirect.elts
+        )
+    # An argument that cannot be read statically keeps the exemption.
+    return True
 
 
 def _parametrized_names(decorator: ast.Call) -> list[str]:

@@ -686,6 +686,14 @@ UNFROZEN_READS = [
     "    return time.time()\n",
     # Starred unpacking keeps the fixed positions around the star.
     "import time\nclock, *rest = (time.time,)\nclock()\n",
+    # A sequence-valued indirect that omits the argument leaves it direct.
+    "import pytest\n"
+    "import time\n"
+    "@pytest.mark.parametrize('frozen_clock', [None], indirect=[])\n"
+    "def test_empty_indirect(frozen_clock):\n"
+    "    return time.time()\n",
+    # A starred sequence pattern keeps the fixed positions around the star.
+    "import time\nmatch (time.time,):\n    case (clock, *rest):\n        clock()\n",
     # The same holds for a comprehension target over a literal iterable.
     "import time\n"
     "def test_comprehension_target_known_elements():\n"
@@ -1210,7 +1218,7 @@ def test_indirect_parametrization_keeps_the_fixture() -> None:
     source = (
         "import pytest\n"
         "import time\n"
-        "@pytest.mark.parametrize('frozen_clock', [None], indirect=True)\n"
+        "@pytest.mark.parametrize('frozen_clock', [None], indirect=['frozen_clock'])\n"
         "def test_indirect(frozen_clock):\n"
         "    return time.time()\n"
     )
