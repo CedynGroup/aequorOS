@@ -811,6 +811,19 @@ UNFROZEN_READS = [
     "        return clock()\n"
     "    read()\n"
     "    clock = lambda: 0\n",
+    # A coroutine's body runs at its await, not where it is created.
+    "import time\n"
+    "async def test_coroutine_awaited_late():\n"
+    "    clock = lambda: 0\n"
+    "    async def read():\n"
+    "        return clock()\n"
+    "    pending = read()\n"
+    "    clock = time.time\n"
+    "    await pending\n",
+    # A defaulted positional-only parameter shifts the defaults.
+    "import time\n"
+    "def test_defaults_with_positional_only(a=None, /, frozen_clock=None, other=None):\n"
+    "    return time.time()\n",
     # The same holds for a comprehension target over a literal iterable.
     "import time\n"
     "def test_comprehension_target_known_elements():\n"

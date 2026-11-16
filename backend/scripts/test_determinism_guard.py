@@ -1921,7 +1921,13 @@ class ClockVisitor(ast.NodeVisitor):
                 else self.callable_scopes
             )
             captured = id(node) in scopes
-            self.aliases = (scopes[id(node)] if captured else enclosing).copy()
+            scope = scopes[id(node)] if captured else enclosing
+            if captured and isinstance(node, ast.AsyncFunctionDef):
+                # Referencing a coroutine function only creates the coroutine;
+                # its body runs at a later await, so the enclosing scope's
+                # final bindings stay reachable.
+                scope = self._merged([scope, enclosing])
+            self.aliases = scope.copy()
             frozen = (
                 self.generator_frozen.get(id(node), recorded_frozen)
                 if captured
@@ -2039,8 +2045,12 @@ def _takes_frozen_clock(args: ast.arguments) -> bool:
     Pytest requests a fixture for each positional-or-keyword and keyword-only
     parameter that has no default.
     """
-    positional = args.args
-    undefaulted = positional[: len(positional) - len(args.defaults)]
+    positional = [*args.posonlyargs, *args.args]
+    undefaulted = [
+        argument
+        for argument in positional[: len(positional) - len(args.defaults)]
+        if argument in args.args
+    ]
     required_keyword_only = [
         argument
         for argument, default in zip(args.kwonlyargs, args.kw_defaults, strict=True)
