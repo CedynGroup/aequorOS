@@ -147,6 +147,19 @@ def _loop_has_break(statements: list[ast.stmt]) -> bool:
     return False
 
 
+#: Prefix of the alias-map keys that record which generators a name may hold,
+#: so the branch, loop and exception joins merge them with the bindings.
+GENERATOR_KEY = "\x00generator:"
+
+
+def _merge_generators(values: list[str]) -> str:
+    """Every generator a name may hold across the reachable paths."""
+    held = dict.fromkeys(
+        alternative for value in values for alternative in _alternatives(value) if alternative
+    )
+    return AMBIGUOUS.join(held)
+
+
 def _merge_values(values: list[str]) -> str:
     """The binding a read may see across the reachable paths of a branch or loop.
 
@@ -280,10 +293,8 @@ class ClockVisitor(ast.NodeVisitor):
         self.assigned_generator: int | None = None
         #: The bindings that generator's assignment expressions may make.
         self.generator_bindings: list[GeneratorBinding] = []
-        #: Per generator variable, the bindings consuming it may make.
-        self.pending_generators: dict[str, list[GeneratorBinding]] = {}
-        #: Per generator variable, the generator it holds.
-        self.generator_names: dict[str, int] = {}
+        #: Per generator, the bindings consuming it may make.
+        self.generator_effects: dict[int, list[GeneratorBinding]] = {}
         #: The enclosing bindings each generator's body is scanned under: the
         #: bindings at creation until the generator is consumed, then those
         #: at its consumption.
@@ -293,6 +304,9 @@ class ClockVisitor(ast.NodeVisitor):
         #: Whether each generator's body runs under a freeze: the freeze
         #: active where it is consumed.
         self.generator_frozen: dict[int, bool] = {}
+        #: What each assignment expression evaluated to, before its target
+        #: was bound.
+        self.walrus_results: dict[int, str] = {}
         #: Bindings of the elements of the unpacked value being evaluated,
         #: captured as each element evaluates.
         self.captured_elements: dict[int, str] = {}
@@ -338,8 +352,10 @@ class ClockVisitor(ast.NodeVisitor):
             # as ``fake_clock or datetime.now`` may still read the wall clock.
             return _merge_values([self.qualified(operand) for operand in node.values])
         if isinstance(node, ast.NamedExpr):
-            # An assignment expression yields the value it binds.
-            return self.qualified(node.value)
+            # An assignment expression yields the value it evaluated, even if
+            # its target replaced the alias that value was read through.
+            result = self.walrus_results.get(id(node))
+            return result if result is not None else self.qualified(node.value)
         return ""
 
     def possible_names(self, node: ast.expr) -> Iterator[str]:
@@ -429,12 +445,13 @@ class ClockVisitor(ast.NodeVisitor):
     def bindings(self, target: ast.expr, value: ast.expr | None = None) -> dict[str, str]:
         if isinstance(target, ast.Name):
             # Rebinding the name discards the generator it held.
-            self.pending_generators.pop(target.id, None)
-            self.generator_names.pop(target.id, None)
             if value is None:
-                return {target.id: ""}
+                return {target.id: "", GENERATOR_KEY + target.id: ""}
             captured = self.captured_elements.get(id(value))
-            return {target.id: captured if captured is not None else self.qualified(value)}
+            return {
+                target.id: captured if captured is not None else self.qualified(value),
+                GENERATOR_KEY + target.id: "",
+            }
         if isinstance(target, (ast.Tuple, ast.List)):
             values = value.elts if isinstance(value, (ast.Tuple, ast.List)) else []
             result: dict[str, str] = {}
@@ -454,11 +471,13 @@ class ClockVisitor(ast.NodeVisitor):
     def visit_Name(self, node: ast.Name) -> None:
         if isinstance(node.ctx, (ast.Store, ast.Del)):
             self.aliases[node.id] = ""
-            self.pending_generators.pop(node.id, None)
-        elif node.id in self.pending_generators:
-            self._apply_generator_bindings(self.pending_generators[node.id])
-        if node.id in self.generator_names and isinstance(node.ctx, ast.Load):
-            self._consume_generator(self.generator_names[node.id])
+            self.aliases[GENERATOR_KEY + node.id] = ""
+            return
+        for held in _alternatives(self.aliases.get(GENERATOR_KEY + node.id, "")):
+            if held:
+                generator = int(held)
+                self._apply_generator_bindings(self.generator_effects.get(generator, []))
+                self._consume_generator(generator)
 
     def _consume_generator(self, generator: int) -> None:
         """Scan a generator's body under the bindings at its consumption."""
@@ -510,26 +529,21 @@ class ClockVisitor(ast.NodeVisitor):
         self.visit(value)
         self.assigned_generator = None
 
-    def _held_generator(self, value: ast.expr) -> tuple[int, list[GeneratorBinding]] | None:
-        """The generator a plain variable copy passes on unconsumed."""
-        if isinstance(value, ast.Name) and value.id in self.generator_names:
-            return self.generator_names[value.id], self.pending_generators.get(value.id, [])
+    def _held_generator(self, value: ast.expr) -> str | None:
+        """The generators a plain variable copy passes on unconsumed."""
+        if isinstance(value, ast.Name):
+            return self.aliases.get(GENERATOR_KEY + value.id) or None
         return None
 
-    def _hold_generator(
-        self,
-        target: ast.expr,
-        value: ast.expr,
-        held: tuple[int, list[GeneratorBinding]] | None = None,
-    ) -> None:
+    def _hold_generator(self, target: ast.expr, value: ast.expr, held: str | None = None) -> None:
         """Keep a generator's effects for where its variable is consumed."""
         if not isinstance(target, ast.Name):
             return
         if held is not None:
-            self.generator_names[target.id], self.pending_generators[target.id] = held
+            self.aliases[GENERATOR_KEY + target.id] = held
         elif isinstance(value, ast.GeneratorExp):
-            self.pending_generators[target.id] = self.generator_bindings
-            self.generator_names[target.id] = id(value)
+            self.generator_effects[id(value)] = self.generator_bindings
+            self.aliases[GENERATOR_KEY + target.id] = str(id(value))
 
     def _preassign_targets_before(self, targets: list[ast.expr], *later: ast.expr | None) -> None:
         """Reserve target scopes ahead of the expressions that follow them.
@@ -591,6 +605,7 @@ class ClockVisitor(ast.NodeVisitor):
 
     def visit_NamedExpr(self, node: ast.NamedExpr) -> None:
         self.visit(node.value)
+        self.walrus_results[id(node)] = self.qualified(node.value)
         self.bind(node.target, node.value)
         if self.exception_snapshots is not None and not self.probing:
             # An exception may surface right after the binding, before the
@@ -619,7 +634,12 @@ class ClockVisitor(ast.NodeVisitor):
         keys: set[str] = set()
         for state in states:
             keys.update(state)
-        merged = {key: _merge_values([state.get(key, "") for state in states]) for key in keys}
+        merged = {
+            key: (_merge_generators if key.startswith(GENERATOR_KEY) else _merge_values)(
+                [state.get(key, "") for state in states]
+            )
+            for key in keys
+        }
         self.aliases.clear()
         self.aliases.update(merged)
 
@@ -1641,14 +1661,13 @@ class ClockVisitor(ast.NodeVisitor):
                 name = symbol.get_name()
                 if symbol.is_local():
                     self.aliases[name] = ""
+                    self.aliases[GENERATOR_KEY + name] = ""
                 elif symbol.is_global() and not (captured and name in self.aliases):
                     # A captured generator scope already holds the module
                     # bindings at consumption.
                     self.aliases[name] = self.module_aliases.get(name, "")
             self.aliases.update(self.default_bindings.get(id(node), {}))
             self.enclosing = self.aliases
-            self.pending_generators = {}
-            self.generator_names = {}
             self.return_states = []
             self.frozen = frozen
             self.deferred_frozen = frozen

@@ -643,6 +643,19 @@ UNFROZEN_READS = [
     "    values = ((clock := reader) for first in (time.time,) for reader in (first,))\n"
     "    list(values)\n"
     "    clock()\n",
+    # An assignment expression's result is what it evaluated, not what its
+    # target replaced.
+    "import time\nclock = (time := time.time)\nclock()\n",
+    # A generator created on one branch stays reachable after the join.
+    "import time\n"
+    "def test_conditional_generator(flag):\n"
+    "    clock = lambda: 0\n"
+    "    if flag:\n"
+    "        values = (clock() for _ in (1,))\n"
+    "    else:\n"
+    "        values = []\n"
+    "    clock = time.time\n"
+    "    list(values)\n",
     # The same holds for a comprehension target over a literal iterable.
     "import time\n"
     "def test_comprehension_target_known_elements():\n"
