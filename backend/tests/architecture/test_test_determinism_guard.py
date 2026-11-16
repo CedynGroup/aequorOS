@@ -412,6 +412,17 @@ UNFROZEN_READS = [
     f"@pytest.mark.freeze_time({INSTANT})\n"
     "def stamp():\n"
     "    return time.time()\n",
+    # A return crosses the finally block with the bindings at the return.
+    "import time\n"
+    "def test_return_through_finally(flag):\n"
+    "    clock = lambda: 0\n"
+    "    try:\n"
+    "        clock = time.time\n"
+    "        if flag:\n"
+    "            return\n"
+    "        clock = lambda: 0\n"
+    "    finally:\n"
+    "        clock()\n",
     # The same holds for a comprehension target over a literal iterable.
     "import time\n"
     "def test_comprehension_target_known_elements():\n"
@@ -783,6 +794,12 @@ def test_comprehension_target_scopes_precede_the_entry_scopes() -> None:
         "mapping = {(lambda: lambda: None): 1 for _ in [] for obj[lambda: None] in []}\n",
     ):
         assert guard.clock_findings(source).reads == []
+
+
+def test_for_target_scopes_are_consumed_once() -> None:
+    """A statement-level loop target's expression scopes are consumed once."""
+    source = "obj = {}\nfor obj[lambda: None] in (1,):\n    pass\n"
+    assert guard.clock_findings(source).reads == []
 
 
 def test_annotated_assignment_scopes_preassign_in_order() -> None:

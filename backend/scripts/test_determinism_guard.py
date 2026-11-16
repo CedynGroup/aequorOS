@@ -213,6 +213,9 @@ class ClockVisitor(ast.NodeVisitor):
         #: Snapshots of the bindings at each reachable ``continue``, one
         #: list per enclosing loop, innermost last.
         self.continue_states: list[list[dict[str, str]]] = []
+        #: Snapshots of the bindings at each reachable ``return`` of the
+        #: visited function body.
+        self.return_states: list[dict[str, str]] = []
         self.probing = False
         #: Whether the visited statements run inside a deferred function or
         # lambda body: Python evaluates function-local variable annotations
@@ -451,7 +454,7 @@ class ClockVisitor(ast.NodeVisitor):
         # Zero iterations leave the target holding its incoming value.
         pre_target = dict(self.aliases)
         target_value = _iterable_element_value(node.iter, self)
-        self._bind_loop_target(node.target, target_value)
+        self._bind_targets_silently([(node.target, target_value)])
         self._visit_loop(node, pre_target=pre_target, target=node.target, target_value=target_value)
 
     visit_AsyncFor = visit_For
@@ -581,11 +584,26 @@ class ClockVisitor(ast.NodeVisitor):
         if self.continue_states:
             self.continue_states[-1].append(dict(self.aliases))
 
+    def visit_Return(self, node: ast.Return) -> None:
+        if node.value is not None:
+            self.visit(node.value)
+        # The silent passes re-visit the same returns, so only the reporting
+        # pass records them.
+        if not self.probing:
+            self.return_states.append(dict(self.aliases))
+
+    def _jump_stacks(self) -> list[list[dict[str, str]]]:
+        """The state lists a jump out of the visited ``try`` appends to."""
+        return [
+            self.break_states[-1] if self.break_states else [],
+            self.continue_states[-1] if self.continue_states else [],
+            self.return_states,
+        ]
+
     def visit_Try(self, node: ast.Try | ast.TryStar) -> None:
         before = dict(self.aliases)
         # Only jumps recorded from here on cross this try's finally.
-        break_mark = len(self.break_states[-1]) if self.break_states else 0
-        continue_mark = len(self.continue_states[-1]) if self.continue_states else 0
+        marks = [len(stack) for stack in self._jump_stacks()]
         # An exception may surface at any point of the body, so collect the
         # state after each statement for the handlers to start from.
         prefixes = [before]
@@ -621,43 +639,35 @@ class ClockVisitor(ast.NodeVisitor):
         self._merge_states(states)
         for statement in node.finalbody:
             self.visit(statement)
-        self._apply_finally_to_jumps(node, break_mark, continue_mark)
+        self._apply_finally_to_jumps(node, marks)
 
-    def _apply_finally_to_jumps(
-        self, node: ast.Try | ast.TryStar, break_mark: int, continue_mark: int
-    ) -> None:
+    def _apply_finally_to_jumps(self, node: ast.Try | ast.TryStar, marks: list[int]) -> None:
         """Fold the finally block's assignments into pending jump states."""
         if not node.finalbody:
             return
-        pending_breaks = self.break_states[-1][break_mark:] if self.break_states else []
-        pending_continues = self.continue_states[-1][continue_mark:] if self.continue_states else []
-        if not pending_breaks and not pending_continues:
+        stacks = self._jump_stacks()
+        pending = [stack[mark:] for stack, mark in zip(stacks, marks, strict=True)]
+        if not any(pending):
             return
-        # A break or continue crosses the finally block, so each pending
-        # jump state must include the finally's assignments. The re-visits
-        # run silently to spare the consumed tables; a read that only the
-        # jump path reaches is new evidence and stays, while reads the
-        # normal pass already recorded are dropped as duplicates.
+        # A break, continue or return crosses the finally block, so each
+        # pending jump state must include the finally's assignments. The
+        # re-visits run silently to spare the consumed tables; a read that
+        # only the jump path reaches is new evidence and stays, while reads
+        # the normal pass already recorded are dropped as duplicates.
         normal_state = dict(self.aliases)
         known_reads = set(self.reads)
         read_mark = len(self.reads)
         outer_probing = self.probing
         self.probing = True
-        transformed_breaks: list[dict[str, str]] = []
-        transformed_continues: list[dict[str, str]] = []
+        transformed: list[list[dict[str, str]]] = [[] for _ in pending]
         try:
-            for state in pending_breaks:
-                self.aliases.clear()
-                self.aliases.update(state)
-                for statement in node.finalbody:
-                    self.visit(statement)
-                transformed_breaks.append(dict(self.aliases))
-            for state in pending_continues:
-                self.aliases.clear()
-                self.aliases.update(state)
-                for statement in node.finalbody:
-                    self.visit(statement)
-                transformed_continues.append(dict(self.aliases))
+            for states, folded in zip(pending, transformed, strict=True):
+                for state in states:
+                    self.aliases.clear()
+                    self.aliases.update(state)
+                    for statement in node.finalbody:
+                        self.visit(statement)
+                    folded.append(dict(self.aliases))
         finally:
             self.probing = outer_probing
             fresh = [read for read in self.reads[read_mark:] if read not in known_reads]
@@ -665,10 +675,8 @@ class ClockVisitor(ast.NodeVisitor):
             self.reads.extend(dict.fromkeys(fresh))
             self.aliases.clear()
             self.aliases.update(normal_state)
-        if self.break_states:
-            self.break_states[-1][break_mark:] = transformed_breaks
-        if self.continue_states:
-            self.continue_states[-1][continue_mark:] = transformed_continues
+        for stack, mark, folded in zip(stacks, marks, transformed, strict=True):
+            stack[mark:] = folded
 
     visit_TryStar = visit_Try
 
@@ -1097,20 +1105,16 @@ class ClockVisitor(ast.NodeVisitor):
         self._preassign_expression_tables(node.value)
         self._preassign_expression_tables(node.key)
 
-    def _bind_comprehension_targets(
-        self, node: ast.ListComp | ast.SetComp | ast.DictComp | ast.GeneratorExp
-    ) -> None:
-        """Bind every generator target without consuming target scopes.
+    def _bind_targets_silently(self, targets: list[tuple[ast.expr, str]]) -> None:
+        """Bind loop or comprehension targets without consuming target scopes.
 
         The scan visits each target again, and a scope in a target
         expression is consumed by that visit alone.
         """
         outer_probing, self.probing = self.probing, True
         try:
-            for generator in node.generators:
-                self._bind_loop_target(
-                    generator.target, _iterable_element_value(generator.iter, self)
-                )
+            for target, value in targets:
+                self._bind_loop_target(target, value)
         finally:
             self.probing = outer_probing
 
@@ -1139,7 +1143,12 @@ class ClockVisitor(ast.NodeVisitor):
             self._preassign_dict_entry_tables(node)
         assigned = self.walrus
         self.walrus = set()
-        self._bind_comprehension_targets(node)
+        self._bind_targets_silently(
+            [
+                (generator.target, _iterable_element_value(generator.iter, self))
+                for generator in node.generators
+            ]
+        )
         if isinstance(node, ast.GeneratorExp):
             # The filters and later iterables also run at consumption time,
             # so the deferred scan covers them with the element.
@@ -1354,6 +1363,7 @@ class ClockVisitor(ast.NodeVisitor):
                     self.aliases[symbol.get_name()] = self.module_aliases.get(symbol.get_name(), "")
             self.aliases.update(self.default_bindings.get(id(node), {}))
             self.enclosing = self.aliases
+            self.return_states = []
             self.frozen = frozen
             self.deferred_frozen = frozen
             previous_body_flag = self.deferred_body
