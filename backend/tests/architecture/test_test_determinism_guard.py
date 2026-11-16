@@ -624,6 +624,18 @@ UNFROZEN_READS = [
     "    first = time.time\n"
     "    list(values)\n"
     "    clock()\n",
+    # Unpacked loop and comprehension targets keep the callables the literal
+    # elements supply.
+    "import time\nfor (clock,) in ((time.time,),):\n    clock()\n",
+    "import time\n[clock() for (clock,) in ((time.time,),)]\n",
+    # An annotated copy of a generator variable keeps it unconsumed.
+    "import time\n"
+    "def test_annotated_generator_alias_consumed_late():\n"
+    "    clock = lambda: 0\n"
+    "    values = (clock() for _ in (1,))\n"
+    "    alias: object = values\n"
+    "    clock = time.time\n"
+    "    list(alias)\n",
     # The same holds for a comprehension target over a literal iterable.
     "import time\n"
     "def test_comprehension_target_known_elements():\n"

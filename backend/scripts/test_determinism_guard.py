@@ -171,18 +171,58 @@ def _merge_values(values: list[str]) -> str:
 #: expression and the generator's own iteration targets, each as the binding
 #: its first iterable supplied at creation or the later iterable to resolve at
 #: consumption.
-GeneratorBinding = tuple[str, ast.expr, dict[str, str | ast.expr]]
+GeneratorBinding = tuple[str, ast.expr, list[tuple[ast.expr, dict[str, str] | ast.expr]]]
 
 
-def _iterable_element_value(iterable: ast.expr, visitor: ClockVisitor) -> str:
-    """The binding a loop or comprehension target takes from a literal iterable.
+def _target_names(target: ast.expr) -> list[str]:
+    """The names a loop or comprehension target binds."""
+    if isinstance(target, ast.Name):
+        return [target.id]
+    if isinstance(target, (ast.Tuple, ast.List)):
+        return [name for element in target.elts for name in _target_names(element)]
+    if isinstance(target, ast.Starred):
+        return _target_names(target.value)
+    return []
 
-    A tuple or list literal assigns each element to the target in turn, so
-    a known clock callable among them keeps the target resolvable.
+
+def _destructure(
+    target: ast.expr, elements: list[ast.expr], visitor: ClockVisitor
+) -> dict[str, str]:
+    """Bind ``target`` to the merge of ``elements``, position by position."""
+    if isinstance(target, ast.Name):
+        value = _merge_values([visitor.qualified(element) for element in elements])
+        return {target.id: value} if value else {}
+    if isinstance(target, (ast.Tuple, ast.List)) and all(
+        isinstance(element, (ast.Tuple, ast.List)) and len(element.elts) == len(target.elts)
+        for element in elements
+    ):
+        result: dict[str, str] = {}
+        for index, item in enumerate(target.elts):
+            result.update(
+                _destructure(
+                    item,
+                    [
+                        element.elts[index]
+                        for element in elements
+                        if isinstance(element, (ast.Tuple, ast.List))
+                    ],
+                    visitor,
+                )
+            )
+        return result
+    return {}
+
+
+def _loop_bindings(target: ast.expr, iterable: ast.expr, visitor: ClockVisitor) -> dict[str, str]:
+    """The bindings a loop or comprehension target takes from a literal iterable.
+
+    A tuple or list literal assigns each element to the target in turn, so a
+    known clock callable among them keeps the target resolvable, also through
+    unpacking.
     """
     if isinstance(iterable, (ast.Tuple, ast.List)) and iterable.elts:
-        return _merge_values([visitor.qualified(element) for element in iterable.elts])
-    return ""
+        return _destructure(target, list(iterable.elts), visitor)
+    return {}
 
 
 class ClockVisitor(ast.NodeVisitor):
@@ -235,7 +275,7 @@ class ClockVisitor(ast.NodeVisitor):
         self.exception_snapshots: list[dict[str, str]] | None = None
         #: The binding a generator's first iterable supplies, captured when
         #: the generator is created: that iterable evaluates eagerly.
-        self.first_iterable_values: dict[int, str] = {}
+        self.first_iterable_values: dict[int, dict[str, str]] = {}
         #: The generator that is the value of the assignment being visited.
         self.assigned_generator: int | None = None
         #: The bindings that generator's assignment expressions may make.
@@ -447,8 +487,11 @@ class ClockVisitor(ast.NodeVisitor):
         """
         for name, value, supplied in bindings:
             targets = {
-                target: source if isinstance(source, str) else _iterable_element_value(source, self)
-                for target, source in supplied.items()
+                bound: (
+                    source if isinstance(source, dict) else _loop_bindings(target, source, self)
+                ).get(bound, "")
+                for target, source in supplied
+                for bound in _target_names(target)
             }
             current = {target: self.aliases.get(target) for target in targets}
             self.aliases.update(targets)
@@ -468,9 +511,24 @@ class ClockVisitor(ast.NodeVisitor):
         self.visit(value)
         self.assigned_generator = None
 
-    def _hold_generator(self, target: ast.expr, value: ast.expr) -> None:
+    def _held_generator(self, value: ast.expr) -> tuple[int, list[GeneratorBinding]] | None:
+        """The generator a plain variable copy passes on unconsumed."""
+        if isinstance(value, ast.Name) and value.id in self.generator_names:
+            return self.generator_names[value.id], self.pending_generators.get(value.id, [])
+        return None
+
+    def _hold_generator(
+        self,
+        target: ast.expr,
+        value: ast.expr,
+        held: tuple[int, list[GeneratorBinding]] | None = None,
+    ) -> None:
         """Keep a generator's effects for where its variable is consumed."""
-        if isinstance(value, ast.GeneratorExp) and isinstance(target, ast.Name):
+        if not isinstance(target, ast.Name):
+            return
+        if held is not None:
+            self.generator_names[target.id], self.pending_generators[target.id] = held
+        elif isinstance(value, ast.GeneratorExp):
             self.pending_generators[target.id] = self.generator_bindings
             self.generator_names[target.id] = id(value)
 
@@ -488,13 +546,7 @@ class ClockVisitor(ast.NodeVisitor):
 
     def visit_Assign(self, node: ast.Assign) -> None:
         self._preassign_targets_before(node.targets, node.value)
-        # Copying a generator variable passes the generator on unconsumed.
-        source = node.value.id if isinstance(node.value, ast.Name) else None
-        held = (
-            (self.generator_names[source], self.pending_generators.get(source, []))
-            if source in self.generator_names
-            else None
-        )
+        held = self._held_generator(node.value)
         if isinstance(node.value, (ast.Tuple, ast.List)):
             for element in node.value.elts:
                 self.visit(element)
@@ -506,9 +558,7 @@ class ClockVisitor(ast.NodeVisitor):
             self.bind(target, node.value)
             if isinstance(target, ast.Name):
                 self.aliases[target.id] = name
-                if held is not None:
-                    self.generator_names[target.id], self.pending_generators[target.id] = held
-            self._hold_generator(target, node.value)
+            self._hold_generator(target, node.value, held)
         self.captured_elements.clear()
 
     def visit_AnnAssign(self, node: ast.AnnAssign) -> None:
@@ -520,9 +570,11 @@ class ClockVisitor(ast.NodeVisitor):
         # Python assigns the value before evaluating the annotation, so the
         # annotation's bindings cannot mask the value's own reads.
         if node.value is not None:
-            self._visit_assigned_value(node.value)
+            held = self._held_generator(node.value)
+            if held is None:
+                self._visit_assigned_value(node.value)
             self.bind(node.target, node.value)
-            self._hold_generator(node.target, node.value)
+            self._hold_generator(node.target, node.value, held)
         if not self.postponed and not self.deferred_body:
             # Module and class bodies evaluate their annotations; a
             # function-local one never runs.
@@ -595,18 +647,18 @@ class ClockVisitor(ast.NodeVisitor):
         self.visit(node.iter)
         # Zero iterations leave the target holding its incoming value.
         pre_target = dict(self.aliases)
-        target_value = _iterable_element_value(node.iter, self)
-        self._bind_targets_silently([(node.target, target_value)])
-        self._visit_loop(node, pre_target=pre_target, target=node.target, target_value=target_value)
+        target_bindings = _loop_bindings(node.target, node.iter, self)
+        self._bind_targets_silently([(node.target, target_bindings)])
+        self._visit_loop(
+            node, pre_target=pre_target, target=node.target, target_bindings=target_bindings
+        )
 
     visit_AsyncFor = visit_For
 
-    def _bind_loop_target(self, target: ast.expr, value: str) -> None:
+    def _bind_loop_target(self, target: ast.expr, bindings: dict[str, str]) -> None:
         """Bind a loop target, keeping known clock callables resolvable."""
-        if isinstance(target, ast.Name) and value:
-            self.aliases[target.id] = value
-        else:
-            self.bind(target)
+        self.bind(target)
+        self.aliases.update(bindings)
 
     def visit_While(self, node: ast.While) -> None:
         self.visit(node.test)
@@ -618,7 +670,7 @@ class ClockVisitor(ast.NodeVisitor):
         recheck: ast.expr | None = None,
         pre_target: dict[str, str] | None = None,
         target: ast.expr | None = None,
-        target_value: str = "",
+        target_bindings: dict[str, str] | None = None,
     ) -> None:
         # A loop body may run zero times, so its assignments must not clear a
         # binding: merge the pre-loop state with the body and ``else`` states.
@@ -638,7 +690,7 @@ class ClockVisitor(ast.NodeVisitor):
             for _ in range(_PROBE_LIMIT):
                 start_state = dict(self.aliases)
                 if target is not None:
-                    self._bind_loop_target(target, target_value)
+                    self._bind_loop_target(target, target_bindings or {})
                 for statement in node.body:
                     self.visit(statement)
                 del self.reads[probe_start:]
@@ -664,7 +716,7 @@ class ClockVisitor(ast.NodeVisitor):
         # Each iteration reassigns the target from the iterable before the
         # body runs.
         if target is not None:
-            self._bind_loop_target(target, target_value)
+            self._bind_loop_target(target, target_bindings or {})
         self.break_states.append([])
         self.continue_states.append([])
         try:
@@ -892,7 +944,9 @@ class ClockVisitor(ast.NodeVisitor):
         captured = self.first_iterable_values.get(id(node)) if level == 0 else None
         self._bind_loop_target(
             generator.target,
-            captured if captured is not None else _iterable_element_value(generator.iter, self),
+            captured
+            if captured is not None
+            else _loop_bindings(generator.target, generator.iter, self),
         )
         for condition in generator.ifs:
             self.visit(condition)
@@ -1294,7 +1348,7 @@ class ClockVisitor(ast.NodeVisitor):
         else:
             self._preassign_expression_tables(node.elt)
 
-    def _bind_targets_silently(self, targets: list[tuple[ast.expr, str]]) -> None:
+    def _bind_targets_silently(self, targets: list[tuple[ast.expr, dict[str, str]]]) -> None:
         """Bind loop or comprehension targets without consuming target scopes.
 
         The scan visits each target again, and a scope in a target
@@ -1346,9 +1400,8 @@ class ClockVisitor(ast.NodeVisitor):
     ) -> None:
         self.visit(node.generators[0].iter)
         if isinstance(node, ast.GeneratorExp) and not self.probing:
-            self.first_iterable_values[id(node)] = _iterable_element_value(
-                node.generators[0].iter, self
-            )
+            first = node.generators[0]
+            self.first_iterable_values[id(node)] = _loop_bindings(first.target, first.iter, self)
         previous_table, previous_aliases, previous_enclosing = (
             self.table,
             self.aliases,
@@ -1376,7 +1429,7 @@ class ClockVisitor(ast.NodeVisitor):
         self.walrus = set()
         self._bind_targets_silently(
             [
-                (generator.target, _iterable_element_value(generator.iter, self))
+                (generator.target, _loop_bindings(generator.target, generator.iter, self))
                 for generator in node.generators
             ]
         )
@@ -1393,13 +1446,13 @@ class ClockVisitor(ast.NodeVisitor):
             # the containing scope may hold their bindings from then on. A
             # generator bound to a name is consumed where the name is read;
             # any other generator is consumed in place.
-            targets: dict[str, str | ast.expr] = {
-                generator.target.id: (
-                    self.first_iterable_values.get(id(node), "") if index == 0 else generator.iter
+            targets: list[tuple[ast.expr, dict[str, str] | ast.expr]] = [
+                (
+                    generator.target,
+                    self.first_iterable_values.get(id(node), {}) if index == 0 else generator.iter,
                 )
                 for index, generator in enumerate(node.generators)
-                if isinstance(generator.target, ast.Name)
-            }
+            ]
             bindings = [
                 (named.target.id, named.value, targets) for named in _named_expressions(node)
             ]
