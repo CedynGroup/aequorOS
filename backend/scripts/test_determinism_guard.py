@@ -1239,8 +1239,16 @@ class ClockVisitor(ast.NodeVisitor):
         elif isinstance(pattern, ast.MatchSequence):
             self._bind_sequence_captures(pattern, subject)
         elif isinstance(pattern, ast.MatchOr):
+            # Any alternative may be the one that matched, so each binds from
+            # the incoming state and the results merge.
+            incoming = dict(self.aliases)
+            alternatives: list[dict[str, str]] = []
             for alternative in pattern.patterns:
+                self.aliases.clear()
+                self.aliases.update(incoming)
                 self._bind_pattern_captures(alternative, subject_value, subject)
+                alternatives.append(dict(self.aliases))
+            self._merge_states(alternatives)
         else:
             self._bind_opaque_captures(pattern)
 

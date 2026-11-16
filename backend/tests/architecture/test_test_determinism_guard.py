@@ -732,6 +732,11 @@ UNFROZEN_READS = [
     "class Helper:\n"
     "    def read(self):\n"
     "        return time.time()\n",
+    # Any alternative of an OR pattern may be the one that matched.
+    "import time\n"
+    "match (time.time, None):\n"
+    "    case (clock, None) | (_, clock):\n"
+    "        clock()\n",
     # The same holds for a comprehension target over a literal iterable.
     "import time\n"
     "def test_comprehension_target_known_elements():\n"
