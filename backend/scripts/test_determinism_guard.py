@@ -193,7 +193,13 @@ class ClockVisitor(ast.NodeVisitor):
     starts.
     """
 
-    def __init__(self, source: str) -> None:
+    def __init__(self, source: str, *, module_marker_applies: bool = True) -> None:
+        #: Whether a module-level ``pytestmark`` reaches the tests: pytest
+        #: never propagates a ``conftest.py`` module's marks to the items
+        #: that use its fixtures.
+        self.module_marker_applies = module_marker_applies
+        #: Depth of the class bodies being visited.
+        self.class_depth = 0
         self.table: symtable.SymbolTable = symtable.symtable(source, "<test>", "exec")
         self.aliases: dict[str, str] = {}
         self.enclosing = self.aliases
@@ -372,7 +378,11 @@ class ClockVisitor(ast.NodeVisitor):
             self.bind(target, node.value)
             if isinstance(target, ast.Name):
                 self.aliases[target.id] = name
-                if target.id == "pytestmark" and self._carries_freeze_marker(node.value):
+                if (
+                    target.id == "pytestmark"
+                    and (self.module_marker_applies or self.class_depth)
+                    and self._carries_freeze_marker(node.value)
+                ):
                     # A marker freezes test execution, not import time.
                     self.deferred_frozen = True
 
@@ -808,7 +818,7 @@ class ClockVisitor(ast.NodeVisitor):
 
     def _preassign_generator_levels(
         self,
-        expression: ast.ListComp | ast.SetComp | ast.DictComp,
+        expression: ast.ListComp | ast.SetComp | ast.DictComp | ast.GeneratorExp,
         *,
         first_iterable: bool,
     ) -> None:
@@ -1091,8 +1101,10 @@ class ClockVisitor(ast.NodeVisitor):
         previous_body_flag = self.deferred_body
         self.deferred_body = False
         self.deferred_frozen = self.deferred_frozen or own
+        self.class_depth += 1
         for statement in node.body:
             self.visit(statement)
+        self.class_depth -= 1
         self.deferred_body = previous_body_flag
         self.table, self.aliases = previous_table, previous_aliases
         self.frozen, self.deferred_frozen = previous_frozen, previous_deferred
@@ -1110,16 +1122,21 @@ class ClockVisitor(ast.NodeVisitor):
         self.visit(node.value)
         self.table = previous_table
 
-    def _preassign_dict_entry_tables(self, node: ast.DictComp) -> None:
-        """Reserve a dictionary comprehension's tables in symbol-table order.
+    def _preassign_comprehension_tables(
+        self, node: ast.ListComp | ast.SetComp | ast.DictComp | ast.GeneratorExp
+    ) -> None:
+        """Reserve a comprehension's own tables in symbol-table order.
 
-        The symbol table lists the filters, the value scope and the key scope
-        in that order, while the entries evaluate key first. The first
-        iterable is already evaluated.
+        The symbol table lists each generator level, then a dictionary's value
+        scope and key scope or the element scope, while the scan evaluates the
+        entries in source order. The first iterable is already evaluated.
         """
         self._preassign_generator_levels(node, first_iterable=False)
-        self._preassign_expression_tables(node.value)
-        self._preassign_expression_tables(node.key)
+        if isinstance(node, ast.DictComp):
+            self._preassign_expression_tables(node.value)
+            self._preassign_expression_tables(node.key)
+        else:
+            self._preassign_expression_tables(node.elt)
 
     def _bind_targets_silently(self, targets: list[tuple[ast.expr, str]]) -> None:
         """Bind loop or comprehension targets without consuming target scopes.
@@ -1155,8 +1172,8 @@ class ClockVisitor(ast.NodeVisitor):
             self.functions.append((node, self.table, previous_enclosing, self.deferred_frozen))
         self.aliases = self.enclosing.copy()
         self.enclosing = self.aliases
-        if isinstance(node, ast.DictComp) and not self.probing:
-            self._preassign_dict_entry_tables(node)
+        if not isinstance(node, ast.GeneratorExp) and not self.probing:
+            self._preassign_comprehension_tables(node)
         assigned = self.walrus
         self.walrus = set()
         self._bind_targets_silently(
@@ -1359,7 +1376,9 @@ class ClockVisitor(ast.NodeVisitor):
                     # not exist in the symbol table; visiting their expressions
                     # would look up symtable children that are not there.
                     self.postponed = True
-        if any(self._pytestmark_statement(statement) for statement in tree.body):
+        if self.module_marker_applies and any(
+            self._pytestmark_statement(statement) for statement in tree.body
+        ):
             self.deferred_frozen = True
         self.visit(tree)
         self._scan_deferred_functions()
@@ -1389,6 +1408,7 @@ class ClockVisitor(ast.NodeVisitor):
             elif isinstance(node, ast.GeneratorExp):
                 # The body runs per consumption, so its levels settle the
                 # same way an eager comprehension's do.
+                self._preassign_comprehension_tables(node)
                 rejected = self._scan_comprehension_pass(node, 0)
                 if rejected:
                     self._merge_states([dict(self.aliases), *rejected])
@@ -1412,14 +1432,14 @@ class ClockFindings:
     unreasoned_suppressions: int
 
 
-def clock_findings(source: str) -> ClockFindings:
+def clock_findings(source: str, *, module_marker_applies: bool = True) -> ClockFindings:
     """Resolve clock-read bindings within each lexical scope in statement order.
 
     A read whose line carries a valid ``# noqa: AQPY001 - <reason> (#<issue>)``
     is reported in ``suppressed_read_lines`` and excluded from the count;
     AQPY000 validation stays separate.
     """
-    visitor = ClockVisitor(source)
+    visitor = ClockVisitor(source, module_marker_applies=module_marker_applies)
     reads = visitor.scan(ast.parse(source))
     unreasoned = 0
     suppressed: set[int] = set()
@@ -1447,7 +1467,7 @@ def inventory(root: Path) -> dict[str, dict[str, int]]:
     counts: dict[str, dict[str, int]] = {}
     for path in sorted((root / "tests").rglob("*.py")):
         source = path.read_text(encoding="utf-8")
-        report = clock_findings(source)
+        report = clock_findings(source, module_marker_applies=path.name != "conftest.py")
         unfrozen = [name for name, line in report.reads if line not in report.suppressed_read_lines]
         found = {AQPY001: len(unfrozen), AQPY000: report.unreasoned_suppressions}
         found = {rule: count for rule, count in found.items() if count}

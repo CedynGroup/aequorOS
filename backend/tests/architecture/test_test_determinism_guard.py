@@ -814,6 +814,31 @@ def test_for_target_scopes_are_consumed_once() -> None:
     assert guard.clock_findings(source).reads == []
 
 
+def test_later_level_target_scopes_precede_the_iterable_scopes() -> None:
+    """A later generator level lists its target scope before its iterable's."""
+    for source in (
+        "[0 for x in [] for obj[lambda: lambda: None] in (lambda: None,)]\n",
+        "{0 for x in [] for obj[lambda: lambda: None] in (lambda: None,)}\n",
+        "values = ((lambda: lambda: None) for x in []"
+        " for obj[lambda: lambda: None] in (lambda: None,))\nlist(values)\n",
+    ):
+        assert guard.clock_findings(source).reads == []
+
+
+def test_conftest_module_marker_does_not_freeze_fixtures() -> None:
+    """A conftest module's marks never reach the tests using its fixtures."""
+    source = (
+        "import pytest\n"
+        "import time\n"
+        f"pytestmark = pytest.mark.freeze_time({INSTANT})\n"
+        "@pytest.fixture\n"
+        "def stamp():\n"
+        "    return time.time()\n"
+    )
+    assert guard.clock_findings(source).reads == []
+    assert guard.clock_findings(source, module_marker_applies=False).reads != []
+
+
 def test_annotated_assignment_scopes_preassign_in_order() -> None:
     """An annotated assignment's annotation scopes precede the value's."""
     source = "stamp: (lambda: None) = lambda: lambda: None\n"
