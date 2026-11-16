@@ -404,6 +404,14 @@ UNFROZEN_READS = [
     "import time\ndef test_positional_default(clock=time.time):\n    clock()\n",
     "import time\ndef test_keyword_only_default(*, clock=time.time):\n    clock()\n",
     "import time\ndef test_lambda_default():\n    (lambda clock=time.time: clock())()\n",
+    # A freeze marker on a fixture function never reaches the tests that
+    # request it, so the fixture body still reads the real clock.
+    "import pytest\n"
+    "import time\n"
+    f"@pytest.fixture\n"
+    f"@pytest.mark.freeze_time({INSTANT})\n"
+    "def stamp():\n"
+    "    return time.time()\n",
     # The same holds for a comprehension target over a literal iterable.
     "import time\n"
     "def test_comprehension_target_known_elements():\n"
@@ -765,6 +773,16 @@ def test_dict_comprehension_later_iterables_precede_the_entry_scopes() -> None:
         "mapping = {(lambda: lambda: None): (lambda: None) for _ in [] for y in (lambda: None,)}\n"
     )
     assert guard.clock_findings(source).reads == []
+
+
+def test_comprehension_target_scopes_precede_the_entry_scopes() -> None:
+    """A comprehension target's expression scopes precede the entries'."""
+    for source in (
+        "mapping = {(lambda: lambda: None): (lambda: None) for obj[lambda: None] in []}\n",
+        "values = [(lambda: lambda: None) for obj[lambda: None] in []]\n",
+        "mapping = {(lambda: lambda: None): 1 for _ in [] for obj[lambda: None] in []}\n",
+    ):
+        assert guard.clock_findings(source).reads == []
 
 
 def test_annotated_assignment_scopes_preassign_in_order() -> None:

@@ -71,6 +71,7 @@ UTC_NOW_SOURCES = frozenset(
 
 FREEZE_MARKER = "pytest.mark.freeze_time"
 TRAVEL = "time_machine.travel"
+FIXTURE_DECORATORS = frozenset({"pytest.fixture", "pytest_asyncio.fixture"})
 FROZEN_CLOCK = "frozen_clock"
 
 #: Upper bound on the silent probe passes a loop runs while its carried
@@ -781,16 +782,33 @@ class ClockVisitor(ast.NodeVisitor):
             self._preassign_expression_tables(expression.generators[0].iter)
             self.preassigned[id(expression)] = self.child_table(expression, "genexpr")
 
+    def _preassign_generator_levels(
+        self,
+        expression: ast.ListComp | ast.SetComp | ast.DictComp,
+        *,
+        first_iterable: bool,
+    ) -> None:
+        """Assign each generator level's tables in symbol-table order.
+
+        A level lists its target, then its iterable (the first level's
+        iterable evaluates in the enclosing scope), then its filters.
+        """
+        for index, generator in enumerate(expression.generators):
+            if index == 0 and first_iterable:
+                self._preassign_expression_tables(generator.iter)
+            self._preassign_expression_tables(generator.target)
+            if index:
+                self._preassign_expression_tables(generator.iter)
+            for condition in generator.ifs:
+                self._preassign_expression_tables(condition)
+
     def _preassign_eager_comprehension_tables(
         self, expression: ast.ListComp | ast.SetComp | ast.DictComp
     ) -> None:
         """Assign an eager comprehension's tables in symbol-table order."""
         # An eager comprehension inlines into the enclosing scope, and the
-        # symbol table lists the iterables and filters first.
-        for generator in expression.generators:
-            self._preassign_expression_tables(generator.iter)
-            for condition in generator.ifs:
-                self._preassign_expression_tables(condition)
+        # symbol table lists the generator levels first.
+        self._preassign_generator_levels(expression, first_iterable=True)
         if isinstance(expression, ast.DictComp):
             # The symbol table lists a dictionary comprehension's value
             # scope before its key scope.
@@ -983,7 +1001,10 @@ class ClockVisitor(ast.NodeVisitor):
             # The silent loop pass only collects bindings; the real pass
             # records the definitions.
             return
-        own = self._decorator_freezes(node.decorator_list) or _takes_frozen_clock(node.args)
+        own = (
+            self._decorator_freezes(node.decorator_list)
+            and not self._is_fixture(node.decorator_list)
+        ) or _takes_frozen_clock(node.args)
         for decorator in node.decorator_list:
             self.visit(decorator)
         self._visit_defaults(node.args)
@@ -1070,16 +1091,28 @@ class ClockVisitor(ast.NodeVisitor):
 
         The symbol table lists the filters, the value scope and the key scope
         in that order, while the entries evaluate key first. The first
-        iterable is already evaluated, so the later iterables and the filters
-        follow in generator order.
+        iterable is already evaluated.
         """
-        for index, generator in enumerate(node.generators):
-            if index:
-                self._preassign_expression_tables(generator.iter)
-            for condition in generator.ifs:
-                self._preassign_expression_tables(condition)
+        self._preassign_generator_levels(node, first_iterable=False)
         self._preassign_expression_tables(node.value)
         self._preassign_expression_tables(node.key)
+
+    def _bind_comprehension_targets(
+        self, node: ast.ListComp | ast.SetComp | ast.DictComp | ast.GeneratorExp
+    ) -> None:
+        """Bind every generator target without consuming target scopes.
+
+        The scan visits each target again, and a scope in a target
+        expression is consumed by that visit alone.
+        """
+        outer_probing, self.probing = self.probing, True
+        try:
+            for generator in node.generators:
+                self._bind_loop_target(
+                    generator.target, _iterable_element_value(generator.iter, self)
+                )
+        finally:
+            self.probing = outer_probing
 
     def visit_comprehension_scope(
         self, node: ast.ListComp | ast.SetComp | ast.DictComp | ast.GeneratorExp
@@ -1106,8 +1139,7 @@ class ClockVisitor(ast.NodeVisitor):
             self._preassign_dict_entry_tables(node)
         assigned = self.walrus
         self.walrus = set()
-        for generator in node.generators:
-            self._bind_loop_target(generator.target, _iterable_element_value(generator.iter, self))
+        self._bind_comprehension_targets(node)
         if isinstance(node, ast.GeneratorExp):
             # The filters and later iterables also run at consumption time,
             # so the deferred scan covers them with the element.
@@ -1179,6 +1211,18 @@ class ClockVisitor(ast.NodeVisitor):
     visit_SetComp = visit_comprehension_scope
     visit_DictComp = visit_comprehension_scope
     visit_GeneratorExp = visit_comprehension_scope
+
+    def _is_fixture(self, decorators: list[ast.expr]) -> bool:
+        """Whether a decorator registers the function as a pytest fixture.
+
+        Marks on a fixture function never reach the tests that request it,
+        so a freeze marker there does not freeze its body.
+        """
+        return any(
+            self.qualified(decorator.func if isinstance(decorator, ast.Call) else decorator)
+            in FIXTURE_DECORATORS
+            for decorator in decorators
+        )
 
     def _decorator_freezes(self, decorators: list[ast.expr]) -> bool:
         return any(
