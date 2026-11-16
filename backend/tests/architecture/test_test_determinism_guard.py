@@ -909,6 +909,14 @@ UNFROZEN_READS = [
     f"    with time_machine.travel({INSTANT}, tick=False):\n"
     "        pending = read()\n"
     "    await pending\n",
+    # A caller's local does not stand in for the callee's global.
+    "import time\n"
+    "clock = time.time\n"
+    "def test_outer():\n"
+    "    clock = lambda: 0\n"
+    "    read()\n"
+    "def read():\n"
+    "    return clock()\n",
     # The same holds for a comprehension target over a literal iterable.
     "import time\n"
     "def test_comprehension_target_known_elements():\n"
@@ -1449,6 +1457,20 @@ def test_closure_called_after_rebinding_reads_the_replacement() -> None:
         "    def read():\n"
         "        return clock()\n"
         "    clock = lambda: 0\n"
+        "    read()\n"
+    )
+    assert guard.clock_findings(source).reads == []
+
+
+def test_a_helper_defined_before_its_frozen_caller_is_accepted() -> None:
+    """A rescan replaces the reads a helper's first scan found."""
+    source = (
+        "import pytest\n"
+        "import time\n"
+        "def read():\n"
+        "    return time.time()\n"
+        f"@pytest.mark.freeze_time({INSTANT})\n"
+        "def test_read():\n"
         "    read()\n"
     )
     assert guard.clock_findings(source).reads == []

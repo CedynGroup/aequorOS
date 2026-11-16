@@ -348,6 +348,10 @@ class ClockVisitor(ast.NodeVisitor):
         self.callable_scopes: dict[int, dict[str, str]] = {}
         #: Whether a nested function's references all ran under a freeze.
         self.callable_frozen: dict[int, bool] = {}
+        #: The reads each recorded body's latest scan found.
+        self.scanned_reads: dict[int, list[tuple[str, int]]] = {}
+        #: The scope each function or lambda is defined in.
+        self.callable_owners: dict[int, int] = {}
         #: The state each recorded body was last scanned under.
         self.scanned_states: dict[int, tuple[tuple[tuple[str, str], ...], bool]] = {}
         #: Whether the visited statements run inside a function body, where
@@ -559,6 +563,14 @@ class ClockVisitor(ast.NodeVisitor):
         """Note a point where a nested function's body may run."""
         known = self.callable_scopes.get(callable_id)
         current = dict(self.aliases)
+        if self.in_function_body and self.callable_owners.get(callable_id) != id(self.enclosing):
+            # A caller's locals are not the callee's globals or closure
+            # variables, so they stay out of the snapshot.
+            for symbol in self.table.get_symbols():
+                if symbol.is_local():
+                    for key in (symbol.get_name(), GENERATOR_KEY + symbol.get_name()):
+                        current.pop(key, None)
+                    current.pop(CALLABLE_KEY + symbol.get_name(), None)
         self.callable_scopes[callable_id] = self._merged([known, current] if known else [current])
         # The body runs under the freeze active at the reference, and under a
         # freeze only if every reference was under one.
@@ -1530,6 +1542,7 @@ class ClockVisitor(ast.NodeVisitor):
         self.table = previous_table
         frozen = own or self.deferred_frozen
         self.functions.append((node, self.child_table(node, node.name), self.enclosing, frozen))
+        self.callable_owners[id(node)] = id(self.enclosing)
         self.aliases[node.name] = ""
         self.aliases[GENERATOR_KEY + node.name] = ""
         self.aliases[CALLABLE_KEY + node.name] = str(id(node))
@@ -1548,6 +1561,7 @@ class ClockVisitor(ast.NodeVisitor):
         if table is None:
             table = self.child_table(node, "lambda")
         self.functions.append((node, table, self.enclosing, frozen))
+        self.callable_owners[id(node)] = id(self.enclosing)
 
     def visit_ClassDef(self, node: ast.ClassDef) -> None:
         if self.probing:
@@ -1961,7 +1975,14 @@ class ClockVisitor(ast.NodeVisitor):
             self.generator_scopes if isinstance(node, ast.GeneratorExp) else self.callable_scopes
         )
         captured = id(node) in scopes
-        scope = scopes[id(node)] if captured else enclosing
+        if not captured:
+            scope = enclosing
+        elif isinstance(node, ast.GeneratorExp):
+            scope = scopes[id(node)]
+        else:
+            # Names the references left out fall back to the enclosing
+            # scope's final bindings.
+            scope = {**enclosing, **scopes[id(node)]}
         if captured and _runs_later(node):
             # Referencing a coroutine or generator function only creates the
             # object; its body runs at a later await or iteration, so the
@@ -1989,6 +2010,8 @@ class ClockVisitor(ast.NodeVisitor):
         self.table = table
         scope, frozen, captured = self._scan_state(node, enclosing, recorded_frozen)
         self.scanned_states[id(node)] = (tuple(sorted(scope.items())), frozen)
+        # A later scan of the same body replaces the reads of this one.
+        outer_reads, self.reads = self.reads, []
         self.aliases = scope.copy()
         for symbol in table.get_symbols():
             name = symbol.get_name()
@@ -2021,6 +2044,7 @@ class ClockVisitor(ast.NodeVisitor):
                 self.visit(statement)
         self.deferred_body = previous_body_flag
         self.in_function_body = False
+        self.scanned_reads[id(node)], self.reads = self.reads, outer_reads
 
     def _scan_deferred_functions(self) -> None:
         """Scan every recorded function, lambda and generator body.
@@ -2046,6 +2070,8 @@ class ClockVisitor(ast.NodeVisitor):
                     self._scan_function(node, table, enclosing, recorded_frozen)
         finally:
             self.probing = outer_probing
+        for reads in self.scanned_reads.values():
+            self.reads.extend(reads)
 
     def _current_state(
         self, node: ast.AST, enclosing: dict[str, str], recorded_frozen: bool
