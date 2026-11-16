@@ -353,6 +353,10 @@ class ClockVisitor(ast.NodeVisitor):
         self.callable_frozen: dict[int, bool] = {}
         #: The reads each recorded body's latest scan found.
         self.scanned_reads: dict[int, list[tuple[str, int]]] = {}
+        #: The functions pytest runs on its own, as tests or fixtures.
+        self.collected_callables: set[int] = set()
+        #: The scope each function or lambda is defined in.
+        self.callable_owners: dict[int, int] = {}
         #: The symbol table of each function or lambda.
         self.callable_tables: dict[int, symtable.SymbolTable] = {}
         #: The functions whose calls only create a coroutine or generator.
@@ -591,6 +595,14 @@ class ClockVisitor(ast.NodeVisitor):
             if (symbol.is_global() and (here.is_local() or here.is_free())) or (
                 symbol.is_free() and here.is_global()
             ):
+                foreign.append(name)
+            elif (
+                symbol.is_free()
+                and here.is_local()
+                and self.callable_owners.get(callable_id) != id(self.enclosing)
+            ):
+                # A local of another function is not the callee's closure
+                # variable; only the defining scope's own local is.
                 foreign.append(name)
         return foreign
 
@@ -1478,13 +1490,21 @@ class ClockVisitor(ast.NodeVisitor):
             arguments.defaults,
             strict=True,
         ):
-            self.visit(default)
-            captured[parameter.arg] = self.qualified(default)
+            self._capture_default(parameter.arg, default, captured)
         for parameter, default in zip(arguments.kwonlyargs, arguments.kw_defaults, strict=True):
             if default is not None:
-                self.visit(default)
-                captured[parameter.arg] = self.qualified(default)
+                self._capture_default(parameter.arg, default, captured)
         return captured
+
+    def _capture_default(self, name: str, default: ast.expr, captured: dict[str, str]) -> None:
+        """Evaluate one default and capture what the parameter will hold."""
+        self.visit(default)
+        captured[name] = self.qualified(default)
+        function = (
+            str(id(default)) if isinstance(default, ast.Lambda) else self._held_callable(default)
+        )
+        if function:
+            captured[CALLABLE_KEY + name] = function
 
     def _visit_annotations(self, arguments: ast.arguments) -> None:
         if self.postponed:
@@ -1550,7 +1570,11 @@ class ClockVisitor(ast.NodeVisitor):
     def visit_FunctionDef(self, node: ast.FunctionDef | ast.AsyncFunctionDef) -> None:
         if self.probing:
             # The silent loop pass only collects bindings; the real pass
-            # records the definitions.
+            # records the definitions. The name still holds the function, so
+            # references through it keep marking where its body may run.
+            self.aliases[node.name] = ""
+            self.aliases[GENERATOR_KEY + node.name] = ""
+            self.aliases[CALLABLE_KEY + node.name] = str(id(node))
             return
         # A mark or a fixture parameter only reaches what pytest manages: the
         # collected tests and the registered fixtures, not their helpers.
@@ -1582,6 +1606,10 @@ class ClockVisitor(ast.NodeVisitor):
         table = self.child_table(node, node.name)
         self.functions.append((node, table, self.enclosing, frozen))
         self.callable_tables[id(node)] = table
+        self.callable_owners[id(node)] = id(self.enclosing)
+        self.callable_owners[id(node)] = id(self.enclosing)
+        if collected or fixture:
+            self.collected_callables.add(id(node))
         if _runs_later(node):
             self.deferred_callables.add(id(node))
         self.aliases[node.name] = ""
@@ -2029,6 +2057,11 @@ class ClockVisitor(ast.NodeVisitor):
             # object; its body runs at a later await or iteration, so the
             # enclosing scope's final bindings stay reachable.
             scope = self._merged([scope, enclosing])
+        independent = id(node) in self.collected_callables
+        if captured and independent:
+            # pytest also runs a collected test or a fixture on its own, under
+            # the enclosing scope's final bindings and its marker freeze.
+            scope = self._merged([scope, enclosing])
         frozen = recorded_frozen
         if captured and not _runs_later(node):
             # A coroutine or generator body runs at a later await or
@@ -2038,6 +2071,8 @@ class ClockVisitor(ast.NodeVisitor):
                 if isinstance(node, ast.GeneratorExp)
                 else self.callable_frozen
             ).get(id(node), recorded_frozen)
+            if independent:
+                frozen = frozen and recorded_frozen
         return scope, frozen, captured
 
     def _scan_function(

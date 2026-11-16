@@ -938,6 +938,48 @@ UNFROZEN_READS = [
     "    clock = time.time\n"
     "    result = await pending\n"
     "    clock = lambda: 0\n",
+    # A collected test also runs on its own, outside a frozen caller.
+    "import pytest\n"
+    "import time\n"
+    "def test_read():\n"
+    "    return time.time()\n"
+    f"@pytest.mark.freeze_time({INSTANT})\n"
+    "def test_frozen():\n"
+    "    test_read()\n",
+    # A deferred rescan keeps nested definitions bound to their functions.
+    "import time\n"
+    "def test_nested_definition_in_a_rescanned_callee():\n"
+    "    clock = lambda: 0\n"
+    "    def middle():\n"
+    "        def inner():\n"
+    "            return clock()\n"
+    "        return inner()\n"
+    "    def caller():\n"
+    "        return middle()\n"
+    "    clock = time.time\n"
+    "    caller()\n"
+    "    clock = lambda: 0\n",
+    # A caller's local does not stand in for the callee's closure variable.
+    "import time\n"
+    "def test_outer():\n"
+    "    clock = time.time\n"
+    "    def read():\n"
+    "        return clock()\n"
+    "    def caller():\n"
+    "        clock = lambda: 0\n"
+    "        return read()\n"
+    "    caller()\n",
+    # A parameter defaulting to a function keeps referencing it.
+    "import time\n"
+    "def test_function_through_a_default():\n"
+    "    clock = lambda: 0\n"
+    "    def read():\n"
+    "        return clock()\n"
+    "    def caller(alias=read):\n"
+    "        return alias()\n"
+    "    clock = time.time\n"
+    "    caller()\n"
+    "    clock = lambda: 0\n",
     # The same holds for a comprehension target over a literal iterable.
     "import time\n"
     "def test_comprehension_target_known_elements():\n"
