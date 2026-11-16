@@ -1344,6 +1344,9 @@ class ClockVisitor(ast.NodeVisitor):
                 self.aliases[GENERATOR_KEY + pattern.name] = (
                     self.captured_generators.get(id(subject), "") if subject is not None else ""
                 )
+                self.aliases[CALLABLE_KEY + pattern.name] = (
+                    self.captured_callables.get(id(subject), "") if subject is not None else ""
+                )
             if pattern.pattern is not None:
                 self._bind_pattern_captures(pattern.pattern, subject_value, subject)
         elif isinstance(pattern, ast.MatchSequence):

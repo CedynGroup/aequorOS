@@ -853,6 +853,17 @@ UNFROZEN_READS = [
     "    clock = time.time\n"
     "    alias()\n"
     "    clock = lambda: 0\n",
+    # A function matched into a capture keeps referencing the same function.
+    "import time\n"
+    "def test_function_through_match_capture():\n"
+    "    clock = lambda: 0\n"
+    "    def read():\n"
+    "        return clock()\n"
+    "    match (read,):\n"
+    "        case (alias,):\n"
+    "            clock = time.time\n"
+    "            alias()\n"
+    "            clock = lambda: 0\n",
     # The same holds for a comprehension target over a literal iterable.
     "import time\n"
     "def test_comprehension_target_known_elements():\n"
