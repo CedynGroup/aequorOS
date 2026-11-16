@@ -839,6 +839,28 @@ def test_conftest_module_marker_does_not_freeze_fixtures() -> None:
     assert guard.clock_findings(source, module_marker_applies=False).reads != []
 
 
+def test_for_target_scopes_precede_the_iterable_scopes() -> None:
+    """A loop target lists its scopes before the iterable's."""
+    source = "obj = {}\nfor obj[lambda: lambda: None] in (lambda: None,):\n    pass\n"
+    assert guard.clock_findings(source).reads == []
+
+
+def test_filters_rerun_before_each_comprehension_element() -> None:
+    """Each iteration reruns the filters before its element reads."""
+    for source in (
+        "import time\n"
+        "clock = lambda: 0\n"
+        "[(clock(), (clock := time.time)) for _ in (1, 2) if (clock := lambda: 0)]\n",
+        "import time\n"
+        "def test_generator():\n"
+        "    clock = lambda: 0\n"
+        "    values = ((clock(), (clock := time.time)) for _ in (1, 2)"
+        " if (clock := lambda: 0))\n"
+        "    list(values)\n",
+    ):
+        assert guard.clock_findings(source).reads == []
+
+
 def test_annotated_assignment_scopes_preassign_in_order() -> None:
     """An annotated assignment's annotation scopes precede the value's."""
     source = "stamp: (lambda: None) = lambda: lambda: None\n"

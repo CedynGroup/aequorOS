@@ -460,6 +460,11 @@ class ClockVisitor(ast.NodeVisitor):
         self._merge_states([after_body, dict(self.aliases) if node.orelse else before])
 
     def visit_For(self, node: ast.For | ast.AsyncFor) -> None:
+        if not self.probing:
+            # The symbol table lists the target's scopes before the
+            # iterable's, while the iterable evaluates first.
+            self._preassign_expression_tables(node.target)
+            self._preassign_expression_tables(node.iter)
         self.visit(node.iter)
         # Zero iterations leave the target holding its incoming value.
         pre_target = dict(self.aliases)
@@ -727,14 +732,15 @@ class ClockVisitor(ast.NodeVisitor):
         self,
         node: ast.ListComp | ast.SetComp | ast.DictComp | ast.GeneratorExp,
         level: int,
-        scan_element: bool = True,
     ) -> list[dict[str, str]]:
         """Scan one comprehension iteration from ``level`` down.
 
         Deeper generator levels repeat within an outer iteration without
         rerunning the outer filters, so each level settles the levels below
         it; a pass whose entry state equals the previous pass's entry state
-        only repeats the tail that pass already recorded.
+        only repeats the tail that pass already recorded. The innermost
+        level's own repetition belongs to its caller, because each of its
+        iterations reruns its target and filters.
         """
         rejected: list[dict[str, str]] = []
         generator = node.generators[level]
@@ -747,6 +753,12 @@ class ClockVisitor(ast.NodeVisitor):
             # state stays reachable.
             rejected.append(dict(self.aliases))
         deeper = level + 1
+        if deeper == len(node.generators):
+            for expression in (
+                [node.key, node.value] if isinstance(node, ast.DictComp) else [node.elt]
+            ):
+                self.visit(expression)
+            return rejected
         previous_entry: dict[str, str] | None = None
         scan_start = len(self.reads)
         for _ in range(_PROBE_LIMIT):
@@ -757,13 +769,7 @@ class ClockVisitor(ast.NodeVisitor):
             # stays silent throughout.
             self.probing = outer_probing or previous_entry is not None
             try:
-                if deeper < len(node.generators):
-                    rejected.extend(self._scan_comprehension_pass(node, deeper, scan_element))
-                elif scan_element:
-                    for expression in (
-                        [node.key, node.value] if isinstance(node, ast.DictComp) else [node.elt]
-                    ):
-                        self.visit(expression)
+                rejected.extend(self._scan_comprehension_pass(node, deeper))
             finally:
                 self.probing = outer_probing
             if entry_state == previous_entry:
@@ -1151,6 +1157,40 @@ class ClockVisitor(ast.NodeVisitor):
         finally:
             self.probing = outer_probing
 
+    def _settle_comprehension(
+        self, node: ast.ListComp | ast.SetComp | ast.DictComp | ast.GeneratorExp
+    ) -> None:
+        """Scan a comprehension's iterations until the bindings stabilize."""
+        # Each iteration rebinds the targets and re-evaluates the filters
+        # under the previous iteration's bindings, so the scans repeat until
+        # the bindings stabilize. Every pass's reads stay recorded, because
+        # each iteration may see a different state; a pass whose entry state
+        # equals the previous pass's entry state only repeats the tail that
+        # the previous pass already recorded.
+        previous_entry: dict[str, str] | None = None
+        scan_start = len(self.reads)
+        for _ in range(_PROBE_LIMIT):
+            entry_state = dict(self.aliases)
+            outer_probing = self.probing
+            # Later passes re-visit definitions whose tables are already
+            # consumed, so they scan silently; an inherited silent pass
+            # stays silent throughout.
+            self.probing = outer_probing or previous_entry is not None
+            try:
+                rejected = self._scan_comprehension_pass(node, 0)
+            finally:
+                self.probing = outer_probing
+            if rejected:
+                # Assignments in a skipped element cannot overwrite the
+                # filter-exit states, and the successful element's own
+                # assignments stay reachable too.
+                self._merge_states([dict(self.aliases), *rejected])
+            if entry_state == previous_entry:
+                del self.reads[scan_start:]
+                break
+            previous_entry = entry_state
+            scan_start = len(self.reads)
+
     def visit_comprehension_scope(
         self, node: ast.ListComp | ast.SetComp | ast.DictComp | ast.GeneratorExp
     ) -> None:
@@ -1192,35 +1232,7 @@ class ClockVisitor(ast.NodeVisitor):
                 previous_enclosing,
             )
             return
-        # Each iteration rebinds the targets and re-evaluates the filters
-        # under the previous iteration's bindings, so the scans repeat until
-        # the bindings stabilize. Every pass's reads stay recorded, because
-        # each iteration may see a different state; a pass whose entry state
-        # equals the previous pass's entry state only repeats the tail that
-        # the previous pass already recorded.
-        previous_entry: dict[str, str] | None = None
-        scan_start = len(self.reads)
-        for _ in range(_PROBE_LIMIT):
-            entry_state = dict(self.aliases)
-            outer_probing = self.probing
-            # Later passes re-visit definitions whose tables are already
-            # consumed, so they scan silently; an inherited silent pass
-            # stays silent throughout.
-            self.probing = outer_probing or previous_entry is not None
-            try:
-                rejected = self._scan_comprehension_pass(node, 0)
-            finally:
-                self.probing = outer_probing
-            if rejected:
-                # Assignments in a skipped element cannot overwrite the
-                # filter-exit states, and the successful element's own
-                # assignments stay reachable too.
-                self._merge_states([dict(self.aliases), *rejected])
-            if entry_state == previous_entry:
-                del self.reads[scan_start:]
-                break
-            previous_entry = entry_state
-            scan_start = len(self.reads)
+        self._settle_comprehension(node)
         leaked, self.walrus = self.walrus, assigned
         if not isinstance(node, ast.GeneratorExp):
             # A nested eager comprehension's walrus names must reach the
@@ -1409,9 +1421,7 @@ class ClockVisitor(ast.NodeVisitor):
                 # The body runs per consumption, so its levels settle the
                 # same way an eager comprehension's do.
                 self._preassign_comprehension_tables(node)
-                rejected = self._scan_comprehension_pass(node, 0)
-                if rejected:
-                    self._merge_states([dict(self.aliases), *rejected])
+                self._settle_comprehension(node)
             else:
                 for statement in node.body:
                     self.visit(statement)
