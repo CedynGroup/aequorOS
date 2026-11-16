@@ -154,6 +154,9 @@ GENERATOR_KEY = "\x00generator:"
 #: Prefix of the keys recording which function or lambda a name may hold, so a
 #: reference to the name marks a point where its body may run.
 CALLABLE_KEY = "\x00callable:"
+#: Marks a generator-key entry that holds the coroutine or generator object a
+#: call of a function created, rather than a generator expression.
+COROUTINE_PREFIX = "call:"
 
 
 def _merge_generators(values: list[str]) -> str:
@@ -350,8 +353,10 @@ class ClockVisitor(ast.NodeVisitor):
         self.callable_frozen: dict[int, bool] = {}
         #: The reads each recorded body's latest scan found.
         self.scanned_reads: dict[int, list[tuple[str, int]]] = {}
-        #: The scope each function or lambda is defined in.
-        self.callable_owners: dict[int, int] = {}
+        #: The symbol table of each function or lambda.
+        self.callable_tables: dict[int, symtable.SymbolTable] = {}
+        #: The functions whose calls only create a coroutine or generator.
+        self.deferred_callables: set[int] = set()
         #: The state each recorded body was last scanned under.
         self.scanned_states: dict[int, tuple[tuple[tuple[str, str], ...], bool]] = {}
         #: Whether the visited statements run inside a function body, where
@@ -554,23 +559,48 @@ class ClockVisitor(ast.NodeVisitor):
             if held:
                 self._reference_callable(int(held))
         for held in _alternatives(self.aliases.get(GENERATOR_KEY + node.id, "")):
-            if held:
+            if held.startswith(COROUTINE_PREFIX):
+                # Consuming a coroutine or generator object runs its function.
+                self._reference_callable(int(held[len(COROUTINE_PREFIX) :]))
+            elif held:
                 generator = int(held)
                 self._apply_generator_bindings(self.generator_effects.get(generator, []))
                 self._consume_generator(generator)
+
+    def _foreign_names(self, callable_id: int) -> list[str]:
+        """The callee's free names that the referencing scope binds differently.
+
+        A global of the callee is the module's binding, so a name the
+        referencing function binds itself, as a local or from a closure, is
+        another variable; a closure variable of the callee comes from a
+        function scope, so a name the referencing scope treats as global is
+        another variable too.
+        """
+        callee = self.callable_tables.get(callable_id)
+        if callee is None or not self.in_function_body:
+            return []
+        foreign: list[str] = []
+        for symbol in callee.get_symbols():
+            name = symbol.get_name()
+            if not (symbol.is_global() or symbol.is_free()):
+                continue
+            try:
+                here = self.table.lookup(name)
+            except KeyError:
+                continue
+            if (symbol.is_global() and (here.is_local() or here.is_free())) or (
+                symbol.is_free() and here.is_global()
+            ):
+                foreign.append(name)
+        return foreign
 
     def _reference_callable(self, callable_id: int) -> None:
         """Note a point where a nested function's body may run."""
         known = self.callable_scopes.get(callable_id)
         current = dict(self.aliases)
-        if self.in_function_body and self.callable_owners.get(callable_id) != id(self.enclosing):
-            # A caller's locals are not the callee's globals or closure
-            # variables, so they stay out of the snapshot.
-            for symbol in self.table.get_symbols():
-                if symbol.is_local():
-                    for key in (symbol.get_name(), GENERATOR_KEY + symbol.get_name()):
-                        current.pop(key, None)
-                    current.pop(CALLABLE_KEY + symbol.get_name(), None)
+        for name in self._foreign_names(callable_id):
+            for key in (name, GENERATOR_KEY + name, CALLABLE_KEY + name):
+                current.pop(key, None)
         self.callable_scopes[callable_id] = self._merged([known, current] if known else [current])
         # The body runs under the freeze active at the reference, and under a
         # freeze only if every reference was under one.
@@ -699,6 +729,14 @@ class ClockVisitor(ast.NodeVisitor):
         elif isinstance(value, ast.GeneratorExp):
             self.generator_effects[id(value)] = self.generator_bindings
             self.aliases[GENERATOR_KEY + target.id] = str(id(value))
+        elif isinstance(value, ast.Call) and isinstance(value.func, ast.Name):
+            created = [
+                COROUTINE_PREFIX + alternative
+                for alternative in _alternatives(self.aliases.get(CALLABLE_KEY + value.func.id, ""))
+                if alternative and int(alternative) in self.deferred_callables
+            ]
+            if created:
+                self.aliases[GENERATOR_KEY + target.id] = AMBIGUOUS.join(created)
 
     def _preassign_targets_before(self, targets: list[ast.expr], *later: ast.expr | None) -> None:
         """Reserve target scopes ahead of the expressions that follow them.
@@ -1541,8 +1579,11 @@ class ClockVisitor(ast.NodeVisitor):
             self.visit(node.returns)
         self.table = previous_table
         frozen = own or self.deferred_frozen
-        self.functions.append((node, self.child_table(node, node.name), self.enclosing, frozen))
-        self.callable_owners[id(node)] = id(self.enclosing)
+        table = self.child_table(node, node.name)
+        self.functions.append((node, table, self.enclosing, frozen))
+        self.callable_tables[id(node)] = table
+        if _runs_later(node):
+            self.deferred_callables.add(id(node))
         self.aliases[node.name] = ""
         self.aliases[GENERATOR_KEY + node.name] = ""
         self.aliases[CALLABLE_KEY + node.name] = str(id(node))
@@ -1561,7 +1602,7 @@ class ClockVisitor(ast.NodeVisitor):
         if table is None:
             table = self.child_table(node, "lambda")
         self.functions.append((node, table, self.enclosing, frozen))
-        self.callable_owners[id(node)] = id(self.enclosing)
+        self.callable_tables[id(node)] = table
 
     def visit_ClassDef(self, node: ast.ClassDef) -> None:
         if self.probing:

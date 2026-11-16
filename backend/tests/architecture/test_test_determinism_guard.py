@@ -917,6 +917,27 @@ UNFROZEN_READS = [
     "    read()\n"
     "def read():\n"
     "    return clock()\n",
+    # A caller's closure variable does not stand in for the callee's global.
+    "import time\n"
+    "clock = time.time\n"
+    "def read():\n"
+    "    return clock()\n"
+    "def test_outer():\n"
+    "    clock = lambda: 0\n"
+    "    def caller():\n"
+    "        read()\n"
+    "        clock()\n"
+    "    caller()\n",
+    # A coroutine reads under the bindings where it is awaited.
+    "import time\n"
+    "async def test_coroutine_awaited_under_a_temporary_binding():\n"
+    "    clock = lambda: 0\n"
+    "    async def read():\n"
+    "        return clock()\n"
+    "    pending = read()\n"
+    "    clock = time.time\n"
+    "    result = await pending\n"
+    "    clock = lambda: 0\n",
     # The same holds for a comprehension target over a literal iterable.
     "import time\n"
     "def test_comprehension_target_known_elements():\n"
