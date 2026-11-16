@@ -165,6 +165,17 @@ def _merge_values(values: list[str]) -> str:
     return values[0]
 
 
+def _iterable_element_value(iterable: ast.expr, visitor: ClockVisitor) -> str:
+    """The binding a loop or comprehension target takes from a literal iterable.
+
+    A tuple or list literal assigns each element to the target in turn, so
+    a known clock callable among them keeps the target resolvable.
+    """
+    if isinstance(iterable, (ast.Tuple, ast.List)) and iterable.elts:
+        return _merge_values([visitor.qualified(element) for element in iterable.elts])
+    return ""
+
+
 class ClockVisitor(ast.NodeVisitor):
     """Resolve clock-call bindings within each lexical scope in statement order.
 
@@ -435,10 +446,18 @@ class ClockVisitor(ast.NodeVisitor):
         self.visit(node.iter)
         # Zero iterations leave the target holding its incoming value.
         pre_target = dict(self.aliases)
-        self.bind(node.target)
-        self._visit_loop(node, pre_target=pre_target, target=node.target)
+        target_value = _iterable_element_value(node.iter, self)
+        self._bind_loop_target(node.target, target_value)
+        self._visit_loop(node, pre_target=pre_target, target=node.target, target_value=target_value)
 
     visit_AsyncFor = visit_For
+
+    def _bind_loop_target(self, target: ast.expr, value: str) -> None:
+        """Bind a loop target, keeping known clock callables resolvable."""
+        if isinstance(target, ast.Name) and value:
+            self.aliases[target.id] = value
+        else:
+            self.bind(target)
 
     def visit_While(self, node: ast.While) -> None:
         self.visit(node.test)
@@ -450,6 +469,7 @@ class ClockVisitor(ast.NodeVisitor):
         recheck: ast.expr | None = None,
         pre_target: dict[str, str] | None = None,
         target: ast.expr | None = None,
+        target_value: str = "",
     ) -> None:
         # A loop body may run zero times, so its assignments must not clear a
         # binding: merge the pre-loop state with the body and ``else`` states.
@@ -469,7 +489,7 @@ class ClockVisitor(ast.NodeVisitor):
             for _ in range(_PROBE_LIMIT):
                 start_state = dict(self.aliases)
                 if target is not None:
-                    self.bind(target)
+                    self._bind_loop_target(target, target_value)
                 for statement in node.body:
                     self.visit(statement)
                 del self.reads[probe_start:]
@@ -495,7 +515,7 @@ class ClockVisitor(ast.NodeVisitor):
         # Each iteration reassigns the target from the iterable before the
         # body runs.
         if target is not None:
-            self.bind(target)
+            self._bind_loop_target(target, target_value)
         self.break_states.append([])
         self.continue_states.append([])
         try:
@@ -606,9 +626,7 @@ class ClockVisitor(ast.NodeVisitor):
         if not node.finalbody:
             return
         pending_breaks = self.break_states[-1][break_mark:] if self.break_states else []
-        pending_continues = (
-            self.continue_states[-1][continue_mark:] if self.continue_states else []
-        )
+        pending_continues = self.continue_states[-1][continue_mark:] if self.continue_states else []
         if not pending_breaks and not pending_continues:
             return
         # A break or continue crosses the finally block, so each pending
@@ -671,6 +689,7 @@ class ClockVisitor(ast.NodeVisitor):
         self,
         node: ast.ListComp | ast.SetComp | ast.DictComp | ast.GeneratorExp,
         level: int,
+        scan_element: bool = True,
     ) -> list[dict[str, str]]:
         """Scan one comprehension iteration from ``level`` down.
 
@@ -683,7 +702,7 @@ class ClockVisitor(ast.NodeVisitor):
         generator = node.generators[level]
         if level:
             self.visit(generator.iter)
-        self.bind(generator.target)
+        self._bind_loop_target(generator.target, _iterable_element_value(generator.iter, self))
         for condition in generator.ifs:
             self.visit(condition)
             # A false filter rejects the iteration, so its post-condition
@@ -701,8 +720,8 @@ class ClockVisitor(ast.NodeVisitor):
             self.probing = outer_probing or previous_entry is not None
             try:
                 if deeper < len(node.generators):
-                    rejected.extend(self._scan_comprehension_pass(node, deeper))
-                elif not isinstance(node, ast.GeneratorExp):
+                    rejected.extend(self._scan_comprehension_pass(node, deeper, scan_element))
+                elif scan_element:
                     for expression in (
                         [node.key, node.value] if isinstance(node, ast.DictComp) else [node.elt]
                     ):
@@ -1020,6 +1039,20 @@ class ClockVisitor(ast.NodeVisitor):
         self.visit(node.value)
         self.table = previous_table
 
+    def _preassign_dict_entry_tables(self, node: ast.DictComp) -> None:
+        """Reserve a dictionary comprehension's tables in symbol-table order.
+
+        The symbol table lists the filters, the value scope and the key scope
+        in that order, while the entries evaluate key first. The first
+        iterable is already evaluated, and the scan visits the later
+        iterables as it reaches them.
+        """
+        for generator in node.generators:
+            for condition in generator.ifs:
+                self._preassign_expression_tables(condition)
+        self._preassign_expression_tables(node.value)
+        self._preassign_expression_tables(node.key)
+
     def visit_comprehension_scope(
         self, node: ast.ListComp | ast.SetComp | ast.DictComp | ast.GeneratorExp
     ) -> None:
@@ -1033,27 +1066,20 @@ class ClockVisitor(ast.NodeVisitor):
             # The silent loop pass leaves the table for the real pass.
             preassigned = self.preassigned.pop(id(node), None)
             self.table = (
-                preassigned
-                if preassigned is not None
-                else self.child_table(node, "genexpr")
+                preassigned if preassigned is not None else self.child_table(node, "genexpr")
             )
             # The body runs at consumption time, which may be long after the
             # enclosing block exited, so only the marker-derived freeze
             # covers it and its element scans with the deferred functions.
-            self.functions.append(
-                (node, self.table, previous_enclosing, self.deferred_frozen)
-            )
+            self.functions.append((node, self.table, previous_enclosing, self.deferred_frozen))
         self.aliases = self.enclosing.copy()
         self.enclosing = self.aliases
         if isinstance(node, ast.DictComp) and not self.probing:
-            # The symbol table lists the value scope before the key scope,
-            # while the entries evaluate key first.
-            self._preassign_expression_tables(node.value)
-            self._preassign_expression_tables(node.key)
+            self._preassign_dict_entry_tables(node)
         assigned = self.walrus
         self.walrus = set()
         for generator in node.generators:
-            self.bind(generator.target)
+            self._bind_loop_target(generator.target, _iterable_element_value(generator.iter, self))
         if isinstance(node, ast.GeneratorExp):
             # The filters and later iterables also run at consumption time,
             # so the deferred scan covers them with the element.
@@ -1262,14 +1288,11 @@ class ClockVisitor(ast.NodeVisitor):
             if isinstance(node, ast.Lambda):
                 self.visit(node.body)
             elif isinstance(node, ast.GeneratorExp):
-                # The filters and later iterables run per consumption too.
-                for index, generator in enumerate(node.generators):
-                    if index:
-                        self.visit(generator.iter)
-                    self.bind(generator.target)
-                    for condition in generator.ifs:
-                        self.visit(condition)
-                self.visit(node.elt)
+                # The body runs per consumption, so its levels settle the
+                # same way an eager comprehension's do.
+                rejected = self._scan_comprehension_pass(node, 0)
+                if rejected:
+                    self._merge_states([dict(self.aliases), *rejected])
             else:
                 for statement in node.body:
                     self.visit(statement)

@@ -96,16 +96,10 @@ UNFROZEN_READS = [
     "    clock = fake_clock or datetime.now\n"
     "    clock()\n",
     # A boolean expression may also be the invoked callable itself.
-    "import time\n"
-    "def test_direct_boolop_call():\n"
-    "    (time.time or None)()\n",
+    "import time\ndef test_direct_boolop_call():\n    (time.time or None)()\n",
     # A body assignment carries into later iterations: a read before the
     # assignment still executes against the assigned clock.
-    "import time\n"
-    "clock = lambda: 0\n"
-    "for _ in (1, 2):\n"
-    "    clock()\n"
-    "    clock = time.time\n",
+    "import time\nclock = lambda: 0\nfor _ in (1, 2):\n    clock()\n    clock = time.time\n",
     # A match case may be skipped, so the pre-match binding stays reachable.
     "import time\n"
     "def test_match_case(mode):\n"
@@ -145,9 +139,7 @@ UNFROZEN_READS = [
     "    clock()\n",
     # An annotated assignment evaluates its value before its annotation, so
     # the annotation's walrus cannot mask the value's own read.
-    "import time\n"
-    "clock = time.time\n"
-    "stamp: (clock := lambda: 0) = clock()\n",
+    "import time\nclock = time.time\nstamp: (clock := lambda: 0) = clock()\n",
     # A loop body may run zero times, so its assignments never clear a
     # clock binding.
     "from datetime import datetime\n"
@@ -394,6 +386,23 @@ UNFROZEN_READS = [
     "def test_nested_comprehension_levels():\n"
     "    clock = lambda: 0\n"
     "    [(clock(), (clock := time.time)) for x in (1,) if (clock := lambda: 0) for y in (1, 2)]\n",
+    # A deferred generator's element settles across its iterations the same
+    # way an eager comprehension's does.
+    "import time\n"
+    "def test_deferred_generator_carried():\n"
+    "    clock = lambda: 0\n"
+    "    values = ((clock(), (clock := time.time)) for _ in (1, 2))\n"
+    "    list(values)\n",
+    # A loop over a literal iterable of clock callables keeps the target
+    # resolvable on every iteration.
+    "import time\n"
+    "def test_loop_target_known_elements():\n"
+    "    for clock in (time.time,):\n"
+    "        clock()\n",
+    # The same holds for a comprehension target over a literal iterable.
+    "import time\n"
+    "def test_comprehension_target_known_elements():\n"
+    "    [clock() for clock in (time.time,)]\n",
 ]
 
 #: The same reads are accepted once the clock is frozen at function, class or
@@ -739,6 +748,12 @@ def test_dict_comprehension_value_scope_precedes_the_key() -> None:
     assert guard.clock_findings(source).reads == []
 
 
+def test_dict_comprehension_filters_precede_the_entry_scopes() -> None:
+    """A dictionary comprehension's filter scopes precede its entry scopes."""
+    source = "mapping = {(lambda: lambda: None): (lambda: None) for _ in [] if (lambda: None)}\n"
+    assert guard.clock_findings(source).reads == []
+
+
 def test_annotated_assignment_scopes_preassign_in_order() -> None:
     """An annotated assignment's annotation scopes precede the value's."""
     source = "stamp: (lambda: None) = lambda: lambda: None\n"
@@ -763,10 +778,7 @@ def test_keyword_arguments_preassign_in_order() -> None:
 
 def test_generic_class_bases_resolve_inside_the_wrapper_scope() -> None:
     """A generic class's bases are evaluated inside its type-parameter scope."""
-    source = (
-        "class Base: pass\n"
-        "class Helper[T: (lambda: None)]((lambda: lambda: Base)()()): pass\n"
-    )
+    source = "class Base: pass\nclass Helper[T: (lambda: None)]((lambda: lambda: Base)()()): pass\n"
     assert guard.clock_findings(source).reads == []
 
 
