@@ -708,6 +708,15 @@ UNFROZEN_READS = [
     "pytestmark = pytest.mark.parametrize('frozen_clock', [None])\n"
     "def test_read(frozen_clock):\n"
     "    return time.time()\n",
+    # An ``as`` capture holds the matched subject.
+    "import time\nmatch time.time:\n    case clock as other:\n        other()\n",
+    # A generator unpacked into a target stays unconsumed until the target is.
+    "import time\n"
+    "def test_unpacked_generator():\n"
+    "    clock = lambda: 0\n"
+    "    values, = ((clock() for _ in (1,)),)\n"
+    "    clock = time.time\n"
+    "    list(values)\n",
     # The same holds for a comprehension target over a literal iterable.
     "import time\n"
     "def test_comprehension_target_known_elements():\n"

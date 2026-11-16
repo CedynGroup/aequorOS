@@ -336,6 +336,8 @@ class ClockVisitor(ast.NodeVisitor):
         #: What each assignment expression evaluated to, before its target
         #: was bound.
         self.walrus_results: dict[int, str] = {}
+        #: The generators among those elements, by element.
+        self.captured_generators: dict[int, str] = {}
         #: Bindings of the elements of the unpacked value being evaluated,
         #: captured as each element evaluates.
         self.captured_elements: dict[int, str] = {}
@@ -479,7 +481,7 @@ class ClockVisitor(ast.NodeVisitor):
             captured = self.captured_elements.get(id(value))
             return {
                 target.id: captured if captured is not None else self.qualified(value),
-                GENERATOR_KEY + target.id: "",
+                GENERATOR_KEY + target.id: self.captured_generators.get(id(value), ""),
             }
         if isinstance(target, (ast.Tuple, ast.List)):
             aligned = (
@@ -578,7 +580,14 @@ class ClockVisitor(ast.NodeVisitor):
             for element in value.elts:
                 self._evaluate_captured(element)
             return
-        self.visit(value)
+        if isinstance(value, ast.GeneratorExp):
+            # A generator inside the unpacked value waits for the consumer of
+            # the target that receives it.
+            self._visit_assigned_value(value)
+            self.generator_effects[id(value)] = self.generator_bindings
+            self.captured_generators[id(value)] = str(id(value))
+        else:
+            self.visit(value)
         self.captured_elements[id(value)] = self.qualified(value)
 
     def _held_generator(self, value: ast.expr) -> str | None:
@@ -623,6 +632,7 @@ class ClockVisitor(ast.NodeVisitor):
                 self.aliases[target.id] = name
             self._hold_generator(target, node.value, held)
         self.captured_elements.clear()
+        self.captured_generators.clear()
 
     def visit_AnnAssign(self, node: ast.AnnAssign) -> None:
         # The symbol table lists the target's scopes, then the annotation's,
@@ -1218,9 +1228,8 @@ class ClockVisitor(ast.NodeVisitor):
         """
         if isinstance(pattern, ast.MatchAs):
             if pattern.name is not None:
-                # A bare capture holds the subject itself; an ``as`` name
-                # holds an unknown value.
-                self.aliases[pattern.name] = subject_value if pattern.pattern is None else ""
+                # A capture, bare or with ``as``, holds the subject itself.
+                self.aliases[pattern.name] = subject_value
             if pattern.pattern is not None:
                 self._bind_pattern_captures(pattern.pattern, subject_value, subject)
         elif isinstance(pattern, ast.MatchSequence):
