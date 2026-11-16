@@ -223,6 +223,9 @@ class ClockVisitor(ast.NodeVisitor):
         self.frozen = False
         self.deferred_frozen = False
         self.postponed = False
+        #: Clock bindings each function or lambda captured through its
+        #: parameter defaults, keyed by node id.
+        self.default_bindings: dict[int, dict[str, str]] = {}
         self.functions: list[
             tuple[
                 ast.FunctionDef | ast.AsyncFunctionDef | ast.Lambda | ast.GeneratorExp,
@@ -906,6 +909,27 @@ class ClockVisitor(ast.NodeVisitor):
             if default is not None:
                 self.visit(default)
 
+    def _capture_defaults(self, node: ast.FunctionDef | ast.AsyncFunctionDef | ast.Lambda) -> None:
+        """Record the clock bindings the parameter defaults capture.
+
+        Defaults evaluate once at definition time, so a parameter that
+        defaults to a clock callable holds it when the body starts.
+        """
+        arguments = node.args
+        positional = [*arguments.posonlyargs, *arguments.args]
+        captured = {
+            parameter.arg: self.qualified(default)
+            for parameter, default in zip(
+                positional[len(positional) - len(arguments.defaults) :],
+                arguments.defaults,
+                strict=True,
+            )
+        }
+        for parameter, default in zip(arguments.kwonlyargs, arguments.kw_defaults, strict=True):
+            if default is not None:
+                captured[parameter.arg] = self.qualified(default)
+        self.default_bindings[id(node)] = captured
+
     def _visit_annotations(self, arguments: ast.arguments) -> None:
         if self.postponed:
             return
@@ -963,6 +987,7 @@ class ClockVisitor(ast.NodeVisitor):
         for decorator in node.decorator_list:
             self.visit(decorator)
         self._visit_defaults(node.args)
+        self._capture_defaults(node)
         entered = self._enter_wrapper_scopes(node.name, node.lineno)
         previous_table = self.table
         if entered:
@@ -983,6 +1008,7 @@ class ClockVisitor(ast.NodeVisitor):
         if self.probing:
             return
         self._visit_arguments(node.args)
+        self._capture_defaults(node)
         # A lambda body runs at call time, which may be long after the
         # enclosing block exited, so only marker-derived deferred freeze
         # covers it — not the run-time ``frozen`` of the defining scope.
@@ -1282,6 +1308,7 @@ class ClockVisitor(ast.NodeVisitor):
                     self.aliases[symbol.get_name()] = ""
                 elif symbol.is_global():
                     self.aliases[symbol.get_name()] = self.module_aliases.get(symbol.get_name(), "")
+            self.aliases.update(self.default_bindings.get(id(node), {}))
             self.enclosing = self.aliases
             self.frozen = frozen
             self.deferred_frozen = frozen

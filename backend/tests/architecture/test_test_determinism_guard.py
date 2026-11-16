@@ -399,6 +399,11 @@ UNFROZEN_READS = [
     "def test_loop_target_known_elements():\n"
     "    for clock in (time.time,):\n"
     "        clock()\n",
+    # A parameter that defaults to a clock callable holds it in the body,
+    # whether positional, keyword-only or on a lambda.
+    "import time\ndef test_positional_default(clock=time.time):\n    clock()\n",
+    "import time\ndef test_keyword_only_default(*, clock=time.time):\n    clock()\n",
+    "import time\ndef test_lambda_default():\n    (lambda clock=time.time: clock())()\n",
     # The same holds for a comprehension target over a literal iterable.
     "import time\n"
     "def test_comprehension_target_known_elements():\n"
