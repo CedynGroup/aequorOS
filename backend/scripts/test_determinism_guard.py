@@ -203,7 +203,7 @@ def _destructure(
 ) -> dict[str, str]:
     """Bind ``target`` to the merge of ``elements``, position by position."""
     if isinstance(target, ast.Name):
-        value = _merge_values([visitor.qualified(element) for element in elements])
+        value = _merge_values([visitor.element_value(element) for element in elements])
         return {target.id: value} if value else {}
     if isinstance(target, (ast.Tuple, ast.List)) and all(
         isinstance(element, (ast.Tuple, ast.List)) and len(element.elts) == len(target.elts)
@@ -529,6 +529,18 @@ class ClockVisitor(ast.NodeVisitor):
         self.visit(value)
         self.assigned_generator = None
 
+    def element_value(self, element: ast.expr) -> str:
+        """The binding an element of a literal sequence evaluated to."""
+        captured = self.captured_elements.get(id(element))
+        return captured if captured is not None else self.qualified(element)
+
+    def _visit_iterable(self, iterable: ast.expr) -> None:
+        """Evaluate an iterable, capturing a literal's elements as they evaluate."""
+        if isinstance(iterable, (ast.Tuple, ast.List)):
+            self._evaluate_captured(iterable)
+        else:
+            self.visit(iterable)
+
     def _evaluate_captured(self, value: ast.expr) -> None:
         """Evaluate an unpacked value, capturing each element as it evaluates."""
         if isinstance(value, (ast.Tuple, ast.List)):
@@ -670,7 +682,7 @@ class ClockVisitor(ast.NodeVisitor):
             # iterable's, while the iterable evaluates first.
             self._preassign_expression_tables(node.target)
             self._preassign_expression_tables(node.iter)
-        self.visit(node.iter)
+        self._visit_iterable(node.iter)
         # Zero iterations leave the target holding its incoming value.
         pre_target = dict(self.aliases)
         target_bindings = _loop_bindings(node.target, node.iter, self)
@@ -966,7 +978,7 @@ class ClockVisitor(ast.NodeVisitor):
         rejected: list[dict[str, str]] = []
         generator = node.generators[level]
         if level:
-            self.visit(generator.iter)
+            self._visit_iterable(generator.iter)
         captured = self.first_iterable_values.get(id(node)) if level == 0 else None
         self._bind_loop_target(
             generator.target,
@@ -1117,7 +1129,7 @@ class ClockVisitor(ast.NodeVisitor):
         self._merge_states([after_body, dict(self.aliases)])
 
     def visit_Match(self, node: ast.Match) -> None:
-        self.visit(node.subject)
+        self._visit_iterable(node.subject)
         before = dict(self.aliases)
         subject_value = self.qualified(node.subject)
         states: list[dict[str, str]] = []
@@ -1131,7 +1143,7 @@ class ClockVisitor(ast.NodeVisitor):
             # A pattern captures the matched value before the guard or the
             # case body runs; a bare capture holds the subject itself, while
             # any other capture holds an unknown value.
-            self._bind_pattern_captures(case.pattern, subject_value)
+            self._bind_pattern_captures(case.pattern, subject_value, node.subject)
             if case.guard is not None:
                 self.visit(case.guard)
                 guard_states.append(dict(self.aliases))
@@ -1152,18 +1164,62 @@ class ClockVisitor(ast.NodeVisitor):
             states.extend(guard_states)
         self._merge_states(states)
 
-    def _bind_pattern_captures(self, pattern: ast.pattern, subject_value: str) -> None:
-        """Apply a case pattern's capture bindings against ``self.aliases``."""
-        for inner in ast.walk(pattern):
-            if isinstance(inner, ast.MatchAs):
-                if inner.pattern is None and inner.name is not None:
-                    self.aliases[inner.name] = subject_value
-                elif inner.name is not None:
-                    self.aliases[inner.name] = ""
-            elif isinstance(inner, ast.MatchStar) and inner.name is not None:
-                self.aliases[inner.name] = ""
-            elif isinstance(inner, ast.MatchMapping) and inner.rest is not None:
-                self.aliases[inner.rest] = ""
+    def _bind_sequence_captures(self, pattern: ast.MatchSequence, subject: ast.expr | None) -> None:
+        """Bind each capture of a sequence pattern to its matched element."""
+        elements = (
+            subject.elts
+            if isinstance(subject, (ast.Tuple, ast.List))
+            and len(subject.elts) == len(pattern.patterns)
+            and not any(isinstance(item, ast.MatchStar) for item in pattern.patterns)
+            else None
+        )
+        for index, item in enumerate(pattern.patterns):
+            element = elements[index] if elements is not None else None
+            self._bind_pattern_captures(
+                item, self.element_value(element) if element is not None else "", element
+            )
+
+    def _bind_pattern_captures(
+        self, pattern: ast.pattern, subject_value: str, subject: ast.expr | None
+    ) -> None:
+        """Apply a case pattern's capture bindings against ``self.aliases``.
+
+        A sequence pattern matches its subject element by element, so each
+        nested capture holds the binding of its own element.
+        """
+        if isinstance(pattern, ast.MatchAs):
+            if pattern.name is not None:
+                # A bare capture holds the subject itself; an ``as`` name
+                # holds an unknown value.
+                self.aliases[pattern.name] = subject_value if pattern.pattern is None else ""
+            if pattern.pattern is not None:
+                self._bind_pattern_captures(pattern.pattern, subject_value, subject)
+        elif isinstance(pattern, ast.MatchSequence):
+            self._bind_sequence_captures(pattern, subject)
+        elif isinstance(pattern, ast.MatchOr):
+            for alternative in pattern.patterns:
+                self._bind_pattern_captures(alternative, subject_value, subject)
+        else:
+            self._bind_opaque_captures(pattern)
+
+    def _bind_opaque_captures(self, pattern: ast.pattern) -> None:
+        """Bind the captures of a pattern whose matched value is unknown."""
+        if isinstance(pattern, ast.MatchStar):
+            names = [pattern.name]
+            nested: list[ast.pattern] = []
+        elif isinstance(pattern, ast.MatchMapping):
+            names = [pattern.rest]
+            nested = pattern.patterns
+        elif isinstance(pattern, ast.MatchClass):
+            names = []
+            nested = [*pattern.patterns, *pattern.kwd_patterns]
+        else:
+            return
+        for name in names:
+            if name is not None:
+                self.aliases[name] = ""
+        for item in nested:
+            self._bind_pattern_captures(item, "", None)
 
     def visit_With(self, node: ast.With | ast.AsyncWith) -> None:
         previous_frozen, previous_deferred = self.frozen, self.deferred_frozen
@@ -1427,7 +1483,7 @@ class ClockVisitor(ast.NodeVisitor):
     def visit_comprehension_scope(
         self, node: ast.ListComp | ast.SetComp | ast.DictComp | ast.GeneratorExp
     ) -> None:
-        self.visit(node.generators[0].iter)
+        self._visit_iterable(node.generators[0].iter)
         if isinstance(node, ast.GeneratorExp) and not self.probing:
             first = node.generators[0]
             self.first_iterable_values[id(node)] = _loop_bindings(first.target, first.iter, self)

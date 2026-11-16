@@ -674,6 +674,10 @@ UNFROZEN_READS = [
     "import time\ndef test_defaulted_frozen_clock(frozen_clock=None):\n    return time.time()\n",
     # Nested elements of an unpacked value are captured as they evaluate.
     "import time\n(clock,), other = (time.time,), (time := None)\nclock()\n",
+    # A loop iterable's elements are captured as they evaluate.
+    "import time\nfor clock in (time.time, (time := lambda: 0)):\n    clock()\n",
+    # A sequence pattern captures each matched element.
+    "import time\nmatch (time.time,):\n    case (clock,):\n        clock()\n",
     # The same holds for a comprehension target over a literal iterable.
     "import time\n"
     "def test_comprehension_target_known_elements():\n"
