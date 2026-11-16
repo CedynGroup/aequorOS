@@ -636,6 +636,13 @@ UNFROZEN_READS = [
     "    alias: object = values\n"
     "    clock = time.time\n"
     "    list(alias)\n",
+    # A later iterable may name an earlier target of the same generator.
+    "import time\n"
+    "def test_dependent_generator_targets():\n"
+    "    clock = lambda: 0\n"
+    "    values = ((clock := reader) for first in (time.time,) for reader in (first,))\n"
+    "    list(values)\n"
+    "    clock()\n",
     # The same holds for a comprehension target over a literal iterable.
     "import time\n"
     "def test_comprehension_target_known_elements():\n"

@@ -486,21 +486,20 @@ class ClockVisitor(ast.NodeVisitor):
         was created.
         """
         for name, value, supplied in bindings:
-            targets = {
-                bound: (
-                    source if isinstance(source, dict) else _loop_bindings(target, source, self)
-                ).get(bound, "")
-                for target, source in supplied
-                for bound in _target_names(target)
-            }
-            current = {target: self.aliases.get(target) for target in targets}
-            self.aliases.update(targets)
+            # Each level's targets are installed before the next iterable
+            # resolves, because a later iterable may name an earlier target.
+            previous: dict[str, str | None] = {}
+            for target, source in supplied:
+                bound = source if isinstance(source, dict) else _loop_bindings(target, source, self)
+                for target_name in _target_names(target):
+                    previous.setdefault(target_name, self.aliases.get(target_name))
+                    self.aliases[target_name] = bound.get(target_name, "")
             resolved = self.qualified(value)
-            for target, previous in current.items():
-                if previous is None:
-                    self.aliases.pop(target, None)
+            for target_name, earlier in previous.items():
+                if earlier is None:
+                    self.aliases.pop(target_name, None)
                 else:
-                    self.aliases[target] = previous
+                    self.aliases[target_name] = earlier
             self.aliases[name] = _merge_values([self.aliases.get(name, ""), resolved])
 
     def _visit_assigned_value(self, value: ast.expr) -> None:
