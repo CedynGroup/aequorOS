@@ -455,11 +455,17 @@ class ClockVisitor(ast.NodeVisitor):
         return child
 
     def visit_Call(self, node: ast.Call) -> None:
+        # The callable resolves after its own expression evaluated, and before
+        # the arguments can rebind anything.
+        self.visit(node.func)
         for name in self.possible_names(node.func):
             if (name in CLOCK_MEMBERS or name in UTC_NOW_SOURCES) and not self.frozen:
                 self.reads.append((name, node.lineno))
                 break
-        self.generic_visit(node)
+        for argument in node.args:
+            self.visit(argument)
+        for keyword in node.keywords:
+            self.visit(keyword)
 
     def visit_Import(self, node: ast.Import) -> None:
         for alias in node.names:
@@ -1222,6 +1228,25 @@ class ClockVisitor(ast.NodeVisitor):
                 item, self.element_value(element) if element is not None else "", element
             )
 
+    def _bind_mapping_captures(self, pattern: ast.MatchMapping, subject: ast.expr | None) -> None:
+        """Bind each capture of a mapping pattern to its literal subject value."""
+        if pattern.rest is not None:
+            self.aliases[pattern.rest] = ""
+        for key, item in zip(pattern.keys, pattern.patterns, strict=True):
+            value = None
+            if isinstance(subject, ast.Dict) and isinstance(key, ast.Constant):
+                value = next(
+                    (
+                        entry
+                        for literal, entry in zip(subject.keys, subject.values, strict=True)
+                        if isinstance(literal, ast.Constant) and literal.value == key.value
+                    ),
+                    None,
+                )
+            self._bind_pattern_captures(
+                item, self.element_value(value) if value is not None else "", value
+            )
+
     def _bind_pattern_captures(
         self, pattern: ast.pattern, subject_value: str, subject: ast.expr | None
     ) -> None:
@@ -1238,6 +1263,8 @@ class ClockVisitor(ast.NodeVisitor):
                 self._bind_pattern_captures(pattern.pattern, subject_value, subject)
         elif isinstance(pattern, ast.MatchSequence):
             self._bind_sequence_captures(pattern, subject)
+        elif isinstance(pattern, ast.MatchMapping):
+            self._bind_mapping_captures(pattern, subject)
         elif isinstance(pattern, ast.MatchOr):
             # Any alternative may be the one that matched, so each binds from
             # the incoming state and the results merge.
@@ -1257,9 +1284,6 @@ class ClockVisitor(ast.NodeVisitor):
         if isinstance(pattern, ast.MatchStar):
             names = [pattern.name]
             nested: list[ast.pattern] = []
-        elif isinstance(pattern, ast.MatchMapping):
-            names = [pattern.rest]
-            nested = pattern.patterns
         elif isinstance(pattern, ast.MatchClass):
             names = []
             nested = [*pattern.patterns, *pattern.kwd_patterns]

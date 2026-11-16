@@ -737,6 +737,12 @@ UNFROZEN_READS = [
     "match (time.time, None):\n"
     "    case (clock, None) | (_, clock):\n"
     "        clock()\n",
+    # A call's own expression establishes the callable it invokes.
+    "import time\n"
+    "def test_callable_from_its_own_expression():\n"
+    "    (reader if (reader := time.time) else None)()\n",
+    # A mapping pattern captures the literal subject's value for its key.
+    "import time\nmatch {'clock': time.time}:\n    case {'clock': clock}:\n        clock()\n",
     # The same holds for a comprehension target over a literal iterable.
     "import time\n"
     "def test_comprehension_target_known_elements():\n"
