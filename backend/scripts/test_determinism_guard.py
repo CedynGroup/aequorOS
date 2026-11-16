@@ -443,6 +443,10 @@ class ClockVisitor(ast.NodeVisitor):
     def visit_NamedExpr(self, node: ast.NamedExpr) -> None:
         self.visit(node.value)
         self.bind(node.target, node.value)
+        if self.exception_snapshots is not None and not self.probing:
+            # An exception may surface right after the binding, before the
+            # statement that holds the expression completes.
+            self.exception_snapshots.append(dict(self.aliases))
         # An assignment expression binds in the containing scope even inside
         # a comprehension; the comprehension hands the record on.
         self.walrus.add(node.target.id)
@@ -1476,9 +1480,7 @@ def _catches_everything(node: ast.Try | ast.TryStar) -> bool:
     """Whether a handler stops every exception the try body raises."""
     return any(
         handler.type is None
-        or (
-            isinstance(handler.type, ast.Name) and handler.type.id in {"Exception", "BaseException"}
-        )
+        or (isinstance(handler.type, ast.Name) and handler.type.id == "BaseException")
         for handler in node.handlers
     )
 

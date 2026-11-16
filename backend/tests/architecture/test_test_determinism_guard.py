@@ -524,6 +524,29 @@ UNFROZEN_READS = [
     "    values = (reader() for reader in (clock,))\n"
     "    clock = lambda: 0\n"
     "    list(values)\n",
+    # An exception between the subexpressions of one statement reaches the
+    # handler under the bindings made so far.
+    "import time\n"
+    "def test_exception_inside_an_expression():\n"
+    "    clock = lambda: 0\n"
+    "    try:\n"
+    "        ((clock := time.time), 1 / 0, (clock := lambda: 0))\n"
+    "    except ZeroDivisionError:\n"
+    "        clock()\n",
+    # An Exception handler leaves a BaseException escaping.
+    "import time\n"
+    "def test_exception_handler_leaves_system_exit(flag):\n"
+    "    clock = lambda: 0\n"
+    "    try:\n"
+    "        try:\n"
+    "            clock = time.time\n"
+    "            if flag:\n"
+    "                raise SystemExit\n"
+    "            clock = lambda: 0\n"
+    "        except Exception:\n"
+    "            clock = lambda: 0\n"
+    "    except SystemExit:\n"
+    "        clock()\n",
     # The same holds for a comprehension target over a literal iterable.
     "import time\n"
     "def test_comprehension_target_known_elements():\n"
