@@ -670,6 +670,10 @@ UNFROZEN_READS = [
     "    values = ((clock := reader) for _ in (1,) if (reader := time.time))\n"
     "    list(values)\n"
     "    clock()\n",
+    # A defaulted parameter is not a fixture request.
+    "import time\ndef test_defaulted_frozen_clock(frozen_clock=None):\n    return time.time()\n",
+    # Nested elements of an unpacked value are captured as they evaluate.
+    "import time\n(clock,), other = (time.time,), (time := None)\nclock()\n",
     # The same holds for a comprehension target over a literal iterable.
     "import time\n"
     "def test_comprehension_target_known_elements():\n"

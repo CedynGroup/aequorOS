@@ -529,6 +529,15 @@ class ClockVisitor(ast.NodeVisitor):
         self.visit(value)
         self.assigned_generator = None
 
+    def _evaluate_captured(self, value: ast.expr) -> None:
+        """Evaluate an unpacked value, capturing each element as it evaluates."""
+        if isinstance(value, (ast.Tuple, ast.List)):
+            for element in value.elts:
+                self._evaluate_captured(element)
+            return
+        self.visit(value)
+        self.captured_elements[id(value)] = self.qualified(value)
+
     def _held_generator(self, value: ast.expr) -> str | None:
         """The generators a plain variable copy passes on unconsumed."""
         if isinstance(value, ast.Name):
@@ -561,9 +570,7 @@ class ClockVisitor(ast.NodeVisitor):
         self._preassign_targets_before(node.targets, node.value)
         held = self._held_generator(node.value)
         if isinstance(node.value, (ast.Tuple, ast.List)):
-            for element in node.value.elts:
-                self.visit(element)
-                self.captured_elements[id(element)] = self.qualified(element)
+            self._evaluate_captured(node.value)
         elif held is None:
             self._visit_assigned_value(node.value)
         name = self.qualified(node.value)
@@ -1732,8 +1739,19 @@ def _catches_everything(node: ast.Try | ast.TryStar) -> bool:
 
 
 def _takes_frozen_clock(args: ast.arguments) -> bool:
-    names = [argument.arg for argument in [*args.posonlyargs, *args.args, *args.kwonlyargs]]
-    return FROZEN_CLOCK in names
+    """Whether pytest injects the ``frozen_clock`` fixture into the function.
+
+    Pytest requests a fixture for each positional-or-keyword and keyword-only
+    parameter that has no default.
+    """
+    positional = args.args
+    undefaulted = positional[: len(positional) - len(args.defaults)]
+    required_keyword_only = [
+        argument
+        for argument, default in zip(args.kwonlyargs, args.kw_defaults, strict=True)
+        if default is None
+    ]
+    return FROZEN_CLOCK in [argument.arg for argument in (*undefaulted, *required_keyword_only)]
 
 
 @dataclasses.dataclass(frozen=True)
