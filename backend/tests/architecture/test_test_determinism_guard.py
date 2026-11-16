@@ -656,6 +656,20 @@ UNFROZEN_READS = [
     "        values = []\n"
     "    clock = time.time\n"
     "    list(values)\n",
+    # A freeze marker on a helper does not freeze it: pytest only reads
+    # marks of the items it collects.
+    "import pytest\n"
+    "import time\n"
+    f"@pytest.mark.freeze_time({INSTANT})\n"
+    "def helper():\n"
+    "    return time.time()\n",
+    # Consuming a generator runs its filters before its element.
+    "import time\n"
+    "def test_filter_before_element():\n"
+    "    clock = lambda: 0\n"
+    "    values = ((clock := reader) for _ in (1,) if (reader := time.time))\n"
+    "    list(values)\n"
+    "    clock()\n",
     # The same holds for a comprehension target over a literal iterable.
     "import time\n"
     "def test_comprehension_target_known_elements():\n"

@@ -1270,8 +1270,11 @@ class ClockVisitor(ast.NodeVisitor):
             # The silent loop pass only collects bindings; the real pass
             # records the definitions.
             return
+        # A mark only reaches the items pytest collects, so a marked helper or
+        # fixture is not frozen by it.
         own = (
             self._decorator_freezes(node.decorator_list)
+            and node.name.startswith("test")
             and not self._is_fixture(node.decorator_list)
         ) or _takes_frozen_clock(node.args)
         for decorator in node.decorator_list:
@@ -1473,7 +1476,8 @@ class ClockVisitor(ast.NodeVisitor):
                 for index, generator in enumerate(node.generators)
             ]
             bindings = [
-                (named.target.id, named.value, targets) for named in _named_expressions(node)
+                (named.target.id, named.value, targets)
+                for named in _generator_named_expressions(node)
             ]
             if id(node) == self.assigned_generator:
                 self.generator_bindings = bindings
@@ -1686,19 +1690,36 @@ class ClockVisitor(ast.NodeVisitor):
             self.deferred_body = previous_body_flag
 
 
-def _named_expressions(node: ast.expr) -> Iterator[ast.NamedExpr]:
-    """The assignment expressions that bind in the scope containing ``node``.
+def _named_expressions(node: ast.AST) -> Iterator[ast.NamedExpr]:
+    """The assignment expressions that bind in the scope containing ``node``,
+    in evaluation order.
 
     A lambda keeps its own assignment expressions to itself.
     """
-    stack: list[ast.AST] = [node]
-    while stack:
-        for child in ast.iter_child_nodes(stack.pop()):
-            if isinstance(child, ast.Lambda):
-                continue
-            if isinstance(child, ast.NamedExpr):
-                yield child
-            stack.append(child)
+    for child in ast.iter_child_nodes(node):
+        if isinstance(child, ast.Lambda):
+            continue
+        yield from _named_expressions(child)
+        if isinstance(child, ast.NamedExpr):
+            yield child
+
+
+def _generator_named_expressions(node: ast.GeneratorExp) -> Iterator[ast.NamedExpr]:
+    """The assignment expressions consuming a generator runs, in order.
+
+    The first iterable evaluates at creation; each iteration then runs a
+    level's filters, the next level's iterable, and finally the element.
+    """
+    for index, generator in enumerate(node.generators):
+        for expression in (*([generator.iter] if index else []), *generator.ifs):
+            if isinstance(expression, ast.NamedExpr):
+                yield from _named_expressions(expression)
+                yield expression
+            else:
+                yield from _named_expressions(expression)
+    yield from _named_expressions(node.elt)
+    if isinstance(node.elt, ast.NamedExpr):
+        yield node.elt
 
 
 def _catches_everything(node: ast.Try | ast.TryStar) -> bool:
