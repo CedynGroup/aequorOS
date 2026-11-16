@@ -754,6 +754,14 @@ def test_dict_comprehension_filters_precede_the_entry_scopes() -> None:
     assert guard.clock_findings(source).reads == []
 
 
+def test_dict_comprehension_later_iterables_precede_the_entry_scopes() -> None:
+    """A dictionary comprehension's later iterable scopes precede its entries."""
+    source = (
+        "mapping = {(lambda: lambda: None): (lambda: None) for _ in [] for y in (lambda: None,)}\n"
+    )
+    assert guard.clock_findings(source).reads == []
+
+
 def test_annotated_assignment_scopes_preassign_in_order() -> None:
     """An annotated assignment's annotation scopes precede the value's."""
     source = "stamp: (lambda: None) = lambda: lambda: None\n"

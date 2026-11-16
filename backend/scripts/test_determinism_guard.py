@@ -1044,10 +1044,12 @@ class ClockVisitor(ast.NodeVisitor):
 
         The symbol table lists the filters, the value scope and the key scope
         in that order, while the entries evaluate key first. The first
-        iterable is already evaluated, and the scan visits the later
-        iterables as it reaches them.
+        iterable is already evaluated, so the later iterables and the filters
+        follow in generator order.
         """
-        for generator in node.generators:
+        for index, generator in enumerate(node.generators):
+            if index:
+                self._preassign_expression_tables(generator.iter)
             for condition in generator.ifs:
                 self._preassign_expression_tables(condition)
         self._preassign_expression_tables(node.value)
