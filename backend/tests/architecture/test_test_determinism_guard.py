@@ -864,6 +864,32 @@ UNFROZEN_READS = [
     "            clock = time.time\n"
     "            alias()\n"
     "            clock = lambda: 0\n",
+    # A helper called at import runs before any module marker freezes.
+    "import pytest\n"
+    "import time\n"
+    f"pytestmark = pytest.mark.freeze_time({INSTANT})\n"
+    "def read():\n"
+    "    return time.time()\n"
+    "STAMP = read()\n",
+    # A generator held directly by a dictionary value reaches the capture.
+    "import time\n"
+    "def test_generator_through_dictionary_value():\n"
+    "    clock = lambda: 0\n"
+    "    match {'values': (clock() for _ in (1,))}:\n"
+    "        case {'values': values}:\n"
+    "            clock = time.time\n"
+    "            list(values)\n",
+    # A helper called by another helper settles to the outer call's bindings.
+    "import time\n"
+    "def test_transitive_helpers():\n"
+    "    clock = lambda: 0\n"
+    "    def first():\n"
+    "        return clock()\n"
+    "    def second():\n"
+    "        return first()\n"
+    "    clock = time.time\n"
+    "    second()\n"
+    "    clock = lambda: 0\n",
     # The same holds for a comprehension target over a literal iterable.
     "import time\n"
     "def test_comprehension_target_known_elements():\n"

@@ -346,6 +346,10 @@ class ClockVisitor(ast.NodeVisitor):
         #: The bindings each nested function or lambda is scanned under: the
         #: merge of the states at the points where it is referenced.
         self.callable_scopes: dict[int, dict[str, str]] = {}
+        #: Whether a nested function's references all ran under a freeze.
+        self.callable_frozen: dict[int, bool] = {}
+        #: The state each recorded body was last scanned under.
+        self.scanned_states: dict[int, tuple[tuple[tuple[str, str], ...], bool]] = {}
         #: Whether the visited statements run inside a function body, where
         #: nothing is collected or registered by pytest.
         self.in_function_body = False
@@ -556,6 +560,11 @@ class ClockVisitor(ast.NodeVisitor):
         known = self.callable_scopes.get(callable_id)
         current = dict(self.aliases)
         self.callable_scopes[callable_id] = self._merged([known, current] if known else [current])
+        # The body runs under the freeze active at the reference, and under a
+        # freeze only if every reference was under one.
+        self.callable_frozen[callable_id] = self.callable_frozen.get(callable_id, True) and (
+            self.frozen
+        )
 
     def _consume_generator(self, generator: int) -> None:
         """Scan a generator's body under the bindings at its consumption."""
@@ -618,14 +627,6 @@ class ClockVisitor(ast.NodeVisitor):
             self._evaluate_captured(iterable)
         else:
             self.visit(iterable)
-
-    def _evaluate_captured_value(self, value: ast.expr) -> None:
-        """Evaluate a dictionary value, capturing it and any literal elements."""
-        if isinstance(value, (ast.Tuple, ast.List)):
-            self._evaluate_captured(value)
-        else:
-            self.visit(value)
-        self.captured_elements[id(value)] = self.qualified(value)
 
     def _evaluate_captured(self, value: ast.expr) -> None:
         """Evaluate an unpacked value, capturing each element as it evaluates."""
@@ -1091,7 +1092,7 @@ class ClockVisitor(ast.NodeVisitor):
         for key, value in zip(node.keys, node.values, strict=True):
             if key is not None:
                 self.visit(key)
-            self._evaluate_captured_value(value)
+            self._evaluate_captured(value)
 
     def _scan_comprehension_pass(
         self,
@@ -1941,58 +1942,108 @@ class ClockVisitor(ast.NodeVisitor):
         # the findings count one read per line and name.
         return _unique_reads(self.reads)
 
-    def _scan_deferred_functions(self) -> None:
-        """Scan every recorded function, lambda and generator body."""
-        for node, table, enclosing, recorded_frozen in self.functions:
-            self.table = table
-            scopes = (
-                self.generator_scopes
-                if isinstance(node, ast.GeneratorExp)
-                else self.callable_scopes
-            )
-            captured = id(node) in scopes
-            scope = scopes[id(node)] if captured else enclosing
-            if captured and _runs_later(node):
-                # Referencing a coroutine or generator function only creates
-                # the object; its body runs at a later await or iteration, so
-                # the enclosing scope's final bindings stay reachable.
-                scope = self._merged([scope, enclosing])
-            self.aliases = scope.copy()
+    def _scan_state(
+        self, node: ast.AST, enclosing: dict[str, str], recorded_frozen: bool
+    ) -> tuple[dict[str, str], bool, bool]:
+        """The bindings and freeze a recorded body is scanned under.
+
+        A function referenced somewhere runs under the bindings and freeze of
+        those references; one that is never referenced runs under the
+        enclosing scope's final bindings.
+        """
+        scopes = (
+            self.generator_scopes if isinstance(node, ast.GeneratorExp) else self.callable_scopes
+        )
+        captured = id(node) in scopes
+        scope = scopes[id(node)] if captured else enclosing
+        if captured and _runs_later(node):
+            # Referencing a coroutine or generator function only creates the
+            # object; its body runs at a later await or iteration, so the
+            # enclosing scope's final bindings stay reachable.
+            scope = self._merged([scope, enclosing])
+        frozen = recorded_frozen
+        if captured:
             frozen = (
-                self.generator_frozen.get(id(node), recorded_frozen)
-                if captured
-                else recorded_frozen
-            )
-            for symbol in table.get_symbols():
-                name = symbol.get_name()
-                if symbol.is_local():
-                    self.aliases[name] = ""
-                    self.aliases[GENERATOR_KEY + name] = ""
-                    self.aliases[CALLABLE_KEY + name] = ""
-                elif symbol.is_global() and not (captured and name in self.aliases):
-                    # A captured generator scope already holds the module
-                    # bindings at consumption.
-                    self.aliases[name] = self.module_aliases.get(name, "")
-            self.aliases.update(self.default_bindings.get(id(node), {}))
-            self.enclosing = self.aliases
-            self.return_states = []
-            self.frozen = frozen
-            self.deferred_frozen = frozen
-            previous_body_flag = self.deferred_body
-            self.deferred_body = True
-            self.in_function_body = True
-            if isinstance(node, ast.Lambda):
-                self.visit(node.body)
-            elif isinstance(node, ast.GeneratorExp):
-                # The body runs per consumption, so its levels settle the
-                # same way an eager comprehension's do.
+                self.generator_frozen
+                if isinstance(node, ast.GeneratorExp)
+                else self.callable_frozen
+            ).get(id(node), recorded_frozen)
+        return scope, frozen, captured
+
+    def _scan_function(
+        self,
+        node: ast.AST,
+        table: symtable.SymbolTable,
+        enclosing: dict[str, str],
+        recorded_frozen: bool,
+    ) -> None:
+        """Scan one recorded function, lambda or generator body."""
+        self.table = table
+        scope, frozen, captured = self._scan_state(node, enclosing, recorded_frozen)
+        self.scanned_states[id(node)] = (tuple(sorted(scope.items())), frozen)
+        self.aliases = scope.copy()
+        for symbol in table.get_symbols():
+            name = symbol.get_name()
+            if symbol.is_local():
+                self.aliases[name] = ""
+                self.aliases[GENERATOR_KEY + name] = ""
+                self.aliases[CALLABLE_KEY + name] = ""
+            elif symbol.is_global() and not (captured and name in self.aliases):
+                # A captured scope already holds the module bindings at the
+                # point the body may run.
+                self.aliases[name] = self.module_aliases.get(name, "")
+        self.aliases.update(self.default_bindings.get(id(node), {}))
+        self.enclosing = self.aliases
+        self.return_states = []
+        self.frozen = frozen
+        self.deferred_frozen = frozen
+        previous_body_flag = self.deferred_body
+        self.deferred_body = True
+        self.in_function_body = True
+        if isinstance(node, ast.Lambda):
+            self.visit(node.body)
+        elif isinstance(node, ast.GeneratorExp):
+            # The body runs per consumption, so its levels settle the same way
+            # an eager comprehension's do.
+            if not self.probing:
                 self._preassign_comprehension_tables(node)
-                self._settle_comprehension(node)
-            else:
-                for statement in node.body:
-                    self.visit(statement)
-            self.deferred_body = previous_body_flag
-            self.in_function_body = False
+            self._settle_comprehension(node)
+        elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            for statement in node.body:
+                self.visit(statement)
+        self.deferred_body = previous_body_flag
+        self.in_function_body = False
+
+    def _scan_deferred_functions(self) -> None:
+        """Scan every recorded function, lambda and generator body.
+
+        A body that calls another function adds bindings to that function's
+        scan state after it may already have been scanned, so the bodies
+        whose state grew are scanned again until the states settle.
+        """
+        for node, table, enclosing, recorded_frozen in self.functions:
+            self._scan_function(node, table, enclosing, recorded_frozen)
+        outer_probing, self.probing = self.probing, True
+        try:
+            for _ in range(_PROBE_LIMIT):
+                stale = [
+                    entry
+                    for entry in self.functions
+                    if self._current_state(entry[0], entry[2], entry[3])
+                    != self.scanned_states.get(id(entry[0]))
+                ]
+                if not stale:
+                    break
+                for node, table, enclosing, recorded_frozen in stale:
+                    self._scan_function(node, table, enclosing, recorded_frozen)
+        finally:
+            self.probing = outer_probing
+
+    def _current_state(
+        self, node: ast.AST, enclosing: dict[str, str], recorded_frozen: bool
+    ) -> tuple[tuple[tuple[str, str], ...], bool]:
+        scope, frozen, _ = self._scan_state(node, enclosing, recorded_frozen)
+        return tuple(sorted(scope.items())), frozen
 
 
 def _named_expressions(node: ast.AST) -> Iterator[ast.NamedExpr]:
