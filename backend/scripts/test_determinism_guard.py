@@ -339,6 +339,9 @@ class ClockVisitor(ast.NodeVisitor):
         #: Whether the visited statements run inside a function body, where
         #: nothing is collected or registered by pytest.
         self.in_function_body = False
+        #: Whether pytest collects tests from the visited scope: the module,
+        #: and the classes named ``Test*`` inside it.
+        self.collectable_scope = True
         #: Whether an enclosing class or module parametrizes ``frozen_clock``
         #: directly for the tests inside it.
         self.inherited_parametrization = False
@@ -1432,8 +1435,9 @@ class ClockVisitor(ast.NodeVisitor):
         # collected tests and the registered fixtures, not their helpers.
         # A function nested in another body is neither collected nor
         # registered.
-        collected = node.name.startswith("test") and not self.in_function_body
-        fixture = self._is_fixture(node.decorator_list) and not self.in_function_body
+        managed = self.collectable_scope and not self.in_function_body
+        collected = node.name.startswith("test") and managed
+        fixture = self._is_fixture(node.decorator_list) and managed
         own = (self._decorator_freezes(node.decorator_list) and collected and not fixture) or (
             (collected or fixture)
             and _takes_frozen_clock(node.args)
@@ -1507,6 +1511,8 @@ class ClockVisitor(ast.NodeVisitor):
         previous_body_flag = self.deferred_body
         self.deferred_body = False
         self.deferred_frozen = self.deferred_frozen or own
+        previous_collectable = self.collectable_scope
+        self.collectable_scope = previous_collectable and node.name.startswith("Test")
         previous_parametrization = self.inherited_parametrization
         self.inherited_parametrization = (
             previous_parametrization
@@ -1515,6 +1521,7 @@ class ClockVisitor(ast.NodeVisitor):
         for statement in node.body:
             self.visit(statement)
         self.inherited_parametrization = previous_parametrization
+        self.collectable_scope = previous_collectable
         self.deferred_body = previous_body_flag
         self.table, self.aliases = previous_table, previous_aliases
         self.frozen, self.deferred_frozen = previous_frozen, previous_deferred

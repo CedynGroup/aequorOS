@@ -779,6 +779,13 @@ UNFROZEN_READS = [
     "        def test_read(self):\n"
     "            return time.time()\n"
     "    TestInner().test_read()\n",
+    # A marked test-named method of a class pytest does not collect.
+    "import pytest\n"
+    "import time\n"
+    "class Helper:\n"
+    f"    @pytest.mark.freeze_time({INSTANT})\n"
+    "    def test_read(self):\n"
+    "        return time.time()\n",
     # The same holds for a comprehension target over a literal iterable.
     "import time\n"
     "def test_comprehension_target_known_elements():\n"
