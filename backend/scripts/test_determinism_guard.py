@@ -73,6 +73,7 @@ UTC_NOW_SOURCES = frozenset(
 FREEZE_MARKER = "pytest.mark.freeze_time"
 TRAVEL = "time_machine.travel"
 FIXTURE_DECORATORS = frozenset({"pytest.fixture", "pytest_asyncio.fixture"})
+PARAMETRIZE = "pytest.mark.parametrize"
 FROZEN_CLOCK = "frozen_clock"
 
 #: Upper bound on the silent probe passes a loop runs while its carried
@@ -198,6 +199,25 @@ def _target_names(target: ast.expr) -> list[str]:
     return []
 
 
+def _aligned(targets: list[ast.expr], values: list[ast.expr]) -> list[ast.expr | None] | None:
+    """The value each target position receives, or ``None`` if unknowable.
+
+    A starred target absorbs the surplus, so the fixed positions around it
+    still pair with their values; the starred position itself has none.
+    """
+    if any(isinstance(value, ast.Starred) for value in values):
+        return None
+    starred = next(
+        (index for index, target in enumerate(targets) if isinstance(target, ast.Starred)), None
+    )
+    if starred is None:
+        return list(values) if len(values) == len(targets) else None
+    if len(values) < len(targets) - 1:
+        return None
+    suffix = len(targets) - starred - 1
+    return [*values[:starred], None, *values[len(values) - suffix :]]
+
+
 def _destructure(
     target: ast.expr, elements: list[ast.expr], visitor: ClockVisitor
 ) -> dict[str, str]:
@@ -205,25 +225,24 @@ def _destructure(
     if isinstance(target, ast.Name):
         value = _merge_values([visitor.element_value(element) for element in elements])
         return {target.id: value} if value else {}
-    if isinstance(target, (ast.Tuple, ast.List)) and all(
-        isinstance(element, (ast.Tuple, ast.List)) and len(element.elts) == len(target.elts)
+    if not isinstance(target, (ast.Tuple, ast.List)):
+        return {}
+    alignments = [
+        _aligned(target.elts, element.elts) if isinstance(element, (ast.Tuple, ast.List)) else None
         for element in elements
-    ):
-        result: dict[str, str] = {}
-        for index, item in enumerate(target.elts):
-            result.update(
-                _destructure(
-                    item,
-                    [
-                        element.elts[index]
-                        for element in elements
-                        if isinstance(element, (ast.Tuple, ast.List))
-                    ],
-                    visitor,
-                )
-            )
-        return result
-    return {}
+    ]
+    if any(alignment is None for alignment in alignments):
+        return {}
+    result: dict[str, str] = {}
+    for index, item in enumerate(target.elts):
+        matched = [
+            alignment[index]
+            for alignment in alignments
+            if alignment and alignment[index] is not None
+        ]
+        if matched:
+            result.update(_destructure(item, [value for value in matched if value], visitor))
+    return result
 
 
 def _loop_bindings(target: ast.expr, iterable: ast.expr, visitor: ClockVisitor) -> dict[str, str]:
@@ -453,12 +472,14 @@ class ClockVisitor(ast.NodeVisitor):
                 GENERATOR_KEY + target.id: "",
             }
         if isinstance(target, (ast.Tuple, ast.List)):
-            values = value.elts if isinstance(value, (ast.Tuple, ast.List)) else []
+            aligned = (
+                _aligned(target.elts, value.elts)
+                if isinstance(value, (ast.Tuple, ast.List))
+                else None
+            )
             result: dict[str, str] = {}
             for index, item in enumerate(target.elts):
-                result.update(
-                    self.bindings(item, values[index] if len(values) == len(target.elts) else None)
-                )
+                result.update(self.bindings(item, aligned[index] if aligned else None))
             return result
         if isinstance(target, ast.Starred):
             return self.bindings(target.value)
@@ -1339,7 +1360,9 @@ class ClockVisitor(ast.NodeVisitor):
             self._decorator_freezes(node.decorator_list)
             and node.name.startswith("test")
             and not self._is_fixture(node.decorator_list)
-        ) or _takes_frozen_clock(node.args)
+        ) or (
+            _takes_frozen_clock(node.args) and not self._parametrizes_directly(node.decorator_list)
+        )
         for decorator in node.decorator_list:
             self.visit(decorator)
         self.default_bindings[id(node)] = self._visit_defaults(node.args)
@@ -1581,6 +1604,27 @@ class ClockVisitor(ast.NodeVisitor):
     visit_DictComp = visit_comprehension_scope
     visit_GeneratorExp = visit_comprehension_scope
 
+    def _parametrizes_directly(self, decorators: list[ast.expr]) -> bool:
+        """Whether a parametrize mark supplies ``frozen_clock`` as a plain value.
+
+        A directly parametrized argument replaces the fixture; an indirect
+        one still requests it.
+        """
+        for decorator in decorators:
+            if not (
+                isinstance(decorator, ast.Call) and self.qualified(decorator.func) == PARAMETRIZE
+            ):
+                continue
+            names = _parametrized_names(decorator)
+            indirect = next(
+                (keyword.value for keyword in decorator.keywords if keyword.arg == "indirect"), None
+            )
+            if FROZEN_CLOCK in names and (
+                indirect is None or (isinstance(indirect, ast.Constant) and not indirect.value)
+            ):
+                return True
+        return False
+
     def _is_fixture(self, decorators: list[ast.expr]) -> bool:
         """Whether a decorator registers the function as a pytest fixture.
 
@@ -1792,6 +1836,24 @@ def _catches_everything(node: ast.Try | ast.TryStar) -> bool:
         or (isinstance(handler.type, ast.Name) and handler.type.id == "BaseException")
         for handler in node.handlers
     )
+
+
+def _parametrized_names(decorator: ast.Call) -> list[str]:
+    """The argument names a ``parametrize`` mark supplies."""
+    names = decorator.args[0] if decorator.args else None
+    if names is None:
+        names = next(
+            (keyword.value for keyword in decorator.keywords if keyword.arg == "argnames"), None
+        )
+    if isinstance(names, ast.Constant) and isinstance(names.value, str):
+        return [name.strip() for name in names.value.split(",")]
+    if isinstance(names, (ast.List, ast.Tuple)):
+        return [
+            element.value
+            for element in names.elts
+            if isinstance(element, ast.Constant) and isinstance(element.value, str)
+        ]
+    return []
 
 
 def _takes_frozen_clock(args: ast.arguments) -> bool:

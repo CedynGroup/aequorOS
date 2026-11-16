@@ -678,6 +678,14 @@ UNFROZEN_READS = [
     "import time\nfor clock in (time.time, (time := lambda: 0)):\n    clock()\n",
     # A sequence pattern captures each matched element.
     "import time\nmatch (time.time,):\n    case (clock,):\n        clock()\n",
+    # Direct parametrization replaces the fixture.
+    "import pytest\n"
+    "import time\n"
+    "@pytest.mark.parametrize('frozen_clock', [None])\n"
+    "def test_parametrized_frozen_clock(frozen_clock):\n"
+    "    return time.time()\n",
+    # Starred unpacking keeps the fixed positions around the star.
+    "import time\nclock, *rest = (time.time,)\nclock()\n",
     # The same holds for a comprehension target over a literal iterable.
     "import time\n"
     "def test_comprehension_target_known_elements():\n"
@@ -1193,6 +1201,18 @@ def test_generator_body_reads_under_the_bindings_at_consumption() -> None:
         "    values = (clock() for _ in (1,))\n"
         "    clock = lambda: 0\n"
         "    list(values)\n"
+    )
+    assert guard.clock_findings(source).reads == []
+
+
+def test_indirect_parametrization_keeps_the_fixture() -> None:
+    """An indirect parametrization still requests the freezing fixture."""
+    source = (
+        "import pytest\n"
+        "import time\n"
+        "@pytest.mark.parametrize('frozen_clock', [None], indirect=True)\n"
+        "def test_indirect(frozen_clock):\n"
+        "    return time.time()\n"
     )
     assert guard.clock_findings(source).reads == []
 
