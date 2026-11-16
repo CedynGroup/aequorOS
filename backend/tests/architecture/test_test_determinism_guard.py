@@ -717,6 +717,21 @@ UNFROZEN_READS = [
     "    values, = ((clock() for _ in (1,)),)\n"
     "    clock = time.time\n"
     "    list(values)\n",
+    # A held generator unpacked into a target stays unconsumed.
+    "import time\n"
+    "def test_unpacked_held_generator():\n"
+    "    clock = lambda: 0\n"
+    "    values = (clock() for _ in (1,))\n"
+    "    alias, = (values,)\n"
+    "    clock = time.time\n"
+    "    list(alias)\n",
+    # A marked helper class is not collected, so its mark freezes nothing.
+    "import pytest\n"
+    "import time\n"
+    f"@pytest.mark.freeze_time({INSTANT})\n"
+    "class Helper:\n"
+    "    def read(self):\n"
+    "        return time.time()\n",
     # The same holds for a comprehension target over a literal iterable.
     "import time\n"
     "def test_comprehension_target_known_elements():\n"
@@ -780,7 +795,7 @@ FROZEN_READS = [
     f"pytestmark = pytest.mark.freeze_time({INSTANT})\n",
     "import pytest\n"
     "from datetime import datetime\n"
-    "class Late:\n"
+    "class TestLate:\n"
     "    def test_method(self):\n"
     "        datetime.now()\n"
     f"    pytestmark = pytest.mark.freeze_time({INSTANT})\n",

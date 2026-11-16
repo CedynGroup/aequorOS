@@ -580,12 +580,16 @@ class ClockVisitor(ast.NodeVisitor):
             for element in value.elts:
                 self._evaluate_captured(element)
             return
+        held = self._held_generator(value)
         if isinstance(value, ast.GeneratorExp):
             # A generator inside the unpacked value waits for the consumer of
             # the target that receives it.
             self._visit_assigned_value(value)
             self.generator_effects[id(value)] = self.generator_bindings
             self.captured_generators[id(value)] = str(id(value))
+        elif held is not None:
+            # So does one that an existing variable already holds.
+            self.captured_generators[id(value)] = held
         else:
             self.visit(value)
         self.captured_elements[id(value)] = self.qualified(value)
@@ -1416,7 +1420,11 @@ class ClockVisitor(ast.NodeVisitor):
     def visit_ClassDef(self, node: ast.ClassDef) -> None:
         if self.probing:
             return
-        own = self._decorator_freezes(node.decorator_list) or self._scope_marker_freezes(node.body)
+        # A class mark reaches only the tests of a class pytest collects; a
+        # helper class called from an unmarked test stays unfrozen.
+        own = node.name.startswith("Test") and (
+            self._decorator_freezes(node.decorator_list) or self._scope_marker_freezes(node.body)
+        )
         for decorator in node.decorator_list:
             self.visit(decorator)
         previous_standing_table = self.table
