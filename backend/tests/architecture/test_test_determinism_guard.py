@@ -578,6 +578,15 @@ UNFROZEN_READS = [
     "    values = ((clock := reader) for reader in (time.time,))\n"
     "    list(values)\n"
     "    clock()\n",
+    # A generator consumed in place reads under the bindings at consumption,
+    # not those left by a later rebinding.
+    "import time\n"
+    "def test_generator_consumed_before_rebinding():\n"
+    "    clock = time.time\n"
+    "    list(clock() for _ in (1,))\n"
+    "    clock = lambda: 0\n",
+    # Unpacking captures each element as it evaluates.
+    "import time\nclock, ignored = time.time, (time := None)\nclock()\n",
     # The same holds for a comprehension target over a literal iterable.
     "import time\n"
     "def test_comprehension_target_known_elements():\n"
@@ -1074,6 +1083,19 @@ def test_annotated_generator_waits_for_its_consumer() -> None:
         "    clock = lambda: 0\n"
         "    values: object = ((clock := time.time) for _ in (1,))\n"
         "    clock()\n"
+    )
+    assert guard.clock_findings(source).reads == []
+
+
+def test_generator_body_reads_under_the_bindings_at_consumption() -> None:
+    """A generator consumed after a rebinding reads the replacement."""
+    source = (
+        "import time\n"
+        "def test_consumed_late():\n"
+        "    clock = time.time\n"
+        "    values = (clock() for _ in (1,))\n"
+        "    clock = lambda: 0\n"
+        "    list(values)\n"
     )
     assert guard.clock_findings(source).reads == []
 

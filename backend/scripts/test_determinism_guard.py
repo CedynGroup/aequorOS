@@ -240,6 +240,17 @@ class ClockVisitor(ast.NodeVisitor):
         self.generator_bindings: list[GeneratorBinding] = []
         #: Per generator variable, the bindings consuming it may make.
         self.pending_generators: dict[str, list[GeneratorBinding]] = {}
+        #: Per generator variable, the generator it holds.
+        self.generator_names: dict[str, int] = {}
+        #: The enclosing bindings each generator's body is scanned under: the
+        #: bindings at creation until the generator is consumed, then those
+        #: at its consumption.
+        self.generator_scopes: dict[int, dict[str, str]] = {}
+        #: The generators whose consumption has set their scan bindings.
+        self.consumed_generators: set[int] = set()
+        #: Bindings of the elements of the unpacked value being evaluated,
+        #: captured as each element evaluates.
+        self.captured_elements: dict[int, str] = {}
         #: Whether the visited statements run inside a deferred function or
         # lambda body: Python evaluates function-local variable annotations
         # never, while module and class bodies evaluate theirs at execution.
@@ -374,7 +385,11 @@ class ClockVisitor(ast.NodeVisitor):
         if isinstance(target, ast.Name):
             # Rebinding the name discards the generator it held.
             self.pending_generators.pop(target.id, None)
-            return {target.id: self.qualified(value) if value is not None else ""}
+            self.generator_names.pop(target.id, None)
+            if value is None:
+                return {target.id: ""}
+            captured = self.captured_elements.get(id(value))
+            return {target.id: captured if captured is not None else self.qualified(value)}
         if isinstance(target, (ast.Tuple, ast.List)):
             values = value.elts if isinstance(value, (ast.Tuple, ast.List)) else []
             result: dict[str, str] = {}
@@ -397,6 +412,21 @@ class ClockVisitor(ast.NodeVisitor):
             self.pending_generators.pop(node.id, None)
         elif node.id in self.pending_generators:
             self._apply_generator_bindings(self.pending_generators[node.id])
+        if node.id in self.generator_names and isinstance(node.ctx, ast.Load):
+            self._consume_generator(self.generator_names[node.id])
+
+    def _consume_generator(self, generator: int) -> None:
+        """Scan a generator's body under the bindings at its consumption."""
+        current = dict(self.aliases)
+        known = self.generator_scopes.get(generator)
+        if known is None or generator not in self.consumed_generators:
+            self.generator_scopes[generator] = current
+        else:
+            self.generator_scopes[generator] = {
+                name: _merge_values([known.get(name, ""), current.get(name, "")])
+                for name in (*known, *current)
+            }
+        self.consumed_generators.add(generator)
 
     def _apply_generator_bindings(self, bindings: list[GeneratorBinding]) -> None:
         """Merge the bindings a consumed generator may have made.
@@ -428,6 +458,7 @@ class ClockVisitor(ast.NodeVisitor):
         """Keep a generator's effects for where its variable is consumed."""
         if isinstance(value, ast.GeneratorExp) and isinstance(target, ast.Name):
             self.pending_generators[target.id] = self.generator_bindings
+            self.generator_names[target.id] = id(value)
 
     def _preassign_targets_before(self, targets: list[ast.expr], *later: ast.expr | None) -> None:
         """Reserve target scopes ahead of the expressions that follow them.
@@ -443,13 +474,19 @@ class ClockVisitor(ast.NodeVisitor):
 
     def visit_Assign(self, node: ast.Assign) -> None:
         self._preassign_targets_before(node.targets, node.value)
-        self._visit_assigned_value(node.value)
+        if isinstance(node.value, (ast.Tuple, ast.List)):
+            for element in node.value.elts:
+                self.visit(element)
+                self.captured_elements[id(element)] = self.qualified(element)
+        else:
+            self._visit_assigned_value(node.value)
         name = self.qualified(node.value)
         for target in node.targets:
             self.bind(target, node.value)
             if isinstance(target, ast.Name):
                 self.aliases[target.id] = name
             self._hold_generator(target, node.value)
+        self.captured_elements.clear()
 
     def visit_AnnAssign(self, node: ast.AnnAssign) -> None:
         # The symbol table lists the target's scopes, then the annotation's,
@@ -1299,6 +1336,7 @@ class ClockVisitor(ast.NodeVisitor):
             # enclosing block exited, so only the marker-derived freeze
             # covers it and its element scans with the deferred functions.
             self.functions.append((node, self.table, previous_enclosing, self.deferred_frozen))
+            self.generator_scopes[id(node)] = dict(previous_aliases)
         self.aliases = self.enclosing.copy()
         self.enclosing = self.aliases
         if not isinstance(node, ast.GeneratorExp) and not self.probing:
@@ -1511,7 +1549,12 @@ class ClockVisitor(ast.NodeVisitor):
         """Scan every recorded function, lambda and generator body."""
         for node, table, enclosing, frozen in self.functions:
             self.table = table
-            self.aliases = enclosing.copy()
+            scope = (
+                self.generator_scopes.get(id(node), enclosing)
+                if isinstance(node, ast.GeneratorExp)
+                else enclosing
+            )
+            self.aliases = scope.copy()
             for symbol in table.get_symbols():
                 if symbol.is_local():
                     self.aliases[symbol.get_name()] = ""
@@ -1520,6 +1563,7 @@ class ClockVisitor(ast.NodeVisitor):
             self.aliases.update(self.default_bindings.get(id(node), {}))
             self.enclosing = self.aliases
             self.pending_generators = {}
+            self.generator_names = {}
             self.return_states = []
             self.frozen = frozen
             self.deferred_frozen = frozen
