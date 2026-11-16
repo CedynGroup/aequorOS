@@ -269,6 +269,9 @@ class ClockVisitor(ast.NodeVisitor):
             # A boolean expression yields one of its operands: a fallback such
             # as ``fake_clock or datetime.now`` may still read the wall clock.
             return _merge_values([self.qualified(operand) for operand in node.values])
+        if isinstance(node, ast.NamedExpr):
+            # An assignment expression yields the value it binds.
+            return self.qualified(node.value)
         return ""
 
     def possible_names(self, node: ast.expr) -> Iterator[str]:
@@ -293,6 +296,8 @@ class ClockVisitor(ast.NodeVisitor):
             # callable, such as ``(time.time or None)()``.
             for operand in node.values:
                 yield from self.possible_names(operand)
+        elif isinstance(node, ast.NamedExpr):
+            yield from self.possible_names(node.value)
         else:
             yield ""
 
@@ -682,21 +687,27 @@ class ClockVisitor(ast.NodeVisitor):
         self.exception_snapshots = outer_snapshots
         for statement in node.finalbody:
             self.visit(statement)
-        self._apply_finally_to_jumps(node, marks, exception_states)
+        escaping = self._apply_finally_to_jumps(node, marks, exception_states)
+        if outer_snapshots is not None:
+            # A body exception that a handler may stop does not escape; the
+            # handler and else states, and every state of a try without
+            # handlers, reach the enclosing statement after this finally.
+            reaching = escaping if not node.handlers else escaping[len(body_states) :]
+            outer_snapshots.extend(reaching)
 
     def _apply_finally_to_jumps(
         self,
         node: ast.Try | ast.TryStar,
         marks: list[int],
         exception_states: list[dict[str, str]],
-    ) -> None:
+    ) -> list[dict[str, str]]:
         """Fold the finally block's assignments into pending jump states.
 
-        The exception states only contribute reads: an exception leaves the
-        function, so nothing downstream carries their bindings.
+        The exception states are returned with the finally block applied, for
+        an enclosing statement an escaping exception reaches next.
         """
         if not node.finalbody:
-            return
+            return exception_states
         stacks = self._jump_stacks()
         pending = [stack[mark:] for stack, mark in zip(stacks, marks, strict=True)]
         # A break, continue or return crosses the finally block, so each
@@ -710,6 +721,7 @@ class ClockVisitor(ast.NodeVisitor):
         outer_probing = self.probing
         self.probing = True
         transformed: list[list[dict[str, str]]] = [[] for _ in pending]
+        escaping: list[dict[str, str]] = []
         try:
             for states, folded in zip(pending, transformed, strict=True):
                 for state in states:
@@ -723,6 +735,7 @@ class ClockVisitor(ast.NodeVisitor):
                 self.aliases.update(state)
                 for statement in node.finalbody:
                     self.visit(statement)
+                escaping.append(dict(self.aliases))
         finally:
             self.probing = outer_probing
             fresh = [read for read in self.reads[read_mark:] if read not in known_reads]
@@ -732,6 +745,7 @@ class ClockVisitor(ast.NodeVisitor):
             self.aliases.update(normal_state)
         for stack, mark, folded in zip(stacks, marks, transformed, strict=True):
             stack[mark:] = folded
+        return escaping
 
     visit_TryStar = visit_Try
 

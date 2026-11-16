@@ -481,6 +481,26 @@ UNFROZEN_READS = [
     "            clock = lambda: 0\n"
     "    except ValueError:\n"
     "        clock()\n",
+    # An exception escaping a nested try reaches the enclosing handler under
+    # the bindings at its raise point.
+    "import time\n"
+    "def test_nested_try_escapes_into_handler(flag):\n"
+    "    clock = lambda: 0\n"
+    "    try:\n"
+    "        try:\n"
+    "            clock = time.time\n"
+    "            if flag:\n"
+    "                raise ValueError\n"
+    "            clock = lambda: 0\n"
+    "        finally:\n"
+    "            pass\n"
+    "    except ValueError:\n"
+    "        clock()\n",
+    # An assignment expression yields the value it binds.
+    "import time\n"
+    "def test_named_expression_alias():\n"
+    "    clock = (reader := time.time)\n"
+    "    clock()\n",
     # The same holds for a comprehension target over a literal iterable.
     "import time\n"
     "def test_comprehension_target_known_elements():\n"
