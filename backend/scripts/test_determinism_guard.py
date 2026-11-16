@@ -199,8 +199,6 @@ class ClockVisitor(ast.NodeVisitor):
         #: never propagates a ``conftest.py`` module's marks to the items
         #: that use its fixtures.
         self.module_marker_applies = module_marker_applies
-        #: Depth of the class bodies being visited.
-        self.class_depth = 0
         self.table: symtable.SymbolTable = symtable.symtable(source, "<test>", "exec")
         self.aliases: dict[str, str] = {}
         self.enclosing = self.aliases
@@ -427,13 +425,6 @@ class ClockVisitor(ast.NodeVisitor):
             self.bind(target, node.value)
             if isinstance(target, ast.Name):
                 self.aliases[target.id] = name
-                if (
-                    target.id == "pytestmark"
-                    and (self.module_marker_applies or self.class_depth)
-                    and self._carries_freeze_marker(node.value)
-                ):
-                    # A marker freezes test execution, not import time.
-                    self.deferred_frozen = True
                 if isinstance(node.value, ast.GeneratorExp):
                     self.pending_generators[target.id] = self.generator_bindings
 
@@ -448,13 +439,6 @@ class ClockVisitor(ast.NodeVisitor):
         if node.value is not None:
             self.visit(node.value)
             self.bind(node.target, node.value)
-            if (
-                isinstance(node.target, ast.Name)
-                and node.target.id == "pytestmark"
-                and (self.module_marker_applies or self.class_depth)
-                and self._carries_freeze_marker(node.value)
-            ):
-                self.deferred_frozen = True
         if not self.postponed and not self.deferred_body:
             # Module and class bodies evaluate their annotations; a
             # function-local one never runs.
@@ -1061,6 +1045,18 @@ class ClockVisitor(ast.NodeVisitor):
     def _visit_annotations(self, arguments: ast.arguments) -> None:
         if self.postponed:
             return
+        if not self.probing:
+            # The symbol table lists the keyword-only parameters' annotations
+            # after the ``**kwargs`` annotation, while they evaluate before it.
+            for argument in (
+                *arguments.posonlyargs,
+                *arguments.args,
+                arguments.vararg,
+                arguments.kwarg,
+                *arguments.kwonlyargs,
+            ):
+                if argument is not None and argument.annotation is not None:
+                    self._preassign_expression_tables(argument.annotation)
         # Annotations evaluate in declaration order: positional parameters,
         # then the vararg, then keyword-only parameters and the kwarg.
         for argument in (*arguments.posonlyargs, *arguments.args):
@@ -1151,9 +1147,7 @@ class ClockVisitor(ast.NodeVisitor):
     def visit_ClassDef(self, node: ast.ClassDef) -> None:
         if self.probing:
             return
-        own = self._decorator_freezes(node.decorator_list) or any(
-            self._pytestmark_statement(statement) for statement in node.body
-        )
+        own = self._decorator_freezes(node.decorator_list) or self._scope_marker_freezes(node.body)
         for decorator in node.decorator_list:
             self.visit(decorator)
         previous_standing_table = self.table
@@ -1176,10 +1170,8 @@ class ClockVisitor(ast.NodeVisitor):
         previous_body_flag = self.deferred_body
         self.deferred_body = False
         self.deferred_frozen = self.deferred_frozen or own
-        self.class_depth += 1
         for statement in node.body:
             self.visit(statement)
-        self.class_depth -= 1
         self.deferred_body = previous_body_flag
         self.table, self.aliases = previous_table, previous_aliases
         self.frozen, self.deferred_frozen = previous_frozen, previous_deferred
@@ -1366,24 +1358,26 @@ class ClockVisitor(ast.NodeVisitor):
             for decorator in decorators
         )
 
-    def _pytestmark_statement(self, statement: ast.stmt) -> bool:
-        """Whether the statement assigns a freeze marker to ``pytestmark``.
+    def _scope_marker_freezes(self, statements: list[ast.stmt]) -> bool:
+        """Whether the scope's effective ``pytestmark`` carries a freeze marker.
 
         Markers govern test execution regardless of where they appear, so a
-        scope's ``pytestmark`` is resolved before its functions are recorded,
-        not only when the assignment is visited.
+        scope's ``pytestmark`` is resolved before its functions are recorded;
+        the last assignment is the one pytest collects.
         """
-        if isinstance(statement, ast.Assign):
-            targets, value = statement.targets, statement.value
-        elif isinstance(statement, ast.AnnAssign):
-            targets, value = [statement.target], statement.value
-        else:
-            return False
-        return (
-            any(isinstance(target, ast.Name) and target.id == "pytestmark" for target in targets)
-            and value is not None
-            and self._carries_freeze_marker(value)
-        )
+        effective: ast.expr | None = None
+        for statement in statements:
+            if isinstance(statement, ast.Assign):
+                targets, value = statement.targets, statement.value
+            elif isinstance(statement, ast.AnnAssign):
+                targets, value = [statement.target], statement.value
+            else:
+                continue
+            if value is not None and any(
+                isinstance(target, ast.Name) and target.id == "pytestmark" for target in targets
+            ):
+                effective = value
+        return effective is not None and self._carries_freeze_marker(effective)
 
     def _carries_freeze_marker(self, value: ast.expr) -> bool:
         if isinstance(value, (ast.List, ast.Tuple, ast.Set)):
@@ -1470,9 +1464,7 @@ class ClockVisitor(ast.NodeVisitor):
                     # not exist in the symbol table; visiting their expressions
                     # would look up symtable children that are not there.
                     self.postponed = True
-        if self.module_marker_applies and any(
-            self._pytestmark_statement(statement) for statement in tree.body
-        ):
+        if self.module_marker_applies and self._scope_marker_freezes(tree.body):
             self.deferred_frozen = True
         self.visit(tree)
         self._scan_deferred_functions()

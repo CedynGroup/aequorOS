@@ -1035,6 +1035,30 @@ def test_rebinding_discards_the_pending_generator() -> None:
     assert guard.clock_findings(source).reads == []
 
 
+def test_keyword_annotation_scopes_follow_the_symbol_table() -> None:
+    """The ``**kwargs`` annotation's scope precedes the keyword-only ones."""
+    source = (
+        "from typing import Annotated\n"
+        "def f(*, k: Annotated[int, (lambda: lambda: None)],"
+        " **kw: Annotated[int, (lambda: None)]):\n"
+        "    pass\n"
+    )
+    assert guard.clock_findings(source).reads == []
+
+
+def test_the_final_pytestmark_assignment_decides() -> None:
+    """A replaced module marker no longer freezes the module."""
+    source = (
+        "import pytest\n"
+        "import time\n"
+        f"pytestmark = pytest.mark.freeze_time({INSTANT})\n"
+        "pytestmark = []\n"
+        "def test_read():\n"
+        "    time.time()\n"
+    )
+    assert guard.clock_findings(source).reads != []
+
+
 def test_annotated_assignment_scopes_preassign_in_order() -> None:
     """An annotated assignment's annotation scopes precede the value's."""
     source = "stamp: (lambda: None) = lambda: lambda: None\n"
