@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import time
 from concurrent.futures import Future
+from threading import Event
 from typing import cast
 
 from sqlalchemy import Engine, text
@@ -15,6 +16,7 @@ def backend_pid(db: Session) -> int:
 def assert_blocked[T](engine: Engine, blocker: int, waiter: int, change: Future[T]) -> None:
     deadline = time.monotonic() + 5
     blocked = False
+    tick = Event()
     with engine.connect() as observer:
         while not blocked and not change.done() and time.monotonic() < deadline:
             blocked = cast(
@@ -25,5 +27,5 @@ def assert_blocked[T](engine: Engine, blocker: int, waiter: int, change: Future[
                 ),
             )
             if not blocked:
-                time.sleep(0.01)
+                tick.wait(0.01)
     assert blocked

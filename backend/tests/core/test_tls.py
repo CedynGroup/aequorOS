@@ -545,8 +545,6 @@ def _await_gateway_readiness(launcher: _GatewayLauncher) -> None:
 
 @pytest.mark.parametrize("kind", ["dashboard", "console"])
 def test_next_container_gateway_terminates_verified_tls(tmp_path: Path, kind: str) -> None:
-    import time  # noqa: PLC0415
-
     import httpx  # noqa: PLC0415
 
     cert, key = certificate(tmp_path)
@@ -578,6 +576,7 @@ server.listen(Number(process.env.PORT), process.env.HOSTNAME);
         loopback_port = cast(int, inner.getsockname()[1])
     launcher = _start_tls_gateway(upstream, cert, key, port, loopback_port)
     try:
+        tick = threading.Event()
         with httpx.Client(verify=client_context(str(cert)), trust_env=False) as client:
             _await_gateway_readiness(launcher)
             response = None
@@ -590,7 +589,7 @@ server.listen(Number(process.env.PORT), process.env.HOSTNAME);
                         break
                 except httpx.ConnectError:
                     pass
-                time.sleep(0.05)
+                tick.wait(0.05)
             assert response is not None and response.status_code == 200, (
                 f"the verified-tls gateway never served a request after reporting "
                 f"readiness (last response: {response}); launcher stdout: "

@@ -10,7 +10,7 @@ from dataclasses import replace
 from datetime import date
 from queue import Queue
 from threading import Event
-from time import monotonic, sleep
+from time import monotonic
 from typing import cast
 
 import pytest
@@ -209,6 +209,7 @@ def test_concurrent_settings_initialization_preserves_scan_and_overrides(
             pid = waiting_pid.get(timeout=10)
             deadline = monotonic() + 10
             blocked = False
+            tick = Event()
             while monotonic() < deadline and not second.done():
                 with Session(bind) as observer:
                     blocked = (
@@ -219,7 +220,7 @@ def test_concurrent_settings_initialization_preserves_scan_and_overrides(
                     )
                 if blocked:
                     break
-                sleep(0.01)
+                tick.wait(0.01)
             assert blocked and not second.done()
         finally:
             release.set()

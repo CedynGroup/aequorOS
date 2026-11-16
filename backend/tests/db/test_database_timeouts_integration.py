@@ -7,6 +7,7 @@ import time
 from collections.abc import Iterator
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
+from threading import Event
 from typing import cast
 from uuid import uuid4
 
@@ -151,6 +152,7 @@ def test_api_idle_transaction_is_terminated_while_worker_and_bi_complete(
         )
         long_job = jobs.submit(worker.scalar, text("SELECT 42 FROM pg_sleep(2)"))
         deadline = time.monotonic() + 10
+        tick = Event()
         with administrator.connect() as observer:
             while observer.scalar(
                 text("SELECT EXISTS (SELECT 1 FROM pg_stat_activity WHERE pid=ANY(:pids))"),
@@ -160,7 +162,7 @@ def test_api_idle_transaction_is_terminated_while_worker_and_bi_complete(
                 assert time.monotonic() < deadline, (
                     "API idle transaction survived the short probe budget"
                 )
-                time.sleep(0.05)
+                tick.wait(0.05)
         for api_connection in (api, legacy_api):
             with pytest.raises(DBAPIError) as terminated:
                 api_connection.execute(text("SELECT 1"))
