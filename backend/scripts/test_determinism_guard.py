@@ -647,16 +647,31 @@ class ClockVisitor(ast.NodeVisitor):
             return self.aliases.get(GENERATOR_KEY + value.id) or None
         return None
 
-    def _hold_generator(self, target: ast.expr, value: ast.expr, held: str | None = None) -> None:
+    def _held_callable(self, value: ast.expr) -> str | None:
+        """The functions a plain variable copy passes on."""
+        if isinstance(value, ast.Name):
+            return self.aliases.get(CALLABLE_KEY + value.id) or None
+        return None
+
+    def _hold_generator(
+        self,
+        target: ast.expr,
+        value: ast.expr,
+        held: str | None = None,
+        held_callable: str | None = None,
+    ) -> None:
         """Keep a generator's effects for where its variable is consumed.
 
-        A lambda bound to a name is held the same way, so its references mark
-        where its body may run.
+        A lambda bound to a name, or a copy of a function variable, is held
+        the same way, so references through the name mark where its body may
+        run.
         """
         if not isinstance(target, ast.Name):
             return
         if isinstance(value, ast.Lambda):
             self.aliases[CALLABLE_KEY + target.id] = str(id(value))
+        elif held_callable is not None:
+            self.aliases[CALLABLE_KEY + target.id] = held_callable
         if held is not None:
             self.aliases[GENERATOR_KEY + target.id] = held
         elif isinstance(value, ast.GeneratorExp):
@@ -678,6 +693,7 @@ class ClockVisitor(ast.NodeVisitor):
     def visit_Assign(self, node: ast.Assign) -> None:
         self._preassign_targets_before(node.targets, node.value)
         held = self._held_generator(node.value)
+        held_callable = self._held_callable(node.value)
         if isinstance(node.value, (ast.Tuple, ast.List)):
             self._evaluate_captured(node.value)
         elif held is None:
@@ -687,7 +703,7 @@ class ClockVisitor(ast.NodeVisitor):
             self.bind(target, node.value)
             if isinstance(target, ast.Name):
                 self.aliases[target.id] = name
-            self._hold_generator(target, node.value, held)
+            self._hold_generator(target, node.value, held, held_callable)
         self.captured_elements.clear()
         self.captured_generators.clear()
 
@@ -701,10 +717,11 @@ class ClockVisitor(ast.NodeVisitor):
         # annotation's bindings cannot mask the value's own reads.
         if node.value is not None:
             held = self._held_generator(node.value)
+            held_callable = self._held_callable(node.value)
             if held is None:
                 self._visit_assigned_value(node.value)
             self.bind(node.target, node.value)
-            self._hold_generator(node.target, node.value, held)
+            self._hold_generator(node.target, node.value, held, held_callable)
         if not self.postponed and not self.deferred_body:
             # Module and class bodies evaluate their annotations; a
             # function-local one never runs.
@@ -1922,10 +1939,10 @@ class ClockVisitor(ast.NodeVisitor):
             )
             captured = id(node) in scopes
             scope = scopes[id(node)] if captured else enclosing
-            if captured and isinstance(node, ast.AsyncFunctionDef):
-                # Referencing a coroutine function only creates the coroutine;
-                # its body runs at a later await, so the enclosing scope's
-                # final bindings stay reachable.
+            if captured and _runs_later(node):
+                # Referencing a coroutine or generator function only creates
+                # the object; its body runs at a later await or iteration, so
+                # the enclosing scope's final bindings stay reachable.
                 scope = self._merged([scope, enclosing])
             self.aliases = scope.copy()
             frozen = (
@@ -1995,6 +2012,24 @@ def _generator_named_expressions(node: ast.GeneratorExp) -> Iterator[ast.NamedEx
     yield from _named_expressions(node.elt)
     if isinstance(node.elt, ast.NamedExpr):
         yield node.elt
+
+
+def _runs_later(node: ast.AST) -> bool:
+    """Whether calling the function only creates a coroutine or generator."""
+    if isinstance(node, ast.AsyncFunctionDef):
+        return True
+    if not isinstance(node, ast.FunctionDef):
+        return False
+    stack: list[ast.AST] = list(node.body)
+    while stack:
+        current = stack.pop()
+        if isinstance(current, (ast.Yield, ast.YieldFrom)):
+            return True
+        if not isinstance(
+            current, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda, ast.ClassDef)
+        ):
+            stack.extend(ast.iter_child_nodes(current))
+    return False
 
 
 def _catches_everything(node: ast.Try | ast.TryStar) -> bool:

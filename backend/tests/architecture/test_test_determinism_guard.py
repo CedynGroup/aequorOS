@@ -824,6 +824,25 @@ UNFROZEN_READS = [
     "import time\n"
     "def test_defaults_with_positional_only(a=None, /, frozen_clock=None, other=None):\n"
     "    return time.time()\n",
+    # A copied function name keeps referencing the same function.
+    "import time\n"
+    "def test_function_alias():\n"
+    "    clock = lambda: 0\n"
+    "    def read():\n"
+    "        return clock()\n"
+    "    alias = read\n"
+    "    clock = time.time\n"
+    "    alias()\n"
+    "    clock = lambda: 0\n",
+    # A generator function's body runs at iteration, not at creation.
+    "import time\n"
+    "def test_generator_function_iterated_late():\n"
+    "    clock = lambda: 0\n"
+    "    def read():\n"
+    "        yield clock()\n"
+    "    values = read()\n"
+    "    clock = time.time\n"
+    "    list(values)\n",
     # The same holds for a comprehension target over a literal iterable.
     "import time\n"
     "def test_comprehension_target_known_elements():\n"
