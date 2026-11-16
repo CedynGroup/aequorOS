@@ -423,6 +423,18 @@ UNFROZEN_READS = [
     "        clock = lambda: 0\n"
     "    finally:\n"
     "        clock()\n",
+    # An exception exit runs the finally block under the bindings at the
+    # raise point.
+    "import time\n"
+    "def test_raise_through_finally(flag):\n"
+    "    clock = lambda: 0\n"
+    "    try:\n"
+    "        clock = time.time\n"
+    "        if flag:\n"
+    "            raise ValueError\n"
+    "        clock = lambda: 0\n"
+    "    finally:\n"
+    "        clock()\n",
     # The same holds for a comprehension target over a literal iterable.
     "import time\n"
     "def test_comprehension_target_known_elements():\n"

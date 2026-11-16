@@ -611,6 +611,9 @@ class ClockVisitor(ast.NodeVisitor):
             self.visit(statement)
             prefixes.append(dict(self.aliases))
         after_body = prefixes[-1]
+        # An exception that no handler stops, or one raised inside a handler,
+        # still runs the finally block under the bindings at its raise point.
+        exception_states = list(prefixes)
         states: list[dict[str, str]] = []
         for handler in node.handlers:
             self.aliases.clear()
@@ -623,6 +626,7 @@ class ClockVisitor(ast.NodeVisitor):
                 self.aliases[handler.name] = ""
             for statement in handler.body:
                 self.visit(statement)
+                exception_states.append(dict(self.aliases))
             if handler.name is not None:
                 self.aliases[handler.name] = ""
             states.append(dict(self.aliases))
@@ -639,16 +643,23 @@ class ClockVisitor(ast.NodeVisitor):
         self._merge_states(states)
         for statement in node.finalbody:
             self.visit(statement)
-        self._apply_finally_to_jumps(node, marks)
+        self._apply_finally_to_jumps(node, marks, exception_states)
 
-    def _apply_finally_to_jumps(self, node: ast.Try | ast.TryStar, marks: list[int]) -> None:
-        """Fold the finally block's assignments into pending jump states."""
+    def _apply_finally_to_jumps(
+        self,
+        node: ast.Try | ast.TryStar,
+        marks: list[int],
+        exception_states: list[dict[str, str]],
+    ) -> None:
+        """Fold the finally block's assignments into pending jump states.
+
+        The exception states only contribute reads: an exception leaves the
+        function, so nothing downstream carries their bindings.
+        """
         if not node.finalbody:
             return
         stacks = self._jump_stacks()
         pending = [stack[mark:] for stack, mark in zip(stacks, marks, strict=True)]
-        if not any(pending):
-            return
         # A break, continue or return crosses the finally block, so each
         # pending jump state must include the finally's assignments. The
         # re-visits run silently to spare the consumed tables; a read that
@@ -668,6 +679,11 @@ class ClockVisitor(ast.NodeVisitor):
                     for statement in node.finalbody:
                         self.visit(statement)
                     folded.append(dict(self.aliases))
+            for state in exception_states:
+                self.aliases.clear()
+                self.aliases.update(state)
+                for statement in node.finalbody:
+                    self.visit(statement)
         finally:
             self.probing = outer_probing
             fresh = [read for read in self.reads[read_mark:] if read not in known_reads]
