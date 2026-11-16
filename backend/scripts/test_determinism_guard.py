@@ -237,9 +237,13 @@ def _destructure(
         generators = _merge_generators(
             [visitor.captured_generators.get(id(element), "") for element in elements]
         )
+        callables = _merge_generators(
+            [visitor.captured_callables.get(id(element), "") for element in elements]
+        )
         return {
             **({target.id: value} if value else {}),
             **({GENERATOR_KEY + target.id: generators} if generators else {}),
+            **({CALLABLE_KEY + target.id: callables} if callables else {}),
         }
     if not isinstance(target, (ast.Tuple, ast.List)):
         return {}
@@ -356,6 +360,8 @@ class ClockVisitor(ast.NodeVisitor):
         self.walrus_results: dict[int, str] = {}
         #: The generators among those elements, by element.
         self.captured_generators: dict[int, str] = {}
+        #: The functions among those elements, by element.
+        self.captured_callables: dict[int, str] = {}
         #: Bindings of the elements of the unpacked value being evaluated,
         #: captured as each element evaluates.
         self.captured_elements: dict[int, str] = {}
@@ -510,7 +516,7 @@ class ClockVisitor(ast.NodeVisitor):
             return {
                 target.id: captured if captured is not None else self.qualified(value),
                 GENERATOR_KEY + target.id: self.captured_generators.get(id(value), ""),
-                CALLABLE_KEY + target.id: "",
+                CALLABLE_KEY + target.id: self.captured_callables.get(id(value), ""),
             }
         if isinstance(target, (ast.Tuple, ast.List)):
             aligned = (
@@ -639,6 +645,9 @@ class ClockVisitor(ast.NodeVisitor):
             self.captured_generators[id(value)] = held
         else:
             self.visit(value)
+        callables = str(id(value)) if isinstance(value, ast.Lambda) else self._held_callable(value)
+        if callables:
+            self.captured_callables[id(value)] = callables
         self.captured_elements[id(value)] = self.qualified(value)
 
     def _held_generator(self, value: ast.expr) -> str | None:
@@ -706,6 +715,7 @@ class ClockVisitor(ast.NodeVisitor):
             self._hold_generator(target, node.value, held, held_callable)
         self.captured_elements.clear()
         self.captured_generators.clear()
+        self.captured_callables.clear()
 
     def visit_AnnAssign(self, node: ast.AnnAssign) -> None:
         # The symbol table lists the target's scopes, then the annotation's,

@@ -843,6 +843,16 @@ UNFROZEN_READS = [
     "    values = read()\n"
     "    clock = time.time\n"
     "    list(values)\n",
+    # A function unpacked into a target keeps referencing the same function.
+    "import time\n"
+    "def test_function_through_unpacking():\n"
+    "    clock = lambda: 0\n"
+    "    def read():\n"
+    "        return clock()\n"
+    "    alias, = (read,)\n"
+    "    clock = time.time\n"
+    "    alias()\n"
+    "    clock = lambda: 0\n",
     # The same holds for a comprehension target over a literal iterable.
     "import time\n"
     "def test_comprehension_target_known_elements():\n"
