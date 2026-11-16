@@ -168,8 +168,10 @@ def _merge_values(values: list[str]) -> str:
 
 
 #: An assignment expression inside a generator: the name it binds, its value
-#: expression and the bindings of the generator's own iteration targets.
-GeneratorBinding = tuple[str, ast.expr, dict[str, str]]
+#: expression and the generator's own iteration targets, each as the binding
+#: its first iterable supplied at creation or the later iterable to resolve at
+#: consumption.
+GeneratorBinding = tuple[str, ast.expr, dict[str, str | ast.expr]]
 
 
 def _iterable_element_value(iterable: ast.expr, visitor: ClockVisitor) -> str:
@@ -443,7 +445,11 @@ class ClockVisitor(ast.NodeVisitor):
         the generator's own iteration targets holding what they held when it
         was created.
         """
-        for name, value, targets in bindings:
+        for name, value, supplied in bindings:
+            targets = {
+                target: source if isinstance(source, str) else _iterable_element_value(source, self)
+                for target, source in supplied.items()
+            }
             current = {target: self.aliases.get(target) for target in targets}
             self.aliases.update(targets)
             resolved = self.qualified(value)
@@ -524,8 +530,13 @@ class ClockVisitor(ast.NodeVisitor):
 
     def visit_AugAssign(self, node: ast.AugAssign) -> None:
         self._preassign_targets_before([node.target], node.value)
-        self.visit(node.value)
-        self.bind(node.target)
+        if isinstance(node.target, ast.Name):
+            self.visit(node.value)
+            self.bind(node.target)
+        else:
+            # The target's subexpressions evaluate before the value.
+            self.visit(node.target)
+            self.visit(node.value)
 
     def visit_NamedExpr(self, node: ast.NamedExpr) -> None:
         self.visit(node.value)
@@ -1382,11 +1393,9 @@ class ClockVisitor(ast.NodeVisitor):
             # the containing scope may hold their bindings from then on. A
             # generator bound to a name is consumed where the name is read;
             # any other generator is consumed in place.
-            targets = {
+            targets: dict[str, str | ast.expr] = {
                 generator.target.id: (
-                    self.first_iterable_values.get(id(node), "")
-                    if index == 0
-                    else _iterable_element_value(generator.iter, self)
+                    self.first_iterable_values.get(id(node), "") if index == 0 else generator.iter
                 )
                 for index, generator in enumerate(node.generators)
                 if isinstance(generator.target, ast.Name)

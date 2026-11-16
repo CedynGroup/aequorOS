@@ -608,6 +608,22 @@ UNFROZEN_READS = [
     "def test_generator_consumed_in_ticking_travel():\n"
     f"    with time_machine.travel({INSTANT}, tick=True):\n"
     "        list(time.time() for _ in (1,))\n",
+    # An augmented assignment evaluates its target before its value.
+    "import time\n"
+    "from collections import defaultdict\n"
+    "def test_augmented_target_before_value():\n"
+    "    values = defaultdict(int)\n"
+    "    clock = time.time\n"
+    "    values[clock()] += (clock := lambda: 0)()\n",
+    # A later iterable supplies its target at consumption.
+    "import time\n"
+    "def test_later_iterable_resolved_at_consumption():\n"
+    "    clock = lambda: 0\n"
+    "    first = lambda: 0\n"
+    "    values = ((clock := reader) for _ in (1,) for reader in (first,))\n"
+    "    first = time.time\n"
+    "    list(values)\n"
+    "    clock()\n",
     # The same holds for a comprehension target over a literal iterable.
     "import time\n"
     "def test_comprehension_target_known_elements():\n"
