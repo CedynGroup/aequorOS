@@ -38,14 +38,20 @@ member’s scoped grants for the case, then sign in as that member. Use the
 local account’s credentials:
 
 ```bash
-read -r LOGIN_EMAIL; read -rs LOGIN_PASSWORD
-printf '{"email":"%s","password":"%s"}' "$LOGIN_EMAIL" "$LOGIN_PASSWORD" |
-  curl --fail-with-body -X POST http://127.0.0.1:8000/api/v1/auth/login \
-    -H 'Content-Type: application/json' --data @-
+IFS= read -r LOGIN_EMAIL
+IFS= read -rs LOGIN_PASSWORD
+TOKEN=$(
+  LOGIN_EMAIL="$LOGIN_EMAIL" LOGIN_PASSWORD="$LOGIN_PASSWORD" \
+    python3 -c 'import json, os; print(json.dumps(dict(email=os.environ["LOGIN_EMAIL"], password=os.environ["LOGIN_PASSWORD"])))' |
+    curl --fail --silent --show-error http://127.0.0.1:8000/api/v1/auth/login \
+      -H 'Content-Type: application/json' --data-binary @- |
+    python3 -c 'import json, sys; print(json.load(sys.stdin)["access_token"])'
+)
+unset LOGIN_EMAIL LOGIN_PASSWORD
 ```
 
-The response carries `access_token`. Export it to an environment variable and send
-`Authorization: Bearer $TOKEN`; never print it into evidence. The authenticated
+The login command stores the access token in `TOKEN`. Use the bearer header
+via stdin as shown below for authenticated requests. The authenticated
 identity and its effective authority are `GET /api/v1/auth/me` and
 `GET /api/v1/auth/effective-authority`.
 
@@ -73,5 +79,5 @@ using the [shared evidence procedure](../SKILL.md#evidence-record).
 url="http://127.0.0.1:8000/api/v1/banks/${BANK_ID:?Set the local fixture bank ID}/live-summary"
 printf 'GET %s\n' 'http://127.0.0.1:8000/api/v1/banks/BK-XXXXXXXX/live-summary'
 curl --silent --show-error --include --max-time 20 \
-  -H "Authorization: Bearer $TOKEN" "$url"
+  -H @- "$url" <<< "Authorization: Bearer ${TOKEN:?Sign in with a local account}"
 ```

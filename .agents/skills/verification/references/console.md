@@ -6,6 +6,10 @@ call the operator API directly. Shared rules are in [../SKILL.md](../SKILL.md).
 
 ## Reach it
 
+For inspector cases, before starting either local API, set the same disposable
+`IMPERSONATION_JWT_SECRET` on both and set the operator API’s `BANK_APP_BASE_URL`
+to the running loopback dashboard origin.
+
 1. Start PostgreSQL, MinIO and the operator API on :8100
    ([operator API reference](operator-api.md#reach-it)). Add the tenant API if
    the case reads tenant data.
@@ -33,3 +37,7 @@ element screenshots per matrix row, named `console-<case>-<before|after>.png`.
 - Provisioning flows write setup records and audit entries: capture the screen
   and the resulting operator API record, and use only the disposable local
   database.
+- For **Open in new tab**, pause at the button’s
+  [navigation call](../../../../console/components/tenants/OpenBankDashboardButton.tsx#L41).
+  Resume only after the actual mint response’s `dashboard_url` matches the
+  running loopback dashboard origin. Keep the token and URL fragment out of evidence.

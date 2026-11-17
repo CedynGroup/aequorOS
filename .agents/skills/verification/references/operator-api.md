@@ -6,6 +6,9 @@ never mounted on the tenant API. Shared rules are in [../SKILL.md](../SKILL.md).
 
 ## Reach it
 
+For inspector cases, apply the [local inspector settings](console.md#reach-it)
+before starting either API.
+
 Start the local stack from [the root README](../../../../README.md#run-it-locally),
 then from `backend/`:
 
@@ -49,8 +52,15 @@ sanitized pair as `operator-api-<case>-after.txt` using the
 url='http://127.0.0.1:8100/operator/v1/<route>'
 printf 'GET %s\n' "$url"
 curl --silent --show-error --include --max-time 20 \
-  -H "Authorization: Bearer $OPERATOR_TOKEN" "$url"
+  -H @- "$url" <<< "Authorization: Bearer ${OPERATOR_TOKEN:?Set the local operator token}"
 ```
 
 Mutating operator calls write to the audit log; verify the audit record as part of
 the case, and run them only against the disposable local database.
+
+For a direct inspector handoff, send
+`POST /operator/v1/inspector/sessions/{session_id}/act-token` for your active
+inspection session and keep its response private. Confirm `dashboard_url` matches
+the running loopback dashboard origin before opening the
+[`/inspect` URL with the encoded act token in its fragment](../../../../console/components/tenants/OpenBankDashboardButton.tsx#L41).
+Keep the token and URL fragment out of evidence.

@@ -78,7 +78,7 @@ Product traps the matrix should catch, because they are invariants:
 - Tenant health is read from what the platform computed (live summary, freshness,
   alerts). Never derive facts yourself to make a screen populate.
 
-Write the matrix as a table in the PR description or a file separate from the manifest:
+Write the matrix as a table in the PR description:
 
 ```text
 case                         surface     principal        data state   expected
