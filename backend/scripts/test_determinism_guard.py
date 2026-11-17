@@ -18,6 +18,18 @@ flags a ``# noqa: AQPY001`` or ``# noqa: TID251`` comment that lacks the
 The allowlist records counts by path and rule, not line numbers. New reads fail
 immediately; removing reads requires shrinking the allowlist (stale counts fail
 too), and ``--strict`` rejects even allowlisted ones.
+
+Known limits. The guard is a static, flow-aware approximation aimed at the
+shapes tests actually use, not a proof. It deliberately does not model rare
+constructions, and a read it cannot attribute is missed rather than guessed:
+
+* A lambda bound to a name is resolved through the bindings visible when it is
+  called, but it has no recorded defining owner, so a lambda that closes over a
+  local clock alias which is rebound between its definition and its call can be
+  missed.
+* An immediately invoked lambda at module level, such as
+  ``STAMP = (lambda: time.time())()``, is not tracked as an import-time call,
+  so a module ``pytestmark`` freeze marker can exempt its read.
 """
 
 from __future__ import annotations
