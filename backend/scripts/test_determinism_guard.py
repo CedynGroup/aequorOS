@@ -30,6 +30,10 @@ constructions, and a read it cannot attribute is missed rather than guessed:
 * An immediately invoked lambda at module level, such as
   ``STAMP = (lambda: time.time())()``, is not tracked as an import-time call,
   so a module ``pytestmark`` freeze marker can exempt its read.
+* A finalizer that both jumps and rebinds a clock through an assignment
+  expression in a definition's default argument is replayed without that
+  default, so the read after the loop can be reported although the rebinding
+  decides it at runtime. That over-reports and never hides a read.
 """
 
 from __future__ import annotations

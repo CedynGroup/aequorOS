@@ -1996,3 +1996,22 @@ def test_finalizer_replay_records_one_read_per_call_site() -> None:
         "        clock()\n"
     )
     assert len(guard.clock_findings(source).reads) == 1
+
+
+def test_definition_default_in_a_jumping_finalizer_is_a_known_over_report() -> None:
+    """A replayed finalizer skips definition defaults, so this read is reported."""
+    source = (
+        "import time\n"
+        "clock = time.time\n"
+        "for _ in (0,):\n"
+        "    try:\n"
+        "        continue\n"
+        "    finally:\n"
+        "        def helper(value=(clock := lambda: 0)):\n"
+        "            pass\n"
+        "        break\n"
+        "else:\n"
+        "    clock = lambda: 0\n"
+        "clock()\n"
+    )
+    assert guard.clock_findings(source).reads != []
