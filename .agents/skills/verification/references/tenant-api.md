@@ -8,11 +8,12 @@ record, local test data, handoff) are in [../SKILL.md](../SKILL.md).
 
 For direct API captures, start the interactive local server. Follow
 [the root README](../../../../README.md#run-it-locally): PostgreSQL and MinIO,
-`mise run risk-service:bootstrap-db`, then from `backend/`:
+`mise run risk-service:bootstrap-db`, then from `backend/` run each command in
+its own terminal and keep both running:
 
 ```bash
-uv run fastapi dev app/main.py --port 8000   # tenant API
-uv run python -m app.worker                  # live plane and official runs
+uv run fastapi dev app/main.py --port 8000   # terminal 1: tenant API
+uv run python -m app.worker                  # terminal 2: live plane and official runs
 ```
 
 Native services without Docker:
@@ -37,9 +38,10 @@ member’s scoped grants for the case, then sign in as that member. Use the
 local account’s credentials:
 
 ```bash
-curl --fail-with-body -X POST http://127.0.0.1:8000/api/v1/auth/login \
-  -H 'Content-Type: application/json' \
-  -d '{"email":"<local account>","password":"<local password>"}'
+read -r LOGIN_EMAIL; read -rs LOGIN_PASSWORD
+printf '{"email":"%s","password":"%s"}' "$LOGIN_EMAIL" "$LOGIN_PASSWORD" |
+  curl --fail-with-body -X POST http://127.0.0.1:8000/api/v1/auth/login \
+    -H 'Content-Type: application/json' --data @-
 ```
 
 The response carries `access_token`. Export it to an environment variable and send

@@ -78,7 +78,7 @@ Product traps the matrix should catch, because they are invariants:
 - Tenant health is read from what the platform computed (live summary, freshness,
   alerts). Never derive facts yourself to make a screen populate.
 
-Write the matrix as a table in the manifest preamble or the PR description:
+Write the matrix as a table in the PR description or a file separate from the manifest:
 
 ```text
 case                         surface     principal        data state   expected
@@ -116,7 +116,7 @@ one row per artifact and the five columns below.
 | `filename`    | artifact name relative to the manifest: `<surface>-<case>-<before\|after>.png`, `.txt`, `.json` |
 | `case`        | the matrix row it proves, verbatim                                                              |
 | `caption`     | one sentence: what the artifact shows and the expected result, with no secrets                  |
-| `sha256`      | `sha256sum <file>` of the artifact                                                              |
+| `sha256`      | the digest only: the first field of `sha256sum <file>`, without the filename                    |
 | `head_commit` | full `git rev-parse HEAD` of the checkout the surface ran from, taken at capture time           |
 
 Non-visual evidence (a request and response pair, a command's output) is a text
