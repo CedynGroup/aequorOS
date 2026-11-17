@@ -849,8 +849,18 @@ const rule = {
       // scopes, so its body reads the enclosing initializer's locals.
       const localScopes = inherited ? inherited.scopes : [];
       const replayScopeKinds = inherited ? inherited.kinds : [];
+      const replayEnvironments = inherited?.environments ?? new Map();
       const scopeDepth = localScopes.length;
       const resolvingLocals = new Set();
+      /** The lexical environment a helper captures at its DEFINITION: its
+       * body must resolve captures through the scopes open where it was
+       * declared, never through a caller's shadowing scopes at the
+       * invocation site. */
+      const captureEnvironment = () => ({
+        scopes: localScopes.slice(),
+        kinds: replayScopeKinds.slice(),
+        environments: replayEnvironments,
+      });
       const lookupLocal = (name) => {
         for (let index = localScopes.length - 1; index >= 0; index -= 1) {
           if (localScopes[index].has(name)) {
@@ -961,6 +971,11 @@ const rule = {
         if (!node || typeof node !== "object" || typeof node.type !== "string") {
           return;
         }
+        if (isFunctionNode(node)) {
+          // The helper's lexical environment is fixed where it is declared.
+          replayEnvironments.set(node, captureEnvironment());
+          return;
+        }
         if (node.type === "BlockStatement") {
           pushLocalScope(node.body);
           for (const statement of node.body) {
@@ -971,6 +986,9 @@ const rule = {
           return;
         }
         if (node.type === "VariableDeclarator" && node.id.type === "Identifier") {
+          if (node.init && isFunctionNode(node.init)) {
+            replayEnvironments.set(node.init, captureEnvironment());
+          }
           // The declaration executes here: classify its initializer now, so
           // the local holds the value it has at this point in the replay.
           const index = lookupLocal(node.id.name);
@@ -986,6 +1004,9 @@ const rule = {
           node.operator === "=" &&
           node.left.type === "Identifier"
         ) {
+          if (isFunctionNode(node.right)) {
+            replayEnvironments.set(node.right, captureEnvironment());
+          }
           // A write to a name bound in an open local scope stays inside the
           // helper: update that local's value (a later read of the local
           // must classify the NEW initializer) without propagating the
@@ -1059,17 +1080,18 @@ const rule = {
           const localDef = localIndex >= 0 ? localScopes[localIndex].get(node.callee.name) : null;
           const localFn = localDef?.fn ?? (localDef?.init && isFunctionNode(localDef.init) ? localDef.init : null);
           if (localFn) {
-            replayInvocationWrites(localFn, active, executionSite, {
-              scopes: localScopes,
-              kinds: replayScopeKinds,
-            });
+            replayInvocationWrites(
+              localFn,
+              active,
+              executionSite,
+              // The helper resolves captures through its DEFINITION-time
+              // environment; a caller's shadowing scopes must not leak in.
+              replayEnvironments.get(localFn),
+            );
           } else {
             const entry = declaredFunctionEntry(node.callee.name, limit);
             if (entry?.fn) {
-              replayInvocationWrites(entry.fn, active, executionSite, {
-                scopes: localScopes,
-                kinds: replayScopeKinds,
-              });
+              replayInvocationWrites(entry.fn, active, executionSite, replayEnvironments.get(entry.fn));
             }
           }
           return;

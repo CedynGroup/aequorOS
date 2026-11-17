@@ -1199,6 +1199,30 @@ test("a nested helper reads the enclosing initializer's locals", async () => {
   assertFlagged(result, "weakAwaits");
 });
 
+// A nested helper resolves its captures through its DEFINITION-time
+// environment: a caller scope that shadows a captured local must not
+// change what the helper sees.
+test("a nested helper ignores a caller's shadowing scopes", async () => {
+  const result = await runOxlint(["weakAwaits"], `
+    let sleep = () => fetch('/');
+    function init() {
+      const local = () => new Promise((resolve) => setTimeout(resolve, 10));
+      function set() {
+        sleep = local;
+      }
+      {
+        const local = () => fetch('/');
+        set();
+      }
+    }
+    init();
+    it('t', async () => {
+      await sleep();
+    });
+  `);
+  assertFlagged(result, "weakAwaits");
+});
+
 // A `var` binding in a replayed block outlives the block, as in JavaScript.
 test("a replayed var binding outlives its block", async () => {
   const result = await runOxlint(["weakAwaits"], `
