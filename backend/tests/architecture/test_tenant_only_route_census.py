@@ -140,6 +140,11 @@ CENSUS: dict[tuple[str, str], CensusEntry] = {
         "scoped_in_service",
         "app.live.service.freshness.get_bank_freshness (live_access.allowed_modules)",
     ),
+    ("GET", "/api/v1/banks/{bank_id}/filing-workflow-templates"): CensusEntry(
+        "scoped_in_service",
+        "app.reporting.service.filing_workflow.templates.list_templates"
+        " (require_resolved_bank_permission, reg/restricted view)",
+    ),
     ("GET", "/api/v1/banks/{bank_id}/ingestion-batches"): CensusEntry(
         "scoped_in_service",
         "app.data_engine.service.ingestion.list_batches (require_data_access)",
@@ -378,7 +383,6 @@ KNOWN_GAPS: dict[tuple[str, str], str] = {
     ("GET", "/api/v1/banks/{bank_id}/regulatory-reporting/settings"): "open; fix in PR #910",
     ("GET", "/api/v1/attestation/signature-placements"): "open; fix in PR #910",
     ("GET", "/api/v1/attestation/signing-policies"): "open; fix in PR #910",
-    ("GET", "/api/v1/banks/{bank_id}/filing-workflow-templates"): "open; fix in PR #908",
 }
 
 
