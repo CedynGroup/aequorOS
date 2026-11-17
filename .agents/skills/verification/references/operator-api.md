@@ -15,9 +15,7 @@ curl --fail-with-body --max-time 8 http://127.0.0.1:8100/operator/health
 ```
 
 Operator password sign-in needs `OPERATOR_JWT_SECRET` in `backend/.env`, a
-separate random value from `AUTH_JWT_SECRET`. Operator routes are covered
-hermetically by `backend/tests/operator`; run the relevant files for logic, and a
-live server for HTTP behavior.
+separate random value from `AUTH_JWT_SECRET`.
 
 ## Sign in
 
@@ -29,7 +27,7 @@ Local only, either:
 
   ```bash
   uv run python scripts/create_operator.py \
-    --email <local address> --display-name <name> --role <role>
+    --email 'operator@example.test' --display-name 'Fixture Operator' --role '<role>'
   ```
 
 - **Dev token.** Set `OPERATOR_DEV_AUTH_ENABLED=1` and a random
@@ -42,14 +40,17 @@ administrator, ownership, membership) and no financial data.
 
 ## Capture
 
-Same shape as the tenant API: one text file per matrix case with the request
-(token redacted), status and body.
+Set `OPERATOR_TOKEN` to the local login token or local dev token. Substitute
+the route and case, using only synthetic IDs. Record the method, sanitized URL
+and any sanitized request body with the response status and body.
 
 ```bash
-curl --silent --include --max-time 20 \
-  -H "Authorization: Bearer $OPERATOR_DEV_TOKEN" \
-  http://127.0.0.1:8100/operator/v1/<route> \
-  > "$EVIDENCE/operator-api-<case>-after.txt"
+url='http://127.0.0.1:8100/operator/v1/<route>'
+{
+  printf 'GET %s\nAuthorization: Bearer [redacted]\n\n' "$url"
+  curl --silent --show-error --include --max-time 20 \
+    -H "Authorization: Bearer $OPERATOR_TOKEN" "$url"
+} > "$EVIDENCE/operator-api-<case>-after.txt"
 ```
 
 Mutating operator calls write to the audit log; verify the audit record as part of

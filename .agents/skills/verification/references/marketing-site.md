@@ -11,9 +11,8 @@ pnpm --filter @aequoros/frontend dev     # http://localhost:3000
 ```
 
 For production-shaped output use `pnpm --filter @aequoros/frontend build` then
-`pnpm --filter @aequoros/frontend start`. Nothing needs configuring to browse it;
-the contact form needs an email-provider key, so verify the form's rendering and
-validation states but do not submit it with a real key or real contact details.
+`pnpm --filter @aequoros/frontend start`. Browsing requires no configuration.
+Use the local capture recipe below for contact submissions.
 Pages are under `frontend/app/` (home, product, company, investors, security,
 contact).
 
@@ -30,6 +29,34 @@ narrow viewport, and check that links and anchors resolve. The design tokens
 live in the `@theme` block of `frontend/app/globals.css` and the shared
 components in `frontend/components/`.
 
-## Gates that go with it
+## Contact API capture
 
-`pnpm --filter @aequoros/frontend lint` and `build`.
+Send requests to the local dev server only. To capture the keyless `503`, start
+the server with `RESEND_API_KEY=` in its environment. For the validation and
+honeypot cases, restart with `RESEND_API_KEY=verification-placeholder`. These
+payloads return before the provider is called:
+
+| Case                    | Request body                                            | Expected response                    |
+| ----------------------- | ------------------------------------------------------- | ------------------------------------ |
+| Keyless                 | `{}`                                                    | `503` with an error                  |
+| Malformed JSON          | `{`                                                     | `400` with an invalid-request error  |
+| Missing required fields | `{}`                                                    | `400` with a required-fields error   |
+| Invalid email           | `{"name":"Fixture","email":"invalid","role":"Analyst"}` | `400` with an email validation error |
+| Honeypot                | `{"_gotcha":"fixture"}`                                 | `200` with `{"ok":true}`             |
+
+Set the case and payload from the table, then capture the request and response:
+
+```bash
+url='http://localhost:3000/api/contact'
+case_name=keyless
+payload='{}'
+{
+  printf 'POST %s\nContent-Type: application/json\n\n%s\n\n' "$url" "$payload"
+  curl --silent --show-error --include --max-time 20 \
+    -H 'Content-Type: application/json' --data "$payload" "$url"
+} > "$EVIDENCE/marketing-contact-$case_name-after.txt"
+```
+
+Redact the live support email address in error responses before hashing the
+artifact. Record delivery success and provider errors as unexecuted when no
+local delivery fixture is available. Use synthetic contact values throughout.

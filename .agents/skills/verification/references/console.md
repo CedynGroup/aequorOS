@@ -3,7 +3,6 @@
 The staff control-plane UI in `console/` (Next.js, :3002). It talks only to the
 [operator API](operator-api.md) through its own `/api/op` proxy; browsers never
 call the operator API directly. Shared rules are in [../SKILL.md](../SKILL.md).
-The console has no browser journey suite, so verification here is interactive.
 
 ## Reach it
 
@@ -20,9 +19,6 @@ The console has no browser journey suite, so verification here is interactive.
 
    The dev server rewrites the tracked `console/next-env.d.ts`; restore it before
    finishing.
-
-Console unit tests (`pnpm --filter @aequoros/console test`) cover tenants, the
-inspector, session handling, audit and regulatory parameters.
 
 ## Sign in
 
@@ -43,7 +39,3 @@ element screenshots per matrix row, named `console-<case>-<before|after>.png`.
 - Impersonation and the tenant inspector open a tenant view for an audited
   support session; capture the audited, read-only state and nothing real.
 - Cover both themes and a narrow viewport if the change touches layout.
-
-## Gates that go with it
-
-`pnpm --filter @aequoros/console typecheck`, `lint`, `test` and `build`.

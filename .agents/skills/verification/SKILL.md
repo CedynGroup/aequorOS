@@ -90,9 +90,9 @@ sibling bank refused         tenant API  analyst fixture  populated    404 or 40
 ## Local test data only
 
 - Sign in only with accounts and tenants that exist in a disposable local
-  environment: the hermetic end-to-end stack's minted fixture identities, a
-  local password account made with `backend/scripts/create_user.py` or
-  `backend/scripts/create_operator.py` against a local database, or the
+  environment: the hermetic end-to-end stack's minted fixture identities, the
+  provisioned local tenant administrator or a local member with the scoped
+  authority required by the case, a local operator password account, or the
   local-only operator dev token. Each reference names which applies.
 - Bank financial data enters only through the Data Engine (upload, adapter, API
   push) from synthetic files. There is no seed route; never add one to make a
@@ -128,11 +128,11 @@ filename	case	caption	sha256	head_commit
 Append a row:
 
 ```bash
-EVIDENCE=<directory outside the worktree>
+EVIDENCE='<directory outside the worktree>'
 FILE=dashboard-liquidity-unavailable-after.png
 printf '%s\t%s\t%s\t%s\t%s\n' "$FILE" "<case>" "<caption>" \
   "$(sha256sum "$EVIDENCE/$FILE" | cut -d' ' -f1)" \
-  "$(git -C <worktree> rev-parse HEAD)" >> "$EVIDENCE/manifest.tsv"
+  "$(git -C "<worktree>" rev-parse HEAD)" >> "$EVIDENCE/manifest.tsv"
 ```
 
 Non-visual evidence (a request and response pair, a command's output) is a text

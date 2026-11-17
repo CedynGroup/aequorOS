@@ -6,13 +6,6 @@ record, local test data, handoff) are in [../SKILL.md](../SKILL.md).
 
 ## Reach it
 
-**Without a running server.** The pytest suites drive the app in process, and
-`mise run risk-service:test` runs the bounded unit set (no database). Integration,
-storage and backend end-to-end suites need PostgreSQL 17 and MinIO and are owned
-by CI ([backend/README.md](../../../../backend/README.md#run-tests)). Use these for
-status codes and error envelopes; use a live server when the claim is about a
-real response over HTTP.
-
 **With a local server.** Follow
 [the root README](../../../../README.md#run-it-locally): PostgreSQL and MinIO,
 `mise run risk-service:bootstrap-db`, then from `backend/`:
@@ -39,18 +32,20 @@ in the readiness body, not only the top-level `status`.
 
 **Hermetic server.** The dashboard's end-to-end stack boots a disposable API on
 a throwaway SQLite database with a canonical fixture bank and minted identities
-([dashboard reference](dashboard.md)). Use it when the change is checked through
-the dashboard anyway.
+([dashboard reference](dashboard.md#hermetic-stack-default)). Follow that
+reference’s managed MinIO setup before capturing against this server.
 
 ## Sign in
 
-Use a local account only. Create one against the local database with
-`backend/scripts/create_user.py` (it prints a generated password once), then:
+Use the administrator created by local bank provisioning. For a different
+principal, use Access → Members as the local Org Owner to configure the
+member’s scoped grants for the case, then sign in as that member. Use the
+local account’s credentials:
 
 ```bash
 curl --fail-with-body -X POST http://127.0.0.1:8000/api/v1/auth/login \
   -H 'Content-Type: application/json' \
-  -d '{"email":"<local account>","password":"<from create_user.py>"}'
+  -d '{"email":"<local account>","password":"<local password>"}'
 ```
 
 The response carries `access_token`. Export it to an environment variable and send
@@ -58,9 +53,9 @@ The response carries `access_token`. Export it to an environment variable and se
 identity and its effective authority are `GET /api/v1/auth/me` and
 `GET /api/v1/auth/effective-authority`.
 
-Authority comes from scoped grants, not from the token's role claim. For a
-refusal case, use a second account without the grant, or an account in a sibling
-bank of the same organization.
+Before capture, confirm the effective authority permits the intended bank and
+action for a permitted case. For a refusal, confirm the member lacks that grant
+or holds it only for a sibling bank in the same organization.
 
 ## Load data
 
@@ -76,24 +71,19 @@ Tenant health after a load is read from `GET /api/v1/banks/{bank_id}/live-summar
 ## Capture
 
 Save each request and response for the matrix case as a text file: method and
-URL (placeholders for ids), status line, and the body. Redact the bearer token and
-use the fixture's ids.
+URL with placeholders for IDs, any sanitized request body, response status and
+response body. Redact the bearer token. Set `BANK_ID` to the local fixture bank’s
+ID for this example.
 
 ```bash
-curl --silent --include --max-time 20 \
-  -H "Authorization: Bearer $TOKEN" \
-  "http://127.0.0.1:8000/api/v1/banks/BK-XXXXXXXX/live-summary" \
-  > "$EVIDENCE/tenant-api-live-summary-permitted-after.txt"
+url="http://127.0.0.1:8000/api/v1/banks/${BANK_ID:?Set the local fixture bank ID}/live-summary"
+{
+  printf 'GET %s\nAuthorization: Bearer [redacted]\n\n' \
+    'http://127.0.0.1:8000/api/v1/banks/BK-XXXXXXXX/live-summary'
+  curl --silent --show-error --include --max-time 20 \
+    -H "Authorization: Bearer $TOKEN" "$url"
+} > "$EVIDENCE/tenant-api-live-summary-permitted-after.txt"
 ```
 
-For a contract change also prove the generated client is fresh:
-
-```bash
-mise run risk-service:openapi-client   # regenerate packages/risk-service-api
-mise run risk-service:api-fresh        # must leave git clean
-```
-
-Cases specific to this surface: object ids under `/banks/{bank_id}` must be
-bank-scoped at the query, so verify a sibling bank's id is refused; a new route
-that takes an object id belongs in the object-reference census
-([authorization contract](../../../../backend/docs/authorization_foundation.md#executable-verification)).
+For an object reference under `/banks/{bank_id}`, capture the refusal when the
+object belongs to a sibling bank in the same organization.
