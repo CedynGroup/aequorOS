@@ -18,6 +18,20 @@ INSTANT = '"2026-01-01T00:00:00+00:00"'
 #: Reads the guard must reject: direct members, both datetime import styles and
 #: aliased imports of the platform utc_now helpers.
 UNFROZEN_READS = [
+    # A marker freezes test execution only: a module-level generator consumed
+    # during import reads the wall clock even under ``pytestmark``.
+    "import pytest\n"
+    "from datetime import datetime\n"
+    f"pytestmark = pytest.mark.freeze_time({INSTANT})\n"
+    "times = (datetime.now() for _ in range(2))\n"
+    "STAMP = next(times)\n",
+    # A module marker does not freeze a generator that is consumed during
+    # import, before the marker applies.
+    "import pytest\n"
+    "import time\n"
+    f"pytestmark = pytest.mark.freeze_time({INSTANT})\n"
+    "times = (time.time() for _ in (0,))\n"
+    "list(times)\n",
     "from datetime import datetime\ndef test_now():\n    datetime.now()\n",
     "from datetime import datetime, UTC\ndef test_now_tz():\n    datetime.now(tz=UTC)\n",
     "from datetime import datetime\ndef test_utcnow():\n    datetime.utcnow()\n",
@@ -1430,13 +1444,6 @@ FROZEN_READS = [
     f"    with time_machine.travel({INSTANT}, tick=True):\n"
     "        times = (datetime.now() for _ in range(2))\n"
     "        stamps = list(times)\n",
-    # A marker freezes test execution only: a module-level generator consumed
-    # during import reads the wall clock even under ``pytestmark``.
-    "import pytest\n"
-    "from datetime import datetime\n"
-    f"pytestmark = pytest.mark.freeze_time({INSTANT})\n"
-    "times = (datetime.now() for _ in range(2))\n"
-    "STAMP = next(times)\n",
     # Completed iterations of a broken loop always run the ``else``, so
     # the pre-else body state is no exit of its own.
     "import time\n"

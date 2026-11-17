@@ -727,8 +727,14 @@ class ClockVisitor(ast.NodeVisitor):
         """Scan a generator's body under the bindings at its consumption.
 
         The freeze stays what its creation gave it: a name-bound generator may
-        run long after its block exited, so only a marker freezes it.
+        run long after its block exited, so only a marker freezes it. A
+        consumption at import time runs the body before any marker applies, so
+        it is judged by the freeze active there.
         """
+        if not self.in_function_body and not self.probing:
+            self.generator_frozen[generator] = (
+                self.generator_frozen.get(generator, True) and self.frozen
+            )
         current = dict(self.aliases)
         known = self.generator_scopes.get(generator)
         if known is None or generator not in self.consumed_generators:
