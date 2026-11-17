@@ -900,3 +900,26 @@ test("propagates captured writes from an explicitly invoked helper", async () =>
   `);
   assertFlagged(result, "weakAwaits");
 });
+
+// An alias reassigned after the await in the same callback must not
+// re-classify that await: it resolves through the declaration standing at
+// the await, while enclosing scopes stay live for forward declarations.
+test("a same-callback reassignment after the await keeps its verdict", async () => {
+  const result = await runOxlint(["weakAwaits"], `
+    function clean() {
+      return fetch('/data');
+    }
+    function timer() {
+      return sleep();
+    }
+    function sleep(ms) {
+      return new Promise((resolve) => setTimeout(resolve, ms));
+    }
+    it('t', async () => {
+      let wait = clean;
+      await wait();
+      wait = timer;
+    });
+  `);
+  assertClean(result, "weakAwaits");
+});

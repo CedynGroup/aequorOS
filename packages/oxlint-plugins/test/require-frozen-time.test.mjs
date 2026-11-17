@@ -1069,3 +1069,23 @@ test("does not treat a computed member named like a restoration as one", async (
   `);
   assertClean(result, "frozenTime");
 });
+
+// An afterAll callback runs once after the whole suite, so it observes the
+// accumulated state: the first test's restoration stands unless a later
+// test (or its beforeEach) refreezes, and the once-only beforeAll freeze
+// must not be re-applied when reconstructing the final state.
+test("an afterAll read observes the suite's accumulated state", async () => {
+  const result = await runOxlint(["frozenTime"], `
+    beforeAll(() => {
+      vi.useFakeTimers();
+    });
+    it('a', () => {
+      vi.useRealTimers();
+    });
+    it('b', () => {});
+    afterAll(() => {
+      Date.now();
+    });
+  `);
+  assertFlagged(result, "frozenTime");
+});

@@ -1035,7 +1035,17 @@ const rule = {
           }
         }
         const evaluationChain = [...pending.chain.slice(0, pending.depth), ...pending.own];
-        const weak = weakUseIn(pending.argument, evaluationChain, true, pending.scopeChain);
+        // The pending's own scopes resolve declarations through frozen
+        // registries (ownDeclarations): an alias reassigned after the await
+        // in the same callback must not re-classify it. Enclosing scopes
+        // stay live so forward declarations still reach the pending.
+        const evaluationScopeChain = [
+          ...pending.scopeChain.slice(0, pending.depth),
+          ...(pending.ownDeclarations ?? pending.scopeChain.slice(pending.depth)).map(
+            (declarations) => ({ declarations }),
+          ),
+        ];
+        const weak = weakUseIn(pending.argument, evaluationChain, true, evaluationScopeChain);
         for (const [scope, values] of snapshot) {
           for (const [name, value] of values) {
             if (value === undefined) {
@@ -1385,6 +1395,14 @@ const rule = {
           describeChain: describeChainOf(node),
           depth: functionDepth(),
           own: chain.slice(functionDepth()).map((map) => new Map(map)),
+          // Frozen copies of the own scopes' declaration registries: an
+          // alias reassigned AFTER the await in the same callback must not
+          // re-classify it — the await resolves through the declaration
+          // standing at the await, while enclosing registries stay live so
+          // forward declarations still reach it.
+          ownDeclarations: scopes
+            .slice(functionDepth())
+            .map((scope) => (scope.declarations ? new Map(scope.declarations) : new Map())),
           // Live scope objects parallel to `chain`: the declaration registry
           // resolves through them at re-evaluation time.
           scopeChain: [...scopes],

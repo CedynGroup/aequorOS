@@ -762,19 +762,49 @@ const rule = {
               // and the teardown hooks that run after it) — not the state
               // after every individual test.
               const collectionState = frozen;
-              const replayedTests =
-                enclosing.callType === "afterAll" ? suiteTests.slice(-1) : suiteTests;
-              frozen = true;
-              for (const test of replayedTests) {
-                // Each replay starts from the timer state module evaluation
-                // leaves behind (the collection-time state computed above):
-                // when no freeze has executed anywhere the state is
-                // unfrozen, not frozen.
-                let state = collectionState;
-                // Setup hooks replay in lifecycle order — every beforeAll
-                // before every beforeEach, outer describes before inner ones
-                // within a phase, registration order within a describe —
-                // not in source registration order across phases.
+              const applyTeardown = (state, hook) =>
+                hook.netFrozen !== null ? hook.netFrozen : state;
+              const readDepthOf = (test) =>
+                test.describes.length - enclosingDescribes.length;
+              const nestedHooks = (state, test, depth, phase) => {
+                for (const hook of hooksByDescribe.get(test.describes[depth]) ?? []) {
+                  if (hook.hookType === phase) {
+                    state = applyTeardown(state, hook);
+                  }
+                }
+                return state;
+              };
+              const ownEarlierHooks = (state, phase) => {
+                if (enclosingDescribes.length > 0) {
+                  for (const hook of hooksByDescribe.get(enclosingDescribes[0]) ?? []) {
+                    if (
+                      hook.hookType === phase &&
+                      hook.callNode.range[0] < enclosing.callNode.range[0]
+                    ) {
+                      state = applyTeardown(state, hook);
+                    }
+                  }
+                } else {
+                  // File-level read: earlier file-level hooks of the read's
+                  // own phase run before it (an earlier file-level afterAll
+                  // restoration invalidates an earlier freeze just like a
+                  // beforeEach's does for afterEach).
+                  for (const hook of fileLevelHooks) {
+                    if (
+                      hook.hookType === phase &&
+                      hook.callNode.range[0] < enclosing.callNode.range[0]
+                    ) {
+                      state = applyTeardown(state, hook);
+                    }
+                  }
+                }
+                return state;
+              };
+              const collectSetupHooks = (test) => {
+                // Setup hooks in lifecycle order — every beforeAll before
+                // every beforeEach, outer describes before inner ones within
+                // a phase, registration order within a describe — not in
+                // source registration order across phases.
                 const setupHooks = [];
                 for (const hook of fileLevelHooks) {
                   if (!isTeardown(hook.hookType)) {
@@ -794,87 +824,113 @@ const rule = {
                     b.depth - a.depth ||
                     a.hook.callNode.range[0] - b.hook.callNode.range[0],
                 );
-                for (const { hook } of setupHooks) {
-                  if (hook.netFrozen !== null) {
-                    state = hook.netFrozen;
+                return setupHooks;
+              };
+              if (enclosing.callType === "afterAll") {
+                // An afterAll callback runs ONCE after the entire suite, so
+                // the state it observes is the ACCUMULATED state the suite's
+                // tests leave behind — not the state an independently
+                // replayed last test would produce (that discards an earlier
+                // test's restoration and re-applies a once-only beforeAll
+                // freeze). The replay runs the suite in execution order: a
+                // describe's beforeAll applies once before its first
+                // covered test, beforeEach hooks re-apply before every test,
+                // each test's immediate transitions follow, and the
+                // afterEach hooks (innermost first, file level last) plus
+                // the completing nested suites' afterAll hooks carry the
+                // state to the next test.
+                let state = collectionState;
+                const beforeAllDone = new Set();
+                const suiteTestTotals = new Map();
+                const suiteTestSeen = new Map();
+                for (const test of suiteTests) {
+                  for (const describeNode of test.describes) {
+                    suiteTestTotals.set(
+                      describeNode,
+                      (suiteTestTotals.get(describeNode) ?? 0) + 1,
+                    );
                   }
                 }
-                for (const transition of transitionsByCallback.get(test.fn) ?? []) {
-                  // Lifecycle order, not source order: a teardown registered
-                  // above a test still runs after it, so every immediate
-                  // transition the test body executes shapes the state the
-                  // teardown callback sees.
-                  if (transition.immediate) {
-                    state = transition.frozen;
-                  }
-                }
-                // The teardown hooks that run before the read. An
-                // afterEach read sees the nested suites' afterEach hooks
-                // (innermost first) and its own suite's earlier
-                // registrations; an afterAll read additionally sees every
-                // afterEach hook (ancestor describes and file level run
-                // last) and the afterAll hooks of the nested suites and of
-                // its own suite registered above it.
-                const applyTeardown = (hook) => {
-                  if (hook.netFrozen !== null) {
+                for (const test of suiteTests) {
+                  for (const { hook, depth } of collectSetupHooks(test)) {
+                    if (hook.netFrozen === null) continue;
+                    if (hook.hookType === "beforeAll") {
+                      // A beforeAll callback runs once before its suite's
+                      // first covered test — not again before each later
+                      // test. The file-level owner is the sentinel `undefined`
+                      // depth.
+                      const owner = test.describes[depth];
+                      if (beforeAllDone.has(owner)) continue;
+                      beforeAllDone.add(owner);
+                    }
                     state = hook.netFrozen;
                   }
-                };
-                const readDepth = test.describes.length - enclosingDescribes.length;
-                const nestedHooks = (depth, phase) => {
-                  for (const hook of hooksByDescribe.get(test.describes[depth]) ?? []) {
-                    if (hook.hookType === phase) {
-                      applyTeardown(hook);
+                  for (const transition of transitionsByCallback.get(test.fn) ?? []) {
+                    // Lifecycle order, not source order: a teardown
+                    // registered above a test still runs after it, so every
+                    // immediate transition the test body executes shapes the
+                    // state the teardown callback sees.
+                    if (transition.immediate) {
+                      state = transition.frozen;
                     }
                   }
-                };
-                const ownEarlierHooks = (phase) => {
-                  if (enclosingDescribes.length > 0) {
-                    for (const hook of hooksByDescribe.get(enclosingDescribes[0]) ?? []) {
-                      if (
-                        hook.hookType === phase &&
-                        hook.callNode.range[0] < enclosing.callNode.range[0]
-                      ) {
-                        applyTeardown(hook);
-                      }
-                    }
-                  } else {
-                    // File-level read: earlier file-level hooks of the read's
-                    // own phase run before it (an earlier file-level afterAll
-                    // restoration invalidates an earlier freeze just like a
-                    // beforeEach's does for afterEach).
-                    for (const hook of fileLevelHooks) {
-                      if (
-                        hook.hookType === phase &&
-                        hook.callNode.range[0] < enclosing.callNode.range[0]
-                      ) {
-                        applyTeardown(hook);
-                      }
-                    }
-                  }
-                };
-                if (enclosing.callType === "afterAll") {
+                  // Every afterEach hook follows each test: nested suites'
+                  // hooks innermost first, ancestor describes, then file
+                  // level.
                   for (let depth = 0; depth < test.describes.length; depth += 1) {
-                    nestedHooks(depth, "afterEach");
+                    state = nestedHooks(state, test, depth, "afterEach");
                   }
                   for (const hook of fileLevelHooks) {
                     if (hook.hookType === "afterEach") {
-                      applyTeardown(hook);
+                      state = applyTeardown(state, hook);
                     }
                   }
-                  for (let depth = 0; depth < readDepth; depth += 1) {
-                    nestedHooks(depth, "afterAll");
+                  // Nested suites whose last covered test just finished run
+                  // their afterAll callbacks before the next test starts.
+                  for (let depth = 0; depth < readDepthOf(test); depth += 1) {
+                    const describeNode = test.describes[depth];
+                    const seen = (suiteTestSeen.get(describeNode) ?? 0) + 1;
+                    suiteTestSeen.set(describeNode, seen);
+                    if (seen === suiteTestTotals.get(describeNode)) {
+                      state = nestedHooks(state, test, depth, "afterAll");
+                    }
                   }
-                  ownEarlierHooks("afterAll");
-                } else {
-                  for (let depth = 0; depth < readDepth; depth += 1) {
-                    nestedHooks(depth, "afterEach");
-                  }
-                  ownEarlierHooks("afterEach");
                 }
-                if (!state) {
-                  frozen = false;
-                  break;
+                // The read's own suite's earlier afterAll registrations run
+                // after every test, right before the read.
+                frozen = ownEarlierHooks(state, "afterAll");
+              } else {
+                // An afterEach callback runs after EVERY covered test, so it
+                // stays covered only while the replayed state is frozen for
+                // every one of them; any test ending unfrozen uncovers it.
+                frozen = true;
+                for (const test of suiteTests) {
+                  // Each replay starts from the timer state module evaluation
+                  // leaves behind (the collection-time state computed above):
+                  // when no freeze has executed anywhere the state is
+                  // unfrozen, not frozen.
+                  let state = collectionState;
+                  for (const { hook } of collectSetupHooks(test)) {
+                    if (hook.netFrozen !== null) {
+                      state = hook.netFrozen;
+                    }
+                  }
+                  for (const transition of transitionsByCallback.get(test.fn) ?? []) {
+                    if (transition.immediate) {
+                      state = transition.frozen;
+                    }
+                  }
+                  // The afterEach hooks that run before the read: the nested
+                  // suites' afterEach hooks (innermost first) and the own
+                  // suite's earlier registrations.
+                  for (let depth = 0; depth < readDepthOf(test); depth += 1) {
+                    state = nestedHooks(state, test, depth, "afterEach");
+                  }
+                  state = ownEarlierHooks(state, "afterEach");
+                  if (!state) {
+                    frozen = false;
+                    break;
+                  }
                 }
               }
             }
