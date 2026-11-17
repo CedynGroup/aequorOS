@@ -1010,6 +1010,17 @@ UNFROZEN_READS = [
 #: The same reads are accepted once the clock is frozen at function, class or
 #: module scope, inside ``time_machine.travel`` or through ``frozen_clock``.
 FROZEN_READS = [
+    # A helper's freeze is judged by its final callers, so a chain whose first
+    # speculative scan ran unfrozen settles to the marker's freeze.
+    "import pytest\n"
+    "import time\n"
+    "def read():\n"
+    "    return time.time()\n"
+    "def helper():\n"
+    "    return read()\n"
+    f"@pytest.mark.freeze_time({INSTANT})\n"
+    "def test_chain():\n"
+    "    helper()\n",
     f"import pytest\nfrom datetime import datetime\n"
     f"@pytest.mark.freeze_time({INSTANT})\n"
     "def test_marker():\n"

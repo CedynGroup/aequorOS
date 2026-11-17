@@ -363,6 +363,10 @@ class ClockVisitor(ast.NodeVisitor):
         self.callable_scopes: dict[int, dict[str, str]] = {}
         #: Whether a nested function's references all ran under a freeze.
         self.callable_frozen: dict[int, bool] = {}
+        # Each scanned body's own freeze contribution per referenced function,
+        # so a rescan replaces what the superseded scan recorded.
+        self.callable_frozen_refs: dict[int, dict[int, bool]] = {}
+        self.scan_key = 0
         #: The reads each recorded body's latest scan found.
         self.scanned_reads: dict[int, list[tuple[str, int]]] = {}
         #: The functions pytest runs on its own, as tests or fixtures.
@@ -641,9 +645,9 @@ class ClockVisitor(ast.NodeVisitor):
         self.callable_scopes[callable_id] = self._merged([known, current] if known else [current])
         # The body runs under the freeze active at the reference, and under a
         # freeze only if every reference was under one.
-        self.callable_frozen[callable_id] = self.callable_frozen.get(callable_id, True) and (
-            self.frozen
-        )
+        refs = self.callable_frozen_refs.setdefault(callable_id, {})
+        refs[self.scan_key] = refs.get(self.scan_key, True) and self.frozen
+        self.callable_frozen[callable_id] = all(refs.values())
 
     def _consume_generator(self, generator: int) -> None:
         """Scan a generator's body under the bindings at its consumption."""
@@ -2130,6 +2134,14 @@ class ClockVisitor(ast.NodeVisitor):
         """Scan one recorded function, lambda or generator body."""
         self.table = table
         scope, frozen, captured = self._scan_state(node, enclosing, recorded_frozen)
+        # A rescan replaces the references this body recorded earlier.
+        self.scan_key = id(node)
+        for callable_id, refs in self.callable_frozen_refs.items():
+            if refs.pop(self.scan_key, None) is not None:
+                if refs:
+                    self.callable_frozen[callable_id] = all(refs.values())
+                else:
+                    self.callable_frozen.pop(callable_id, None)
         self.scanned_states[id(node)] = (tuple(sorted(scope.items())), frozen)
         # A later scan of the same body replaces the reads of this one.
         outer_reads, self.reads = self.reads, []
@@ -2165,6 +2177,7 @@ class ClockVisitor(ast.NodeVisitor):
                 self.visit(statement)
         self.deferred_body = previous_body_flag
         self.in_function_body = False
+        self.scan_key = 0
         self.scanned_reads[id(node)], self.reads = self.reads, outer_reads
 
     def _scan_deferred_functions(self) -> None:
