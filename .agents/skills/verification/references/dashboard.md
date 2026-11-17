@@ -1,0 +1,93 @@
+# Bank dashboard
+
+The authenticated bank product UI in `backend/dashboard/` (Next.js, :3001).
+Every figure comes from the tenant API through the generated client. Routes and
+what they read: [the dashboard README](../../../../backend/dashboard/README.md#scope).
+Shared rules are in [../SKILL.md](../SKILL.md).
+
+## Reach it
+
+### Hermetic stack (default)
+
+The Playwright configuration boots a disposable stack: the API on a throwaway
+SQLite file rebuilt every run, a local OpenID Connect issuer, and `next dev`.
+Setup mints a signed-in browser state per fixture role, so there is no password
+to enter. Details and prerequisites:
+[End-to-end (Playwright)](../../../../backend/dashboard/README.md#end-to-end-playwright).
+
+- First use: `pnpm --filter @aequoros/dashboard exec playwright install chromium`.
+- `pnpm --filter @aequoros/dashboard e2e:visual` provisions local PostgreSQL and
+  MinIO through `backend/scripts/local_services.py` when no S3 endpoint is
+  exported, then runs the screenshot tour.
+- Set `E2E_RUNTIME_DIR` to a directory **outside** the worktree; it holds the
+  database, the per-role states (`<role>.json`) and the captures.
+- Set the same `E2E_TODAY=YYYY-MM-DD` for the before and after runs so both anchor
+  on one reporting date.
+- One run per worktree at a time; a lock rejects concurrent runs.
+- The fixture bank carries synthetic data only, and the stack never touches a
+  primary database.
+
+### Interactive local stack
+
+Use when the case needs a role, bank state, theme or viewport the tour does not
+cover. Start PostgreSQL, MinIO, the API, the worker and the dashboard as in
+[the root README](../../../../README.md#run-it-locally), with local random secrets
+in `backend/.env` and `backend/dashboard/.env.local`:
+
+```bash
+pnpm --filter @aequoros/dashboard dev   # http://localhost:3001
+```
+
+Provision a bank in the [staff console](console.md) (setup records only), create
+a local password account with `backend/scripts/create_user.py`, and load
+synthetic data through the Data Engine ([tenant API reference](tenant-api.md#load-data)).
+Use one browser host throughout (`localhost` or `127.0.0.1`, not both): they have
+separate cookie jars.
+
+## Sign in
+
+- Hermetic: use the fixture role's state file, for example
+  `$E2E_RUNTIME_DIR/analyst.json` as the browser's storage state. Roles are
+  listed in `E2E_STORAGE_ROLES` in `backend/dashboard/e2e/support/mint.ts`; each
+  is a fixture identity at `e2e.<role>@aequoros.example`. Pick the role that
+  matches the matrix row, including the lacking-the-grant role for refusals.
+- Interactive: sign in at `/login` with the local account.
+
+## Capture
+
+**Tour.** `visual-tour.e2e.spec.ts` captures every route as the `admin` fixture,
+dark theme, full page, after loading skeletons clear. Output is
+`$E2E_RUNTIME_DIR/visual-tour/<name>.png`, where `/` is `home` and each other `/`
+becomes `__` (`/liquidity/nsfr` is `liquidity__nsfr.png`). Run it at the base
+commit and again at the head, into two different runtime directories, and use the
+files for the routes the change touches.
+
+**Other cases.** Drive the signed-in browser with whatever browser automation the
+session has, or with the existing Playwright journeys. Settle before capturing: a
+page is loaded when no `.animate-pulse` placeholder remains in the viewport (the
+logic is `settleForCapture` in `backend/dashboard/e2e/support/capture.ts`).
+Charts render without animation.
+
+- **Light theme.** Dark is the default. Choose light with the Settings →
+  Appearance preference (stored on the account and exposed as
+  `data-theme="light"` on `<html>`), or emulate `prefers-color-scheme: light`.
+  Both themes must render, with token classes and no raw hex
+  ([CONTRIBUTING.md](../../../../CONTRIBUTING.md#development-conventions-for-invited-contributors)).
+- **Narrow viewport.** Existing journeys use 390 px wide for mobile and 1440 px
+  for desktop; match them.
+- **Regulatory status and commencement.** These journeys use a separate stack
+  with a file-controlled reporting clock, started by
+  `playwright.regulatory.config.ts` (see the README section above). It writes
+  captures to `E2E_EVIDENCE_DIR` when set.
+- **Browser contracts and mutations.** `e2e:contracts` runs presentation and HTTP
+  checks; `playwright.fx-live.config.ts` runs mutation journeys on their own
+  stack.
+
+Cases specific to this surface: an unavailable figure renders as unavailable and
+draws no reference line; a refusal for a missing grant renders as the refusal,
+not an empty page; jurisdiction labels come from the bank's data.
+
+## Gates that go with it
+
+`pnpm --filter @aequoros/dashboard typecheck`, `lint`, `test` and `build`, and
+`mise run risk-service:api-fresh` after any API change.
