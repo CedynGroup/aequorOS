@@ -1315,6 +1315,60 @@ test("an inline callable replacement restores for sibling suites", async () => {
   assertClean(result, "weakAwaits");
 });
 
+// An assignment inside a call argument executes with the call: the replay
+// must apply it.
+test("an assignment inside a call argument replays", async () => {
+  const result = await runOxlint(["weakAwaits"], `
+    let sleep = () => fetch('/');
+    function consume(value) {}
+    function init() {
+      consume(sleep = () => new Promise((resolve) => setTimeout(resolve, 10)));
+    }
+    init();
+    it('t', async () => {
+      await sleep();
+    });
+  `);
+  assertFlagged(result, "weakAwaits");
+});
+
+// An assigned closure may call a replay-local whose kind is a weak helper:
+// the closure carries that dependency.
+test("an assigned closure resolves replay-local captures", async () => {
+  const result = await runOxlint(["weakAwaits"], `
+    let sleep;
+    function init() {
+      const local = () => new Promise((resolve) => setTimeout(resolve, 10));
+      sleep = () => local();
+    }
+    init();
+    it('t', async () => {
+      await sleep();
+    });
+  `);
+  assertFlagged(result, "weakAwaits");
+});
+
+// A hoisted helper may be invoked before its textual declaration: its
+// replay environment is fixed at its defining scope, recorded at entry.
+test("a hoisted helper invoked before its declaration keeps its capture", async () => {
+  const result = await runOxlint(["weakAwaits"], `
+    let sleep;
+    function init() {
+      const local = () => new Promise((resolve) => setTimeout(resolve, 10));
+      set();
+      function set() {
+        sleep = local;
+      }
+    }
+    init();
+    it('t', async () => {
+      await sleep();
+    });
+  `);
+  assertFlagged(result, "weakAwaits");
+});
+
 // A block-local declaration expires with its block: the same-named
 // assignment after the block updates the captured binding.
 test("a block-local shadow does not exclude assignments outside its block", async () => {

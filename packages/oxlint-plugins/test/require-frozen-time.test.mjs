@@ -1344,6 +1344,53 @@ test("an afterAll reassignment does not cover an earlier test", async () => {
   assertFlagged(result, "frozenTime");
 });
 
+// A setup hook registered after a test still runs before it: the test's
+// invocation resolves the callable standing at execution time.
+test("a beforeEach reassignment applies to a test registered above it", async () => {
+  const result = await runOxlint(["frozenTime"], `
+    let freeze = () => vi.useFakeTimers();
+    it('t', () => {
+      freeze();
+      Date.now();
+    });
+    beforeEach(() => {
+      freeze = () => {};
+    });
+  `);
+  assertFlagged(result, "frozenTime");
+});
+
+// A read inside an invoked helper's body executes at the invocation site:
+// a freeze invoked first covers it.
+test("a helper-body read is ordered at its invocation site", async () => {
+  const result = await runOxlint(["frozenTime"], `
+    it('t', () => {
+      function freeze() {
+        vi.useFakeTimers();
+      }
+      function read() {
+        Date.now();
+      }
+      freeze();
+      read();
+    });
+  `);
+  assertClean(result, "frozenTime");
+});
+
+// An alias of a known callable is invocable through its own name.
+test("an alias of a test-local callable applies its transitions", async () => {
+  const result = await runOxlint(["frozenTime"], `
+    it('t', () => {
+      const freeze = () => vi.useFakeTimers();
+      const invoke = freeze;
+      invoke();
+      Date.now();
+    });
+  `);
+  assertClean(result, "frozenTime");
+});
+
 // A module-level helper invoked from a hook contributes its transitions to
 // that hook: the freeze covers the tests the hook precedes.
 test("a hook invoking a module-level freezing helper covers its tests", async () => {

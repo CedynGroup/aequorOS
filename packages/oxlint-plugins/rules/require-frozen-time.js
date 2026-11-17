@@ -356,8 +356,18 @@ const rule = {
     // declarations register in their containing FUNCTION scope because their
     // binding outlives any intervening block.
     const scopeKinds = ["program"];
+    // In-place reassignments per (scope, name), in traversal order, each
+    // with the callback that writes and the value it replaced: an
+    // invocation resolves against the version standing when its callback
+    // EXECUTES, not whichever write traversal reached first (a setup hook
+    // registered after a test still runs before it).
+    const writeHistory = new Map();
     const helperInvocations = new Map();
     const invocationHelpers = new Map();
+    // The scope map each recorded invocation resolved through at traversal
+    // time (lexical scopes are popped by Program:exit, so the re-resolution
+    // looks the versions up through this recorded scope).
+    const invocationScopes = new Map();
     const registerHelperAt = (name, fn, index) => {
       if (name) {
         helperScopes[index].set(name, fn);
@@ -548,6 +558,11 @@ const rule = {
             node.init?.type === "ArrowFunctionExpression")
         ) {
           registerHelperAt(node.id.name, node.init, index);
+        } else if (node.id.type === "Identifier" && node.init?.type === "Identifier") {
+          // An alias of a known helper is invocable through its own name:
+          // register the same callable instead of shadowing it.
+          const target = resolveHelper(node.init.name);
+          registerHelperAt(node.id.name, target, index);
         } else {
           // Any other binding shadows outer helpers of the same name —
           // including destructured patterns' bound names.
@@ -585,13 +600,31 @@ const rule = {
         }
         // A reassignment updates the callable the binding holds: each
         // invocation must resolve to the callable held at that point, not
-        // the original initializer.
+        // the original initializer. The write is also recorded with the
+        // callback that performs it, so Program:exit can resolve each
+        // invocation against the version standing when its callback
+        // executes.
         for (let index = helperScopes.length - 1; index >= 0; index -= 1) {
           if (helperScopes[index].has(node.left.name)) {
+            const scope = helperScopes[index];
+            const previous = scope.get(node.left.name);
             const callable =
               node.right.type === "FunctionExpression" ||
               node.right.type === "ArrowFunctionExpression";
-            helperScopes[index].set(node.left.name, callable ? node.right : null);
+            scope.set(node.left.name, callable ? node.right : null);
+            let perScope = writeHistory.get(scope);
+            if (!perScope) {
+              perScope = new Map();
+              writeHistory.set(scope, perScope);
+            }
+            const versions = perScope.get(node.left.name) ?? [];
+            versions.push({
+              fn: callable ? node.right : null,
+              previous,
+              writer: boundary ? callbackInfoOf(boundary) : null,
+              pos: node.range?.[0] ?? 0,
+            });
+            perScope.set(node.left.name, versions);
             break;
           }
         }
@@ -611,6 +644,12 @@ const rule = {
             sites.push(node);
             helperInvocations.set(helper, sites);
             invocationHelpers.set(node, helper);
+            for (let index = helperScopes.length - 1; index >= 0; index -= 1) {
+              if (helperScopes[index].has(callee.name)) {
+                invocationScopes.set(node, helperScopes[index]);
+                break;
+              }
+            }
           }
         }
 
@@ -916,17 +955,6 @@ const rule = {
           }
           pushOwnEntry();
         };
-        for (const call of freezeCalls) recordTransition(call, true);
-        for (const call of unfreezeCalls) recordTransition(call, false);
-        // Equal execution positions (transitions inside one IIFE body)
-        // keep source order.
-        const byExecution = compareExecution;
-        for (const list of transitionsByCallback.values()) {
-          list.sort(byExecution);
-        }
-        moduleTransitions.sort(byExecution);
-        describeTransitions.sort(byExecution);
-
         /**
          * Lifecycle phases: beforeAll < beforeEach < test < afterEach <
          * afterAll. A freeze in an earlier phase covers callbacks in the same
@@ -941,6 +969,113 @@ const rule = {
           if (callType === "afterAll") return 4;
           return undefined;
         };
+
+
+        /**
+         * Whether a recorded reassignment executes before callback `C` runs
+         * (null = module evaluation). A module- or describe-body write runs
+         * during collection, before every callback; a hook or test write
+         * runs in lifecycle order: earlier phase first, outer describes
+         * before inner ones within a setup phase, registration order within
+         * a describe.
+         */
+        const writeAppliesTo = (version, callback, site) => {
+          const writer = version.writer;
+          if (!writer) {
+            return true;
+          }
+          if (!callback) {
+            return false;
+          }
+          if (writer.fn === callback.fn) {
+            // The same callback: the write applies to invocations that
+            // follow it in the body.
+            return version.pos < (site.range?.[0] ?? 0);
+          }
+          if (writer.callType === "describe") {
+            return true;
+          }
+          const rankW = phaseRank(writer.callType);
+          const rankC = phaseRank(callback.callType);
+          if (rankC === undefined) {
+            // The invocation sits in a describe body: collection-time code.
+            return rankW === undefined;
+          }
+          if (rankW === undefined) {
+            return false;
+          }
+          if (rankW !== rankC) {
+            if (rankW > rankC) {
+              return false;
+            }
+            const writerDescribes = findAllEnclosingDescribes(writer.callNode);
+            const callbackDescribes = findAllEnclosingDescribes(callback.callNode);
+            return (
+              writerDescribes.length <= callbackDescribes.length &&
+              writerDescribes.every((describe, index) => callbackDescribes[index] === describe)
+            );
+          }
+          const writerDepth = findAllEnclosingDescribes(writer.callNode).length;
+          const callbackDepth = findAllEnclosingDescribes(callback.callNode).length;
+          if (writerDepth !== callbackDepth) {
+            return writerDepth < callbackDepth;
+          }
+          return writer.callNode.range[0] < callback.callNode.range[0];
+        };
+        /** The callable `name` resolves to at the execution of `site`,
+         * through the scope the traversal recorded for it. */
+        const resolveHelperAtExecution = (name, site) => {
+          const scope = invocationScopes.get(site);
+          if (!scope) {
+            return invocationHelpers.get(site) ?? null;
+          }
+          const versions = writeHistory.get(scope)?.get(name) ?? [];
+          if (versions.length === 0) {
+            return scope.get(name);
+          }
+          const callback = callbackInfoOf(nearestFunction(site));
+          for (let version = versions.length - 1; version >= 0; version -= 1) {
+            if (writeAppliesTo(versions[version], callback, site)) {
+              return versions[version].fn;
+            }
+          }
+          return versions[0].previous;
+        };
+        // Re-resolve every recorded invocation in lifecycle order: a setup
+        // hook registered after a test still runs before it, so the callable
+        // the test's invocation sees is the one standing at execution, not
+        // the one standing when the traversal reached the call.
+        for (const [site, recordedFn] of [...invocationHelpers]) {
+          const correct = resolveHelperAtExecution(site.callee.name, site);
+          if (correct === recordedFn) {
+            continue;
+          }
+          const sites = helperInvocations.get(recordedFn) ?? [];
+          const remaining = sites.filter((candidate) => candidate !== site);
+          if (remaining.length > 0) {
+            helperInvocations.set(recordedFn, remaining);
+          } else {
+            helperInvocations.delete(recordedFn);
+          }
+          if (correct) {
+            const moved = helperInvocations.get(correct) ?? [];
+            moved.push(site);
+            helperInvocations.set(correct, moved);
+            invocationHelpers.set(site, correct);
+          } else {
+            invocationHelpers.delete(site);
+          }
+        }
+        for (const call of freezeCalls) recordTransition(call, true);
+        for (const call of unfreezeCalls) recordTransition(call, false);
+        // Equal execution positions (transitions inside one IIFE body)
+        // keep source order.
+        const byExecution = compareExecution;
+        for (const list of transitionsByCallback.values()) {
+          list.sort(byExecution);
+        }
+        moduleTransitions.sort(byExecution);
+        describeTransitions.sort(byExecution);
 
         // Test callbacks that touch the timer state, each with its chain of
         // enclosing describes: a teardown callback runs after every test of
@@ -1057,6 +1192,72 @@ const rule = {
           const readEntry = { node: readNode, order: readExecutionKey(readNode) };
           return compareExecution(transition, readEntry) < 0;
         };
+        /**
+         * Every execution key a read takes: a read inside a named helper's
+         * body executes at the helper's invocation sites (expanded through
+         * the helper's execution contexts exactly like a transition's), not
+         * at its declaration position. A read in a direct callback body or
+         * module code has its single source-position key.
+         */
+        const readExecutionKeys = (node) => {
+          let boundary = nearestFunction(node);
+          while (boundary) {
+            const parent = boundary.parent;
+            if (parent?.type === "CallExpression" && parent.callee === boundary) {
+              boundary = nearestFunction(parent);
+              continue;
+            }
+            break;
+          }
+          if (!boundary || callbackInfoOf(boundary)) {
+            return [readExecutionKey(node)];
+          }
+          const contexts = contextsOf(boundary, new Set());
+          if (contexts.length === 0) {
+            return [readExecutionKey(node)];
+          }
+          // Frames between the read and its helper's body: IIFE boundaries
+          // and argument positions of invocations the body makes.
+          const frames = [];
+          let current = node;
+          while (current && current !== boundary) {
+            const parent = current.parent;
+            if (parent?.type === "CallExpression" || parent?.type === "NewExpression") {
+              const callee = parent.callee;
+              if (
+                callee.type === "ArrowFunctionExpression" ||
+                callee.type === "FunctionExpression"
+              ) {
+                frames.push({
+                  call: parent,
+                  marker: inSubtree(callee.body, node) ? 1 : 0,
+                });
+              } else if (
+                callee.type === "Identifier" &&
+                invocationHelpers.get(parent) &&
+                !inSubtree(callee, current)
+              ) {
+                frames.push({ call: parent, marker: 0 });
+              }
+            }
+            current = parent;
+          }
+          return contexts.map((ctx) => {
+            const order = [];
+            for (const site of ctx.sites) {
+              order.push(...executionKey(site), 1);
+            }
+            if (frames.length === 0) {
+              order.push(node.range[0]);
+            } else {
+              for (let index = frames.length - 1; index >= 0; index -= 1) {
+                order.push(frames[index].call.range[0], frames[index].marker);
+              }
+              order.push(node.range[0]);
+            }
+            return order;
+          });
+        };
 
         for (const { node, api } of timeDependentNodes) {
           const enclosing = findEnclosingTestCallback(node);
@@ -1071,15 +1272,18 @@ const rule = {
            * callback contributes its transitions up to the read.
            */
           const readFunction = nearestFunction(node);
-          const stateAt = (transitions) => {
-            const own = transitions.filter(
+          // The callback's own transition state at ONE execution key of the
+          // read: null when no own transition executed before it (the state
+          // the hooks leave decides).
+          const stateForKey = (key) => {
+            const own = (transitionsByCallback.get(enclosing.fn) ?? []).filter(
               (t) =>
                 // A transition the callback executes directly, or one inside
                 // the same deferred function the read sits in (its own
                 // freeze covers its own reads), and one that executed
-                // before the read.
+                // before this execution of the read.
                 (t.immediate || t.fn === readFunction) &&
-                executesBefore(t, node),
+                compareExecution(t, { node, order: key }) < 0,
             );
             return own.length > 0 ? own.at(-1).frozen : null;
           };
@@ -1345,8 +1549,35 @@ const rule = {
               if (hook.netFrozen !== null) frozen = hook.netFrozen;
             }
           }
-          const ownState = stateAt(transitionsByCallback.get(enclosing.fn) ?? []);
-          if (ownState !== null) frozen = ownState;
+          const readOrders = readExecutionKeys(node);
+          if (readOrders.length === 1) {
+            const ownState = stateForKey(readOrders[0]);
+            if (ownState !== null) frozen = ownState;
+          } else {
+            // The read executes at EVERY invocation of its helper: it stays
+            // covered only while every execution observes a frozen state. A
+            // context without own transitions inherits the hook-derived
+            // state.
+            let sawOwn = false;
+            for (const key of readOrders) {
+              const state = stateForKey(key);
+              if (state === null) {
+                if (!frozen) {
+                  frozen = false;
+                  break;
+                }
+                continue;
+              }
+              sawOwn = true;
+              if (!state) {
+                frozen = false;
+                break;
+              }
+            }
+            if (sawOwn && frozen !== false) {
+              frozen = true;
+            }
+          }
 
           if (!frozen) {
             report();

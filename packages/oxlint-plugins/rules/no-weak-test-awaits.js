@@ -787,11 +787,18 @@ const rule = {
             if (helperWritesCaptures(localFn)) {
               result = true;
             }
-            return;
+          } else {
+            const entry = declaredFunctionEntry(node.callee.name);
+            if (entry?.fn && helperWritesCaptures(entry.fn)) {
+              result = true;
+            }
           }
-          const entry = declaredFunctionEntry(node.callee.name);
-          if (entry?.fn && helperWritesCaptures(entry.fn)) {
-            result = true;
+          // Argument expressions execute before the call: an assignment
+          // inside an argument is part of this function's writes.
+          for (const argument of node.arguments ?? []) {
+            if (argument && typeof argument === "object" && typeof argument.type === "string" && !isFunctionNode(argument)) {
+              walk(argument);
+            }
           }
           return;
         }
@@ -912,7 +919,10 @@ const rule = {
               def.kind = boundKind(def.init, limit);
             }
           } else {
-            def.kind = boundKind(def.init, limit);
+            def.kind =
+              isFunctionNode(def.init) && localWeakCallInside(def.init)
+                ? WEAK_HELPER
+                : boundKind(def.init, limit);
           }
         } finally {
           resolvingLocals.delete(def);
@@ -929,6 +939,44 @@ const rule = {
         }
         return replayScopeKinds.length;
       };
+      /** Whether a function body calls a replay-local whose kind is a weak
+       * helper: a closure assigned inside the helper captures the local's
+       * timer dependency, which boundKind (registry-only) cannot see. */
+      const localWeakCallInside = (fnNode) => {
+        let weak = false;
+        const scan = (node) => {
+          if (weak || !node || typeof node !== "object" || typeof node.type !== "string") {
+            return;
+          }
+          if (node !== fnNode && isFunctionNode(node)) {
+            return;
+          }
+          if (node.type === "CallExpression" && node.callee.type === "Identifier") {
+            const index = lookupLocal(node.callee.name);
+            if (index >= 0) {
+              const source = localScopes[index].get(node.callee.name);
+              if (source && classifyLocal(source) === WEAK_HELPER) {
+                weak = true;
+                return;
+              }
+            }
+          }
+          for (const [key, value] of Object.entries(node)) {
+            if (key === "parent") {
+              continue;
+            }
+            if (Array.isArray(value)) {
+              for (const child of value) {
+                scan(child);
+              }
+            } else if (value && typeof value === "object" && typeof value.type === "string") {
+              scan(value);
+            }
+          }
+        };
+        scan(fnNode.body ?? fnNode);
+        return weak;
+      };
       const pushLocalScope = (statements, kind = "block") => {
         const map = new Map();
         // A `var` binding outlives any intervening block: it registers in
@@ -937,6 +985,7 @@ const rule = {
         const varTargetIndex = kind === "function" ? replayScopeKinds.length : varReplayScopeIndex();
         const varTarget = localScopes[varTargetIndex] ?? map;
         replayScopeKinds.push(kind);
+        localScopes.push(map);
         for (const statement of statements ?? []) {
           if (statement.type === "VariableDeclaration") {
             const target = statement.kind === "var" ? varTarget : map;
@@ -947,9 +996,11 @@ const rule = {
             }
           } else if (statement.type === "FunctionDeclaration" && statement.id) {
             map.set(statement.id.name, { fn: statement, kind: undefined });
+            // A hoisted helper may be invoked before its textual declaration:
+            // record its DEFINITION-time environment at scope entry.
+            replayEnvironments.set(statement, captureEnvironment());
           }
         }
-        localScopes.push(map);
         // Local NAMES register at scope entry, but their initializers
         // classify when the replay REACHES each declaration: a copy taken
         // after an intervening assignment must see the assigned value, and
@@ -1053,7 +1104,13 @@ const rule = {
                 : undefined;
               kind = localKind !== undefined ? localKind : boundKind(node.right, limit);
             } else {
-              kind = boundKind(node.right, limit);
+              // An assigned closure may call a replay-local whose kind is a
+              // weak helper — a dependency boundKind (registry-only) cannot
+              // see.
+              kind =
+                isFunctionNode(node.right) && localWeakCallInside(node.right)
+                  ? WEAK_HELPER
+                  : boundKind(node.right, limit);
             }
             const { target, logged } = assignIdentifier(node.left, kind, limit, executionSite);
             if (kind === WEAK_UNRESOLVED && node.right.type === "Identifier") {
@@ -1139,6 +1196,14 @@ const rule = {
             const entry = declaredFunctionEntry(node.callee.name, limit);
             if (entry?.fn) {
               replayInvocationWrites(entry.fn, active, executionSite, replayEnvironments.get(entry.fn));
+            }
+          }
+          // Argument expressions execute before the call: replay their
+          // assignments too (an argument assignment is part of this
+          // function's writes).
+          for (const argument of node.arguments ?? []) {
+            if (argument && typeof argument === "object" && typeof argument.type === "string" && !isFunctionNode(argument)) {
+              walk(argument);
             }
           }
           return;
