@@ -574,6 +574,15 @@ const rule = {
         if (boundary && !callbackInfoOf(boundary)) {
           return;
         }
+        if (boundary) {
+          const writer = callbackInfoOf(boundary);
+          if (writer && (writer.callType === "afterEach" || writer.callType === "afterAll")) {
+            // A teardown callback runs after every test of its suite: its
+            // reassignment must not change what those tests resolve, so it
+            // stays isolated from the shared registry.
+            return;
+          }
+        }
         // A reassignment updates the callable the binding holds: each
         // invocation must resolve to the callable held at that point, not
         // the original initializer.
@@ -790,6 +799,47 @@ const rule = {
         const describeTransitions = [];
         const recordTransition = (call, frozen) => {
           const fn = nearestFunction(call.node);
+          // The first await in `fn`'s own body (nested functions suspend
+          // separately): a transition after it executes only once the helper
+          // resumes, which a caller that never awaits the helper does not
+          // wait for.
+          const firstAwaitOf = (owner) => {
+            if (!owner || !owner.async) {
+              return undefined;
+            }
+            let pos;
+            const scan = (node) => {
+              if (!node || typeof node !== "object" || typeof node.type !== "string" || pos !== undefined) {
+                return;
+              }
+              if (node.type === "AwaitExpression") {
+                pos = node.range?.[0];
+                return;
+              }
+              if (
+                node !== owner &&
+                (node.type === "FunctionExpression" ||
+                  node.type === "ArrowFunctionExpression" ||
+                  node.type === "FunctionDeclaration")
+              ) {
+                return;
+              }
+              for (const [key, value] of Object.entries(node)) {
+                if (key === "parent") {
+                  continue;
+                }
+                if (Array.isArray(value)) {
+                  for (const child of value) {
+                    scan(child);
+                  }
+                } else if (value && typeof value === "object" && typeof value.type === "string") {
+                  scan(value);
+                }
+              }
+            };
+            scan(owner.body);
+            return pos;
+          };
           // The first non-IIFE function boundary around the transition: the
           // context boundary whose invocation chain decides immediacy.
           let boundary = fn;
@@ -825,6 +875,18 @@ const rule = {
             return;
           }
           for (const ctx of contexts) {
+            const suspendAt = firstAwaitOf(fn);
+            if (
+              suspendAt !== undefined &&
+              suspendAt < call.node.range?.[0] &&
+              !ctx.sites.every((site) => site.parent?.type === "AwaitExpression")
+            ) {
+              // The helper suspends before this transition and at least one
+              // call site does not await it: the transition has not executed
+              // by the time the caller's next statement runs, so it must not
+              // shape the state that site's later reads see.
+              continue;
+            }
             const order = [];
             for (const site of ctx.sites) {
               order.push(...executionKey(site), 1);

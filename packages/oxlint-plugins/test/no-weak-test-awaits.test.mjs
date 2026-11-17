@@ -1241,6 +1241,80 @@ test("a replayed var binding outlives its block", async () => {
   assertFlagged(result, "weakAwaits");
 });
 
+// Statements after an unconditional return never execute: the replay must
+// not apply them.
+test("the replay stops at an unconditional return", async () => {
+  const result = await runOxlint(["weakAwaits"], `
+    let sleep = () => new Promise((resolve) => setTimeout(resolve, 10));
+    function reset() {
+      return;
+      sleep = () => fetch('/data');
+    }
+    reset();
+    it('t', async () => {
+      await sleep();
+    });
+  `);
+  assertFlagged(result, "weakAwaits");
+});
+
+// A cached captured-write summary must not outlive the registry entries it
+// resolved through: replacing a referenced callable invalidates it.
+test("a replaced callee invalidates cached replay summaries", async () => {
+  const result = await runOxlint(["weakAwaits"], `
+    let sleep;
+    function set() {}
+    function reset() {
+      set();
+    }
+    reset();
+    set = () => {
+      sleep = () => new Promise((resolve) => setTimeout(resolve, 10));
+    };
+    reset();
+    it('t', async () => {
+      await sleep();
+    });
+  `);
+  assertFlagged(result, "weakAwaits");
+});
+
+// A call captured inside a function nothing invokes stays isolated: its
+// writes propagate only when that function executes.
+test("calls inside uncalled functions stay isolated", async () => {
+  const result = await runOxlint(["weakAwaits"], `
+    let sleep = () => new Promise((resolve) => setTimeout(resolve, 10));
+    function reset() {
+      sleep = () => fetch('/');
+    }
+    function unused() {
+      reset();
+    }
+    it('t', async () => {
+      await sleep();
+    });
+  `);
+  assertFlagged(result, "weakAwaits");
+});
+
+// An inline callable replacement records the registry state it replaces, so
+// the flush restores a sibling suite's resolution exactly.
+test("an inline callable replacement restores for sibling suites", async () => {
+  const result = await runOxlint(["weakAwaits"], `
+    async function wait() {}
+    it('clean', async () => {
+      await wait();
+    });
+    describe('b', () => {
+      beforeEach(() => {
+        wait = async () => new Promise((resolve) => setTimeout(resolve, 10));
+      });
+      it('t', () => {});
+    });
+  `);
+  assertClean(result, "weakAwaits");
+});
+
 // A block-local declaration expires with its block: the same-named
 // assignment after the block updates the captured binding.
 test("a block-local shadow does not exclude assignments outside its block", async () => {

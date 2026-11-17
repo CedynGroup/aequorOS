@@ -136,6 +136,17 @@ const CALLBACK_INVOKERS = new Set([
 /** Setup hooks whose callbacks run before the tests they precede. */
 const SETUP_HOOKS = new Set(["beforeEach", "beforeAll"]);
 const DESCRIBE_NAMES = new Set(["describe"]);
+/** Callback registrations whose callback the runner executes: a call
+ * captured inside one runs; a call captured inside any other function runs
+ * only if that function is itself invoked. */
+const CALLBACK_NAMES = new Set([
+  ...SETUP_HOOKS,
+  "afterEach",
+  "afterAll",
+  "test",
+  "it",
+  ...DESCRIBE_NAMES,
+]);
 
 /** Lifecycle order of a setup-hook phase: every beforeAll runs before every
  * beforeEach, whatever the registration order in the source. */
@@ -978,8 +989,17 @@ const rule = {
         }
         if (node.type === "BlockStatement") {
           pushLocalScope(node.body);
+          // An unconditional return/throw ends the sequence: statements
+          // after it never execute, so the replay must not apply them.
+          let terminated = false;
           for (const statement of node.body) {
+            if (terminated) {
+              break;
+            }
             walk(statement);
+            if (statement.type === "ReturnStatement" || statement.type === "ThrowStatement") {
+              terminated = true;
+            }
           }
           localScopes.pop();
           replayScopeKinds.pop();
@@ -1052,12 +1072,27 @@ const rule = {
                   target.declarations = new Map();
                 }
                 target.declarations.set(node.left.name, aliasTarget);
+                // The registry changed: cached captured-write summaries that
+                // resolved through the old entries are stale.
+                replaySummaries.clear();
               }
             } else if (target) {
-              // The reassignment replaces any callable registry entry: a
+              // A reassignment replaces the callable the binding holds: a
               // later invocation must replay the NEW value's body, and a
               // non-callable value leaves nothing invocable behind.
               if (isFunctionNode(node.right)) {
+                if (logged) {
+                  // Record the registry state this write replaces, so the
+                  // flush replay restores the sibling suite's entry exactly
+                  // like an unresolved-alias write does.
+                  logged.declaration = {
+                    scope: target,
+                    name: node.left.name,
+                    entry: { fn: node.right, slot: scopes.indexOf(target) },
+                    had: target.declarations?.has(node.left.name) ?? false,
+                    previous: target.declarations?.get(node.left.name),
+                  };
+                }
                 if (!target.declarations) {
                   target.declarations = new Map();
                 }
@@ -1066,8 +1101,20 @@ const rule = {
                   slot: scopes.indexOf(target),
                 });
               } else {
+                if (logged) {
+                  logged.declaration = {
+                    scope: target,
+                    name: node.left.name,
+                    entry: undefined,
+                    had: target.declarations?.has(node.left.name) ?? false,
+                    previous: target.declarations?.get(node.left.name),
+                  };
+                }
                 target.declarations?.delete(node.left.name);
               }
+              // The registry changed: cached captured-write summaries that
+              // resolved through the old entries are stale.
+              replaySummaries.clear();
             }
           }
           return;
@@ -1123,8 +1170,17 @@ const rule = {
       };
       try {
         const body = fn.body;
+        // An unconditional return/throw ends the body's sequence: later
+        // statements never execute and must not replay.
+        let terminated = false;
         for (const statement of body?.type === "BlockStatement" ? body.body : []) {
+          if (terminated) {
+            break;
+          }
           walk(statement);
+          if (statement.type === "ReturnStatement" || statement.type === "ThrowStatement") {
+            terminated = true;
+          }
         }
         if (body && body.type !== "BlockStatement") {
           walk(body);
@@ -1682,6 +1738,46 @@ const rule = {
         // as uncalled. Writes the helper performs log at the invocation's
         // position, not the helper body's.
         if (node.callee.type === "Identifier") {
+          // Only a call that executes IN PLACE replays here: a call captured
+          // inside a function nothing invokes stays isolated, and its writes
+          // propagate when a replay reaches that function's body.
+          let boundary = null;
+          for (let probe = node.parent; probe; probe = probe.parent) {
+            if (isFunctionNode(probe)) {
+              boundary = probe;
+              break;
+            }
+          }
+          while (boundary) {
+            const parent = boundary.parent;
+            if (parent?.type === "CallExpression" && parent.callee === boundary) {
+              boundary = null;
+              for (let probe = parent.parent; probe; probe = probe.parent) {
+                if (isFunctionNode(probe)) {
+                  boundary = probe;
+                  break;
+                }
+              }
+              continue;
+            }
+            break;
+          }
+          if (boundary) {
+            const call = boundary.parent;
+            const base =
+              call?.type === "CallExpression"
+                ? call.callee.type === "Identifier"
+                  ? call.callee.name
+                  : call.callee.type === "MemberExpression" && !call.callee.computed
+                    ? call.callee.property?.type === "Identifier"
+                      ? call.callee.property.name
+                      : null
+                    : null
+                : null;
+            if (base === null || !CALLBACK_NAMES.has(base)) {
+              return;
+            }
+          }
           const entry = declaredFunctionEntry(node.callee.name);
           if (entry?.fn) {
             replayInvocationWrites(entry.fn, new Set(), node.range?.[0] ?? 0);
@@ -1828,12 +1924,28 @@ const rule = {
                   target.declarations = new Map();
                 }
                 target.declarations.set(node.left.name, aliasTarget);
+                // The registry changed: cached captured-write summaries that
+                // resolved through the old entries are stale.
+                replaySummaries.clear();
               }
             } else if (target) {
               // A reassignment replaces the callable the binding holds: a
               // later invocation must replay the NEW value's body, and a
               // non-callable value leaves nothing invocable behind.
               if (isFunctionNode(node.right)) {
+                if (logged) {
+                  // Record the registry state this write replaces, so the
+                  // flush replay can restore the sibling suite's entry —
+                  // replaying the binding value alone would leave the last
+                  // sibling's declaration visible to every suite.
+                  logged.declaration = {
+                    scope: target,
+                    name: node.left.name,
+                    entry: { fn: node.right, slot: scopes.indexOf(target) },
+                    had: target.declarations?.has(node.left.name) ?? false,
+                    previous: target.declarations?.get(node.left.name),
+                  };
+                }
                 if (!target.declarations) {
                   target.declarations = new Map();
                 }
@@ -1842,8 +1954,20 @@ const rule = {
                   slot: scopes.indexOf(target),
                 });
               } else {
+                if (logged) {
+                  logged.declaration = {
+                    scope: target,
+                    name: node.left.name,
+                    entry: undefined,
+                    had: target.declarations?.has(node.left.name) ?? false,
+                    previous: target.declarations?.get(node.left.name),
+                  };
+                }
                 target.declarations?.delete(node.left.name);
               }
+              // The registry changed: cached captured-write summaries that
+              // resolved through the old entries are stale.
+              replaySummaries.clear();
             }
           }
         }

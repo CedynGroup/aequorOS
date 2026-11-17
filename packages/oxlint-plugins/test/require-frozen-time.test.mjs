@@ -1312,6 +1312,38 @@ test("a loop keeps helper scopes balanced across callbacks", async () => {
   assertClean(result, "frozenTime");
 });
 
+// An async helper invoked without await suspends before its later
+// transitions: they have not run when the caller's next statement executes.
+test("an unawaited async helper's post-suspension freeze does not cover a read", async () => {
+  const result = await runOxlint(["frozenTime"], `
+    async function freeze() {
+      await new Promise(() => {});
+      vi.useFakeTimers();
+    }
+    it('t', () => {
+      freeze();
+      Date.now();
+    });
+  `);
+  assertFlagged(result, "frozenTime");
+});
+
+// A teardown callback runs after every test of its suite: its reassignment
+// must not change what those tests resolve.
+test("an afterAll reassignment does not cover an earlier test", async () => {
+  const result = await runOxlint(["frozenTime"], `
+    let freeze = () => {};
+    afterAll(() => {
+      freeze = () => vi.useFakeTimers();
+    });
+    it('t', () => {
+      freeze();
+      Date.now();
+    });
+  `);
+  assertFlagged(result, "frozenTime");
+});
+
 // A module-level helper invoked from a hook contributes its transitions to
 // that hook: the freeze covers the tests the hook precedes.
 test("a hook invoking a module-level freezing helper covers its tests", async () => {
