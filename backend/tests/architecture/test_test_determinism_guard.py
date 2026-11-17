@@ -1005,6 +1005,158 @@ UNFROZEN_READS = [
     "import time\n"
     "def test_comprehension_target_known_elements():\n"
     "    [clock() for clock in (time.time,)]\n",
+    # An attribute alias built from a conditionally rebound name keeps every
+    # clock-capable alternative: ``clock.now`` over ``datetime|time`` is both
+    # ``datetime.datetime.now`` and ``time.now``.
+    "def test_alias_keeps_alternatives(use_datetime):\n"
+    "    if use_datetime:\n"
+    "        from datetime import datetime as clock\n"
+    "    else:\n"
+    "        import time as clock\n"
+    "    read = clock.now\n"
+    "    read()\n",
+    "def test_date_or_datetime(use_datetime):\n"
+    "    if use_datetime:\n"
+    "        from datetime import datetime as clock\n"
+    "    else:\n"
+    "        from datetime import date as clock\n"
+    "    read = clock.today\n"
+    "    read()\n",
+    # A zero-iteration loop keeps the target's pre-loop binding, so the read
+    # after the loop is real even though the body never ran.
+    "import time as clock\nfor clock in ():\n    pass\nclock.time()\n",
+    # A break exits past the else with the bindings it holds at that point,
+    # so the pre-loop binding stays reachable after the loop.
+    "import time as clock\n"
+    "for _ in [0]:\n"
+    "    if stop:\n"
+    "        break\n"
+    "    clock = fake_clock\n"
+    "else:\n"
+    "    clock = fake_clock\n"
+    "assert clock.time() == 0\n",
+    "from datetime import datetime\n"
+    "async def test_zero_iterations():\n"
+    "    clock = datetime.now\n"
+    "    async for clock in ():\n"
+    "        pass\n"
+    "    clock()\n",
+    # A break exits through the ``finally`` suite, so its assignments reach
+    # the statement after the loop: a clock bound there is real.
+    "import time\n"
+    "def test_break_through_finally():\n"
+    "    clock = lambda: 0\n"
+    "    for _ in values:\n"
+    "        try:\n"
+    "            break\n"
+    "        finally:\n"
+    "            clock = time.time\n"
+    "    clock()\n",
+    # ``except*`` builds an ``ast.TryStar``; the finalizer applies to the
+    # break state just the same.
+    "import time\n"
+    "def test_break_through_finally_star():\n"
+    "    clock = lambda: 0\n"
+    "    for _ in values:\n"
+    "        try:\n"
+    "            break\n"
+    "        except* Exception:\n"
+    "            pass\n"
+    "        finally:\n"
+    "            clock = time.time\n"
+    "    else:\n"
+    "        clock = lambda: 0\n"
+    "    clock()\n",
+    # A ``continue`` before the rebinding skips it on that path; if every
+    # iteration continues, the loop exits with the pre-loop binding.
+    "import time\n"
+    "clock = time.time\n"
+    "for _ in (0,):\n"
+    "    if skip:\n"
+    "        continue\n"
+    "    clock = lambda: 0\n"
+    "clock()\n",
+    # A rebinding inside an exception handler does not erase the binding
+    # the successful try path still holds, so the success path's binding
+    # must stay reachable past the loop.
+    "import time\n"
+    "clock = time.time\n"
+    "for _ in (0,):\n"
+    "    try:\n"
+    "        work()\n"
+    "    except ValueError:\n"
+    "        clock = lambda: 0\n"
+    "clock()\n",
+    "import time\n"
+    "clock = time.time\n"
+    "try:\n"
+    "    work()\n"
+    "except ValueError:\n"
+    "    clock = lambda: 0\n"
+    "clock()\n",
+    # The raise may strike after the body has rebound the clock, so the
+    # handler entry carries that binding and its read is not frozen.
+    "import time\n"
+    "def test_handler_after_body_rebind():\n"
+    "    clock = lambda: 0\n"
+    "    try:\n"
+    "        clock = time.time\n"
+    "        raise ValueError()\n"
+    "    except ValueError:\n"
+    "        clock()\n",
+    # A loop with both a break and a continue still runs its else suite
+    # after a final-iteration continue, so the continue's held bindings
+    # reach the else's read.
+    "import time\n"
+    "clock = time.time\n"
+    "for _ in (0,):\n"
+    "    if stop:\n"
+    "        clock = lambda: 0\n"
+    "        break\n"
+    "    elif other:\n"
+    "        continue\n"
+    "    clock = lambda: 0\n"
+    "else:\n"
+    "    clock()\n",
+    # A ``continue`` exits through the ``finally`` like a ``break``: the
+    # finalizer's re-rebinding reaches the continue's saved state, and the
+    # statements after the try do not run on that path.
+    "import time\n"
+    "clock = time.time\n"
+    "for _ in (0,):\n"
+    "    try:\n"
+    "        clock = lambda: 0\n"
+    "        if skip:\n"
+    "            continue\n"
+    "    finally:\n"
+    "        clock = time.time\n"
+    "    clock = lambda: 0\n"
+    "clock()\n",
+    # The reporting pass binds what the silent passes skip: a definition-
+    # time assignment expression inside the loop is a completed-iteration
+    # exit binding.
+    "import time\n"
+    "def test_definition_time_walrus_in_loop(values):\n"
+    "    clock = lambda: 0\n"
+    "    for _ in values:\n"
+    "        def helper(value=(clock := time.time)):\n"
+    "            pass\n"
+    "    clock()\n",
+    # A finalizer's conditional break is a distinct exit even when the
+    # finalizer ends in an unconditional continue.
+    "import time\n"
+    "clock = lambda: 0\n"
+    "for _ in (0,):\n"
+    "    try:\n"
+    "        clock = time.time\n"
+    "        break\n"
+    "    finally:\n"
+    "        if stop:\n"
+    "            break\n"
+    "        continue\n"
+    "else:\n"
+    "    clock = lambda: 0\n"
+    "clock()\n",
 ]
 
 #: The same reads are accepted once the clock is frozen at function, class or
@@ -1222,6 +1374,71 @@ FROZEN_READS = [
     "def test_generator_consumed_in_travel():\n"
     f"    with time_machine.travel({INSTANT}, tick=False):\n"
     "        list(time.time() for _ in (1,))\n",
+    # Completed iterations of a broken loop always run the ``else``, so
+    # the pre-else body state is no exit of its own.
+    "import time\n"
+    "def test_else_replaces_pre_else_state(flag):\n"
+    "    clock = time.time\n"
+    "    for _ in (0,):\n"
+    "        if flag:\n"
+    "            clock = lambda: 0\n"
+    "            break\n"
+    "    else:\n"
+    "        clock = lambda: 0\n"
+    "    clock()\n",
+    # A finalizer's unconditional ``continue`` cancels the pending break:
+    # the jump re-enters the loop and the ``else`` decides the exit.
+    "import time\n"
+    "def test_finally_continue_cancels_break():\n"
+    "    clock = lambda: 0\n"
+    "    for _ in (0,):\n"
+    "        try:\n"
+    "            break\n"
+    "        finally:\n"
+    "            clock = time.time\n"
+    "            continue\n"
+    "    else:\n"
+    "        clock = lambda: 0\n"
+    "    clock()\n",
+    # An exhausted iterable always runs the else suite, so an else that
+    # replaces the binding decides the post-loop state on its own.
+    "import time as clock\n"
+    "from types import SimpleNamespace\n"
+    "for clock in ():\n"
+    "    pass\n"
+    "else:\n"
+    "    clock = SimpleNamespace(time=lambda: 0)\n"
+    "assert clock.time() == 0\n",
+    # A final-iteration ``continue`` still runs the loop's ``else`` suite,
+    # so an else that replaces the binding decides the post-loop state; the
+    # raw continue state is not a post-loop exit of its own.
+    "import time\n"
+    "clock = time.time\n"
+    "for _ in (0,):\n"
+    "    continue\n"
+    "else:\n"
+    "    clock = lambda: 0\n"
+    "clock()\n",
+    # The zero-iteration path runs through the ``else`` suite, so an else
+    # that replaces the binding decides the state after the loop.
+    "import time as clock\n"
+    "from types import SimpleNamespace\n"
+    "for clock in ():\n"
+    "    pass\n"
+    "else:\n"
+    "    clock = SimpleNamespace(time=lambda: 0)\n"
+    "clock.time()\n",
+    # Without a break the else suite runs on every normal exit, so it also
+    # decides the post-loop state when the iterable is not provably empty:
+    # a binding it replaces cannot reach the statement after the loop.
+    "import time as clock\n"
+    "from types import SimpleNamespace\n"
+    "def test_else_replaces_shadowed():\n"
+    "    for clock in values:\n"
+    "        pass\n"
+    "    else:\n"
+    "        clock = SimpleNamespace(time=lambda: 0)\n"
+    "    clock.time()\n",
 ]
 
 
@@ -1732,3 +1949,69 @@ def test_only_the_unfrozen_part_of_a_file_is_counted(tmp_path: Path, source: str
     allowlist = tmp_path / "allowlist.json"
     allowlist.write_text("{}")
     assert guard.main(["--root", str(tmp_path), "--allowlist", str(allowlist)]) == 1
+
+
+def test_distinct_calls_on_one_line_each_count() -> None:
+    """Same-line reads are one per call site, not one per line."""
+    source = (
+        "from datetime import datetime\n"
+        "def test_two_on_one_line():\n"
+        "    a = datetime.now(); b = datetime.now()\n"
+    )
+    assert len(guard.clock_findings(source).reads) == 2
+
+
+def test_break_inside_finally_is_not_replayed_over_itself() -> None:
+    """A break originating in the finalizer already carries its assignments."""
+    source = (
+        "import time\n"
+        "clock = lambda: 0\n"
+        "replacement = time.time\n"
+        "for _ in range(1):\n"
+        "    try:\n"
+        "        pass\n"
+        "    finally:\n"
+        "        clock = replacement\n"
+        "        replacement = lambda: 0\n"
+        "        break\n"
+        "else:\n"
+        "    clock = lambda: 0\n"
+        "clock()\n"
+    )
+    assert guard.clock_findings(source).reads != []
+
+
+def test_finalizer_replay_records_one_read_per_call_site() -> None:
+    """A call site resolved differently per path still counts once."""
+    source = (
+        "import time\n"
+        "from datetime import datetime\n"
+        "clock = time.time\n"
+        "for _ in range(3):\n"
+        "    try:\n"
+        "        if flag:\n"
+        "            break\n"
+        "        clock = datetime.now\n"
+        "    finally:\n"
+        "        clock()\n"
+    )
+    assert len(guard.clock_findings(source).reads) == 1
+
+
+def test_definition_default_in_a_jumping_finalizer_is_a_known_over_report() -> None:
+    """A replayed finalizer skips definition defaults, so this read is reported."""
+    source = (
+        "import time\n"
+        "clock = time.time\n"
+        "for _ in (0,):\n"
+        "    try:\n"
+        "        continue\n"
+        "    finally:\n"
+        "        def helper(value=(clock := lambda: 0)):\n"
+        "            pass\n"
+        "        break\n"
+        "else:\n"
+        "    clock = lambda: 0\n"
+        "clock()\n"
+    )
+    assert guard.clock_findings(source).reads != []

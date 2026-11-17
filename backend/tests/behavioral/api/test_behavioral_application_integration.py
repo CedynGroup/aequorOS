@@ -576,7 +576,10 @@ def test_self_review_and_configurator_only_review_are_denied_without_acceptance(
             "revoked_reason": "Exercise revoked configure denial.",
         },
         {"valid_from": utc_now() + timedelta(days=1)},
-        {"valid_from": utc_now() - timedelta(days=2), "valid_until": utc_now() - timedelta(days=1)},
+        {
+            "valid_from": (expired_at := utc_now()) - timedelta(days=2),
+            "valid_until": expired_at - timedelta(days=1),
+        },
     ],
 )
 def test_incomplete_or_inactive_configure_bindings_do_not_propose(
