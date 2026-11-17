@@ -704,6 +704,16 @@ const rule = {
         if (node.type === "FunctionDeclaration" && node.id) {
           localCallables.set(node.id.name, node);
         }
+        if (
+          node.type === "VariableDeclarator" &&
+          node.id.type === "Identifier" &&
+          (node.init?.type === "FunctionExpression" ||
+            node.init?.type === "ArrowFunctionExpression")
+        ) {
+          // A variable-declared callable is invocable by name like a
+          // function declaration.
+          localCallables.set(node.id.name, node.init);
+        }
         for (const [key, value] of Object.entries(node)) {
           if (key === "parent") {
             continue;
@@ -938,6 +948,10 @@ const rule = {
             if (def) {
               def.init = node.right;
               def.kind = undefined;
+              // Retain the assigned value at this execution position: a
+              // later read must not re-resolve the alias through the
+              // source's subsequent replacement.
+              classifyLocal(def);
             }
           } else {
             let kind;
@@ -992,8 +1006,9 @@ const rule = {
           // cannot see the helper's own function declarations.
           const localIndex = lookupLocal(node.callee.name);
           const localDef = localIndex >= 0 ? localScopes[localIndex].get(node.callee.name) : null;
-          if (localDef?.fn) {
-            replayInvocationWrites(localDef.fn, active, executionSite);
+          const localFn = localDef?.fn ?? (localDef?.init && isFunctionNode(localDef.init) ? localDef.init : null);
+          if (localFn) {
+            replayInvocationWrites(localFn, active, executionSite);
           } else {
             const entry = declaredFunctionEntry(node.callee.name, limit);
             if (entry?.fn) {

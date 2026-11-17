@@ -1099,6 +1099,45 @@ test("a helper's nested function declaration propagates its writes", async () =>
   assertFlagged(result, "weakAwaits");
 });
 
+// A variable-declared local callable is invocable by name like a function
+// declaration: invoking it replays its captured writes.
+test("a helper's local arrow callable propagates its writes", async () => {
+  const result = await runOxlint(["weakAwaits"], `
+    let sleep;
+    function init() {
+      const set = () => {
+        sleep = () => new Promise((resolve) => setTimeout(resolve, 10));
+      };
+      set();
+    }
+    init();
+    it('t', async () => {
+      await sleep();
+    });
+  `);
+  assertFlagged(result, "weakAwaits");
+});
+
+// An assignment copies the source's CURRENT value: a later reassignment of
+// the source must not change the copy.
+test("an assigned copy keeps the value at its execution position", async () => {
+  const result = await runOxlint(["weakAwaits"], `
+    let sleep = () => fetch('/');
+    function init() {
+      let x = () => fetch('/');
+      let y;
+      y = x;
+      x = () => new Promise((resolve) => setTimeout(resolve, 10));
+      sleep = y;
+    }
+    init();
+    it('t', async () => {
+      await sleep();
+    });
+  `);
+  assertClean(result, "weakAwaits");
+});
+
 // A block-local declaration expires with its block: the same-named
 // assignment after the block updates the captured binding.
 test("a block-local shadow does not exclude assignments outside its block", async () => {
