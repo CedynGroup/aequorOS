@@ -1061,6 +1061,25 @@ test("a local copy keeps the value it was taken from", async () => {
   assertClean(result, "weakAwaits");
 });
 
+// A copy taken AFTER an intervening assignment sees the assigned value:
+// initializers classify when the replay reaches each declaration.
+test("a local copy after a reassignment carries the new value", async () => {
+  const result = await runOxlint(["weakAwaits"], `
+    let sleep = () => fetch('/');
+    function init() {
+      let x = () => fetch('/');
+      x = () => new Promise((resolve) => setTimeout(resolve, 10));
+      let y = x;
+      sleep = y;
+    }
+    init();
+    it('t', async () => {
+      await sleep();
+    });
+  `);
+  assertFlagged(result, "weakAwaits");
+});
+
 // A callee declared inside the replaying helper resolves through the
 // helper's own declarations: its captured writes propagate.
 test("a helper's nested function declaration propagates its writes", async () => {

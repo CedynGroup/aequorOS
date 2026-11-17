@@ -374,6 +374,16 @@ const rule = {
       // order alone cannot tell.
       calls.push({ node, enclosing });
     };
+    /** The test/hook callback `fn` is the direct argument of, if any. */
+    const callbackInfoOf = (fn) => {
+      const call = fn.parent;
+      if (call?.type !== "CallExpression") return null;
+      const base = getCalleeBaseName(call.callee);
+      if (base === null || !SCOPE_NAMES.has(base) || !call.arguments.includes(fn)) {
+        return null;
+      }
+      return { fn, callType: base, callNode: call };
+    };
     /** Register every identifier a binding pattern declares as a shadowing
      * (noncallable) name: helper resolution must not pass through it. */
     const registerShadowNames = (pattern) => {
@@ -476,6 +486,22 @@ const rule = {
       },
       AssignmentExpression(node) {
         if (node.operator !== "=" || node.left.type !== "Identifier") {
+          return;
+        }
+        // Only an assignment that executes IN PLACE (directly in a
+        // callback's body or behind IIFE boundaries) updates the registry:
+        // a reassignment captured inside an uncalled helper must stay
+        // isolated until that helper actually runs.
+        let boundary = nearestFunction(node);
+        while (boundary) {
+          const parent = boundary.parent;
+          if (parent?.type === "CallExpression" && parent.callee === boundary) {
+            boundary = nearestFunction(parent);
+            continue;
+          }
+          break;
+        }
+        if (boundary && !callbackInfoOf(boundary)) {
           return;
         }
         // A reassignment updates the callable the binding holds: each
@@ -599,17 +625,6 @@ const rule = {
       // Validate each time-dependent node against its scope
       "Program:exit"() {
         if (timeDependentNodes.length === 0) return;
-
-        /** The test/hook callback `fn` is the direct argument of, if any. */
-        const callbackInfoOf = (fn) => {
-          const call = fn.parent;
-          if (call?.type !== "CallExpression") return null;
-          const base = getCalleeBaseName(call.callee);
-          if (base === null || !SCOPE_NAMES.has(base) || !call.arguments.includes(fn)) {
-            return null;
-          }
-          return { fn, callType: base, callNode: call };
-        };
 
         /**
          * Every context `fn`'s body runs in, as `{ root, sites }`: root is

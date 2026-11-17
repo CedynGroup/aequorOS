@@ -873,13 +873,10 @@ const rule = {
           }
         }
         localScopes.push(map);
-        // Classify each local's initializer at its EXECUTION position, in
-        // declaration order: a copy taken from a local holds the value the
-        // source had at that point, not the source's later value. (A later
-        // assignment still reclassifies through the assignment handler.)
-        for (const def of map.values()) {
-          classifyLocal(def);
-        }
+        // Local NAMES register at scope entry, but their initializers
+        // classify when the replay REACHES each declaration: a copy taken
+        // after an intervening assignment must see the assigned value, and
+        // a copy taken before it must not.
       };
       pushLocalScope(fn.body?.type === "BlockStatement" ? fn.body.body : []);
       const params = new Map();
@@ -914,6 +911,17 @@ const rule = {
           }
           localScopes.pop();
           return;
+        }
+        if (node.type === "VariableDeclarator" && node.id.type === "Identifier") {
+          // The declaration executes here: classify its initializer now, so
+          // the local holds the value it has at this point in the replay.
+          const index = lookupLocal(node.id.name);
+          if (index >= 0) {
+            const def = localScopes[index].get(node.id.name);
+            if (def && def.init === node.init) {
+              classifyLocal(def);
+            }
+          }
         }
         if (
           node.type === "AssignmentExpression" &&

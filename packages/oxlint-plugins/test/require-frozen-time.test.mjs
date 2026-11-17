@@ -1245,6 +1245,22 @@ test("an invoked replacement callable applies its transitions", async () => {
   assertClean(result, "frozenTime");
 });
 
+// A reassignment captured inside an UNCALLED helper stays isolated: the
+// invoked callable is still the original no-op.
+test("an uncalled helper's reassignment does not change the registry", async () => {
+  const result = await runOxlint(["frozenTime"], `
+    let freeze = () => {};
+    function init() {
+      freeze = () => vi.useFakeTimers();
+    }
+    it('t', () => {
+      freeze();
+      Date.now();
+    });
+  `);
+  assertFlagged(result, "frozenTime");
+});
+
 // A module-level helper invoked from a hook contributes its transitions to
 // that hook: the freeze covers the tests the hook precedes.
 test("a hook invoking a module-level freezing helper covers its tests", async () => {
