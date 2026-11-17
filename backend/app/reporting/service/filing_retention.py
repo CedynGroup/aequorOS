@@ -12,10 +12,10 @@ from sqlalchemy.orm import Session
 
 from app.attestation.public import RegulatoryArtifactVersion
 from app.core.tenancy import TenantContext
+from app.identity.public import get_bank_or_404
 from app.reporting.models.packages import RegulatoryPackage
 from app.reporting.service.artifact_versions import archived_version
 from app.reporting.service.channels import FiledArtifact
-from app.reporting.service.common import get_bank_or_404
 from app.storage.client import StorageError, StorageLocation, StorageValidationError
 from app.storage.config import get_storage_settings
 from app.storage.factory import get_storage_client

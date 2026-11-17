@@ -42,7 +42,7 @@ from app.core.key_management.presentation import require_disclosed
 from app.data_engine.public import withdrawal_impact
 from app.domain.authority.outcomes import NotComputable
 from app.forecasting.public import regulatory_forecasting
-from app.identity.public import Bank, InstitutionProfile, User
+from app.identity.public import Bank, InstitutionProfile, User, get_bank_or_404
 from app.liquidity.public import Bsd3SummaryRowRead, regulatory_liquidity
 from app.live.public import (
     BankReportingPeriod,
@@ -55,7 +55,6 @@ from app.reporting.models.packages import RegulatoryPackage
 from app.reporting.schemas.packages import RegulatoryPackageCreate, RegulatoryPackageRead
 from app.reporting.service import family_access, family_hooks, filing_reconciliation
 from app.reporting.service.common import (
-    get_bank_or_404,
     get_snapshot_for_reporting_date,
     read_package,
     require_actor,

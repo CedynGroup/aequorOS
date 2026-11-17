@@ -32,6 +32,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import TenantContext
 from app.core.return_family_access import FamilyGate, gate_for
 from app.identity import public as institution_profile
+from app.identity.public import get_bank_or_404
 from app.notifications.public import notifications
 from app.reporting.models.packages import (
     RegulatoryPackage,
@@ -74,7 +75,6 @@ from app.reporting.service.channels import (
     build_email_bundle,
 )
 from app.reporting.service.common import (
-    get_bank_or_404,
     get_package_or_404,
     read_package,
     require_actor,

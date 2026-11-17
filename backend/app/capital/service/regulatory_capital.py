@@ -85,7 +85,7 @@ from app.capital.service import sdi_capital, sdi_capital_checks
 from app.core.authorization import Module, Permission, Sensitivity
 from app.core.errors import ModuleDataUnavailable
 from app.identity import public as scoped_authorization
-from app.identity.public import Bank, BankRead, BankReportingPeriodRead
+from app.identity.public import Bank, BankRead, BankReportingPeriodRead, get_bank_or_404
 from app.liquidity.schemas.regulatory_liquidity import (
     RegulatoryRunBatchRead,
     RegulatoryRunCreate,
@@ -416,7 +416,7 @@ def run_all_capital_scenarios(
 def get_capital_dashboard(
     db: Session, ctx: TenantContext, bank_id: str, reporting_period_id: UUID | None = None
 ) -> CapitalDashboardRead:
-    bank = _get_bank_or_404(db, ctx, bank_id)
+    bank = get_bank_or_404(db, ctx, bank_id)
     periods = _list_periods_ascending(db, ctx, bank)
     if reporting_period_id is None:
         period = current_fact_period_or_409(db, ctx, bank, MODULE_CAPITAL)
@@ -1822,7 +1822,7 @@ def _baseline_run_or_409(
     *,
     artifact: str,
 ) -> tuple[Bank, BankReportingPeriod, RegulatoryRun]:
-    bank = _get_bank_or_404(db, ctx, bank_id)
+    bank = get_bank_or_404(db, ctx, bank_id)
     if reporting_period_id is None:
         periods = _list_periods_ascending(db, ctx, bank)
         if not periods:
@@ -2330,15 +2330,6 @@ def _list_periods_ascending(
             .order_by(BankReportingPeriod.period_end)
         )
     )
-
-
-def _get_bank_or_404(db: Session, ctx: TenantContext, bank_id: str) -> Bank:
-    bank = db.scalar(
-        select(Bank).where(Bank.id == bank_id, Bank.organization_id == ctx.organization_id)
-    )
-    if bank is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Bank not found.")
-    return bank
 
 
 def _get_period_or_404(

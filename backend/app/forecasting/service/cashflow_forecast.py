@@ -48,7 +48,7 @@ from app.forecasting.schemas.cashflow_forecast import (
     CashflowHistoryPointRead,
     CashflowHistoryRead,
 )
-from app.identity.public import Bank
+from app.identity.public import Bank, get_bank_or_404
 
 if TYPE_CHECKING:
     from types import ModuleType
@@ -92,14 +92,14 @@ def get_forecast(  # noqa: PLR0913 - explicit tenant forecast inputs
     mode: CashflowForecastMode,
     scenario: CashflowForecastScenario,
 ) -> CashflowForecastRead:
-    bank = _get_bank_or_404(db, ctx, bank_id)
+    bank = get_bank_or_404(db, ctx, bank_id)
     return _get_service(db, ctx, bank_id).forecast(
         db, ctx, bank, horizon=horizon, mode=mode, scenario=scenario
     )
 
 
 def get_history(db: Session, ctx: TenantContext, bank_id: str, *, days: int) -> CashflowHistoryRead:
-    _get_bank_or_404(db, ctx, bank_id)
+    get_bank_or_404(db, ctx, bank_id)
     return _get_service(db, ctx, bank_id).history(days)
 
 
@@ -413,12 +413,3 @@ def reset_forecast_service() -> None:
     with _services_lock:
         _services.clear()
         _key_locks.clear()
-
-
-def _get_bank_or_404(db: Session, ctx: TenantContext, bank_id: str) -> Bank:
-    bank = db.scalar(
-        select(Bank).where(Bank.id == bank_id, Bank.organization_id == ctx.organization_id)
-    )
-    if bank is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Bank not found.")
-    return bank

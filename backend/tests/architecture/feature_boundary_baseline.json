@@ -1,6 +1,5 @@
 [
  "layer attestation->reporting: app.services.attestation.artifact_signing -> app.models.regulatory_reporting",
- "layer attestation->reporting: app.services.attestation.artifact_signing -> app.services.regulatory_reporting.common",
  "layer attestation->reporting: app.services.attestation.artifact_signing -> app.services.regulatory_reporting.exports",
  "layer attestation->reporting: app.services.attestation.placements -> app.models.regulatory_reporting",
  "layer attestation->reporting: app.services.attestation.placements -> app.services.regulatory_reporting.registry",
@@ -94,9 +93,7 @@
  "layer kernel->reporting: app.api.deps -> app.services.regulatory_reporting.family_access",
  "layer liquidity->credit: app.services.liquidity_ewi -> app.services.loan_classification",
  "layer liquidity->reporting: app.services.regulatory_liquidity -> app.services.filing_reconciliation",
- "layer liquidity->stress: app.services.cashflow_window -> app.services.stress_scenarios",
  "layer liquidity->stress: app.services.regulatory_liquidity -> app.services.enterprise_run_visibility",
- "layer liquidity->stress: app.services.window_analytics -> app.services.stress_scenarios",
  "layer live->bi: app.services.live_refresh_triggers -> app.services.bi.enqueue",
  "layer live->bi: app.services.pipeline -> app.services.bi.enqueue",
  "layer live->capital: app.services.data_activation -> app.schemas.regulatory_capital",

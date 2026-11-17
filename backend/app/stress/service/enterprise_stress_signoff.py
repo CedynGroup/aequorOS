@@ -36,7 +36,7 @@ from app.api.deps import TenantContext
 from app.attestation.public import digest_of, identity, stepup
 from app.core.authorization import Permission
 from app.db.base import utc_now
-from app.identity.public import Bank, User
+from app.identity.public import Bank, User, get_bank_or_404
 from app.live.public import RegulatoryRun
 from app.models import EnterpriseStressSignoff
 from app.services.audit import record_event
@@ -55,15 +55,6 @@ from app.stress.schemas.enterprise_stress_signoff import (
 from app.stress.service import scope_authorization
 
 MODULE_ENTERPRISE_STRESS = "enterprise_stress"
-
-
-def _get_bank_or_404(db: Session, ctx: TenantContext, bank_id: str) -> Bank:
-    bank = db.scalar(
-        select(Bank).where(Bank.id == bank_id, Bank.organization_id == ctx.organization_id)
-    )
-    if bank is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Bank not found.")
-    return bank
 
 
 def _get_signoff_or_404(
@@ -336,7 +327,7 @@ def create_signoff(
     db: Session, ctx: TenantContext, bank_id: str, payload: StressSignoffCreate
 ) -> StressSignoffRead:
     scope_authorization.require_permission(db, ctx, bank_id, Permission.CREATE)
-    bank = _get_bank_or_404(db, ctx, bank_id)
+    bank = get_bank_or_404(db, ctx, bank_id)
     run = _resolve_enterprise_run_or_404(db, ctx, bank, payload.run_id)
     existing = db.scalar(
         select(EnterpriseStressSignoff).where(

@@ -92,7 +92,7 @@ def test_summary_filters_with_the_positive_include_and_skips_the_stale_probe() -
     db = _rows_free_session(captured)
     bank = _bank()
     with (
-        patch.object(live_view, "_get_bank_or_404", return_value=bank),
+        patch.object(live_view, "get_bank_or_404", return_value=bank),
         patch.object(live_view, "_latest_period", return_value=None),
         patch.object(live_access, "allowed_modules", return_value=[]) as allowed,
         patch.object(live_view, "_cache_is_behind_the_book") as probe,
@@ -113,7 +113,7 @@ def test_alerts_filter_with_the_positive_include_list() -> None:
     db = _rows_free_session(captured)
     bank = _bank()
     with (
-        patch.object(alerts, "_get_bank_or_404", return_value=bank),
+        patch.object(alerts, "get_bank_or_404", return_value=bank),
         patch.object(live_access, "allowed_modules", return_value=["liquidity"]) as allowed,
     ):
         feed = alerts.get_bank_alerts(db, _context(), bank.id)
@@ -130,7 +130,7 @@ def test_window_analytics_filter_with_the_positive_include_list() -> None:
     db = _rows_free_session(captured)
     bank = _bank()
     with (
-        patch.object(window_analytics, "_get_bank_or_404", return_value=bank),
+        patch.object(window_analytics, "get_bank_or_404", return_value=bank),
         patch.object(live_access, "allowed_modules", return_value=["liquidity"]) as allowed,
     ):
         window = window_analytics.compute_window(
@@ -153,7 +153,7 @@ def test_unknown_snapshot_module_denies_without_the_evaluator() -> None:
     db = _rows_free_session([])
     bank = _bank()
     with (
-        patch.object(live_view, "_get_bank_or_404", return_value=bank),
+        patch.object(live_view, "get_bank_or_404", return_value=bank),
         patch.object(live_view.scoped_authorization, "evaluate_bank_permission") as evaluate,
         pytest.raises(HTTPException) as refused,
     ):

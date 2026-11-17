@@ -86,7 +86,7 @@ from app.data_engine.schemas.database_connection import (
 )
 from app.data_engine.service.access import require_data_access
 from app.db.base import utc_now
-from app.identity.public import Bank
+from app.identity.public import get_bank_or_404
 from app.market_data.public import derive_status
 from app.services.audit import record_event
 
@@ -117,7 +117,7 @@ _adapter = DatabaseDirectAdapter()
 
 def list_connections(db: Session, ctx: TenantContext, bank_id: str) -> DatabaseConnectionListRead:
     require_data_access(db, ctx, bank_id, Permission.VIEW, Sensitivity.RESTRICTED)
-    _get_bank_or_404(db, ctx, bank_id)
+    get_bank_or_404(db, ctx, bank_id)
     rows = db.scalars(
         select(DatabaseDirectConnection)
         .where(
@@ -135,7 +135,7 @@ def get_connection(
     db: Session, ctx: TenantContext, bank_id: str, connection_id: UUID
 ) -> DatabaseConnectionRead:
     require_data_access(db, ctx, bank_id, Permission.VIEW, Sensitivity.RESTRICTED, opaque=True)
-    _get_bank_or_404(db, ctx, bank_id)
+    get_bank_or_404(db, ctx, bank_id)
     return _read_model(_get_connection_or_404(db, ctx, bank_id, connection_id))
 
 
@@ -152,7 +152,7 @@ def create_connection(
     # Configuration duty: exact data/configure/restricted authority BEFORE any
     # vault write or credential check.
     require_data_access(db, ctx, bank_id, Permission.CONFIGURE, Sensitivity.RESTRICTED)
-    _get_bank_or_404(db, ctx, bank_id)
+    get_bank_or_404(db, ctx, bank_id)
     backend = payload.backend
     if not payload.credentials:
         raise HTTPException(
@@ -237,7 +237,7 @@ def update_connection(
     """Post-onboarding edits and credential rotation (validate new first)."""
     # Configuration duty (incl. credential rotation): deny before any vault write.
     require_data_access(db, ctx, bank_id, Permission.CONFIGURE, Sensitivity.RESTRICTED, opaque=True)
-    _get_bank_or_404(db, ctx, bank_id)
+    get_bank_or_404(db, ctx, bank_id)
     connection = _get_connection_or_404(db, ctx, bank_id, connection_id)
     _ensure_not_revoked(connection)
 
@@ -295,7 +295,7 @@ def disable_connection(
     db: Session, ctx: TenantContext, bank_id: str, connection_id: UUID
 ) -> DatabaseConnectionWriteAcknowledgement:
     require_data_access(db, ctx, bank_id, Permission.CONFIGURE, Sensitivity.RESTRICTED, opaque=True)
-    _get_bank_or_404(db, ctx, bank_id)
+    get_bank_or_404(db, ctx, bank_id)
     connection = _get_connection_or_404(db, ctx, bank_id, connection_id)
     _ensure_not_revoked(connection)
     if connection.status != "DISABLED":
@@ -319,7 +319,7 @@ def enable_connection(
     db: Session, ctx: TenantContext, bank_id: str, connection_id: UUID
 ) -> DatabaseConnectionWriteAcknowledgement:
     require_data_access(db, ctx, bank_id, Permission.CONFIGURE, Sensitivity.RESTRICTED, opaque=True)
-    _get_bank_or_404(db, ctx, bank_id)
+    get_bank_or_404(db, ctx, bank_id)
     connection = _get_connection_or_404(db, ctx, bank_id, connection_id)
     if connection.status != "DISABLED":
         raise HTTPException(
@@ -344,7 +344,7 @@ def revoke_connection(
     db: Session, ctx: TenantContext, bank_id: str, connection_id: UUID
 ) -> DatabaseConnectionWriteAcknowledgement:
     require_data_access(db, ctx, bank_id, Permission.CONFIGURE, Sensitivity.RESTRICTED, opaque=True)
-    _get_bank_or_404(db, ctx, bank_id)
+    get_bank_or_404(db, ctx, bank_id)
     connection = _get_connection_or_404(db, ctx, bank_id, connection_id)
     if connection.status == "REVOKED" and connection.credential_ciphertext is None:
         # Already revoked and wiped (a test/sync failure can set REVOKED
@@ -396,7 +396,7 @@ def probe_connection_internal(
     *,
     driver: DatabaseDriver | None = None,
 ) -> DatabaseConnectionTestResult:
-    _get_bank_or_404(db, ctx, bank_id)
+    get_bank_or_404(db, ctx, bank_id)
     connection = _get_connection_or_404(db, ctx, bank_id, connection_id)
     _ensure_not_revoked(connection)
     _ensure_not_disabled(connection)
@@ -443,7 +443,7 @@ def discover_schema(
 ) -> DatabaseConnectionDiscoverResult:
     """Stage a read-only pull and report its tables/columns for mapping."""
     require_data_access(db, ctx, bank_id, Permission.VALIDATE, Sensitivity.RESTRICTED, opaque=True)
-    _get_bank_or_404(db, ctx, bank_id)
+    get_bank_or_404(db, ctx, bank_id)
     connection = _get_connection_or_404(db, ctx, bank_id, connection_id)
     _ensure_not_revoked(connection)
     _ensure_not_disabled(connection)
@@ -463,7 +463,7 @@ def require_sync_connection(
 ) -> DatabaseDirectConnection:
     """Resolve RUN authority and the scoped object before provisioning storage."""
     require_data_access(db, ctx, bank_id, Permission.RUN, Sensitivity.RESTRICTED, opaque=True)
-    _get_bank_or_404(db, ctx, bank_id)
+    get_bank_or_404(db, ctx, bank_id)
     connection = _get_connection_or_404(db, ctx, bank_id, connection_id)
     _ensure_not_revoked(connection)
     _ensure_not_disabled(connection)
@@ -691,15 +691,6 @@ def _safe_column_samples(
         if seen:
             samples[column] = seen
     return samples
-
-
-def _get_bank_or_404(db: Session, ctx: TenantContext, bank_id: str) -> Bank:
-    bank = db.scalar(
-        select(Bank).where(Bank.id == bank_id, Bank.organization_id == ctx.organization_id)
-    )
-    if bank is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Bank not found.")
-    return bank
 
 
 def _get_connection_or_404(

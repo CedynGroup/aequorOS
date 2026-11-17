@@ -33,7 +33,7 @@ from sqlalchemy.orm import Session
 from app.api.deps import TenantContext
 from app.core.authorization import ConditionCheck, ConditionKind, Permission
 from app.db.base import utc_now
-from app.identity.public import Bank
+from app.identity.public import get_bank_or_404
 from app.models import ManagementActionItem, ManagementActionPlan
 from app.services.audit import record_event
 from app.stress.domain.management_actions import (
@@ -57,15 +57,6 @@ from app.stress.schemas.management_actions import (
     ManagementActionPlanUpdate,
 )
 from app.stress.service import scope_authorization
-
-
-def _get_bank_or_404(db: Session, ctx: TenantContext, bank_id: str) -> Bank:
-    bank = db.scalar(
-        select(Bank).where(Bank.id == bank_id, Bank.organization_id == ctx.organization_id)
-    )
-    if bank is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Bank not found.")
-    return bank
 
 
 def _get_plan_or_404(db: Session, ctx: TenantContext, plan_id: UUID) -> ManagementActionPlan:
@@ -214,7 +205,7 @@ def create_plan(
 ) -> ManagementActionPlanRead:
     scope_authorization.require_permission(db, ctx, payload.bank_id, Permission.CREATE)
     if payload.bank_id is not None:
-        _get_bank_or_404(db, ctx, payload.bank_id)
+        get_bank_or_404(db, ctx, payload.bank_id)
     if _duplicate_code_exists(db, ctx, payload.bank_id, payload.code):
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,

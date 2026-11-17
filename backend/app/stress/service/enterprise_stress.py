@@ -57,7 +57,7 @@ from app.domain.authority.outcomes import NotComputable, OutcomeDetail, OutcomeS
 from app.forecasting.domain.engine import ForecastAssumptions, ForecastFact, ForecastParams
 from app.fx.domain.engine import FxPosition
 from app.identity import public as scoped_authorization
-from app.identity.public import Bank
+from app.identity.public import Bank, get_bank_or_404
 from app.irrbb.public import regulatory_irr
 from app.liquidity.domain.engine import (
     HQLA_LEVEL_1,
@@ -295,15 +295,6 @@ class EnterpriseStressError(HTTPException):
 
 def _dec(value: Any) -> Decimal:
     return Decimal(str(value))
-
-
-def _get_bank_or_404(db: Session, ctx: TenantContext, bank_id: str) -> Bank:
-    bank = db.scalar(
-        select(Bank).where(Bank.id == bank_id, Bank.organization_id == ctx.organization_id)
-    )
-    if bank is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Bank not found.")
-    return bank
 
 
 def _get_period_or_404(
@@ -1572,7 +1563,7 @@ def _run_enterprise_stress_test(  # noqa: PLR0912, PLR0915 - one linear orchestr
     db: Session, ctx: TenantContext, bank_id: str, payload: EnterpriseStressRunCreate
 ) -> EnterpriseStressRead:
     """Run one enterprise stress test and persist it as an immutable run."""
-    bank = _get_bank_or_404(db, ctx, bank_id)
+    bank = get_bank_or_404(db, ctx, bank_id)
     scoped_authorization.require_resolved_bank_permission(
         db,
         ctx,
@@ -1980,7 +1971,7 @@ def _run_enterprise_stress_test(  # noqa: PLR0912, PLR0915 - one linear orchestr
 def get_latest_enterprise_stress(
     db: Session, ctx: TenantContext, bank_id: str, reporting_period_id: UUID, scenario_id: UUID
 ) -> EnterpriseStressRead:
-    bank = _get_bank_or_404(db, ctx, bank_id)
+    bank = get_bank_or_404(db, ctx, bank_id)
     scoped_authorization.require_resolved_bank_permission(
         db,
         ctx,
@@ -2060,7 +2051,7 @@ def list_enterprise_stress_runs(
     Optionally scoped to one reporting period. RLS-scoped; succeeded runs only
     (a failed attempt carries no Appendix II payload to summarise).
     """
-    bank = _get_bank_or_404(db, ctx, bank_id)
+    bank = get_bank_or_404(db, ctx, bank_id)
     # The list summaries carry stressed CAR and the capital gap, so the list
     # matches latest/detail at confidential (W5); aggregated readers lose it.
     scoped_authorization.require_resolved_bank_permission(
@@ -2096,7 +2087,7 @@ def get_enterprise_stress_run(
     (``inputs.scenario.id``) so the re-opened view is faithful to the run even if
     the scenario has since been re-versioned or archived.
     """
-    bank = _get_bank_or_404(db, ctx, bank_id)
+    bank = get_bank_or_404(db, ctx, bank_id)
     scoped_authorization.require_resolved_bank_permission(
         db,
         ctx,

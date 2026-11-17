@@ -20,7 +20,7 @@ from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
 from app.core.authorization import Permission, Sensitivity
-from app.identity.public import Bank
+from app.identity.public import Bank, get_bank_or_404
 from app.live.public import BankReportingPeriod
 from app.models import StressScenario
 from app.services.audit import record_event
@@ -40,15 +40,6 @@ from app.stress.service.scenario_catalog import (
     system_shocks,
     validate_shocks,
 )
-
-
-def _get_bank_or_404(db: Session, ctx: TenantContext, bank_id: str) -> Bank:
-    bank = db.scalar(
-        select(Bank).where(Bank.id == bank_id, Bank.organization_id == ctx.organization_id)
-    )
-    if bank is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Bank not found.")
-    return bank
 
 
 def _get_scenario_or_404(
@@ -94,7 +85,7 @@ def list_catalogue(  # noqa: PLR0913 - one read carries its full scoping
     reporting_period_id: UUID | None = None,
     include_archived: bool = False,
 ) -> ScenarioCatalogueRead:
-    bank = _get_bank_or_404(db, ctx, bank_id)
+    bank = get_bank_or_404(db, ctx, bank_id)
     scenario_workbench_authorization.require_module_permission(
         db,
         ctx,
@@ -175,7 +166,7 @@ def create_scenario(
     module: WorkbenchModule,
     payload: StressScenarioCreate,
 ) -> StressScenarioRead:
-    bank = _get_bank_or_404(db, ctx, bank_id)
+    bank = get_bank_or_404(db, ctx, bank_id)
     scenario_workbench_authorization.require_module_permission(
         db,
         ctx,
@@ -237,7 +228,7 @@ def update_scenario(  # noqa: PLR0913 - one write carries its full scoping
     scenario_id: UUID,
     payload: StressScenarioUpdate,
 ) -> StressScenarioRead:
-    bank = _get_bank_or_404(db, ctx, bank_id)
+    bank = get_bank_or_404(db, ctx, bank_id)
     scenario_workbench_authorization.require_module_permission(
         db,
         ctx,
@@ -275,7 +266,7 @@ def set_archived(  # noqa: PLR0913 - one write carries its full scoping
     scenario_id: UUID,
     payload: StressScenarioArchive,
 ) -> StressScenarioRead:
-    bank = _get_bank_or_404(db, ctx, bank_id)
+    bank = get_bank_or_404(db, ctx, bank_id)
     scenario_workbench_authorization.require_module_permission(
         db,
         ctx,

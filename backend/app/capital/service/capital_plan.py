@@ -43,10 +43,9 @@ from app.core.authorization import ConditionCheck, ConditionKind, Module, Permis
 from app.db.base import utc_now
 from app.forecasting.service import regulatory_forecasting
 from app.identity import public as scoped_authorization
-from app.identity.public import Bank
+from app.identity.public import Bank, get_bank_or_404
 from app.liquidity.service.liquidity_cfp import get_cfp
 from app.liquidity.service.liquidity_ewi import (
-    _get_bank_or_404,  # noqa: PLC2701 - shared tenant guards, one definition
     _get_period_or_404,  # noqa: PLC2701
     escalation_state,
     evaluate_ewis,
@@ -527,7 +526,7 @@ def _ilaap_read(snapshot: IlaapSnapshot) -> IlaapSnapshotRead:
 
 
 def get_capital_plan(db: Session, ctx: TenantContext, bank_id: str) -> CapitalPlanSummaryRead:
-    bank = _get_bank_or_404(db, ctx, bank_id)
+    bank = get_bank_or_404(db, ctx, bank_id)
     current = _current_plan(db, ctx, bank)
     approved = _approved_plan(db, ctx, bank)
     reference = approved or current
@@ -580,7 +579,7 @@ def maker_checker_conditions(
 ) -> tuple[ConditionCheck, ...]:
     """Resolve the plan's preparer before evaluating approval authority."""
 
-    bank = _get_bank_or_404(db, ctx, bank_id)
+    bank = get_bank_or_404(db, ctx, bank_id)
     plan = _current_plan(db, ctx, bank)
     distinct = plan is None or plan.prepared_by is None or plan.prepared_by != ctx.actor_user_id
     return (
@@ -604,7 +603,7 @@ def put_capital_plan(
     plan and the record of why it was proposed land together or not at all.
     The maker-checker is untouched: the caller still becomes ``prepared_by``,
     and a different person must approve."""
-    bank = _get_bank_or_404(db, ctx, bank_id)
+    bank = get_bank_or_404(db, ctx, bank_id)
     current = _current_plan(db, ctx, bank)
     if current is not None and current.status == "draft":
         plan = current
@@ -639,7 +638,7 @@ def put_capital_plan(
 def approve_capital_plan(
     db: Session, ctx: TenantContext, bank_id: str, payload: CapitalPlanApprove
 ) -> CapitalPlanRead:
-    bank = _get_bank_or_404(db, ctx, bank_id)
+    bank = get_bank_or_404(db, ctx, bank_id)
     plan = _current_plan(db, ctx, bank)
     if plan is None or plan.status != "draft":
         raise HTTPException(
@@ -713,7 +712,7 @@ def refresh_ilaap(
     db: Session, ctx: TenantContext, bank_id: str, payload: IlaapRefreshCreate
 ) -> IlaapSnapshotRead:
     """Mint the quarterly ILAAP component from stored liquidity state."""
-    bank = _get_bank_or_404(db, ctx, bank_id)
+    bank = get_bank_or_404(db, ctx, bank_id)
     period = _get_period_or_404(db, ctx, bank, payload.reporting_period_id)
     baseline = db.scalar(
         select(RegulatoryRun)
@@ -805,7 +804,7 @@ def refresh_ilaap(
 def list_ilaap_snapshots(
     db: Session, ctx: TenantContext, bank_id: str, reporting_period_id: UUID | None = None
 ) -> IlaapSnapshotListRead:
-    bank = _get_bank_or_404(db, ctx, bank_id)
+    bank = get_bank_or_404(db, ctx, bank_id)
     conditions = [
         IlaapSnapshot.organization_id == ctx.organization_id,
         IlaapSnapshot.bank_id == bank.id,

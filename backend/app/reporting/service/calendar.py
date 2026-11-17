@@ -27,7 +27,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.deps import TenantContext
-from app.identity.public import Bank
+from app.identity.public import Bank, get_bank_or_404
 from app.reporting.models.packages import (
     RegulatoryPackage,
     RegulatoryReportingSettings,
@@ -52,7 +52,6 @@ from app.reporting.service.anchors import (
     computed_snapshot_dates,
     snapshot_coverage,
 )
-from app.reporting.service.common import get_bank_or_404
 from app.reporting.service.eligibility import (
     BLOCKING_CRITERIA,
     InstitutionEligibility,

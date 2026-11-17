@@ -93,7 +93,7 @@ from app.forecasting.schemas.forecasting import (
     WhatIfYearDeltaRead,
 )
 from app.identity import public as scoped_authorization
-from app.identity.public import Bank
+from app.identity.public import Bank, get_bank_or_404
 from app.liquidity.domain.engine import (
     FACT_GROUP_SECURITIES,
     HQLA_LEVEL_1,
@@ -267,7 +267,7 @@ class _ActiveForecastParams:
 def list_forecast_scenarios(
     db: Session, ctx: TenantContext, bank_id: str
 ) -> ForecastScenarioListRead:
-    bank = _get_bank_or_404(db, ctx, bank_id)
+    bank = get_bank_or_404(db, ctx, bank_id)
     # The scenario list is the entry screen for the projection; refusing it here
     # is what stops an SDI operator from filling in assumptions for a projection
     # that will not be produced.
@@ -296,7 +296,7 @@ def create_forecast_run(
     db: Session, ctx: TenantContext, bank_id: str, payload: ForecastRunCreate
 ) -> ForecastRunRead:
     _require_actor(ctx)
-    bank = _get_bank_or_404(db, ctx, bank_id)
+    bank = get_bank_or_404(db, ctx, bank_id)
     _require_run_authority(db, ctx, bank, surface="forecast_run")
     # Regime gate BEFORE anything is computed or persisted (forensic architecture
     # audit sections 6 + 10): this projection's compliance outputs are Basel
@@ -461,7 +461,7 @@ def list_forecast_runs(
     limit: int = 25,
     offset: int = 0,
 ) -> ForecastRunListRead:
-    bank = _get_bank_or_404(db, ctx, bank_id)
+    bank = get_bank_or_404(db, ctx, bank_id)
     conditions = (
         RegulatoryRun.organization_id == ctx.organization_id,
         RegulatoryRun.bank_id == bank.id,
@@ -498,7 +498,7 @@ def list_forecast_runs(
 def get_forecast_run(
     db: Session, ctx: TenantContext, bank_id: str, run_id: UUID
 ) -> ForecastRunRead:
-    bank = _get_bank_or_404(db, ctx, bank_id)
+    bank = get_bank_or_404(db, ctx, bank_id)
     return _read_forecast_run(
         db,
         _run_or_404(db, ctx, bank.id, run_id, module=MODULE_FORECAST),
@@ -510,7 +510,7 @@ def run_strategic_optimizer(
     db: Session, ctx: TenantContext, bank_id: str, payload: OptimizerRunCreate
 ) -> OptimizerResultRead:
     _require_actor(ctx)
-    bank = _get_bank_or_404(db, ctx, bank_id)
+    bank = get_bank_or_404(db, ctx, bank_id)
     _require_run_authority(db, ctx, bank, surface="optimizer_run")
     sdi_regime.require_bank_forecast_regime(db, bank)
     period = _get_period_or_404(db, ctx, bank, payload.reporting_period_id)
@@ -559,7 +559,7 @@ def run_whatif_analysis(
     db: Session, ctx: TenantContext, bank_id: str, payload: WhatIfRunCreate
 ) -> WhatIfResultRead:
     _require_actor(ctx)
-    bank = _get_bank_or_404(db, ctx, bank_id)
+    bank = get_bank_or_404(db, ctx, bank_id)
     _require_run_authority(db, ctx, bank, surface="whatif_run")
     sdi_regime.require_bank_forecast_regime(db, bank)
     period = _get_period_or_404(db, ctx, bank, payload.reporting_period_id)
@@ -1704,15 +1704,6 @@ def _latest_period_end(db: Session, ctx: TenantContext, bank: Bank) -> date | No
             BankReportingPeriod.bank_id == bank.id,
         )
     )
-
-
-def _get_bank_or_404(db: Session, ctx: TenantContext, bank_id: str) -> Bank:
-    bank = db.scalar(
-        select(Bank).where(Bank.id == bank_id, Bank.organization_id == ctx.organization_id)
-    )
-    if bank is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Bank not found.")
-    return bank
 
 
 def _get_period_or_404(

@@ -32,7 +32,7 @@ from app.core.authorization import (
 )
 from app.db.base import utc_now
 from app.identity import public as scoped_authorization
-from app.identity.public import Bank
+from app.identity.public import Bank, get_bank_or_404
 from app.liquidity.schemas.liquidity_cfp import (
     CfpActivationCreate,
     CfpApprove,
@@ -46,7 +46,6 @@ from app.liquidity.schemas.liquidity_cfp import (
     EwiEvaluationRead,
 )
 from app.liquidity.service.liquidity_ewi import (
-    _get_bank_or_404,  # noqa: PLC2701 - shared tenant guards, one definition
     _get_period_or_404,  # noqa: PLC2701
     escalation_state,
     evaluate_ewis,
@@ -136,7 +135,7 @@ def _read(plan: ContingencyFundingPlan) -> CfpRead:
 
 
 def get_cfp(db: Session, ctx: TenantContext, bank_id: str) -> CfpSummaryRead:
-    bank = _get_bank_or_404(db, ctx, bank_id)
+    bank = get_bank_or_404(db, ctx, bank_id)
     current = _current_plan(db, ctx, bank)
     approved = _approved_plan(db, ctx, bank)
     return CfpSummaryRead(
@@ -149,7 +148,7 @@ def ewi_dashboard(
     db: Session, ctx: TenantContext, bank_id: str, reporting_period_id: UUID | None = None
 ) -> EwiDashboardRead:
     """The server-side EWI board: evaluations + escalation + CFP posture."""
-    bank = _get_bank_or_404(db, ctx, bank_id)
+    bank = get_bank_or_404(db, ctx, bank_id)
     period = (
         current_fact_period_or_409(db, ctx, bank, "liquidity")
         if reporting_period_id is None
@@ -172,7 +171,7 @@ def ewi_dashboard(
 
 def put_cfp(db: Session, ctx: TenantContext, bank_id: str, payload: CfpPut) -> CfpRead:
     """Create or update the draft plan (a new draft supersedes no approval)."""
-    bank = _get_bank_or_404(db, ctx, bank_id)
+    bank = get_bank_or_404(db, ctx, bank_id)
     current = _current_plan(db, ctx, bank, for_update=True)
     permission = (
         Permission.EDIT if current is not None and current.status == "draft" else Permission.CREATE
@@ -246,7 +245,7 @@ def _require_directive_complete(content: CfpContent) -> None:
 
 
 def approve_cfp(db: Session, ctx: TenantContext, bank_id: str, payload: CfpApprove) -> CfpRead:
-    bank = _get_bank_or_404(db, ctx, bank_id)
+    bank = get_bank_or_404(db, ctx, bank_id)
     plan = _current_plan(db, ctx, bank, for_update=True)
     if plan is None or plan.status != "draft":
         scoped_authorization.require_resolved_bank_permission(
@@ -462,7 +461,7 @@ def _record_transition(  # noqa: PLR0913 - the ¶74 event carries its full evide
 def activate_cfp(
     db: Session, ctx: TenantContext, bank_id: str, payload: CfpActivationCreate
 ) -> CfpEventRead:
-    bank = _get_bank_or_404(db, ctx, bank_id)
+    bank = get_bank_or_404(db, ctx, bank_id)
     scoped_authorization.require_resolved_bank_permission(
         db,
         ctx,
@@ -510,7 +509,7 @@ def activate_cfp(
 def de_escalate_cfp(
     db: Session, ctx: TenantContext, bank_id: str, payload: CfpActivationCreate
 ) -> CfpEventRead:
-    bank = _get_bank_or_404(db, ctx, bank_id)
+    bank = get_bank_or_404(db, ctx, bank_id)
     scoped_authorization.require_resolved_bank_permission(
         db,
         ctx,
@@ -537,7 +536,7 @@ def de_escalate_cfp(
 
 
 def list_events(db: Session, ctx: TenantContext, bank_id: str) -> CfpEventListRead:
-    bank = _get_bank_or_404(db, ctx, bank_id)
+    bank = get_bank_or_404(db, ctx, bank_id)
     records = db.execute(
         select(CfpActivationEvent, ContingencyFundingPlan.version)
         .join(

@@ -50,7 +50,7 @@ from app.capital.domain.engine import (
 )
 from app.capital.service import sdi_capital
 from app.core.errors import ModuleDataUnavailable
-from app.identity.public import Bank, BankRead, BankReportingPeriodRead
+from app.identity.public import Bank, BankRead, BankReportingPeriodRead, get_bank_or_404
 from app.irrbb.domain import IrrRunError
 from app.irrbb.domain.engine import (
     BASE_CURVE_SCENARIO,
@@ -192,7 +192,7 @@ def create_irr_run(
     db: Session, ctx: TenantContext, bank_id: str, payload: RegulatoryRunCreate
 ) -> RegulatoryRunRead:
     _require_actor(ctx)
-    bank = _get_bank_or_404(db, ctx, bank_id)
+    bank = get_bank_or_404(db, ctx, bank_id)
     period = _get_period_or_404(db, ctx, bank, payload.reporting_period_id)
     return _create_and_execute(db, ctx, bank, period, payload.scenario_code)
 
@@ -201,7 +201,7 @@ def run_all_irr_scenarios(
     db: Session, ctx: TenantContext, bank_id: str, payload: IrrScenarioBatchCreate
 ) -> RegulatoryRunBatchRead:
     _require_actor(ctx)
-    bank = _get_bank_or_404(db, ctx, bank_id)
+    bank = get_bank_or_404(db, ctx, bank_id)
     period = _get_period_or_404(db, ctx, bank, payload.reporting_period_id)
     # Every immutable ``RegulatoryRun`` is filing evidence, so the balance-sheet
     # control gates this mint exactly as it gates capital and liquidity
@@ -225,7 +225,7 @@ def get_irr_dashboard(
     *,
     resolved_bank: Bank | None = None,
 ) -> IrrDashboardRead:
-    bank = resolved_bank or _get_bank_or_404(db, ctx, bank_id)
+    bank = resolved_bank or get_bank_or_404(db, ctx, bank_id)
     periods = _list_periods_ascending(db, ctx, bank)
     period = (
         current_fact_period_or_409(db, ctx, bank, MODULE_IRR)
@@ -1085,7 +1085,7 @@ def compute_ear_analysis(  # noqa: PLR0913 - the workbench seam names its full s
     Stored regulatory runs (12-month ±200 bp) are never read or written here.
     """
     _validate_ear_analysis_inputs(horizon_months, delta_bp)
-    bank = _get_bank_or_404(db, ctx, bank_id)
+    bank = get_bank_or_404(db, ctx, bank_id)
     period = _get_period_or_404(db, ctx, bank, reporting_period_id)
     facts = _load_facts(db, ctx, bank, period)
     if not facts:
@@ -1694,15 +1694,6 @@ def _list_periods_ascending(
             .order_by(BankReportingPeriod.period_end)
         )
     )
-
-
-def _get_bank_or_404(db: Session, ctx: TenantContext, bank_id: str) -> Bank:
-    bank = db.scalar(
-        select(Bank).where(Bank.id == bank_id, Bank.organization_id == ctx.organization_id)
-    )
-    if bank is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Bank not found.")
-    return bank
 
 
 def _get_period_or_404(

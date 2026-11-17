@@ -48,7 +48,7 @@ from app.data_engine.service.ingestion import (
     start_ingestion,
 )
 from app.db.base import utc_now
-from app.identity.public import Bank
+from app.identity.public import Bank, get_bank_or_404
 from app.models import IngestionBatch, MappingConfigRecord
 from app.services.audit import record_event
 from app.storage.client import (
@@ -74,7 +74,7 @@ def open_push_batch(
     storage: StorageClient,
 ) -> PushBatchStatusRead:
     storage = storage.for_session(db)
-    bank = _get_bank_or_404(db, ctx, bank_id)
+    bank = get_bank_or_404(db, ctx, bank_id)
     slug = bank_slug(db, bank)
     storage.ensure_institution(slug)
 
@@ -138,7 +138,7 @@ def stage_push_records(  # noqa: PLR0913 - mirrors record_event's shape
     storage: StorageClient,
 ) -> PushBatchStatusRead:
     storage = storage.for_session(db)
-    bank = _get_bank_or_404(db, ctx, bank_id)
+    bank = get_bank_or_404(db, ctx, bank_id)
     slug = bank_slug(db, bank)
     manifest = _get_manifest_or_404(ctx, bank, slug, push_batch_id, storage)
     if manifest["status"] == "committed":
@@ -197,7 +197,7 @@ def commit_push_batch(
     storage: StorageClient,
 ) -> IngestionBatchStartRead:
     storage = storage.for_session(db)
-    bank = _get_bank_or_404(db, ctx, bank_id)
+    bank = get_bank_or_404(db, ctx, bank_id)
     slug = bank_slug(db, bank)
     manifest = _get_manifest_or_404(ctx, bank, slug, push_batch_id, storage)
 
@@ -259,7 +259,7 @@ def get_push_batch(
     storage: StorageClient,
 ) -> PushBatchStatusRead:
     storage = storage.for_session(db)
-    bank = _get_bank_or_404(db, ctx, bank_id)
+    bank = get_bank_or_404(db, ctx, bank_id)
     slug = bank_slug(db, bank)
     return _status_read(_get_manifest_or_404(ctx, bank, slug, push_batch_id, storage))
 
@@ -428,15 +428,6 @@ def _read_json(storage: StorageClient, location: StorageLocation) -> dict[str, A
     except StorageNotFoundError:
         return None
     return json.loads(stream.read().decode("utf-8"))
-
-
-def _get_bank_or_404(db: Session, ctx: TenantContext, bank_id: str) -> Bank:
-    bank = db.scalar(
-        select(Bank).where(Bank.id == bank_id, Bank.organization_id == ctx.organization_id)
-    )
-    if bank is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Bank not found.")
-    return bank
 
 
 def _get_batch_or_404(

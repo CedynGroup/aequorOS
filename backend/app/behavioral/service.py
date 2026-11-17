@@ -39,7 +39,7 @@ from app.core.ids import new_uuid7
 from app.data_engine.public import CanonicalReferenceRow, IngestionBatch, LineageRecord
 from app.db.base import utc_now
 from app.identity import public as scoped_authorization
-from app.identity.public import Bank
+from app.identity.public import Bank, get_bank_or_404
 
 _MODULES = {
     "nmd-duration": nmd_duration,
@@ -68,15 +68,6 @@ def _validate_model(model: str) -> None:
         )
 
 
-def _get_bank_or_404(db: Session, ctx: TenantContext, bank_id: str) -> Bank:
-    bank = db.scalar(
-        select(Bank).where(Bank.id == bank_id, Bank.organization_id == ctx.organization_id)
-    )
-    if bank is None:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Bank not found.")
-    return bank
-
-
 def _artifacts_path(org_id: str, bank_id: str, model: str) -> Path:
     root = get_settings().behavioral.artifacts_dir
     return Path(root) / model / str(org_id) / str(bank_id) / "estimates.json"
@@ -103,7 +94,7 @@ def get_estimates(  # noqa: PLR0913 - explicit tenant, model, refresh, and resol
     route, and no training happens before that decision.
     """
     _validate_model(model)
-    bank = resolved_bank or _get_bank_or_404(db, ctx, bank_id)
+    bank = resolved_bank or get_bank_or_404(db, ctx, bank_id)
     if refresh:
         scoped_authorization.require_resolved_bank_permission(
             db,

@@ -37,7 +37,7 @@ from app.capital.public import (
     run_metrics as _capital_run_metrics,
 )
 from app.domain.authority.results import Computed
-from app.identity.public import Bank
+from app.identity.public import Bank, get_bank_or_404
 from app.liquidity.schemas.window_analytics import (
     WindowAnalyticsRead,
     WindowDailyStatRead,
@@ -59,7 +59,6 @@ from app.liquidity.service.regulatory_liquidity import (
     _scalar_metrics as _liquidity_run_metrics,  # noqa: PLC2701 - dashboard-trend parity
 )
 from app.live.public import BankReportingPeriod, LiveMetricSnapshot, live_access
-from app.stress.service.stress_scenarios import _get_bank_or_404  # noqa: PLC2701 - shared guard
 
 _MAX_WINDOW_MONTHS = 36
 # Averages quantize to the run metrics' own 6-dp precision, so a one-point
@@ -100,7 +99,7 @@ def compute_window(
     end_date: date,
 ) -> WindowAnalyticsRead:
     """Ratio series + window statistics + daily aggregates for [start, end]."""
-    bank = _get_bank_or_404(db, ctx, bank_id)
+    bank = get_bank_or_404(db, ctx, bank_id)
     _validate_window(start_date, end_date)
     # The one closed engine-to-module map decides what this caller may read.
     # A positive include list hides new or unknown modules by default.
