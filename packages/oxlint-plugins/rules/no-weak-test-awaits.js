@@ -714,6 +714,18 @@ const rule = {
           // function declaration.
           localCallables.set(node.id.name, node.init);
         }
+        if (
+          node.type === "VariableDeclarator" &&
+          node.id.type === "Identifier" &&
+          node.init?.type === "Identifier"
+        ) {
+          // An alias of an already-collected callable is invocable through
+          // its own name (declarations register in source order).
+          const source = localCallables.get(node.init.name);
+          if (source) {
+            localCallables.set(node.id.name, source);
+          }
+        }
         for (const [key, value] of Object.entries(node)) {
           if (key === "parent") {
             continue;
@@ -859,8 +871,21 @@ const rule = {
             def.kind = false;
           } else if (def.init.type === "Identifier") {
             const index = lookupLocal(def.init.name);
-            def.kind =
-              index >= 0 ? classifyLocal(localScopes[index].get(def.init.name)) : boundKind(def.init, limit);
+            if (index >= 0) {
+              const source = localScopes[index].get(def.init.name);
+              def.kind = classifyLocal(source);
+              // An alias carries the callable identity of its source, so an
+              // invocation through the alias replays the same writes.
+              if (def.fn === undefined) {
+                if (source.fn !== undefined) {
+                  def.fn = source.fn;
+                } else if (source.init && isFunctionNode(source.init)) {
+                  def.fn = source.init;
+                }
+              }
+            } else {
+              def.kind = boundKind(def.init, limit);
+            }
           } else {
             def.kind = boundKind(def.init, limit);
           }
@@ -1682,12 +1707,21 @@ const rule = {
         // A variable-declared callable (`const init = () => {...}`) is
         // invocable by name exactly like a function declaration: register
         // it so an explicit call replays its captured writes.
-        if (
-          node.id.type === "Identifier" &&
-          (node.init?.type === "FunctionExpression" ||
-            node.init?.type === "ArrowFunctionExpression")
-        ) {
-          registerCallable(node.id.name, node.init);
+        if (node.id.type === "Identifier") {
+          if (
+            node.init?.type === "FunctionExpression" ||
+            node.init?.type === "ArrowFunctionExpression"
+          ) {
+            registerCallable(node.id.name, node.init);
+          } else if (node.init?.type === "Identifier") {
+            // An alias of a known callable is invocable through its own
+            // name: register the same function so an explicit call of the
+            // alias replays the same captured writes.
+            const entry = declaredFunctionEntry(node.init.name);
+            if (entry?.fn) {
+              registerCallable(node.id.name, entry.fn);
+            }
+          }
         }
         const kind = boundKind(node.init);
         if (

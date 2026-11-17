@@ -1261,6 +1261,24 @@ test("an uncalled helper's reassignment does not change the registry", async () 
   assertFlagged(result, "frozenTime");
 });
 
+// A loop-header binding lives in the loop's own scope: after the loop
+// exits, the outer freezing function resolves again.
+test("a loop-header shadow expires with the loop", async () => {
+  const result = await runOxlint(["frozenTime"], `
+    it('t', () => {
+      function freeze() {
+        vi.useFakeTimers();
+      }
+      for (let freeze of [() => {}]) {
+        freeze();
+      }
+      freeze();
+      Date.now();
+    });
+  `);
+  assertClean(result, "frozenTime");
+});
+
 // A module-level helper invoked from a hook contributes its transitions to
 // that hook: the freeze covers the tests the hook precedes.
 test("a hook invoking a module-level freezing helper covers its tests", async () => {

@@ -1118,6 +1118,26 @@ test("a helper's local arrow callable propagates its writes", async () => {
   assertFlagged(result, "weakAwaits");
 });
 
+// A local alias of a local callable is invocable through its own name: the
+// invocation replays the same captured writes.
+test("a helper's local callable alias propagates its writes", async () => {
+  const result = await runOxlint(["weakAwaits"], `
+    let sleep;
+    function init() {
+      const set = () => {
+        sleep = () => new Promise((resolve) => setTimeout(resolve, 10));
+      };
+      const invoke = set;
+      invoke();
+    }
+    init();
+    it('t', async () => {
+      await sleep();
+    });
+  `);
+  assertFlagged(result, "weakAwaits");
+});
+
 // An assignment copies the source's CURRENT value: a later reassignment of
 // the source must not change the copy.
 test("an assigned copy keeps the value at its execution position", async () => {

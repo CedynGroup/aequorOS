@@ -471,6 +471,38 @@ const rule = {
       "CatchClause:exit"() {
         helperScopes.pop();
       },
+      ForStatement(node) {
+        if (node.init?.type === "VariableDeclaration") {
+          // A loop-header binding lives in the loop's own scope: push a
+          // scope so it cannot shadow an outer helper after the loop exits.
+          helperScopes.push(new Map());
+        }
+      },
+      "ForStatement:exit"(node) {
+        if (node.init?.type === "VariableDeclaration") {
+          helperScopes.pop();
+        }
+      },
+      ForInStatement(node) {
+        if (node.left.type === "VariableDeclaration") {
+          helperScopes.push(new Map());
+        }
+      },
+      "ForInStatement:exit"(node) {
+        if (node.left.type === "VariableDeclaration") {
+          helperScopes.pop();
+        }
+      },
+      ForOfStatement(node) {
+        if (node.left.type === "VariableDeclaration") {
+          helperScopes.push(new Map());
+        }
+      },
+      "ForOfStatement:exit"(node) {
+        if (node.left.type === "VariableDeclaration") {
+          helperScopes.pop();
+        }
+      },
       VariableDeclarator(node) {
         if (
           node.id.type === "Identifier" &&
