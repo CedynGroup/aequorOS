@@ -17,18 +17,10 @@ call the operator API directly. Shared rules are in [../SKILL.md](../SKILL.md).
    pnpm --filter @aequoros/console dev   # http://localhost:3002
    ```
 
-   The dev server rewrites the tracked `console/next-env.d.ts`; restore it before
-   finishing.
-
-4. For a bank dashboard handoff, start the local tenant API and dashboard. On
-   both local APIs, set the same disposable
-   `IMPERSONATION_JWT_SECRET=<local-random-secret>`. Set `BANK_APP_BASE_URL` on
-   the operator API to the running loopback dashboard origin, for example
-   `http://localhost:3001`, and restart both APIs. Before clicking **Open in
-   new tab**, use the [act-token preflight](operator-api.md#inspector-handoff)
-   as the same local operator on the active session. The button opens the URL
-   automatically, so proceed only after the returned `dashboard_url` exactly
-   matches the running loopback origin.
+4. For an inspector handoff, run the local tenant API and dashboard. Before
+   starting the APIs, set the same disposable `IMPERSONATION_JWT_SECRET=<local-random-secret>` on both APIs
+   and set `BANK_APP_BASE_URL` on the operator API to the running loopback
+   dashboard origin.
 
 ## Sign in
 
@@ -47,5 +39,8 @@ element screenshots per matrix row, named `console-<case>-<before|after>.png`.
   and the resulting operator API record, and use only the disposable local
   database.
 - For the inspector handoff, capture the audited, read-only dashboard state
-  after completing the preflight.
+  from **Open in new tab**. Have browser automation hold the button’s
+  `window.open` call and verify that the actual mint response’s
+  `dashboard_url`, as used in that call, matches the configured loopback
+  origin before allowing navigation.
 - Capture a narrow viewport if the change touches layout.

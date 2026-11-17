@@ -129,9 +129,10 @@ Append a row:
 ```bash
 EVIDENCE='<directory outside the worktree>'
 FILE=dashboard-liquidity-unavailable-after.png
+CHECKSUM=$(sha256sum < "$EVIDENCE/$FILE") &&
+HEAD_COMMIT=$(git -C "<worktree>" rev-parse --verify HEAD) &&
 printf '%s\t%s\t%s\t%s\t%s\n' "$FILE" "<case>" "<caption>" \
-  "$(sha256sum "$EVIDENCE/$FILE" | cut -d' ' -f1)" \
-  "$(git -C "<worktree>" rev-parse HEAD)" >> "$EVIDENCE/manifest.tsv"
+  "${CHECKSUM%% *}" "$HEAD_COMMIT" >> "$EVIDENCE/manifest.tsv"
 ```
 
 Non-visual evidence (a request and response pair, a command's output) is a text

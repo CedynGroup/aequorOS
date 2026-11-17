@@ -21,7 +21,7 @@ None.
 ## Capture
 
 Full-page screenshots per page and viewport with the session's browser
-automation, named `marketing-<page>-<before|after>.png`. Cover desktop and a
+automation, named `marketing-<case>-<before|after>.png` (include the viewport in the case). Cover desktop and a
 narrow viewport, and check that links and anchors resolve.
 
 ## Contact API capture

@@ -83,5 +83,6 @@ Charts render without animation.
   for desktop; match them.
 - **Regulatory status and commencement.** These journeys use a separate stack
   with a file-controlled reporting clock, started by
-  `playwright.regulatory.config.ts` (see the README section above). It writes
-  captures to `E2E_EVIDENCE_DIR` when set.
+  `playwright.regulatory.config.ts` (see the README section above). Run its
+  command with `AQS_LOCAL_SERVICES=native` or `AQS_LOCAL_SERVICES=docker` and
+  set `E2E_EVIDENCE_DIR` for captures.
