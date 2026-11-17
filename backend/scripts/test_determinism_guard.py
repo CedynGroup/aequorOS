@@ -36,6 +36,10 @@ constructions, and a read it cannot attribute is missed rather than guessed:
   module-level assignment expression counts as a rebinding whatever its
   position, so the guard reports such a read instead of accepting it. That
   over-reports and never hides a read.
+* A module ``pytestmark`` freeze marker never covers a generator created at
+  import time, so a module-level generator that a marked test consumes later
+  is reported rather than accepted. That also over-reports and never hides a
+  read.
 * Only a ``for`` loop and the builtin consumers count as consuming a generator
   in place. Unpacking one, as in ``[*(time.time() for _ in (0,))]``, a tuple
   or set display, or a starred call argument, is not recognised, so a frozen
@@ -727,14 +731,9 @@ class ClockVisitor(ast.NodeVisitor):
         """Scan a generator's body under the bindings at its consumption.
 
         The freeze stays what its creation gave it: a name-bound generator may
-        run long after its block exited, so only a marker freezes it. A
-        consumption at import time runs the body before any marker applies, so
-        it is judged by the freeze active there.
+        run long after its block exited, so only a marker freezes it, and a
+        module marker never covers one created at import time.
         """
-        if not self.in_function_body and not self.probing:
-            self.generator_frozen[generator] = (
-                self.generator_frozen.get(generator, True) and self.frozen
-            )
         current = dict(self.aliases)
         known = self.generator_scopes.get(generator)
         if known is None or generator not in self.consumed_generators:
@@ -1970,8 +1969,12 @@ class ClockVisitor(ast.NodeVisitor):
             # The body runs where the generator is consumed: under the freeze
             # active here when this statement exhausts it, else under the
             # freeze a marker gives the whole test.
+            # A module marker never covers import time, so a generator created
+            # there that its statement does not exhaust is never frozen by it.
             self.generator_frozen[id(node)] = (
-                self.frozen if id(node) in self.eager_generators else self.deferred_frozen
+                self.frozen
+                if id(node) in self.eager_generators
+                else self.deferred_frozen and self.in_function_body
             )
         self.aliases = self.enclosing.copy()
         self.enclosing = self.aliases

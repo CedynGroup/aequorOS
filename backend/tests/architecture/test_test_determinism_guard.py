@@ -18,6 +18,12 @@ INSTANT = '"2026-01-01T00:00:00+00:00"'
 #: Reads the guard must reject: direct members, both datetime import styles and
 #: aliased imports of the platform utc_now helpers.
 UNFROZEN_READS = [
+    # The same holds for a generator handed straight to a consumer that does
+    # not exhaust it.
+    "import pytest\n"
+    "import time\n"
+    f"pytestmark = pytest.mark.freeze_time({INSTANT})\n"
+    "STAMP = next(time.time() for _ in (0,))\n",
     # A marker freezes test execution only: a module-level generator consumed
     # during import reads the wall clock even under ``pytestmark``.
     "import pytest\n"
