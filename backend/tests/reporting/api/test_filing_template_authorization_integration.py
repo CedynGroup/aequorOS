@@ -289,6 +289,7 @@ def test_out_of_coverage_bank_is_hidden(db_client: TestClient) -> None:
     assert _counts() == before
 
 
+@pytest.mark.freeze_time("2026-01-01T00:00:00+00:00")
 def test_impersonated_session_cannot_write_templates(db_client: TestClient) -> None:
     _grant(USER_1, RoleBundle.CONFIGURATOR)
     before = _counts()
