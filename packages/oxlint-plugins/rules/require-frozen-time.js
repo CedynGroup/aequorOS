@@ -500,7 +500,6 @@ const rule = {
       },
       ForStatement(node) {
         if (node.init?.type === "VariableDeclaration") {
-          helperScopes.push(new Map());
           scopeKinds.push("loop");
           // A loop-header binding lives in the loop's own scope: push a
           // scope so it cannot shadow an outer helper after the loop exits.
@@ -515,7 +514,6 @@ const rule = {
       },
       ForInStatement(node) {
         if (node.left.type === "VariableDeclaration") {
-          helperScopes.push(new Map());
           scopeKinds.push("loop");
           helperScopes.push(new Map());
         }
@@ -528,7 +526,6 @@ const rule = {
       },
       ForOfStatement(node) {
         if (node.left.type === "VariableDeclaration") {
-          helperScopes.push(new Map());
           scopeKinds.push("loop");
           helperScopes.push(new Map());
         }

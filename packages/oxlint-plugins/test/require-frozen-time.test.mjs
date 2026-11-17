@@ -1294,6 +1294,24 @@ test("a var-declared callable outlives its block", async () => {
   assertClean(result, "frozenTime");
 });
 
+// A loop must push and pop exactly one helper scope: an unbalanced stack
+// leaks an earlier callback's registrations into later callbacks.
+test("a loop keeps helper scopes balanced across callbacks", async () => {
+  const result = await runOxlint(["frozenTime"], `
+    function restore() {}
+    beforeEach(() => vi.useFakeTimers());
+    it('a', () => {
+      for (let x of []) {}
+      var restore = () => vi.useRealTimers();
+    });
+    it('b', () => {
+      restore();
+      Date.now();
+    });
+  `);
+  assertClean(result, "frozenTime");
+});
+
 // A module-level helper invoked from a hook contributes its transitions to
 // that hook: the freeze covers the tests the hook precedes.
 test("a hook invoking a module-level freezing helper covers its tests", async () => {

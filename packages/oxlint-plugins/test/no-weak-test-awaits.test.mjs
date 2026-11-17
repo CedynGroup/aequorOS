@@ -1179,6 +1179,44 @@ test("a replaced local alias resolves to its replacement", async () => {
   assertFlagged(result, "weakAwaits");
 });
 
+// A nested helper invoked during the replay reads the invoking
+// initializer's locals: its captured write carries the local's kind.
+test("a nested helper reads the enclosing initializer's locals", async () => {
+  const result = await runOxlint(["weakAwaits"], `
+    let sleep;
+    function init() {
+      const local = () => new Promise((resolve) => setTimeout(resolve, 10));
+      function set() {
+        sleep = local;
+      }
+      set();
+    }
+    init();
+    it('t', async () => {
+      await sleep();
+    });
+  `);
+  assertFlagged(result, "weakAwaits");
+});
+
+// A `var` binding in a replayed block outlives the block, as in JavaScript.
+test("a replayed var binding outlives its block", async () => {
+  const result = await runOxlint(["weakAwaits"], `
+    let sleep = () => fetch('/');
+    function init() {
+      {
+        var local = () => new Promise((resolve) => setTimeout(resolve, 10));
+      }
+      sleep = local;
+    }
+    init();
+    it('t', async () => {
+      await sleep();
+    });
+  `);
+  assertFlagged(result, "weakAwaits");
+});
+
 // A block-local declaration expires with its block: the same-named
 // assignment after the block updates the captured binding.
 test("a block-local shadow does not exclude assignments outside its block", async () => {

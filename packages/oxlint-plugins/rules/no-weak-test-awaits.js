@@ -827,7 +827,7 @@ const rule = {
      * source sits (a reset invoked after an await in the same hook has not
      * happened when that await runs).
      */
-    function replayInvocationWrites(fn, active, executionSite) {
+    function replayInvocationWrites(fn, active, executionSite, inherited) {
       if (active.has(fn)) {
         return;
       }
@@ -844,8 +844,12 @@ const rule = {
       // write to a name bound in an open scope is the helper's own local
       // state (a block-local expires with its block), and a local referenced
       // on a right-hand side carries that local's kind instead of resolving
-      // against the defining scopes, where it does not exist.
-      const localScopes = [];
+      // against the defining scopes, where it does not exist. A nested
+      // helper invoked during the replay inherits the invoking replay's
+      // scopes, so its body reads the enclosing initializer's locals.
+      const localScopes = inherited ? inherited.scopes : [];
+      const replayScopeKinds = inherited ? inherited.kinds : [];
+      const scopeDepth = localScopes.length;
       const resolvingLocals = new Set();
       const lookupLocal = (name) => {
         for (let index = localScopes.length - 1; index >= 0; index -= 1) {
@@ -894,13 +898,30 @@ const rule = {
         }
         return def.kind;
       };
-      const pushLocalScope = (statements) => {
+      /** The replay-scope index of the nearest enclosing function body, the
+       * scope a `var` binding belongs to. */
+      const varReplayScopeIndex = () => {
+        for (let index = replayScopeKinds.length - 1; index >= 0; index -= 1) {
+          if (replayScopeKinds[index] === "function") {
+            return index;
+          }
+        }
+        return replayScopeKinds.length;
+      };
+      const pushLocalScope = (statements, kind = "block") => {
         const map = new Map();
+        // A `var` binding outlives any intervening block: it registers in
+        // the nearest function-body scope (this scope, when the scope being
+        // pushed is one) while a let/const binding registers here.
+        const varTargetIndex = kind === "function" ? replayScopeKinds.length : varReplayScopeIndex();
+        const varTarget = localScopes[varTargetIndex] ?? map;
+        replayScopeKinds.push(kind);
         for (const statement of statements ?? []) {
           if (statement.type === "VariableDeclaration") {
+            const target = statement.kind === "var" ? varTarget : map;
             for (const declarator of statement.declarations) {
               if (declarator.id.type === "Identifier") {
-                map.set(declarator.id.name, { init: declarator.init, kind: undefined });
+                target.set(declarator.id.name, { init: declarator.init, kind: undefined });
               }
             }
           } else if (statement.type === "FunctionDeclaration" && statement.id) {
@@ -913,7 +934,7 @@ const rule = {
         // after an intervening assignment must see the assigned value, and
         // a copy taken before it must not.
       };
-      pushLocalScope(fn.body?.type === "BlockStatement" ? fn.body.body : []);
+      pushLocalScope(fn.body?.type === "BlockStatement" ? fn.body.body : [], "function");
       const params = new Map();
       const declarePattern = (pattern) => {
         if (!pattern) return;
@@ -935,6 +956,7 @@ const rule = {
         declarePattern(parameter);
       }
       localScopes.push(params);
+      replayScopeKinds.push("function");
       const walk = (node) => {
         if (!node || typeof node !== "object" || typeof node.type !== "string") {
           return;
@@ -945,6 +967,7 @@ const rule = {
             walk(statement);
           }
           localScopes.pop();
+          replayScopeKinds.pop();
           return;
         }
         if (node.type === "VariableDeclarator" && node.id.type === "Identifier") {
@@ -1036,11 +1059,17 @@ const rule = {
           const localDef = localIndex >= 0 ? localScopes[localIndex].get(node.callee.name) : null;
           const localFn = localDef?.fn ?? (localDef?.init && isFunctionNode(localDef.init) ? localDef.init : null);
           if (localFn) {
-            replayInvocationWrites(localFn, active, executionSite);
+            replayInvocationWrites(localFn, active, executionSite, {
+              scopes: localScopes,
+              kinds: replayScopeKinds,
+            });
           } else {
             const entry = declaredFunctionEntry(node.callee.name, limit);
             if (entry?.fn) {
-              replayInvocationWrites(entry.fn, active, executionSite);
+              replayInvocationWrites(entry.fn, active, executionSite, {
+                scopes: localScopes,
+                kinds: replayScopeKinds,
+              });
             }
           }
           return;
@@ -1080,6 +1109,11 @@ const rule = {
         }
       } finally {
         active.delete(fn);
+        // A nested invocation inherits the caller's live scope stack: drop
+        // exactly the scopes this replay pushed so the caller's environment
+        // is intact when its walk continues.
+        localScopes.length = scopeDepth;
+        replayScopeKinds.length = scopeDepth;
       }
     }
 
