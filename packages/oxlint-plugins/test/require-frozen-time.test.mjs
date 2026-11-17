@@ -1181,6 +1181,38 @@ test("a defaulted parameter shadowing a freezing helper stops resolution", async
   assertFlagged(result, "frozenTime");
 });
 
+// A destructured binding shadows the outer helper like any other binding.
+test("a destructured shadowing binding stops helper resolution", async () => {
+  const result = await runOxlint(["frozenTime"], `
+    function freeze() {
+      vi.useFakeTimers();
+    }
+    it('t', () => {
+      const { freeze } = { freeze: () => {} };
+      freeze();
+      Date.now();
+    });
+  `);
+  assertFlagged(result, "frozenTime");
+});
+
+// Function declarations are initialized at block entry: an invocation
+// textually above the declaration inside the same block resolves.
+test("a block hoists its function declarations to the block entry", async () => {
+  const result = await runOxlint(["frozenTime"], `
+    it('t', () => {
+      {
+        freeze();
+        function freeze() {
+          vi.useFakeTimers();
+        }
+      }
+      Date.now();
+    });
+  `);
+  assertClean(result, "frozenTime");
+});
+
 // A module-level helper invoked from a hook contributes its transitions to
 // that hook: the freeze covers the tests the hook precedes.
 test("a hook invoking a module-level freezing helper covers its tests", async () => {

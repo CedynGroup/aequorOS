@@ -437,11 +437,18 @@ const rule = {
       "ArrowFunctionExpression:exit"() {
         helperScopes.pop();
       },
-      BlockStatement() {
+      BlockStatement(node) {
         // Lexical block scope: a block-local callable registration must not
         // outlive its block, and a block-local noncallable binding shadows
-        // outer helpers only inside it.
+        // outer helpers only inside it. Function declarations are
+        // initialized at block entry, so hoist them before descending (a
+        // call textually above the declaration still resolves).
         helperScopes.push(new Map());
+        for (const statement of node.body) {
+          if (statement.type === "FunctionDeclaration") {
+            registerHelper(statement.id?.name, statement);
+          }
+        }
       },
       "BlockStatement:exit"() {
         helperScopes.pop();
@@ -454,15 +461,16 @@ const rule = {
         helperScopes.pop();
       },
       VariableDeclarator(node) {
-        if (node.id.type !== "Identifier") return;
         if (
-          node.init?.type === "FunctionExpression" ||
-          node.init?.type === "ArrowFunctionExpression"
+          node.id.type === "Identifier" &&
+          (node.init?.type === "FunctionExpression" ||
+            node.init?.type === "ArrowFunctionExpression")
         ) {
           registerHelper(node.id.name, node.init);
         } else {
-          // Any other binding shadows outer helpers of the same name.
-          registerHelper(node.id.name, null);
+          // Any other binding shadows outer helpers of the same name —
+          // including destructured patterns' bound names.
+          registerShadowNames(node.id);
         }
       },
       CallExpression(node) {

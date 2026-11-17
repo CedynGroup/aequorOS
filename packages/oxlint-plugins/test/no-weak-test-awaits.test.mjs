@@ -1024,6 +1024,24 @@ test("an invoked helper's local helper propagates its kind", async () => {
   assertFlagged(result, "weakAwaits");
 });
 
+// A local reassigned before it is copied to a captured binding carries the
+// NEW initializer's kind: the replay updates local values on assignment.
+test("a reassigned local propagates its latest value's kind", async () => {
+  const result = await runOxlint(["weakAwaits"], `
+    let sleep = () => fetch('/');
+    function init() {
+      let local = () => fetch('/');
+      local = () => new Promise((resolve) => setTimeout(resolve, 10));
+      sleep = local;
+    }
+    init();
+    it('t', async () => {
+      await sleep();
+    });
+  `);
+  assertFlagged(result, "weakAwaits");
+});
+
 // A block-local declaration expires with its block: the same-named
 // assignment after the block updates the captured binding.
 test("a block-local shadow does not exclude assignments outside its block", async () => {

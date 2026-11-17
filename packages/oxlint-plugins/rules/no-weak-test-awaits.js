@@ -875,9 +875,17 @@ const rule = {
           node.left.type === "Identifier"
         ) {
           // A write to a name bound in an open local scope stays inside the
-          // helper: replaying it onto the caller's scopes would clobber a
-          // captured binding the local merely shadows.
-          if (lookupLocal(node.left.name) < 0) {
+          // helper: update that local's value (a later read of the local
+          // must classify the NEW initializer) without propagating the
+          // write to the caller's scopes.
+          const localIndex = lookupLocal(node.left.name);
+          if (localIndex >= 0) {
+            const def = localScopes[localIndex].get(node.left.name);
+            if (def) {
+              def.init = node.right;
+              def.kind = undefined;
+            }
+          } else {
             let kind;
             if (node.right.type === "Identifier") {
               const localKind = lookupLocal(node.right.name) >= 0
