@@ -13,6 +13,7 @@ Two pins, both readable without Postgres:
 from __future__ import annotations
 
 import inspect
+from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
 
@@ -524,3 +525,28 @@ def test_the_simple_gates_keep_their_public_shape() -> None:
         assert gate.__module__ == "app.api.deps", name
         assert str(inspect.signature(gate)) == FROZEN_SIGNATURES[name], name
         assert gate.__doc__ == FROZEN_DOCS[name], name
+
+
+def test_the_frozen_table_rows_equal_the_policy_snapshot() -> None:
+    """The spec table is the snapshot, spelled as data."""
+    table: Mapping[str, Any] = deps._INSTITUTION_GATE_SPECS
+    assert {
+        name: GateSpec(
+            module=row.module.name,
+            sensitivity=row.sensitivity.name,
+            permission=row.permission.name,
+            surface=row.surface,
+            detail=row.detail,
+            request=row.request,
+            whole_institution=row.whole_institution,
+            denial_status=row.denial_status,
+        )
+        for name, row in table.items()
+    } == FROZEN_SPECS
+
+
+def test_each_simple_gate_defers_to_its_frozen_spec_row() -> None:
+    """A gate may not grow a second, hand-written policy beside the table."""
+    for name in GATE_NAMES:
+        source = inspect.getsource(getattr(deps, name))
+        assert f'_INSTITUTION_GATE_SPECS["{name}"]' in source, name
