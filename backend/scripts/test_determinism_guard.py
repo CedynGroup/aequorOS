@@ -30,21 +30,6 @@ constructions, and a read it cannot attribute is missed rather than guessed:
 * An immediately invoked lambda at module level, such as
   ``STAMP = (lambda: time.time())()``, is not tracked as an import-time call,
   so a module ``pytestmark`` freeze marker can exempt its read.
-* A generator handed to a builtin consumer such as ``list`` is accepted as
-  consumed in place only while the consumer's name is never rebound in that
-  scope. An annotation-only declaration, a binding later in a class body or a
-  module-level assignment expression counts as a rebinding whatever its
-  position, so the guard reports such a read instead of accepting it. That
-  over-reports and never hides a read.
-* A module ``pytestmark`` freeze marker never covers a generator created at
-  import time, so a module-level generator that a marked test consumes later
-  is reported rather than accepted. That also over-reports and never hides a
-  read.
-* Only a ``for`` loop and the builtin consumers count as consuming a generator
-  in place. Unpacking one, as in ``[*(time.time() for _ in (0,))]``, a tuple
-  or set display, or a starred call argument, is not recognised, so a frozen
-  read it exhausts is reported instead of accepted. That also over-reports and
-  never hides a read.
 """
 
 from __future__ import annotations
@@ -99,10 +84,6 @@ UTC_NOW_SOURCES = frozenset(
 
 FREEZE_MARKER = "pytest.mark.freeze_time"
 TRAVEL = "time_machine.travel"
-#: Builtins that exhaust a single iterable argument before returning.
-EAGER_CONSUMERS = frozenset(
-    {"list", "tuple", "set", "frozenset", "dict", "sorted", "sum", "min", "max"}
-)
 FIXTURE_DECORATORS = frozenset({"pytest.fixture", "pytest_asyncio.fixture"})
 PARAMETRIZE = "pytest.mark.parametrize"
 FROZEN_CLOCK = "frozen_clock"
@@ -152,22 +133,6 @@ def _unique_reads(reads: list[tuple[str, int, int]]) -> list[tuple[str, int, int
     for read in reads:
         unique.setdefault((read[1], read[2]), read)
     return list(unique.values())
-
-
-def _exits_early(node: ast.For | ast.AsyncFor) -> bool:
-    """Whether the loop body can leave before its iterable is exhausted."""
-    if _loop_has_break(node.body):
-        return True
-    stack: list[ast.AST] = list(node.body)
-    while stack:
-        current = stack.pop()
-        if isinstance(current, (ast.Return, ast.Yield, ast.YieldFrom)):
-            return True
-        if not isinstance(
-            current, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda, ast.ClassDef)
-        ):
-            stack.extend(ast.iter_child_nodes(current))
-    return False
 
 
 def _loop_has_break(statements: list[ast.stmt]) -> bool:
@@ -236,18 +201,6 @@ def _merge_values(values: list[str]) -> str:
 #: its first iterable supplied at creation or the later iterable to resolve at
 #: consumption.
 GeneratorBinding = tuple[str, ast.expr, list[tuple[ast.expr, dict[str, str] | ast.expr]]]
-
-
-def _module_walrus_names(tree: ast.Module) -> Iterator[str]:
-    """The names assignment expressions bind in the module's own scope."""
-    stack: list[ast.AST] = [tree]
-    while stack:
-        for child in ast.iter_child_nodes(stack.pop()):
-            if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef, ast.Lambda, ast.ClassDef)):
-                continue
-            if isinstance(child, ast.NamedExpr):
-                yield child.target.id
-            stack.append(child)
 
 
 def _target_names(target: ast.expr) -> list[str]:
@@ -431,11 +384,6 @@ class ClockVisitor(ast.NodeVisitor):
         #: Whether a finalizer is being replayed under a pending jump, so the
         #: jumps it executes are recorded as exits.
         self.replaying = False
-        #: The generator expressions the statement that creates them runs to
-        #: the end, so they execute under the freeze active there.
-        self.eager_generators: set[int] = set()
-        #: Names an assignment expression binds at module level, anywhere.
-        self.module_walrus_names: frozenset[str] = frozenset()
         #: Whether the visited statements run inside a function body, where
         #: nothing is collected or registered by pytest.
         self.in_function_body = False
@@ -583,38 +531,12 @@ class ClockVisitor(ast.NodeVisitor):
             if (name in CLOCK_MEMBERS or name in UTC_NOW_SOURCES) and not self.frozen:
                 self.reads.append((name, node.lineno, node.col_offset))
                 break
-        if self._exhausts_first_argument(node):
-            self.eager_generators.add(id(node.args[0]))
         for argument in node.args:
             self.visit(argument)
         for keyword in node.keywords:
             self.visit(keyword)
         for function in called:
             self._reference_callable(function)
-
-    def _exhausts_first_argument(self, node: ast.Call) -> bool:
-        """Whether the call provably exhausts a generator given as its argument.
-
-        Only a lone iterable that a builtin eager consumer, or a literal
-        string's ``join``, runs to the end inside this very statement counts:
-        a lazy or short-circuiting consumer, a user-defined name or a further
-        argument may leave the generator to run later.
-        """
-        if not node.args or not isinstance(node.args[0], ast.GeneratorExp):
-            return False
-        func = node.func
-        if isinstance(func, ast.Attribute):
-            return (
-                func.attr == "join"
-                and isinstance(func.value, ast.Constant)
-                and isinstance(func.value.value, str)
-                and len(node.args) == 1
-            )
-        if not (isinstance(func, ast.Name) and func.id in EAGER_CONSUMERS):
-            return False
-        if func.id in {"min", "max"} and len(node.args) != 1:
-            return False
-        return self._is_builtin(func.id)
 
     def visit_Import(self, node: ast.Import) -> None:
         for alias in node.names:
@@ -728,17 +650,17 @@ class ClockVisitor(ast.NodeVisitor):
         self.callable_frozen[callable_id] = all(refs.values())
 
     def _consume_generator(self, generator: int) -> None:
-        """Scan a generator's body under the bindings at its consumption.
-
-        The freeze stays what its creation gave it: a name-bound generator may
-        run long after its block exited, so only a marker freezes it, and a
-        module marker never covers one created at import time.
-        """
+        """Scan a generator's body under the bindings at its consumption."""
         current = dict(self.aliases)
         known = self.generator_scopes.get(generator)
+        frozen = self.frozen
         if known is None or generator not in self.consumed_generators:
             self.generator_scopes[generator] = current
+            self.generator_frozen[generator] = frozen
         else:
+            self.generator_frozen[generator] = (
+                self.generator_frozen.get(generator, False) and frozen
+            )
             self.generator_scopes[generator] = {
                 name: _merge_values([known.get(name, ""), current.get(name, "")])
                 for name in (*known, *current)
@@ -895,9 +817,6 @@ class ClockVisitor(ast.NodeVisitor):
         self._preassign_targets_before([node.target], annotation, node.value)
         # Python assigns the value before evaluating the annotation, so the
         # annotation's bindings cannot mask the value's own reads.
-        if node.value is None and isinstance(node.target, ast.Name):
-            # A bare annotation declares the name without binding it.
-            self.aliases.setdefault(node.target.id, "")
         if node.value is not None:
             held = self._held_generator(node.value)
             held_callable = self._held_callable(node.value)
@@ -993,8 +912,6 @@ class ClockVisitor(ast.NodeVisitor):
             # iterable's, while the iterable evaluates first.
             self._preassign_expression_tables(node.target)
             self._preassign_expression_tables(node.iter)
-        if isinstance(node.iter, ast.GeneratorExp) and not _exits_early(node):
-            self.eager_generators.add(id(node.iter))
         self._visit_iterable(node.iter)
         # Zero iterations leave the target holding its incoming value.
         pre_target = dict(self.aliases)
@@ -1012,25 +929,6 @@ class ClockVisitor(ast.NodeVisitor):
         """Bind a loop target, keeping known clock callables resolvable."""
         self.bind(target)
         self.aliases.update(bindings)
-
-    def _is_builtin(self, name: str) -> bool:
-        """Whether ``name`` still resolves to the builtin at the visited point.
-
-        A deferred body runs after its module executed, so any module binding
-        shadows; module-level code only sees the bindings placed above it,
-        except an assignment expression, which always shadows.
-        """
-        if name in self.module_walrus_names:
-            return False
-        if not self.in_function_body:
-            return name not in self.aliases
-        try:
-            symbol = self.table.lookup(name)
-        except KeyError:
-            symbol = None
-        if symbol is not None and (symbol.is_local() or symbol.is_free()):
-            return False
-        return name not in self.module_aliases
 
     def visit_While(self, node: ast.While) -> None:
         self.visit(node.test)
@@ -1940,12 +1838,6 @@ class ClockVisitor(ast.NodeVisitor):
     def visit_comprehension_scope(
         self, node: ast.ListComp | ast.SetComp | ast.DictComp | ast.GeneratorExp
     ) -> None:
-        if (
-            not isinstance(node, ast.GeneratorExp) or id(node) in self.eager_generators
-        ) and isinstance(node.generators[0].iter, ast.GeneratorExp):
-            # An eager comprehension, or a generator this statement exhausts,
-            # exhausts a generator it iterates.
-            self.eager_generators.add(id(node.generators[0].iter))
         self._visit_iterable(node.generators[0].iter)
         if isinstance(node, ast.GeneratorExp) and not self.probing:
             first = node.generators[0]
@@ -1966,16 +1858,9 @@ class ClockVisitor(ast.NodeVisitor):
             # covers it and its element scans with the deferred functions.
             self.functions.append((node, self.table, previous_enclosing, self.deferred_frozen))
             self.generator_scopes[id(node)] = dict(previous_aliases)
-            # The body runs where the generator is consumed: under the freeze
-            # active here when this statement exhausts it, else under the
-            # freeze a marker gives the whole test.
-            # A module marker never covers import time, so a generator created
-            # there that its statement does not exhaust is never frozen by it.
-            self.generator_frozen[id(node)] = (
-                self.frozen
-                if id(node) in self.eager_generators
-                else self.deferred_frozen and self.in_function_body
-            )
+            if id(node) != self.assigned_generator:
+                # Consumed in place, under the freeze active here.
+                self.generator_frozen[id(node)] = self.frozen
         self.aliases = self.enclosing.copy()
         self.enclosing = self.aliases
         if not isinstance(node, ast.GeneratorExp) and not self.probing:
@@ -2216,7 +2101,6 @@ class ClockVisitor(ast.NodeVisitor):
         if self.module_marker_applies and self._scope_marker_freezes(tree.body):
             self.deferred_frozen = True
         self.inherited_parametrization = self._scope_parametrizes_directly(tree.body, [])
-        self.module_walrus_names = frozenset(_module_walrus_names(tree))
         self.visit(tree)
         self._scan_deferred_functions()
         # Repeated passes and nested levels can record the same read twice;
@@ -2303,9 +2187,7 @@ class ClockVisitor(ast.NodeVisitor):
         self.enclosing = self.aliases
         self.return_states = []
         self.frozen = frozen
-        # A generator that this statement froze still creates its own inner
-        # generators under the marker freeze alone.
-        self.deferred_frozen = recorded_frozen if isinstance(node, ast.GeneratorExp) else frozen
+        self.deferred_frozen = frozen
         previous_body_flag = self.deferred_body
         self.deferred_body = True
         self.in_function_body = True

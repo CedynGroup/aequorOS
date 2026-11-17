@@ -18,26 +18,6 @@ INSTANT = '"2026-01-01T00:00:00+00:00"'
 #: Reads the guard must reject: direct members, both datetime import styles and
 #: aliased imports of the platform utc_now helpers.
 UNFROZEN_READS = [
-    # The same holds for a generator handed straight to a consumer that does
-    # not exhaust it.
-    "import pytest\n"
-    "import time\n"
-    f"pytestmark = pytest.mark.freeze_time({INSTANT})\n"
-    "STAMP = next(time.time() for _ in (0,))\n",
-    # A marker freezes test execution only: a module-level generator consumed
-    # during import reads the wall clock even under ``pytestmark``.
-    "import pytest\n"
-    "from datetime import datetime\n"
-    f"pytestmark = pytest.mark.freeze_time({INSTANT})\n"
-    "times = (datetime.now() for _ in range(2))\n"
-    "STAMP = next(times)\n",
-    # A module marker does not freeze a generator that is consumed during
-    # import, before the marker applies.
-    "import pytest\n"
-    "import time\n"
-    f"pytestmark = pytest.mark.freeze_time({INSTANT})\n"
-    "times = (time.time() for _ in (0,))\n"
-    "list(times)\n",
     "from datetime import datetime\ndef test_now():\n    datetime.now()\n",
     "from datetime import datetime, UTC\ndef test_now_tz():\n    datetime.now(tz=UTC)\n",
     "from datetime import datetime\ndef test_utcnow():\n    datetime.utcnow()\n",
@@ -167,111 +147,6 @@ UNFROZEN_READS = [
     "for replacement in ():\n"
     "    clock = replacement\n"
     "clock()\n",
-    # A generator expression is lazy: created inside a travel, its body runs
-    # at consumption time, which may be long after the block exited.
-    "import time_machine\n"
-    "from datetime import datetime\n"
-    f"with time_machine.travel({INSTANT}, tick=False):\n"
-    "    times = (datetime.now() for _ in range(2))\n"
-    "list(times)\n",
-    # An attribute alias built from a conditionally rebound name keeps every
-    # clock-capable alternative: ``clock.now`` over ``datetime|time`` is both
-    # ``datetime.datetime.now`` and ``time.now``.
-    "def test_alias_keeps_alternatives(use_datetime):\n"
-    "    if use_datetime:\n"
-    "        from datetime import datetime as clock\n"
-    "    else:\n"
-    "        import time as clock\n"
-    "    read = clock.now\n"
-    "    read()\n",
-    "def test_date_or_datetime(use_datetime):\n"
-    "    if use_datetime:\n"
-    "        from datetime import datetime as clock\n"
-    "    else:\n"
-    "        from datetime import date as clock\n"
-    "    read = clock.today\n"
-    "    read()\n",
-    # A zero-iteration loop keeps the target's pre-loop binding, so the read
-    # after the loop is real even though the body never ran.
-    "import time as clock\nfor clock in ():\n    pass\nclock.time()\n",
-    # A break exits past the else with the bindings it holds at that point,
-    # so the pre-loop binding stays reachable after the loop.
-    "import time as clock\n"
-    "for _ in [0]:\n"
-    "    if stop:\n"
-    "        break\n"
-    "    clock = fake_clock\n"
-    "else:\n"
-    "    clock = fake_clock\n"
-    "assert clock.time() == 0\n",
-    "from datetime import datetime\n"
-    "async def test_zero_iterations():\n"
-    "    clock = datetime.now\n"
-    "    async for clock in ():\n"
-    "        pass\n"
-    "    clock()\n",
-    # A binding in an enclosing function scope shadows the builtin just as a
-    # local one does: a nested test closing over it consumes nothing eagerly.
-    "import time_machine\n"
-    "from datetime import datetime\n"
-    "def make_shadowed_test():\n"
-    "    list = lambda values: values\n"
-    "    def test_shadowed_in_enclosing():\n"
-    f"        with time_machine.travel({INSTANT}, tick=False):\n"
-    "            times = list(datetime.now() for _ in range(2))\n"
-    "        next(times)\n"
-    "    return test_shadowed_in_enclosing\n",
-    # A generator bound in a travel and consumed only conditionally keeps its
-    # reads: the branch may not run, and an unfrozen consumption after the
-    # block is still possible.
-    "import time_machine\n"
-    "from datetime import datetime\n"
-    f"with time_machine.travel({INSTANT}, tick=False):\n"
-    "    times = (datetime.now() for _ in range(2))\n"
-    "if flag:\n"
-    "    list(times)\n"
-    "list(times)\n",
-    # Short-circuiting and lazy consumers do not exhaust the generator, and
-    # the variadic min/max forms may return it unconsumed.
-    "import time_machine\n"
-    "from datetime import datetime\n"
-    f"with time_machine.travel({INSTANT}, tick=False):\n"
-    "    times = (datetime.now() for _ in range(2))\n"
-    "    any(times)\n"
-    "list(times)\n",
-    "import time_machine\n"
-    "from datetime import datetime\n"
-    f"with time_machine.travel({INSTANT}, tick=False):\n"
-    "    times = iter(datetime.now() for _ in range(2))\n"
-    "list(times)\n",
-    "import time_machine\n"
-    "from datetime import datetime\n"
-    f"with time_machine.travel({INSTANT}, tick=False):\n"
-    "    times = (datetime.now() for _ in range(2))\n"
-    "    best = max(times, ())\n"
-    "list(best)\n",
-    # A generator yielded by another generator is consumed by whoever
-    # consumes the outer one, not by the statement that created it.
-    "import time_machine\n"
-    "from datetime import datetime\n"
-    f"with time_machine.travel({INSTANT}, tick=False):\n"
-    "    groups = list((datetime.now() for _ in range(2)) for _ in range(1))\n"
-    "list(groups[0])\n",
-    # A local binding shadows the builtin, so ``list(times)`` consumes
-    # nothing; and each deferred body is its own execution, so one function's
-    # frozen consumption never discharges another's reads.
-    "import time_machine\n"
-    "import pytest\n"
-    "from datetime import datetime\n"
-    f"with time_machine.travel({INSTANT}, tick=False):\n"
-    "    times = (datetime.now() for _ in range(2))\n"
-    f"@pytest.mark.freeze_time({INSTANT})\n"
-    "def test_shadowed_consumer():\n"
-    "    list = lambda value: value\n"
-    "    return list(times)\n"
-    f"@pytest.mark.freeze_time({INSTANT})\n"
-    "def test_second_consumer_of_the_same_generator():\n"
-    "    return list(times)\n",
     # A ticking travel inside a frozen travel advances the clock from real
     # elapsed time; its reads are not pinned to an instant.
     "import time_machine\n"
@@ -382,221 +257,6 @@ UNFROZEN_READS = [
     "        raise ValueError\n"
     "    except ValueError:\n"
     "        clock()\n",
-    # A name-bound generator may be consumed long after its block exits, so
-    # like a lambda it stays reported even when this test consumes it inside
-    # the travel; only a marker or the frozen_clock fixture covers a whole
-    # test execution.
-    "import time_machine\n"
-    "from datetime import datetime\n"
-    "def test_generator_consumed_inside():\n"
-    f"    with time_machine.travel({INSTANT}, tick=False):\n"
-    "        times = (datetime.now() for _ in range(2))\n"
-    "        assert list(times)\n",
-    "import time_machine\n"
-    "from datetime import datetime\n"
-    "def test_generator_consumed_by_comprehension():\n"
-    f"    with time_machine.travel({INSTANT}, tick=False):\n"
-    "        times = (datetime.now() for _ in range(2))\n"
-    "        assert [stamp for stamp in times]\n",
-    # A loop with an early exit may leave generator items unread.
-    "import time_machine\n"
-    "from datetime import datetime\n"
-    "def test_for_with_break():\n"
-    f"    with time_machine.travel({INSTANT}, tick=False):\n"
-    "        for stamp in (datetime.now() for _ in range(5)):\n"
-    "            if stamp.year > NOW_YEAR:\n"
-    "                break\n",
-    # A later comprehension iterable runs per item of the earlier ones, so an
-    # empty earlier iterable never reaches it.
-    "import time_machine\n"
-    "from datetime import datetime\n"
-    "def test_later_comprehension_iterable():\n"
-    f"    with time_machine.travel({INSTANT}, tick=False):\n"
-    "        return [stamp for unused in [] for stamp in (datetime.now() for _ in range(2))]\n",
-    # Only the iterable argument is consumed: sum's start value is returned,
-    # not iterated.
-    "import time_machine\n"
-    "from datetime import datetime\n"
-    "def test_sum_start_argument():\n"
-    f"    with time_machine.travel({INSTANT}, tick=False):\n"
-    "        times = sum([], (datetime.now() for _ in range(2)))\n"
-    "    return list(times)\n",
-    # A receiver that is not a literal string may be a user-defined join.
-    "import time_machine\n"
-    "from datetime import datetime\n"
-    "def test_unproven_join_receiver(sep):\n"
-    f"    with time_machine.travel({INSTANT}, tick=False):\n"
-    "        return sep.join(datetime.now() for _ in range(2))\n",
-    # ``iter`` creates an iterator without consuming it.
-    "import time_machine\n"
-    "from datetime import datetime\n"
-    f"with time_machine.travel({INSTANT}, tick=False):\n"
-    "    times = iter(datetime.now() for _ in range(2))\n"
-    "list(times)\n",
-    # The eager context must not leak through a container: ``list`` consumes
-    # the outer list, not a generator merely stored in it.
-    "import time_machine\n"
-    "from datetime import datetime\n"
-    f"with time_machine.travel({INSTANT}, tick=False):\n"
-    "    groups = list([(datetime.now() for _ in range(2))])\n"
-    "next(groups[0])\n",
-    # A local binding shadows the builtin, so this ``list`` consumes nothing.
-    "import time_machine\n"
-    "import pytest\n"
-    "from datetime import datetime\n"
-    f"with time_machine.travel({INSTANT}, tick=False):\n"
-    "    times = (datetime.now() for _ in range(2))\n"
-    f"@pytest.mark.freeze_time({INSTANT})\n"
-    "def test_shadowed_consumer():\n"
-    "    list = lambda value: value\n"
-    "    return list(times)\n",
-    # A break exits through the ``finally`` suite, so its assignments reach
-    # the statement after the loop: a clock bound there is real.
-    "import time\n"
-    "def test_break_through_finally():\n"
-    "    clock = lambda: 0\n"
-    "    for _ in values:\n"
-    "        try:\n"
-    "            break\n"
-    "        finally:\n"
-    "            clock = time.time\n"
-    "    clock()\n",
-    # ``except*`` builds an ``ast.TryStar``; the finalizer applies to the
-    # break state just the same.
-    "import time\n"
-    "def test_break_through_finally_star():\n"
-    "    clock = lambda: 0\n"
-    "    for _ in values:\n"
-    "        try:\n"
-    "            break\n"
-    "        except* Exception:\n"
-    "            pass\n"
-    "        finally:\n"
-    "            clock = time.time\n"
-    "    else:\n"
-    "        clock = lambda: 0\n"
-    "    clock()\n",
-    # An unpack-only literal (``[*values]``, ``{**mapping}``) may evaluate
-    # to nothing, so the loop body is not guaranteed to run and the
-    # pre-loop clock binding survives to the read.
-    "import time\nclock = time.time\nfor clock in [*values]:\n    clock = lambda: 0\nclock()\n",
-    "import time\nclock = time.time\nfor clock in {**mapping}:\n    clock = lambda: 0\nclock()\n",
-    # A shadowed ``range`` may return an empty iterable: pruning the
-    # zero-iteration path would drop the pre-loop binding it preserves.
-    "import time\n"
-    "range = lambda n: []\n"
-    "clock = time.time\n"
-    "for _ in range(1):\n"
-    "    clock = lambda: 0\n"
-    "clock()\n",
-    "import time\n"
-    "def test_local_range_shadow():\n"
-    "    clock = time.time\n"
-    "    for _ in range(1):\n"
-    "        clock = lambda: 0\n"
-    "    clock()\n"
-    "    range = lambda n: []\n",
-    # A ``continue`` before the rebinding skips it on that path; if every
-    # iteration continues, the loop exits with the pre-loop binding.
-    "import time\n"
-    "clock = time.time\n"
-    "for _ in (0,):\n"
-    "    if skip:\n"
-    "        continue\n"
-    "    clock = lambda: 0\n"
-    "clock()\n",
-    # A module binding placed ABOVE a module-level deferred body shadows the
-    # builtin it uses: the body runs at its own statement, after that
-    # binding.
-    "list = None\n"
-    "import time_machine\n"
-    "from datetime import datetime\n"
-    f"with time_machine.travel({INSTANT}, tick=False):\n"
-    "    stamps = list(datetime.now().year for _ in range(2))\n",
-    # A rebinding inside an exception handler does not erase the binding
-    # the successful try path still holds, so the success path's binding
-    # must stay reachable past the loop.
-    "import time\n"
-    "clock = time.time\n"
-    "for _ in (0,):\n"
-    "    try:\n"
-    "        work()\n"
-    "    except ValueError:\n"
-    "        clock = lambda: 0\n"
-    "clock()\n",
-    "import time\n"
-    "clock = time.time\n"
-    "try:\n"
-    "    work()\n"
-    "except ValueError:\n"
-    "    clock = lambda: 0\n"
-    "clock()\n",
-    # The raise may strike after the body has rebound the clock, so the
-    # handler entry carries that binding and its read is not frozen.
-    "import time\n"
-    "def test_handler_after_body_rebind():\n"
-    "    clock = lambda: 0\n"
-    "    try:\n"
-    "        clock = time.time\n"
-    "        raise ValueError()\n"
-    "    except ValueError:\n"
-    "        clock()\n",
-    # A loop with both a break and a continue still runs its else suite
-    # after a final-iteration continue, so the continue's held bindings
-    # reach the else's read.
-    "import time\n"
-    "clock = time.time\n"
-    "for _ in (0,):\n"
-    "    if stop:\n"
-    "        clock = lambda: 0\n"
-    "        break\n"
-    "    elif other:\n"
-    "        continue\n"
-    "    clock = lambda: 0\n"
-    "else:\n"
-    "    clock()\n",
-    # A ``continue`` exits through the ``finally`` like a ``break``: the
-    # finalizer's re-rebinding reaches the continue's saved state, and the
-    # statements after the try do not run on that path.
-    "import time\n"
-    "clock = time.time\n"
-    "for _ in (0,):\n"
-    "    try:\n"
-    "        clock = lambda: 0\n"
-    "        if skip:\n"
-    "            continue\n"
-    "    finally:\n"
-    "        clock = time.time\n"
-    "    clock = lambda: 0\n"
-    "clock()\n",
-    # A function-level deferred body runs after the module has fully
-    # executed, so a module binding placed after the definition still
-    # shadows the builtin inside it.
-    "import time_machine\n"
-    "from datetime import datetime\n"
-    f"with time_machine.travel({INSTANT}, tick=False):\n"
-    "    def later():\n"
-    "        return list(datetime.now().year for _ in range(2))\n"
-    "list = None\n",
-    # A subscript target only loads the indexed name; assigning an entry
-    # does not shadow the builtin used inside it.
-    "import time\n"
-    "clock = time.time\n"
-    "registry = {}\n"
-    "registry[list] = 1\n"
-    "def test_lists():\n"
-    "    return list(time.time() for _ in (0,))\n",
-    # A ``match`` statement's case bodies bind module-level names like any
-    # other statement flow, so a shadow assigned in a case revokes the
-    # range pruning below it.
-    "import time\n"
-    "clock = time.time\n"
-    "match mode:\n"
-    "    case _:\n"
-    "        range = lambda n: []\n"
-    "for _ in range(1):\n"
-    "    clock = lambda: 0\n"
-    "clock()\n",
     # Zero iterations leave the loop target holding its incoming value.
     "import time\n"
     "def test_zero_iterations_keep_the_target():\n"
@@ -616,35 +276,6 @@ UNFROZEN_READS = [
     "def test_comprehension_first_iteration_read():\n"
     "    clock = time.time\n"
     "    [(clock(), (clock := lambda: 0)) for _ in range(1)]\n",
-    # A nested function captures an enclosing ``range`` binding as a free
-    # symbol, so the shadow revokes the range pruning there too.
-    "import time\n"
-    "def outer():\n"
-    "    range = lambda n: []\n"
-    "    def test_nested():\n"
-    "        clock = time.time\n"
-    "        for _ in range(1):\n"
-    "            clock = lambda: 0\n"
-    "        clock()\n",
-    # A class body executes inline, so a class-local ``range`` binding
-    # placed above the loop shadows the builtin there.
-    "import time\n"
-    "class C:\n"
-    "    clock = time.time\n"
-    "    range = lambda n: []\n"
-    "    for _ in range(1):\n"
-    "        clock = lambda: 0\n"
-    "    clock()\n",
-    # An assignment expression in a module-executed expression (an ``if``
-    # condition here) binds the module scope like any other assignment.
-    "import time\n"
-    "if (range := lambda n: []):\n"
-    "    pass\n"
-    "def test_walrus_range():\n"
-    "    clock = time.time\n"
-    "    for _ in range(1):\n"
-    "        clock = lambda: 0\n"
-    "    clock()\n",
     # A break exits with the bindings at the break, not the body's end.
     "import time\n"
     "def test_break_keeps_its_binding(flag):\n"
@@ -723,26 +354,6 @@ UNFROZEN_READS = [
     "        finally:\n"
     "            pass\n"
     "    clock()\n",
-    # The reporting pass binds what the silent passes skip: a definition-
-    # time assignment expression inside the loop is a completed-iteration
-    # exit binding.
-    "import time\n"
-    "def test_definition_time_walrus_in_loop(values):\n"
-    "    clock = lambda: 0\n"
-    "    for _ in values:\n"
-    "        def helper(value=(clock := time.time)):\n"
-    "            pass\n"
-    "    clock()\n",
-    # A definition's defaults evaluate at the definition, so their
-    # assignment expressions bind the module scope.
-    "import time\n"
-    "def helper(value=(range := lambda n: [])):\n"
-    "    pass\n"
-    "def test_definition_default_range():\n"
-    "    clock = time.time\n"
-    "    for _ in range(1):\n"
-    "        clock = lambda: 0\n"
-    "    clock()\n",
     # A finally read reached only through a jump state is still reported.
     "import time\n"
     "def test_finally_read_through_break(flag):\n"
@@ -761,23 +372,16 @@ UNFROZEN_READS = [
     "    clock = lambda: 0\n"
     "    [[(clock := time.time) for y in (1,)] for x in (1,)]\n"
     "    clock()\n",
-    # A compound statement's nested assignment expression binds at its
-    # own line, so a later walrus does not shadow an earlier consumer.
+    # A generator's filters also run at consumption time, so a filter read
+    # is reported even when created inside a frozen travel.
     "import time\n"
     "import time_machine\n"
+    "from datetime import datetime\n"
     f"with time_machine.travel({INSTANT}, tick=False):\n"
-    "    stamps = list(time.time() for _ in (0,))\n"
-    "(list := None)\n",
-    # An annotation without a value declares nothing, so the builtin is
-    # not shadowed.
-    "import time\n"
-    "import time_machine\n"
-    "list: type\n"
-    f"with time_machine.travel({INSTANT}, tick=False):\n"
-    "    stamps = list(time.time() for _ in (0,))\n",
-    # A deeper comprehension level rebinds inside a filter, so the element
-    # read after it resolves to the rebinding on the first pass but to the
-    # initializer on the settled passes.
+    "    values = (0 for _ in (1,) if time.time())\n"
+    "next(values)\n",
+    # An inner comprehension iteration keeps its own carried bindings
+    # against the outer filter's reassignment.
     "import time\n"
     "def test_nested_comprehension_levels():\n"
     "    clock = lambda: 0\n"
@@ -1397,6 +1001,147 @@ UNFROZEN_READS = [
     "    clock = time.time\n"
     "    caller()\n"
     "    clock = lambda: 0\n",
+    # The same holds for a comprehension target over a literal iterable.
+    "import time\n"
+    "def test_comprehension_target_known_elements():\n"
+    "    [clock() for clock in (time.time,)]\n",
+    # An attribute alias built from a conditionally rebound name keeps every
+    # clock-capable alternative: ``clock.now`` over ``datetime|time`` is both
+    # ``datetime.datetime.now`` and ``time.now``.
+    "def test_alias_keeps_alternatives(use_datetime):\n"
+    "    if use_datetime:\n"
+    "        from datetime import datetime as clock\n"
+    "    else:\n"
+    "        import time as clock\n"
+    "    read = clock.now\n"
+    "    read()\n",
+    "def test_date_or_datetime(use_datetime):\n"
+    "    if use_datetime:\n"
+    "        from datetime import datetime as clock\n"
+    "    else:\n"
+    "        from datetime import date as clock\n"
+    "    read = clock.today\n"
+    "    read()\n",
+    # A zero-iteration loop keeps the target's pre-loop binding, so the read
+    # after the loop is real even though the body never ran.
+    "import time as clock\nfor clock in ():\n    pass\nclock.time()\n",
+    # A break exits past the else with the bindings it holds at that point,
+    # so the pre-loop binding stays reachable after the loop.
+    "import time as clock\n"
+    "for _ in [0]:\n"
+    "    if stop:\n"
+    "        break\n"
+    "    clock = fake_clock\n"
+    "else:\n"
+    "    clock = fake_clock\n"
+    "assert clock.time() == 0\n",
+    "from datetime import datetime\n"
+    "async def test_zero_iterations():\n"
+    "    clock = datetime.now\n"
+    "    async for clock in ():\n"
+    "        pass\n"
+    "    clock()\n",
+    # A break exits through the ``finally`` suite, so its assignments reach
+    # the statement after the loop: a clock bound there is real.
+    "import time\n"
+    "def test_break_through_finally():\n"
+    "    clock = lambda: 0\n"
+    "    for _ in values:\n"
+    "        try:\n"
+    "            break\n"
+    "        finally:\n"
+    "            clock = time.time\n"
+    "    clock()\n",
+    # ``except*`` builds an ``ast.TryStar``; the finalizer applies to the
+    # break state just the same.
+    "import time\n"
+    "def test_break_through_finally_star():\n"
+    "    clock = lambda: 0\n"
+    "    for _ in values:\n"
+    "        try:\n"
+    "            break\n"
+    "        except* Exception:\n"
+    "            pass\n"
+    "        finally:\n"
+    "            clock = time.time\n"
+    "    else:\n"
+    "        clock = lambda: 0\n"
+    "    clock()\n",
+    # A ``continue`` before the rebinding skips it on that path; if every
+    # iteration continues, the loop exits with the pre-loop binding.
+    "import time\n"
+    "clock = time.time\n"
+    "for _ in (0,):\n"
+    "    if skip:\n"
+    "        continue\n"
+    "    clock = lambda: 0\n"
+    "clock()\n",
+    # A rebinding inside an exception handler does not erase the binding
+    # the successful try path still holds, so the success path's binding
+    # must stay reachable past the loop.
+    "import time\n"
+    "clock = time.time\n"
+    "for _ in (0,):\n"
+    "    try:\n"
+    "        work()\n"
+    "    except ValueError:\n"
+    "        clock = lambda: 0\n"
+    "clock()\n",
+    "import time\n"
+    "clock = time.time\n"
+    "try:\n"
+    "    work()\n"
+    "except ValueError:\n"
+    "    clock = lambda: 0\n"
+    "clock()\n",
+    # The raise may strike after the body has rebound the clock, so the
+    # handler entry carries that binding and its read is not frozen.
+    "import time\n"
+    "def test_handler_after_body_rebind():\n"
+    "    clock = lambda: 0\n"
+    "    try:\n"
+    "        clock = time.time\n"
+    "        raise ValueError()\n"
+    "    except ValueError:\n"
+    "        clock()\n",
+    # A loop with both a break and a continue still runs its else suite
+    # after a final-iteration continue, so the continue's held bindings
+    # reach the else's read.
+    "import time\n"
+    "clock = time.time\n"
+    "for _ in (0,):\n"
+    "    if stop:\n"
+    "        clock = lambda: 0\n"
+    "        break\n"
+    "    elif other:\n"
+    "        continue\n"
+    "    clock = lambda: 0\n"
+    "else:\n"
+    "    clock()\n",
+    # A ``continue`` exits through the ``finally`` like a ``break``: the
+    # finalizer's re-rebinding reaches the continue's saved state, and the
+    # statements after the try do not run on that path.
+    "import time\n"
+    "clock = time.time\n"
+    "for _ in (0,):\n"
+    "    try:\n"
+    "        clock = lambda: 0\n"
+    "        if skip:\n"
+    "            continue\n"
+    "    finally:\n"
+    "        clock = time.time\n"
+    "    clock = lambda: 0\n"
+    "clock()\n",
+    # The reporting pass binds what the silent passes skip: a definition-
+    # time assignment expression inside the loop is a completed-iteration
+    # exit binding.
+    "import time\n"
+    "def test_definition_time_walrus_in_loop(values):\n"
+    "    clock = lambda: 0\n"
+    "    for _ in values:\n"
+    "        def helper(value=(clock := time.time)):\n"
+    "            pass\n"
+    "    clock()\n",
     # A finalizer's conditional break is a distinct exit even when the
     # finalizer ends in an unconditional continue.
     "import time\n"
@@ -1412,17 +1157,6 @@ UNFROZEN_READS = [
     "else:\n"
     "    clock = lambda: 0\n"
     "clock()\n",
-    # The same holds for a comprehension target over a literal iterable.
-    "import time\n"
-    "def test_comprehension_target_known_elements():\n"
-    "    [clock() for clock in (time.time,)]\n",
-    # A generator's filters run at consumption time, outside the freeze.
-    "import time\n"
-    "import time_machine\n"
-    "from datetime import datetime\n"
-    "with time_machine.travel(datetime.now(), tick=False):\n"
-    "    values = (0 for _ in (1,) if time.time())\n"
-    "next(values)\n",
 ]
 
 #: The same reads are accepted once the clock is frozen at function, class or
@@ -1439,91 +1173,6 @@ FROZEN_READS = [
     f"@pytest.mark.freeze_time({INSTANT})\n"
     "def test_chain():\n"
     "    helper()\n",
-    # A marker-frozen test that enters an explicit ticking travel reads a
-    # clock that advances from real elapsed time, even through a generator
-    # created and consumed inside that travel.
-    "import pytest\n"
-    "from datetime import datetime\n"
-    "import time_machine\n"
-    f"@pytest.mark.freeze_time({INSTANT})\n"
-    "def test_ticking_travel_generator():\n"
-    f"    with time_machine.travel({INSTANT}, tick=True):\n"
-    "        times = (datetime.now() for _ in range(2))\n"
-    "        stamps = list(times)\n",
-    # Completed iterations of a broken loop always run the ``else``, so
-    # the pre-else body state is no exit of its own.
-    "import time\n"
-    "def test_else_replaces_pre_else_state(flag):\n"
-    "    clock = time.time\n"
-    "    for _ in (0,):\n"
-    "        if flag:\n"
-    "            clock = lambda: 0\n"
-    "            break\n"
-    "    else:\n"
-    "        clock = lambda: 0\n"
-    "    clock()\n",
-    # A finalizer's unconditional ``continue`` cancels the pending break:
-    # the jump re-enters the loop and the ``else`` decides the exit.
-    "import time\n"
-    "def test_finally_continue_cancels_break():\n"
-    "    clock = lambda: 0\n"
-    "    for _ in (0,):\n"
-    "        try:\n"
-    "            break\n"
-    "        finally:\n"
-    "            clock = time.time\n"
-    "            continue\n"
-    "    else:\n"
-    "        clock = lambda: 0\n"
-    "    clock()\n",
-    # An inner loop's continue stays scoped to that loop.
-    "import time\n"
-    "def test_inner_continue_stays_scoped():\n"
-    "    clock = lambda: 0\n"
-    "    for _ in (1, 2):\n"
-    "        clock()\n"
-    "        for _ in (1,):\n"
-    "            clock = time.time\n"
-    "            continue\n"
-    "        clock = lambda: 0\n",
-    # A continue crosses the finally block the same way.
-    "import time\n"
-    "def test_finally_covers_continue_exit():\n"
-    "    clock = lambda: 0\n"
-    "    for _ in (1, 2):\n"
-    "        clock()\n"
-    "        try:\n"
-    "            clock = time.time\n"
-    "            continue\n"
-    "        finally:\n"
-    "            clock = lambda: 0\n",
-    # previous binding, and Python deletes it when the block exits.
-    "import time\n"
-    "def test_except_as_binds_the_exception():\n"
-    "    clock = time.time\n"
-    "    try:\n"
-    "        pass\n"
-    "    except ValueError as clock:\n"
-    "        clock()\n",
-    # An exhausted iterable always runs the else suite, so an else that
-    # replaces the binding decides the post-loop state on its own.
-    "import time as clock\n"
-    "from types import SimpleNamespace\n"
-    "for clock in ():\n"
-    "    pass\n"
-    "else:\n"
-    "    clock = SimpleNamespace(time=lambda: 0)\n"
-    "assert clock.time() == 0\n",
-    # A final-iteration ``continue`` still runs the loop's ``else`` suite,
-    # so an else that replaces the binding decides the post-loop state; the
-    # raw continue state is not a post-loop exit of its own.
-    "import time\n"
-    "clock = time.time\n"
-    "for _ in (0,):\n"
-    "    continue\n"
-    "else:\n"
-    "    clock = lambda: 0\n"
-    "clock()\n",
     f"import pytest\nfrom datetime import datetime\n"
     f"@pytest.mark.freeze_time({INSTANT})\n"
     "def test_marker():\n"
@@ -1687,6 +1336,27 @@ FROZEN_READS = [
     "    else:\n"
     "        clock = lambda: 0\n"
     "    clock()\n",
+    # A continue crosses the finally block the same way.
+    "import time\n"
+    "def test_finally_covers_continue_exit():\n"
+    "    clock = lambda: 0\n"
+    "    for _ in (1, 2):\n"
+    "        clock()\n"
+    "        try:\n"
+    "            clock = time.time\n"
+    "            continue\n"
+    "        finally:\n"
+    "            clock = lambda: 0\n",
+    # An inner loop's continue stays scoped to that loop.
+    "import time\n"
+    "def test_inner_continue_stays_scoped():\n"
+    "    clock = lambda: 0\n"
+    "    for _ in (1, 2):\n"
+    "        clock()\n"
+    "        for _ in (1,):\n"
+    "            clock = time.time\n"
+    "            continue\n"
+    "        clock = lambda: 0\n",
     # A break inside a nested loop belongs to that loop, so the outer loop
     # still exhausts and its else rebinds the alias.
     "import time\n"
@@ -1704,6 +1374,51 @@ FROZEN_READS = [
     "def test_generator_consumed_in_travel():\n"
     f"    with time_machine.travel({INSTANT}, tick=False):\n"
     "        list(time.time() for _ in (1,))\n",
+    # Completed iterations of a broken loop always run the ``else``, so
+    # the pre-else body state is no exit of its own.
+    "import time\n"
+    "def test_else_replaces_pre_else_state(flag):\n"
+    "    clock = time.time\n"
+    "    for _ in (0,):\n"
+    "        if flag:\n"
+    "            clock = lambda: 0\n"
+    "            break\n"
+    "    else:\n"
+    "        clock = lambda: 0\n"
+    "    clock()\n",
+    # A finalizer's unconditional ``continue`` cancels the pending break:
+    # the jump re-enters the loop and the ``else`` decides the exit.
+    "import time\n"
+    "def test_finally_continue_cancels_break():\n"
+    "    clock = lambda: 0\n"
+    "    for _ in (0,):\n"
+    "        try:\n"
+    "            break\n"
+    "        finally:\n"
+    "            clock = time.time\n"
+    "            continue\n"
+    "    else:\n"
+    "        clock = lambda: 0\n"
+    "    clock()\n",
+    # An exhausted iterable always runs the else suite, so an else that
+    # replaces the binding decides the post-loop state on its own.
+    "import time as clock\n"
+    "from types import SimpleNamespace\n"
+    "for clock in ():\n"
+    "    pass\n"
+    "else:\n"
+    "    clock = SimpleNamespace(time=lambda: 0)\n"
+    "assert clock.time() == 0\n",
+    # A final-iteration ``continue`` still runs the loop's ``else`` suite,
+    # so an else that replaces the binding decides the post-loop state; the
+    # raw continue state is not a post-loop exit of its own.
+    "import time\n"
+    "clock = time.time\n"
+    "for _ in (0,):\n"
+    "    continue\n"
+    "else:\n"
+    "    clock = lambda: 0\n"
+    "clock()\n",
     # The zero-iteration path runs through the ``else`` suite, so an else
     # that replaces the binding decides the state after the loop.
     "import time as clock\n"
@@ -1724,68 +1439,11 @@ FROZEN_READS = [
     "    else:\n"
     "        clock = SimpleNamespace(time=lambda: 0)\n"
     "    clock.time()\n",
-    # A module binding placed after a module-level deferred body does not
-    # shadow the builtin the body still sees at its own statement.
-    "import time_machine\n"
-    "from datetime import datetime\n"
-    f"with time_machine.travel({INSTANT}, tick=False):\n"
-    "    stamps = list(datetime.now().year for _ in range(2))\n"
-    "list = None\n",
-    # A generator consumed inline runs inside the statement that consumes it,
-    # so a travel covering that statement covers its reads.
-    "import time_machine\n"
-    "from datetime import datetime\n"
-    "def test_inline_generator():\n"
-    f"    with time_machine.travel({INSTANT}, tick=False):\n"
-    "        total = sum(datetime.now().year for _ in range(3))\n",
-    # A literal-string join exhausts its single iterable argument.
-    "import time_machine\n"
-    "from datetime import datetime\n"
-    "def test_join_inline():\n"
-    f"    with time_machine.travel({INSTANT}, tick=False):\n"
-    "        stamps = '\\n'.join(str(datetime.now()) for _ in range(2))\n",
-    # A for loop without an early exit consumes its iterable generator fully.
-    "import time_machine\n"
-    "from datetime import datetime\n"
-    "def test_for_without_break():\n"
-    f"    with time_machine.travel({INSTANT}, tick=False):\n"
-    "        for stamp in (datetime.now() for _ in range(5)):\n"
-    "            total += stamp.year\n",
-    # A builtin name one unrelated function shadows locally stays a builtin
-    # everywhere else: only the lexical chain's own locals shadow it, so an
-    # eager consumer keeps consuming its generator argument.
-    "import time_machine\n"
-    "from datetime import datetime\n"
-    "def unrelated():\n"
-    "    list = None\n"
-    "    return list\n"
-    "def outer():\n"
-    "    def test_t():\n"
-    f"        with time_machine.travel({INSTANT}, tick=False):\n"
-    "            stamps = list(datetime.now() for _ in range(2))\n"
-    "        next(stamps)\n"
-    "    return test_t\n",
-    # A generator this statement exhausts also exhausts the generator it
-    # iterates first.
-    "import time\n"
-    "import time_machine\n"
-    f"with time_machine.travel({INSTANT}, tick=False):\n"
-    "    total = sum(x for x in (time.time() for _ in (0,)))\n",
 ]
 
 
 def test_the_determinism_allowlist_is_current() -> None:
     assert guard.main([]) == 0
-
-
-def test_distinct_calls_on_one_line_each_count() -> None:
-    """Same-line reads are one per call site, not one per line."""
-    source = (
-        "from datetime import datetime\n"
-        "def test_two_on_one_line():\n"
-        "    a = datetime.now(); b = datetime.now()\n"
-    )
-    assert len(guard.clock_findings(source).reads) == 2
 
 
 @pytest.mark.parametrize("source", UNFROZEN_READS)
@@ -1855,43 +1513,6 @@ def test_comprehension_walrus_binds_in_the_containing_scope() -> None:
         "    return clock()\n"
     )
     assert guard.clock_findings(source).reads != []
-
-
-def test_break_inside_finally_is_not_replayed_over_itself() -> None:
-    """A break originating in the finalizer already carries its assignments."""
-    source = (
-        "import time\n"
-        "clock = lambda: 0\n"
-        "replacement = time.time\n"
-        "for _ in range(1):\n"
-        "    try:\n"
-        "        pass\n"
-        "    finally:\n"
-        "        clock = replacement\n"
-        "        replacement = lambda: 0\n"
-        "        break\n"
-        "else:\n"
-        "    clock = lambda: 0\n"
-        "clock()\n"
-    )
-    assert guard.clock_findings(source).reads != []
-
-
-def test_finalizer_replay_records_one_read_per_call_site() -> None:
-    """A call site resolved differently per path still counts once."""
-    source = (
-        "import time\n"
-        "from datetime import datetime\n"
-        "clock = time.time\n"
-        "for _ in range(3):\n"
-        "    try:\n"
-        "        if flag:\n"
-        "            break\n"
-        "        clock = datetime.now\n"
-        "    finally:\n"
-        "        clock()\n"
-    )
-    assert len(guard.clock_findings(source).reads) == 1
 
 
 def test_while_condition_rescan_leaves_definitions_alone() -> None:
@@ -2330,13 +1951,48 @@ def test_only_the_unfrozen_part_of_a_file_is_counted(tmp_path: Path, source: str
     assert guard.main(["--root", str(tmp_path), "--allowlist", str(allowlist)]) == 1
 
 
-def test_unpacking_a_generator_is_a_known_over_report() -> None:
-    """Unpacking is not recognised as consumption, so a frozen read is reported."""
+def test_distinct_calls_on_one_line_each_count() -> None:
+    """Same-line reads are one per call site, not one per line."""
+    source = (
+        "from datetime import datetime\n"
+        "def test_two_on_one_line():\n"
+        "    a = datetime.now(); b = datetime.now()\n"
+    )
+    assert len(guard.clock_findings(source).reads) == 2
+
+
+def test_break_inside_finally_is_not_replayed_over_itself() -> None:
+    """A break originating in the finalizer already carries its assignments."""
     source = (
         "import time\n"
-        "import time_machine\n"
-        "def test_unpacked():\n"
-        f"    with time_machine.travel({INSTANT}, tick=False):\n"
-        "        stamps = [*(time.time() for _ in (0,))]\n"
+        "clock = lambda: 0\n"
+        "replacement = time.time\n"
+        "for _ in range(1):\n"
+        "    try:\n"
+        "        pass\n"
+        "    finally:\n"
+        "        clock = replacement\n"
+        "        replacement = lambda: 0\n"
+        "        break\n"
+        "else:\n"
+        "    clock = lambda: 0\n"
+        "clock()\n"
     )
     assert guard.clock_findings(source).reads != []
+
+
+def test_finalizer_replay_records_one_read_per_call_site() -> None:
+    """A call site resolved differently per path still counts once."""
+    source = (
+        "import time\n"
+        "from datetime import datetime\n"
+        "clock = time.time\n"
+        "for _ in range(3):\n"
+        "    try:\n"
+        "        if flag:\n"
+        "            break\n"
+        "        clock = datetime.now\n"
+        "    finally:\n"
+        "        clock()\n"
+    )
+    assert len(guard.clock_findings(source).reads) == 1
