@@ -17,6 +17,21 @@ curl --fail-with-body --max-time 8 http://127.0.0.1:8100/operator/health
 Operator password sign-in needs `OPERATOR_JWT_SECRET` in `backend/.env`, a
 separate random value from `AUTH_JWT_SECRET`.
 
+### Inspector handoff
+
+Start the local tenant API and interactive bank dashboard before capturing an
+act-token handoff. Set the same fresh, disposable
+`IMPERSONATION_JWT_SECRET=<local-random-secret>` on both local APIs and set
+`BANK_APP_BASE_URL` on the operator API to the running loopback dashboard
+origin, for example `http://localhost:3001`. Restart both APIs after changing
+their settings.
+
+As the local operator who opened an active inspector session, call
+`POST /operator/v1/inspector/sessions/{session_id}/act-token`. Confirm that the
+returned `dashboard_url` exactly matches the configured loopback origin before
+opening it. For a mint-only capture, inspect the response locally and use the
+shared evidence procedure below.
+
 ## Sign in
 
 Local only, either:

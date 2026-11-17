@@ -19,7 +19,8 @@ to enter. Details and prerequisites:
 - First use: `pnpm --filter @aequoros/dashboard exec playwright install chromium`.
 - Run `AQS_LOCAL_SERVICES=native pnpm --filter @aequoros/dashboard e2e:visual`.
   Use `AQS_LOCAL_SERVICES=docker` for Docker-backed MinIO. Both modes provision
-  worktree-local MinIO and override inherited storage settings.
+  worktree-local MinIO and override inherited storage settings. Playwright
+  selects the loopback ports and stops its servers when the run ends.
 - Set `E2E_RUNTIME_DIR` to a directory **outside** the worktree; it holds the
   database, the per-role states (`<role>.json`) and the captures.
 - Set the same `E2E_TODAY=YYYY-MM-DD` for the before and after runs so both anchor
@@ -30,8 +31,8 @@ to enter. Details and prerequisites:
 
 ### Interactive local stack
 
-Use when the case needs a role, bank state, theme or viewport the tour does not
-cover. Start PostgreSQL, MinIO, the API, the worker and the dashboard as in
+Use this stack for standalone browser captures, including cases the tour does
+not cover. Start PostgreSQL, MinIO, the API, the worker and the dashboard as in
 [the root README](../../../../README.md#run-it-locally), with local random secrets
 in `backend/.env` and `backend/dashboard/.env.local`:
 
@@ -48,18 +49,19 @@ separate cookie jars.
 
 ## Sign in
 
-- During the hermetic run, use the fixture role's state file, for example
-  `$E2E_RUNTIME_DIR/analyst.json` as the browser's storage state. Roles are
-  listed in `E2E_STORAGE_ROLES` in `backend/dashboard/e2e/support/mint.ts`; each
-  is a fixture identity at `e2e.<role>@aequoros.example`. Pick the role that
-  matches the matrix row, including the lacking-the-grant role for refusals.
-- Interactive: sign in at `/login` with the local account and confirm its
-  effective authority for the bank and action before capture.
+- Hermetic captures run inside the Playwright invocation, using its configured
+  `baseURL` and the fixture role's storage state from that run. The visual tour
+  supplies its admin state. For other in-run captures, select the matching
+  fixture role from `E2E_STORAGE_ROLES` in
+  `backend/dashboard/e2e/support/mint.ts`.
+- For standalone captures, sign in at the interactive stack’s `/login` with
+  its local account and confirm its effective authority for the bank and action
+  before capture.
 
 ## Capture
 
-**Tour.** `visual-tour.e2e.spec.ts` captures its listed routes as the `admin` fixture,
-dark theme, full page, after loading skeletons clear. Output is
+**Tour.** `visual-tour.e2e.spec.ts` takes full-page screenshots of its listed
+routes as the `admin` fixture with a dark browser preference. Output is
 `$E2E_RUNTIME_DIR/visual-tour/<name>.png`, where `/` is `home` and each other `/`
 becomes `__` (`/liquidity/nsfr` is `liquidity__nsfr.png`). Run it at the base
 commit and again at the head, into two different runtime directories. Use a
@@ -67,10 +69,10 @@ tour image for a matrix row only if you observed the final URL and expected
 state during that capture. The PNG name records the requested route. Use
 interactive capture for unattended tour output and routes outside the tour.
 
-**Interactive capture.** Drive the signed-in browser with the session’s browser
-automation. Check the final URL and expected state before saving. Settle first: a
-page is loaded when no `.animate-pulse` placeholder remains in the viewport (the
-logic is `settleForCapture` in `backend/dashboard/e2e/support/capture.ts`).
+**Interactive capture.** Drive the browser signed in to the interactive stack
+with the session’s browser automation. Before saving, check the final URL and
+expected state and wait for viewport loading placeholders to clear. See
+`settleForCapture` in `backend/dashboard/e2e/support/capture.ts`.
 Charts render without animation.
 
 - **Light theme.** Dark is the default. Choose Light under Settings → Profile →

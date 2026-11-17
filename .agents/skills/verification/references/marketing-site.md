@@ -13,21 +13,16 @@ pnpm --filter @aequoros/frontend dev     # http://localhost:3000
 For production-shaped output use `pnpm --filter @aequoros/frontend build` then
 `pnpm --filter @aequoros/frontend start`. Browsing requires no configuration.
 Use the local capture recipe below for contact submissions.
-Pages are under `frontend/app/` (home, product, company, investors, security,
-contact).
 
 ## Sign in
 
-None. Product imagery on the site is static captures stored with the site, not a
-live login-gated demo. Do not refresh them from a deployed environment.
+None.
 
 ## Capture
 
 Full-page screenshots per page and viewport with the session's browser
 automation, named `marketing-<page>-<before|after>.png`. Cover desktop and a
-narrow viewport, and check that links and anchors resolve. The design tokens
-live in the `@theme` block of `frontend/app/globals.css` and the shared
-components in `frontend/components/`.
+narrow viewport, and check that links and anchors resolve.
 
 ## Contact API capture
 
