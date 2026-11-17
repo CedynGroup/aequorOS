@@ -1019,3 +1019,39 @@ test("replays a beforeAll restoration before a later beforeEach freeze", async (
   `);
   assertClean(result, "frozenTime");
 });
+
+test("an earlier file-level afterAll restoration unfreezes a later afterAll read", async () => {
+  const result = await runOxlint(["frozenTime"], `
+    beforeAll(() => {
+      vi.useFakeTimers();
+    });
+    afterAll(() => {
+      vi.useRealTimers();
+    });
+    afterAll(() => {
+      Date.now();
+    });
+    it('t', () => {});
+  `);
+  assertFlagged(result, "frozenTime");
+});
+
+test("an afterAll read sees the suite's final state, not every test's", async () => {
+  const result = await runOxlint(["frozenTime"], `
+    describe('s', () => {
+      beforeAll(() => {
+        vi.useFakeTimers();
+      });
+      it('first', () => {
+        vi.useRealTimers();
+      });
+      it('second', () => {
+        vi.useFakeTimers();
+      });
+      afterAll(() => {
+        Date.now();
+      });
+    });
+  `);
+  assertClean(result, "frozenTime");
+});

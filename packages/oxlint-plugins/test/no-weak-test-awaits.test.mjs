@@ -806,3 +806,64 @@ test("re-resolves a forwarding helper's dependency reassigned by a hook", async 
   `);
   assertClean(result, "weakAwaits");
 });
+
+// Sibling hooks assigning unresolved helpers to one binding must replay the
+// declaration-registry entry together with the binding value: suite A's
+// alias of the clean helper survives suite B's write.
+test("a sibling suite's alias write does not leak its declaration entry", async () => {
+  const flagged = await runOxlint(["weakAwaits"], `
+    function clean() {
+      return fetch('/data');
+    }
+    function timer() {
+      return sleep();
+    }
+    let sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+    let wait = clean;
+    describe('A', () => {
+      beforeEach(() => {
+        wait = clean;
+      });
+      it('t', async () => {
+        await wait();
+      });
+    });
+    describe('B', () => {
+      beforeEach(() => {
+        wait = timer;
+      });
+      it('t', async () => {
+        await wait();
+      });
+    });
+  `);
+  // Suite B's await is legitimately weak (its beforeEach leaves the timer
+  // forwarding helper in place).
+  assertFlagged(flagged, "weakAwaits");
+  const cleanSuite = await runOxlint(["weakAwaits"], `
+    function clean() {
+      return fetch('/data');
+    }
+    function timer() {
+      return sleep();
+    }
+    let sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+    let wait = clean;
+    describe('A', () => {
+      beforeEach(() => {
+        wait = clean;
+      });
+      it('t', async () => {
+        await wait();
+      });
+    });
+    describe('B', () => {
+      beforeEach(() => {
+        wait = timer;
+      });
+    });
+  `);
+  // With B's await removed, no finding may remain: A's replay must resolve
+  // through the clean helper's declaration, not the last sibling's.
+  assertClean(cleanSuite, "weakAwaits");
+});

@@ -750,10 +750,16 @@ const rule = {
             } else {
               // The read stays covered only while the replayed state is
               // frozen for EVERY covered test; any test ending unfrozen
-              // uncovers it.
+              // uncovers it. An afterAll callback is the exception: it runs
+              // ONCE after the entire suite, so the state it observes is the
+              // one the suite's LAST test leaves behind (its own transitions
+              // and the teardown hooks that run after it) — not the state
+              // after every individual test.
               const collectionState = frozen;
+              const replayedTests =
+                enclosing.callType === "afterAll" ? suiteTests.slice(-1) : suiteTests;
               frozen = true;
-              for (const test of suiteTests) {
+              for (const test of replayedTests) {
                 // Each replay starts from the timer state module evaluation
                 // leaves behind (the collection-time state computed above):
                 // when no freeze has executed anywhere the state is
@@ -826,7 +832,11 @@ const rule = {
                         applyTeardown(hook);
                       }
                     }
-                  } else if (enclosing.callType === "afterEach") {
+                  } else {
+                    // File-level read: earlier file-level hooks of the read's
+                    // own phase run before it (an earlier file-level afterAll
+                    // restoration invalidates an earlier freeze just like a
+                    // beforeEach's does for afterEach).
                     for (const hook of fileLevelHooks) {
                       if (
                         hook.hookType === phase &&

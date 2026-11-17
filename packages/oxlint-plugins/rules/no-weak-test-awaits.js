@@ -735,7 +735,7 @@ const rule = {
 
     function assignIdentifier(node, kind) {
       if (node?.type !== "Identifier") {
-        return;
+        return null;
       }
 
       // Confine write effects to the function whose body the assignment sits
@@ -744,24 +744,32 @@ const rule = {
       // the exception — its callback runs before the tests, so its
       // assignment to an outer binding propagates outward.
       const target = writeTargetScope(node.name);
-      if (target) {
-        // A hook's write to a shared binding applies only to the suites the
-        // hook covers: log it so a pending await from another suite can be
-        // re-evaluated without it.
-        const hookScope = [...scopes].reverse().find((scope) => scope.type === "hook");
-        if (hookScope && !isOrContains(hookScope, target)) {
-          hookWrites.push({
-            scope: target,
-            name: node.name,
-            kind,
-            had: target.bindings.has(node.name),
-            previous: target.bindings.get(node.name),
-            describeChain: hookScope.describeChain ?? [],
-            phase: hookScope.hookName ?? "beforeEach",
-          });
-        }
-        target.bindings.set(node.name, kind);
+      if (!target) {
+        return null;
       }
+      // A hook's write to a shared binding applies only to the suites the
+      // hook covers: log it so a pending await from another suite can be
+      // re-evaluated without it.
+      const hookScope = [...scopes].reverse().find((scope) => scope.type === "hook");
+      let logged = null;
+      if (hookScope && !isOrContains(hookScope, target)) {
+        logged = {
+          scope: target,
+          name: node.name,
+          kind,
+          had: target.bindings.has(node.name),
+          previous: target.bindings.get(node.name),
+          describeChain: hookScope.describeChain ?? [],
+          phase: hookScope.hookName ?? "beforeEach",
+          // The declaration-registry entry this write installs (an aliased
+          // unresolved helper), recorded by the assignment handler so the
+          // replay can restore it together with the binding value.
+          declaration: null,
+        };
+        hookWrites.push(logged);
+      }
+      target.bindings.set(node.name, kind);
+      return { target, logged };
     }
 
     /** Whether `scope` is `outer` or sits above it on the scope stack: a
@@ -853,6 +861,26 @@ const rule = {
             snapshotted.set(entry.name, entry.scope.bindings.get(entry.name));
           }
         }
+        // Declaration-registry entries replay alongside the binding values:
+        // a sibling hook's alias registration must not leak into this
+        // pending's suite, and this suite's own alias must be installed.
+        const declarations = new Map();
+        const declarationSnapshots = new Map();
+        for (const entry of hookWrites) {
+          if (!entry.declaration) continue;
+          const { scope, name } = entry.declaration;
+          if (!declarations.has(scope)) {
+            declarations.set(scope, new Map());
+            declarationSnapshots.set(scope, new Map());
+          }
+          const entries = declarations.get(scope);
+          if (!entries.has(name)) {
+            entries.set(name, entry.declaration.had ? entry.declaration.previous : undefined);
+            declarationSnapshots
+              .get(scope)
+              .set(name, scope.declarations?.get(name) ?? undefined);
+          }
+        }
         for (const entry of orderedWrites) {
           const applies =
             entry.describeChain.length <= pending.describeChain.length &&
@@ -861,6 +889,11 @@ const rule = {
             );
           if (applies) {
             targets.get(entry.scope).set(entry.name, entry.kind);
+            if (entry.declaration) {
+              declarations
+                .get(entry.declaration.scope)
+                .set(entry.declaration.name, entry.declaration.entry);
+            }
           }
         }
         for (const [scope, values] of targets) {
@@ -872,6 +905,18 @@ const rule = {
             }
           }
         }
+        for (const [scope, entries] of declarations) {
+          if (!scope.declarations) {
+            scope.declarations = new Map();
+          }
+          for (const [name, value] of entries) {
+            if (value === undefined) {
+              scope.declarations.delete(name);
+            } else {
+              scope.declarations.set(name, value);
+            }
+          }
+        }
         const evaluationChain = [...pending.chain.slice(0, pending.depth), ...pending.own];
         const weak = weakUseIn(pending.argument, evaluationChain, true, pending.scopeChain);
         for (const [scope, values] of snapshot) {
@@ -880,6 +925,18 @@ const rule = {
               scope.bindings.delete(name);
             } else {
               scope.bindings.set(name, value);
+            }
+          }
+        }
+        for (const [scope, entries] of declarationSnapshots) {
+          for (const [name, value] of entries) {
+            if (value === undefined) {
+              scope.declarations?.delete(name);
+            } else {
+              if (!scope.declarations) {
+                scope.declarations = new Map();
+              }
+              scope.declarations.set(name, value);
             }
           }
         }
@@ -1141,17 +1198,29 @@ const rule = {
             // dependency when it becomes known. The registry entry belongs
             // in the scope the binding was updated in — a hook assigning to
             // an outer binding registers there, not in the hook's scope.
-            const scope = writeTargetScope(node.left.name);
+            const { target, logged } = assignIdentifier(node.left, kind);
             if (kind === WEAK_UNRESOLVED && node.right.type === "Identifier") {
-              const target = unresolvedAliasTarget(node.right.name);
-              if (target && scope) {
-                if (!scope.declarations) {
-                  scope.declarations = new Map();
+              const aliasTarget = unresolvedAliasTarget(node.right.name);
+              if (aliasTarget && target) {
+                if (logged) {
+                  // Record the registry state this write replaces, so the
+                  // flush replay can restore the sibling suite's entry —
+                  // replaying the binding value alone would leave the last
+                  // sibling's declaration visible to every suite.
+                  logged.declaration = {
+                    scope: target,
+                    name: node.left.name,
+                    entry: aliasTarget,
+                    had: target.declarations?.has(node.left.name) ?? false,
+                    previous: target.declarations?.get(node.left.name),
+                  };
                 }
-                scope.declarations.set(node.left.name, target);
+                if (!target.declarations) {
+                  target.declarations = new Map();
+                }
+                target.declarations.set(node.left.name, aliasTarget);
               }
             }
-            assignIdentifier(node.left, kind);
           }
         }
       },
