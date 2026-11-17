@@ -1158,6 +1158,27 @@ test("an assigned copy keeps the value at its execution position", async () => {
   assertClean(result, "weakAwaits");
 });
 
+// A replay-local alias REPLACED by a callable no longer resolves to its
+// previous callable: the invocation replays the replacement's writes.
+test("a replaced local alias resolves to its replacement", async () => {
+  const result = await runOxlint(["weakAwaits"], `
+    let sleep;
+    function init() {
+      const noop = () => {};
+      let invoke = noop;
+      invoke = () => {
+        sleep = () => new Promise((resolve) => setTimeout(resolve, 10));
+      };
+      invoke();
+    }
+    init();
+    it('t', async () => {
+      await sleep();
+    });
+  `);
+  assertFlagged(result, "weakAwaits");
+});
+
 // A block-local declaration expires with its block: the same-named
 // assignment after the block updates the captured binding.
 test("a block-local shadow does not exclude assignments outside its block", async () => {

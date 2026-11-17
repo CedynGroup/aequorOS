@@ -973,6 +973,9 @@ const rule = {
             if (def) {
               def.init = node.right;
               def.kind = undefined;
+              // The cached callable identity belongs to the replaced value:
+              // reclassification must not keep resolving the old callable.
+              def.fn = undefined;
               // Retain the assigned value at this execution position: a
               // later read must not re-resolve the alias through the
               // source's subsequent replacement.

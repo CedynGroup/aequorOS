@@ -1279,6 +1279,21 @@ test("a loop-header shadow expires with the loop", async () => {
   assertClean(result, "frozenTime");
 });
 
+// A `var` binding outlives the block it is declared in: the call after the
+// block resolves it and its freeze applies.
+test("a var-declared callable outlives its block", async () => {
+  const result = await runOxlint(["frozenTime"], `
+    it('t', () => {
+      {
+        var freeze = () => vi.useFakeTimers();
+      }
+      freeze();
+      Date.now();
+    });
+  `);
+  assertClean(result, "frozenTime");
+});
+
 // A module-level helper invoked from a hook contributes its transitions to
 // that hook: the freeze covers the tests the hook precedes.
 test("a hook invoking a module-level freezing helper covers its tests", async () => {

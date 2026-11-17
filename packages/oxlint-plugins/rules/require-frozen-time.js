@@ -351,12 +351,30 @@ const rule = {
     // body, so the body's timer transitions apply at the invocation site —
     // a helper that is merely declared still executes nothing.
     const helperScopes = [new Map()];
+    // What each helper-scope entry represents: the program level, a function
+    // body, or a narrower lexical scope (block, catch, loop header). `var`
+    // declarations register in their containing FUNCTION scope because their
+    // binding outlives any intervening block.
+    const scopeKinds = ["program"];
     const helperInvocations = new Map();
     const invocationHelpers = new Map();
-    const registerHelper = (name, fn) => {
+    const registerHelperAt = (name, fn, index) => {
       if (name) {
-        helperScopes[helperScopes.length - 1].set(name, fn);
+        helperScopes[index].set(name, fn);
       }
+    };
+    const registerHelper = (name, fn) => {
+      registerHelperAt(name, fn, helperScopes.length - 1);
+    };
+    /** The helper-scope index of the nearest enclosing function body (the
+     * program level, index 0, when there is none). */
+    const varScopeIndex = () => {
+      for (let index = scopeKinds.length - 1; index >= 1; index -= 1) {
+        if (scopeKinds[index] === "function") {
+          return index;
+        }
+      }
+      return 0;
     };
     const resolveHelper = (name) => {
       for (let index = helperScopes.length - 1; index >= 0; index -= 1) {
@@ -386,26 +404,28 @@ const rule = {
     };
     /** Register every identifier a binding pattern declares as a shadowing
      * (noncallable) name: helper resolution must not pass through it. */
-    const registerShadowNames = (pattern) => {
+    const registerShadowNames = (pattern, index = helperScopes.length - 1) => {
       if (!pattern) return;
       if (pattern.type === "Identifier") {
-        registerHelper(pattern.name, null);
+        registerHelperAt(pattern.name, null, index);
       } else if (pattern.type === "AssignmentPattern") {
-        registerShadowNames(pattern.left);
+        registerShadowNames(pattern.left, index);
       } else if (pattern.type === "RestElement") {
-        registerShadowNames(pattern.argument);
+        registerShadowNames(pattern.argument, index);
       } else if (pattern.type === "ArrayPattern") {
-        for (const element of pattern.elements ?? []) registerShadowNames(element);
+        for (const element of pattern.elements ?? []) registerShadowNames(element, index);
       } else if (pattern.type === "ObjectPattern") {
         for (const property of pattern.properties ?? []) {
           registerShadowNames(
             property.type === "RestElement" ? property.argument : property.value,
+            index,
           );
         }
       }
     };
     const pushHelperScope = (fn) => {
       helperScopes.push(new Map());
+      scopeKinds.push("function");
       // The function's own parameters shadow outer helpers of the same
       // name: a call through a parameter is not a call through the helper.
       for (const parameter of fn.params ?? []) {
@@ -435,18 +455,21 @@ const rule = {
       },
       "FunctionDeclaration:exit"() {
         helperScopes.pop();
+        scopeKinds.pop();
       },
       FunctionExpression(node) {
         pushHelperScope(node);
       },
       "FunctionExpression:exit"() {
         helperScopes.pop();
+        scopeKinds.pop();
       },
       ArrowFunctionExpression(node) {
         pushHelperScope(node);
       },
       "ArrowFunctionExpression:exit"() {
         helperScopes.pop();
+        scopeKinds.pop();
       },
       BlockStatement(node) {
         // Lexical block scope: a block-local callable registration must not
@@ -455,6 +478,7 @@ const rule = {
         // initialized at block entry, so hoist them before descending (a
         // call textually above the declaration still resolves).
         helperScopes.push(new Map());
+        scopeKinds.push("block");
         for (const statement of node.body) {
           if (statement.type === "FunctionDeclaration") {
             registerHelper(statement.id?.name, statement);
@@ -463,16 +487,21 @@ const rule = {
       },
       "BlockStatement:exit"() {
         helperScopes.pop();
+        scopeKinds.pop();
       },
       CatchClause(node) {
         helperScopes.push(new Map());
+        scopeKinds.push("catch");
         registerShadowNames(node.param);
       },
       "CatchClause:exit"() {
         helperScopes.pop();
+        scopeKinds.pop();
       },
       ForStatement(node) {
         if (node.init?.type === "VariableDeclaration") {
+          helperScopes.push(new Map());
+          scopeKinds.push("loop");
           // A loop-header binding lives in the loop's own scope: push a
           // scope so it cannot shadow an outer helper after the loop exits.
           helperScopes.push(new Map());
@@ -481,39 +510,51 @@ const rule = {
       "ForStatement:exit"(node) {
         if (node.init?.type === "VariableDeclaration") {
           helperScopes.pop();
+          scopeKinds.pop();
         }
       },
       ForInStatement(node) {
         if (node.left.type === "VariableDeclaration") {
+          helperScopes.push(new Map());
+          scopeKinds.push("loop");
           helperScopes.push(new Map());
         }
       },
       "ForInStatement:exit"(node) {
         if (node.left.type === "VariableDeclaration") {
           helperScopes.pop();
+          scopeKinds.pop();
         }
       },
       ForOfStatement(node) {
         if (node.left.type === "VariableDeclaration") {
+          helperScopes.push(new Map());
+          scopeKinds.push("loop");
           helperScopes.push(new Map());
         }
       },
       "ForOfStatement:exit"(node) {
         if (node.left.type === "VariableDeclaration") {
           helperScopes.pop();
+          scopeKinds.pop();
         }
       },
       VariableDeclarator(node) {
+        // A `var` binding outlives any intervening block or loop header: it
+        // registers in the containing function's scope so a call after the
+        // block still resolves (a let/const binding registers in the
+        // innermost lexical scope and expires with it).
+        const index = node.parent?.kind === "var" ? varScopeIndex() : helperScopes.length - 1;
         if (
           node.id.type === "Identifier" &&
           (node.init?.type === "FunctionExpression" ||
             node.init?.type === "ArrowFunctionExpression")
         ) {
-          registerHelper(node.id.name, node.init);
+          registerHelperAt(node.id.name, node.init, index);
         } else {
           // Any other binding shadows outer helpers of the same name —
           // including destructured patterns' bound names.
-          registerShadowNames(node.id);
+          registerShadowNames(node.id, index);
         }
       },
       AssignmentExpression(node) {
