@@ -625,14 +625,29 @@ const rule = {
       registerCallable(declaration.id?.name, declaration);
     }
 
-    /** The registered declaration for `name`, innermost scope first. */
-    function declaredFunctionEntry(name) {
-      for (let index = scopes.length - 1; index >= 0; index -= 1) {
+    /** The registered declaration for `name`, innermost scope first,
+     * bounded at `limit` (the replaying helper's defining scope). */
+    function declaredFunctionEntry(name, limit = scopes.length - 1) {
+      for (let index = limit; index >= 0; index -= 1) {
         if (scopes[index].declarations?.has(name)) {
           return scopes[index].declarations.get(name);
         }
       }
       return null;
+    }
+
+    /** The defining scope slot of a registered callable: the scope its
+     * declaration was registered in (alias entries share the original
+     * entry object, so any match carries the defining slot). */
+    function declaredSlotOf(fn) {
+      for (let index = scopes.length - 1; index >= 0; index -= 1) {
+        for (const entry of scopes[index].declarations?.values() ?? []) {
+          if (entry.fn === fn) {
+            return entry.slot;
+          }
+        }
+      }
+      return scopes.length - 1;
     }
 
     /** The names `fn` binds for itself: its parameters and every binding its
@@ -671,16 +686,14 @@ const rule = {
             for (const child of value) {
               if (child && typeof child === "object" && typeof child.type === "string") {
                 if (isFunctionNode(child)) {
-                  // A nested function's bindings end at its own boundary;
-                  // its parameters are its locals, not this helper's writes'
-                  // targets — its body is only ever replayed through its own
-                  // invocation, which collects its locals there.
+                  // A nested function's bindings end at its own boundary:
+                  // its parameters are ITS locals, not this helper's, and
+                  // its body is only ever replayed through its own
+                  // invocation, which collects its locals there. A nested
+                  // function declaration's name, though, binds in this
+                  // helper's scope.
                   if (child.type === "FunctionDeclaration") {
                     collectIdentifier(child.id);
-                  } else {
-                    for (const parameter of child.params ?? []) {
-                      collectIdentifier(parameter);
-                    }
                   }
                   continue;
                 }
@@ -691,10 +704,6 @@ const rule = {
             if (isFunctionNode(value)) {
               if (value.type === "FunctionDeclaration") {
                 collectIdentifier(value.id);
-              } else {
-                for (const parameter of value.params ?? []) {
-                  collectIdentifier(parameter);
-                }
               }
               continue;
             }
@@ -724,6 +733,11 @@ const rule = {
         return;
       }
       active.add(fn);
+      // The helper's writes resolve against ITS defining scope chain (the
+      // registry slot the invocation was resolved through): a caller's
+      // shadowing local must never capture them, while the helper's captured
+      // bindings update exactly where its body sees them.
+      const limit = declaredSlotOf(fn);
       const locals = localNamesOf(fn);
       const walk = (node) => {
         if (!node || typeof node !== "object" || typeof node.type !== "string") {
@@ -738,10 +752,10 @@ const rule = {
           // helper: replaying it onto the caller's scopes would clobber a
           // captured binding the local merely shadows.
           if (!locals.has(node.left.name)) {
-            const kind = boundKind(node.right);
-            const { target, logged } = assignIdentifier(node.left, kind);
+            const kind = boundKind(node.right, limit);
+            const { target, logged } = assignIdentifier(node.left, kind, limit);
             if (kind === WEAK_UNRESOLVED && node.right.type === "Identifier") {
-              const aliasTarget = unresolvedAliasTarget(node.right.name);
+              const aliasTarget = unresolvedAliasTarget(node.right.name, limit);
               if (aliasTarget && target) {
                 if (logged) {
                   logged.declaration = {
@@ -762,7 +776,7 @@ const rule = {
           return;
         }
         if (node.type === "CallExpression" && node.callee.type === "Identifier") {
-          const entry = declaredFunctionEntry(node.callee.name);
+          const entry = declaredFunctionEntry(node.callee.name, limit);
           if (entry?.fn) {
             replayInvocationWrites(entry.fn, active);
           }
@@ -800,9 +814,10 @@ const rule = {
       }
     }
 
-    /** The declaration an unresolved alias forwards to, if one is visible. */
-    function unresolvedAliasTarget(name) {
-      for (let index = scopes.length - 1; index >= 0; index -= 1) {
+    /** The declaration an unresolved alias forwards to, if one is visible,
+     * bounded at `limit` (the replaying helper's defining scope). */
+    function unresolvedAliasTarget(name, limit = scopes.length - 1) {
+      for (let index = limit; index >= 0; index -= 1) {
         if (scopes[index].bindings.get(name) === WEAK_UNRESOLVED) {
           return scopes[index].declarations?.get(name) ?? null;
         }
@@ -852,8 +867,8 @@ const rule = {
       return 0;
     }
 
-    function resolveKind(name) {
-      return resolveInChain(currentChain(), name);
+    function resolveKind(name, limit = scopes.length - 1) {
+      return resolveInChain(currentChain().slice(0, limit + 1), name);
     }
 
     function declareIdentifier(node, kind, varKind) {
@@ -881,10 +896,12 @@ const rule = {
      * The scope an assignment to `name` updates, and where an alias of an
      * unresolved helper must be registered: innermost first when the write
      * propagates (a setup hook or a synchronously executed callback),
-     * otherwise confined to the current function.
+     * otherwise confined to the current function. `limit` bounds resolution
+     * at the replaying helper's defining scope: the helper's writes update
+     * the bindings ITS body sees, never a caller's shadowing local.
      */
-    function writeTargetScope(name) {
-      let boundary = scopes.length - 1;
+    function writeTargetScope(name, limit = scopes.length - 1) {
+      let boundary = limit;
       while (
         boundary >= 0 &&
         scopes[boundary].type !== "function" &&
@@ -898,13 +915,13 @@ const rule = {
         // binding wins over everything) out to the module binding: a hook
         // assignment updates the nearest visible binding, so a suite-level
         // shadow wins over the module binding.
-        for (let index = scopes.length - 1; index >= 0; index -= 1) {
+        for (let index = limit; index >= 0; index -= 1) {
           if (scopes[index].bindings.has(name)) {
             return scopes[index];
           }
         }
       }
-      for (let index = scopes.length - 1; index >= boundary; index -= 1) {
+      for (let index = limit; index >= boundary; index -= 1) {
         if (scopes[index].bindings.has(name)) {
           return scopes[index];
         }
@@ -914,7 +931,7 @@ const rule = {
       return boundary >= 0 ? scopes[boundary] : null;
     }
 
-    function assignIdentifier(node, kind) {
+    function assignIdentifier(node, kind, limit = scopes.length - 1) {
       if (node?.type !== "Identifier") {
         return null;
       }
@@ -924,7 +941,7 @@ const rule = {
       // classification the enclosing scopes already have. A setup hook is
       // the exception — its callback runs before the tests, so its
       // assignment to an outer binding propagates outward.
-      const target = writeTargetScope(node.name);
+      const target = writeTargetScope(node.name, limit);
       if (!target) {
         return null;
       }
@@ -969,23 +986,27 @@ const rule = {
 
     /** The kind an alias inherits: helpers alias to helpers, promises to
      * promises, and an unresolved helper stays unresolved through aliases so
-     * its dependency is resolved when it becomes known. */
-    function aliasedKind(init) {
+     * its dependency is resolved when it becomes known. `limit` bounds
+     * resolution at the replaying helper's defining scope. */
+    function aliasedKind(init, limit = scopes.length - 1) {
       if (init?.type !== "Identifier") return null;
-      const kind = resolveKind(init.name);
+      const kind = resolveKind(init.name, limit);
       return kind === WEAK_HELPER || kind === WEAK_PROMISE || kind === WEAK_UNRESOLVED
         ? kind
         : null;
     }
 
-    /** Classify the kind a declarator/assignment binds, from its right side. */
-    function boundKind(right) {
-      const alias = aliasedKind(right);
+    /** Classify the kind a declarator/assignment binds, from its right side.
+     * `limit` bounds resolution at the replaying helper's defining scope. */
+    function boundKind(right, limit = scopes.length - 1) {
+      const alias = aliasedKind(right, limit);
       if (alias) return alias;
       if (isFunctionNode(right)) {
         return functionContainsWeakTimerPromise(right) ? WEAK_HELPER : false;
       }
-      return weakUseIn(right, currentChain(), false, [...scopes]) ? WEAK_PROMISE : false;
+      return weakUseIn(right, currentChain().slice(0, limit + 1), false, scopes.slice(0, limit + 1))
+        ? WEAK_PROMISE
+        : false;
     }
 
     /**

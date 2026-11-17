@@ -971,3 +971,37 @@ test("an invoked arrow initializer propagates its captured writes", async () => 
   `);
   assertFlagged(result, "weakAwaits");
 });
+
+// The helper's writes resolve against its DEFINING scope: a caller's
+// shadowing local must not capture them.
+test("a caller's shadowing local does not capture an invoked helper's write", async () => {
+  const result = await runOxlint(["weakAwaits"], `
+    let sleep;
+    function init() {
+      sleep = () => new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    it('t', async () => {
+      let sleep = () => fetch('/data');
+      init();
+      await sleep();
+    });
+  `);
+  assertClean(result, "weakAwaits");
+});
+
+// A nested function's parameters are its own locals, not the enclosing
+// helper's: they must not suppress the helper's captured write.
+test("a nested function's parameter is not the helper's local", async () => {
+  const result = await runOxlint(["weakAwaits"], `
+    let sleep = () => fetch('/data');
+    function init() {
+      const other = (sleep) => {};
+      sleep = () => new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    init();
+    it('t', async () => {
+      await sleep();
+    });
+  `);
+  assertFlagged(result, "weakAwaits");
+});

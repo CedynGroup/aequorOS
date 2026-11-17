@@ -373,11 +373,34 @@ const rule = {
       // order alone cannot tell.
       calls.push({ node, enclosing });
     };
-    const pushHelperScope = (body) => {
+    /** Register every identifier a binding pattern declares as a shadowing
+     * (noncallable) name: helper resolution must not pass through it. */
+    const registerShadowNames = (pattern) => {
+      if (!pattern) return;
+      if (pattern.type === "Identifier") {
+        registerHelper(pattern.name, null);
+      } else if (pattern.type === "AssignmentPattern" || pattern.type === "RestElement") {
+        registerShadowNames(pattern.argument);
+      } else if (pattern.type === "ArrayPattern") {
+        for (const element of pattern.elements ?? []) registerShadowNames(element);
+      } else if (pattern.type === "ObjectPattern") {
+        for (const property of pattern.properties ?? []) {
+          registerShadowNames(
+            property.type === "RestElement" ? property.argument : property.value,
+          );
+        }
+      }
+    };
+    const pushHelperScope = (fn) => {
       helperScopes.push(new Map());
+      // The function's own parameters shadow outer helpers of the same
+      // name: a call through a parameter is not a call through the helper.
+      for (const parameter of fn.params ?? []) {
+        registerShadowNames(parameter);
+      }
       // Hoisted function declarations resolve for calls that textually
       // precede them within the same body.
-      for (const statement of body?.type === "BlockStatement" ? body.body : []) {
+      for (const statement of fn.body?.type === "BlockStatement" ? fn.body.body : []) {
         if (statement.type === "FunctionDeclaration") {
           registerHelper(statement.id?.name, statement);
         }
@@ -395,30 +418,49 @@ const rule = {
         if (node.id) {
           registerHelper(node.id.name, node);
         }
-        pushHelperScope(node.body);
+        pushHelperScope(node);
       },
       "FunctionDeclaration:exit"() {
         helperScopes.pop();
       },
       FunctionExpression(node) {
-        pushHelperScope(node.body);
+        pushHelperScope(node);
       },
       "FunctionExpression:exit"() {
         helperScopes.pop();
       },
       ArrowFunctionExpression(node) {
-        pushHelperScope(node.body);
+        pushHelperScope(node);
       },
       "ArrowFunctionExpression:exit"() {
         helperScopes.pop();
       },
+      BlockStatement() {
+        // Lexical block scope: a block-local callable registration must not
+        // outlive its block, and a block-local noncallable binding shadows
+        // outer helpers only inside it.
+        helperScopes.push(new Map());
+      },
+      "BlockStatement:exit"() {
+        helperScopes.pop();
+      },
+      CatchClause(node) {
+        helperScopes.push(new Map());
+        registerShadowNames(node.param);
+      },
+      "CatchClause:exit"() {
+        helperScopes.pop();
+      },
       VariableDeclarator(node) {
+        if (node.id.type !== "Identifier") return;
         if (
-          node.id.type === "Identifier" &&
-          (node.init?.type === "FunctionExpression" ||
-            node.init?.type === "ArrowFunctionExpression")
+          node.init?.type === "FunctionExpression" ||
+          node.init?.type === "ArrowFunctionExpression"
         ) {
           registerHelper(node.id.name, node.init);
+        } else {
+          // Any other binding shadows outer helpers of the same name.
+          registerHelper(node.id.name, null);
         }
       },
       CallExpression(node) {

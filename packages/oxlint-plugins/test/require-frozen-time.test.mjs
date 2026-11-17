@@ -1125,3 +1125,40 @@ test("multiple beforeAll callbacks apply in registration order", async () => {
   `);
   assertClean(result, "frozenTime");
 });
+
+// A parameter shadows an outer helper of the same name: a call through the
+// parameter is not a call through the helper, so the outer freeze never
+// executes and the read stays on the wall clock.
+test("a parameter shadowing a freezing helper stops helper resolution", async () => {
+  const result = await runOxlint(["frozenTime"], `
+    function freeze() {
+      vi.useFakeTimers();
+    }
+    function run(freeze) {
+      freeze();
+    }
+    it('t', () => {
+      run(() => {});
+      Date.now();
+    });
+  `);
+  assertFlagged(result, "frozenTime");
+});
+
+// A block-local binding shadows an outer helper only inside its block: the
+// invocation after the block resolves to the freezing function.
+test("a block-local shadow does not outlive its block", async () => {
+  const result = await runOxlint(["frozenTime"], `
+    it('t', () => {
+      function freeze() {
+        vi.useFakeTimers();
+      }
+      {
+        const freeze = () => {};
+      }
+      freeze();
+      Date.now();
+    });
+  `);
+  assertClean(result, "frozenTime");
+});
