@@ -721,3 +721,88 @@ test("two sibling hooks keep each suite's own write", async () => {
   `);
   assertClean(result, "weakAwaits");
 });
+
+// -- CodeRabbit round (2026-11-17, teardown/replay soundness) ---------------
+
+// A setup hook registered after the test still runs before it, so a clean
+// replacement must unreport the await; the verdict is deferred to the final
+// hook replay instead of being fixed at the visit.
+test("does not report an await a later-registered hook replaces with a clean one", async () => {
+  const result = await runOxlint(["weakAwaits"], `
+    let sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+    it('t', async () => {
+      await sleep(10);
+    });
+    beforeEach(() => {
+      sleep = () => fetch('/data');
+    });
+  `);
+  assertClean(result, "weakAwaits");
+});
+
+// Binding produces a function value; awaiting the bound expression waits on
+// nothing. Only invoking the bound result waits on the timer promise.
+test("does not flag an await of a bound helper that is never invoked", async () => {
+  const result = await runOxlint(["weakAwaits"], `
+    const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+    it('t', async () => {
+      await sleep.bind(null, 10);
+    });
+  `);
+  assertClean(result, "weakAwaits");
+});
+
+// A block-local declaration shadows an outer weak helper only inside its
+// block; the helper's call inside the block resolves to the local binding.
+test("resolves a call inside a block to the block-local shadow", async () => {
+  const result = await runOxlint(["weakAwaits"], `
+    const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+    function ready() {
+      {
+        const sleep = () => fetch('/data');
+        return sleep();
+      }
+    }
+    it('t', async () => {
+      await ready();
+    });
+  `);
+  assertClean(result, "weakAwaits");
+});
+
+// Setup hooks replay in execution order: a beforeAll declared after a
+// beforeEach still runs first, so the beforeEach's timer assignment is the
+// value the test observes.
+test("replays setup hooks in execution order, not registration order", async () => {
+  const result = await runOxlint(["weakAwaits"], `
+    let wait;
+    beforeEach(() => {
+      wait = (ms) => new Promise((r) => setTimeout(r, ms));
+    });
+    beforeAll(() => {
+      wait = () => fetch('/data');
+    });
+    it('t', async () => {
+      await wait();
+    });
+  `);
+  assertFlagged(result, "weakAwaits");
+});
+
+// A forwarding helper's weakness depends on its dependency's current value:
+// a hook reassigning the dependency re-classifies the helper at the await.
+test("re-resolves a forwarding helper's dependency reassigned by a hook", async () => {
+  const result = await runOxlint(["weakAwaits"], `
+    let dependency = (ms) => new Promise((r) => setTimeout(r, ms));
+    function wait() {
+      return dependency();
+    }
+    beforeEach(() => {
+      dependency = () => fetch('/data');
+    });
+    it('t', async () => {
+      await wait();
+    });
+  `);
+  assertClean(result, "weakAwaits");
+});
