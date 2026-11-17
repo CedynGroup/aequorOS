@@ -1055,3 +1055,17 @@ test("an afterAll read sees the suite's final state, not every test's", async ()
   `);
   assertClean(result, "frozenTime");
 });
+
+test("does not treat a computed member named like a restoration as one", async () => {
+  const result = await runOxlint(["frozenTime"], `
+    const useRealTimers = 'clearAllMocks';
+    beforeEach(() => {
+      vi.useFakeTimers();
+    });
+    it('t', () => {
+      vi[useRealTimers]();
+      expect(Date.now()).toBeGreaterThan(0);
+    });
+  `);
+  assertClean(result, "frozenTime");
+});

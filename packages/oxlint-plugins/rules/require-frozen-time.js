@@ -397,9 +397,13 @@ const rule = {
           }
         }
 
-        // Detect vi.useFakeTimers(), jest.useFakeTimers(), vi.setSystemTime(), jest.setSystemTime()
+        // Detect vi.useFakeTimers(), jest.useFakeTimers(), vi.setSystemTime(), jest.setSystemTime().
+        // The property must be NONCOMPUTED: a computed member's property
+        // name is an expression to evaluate, not the invoked method's
+        // identity — `vi[useRealTimers]()` may call anything.
         if (
           callee.type === "MemberExpression" &&
+          !callee.computed &&
           callee.object.type === "Identifier" &&
           RUNNER_OBJECTS.has(callee.object.name) &&
           callee.property.type === "Identifier" &&
@@ -410,9 +414,11 @@ const rule = {
         }
 
         // Detect vi.useRealTimers() / jest.useRealTimers(): the wall clock is
-        // back, so any earlier freeze no longer covers later reads.
+        // back, so any earlier freeze no longer covers later reads. Must be
+        // noncomputed, like the freeze detection above.
         if (
           callee.type === "MemberExpression" &&
+          !callee.computed &&
           callee.object.type === "Identifier" &&
           RUNNER_OBJECTS.has(callee.object.name) &&
           callee.property.type === "Identifier" &&

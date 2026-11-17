@@ -619,6 +619,101 @@ const rule = {
       });
     }
 
+    /** The registered declaration for `name`, innermost scope first. */
+    function declaredFunctionEntry(name) {
+      for (let index = scopes.length - 1; index >= 0; index -= 1) {
+        if (scopes[index].declarations?.has(name)) {
+          return scopes[index].declarations.get(name);
+        }
+      }
+      return null;
+    }
+
+    /**
+     * A named helper invoked explicitly (a statically resolvable call) runs
+     * its body where the call sits, so its captured assignments reach the
+     * enclosing scopes exactly like an IIFE's writes do — the body traversal
+     * alone confined them to the helper's temporary scope. Re-apply the
+     * body's assignments at the call site, recursing into helper invocations
+     * it makes and guarding against recursion cycles. Genuinely uncalled
+     * functions stay isolated: without a call their writes are never
+     * replayed.
+     */
+    function replayInvocationWrites(fn, active) {
+      if (active.has(fn)) {
+        return;
+      }
+      active.add(fn);
+      const walk = (node) => {
+        if (!node || typeof node !== "object" || typeof node.type !== "string") {
+          return;
+        }
+        if (
+          node.type === "AssignmentExpression" &&
+          node.operator === "=" &&
+          node.left.type === "Identifier"
+        ) {
+          const kind = boundKind(node.right);
+          const { target, logged } = assignIdentifier(node.left, kind);
+          if (kind === WEAK_UNRESOLVED && node.right.type === "Identifier") {
+            const aliasTarget = unresolvedAliasTarget(node.right.name);
+            if (aliasTarget && target) {
+              if (logged) {
+                logged.declaration = {
+                  scope: target,
+                  name: node.left.name,
+                  entry: aliasTarget,
+                  had: target.declarations?.has(node.left.name) ?? false,
+                  previous: target.declarations?.get(node.left.name),
+                };
+              }
+              if (!target.declarations) {
+                target.declarations = new Map();
+              }
+              target.declarations.set(node.left.name, aliasTarget);
+            }
+          }
+          return;
+        }
+        if (node.type === "CallExpression" && node.callee.type === "Identifier") {
+          const entry = declaredFunctionEntry(node.callee.name);
+          if (entry?.fn) {
+            replayInvocationWrites(entry.fn, active);
+          }
+          return;
+        }
+        for (const [key, value] of Object.entries(node)) {
+          if (key === "parent") {
+            continue;
+          }
+          if (Array.isArray(value)) {
+            for (const child of value) {
+              if (
+                child &&
+                typeof child === "object" &&
+                typeof child.type === "string" &&
+                !isFunctionNode(child)
+              ) {
+                walk(child);
+              }
+            }
+          } else if (
+            value &&
+            typeof value === "object" &&
+            typeof value.type === "string" &&
+            !isFunctionNode(value)
+          ) {
+            walk(value);
+          }
+        }
+      };
+      try {
+        walk(fn.body);
+      } finally {
+        active.delete(fn);
+      }
+    }
+
     /** The declaration an unresolved alias forwards to, if one is visible. */
     function unresolvedAliasTarget(name) {
       for (let index = scopes.length - 1; index >= 0; index -= 1) {
@@ -761,6 +856,7 @@ const rule = {
           previous: target.bindings.get(node.name),
           describeChain: hookScope.describeChain ?? [],
           phase: hookScope.hookName ?? "beforeEach",
+          order: hookScope.hookOrder ?? 0,
           // The declaration-registry entry this write installs (an aliased
           // unresolved helper), recorded by the assignment handler so the
           // replay can restore it together with the binding value.
@@ -881,12 +977,33 @@ const rule = {
               .set(name, scope.declarations?.get(name) ?? undefined);
           }
         }
+        // Hook writes execute in lifecycle order — every beforeAll before
+        // every beforeEach, outer describes' hooks before inner ones within
+        // a phase, registration order within a suite. A write applies to a
+        // pending only when it runs before the pending's own position: for
+        // a pending inside a setup hook, later-executing writes (the
+        // finding's beforeEach write against a beforeAll's await) have not
+        // happened yet.
+        const writeExecutesBeforePending = (entry) => {
+          if (!pending.hookKey) {
+            return true;
+          }
+          const phase = hookPhase(entry.phase);
+          if (phase !== pending.hookKey.phase) {
+            return phase < pending.hookKey.phase;
+          }
+          if (entry.describeChain.length !== pending.hookKey.depth) {
+            return entry.describeChain.length < pending.hookKey.depth;
+          }
+          return entry.order <= pending.hookKey.order;
+        };
         for (const entry of orderedWrites) {
           const applies =
             entry.describeChain.length <= pending.describeChain.length &&
             entry.describeChain.every(
               (describe, position) => pending.describeChain[position] === describe,
-            );
+            ) &&
+            writeExecutesBeforePending(entry);
           if (applies) {
             targets.get(entry.scope).set(entry.name, entry.kind);
             if (entry.declaration) {
@@ -1100,6 +1217,18 @@ const rule = {
         popScope();
         flushPendingAwaits();
       },
+      CallExpression(node) {
+        // An explicitly invoked named helper runs its body here: replay its
+        // captured assignments against the call site's scopes, so a helper
+        // that initializes shared bindings before the tests is not treated
+        // as uncalled.
+        if (node.callee.type === "Identifier") {
+          const entry = declaredFunctionEntry(node.callee.name);
+          if (entry?.fn) {
+            replayInvocationWrites(entry.fn, new Set());
+          }
+        }
+      },
       BlockStatement(node) {
         pushScope();
         declareFunctionDeclarations(node.body);
@@ -1143,6 +1272,7 @@ const rule = {
         const hookName = hookNameFor(node);
         if (hookName !== null) {
           scopes[scopes.length - 1].hookName = hookName;
+          scopes[scopes.length - 1].hookOrder = node.range?.[0] ?? 0;
           scopes[scopes.length - 1].describeChain = describeChainOf(node);
         }
         // A synchronously executed function (IIFE, describe callback) runs
@@ -1159,6 +1289,7 @@ const rule = {
         const hookName = hookNameFor(node);
         if (hookName !== null) {
           scopes[scopes.length - 1].hookName = hookName;
+          scopes[scopes.length - 1].hookOrder = node.range?.[0] ?? 0;
           scopes[scopes.length - 1].describeChain = describeChainOf(node);
         }
         if (executesWhereDefined(node)) {
@@ -1238,8 +1369,15 @@ const rule = {
         // and the test only ever runs with the final assignment. Reporting
         // at the visit would fire on state the test never observes. The
         // pending's frozen function-local values keep later same-function
-        // reassignments from changing an earlier await's verdict.
+        // reassignments from changing an earlier await's verdict. For an
+        // await inside a setup hook, the hook's own lifecycle key is kept:
+        // hook writes that execute AFTER that hook must not reach its
+        // awaits (a beforeEach write has not happened while a beforeAll's
+        // callback runs).
         const chain = currentChain();
+        const pendingHookScope = [...scopes]
+          .reverse()
+          .find((scope) => scope.type === "hook");
         pendingAwaits.push({
           node,
           argument: node.argument,
@@ -1250,6 +1388,13 @@ const rule = {
           // Live scope objects parallel to `chain`: the declaration registry
           // resolves through them at re-evaluation time.
           scopeChain: [...scopes],
+          hookKey: pendingHookScope
+            ? {
+                phase: hookPhase(pendingHookScope.hookName ?? "beforeEach"),
+                depth: (pendingHookScope.describeChain ?? []).length,
+                order: pendingHookScope.hookOrder ?? 0,
+              }
+            : null,
         });
       },
     };

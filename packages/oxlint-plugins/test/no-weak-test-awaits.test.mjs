@@ -867,3 +867,36 @@ test("a sibling suite's alias write does not leak its declaration entry", async 
   // through the clean helper's declaration, not the last sibling's.
   assertClean(cleanSuite, "weakAwaits");
 });
+
+// A write from a setup hook that executes AFTER the pending's own hook must
+// not reach its awaits: a beforeEach assignment has not happened while a
+// beforeAll's callback runs.
+test("does not apply a hook write that executes after the pending's hook", async () => {
+  const result = await runOxlint(["weakAwaits"], `
+    let sleep = () => new Promise((r) => setTimeout(r, 10));
+    beforeAll(async () => {
+      await sleep();
+    });
+    beforeEach(() => {
+      sleep = () => fetch('/data');
+    });
+    it('t', () => {});
+  `);
+  assertFlagged(result, "weakAwaits");
+});
+
+// A named helper invoked explicitly runs its body where the call sits, so
+// its captured assignments initialize the shared binding like an IIFE's.
+test("propagates captured writes from an explicitly invoked helper", async () => {
+  const result = await runOxlint(["weakAwaits"], `
+    let sleep;
+    function init() {
+      sleep = () => new Promise((r) => setTimeout(r, 10));
+    }
+    init();
+    it('t', async () => {
+      await sleep();
+    });
+  `);
+  assertFlagged(result, "weakAwaits");
+});
