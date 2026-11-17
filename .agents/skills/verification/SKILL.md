@@ -62,7 +62,7 @@ axes; add others the change introduces.
 | Authority        | permitted principal; principal lacking the grant (refusal is the expected result); a sibling bank in the same organization (RLS tenant is shared) |
 | Data state       | populated; empty ("no computed data yet"); figure unavailable or not applicable; refused or failed computation                                    |
 | Freshness        | live result current; stale or recomputing; official run versus live view                                                                          |
-| Rendering        | dark theme (default) and light theme; desktop and a narrow viewport                                                                               |
+| Rendering        | supported themes (dashboard Dark and Light; console Dark only); desktop and a narrow viewport                                                     |
 | Input            | valid; invalid (validation error shape); boundary values the change introduced                                                                    |
 | Contract         | status code, error envelope, generated-client freshness for API changes                                                                           |
 | Regression guard | the neighbouring screen or route that shares the changed component or service                                                                     |
@@ -102,10 +102,9 @@ sibling bank refused         tenant API  analyst fixture  populated    404 or 40
   skill, manifests, captions and screenshots must contain only synthetic
   identifiers and placeholders such as `BK-XXXXXXXX`, `OR-XXXXXXXX`,
   `analyst@example.test`.
-- Never put a token, password or key into a caption, a command shown in
-  evidence, or a screenshot. Pass secrets by environment variable and redact
-  anything real before sharing. If a capture shows anything not synthetic,
-  discard it.
+- Pass secrets by environment variable. Keep credentials and real identifiers
+  out of evidence, including commands, screenshots and captions. Discard any
+  screenshot that exposes them.
 
 ## Evidence record
 
@@ -136,8 +135,14 @@ printf '%s\t%s\t%s\t%s\t%s\n' "$FILE" "<case>" "<caption>" \
 ```
 
 Non-visual evidence (a request and response pair, a command's output) is a text
-or JSON file in the same directory and the same manifest. Capture response
-bodies from the local fixture only.
+or JSON file in the same directory and the same manifest. Capture from the local
+fixture only. For API evidence, review the response locally and prepare the
+sanitized request and response before writing the artifact. Keep the method,
+sanitized URL, response status and relevant fields. Check both directions,
+including headers, bodies and URL parameters, for credentials and real
+identifiers. Replace sensitive values with placeholders, including bearer
+tokens, cookies, access and refresh tokens, passwords and keys. Persist only
+the sanitized result.
 
 ## Handoff
 

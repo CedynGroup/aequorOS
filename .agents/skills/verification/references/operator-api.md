@@ -41,16 +41,15 @@ administrator, ownership, membership) and no financial data.
 ## Capture
 
 Set `OPERATOR_TOKEN` to the local login token or local dev token. Substitute
-the route and case, using only synthetic IDs. Record the method, sanitized URL
-and any sanitized request body with the response status and body.
+the route using synthetic IDs. Inspect the exchange locally, then save the
+sanitized pair as `operator-api-<case>-after.txt` using the
+[shared evidence procedure](../SKILL.md#evidence-record).
 
 ```bash
 url='http://127.0.0.1:8100/operator/v1/<route>'
-{
-  printf 'GET %s\nAuthorization: Bearer [redacted]\n\n' "$url"
-  curl --silent --show-error --include --max-time 20 \
-    -H "Authorization: Bearer $OPERATOR_TOKEN" "$url"
-} > "$EVIDENCE/operator-api-<case>-after.txt"
+printf 'GET %s\n' "$url"
+curl --silent --show-error --include --max-time 20 \
+  -H "Authorization: Bearer $OPERATOR_TOKEN" "$url"
 ```
 
 Mutating operator calls write to the audit log; verify the audit record as part of

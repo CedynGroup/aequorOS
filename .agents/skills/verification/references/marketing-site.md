@@ -44,19 +44,17 @@ payloads return before the provider is called:
 | Invalid email           | `{"name":"Fixture","email":"invalid","role":"Analyst"}` | `400` with an email validation error |
 | Honeypot                | `{"_gotcha":"fixture"}`                                 | `200` with `{"ok":true}`             |
 
-Set the case and payload from the table, then capture the request and response:
+Set the payload from the table and inspect the exchange locally:
 
 ```bash
 url='http://localhost:3000/api/contact'
-case_name=keyless
 payload='{}'
-{
-  printf 'POST %s\nContent-Type: application/json\n\n%s\n\n' "$url" "$payload"
-  curl --silent --show-error --include --max-time 20 \
-    -H 'Content-Type: application/json' --data "$payload" "$url"
-} > "$EVIDENCE/marketing-contact-$case_name-after.txt"
+printf 'POST %s\nContent-Type: application/json\n\n%s\n\n' "$url" "$payload"
+curl --silent --show-error --include --max-time 20 \
+  -H 'Content-Type: application/json' --data "$payload" "$url"
 ```
 
-Redact the live support email address in error responses before hashing the
-artifact. Record delivery success and provider errors as unexecuted when no
-local delivery fixture is available. Use synthetic contact values throughout.
+Save the sanitized pair as `marketing-contact-<case>-after.txt` using the
+[shared evidence procedure](../SKILL.md#evidence-record). Record delivery
+success and provider errors as unexecuted when no local delivery fixture is
+available.

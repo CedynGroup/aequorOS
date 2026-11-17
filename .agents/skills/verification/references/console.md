@@ -38,4 +38,4 @@ element screenshots per matrix row, named `console-<case>-<before|after>.png`.
   database.
 - Impersonation and the tenant inspector open a tenant view for an audited
   support session; capture the audited, read-only state and nothing real.
-- Cover both themes and a narrow viewport if the change touches layout.
+- Capture a narrow viewport if the change touches layout.

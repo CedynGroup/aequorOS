@@ -48,7 +48,7 @@ separate cookie jars.
 
 ## Sign in
 
-- Hermetic: use the fixture role's state file, for example
+- During the hermetic run, use the fixture role's state file, for example
   `$E2E_RUNTIME_DIR/analyst.json` as the browser's storage state. Roles are
   listed in `E2E_STORAGE_ROLES` in `backend/dashboard/e2e/support/mint.ts`; each
   is a fixture identity at `e2e.<role>@aequoros.example`. Pick the role that
@@ -62,13 +62,13 @@ separate cookie jars.
 dark theme, full page, after loading skeletons clear. Output is
 `$E2E_RUNTIME_DIR/visual-tour/<name>.png`, where `/` is `home` and each other `/`
 becomes `__` (`/liquidity/nsfr` is `liquidity__nsfr.png`). Run it at the base
-commit and again at the head, into two different runtime directories, and use the
-files only after checking the destination URL and expected visible state for
-each matrix case. Use interactive capture for routes outside the tour or cases
-whose expected state the tour did not reach.
+commit and again at the head, into two different runtime directories. Use a
+tour image for a matrix row only if you observed the final URL and expected
+state during that capture. The PNG name records the requested route. Use
+interactive capture for unattended tour output and routes outside the tour.
 
-**Other cases.** Drive the signed-in browser with whatever browser automation the
-session has, or with the existing Playwright journeys. Settle before capturing: a
+**Interactive capture.** Drive the signed-in browser with the session’s browser
+automation. Check the final URL and expected state before saving. Settle first: a
 page is loaded when no `.animate-pulse` placeholder remains in the viewport (the
 logic is `settleForCapture` in `backend/dashboard/e2e/support/capture.ts`).
 Charts render without animation.
@@ -83,7 +83,3 @@ Charts render without animation.
   with a file-controlled reporting clock, started by
   `playwright.regulatory.config.ts` (see the README section above). It writes
   captures to `E2E_EVIDENCE_DIR` when set.
-
-Cases specific to this surface: an unavailable figure renders as unavailable and
-draws no reference line; a refusal for a missing grant renders as the refusal,
-not an empty page; jurisdiction labels come from the bank's data.
