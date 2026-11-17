@@ -52,6 +52,17 @@ const period = {
   status: "open",
 };
 
+// An older month: the bank context sorts periods newest-first, so the
+// workspace still opens on `period` and the switch below moves backwards.
+const laterPeriod = {
+  id: "period-2",
+  bank_id: bankId,
+  label: "September 2026",
+  period_start: "2026-09-01",
+  period_end: "2026-09-30",
+  status: "open",
+};
+
 const metrics = {
   nop_ghs: "30",
   nop_pct_tier1: "30",
@@ -69,12 +80,12 @@ const metrics = {
   hedge_effective_count: 1,
 };
 
-function runBody(withheld: boolean) {
+function runBody(runId: string, withheld: boolean) {
   return {
-    id: "run-1",
+    id: runId,
     organization_id: "org",
     bank_id: bankId,
-    reporting_period_id: period.id,
+    reporting_period_id: runId.slice("run-".length),
     module: "fx",
     scenario_code: "baseline",
     status: "succeeded",
@@ -128,8 +139,12 @@ function fixture(options: {
 }) {
   const fxRequests: string[] = [];
   const runRequests: string[] = [];
-  const periodMode = (url: string) =>
-    new URL(url).searchParams.get("reporting_period_id") === period.id;
+  const periods = options.periods ?? [period];
+  const periodById = new Map(periods.map((entry) => [entry.id, entry]));
+  const requestedPeriod = (url: string) => {
+    const id = new URL(url).searchParams.get("reporting_period_id");
+    return id ? periodById.get(id) : null;
+  };
   server.use(
     http.get(`${apiBaseUrl}/auth/me`, () =>
       HttpResponse.json({
@@ -174,7 +189,7 @@ function fixture(options: {
       HttpResponse.json({ bi_enabled: false, bi_nlq_enabled: false }),
     ),
     http.get(`${base}/reporting-periods`, () =>
-      HttpResponse.json({ periods: options.periods ?? [period] }),
+      HttpResponse.json({ periods }),
     ),
     http.get(`${base}/freshness`, () =>
       HttpResponse.json({
@@ -188,6 +203,7 @@ function fixture(options: {
     http.get(`${base}/live-summary`, () => HttpResponse.json({})),
     http.get(`${base}/fx/dashboard`, ({ request }) => {
       fxRequests.push(request.url);
+      const requested = requestedPeriod(request.url);
       return HttpResponse.json({
         bank: {
           id: bankId,
@@ -195,8 +211,8 @@ function fixture(options: {
           currency: "GHS",
           jurisdiction_code: "GH",
         },
-        period,
-        latest_run_id: periodMode(request.url) ? "run-1" : null,
+        period: requested ?? period,
+        latest_run_id: requested ? `run-${requested.id}` : null,
         metrics,
         positions: [],
         standalone_vars: [],
@@ -218,8 +234,9 @@ function fixture(options: {
       });
     }),
     http.get(`${base}/regulatory-runs/:runId`, ({ params }) => {
-      runRequests.push(String(params.runId));
-      return HttpResponse.json(runBody(options.withheld));
+      const runId = String(params.runId);
+      runRequests.push(runId);
+      return HttpResponse.json(runBody(runId, options.withheld));
     }),
   );
   return { fxRequests, runRequests };
@@ -294,7 +311,7 @@ it("requests the FX dashboard for the selected reporting period and reads its st
   );
   // The Hedge Book then reads the run stored for that period through its own
   // route: the stored snapshot, not a default, drives the bands.
-  await waitFor(() => expect(runRequests).toEqual(["run-1"]));
+  await waitFor(() => expect(runRequests).toEqual(["run-period-1"]));
   await screen.findByText("Effective");
 });
 
@@ -309,7 +326,7 @@ it("shows a withheld stored snapshot as unavailable instead of the hardcoded def
       ),
     ).toBe(true),
   );
-  await waitFor(() => expect(runRequests).toEqual(["run-1"]));
+  await waitFor(() => expect(runRequests).toEqual(["run-period-1"]));
 
   expect(await screen.findByText("Unavailable")).toBeInTheDocument();
   expect(
@@ -332,7 +349,7 @@ it("drives the dual-test bands from the stored run snapshot when it is served", 
       ),
     ).toBe(true),
   );
-  await waitFor(() => expect(runRequests).toEqual(["run-1"]));
+  await waitFor(() => expect(runRequests).toEqual(["run-period-1"]));
 
   expect((await screen.findAllByText(/R² ≥ 90%/)).length).toBeGreaterThan(0);
   expect(screen.getAllByText(/70–130%/).length).toBeGreaterThan(0);
@@ -348,4 +365,33 @@ it("falls back to current mode with no reporting period selected", async () => {
   expect(urls.every((url) => !url.includes("reporting_period_id"))).toBe(true);
   // Current mode as before: the documented IFRS 9 defaults, no stored run.
   expect(screen.getAllByText(/R² ≥ 80%/).length).toBeGreaterThan(0);
+});
+
+it("refetches the dashboard and the stored run when the selection moves to another period", async () => {
+  const { fxRequests, runRequests } = fixture({
+    withheld: false,
+    periods: [period, laterPeriod],
+  });
+  const { fireEvent } = await import("@testing-library/react");
+  view();
+
+  await waitFor(() => expect(runRequests).toEqual(["run-period-1"]));
+  // Move the as-of selection through the workspace's own period control.
+  fireEvent.change(screen.getByRole("combobox"), {
+    target: { value: laterPeriod.id },
+  });
+
+  // A fresh request carries the new period, and the run read is that
+  // period's run — not the previous selection's cached result.
+  await waitFor(() =>
+    expect(
+      fxRequests.some((url) =>
+        url.includes(`reporting_period_id=${laterPeriod.id}`),
+      ),
+    ).toBe(true),
+  );
+  await waitFor(() =>
+    expect(runRequests).toEqual(["run-period-1", "run-period-2"]),
+  );
+  expect(screen.getByRole("combobox")).toHaveValue(laterPeriod.id);
 });
