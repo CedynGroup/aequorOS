@@ -54,10 +54,3 @@ curl --silent --show-error --include --max-time 20 \
 
 Mutating operator calls write to the audit log; verify the audit record as part of
 the case, and run them only against the disposable local database.
-
-For act-token response evidence, use the
-[local inspector settings](console.md#reach-it) and capture the sanitized
-response. The
-[console handoff](../../../../console/components/tenants/OpenBankDashboardButton.tsx#L41)
-builds the destination from `dashboard_url`, `/inspect`, and the encoded token
-in the fragment. Keep the token and fragment out of the artifact.

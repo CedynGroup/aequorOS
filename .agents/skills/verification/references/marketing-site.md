@@ -10,19 +10,14 @@ and no backend dependency. Shared rules are in [../SKILL.md](../SKILL.md).
 pnpm --filter @aequoros/frontend dev     # http://localhost:3000
 ```
 
-For production-shaped output use `pnpm --filter @aequoros/frontend build` then
-`pnpm --filter @aequoros/frontend start`. Browsing requires no configuration.
-Use the local capture recipe below for contact submissions.
-
 ## Sign in
 
 None.
 
 ## Capture
 
-Full-page screenshots per page and viewport with the session's browser
-automation, named `marketing-<case>-<before|after>.png` (include the viewport in the case). Cover desktop and a
-narrow viewport, and check that links and anchors resolve.
+Full-page screenshots per matrix case with the session's browser automation,
+named `marketing-<case>-<before|after>.png`.
 
 ## Contact API capture
 

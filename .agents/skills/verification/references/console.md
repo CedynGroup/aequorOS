@@ -17,11 +17,6 @@ call the operator API directly. Shared rules are in [../SKILL.md](../SKILL.md).
    pnpm --filter @aequoros/console dev   # http://localhost:3002
    ```
 
-4. For an inspector handoff, run the local tenant API and dashboard. Before
-   starting the APIs, set the same disposable `IMPERSONATION_JWT_SECRET=<local-random-secret>` on both APIs
-   and set `BANK_APP_BASE_URL` on the operator API to the running loopback
-   dashboard origin.
-
 ## Sign in
 
 Local only. At `/login`, either the email and password of a local operator
@@ -38,9 +33,3 @@ element screenshots per matrix row, named `console-<case>-<before|after>.png`.
 - Provisioning flows write setup records and audit entries: capture the screen
   and the resulting operator API record, and use only the disposable local
   database.
-- For the inspector handoff, capture the audited, read-only dashboard state
-  from **Open in new tab**. Have browser automation hold the button’s
-  `window.open` call and verify that the actual mint response’s
-  `dashboard_url`, as used in that call, matches the configured loopback
-  origin before allowing navigation.
-- Capture a narrow viewport if the change touches layout.

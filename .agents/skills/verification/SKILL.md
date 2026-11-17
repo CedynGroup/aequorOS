@@ -62,7 +62,7 @@ axes; add others the change introduces.
 | Authority        | permitted principal; principal lacking the grant (refusal is the expected result); a sibling bank in the same organization (RLS tenant is shared) |
 | Data state       | populated; empty ("no computed data yet"); figure unavailable or not applicable; refused or failed computation                                    |
 | Freshness        | live result current; stale or recomputing; official run versus live view                                                                          |
-| Rendering        | supported themes (dashboard Dark and Light; console Dark only); desktop and a narrow viewport                                                     |
+| Rendering        | supported themes; desktop and a narrow viewport                                                                                                   |
 | Input            | valid; invalid (validation error shape); boundary values the change introduced                                                                    |
 | Contract         | status code, error envelope, generated-client freshness for API changes                                                                           |
 | Regression guard | the neighbouring screen or route that shares the changed component or service                                                                     |
@@ -108,13 +108,8 @@ sibling bank refused         tenant API  analyst fixture  populated    404 or 40
 
 ## Evidence record
 
-One manifest per verification run, kept in a directory outside the worktree
-(for example under the task's scratch area, or `mktemp -d`). One row per
-artifact, tab-separated, with this header:
-
-```text
-filename	case	caption	sha256	head_commit
-```
+Keep one tab-separated manifest per verification run outside the worktree, with
+one row per artifact and the five columns below.
 
 | Field         | Meaning                                                                                         |
 | ------------- | ----------------------------------------------------------------------------------------------- |
@@ -123,17 +118,6 @@ filename	case	caption	sha256	head_commit
 | `caption`     | one sentence: what the artifact shows and the expected result, with no secrets                  |
 | `sha256`      | `sha256sum <file>` of the artifact                                                              |
 | `head_commit` | full `git rev-parse HEAD` of the checkout the surface ran from, taken at capture time           |
-
-Append a row:
-
-```bash
-EVIDENCE='<directory outside the worktree>'
-FILE=dashboard-liquidity-unavailable-after.png
-CHECKSUM=$(sha256sum < "$EVIDENCE/$FILE") &&
-HEAD_COMMIT=$(git -C "<worktree>" rev-parse --verify HEAD) &&
-printf '%s\t%s\t%s\t%s\t%s\n' "$FILE" "<case>" "<caption>" \
-  "${CHECKSUM%% *}" "$HEAD_COMMIT" >> "$EVIDENCE/manifest.tsv"
-```
 
 Non-visual evidence (a request and response pair, a command's output) is a text
 or JSON file in the same directory and the same manifest. Capture from the local
