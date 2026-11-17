@@ -379,7 +379,9 @@ const rule = {
       if (!pattern) return;
       if (pattern.type === "Identifier") {
         registerHelper(pattern.name, null);
-      } else if (pattern.type === "AssignmentPattern" || pattern.type === "RestElement") {
+      } else if (pattern.type === "AssignmentPattern") {
+        registerShadowNames(pattern.left);
+      } else if (pattern.type === "RestElement") {
         registerShadowNames(pattern.argument);
       } else if (pattern.type === "ArrayPattern") {
         for (const element of pattern.elements ?? []) registerShadowNames(element);
@@ -767,6 +769,9 @@ const rule = {
         // enclosing describes: a teardown callback runs after every test of
         // its suite — including tests registered in suites nested inside it —
         // so each test's own transitions shape the state the teardown sees.
+        // The callbacks come from the RESOLVED execution contexts (a
+        // module-level helper invoked from a hook contributes its transitions
+        // to that hook), not the transitions' lexical enclosing callback.
         const collectedTests = [];
         // Every before-hook (beforeAll/beforeEach) whose callback touches the
         // timer state, keyed by the describe it is registered in (`null` =
@@ -775,26 +780,31 @@ const rule = {
         // restoring hook actively undoes an earlier hook's freeze.
         const hooksByDescribe = new Map();
         const fileLevelHooks = [];
-        for (const { enclosing } of [...freezeCalls, ...unfreezeCalls]) {
+        const hookCallbacks = new Map();
+        for (const callback of transitionsByCallback.keys()) {
+          const info = callbackInfoOf(callback);
+          if (!info) continue;
           if (
-            !enclosing ||
             !(
-              BEFORE_HOOKS.has(enclosing.callType) ||
-              enclosing.callType === "afterEach" ||
-              enclosing.callType === "afterAll"
+              BEFORE_HOOKS.has(info.callType) ||
+              info.callType === "afterEach" ||
+              info.callType === "afterAll"
             )
           ) {
             continue;
           }
-          const transitions = (transitionsByCallback.get(enclosing.fn) ?? []).filter(
+          hookCallbacks.set(callback, info);
+        }
+        for (const [callback, info] of hookCallbacks) {
+          const transitions = (transitionsByCallback.get(callback) ?? []).filter(
             (t) => t.immediate,
           );
           const hook = {
-            hookType: enclosing.callType,
-            callNode: enclosing.callNode,
+            hookType: info.callType,
+            callNode: info.callNode,
             netFrozen: transitions.length > 0 ? transitions.at(-1).frozen : null,
           };
-          const parentDescribe = findEnclosingDescribe(enclosing.callNode);
+          const parentDescribe = findEnclosingDescribe(info.callNode);
           if (parentDescribe) {
             const hooks = hooksByDescribe.get(parentDescribe) ?? [];
             hooks.push(hook);
@@ -810,51 +820,65 @@ const rule = {
         fileLevelHooks.sort((a, b) => a.callNode.range[0] - b.callNode.range[0]);
 
         /**
-         * Whether a transition executes before a read `node`. Source order is
-         * the base, but a transition inside an immediately-invoked function
-         * runs when the invocation's BODY runs — after its arguments. A read
-         * inside an argument of that same invocation therefore happens before
-         * the transition, not after it.
+         * Whether a transition executes before a read, by EXECUTION order —
+         * the transition's ordering key against the read's execution key.
+         * Source positions alone are wrong across invocation frames: an
+         * IIFE's argument (a freeze) runs before the body that follows it in
+         * the source, and a named helper's body runs after the invocation's
+         * arguments, which precede it in the source.
          */
-        const executesBefore = (transitionNode, readNode) => {
-          if (transitionNode.range[0] >= readNode.range[0]) {
-            return false;
+        const inSubtree = (ancestor, node) => {
+          let probe = node;
+          while (probe) {
+            if (probe === ancestor) {
+              return true;
+            }
+            probe = probe.parent;
           }
-          let current = readNode.parent;
-          let previous = readNode;
+          return false;
+        };
+        const readExecutionKey = (node) => {
+          // Invocation frames from the node upward: an IIFE's body runs
+          // after its arguments (marker 1 vs 0), and a named-helper
+          // invocation's arguments run before the helper's body (marker 0),
+          // exactly the frames the transition orders are built from.
+          const frames = [];
+          let current = node;
           while (current) {
-            if (
-              (current.type === "CallExpression" &&
-                (current.callee.type === "ArrowFunctionExpression" ||
-                  current.callee.type === "FunctionExpression")) ||
-              (current.type === "NewExpression" &&
-                (current.callee.type === "ArrowFunctionExpression" ||
-                  current.callee.type === "FunctionExpression"))
-            ) {
-              const body = current.callee.body;
-              // A block-bodied IIFE nests the transition below the body, so
-              // walk up from the transition itself.
-              let inner = transitionNode;
-              while (inner) {
-                if (inner === body) {
-                  if (previous !== current.callee) {
-                    // The read reached this invocation through an argument:
-                    // the body — and the transition — runs after it.
-                    return false;
-                  }
-                  // The read is inside the invocation body itself: source
-                  // order within the body decides, so keep scanning upward
-                  // for an outer invocation that might wrap the read in an
-                  // argument.
-                  break;
-                }
-                inner = inner.parent;
+            const parent = current.parent;
+            if (parent?.type === "CallExpression" || parent?.type === "NewExpression") {
+              const callee = parent.callee;
+              if (
+                callee.type === "ArrowFunctionExpression" ||
+                callee.type === "FunctionExpression"
+              ) {
+                frames.push({
+                  call: parent,
+                  marker: inSubtree(callee.body, node) ? 1 : 0,
+                });
+              } else if (
+                callee.type === "Identifier" &&
+                resolveHelper(callee.name) &&
+                !inSubtree(callee, current)
+              ) {
+                frames.push({ call: parent, marker: 0 });
               }
             }
-            previous = current;
-            current = current.parent;
+            current = parent;
           }
-          return true;
+          if (frames.length === 0) {
+            return [node.range[0]];
+          }
+          const key = [];
+          for (let index = frames.length - 1; index >= 0; index -= 1) {
+            key.push(frames[index].call.range[0], frames[index].marker);
+          }
+          key.push(node.range[0]);
+          return key;
+        };
+        const executesBefore = (transition, readNode) => {
+          const readEntry = { node: readNode, order: readExecutionKey(readNode) };
+          return compareExecution(transition, readEntry) < 0;
         };
 
         for (const { node, api } of timeDependentNodes) {
@@ -878,7 +902,7 @@ const rule = {
                 // freeze covers its own reads), and one that executed
                 // before the read.
                 (t.immediate || t.fn === readFunction) &&
-                executesBefore(t.effNode ?? t.node, node),
+                executesBefore(t, node),
             );
             return own.length > 0 ? own.at(-1).frozen : null;
           };
@@ -891,7 +915,7 @@ const rule = {
             // read too (outer describes collect before inner ones).
             const candidates = [...moduleTransitions, ...describeTransitions];
             const before = candidates
-              .filter((t) => executesBefore(t.effNode ?? t.node, node))
+              .filter((t) => executesBefore(t, node))
               .sort(compareExecution);
             if (before.length === 0 || !before.at(-1).frozen) {
               report();
@@ -1047,111 +1071,96 @@ const rule = {
                 );
                 return setupHooks;
               };
-              if (enclosing.callType === "afterAll") {
-                // An afterAll callback runs ONCE after the entire suite, so
-                // the state it observes is the ACCUMULATED state the suite's
-                // tests leave behind — not the state an independently
-                // replayed last test would produce (that discards an earlier
-                // test's restoration and re-applies a once-only beforeAll
-                // freeze). The replay runs the suite in execution order: a
-                // describe's beforeAll applies once before its first
-                // covered test, beforeEach hooks re-apply before every test,
-                // each test's immediate transitions follow, and the
-                // afterEach hooks (innermost first, file level last) plus
-                // the completing nested suites' afterAll hooks carry the
-                // state to the next test.
-                let state = collectionState;
-                const beforeAllDone = new Set();
-                const suiteTestTotals = new Map();
-                const suiteTestSeen = new Map();
-                for (const test of suiteTests) {
-                  for (const describeNode of test.describes) {
-                    suiteTestTotals.set(
-                      describeNode,
-                      (suiteTestTotals.get(describeNode) ?? 0) + 1,
-                    );
+              // Both teardown reads replay the suite cumulatively in
+              // execution order. An afterAll callback runs ONCE after the
+              // entire suite, so it observes the accumulated state the
+              // suite's tests leave behind; an afterEach callback runs after
+              // EVERY covered test, so it stays covered only while the state
+              // at each of its executions is frozen. An independently
+              // replayed per-test snapshot would discard an earlier test's
+              // restoration and re-apply a once-only beforeAll freeze. The
+              // replay: a describe's beforeAll applies once before its first
+              // covered test, beforeEach hooks re-apply before every test,
+              // each test's immediate transitions follow, and the afterEach
+              // hooks (innermost first, file level last) plus the completing
+              // nested suites' afterAll hooks carry the state to the next
+              // test.
+              const isAfterAll = enclosing.callType === "afterAll";
+              let state = collectionState;
+              let covered = true;
+              const beforeAllDone = new Set();
+              const suiteTestTotals = new Map();
+              const suiteTestSeen = new Map();
+              for (const test of suiteTests) {
+                for (const describeNode of test.describes) {
+                  suiteTestTotals.set(
+                    describeNode,
+                    (suiteTestTotals.get(describeNode) ?? 0) + 1,
+                  );
+                }
+              }
+              for (const test of suiteTests) {
+                for (const { hook } of collectSetupHooks(test)) {
+                  if (hook.netFrozen === null) continue;
+                  if (hook.hookType === "beforeAll") {
+                    // Each beforeAll CALLBACK runs once before its suite's
+                    // first covered test — not again before each later
+                    // test, and not skipped because a sibling beforeAll of
+                    // the same suite already ran.
+                    if (beforeAllDone.has(hook)) continue;
+                    beforeAllDone.add(hook);
+                  }
+                  state = hook.netFrozen;
+                }
+                for (const transition of transitionsByCallback.get(test.fn) ?? []) {
+                  // Lifecycle order, not source order: a teardown
+                  // registered above a test still runs after it, so every
+                  // immediate transition the test body executes shapes the
+                  // state the teardown callback sees.
+                  if (transition.immediate) {
+                    state = transition.frozen;
                   }
                 }
-                for (const test of suiteTests) {
-                  for (const { hook } of collectSetupHooks(test)) {
-                    if (hook.netFrozen === null) continue;
-                    if (hook.hookType === "beforeAll") {
-                      // Each beforeAll CALLBACK runs once before its suite's
-                      // first covered test — not again before each later
-                      // test, and not skipped because a sibling beforeAll of
-                      // the same suite already ran.
-                      if (beforeAllDone.has(hook)) continue;
-                      beforeAllDone.add(hook);
-                    }
-                    state = hook.netFrozen;
-                  }
-                  for (const transition of transitionsByCallback.get(test.fn) ?? []) {
-                    // Lifecycle order, not source order: a teardown
-                    // registered above a test still runs after it, so every
-                    // immediate transition the test body executes shapes the
-                    // state the teardown callback sees.
-                    if (transition.immediate) {
-                      state = transition.frozen;
-                    }
-                  }
-                  // Every afterEach hook follows each test: nested suites'
-                  // hooks innermost first, ancestor describes, then file
-                  // level.
-                  for (let depth = 0; depth < test.describes.length; depth += 1) {
-                    state = nestedHooks(state, test, depth, "afterEach");
-                  }
-                  for (const hook of fileLevelHooks) {
-                    if (hook.hookType === "afterEach") {
-                      state = applyTeardown(state, hook);
-                    }
-                  }
-                  // Nested suites whose last covered test just finished run
-                  // their afterAll callbacks before the next test starts.
-                  for (let depth = 0; depth < readDepthOf(test); depth += 1) {
-                    const describeNode = test.describes[depth];
-                    const seen = (suiteTestSeen.get(describeNode) ?? 0) + 1;
-                    suiteTestSeen.set(describeNode, seen);
-                    if (seen === suiteTestTotals.get(describeNode)) {
-                      state = nestedHooks(state, test, depth, "afterAll");
-                    }
+                // The state the READ observes at this execution: the nested
+                // suites' afterEach hooks and the read's own suite's earlier
+                // registrations have run; ancestor describes' and file-level
+                // afterEach hooks run after it.
+                let readState = state;
+                for (let depth = 0; depth < readDepthOf(test); depth += 1) {
+                  readState = nestedHooks(readState, test, depth, "afterEach");
+                }
+                readState = ownEarlierHooks(readState, "afterEach");
+                if (!readState) {
+                  covered = false;
+                }
+                // Carry the state to the next test: EVERY afterEach hook
+                // runs after each test — a restoration in one execution
+                // leaves the next test's teardown on the real clock.
+                for (let depth = 0; depth < test.describes.length; depth += 1) {
+                  state = nestedHooks(state, test, depth, "afterEach");
+                }
+                for (const hook of fileLevelHooks) {
+                  if (hook.hookType === "afterEach") {
+                    state = applyTeardown(state, hook);
                   }
                 }
+                // Nested suites whose last covered test just finished run
+                // their afterAll callbacks before the next test starts.
+                for (let depth = 0; depth < readDepthOf(test); depth += 1) {
+                  const describeNode = test.describes[depth];
+                  const seen = (suiteTestSeen.get(describeNode) ?? 0) + 1;
+                  suiteTestSeen.set(describeNode, seen);
+                  if (seen === suiteTestTotals.get(describeNode)) {
+                    state = nestedHooks(state, test, depth, "afterAll");
+                  }
+                }
+              }
+              if (isAfterAll) {
                 // The read's own suite's earlier afterAll registrations run
                 // after every test, right before the read.
                 frozen = ownEarlierHooks(state, "afterAll");
               } else {
-                // An afterEach callback runs after EVERY covered test, so it
-                // stays covered only while the replayed state is frozen for
-                // every one of them; any test ending unfrozen uncovers it.
-                frozen = true;
-                for (const test of suiteTests) {
-                  // Each replay starts from the timer state module evaluation
-                  // leaves behind (the collection-time state computed above):
-                  // when no freeze has executed anywhere the state is
-                  // unfrozen, not frozen.
-                  let state = collectionState;
-                  for (const { hook } of collectSetupHooks(test)) {
-                    if (hook.netFrozen !== null) {
-                      state = hook.netFrozen;
-                    }
-                  }
-                  for (const transition of transitionsByCallback.get(test.fn) ?? []) {
-                    if (transition.immediate) {
-                      state = transition.frozen;
-                    }
-                  }
-                  // The afterEach hooks that run before the read: the nested
-                  // suites' afterEach hooks (innermost first) and the own
-                  // suite's earlier registrations.
-                  for (let depth = 0; depth < readDepthOf(test); depth += 1) {
-                    state = nestedHooks(state, test, depth, "afterEach");
-                  }
-                  state = ownEarlierHooks(state, "afterEach");
-                  if (!state) {
-                    frozen = false;
-                    break;
-                  }
-                }
+                frozen = covered;
               }
             }
           } else {

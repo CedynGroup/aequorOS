@@ -1005,3 +1005,101 @@ test("a nested function's parameter is not the helper's local", async () => {
   `);
   assertFlagged(result, "weakAwaits");
 });
+
+// A local helper assigned to a captured binding carries its own kind: the
+// replay must classify the initializer's locals, not treat the reference
+// as clean because it does not exist in the defining scopes.
+test("an invoked helper's local helper propagates its kind", async () => {
+  const result = await runOxlint(["weakAwaits"], `
+    let sleep = () => fetch('/data');
+    function init() {
+      const timer = () => new Promise((resolve) => setTimeout(resolve, 10));
+      sleep = timer;
+    }
+    init();
+    it('t', async () => {
+      await sleep();
+    });
+  `);
+  assertFlagged(result, "weakAwaits");
+});
+
+// A block-local declaration expires with its block: the same-named
+// assignment after the block updates the captured binding.
+test("a block-local shadow does not exclude assignments outside its block", async () => {
+  const result = await runOxlint(["weakAwaits"], `
+    let sleep = () => fetch('/data');
+    function init() {
+      {
+        let sleep;
+      }
+      sleep = () => new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    init();
+    it('t', async () => {
+      await sleep();
+    });
+  `);
+  assertFlagged(result, "weakAwaits");
+});
+
+// A reset invoked after an await in the same hook has not happened when
+// that await runs: the write logs at the invocation's position.
+test("a helper invoked after an await in the same hook does not reach it", async () => {
+  const result = await runOxlint(["weakAwaits"], `
+    let sleep = () => new Promise((resolve) => setTimeout(resolve, 10));
+    beforeEach(async () => {
+      function reset() {
+        sleep = () => fetch('/data');
+      }
+      await sleep();
+      reset();
+    });
+    it('t', () => {});
+  `);
+  assertFlagged(result, "weakAwaits");
+});
+
+// A reassignment replaces the callable a binding holds: a later invocation
+// replays the NEW value's body, so the obsolete write is not replayed.
+test("a reassigned callable no longer replays its old body", async () => {
+  const result = await runOxlint(["weakAwaits"], `
+    let wait;
+    function init() {
+      wait = () => new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    init = () => {};
+    init();
+    it('t', async () => {
+      await wait();
+    });
+  `);
+  assertClean(result, "weakAwaits");
+});
+
+// A long acyclic forwarding chain must classify in linear time: each
+// helper forwards twice, so an unbounded replay would expand
+// exponentially and hang the lint run (28 levels take minutes unfixed,
+// well under a second with the write-summary cache).
+test("a forwarding-helper chain classifies without exponential expansion", async () => {
+  let chain = "function f0() {}\n";
+  for (let index = 1; index <= 28; index += 1) {
+    chain += `function f${index}() { f${index - 1}(); f${index - 1}(); }\n`;
+  }
+  chain += `it('t', async () => { await f28(); });\n`;
+  const result = await runOxlint(["weakAwaits"], chain);
+  assertClean(result, "weakAwaits");
+});
+
+// A mutation at the end of the chain must still propagate: the summary
+// cache only skips helpers proven not to write captured state.
+test("a writing helper at the end of a forwarding chain still propagates", async () => {
+  let chain = "let sleep;\n";
+  chain += "function f0() { sleep = () => new Promise((resolve) => setTimeout(resolve, 10)); }\n";
+  for (let index = 1; index <= 12; index += 1) {
+    chain += `function f${index}() { f${index - 1}(); f${index - 1}(); }\n`;
+  }
+  chain += `f12();\nit('t', async () => { await sleep(); });\n`;
+  const result = await runOxlint(["weakAwaits"], chain);
+  assertFlagged(result, "weakAwaits");
+});

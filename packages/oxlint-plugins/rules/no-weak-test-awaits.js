@@ -626,11 +626,16 @@ const rule = {
     }
 
     /** The registered declaration for `name`, innermost scope first,
-     * bounded at `limit` (the replaying helper's defining scope). */
+     * bounded at `limit` (the replaying helper's defining scope). A scope
+     * that binds the name without a callable entry shadows it: lookup stops
+     * there instead of passing through to an outer helper. */
     function declaredFunctionEntry(name, limit = scopes.length - 1) {
       for (let index = limit; index >= 0; index -= 1) {
         if (scopes[index].declarations?.has(name)) {
           return scopes[index].declarations.get(name);
+        }
+        if (scopes[index].bindings.has(name)) {
+          return null;
         }
       }
       return null;
@@ -650,33 +655,73 @@ const rule = {
       return scopes.length - 1;
     }
 
-    /** The names `fn` binds for itself: its parameters and every binding its
-     * body introduces outside nested functions. A write to one of them is
-     * the helper's own local state, never a captured outer binding. */
-    function localNamesOf(fn) {
-      const locals = new Set();
-      const collectIdentifier = (pattern) => {
+    /**
+     * Whether invoking `fn` can reach a captured binding at all, cached per
+     * helper: a helper that only touches its own locals and forwards to
+     * non-writing helpers is skipped by the replay entirely — without the
+     * cache, an acyclic forwarding chain invoked at every level expands
+     * exponentially. Cycles contribute nothing new (the guard assumes a
+     * computing frame is clean; the finished pass overwrites it).
+     */
+    const replaySummaries = new Map();
+    function helperWritesCaptures(fn) {
+      if (replaySummaries.has(fn)) {
+        return replaySummaries.get(fn);
+      }
+      replaySummaries.set(fn, false);
+      // Conservative shadow set: only bindings that shadow for the WHOLE
+      // body (parameters and top-level declarations) exclude a write. A
+      // block-local might expire before a same-named assignment, which the
+      // scoped replay walk decides precisely — the summary must not skip it.
+      const shadows = new Set();
+      const collectNames = (pattern) => {
         if (!pattern) return;
         if (pattern.type === "Identifier") {
-          locals.add(pattern.name);
-        } else if (pattern.type === "AssignmentPattern" || pattern.type === "RestElement") {
-          collectIdentifier(pattern.argument);
+          shadows.add(pattern.name);
+        } else if (pattern.type === "AssignmentPattern") {
+          collectNames(pattern.left);
+        } else if (pattern.type === "RestElement") {
+          collectNames(pattern.argument);
         } else if (pattern.type === "ArrayPattern") {
-          for (const element of pattern.elements ?? []) collectIdentifier(element);
+          for (const element of pattern.elements ?? []) collectNames(element);
         } else if (pattern.type === "ObjectPattern") {
           for (const property of pattern.properties ?? []) {
-            collectIdentifier(property.type === "RestElement" ? property.argument : property.value);
+            collectNames(property.type === "RestElement" ? property.argument : property.value);
           }
         }
       };
+      for (const parameter of fn.params ?? []) {
+        collectNames(parameter);
+      }
+      for (const statement of fn.body?.type === "BlockStatement" ? fn.body.body : []) {
+        if (statement.type === "VariableDeclaration") {
+          for (const declarator of statement.declarations) {
+            collectNames(declarator.id);
+          }
+        } else if (statement.type === "FunctionDeclaration" && statement.id) {
+          shadows.add(statement.id.name);
+        }
+      }
+      let result = false;
       const walk = (node) => {
-        if (!node || typeof node !== "object" || typeof node.type !== "string") {
+        if (result || !node || typeof node !== "object" || typeof node.type !== "string") {
           return;
         }
-        if (node.type === "VariableDeclarator") {
-          collectIdentifier(node.id);
-        } else if (node.type === "FunctionDeclaration") {
-          collectIdentifier(node.id);
+        if (
+          node.type === "AssignmentExpression" &&
+          node.operator === "=" &&
+          node.left.type === "Identifier" &&
+          !shadows.has(node.left.name)
+        ) {
+          result = true;
+          return;
+        }
+        if (node.type === "CallExpression" && node.callee.type === "Identifier") {
+          const entry = declaredFunctionEntry(node.callee.name);
+          if (entry?.fn && helperWritesCaptures(entry.fn)) {
+            result = true;
+          }
+          return;
         }
         for (const [key, value] of Object.entries(node)) {
           if (key === "parent") {
@@ -684,38 +729,28 @@ const rule = {
           }
           if (Array.isArray(value)) {
             for (const child of value) {
-              if (child && typeof child === "object" && typeof child.type === "string") {
-                if (isFunctionNode(child)) {
-                  // A nested function's bindings end at its own boundary:
-                  // its parameters are ITS locals, not this helper's, and
-                  // its body is only ever replayed through its own
-                  // invocation, which collects its locals there. A nested
-                  // function declaration's name, though, binds in this
-                  // helper's scope.
-                  if (child.type === "FunctionDeclaration") {
-                    collectIdentifier(child.id);
-                  }
-                  continue;
-                }
+              if (
+                child &&
+                typeof child === "object" &&
+                typeof child.type === "string" &&
+                !isFunctionNode(child)
+              ) {
                 walk(child);
               }
             }
-          } else if (value && typeof value === "object" && typeof value.type === "string") {
-            if (isFunctionNode(value)) {
-              if (value.type === "FunctionDeclaration") {
-                collectIdentifier(value.id);
-              }
-              continue;
-            }
+          } else if (
+            value &&
+            typeof value === "object" &&
+            typeof value.type === "string" &&
+            !isFunctionNode(value)
+          ) {
             walk(value);
           }
         }
       };
-      for (const parameter of fn.params ?? []) {
-        collectIdentifier(parameter);
-      }
       walk(fn.body);
-      return locals;
+      replaySummaries.set(fn, result);
+      return result;
     }
 
     /**
@@ -726,10 +761,16 @@ const rule = {
      * body's assignments at the call site, recursing into helper invocations
      * it makes and guarding against recursion cycles. Genuinely uncalled
      * functions stay isolated: without a call their writes are never
-     * replayed.
+     * replayed. `executionSite` is the invocation's position: a write the
+     * helper performs logs at where the CALL runs, not where the helper's
+     * source sits (a reset invoked after an await in the same hook has not
+     * happened when that await runs).
      */
-    function replayInvocationWrites(fn, active) {
+    function replayInvocationWrites(fn, active, executionSite) {
       if (active.has(fn)) {
+        return;
+      }
+      if (!helperWritesCaptures(fn)) {
         return;
       }
       active.add(fn);
@@ -738,9 +779,94 @@ const rule = {
       // shadowing local must never capture them, while the helper's captured
       // bindings update exactly where its body sees them.
       const limit = declaredSlotOf(fn);
-      const locals = localNamesOf(fn);
+      // Lexically scoped local bindings with their classified kinds: a
+      // write to a name bound in an open scope is the helper's own local
+      // state (a block-local expires with its block), and a local referenced
+      // on a right-hand side carries that local's kind instead of resolving
+      // against the defining scopes, where it does not exist.
+      const localScopes = [];
+      const resolvingLocals = new Set();
+      const lookupLocal = (name) => {
+        for (let index = localScopes.length - 1; index >= 0; index -= 1) {
+          if (localScopes[index].has(name)) {
+            return index;
+          }
+        }
+        return -1;
+      };
+      const classifyLocal = (def) => {
+        if (def.kind !== undefined) {
+          return def.kind;
+        }
+        if (resolvingLocals.has(def)) {
+          // A recursive local chain: treat as unresolved until the pass ends.
+          return WEAK_UNRESOLVED;
+        }
+        resolvingLocals.add(def);
+        try {
+          if (def.fn) {
+            def.kind = functionContainsWeakTimerPromise(def.fn) ? WEAK_HELPER : false;
+          } else if (!def.init) {
+            def.kind = false;
+          } else if (def.init.type === "Identifier") {
+            const index = lookupLocal(def.init.name);
+            def.kind =
+              index >= 0 ? classifyLocal(localScopes[index].get(def.init.name)) : boundKind(def.init, limit);
+          } else {
+            def.kind = boundKind(def.init, limit);
+          }
+        } finally {
+          resolvingLocals.delete(def);
+        }
+        return def.kind;
+      };
+      const pushLocalScope = (statements) => {
+        const map = new Map();
+        for (const statement of statements ?? []) {
+          if (statement.type === "VariableDeclaration") {
+            for (const declarator of statement.declarations) {
+              if (declarator.id.type === "Identifier") {
+                map.set(declarator.id.name, { init: declarator.init, kind: undefined });
+              }
+            }
+          } else if (statement.type === "FunctionDeclaration" && statement.id) {
+            map.set(statement.id.name, { fn: statement, kind: undefined });
+          }
+        }
+        localScopes.push(map);
+      };
+      pushLocalScope(fn.body?.type === "BlockStatement" ? fn.body.body : []);
+      const params = new Map();
+      const declarePattern = (pattern) => {
+        if (!pattern) return;
+        if (pattern.type === "Identifier") {
+          params.set(pattern.name, { init: null, kind: false });
+        } else if (pattern.type === "AssignmentPattern") {
+          declarePattern(pattern.left);
+        } else if (pattern.type === "RestElement") {
+          declarePattern(pattern.argument);
+        } else if (pattern.type === "ArrayPattern") {
+          for (const element of pattern.elements ?? []) declarePattern(element);
+        } else if (pattern.type === "ObjectPattern") {
+          for (const property of pattern.properties ?? []) {
+            declarePattern(property.type === "RestElement" ? property.argument : property.value);
+          }
+        }
+      };
+      for (const parameter of fn.params ?? []) {
+        declarePattern(parameter);
+      }
+      localScopes.push(params);
       const walk = (node) => {
         if (!node || typeof node !== "object" || typeof node.type !== "string") {
+          return;
+        }
+        if (node.type === "BlockStatement") {
+          pushLocalScope(node.body);
+          for (const statement of node.body) {
+            walk(statement);
+          }
+          localScopes.pop();
           return;
         }
         if (
@@ -748,12 +874,20 @@ const rule = {
           node.operator === "=" &&
           node.left.type === "Identifier"
         ) {
-          // A write to the helper's own local variable stays inside the
+          // A write to a name bound in an open local scope stays inside the
           // helper: replaying it onto the caller's scopes would clobber a
           // captured binding the local merely shadows.
-          if (!locals.has(node.left.name)) {
-            const kind = boundKind(node.right, limit);
-            const { target, logged } = assignIdentifier(node.left, kind, limit);
+          if (lookupLocal(node.left.name) < 0) {
+            let kind;
+            if (node.right.type === "Identifier") {
+              const localKind = lookupLocal(node.right.name) >= 0
+                ? classifyLocal(localScopes[lookupLocal(node.right.name)].get(node.right.name))
+                : undefined;
+              kind = localKind !== undefined ? localKind : boundKind(node.right, limit);
+            } else {
+              kind = boundKind(node.right, limit);
+            }
+            const { target, logged } = assignIdentifier(node.left, kind, limit, executionSite);
             if (kind === WEAK_UNRESOLVED && node.right.type === "Identifier") {
               const aliasTarget = unresolvedAliasTarget(node.right.name, limit);
               if (aliasTarget && target) {
@@ -771,6 +905,21 @@ const rule = {
                 }
                 target.declarations.set(node.left.name, aliasTarget);
               }
+            } else if (target) {
+              // The reassignment replaces any callable registry entry: a
+              // later invocation must replay the NEW value's body, and a
+              // non-callable value leaves nothing invocable behind.
+              if (isFunctionNode(node.right)) {
+                if (!target.declarations) {
+                  target.declarations = new Map();
+                }
+                target.declarations.set(node.left.name, {
+                  fn: node.right,
+                  slot: scopes.indexOf(target),
+                });
+              } else {
+                target.declarations?.delete(node.left.name);
+              }
             }
           }
           return;
@@ -778,7 +927,7 @@ const rule = {
         if (node.type === "CallExpression" && node.callee.type === "Identifier") {
           const entry = declaredFunctionEntry(node.callee.name, limit);
           if (entry?.fn) {
-            replayInvocationWrites(entry.fn, active);
+            replayInvocationWrites(entry.fn, active, executionSite);
           }
           return;
         }
@@ -808,7 +957,13 @@ const rule = {
         }
       };
       try {
-        walk(fn.body);
+        const body = fn.body;
+        for (const statement of body?.type === "BlockStatement" ? body.body : []) {
+          walk(statement);
+        }
+        if (body && body.type !== "BlockStatement") {
+          walk(body);
+        }
       } finally {
         active.delete(fn);
       }
@@ -931,7 +1086,12 @@ const rule = {
       return boundary >= 0 ? scopes[boundary] : null;
     }
 
-    function assignIdentifier(node, kind, limit = scopes.length - 1) {
+    function assignIdentifier(
+      node,
+      kind,
+      limit = scopes.length - 1,
+      site = node.range?.[0] ?? 0,
+    ) {
       if (node?.type !== "Identifier") {
         return null;
       }
@@ -960,11 +1120,11 @@ const rule = {
           describeChain: hookScope.describeChain ?? [],
           phase: hookScope.hookName ?? "beforeEach",
           order: hookScope.hookOrder ?? 0,
-          // Where the assignment sits in the hook's body: two writes share
-          // the hook's registration order, so only this position tells
-          // whether the write had happened before a given await in the same
-          // hook.
-          site: node.range?.[0] ?? 0,
+          // Where the write EXECUTES: the assignment's own position for a
+          // direct write, or the invocation's position when the replay runs
+          // a helper's body (a reset invoked after an await in the same hook
+          // has not happened when that await runs).
+          site,
           // The declaration-registry entry this write installs (an aliased
           // unresolved helper), recorded by the assignment handler so the
           // replay can restore it together with the binding value.
@@ -1349,11 +1509,12 @@ const rule = {
         // An explicitly invoked named helper runs its body here: replay its
         // captured assignments against the call site's scopes, so a helper
         // that initializes shared bindings before the tests is not treated
-        // as uncalled.
+        // as uncalled. Writes the helper performs log at the invocation's
+        // position, not the helper body's.
         if (node.callee.type === "Identifier") {
           const entry = declaredFunctionEntry(node.callee.name);
           if (entry?.fn) {
-            replayInvocationWrites(entry.fn, new Set());
+            replayInvocationWrites(entry.fn, new Set(), node.range?.[0] ?? 0);
           }
         }
       },
@@ -1488,6 +1649,21 @@ const rule = {
                   target.declarations = new Map();
                 }
                 target.declarations.set(node.left.name, aliasTarget);
+              }
+            } else if (target) {
+              // A reassignment replaces the callable the binding holds: a
+              // later invocation must replay the NEW value's body, and a
+              // non-callable value leaves nothing invocable behind.
+              if (isFunctionNode(node.right)) {
+                if (!target.declarations) {
+                  target.declarations = new Map();
+                }
+                target.declarations.set(node.left.name, {
+                  fn: node.right,
+                  slot: scopes.indexOf(target),
+                });
+              } else {
+                target.declarations?.delete(node.left.name);
               }
             }
           }

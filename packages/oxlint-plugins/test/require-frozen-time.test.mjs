@@ -1162,3 +1162,82 @@ test("a block-local shadow does not outlive its block", async () => {
   `);
   assertClean(result, "frozenTime");
 });
+
+// A defaulted parameter shadows the outer helper like a plain one: the
+// lookup must read AssignmentPattern's left binding.
+test("a defaulted parameter shadowing a freezing helper stops resolution", async () => {
+  const result = await runOxlint(["frozenTime"], `
+    function freeze() {
+      vi.useFakeTimers();
+    }
+    function run(freeze = () => {}) {
+      freeze();
+    }
+    it('t', () => {
+      run();
+      Date.now();
+    });
+  `);
+  assertFlagged(result, "frozenTime");
+});
+
+// A module-level helper invoked from a hook contributes its transitions to
+// that hook: the freeze covers the tests the hook precedes.
+test("a hook invoking a module-level freezing helper covers its tests", async () => {
+  const result = await runOxlint(["frozenTime"], `
+    function freeze() {
+      vi.useFakeTimers();
+    }
+    beforeEach(() => {
+      freeze();
+    });
+    it('t', () => {
+      Date.now();
+    });
+  `);
+  assertClean(result, "frozenTime");
+});
+
+// An IIFE's argument runs before its body: a freeze in the argument
+// protects the body's reads even though the source order says otherwise.
+test("an IIFE argument freeze covers the body's reads", async () => {
+  const result = await runOxlint(["frozenTime"], `
+    it('t', () => {
+      (() => {
+        Date.now();
+      })(vi.useFakeTimers());
+    });
+  `);
+  assertClean(result, "frozenTime");
+});
+
+// A named helper's body runs after the invocation's arguments: a read in
+// the argument happens before the freeze and stays on the wall clock.
+test("a read in a helper invocation's argument precedes the freeze", async () => {
+  const result = await runOxlint(["frozenTime"], `
+    function freeze() {
+      vi.useFakeTimers();
+    }
+    it('t', () => {
+      freeze(Date.now());
+    });
+  `);
+  assertFlagged(result, "frozenTime");
+});
+
+// afterEach executions carry the timer state forward: the first teardown's
+// restoration leaves the second teardown on the real clock.
+test("an afterEach read sees the state earlier executions left behind", async () => {
+  const result = await runOxlint(["frozenTime"], `
+    beforeAll(() => {
+      vi.useFakeTimers();
+    });
+    afterEach(() => {
+      Date.now();
+      vi.useRealTimers();
+    });
+    it('a', () => {});
+    it('b', () => {});
+  `);
+  assertFlagged(result, "frozenTime");
+});
