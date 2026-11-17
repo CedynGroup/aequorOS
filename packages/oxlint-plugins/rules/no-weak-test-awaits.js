@@ -598,9 +598,10 @@ const rule = {
     // does not cover can be re-evaluated without it.
     const hookWrites = [];
 
-    /** Record a declaration in the registry of its binding's scope. */
-    function registerFunctionDeclaration(declaration) {
-      if (!declaration.id) {
+    /** Record a callable declaration in the registry of the current scope,
+     * so an explicit invocation of its name resolves to its body. */
+    function registerCallable(name, fn) {
+      if (!name) {
         // An anonymous declaration (`export default function () {}`) cannot
         // be referenced by name; there is nothing to register.
         return;
@@ -613,10 +614,15 @@ const rule = {
       // registered in a deeper scope must still be classified against the
       // scope its function was declared in, or a shadowing dependency in
       // the alias's scope would hide the real one.
-      scope.declarations.set(declaration.id.name, {
-        fn: declaration,
+      scope.declarations.set(name, {
+        fn,
         slot: scopes.length - 1,
       });
+    }
+
+    /** Record a function declaration under its own name. */
+    function registerFunctionDeclaration(declaration) {
+      registerCallable(declaration.id?.name, declaration);
     }
 
     /** The registered declaration for `name`, innermost scope first. */
@@ -627,6 +633,80 @@ const rule = {
         }
       }
       return null;
+    }
+
+    /** The names `fn` binds for itself: its parameters and every binding its
+     * body introduces outside nested functions. A write to one of them is
+     * the helper's own local state, never a captured outer binding. */
+    function localNamesOf(fn) {
+      const locals = new Set();
+      const collectIdentifier = (pattern) => {
+        if (!pattern) return;
+        if (pattern.type === "Identifier") {
+          locals.add(pattern.name);
+        } else if (pattern.type === "AssignmentPattern" || pattern.type === "RestElement") {
+          collectIdentifier(pattern.argument);
+        } else if (pattern.type === "ArrayPattern") {
+          for (const element of pattern.elements ?? []) collectIdentifier(element);
+        } else if (pattern.type === "ObjectPattern") {
+          for (const property of pattern.properties ?? []) {
+            collectIdentifier(property.type === "RestElement" ? property.argument : property.value);
+          }
+        }
+      };
+      const walk = (node) => {
+        if (!node || typeof node !== "object" || typeof node.type !== "string") {
+          return;
+        }
+        if (node.type === "VariableDeclarator") {
+          collectIdentifier(node.id);
+        } else if (node.type === "FunctionDeclaration") {
+          collectIdentifier(node.id);
+        }
+        for (const [key, value] of Object.entries(node)) {
+          if (key === "parent") {
+            continue;
+          }
+          if (Array.isArray(value)) {
+            for (const child of value) {
+              if (child && typeof child === "object" && typeof child.type === "string") {
+                if (isFunctionNode(child)) {
+                  // A nested function's bindings end at its own boundary;
+                  // its parameters are its locals, not this helper's writes'
+                  // targets — its body is only ever replayed through its own
+                  // invocation, which collects its locals there.
+                  if (child.type === "FunctionDeclaration") {
+                    collectIdentifier(child.id);
+                  } else {
+                    for (const parameter of child.params ?? []) {
+                      collectIdentifier(parameter);
+                    }
+                  }
+                  continue;
+                }
+                walk(child);
+              }
+            }
+          } else if (value && typeof value === "object" && typeof value.type === "string") {
+            if (isFunctionNode(value)) {
+              if (value.type === "FunctionDeclaration") {
+                collectIdentifier(value.id);
+              } else {
+                for (const parameter of value.params ?? []) {
+                  collectIdentifier(parameter);
+                }
+              }
+              continue;
+            }
+            walk(value);
+          }
+        }
+      };
+      for (const parameter of fn.params ?? []) {
+        collectIdentifier(parameter);
+      }
+      walk(fn.body);
+      return locals;
     }
 
     /**
@@ -644,6 +724,7 @@ const rule = {
         return;
       }
       active.add(fn);
+      const locals = localNamesOf(fn);
       const walk = (node) => {
         if (!node || typeof node !== "object" || typeof node.type !== "string") {
           return;
@@ -653,24 +734,29 @@ const rule = {
           node.operator === "=" &&
           node.left.type === "Identifier"
         ) {
-          const kind = boundKind(node.right);
-          const { target, logged } = assignIdentifier(node.left, kind);
-          if (kind === WEAK_UNRESOLVED && node.right.type === "Identifier") {
-            const aliasTarget = unresolvedAliasTarget(node.right.name);
-            if (aliasTarget && target) {
-              if (logged) {
-                logged.declaration = {
-                  scope: target,
-                  name: node.left.name,
-                  entry: aliasTarget,
-                  had: target.declarations?.has(node.left.name) ?? false,
-                  previous: target.declarations?.get(node.left.name),
-                };
+          // A write to the helper's own local variable stays inside the
+          // helper: replaying it onto the caller's scopes would clobber a
+          // captured binding the local merely shadows.
+          if (!locals.has(node.left.name)) {
+            const kind = boundKind(node.right);
+            const { target, logged } = assignIdentifier(node.left, kind);
+            if (kind === WEAK_UNRESOLVED && node.right.type === "Identifier") {
+              const aliasTarget = unresolvedAliasTarget(node.right.name);
+              if (aliasTarget && target) {
+                if (logged) {
+                  logged.declaration = {
+                    scope: target,
+                    name: node.left.name,
+                    entry: aliasTarget,
+                    had: target.declarations?.has(node.left.name) ?? false,
+                    previous: target.declarations?.get(node.left.name),
+                  };
+                }
+                if (!target.declarations) {
+                  target.declarations = new Map();
+                }
+                target.declarations.set(node.left.name, aliasTarget);
               }
-              if (!target.declarations) {
-                target.declarations = new Map();
-              }
-              target.declarations.set(node.left.name, aliasTarget);
             }
           }
           return;
@@ -857,6 +943,11 @@ const rule = {
           describeChain: hookScope.describeChain ?? [],
           phase: hookScope.hookName ?? "beforeEach",
           order: hookScope.hookOrder ?? 0,
+          // Where the assignment sits in the hook's body: two writes share
+          // the hook's registration order, so only this position tells
+          // whether the write had happened before a given await in the same
+          // hook.
+          site: node.range?.[0] ?? 0,
           // The declaration-registry entry this write installs (an aliased
           // unresolved helper), recorded by the assignment handler so the
           // replay can restore it together with the binding value.
@@ -995,7 +1086,13 @@ const rule = {
           if (entry.describeChain.length !== pending.hookKey.depth) {
             return entry.describeChain.length < pending.hookKey.depth;
           }
-          return entry.order <= pending.hookKey.order;
+          if (entry.order !== pending.hookKey.order) {
+            return entry.order < pending.hookKey.order;
+          }
+          // Same hook: only the positions inside the callback tell whether
+          // the write had happened before the await — a reassignment after
+          // the await must not reach its verdict.
+          return entry.site < pending.hookKey.awaitStart;
         };
         for (const entry of orderedWrites) {
           const applies =
@@ -1314,6 +1411,16 @@ const rule = {
       },
       "CatchClause:exit": popScope,
       VariableDeclarator(node) {
+        // A variable-declared callable (`const init = () => {...}`) is
+        // invocable by name exactly like a function declaration: register
+        // it so an explicit call replays its captured writes.
+        if (
+          node.id.type === "Identifier" &&
+          (node.init?.type === "FunctionExpression" ||
+            node.init?.type === "ArrowFunctionExpression")
+        ) {
+          registerCallable(node.id.name, node.init);
+        }
         const kind = boundKind(node.init);
         if (
           kind === WEAK_UNRESOLVED &&
@@ -1411,6 +1518,7 @@ const rule = {
                 phase: hookPhase(pendingHookScope.hookName ?? "beforeEach"),
                 depth: (pendingHookScope.describeChain ?? []).length,
                 order: pendingHookScope.hookOrder ?? 0,
+                awaitStart: node.range?.[0] ?? 0,
               }
             : null,
         });

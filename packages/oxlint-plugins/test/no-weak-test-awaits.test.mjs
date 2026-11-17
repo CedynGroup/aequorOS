@@ -923,3 +923,51 @@ test("a same-callback reassignment after the await keeps its verdict", async () 
   `);
   assertClean(result, "weakAwaits");
 });
+
+// A write to the helper's own local variable stays inside the helper: the
+// local merely shadows the captured binding, so replaying the invocation
+// must not clobber the caller's clean helper.
+test("an invoked helper's local shadow does not clobber the captured binding", async () => {
+  const result = await runOxlint(["weakAwaits"], `
+    let sleep = () => fetch('/data');
+    function init() {
+      let sleep;
+      sleep = () => new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    init();
+    it('t', async () => {
+      await sleep();
+    });
+  `);
+  assertClean(result, "weakAwaits");
+});
+
+// A reassignment in the same hook that executes after the await must not
+// reach its verdict: only the writes before the await have happened.
+test("a same-hook reassignment after the await does not reach it", async () => {
+  const result = await runOxlint(["weakAwaits"], `
+    let sleep = () => new Promise((resolve) => setTimeout(resolve, 10));
+    beforeEach(async () => {
+      await sleep();
+      sleep = () => fetch('/data');
+    });
+    it('t', () => {});
+  `);
+  assertFlagged(result, "weakAwaits");
+});
+
+// A variable-declared callable is invocable by name exactly like a function
+// declaration: invoking it replays its captured writes.
+test("an invoked arrow initializer propagates its captured writes", async () => {
+  const result = await runOxlint(["weakAwaits"], `
+    let sleep;
+    const init = () => {
+      sleep = () => new Promise((resolve) => setTimeout(resolve, 10));
+    };
+    init();
+    it('t', async () => {
+      await sleep();
+    });
+  `);
+  assertFlagged(result, "weakAwaits");
+});

@@ -1089,3 +1089,39 @@ test("an afterAll read observes the suite's accumulated state", async () => {
   `);
   assertFlagged(result, "frozenTime");
 });
+
+// A named helper invoked explicitly runs its body where the call sits, so
+// its freeze covers the reads after the invocation — a helper that is
+// merely declared still executes nothing.
+test("an explicitly invoked helper's freeze covers the following reads", async () => {
+  const result = await runOxlint(["frozenTime"], `
+    it('t', () => {
+      function freeze() {
+        vi.useFakeTimers();
+      }
+      freeze();
+      Date.now();
+    });
+  `);
+  assertClean(result, "frozenTime");
+});
+
+// Each beforeAll callback runs once before the suite's first test: a
+// sibling beforeAll of the same suite still runs after the first one.
+test("multiple beforeAll callbacks apply in registration order", async () => {
+  const result = await runOxlint(["frozenTime"], `
+    describe('s', () => {
+      beforeAll(() => {
+        vi.useRealTimers();
+      });
+      beforeAll(() => {
+        vi.useFakeTimers();
+      });
+      it('t', () => {});
+      afterAll(() => {
+        Date.now();
+      });
+    });
+  `);
+  assertClean(result, "frozenTime");
+});

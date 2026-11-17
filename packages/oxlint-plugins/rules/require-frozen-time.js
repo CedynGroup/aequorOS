@@ -319,26 +319,6 @@ function isClockFreezeCall(callee) {
   );
 }
 
-/**
- * Whether the transition at `node` executes when `top` — the enclosing test
- * or hook callback, or null for module evaluation — runs. Every function
- * boundary between the transition and `top` must be immediately invoked
- * where it sits (an IIFE); a closure the callback merely defines executes
- * only if something later calls it, so its transitions say nothing about
- * the callback's own timer state.
- */
-function executesWhenEnclosingRuns(node, top) {
-  let current = nearestFunction(node);
-  while (current && current !== top) {
-    const parent = current.parent;
-    if (!(parent?.type === "CallExpression" && parent.callee === current)) {
-      return false;
-    }
-    current = nearestFunction(parent);
-  }
-  return true;
-}
-
 const rule = {
   meta: {
     type: "problem",
@@ -365,19 +345,95 @@ const rule = {
     const timeDependentNodes = [];
     // Every registered test callback, with its describe chain.
     const allTestCallbacks = [];
+    // Statically resolvable named helpers: function declarations and
+    // variable-declared callable expressions, scoped to the function they
+    // are declared in. An explicit invocation `helper()` resolves to its
+    // body, so the body's timer transitions apply at the invocation site —
+    // a helper that is merely declared still executes nothing.
+    const helperScopes = [new Map()];
+    const helperInvocations = new Map();
+    const registerHelper = (name, fn) => {
+      if (name) {
+        helperScopes[helperScopes.length - 1].set(name, fn);
+      }
+    };
+    const resolveHelper = (name) => {
+      for (let index = helperScopes.length - 1; index >= 0; index -= 1) {
+        if (helperScopes[index].has(name)) {
+          return helperScopes[index].get(name);
+        }
+      }
+      return null;
+    };
     const recordFreezeState = (node, calls) => {
       const enclosing = findEnclosingTestCallback(node);
-      // A transition directly in the callback's body (or inside a closure
-      // the body immediately invokes) executes when the callback runs; one
-      // captured inside a closure nobody invokes here runs only if that
-      // closure is called later, so it does not describe the callback's own
-      // timer state — nor, for uncalled module-level helpers, the module's.
-      const immediate = executesWhenEnclosingRuns(node, enclosing ? enclosing.fn : null);
-      calls.push({ node, enclosing, immediate });
+      // Whether the transition executes when the enclosing callback runs is
+      // decided once every invocation site is known (Program:exit): a helper
+      // declared above may be invoked below — or never — so the traversal
+      // order alone cannot tell.
+      calls.push({ node, enclosing });
+    };
+    const pushHelperScope = (body) => {
+      helperScopes.push(new Map());
+      // Hoisted function declarations resolve for calls that textually
+      // precede them within the same body.
+      for (const statement of body?.type === "BlockStatement" ? body.body : []) {
+        if (statement.type === "FunctionDeclaration") {
+          registerHelper(statement.id?.name, statement);
+        }
+      }
     };
     return {
+      Program(node) {
+        for (const statement of node.body) {
+          if (statement.type === "FunctionDeclaration") {
+            registerHelper(statement.id?.name, statement);
+          }
+        }
+      },
+      FunctionDeclaration(node) {
+        if (node.id) {
+          registerHelper(node.id.name, node);
+        }
+        pushHelperScope(node.body);
+      },
+      "FunctionDeclaration:exit"() {
+        helperScopes.pop();
+      },
+      FunctionExpression(node) {
+        pushHelperScope(node.body);
+      },
+      "FunctionExpression:exit"() {
+        helperScopes.pop();
+      },
+      ArrowFunctionExpression(node) {
+        pushHelperScope(node.body);
+      },
+      "ArrowFunctionExpression:exit"() {
+        helperScopes.pop();
+      },
+      VariableDeclarator(node) {
+        if (
+          node.id.type === "Identifier" &&
+          (node.init?.type === "FunctionExpression" ||
+            node.init?.type === "ArrowFunctionExpression")
+        ) {
+          registerHelper(node.id.name, node.init);
+        }
+      },
       CallExpression(node) {
         const callee = node.callee;
+
+        // Record explicit invocations of statically resolvable named
+        // helpers: a helper's transitions apply at the sites that invoke it.
+        if (callee.type === "Identifier") {
+          const helper = resolveHelper(callee.name);
+          if (helper) {
+            const sites = helperInvocations.get(helper) ?? [];
+            sites.push(node);
+            helperInvocations.set(helper, sites);
+          }
+        }
 
         // Every test callback, timer-touching or not: a teardown's state is
         // shaped by each covered test's own transitions, and a test without
@@ -470,6 +526,99 @@ const rule = {
       "Program:exit"() {
         if (timeDependentNodes.length === 0) return;
 
+        /** The test/hook callback `fn` is the direct argument of, if any. */
+        const callbackInfoOf = (fn) => {
+          const call = fn.parent;
+          if (call?.type !== "CallExpression") return null;
+          const base = getCalleeBaseName(call.callee);
+          if (base === null || !SCOPE_NAMES.has(base) || !call.arguments.includes(fn)) {
+            return null;
+          }
+          return { fn, callType: base, callNode: call };
+        };
+
+        /**
+         * Every context `fn`'s body runs in, as `{ root, sites }`: root is
+         * the test/hook callback containing the outermost execution (null =
+         * module evaluation) and sites the chain of invocation call nodes
+         * (outermost first) leading into the body. An immediately-invoked
+         * function runs wherever its own invocation sits, so IIFE boundaries
+         * are ordering detail handled by the execution keys, not context
+         * boundaries; a named helper runs at the sites that invoke it — if
+         * nothing invokes it, it never runs.
+         */
+        const contextsOf = (fn, active) => {
+          if (!fn) {
+            return [{ root: null, sites: [] }];
+          }
+          if (active.has(fn)) {
+            return [];
+          }
+          active.add(fn);
+          try {
+            const parent = fn.parent;
+            if (parent?.type === "CallExpression" && parent.callee === fn) {
+              return contextsOf(nearestFunction(parent), active);
+            }
+            if (callbackInfoOf(fn)) {
+              return [{ root: fn, sites: [] }];
+            }
+            const contexts = [];
+            for (const site of helperInvocations.get(fn) ?? []) {
+              for (const outer of contextsOf(nearestFunction(site), active)) {
+                contexts.push({ root: outer.root, sites: [...outer.sites, site] });
+              }
+            }
+            return contexts;
+          } finally {
+            active.delete(fn);
+          }
+        };
+
+        /**
+         * executionKey limited to the IIFE frames between `node` and
+         * `boundary` (the first non-IIFE function around it): frames above
+         * the boundary belong to the invocation chain's keys.
+         */
+        const executionKeyWithin = (node, boundary) => {
+          const chain = [];
+          let current = node;
+          while (current && current !== boundary) {
+            const parent = current.parent;
+            if (
+              parent &&
+              (parent.type === "CallExpression" || parent.type === "NewExpression") &&
+              (parent.callee.type === "ArrowFunctionExpression" ||
+                parent.callee.type === "FunctionExpression")
+            ) {
+              chain.push(parent);
+            }
+            current = parent;
+          }
+          if (chain.length === 0) {
+            return [node.range[0]];
+          }
+          const inBody = (outer, inner) => {
+            let probe = inner;
+            while (probe && probe !== outer) {
+              if (probe === outer.callee.body) {
+                return true;
+              }
+              probe = probe.parent;
+            }
+            return false;
+          };
+          const key = [];
+          for (let index = chain.length - 1; index >= 0; index -= 1) {
+            const invocation = chain[index];
+            const contained = index > 0 ? chain[index - 1] : node;
+            key.push(invocation.range[0]);
+            key.push(inBody(invocation, contained) ? 1 : 0);
+          }
+          key.push(node.range[0]);
+          return key;
+        };
+
         // Timer-state transitions grouped by where they execute, each list
         // ordered by source position:
         //  - per enclosing test/hook callback (its own body);
@@ -481,40 +630,70 @@ const rule = {
         // timer state of everything collected after them.
         const describeTransitions = [];
         const recordTransition = (call, frozen) => {
-          const entry = {
+          const fn = nearestFunction(call.node);
+          // The first non-IIFE function boundary around the transition: the
+          // context boundary whose invocation chain decides immediacy.
+          let boundary = fn;
+          while (boundary) {
+            const parent = boundary.parent;
+            if (parent?.type === "CallExpression" && parent.callee === boundary) {
+              boundary = nearestFunction(parent);
+              continue;
+            }
+            break;
+          }
+          const ownEntry = {
             node: call.node,
             frozen,
-            immediate: call.immediate,
-            // The function the transition sits in: a deferred helper's own
-            // freeze still covers the reads inside that same helper, even
-            // though the helper's transitions say nothing about its caller.
-            fn: nearestFunction(call.node),
-            // Execution point: an IIFE body's transition runs when the
-            // invocation's body runs, after its arguments.
+            immediate: false,
+            fn,
             order: executionKey(call.node),
           };
-          // A transition trapped inside a closure that nothing here invokes
-          // (an uncalled helper, a hook's unused restoration) executes only
-          // if that closure is called later; it contributes no state to the
-          // enclosing callback or to module evaluation.
-          if (!call.immediate) {
+          const pushOwnEntry = () => {
+            // A transition trapped inside a closure that nothing here
+            // invokes (an uncalled helper, a hook's unused restoration)
+            // executes only if that closure is called later; it still
+            // covers the reads inside its own body.
             if (call.enclosing && !DESCRIBE_NAMES.has(call.enclosing.callType)) {
               const list = transitionsByCallback.get(call.enclosing.fn) ?? [];
-              list.push(entry);
+              list.push(ownEntry);
               transitionsByCallback.set(call.enclosing.fn, list);
             }
+          };
+          const contexts = contextsOf(boundary, new Set());
+          if (contexts.length === 0) {
+            pushOwnEntry();
             return;
           }
-          if (!call.enclosing) {
-            moduleTransitions.push(entry);
-            return;
+          for (const ctx of contexts) {
+            const order = [];
+            for (const site of ctx.sites) {
+              order.push(...executionKey(site), 1);
+            }
+            order.push(...executionKeyWithin(call.node, boundary));
+            const entry = {
+              node: call.node,
+              // The position the transition takes effect: the invocation
+              // site that runs it, not the helper body's declaration.
+              effNode: ctx.sites.length > 0 ? ctx.sites[ctx.sites.length - 1] : call.node,
+              frozen,
+              immediate: true,
+              fn,
+              order,
+            };
+            if (!ctx.root) {
+              moduleTransitions.push(entry);
+              continue;
+            }
+            const info = callbackInfoOf(ctx.root);
+            if (DESCRIBE_NAMES.has(info.callType)) {
+              describeTransitions.push(entry);
+            }
+            const list = transitionsByCallback.get(ctx.root) ?? [];
+            list.push(entry);
+            transitionsByCallback.set(ctx.root, list);
           }
-          if (DESCRIBE_NAMES.has(call.enclosing.callType)) {
-            describeTransitions.push(entry);
-          }
-          const list = transitionsByCallback.get(call.enclosing.fn) ?? [];
-          list.push(entry);
-          transitionsByCallback.set(call.enclosing.fn, list);
+          pushOwnEntry();
         };
         for (const call of freezeCalls) recordTransition(call, true);
         for (const call of unfreezeCalls) recordTransition(call, false);
@@ -657,7 +836,7 @@ const rule = {
                 // freeze covers its own reads), and one that executed
                 // before the read.
                 (t.immediate || t.fn === readFunction) &&
-                executesBefore(t.node, node),
+                executesBefore(t.effNode ?? t.node, node),
             );
             return own.length > 0 ? own.at(-1).frozen : null;
           };
@@ -670,7 +849,7 @@ const rule = {
             // read too (outer describes collect before inner ones).
             const candidates = [...moduleTransitions, ...describeTransitions];
             const before = candidates
-              .filter((t) => executesBefore(t.node, node))
+              .filter((t) => executesBefore(t.effNode ?? t.node, node))
               .sort(compareExecution);
             if (before.length === 0 || !before.at(-1).frozen) {
               report();
@@ -852,16 +1031,15 @@ const rule = {
                   }
                 }
                 for (const test of suiteTests) {
-                  for (const { hook, depth } of collectSetupHooks(test)) {
+                  for (const { hook } of collectSetupHooks(test)) {
                     if (hook.netFrozen === null) continue;
                     if (hook.hookType === "beforeAll") {
-                      // A beforeAll callback runs once before its suite's
+                      // Each beforeAll CALLBACK runs once before its suite's
                       // first covered test — not again before each later
-                      // test. The file-level owner is the sentinel `undefined`
-                      // depth.
-                      const owner = test.describes[depth];
-                      if (beforeAllDone.has(owner)) continue;
-                      beforeAllDone.add(owner);
+                      // test, and not skipped because a sibling beforeAll of
+                      // the same suite already ran.
+                      if (beforeAllDone.has(hook)) continue;
+                      beforeAllDone.add(hook);
                     }
                     state = hook.netFrozen;
                   }
