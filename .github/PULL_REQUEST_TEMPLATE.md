@@ -16,8 +16,8 @@
 
 ## Screenshots
 
-<!-- Omit this entire section for non-UI changes. Include before/after, light/dark and mobile/desktop screenshots where relevant. -->
-<!-- Agents: follow .agents/skills/verification/SKILL.md for local evidence and list screenshots here as pending. firstmate attaches them to this description. Do not use gists. -->
+<!-- Omit this entire section for non-UI changes. Follow .agents/skills/verification/SKILL.md for screenshot cases and local evidence. -->
+<!-- Agents: list screenshots here as pending. firstmate attaches them to this description. Do not use gists. -->
 
 ## How to review
 
