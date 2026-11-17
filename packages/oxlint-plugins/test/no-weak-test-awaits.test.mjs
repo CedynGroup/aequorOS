@@ -1042,6 +1042,44 @@ test("a reassigned local propagates its latest value's kind", async () => {
   assertFlagged(result, "weakAwaits");
 });
 
+// A copy taken from a local holds the value the source had at the copy's
+// execution position, not the source's later value.
+test("a local copy keeps the value it was taken from", async () => {
+  const result = await runOxlint(["weakAwaits"], `
+    let sleep = () => fetch('/');
+    function init() {
+      let x = () => fetch('/');
+      let y = x;
+      x = () => new Promise((resolve) => setTimeout(resolve, 10));
+      sleep = y;
+    }
+    init();
+    it('t', async () => {
+      await sleep();
+    });
+  `);
+  assertClean(result, "weakAwaits");
+});
+
+// A callee declared inside the replaying helper resolves through the
+// helper's own declarations: its captured writes propagate.
+test("a helper's nested function declaration propagates its writes", async () => {
+  const result = await runOxlint(["weakAwaits"], `
+    let sleep;
+    function init() {
+      function set() {
+        sleep = () => new Promise((resolve) => setTimeout(resolve, 10));
+      }
+      set();
+    }
+    init();
+    it('t', async () => {
+      await sleep();
+    });
+  `);
+  assertFlagged(result, "weakAwaits");
+});
+
 // A block-local declaration expires with its block: the same-named
 // assignment after the block updates the captured binding.
 test("a block-local shadow does not exclude assignments outside its block", async () => {

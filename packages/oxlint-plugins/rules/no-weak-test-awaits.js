@@ -693,15 +693,47 @@ const rule = {
       for (const parameter of fn.params ?? []) {
         collectNames(parameter);
       }
-      for (const statement of fn.body?.type === "BlockStatement" ? fn.body.body : []) {
-        if (statement.type === "VariableDeclaration") {
-          for (const declarator of statement.declarations) {
-            collectNames(declarator.id);
-          }
-        } else if (statement.type === "FunctionDeclaration" && statement.id) {
-          shadows.add(statement.id.name);
+      // The helper's own function declarations (outside nested functions):
+      // a callee resolved here must be looked up among them first — the
+      // caller's scope stack cannot see the helper's locals.
+      const localCallables = new Map();
+      const collectCallables = (node) => {
+        if (!node || typeof node !== "object" || typeof node.type !== "string") {
+          return;
         }
-      }
+        if (node.type === "FunctionDeclaration" && node.id) {
+          localCallables.set(node.id.name, node);
+        }
+        for (const [key, value] of Object.entries(node)) {
+          if (key === "parent") {
+            continue;
+          }
+          if (Array.isArray(value)) {
+            for (const child of value) {
+              if (child && typeof child === "object" && typeof child.type === "string") {
+                if (isFunctionNode(child)) {
+                  // A nested function declaration's NAME binds in this
+                  // helper's scope (its body's declarations do not).
+                  if (child.type === "FunctionDeclaration" && child.id) {
+                    localCallables.set(child.id.name, child);
+                  }
+                  continue;
+                }
+                collectCallables(child);
+              }
+            }
+          } else if (value && typeof value === "object" && typeof value.type === "string") {
+            if (isFunctionNode(value)) {
+              if (value.type === "FunctionDeclaration" && value.id) {
+                localCallables.set(value.id.name, value);
+              }
+              continue;
+            }
+            collectCallables(value);
+          }
+        }
+      };
+      collectCallables(fn.body);
       let result = false;
       const walk = (node) => {
         if (result || !node || typeof node !== "object" || typeof node.type !== "string") {
@@ -717,6 +749,13 @@ const rule = {
           return;
         }
         if (node.type === "CallExpression" && node.callee.type === "Identifier") {
+          const localFn = localCallables.get(node.callee.name);
+          if (localFn) {
+            if (helperWritesCaptures(localFn)) {
+              result = true;
+            }
+            return;
+          }
           const entry = declaredFunctionEntry(node.callee.name);
           if (entry?.fn && helperWritesCaptures(entry.fn)) {
             result = true;
@@ -834,6 +873,13 @@ const rule = {
           }
         }
         localScopes.push(map);
+        // Classify each local's initializer at its EXECUTION position, in
+        // declaration order: a copy taken from a local holds the value the
+        // source had at that point, not the source's later value. (A later
+        // assignment still reclassifies through the assignment handler.)
+        for (const def of map.values()) {
+          classifyLocal(def);
+        }
       };
       pushLocalScope(fn.body?.type === "BlockStatement" ? fn.body.body : []);
       const params = new Map();
@@ -933,9 +979,18 @@ const rule = {
           return;
         }
         if (node.type === "CallExpression" && node.callee.type === "Identifier") {
-          const entry = declaredFunctionEntry(node.callee.name, limit);
-          if (entry?.fn) {
-            replayInvocationWrites(entry.fn, active, executionSite);
+          // A callee declared inside the replaying helper resolves through
+          // the replay's local scopes first: the caller's scope stack
+          // cannot see the helper's own function declarations.
+          const localIndex = lookupLocal(node.callee.name);
+          const localDef = localIndex >= 0 ? localScopes[localIndex].get(node.callee.name) : null;
+          if (localDef?.fn) {
+            replayInvocationWrites(localDef.fn, active, executionSite);
+          } else {
+            const entry = declaredFunctionEntry(node.callee.name, limit);
+            if (entry?.fn) {
+              replayInvocationWrites(entry.fn, active, executionSite);
+            }
           }
           return;
         }

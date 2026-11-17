@@ -352,6 +352,7 @@ const rule = {
     // a helper that is merely declared still executes nothing.
     const helperScopes = [new Map()];
     const helperInvocations = new Map();
+    const invocationHelpers = new Map();
     const registerHelper = (name, fn) => {
       if (name) {
         helperScopes[helperScopes.length - 1].set(name, fn);
@@ -473,17 +474,38 @@ const rule = {
           registerShadowNames(node.id);
         }
       },
+      AssignmentExpression(node) {
+        if (node.operator !== "=" || node.left.type !== "Identifier") {
+          return;
+        }
+        // A reassignment updates the callable the binding holds: each
+        // invocation must resolve to the callable held at that point, not
+        // the original initializer.
+        for (let index = helperScopes.length - 1; index >= 0; index -= 1) {
+          if (helperScopes[index].has(node.left.name)) {
+            const callable =
+              node.right.type === "FunctionExpression" ||
+              node.right.type === "ArrowFunctionExpression";
+            helperScopes[index].set(node.left.name, callable ? node.right : null);
+            break;
+          }
+        }
+      },
       CallExpression(node) {
         const callee = node.callee;
 
         // Record explicit invocations of statically resolvable named
         // helpers: a helper's transitions apply at the sites that invoke it.
+        // The resolved identity is kept per call: ordering decisions made at
+        // Program:exit cannot re-resolve names (the lexical scopes are gone
+        // by then).
         if (callee.type === "Identifier") {
           const helper = resolveHelper(callee.name);
           if (helper) {
             const sites = helperInvocations.get(helper) ?? [];
             sites.push(node);
             helperInvocations.set(helper, sites);
+            invocationHelpers.set(node, helper);
           }
         }
 
@@ -866,7 +888,7 @@ const rule = {
                 });
               } else if (
                 callee.type === "Identifier" &&
-                resolveHelper(callee.name) &&
+                invocationHelpers.get(parent) &&
                 !inSubtree(callee, current)
               ) {
                 frames.push({ call: parent, marker: 0 });

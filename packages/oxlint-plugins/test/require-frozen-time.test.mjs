@@ -1213,6 +1213,38 @@ test("a block hoists its function declarations to the block entry", async () => 
   assertClean(result, "frozenTime");
 });
 
+// A read in a helper invocation's argument runs before the helper's body:
+// the beforeEach freeze still covers it, and the body's restoration has
+// not happened yet.
+test("an argument read is judged before the invoked helper's body", async () => {
+  const result = await runOxlint(["frozenTime"], `
+    beforeEach(() => {
+      vi.useFakeTimers();
+    });
+    it('t', () => {
+      function restore() {
+        vi.useRealTimers();
+      }
+      restore(Date.now());
+    });
+  `);
+  assertClean(result, "frozenTime");
+});
+
+// A reassignment replaces the callable a binding holds: the invocation
+// resolves to the callable held at that point, and its freeze applies.
+test("an invoked replacement callable applies its transitions", async () => {
+  const result = await runOxlint(["frozenTime"], `
+    it('t', () => {
+      let freeze = () => {};
+      freeze = () => vi.useFakeTimers();
+      freeze();
+      Date.now();
+    });
+  `);
+  assertClean(result, "frozenTime");
+});
+
 // A module-level helper invoked from a hook contributes its transitions to
 // that hook: the freeze covers the tests the hook precedes.
 test("a hook invoking a module-level freezing helper covers its tests", async () => {
