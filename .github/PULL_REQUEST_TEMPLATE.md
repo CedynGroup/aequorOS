@@ -17,7 +17,7 @@
 ## Screenshots
 
 <!-- Omit this entire section for non-UI changes. Include before/after, light/dark and mobile/desktop screenshots where relevant. -->
-<!-- Agents: save screenshots locally with a manifest and list them here as pending; firstmate attaches them to this description. Do not use gists or commit images. -->
+<!-- Agents: follow .agents/skills/verification/SKILL.md for local evidence and list screenshots here as pending. firstmate attaches them to this description. Do not use gists. -->
 
 ## How to review
 

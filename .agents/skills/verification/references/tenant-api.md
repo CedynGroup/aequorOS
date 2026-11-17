@@ -15,8 +15,7 @@ uv run fastapi dev app/main.py --port 8000   # tenant API
 uv run python -m app.worker                  # live plane and official runs
 ```
 
-The worker is required for any figure; without it every Treasury and ALM route
-answers "no computed data yet". Native services without Docker:
+Native services without Docker:
 [the dashboard guide](../../../../backend/dashboard/README.md#local-services-without-docker-or-orbstack)
 and `backend/scripts/local_services.py`.
 
@@ -27,8 +26,8 @@ curl --fail-with-body --max-time 8 http://127.0.0.1:8000/api/health/live
 curl --fail-with-body --max-time 8 http://127.0.0.1:8000/api/health/ready
 ```
 
-Read `checks.database.status`, `checks.storage.status` and `checks.worker.status`
-in the readiness body, not only the top-level `status`.
+Interpret the response using the [local readiness guide](../../../../README.md#run-it-locally).
+For cases that depend on computation, also confirm the local worker is running.
 
 ## Sign in
 

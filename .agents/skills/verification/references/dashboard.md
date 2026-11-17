@@ -61,9 +61,10 @@ separate cookie jars.
 ## Capture
 
 **Tour.** `visual-tour.e2e.spec.ts` takes full-page screenshots of its listed
-routes as the `admin` fixture with a dark browser preference. Output is
-`$E2E_RUNTIME_DIR/visual-tour/<name>.png`, where `/` is `home` and each other `/`
-becomes `__` (`/liquidity/nsfr` is `liquidity__nsfr.png`). Run it at the base
+routes as the `admin` fixture with a dark browser preference. See the
+[dashboard README](../../../../backend/dashboard/README.md#end-to-end-playwright)
+for the output directory. The PNG name maps `/` to `home` and internal slashes
+to `__` (`/liquidity/nsfr` is `liquidity__nsfr.png`). Run it at the base
 commit and again at the head, into two different runtime directories. Use a
 tour image for a matrix row only if you observed the final URL and expected
 state during that capture. The PNG name records the requested route. Use
