@@ -748,19 +748,43 @@ const rule = {
                 if (hook.netFrozen !== null) frozen = hook.netFrozen;
               }
             } else {
+              // The read stays covered only while the replayed state is
+              // frozen for EVERY covered test; any test ending unfrozen
+              // uncovers it.
+              const collectionState = frozen;
               frozen = true;
               for (const test of suiteTests) {
-                let state = true;
+                // Each replay starts from the timer state module evaluation
+                // leaves behind (the collection-time state computed above):
+                // when no freeze has executed anywhere the state is
+                // unfrozen, not frozen.
+                let state = collectionState;
+                // Setup hooks replay in lifecycle order — every beforeAll
+                // before every beforeEach, outer describes before inner ones
+                // within a phase, registration order within a describe —
+                // not in source registration order across phases.
+                const setupHooks = [];
                 for (const hook of fileLevelHooks) {
-                  if (!isTeardown(hook.hookType) && hook.netFrozen !== null) {
-                    state = hook.netFrozen;
+                  if (!isTeardown(hook.hookType)) {
+                    setupHooks.push({ hook, depth: test.describes.length });
                   }
                 }
                 for (let depth = test.describes.length - 1; depth >= 0; depth -= 1) {
                   for (const hook of hooksByDescribe.get(test.describes[depth]) ?? []) {
-                    if (!isTeardown(hook.hookType) && hook.netFrozen !== null) {
-                      state = hook.netFrozen;
+                    if (!isTeardown(hook.hookType)) {
+                      setupHooks.push({ hook, depth });
                     }
+                  }
+                }
+                setupHooks.sort(
+                  (a, b) =>
+                    phaseRank(a.hook.hookType) - phaseRank(b.hook.hookType) ||
+                    b.depth - a.depth ||
+                    a.hook.callNode.range[0] - b.hook.callNode.range[0],
+                );
+                for (const { hook } of setupHooks) {
+                  if (hook.netFrozen !== null) {
+                    state = hook.netFrozen;
                   }
                 }
                 for (const transition of transitionsByCallback.get(test.fn) ?? []) {

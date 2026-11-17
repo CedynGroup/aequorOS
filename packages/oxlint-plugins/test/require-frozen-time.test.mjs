@@ -981,3 +981,41 @@ test("a test's own freeze keeps the teardown read covered", async () => {
   `);
   assertClean(result, "frozenTime");
 });
+
+test("reports a teardown read when nothing froze the clock", async () => {
+  const result = await runOxlint(["frozenTime"], `
+    it('t', () => {});
+    afterEach(() => {
+      Date.now();
+    });
+  `);
+  assertFlagged(result, "frozenTime");
+});
+
+test("reports an afterAll read when nothing froze the clock", async () => {
+  const result = await runOxlint(["frozenTime"], `
+    it('t', () => {});
+    afterAll(() => {
+      Date.now();
+    });
+  `);
+  assertFlagged(result, "frozenTime");
+});
+
+test("replays a beforeAll restoration before a later beforeEach freeze", async () => {
+  const result = await runOxlint(["frozenTime"], `
+    describe('s', () => {
+      beforeEach(() => {
+        vi.useFakeTimers();
+      });
+      beforeAll(() => {
+        vi.useRealTimers();
+      });
+      it('t', () => {});
+      afterEach(() => {
+        Date.now();
+      });
+    });
+  `);
+  assertClean(result, "frozenTime");
+});
