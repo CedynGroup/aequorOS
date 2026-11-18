@@ -191,7 +191,7 @@ Generates, validates, certifies and files regulatory return packages.
 
 Lists the organization's members and administers scoped access grants.
 
-- **Reach**: an Org Owner or an account administrator.
+- **Reach**: an account with an active Org Owner binding; an account administrator alone is refused `403`.
 - **Control**: `GET /organization/members`; `POST /authorization/bindings/preview`
   then `POST /authorization/bindings` to grant; `POST
 /authorization/bindings/{binding_id}/revoke`; requests go through
@@ -617,9 +617,9 @@ Shows the transfer curve and product and branch profitability.
 
 Projects the balance sheet and runs scenarios, what-ifs and reverse stress.
 
-- **Reach**: signed in with forecasting authority; governed assumptions in place.
-- **Control**: open `/forecasting`, then `/forecasting/assumptions`, `/nii`,
-  `/scenario`, `/whatif`, `/optimizer` and `/reverse-stress`.
+- **Reach**: signed in with Forecasting Run authority, a selected reporting period and governed assumptions in place.
+- **Control**: open `/forecasting` and click **Run forecast**, then open `/forecasting/assumptions`, `/nii`,
+  `/scenario`, `/whatif` and `/optimizer`; on `/reverse-stress` click **Run reverse stress**.
 - **Check**: a run lists under `GET /banks/{bank_id}/forecast/runs` and its
   figures render; reverse stress shows its frontier and breach value.
 - **Traps**: a book that cannot be forecast shows a not-computable state, which
