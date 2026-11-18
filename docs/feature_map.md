@@ -75,11 +75,14 @@ caller's identity and authority.
 Reads the figures the worker computed for a bank, how current they are and the
 findings raised. This is the tenant-health surface.
 
-- **Reach**: a signed-in principal with access to the bank; for populated
-  results, a Data Engine load and a running worker.
+- **Reach**: for reads, sign in with bank access. Populated results need a Data
+  Engine load and a running worker. Refresh requires confidential Data View
+  and Run. Official runs require confidential Run for each applicable module
+  and restricted Regulatory View.
 - **Control**: `GET /banks/{bank_id}/live-summary`, `GET /banks/{bank_id}/freshness`,
   `GET /banks/{bank_id}/alerts`. `POST /banks/{bank_id}/refresh` and
-  `POST /banks/{bank_id}/official-runs` enqueue work.
+  `POST /banks/{bank_id}/official-runs` enqueue work. Send `as_of_date` and a
+  nonempty `reason` in each POST body.
 - **Check**: `live-summary` returns `modules[]` with `status`, `metrics` and
   `pipeline_state` (`ready`, `blocked` or `failed`), plus `is_stale` and an
   optional `reconciliation` verdict. `freshness` returns per-module `is_stale`
@@ -124,8 +127,8 @@ Parses a spreadsheet or CSV into an ingestion batch with row-level findings.
   source reference and finding.
 - **Traps**: the upload stages in the bank's object storage, so a local MinIO
   must be running. A legacy `.xls` is refused by format with re-save guidance;
-  an empty file answers `422` and an oversized file `413`. Rows with errors
-  produce an "accepted with warnings" batch, not a failure.
+  an empty file answers `422` and an oversized file `413`. Non-blocking row
+  errors can yield `accepted_with_warnings`; a `BLOCKER` rejects the batch.
 - **Depends on**: `POST /banks/{bank_id}/ingestion-uploads`,
   `POST /banks/{bank_id}/ingestion-batches`, `GET /banks/{bank_id}/ingestion-batches[/{batch_id}]` and
   `GET /banks/{bank_id}/ingestion-batches/{batch_id}/translation-failures`,
@@ -160,16 +163,17 @@ Generates, validates, certifies and files regulatory return packages.
   authorized preparer, approver and validator accounts.
 - **Control**: as preparer, use `GET /banks/{bank_id}/return-anchors` to pick the
   reporting date, then `POST /banks/{bank_id}/regulatory-packages` and run
-  `validate`. For each required signing role, call `attestation/step-up` as
-  that signer with their configured step-up proof, then pass its
-  `authorization_token` and `certification_digest` to `attestation/certify`
-  as `authorization_token` and `expected_certification_digest`, respectively.
-  Preparer certification starts the approval chain and approver certification
-  records approval. Use `workflow` to follow any remaining review decisions
-  (`workflow/decisions`) and intermediate hand-offs (`workflow/hand-off`)
-  with the assigned officers. Once the package is approved and fully certified,
-  as validator call `submit` with
-  `{"channel":"orass_sandbox"}`.
+  `validate`. Each required signer calls `attestation/step-up` with
+  `signing_role` and their step-up proof, then `attestation/certify` with the
+  same `signing_role`, returned `authorization_token` and returned
+  `certification_digest` as `expected_certification_digest`. Preparer
+  certification starts the chain and approver certification records approval.
+  Follow `workflow/decisions` for any remaining review decisions. Use
+  `workflow/hand-off` only to advance stages whose `transmit_on_approve` is
+  false, such as handing off from the approver to the validator. Once approved
+  and fully certified, file as validator directly through `submit` with
+  `{"channel":"orass_sandbox"}`. The transmitting stage's hand-off uses the
+  registry default, so skip that hand-off in this recipe.
 - **Check**: a package reports its validation results, approval workflow state
   and filed artifacts; its version chain and submission events are readable.
 - **Traps**: reporting dates come from the return definition, not the bank's
@@ -301,13 +305,13 @@ Opens a time-boxed, audited, read-only inspection of one tenant.
 
 Creates staff accounts and manages their role and activation.
 
-- **Reach**: an `operator_admin` or `super_admin` session.
+- **Reach**: sign in with authority to administer staff accounts.
 - **Control**: `GET` and `POST /operator/v1/operators`; `POST
 /operator/v1/operators/{email}/deactivate`, `/reactivate`, `/reset-password`.
 - **Check**: the account appears with its role and `is_active`; a reset returns a
   one-time password; each change is in the audit log.
-- **Traps**: a `developer` session is refused `403` on these routes by design,
-  and rank rules limit which rows an admin may change.
+- **Traps**: staff sessions without account administration authority receive
+  `403`. Rank rules also limit which accounts an administrator may change.
 - **Depends on**: `/operator/v1/operators`, `/operator/v1/audit`.
 
 ### Regulatory parameters
@@ -328,10 +332,12 @@ approval.
 Builds, approves and publishes the market-data determinations that fan out to
 banks.
 
-- **Reach**: a signed-in operator with desk authority; observations loaded for the
-  curves in scope.
-- **Control**: `POST /operator/v1/desk/determinations`, then `compute`, `submit`,
-  `approve` and `publish` under `/desk/determinations/{determination_id}`;
+- **Reach**: two different operators with desk authority and observations loaded
+  for the curves in scope.
+- **Control**: the maker creates the determination with
+  `POST /operator/v1/desk/determinations`, calls `compute` and calls `submit`
+  for review. The checker calls `approve`, then publishes with `publish`.
+  These actions are under `/operator/v1/desk/determinations/{determination_id}`.
   `GET /operator/v1/desk/publications` lists what was published.
 - **Check**: the determination advances through its states and a published one
   appears in publications.
@@ -410,9 +416,12 @@ Starts and ends audited inspection sessions and opens a tenant's dashboard.
 - **Reach**: signed in with inspector authority; open `/admin/inspector`.
 - **Control**: under "Start inspection session" choose **Organization**,
   **Examination bank**, **Reason**, **Support reference**, **Mode** and
-  **Session duration**; on a tenant page use **Open in new tab**.
-- **Check**: the session lists under active sessions and the "Active sessions"
-  figure counts it; **Open in new tab** opens the dashboard's `/inspect` page.
+  **Session duration**, then click **Start session**. On that tenant's page
+  click **Open bank dashboard**, then **Open in new tab** in the modal.
+  Return to `/admin/inspector`, select **Active only** and click **End** on the
+  session row.
+- **Check**: the session appears in the active list and count. The dashboard
+  opens at `/inspect`, and ending the session removes it from the active list.
 - **Traps**: pause at the button's navigation call and keep the token and URL
   fragment out of evidence, as the console reference describes.
 - **Depends on**: `/admin/inspector`, `components/tenants/OpenBankDashboardButton.tsx`;
@@ -422,12 +431,14 @@ Starts and ends audited inspection sessions and opens a tenant's dashboard.
 
 Manages staff accounts.
 
-- **Reach**: signed in as `operator_admin` or above; open `/admin/operators`.
+- **Reach**: sign in with authority to administer staff accounts and open
+  `/admin/operators`.
 - **Control**: **Create operator**, fill **Email**, **Display name** and **Role**,
   then confirm; row actions deactivate, reactivate or reset a password.
 - **Check**: the new account lists with its role; a reset shows a one-time
   password dialog.
-- **Traps**: a `developer` role cannot use this page.
+- **Traps**: the page requires account administration authority, and rank rules
+  limit which accounts an administrator may change.
 - **Depends on**: `/admin/operators`; `/operator/v1/operators`.
 
 ### Console regulatory parameters
@@ -458,10 +469,12 @@ Shows the operator action trail.
 
 Works through determinations, curves, observations and publications.
 
-- **Reach**: signed in; open `/desk/market` or a desk page from the rail.
-- **Control**: open **Determinations**, **Curves**, **Observations** or
-  **Publications** and use the page's create, compute, approve and publish
-  actions.
+- **Reach**: use separate maker and checker accounts with desk access. Open
+  `/desk/market` or a desk page from the rail.
+- **Control**: in **Determinations**, the maker creates, computes and submits
+  for review. The checker opens the submitted determination, approves it and
+  publishes it. Use **Curves**, **Observations** and **Publications** to inspect
+  the inputs and results.
 - **Check**: a determination moves through its states and a published one is
   listed under **Publications**.
 - **Traps**: an unavailable source is shown as unavailable; publishing writes
@@ -500,8 +513,7 @@ Signs a bank user in and ends the session.
   role; after sign-out the URL is `/login` and a stale refresh token answers
   `401`.
 - **Traps**: an unauthenticated visit to a protected route redirects to `/login`.
-  Use one browser host (`localhost` or `127.0.0.1`) throughout: they keep
-  separate cookie jars.
+  Use the same loopback origin throughout to keep the browser session.
 - **Depends on**: `/login`, `/api/auth/*`; the tenant API's `/auth/login`,
   `/auth/refresh`; fixture roles in `e2e/support/mint.ts`.
 
@@ -654,11 +666,13 @@ Shows model estimates and training coverage for the bank's behavioral assumption
 
 Collects board packs, saved analyses and persisted regulatory runs.
 
-- **Reach**: sign in, select a bank with computed live evidence and open `/reports`.
+- **Reach**: sign in, select a bank with fresh, available live evidence and
+  open `/reports`.
 - **Control**: open **Board pack** and select **Print / Save as PDF**.
 - **Check**: the pack renders the bank's available live module figures and
   opens the print dialog.
-- **Traps**: printing is disabled when there is no available live evidence.
+- **Traps**: stale evidence withholds figures until recomputation. Printing
+  can remain enabled if the stale response still contains modules.
 - **Depends on**: `/reports/board-pack`, `/reports/analyses`,
   **Print / Save as PDF** and `GET /banks/{bank_id}/regulatory-runs` for the run registry.
 
@@ -686,8 +700,9 @@ Uploads a spreadsheet or CSV and reviews the batch it creates.
   Translated, Accepted and Errors counts; `/data-engine/batches/{batchId}` lists
   "Validation findings" and "Untranslatable rows" with row references. For
   `tests/data-engine/fixtures/positions.csv` the counts are 4, 3, 2 and 1.
-- **Traps**: a legacy `.xls` is refused with re-save guidance; a file with bad
-  rows is "accepted with warnings", not failed. Use synthetic files only.
+- **Traps**: a legacy `.xls` is refused with re-save guidance. Non-blocking row
+  errors can yield "accepted with warnings"; a blocker rejects the batch.
+  Use synthetic files only.
 - **Depends on**: `/data-engine/excel-csv`, `/data-engine/batches/[batchId]`;
   `POST /banks/{bank_id}/ingestion-uploads` and `POST /banks/{bank_id}/ingestion-batches`.
 
