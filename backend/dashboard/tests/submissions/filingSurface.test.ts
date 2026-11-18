@@ -603,7 +603,7 @@ function stubFor(specifier: string): unknown | undefined {
                     family: "bsd",
                     title: "Assets",
                     fidelity: "CONFIRMED",
-                    defaultChannel: "orass_sandbox",
+                    defaultChannel: workspaceDefaultChannel,
                   },
                 ],
               },
@@ -801,6 +801,7 @@ test("a disabled act states its reason on screen, not only on hover", () => {
 let workspaceAuthority = projection([]);
 let workspaceProfileLoading = false;
 let workspacePackage: Props = {};
+let workspaceDefaultChannel = "orass_sandbox";
 
 function renderWorkspace(
   status: Status,
@@ -901,6 +902,51 @@ test("the rendered workspace shows channel sections only to a transmitter", () =
       }
     }
   }
+  workspaceProfileLoading = false;
+});
+
+test("the read-only export officer takes the email bundle without the filing act", () => {
+  // The surface: export authority without transmission gets the export row
+  // and never the filing row; the officer who files keeps the filing row and
+  // gains nothing from the export row they cannot already reach.
+  for (const status of STATUSES) {
+    const exportOnly = surfaceSections(
+      input(authority({ mayExport: true }), status),
+    );
+    assert.ok(exportOnly.includes("export"), `${status}: no export row`);
+    assert.ok(
+      !exportOnly.includes("transmission"),
+      `${status}: export without transmission was offered the filing surface`,
+    );
+    const filingOfficer = surfaceSections(
+      input(authority({ mayTransmit: true, mayExport: true }), status),
+    );
+    assert.ok(
+      !filingOfficer.includes("export"),
+      `${status}: the filing officer was doubled up`,
+    );
+  }
+  // The render: the row offers the bundle download and the send-ready
+  // instructions, and offers no filing control.
+  workspaceAuthority = projection([{ permission: "export" }]);
+  workspaceDefaultChannel = "email";
+  try {
+    const { text, sections } = renderWorkspace("generated", false);
+    assert.equal(
+      sections.filter((section) => section === "export-row").length,
+      1,
+      sections.join(","),
+    );
+    assert.match(text, /Download the email bundle/);
+    assert.ok(!/Use email fallback/i.test(text), text);
+    assert.ok(!/resubmi/i.test(text), text);
+  } finally {
+    workspaceDefaultChannel = "orass_sandbox";
+  }
+  // Without export authority the row is absent, however the return is filed.
+  workspaceAuthority = projection([]);
+  const reader = renderWorkspace("generated", false);
+  assert.ok(!reader.sections.includes("export-row"), reader.sections.join(","));
   workspaceProfileLoading = false;
 });
 

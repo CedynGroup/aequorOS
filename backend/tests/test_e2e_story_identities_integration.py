@@ -204,7 +204,7 @@ def test_signing_story_officers_hold_return_export_and_other_stories_do_not(
                             binding.institution_id,
                         )
                         for binding in bindings
-                        if binding.role_bundle == RoleBundle.ANALYST.value
+                        if binding.role_bundle == RoleBundle.EXPORTER.value
                     },
                     {
                         (
@@ -233,10 +233,10 @@ def test_signing_story_officers_hold_return_export_and_other_stories_do_not(
         held = signed[role]
         capabilities, bundles, export_rows = held.capabilities, held.bundles, held.export_rows
         assert ("reg", "restricted", "export") in capabilities[signed_bank], role
-        assert RoleBundle.ANALYST.value in bundles, role
+        assert RoleBundle.EXPORTER.value in bundles, role
         # Confined to the story's own bank: an organization-scoped binding
         # matches every institution in the tenant, so the grant names one.
-        assert export_rows == {("analyst", InstitutionScope.INSTITUTION.value, signed_bank)}, role
+        assert export_rows == {("exporter", InstitutionScope.INSTITUTION.value, signed_bank)}, role
         assert set(capabilities) == {signed_bank}, role
     # A plain approver keeps its own bundle and stays refused: no analyst row,
     # and no export the ceremony could read a page with. The #185 ceremony
@@ -247,7 +247,7 @@ def test_signing_story_officers_hold_return_export_and_other_stories_do_not(
     assert approver.bundles == {
         RoleBundle.MEMBER.value,
         RoleBundle.APPROVER.value,
-        RoleBundle.ANALYST.value,
+        RoleBundle.EXPORTER.value,
         RoleBundle.SIGNER.value,
     }
     assert approver.ceremony_rows == {

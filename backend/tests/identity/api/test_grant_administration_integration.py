@@ -2438,3 +2438,155 @@ def test_audit_officers_cannot_be_granted_product_modules(
         },
     )
     assert response.status_code == 409, response.text
+
+
+def test_exporter_is_explicit_exact_and_invalidates_sign_ins(grant_client: TestClient) -> None:
+    """Create and revoke exact read-only export authority while invalidating tokens.
+
+    The composer is the only way the bundle is issued: nothing in provisioning,
+    invitations or migration grants it, so the binding exists only after this
+    owner act — and the grant invalidates the grantee's session in the same
+    transaction, exactly like every other role mutation.
+    """
+    with _session() as db:
+        user = tenant_user(db, organization_id=ORG_1, user_id=GRANTEE)
+        issued = authentication.issue_tokens(db, user)
+        version = user.authorization_version
+        assert not list(
+            db.scalars(
+                select(AuthorizationBinding).where(
+                    AuthorizationBinding.organization_id == ORG_1,
+                    AuthorizationBinding.role_bundle == "exporter",
+                )
+            )
+        )
+    grantee_headers = {"Authorization": f"Bearer {issued.access_token}"}
+    assert grant_client.get("/api/v1/auth/me", headers=grantee_headers).status_code == 200
+    payload = _payload(role="exporter", module="reg", sensitivity="restricted")
+    created = grant_client.post(
+        "/api/v1/authorization/bindings",
+        headers=_owner_headers(),
+        json=_reviewed_payload(grant_client, payload),
+    )
+    assert created.status_code == 201, created.text
+    result = BindingCreateResponse.model_validate_json(created.text)
+    binding = result.binding
+    assert binding.role_bundle == "exporter"
+    assert binding.institution_id == BANK_A
+    assert binding.module_scope is ModuleScope.REGULATORY
+    assert binding.sensitivity_scope is SensitivityScope.RESTRICTED
+    assert binding.authority_sentence == (
+        "Amma Owusu is an Exporter in Regulatory Reporting for Aequor Bank Ghana, "
+        "covering Restricted data."
+    )
+    assert result.sod_decision.outcome == "allow"
+    assert grant_client.get("/api/v1/auth/me", headers=grantee_headers).status_code == 401
+    with _session() as db:
+        user = tenant_user(db, organization_id=ORG_1, user_id=GRANTEE)
+        assert user.authorization_version == version + 1
+        principal = PrincipalLocator(ORG_1, GRANTEE, PrincipalType.HUMAN)
+        exact = _resource(BANK_A, Module.REGULATORY, Sensitivity.RESTRICTED)
+        for permission in (Permission.VIEW, Permission.EXPORT):
+            assert authorization.evaluate_permission(db, principal, permission, exact).allowed
+    current = None
+    with _session() as db:
+        user = tenant_user(db, organization_id=ORG_1, user_id=GRANTEE)
+        current = authentication.issue_tokens(db, user)
+    assert (
+        grant_client.get(
+            "/api/v1/auth/me", headers={"Authorization": f"Bearer {current.access_token}"}
+        ).status_code
+        == 200
+    )
+    revoked = grant_client.post(
+        f"/api/v1/authorization/bindings/{binding.id}/revoke",
+        headers=_owner_headers(),
+        json={"reason": "Export responsibilities reassigned"},
+    )
+    assert revoked.status_code == 200, revoked.text
+    with _session() as db:
+        user = tenant_user(db, organization_id=ORG_1, user_id=GRANTEE)
+        assert user.authorization_version == version + 2
+        principal = PrincipalLocator(ORG_1, GRANTEE, PrincipalType.HUMAN)
+        exact = _resource(BANK_A, Module.REGULATORY, Sensitivity.RESTRICTED)
+        for permission in (Permission.VIEW, Permission.EXPORT):
+            assert not authorization.evaluate_permission(db, principal, permission, exact).allowed
+
+
+@pytest.mark.parametrize(
+    "permission",
+    [
+        pytest.param(Permission.CREATE, id="create-denied"),
+        pytest.param(Permission.EDIT, id="edit-denied"),
+        pytest.param(Permission.RUN, id="run-denied"),
+        pytest.param(Permission.REVIEW, id="review-denied"),
+        pytest.param(Permission.APPROVE, id="approve-denied"),
+        pytest.param(Permission.VALIDATE, id="validate-denied"),
+        pytest.param(Permission.SIGN_OFF, id="sign-off-denied"),
+        pytest.param(Permission.SUBMIT, id="submit-denied"),
+        pytest.param(Permission.CONFIGURE, id="configure-denied"),
+        pytest.param(Permission.ADMINISTER, id="administer-denied"),
+        pytest.param(Permission.INGEST, id="ingest-denied"),
+    ],
+)
+def test_exporter_grant_denies_every_operational_permission(
+    grant_client: TestClient,
+    permission: Permission,
+) -> None:
+    """Viewing and taking a finished return away is the whole of the bundle."""
+    created = grant_client.post(
+        "/api/v1/authorization/bindings",
+        headers=_owner_headers(),
+        json=_reviewed_payload(
+            grant_client, _payload(role="exporter", module="reg", sensitivity="restricted")
+        ),
+    )
+    assert created.status_code == 201, created.text
+    with _session() as db:
+        principal = PrincipalLocator(ORG_1, GRANTEE, PrincipalType.HUMAN)
+        exact = _resource(BANK_A, Module.REGULATORY, Sensitivity.RESTRICTED)
+        assert not authorization.evaluate_permission(db, principal, permission, exact).allowed
+
+
+@pytest.mark.parametrize("filing_role", ["approver", "validator"])
+def test_exporter_may_be_combined_with_a_filing_role(
+    grant_client: TestClient, filing_role: str
+) -> None:
+    """The separation-of-duties rule the exporter ships under, enforced at assignment.
+
+    The exporter is a read-and-take-away bundle, never an operational write, so
+    holding it beside the Approver or Validator bundle is allowed — unlike the
+    Approver + Validator pair, which stays a hard block for the same identity.
+    """
+    first = grant_client.post(
+        "/api/v1/authorization/bindings",
+        headers=_owner_headers(),
+        json=_reviewed_payload(
+            grant_client, _payload(role=filing_role, module="reg", sensitivity="restricted")
+        ),
+    )
+    assert first.status_code == 201, first.text
+    second = grant_client.post(
+        "/api/v1/authorization/bindings",
+        headers=_owner_headers(),
+        json=_reviewed_payload(
+            grant_client, _payload(role="exporter", module="reg", sensitivity="restricted")
+        ),
+    )
+    assert second.status_code == 201, second.text
+    result = BindingCreateResponse.model_validate_json(second.text)
+    assert result.sod_decision.outcome == "allow"
+    assert result.binding.role_bundle == "exporter"
+
+
+def test_only_grant_administration_can_issue_the_exporter(grant_client: TestClient) -> None:
+    """A member without the owner binding cannot grant the exporter, scalar role or not."""
+    for roles in (("viewer",), ("account_admin",), ("admin",), ("analyst",)):
+        denied = grant_client.post(
+            "/api/v1/authorization/bindings",
+            headers=headers(user_id=GRANTEE, roles=roles),
+            json=_reviewed_payload(
+                grant_client, _payload(role="exporter", module="reg", sensitivity="restricted")
+            ),
+        )
+        assert denied.status_code == 403, denied.text

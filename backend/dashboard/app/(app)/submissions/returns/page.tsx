@@ -149,6 +149,7 @@ import ChecksPanel, {
 } from "@/components/submissions/ChecksPanel";
 import EventsFeed from "@/components/submissions/EventsFeed";
 import TransmissionCard, {
+  EmailBundleExport,
   REUPLOAD_CHANNEL,
   TransmissionNotice,
   filingRefusalMessage,
@@ -765,12 +766,12 @@ function PackageWorkspace({
   const filingRefusal = filingRefusalMessage(submit.error);
   // The instructions preview is part of the export surface, not the filing act:
   // asking for it without EXPORT is a guaranteed 403, so it is not requested.
+  // It does NOT need transmission authority — the read-only exporter reads it
+  // too, which is why mayTransmit is deliberately absent here.
   const instructionsQuery = useEmailFallbackInstructions(
     bankId,
     summary.id,
-    authority.mayExport &&
-      authority.mayTransmit &&
-      (Boolean(filingRefusal) || channel === "email"),
+    authority.mayExport && (Boolean(filingRefusal) || channel === "email"),
   );
 
   const attestation = attestationQuery.data ?? null;
@@ -1196,6 +1197,24 @@ function PackageWorkspace({
             pollStatus={poll.data?.pollStatus ?? null}
             pollError={poll.error}
             fallbackPending={submit.isPending}
+          />
+        </DisclosureRow>
+      )}
+
+      {/* The read-only export of the channel: an officer who may take the
+          bundle away but not file it sees this row instead of the filing card.
+          The channel never asked anything of them, so the row exists only when
+          the return is filed by email — otherwise there is nothing to take. */}
+      {showSection("export") && (
+        <DisclosureRow
+          title="Email bundle"
+          testId="export-row"
+          summary="Subject, instructions and attachments, ready to open in your mail client and send."
+        >
+          <EmailBundleExport
+            instructions={instructionsQuery.data?.instructions ?? null}
+            onDownloadEml={handleEmlDownload}
+            emlError={emlError}
           />
         </DisclosureRow>
       )}

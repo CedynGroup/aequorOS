@@ -197,6 +197,19 @@ class RoleBundle(StrEnum):
     #: it deliberately does NOT carry ``Permission.VALIDATE`` — that verb is the
     #: machine rules check the Preparer re-runs, not this person's act.
     VALIDATOR = "validator"
+    #: The read-only exporter. Seeing a finished return and taking its file away
+    #: are two acts (the #774 export cutover), and this bundle carries exactly
+    #: those two: VIEW plus EXPORT, and none of the preparation, review,
+    #: approval, signing or transmission authority. It exists so a regulator
+    #: liaison can collect returns without also being a preparer — the gap the
+    #: export cutover recorded while the only EXPORT-carrying human bundle was
+    #: the analyst, whose file-taking came bundled with preparation. Never
+    #: granted automatically: provisioning, invitations, single sign-on and
+    #: migrations create none, and only an administrator's composer grant does.
+    #: It is a read-and-take-away bundle, not an operational write, so the
+    #: assignment-time separation-of-duties decision allows it beside the
+    #: filing roles (backend/docs/authorization_foundation.md, export section).
+    EXPORTER = "exporter"
     CONFIGURATOR = "configurator"
     SIGNER = "signer"
     ACCOUNT_ADMIN = "account_admin"
@@ -257,6 +270,13 @@ ROLE_PERMISSIONS: Final[Mapping[RoleBundle, frozenset[Permission]]] = MappingPro
         # the stage engine's per-object condition lands
         # (docs/filing_workflow_redesign.md §3.3).
         RoleBundle.VALIDATOR: frozenset({Permission.VIEW, Permission.SUBMIT}),
+        # Seeing and taking away, and nothing else. EXPORT here never implies
+        # CREATE/EDIT/RUN: the holder is outside the preparation ladder, which
+        # is the entire point of a dedicated bundle (the analyst's EXPORT came
+        # fused to preparation). Every export gate still demands the binding's
+        # REG/restricted scope on the exact bank, so the bundle grants nothing
+        # by existing.
+        RoleBundle.EXPORTER: frozenset({Permission.VIEW, Permission.EXPORT}),
         # Configuration is separate from read, operations and approval.
         RoleBundle.CONFIGURATOR: frozenset({Permission.CONFIGURE}),
         # Formal signing is separate from read, preparation and approval.

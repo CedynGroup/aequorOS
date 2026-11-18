@@ -41,6 +41,11 @@ GrantableRoleBundle = Literal[
     # transmission authority exists only as an explicit binding: nothing
     # backfilled it and no scalar role produces it.
     "validator",
+    # Read-only export of finished returns: view + export, never preparation,
+    # approval, signing or transmission. Grantable for the same reason the
+    # validator is — the authority exists only as an explicit binding — and it
+    # is never issued by provisioning, invitations or migrations.
+    "exporter",
     "configurator",
     # Formal signing only; reading and approval remain separate explicit grants.
     "signer",
