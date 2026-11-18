@@ -1,0 +1,18 @@
+2026-11-11T14:21:45.5827603Z ##[group]Run mise exec -- pnpm --filter @aequoros/dashboard exec playwright install-deps chromium
+2026-11-11T14:21:45.5828359Z [36;1mmise exec -- pnpm --filter @aequoros/dashboard exec playwright install-deps chromium[0m
+2026-11-11T14:21:45.5848856Z shell: /usr/bin/bash -e {0}
+2026-11-11T14:22:06.4096275Z Ign:2 http://azure.archive.ubuntu.com/ubuntu noble InRelease
+2026-11-11T14:22:26.4349986Z Ign:3 http://azure.archive.ubuntu.com/ubuntu noble-updates InRelease
+2026-11-11T14:24:05.7922361Z Err:2 https://security.ubuntu.com/ubuntu noble InRelease
+2026-11-11T14:24:05.7924126Z   Temporary failure resolving 'azure.archive.ubuntu.com'
+2026-11-11T14:24:26.6368603Z Err:3 https://security.ubuntu.com/ubuntu noble-updates InRelease
+2026-11-11T14:25:09.7399835Z W: Failed to fetch mirror+file:/etc/apt/apt-mirrors.txt/dists/noble/InRelease  Temporary failure resolving 'azure.archive.ubuntu.com'
+2026-11-11T14:25:09.7400783Z W: Failed to fetch mirror+file:/etc/apt/apt-mirrors.txt/dists/noble-updates/InRelease  Temporary failure resolving 'azure.archive.ubuntu.com'
+2026-11-11T14:26:30.2068787Z Ign:6 http://azure.archive.ubuntu.com/ubuntu noble/universe amd64 fonts-wqy-zenhei all 0.9.45-8
+2026-11-11T14:28:50.4141574Z Ign:2 https://archive.ubuntu.com/ubuntu noble/universe amd64 fonts-ipafont-gothic all 00303-21ubuntu1
+2026-11-11T14:30:10.5489955Z Err:6 https://security.ubuntu.com/ubuntu noble/universe amd64 fonts-wqy-zenhei all 0.9.45-8
+2026-11-11T14:31:00.1508308Z Get:7 https://security.ubuntu.com/ubuntu noble/universe amd64 fonts-ipafont-gothic all 00303-21ubuntu1 [1,234 kB]
+2026-11-11T14:31:10.1274135Z Get:8 https://security.ubuntu.com/ubuntu noble/main amd64 fonts-freefont-ttf all 20211204+svn4273-2 [3,456 kB]
+2026-11-11T14:31:20.6999334Z Fetched 4,690 kB in 2s (2,345 kB/s)
+2026-11-11T14:31:30.7027044Z Chromium downloaded successfully.
+2026-11-11T14:31:31.7494032Z ##[end-action id=install-deps.__run;outcome=success;conclusion=success;duration_ms=586166]

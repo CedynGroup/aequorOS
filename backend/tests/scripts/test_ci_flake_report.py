@@ -139,6 +139,173 @@ def test_infrastructure_download_failure_classified() -> None:
     assert infra[0].signature == "infra:download-curl-22-504"
 
 
+def test_apt_mirror_outage_classified_as_infrastructure() -> None:
+    # Real excerpt of the 2026-11-11 apt-mirror outage: Dashboard journeys
+    # shard 1/4, run 43037570348 job 130580527090. The `playwright
+    # install-deps chromium` step failed with apt's exit code 100 after
+    # "E: Failed to fetch ... Temporary failure resolving" lines.
+    findings = flake_report.extract_findings(fixture_text("apt_mirror_outage.log"))
+    infra = [f for f in findings if f.kind == "infra"]
+    assert len(infra) == 1
+    assert infra[0].signature == "infra:apt-mirror-100"
+    assert not any(f.kind in ("test", "typecheck") for f in findings)
+
+
+def test_apt_update_index_failure_classified_as_infrastructure() -> None:
+    findings = flake_report.extract_findings(
+        [
+            "2026-11-11T14:22:06.4096275Z "
+            "Ign:2 http://azure.archive.ubuntu.com/ubuntu noble InRelease",
+            "2026-11-11T14:24:05.7922361Z Err:2 https://security.ubuntu.com/ubuntu noble InRelease",
+            "2026-11-11T14:25:09.7399835Z E: Some index files failed to download. "
+            "They have been ignored, or old ones used instead.",
+            "2026-11-11T14:25:30.7494032Z ##[error]Process completed with exit code 100.",
+        ]
+    )
+    infra = [f for f in findings if f.kind == "infra"]
+    assert len(infra) == 1
+    assert infra[0].signature == "infra:apt-mirror-100"
+
+
+def test_passing_log_with_nonfatal_apt_warnings_not_counted() -> None:
+    # Same mirror-retry shape as the outage but the fetches recovered:
+    # Ign:/Err:/W: lines on their own are transient, and the step succeeded,
+    # so no infrastructure finding may be produced.
+    findings = flake_report.extract_findings(fixture_text("passing_apt_retry.log"))
+    assert findings == []
+
+
+def test_recovered_apt_step_then_unrelated_exit_100_not_classified() -> None:
+    # Fatal-looking apt evidence pairs only with its own step's abort marker:
+    # a recovered apt step's Err:/W: lines must not combine with a later,
+    # unrelated step's exit code 100.
+    findings = flake_report.extract_findings(
+        [
+            "2026-11-11T14:20:00.0000000Z ##[group]Run sudo apt-get update",
+            "2026-11-11T14:20:05.7922361Z Err:2 https://security.ubuntu.com/ubuntu noble InRelease",
+            "2026-11-11T14:20:06.7399835Z W: Failed to fetch "
+            "mirror+file:/etc/apt/apt-mirrors.txt/dists/noble/InRelease  "
+            "Temporary failure resolving 'azure.archive.ubuntu.com'",
+            "2026-11-11T14:20:30.0000000Z "
+            "##[end-action id=apt.__run;outcome=success;conclusion=success;duration_ms=30000]",
+            "2026-11-11T14:21:00.0000000Z ##[group]Run some-tool deploy",
+            "2026-11-11T14:21:10.7494032Z ##[error]Process completed with exit code 100.",
+        ]
+    )
+    assert findings == []
+
+
+def test_inner_log_group_does_not_reset_pending_apt_evidence() -> None:
+    # Plain ##[group] lines are free-form log groups INSIDE a step (only the
+    # runner's "##[group]Run <script>" echo starts a step), so a diagnostics
+    # group between the fatal apt lines and the step's exit must not discard
+    # the pending evidence.
+    findings = flake_report.extract_findings(
+        [
+            "2026-11-11T14:20:00.0000000Z "
+            "##[group]Run mise exec -- pnpm exec playwright install-deps chromium",
+            "2026-11-11T14:20:10.0000000Z E: Failed to fetch "
+            "https://security.ubuntu.com/ubuntu/pool/x.deb  "
+            "Temporary failure resolving 'azure.archive.ubuntu.com'",
+            "2026-11-11T14:20:20.0000000Z ##[group]Diagnostics",
+            "2026-11-11T14:20:25.7494032Z ##[error]Process completed with exit code 100.",
+        ]
+    )
+    infra = [f for f in findings if f.kind == "infra"]
+    assert len(infra) == 1
+    assert infra[0].signature == "infra:apt-mirror-100"
+
+
+def test_recovered_install_retry_within_one_step_not_infra() -> None:
+    # A step that installs dependencies and then runs tests (no step boundary
+    # between them): the first install attempt fails, a retry starts and
+    # succeeds, and the later test failure keeps its test signature without
+    # any infrastructure finding.
+    findings = flake_report.extract_findings(
+        [
+            "2026-11-11T14:20:00.0000000Z "
+            "##[group]Run mise exec -- pnpm exec playwright install-deps chromium "
+            "&& mise exec -- pnpm exec playwright test",
+            "2026-11-11T14:20:05.0000000Z Installing dependencies...",
+            "2026-11-11T14:20:10.0000000Z E: Failed to fetch "
+            "https://security.ubuntu.com/ubuntu/pool/x.deb  "
+            "Temporary failure resolving 'azure.archive.ubuntu.com'",
+            "2026-11-11T14:20:15.0000000Z Error: Installation process exited with code: 100",
+            "2026-11-11T14:20:40.0000000Z Retrying dependency installation",
+            "2026-11-11T14:20:45.0000000Z Installing dependencies...",
+            "2026-11-11T14:21:00.0000000Z Fetched 13.1 MB in 1s (9839 kB/s)",
+            "2026-11-11T14:25:41.2054952Z "
+            "✘  1 tests/attestation/attestation.e2e.spec.ts:621:7 › a test (30.1s)",
+            "2026-11-11T14:25:41.7494032Z ##[error]Process completed with exit code 1.",
+        ]
+    )
+    assert [f.kind for f in findings] == ["test"]
+
+
+def test_failed_retry_within_one_step_still_infra() -> None:
+    # A second attempt inside the same step that fails again re-arms the
+    # pending evidence: the step's abort still classifies as infrastructure.
+    findings = flake_report.extract_findings(
+        [
+            "2026-11-11T14:20:00.0000000Z "
+            "##[group]Run mise exec -- pnpm exec playwright install-deps chromium",
+            "2026-11-11T14:20:05.0000000Z Installing dependencies...",
+            "2026-11-11T14:20:10.0000000Z E: Failed to fetch "
+            "https://security.ubuntu.com/ubuntu/pool/x.deb  "
+            "Temporary failure resolving 'azure.archive.ubuntu.com'",
+            "2026-11-11T14:20:15.0000000Z Error: Installation process exited with code: 100",
+            "2026-11-11T14:20:45.0000000Z Installing dependencies...",
+            "2026-11-11T14:20:50.0000000Z E: Unable to fetch some archives, maybe you "
+            "ran apt-get update?",
+            "2026-11-11T14:20:55.0000000Z Error: Installation process exited with code: 100",
+            "2026-11-11T14:20:56.7494032Z ##[error]Process completed with exit code 1.",
+        ]
+    )
+    infra = [f for f in findings if f.kind == "infra"]
+    assert len(infra) == 1
+    assert infra[0].signature == "infra:apt-mirror-100"
+
+
+def test_successful_install_retry_then_test_failure_not_infra() -> None:
+    # The installer's exit-100 marker is pending evidence only: a step whose
+    # retry succeeds discards it, and the later unrelated test failure keeps
+    # its test signature without any infrastructure finding.
+    findings = flake_report.extract_findings(
+        [
+            "2026-11-11T14:20:00.0000000Z "
+            "##[group]Run mise exec -- pnpm exec playwright install-deps chromium",
+            "2026-11-11T14:20:10.0000000Z E: Failed to fetch "
+            "https://security.ubuntu.com/ubuntu/pool/x.deb  "
+            "Temporary failure resolving 'azure.archive.ubuntu.com'",
+            "2026-11-11T14:20:15.0000000Z Error: Installation process exited with code: 100",
+            "2026-11-11T14:20:40.0000000Z Retrying dependency installation",
+            "2026-11-11T14:21:00.0000000Z Chromium 143.0.0.0 downloaded successfully.",
+            "2026-11-11T14:21:05.0000000Z "
+            "##[end-action id=deps.__run;outcome=success;conclusion=success;duration_ms=60000]",
+            "2026-11-11T14:25:00.0000000Z ##[group]Run pnpm exec playwright test",
+            "2026-11-11T14:25:41.2054952Z "
+            "✘  1 tests/attestation/attestation.e2e.spec.ts:621:7 › a test (30.1s)",
+            "2026-11-11T14:25:41.7494032Z ##[error]Process completed with exit code 1.",
+        ]
+    )
+    assert [f.kind for f in findings] == ["test"]
+
+
+def test_real_test_failure_with_transient_apt_warnings_stays_a_flake() -> None:
+    # A genuine test failure in a job whose apt phase printed only transient
+    # mirror warnings (packages fetched on retry) keeps its test finding and
+    # gains no infrastructure finding.
+    findings = flake_report.extract_findings(fixture_text("test_failure_with_apt_warnings.log"))
+    assert [f for f in findings if f.kind == "infra"] == []
+    pytest_findings = [f for f in findings if f.kind == "test"]
+    assert [(f.signature, f.test_names) for f in pytest_findings] == [
+        (
+            "playwright:tests/attestation/attestation.e2e.spec.ts",
+            ["signing ceremony keeps the ceremony reachable while the pack detail loads"],
+        )
+    ]
+
+
 def test_nonfatal_retry_lines_not_counted() -> None:
     findings = flake_report.extract_findings(fixture_text("passing_download_retry.log"))
     assert findings == []
