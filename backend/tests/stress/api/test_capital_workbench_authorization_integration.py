@@ -47,17 +47,14 @@ CAPITAL_SHOCKS = {"ecl_pd_multiplier": "1.15", "ecl_lgd_multiplier": "1.10"}
 
 @pytest.fixture(autouse=True)
 def _start_without_fixture_authority(db_client: TestClient) -> None:
-    session = get_sessionmaker()()
-    session.info["organization_id"] = ORG_1
-    try:
+    with get_sessionmaker()() as session:
+        session.info["organization_id"] = ORG_1
         session.execute(
             delete(AuthorizationBinding).where(AuthorizationBinding.organization_id == ORG_1)
         )
         bank_exists = (
             session.scalar(
-                select(Bank.id).where(
-                    Bank.id == SAMPLE_BANK_ID, Bank.organization_id == ORG_1
-                )
+                select(Bank.id).where(Bank.id == SAMPLE_BANK_ID, Bank.organization_id == ORG_1)
             )
             is not None
         )
@@ -75,13 +72,10 @@ def _start_without_fixture_authority(db_client: TestClient) -> None:
                 )
             )
         session.commit()
-    finally:
-        session.close()
 
 
 def _seed_book() -> UUID:
-    session = get_sessionmaker()()
-    try:
+    with get_sessionmaker()() as session:
         materialize_canonical_test_book(session)
         period_id = session.scalar(
             select(BankReportingPeriod.id)
@@ -94,14 +88,11 @@ def _seed_book() -> UUID:
         assert period_id is not None
         session.commit()
         return period_id
-    finally:
-        session.close()
 
 
 def _add_sibling_bank() -> None:
-    session = get_sessionmaker()()
-    session.info["organization_id"] = ORG_1
-    try:
+    with get_sessionmaker()() as session:
+        session.info["organization_id"] = ORG_1
         session.add(
             Bank(
                 id=SIBLING_BANK_ID,
@@ -115,8 +106,6 @@ def _add_sibling_bank() -> None:
             )
         )
         session.commit()
-    finally:
-        session.close()
 
 
 def _grant(
@@ -126,12 +115,9 @@ def _grant(
     module_scope: ModuleScope = ModuleScope.CAPITAL,
     sensitivity_scope: SensitivityScope = SensitivityScope.CONFIDENTIAL,
 ) -> int:
-    session = get_sessionmaker()()
-    session.info["organization_id"] = ORG_1
-    try:
-        user = session.scalar(
-            select(User).where(User.id == USER_1, User.organization_id == ORG_1)
-        )
+    with get_sessionmaker()() as session:
+        session.info["organization_id"] = ORG_1
+        user = session.scalar(select(User).where(User.id == USER_1, User.organization_id == ORG_1))
         assert user is not None
         authorization.create_role_binding(
             session,
@@ -150,14 +136,11 @@ def _grant(
         )
         session.refresh(user)
         return user.authorization_version
-    finally:
-        session.close()
 
 
 def _scenario_count(module: str) -> int:
-    session = get_sessionmaker()()
-    session.info["organization_id"] = ORG_1
-    try:
+    with get_sessionmaker()() as session:
+        session.info["organization_id"] = ORG_1
         count = (
             session.scalar(
                 select(func.count())
@@ -171,14 +154,11 @@ def _scenario_count(module: str) -> int:
         )
         session.commit()
         return int(count)
-    finally:
-        session.close()
 
 
 def _analysis_count(module: str) -> int:
-    session = get_sessionmaker()()
-    session.info["organization_id"] = ORG_1
-    try:
+    with get_sessionmaker()() as session:
+        session.info["organization_id"] = ORG_1
         count = (
             session.scalar(
                 select(func.count())
@@ -192,14 +172,11 @@ def _analysis_count(module: str) -> int:
         )
         session.commit()
         return int(count)
-    finally:
-        session.close()
 
 
 def _audit_count() -> int:
-    session = get_sessionmaker()()
-    session.info["organization_id"] = ORG_1
-    try:
+    with get_sessionmaker()() as session:
+        session.info["organization_id"] = ORG_1
         count = (
             session.scalar(
                 select(func.count())
@@ -210,14 +187,11 @@ def _audit_count() -> int:
         )
         session.commit()
         return int(count)
-    finally:
-        session.close()
 
 
 def _seed_saved_analysis(period_id: UUID) -> UUID:
-    session = get_sessionmaker()()
-    session.info["organization_id"] = ORG_1
-    try:
+    with get_sessionmaker()() as session:
+        session.info["organization_id"] = ORG_1
         row = SavedScenarioAnalysis(
             organization_id=ORG_1,
             bank_id=SAMPLE_BANK_ID,
@@ -232,8 +206,6 @@ def _seed_saved_analysis(period_id: UUID) -> UUID:
         session.add(row)
         session.commit()
         return row.id
-    finally:
-        session.close()
 
 
 def test_exact_capital_binding_allows_the_whole_workbench(db_client: TestClient) -> None:
