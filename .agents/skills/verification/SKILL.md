@@ -18,7 +18,9 @@ it and capture on it:
 | Marketing site                | [references/marketing-site.md](references/marketing-site.md) |
 
 Tools, fixtures and feature maps are ordinary repo code and docs. The references
-link to them; this skill does not copy them. Tests, gates and CI are not
+link to them; this skill does not copy them. The
+[feature map](../../../docs/feature_map.md) lists each surface's features with
+how to reach, drive and check them. Tests, gates and CI are not
 replaced by verification: run the gates in
 [ARCHITECTURE.md §8](../../../ARCHITECTURE.md#8-validation-commands) as well.
 

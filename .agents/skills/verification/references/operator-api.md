@@ -3,6 +3,7 @@
 The staff control plane in `backend/app/operator/`: a separate ASGI app on :8100
 with routes under `/operator/v1` and an unauthenticated `/operator/health`. It is
 never mounted on the tenant API. Shared rules are in [../SKILL.md](../SKILL.md).
+Its features: [feature map](../../../../docs/feature_map.md#staff-operator-api).
 
 ## Reach it
 

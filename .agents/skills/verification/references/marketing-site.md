@@ -3,6 +3,7 @@
 The public site in `frontend/` (Next.js, :3000, deployed to the apex domain). It
 is static content with a contact form and has no authentication, no tenant data
 and no backend dependency. Shared rules are in [../SKILL.md](../SKILL.md).
+Its features: [feature map](../../../../docs/feature_map.md#marketing-site).
 
 ## Reach it
 

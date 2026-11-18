@@ -4,6 +4,7 @@ The authenticated bank product UI in `backend/dashboard/` (Next.js, :3001).
 Every figure comes from the tenant API through the generated client. Routes and
 what they read: [the dashboard README](../../../../backend/dashboard/README.md#scope).
 Shared rules are in [../SKILL.md](../SKILL.md).
+Its features: [feature map](../../../../docs/feature_map.md#bank-dashboard).
 
 ## Reach it
 
