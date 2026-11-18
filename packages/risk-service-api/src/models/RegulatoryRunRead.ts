@@ -18,6 +18,13 @@ import {
   RegulatoryRunStatusToJSON,
   RegulatoryRunStatusToJSONTyped,
 } from "./RegulatoryRunStatus";
+import type { InputsUnavailableReason } from "./InputsUnavailableReason";
+import {
+  InputsUnavailableReasonFromJSON,
+  InputsUnavailableReasonFromJSONTyped,
+  InputsUnavailableReasonToJSON,
+  InputsUnavailableReasonToJSONTyped,
+} from "./InputsUnavailableReason";
 import type { RegulatoryMetricResultRead } from "./RegulatoryMetricResultRead";
 import {
   RegulatoryMetricResultReadFromJSON,
@@ -67,6 +74,13 @@ import {
   RegulatoryRunCompletedAtToJSON,
   RegulatoryRunCompletedAtToJSONTyped,
 } from "./RegulatoryRunCompletedAt";
+import type { Inputs } from "./Inputs";
+import {
+  InputsFromJSON,
+  InputsFromJSONTyped,
+  InputsToJSON,
+  InputsToJSONTyped,
+} from "./Inputs";
 import type { RegulatoryRunAssumptionProvenance } from "./RegulatoryRunAssumptionProvenance";
 import {
   RegulatoryRunAssumptionProvenanceFromJSON,
@@ -149,10 +163,22 @@ export interface RegulatoryRunRead {
   inputSchemaVersion: string;
   /**
    *
-   * @type {{ [key: string]: any; }}
+   * @type {Inputs}
    * @memberof RegulatoryRunRead
    */
-  inputs: { [key: string]: any };
+  inputs: Inputs;
+  /**
+   *
+   * @type {boolean}
+   * @memberof RegulatoryRunRead
+   */
+  inputsAvailable: boolean;
+  /**
+   *
+   * @type {InputsUnavailableReason}
+   * @memberof RegulatoryRunRead
+   */
+  inputsUnavailableReason: InputsUnavailableReason;
   /**
    *
    * @type {Array<RegulatoryLineItemRead>}
@@ -255,6 +281,13 @@ export function instanceOfRegulatoryRunRead(
   )
     return false;
   if (!("inputs" in value) || value["inputs"] === undefined) return false;
+  if (!("inputsAvailable" in value) || value["inputsAvailable"] === undefined)
+    return false;
+  if (
+    !("inputsUnavailableReason" in value) ||
+    value["inputsUnavailableReason"] === undefined
+  )
+    return false;
   if (!("lineItems" in value) || value["lineItems"] === undefined) return false;
   if (!("metricResults" in value) || value["metricResults"] === undefined)
     return false;
@@ -308,7 +341,11 @@ export function RegulatoryRunReadFromJSONTyped(
     id: json["id"],
     inputHash: json["input_hash"],
     inputSchemaVersion: json["input_schema_version"],
-    inputs: json["inputs"],
+    inputs: InputsFromJSON(json["inputs"]),
+    inputsAvailable: json["inputs_available"],
+    inputsUnavailableReason: InputsUnavailableReasonFromJSON(
+      json["inputs_unavailable_reason"],
+    ),
     lineItems: (json["line_items"] as Array<any>).map(
       RegulatoryLineItemReadFromJSON,
     ),
@@ -356,7 +393,11 @@ export function RegulatoryRunReadToJSONTyped(
     id: value["id"],
     input_hash: value["inputHash"],
     input_schema_version: value["inputSchemaVersion"],
-    inputs: value["inputs"],
+    inputs: InputsToJSON(value["inputs"]),
+    inputs_available: value["inputsAvailable"],
+    inputs_unavailable_reason: InputsUnavailableReasonToJSON(
+      value["inputsUnavailableReason"],
+    ),
     line_items: (value["lineItems"] as Array<any>).map(
       RegulatoryLineItemReadToJSON,
     ),

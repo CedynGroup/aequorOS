@@ -212,8 +212,10 @@ export function ftpLimits(data: FtpDashboardRead | undefined): LimitRow[] {
 /**
  * LCR/NSFR rows for the limit wall. The dashboard payload carries statuses
  * but no numeric thresholds, so the thresholds come verbatim from the stored
- * run's snapshotted parameter set (`runThresholds`) — a row is emitted only
- * when its floor exists there; nothing is ever invented client-side.
+ * run's snapshotted parameter set (`runThresholds`) — or, when that snapshot
+ * is withheld below restricted view, from the run's own metric results, which
+ * record the same execution-time minimum. A row is emitted only when its
+ * floor exists in the payload; nothing is ever invented client-side.
  */
 const RATIO_STATUS: Record<string, LimitStatus> = {
   green: "ok",

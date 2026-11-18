@@ -59,7 +59,11 @@ from tests.fixtures.canonical_bank_fixture import (
 from tests.irrbb.service.test_irr_dual_curve import AGD_RATES, EXPECTED_AGD_MIDPOINTS_PCT
 from tests.support.factories.canonical import FIXTURE_AS_OF, seed_canonical_fixture
 
-CTX = TenantContext(organization_id=DEMO_ORG_ID, actor_user_id=DEMO_USER_ID)
+# authorization_version 1: the hermetic fixture user's all-sensitivity viewer
+# binding, so run reads serve the stored input snapshot to this reader.
+CTX = TenantContext(
+    organization_id=DEMO_ORG_ID, actor_user_id=DEMO_USER_ID, authorization_version=1
+)
 REPORTING_DATE = date(2026, 3, 31)
 
 
@@ -245,8 +249,11 @@ def test_official_run_discounts_on_the_published_agd(db_session: Session) -> Non
     before = _baseline_run(db_session, period.id)
     assert before.status == "succeeded"
     # Without a published discount curve the snapshot keeps its historical
-    # parameter keys — the hash-compatibility contract.
-    assert set(before.inputs["parameters"]) == {
+    # parameter keys — the hash-compatibility contract. The fixture reader
+    # holds all-sensitivity VIEW, so the snapshot is served.
+    before_inputs = before.inputs
+    assert before_inputs is not None
+    assert set(before_inputs["parameters"]) == {
         "base_curve_pct",
         "scenario_shocks",
         "limits_pct",
@@ -256,7 +263,9 @@ def test_official_run_discounts_on_the_published_agd(db_session: Session) -> Non
     after = _baseline_run(db_session, period.id)
     assert after.status == "succeeded"
 
-    parameters = after.inputs["parameters"]
+    after_inputs = after.inputs
+    assert after_inputs is not None
+    parameters = after_inputs["parameters"]
     assert set(parameters) == {
         "base_curve_pct",
         "scenario_shocks",
@@ -265,7 +274,7 @@ def test_official_run_discounts_on_the_published_agd(db_session: Session) -> Non
     }
     assert parameters["discount_curve_pct"] == EXPECTED_AGD_MIDPOINTS_PCT
     # The base curve block is untouched — the AGD never rewrites projection.
-    assert parameters["base_curve_pct"] == before.inputs["parameters"]["base_curve_pct"]
+    assert parameters["base_curve_pct"] == before_inputs["parameters"]["base_curve_pct"]
     # A run that discounted on the AGD is a different reproducible input.
     assert after.input_hash != before.input_hash
     # ... and the live freshness comparison sees the same current hash.

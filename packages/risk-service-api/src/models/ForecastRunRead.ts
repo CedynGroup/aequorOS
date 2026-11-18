@@ -11,13 +11,6 @@
  */
 
 import { mapValues } from "../runtime";
-import type { ForecastProjectionSummary } from "./ForecastProjectionSummary";
-import {
-  ForecastProjectionSummaryFromJSON,
-  ForecastProjectionSummaryFromJSONTyped,
-  ForecastProjectionSummaryToJSON,
-  ForecastProjectionSummaryToJSONTyped,
-} from "./ForecastProjectionSummary";
 import type { ForecastRunCompletedAt } from "./ForecastRunCompletedAt";
 import {
   ForecastRunCompletedAtFromJSON,
@@ -32,6 +25,13 @@ import {
   RegulatoryRunStatusToJSON,
   RegulatoryRunStatusToJSONTyped,
 } from "./RegulatoryRunStatus";
+import type { InputsUnavailableReason } from "./InputsUnavailableReason";
+import {
+  InputsUnavailableReasonFromJSON,
+  InputsUnavailableReasonFromJSONTyped,
+  InputsUnavailableReasonToJSON,
+  InputsUnavailableReasonToJSONTyped,
+} from "./InputsUnavailableReason";
 import type { RegulatoryMetricResultRead } from "./RegulatoryMetricResultRead";
 import {
   RegulatoryMetricResultReadFromJSON,
@@ -46,6 +46,20 @@ import {
   RegulatoryValidationReadToJSON,
   RegulatoryValidationReadToJSONTyped,
 } from "./RegulatoryValidationRead";
+import type { ForecastScenarioCode } from "./ForecastScenarioCode";
+import {
+  ForecastScenarioCodeFromJSON,
+  ForecastScenarioCodeFromJSONTyped,
+  ForecastScenarioCodeToJSON,
+  ForecastScenarioCodeToJSONTyped,
+} from "./ForecastScenarioCode";
+import type { ForecastProjectionSummary } from "./ForecastProjectionSummary";
+import {
+  ForecastProjectionSummaryFromJSON,
+  ForecastProjectionSummaryFromJSONTyped,
+  ForecastProjectionSummaryToJSON,
+  ForecastProjectionSummaryToJSONTyped,
+} from "./ForecastProjectionSummary";
 import type { ForecastRunStartedAt } from "./ForecastRunStartedAt";
 import {
   ForecastRunStartedAtFromJSON,
@@ -67,13 +81,13 @@ import {
   ProjectionYearReadToJSON,
   ProjectionYearReadToJSONTyped,
 } from "./ProjectionYearRead";
-import type { ForecastScenarioCode } from "./ForecastScenarioCode";
+import type { Inputs } from "./Inputs";
 import {
-  ForecastScenarioCodeFromJSON,
-  ForecastScenarioCodeFromJSONTyped,
-  ForecastScenarioCodeToJSON,
-  ForecastScenarioCodeToJSONTyped,
-} from "./ForecastScenarioCode";
+  InputsFromJSON,
+  InputsFromJSONTyped,
+  InputsToJSON,
+  InputsToJSONTyped,
+} from "./Inputs";
 import type { ForecastRunAssumptionVersion } from "./ForecastRunAssumptionVersion";
 import {
   ForecastRunAssumptionVersionFromJSON,
@@ -163,10 +177,22 @@ export interface ForecastRunRead {
   inputSchemaVersion: string;
   /**
    *
-   * @type {{ [key: string]: any; }}
+   * @type {Inputs}
    * @memberof ForecastRunRead
    */
-  inputs: { [key: string]: any };
+  inputs: Inputs;
+  /**
+   *
+   * @type {boolean}
+   * @memberof ForecastRunRead
+   */
+  inputsAvailable: boolean;
+  /**
+   *
+   * @type {InputsUnavailableReason}
+   * @memberof ForecastRunRead
+   */
+  inputsUnavailableReason: InputsUnavailableReason;
   /**
    *
    * @type {Array<RegulatoryMetricResultRead>}
@@ -270,6 +296,13 @@ export function instanceOfForecastRunRead(
   )
     return false;
   if (!("inputs" in value) || value["inputs"] === undefined) return false;
+  if (!("inputsAvailable" in value) || value["inputsAvailable"] === undefined)
+    return false;
+  if (
+    !("inputsUnavailableReason" in value) ||
+    value["inputsUnavailableReason"] === undefined
+  )
+    return false;
   if (!("metricResults" in value) || value["metricResults"] === undefined)
     return false;
   if (!("module" in value) || value["module"] === undefined) return false;
@@ -323,7 +356,11 @@ export function ForecastRunReadFromJSONTyped(
     id: json["id"],
     inputHash: json["input_hash"],
     inputSchemaVersion: json["input_schema_version"],
-    inputs: json["inputs"],
+    inputs: InputsFromJSON(json["inputs"]),
+    inputsAvailable: json["inputs_available"],
+    inputsUnavailableReason: InputsUnavailableReasonFromJSON(
+      json["inputs_unavailable_reason"],
+    ),
     metricResults: (json["metric_results"] as Array<any>).map(
       RegulatoryMetricResultReadFromJSON,
     ),
@@ -369,7 +406,11 @@ export function ForecastRunReadToJSONTyped(
     id: value["id"],
     input_hash: value["inputHash"],
     input_schema_version: value["inputSchemaVersion"],
-    inputs: value["inputs"],
+    inputs: InputsToJSON(value["inputs"]),
+    inputs_available: value["inputsAvailable"],
+    inputs_unavailable_reason: InputsUnavailableReasonToJSON(
+      value["inputsUnavailableReason"],
+    ),
     metric_results: (value["metricResults"] as Array<any>).map(
       RegulatoryMetricResultReadToJSON,
     ),
