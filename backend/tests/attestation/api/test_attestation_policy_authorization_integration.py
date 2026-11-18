@@ -8,6 +8,12 @@ binding is deliberately insufficient — authority over every future filing of a
 return is not a single-institution act — and scalar ``admin``/``account_admin``
 role claims are ignored, the post-PR #150 RBAC finding this suite pins. Denial
 writes nothing: no policy row, no template row, no audit event.
+
+The matching lists read the same organization-wide configuration, so
+``GET /attestation/signing-policies`` and ``GET /attestation/signature-placements``
+demand the same sentence at ``view``: a bank-scoped binding is refused on the
+read exactly as it is on the write, and the earlier open read of the policy list
+is gone.
 """
 
 from __future__ import annotations
@@ -28,6 +34,7 @@ from app.core.authorization import (
     SensitivityScope,
 )
 from app.db.session import get_sessionmaker
+from app.identity.public import DEFAULT_DENIAL_DETAIL
 from app.identity.service import authorization
 from app.models import (
     AuditEvent,
@@ -275,3 +282,52 @@ def test_reg_configurator_without_capital_reads_still_signs_off_icaap_policies(
     )
     assert policy.status_code == 200, policy.text
     assert policy.json()["return_code"] == "ICAAP-REPORT"
+
+
+# --- the list reads -----------------------------------------------------------
+
+
+def test_lists_decide_exactly_as_their_puts_for_the_same_actors(
+    db_client: TestClient,
+) -> None:
+    """The same actor, bound to one bank only, is refused on the list reads
+    exactly as the PUTs refuse it; the organization-scope sentence the PUT
+    demands at configure reads the lists at view."""
+    _suspend_all()
+    _grant(RoleBundle.CONFIGURATOR, scope=_bank_scope())
+    for url, payload in ((POLICY_URL, POLICY_PAYLOAD), (PLACEMENT_URL, PLACEMENT_PAYLOAD)):
+        read = db_client.get(url, headers=_auth())
+        assert read.status_code == 403, (url, read.text)
+        assert error_envelope(read)["message"] == DEFAULT_DENIAL_DETAIL
+        write = db_client.put(url, headers=_auth(), json=payload)
+        assert write.status_code == 403, (url, write.text)
+        assert error_envelope(write)["message"] == ORG_DENIAL
+
+    _suspend_all()
+    _grant(RoleBundle.VIEWER, scope=_org_scope())
+    for url in (POLICY_URL, PLACEMENT_URL):
+        assert db_client.get(url, headers=_auth()).status_code == 200, url
+
+
+def test_lists_denied_without_any_binding(db_client: TestClient) -> None:
+    _suspend_all()
+    for url in (POLICY_URL, PLACEMENT_URL):
+        denied = db_client.get(url, headers=_auth())
+        assert denied.status_code == 403, (url, denied.text)
+        assert error_envelope(denied)["message"] == DEFAULT_DENIAL_DETAIL
+
+
+def test_configure_authority_writes_but_does_not_read(db_client: TestClient) -> None:
+    """Configurator carries exactly ``configure``: the organization-scope
+    Configurator writes a policy and still cannot list it."""
+    _suspend_all()
+    _grant(RoleBundle.CONFIGURATOR, scope=_org_scope())
+    for url in (POLICY_URL, PLACEMENT_URL):
+        denied = db_client.get(url, headers=_auth())
+        assert denied.status_code == 403, (url, denied.text)
+        assert error_envelope(denied)["message"] == DEFAULT_DENIAL_DETAIL
+
+    policy = db_client.put(POLICY_URL, headers=_auth(), json=POLICY_PAYLOAD)
+    assert policy.status_code == 200, policy.text
+    still = db_client.get(POLICY_URL, headers=_auth())
+    assert still.status_code == 403, still.text

@@ -1,15 +1,17 @@
-"""REG configure cutover: channel-config and reporting-settings writes need
-exact grants.
+"""REG configure cutover: channel-config and reporting-settings need exact grants.
 
 ``PUT /banks/{bank_id}/regulatory-reporting/channel-configs/{channel}`` and
 ``PUT /banks/{bank_id}/regulatory-reporting/settings`` are configuration duties:
 they require a complete active ``reg/configure/restricted`` exact-bank binding,
 denied BEFORE any credential encryption, row mutation or audit row (VAL-CFG-007).
-The read boundaries keep their existing tenant gates and gain nothing from
-Configurator (no broadening). Both writes return write-only acknowledgements
-(D27/D34): a configure-only caller never reads stored content — the credential
-fingerprint, ``has_credentials`` or the stored row timestamps — through a write
-response.
+The matching GETs read the same restricted-surface configuration, so they demand
+the same binding at ``view`` — coverage first (a principal with no effective
+authority for the bank in any module gets the opaque 404), then the scoped
+denial, and the channel's "not configured" 404 only once authorization has
+passed. Both writes return write-only acknowledgements (D27/D34): a
+configure-only caller never reads stored content — the credential fingerprint,
+``has_credentials`` or the stored row timestamps — through a write response, and
+configure alone confers no read.
 """
 
 from __future__ import annotations
@@ -32,6 +34,7 @@ from app.core.authorization import (
 )
 from app.core.config import get_settings
 from app.db.session import get_sessionmaker
+from app.identity.public import DEFAULT_DENIAL_DETAIL
 from app.identity.service import authorization
 from app.models import (
     AuditEvent,
@@ -352,3 +355,112 @@ def _suspend_all(db: Session | None = None) -> None:
     )
     if db is None:
         session.close()
+
+
+# --- the read gates -----------------------------------------------------------
+#
+# The seeded hermetic viewer (organization-scope, all modules, all sensitivities)
+# covers reg/restricted VIEW on its own, so every deny case here suspends it and
+# rebuilds exactly the coverage the case is about.
+
+
+def _coverage_without_reg_view() -> None:
+    """Suspend everything, then grant one non-REG exact-bank read: the actor
+    stays covered for the bank (it exists for them) but holds no REG sentence."""
+    _suspend_all()
+    _grant(
+        RoleBundle.VIEWER,
+        module=ModuleScope.LIQUIDITY,
+        sensitivity=SensitivityScope.CONFIDENTIAL,
+    )
+
+
+def test_reads_require_exact_bank_restricted_view(db_client: TestClient) -> None:
+    """Covered, scalar roles and all, but without reg/restricted VIEW: both
+    configuration reads are refused with the shared denial detail, before any
+    stored content is read."""
+    _coverage_without_reg_view()
+    for url in (CHANNEL_URL, SETTINGS_URL):
+        denied = db_client.get(url, headers=_auth())
+        assert denied.status_code == 403, (url, denied.text)
+        assert error_envelope(denied)["message"] == DEFAULT_DENIAL_DETAIL
+
+
+def test_reads_read_for_the_exact_bank_viewer(db_client: TestClient) -> None:
+    """The exact reg/restricted VIEW sentence reads both stored rows."""
+    _suspend_all()
+    _grant(RoleBundle.CONFIGURATOR)
+    stored = db_client.put(
+        CHANNEL_URL,
+        headers=_auth(),
+        json={"config": {"institution_code": "SBL-001"}, "credentials": {"api_key": "secret"}},
+    )
+    assert stored.status_code == 200, stored.text
+    settings = db_client.put(
+        SETTINGS_URL, headers=_auth(), json={"deadline_overrides": {"BSD2": 14}}
+    )
+    assert settings.status_code == 200, settings.text
+    _grant(RoleBundle.VIEWER)
+
+    read = db_client.get(CHANNEL_URL, headers=_auth())
+    assert read.status_code == 200, read.text
+    body = read.json()
+    assert body["config"] == {"institution_code": "SBL-001"}
+    assert body["has_credentials"] is True
+    assert body["credential_fingerprint"]
+
+    settings_read = db_client.get(SETTINGS_URL, headers=_auth())
+    assert settings_read.status_code == 200, settings_read.text
+    assert settings_read.json()["deadline_overrides"] == {"BSD2": 14}
+
+
+def test_unconfigured_channel_404_only_after_authorization(db_client: TestClient) -> None:
+    """A channel the bank never configured answers 404 to an authorized reader
+    and 403 — never the unconfigured 404 — to one without the read sentence."""
+    _suspend_all()
+    _grant(RoleBundle.VIEWER)
+    unconfigured = db_client.get(CHANNEL_URL, headers=_auth())
+    assert unconfigured.status_code == 404, unconfigured.text
+    assert "No channel configuration exists" in error_envelope(unconfigured)["message"]
+
+    _suspend_all()
+    _coverage_without_reg_view()
+    denied = db_client.get(CHANNEL_URL, headers=_auth())
+    assert denied.status_code == 403, denied.text
+    assert error_envelope(denied)["message"] == DEFAULT_DENIAL_DETAIL
+
+
+def test_reads_denied_for_the_sibling_bank_viewer(db_client: TestClient) -> None:
+    """The reg/restricted VIEW sentence granted on the sibling bank reads
+    nothing here: coverage comes from a non-REG row, the REG sentence sits on
+    the wrong bank."""
+    _suspend_all()
+    _grant(
+        RoleBundle.VIEWER,
+        module=ModuleScope.LIQUIDITY,
+        sensitivity=SensitivityScope.CONFIDENTIAL,
+    )
+    _grant(RoleBundle.VIEWER, bank_id=SIBLING)
+    for url in (CHANNEL_URL, SETTINGS_URL):
+        denied = db_client.get(url, headers=_auth())
+        assert denied.status_code == 403, (url, denied.text)
+        assert error_envelope(denied)["message"] == DEFAULT_DENIAL_DETAIL
+
+
+def test_reads_hidden_without_any_coverage(db_client: TestClient) -> None:
+    """With every binding suspended the bank itself is hidden: the opaque 404,
+    for both reads."""
+    _suspend_all()
+    for url in (CHANNEL_URL, SETTINGS_URL):
+        hidden = db_client.get(url, headers=_auth())
+        assert hidden.status_code == 404, (url, hidden.text)
+        assert error_envelope(hidden)["message"] == "Bank not found."
+
+
+def test_reads_hidden_from_another_organization(db_client: TestClient) -> None:
+    _grant(RoleBundle.CONFIGURATOR)
+    other = headers(org_id="OR-1S000002", roles=("admin",))
+    for url in (CHANNEL_URL, SETTINGS_URL):
+        hidden = db_client.get(url, headers=other)
+        assert hidden.status_code == 404, (url, hidden.text)
+        assert error_envelope(hidden)["message"] == "Bank not found."

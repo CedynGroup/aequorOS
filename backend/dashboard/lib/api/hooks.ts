@@ -3284,6 +3284,7 @@ export function isChannelConfigMissingError(error: unknown): boolean {
 export function useChannelConfig(
   bankId: string | undefined,
   channel: ChannelCode,
+  options?: { enabled?: boolean },
 ) {
   return useQuery({
     queryKey: ["rr-channel-config", bankId, channel],
@@ -3294,7 +3295,10 @@ export function useChannelConfig(
           channel,
         }),
       ),
-    enabled: Boolean(bankId),
+    // The backend refuses the stored-configuration read without the exact
+    // reg/restricted view sentence, so the caller asks first and the denied
+    // state renders without a guaranteed-403 request.
+    enabled: Boolean(bankId) && options?.enabled !== false,
     retry: false,
   });
 }
