@@ -403,6 +403,11 @@ generate → preview vs prior period → validate → approvals → export xlsx/
 config, institution codes, contacts). Liquidity/Basel submission tabs removed → module pages
 link "Official returns →". Sidebar Governance: Reports · Regulatory Reporting · Settings.
 
+In **Returns**, you can use the export buttons as soon as they are enabled for
+the generated version, even while package details are loading. The buttons
+show a reason when the version history needed to identify the filed document
+is still loading or could not be loaded.
+
 ## 8. Extensibility
 
 `regulator` field on registry entries (BOG now; CBN/CBK/SARB later); channels and templates are
