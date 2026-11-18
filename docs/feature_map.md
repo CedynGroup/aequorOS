@@ -142,18 +142,15 @@ Parses a spreadsheet or CSV into an ingestion batch with row-level findings.
 Loads data from an institution's middleware through three calls, running the
 same pipeline as an upload.
 
-- **Reach**: a data push integration key issued for the bank (see
-  [Integration keys](#integration-keys)); the contract is
-  [API_INTEGRATION.md](API_INTEGRATION.md).
-- **Control**: `POST /banks/{bank_id}/push-batches` (open, with `as_of_date`,
-  `idempotency_key`, `reason`), `POST .../{push_id}/records` (stage pages),
-  `POST .../{push_id}/commit`; `GET .../{push_id}` reports staging status.
-- **Check**: open answers `201`; commit answers `201` and yields an ingestion
-  batch with `source_system` `API_PUSH`; reopening with the same key returns the
-  same batch.
-- **Traps**: a key works only on the push routes and the bank it was issued for;
-  other routes answer `401` and another bank answers `404`. A human access token
-  answers `403` here. Reusing a key with a different `as_of_date` is `409`.
+- **Reach**: a data push integration key issued for the bank. See
+  [Integration keys](#integration-keys).
+- **Control**: open a push batch, stage synthetic records and commit it using
+  the [push flow](API_INTEGRATION.md#2-the-three-call-flow) in the integration guide.
+- **Check**: the commit returns an ingestion batch with `source_system`
+  `API_PUSH`. Repeat the commit and confirm it returns the same ingestion
+  batch with `reused: true`.
+- **Traps**: the integration guide covers authentication and idempotency.
+  Keep the integration key out of evidence.
 - **Depends on**: `/banks/{bank_id}/push-batches` and its `records` and `commit`
   routes; `backend/scripts/ingest_push.py`.
 
@@ -705,8 +702,9 @@ Uploads a spreadsheet or CSV and reviews the batch it creates.
   click **Upload & ingest**; open **Batch detail**.
 - **Check**: the outcome card shows the batch state and the Extracted,
   Translated, Accepted and Errors counts; `/data-engine/batches/{batchId}` lists
-  "Validation findings" and "Untranslatable rows" with row references. For
-  `tests/data-engine/fixtures/positions.csv` the counts are 4, 3, 2 and 1.
+  "Validation findings" and "Untranslatable rows" with row references. Use the
+  [ingestion story test](../backend/dashboard/tests/data-engine/data-engine-ingestion.e2e.spec.ts)
+  for the synthetic fixture and its expected counts.
 - **Traps**: a legacy `.xls` is refused with re-save guidance. Non-blocking row
   errors can yield "accepted with warnings"; a blocker rejects the batch.
   Use synthetic files only.
