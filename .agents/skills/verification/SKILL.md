@@ -20,7 +20,9 @@ it and capture on it:
 Tools, fixtures and feature maps are ordinary repo code and docs. The references
 link to them; this skill does not copy them. The
 [feature map](../../../docs/feature_map.md) lists each surface's features with
-how to reach, drive and check them. Tests, gates and CI are not
+how to reach, drive and check them. A change that adds, renames or removes a
+feature updates its entry in the same PR; a CI check fails when an entry names a
+route, page, test id or file that no longer exists. Tests, gates and CI are not
 replaced by verification: run the gates in
 [ARCHITECTURE.md §8](../../../ARCHITECTURE.md#8-validation-commands) as well.
 

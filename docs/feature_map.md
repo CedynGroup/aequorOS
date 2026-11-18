@@ -12,12 +12,16 @@ Verification recipes use these fields:
 - **Control**: what you click, type or call.
 - **Check**: the observable result that proves it worked.
 - **Traps**: failures that are not product bugs.
-- **Depends on**: the routes, endpoints and selectors the entry relies on.
+- **Depends on**: the routes, pages, test ids and files the entry relies on, as labelled
+  clauses (see [Checked references](#checked-references)).
 
 Entries that skip an operation give the reason under **Verification** and list
 the dependencies separately.
 
 Headings are identifiers. Rename one only together with every reference to it.
+A change that adds, renames or removes a feature updates its entry in the same
+change. Prefer a control's accessible role or name over quoted copy, and point to
+the source or spec that owns the detail instead of restating it.
 
 Shared conventions, which the entries do not repeat:
 
@@ -34,6 +38,27 @@ Shared conventions, which the entries do not repeat:
   `/api/`. Operator API paths that start with `/operator/` are already complete.
   `{bank_id}` is a `BK-` platform ID and `{org_id}` an `OR-` platform ID.
 
+## Checked references
+
+`backend/tests/architecture/test_feature_map_references.py` runs in the "Unit
+tests" CI job and locally with
+`cd backend && uv run pytest tests/architecture/test_feature_map_references.py`. It
+fails when a name an entry depends on no longer exists, when a link or repository
+path in this file points at nothing, or when a router group or page group is
+neither covered by an entry nor listed under [Not mapped](#not-mapped).
+
+A **Depends on** line is a list of clauses separated by semicolons. Each clause
+starts with a label and lists backticked tokens:
+
+- `tenant API` and `operator API`: a route, optionally with a leading HTTP method
+  and a trailing `/*` for a subtree. Tenant paths omit the `/api/v1` prefix.
+- `pages`: a path in the app tree of the surface the entry sits under.
+- `test ids`: a `data-testid` string in that surface's component source.
+- `files`: a repository path that Git tracks.
+
+`{name}` and `[name]` both stand for a path parameter. The check proves a name
+still exists, not that the recipe around it still works.
+
 ## Tenant API
 
 The bank-facing FastAPI app in `backend/app/main.py` on :8000. Reach it as in
@@ -49,7 +74,7 @@ Reports whether the process is alive and whether its dependencies are ready.
   `degraded` and component checks, or `503` when the readiness probe fails.
 - **Traps**: computation cases need `app.worker` running. The worker check
   detects overdue jobs as a sign of degradation. Check the process separately.
-- **Depends on**: `/api/health/live`, `/api/health/ready`.
+- **Depends on**: tenant API `/api/health/live`, `/api/health/ready`.
 
 ### Tenant API sign-in
 
@@ -59,17 +84,18 @@ caller's identity and authority.
 - **Reach**: a local account exists (the provisioned administrator or a member
   granted scoped access).
 - **Control**: `POST /auth/login` with `{"email", "password"}`; send the
-  returned `access_token` as a bearer value. `POST /auth/refresh` rotates a
-  session and `POST /auth/logout` revokes it.
+  returned `access_token` as a bearer value. `POST /auth/refresh` and
+  `POST /auth/logout` each take `{"refresh_token": ...}`; refresh returns a
+  replacement refresh token, so log out with the replacement.
 - **Check**: `GET /auth/me` returns the caller; `GET /auth/effective-authority`
-  returns the scoped grants the rest of the API enforces. A refresh token
-  replayed after logout answers `401`.
+  returns the scoped grants the rest of the API enforces. After logout, refreshing
+  with that same replacement token answers `401`.
 - **Traps**: authority comes from scoped bindings, not the role label or token
   claims, so confirm effective authority for the bank and action before a
   capture. Pass credentials by environment variable and keep them out of
   evidence.
-- **Depends on**: `/auth/login`, `/auth/refresh`, `/auth/logout`, `/auth/me`,
-  `/auth/effective-authority`.
+- **Depends on**: tenant API `POST /auth/login`, `POST /auth/refresh`,
+  `POST /auth/logout`, `GET /auth/me`, `GET /auth/effective-authority`.
 
 ### Live summary, freshness and alerts
 
@@ -93,25 +119,39 @@ findings raised. This is the tenant-health surface.
   `blocked` module was computed on a book that fails the balance-sheet identity;
   nothing derived from it may be filed. An official-run refusal is the fail-closed
   design, not a fault. Never derive facts yourself to populate a screen.
-- **Depends on**: `/banks/{bank_id}/live-summary`, `/freshness`, `/alerts`,
-  `/refresh`, `/official-runs`.
+- **Depends on**: tenant API `GET /banks/{bank_id}/live-summary`,
+  `GET /banks/{bank_id}/freshness`, `GET /banks/{bank_id}/alerts`,
+  `POST /banks/{bank_id}/refresh`, `POST /banks/{bank_id}/official-runs`.
 
 ### Module dashboards
 
 Serves each risk module's computed headline payload.
 
 - **Reach**: a signed-in principal holding the module's grant; a loaded book for
-  populated results.
+  populated results. Scenario runs need the module's Run authority, which the
+  read-only dashboard grant does not carry.
 - **Control**: `GET /banks/{bank_id}/liquidity/dashboard`,
   `/capital/dashboard`, `/irr/dashboard`, `/fx/dashboard`, `/ftp/dashboard`,
   `/credit/dashboard`; scenario runs are `POST` to each module's
-  `/run-all-scenarios`.
-- **Check**: each answers with the module's payload for the live book, matching
-  what its dashboard screen shows.
+  `/run-all-scenarios` with the `reporting_period_id` of an existing reporting
+  period in the JSON body.
+- **Check**: each answers with the module's `metrics` for the live book, matching
+  what its dashboard screen shows: `lcr_pct` and `nsfr_pct` (liquidity), `car_pct`
+  and `cet1_ratio_pct` (capital), `worst_eve_change_pct_tier1` (IRR),
+  `nop_pct_tier1` (FX), `portfolio_nim_pct` (FTP) and `npl_ratio_pct` (credit).
 - **Traps**: "no data yet" or "not configured" answers `200` with
   `{"available": false, "error_code", "reason"}`, not a `4xx`. Treat that as the
   unavailable state to verify, not as an error.
-- **Depends on**: the `/dashboard` and `/run-all-scenarios` routes above.
+- **Depends on**: tenant API `GET /banks/{bank_id}/liquidity/dashboard`,
+  `GET /banks/{bank_id}/capital/dashboard`, `GET /banks/{bank_id}/irr/dashboard`,
+  `GET /banks/{bank_id}/fx/dashboard`, `GET /banks/{bank_id}/ftp/dashboard`,
+  `GET /banks/{bank_id}/credit/dashboard`,
+  `POST /banks/{bank_id}/liquidity/run-all-scenarios`,
+  `POST /banks/{bank_id}/capital/run-all-scenarios`,
+  `POST /banks/{bank_id}/irr/run-all-scenarios`,
+  `POST /banks/{bank_id}/fx/run-all-scenarios`,
+  `POST /banks/{bank_id}/ftp/run-all-scenarios`,
+  `POST /banks/{bank_id}/credit/run-all-scenarios`.
 
 ### Data Engine upload
 
@@ -130,10 +170,12 @@ Parses a spreadsheet or CSV into an ingestion batch with row-level findings.
   must be running. A legacy `.xls` is refused by format with re-save guidance;
   an empty file answers `422` and an oversized file `413`. Non-blocking row
   errors can yield `accepted_with_warnings`; a `BLOCKER` rejects the batch.
-- **Depends on**: `POST /banks/{bank_id}/ingestion-uploads`,
-  `POST /banks/{bank_id}/ingestion-batches`, `GET /banks/{bank_id}/ingestion-batches[/{batch_id}]` and
+- **Depends on**: tenant API `POST /banks/{bank_id}/ingestion-uploads`,
+  `POST /banks/{bank_id}/ingestion-batches`, `GET /banks/{bank_id}/ingestion-batches`,
+  `GET /banks/{bank_id}/ingestion-batches/{batch_id}`,
   `GET /banks/{bank_id}/ingestion-batches/{batch_id}/translation-failures`,
-  plus `/ingestion-summary`, `/mapping-configs` and `/data-activations`.
+  `GET /banks/{bank_id}/ingestion-summary`, `GET /banks/{bank_id}/mapping-configs`,
+  `GET /banks/{bank_id}/data-activations`.
 
 ### Data Engine API push
 
@@ -149,8 +191,8 @@ same pipeline as an upload.
   batch with `reused: true`.
 - **Traps**: the integration guide covers authentication and idempotency.
   Keep the integration key out of evidence.
-- **Depends on**: `/banks/{bank_id}/push-batches` and its `records` and `commit`
-  routes; `backend/scripts/ingest_push.py`.
+- **Depends on**: tenant API `/banks/{bank_id}/push-batches/*`; files
+  `backend/scripts/ingest_push.py`, `docs/API_INTEGRATION.md`.
 
 ### Regulatory returns
 
@@ -178,9 +220,8 @@ Generates, validates, certifies and files regulatory return packages.
   reporting periods. Without signing configured the API logs that no return can be
   certified or filed; that is the unconfigured state, not a fault. Verify filing
   only against the simulated channel.
-- **Depends on**: `/banks/{bank_id}/regulatory-packages[/{package_id}]` and its
-  `validate`, `workflow`, `attestation/step-up`, `attestation/certify` and
-  `submit` routes, `/return-anchors`, `/regulatory-runs`.
+- **Depends on**: tenant API `/banks/{bank_id}/regulatory-packages/*`,
+  `GET /banks/{bank_id}/return-anchors`, `GET /banks/{bank_id}/regulatory-runs`.
 
 ### Access grants and members
 
@@ -198,8 +239,10 @@ Lists the organization's members and administers scoped access grants.
 - **Traps**: a grant that conflicts with an existing one is refused by design.
   Two banks of one organization share a tenant, so verify a sibling bank is
   refused at the query, not only hidden in the UI.
-- **Depends on**: `/organization/members`, `/authorization/bindings`,
-  `/authorization/bindings/preview`, `/authorization/access-requests`.
+- **Depends on**: tenant API `GET /organization/members`,
+  `POST /authorization/bindings`, `POST /authorization/bindings/preview`,
+  `POST /authorization/bindings/{binding_id}/revoke`,
+  `/authorization/access-requests/*`.
 
 ### Integration keys
 
@@ -212,7 +255,8 @@ Issues and revokes bank-scoped machine keys for the push API.
   key is listed as revoked and its writes are refused.
 - **Traps**: only data push keys can be issued; a reader key is refused with
   `422`. Never record the key value in evidence.
-- **Depends on**: `/integration-keys`, `/integration-keys/{key_id}/revoke`.
+- **Depends on**: tenant API `GET /integration-keys`, `POST /integration-keys`,
+  `POST /integration-keys/{key_id}/revoke`.
 
 ### Business intelligence
 
@@ -225,7 +269,22 @@ Defines measures, dashboards and alerts over a bank's data.
   shares.
 - **Traps**: with BI disabled the registered BI routes return `404` through the
   router-level feature gate.
-- **Depends on**: `/banks/{bank_id}/bi/*`.
+- **Depends on**: tenant API `/banks/{bank_id}/bi/*`.
+
+### Bank audit log
+
+Reads the bank's attributable security and compliance events.
+
+- **Reach**: an account with an Auditor, Security Officer or Compliance Officer
+  binding that covers the whole institution; perform a loggable action first, such
+  as a grant.
+- **Control**: `GET /banks/{bank_id}/audit-log?limit=20`; add `event_type`, `actor`
+  or `outcome` to filter and follow `next_cursor` for the next page.
+- **Check**: events list newest first and the action you performed appears with its
+  actor; a second page continues from `next_cursor`.
+- **Traps**: `start` and `end` must carry a timezone or the API answers `422`. An
+  account without an officer binding is refused with `403`.
+- **Depends on**: tenant API `GET /banks/{bank_id}/audit-log`.
 
 ## Staff operator API
 
@@ -246,7 +305,7 @@ Reports liveness and signs in a local staff account.
 - **Traps**: password sign-in needs `OPERATOR_JWT_SECRET`, a different random
   value from `AUTH_JWT_SECRET`. The dev token path needs
   `OPERATOR_DEV_AUTH_ENABLED=1` and is refused outside an undeployed environment.
-- **Depends on**: `/operator/health`, `/operator/auth/login`.
+- **Depends on**: operator API `GET /operator/health`, `POST /operator/auth/login`.
 
 ### Tenant provisioning
 
@@ -260,8 +319,8 @@ Creates a tenant's organization, bank and first administrator as one saga.
 - **Traps**: provisioning writes setup records and no bank financial data. A step
   failure rolls back what preceded it. The generated administrator password is
   shown once.
-- **Depends on**: `/operator/v1/tenants`, `/operator/v1/tenants/{org_id}`,
-  `/operator/v1/audit`.
+- **Depends on**: operator API `POST /operator/v1/tenants`, `GET /operator/v1/tenants`,
+  `GET /operator/v1/tenants/{org_id}`, `GET /operator/v1/audit`.
 
 ### Tenant diagnostics and remediation
 
@@ -283,8 +342,14 @@ fixes.
   audit entry.
 - **Traps**: fixes mutate tenant state, so run them only against the disposable
   database. Whether a fix completes depends on the worker running.
-- **Depends on**: the `/operator/v1/tenants/{org_id}/*` routes above, `/jobs`,
-  `/worker-health`.
+- **Depends on**: operator API `GET /operator/v1/tenants/{org_id}/metrics`,
+  `GET /operator/v1/tenants/{org_id}/ingestion`,
+  `GET /operator/v1/tenants/{org_id}/ingestion/{batch_id}`,
+  `GET /operator/v1/tenants/{org_id}/findings`,
+  `GET /operator/v1/tenants/{org_id}/config`,
+  `GET /operator/v1/tenants/{org_id}/storage`,
+  `GET /operator/v1/tenants/{org_id}/users`, `POST /operator/v1/tenants/{org_id}/fix/*`,
+  `GET /operator/v1/jobs`, `GET /operator/v1/worker-health`.
 
 ### Inspector sessions
 
@@ -302,8 +367,10 @@ Opens a time-boxed, audited, read-only inspection of one tenant.
 - **Traps**: the act token and any URL fragment carrying it are credentials; keep
   them out of evidence. Confirm `dashboard_url` is the loopback dashboard before
   opening it.
-- **Depends on**: `/operator/v1/inspector/sessions` and its `act-token` and `end`
-  routes.
+- **Depends on**: operator API `POST /operator/v1/inspector/sessions`,
+  `GET /operator/v1/inspector/sessions`,
+  `POST /operator/v1/inspector/sessions/{session_id}/act-token`,
+  `POST /operator/v1/inspector/sessions/{session_id}/end`.
 
 ### Operator accounts
 
@@ -316,7 +383,10 @@ Creates staff accounts and manages their role and activation.
   one-time password; each change is in the audit log.
 - **Traps**: staff sessions without account administration authority receive
   `403`. Rank rules also limit which accounts an administrator may change.
-- **Depends on**: `/operator/v1/operators`, `/operator/v1/audit`.
+- **Depends on**: operator API `GET /operator/v1/operators`,
+  `POST /operator/v1/operators`, `POST /operator/v1/operators/{email}/deactivate`,
+  `POST /operator/v1/operators/{email}/reactivate`,
+  `POST /operator/v1/operators/{email}/reset-password`, `GET /operator/v1/audit`.
 
 ### Regulatory parameters
 
@@ -324,12 +394,15 @@ Governs the control-plane thresholds banks are measured against, with four-eyes
 approval.
 
 - **Reach**: a signed-in operator.
-- **Control**: `GET` and `POST /operator/v1/regulatory-parameters`; `POST
-/operator/v1/regulatory-parameters/{param_id}/approve` from a second operator.
+- **Control**: `GET` and `POST /operator/v1/regulatory-parameters`; a second
+  operator then calls `POST /operator/v1/regulatory-parameters/{param_id}/approve`
+  with `{}` or an object holding `change_rationale`.
 - **Check**: a proposed parameter stays pending until a different operator
   approves it; the approval is audited.
 - **Traps**: the proposer cannot approve their own change.
-- **Depends on**: `/operator/v1/regulatory-parameters`.
+- **Depends on**: operator API `GET /operator/v1/regulatory-parameters`,
+  `POST /operator/v1/regulatory-parameters`,
+  `POST /operator/v1/regulatory-parameters/{param_id}/approve`.
 
 ### Markets desk determinations
 
@@ -348,12 +421,38 @@ banks.
 - **Traps**: a vendor error never reaches a bank-facing surface; an unavailable
   source shows as unavailable. Publishing writes shared market data, so use the
   disposable database.
-- **Depends on**: `/operator/v1/desk/*`, `/operator/v1/curves/*`.
+- **Depends on**: operator API `POST /operator/v1/fx-forward/construct`,
+  `/operator/v1/desk/*`, `/operator/v1/curves/*`.
+
+### Operating environment assessments
+
+Computes, reviews, approves and publishes the operating-environment score that
+feeds the implied-rating model.
+
+- **Reach**: two different signed-in operators, a disposable database and loaded
+  observable inputs.
+- **Control**: `POST /operator/v1/operating-environment/compute-preview`, then
+  `POST /operator/v1/operating-environment/assessments` to stage a draft and
+  `POST .../assessments/{assessment_id}/submit`; the second operator calls
+  `approve` and then `publish` on the same path.
+- **Check**: the assessment moves through draft, pending review, approved and
+  published, and `GET /operator/v1/operating-environment/assessments` lists it.
+- **Traps**: the proposer cannot approve. Publishing writes shared market data to
+  every tenant, so use the disposable database only. A per-tenant failure is
+  recorded rather than rolled back, and publishing again heals it.
+- **Depends on**: operator API `GET /operator/v1/operating-environment/assessments`,
+  `POST /operator/v1/operating-environment/compute-preview`,
+  `POST /operator/v1/operating-environment/assessments`,
+  `POST /operator/v1/operating-environment/assessments/{assessment_id}/submit`,
+  `POST /operator/v1/operating-environment/assessments/{assessment_id}/approve`,
+  `POST /operator/v1/operating-environment/assessments/{assessment_id}/publish`.
 
 ## Staff console
 
 The operator UI in `console/` on :3002. It reaches the operator API through its
-`/api/op` proxy only. Reach it as in
+`/api/op` proxy only. It has no browser e2e and no `data-testid`, so the entries
+name controls by their visible label and point to the component that owns the
+copy. Reach it as in
 [the console reference](../.agents/skills/verification/references/console.md).
 
 ### Console sign-in
@@ -361,29 +460,28 @@ The operator UI in `console/` on :3002. It reaches the operator API through its
 Signs a staff member in to the console.
 
 - **Reach**: `/login` with the console and operator API running.
-- **Control**: type an email and password into the **Email** and **Password**
-  fields and click **Sign in**; in development builds, open **Local dev**, paste
-  the token into the field with placeholder `Paste OPERATOR_DEV_TOKEN` and click
-  **Sign in with dev token**.
-- **Check**: the URL leaves `/login` for `/` and the shell navigation appears; a
-  wrong credential shows an alert and keeps you on `/login`; a rejected dev token
-  reads "Token rejected by the operator API."
-- **Traps**: the dev disclosure exists only in development builds and needs dev
-  auth enabled on the operator API. Workforce SSO is for deployed environments
-  and is not a verification path.
-- **Depends on**: `/login`, `/api/auth/password-login`, `/api/op/*`; the operator
-  API's `/operator/auth/login`.
+- **Control**: fill **Email** and **Password** and submit; in development builds
+  only, expand **Local dev** and submit a dev token.
+- **Check**: the URL becomes `/tenants` and the shell navigation appears; a wrong
+  credential shows an alert and keeps you on `/login`.
+- **Traps**: the same secrets and dev-auth conditions as
+  [Operator health and sign-in](#operator-health-and-sign-in). Workforce SSO is for
+  deployed environments and is not a verification path. Error copy is owned by
+  `console/app/login/page.tsx`.
+- **Depends on**: pages `/login`, `/api/auth/*`, `/api/op/*`; operator API
+  `POST /operator/auth/login`; files `console/app/login/page.tsx`.
 
 ### Console home
 
 Summarises the fleet, items needing attention, connections and desk status.
 
-- **Reach**: signed in at `/`.
+- **Reach**: signed in; open `/`.
 - **Control**: open **Home** in the rail.
 - **Check**: the fleet snapshot, overview figures and attention list render from
-  the operator API's overview and tenant reads.
+  `GET /operator/v1/overview` and `GET /operator/v1/tenants`.
 - **Traps**: an empty deployment shows empty states, not zeros.
-- **Depends on**: `/`; `/operator/v1/overview`, `/operator/v1/tenants`.
+- **Depends on**: pages `/`; operator API `GET /operator/v1/overview`,
+  `GET /operator/v1/tenants`.
 
 ### Console tenants
 
@@ -392,112 +490,147 @@ Lists every onboarded institution and opens one for diagnostics.
 - **Reach**: signed in; open `/tenants`. The detail page loads its ingestion and
   live-module figures only while a session you opened for that tenant is active
   (see [Console inspector](#console-inspector)).
-- **Control**: filter with **All**, **Live**, **Empty** or **Stale**; **Export
-  CSV**; open a row for `/tenants/{orgId}`.
-- **Check**: the count line reads "N of M shown"; the detail page shows
-  jurisdiction, currency, licence, ingestion and live-module figures for that
-  tenant.
-- **Traps**: with no tenants the table shows "No tenants on this deployment yet".
-- **Depends on**: `/tenants`, `/tenants/[orgId]`; `/operator/v1/tenants`.
+- **Control**: filter with the **All**, **Live**, **Empty** and **Stale** toggles
+  or the search box, use **Export CSV**, and open a row for `/tenants/{orgId}`.
+- **Check**: the count line reads "N of M shown" and the tiles agree with
+  `GET /operator/v1/tenants`; the detail page shows jurisdiction, currency,
+  licence, ingestion and live-module figures for that tenant. The tile
+  definitions are in `console/app/(shell)/(developer)/tenants/page.tsx`.
+- **Traps**: with no tenants the table shows its empty state. Diagnostics traps are
+  in [Tenant diagnostics and remediation](#tenant-diagnostics-and-remediation).
+- **Depends on**: pages `/tenants`, `/tenants/{orgId}`; operator API
+  `GET /operator/v1/tenants`.
 
 ### Console onboarding
 
 Provisions a tenant through a form, a review step and a result panel.
 
 - **Reach**: signed in; open `/onboard`.
-- **Control**: fill **Organization name**, **Bank name**, **License type**,
-  **Institution type**, **Jurisdiction**, **Reporting currency**, **Admin email**
-  and **Admin full name**, click **Review**, then **Provision tenant**.
-- **Check**: the "Provisioning steps" panel reports each step, then "Tenant
-  provisioned" shows the new identifiers and a one-time password.
-- **Traps**: nothing is created until the review step is confirmed. The panel
-  holds the generated password, so keep it out of screenshots. When the bank key
-  fields are required, the form asks for key details before it enables **Review**.
-- **Depends on**: `/onboard`; `POST /operator/v1/tenants`.
+- **Control**: fill every required field (jurisdiction prefills the currency and
+  institution type is a closed list), then **Review**, then **Provision tenant**.
+  The fields and their rules are in `console/app/(shell)/(developer)/onboard/page.tsx`.
+- **Check**: the "Provisioning steps" panel reports each step, then the result
+  shows the new `BK-` and `OR-` identifiers; the one-time password stays hidden
+  until revealed.
+- **Traps**: nothing is created until the review step is confirmed. Do not reveal
+  the password in a screenshot. Bank key fields become required when the operator
+  health read reports `bank_key_required` (`console/lib/onboarding.ts`). The saga
+  traps are in [Tenant provisioning](#tenant-provisioning).
+- **Depends on**: pages `/onboard`; operator API `POST /operator/v1/tenants`; files
+  `console/lib/onboarding.ts`.
 
 ### Console inspector
 
 Starts and ends audited inspection sessions and opens a tenant's dashboard.
 
 - **Reach**: signed in with inspector authority; open `/admin/inspector`.
-- **Control**: under "Start inspection session" choose **Organization**,
-  **Examination bank**, **Reason**, **Support reference**, **Mode** and
-  **Session duration**, then click **Start session**. On that tenant's page
-  click **Open bank dashboard**, then **Open in new tab** in the modal.
-  Return to `/admin/inspector`, select **Active only** and click **End** on the
-  session row.
-- **Check**: the session appears in the active list and count. The dashboard
-  opens at `/inspect`, and ending the session removes it from the active list.
-- **Traps**: pause at the button's navigation call and keep the token and URL
-  fragment out of evidence, as the console reference describes.
-- **Depends on**: `/admin/inspector`, `components/tenants/OpenBankDashboardButton.tsx`;
-  `/operator/v1/inspector/sessions`.
+- **Control**: click **Start session**, choose the **Organization** (it also fixes
+  the examination bank), fill **Reason** and **Support reference**, choose **Mode**
+  and **Session duration**, and submit the dialog. On that tenant's page click
+  **Open bank dashboard**, then **Open in new tab**. Back on `/admin/inspector`,
+  set the session-state filter to active only and click **End** on the row.
+- **Check**: the active-sessions tile and list include the session; the dashboard
+  opens at `/inspect`; after **End** it leaves the active list. The audit log
+  records `inspector.session.start` and `inspector.session.end`.
+- **Traps**: break-glass mode needs operator-admin authority. Pause at the
+  button's navigation call and keep the token and URL fragment out of evidence, as
+  the console reference describes. API traps are in
+  [Inspector sessions](#inspector-sessions).
+- **Depends on**: pages `/admin/inspector`; operator API
+  `POST /operator/v1/inspector/sessions`, `GET /operator/v1/inspector/sessions`; files
+  `console/components/admin/InspectorView.tsx`,
+  `console/components/tenants/OpenBankDashboardButton.tsx`.
 
 ### Console operators
 
 Manages staff accounts.
 
-- **Reach**: sign in with authority to administer staff accounts and open
+- **Reach**: sign in as an operator administrator or above and open
   `/admin/operators`.
 - **Control**: **Create operator**, fill **Email**, **Display name** and **Role**,
-  then confirm; row actions deactivate, reactivate or reset a password.
-- **Check**: the new account lists with its role; a reset shows a one-time
-  password dialog.
-- **Traps**: the page requires account administration authority, and rank rules
-  limit which accounts an administrator may change.
-- **Depends on**: `/admin/operators`; `/operator/v1/operators`.
+  and submit; each row offers **Reset** and **Deactivate** or **Reactivate**, each
+  confirmed in a dialog.
+- **Check**: the new account lists with its role and active state; create and reset
+  each show a one-time password dialog; the audit log records `operators.create`,
+  `operators.reset_password`, `operators.deactivate` and `operators.reactivate`.
+- **Traps**: a developer-role account sees the access explainer, not the page.
+  Rank rules also limit which accounts an administrator may change, as in
+  [Operator accounts](#operator-accounts).
+- **Depends on**: pages `/admin/operators`; operator API `GET /operator/v1/operators`;
+  files `console/components/admin/OperatorsView.tsx`.
 
 ### Console regulatory parameters
 
 Proposes and approves governed parameters.
 
-- **Reach**: signed in; open `/admin/regulatory-parameters`.
-- **Control**: propose a change, then approve it as a different operator.
-- **Check**: the parameter moves from pending to approved and the audit log
-  records both steps.
-- **Traps**: the proposer cannot approve their own change.
-- **Depends on**: `/admin/regulatory-parameters`;
-  `/operator/v1/regulatory-parameters`.
+- **Reach**: signed in as two different operators; open
+  `/admin/regulatory-parameters`.
+- **Control**: as the first operator click **Propose parameter**, fill the form
+  (what it applies to, parameter code, jurisdiction, value, unit, effective date,
+  source and reason) and submit the proposal. As the second operator open the
+  proposal under "Awaiting approval", click **Review and approve** and confirm.
+  The form fields are in `console/components/admin/RegulatoryParametersView.tsx`.
+- **Check**: the proposal leaves "Awaiting approval" and the register shows it in
+  force from its effective date; the audit log records
+  `regulatory_parameter.propose` and `regulatory_parameter.approve`.
+- **Traps**: the proposer sees "Needs a second operator" on their own row instead
+  of an approve button. Approval enqueues live refreshes, so a worker is needed for
+  downstream recompute but not for the state change.
+- **Depends on**: pages `/admin/regulatory-parameters`; operator API
+  `GET /operator/v1/regulatory-parameters`; files
+  `console/components/admin/RegulatoryParametersView.tsx`.
 
 ### Console audit log
 
 Shows the operator action trail.
 
-- **Reach**: signed in; open `/admin/audit`.
-- **Control**: scroll or page the list.
-- **Check**: an action performed earlier in the run, such as a provisioning or an
-  operator creation, appears with its actor and time.
+- **Reach**: sign in as an operator administrator or above and open `/admin/audit`.
+- **Control**: filter by **Operator email**, **Target org** or **Action prefix**
+  and click **Apply**; page with **Prev** and **Next**.
+- **Check**: filtering by the prefix of an action you caused, such as
+  `tenants.provision`, lists it with its actor and time.
 - **Traps**: mutating calls write here, so entries from other cases on the same
-  database are expected.
-- **Depends on**: `/admin/audit`; `/operator/v1/audit`.
+  database are expected, and reading the log writes an `audit.read` entry.
+- **Depends on**: pages `/admin/audit`; operator API `GET /operator/v1/audit`; files
+  `console/components/admin/AuditView.tsx`.
 
 ### Console markets desk
 
 Works through determinations, curves, observations and publications.
 
-- **Reach**: use separate maker and checker accounts with desk access. Open
-  `/desk/market` or a desk page from the rail.
-- **Control**: in **Determinations**, the maker creates, computes and submits
-  for review. The checker opens the submitted determination, approves it and
-  publishes it. Use **Curves**, **Observations** and **Publications** to inspect
-  the inputs and results.
-- **Check**: a determination moves through its states and a published one is
-  listed under **Publications**.
-- **Traps**: an unavailable source is shown as unavailable; publishing writes
-  shared data, so use the disposable database.
-- **Depends on**: `/desk/*`; `/operator/v1/desk/*`, `/operator/v1/curves/*`.
+- **Reach**: use separate maker and checker accounts with desk access, and open
+  `/desk/determinations`.
+- **Control**: as the maker click **New determination**, choose the date, open the
+  draft, compute it and submit it for review. As the checker open the submitted
+  determination, approve it and publish it. Inspect inputs and results under
+  **Curves**, **Observations** and **Publications**.
+- **Check**: a determination moves from draft through pending review and approved
+  to published, and a published one is listed under `/desk/publications`. The audit
+  log records `desk.determination.*` actions.
+- **Traps**: the draft needs an approved methodology and observations on or before
+  the date. Publishing writes shared data, so use the disposable database; the
+  other traps are in [Markets desk determinations](#markets-desk-determinations).
+- **Depends on**: pages `/desk/*`; operator API
+  `POST /operator/v1/fx-forward/construct`, `/operator/v1/desk/*`,
+  `/operator/v1/curves/*`; files
+  `console/app/(shell)/(desk)/desk/determinations/page.tsx`.
 
 ### Console operations
 
 Shows data engines, connections and background jobs.
 
 - **Reach**: signed in; open `/operations`.
-- **Control**: open **Operations** in the rail.
-- **Check**: engines, connections and jobs list from the operator API; a stuck
-  job shows in the dedup view.
+- **Control**: open **Operations** in the rail; filter the connections table by
+  organization, engine and status.
+- **Check**: the tiles, connections and jobs agree with
+  `GET /operator/v1/overview`, `GET /operator/v1/data-engines` and
+  `GET /operator/v1/jobs`; a stuck job is a job row with a non-terminal status and
+  a rising attempts count.
 - **Traps**: job progress depends on the worker running.
-- **Depends on**: `/operations`; `/operator/v1/data-engines`, `/operator/v1/jobs`,
-  `/operator/v1/worker-health`.
+- **Depends on**: pages `/operations`; operator API `GET /operator/v1/overview`,
+  `GET /operator/v1/data-engines`, `GET /operator/v1/jobs`,
+  `GET /operator/v1/worker-health`; files
+  `console/app/(shell)/(developer)/operations/page.tsx`.
 
 ## Bank dashboard
 
@@ -505,7 +638,10 @@ The authenticated bank product UI in `backend/dashboard/` on :3001. Every figure
 comes from the tenant API through the generated client. Reach it as in
 [the dashboard reference](../.agents/skills/verification/references/dashboard.md);
 routes and what they read are in
-[the dashboard README](../backend/dashboard/README.md#scope).
+[the dashboard README](../backend/dashboard/README.md#scope). Controls are named by
+the accessible role and name the Playwright specs under `backend/dashboard/tests/`
+already use; the shared helpers are in `backend/dashboard/e2e/support/`. Each module
+entry names the response fields its screen figures are compared with.
 
 ### Dashboard sign-in
 
@@ -513,43 +649,68 @@ Signs a bank user in and ends the session.
 
 - **Reach**: `/login` on the interactive stack; the hermetic stack mints a
   signed-in state per fixture role and skips this form.
-- **Control**: type into **Email** and **Password** and click **Sign in**; open
-  the account button in the header and choose **Sign out**.
-- **Check**: the URL becomes `/` and the account button shows the user's name and
-  role; after sign-out the URL is `/login` and a stale refresh token answers
-  `401`.
+- **Control**: fill **Email** and **Password** and click **Sign in**; to sign out,
+  open the account button in the header and choose **Sign out**. The exact steps
+  are in `backend/dashboard/tests/session/session-lifecycle.e2e.spec.ts`.
+- **Check**: the URL becomes `/` and the account button shows the user; after
+  sign-out the URL is `/login` and replaying the old refresh token to
+  `POST /auth/refresh` answers `401`.
 - **Traps**: an unauthenticated visit to a protected route redirects to `/login`.
-  Use the same loopback origin throughout to keep the browser session.
-- **Depends on**: `/login`, `/api/auth/*`; the tenant API's `/auth/login`,
-  `/auth/refresh`; fixture roles in `e2e/support/mint.ts`.
+  Use the same loopback origin throughout to keep the browser session. The
+  credential traps are in [Tenant API sign-in](#tenant-api-sign-in).
+- **Depends on**: pages `/login`, `/api/auth/*`; tenant API `POST /auth/login`,
+  `POST /auth/refresh`; files `backend/dashboard/e2e/support/mint.ts`,
+  `backend/dashboard/tests/session/session-lifecycle.e2e.spec.ts`.
 
 ### Dashboard overview
 
 Summarises cross-module posture, live-engine freshness and the filing calendar.
 
-- **Reach**: signed in at `/`.
-- **Control**: open the home page.
-- **Check**: with data, the "Treasury Command Center" shows each module's live
-  status; without data it shows "No computed data yet" with an **Open the Data
-  Engine** link.
-- **Traps**: the empty state is correct for a bank that has not ingested data.
+- **Reach**: signed in; open `/`.
+- **Control**: open **Command Center** in the sidebar; each module tile is a link
+  named for its module.
+- **Check**: with data, each module tile shows its live status from
+  `GET /banks/{bank_id}/live-summary`; without data the page shows its "No computed
+  data yet" state with a link to the Data Engine.
+- **Traps**: the empty state is correct for a bank that has not ingested data, as
+  in [Live summary, freshness and alerts](#live-summary-freshness-and-alerts).
   Historical reporting periods are optional for daily work.
-- **Depends on**: `/`, `features/home/routes/command-center.tsx`;
-  `/banks/{bank_id}/live-summary`.
+- **Depends on**: pages `/`; tenant API `GET /banks/{bank_id}/analytics/window`,
+  `GET /banks/{bank_id}/live-snapshots`, `GET /banks/{bank_id}/live-summary`; files
+  `backend/dashboard/features/home/routes/command-center.tsx`.
+
+### Dashboard insights
+
+Shows the platform's computed statements for one reporting date and the analysis
+catalogue the reader may use.
+
+- **Reach**: `BI_ENABLED` on the API and BI grants for the signed-in user; open
+  `/insights`.
+- **Control**: change the date in the filter bar.
+- **Check**: the statements equal the response of
+  `GET /banks/{bank_id}/bi/insights?as_of=<date>`, and the catalogue lists only what
+  `GET /banks/{bank_id}/bi/catalogue` allows the reader.
+- **Traps**: with BI disabled the page shows its not-available state and the API
+  answers `404`, as in [Business intelligence](#business-intelligence). A date with
+  nothing computed says so rather than showing zeros.
+- **Depends on**: pages `/insights`; tenant API `GET /banks/{bank_id}/bi/insights`,
+  `GET /banks/{bank_id}/bi/catalogue`.
 
 ### Dashboard module navigation
 
 Moves between a module's tabs and between modules.
 
 - **Reach**: signed in; any module route.
-- **Control**: click a tab link in the "Module sections" navigation, or use the
-  command palette.
+- **Control**: click a link in the "Module sections" navigation, or call
+  `openTab(page, "<tab name>")` from
+  `backend/dashboard/e2e/support/navigation.ts`; move between modules with the
+  sidebar, or open the command palette with `Control+k`.
 - **Check**: the URL becomes the tab's route and the page heading changes.
 - **Traps**: a first compile of a route can outlast a short wait; wait for the
-  destination URL before asserting figures. A module the user has no grant for
-  shows an access notice, not an error.
-- **Depends on**: `navigation` landmark named "Module sections";
-  `e2e/support/navigation.ts`.
+  destination URL before asserting figures. A tab the user has no grant for is
+  absent, and a module without a grant shows an access notice, not an error.
+- **Depends on**: files `backend/dashboard/e2e/support/navigation.ts`,
+  `backend/dashboard/components/shell/ModuleTabs.tsx`.
 
 ### Dashboard liquidity
 
@@ -557,53 +718,85 @@ Shows the LCR, NSFR, buffer, monitoring, early warnings, contingency plan and
 liquidity stress.
 
 - **Reach**: signed in with liquidity authority; a loaded book for figures.
-- **Control**: open `/liquidity` ("Liquidity Cockpit"), then the **NSFR**,
-  **Buffer**, **Monitoring**, **Stress** and forecast tabs.
-- **Check**: LCR and NSFR agree with `GET /banks/{bank_id}/liquidity/dashboard`;
-  NSFR lines show available and required stable funding.
-- **Traps**: no data shows an unavailable state, never zero. Ratios are tested
-  against governed thresholds, not literals.
-- **Depends on**: `/liquidity`, `/liquidity/nsfr`, `/liquidity/buffer`,
-  `/liquidity/monitoring`, `/liquidity/stress`, `/liquidity/cfp`;
-  `/banks/{bank_id}/liquidity/dashboard`, `/liquidity-monitoring`.
+- **Control**: open `/liquidity`, then the **NSFR**, **Buffer**, **Monitoring**,
+  **Stress** and forecast tabs.
+- **Check**: against `GET /banks/{bank_id}/liquidity/dashboard`, the LCR tile equals
+  `metrics.lcr_pct`, HQLA equals `metrics.hqla_total_ghs` and 30-day net outflows
+  equals `metrics.net_outflows_30d_ghs`; on the NSFR tab the NSFR tile equals
+  `metrics.nsfr_pct` and available and required stable funding equal
+  `metrics.asf_total_ghs` and `metrics.rsf_total_ghs`. The tiles are asserted in
+  `backend/dashboard/tests/liquidity/liquidity-risk-workflows.e2e.spec.ts`.
+- **Traps**: no data shows an unavailable state, never zero, as in
+  [Module dashboards](#module-dashboards). Ratios are tested against governed
+  thresholds, not literals.
+- **Depends on**: pages `/liquidity/*`; tenant API
+  `GET /banks/{bank_id}/analytics/cashflow-window`,
+  `GET /banks/{bank_id}/cashflow-forecast`, `GET /banks/{bank_id}/cashflow-history`,
+  `GET /banks/{bank_id}/liquidity-haircuts`, `GET /banks/{bank_id}/liquidity/dashboard`,
+  `GET /banks/{bank_id}/liquidity-monitoring`; files
+  `backend/dashboard/tests/liquidity/liquidity-risk-workflows.e2e.spec.ts`.
 
 ### Dashboard Basel capital
 
 Shows risk-weighted assets, capital structure, adequacy and capital stress.
 
 - **Reach**: signed in with capital authority.
-- **Control**: open `/basel`, then `/basel/rwa`, `/basel/structure`,
-  `/basel/stress` and `/basel/planning`.
-- **Check**: figures agree with `GET /banks/{bank_id}/capital/dashboard`, `/rwa`
-  and `/structure`.
+- **Control**: open `/basel`, then `/basel/rwa`, `/basel/structure`, `/basel/stress`
+  and `/basel/planning`.
+- **Check**: against `GET /banks/{bank_id}/capital/dashboard`, the capital adequacy,
+  Tier 1, CET1 and leverage tiles equal `metrics.car_pct`, `metrics.tier1_ratio_pct`,
+  `metrics.cet1_ratio_pct` and `metrics.leverage_ratio_pct`, and total RWA equals
+  `metrics.total_rwa_ghs`; on `/basel/rwa` the credit, market and operational RWA
+  tiles equal `credit_rwa_ghs`, `market_rwa_ghs` and `operational_rwa_ghs` from
+  `GET /banks/{bank_id}/capital/rwa`. The tiles are asserted in
+  `backend/dashboard/tests/basel/basel-risk-workflows.e2e.spec.ts`.
 - **Traps**: the bank's booked allowance is the capital figure of record; modelled
-  expected loss is a what-if and is never substituted in Tier 2.
-- **Depends on**: `/basel/*`; `/banks/{bank_id}/capital/*`.
+  expected loss is a what-if and is never substituted in Tier 2. A ratio whose
+  minimum is not on file shows no compliance claim.
+- **Depends on**: pages `/basel/*`; tenant API `GET /banks/{bank_id}/capital-plan`,
+  `GET /banks/{bank_id}/capital/dashboard`, `GET /banks/{bank_id}/capital/rwa`,
+  `GET /banks/{bank_id}/capital/structure`; files
+  `backend/dashboard/tests/basel/basel-risk-workflows.e2e.spec.ts`.
 
 ### Dashboard interest-rate risk
 
 Shows repricing gap, EVE and earnings sensitivity, limits and scenarios.
 
 - **Reach**: signed in with IRR authority.
-- **Control**: open `/irr`, then `/irr/gaps`, `/irr/sensitivity`, `/irr/limits`
-  and `/irr/scenarios`.
-- **Check**: headline figures agree with `GET /banks/{bank_id}/irr/dashboard` and
-  `/irr/ear-analysis`.
-- **Traps**: a stress input outside the supported boundaries is refused rather
-  than computed; that is the expected result.
-- **Depends on**: `/irr/*`; `/banks/{bank_id}/irr/*`.
+- **Control**: open `/irr`, then `/irr/gaps`, `/irr/sensitivity`, `/irr/limits` and
+  `/irr/scenarios`.
+- **Check**: against `GET /banks/{bank_id}/irr/dashboard`, the worst ΔEVE tile equals
+  `metrics.worst_eve_change_pct_tier1`, the duration gap equals
+  `metrics.duration_gap` and the ±200bp NII tile equals `metrics.ear_up_200_ghs` and
+  `metrics.ear_down_200_ghs`; on `/irr/sensitivity` the ΔNII tiles equal `ear_up`
+  and `ear_down` from `GET /banks/{bank_id}/irr/ear-analysis` for the same horizon.
+  The tiles are asserted in
+  `backend/dashboard/tests/irr/irrbb-risk-workflows.e2e.spec.ts`.
+- **Traps**: a stress input outside the supported boundaries is refused rather than
+  computed; that is the expected result. The desk-horizon read is a separate
+  computation from the stored regulatory figure.
+- **Depends on**: pages `/irr/*`; tenant API `GET /banks/{bank_id}/irr/dashboard`,
+  `GET /banks/{bank_id}/irr/ear-analysis`; files
+  `backend/dashboard/tests/irr/irrbb-risk-workflows.e2e.spec.ts`.
 
 ### Dashboard FX
 
 Shows net open position, value at risk, hedges and forwards.
 
 - **Reach**: signed in with FX authority.
-- **Control**: open `/fx`, then `/fx/var`, `/fx/hedges`, `/fx/forwards`,
-  `/fx/limits` and `/fx/scenarios`.
-- **Check**: figures agree with `GET /banks/{bank_id}/fx/dashboard`.
+- **Control**: open `/fx`, then `/fx/var`, `/fx/hedges`, `/fx/forwards`, `/fx/limits`
+  and `/fx/scenarios`.
+- **Check**: against `GET /banks/{bank_id}/fx/dashboard`, the aggregate NOP tile
+  equals `metrics.nop_pct_tier1`, net open position equals `metrics.nop_ghs` and the
+  largest single currency equals `metrics.single_ccy_max_pct`; on `/fx/var` the
+  portfolio VaR equals `metrics.var_99_1d_ghs` and stressed VaR equals
+  `metrics.stressed_var_ghs`. The tiles are asserted in
+  `backend/dashboard/tests/fx/fx-risk-workflows.e2e.spec.ts`.
 - **Traps**: without a loaded book or the market data a figure needs, the screen
-  shows that figure as unavailable, never as zero.
-- **Depends on**: `/fx/*`; `/banks/{bank_id}/fx/dashboard`.
+  shows that figure as unavailable, never as zero, as in
+  [Module dashboards](#module-dashboards).
+- **Depends on**: pages `/fx/*`; tenant API `GET /banks/{bank_id}/fx/dashboard`; files
+  `backend/dashboard/tests/fx/fx-risk-workflows.e2e.spec.ts`.
 
 ### Dashboard funds transfer pricing
 
@@ -612,27 +805,41 @@ Shows the transfer curve and product and branch profitability.
 - **Reach**: signed in with FTP authority.
 - **Control**: open `/ftp`, then `/ftp/products`, `/ftp/lines`, `/ftp/rules`,
   `/ftp/scenarios` and `/ftp/expost`.
-- **Check**: figures agree with `GET /banks/{bank_id}/ftp/dashboard`.
-- **Traps**: without a loaded book the pages show their empty state.
-- **Depends on**: `/ftp/*`; `/banks/{bank_id}/ftp/dashboard`.
+- **Check**: against `GET /banks/{bank_id}/ftp/dashboard`, on `/ftp` the blended
+  assigned FTP, portfolio NIM, weighted asset yield and weighted funding credit
+  tiles equal `metrics.blended_assigned_ftp_pct`, `metrics.portfolio_nim_pct`,
+  `metrics.weighted_asset_yield_pct` and `metrics.weighted_funding_credit_pct`; on
+  `/ftp/products` the products-below-floor tile equals
+  `metrics.products_below_min_margin` of `metrics.total_products`. The tiles are
+  asserted in `backend/dashboard/tests/ftp/ftp-risk-workflows.e2e.spec.ts`.
+- **Traps**: without a loaded book the pages show their empty state, as in
+  [Module dashboards](#module-dashboards).
+- **Depends on**: pages `/ftp/*`; tenant API `GET /banks/{bank_id}/ftp/dashboard`; files
+  `backend/dashboard/tests/ftp/ftp-risk-workflows.e2e.spec.ts`.
 
 ### Dashboard forecasting
 
 Projects the balance sheet and runs scenarios, what-ifs and reverse stress.
 
-- **Reach**: signed in with Forecasting Run authority, a selected reporting period and governed assumptions in place.
+- **Reach**: signed in with Forecasting Run authority, a selected reporting period
+  and governed assumptions in place.
 - **Control**: open `/forecasting` and click **Run forecast**, then open
   `/forecasting/assumptions`, `/forecasting/nii`, `/forecasting/scenario`,
-  `/forecasting/whatif` and `/forecasting/optimizer`. On
-  `/forecasting/reverse-stress` click **Run reverse stress**.
-- **Check**: a run lists under `GET /banks/{bank_id}/forecast/runs` and its
-  figures render; reverse stress shows its frontier and breach value.
-- **Traps**: a book that cannot be forecast shows a not-computable state, which
-  is the expected result.
-- **Depends on**: `/forecasting/*`, including `/forecasting/reverse-stress`;
-  `/banks/{bank_id}/forecast/runs`, `POST /banks/{bank_id}/reverse-stress/runs`;
-  `data-testid` `reverse-stress-frontier` and
-  `reverse-stress-headlines`.
+  `/forecasting/whatif` and `/forecasting/optimizer`. On `/forecasting/reverse-stress`
+  click **Run reverse stress**.
+- **Check**: the run lists under `GET /banks/{bank_id}/forecast/runs`, and its
+  year-5 CAR and average ROE equal `summary.year5_car_pct` and `summary.avg_roe_pct`
+  from `GET /banks/{bank_id}/forecast/runs/{run_id}`. On reverse stress the
+  `reverse-stress-breach-value` elements equal `liquidity_axis.breach_multiplier` and
+  `capital_axis.breach_multiplier` from `GET /banks/{bank_id}/reverse-stress/latest`.
+- **Traps**: a book that cannot be forecast shows a not-computable state, which is
+  the expected result. Reverse stress also needs financial facts for the period and
+  configured liquidity and capital stress scenarios.
+- **Depends on**: pages `/forecasting/*`; tenant API
+  `GET /banks/{bank_id}/forecast/runs`, `GET /banks/{bank_id}/forecast/runs/{run_id}`,
+  `POST /banks/{bank_id}/forecast/runs`, `POST /banks/{bank_id}/reverse-stress/runs`,
+  `GET /banks/{bank_id}/reverse-stress/latest`; test ids `reverse-stress-frontier`,
+  `reverse-stress-headlines`, `reverse-stress-breach-value`.
 
 ### Dashboard credit
 
@@ -641,23 +848,32 @@ Shows asset quality, delinquency, concentration, vintages and activity.
 - **Reach**: signed in with credit authority.
 - **Control**: open `/credit`, then `/credit/book`, `/credit/delinquency`,
   `/credit/concentration`, `/credit/vintages` and `/credit/activity`.
-- **Check**: figures agree with `GET /banks/{bank_id}/credit/dashboard` and
-  `/credit/loans`.
-- **Traps**: credit register access is scoped by grant, so a narrower principal
-  sees less than an administrator; compare against that principal's authority.
-- **Depends on**: `/credit/*`; `/banks/{bank_id}/credit/*`.
+- **Check**: against `GET /banks/{bank_id}/credit/dashboard`, the gross loan book,
+  NPL ratio, NPL exposure and provision coverage equal `metrics.gross_loans_ghs`,
+  `metrics.npl_ratio_pct`, `metrics.npl_exposure_ghs` and
+  `metrics.provision_coverage_pct`, and PAR 30+ equals the `par_30` item of
+  `metrics.portfolio_at_risk` times 100; on `/credit/concentration` the book total
+  equals `total_book_ghs` and each HHI equals `dimensions[].hhi` from
+  `GET /banks/{bank_id}/credit/concentration`.
+- **Traps**: credit register access is scoped by grant, so a narrower principal sees
+  less than an administrator; compare against that principal's authority.
+- **Depends on**: pages `/credit/*`; tenant API `GET /banks/{bank_id}/credit/dashboard`,
+  `GET /banks/{bank_id}/credit/concentration`, `GET /banks/{bank_id}/credit/loans`.
 
 ### Dashboard markets
 
 Shows published curves, rates, FX and indices with source and freshness details.
 
 - **Reach**: sign in with Markets published-view authority and open `/markets`.
-- **Control**: select **Curves** or **Market data** and change **As of**.
-- **Check**: the curves and source details match the publication available for the
-  selected date.
-- **Traps**: a date without published coverage can show an empty view.
-- **Depends on**: `/markets`, **Curves**, **As of** and
+- **Control**: select the **Curves** or **Market data** tab and set the **As of**
+  date.
+- **Check**: the request carries `as_of` for the chosen date and the response
+  `as_of_date` equals it; each curve's `curve_name` and its `points[].rate` per
+  `tenor_months` match the Curves tab, and the source chip agrees with
+  `attribution.source_system` and `attribution.stale` from
   `GET /banks/{bank_id}/market-data/views`.
+- **Traps**: a date without published coverage can show an empty view.
+- **Depends on**: pages `/markets`; tenant API `GET /banks/{bank_id}/market-data/views`.
 
 ### Dashboard behavioral models
 
@@ -665,36 +881,89 @@ Shows model estimates and training coverage for the bank's behavioral assumption
 
 - **Reach**: sign in with Behavioral aggregated-view authority and open `/behavioral`.
 - **Control**: open **NMD Duration**, **Loan Prepayment** or **Deposit Stability**.
-- **Check**: the model workspace reports the estimate and its training coverage
-  for the selected model.
-- **Traps**: a bank without enough ingested history may have no trained estimate.
-- **Depends on**: `/behavioral/{nmd-duration|prepayment|deposit-stability}` and
+- **Check**: against `GET /banks/{bank_id}/behavioral/{model}` (camelCase keys), the
+  training-data tile equals `accuracy.sampleCount`, its months and method equal
+  `accuracy.monthCoverage` and `method`, the holdout error equals `accuracy.cvRmse`,
+  and the average tile equals the mean of `products[].value`.
+- **Traps**: a bank without enough ingested history may have no trained estimate,
+  and the first request can show a training state before figures.
+- **Depends on**: pages `/behavioral/*`; tenant API
   `GET /banks/{bank_id}/behavioral/{model}`.
 
 ### Dashboard reports
 
 Collects board packs, saved analyses and persisted regulatory runs.
 
-- **Reach**: sign in, select a bank with fresh, available live evidence and
-  open `/reports`.
-- **Control**: open **Board pack** and select **Print / Save as PDF**.
-- **Check**: the pack renders the bank's available live module figures and
-  opens the print dialog.
-- **Traps**: stale evidence withholds figures until recomputation. Printing
-  can remain enabled if the stale response still contains modules.
-- **Depends on**: `/reports/board-pack`, `/reports/analyses`,
-  **Print / Save as PDF** and `GET /banks/{bank_id}/regulatory-runs` for the run registry.
+- **Reach**: sign in, select a bank with fresh, available live evidence and open
+  `/reports`.
+- **Control**: open **Board pack** and click **Print / Save as PDF**.
+- **Check**: each executive-summary tile equals the headline metric of its module in
+  `GET /banks/{bank_id}/live-summary` (`lcr_pct`, `car_pct`, `npl_ratio_pct`,
+  `worst_eve_change_pct_tier1`, `nop_pct_tier1`, `portfolio_nim_pct`), its source
+  line equals `source_as_of_date`, `calculation_generation` and `computed_at`, and
+  printing opens the print dialog. The spec is
+  `backend/dashboard/tests/reports/board-pack.spec.tsx`.
+- **Traps**: stale evidence withholds figures until recomputation. Printing can
+  remain enabled if the stale response still contains modules.
+- **Depends on**: pages `/reports/*`; tenant API
+  `GET /banks/{bank_id}/reports/comparison`, `GET /banks/{bank_id}/submissions/bsd2`,
+  `GET /banks/{bank_id}/submissions/bsd3`, `GET /banks/{bank_id}/live-summary`,
+  `GET /banks/{bank_id}/regulatory-runs`; files
+  `backend/dashboard/tests/reports/board-pack.spec.tsx`.
 
 ### Dashboard positions
 
 Shows the canonical position book behind every module.
 
 - **Reach**: signed in with data authority; a loaded book.
-- **Control**: open `/positions` and filter, sort or page the blotter.
-- **Check**: rows and totals match `GET /banks/{bank_id}/canonical-positions`.
+- **Control**: open `/positions` and filter by search text, position type or
+  currency, then page the blotter.
+- **Check**: the positions count equals `total` from
+  `GET /banks/{bank_id}/canonical-positions/facets`; with a filter applied the
+  matching count and the footer equal `total` from
+  `GET /banks/{bank_id}/canonical-positions` for the same filter. The screen shows
+  row counts, not monetary totals.
 - **Traps**: an empty book shows an empty table.
-- **Depends on**: `/positions`; `/banks/{bank_id}/canonical-positions`,
-  `/canonical-positions/facets`.
+- **Depends on**: pages `/positions`; tenant API `GET /lineage/{lineage_id}`,
+  `GET /banks/{bank_id}/canonical-positions`,
+  `GET /banks/{bank_id}/canonical-positions/facets`.
+
+### Dashboard scenario workbench
+
+Lists each module's stress scenario definitions and its stored scenario results.
+
+- **Reach**: signed in with the module's authority and a selected reporting period;
+  open `/irr/scenarios`.
+- **Control**: open the scenario page of a module: `/irr/scenarios`,
+  `/fx/scenarios`, `/ftp/scenarios`, `/basel/stress` or `/liquidity/stress`.
+- **Check**: the scenario definitions and stored results agree with
+  `GET /banks/{bank_id}/scenario-workbench/{module}/scenarios` and
+  `GET /banks/{bank_id}/scenario-workbench/{module}/analyses`.
+- **Traps**: reading the registry creates no runs. A module the user lacks run
+  authority for shows its notice instead of a run control.
+- **Depends on**: pages `/irr/scenarios`, `/fx/scenarios`, `/ftp/scenarios`,
+  `/basel/stress`, `/liquidity/stress`; tenant API
+  `GET /banks/{bank_id}/scenario-workbench/{module}/scenarios`,
+  `GET /banks/{bank_id}/scenario-workbench/{module}/analyses`.
+
+### Dashboard enterprise stress
+
+Runs an approved macro scenario against a bank's book and shows capital and
+liquidity results, the run registry and management actions.
+
+- **Reach**: signed in with stress view and run authority and IRR confidential run
+  authority, a reporting period with an ingested book; open `/irr/enterprise-stress`.
+- **Control**: in the scenario-and-run tab select an approved scenario, enter the run
+  reason and click **Run enterprise stress**; open the run registry.
+- **Check**: the results tab shows the stressed capital adequacy and its erosion; the
+  run lists in `GET /banks/{bank_id}/enterprise-stress/runs` and reopens from the
+  registry.
+- **Traps**: only an approved scenario can be selected and its creator cannot approve
+  it (`409`). Sign-off attestation needs SSO step-up, so skip it locally.
+- **Depends on**: pages `/irr/enterprise-stress`; tenant API
+  `POST /banks/{bank_id}/enterprise-stress/runs`,
+  `GET /banks/{bank_id}/enterprise-stress/runs`, `POST /macro-scenarios`,
+  `POST /management-action-plans`.
 
 ### Dashboard Data Engine upload
 
@@ -703,18 +972,19 @@ Uploads a spreadsheet or CSV and reviews the batch it creates.
 - **Reach**: signed in with upload and batch-run authority, plus mapping
   activation authority if needed. Start local MinIO and open `/data-engine/excel-csv`.
 - **Control**: on a mapping template click **Activate mapping**; in the "Upload &
-  ingest" section set **Source files (.xlsx / .csv)** and **As-of date**, then
-  click **Upload & ingest**; open **Batch detail**.
-- **Check**: the outcome card shows the batch state and the Extracted,
-  Translated, Accepted and Errors counts; `/data-engine/batches/{batchId}` lists
-  "Validation findings" and "Untranslatable rows" with row references. Use the
-  [ingestion story test](../backend/dashboard/tests/data-engine/data-engine-ingestion.e2e.spec.ts)
-  for the synthetic fixture and its expected counts.
-- **Traps**: a legacy `.xls` is refused with re-save guidance. Non-blocking row
-  errors can yield "accepted with warnings"; a blocker rejects the batch.
-  Use synthetic files only.
-- **Depends on**: `/data-engine/excel-csv`, `/data-engine/batches/[batchId]`;
-  `POST /banks/{bank_id}/ingestion-uploads` and `POST /banks/{bank_id}/ingestion-batches`.
+  ingest" section choose the source file and the as-of date, click **Upload &
+  ingest**, then open the batch from the **Batch detail** link. The steps and
+  helpers are in `backend/dashboard/tests/data-engine/data-engine-ingestion.e2e.spec.ts`.
+- **Check**: the outcome card shows the batch state and its extracted, translated,
+  accepted and error counts, and `/data-engine/batches/{batchId}` lists the
+  validation findings and untranslatable rows with row references. The synthetic
+  fixture and its expected counts are in `backend/dashboard/tests/data-engine/fixtures/`.
+- **Traps**: the upload and format traps are in
+  [Data Engine upload](#data-engine-upload). Use synthetic files only.
+- **Depends on**: pages `/data-engine/excel-csv`, `/data-engine/batches/{batchId}`;
+  tenant API `POST /banks/{bank_id}/ingestion-uploads`,
+  `POST /banks/{bank_id}/ingestion-batches`; files
+  `backend/dashboard/tests/data-engine/data-engine-ingestion.e2e.spec.ts`.
 
 ### Dashboard Data Engine connections
 
@@ -728,15 +998,52 @@ Configures API push, database-direct, core-banking adapter and market-data loads
 - **Traps**: a reader without the grant sees a restricted notice. Reconciliation
   exceptions follow checker independence: the maker cannot approve their own
   proposal.
-- **Depends on**: `/data-engine/*`; `data-testid`
-  `market-data-connections-restricted`.
+- **Depends on**: pages `/data-engine/*`; tenant API
+  `POST /banks/{bank_id}/database-direct/connections`,
+  `POST /banks/{bank_id}/temenos/connections`, `GET /market-data/templates/{kind}`; test
+  ids `market-data-connections-restricted`.
+
+### Dashboard reconciliation exceptions
+
+Proposes, approves and revokes bounded reconciliation exceptions.
+
+- **Reach**: two different signed-in users, a proposer with Data create authority and
+  an approver with Data approve authority; open `/data-engine`.
+- **Control**: as the proposer fill the reason, the maximum gap fraction and the dates
+  and click **Record proposal**. As the approver enter an approval label and click
+  **Approve exception**, or revoke with a reason.
+- **Check**: the row moves from pending to approved or revoked and appears in
+  `GET /banks/{bank_id}/reconciliation/exceptions`.
+- **Traps**: the proposer cannot approve their own proposal (the API answers `409`).
+  A pending exception never changes a filing gate, and a gap above the ceiling still
+  blocks.
+- **Depends on**: pages `/data-engine`; tenant API
+  `GET /banks/{bank_id}/reconciliation/exceptions`,
+  `POST /banks/{bank_id}/reconciliation/exceptions`,
+  `POST /banks/{bank_id}/reconciliation/exceptions/{exception_id}/approve`,
+  `POST /banks/{bank_id}/reconciliation/exceptions/{exception_id}/revoke`.
 
 ### Dashboard submissions
 
 Prepares, validates, certifies and files regulatory returns.
 
 - **Verification**: dashboard filing requires a local sandbox because the hand-off can transmit to a real channel. This map skips the filing run.
-- **Depends on**: `/submissions/returns`, `/approvals`, `/history`, `/instruments`.
+- **Depends on**: pages `/submissions/*`.
+
+### Dashboard reporting calendar and templates
+
+Shows the regulatory reporting obligations and the return templates.
+
+- **Reach**: signed in with a bank; open `/submissions/calendar` and
+  `/submissions/templates`.
+- **Control**: open both pages and page through the obligations.
+- **Check**: the overdue, due-soon and on-track counts and the rows agree with
+  `GET /banks/{bank_id}/reporting-obligations`; the templates page lists
+  `GET /regulatory-reporting/templates`.
+- **Traps**: dates come from the return definitions, never from the bank's reporting
+  periods. Reading these pages files and transmits nothing.
+- **Depends on**: pages `/submissions/calendar`, `/submissions/templates`; tenant API
+  `GET /banks/{bank_id}/reporting-obligations`, `GET /regulatory-reporting/templates`.
 
 ### Dashboard ICAAP
 
@@ -749,20 +1056,67 @@ Builds the internal capital adequacy assessment in a per-cycle workspace.
   and the filing page shows its chain and omissions.
 - **Traps**: when signing is not configured, filing shows a suspended notice
   (`data-testid` `icaap-signing-suspended`).
-- **Depends on**: `/icaap/*`; `/banks/{bank_id}/icaap/cycles/*`.
+- **Depends on**: pages `/icaap/*`; tenant API `/banks/{bank_id}/icaap/cycles/*`; test
+  ids `icaap-signing-suspended`.
 
 ### Dashboard institution profile
 
 Shows the institution's legal identity, authorisation, ownership and registers.
 
 - **Reach**: signed in; open `/institution`.
-- **Control**: open the profile, then outlets, products, parties, registers and
-  history.
-- **Check**: the "Institution Profile" heading and the bank's platform ID match
+- **Control**: open the profile, then outlets, products and licences, parties,
+  registers and name history.
+- **Check**: against `GET /banks/{bank_id}/institution-profile`, institution type,
+  legal entity structure, authorisation date, approved capital and local and
+  foreign ownership equal `profile.institution_type`,
+  `profile.legal_entity_structure`, `profile.authorisation_date`,
+  `profile.approved_capital`, `profile.ownership_local_pct` and
+  `profile.ownership_foreign_pct`; tax and registration identifiers appear only when
+  `restricted_visible` is true.
+- **Traps**: the screen does not show the platform ID, which is the token used in
+  API paths and in the push contract; read it from the request path.
+- **Depends on**: pages `/institution/*`; tenant API
   `GET /banks/{bank_id}/institution-profile`.
-- **Traps**: the platform ID shown is the one used in API paths and in the push
-  contract.
-- **Depends on**: `/institution/*`; `/banks/{bank_id}/institution-profile`.
+
+### Dashboard institution registers
+
+Adds and edits outlets, products, licences, related parties and name history.
+
+- **Reach**: signed in with Institution configure authority for the bank; open
+  `/institution/outlets`, `/institution/products`, `/institution/parties` or
+  `/institution/history`.
+- **Control**: click the page's add button, fill the synthetic details and a reason,
+  and save.
+- **Check**: the new row appears in the register and in
+  `GET /banks/{bank_id}/institution-profile`, and the change is audited.
+- **Traps**: every write needs a reason or the API refuses it. Related-party rows are
+  personal data, so use invented names.
+- **Depends on**: pages `/institution/outlets`, `/institution/products`,
+  `/institution/parties`, `/institution/history`; tenant API
+  `POST /banks/{bank_id}/outlets`, `POST /banks/{bank_id}/products`,
+  `POST /banks/{bank_id}/related-parties`, `POST /banks/{bank_id}/licenses`,
+  `POST /banks/{bank_id}/name-history`.
+
+### Dashboard Board registers
+
+Shows and edits the Board-adopted liquidity and credit registers with approval
+evidence.
+
+- **Reach**: signed in; open `/institution/registers`. Cards render only for
+  principals with the module's view authority, and editing needs configure authority.
+- **Control**: on a register card click **Edit register**, change a value, fill the
+  effective date, approver and reason, and click **Record generation**.
+- **Check**: the card lists the new generation with its approver and effective date,
+  and `GET /banks/{bank_id}/liquidity-thresholds?as_of=<date>` returns it as the
+  active generation.
+- **Traps**: a view-only principal sees a disabled edit control with its reason.
+  Capital authority is refused on the credit registers. Values travel as strings to
+  keep decimal precision.
+- **Depends on**: pages `/institution/registers`; tenant API
+  `GET /banks/{bank_id}/liquidity-thresholds`,
+  `PUT /banks/{bank_id}/liquidity-thresholds`, `GET /banks/{bank_id}/credit-thresholds`,
+  `GET /banks/{bank_id}/crm-haircuts`, `GET /banks/{bank_id}/ecl-assumptions`,
+  `GET /banks/{bank_id}/concentration-limits`.
 
 ### Dashboard explore
 
@@ -770,24 +1124,39 @@ Builds ad hoc questions and views over the book.
 
 - **Reach**: BI enabled on the API and BI grants for the signed-in user. Open
   `/explore`. For **Ask a question**, also enable `BI_NLQ_ENABLED` on the API.
-- **Control**: shape a grid with **Measure** and **Break down by**, **Export**, or
-  use the **Ask a question** tab, enter a question, click **Work out my question**, review the proposal and click **Yes, run this question**.
-- **Check**: the grid rows reconcile with the source figures and a confirmed
-  question shows "The question you confirmed".
-- **Traps**: with BI disabled the API's router-level feature gate returns `404`.
-  Disabling `BI_NLQ_ENABLED` hides **Ask a question**.
-- **Depends on**: `/explore/*`, `/dashboards/*`; `/banks/{bank_id}/bi/*`.
+- **Control**: tick a **Measure** and a **Break down by** option, switch to the full
+  grid, or open **Export** and pick a format. For **Ask a question**, a tab that is
+  absent unless `BI_NLQ_ENABLED` is on, enter a question, click **Work out my
+  question**, review the proposal and click **Yes, run this question**. The steps and
+  fixtures are in `backend/dashboard/tests/bi/bi-explore.e2e.spec.ts` and
+  `backend/dashboard/tests/bi/bi-ask.e2e.spec.ts`.
+- **Check**: the grid rows reconcile with the source figures from
+  `GET /banks/{bank_id}/bi/*`, and a confirmed question shows its answer heading.
+- **Traps**: with BI disabled the API's router-level feature gate returns `404`, as
+  in [Business intelligence](#business-intelligence). Disabling `BI_NLQ_ENABLED`
+  hides **Ask a question**.
+- **Depends on**: pages `/explore/*`, `/dashboards/*`; tenant API
+  `/banks/{bank_id}/bi/*`; files `backend/dashboard/tests/bi/bi-explore.e2e.spec.ts`,
+  `backend/dashboard/tests/bi/bi-ask.e2e.spec.ts`.
 
 ### Dashboard risk and alerts
 
 Shows the limit wall, findings and pipeline alerts.
 
 - **Reach**: signed in; open `/risk` or `/alerts`.
-- **Control**: open the page and filter.
-- **Check**: alert counts and items agree with
-  `GET /banks/{bank_id}/alerts`.
-- **Traps**: with no findings the page shows an empty state, not a hidden one.
-- **Depends on**: `/risk`, `/alerts`; `/banks/{bank_id}/alerts`.
+- **Control**: on `/risk` choose the limit wall or validation checks and filter the
+  wall with the **All limits**, **Breaches** and **Amber** pills. On `/alerts` group
+  the stream with **By module** or **By severity**.
+- **Check**: on `/alerts`, open alerts, critical, high and modules-affected equal
+  `total`, `by_severity.critical`, `by_severity.high` and the number of keys in
+  `by_module` from `GET /banks/{bank_id}/alerts`, after dropping alerts for modules
+  whose rules are not in force. The `/risk` limit counts are derived on the page
+  from the module dashboards, not from this route.
+- **Traps**: with no findings the page shows an empty state, not a hidden one. The
+  on-screen alert total can be lower than the raw `total` for the in-force reason
+  above.
+- **Depends on**: pages `/risk`, `/alerts`; tenant API `GET /banks/{bank_id}/alerts`;
+  files `backend/dashboard/lib/api/regulatoryRules.ts`.
 
 ### Dashboard members and grants
 
@@ -795,43 +1164,54 @@ Lists members and grants or revokes scoped access.
 
 - **Reach**: sign in with an active organization ownership binding and open
   `/access/members`. Account administration alone is insufficient.
-- **Control**: **View `<member name>`**, **Grant access**, set **Module**, **Role
-  bundle**, **Sensitivity**, **Institution coverage** and **Reason**, **Review
-  grant**, **Add grant**, **Done**; **Revoke access** then **Revoke this access**.
-- **Check**: the grant notice "Grant created" appears and the member's active
-  access lists the new grant; revocation shows its reason and who revoked it.
-- **Traps**: a conflicting grant is shown as **Cannot be granted**; that is the
-  separation-of-duties rule, not a fault. A member without owner authority is
-  shown an access-denied page.
-- **Depends on**: `/access/members`, `/access/my-access`, `/access/authentication`;
-  `/authorization/bindings`, `/organization/members`.
+- **Control**: on the member's row click **Add grant**, set the role bundle,
+  institution coverage, module, sensitivity and reason fields, then **Review grant**,
+  **Grant access** and **Done**. To revoke, open the member with **View**, click
+  **Revoke this access** on the grant, fill the reason and confirm. The steps are in
+  `backend/dashboard/tests/access/grant-administration.e2e.spec.ts`.
+- **Check**: a "Grant created" notice appears with its summary sentence and the
+  member's grant count rises; after revoke the revoked user's next call returns
+  `401`.
+- **Traps**: a conflicting grant turns **Review grant** into **Cannot be granted**;
+  that is the separation-of-duties rule in
+  [Access grants and members](#access-grants-and-members), not a fault. A member
+  without owner authority is shown an access-denied page.
+- **Depends on**: pages `/access/members`, `/access/my-access`,
+  `/access/authentication`; tenant API `GET /organization/members`,
+  `POST /authorization/bindings`; files
+  `backend/dashboard/tests/access/grant-administration.e2e.spec.ts`.
 
 ### Dashboard integration keys
 
 Issues and revokes data push keys.
 
-- **Reach**: signed in as an account administrator; open
-  `/access/integration-keys`.
-- **Control**: type a **Key label**, choose the bank, click **Generate data push
-  key**, then **I have stored it securely — dismiss**; **Revoke** on a listed key.
-- **Check**: "Data push key generated — copy it now" shows the secret once; the
-  key lists afterwards without it and a revoked key reads "Revoked".
-- **Traps**: keep the secret out of screenshots and captions.
-- **Depends on**: `/access/integration-keys`; `/integration-keys`.
+- **Reach**: signed in as an account administrator; open `/access/integration-keys`.
+- **Control**: type a **Key label**, click **Generate data push key**, then dismiss
+  the one-time secret; click **Revoke** on a listed key and answer the browser prompt
+  with a reason. The key is issued for the active bank, which is shown read-only.
+  The steps are in
+  `backend/dashboard/tests/integration-keys/integration-key-machine-principal.e2e.spec.ts`.
+- **Check**: the secret shows once, the key then lists as active without it and a
+  revoked key lists as revoked.
+- **Traps**: keep the secret out of screenshots and captions; the key rules are in
+  [Integration keys](#integration-keys).
+- **Depends on**: pages `/access/integration-keys`; tenant API `GET /integration-keys`,
+  `POST /integration-keys`; files
+  `backend/dashboard/tests/integration-keys/integration-key-machine-principal.e2e.spec.ts`.
 
 ### Dashboard settings and appearance
 
 Sets theme, profile and account preferences.
 
 - **Reach**: signed in; open `/settings/profile`.
-- **Control**: under **Appearance** choose the **Light**, **Dark** or **System**
-  radio.
-- **Check**: `<html>` carries `data-theme="light"` or `"dark"` to match the
-  choice.
-- **Traps**: dark is the default. With **System**, the theme follows the browser's
-  `prefers-color-scheme`.
-- **Depends on**: `/settings`, `/settings/profile`; `data-theme` on `<html>`;
-  `components/shell/ThemeProvider.tsx`.
+- **Control**: under appearance choose the **Light**, **Dark** or **System** radio.
+  The steps are in `backend/dashboard/tests/settings/settings-shell.e2e.spec.ts`.
+- **Check**: `<html>` carries `data-theme="light"` or `"dark"` to match the choice,
+  and the choice survives a reload.
+- **Traps**: with **System**, the theme follows the browser's `prefers-color-scheme`.
+- **Depends on**: pages `/settings/*`; files
+  `backend/dashboard/components/shell/ThemeProvider.tsx`,
+  `backend/dashboard/tests/settings/settings-shell.e2e.spec.ts`.
 
 ### Dashboard tenant inspector
 
@@ -844,7 +1224,19 @@ Opens a read-only dashboard for a staff inspection session.
 - **Check**: the dashboard opens scoped to the inspected bank with the
   impersonation banner shown.
 - **Traps**: the act token travels in the URL fragment; keep it out of evidence.
-- **Depends on**: `/inspect`, `/api/impersonation`.
+- **Depends on**: pages `/inspect`, `/api/impersonation/*`.
+
+### Dashboard health
+
+Reports whether the dashboard process is alive.
+
+- **Reach**: the dashboard server is running.
+- **Control**: `GET /api/health/live` on the dashboard origin, with no sign-in.
+- **Check**: `200` with `{"service":"aequoros-dashboard","status":"ok"}`.
+- **Traps**: it does not call the tenant API, so it stays `200` when the API is down.
+  The API has its own [Tenant API health](#tenant-api-health) entry.
+- **Depends on**: pages `/api/health/live`; files
+  `backend/dashboard/app/api/health/live/route.ts`.
 
 ## Marketing site
 
@@ -862,11 +1254,59 @@ Presents the product, company, security, investors and contact pages.
 - **Check**: each route answers `200` and renders in both desktop and narrow
   viewports; `/sitemap.xml` and `/robots.txt` are served.
 - **Traps**: the product pages show static captures, not live tenant data.
-- **Depends on**: `frontend/app/*/page.tsx`; `components/Navigation.tsx`.
+- **Depends on**: pages `/`, `/product`, `/company`, `/security`, `/investors`,
+  `/contact`, `/sitemap.xml`, `/robots.txt`; files `frontend/components/Navigation.tsx`.
 
 ### Marketing contact form
 
 Sends a demo request through the site's contact API.
 
 - **Verification**: contact submission requires a local delivery fixture because it can email a real recipient. This map skips form submission.
-- **Depends on**: `/contact`, `/api/contact`; `components/ContactForm.tsx`.
+- **Depends on**: pages `/contact`, `/api/contact/*`; files
+  `frontend/components/ContactForm.tsx`.
+
+## Not mapped
+
+Groups the check finds that have no entry, each with the reason. Add an entry and
+remove the line when a group gains a recipe that can run on a local stack.
+
+### Tenant API
+
+- `/cases`, `/assessments`, `/assessment-runs`, `/assessment-types`, `/documents`,
+  `/findings`, `/risk-types`, `/taxonomies`: the retired legacy case vertical, kept
+  only for old clients (see `backend/AGENTS.md`).
+- `/banks`, `/banks/{bank_id}/reporting-periods`: thin reads behind the bank and
+  period selectors that every dashboard entry uses.
+- `/banks/{bank_id}/sdi`, `/banks/{bank_id}/loan-classification`: regime-specific
+  panels inside the capital, liquidity and credit dashboards, shown only for the
+  small deposit-taking regime.
+- `/banks/{bank_id}/implied-rating`: needs a published operating-environment score
+  and market inputs, so the recipe is not verifiable on a bare local stack.
+- `/banks/{bank_id}/system-of-record`, `/banks/{bank_id}/system-of-record-assessment`:
+  governance that needs two data officers and a duplicated-book diagnosis, with no
+  dashboard surface.
+- `/banks/{bank_id}/canonical-withdrawals`,
+  `/banks/{bank_id}/canonical-withdrawal-scope`, `/banks/{bank_id}/position-snapshots`:
+  data-retirement and override flows that change a loaded book; skipped rather than
+  driven on a shared book.
+- `/banks/{bank_id}/encryption-key`: connecting and rotating a bank key needs a key
+  management service (see `backend/docs/bank_encryption.md`).
+- `/banks/{bank_id}/examiner`: read only through an inspection session and needs
+  completed official runs.
+- `/banks/{bank_id}/filing-workflow-templates`, `/banks/{bank_id}/regulatory-reporting`,
+  `/banks/{bank_id}/regulatory-artifacts`, `/banks/{bank_id}/regulatory-artifact-versions`,
+  `/attestation`: filing channels, approval chains, signing and filed artifacts, which
+  belong to the filing flow this map skips because it can transmit.
+- `/notifications`: no route creates a notification; rows come only from reporting
+  workflows, so a local recipe cannot produce one.
+- `/jobs`, `/feature-flags`, `/storage`: polling, gating and signed-download
+  endpoints used by other entries, with no standalone entry point.
+
+### Bank dashboard
+
+- `/api/attestation`, `/api/stress`: single sign-on step-up proxies for return
+  certification and stress sign-off, which need an identity provider.
+
+### Marketing site
+
+- `/opengraph-image`: a generated share image with no content to verify.
