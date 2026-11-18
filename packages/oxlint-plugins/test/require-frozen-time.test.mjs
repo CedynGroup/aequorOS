@@ -1376,6 +1376,41 @@ test("a beforeEach initialization applies to a test registered above it", async 
   assertClean(result, "frozenTime");
 });
 
+// An outer hook covers the nested suites' tests: its reassignment applies
+// to an inner test's invocation (describe chains compare as suffixes,
+// innermost first).
+test("an outer beforeEach reassignment covers a nested test", async () => {
+  const result = await runOxlint(["frozenTime"], `
+    describe('outer', () => {
+      let freeze = () => vi.useFakeTimers();
+      beforeEach(() => {
+        freeze = () => {};
+      });
+      describe('inner', () => {
+        it('t', () => {
+          freeze();
+          Date.now();
+        });
+      });
+    });
+  `);
+  assertFlagged(result, "frozenTime");
+});
+
+// A reassignment through an alias carries the alias's callable.
+test("a reassignment to a known callable resolves it", async () => {
+  const result = await runOxlint(["frozenTime"], `
+    it('t', () => {
+      let freeze = () => {};
+      const real = () => vi.useFakeTimers();
+      freeze = real;
+      freeze();
+      Date.now();
+    });
+  `);
+  assertClean(result, "frozenTime");
+});
+
 // A read inside an invoked helper's body executes at the invocation site:
 // a freeze invoked first covers it.
 test("a helper-body read is ordered at its invocation site", async () => {

@@ -608,10 +608,17 @@ const rule = {
           if (helperScopes[index].has(node.left.name)) {
             const scope = helperScopes[index];
             const previous = scope.get(node.left.name);
-            const callable =
+            let resolved = null;
+            if (
               node.right.type === "FunctionExpression" ||
-              node.right.type === "ArrowFunctionExpression";
-            scope.set(node.left.name, callable ? node.right : null);
+              node.right.type === "ArrowFunctionExpression"
+            ) {
+              resolved = node.right;
+            } else if (node.right.type === "Identifier") {
+              // An alias of a known callable carries the callable itself.
+              resolved = resolveHelper(node.right.name);
+            }
+            scope.set(node.left.name, resolved);
             let perScope = writeHistory.get(scope);
             if (!perScope) {
               perScope = new Map();
@@ -619,7 +626,7 @@ const rule = {
             }
             const versions = perScope.get(node.left.name) ?? [];
             versions.push({
-              fn: callable ? node.right : null,
+              fn: resolved,
               previous,
               writer: boundary ? callbackInfoOf(boundary) : null,
               pos: node.range?.[0] ?? 0,
@@ -1019,11 +1026,17 @@ const rule = {
             if (rankW > rankC) {
               return false;
             }
+            // Chains are innermost-first: an outer hook's chain is a SUFFIX
+            // of a nested test's chain (the hook covers the nested suite).
             const writerDescribes = findAllEnclosingDescribes(writer.callNode);
             const callbackDescribes = findAllEnclosingDescribes(callback.callNode);
             return (
               writerDescribes.length <= callbackDescribes.length &&
-              writerDescribes.every((describe, index) => callbackDescribes[index] === describe)
+              writerDescribes.every(
+                (describe, index) =>
+                  callbackDescribes[callbackDescribes.length - writerDescribes.length + index] ===
+                  describe,
+              )
             );
           }
           const writerDepth = findAllEnclosingDescribes(writer.callNode).length;
@@ -1044,7 +1057,8 @@ const rule = {
           if (versions.length === 0) {
             return scope.get(name);
           }
-          const callback = callbackInfoOf(nearestFunction(site));
+          const siteFn = nearestFunction(site);
+          const callback = siteFn ? callbackInfoOf(siteFn) : null;
           for (let version = versions.length - 1; version >= 0; version -= 1) {
             if (writeAppliesTo(versions[version], callback, site)) {
               return versions[version].fn;
