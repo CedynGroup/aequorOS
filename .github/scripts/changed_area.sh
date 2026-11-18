@@ -11,7 +11,7 @@
 #
 # Usage: changed_area.sh <output-name> <path-regex> [--ignore]
 # By default the regex selects paths to run; --ignore selects paths to skip and
-# runs if any changed path is outside it. Both modes consider both sides of a rename.
+# runs if any changed path is outside it, considering both sides of a rename.
 #
 # Fail-closed on purpose: anything this cannot determine — a non-pull_request
 # event, a diff that will not compute, an empty change set — answers "true" and
@@ -23,10 +23,12 @@ set -euo pipefail
 NAME="${1:?usage: changed_area.sh <output-name> <regex>}"
 PATTERN="${2:?usage: changed_area.sh <output-name> <regex>}"
 MATCH_ARGS=(-qE)
+DIFF_ARGS=(--name-only)
 case "${3:-}" in
   '') ;;
   --ignore)
     MATCH_ARGS=(-qvE)
+    DIFF_ARGS+=(--no-renames)
     ;;
   *) exit 2 ;;
 esac
@@ -57,7 +59,7 @@ if [ -z "${BASE}" ]; then
   exit 0
 fi
 
-if ! CHANGED="$(git diff --name-only --no-renames "${BASE}" HEAD 2>&1)"; then
+if ! CHANGED="$(git diff "${DIFF_ARGS[@]}" "${BASE}" HEAD 2>&1)"; then
   echo "::warning::Could not diff ${BASE}..HEAD (${CHANGED}); running every gate."
   emit true
   exit 0
