@@ -3,7 +3,6 @@
 The bank-facing FastAPI app in `backend/app/main.py`: business routes under
 `/api/v1`, health under `/api/health`. Shared rules (case matrix, evidence
 record, local test data, handoff) are in [../SKILL.md](../SKILL.md).
-Its features: [feature map](../../../../docs/feature_map.md#tenant-api).
 
 ## Reach it
 

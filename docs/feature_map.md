@@ -44,10 +44,10 @@ Reports whether the process is alive and whether its dependencies are ready.
 
 - **Reach**: the API process is running.
 - **Control**: `GET /api/health/live`, then `GET /api/health/ready`.
-- **Check**: `live` answers `200`; `ready` answers `200` when every subsystem it
-  checks is ready and `503` otherwise, without naming the cause.
-- **Traps**: a running process does not mean a ready one. Computation cases also
-  need the worker (`app.worker`) running; no health route reports its absence.
+- **Check**: `live` answers `200`. Readiness answers `200` with status `ok` or
+  `degraded` and component checks, or `503` when the readiness probe fails.
+- **Traps**: computation cases need `app.worker` running. The worker check
+  detects overdue jobs as a sign of degradation. Check the process separately.
 - **Depends on**: `/api/health/live`, `/api/health/ready`.
 
 ### Tenant API sign-in
@@ -113,21 +113,23 @@ Serves each risk module's computed headline payload.
 
 Parses a spreadsheet or CSV into an ingestion batch with row-level findings.
 
-- **Reach**: a principal with upload authority for the bank; for a file to
-  translate, a mapping configuration active for its layout.
-- **Control**: `POST /banks/{bank_id}/ingestion-uploads` with the file as the
-  `file` form part; list and read batches at
-  `GET /banks/{bank_id}/ingestion-batches[/{batch_id}]` and failures at
-  `/ingestion-batches/{batch_id}/translation-failures`.
-- **Check**: the upload answers `201`; the batch reports extracted, translated,
-  accepted and error counts, and a rejected row carries its source reference and
-  finding.
+- **Reach**: a principal with bank-scoped upload and batch-run authority, and
+  an active mapping for the file layout.
+- **Control**: `POST /banks/{bank_id}/ingestion-uploads` with the `file` form
+  part. Send the returned `location`, `source_system: EXCEL_CSV`, `as_of_date`
+  and `reason` to `POST /banks/{bank_id}/ingestion-batches`. Use the returned
+  `batch.id` to read the batch and its translation failures.
+- **Check**: upload and batch creation each answer `201`. The batch reports
+  extracted, translated, accepted and error counts. A rejected row carries its
+  source reference and finding.
 - **Traps**: the upload stages in the bank's object storage, so a local MinIO
   must be running. A legacy `.xls` is refused by format with re-save guidance;
   an empty file answers `422` and an oversized file `413`. Rows with errors
   produce an "accepted with warnings" batch, not a failure.
-- **Depends on**: `/banks/{bank_id}/ingestion-uploads`, `/ingestion-batches`,
-  `/ingestion-summary`, `/mapping-configs`, `/data-activations`.
+- **Depends on**: `POST /banks/{bank_id}/ingestion-uploads`,
+  `POST /banks/{bank_id}/ingestion-batches`, `GET /banks/{bank_id}/ingestion-batches[/{batch_id}]` and
+  `GET /banks/{bank_id}/ingestion-batches/{batch_id}/translation-failures`,
+  plus `/ingestion-summary`, `/mapping-configs` and `/data-activations`.
 
 ### Data Engine API push
 
@@ -153,12 +155,21 @@ same pipeline as an upload.
 
 Generates, validates, certifies and files regulatory return packages.
 
-- **Reach**: a bank with a computed live book, a reporting period and a principal
-  with filing authority; certification also needs attestation signing configured.
-- **Control**: `POST /banks/{bank_id}/regulatory-packages`, then `validate`,
-  `request-approval`, `attestation/certify` and `submit` under
-  `/regulatory-packages/{package_id}`; `GET /banks/{bank_id}/return-anchors`
-  lists reporting dates.
+- **Reach**: a bank with a computed live book and a return that supports
+  `orass_sandbox`, sandbox and attestation signing configured, and distinct
+  authorized preparer, approver and validator accounts.
+- **Control**: as preparer, use `GET /banks/{bank_id}/return-anchors` to pick the
+  reporting date, then `POST /banks/{bank_id}/regulatory-packages` and run
+  `validate`. For each required signing role, call `attestation/step-up` as
+  that signer with their configured step-up proof, then pass its
+  `authorization_token` and `certification_digest` to `attestation/certify`
+  as `authorization_token` and `expected_certification_digest`, respectively.
+  Preparer certification starts the approval chain and approver certification
+  records approval. Use `workflow` to follow any remaining review decisions
+  (`workflow/decisions`) and intermediate hand-offs (`workflow/hand-off`)
+  with the assigned officers. Once the package is approved and fully certified,
+  as validator call `submit` with
+  `{"channel":"orass_sandbox"}`.
 - **Check**: a package reports its validation results, approval workflow state
   and filed artifacts; its version chain and submission events are readable.
 - **Traps**: reporting dates come from the return definition, not the bank's
@@ -166,8 +177,8 @@ Generates, validates, certifies and files regulatory return packages.
   certified or filed; that is the unconfigured state, not a fault. Verify filing
   only against the simulated channel.
 - **Depends on**: `/banks/{bank_id}/regulatory-packages[/{package_id}]` and its
-  `validate`, `workflow`, `attestation` and `submit` routes, `/return-anchors`,
-  `/regulatory-runs`.
+  `validate`, `workflow`, `attestation/step-up`, `attestation/certify` and
+  `submit` routes, `/return-anchors`, `/regulatory-runs`.
 
 ### Access grants and members
 
@@ -204,14 +215,13 @@ Issues and revokes bank-scoped machine keys for the push API.
 
 Defines measures, dashboards and alerts over a bank's data.
 
-- **Reach**: the BI routers are mounted only when `BI_ENABLED` is set in the API
-  environment; a principal with the BI grants.
+- **Reach**: enable `BI_ENABLED` on the API and sign in with the BI grants.
 - **Control**: `GET /banks/{bank_id}/bi/measures`, `/bi/dashboards`,
   `/bi/alerts`, with the matching `POST`, `PUT` and `DELETE` routes.
 - **Check**: created measures and dashboards are listed with their versions and
   shares.
-- **Traps**: with BI disabled these routes are absent and answer `404`; that is
-  the configuration, not a regression.
+- **Traps**: with BI disabled the registered BI routes return `404` through the
+  router-level feature gate.
 - **Depends on**: `/banks/{bank_id}/bi/*`.
 
 ## Staff operator API
@@ -616,6 +626,42 @@ Shows asset quality, delinquency, concentration, vintages and activity.
   sees less than an administrator; compare against that principal's authority.
 - **Depends on**: `/credit/*`; `/banks/{bank_id}/credit/*`.
 
+### Dashboard markets
+
+Shows published curves, rates, FX and indices with source and freshness details.
+
+- **Reach**: sign in with Markets published-view authority and open `/markets`.
+- **Control**: select **Curves** or **Market data** and change **As of**.
+- **Check**: the curves and source details match the publication available for the
+  selected date.
+- **Traps**: a date without published coverage can show an empty view.
+- **Depends on**: `/markets`, **Curves**, **As of** and
+  `GET /banks/{bank_id}/market-data/views`.
+
+### Dashboard behavioral models
+
+Shows model estimates and training coverage for the bank's behavioral assumptions.
+
+- **Reach**: sign in with Behavioral aggregated-view authority and open `/behavioral`.
+- **Control**: open **NMD Duration**, **Loan Prepayment** or **Deposit Stability**.
+- **Check**: the model workspace reports the estimate and its training coverage
+  for the selected model.
+- **Traps**: a bank without enough ingested history may have no trained estimate.
+- **Depends on**: `/behavioral/{nmd-duration|prepayment|deposit-stability}` and
+  `GET /banks/{bank_id}/behavioral/{model}`.
+
+### Dashboard reports
+
+Collects board packs, saved analyses and persisted regulatory runs.
+
+- **Reach**: sign in, select a bank with computed live evidence and open `/reports`.
+- **Control**: open **Board pack** and select **Print / Save as PDF**.
+- **Check**: the pack renders the bank's available live module figures and
+  opens the print dialog.
+- **Traps**: printing is disabled when there is no available live evidence.
+- **Depends on**: `/reports/board-pack`, `/reports/analyses`,
+  **Print / Save as PDF** and `GET /banks/{bank_id}/regulatory-runs` for the run registry.
+
 ### Dashboard positions
 
 Shows the canonical position book behind every module.
@@ -631,8 +677,8 @@ Shows the canonical position book behind every module.
 
 Uploads a spreadsheet or CSV and reviews the batch it creates.
 
-- **Reach**: signed in with upload authority; local MinIO running; open
-  `/data-engine/excel-csv`.
+- **Reach**: signed in with upload and batch-run authority, plus mapping
+  activation authority if needed. Start local MinIO and open `/data-engine/excel-csv`.
 - **Control**: on a mapping template click **Activate mapping**; in the "Upload &
   ingest" section set **Source files (.xlsx / .csv)** and **As-of date**, then
   click **Upload & ingest**; open **Batch detail**.
@@ -643,7 +689,7 @@ Uploads a spreadsheet or CSV and reviews the batch it creates.
 - **Traps**: a legacy `.xls` is refused with re-save guidance; a file with bad
   rows is "accepted with warnings", not failed. Use synthetic files only.
 - **Depends on**: `/data-engine/excel-csv`, `/data-engine/batches/[batchId]`;
-  `POST /banks/{bank_id}/ingestion-uploads`.
+  `POST /banks/{bank_id}/ingestion-uploads` and `POST /banks/{bank_id}/ingestion-batches`.
 
 ### Dashboard Data Engine connections
 
@@ -664,11 +710,13 @@ Configures API push, database-direct, core-banking adapter and market-data loads
 
 Prepares, validates, certifies and files regulatory returns.
 
-- **Reach**: signed in with filing authority; open `/submissions` (it redirects to
-  the returns workspace).
-- **Control**: pick a **Channel** and **Reporting date**, generate a pack, then
-  **Validate**, request approval, certify and transmit from the return command
-  bar.
+- **Reach**: use the bank, return and signing prerequisites in
+  [Regulatory returns](#regulatory-returns). Open `/submissions` to reach the
+  returns workspace.
+- **Control**: pick the **Reporting date** and generate the pack. After checks
+  pass, follow the command bar as preparer and approver to certify and review,
+  completing the signing prompts. As the filing principal, select
+  **ORASS (sandbox)** (`orass_sandbox`) in **Channel** before transmitting.
 - **Check**: the return reports "Checks passed", its filing chain and transmission
   rows; the command bar names its primary action and the reason when it is
   disabled.
@@ -709,12 +757,14 @@ Shows the institution's legal identity, authorisation, ownership and registers.
 
 Builds ad hoc questions and views over the book.
 
-- **Reach**: BI enabled on the API; signed in with BI grants; open `/explore`.
+- **Reach**: BI enabled on the API and BI grants for the signed-in user. Open
+  `/explore`. For **Ask a question**, also enable `BI_NLQ_ENABLED` on the API.
 - **Control**: shape a grid with **Measure** and **Break down by**, **Export**, or
   use the **Ask a question** tab and **Work out my question**.
 - **Check**: the grid rows reconcile with the source figures and a confirmed
   question shows "The question you confirmed".
-- **Traps**: with BI disabled the routes are absent.
+- **Traps**: with BI disabled the API's router-level feature gate returns `404`.
+  Disabling `BI_NLQ_ENABLED` hides **Ask a question**.
 - **Depends on**: `/explore/*`, `/dashboards/*`; `/banks/{bank_id}/bi/*`.
 
 ### Dashboard risk and alerts
@@ -807,10 +857,11 @@ Presents the product, company, security, investors and contact pages.
 Sends a demo request through the site's contact API.
 
 - **Reach**: open `/contact`.
-- **Control**: fill the name, email, organization, role and message fields and
-  click **Request demo**; the API is `POST /api/contact`.
-- **Check**: a valid request answers `200` with `{"ok": true}`; missing fields and
-  an invalid email answer `400` with an error message; a filled honeypot field
+- **Control**: fill the required name, email and role fields and click **Request
+  demo**. Organization and message are optional. For direct validation and
+  honeypot requests, use the local [Contact API capture recipe](../.agents/skills/verification/references/marketing-site.md#contact-api-capture).
+- **Check**: a delivered request answers `200` with `{"ok": true}`. Missing required
+  fields and an invalid email answer `400` with an error message; a filled honeypot field
   (`_gotcha`) answers `200` without sending.
 - **Traps**: without `RESEND_API_KEY` the API answers `503`. With a placeholder
   key, delivery cannot succeed, so record delivery as unexecuted rather than

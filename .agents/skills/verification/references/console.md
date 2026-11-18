@@ -3,7 +3,6 @@
 The staff control-plane UI in `console/` (Next.js, :3002). It talks only to the
 [operator API](operator-api.md) through its own `/api/op` proxy; browsers never
 call the operator API directly. Shared rules are in [../SKILL.md](../SKILL.md).
-Its features: [feature map](../../../../docs/feature_map.md#staff-console).
 
 ## Reach it
 
