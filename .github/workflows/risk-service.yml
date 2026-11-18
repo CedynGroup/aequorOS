@@ -249,7 +249,7 @@ jobs:
           PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: >-
           .github/scripts/changed_area.sh guards
-          '^(backend/|mise\.toml$|\.github/|docs/feature_map\.md$|console/(app|components)/|frontend/(app|components)/)'
+          '^((backend|console|frontend|docs|packages|deploy|\.agents|\.github)/|mise\.toml$)'
       - name: Detect whether this pull request touches the generated API client
         id: api_client
         env:

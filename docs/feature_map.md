@@ -46,6 +46,7 @@ tests" CI job and locally with
 fails when a name an entry depends on no longer exists, when a link or repository
 path in this file points at nothing, or when a router group or page group is
 neither covered by an entry nor listed under [Not mapped](#not-mapped).
+Operator router groups use the tags on registered routes.
 
 A **Depends on** line is a list of clauses separated by semicolons. Each clause
 starts with a label and lists backticked tokens:
@@ -200,18 +201,19 @@ Generates, validates, certifies and files regulatory return packages.
 
 - **Reach**: a bank with a computed live book and a return that supports
   `orass_sandbox`, sandbox and attestation signing configured, and distinct
-  authorized preparer, approver and validator accounts.
-- **Control**: as preparer, pick a date with `GET /banks/{bank_id}/return-anchors?return_code={return_code}`, then send
+  accounts authorized to prepare, approve and validate the package.
+- **Control**: with preparation authority, pick a date with
+  `GET /banks/{bank_id}/return-anchors?return_code={return_code}`, then send
   `return_code` and `reporting_date` to `POST /banks/{bank_id}/regulatory-packages`
-  and run `validate`. Each required signer calls `attestation/step-up` with
+  and run `validate`. Each person required to sign calls `attestation/step-up` with
   `signing_role` and their step-up proof, then `attestation/certify` with the
   same `signing_role`, returned `authorization_token` and returned
-  `certification_digest` as `expected_certification_digest`. Preparer
-  certification starts the chain and approver certification records approval.
+  `certification_digest` as `expected_certification_digest`. Certification at
+  preparation starts the chain and certification at approval records approval.
   Follow `workflow/decisions` for any remaining review decisions. Use
   `workflow/hand-off` only to advance stages whose `transmit_on_approve` is
-  false, such as handing off from the approver to the validator. Once approved
-  and fully certified, file as validator directly through `submit` with
+  false, such as handing off from approval to validation. Once approved and fully
+  certified, use validation authority to call `submit` directly with
   `{"channel":"orass_sandbox"}`. The transmitting stage's hand-off uses the
   registry default, so skip that hand-off in this recipe.
 - **Check**: a package reports its validation results, approval workflow state
@@ -248,7 +250,7 @@ Lists the organization's members and administers scoped access grants.
 
 Issues and revokes bank-scoped machine keys for the push API.
 
-- **Reach**: an account administrator with integration authority.
+- **Reach**: an account with authority to administer accounts and manage integrations.
 - **Control**: `POST /integration-keys` (label, bank), `GET /integration-keys`,
   `POST /integration-keys/{key_id}/revoke`.
 - **Check**: the secret is returned once at creation and never again; a revoked
@@ -275,15 +277,15 @@ Defines measures, dashboards and alerts over a bank's data.
 
 Reads the bank's attributable security and compliance events.
 
-- **Reach**: an account with an Auditor, Security Officer or Compliance Officer
-  binding that covers the whole institution; perform a loggable action first, such
-  as a grant.
+- **Reach**: an account with a whole-institution binding to view the audit log
+  through audit, security oversight or compliance oversight authority. Perform a
+  loggable action such as a grant.
 - **Control**: `GET /banks/{bank_id}/audit-log?limit=20`; add `event_type`, `actor`
   or `outcome` to filter and follow `next_cursor` for the next page.
 - **Check**: events list newest first and the action you performed appears with its
   actor; a second page continues from `next_cursor`.
 - **Traps**: `start` and `end` must carry a timezone or the API answers `422`. An
-  account without an officer binding is refused with `403`.
+  account without the required audit binding is refused with `403`.
 - **Depends on**: tenant API `GET /banks/{bank_id}/audit-log`.
 
 ## Staff operator API
@@ -494,8 +496,7 @@ Lists every onboarded institution and opens one for diagnostics.
   or the search box, use **Export CSV**, and open a row for `/tenants/{orgId}`.
 - **Check**: the count line reads "N of M shown" and the tiles agree with
   `GET /operator/v1/tenants`; the detail page shows jurisdiction, currency,
-  licence, ingestion and live-module figures for that tenant. The tile
-  definitions are in `console/app/(shell)/(developer)/tenants/page.tsx`.
+  licence, ingestion and live-module figures for that tenant.
 - **Traps**: with no tenants the table shows its empty state. Diagnostics traps are
   in [Tenant diagnostics and remediation](#tenant-diagnostics-and-remediation).
 - **Depends on**: pages `/tenants`, `/tenants/{orgId}`; operator API
@@ -508,7 +509,6 @@ Provisions a tenant through a form, a review step and a result panel.
 - **Reach**: signed in; open `/onboard`.
 - **Control**: fill every required field (jurisdiction prefills the currency and
   institution type is a closed list), then **Review**, then **Provision tenant**.
-  The fields and their rules are in `console/app/(shell)/(developer)/onboard/page.tsx`.
 - **Check**: the "Provisioning steps" panel reports each step, then the result
   shows the new `BK-` and `OR-` identifiers; the one-time password stays hidden
   until revealed.
@@ -532,7 +532,7 @@ Starts and ends audited inspection sessions and opens a tenant's dashboard.
 - **Check**: the active-sessions tile and list include the session; the dashboard
   opens at `/inspect`; after **End** it leaves the active list. The audit log
   records `inspector.session.start` and `inspector.session.end`.
-- **Traps**: break-glass mode needs operator-admin authority. Pause at the
+- **Traps**: break-glass mode needs staff administration authority. Pause at the
   button's navigation call and keep the token and URL fragment out of evidence, as
   the console reference describes. API traps are in
   [Inspector sessions](#inspector-sessions).
@@ -545,15 +545,14 @@ Starts and ends audited inspection sessions and opens a tenant's dashboard.
 
 Manages staff accounts.
 
-- **Reach**: sign in as an operator administrator or above and open
-  `/admin/operators`.
+- **Reach**: sign in with authority to administer staff accounts and open `/admin/operators`.
 - **Control**: **Create operator**, fill **Email**, **Display name** and **Role**,
   and submit; each row offers **Reset** and **Deactivate** or **Reactivate**, each
   confirmed in a dialog.
 - **Check**: the new account lists with its role and active state; create and reset
   each show a one-time password dialog; the audit log records `operators.create`,
   `operators.reset_password`, `operators.deactivate` and `operators.reactivate`.
-- **Traps**: a developer-role account sees the access explainer, not the page.
+- **Traps**: staff without account administration authority see the access explainer.
   Rank rules also limit which accounts an administrator may change, as in
   [Operator accounts](#operator-accounts).
 - **Depends on**: pages `/admin/operators`; operator API `GET /operator/v1/operators`;
@@ -584,7 +583,7 @@ Proposes and approves governed parameters.
 
 Shows the operator action trail.
 
-- **Reach**: sign in as an operator administrator or above and open `/admin/audit`.
+- **Reach**: sign in with staff administration authority and open `/admin/audit`.
 - **Control**: filter by **Operator email**, **Target org** or **Action prefix**
   and click **Apply**; page with **Prev** and **Next**.
 - **Check**: filtering by the prefix of an action you caused, such as
@@ -629,8 +628,7 @@ Shows data engines, connections and background jobs.
 - **Traps**: job progress depends on the worker running.
 - **Depends on**: pages `/operations`; operator API `GET /operator/v1/overview`,
   `GET /operator/v1/data-engines`, `GET /operator/v1/jobs`,
-  `GET /operator/v1/worker-health`; files
-  `console/app/(shell)/(developer)/operations/page.tsx`.
+  `GET /operator/v1/worker-health`.
 
 ## Bank dashboard
 
@@ -829,9 +827,11 @@ Projects the balance sheet and runs scenarios, what-ifs and reverse stress.
   click **Run reverse stress**.
 - **Check**: the run lists under `GET /banks/{bank_id}/forecast/runs`, and its
   year-5 CAR and average ROE equal `summary.year5_car_pct` and `summary.avg_roe_pct`
-  from `GET /banks/{bank_id}/forecast/runs/{run_id}`. On reverse stress the
-  `reverse-stress-breach-value` elements equal `liquidity_axis.breach_multiplier` and
-  `capital_axis.breach_multiplier` from `GET /banks/{bank_id}/reverse-stress/latest`.
+  from `GET /banks/{bank_id}/forecast/runs/{run_id}`. Compare `liquidity_axis` and
+  `capital_axis` independently against `GET /banks/{bank_id}/reverse-stress/latest`.
+  A breached axis with a multiplier shows a `reverse-stress-breach-value` marker
+  with its `breach_multiplier` formatted to two decimals followed by ×. Otherwise
+  the axis has no marker and shows that it holds to the search limit.
 - **Traps**: a book that cannot be forecast shows a not-computable state, which is
   the expected result. Reverse stress also needs financial facts for the period and
   configured liquidity and capital stress scenarios.
@@ -855,8 +855,8 @@ Shows asset quality, delinquency, concentration, vintages and activity.
   `metrics.portfolio_at_risk` times 100; on `/credit/concentration` the book total
   equals `total_book_ghs` and each HHI equals `dimensions[].hhi` from
   `GET /banks/{bank_id}/credit/concentration`.
-- **Traps**: credit register access is scoped by grant, so a narrower principal sees
-  less than an administrator; compare against that principal's authority.
+- **Traps**: credit register access is scoped by grant. Compare the visible
+  register with the signed-in account's grant scope.
 - **Depends on**: pages `/credit/*`; tenant API `GET /banks/{bank_id}/credit/dashboard`,
   `GET /banks/{bank_id}/credit/concentration`, `GET /banks/{bank_id}/credit/loans`.
 
@@ -1147,14 +1147,14 @@ Shows the limit wall, findings and pipeline alerts.
 - **Control**: on `/risk` choose the limit wall or validation checks and filter the
   wall with the **All limits**, **Breaches** and **Amber** pills. On `/alerts` group
   the stream with **By module** or **By severity**.
-- **Check**: on `/alerts`, open alerts, critical, high and modules-affected equal
-  `total`, `by_severity.critical`, `by_severity.high` and the number of keys in
-  `by_module` from `GET /banks/{bank_id}/alerts`, after dropping alerts for modules
-  whose rules are not in force. The `/risk` limit counts are derived on the page
-  from the module dashboards, not from this route.
-- **Traps**: with no findings the page shows an empty state, not a hidden one. The
-  on-screen alert total can be lower than the raw `total` for the in-force reason
-  above.
+- **Check**: on `/alerts`, start with the `items` returned by
+  `GET /banks/{bank_id}/alerts?limit=200`. Keep alerts for modules whose rules are
+  in force. When liquidity rules are out of force, exclude the forecast rules
+  `year5_lcr_above_minimum` and `year5_nsfr_above_minimum`. From the resulting list,
+  count all items, critical items, high items and distinct modules for the four
+  tiles. The `/risk` limit counts come from the module dashboards.
+- **Traps**: an empty filtered list shows an empty state. The response aggregates
+  may include findings outside the returned page or the applicable rules.
 - **Depends on**: pages `/risk`, `/alerts`; tenant API `GET /banks/{bank_id}/alerts`;
   files `backend/dashboard/lib/api/regulatoryRules.ts`.
 
@@ -1185,7 +1185,7 @@ Lists members and grants or revokes scoped access.
 
 Issues and revokes data push keys.
 
-- **Reach**: signed in as an account administrator; open `/access/integration-keys`.
+- **Reach**: sign in with account administration authority and open `/access/integration-keys`.
 - **Control**: type a **Key label**, click **Generate data push key**, then dismiss
   the one-time secret; click **Revoke** on a listed key and answer the browser prompt
   with a reason. The key is issued for the active bank, which is shown read-only.
@@ -1301,6 +1301,13 @@ remove the line when a group gains a recipe that can run on a local stack.
   workflows, so a local recipe cannot produce one.
 - `/jobs`, `/feature-flags`, `/storage`: polling, gating and signed-download
   endpoints used by other entries, with no standalone entry point.
+
+### Staff operator API
+
+- `operator-bank-encryption`: key custody operations require a key management service.
+- `operator-bi`: backfill requires a bank with BI history and a worker to process it.
+- `operator-activity`: the inspection-session feed combines records produced by
+  other workflows.
 
 ### Bank dashboard
 

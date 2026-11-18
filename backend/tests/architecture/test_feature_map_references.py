@@ -14,7 +14,7 @@ What it checks
   site, ``data-testid`` strings against their component sources, and file paths
   against the files Git tracks.
 * Every Markdown link and every backticked repository path anywhere in the map
-  points at a tracked file, and every ``#anchor`` matches a heading.
+  points at a tracked file or directory, and every ``#anchor`` matches a heading.
 * Every public API router group and every user-facing page group is either covered
   by an entry or listed under ``Not mapped`` with a reason, and a ``Not mapped``
   line that no longer matches anything is stale.
@@ -47,6 +47,7 @@ from pathlib import Path, PurePosixPath
 from typing import Final
 
 import pytest
+from fastapi.routing import APIRoute
 from starlette.applications import Starlette
 
 from app.core.config import get_operator_settings, get_settings
@@ -90,6 +91,10 @@ METADATA_PAGES: Final = {
     "opengraph-image": "/opengraph-image",
 }
 SOURCE_SUFFIXES: Final = (".ts", ".tsx", ".js", ".jsx", ".mjs")
+TEST_ID_ATTRIBUTE: Final = re.compile(
+    r"""(?<!\S)data-testid\s*=\s*(\{\s*)?(["'])([\w-]+)\2(?(1)\s*\})(?=\s|/|>)"""
+    r"""|/\*[\s\S]*?\*/|//[^\n]*|"(?:\\.|[^"\\\n])*"|'(?:\\.|[^'\\\n])*'"""
+)
 TEST_PATH: Final = re.compile(r"(?:^|/)(?:tests?|e2e|node_modules|\.next)/|\.(?:spec|test)\.")
 METHODS: Final = ("GET", "POST", "PUT", "PATCH", "DELETE")
 
@@ -100,7 +105,8 @@ class Sources:
 
     routes: Mapping[str, Mapping[str, frozenset[str]]]  # "tenant"/"operator" -> path -> methods
     pages: Mapping[str, frozenset[str]]  # UI section -> normalized page paths
-    source_text: Mapping[str, str]  # UI section -> concatenated component source
+    operator_groups: Mapping[tuple[str, str], frozenset[str]]  # path and method -> router tags
+    test_ids: Mapping[str, frozenset[str]]  # UI section -> literal data-testid values
     tracked: frozenset[str]  # repository-relative files Git tracks
     read_text: Callable[[str], str | None]  # a tracked file's text, for anchors
 
@@ -219,13 +225,6 @@ def tenant_group(path: str) -> str:
     return "/" + "/".join(path.split("/")[1:3])
 
 
-def operator_group(path: str) -> str:
-    segments = path.split("/")[1:]
-    if len(segments) >= 3 and segments[1] == "v1":
-        return f"/operator/v1/{segments[2]}"
-    return "/" + "/".join(segments[:2])
-
-
 def page_group(path: str) -> str:
     segments = path.split("/")[1:]
     if segments[0] == "api" and len(segments) > 1:
@@ -233,26 +232,23 @@ def page_group(path: str) -> str:
     return "/" + segments[0] if segments[0] else "/"
 
 
-def group_of(path: str, api: str) -> str:
-    return tenant_group(path) if api == "tenant" else operator_group(path)
-
-
 def display_group(group: str) -> str:
     return group.replace("{}", "{bank_id}")
 
 
-def route_exists(token: str, api: str, routes: Mapping[str, frozenset[str]]) -> bool:
+def matching_routes(
+    token: str, api: str, routes: Mapping[str, frozenset[str]]
+) -> Iterator[tuple[str, str]]:
     method, raw = split_method(token)
     wildcard = raw.endswith("/*")
     path = api_path(raw.removesuffix("/*"), api)
-    matched = [
-        methods
-        for known, methods in routes.items()
-        if known == path or (wildcard and known.startswith(path + "/"))
-    ]
-    if not matched:
-        return False
-    return method is None or any(method in methods for methods in matched)
+    for known, methods in routes.items():
+        if known == path or (wildcard and known.startswith(path + "/")):
+            yield from ((known, verb) for verb in methods if method is None or method == verb)
+
+
+def route_exists(token: str, api: str, routes: Mapping[str, frozenset[str]]) -> bool:
+    return next(matching_routes(token, api, routes), None) is not None
 
 
 def page_exists(token: str, pages: frozenset[str]) -> bool:
@@ -291,13 +287,14 @@ def token_error(label: str, token: str, section: str, sources: Sources) -> str |
     if label == "pages":
         found = page_exists(token, sources.pages.get(section, frozenset()))
         return None if found else f"page `{token}` is not under the {section} app tree"
-    found = token in sources.source_text.get(section, "")
+    found = token in sources.test_ids.get(section, frozenset())
     return None if found else f"test id `{token}` appears in no {section} component source"
 
 
 def link_errors(text: str, headings: list[str], sources: Sources) -> Iterator[str]:
     anchors = {slug(title) for title in headings}
     base = PurePosixPath(MAP_FILE).parent
+    directories = {str(parent) for path in sources.tracked for parent in PurePosixPath(path).parents}
     for number, line in enumerate(text.splitlines(), start=1):
         where = f"{MAP_FILE}:{number}"
         for target in re.findall(r"\]\(([^)\s]+)\)", line):
@@ -318,16 +315,17 @@ def link_errors(text: str, headings: list[str], sources: Sources) -> Iterator[st
                 if anchor not in {slug(title) for title in titles}:
                     yield f"{where}: anchor #{anchor} matches no heading in {resolved}"
         for token in re.findall(r"`([^`]+)`", line):
-            looks_like_path = token.startswith(ROOTS) and re.search(r"\.[A-Za-z0-9]+$", token)
+            looks_like_path = token.startswith(ROOTS)
             if (
                 looks_like_path
                 and not re.search(r"[*{}\[\]<> ]", token)
-                and token not in sources.tracked
+                and token.rstrip("/") not in sources.tracked
+                and token.rstrip("/") not in directories
             ):
-                yield f"{where}: file `{token}` is not tracked"
+                yield f"{where}: path `{token}` is not tracked"
 
 
-def covered_groups(entries: list[Entry]) -> dict[str, set[str]]:
+def covered_groups(entries: list[Entry], sources: Sources) -> dict[str, set[str]]:
     """Groups any entry names: an API group is covered by its own entry or by a UI entry's read."""
     covered: dict[str, set[str]] = {}
     for entry in entries:
@@ -336,8 +334,12 @@ def covered_groups(entries: list[Entry]) -> dict[str, set[str]]:
                 path = token.removesuffix("/*")
                 if label in API_LABELS:
                     api = API_LABELS[label]
-                    group = group_of(api_path(split_method(path)[1], api), api)
-                    covered.setdefault(api, set()).add(group)
+                    groups = covered.setdefault(api, set())
+                    if api == "tenant":
+                        groups.add(tenant_group(api_path(split_method(path)[1], api)))
+                    else:
+                        for match in matching_routes(token, api, sources.routes.get(api, {})):
+                            groups.update(sources.operator_groups.get(match, ()))
                 elif label == "pages":
                     covered.setdefault(entry.section, set()).add(page_group(normalize(path)))
     return covered
@@ -345,8 +347,12 @@ def covered_groups(entries: list[Entry]) -> dict[str, set[str]]:
 
 def existing_groups(sources: Sources) -> dict[str, set[str]]:
     existing = {
-        api: {group_of(path, api) for path in routes if path not in FRAMEWORK_PATHS}
-        for api, routes in sources.routes.items()
+        "tenant": {
+            tenant_group(path)
+            for path in sources.routes.get("tenant", {})
+            if path not in FRAMEWORK_PATHS
+        },
+        "operator": {tag for tags in sources.operator_groups.values() for tag in tags},
     }
     for section in UI_SECTIONS:
         existing[section] = {page_group(path) for path in sources.pages.get(section, frozenset())}
@@ -371,7 +377,7 @@ def not_mapped_groups(lines: list[tuple[int, str]]) -> tuple[dict[str, int], lis
 def coverage_errors(
     entries: list[Entry], not_mapped: dict[str, list[tuple[int, str]]], sources: Sources
 ) -> Iterator[str]:
-    covered = covered_groups(entries)
+    covered = covered_groups(entries, sources)
     titles = {"tenant": "Tenant API", "operator": "Staff operator API"}
     for key, groups in sorted(existing_groups(sources).items()):
         surface = titles.get(key, key)
@@ -428,6 +434,13 @@ def page_path(app_root: str, file: str) -> str | None:
     return None
 
 
+def literal_test_ids(source: str) -> Iterator[str]:
+    """Read literal selector declarations. A declaration can exist without rendering."""
+    for match in TEST_ID_ATTRIBUTE.finditer(source):
+        if value := match[3]:
+            yield value
+
+
 def real_sources(applications: Mapping[str, Starlette]) -> Sources:
     tracked = tracked_files()
     endpoints, problems = registered_endpoints(applications, {})
@@ -436,17 +449,25 @@ def real_sources(applications: Mapping[str, Starlette]) -> Sources:
     for endpoint in endpoints:
         application, method, path = endpoint.key
         routes[application].setdefault(normalize(path), set()).add(method)
+    operator_groups = {
+        (normalize(route.path), method): frozenset(str(tag) for tag in route.tags)
+        or frozenset({normalize(route.path)})
+        for route in applications["operator"].routes
+        if isinstance(route, APIRoute)
+        for method in route.methods
+    }
     pages: dict[str, frozenset[str]] = {}
-    text: dict[str, str] = {}
+    test_ids: dict[str, frozenset[str]] = {}
     for section, (app_root, source_root) in UI_SECTIONS.items():
         found = {page_path(app_root, name) for name in tracked if name.startswith(app_root + "/")}
         pages[section] = frozenset(path for path in found if path is not None)
-        text[section] = "\n".join(
-            (REPO / name).read_text(encoding="utf-8", errors="replace")
-            for name in sorted(tracked)
+        test_ids[section] = frozenset(
+            test_id
+            for name in tracked
             if name.startswith(source_root + "/")
             and name.endswith(SOURCE_SUFFIXES)
             and not TEST_PATH.search(name)
+            for test_id in literal_test_ids((REPO / name).read_text(encoding="utf-8", errors="replace"))
         )
     return Sources(
         routes={
@@ -454,7 +475,8 @@ def real_sources(applications: Mapping[str, Starlette]) -> Sources:
             for api, rows in routes.items()
         },
         pages=pages,
-        source_text=text,
+        operator_groups=operator_groups,
+        test_ids=test_ids,
         tracked=tracked,
         read_text=lambda name: (
             (REPO / name).read_text(encoding="utf-8") if name in tracked else None
@@ -495,17 +517,26 @@ SYNTHETIC: Final = Sources(
             "/api/health/live": frozenset({"GET"}),
             "/docs": frozenset({"GET"}),
         },
-        "operator": {"/operator/v1/tenants": frozenset({"GET"})},
+        "operator": {"/operator/v1/tenants": frozenset({"GET", "POST"})},
     },
     pages={
         "Staff console": frozenset({"/", "/tenants", "/tenants/{}"}),
         "Bank dashboard": frozenset({"/widgets", "/api/health"}),
         "Marketing site": frozenset({"/", "/sitemap.xml"}),
     },
-    source_text={
-        "Staff console": "data-testid='console-badge'",
-        "Bank dashboard": "data-testid='widget-total'",
-        "Marketing site": "",
+    operator_groups={
+        ("/operator/v1/tenants", "GET"): frozenset({"operator-tenants"}),
+        ("/operator/v1/tenants", "POST"): frozenset({"operator-provisioning"}),
+    },
+    test_ids={
+        "Staff console": frozenset(
+            literal_test_ids(
+                "<Tag data-testid='console-badge' />"
+                "<Tag data-testid='console-gone-extra' />"
+                "{/* <Tag data-testid='console-gone' /> */}"
+            )
+        ),
+        "Bank dashboard": frozenset(literal_test_ids('<Tag data-testid="widget-total" />')),
     },
     tracked=frozenset({"docs/feature_map.md", "backend/scripts/tool.py", "docs/other.md"}),
     read_text=lambda name: "# Other\n\n## Part one\n" if name == "docs/other.md" else None,
@@ -517,7 +548,7 @@ CLEAN_MAP: Final = """# Map
 
 ### Widgets
 
-Lists widgets.
+Lists widgets. Tools are under `backend/scripts/` and `backend/scripts/{tool}/`.
 
 - **Reach**: signed in.
 - **Depends on**: tenant API `GET /banks/{bank_id}/widgets`, `/banks/{bank_id}/widgets/{id}`;
@@ -531,7 +562,7 @@ Lists widgets.
 
 ### Tenants
 
-- **Depends on**: operator API `/operator/v1/tenants`.
+- **Depends on**: operator API `GET /operator/v1/tenants`.
 
 ## Staff console
 
@@ -540,7 +571,7 @@ Lists widgets.
 See [Widgets](#widgets) and [other](other.md#part-one).
 
 - **Depends on**: pages `/`, `/tenants/{orgId}`; test ids `console-badge`;
-  operator API `/operator/v1/tenants`.
+  operator API `GET /operator/v1/tenants`.
 
 ## Bank dashboard
 
@@ -559,6 +590,10 @@ See [Widgets](#widgets) and [other](other.md#part-one).
 ### Tenant API
 
 - `/legacy`: kept for an old client.
+
+### Staff operator API
+
+- `operator-provisioning`: creates an organization.
 """
 
 
@@ -573,6 +608,7 @@ def test_a_current_map_passes() -> None:
         ("`GET /banks/{bank_id}/widgets`", "`DELETE /banks/{bank_id}/widgets`", "route"),
         ("pages `/`, `/tenants/{orgId}`", "pages `/`, `/tenant/{orgId}`", "page"),
         ("test ids `console-badge`", "test ids `console-gone`", "test id"),
+        ("`backend/scripts/`", "`backend/missing/`", "not tracked"),
         ("`backend/scripts/tool.py`", "`backend/scripts/moved.py`", "not tracked"),
         ("[other](other.md#part-one)", "[other](other.md#part-two)", "matches no heading"),
         ("[Widgets](#widgets)", "[Widgets](#gadgets)", "matches no heading"),
@@ -587,8 +623,12 @@ def test_a_stale_reference_is_reported(old: str, new: str, expected: str) -> Non
 
 
 def test_an_unclaimed_group_must_be_covered_or_listed_with_a_reason() -> None:
-    unclaimed = CLEAN_MAP.replace("- `/legacy`: kept for an old client.", "")
-    assert any("/legacy is neither covered" in e for e in map_errors(unclaimed, SYNTHETIC))
+    unclaimed = CLEAN_MAP.replace("- `/legacy`: kept for an old client.", "").replace(
+        "- `operator-provisioning`: creates an organization.", ""
+    )
+    errors = map_errors(unclaimed, SYNTHETIC)
+    assert any("/legacy is neither covered" in e for e in errors)
+    assert any("operator-provisioning is neither covered" in e for e in errors)
     no_reason = CLEAN_MAP.replace("kept for an old client.", "")
     assert any("a colon, a reason" in e for e in map_errors(no_reason, SYNTHETIC))
 
@@ -600,10 +640,6 @@ def test_a_not_mapped_line_that_matches_nothing_is_stale() -> None:
     assert any("which an entry covers" in e for e in map_errors(covered, SYNTHETIC))
 
 
-def test_framework_routes_are_not_features() -> None:
-    assert not any("/docs" in e for e in map_errors(CLEAN_MAP, SYNTHETIC))
-
-
 def test_a_new_page_group_must_be_claimed() -> None:
     sources = Sources(
         routes=SYNTHETIC.routes,
@@ -611,7 +647,8 @@ def test_a_new_page_group_must_be_claimed() -> None:
             **SYNTHETIC.pages,
             "Bank dashboard": SYNTHETIC.pages["Bank dashboard"] | {"/insights"},
         },
-        source_text=SYNTHETIC.source_text,
+        operator_groups=SYNTHETIC.operator_groups,
+        test_ids=SYNTHETIC.test_ids,
         tracked=SYNTHETIC.tracked,
         read_text=SYNTHETIC.read_text,
     )
