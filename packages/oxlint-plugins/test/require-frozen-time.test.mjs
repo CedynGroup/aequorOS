@@ -1360,6 +1360,22 @@ test("a beforeEach reassignment applies to a test registered above it", async ()
   assertFlagged(result, "frozenTime");
 });
 
+// A setup hook registered after the test may INITIALIZE the helper: the
+// invocation resolves the callable standing at execution time.
+test("a beforeEach initialization applies to a test registered above it", async () => {
+  const result = await runOxlint(["frozenTime"], `
+    let freeze;
+    it('t', () => {
+      freeze();
+      Date.now();
+    });
+    beforeEach(() => {
+      freeze = () => vi.useFakeTimers();
+    });
+  `);
+  assertClean(result, "frozenTime");
+});
+
 // A read inside an invoked helper's body executes at the invocation site:
 // a freeze invoked first covers it.
 test("a helper-body read is ordered at its invocation site", async () => {

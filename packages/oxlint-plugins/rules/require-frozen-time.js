@@ -650,6 +650,17 @@ const rule = {
                 break;
               }
             }
+          } else {
+            // Uninitialized (or shadowed) at traversal time: still record
+            // the site with its scope, so the lifecycle re-resolution can
+            // pick up the callable a later-registered setup hook installs.
+            for (let index = helperScopes.length - 1; index >= 0; index -= 1) {
+              if (helperScopes[index].has(callee.name)) {
+                invocationScopes.set(node, helperScopes[index]);
+                invocationHelpers.set(node, null);
+                break;
+              }
+            }
           }
         }
 
