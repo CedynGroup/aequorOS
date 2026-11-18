@@ -1521,3 +1521,68 @@ test("an afterEach read sees the state earlier executions left behind", async ()
   `);
   assertFlagged(result, "frozenTime");
 });
+
+// A same-phase helper write applies only within the writer's own describe
+// subtree: a sibling suite's beforeEach never runs around this suite's
+// callbacks, so its reassignment must not freeze the sibling's read.
+test("a sibling suite's hook write does not freeze another suite's read", async () => {
+  const result = await runOxlint(["frozenTime"], `
+    let freeze = () => {};
+    describe('a', () => {
+      beforeEach(() => {
+        freeze = () => vi.useFakeTimers();
+      });
+      it('x', () => {});
+    });
+    describe('b', () => {
+      beforeEach(() => {
+        freeze();
+        Date.now();
+      });
+      it('t', () => {});
+    });
+  `);
+  assertFlagged(result, "frozenTime");
+});
+
+// The same isolation holds when the writer's suite has no tests at all: a
+// hook inside an empty describe never executes.
+test("an empty sibling suite's hook write does not freeze another suite's read", async () => {
+  const result = await runOxlint(["frozenTime"], `
+    let freeze = () => {};
+    describe('empty', () => {
+      beforeEach(() => {
+        freeze = () => vi.useFakeTimers();
+      });
+    });
+    describe('active', () => {
+      beforeEach(() => {
+        freeze();
+        Date.now();
+      });
+      it('t', () => {});
+    });
+  `);
+  assertFlagged(result, "frozenTime");
+});
+
+// Containment still works outward: an outer suite's beforeEach reassignment
+// covers the reads of the suites nested inside it.
+test("an outer suite's hook write still covers a nested suite's read", async () => {
+  const result = await runOxlint(["frozenTime"], `
+    let freeze = () => {};
+    describe('outer', () => {
+      beforeEach(() => {
+        freeze = () => vi.useFakeTimers();
+      });
+      describe('inner', () => {
+        beforeEach(() => {
+          freeze();
+          Date.now();
+        });
+        it('t', () => {});
+      });
+    });
+  `);
+  assertClean(result, "frozenTime");
+});

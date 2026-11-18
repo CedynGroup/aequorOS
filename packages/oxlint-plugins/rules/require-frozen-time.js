@@ -1039,10 +1039,21 @@ const rule = {
               )
             );
           }
-          const writerDepth = findAllEnclosingDescribes(writer.callNode).length;
-          const callbackDepth = findAllEnclosingDescribes(callback.callNode).length;
-          if (writerDepth !== callbackDepth) {
-            return writerDepth < callbackDepth;
+          // A same-phase hook write applies only within the writer's own
+          // describe subtree: a sibling suite's hook never runs around this
+          // callback, no matter its registration position, so the writer's
+          // enclosing describes must be a suffix of the callback's.
+          const writerDescribes = findAllEnclosingDescribes(writer.callNode);
+          const callbackDescribes = findAllEnclosingDescribes(callback.callNode);
+          const contained =
+            writerDescribes.length <= callbackDescribes.length &&
+            writerDescribes.every(
+              (describe, index) =>
+                callbackDescribes[callbackDescribes.length - writerDescribes.length + index] ===
+                describe,
+            );
+          if (!contained) {
+            return false;
           }
           return writer.callNode.range[0] < callback.callNode.range[0];
         };
