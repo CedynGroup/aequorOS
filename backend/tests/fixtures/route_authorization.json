@@ -1104,41 +1104,6 @@
       ]
     },
     {
-      "name": "tenant-dependencies-153339a12488",
-      "kind": "dependency",
-      "basis": "Existing tenant authentication boundary and exact registered dependency calls listed here. Named scoped/legacy gates remain unchanged; handler and service checks can narrow this access further. Presence is not policy correctness.",
-      "references": [
-        "app/api/deps.py:get_current_principal",
-        "app/api/deps.py:get_mutation_tenant_context",
-        "app/api/deps.py:get_tenant_context",
-        "app/api/deps.py:get_tenant_db_session",
-        "app/api/deps.py:resolve_tenant_bank"
-      ],
-      "authentication": "tenant",
-      "dependencies": [
-        "app.api.deps:get_current_principal",
-        "app.api.deps:get_mutation_tenant_context",
-        "app.api.deps:get_tenant_context",
-        "app.api.deps:get_tenant_db_session",
-        "app.api.deps:resolve_tenant_bank",
-        "fastapi.security.http:HTTPBearer"
-      ],
-      "routes": [
-        {
-          "application": "tenant",
-          "method": "POST",
-          "path": "/api/v1/banks/{bank_id}/official-runs",
-          "endpoint": "app.live.api.manage_live_engine:mint_official_run"
-        },
-        {
-          "application": "tenant",
-          "method": "POST",
-          "path": "/api/v1/banks/{bank_id}/refresh",
-          "endpoint": "app.live.api.manage_live_engine:refresh_bank_data"
-        }
-      ]
-    },
-    {
       "name": "tenant-dependencies-15342f3123d3",
       "kind": "dependency",
       "basis": "Existing tenant authentication boundary and exact registered dependency calls listed here. Named scoped/legacy gates remain unchanged; handler and service checks can narrow this access further. Presence is not policy correctness.",
@@ -3414,6 +3379,12 @@
         {
           "application": "tenant",
           "method": "POST",
+          "path": "/api/v1/banks/{bank_id}/official-runs",
+          "endpoint": "app.live.api.manage_live_engine:mint_official_run"
+        },
+        {
+          "application": "tenant",
+          "method": "POST",
           "path": "/api/v1/banks/{bank_id}/outlets",
           "endpoint": "app.identity.api.manage_institution_profile:create_outlet"
         },
@@ -3458,6 +3429,12 @@
           "method": "POST",
           "path": "/api/v1/banks/{bank_id}/reconciliation/exceptions/{exception_id}/revoke",
           "endpoint": "app.data_engine.api.manage_reconciliation:revoke_reconciliation_exception"
+        },
+        {
+          "application": "tenant",
+          "method": "POST",
+          "path": "/api/v1/banks/{bank_id}/refresh",
+          "endpoint": "app.live.api.manage_live_engine:refresh_bank_data"
         },
         {
           "application": "tenant",
