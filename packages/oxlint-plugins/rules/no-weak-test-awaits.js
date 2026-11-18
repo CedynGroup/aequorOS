@@ -898,7 +898,14 @@ const rule = {
         resolvingLocals.add(def);
         try {
           if (def.fn) {
-            def.kind = functionContainsWeakTimerPromise(def.fn) ? WEAK_HELPER : false;
+            // A replay-local function DECLARATION classifies against its
+            // replay environment like the initializer-arrow path: a body
+            // that calls another replay-local weak helper carries that
+            // dependency even though no timer promise is built inside it.
+            def.kind =
+              functionContainsWeakTimerPromise(def.fn) || localWeakCallInside(def.fn)
+                ? WEAK_HELPER
+                : false;
           } else if (!def.init) {
             def.kind = false;
           } else if (def.init.type === "Identifier") {

@@ -1332,6 +1332,28 @@ test("an assignment inside a call argument replays", async () => {
   assertFlagged(result, "weakAwaits");
 });
 
+// A replay-local function DECLARATION that calls another replay-local weak
+// helper is captured out through an identifier assignment: the declaration
+// classifies against the replay environment, like the initializer-arrow
+// path, instead of being cached as clean.
+test("a captured function declaration resolves replay-local captures", async () => {
+  const result = await runOxlint(["weakAwaits"], `
+    let sleep;
+    function init() {
+      const local = () => new Promise((resolve) => setTimeout(resolve, 10));
+      function get() {
+        return local();
+      }
+      sleep = get;
+    }
+    init();
+    it('t', async () => {
+      await sleep();
+    });
+  `);
+  assertFlagged(result, "weakAwaits");
+});
+
 // An assigned closure may call a replay-local whose kind is a weak helper:
 // the closure carries that dependency.
 test("an assigned closure resolves replay-local captures", async () => {
