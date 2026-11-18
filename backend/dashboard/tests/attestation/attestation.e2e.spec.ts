@@ -695,14 +695,13 @@ test.describe("the filed document", () => {
     page,
   }) => {
     // Regeneration puts the new version on screen from the packages list a
-    // moment before the package detail lands behind it — and the export act
-    // reads only what is keyed by the summary on screen. There was a window
-    // where the button was rendered and live but the act refused it with an
-    // invisible "try again" (CI run 42543882345: the click beat the detail,
-    // no export was ever requested, and the button never became Download).
-    // Holding the detail and the auto-run checks response back until the click
-    // has landed keeps that window open, so this clicks into it
-    // deterministically.
+    // moment before the package detail lands behind it, and the export act
+    // reads only what is keyed by the summary on screen. A rendered button must
+    // therefore run the act even while the detail is still in flight: a guard
+    // on the detail would swallow the click, no export would be requested, and
+    // no download would arrive. Holding the detail and the auto-run checks
+    // response back until the click has produced its download keeps that window
+    // open, so this clicks into it deterministically.
     let releaseDetail = () => {};
     const detailHeld = new Promise<void>((resolve) => {
       releaseDetail = resolve;
@@ -720,9 +719,7 @@ test.describe("the filed document", () => {
       await generateCurrentVersion(page);
       const [download] = await Promise.all([
         page.waitForEvent("download", { timeout: 30_000 }),
-        page
-          .getByRole("button", { name: /produce and download pdf/i })
-          .click(),
+        page.getByRole("button", { name: /produce and download pdf/i }).click(),
       ]);
       expect(download.suggestedFilename()).toMatch(/\.pdf$/i);
       expect(await download.failure()).toBeNull();
