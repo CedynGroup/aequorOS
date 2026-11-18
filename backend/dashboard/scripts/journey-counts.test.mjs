@@ -228,9 +228,9 @@ test("rejects a vanished journey even when every shard passed", () =>
     assert.equal(result.status, 1);
     assert.match(result.stdout, /the suite pins 236/);
     const belowFloor = reports();
-    belowFloor[0].journeys.splice(21);
-    belowFloor[0].discovered -= 21;
-    belowFloor[0].executed -= 21;
+    const removed = belowFloor[0].journeys.splice(-24);
+    belowFloor[0].discovered -= removed.length;
+    belowFloor[0].executed -= removed.length;
     assert.match(invoke(root, belowFloor).stdout, /floor is 213/);
   }));
 test("names skipped journeys and refuses skip-based success", () =>

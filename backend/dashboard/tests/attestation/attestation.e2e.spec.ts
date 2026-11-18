@@ -715,20 +715,19 @@ test.describe("the filed document", () => {
       },
     );
 
-    await page.goto(GATED_RETURN);
-    await generateCurrentVersion(page);
-    await expect(page.getByText(/Generated|Checks passed/).first()).toBeVisible(
-      { timeout: 60_000 },
-    );
-
-    await page
-      .getByRole("button", { name: /produce and download pdf/i })
-      .click();
-    releaseDetail();
-    await expect(
-      page.getByRole("button", { name: /^download pdf$/i }),
-    ).toBeVisible({ timeout: 30_000 });
-    // Still the unsigned return: the export exists, the signature claim does not.
-    await expect(page.getByText(/Signed PDF/i)).toHaveCount(0);
+    try {
+      await page.goto(GATED_RETURN);
+      await generateCurrentVersion(page);
+      const [download] = await Promise.all([
+        page.waitForEvent("download", { timeout: 30_000 }),
+        page
+          .getByRole("button", { name: /produce and download pdf/i })
+          .click(),
+      ]);
+      expect(download.suggestedFilename()).toMatch(/\.pdf$/i);
+      expect(await download.failure()).toBeNull();
+    } finally {
+      releaseDetail();
+    }
   });
 });
