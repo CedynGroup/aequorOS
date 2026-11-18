@@ -167,6 +167,7 @@ def test_custom_scenario_crud_guards(db_session: Session) -> None:
     assert "inflow_multiplier" in excinfo.value.detail["allowed_keys"]  # type: ignore[index]
 
     # Capital requires the full quarterly set together.
+    _grant_analyst(db_session, ModuleScope.CAPITAL, SensitivityScope.CONFIDENTIAL)
     with pytest.raises(HTTPException) as excinfo:
         stress_scenarios.create_scenario(
             db_session,

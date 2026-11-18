@@ -42,9 +42,15 @@ LIQ `view` decision with sensitivity `confidential`; neither decision may use
 scope fields from the other binding.
 
 Capital entries in `/scenario-workbench/capital` apply the same CAP
-`run`/`create`/`view`/`edit` split. No route infers authority from `users.role`,
-token `roles[]`, a different module, a different sensitivity, or separate
-partial bindings.
+`run`/`create`/`view`/`edit` split as the other engine modules' workbench
+policies: the catalogue and saved-analysis reads need CAP `view`, creating a
+scenario or saving an analysis needs CAP `create`, editing and archiving a
+scenario and deleting a saved analysis need CAP `edit`, and running an analysis
+needs CAP `run` — all at sensitivity `confidential` on the exact bank, decided
+in the service right after the bank lookup and before any side effect. The
+shared workbench authorization denies any module without an explicit scoped
+policy; no route infers authority from `users.role`, token `roles[]`, a
+different module, a different sensitivity, or separate partial bindings.
 
 One examiner exception, and it is not an inference: the evidence bundle CITES
 `GET /banks/{bank_id}/capital-plan`, so a verified act-as-examiner session bound

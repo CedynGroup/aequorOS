@@ -1,10 +1,10 @@
 """Scenario analysis endpoints — compute-only what-if + saved analyses.
 
 The analysis POST mutates nothing, so it remains on the read-only principal
-dependency. Cut-over modules require their exact confidential ``run`` authority
-in the service; other modules retain their current behavior until their matrix
-cutovers. Saving and deleting use the transitional scoped mutation principal
-boundary.
+dependency. Every module requires its exact binding for the action at the
+module's workbench sensitivity, decided in the service before anything runs.
+Saving and deleting use the scoped mutation principal boundary; the shared
+authorization module denies any module without a scoped policy.
 """
 
 from __future__ import annotations
