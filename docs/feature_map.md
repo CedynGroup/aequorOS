@@ -43,17 +43,24 @@ Shared conventions, which the entries do not repeat:
 `backend/tests/architecture/test_feature_map_references.py` runs in the "Unit
 tests" CI job and locally with
 `cd backend && uv run pytest tests/architecture/test_feature_map_references.py`. It
-fails when a name an entry depends on no longer exists, when a link or repository
-path in this file points at nothing, or when a route group or page group is
-neither covered by an entry nor listed under [Not mapped](#not-mapped).
+checks dependency tokens, repository-relative links and Markdown heading anchors,
+and literal backticked paths under the configured repository directories. It
+requires every route group and page group it inventories to have an entry or a
+reason under [Not mapped](#not-mapped).
 Tenant groups use route prefixes, with bank-scoped routes grouped by the first
 segment after the bank ID. Operator groups use the tags on registered routes.
+
+On pull requests, the job uses the guards path selector in
+[the Risk service workflow](../.github/workflows/risk-service.yml). For a
+recognized rename, the selector sees the destination path. A move out of a
+watched directory can therefore skip the check.
 
 A **Depends on** line is a list of clauses separated by semicolons. Each clause
 starts with a label and lists backticked tokens:
 
 - `tenant API` and `operator API`: a route, optionally with a leading HTTP method
-  and a trailing `/*` for a subtree. Tenant paths omit the `/api/v1` prefix.
+  and a trailing `/*` for a subtree. Tenant paths may omit the `/api/v1` prefix.
+  Use the full path for tenant routes outside that prefix, such as health probes.
 - `pages`: a path in the app tree of the surface the entry sits under.
 - `test ids`: a literal `data-testid` declaration in that surface's component source.
 - `files`: a repository path that Git tracks.
