@@ -700,12 +700,17 @@ test.describe("the filed document", () => {
     // where the button was rendered and live but the act refused it with an
     // invisible "try again" (CI run 42543882345: the click beat the detail,
     // no export was ever requested, and the button never became Download).
-    // Holding the detail and the auto-run checks response back makes that
-    // window seconds wide, so this clicks into it deterministically.
+    // Holding the detail and the auto-run checks response back until the click
+    // has landed keeps that window open, so this clicks into it
+    // deterministically.
+    let releaseDetail = () => {};
+    const detailHeld = new Promise<void>((resolve) => {
+      releaseDetail = resolve;
+    });
     await page.route(
       /\/regulatory-packages\/[^/]+(\/validate)?$/,
       async (route) => {
-        await new Promise((resolve) => setTimeout(resolve, 2500));
+        await detailHeld;
         await route.continue();
       },
     );
@@ -719,6 +724,7 @@ test.describe("the filed document", () => {
     await page
       .getByRole("button", { name: /produce and download pdf/i })
       .click();
+    releaseDetail();
     await expect(
       page.getByRole("button", { name: /^download pdf$/i }),
     ).toBeVisible({ timeout: 30_000 });
