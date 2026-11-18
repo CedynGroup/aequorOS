@@ -191,7 +191,8 @@ Generates, validates, certifies and files regulatory return packages.
 
 Lists the organization's members and administers scoped access grants.
 
-- **Reach**: an account with an active Org Owner binding; an account administrator alone is refused `403`.
+- **Reach**: an account with an active organization ownership binding. Account
+  administration alone is insufficient and the API returns `403`.
 - **Control**: `GET /organization/members`; `POST /authorization/bindings/preview`
   then `POST /authorization/bindings` to grant; `POST
 /authorization/bindings/{binding_id}/revoke`; requests go through
@@ -618,14 +619,17 @@ Shows the transfer curve and product and branch profitability.
 Projects the balance sheet and runs scenarios, what-ifs and reverse stress.
 
 - **Reach**: signed in with Forecasting Run authority, a selected reporting period and governed assumptions in place.
-- **Control**: open `/forecasting` and click **Run forecast**, then open `/forecasting/assumptions`, `/nii`,
-  `/scenario`, `/whatif` and `/optimizer`; on `/reverse-stress` click **Run reverse stress**.
+- **Control**: open `/forecasting` and click **Run forecast**, then open
+  `/forecasting/assumptions`, `/forecasting/nii`, `/forecasting/scenario`,
+  `/forecasting/whatif` and `/forecasting/optimizer`. On
+  `/forecasting/reverse-stress` click **Run reverse stress**.
 - **Check**: a run lists under `GET /banks/{bank_id}/forecast/runs` and its
   figures render; reverse stress shows its frontier and breach value.
 - **Traps**: a book that cannot be forecast shows a not-computable state, which
   is the expected result.
-- **Depends on**: `/forecasting/*`; `/banks/{bank_id}/forecast/runs`,
-  `/reverse-stress`; `data-testid` `reverse-stress-frontier` and
+- **Depends on**: `/forecasting/*`, including `/forecasting/reverse-stress`;
+  `/banks/{bank_id}/forecast/runs`, `POST /banks/{bank_id}/reverse-stress/runs`;
+  `data-testid` `reverse-stress-frontier` and
   `reverse-stress-headlines`.
 
 ### Dashboard credit
@@ -786,7 +790,8 @@ Shows the limit wall, findings and pipeline alerts.
 
 Lists members and grants or revokes scoped access.
 
-- **Reach**: signed in as an Org Owner; open `/access/members`.
+- **Reach**: sign in with an active organization ownership binding and open
+  `/access/members`. Account administration alone is insufficient.
 - **Control**: **View `<member name>`**, **Grant access**, set **Module**, **Role
   bundle**, **Sensitivity**, **Institution coverage** and **Reason**, **Review
   grant**, **Add grant**, **Done**; **Revoke access** then **Revoke this access**.
