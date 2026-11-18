@@ -161,9 +161,9 @@ Generates, validates, certifies and files regulatory return packages.
 - **Reach**: a bank with a computed live book and a return that supports
   `orass_sandbox`, sandbox and attestation signing configured, and distinct
   authorized preparer, approver and validator accounts.
-- **Control**: as preparer, use `GET /banks/{bank_id}/return-anchors` to pick the
-  reporting date, then `POST /banks/{bank_id}/regulatory-packages` and run
-  `validate`. Each required signer calls `attestation/step-up` with
+- **Control**: as preparer, pick a date with `GET /banks/{bank_id}/return-anchors?return_code={return_code}`, then send
+  `return_code` and `reporting_date` to `POST /banks/{bank_id}/regulatory-packages`
+  and run `validate`. Each required signer calls `attestation/step-up` with
   `signing_role` and their step-up proof, then `attestation/certify` with the
   same `signing_role`, returned `authorization_token` and returned
   `certification_digest` as `expected_certification_digest`. Preparer
@@ -289,8 +289,8 @@ Opens a time-boxed, audited, read-only inspection of one tenant.
 - **Reach**: an operator with inspector authority; the same
   `IMPERSONATION_JWT_SECRET` on both APIs and `BANK_APP_BASE_URL` set to the
   running dashboard origin.
-- **Control**: `POST /operator/v1/inspector/sessions` (organization, bank,
-  reason, mode, duration); `POST .../{session_id}/act-token` hands off to the
+- **Control**: `POST /operator/v1/inspector/sessions` (`organization_id`, `bank_id`,
+  `reason`, `support_reference`, `mode`, `ttl_minutes`); `POST .../{session_id}/act-token` hands off to the
   dashboard; `POST .../{session_id}/end` closes it.
 - **Check**: `GET /operator/v1/inspector/sessions` lists the session as active;
   the act-token response carries a `dashboard_url` matching the running
@@ -725,22 +725,8 @@ Configures API push, database-direct, core-banking adapter and market-data loads
 
 Prepares, validates, certifies and files regulatory returns.
 
-- **Reach**: use the bank, return and signing prerequisites in
-  [Regulatory returns](#regulatory-returns). Open `/submissions` to reach the
-  returns workspace.
-- **Control**: pick the **Reporting date** and generate the pack. After checks
-  pass, follow the command bar as preparer and approver to certify and review,
-  completing the signing prompts. As the filing principal, select
-  **ORASS (sandbox)** (`orass_sandbox`) in **Channel** before transmitting.
-- **Check**: the return reports "Checks passed", its filing chain and transmission
-  rows; the command bar names its primary action and the reason when it is
-  disabled.
-- **Traps**: reporting dates come from the return definition. Rehearsal and
-  simulated transmission are marked as such; verify filing only against them.
-  When signing is not configured the page says certification is suspended.
-- **Depends on**: `/submissions/returns`, `/approvals`, `/history`, `/instruments`;
-  `data-testid` `return-command-bar`, `primary-filing-action`, `open-transmit`,
-  `validator-surface`, `attestation-clearance`.
+- **Verification**: dashboard filing requires a local sandbox because the hand-off can transmit to a real channel. This map skips the filing run.
+- **Depends on**: `/submissions/returns`, `/approvals`, `/history`, `/instruments`.
 
 ### Dashboard ICAAP
 
@@ -871,14 +857,5 @@ Presents the product, company, security, investors and contact pages.
 
 Sends a demo request through the site's contact API.
 
-- **Reach**: open `/contact`.
-- **Control**: fill the required name, email and role fields and click **Request
-  demo**. Organization and message are optional. For direct validation and
-  honeypot requests, use the local [Contact API capture recipe](../.agents/skills/verification/references/marketing-site.md#contact-api-capture).
-- **Check**: a delivered request answers `200` with `{"ok": true}`. Missing required
-  fields and an invalid email answer `400` with an error message; a filled honeypot field
-  (`_gotcha`) answers `200` without sending.
-- **Traps**: without `RESEND_API_KEY` the API answers `503`. With a placeholder
-  key, delivery cannot succeed, so record delivery as unexecuted rather than
-  approximating it.
+- **Verification**: contact submission requires a local delivery fixture because it can email a real recipient. This map skips form submission.
 - **Depends on**: `/contact`, `/api/contact`; `components/ContactForm.tsx`.
