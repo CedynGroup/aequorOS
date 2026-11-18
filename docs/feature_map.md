@@ -270,7 +270,7 @@ Creates a tenant's organization, bank and first administrator as one saga.
 Reads a tenant's metrics, ingestion, findings and storage, and runs operator
 fixes.
 
-- **Reach**: a signed-in operator and a provisioned tenant.
+- **Reach**: a signed-in operator, a provisioned tenant and an active inspection session for that tenant (see [Inspector sessions](#inspector-sessions)); without one these reads and fixes refuse `403 inspection_required`.
 - **Control**: `GET /operator/v1/tenants/{org_id}/metrics`, `/ingestion`,
   `/ingestion/{batch_id}`, `/findings`, `/config`, `/storage`, `/users`; fixes
   are `POST /operator/v1/tenants/{org_id}/fix/recompute`, `/fix/official-run`,
@@ -386,7 +386,7 @@ Summarises the fleet, items needing attention, connections and desk status.
 
 Lists every onboarded institution and opens one for diagnostics.
 
-- **Reach**: signed in; open `/tenants`.
+- **Reach**: signed in; open `/tenants`. The detail page loads its ingestion and live-module figures only while an inspection session for that tenant is active (see [Console inspector](#console-inspector)).
 - **Control**: filter with **All**, **Live**, **Empty** or **Stale**; **Export
   CSV**; open a row for `/tenants/{orgId}`.
 - **Check**: the count line reads "N of M shown"; the detail page shows
@@ -716,8 +716,8 @@ Uploads a spreadsheet or CSV and reviews the batch it creates.
 Configures API push, database-direct, core-banking adapter and market-data loads.
 
 - **Reach**: signed in with data authority.
-- **Control**: open `/data-engine/api`, `/database`, `/t24`, `/adapters` or
-  `/market-data`.
+- **Control**: open `/data-engine/api`, `/data-engine/database`, `/data-engine/t24`, `/data-engine/adapters` or
+  `/data-engine/market-data`.
 - **Check**: each page shows its connection state and the guide or form for that
   route; the overview at `/data-engine` lists recent ingestion across sources.
 - **Traps**: a reader without the grant sees a restricted notice. Reconciliation
@@ -766,7 +766,7 @@ Builds ad hoc questions and views over the book.
 - **Reach**: BI enabled on the API and BI grants for the signed-in user. Open
   `/explore`. For **Ask a question**, also enable `BI_NLQ_ENABLED` on the API.
 - **Control**: shape a grid with **Measure** and **Break down by**, **Export**, or
-  use the **Ask a question** tab and **Work out my question**.
+  use the **Ask a question** tab, enter a question, click **Work out my question**, review the proposal and click **Yes, run this question**.
 - **Check**: the grid rows reconcile with the source figures and a confirmed
   question shows "The question you confirmed".
 - **Traps**: with BI disabled the API's router-level feature gate returns `404`.
