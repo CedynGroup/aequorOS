@@ -793,8 +793,9 @@ ingestion-to-worker-to-generated-return journey stays together.
 
 The visual tour is not part of the gate: it exists so a design change can be
 reviewed as pixels rather than as a diff. Run the commands from the repository
-root; the tour writes full-page screenshots of every route to
-`backend/dashboard/e2e/.tmp/visual-tour/`.
+root. The tour writes full-page screenshots for its listed routes under
+`$E2E_RUNTIME_DIR/visual-tour/` when `E2E_RUNTIME_DIR` is set, and under
+`backend/dashboard/e2e/.tmp/visual-tour/` by default.
 
 The Data Engine journeys (`tests/data-engine/data-engine-ingestion.e2e.spec.ts`) use the fixtures in
 `tests/data-engine/fixtures/` to cover Excel/CSV upload, legacy `.xls` refusal,

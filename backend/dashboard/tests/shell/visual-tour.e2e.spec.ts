@@ -1,11 +1,6 @@
 /**
- * Visual tour — full-page screenshots of every route against the hermetic
- * stack, for design-audit before/after evidence. Not part of the regular
- * gate: invoke the separate e2e:visual command.
- *
- *   pnpm e2e:visual
- *
- * Output: e2e/.tmp/visual-tour/<route>.png
+ * Captures before/after design evidence on the hermetic stack.
+ * See the dashboard README's End-to-end (Playwright) section for usage.
  */
 import { test } from "@playwright/test";
 import { mkdirSync } from "fs";
