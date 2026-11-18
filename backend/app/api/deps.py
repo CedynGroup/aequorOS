@@ -1,8 +1,8 @@
 from __future__ import annotations
 
-from collections.abc import Iterator
+from collections.abc import Iterator, Mapping
 from dataclasses import dataclass
-from typing import Annotated, Final, Literal
+from typing import Annotated, Final, Literal, NamedTuple
 from uuid import UUID
 
 from fastapi import Depends, HTTPException, Query, Request, status
@@ -1208,20 +1208,256 @@ def _require_institution_permission(  # noqa: PLR0913 - complete policy tuple is
     return InstitutionPermissionAccess(ctx=ctx, bank=bank, data_scope=data_scope)
 
 
-def require_capital_aggregated_view(
-    db: DbSession,
-    ctx: Tenant,
-    bank: TenantBank,
-) -> InstitutionPermissionAccess:
-    return _require_institution_permission(
-        db,
-        ctx,
-        bank,
+#: Every credit gate answers with the same sentence, so a denied reader is
+#: never told WHICH half of the sentence it is missing.
+_CREDIT_DETAIL = "Credit access requires an active scoped binding."
+_MARKETS_VIEW_DETAIL = "Markets access requires an active scoped binding."
+
+
+class _InstitutionGateSpec(NamedTuple):
+    """The complete frozen policy sentence one simple institution gate stands for."""
+
+    module: Module
+    sensitivity: Sensitivity
+    permission: Permission
+    surface: str
+    detail: str
+    #: Opt a gate into the examiner register contract by passing the request
+    #: through; only the evidence bundle's cited routes set this.
+    request: bool = False
+    #: The DATA-scope half of the sentence: False only on a surface that applies
+    #: ``access.data_scope`` to its own rows (the credit blotter and activity).
+    whole_institution: bool = True
+    #: An object-detail route may hide a denied run behind the service's 404.
+    denial_status: int = status.HTTP_403_FORBIDDEN
+
+
+#: The frozen policy table for the simple institution gates. Each gate below
+#: keeps its own ``def`` — route wiring, the route catalogue labels and the
+#: examiner contract all key on the function object — and delegates to exactly
+#: one row of this table; the row IS the gate's policy, so a policy change is a
+#: row change here, never a silent edit of a call site.
+_INSTITUTION_GATE_SPECS: Mapping[str, _InstitutionGateSpec] = {
+    "require_capital_aggregated_view": _InstitutionGateSpec(
         module=Module.CAPITAL,
         sensitivity=Sensitivity.AGGREGATED,
         permission=Permission.VIEW,
         surface="capital_aggregated_view",
         detail="Capital access requires an active scoped binding.",
+    ),
+    "require_capital_confidential_view": _InstitutionGateSpec(
+        module=Module.CAPITAL,
+        sensitivity=Sensitivity.CONFIDENTIAL,
+        permission=Permission.VIEW,
+        surface="capital_confidential_view",
+        detail="Capital access requires an active scoped binding.",
+        request=True,
+    ),
+    "require_capital_restricted_view": _InstitutionGateSpec(
+        module=Module.CAPITAL,
+        sensitivity=Sensitivity.RESTRICTED,
+        permission=Permission.VIEW,
+        surface="capital_restricted_view",
+        detail="Capital assurance access requires an active scoped binding.",
+    ),
+    "require_capital_run": _InstitutionGateSpec(
+        module=Module.CAPITAL,
+        sensitivity=Sensitivity.CONFIDENTIAL,
+        permission=Permission.RUN,
+        surface="capital_run",
+        detail="Running Capital calculations requires an active scoped binding.",
+    ),
+    "require_credit_aggregated_view": _InstitutionGateSpec(
+        module=Module.CREDIT,
+        sensitivity=Sensitivity.AGGREGATED,
+        permission=Permission.VIEW,
+        surface="credit_aggregated_view",
+        detail=_CREDIT_DETAIL,
+    ),
+    "require_credit_concentration_view": _InstitutionGateSpec(
+        module=Module.CREDIT,
+        sensitivity=Sensitivity.RESTRICTED,
+        permission=Permission.VIEW,
+        surface="credit_concentration_view",
+        detail=_CREDIT_DETAIL,
+    ),
+    "require_credit_restricted_view": _InstitutionGateSpec(
+        module=Module.CREDIT,
+        sensitivity=Sensitivity.RESTRICTED,
+        permission=Permission.VIEW,
+        surface="credit_restricted_view",
+        detail=_CREDIT_DETAIL,
+        request=True,
+    ),
+    "require_credit_blotter_view": _InstitutionGateSpec(
+        module=Module.CREDIT,
+        sensitivity=Sensitivity.RESTRICTED,
+        permission=Permission.VIEW,
+        surface="credit_blotter_view",
+        detail=_CREDIT_DETAIL,
+        whole_institution=False,
+    ),
+    "require_credit_activity_view": _InstitutionGateSpec(
+        module=Module.CREDIT,
+        sensitivity=Sensitivity.CONFIDENTIAL,
+        permission=Permission.VIEW,
+        surface="credit_activity_view",
+        detail=_CREDIT_DETAIL,
+        whole_institution=False,
+    ),
+    "require_credit_run": _InstitutionGateSpec(
+        module=Module.CREDIT,
+        sensitivity=Sensitivity.CONFIDENTIAL,
+        permission=Permission.RUN,
+        surface="credit_run",
+        detail="Running Credit calculations requires an active scoped binding.",
+    ),
+    "require_fx_aggregated_view": _InstitutionGateSpec(
+        module=Module.FX,
+        sensitivity=Sensitivity.AGGREGATED,
+        permission=Permission.VIEW,
+        surface="fx_aggregated_view",
+        detail="FX access requires an active scoped binding.",
+    ),
+    "require_fx_run": _InstitutionGateSpec(
+        module=Module.FX,
+        sensitivity=Sensitivity.CONFIDENTIAL,
+        permission=Permission.RUN,
+        surface="fx_run",
+        detail="Running FX calculations requires an active scoped binding.",
+    ),
+    "require_forecasting_aggregated_view": _InstitutionGateSpec(
+        module=Module.FORECASTING,
+        sensitivity=Sensitivity.AGGREGATED,
+        permission=Permission.VIEW,
+        surface="forecasting_aggregated_view",
+        detail="Forecasting access requires an active scoped binding.",
+    ),
+    "require_forecasting_confidential_view": _InstitutionGateSpec(
+        module=Module.FORECASTING,
+        sensitivity=Sensitivity.CONFIDENTIAL,
+        permission=Permission.VIEW,
+        surface="forecasting_confidential_view",
+        detail="Forecasting access requires an active scoped binding.",
+    ),
+    "require_forecasting_run_detail_view": _InstitutionGateSpec(
+        module=Module.FORECASTING,
+        sensitivity=Sensitivity.CONFIDENTIAL,
+        permission=Permission.VIEW,
+        surface="forecasting_run_detail",
+        detail="Regulatory run not found.",
+        denial_status=status.HTTP_404_NOT_FOUND,
+    ),
+    "require_forecasting_run": _InstitutionGateSpec(
+        module=Module.FORECASTING,
+        sensitivity=Sensitivity.CONFIDENTIAL,
+        permission=Permission.RUN,
+        surface="forecasting_run",
+        detail="Running Forecasting calculations requires an active scoped binding.",
+    ),
+    "require_forecasting_assumption_edit": _InstitutionGateSpec(
+        module=Module.FORECASTING,
+        sensitivity=Sensitivity.CONFIDENTIAL,
+        permission=Permission.EDIT,
+        surface="forecast_assumption_edit",
+        detail="Editing forecast assumptions requires an active scoped binding.",
+    ),
+    "require_forecasting_assumption_review": _InstitutionGateSpec(
+        module=Module.FORECASTING,
+        sensitivity=Sensitivity.CONFIDENTIAL,
+        permission=Permission.REVIEW,
+        surface="forecast_assumption_review",
+        detail="Reviewing forecast assumptions requires an active scoped binding.",
+    ),
+    "require_markets_published_view": _InstitutionGateSpec(
+        module=Module.MARKETS,
+        sensitivity=Sensitivity.PUBLISHED,
+        permission=Permission.VIEW,
+        surface="markets_published_view",
+        detail=_MARKETS_VIEW_DETAIL,
+    ),
+    "require_markets_template_view": _InstitutionGateSpec(
+        module=Module.MARKETS,
+        sensitivity=Sensitivity.PUBLISHED,
+        permission=Permission.VIEW,
+        surface="markets_template_view",
+        detail=_MARKETS_VIEW_DETAIL,
+    ),
+    "require_markets_confidential_view": _InstitutionGateSpec(
+        module=Module.MARKETS,
+        sensitivity=Sensitivity.CONFIDENTIAL,
+        permission=Permission.VIEW,
+        surface="markets_confidential_view",
+        detail=_MARKETS_VIEW_DETAIL,
+    ),
+    "require_markets_restricted_view": _InstitutionGateSpec(
+        module=Module.MARKETS,
+        sensitivity=Sensitivity.RESTRICTED,
+        permission=Permission.VIEW,
+        surface="markets_restricted_view",
+        detail="Market data connection access requires an active scoped binding.",
+    ),
+    "require_markets_run": _InstitutionGateSpec(
+        module=Module.MARKETS,
+        sensitivity=Sensitivity.CONFIDENTIAL,
+        permission=Permission.RUN,
+        surface="markets_run",
+        detail="Running an implied rating requires an active scoped binding.",
+    ),
+    "require_markets_upload": _InstitutionGateSpec(
+        module=Module.MARKETS,
+        sensitivity=Sensitivity.PUBLISHED,
+        permission=Permission.CREATE,
+        surface="markets_upload",
+        detail="Uploading market data requires an active scoped binding.",
+    ),
+    "require_markets_overlay_create": _InstitutionGateSpec(
+        module=Module.MARKETS,
+        sensitivity=Sensitivity.CONFIDENTIAL,
+        permission=Permission.CREATE,
+        surface="markets_overlay_create",
+        detail="Creating a market data overlay requires an active scoped binding.",
+    ),
+    "require_markets_overlay_edit": _InstitutionGateSpec(
+        module=Module.MARKETS,
+        sensitivity=Sensitivity.CONFIDENTIAL,
+        permission=Permission.EDIT,
+        surface="markets_overlay_edit",
+        detail="Ending a market data overlay requires an active scoped binding.",
+    ),
+}
+
+
+def _apply_institution_gate(
+    spec: _InstitutionGateSpec,
+    db: DbSession,
+    ctx: Tenant,
+    bank: TenantBank,
+    request: Request | None = None,
+) -> InstitutionPermissionAccess:
+    """Expand one frozen spec row into the complete shared authorization call."""
+    return _require_institution_permission(
+        db,
+        ctx,
+        bank,
+        module=spec.module,
+        sensitivity=spec.sensitivity,
+        permission=spec.permission,
+        surface=spec.surface,
+        detail=spec.detail,
+        require_whole_institution=spec.whole_institution,
+        denial_status=spec.denial_status,
+        request=request if spec.request else None,
+    )
+
+
+def require_capital_aggregated_view(
+    db: DbSession,
+    ctx: Tenant,
+    bank: TenantBank,
+) -> InstitutionPermissionAccess:
+    return _apply_institution_gate(
+        _INSTITUTION_GATE_SPECS["require_capital_aggregated_view"], db, ctx, bank
     )
 
 
@@ -1231,17 +1467,9 @@ def require_capital_confidential_view(
     ctx: Tenant,
     bank: TenantBank,
 ) -> InstitutionPermissionAccess:
-    return _require_institution_permission(
-        db,
-        ctx,
-        bank,
-        module=Module.CAPITAL,
-        sensitivity=Sensitivity.CONFIDENTIAL,
-        permission=Permission.VIEW,
-        surface="capital_confidential_view",
-        detail="Capital access requires an active scoped binding.",
-        # The evidence bundle cites GET /capital-plan (app.core.examiner).
-        request=request,
+    # The evidence bundle cites GET /capital-plan (app.core.examiner).
+    return _apply_institution_gate(
+        _INSTITUTION_GATE_SPECS["require_capital_confidential_view"], db, ctx, bank, request
     )
 
 
@@ -1250,15 +1478,8 @@ def require_capital_restricted_view(
     ctx: Tenant,
     bank: TenantBank,
 ) -> InstitutionPermissionAccess:
-    return _require_institution_permission(
-        db,
-        ctx,
-        bank,
-        module=Module.CAPITAL,
-        sensitivity=Sensitivity.RESTRICTED,
-        permission=Permission.VIEW,
-        surface="capital_restricted_view",
-        detail="Capital assurance access requires an active scoped binding.",
+    return _apply_institution_gate(
+        _INSTITUTION_GATE_SPECS["require_capital_restricted_view"], db, ctx, bank
     )
 
 
@@ -1267,21 +1488,7 @@ def require_capital_run(
     ctx: Tenant,
     bank: TenantBank,
 ) -> InstitutionPermissionAccess:
-    return _require_institution_permission(
-        db,
-        ctx,
-        bank,
-        module=Module.CAPITAL,
-        sensitivity=Sensitivity.CONFIDENTIAL,
-        permission=Permission.RUN,
-        surface="capital_run",
-        detail="Running Capital calculations requires an active scoped binding.",
-    )
-
-
-#: Every credit dependency answers with the same sentence, so a denied reader is
-#: never told WHICH half of the sentence it is missing.
-_CREDIT_DETAIL = "Credit access requires an active scoped binding."
+    return _apply_institution_gate(_INSTITUTION_GATE_SPECS["require_capital_run"], db, ctx, bank)
 
 
 def require_credit_aggregated_view(
@@ -1298,15 +1505,8 @@ def require_credit_aggregated_view(
     what population it was computed over, so a branch-scoped slice would read as
     the institution's number — refused instead.
     """
-    return _require_institution_permission(
-        db,
-        ctx,
-        bank,
-        module=Module.CREDIT,
-        sensitivity=Sensitivity.AGGREGATED,
-        permission=Permission.VIEW,
-        surface="credit_aggregated_view",
-        detail=_CREDIT_DETAIL,
+    return _apply_institution_gate(
+        _INSTITUTION_GATE_SPECS["require_credit_aggregated_view"], db, ctx, bank
     )
 
 
@@ -1325,15 +1525,8 @@ def require_credit_concentration_view(
     share of the institution's capital, which is an institution-grain measure a
     branch slice cannot produce.
     """
-    return _require_institution_permission(
-        db,
-        ctx,
-        bank,
-        module=Module.CREDIT,
-        sensitivity=Sensitivity.RESTRICTED,
-        permission=Permission.VIEW,
-        surface="credit_concentration_view",
-        detail=_CREDIT_DETAIL,
+    return _apply_institution_gate(
+        _INSTITUTION_GATE_SPECS["require_credit_concentration_view"], db, ctx, bank
     )
 
 
@@ -1360,20 +1553,12 @@ def require_credit_restricted_view(
     rows must opt out of that default and apply the scope; see
     ``require_credit_blotter_view`` and ``require_credit_activity_view``.
     """
-    return _require_institution_permission(
-        db,
-        ctx,
-        bank,
-        module=Module.CREDIT,
-        sensitivity=Sensitivity.RESTRICTED,
-        permission=Permission.VIEW,
-        surface="credit_restricted_view",
-        detail=_CREDIT_DETAIL,
-        # The evidence bundle cites GET /ecl-assumptions and GET /crm-haircuts.
-        # The three OTHER routes on this dependency (/concentration-limits,
-        # /credit-thresholds, /sdi/large-exposures) are not cited, so the
-        # examiner contract refuses them for an inspection session.
-        request=request,
+    # The evidence bundle cites GET /ecl-assumptions and GET /crm-haircuts.
+    # The three OTHER routes on this dependency (/concentration-limits,
+    # /credit-thresholds, /sdi/large-exposures) are not cited, so the
+    # examiner contract refuses them for an inspection session.
+    return _apply_institution_gate(
+        _INSTITUTION_GATE_SPECS["require_credit_restricted_view"], db, ctx, bank, request
     )
 
 
@@ -1388,16 +1573,8 @@ def require_credit_blotter_view(
     its own branch, so they are the surface a branch or region grant was written
     for: the caller applies ``access.data_scope`` to the rows AND to every count.
     """
-    return _require_institution_permission(
-        db,
-        ctx,
-        bank,
-        module=Module.CREDIT,
-        sensitivity=Sensitivity.RESTRICTED,
-        permission=Permission.VIEW,
-        surface="credit_blotter_view",
-        detail=_CREDIT_DETAIL,
-        require_whole_institution=False,
+    return _apply_institution_gate(
+        _INSTITUTION_GATE_SPECS["require_credit_blotter_view"], db, ctx, bank
     )
 
 
@@ -1416,16 +1593,8 @@ def require_credit_activity_view(
     is attributable to a branch through the facility it names, so the scope
     applies to the rows, the two counts and the monthly flows.
     """
-    return _require_institution_permission(
-        db,
-        ctx,
-        bank,
-        module=Module.CREDIT,
-        sensitivity=Sensitivity.CONFIDENTIAL,
-        permission=Permission.VIEW,
-        surface="credit_activity_view",
-        detail=_CREDIT_DETAIL,
-        require_whole_institution=False,
+    return _apply_institution_gate(
+        _INSTITUTION_GATE_SPECS["require_credit_activity_view"], db, ctx, bank
     )
 
 
@@ -1441,16 +1610,7 @@ def require_credit_run(
     and the whole institution, because a run sealed over one branch would be a
     filing record that claims to be the institution's book.
     """
-    return _require_institution_permission(
-        db,
-        ctx,
-        bank,
-        module=Module.CREDIT,
-        sensitivity=Sensitivity.CONFIDENTIAL,
-        permission=Permission.RUN,
-        surface="credit_run",
-        detail="Running Credit calculations requires an active scoped binding.",
-    )
+    return _apply_institution_gate(_INSTITUTION_GATE_SPECS["require_credit_run"], db, ctx, bank)
 
 
 @dataclass(frozen=True)
@@ -1900,15 +2060,8 @@ def require_fx_aggregated_view(
     ctx: Tenant,
     bank: TenantBank,
 ) -> InstitutionPermissionAccess:
-    return _require_institution_permission(
-        db,
-        ctx,
-        bank,
-        module=Module.FX,
-        sensitivity=Sensitivity.AGGREGATED,
-        permission=Permission.VIEW,
-        surface="fx_aggregated_view",
-        detail="FX access requires an active scoped binding.",
+    return _apply_institution_gate(
+        _INSTITUTION_GATE_SPECS["require_fx_aggregated_view"], db, ctx, bank
     )
 
 
@@ -1917,16 +2070,7 @@ def require_fx_run(
     ctx: Tenant,
     bank: TenantBank,
 ) -> InstitutionPermissionAccess:
-    return _require_institution_permission(
-        db,
-        ctx,
-        bank,
-        module=Module.FX,
-        sensitivity=Sensitivity.CONFIDENTIAL,
-        permission=Permission.RUN,
-        surface="fx_run",
-        detail="Running FX calculations requires an active scoped binding.",
-    )
+    return _apply_institution_gate(_INSTITUTION_GATE_SPECS["require_fx_run"], db, ctx, bank)
 
 
 def require_forecasting_aggregated_view(
@@ -1934,15 +2078,8 @@ def require_forecasting_aggregated_view(
     ctx: Tenant,
     bank: TenantBank,
 ) -> InstitutionPermissionAccess:
-    return _require_institution_permission(
-        db,
-        ctx,
-        bank,
-        module=Module.FORECASTING,
-        sensitivity=Sensitivity.AGGREGATED,
-        permission=Permission.VIEW,
-        surface="forecasting_aggregated_view",
-        detail="Forecasting access requires an active scoped binding.",
+    return _apply_institution_gate(
+        _INSTITUTION_GATE_SPECS["require_forecasting_aggregated_view"], db, ctx, bank
     )
 
 
@@ -1951,15 +2088,8 @@ def require_forecasting_confidential_view(
     ctx: Tenant,
     bank: TenantBank,
 ) -> InstitutionPermissionAccess:
-    return _require_institution_permission(
-        db,
-        ctx,
-        bank,
-        module=Module.FORECASTING,
-        sensitivity=Sensitivity.CONFIDENTIAL,
-        permission=Permission.VIEW,
-        surface="forecasting_confidential_view",
-        detail="Forecasting access requires an active scoped binding.",
+    return _apply_institution_gate(
+        _INSTITUTION_GATE_SPECS["require_forecasting_confidential_view"], db, ctx, bank
     )
 
 
@@ -1974,16 +2104,8 @@ def require_forecasting_run_detail_view(
     exist, so the denial is the same 404 the service raises for an unknown ID.
     """
 
-    return _require_institution_permission(
-        db,
-        ctx,
-        bank,
-        module=Module.FORECASTING,
-        sensitivity=Sensitivity.CONFIDENTIAL,
-        permission=Permission.VIEW,
-        surface="forecasting_run_detail",
-        detail="Regulatory run not found.",
-        denial_status=status.HTTP_404_NOT_FOUND,
+    return _apply_institution_gate(
+        _INSTITUTION_GATE_SPECS["require_forecasting_run_detail_view"], db, ctx, bank
     )
 
 
@@ -1992,15 +2114,8 @@ def require_forecasting_run(
     ctx: Tenant,
     bank: TenantBank,
 ) -> InstitutionPermissionAccess:
-    return _require_institution_permission(
-        db,
-        ctx,
-        bank,
-        module=Module.FORECASTING,
-        sensitivity=Sensitivity.CONFIDENTIAL,
-        permission=Permission.RUN,
-        surface="forecasting_run",
-        detail="Running Forecasting calculations requires an active scoped binding.",
+    return _apply_institution_gate(
+        _INSTITUTION_GATE_SPECS["require_forecasting_run"], db, ctx, bank
     )
 
 
@@ -2011,15 +2126,8 @@ def require_forecasting_assumption_edit(
 ) -> InstitutionPermissionAccess:
     """Draft, revise or submit a forecast assumption version (the maker's verbs)."""
 
-    return _require_institution_permission(
-        db,
-        ctx,
-        bank,
-        module=Module.FORECASTING,
-        sensitivity=Sensitivity.CONFIDENTIAL,
-        permission=Permission.EDIT,
-        surface="forecast_assumption_edit",
-        detail="Editing forecast assumptions requires an active scoped binding.",
+    return _apply_institution_gate(
+        _INSTITUTION_GATE_SPECS["require_forecasting_assumption_edit"], db, ctx, bank
     )
 
 
@@ -2035,15 +2143,8 @@ def require_forecasting_assumption_review(
     load.
     """
 
-    return _require_institution_permission(
-        db,
-        ctx,
-        bank,
-        module=Module.FORECASTING,
-        sensitivity=Sensitivity.CONFIDENTIAL,
-        permission=Permission.REVIEW,
-        surface="forecast_assumption_review",
-        detail="Reviewing forecast assumptions requires an active scoped binding.",
+    return _apply_institution_gate(
+        _INSTITUTION_GATE_SPECS["require_forecasting_assumption_review"], db, ctx, bank
     )
 
 
@@ -2136,7 +2237,6 @@ def require_ilaap_refresh(
 # representative /test pull is one of them: it denies before the bank or
 # connection lookup, the vault retrieval or any vendor call, and its vendor
 # content (sample values, vendor error) is separately authorized read material.
-_MARKETS_VIEW_DETAIL = "Markets access requires an active scoped binding."
 
 
 def require_markets_published_view(
@@ -2144,15 +2244,8 @@ def require_markets_published_view(
     ctx: Tenant,
     bank: TenantBank,
 ) -> InstitutionPermissionAccess:
-    return _require_institution_permission(
-        db,
-        ctx,
-        bank,
-        module=Module.MARKETS,
-        sensitivity=Sensitivity.PUBLISHED,
-        permission=Permission.VIEW,
-        surface="markets_published_view",
-        detail=_MARKETS_VIEW_DETAIL,
+    return _apply_institution_gate(
+        _INSTITUTION_GATE_SPECS["require_markets_published_view"], db, ctx, bank
     )
 
 
@@ -2175,15 +2268,8 @@ def require_markets_template_view(
     """
 
     _ = bank_id  # validated here so a missing bank is a 422, resolved by TenantBank
-    return _require_institution_permission(
-        db,
-        ctx,
-        bank,
-        module=Module.MARKETS,
-        sensitivity=Sensitivity.PUBLISHED,
-        permission=Permission.VIEW,
-        surface="markets_template_view",
-        detail=_MARKETS_VIEW_DETAIL,
+    return _apply_institution_gate(
+        _INSTITUTION_GATE_SPECS["require_markets_template_view"], db, ctx, bank
     )
 
 
@@ -2192,15 +2278,8 @@ def require_markets_confidential_view(
     ctx: Tenant,
     bank: TenantBank,
 ) -> InstitutionPermissionAccess:
-    return _require_institution_permission(
-        db,
-        ctx,
-        bank,
-        module=Module.MARKETS,
-        sensitivity=Sensitivity.CONFIDENTIAL,
-        permission=Permission.VIEW,
-        surface="markets_confidential_view",
-        detail=_MARKETS_VIEW_DETAIL,
+    return _apply_institution_gate(
+        _INSTITUTION_GATE_SPECS["require_markets_confidential_view"], db, ctx, bank
     )
 
 
@@ -2209,15 +2288,8 @@ def require_markets_restricted_view(
     ctx: Tenant,
     bank: TenantBank,
 ) -> InstitutionPermissionAccess:
-    return _require_institution_permission(
-        db,
-        ctx,
-        bank,
-        module=Module.MARKETS,
-        sensitivity=Sensitivity.RESTRICTED,
-        permission=Permission.VIEW,
-        surface="markets_restricted_view",
-        detail="Market data connection access requires an active scoped binding.",
+    return _apply_institution_gate(
+        _INSTITUTION_GATE_SPECS["require_markets_restricted_view"], db, ctx, bank
     )
 
 
@@ -2226,16 +2298,7 @@ def require_markets_run(
     ctx: Tenant,
     bank: TenantBank,
 ) -> InstitutionPermissionAccess:
-    return _require_institution_permission(
-        db,
-        ctx,
-        bank,
-        module=Module.MARKETS,
-        sensitivity=Sensitivity.CONFIDENTIAL,
-        permission=Permission.RUN,
-        surface="markets_run",
-        detail="Running an implied rating requires an active scoped binding.",
-    )
+    return _apply_institution_gate(_INSTITUTION_GATE_SPECS["require_markets_run"], db, ctx, bank)
 
 
 def require_markets_upload(
@@ -2243,16 +2306,7 @@ def require_markets_upload(
     ctx: Tenant,
     bank: TenantBank,
 ) -> InstitutionPermissionAccess:
-    return _require_institution_permission(
-        db,
-        ctx,
-        bank,
-        module=Module.MARKETS,
-        sensitivity=Sensitivity.PUBLISHED,
-        permission=Permission.CREATE,
-        surface="markets_upload",
-        detail="Uploading market data requires an active scoped binding.",
-    )
+    return _apply_institution_gate(_INSTITUTION_GATE_SPECS["require_markets_upload"], db, ctx, bank)
 
 
 def require_markets_overlay_create(
@@ -2260,15 +2314,8 @@ def require_markets_overlay_create(
     ctx: Tenant,
     bank: TenantBank,
 ) -> InstitutionPermissionAccess:
-    return _require_institution_permission(
-        db,
-        ctx,
-        bank,
-        module=Module.MARKETS,
-        sensitivity=Sensitivity.CONFIDENTIAL,
-        permission=Permission.CREATE,
-        surface="markets_overlay_create",
-        detail="Creating a market data overlay requires an active scoped binding.",
+    return _apply_institution_gate(
+        _INSTITUTION_GATE_SPECS["require_markets_overlay_create"], db, ctx, bank
     )
 
 
@@ -2277,15 +2324,8 @@ def require_markets_overlay_edit(
     ctx: Tenant,
     bank: TenantBank,
 ) -> InstitutionPermissionAccess:
-    return _require_institution_permission(
-        db,
-        ctx,
-        bank,
-        module=Module.MARKETS,
-        sensitivity=Sensitivity.CONFIDENTIAL,
-        permission=Permission.EDIT,
-        surface="markets_overlay_edit",
-        detail="Ending a market data overlay requires an active scoped binding.",
+    return _apply_institution_gate(
+        _INSTITUTION_GATE_SPECS["require_markets_overlay_edit"], db, ctx, bank
     )
 
 
