@@ -6,13 +6,16 @@ upload** entry"), and the
 [verification skill](../.agents/skills/verification/SKILL.md) uses the same
 entries to reach each feature and check it on a running surface.
 
-Every entry has the same fields:
+Verification recipes use these fields:
 
 - **Reach**: the precondition that puts you at the feature's entry point.
 - **Control**: what you click, type or call.
 - **Check**: the observable result that proves it worked.
 - **Traps**: failures that are not product bugs.
 - **Depends on**: the routes, endpoints and selectors the entry relies on.
+
+Entries that skip an operation give the reason under **Verification** and list
+the dependencies separately.
 
 An entry that describes work not yet merged is labelled `pending-until-merged`
 at the start of its description. Headings are identifiers: rename one only
@@ -29,9 +32,9 @@ Shared conventions, which the entries do not repeat:
   not a fault.
 - A refusal (`401`, `403`, or `404` for a sibling bank) is the expected result
   for a principal without the grant.
-- Routes are listed relative to their surface's base: `/api/v1` for the tenant
-  API and `/operator/v1` for the operator API. `{bank_id}` is a `BK-` platform
-  ID and `{org_id}` an `OR-` platform ID.
+- Prefix tenant API routes with `/api/v1` unless the path already starts with
+  `/api/`. Operator API paths that start with `/operator/` are already complete.
+  `{bank_id}` is a `BK-` platform ID and `{org_id}` an `OR-` platform ID.
 
 ## Tenant API
 
