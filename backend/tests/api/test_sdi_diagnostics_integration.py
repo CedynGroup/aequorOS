@@ -4,8 +4,17 @@ from datetime import date
 from decimal import Decimal
 from uuid import uuid4
 
+from app.core.authorization import (
+    GrantorType,
+    InstitutionScope,
+    ModuleScope,
+    PrincipalType,
+    RoleBundle,
+    SensitivityScope,
+)
 from app.db.base import utc_now
 from app.db.session import get_sessionmaker
+from app.identity.service import authorization
 from app.models import (
     Bank,
     CanonicalPosition,
@@ -13,7 +22,14 @@ from app.models import (
     IngestionBatch,
     LineageRecord,
 )
-from tests.support.helpers import ORG_1, headers
+from tests.support.authorization_fixtures import (
+    current_authorization_version,
+    open_tenant_session,
+    suspend_all_bindings,
+)
+from tests.support.helpers import ORG_1, ORG_2, USER_1, error_envelope, headers
+
+USER_ID = USER_1
 
 
 def _create_sdi_bank() -> str:
@@ -62,6 +78,58 @@ LATEST_CURRENT = date(2026, 6, 30)
 SUPERSEDED_LATER = date(2026, 7, 31)
 WITHDRAWN_LATER = date(2026, 8, 31)
 REJECTED_LATER = date(2026, 9, 30)
+
+#: The readiness rows, per governing module — the whole disclosure map of the
+#: route. A caller sees exactly the rows of the modules it may view at
+#: aggregated sensitivity; a module outside this map exists on no surface.
+LIQUIDITY_ROWS = ("liquidity_table1", "maturity_ladder", "funding_concentration")
+CAPITAL_ROWS = ("capital",)
+CREDIT_ROWS = ("exposures", "provisioning")
+ALL_ROWS = LIQUIDITY_ROWS + CAPITAL_ROWS + CREDIT_ROWS
+
+
+def _module_only_viewer(module: ModuleScope) -> dict[str, str]:
+    """Headers for an actor whose only active binding is one module's view.
+
+    The hermetic fixture seeds the demo actor with an organization-wide
+    all-module viewer binding, so a module-only actor is the same user with
+    every binding suspended and exactly one aggregated viewer sentence granted
+    back. Scalar roles are carried but grant nothing by themselves.
+    """
+    with get_sessionmaker()() as db:
+        suspend_all_bindings(
+            db, organization_id=ORG_1, user_id=USER_ID, reason="sdi module-view test"
+        )
+        authorization.create_role_binding(
+            db,
+            organization_id=ORG_1,
+            principal_user_id=USER_ID,
+            principal_type=PrincipalType.HUMAN,
+            role_bundle=RoleBundle.VIEWER,
+            scope=authorization.BindingScope(
+                InstitutionScope.ORGANIZATION, None, module, SensitivityScope.AGGREGATED
+            ),
+            grantor=authorization.GrantorRef(GrantorType.SYSTEM, "sdi-readiness-test"),
+            reason="SDI readiness module-view regression authority",
+        )
+        db.commit()
+    return _current_user_headers()
+
+
+def _suspended_bindings_headers(roles: tuple[str, ...] = ("admin",)) -> dict[str, str]:
+    """Headers for an actor with every binding suspended: no module view at all."""
+    with get_sessionmaker()() as db:
+        suspend_all_bindings(
+            db, organization_id=ORG_1, user_id=USER_ID, reason="sdi no-binding test"
+        )
+        db.commit()
+    return _current_user_headers(roles=roles)
+
+
+def _current_user_headers(roles: tuple[str, ...] = ("admin",)) -> dict[str, str]:
+    with open_tenant_session(ORG_1) as db:
+        version = current_authorization_version(db, organization_id=ORG_1, user_id=USER_ID)
+    return headers(roles=roles, authorization_version=version)
 
 
 def _seed_snapshot_history(bank_id: str) -> None:
@@ -202,6 +270,10 @@ def test_sdi_liquidity_position_returns_typed_unavailable_controls(db_client) ->
     assert len(body["reserves"]) == 2
     assert all(row["status"] == "not_computable" for row in body["reserves"])
     assert body["maturity_ladder"]
+    # The internal caller keeps the FULL readiness rows: its own gate (the
+    # liquidity confidential resource) has already decided who is asking, so
+    # the embedded report is never narrowed per module.
+    assert [row["module"] for row in body["readiness"]] == list(ALL_ROWS)
 
 
 def test_sdi_large_exposures_returns_empty_book_without_false_breach(db_client) -> None:  # noqa: ANN001
@@ -274,3 +346,75 @@ def test_sdi_capital_summary_declares_the_risk_classes_it_omits(db_client) -> No
     assert "credit risk only" in body["rwa_scope_note"]
     # Reader-facing copy, no parameter codes or raw enums.
     assert "no charge is assumed" in by_class["operational"]["note"]
+
+
+def _readiness_modules(client, bank_id: str, auth: dict[str, str]) -> list[str]:  # noqa: ANN001
+    response = client.get(f"/api/v1/banks/{bank_id}/sdi/readiness", headers=auth)
+    assert response.status_code == 200, response.text
+    return [row["module"] for row in response.json()["modules"]]
+
+
+def test_full_actor_still_sees_every_module_row(db_client) -> None:  # noqa: ANN001
+    """The all-module viewer (the seeded demo sentence) keeps all six rows, in
+    the service's own order — the filtering narrows, it never reorders."""
+    bank_id = _create_sdi_bank()
+    assert _readiness_modules(db_client, bank_id, headers()) == list(ALL_ROWS)
+
+
+def test_liquidity_only_actor_sees_exactly_the_liquidity_rows(db_client) -> None:  # noqa: ANN001
+    bank_id = _create_sdi_bank()
+    assert _readiness_modules(
+        db_client, bank_id, _module_only_viewer(ModuleScope.LIQUIDITY)
+    ) == list(LIQUIDITY_ROWS)
+
+
+def test_capital_only_actor_sees_exactly_the_capital_row(db_client) -> None:  # noqa: ANN001
+    bank_id = _create_sdi_bank()
+    assert _readiness_modules(
+        db_client, bank_id, _module_only_viewer(ModuleScope.CAPITAL)
+    ) == list(CAPITAL_ROWS)
+
+
+def test_credit_only_actor_sees_exposures_and_provisioning(db_client) -> None:  # noqa: ANN001
+    bank_id = _create_sdi_bank()
+    assert _readiness_modules(
+        db_client, bank_id, _module_only_viewer(ModuleScope.CREDIT)
+    ) == list(CREDIT_ROWS)
+
+
+def test_actor_with_no_module_view_gets_an_empty_modules_list(db_client) -> None:  # noqa: ANN001
+    """Zero qualifying rows answer 200 with an empty list, not a denial.
+
+    The route filters what a caller may see rather than refusing the caller: a
+    member of the organization without any module view still learns that there
+    is nothing on this surface for them (the live summary's behavior), while a
+    caller outside the organization keeps the opaque 404.
+    """
+    bank_id = _create_sdi_bank()
+    response = db_client.get(
+        f"/api/v1/banks/{bank_id}/sdi/readiness",
+        headers=_suspended_bindings_headers(),
+    )
+    assert response.status_code == 200, response.text
+    assert response.json()["modules"] == []
+
+
+def test_account_admin_without_bindings_gets_an_empty_modules_list(db_client) -> None:  # noqa: ANN001
+    """Scalar administration is not module view: the account admin sees no rows."""
+    bank_id = _create_sdi_bank()
+    response = db_client.get(
+        f"/api/v1/banks/{bank_id}/sdi/readiness",
+        headers=_suspended_bindings_headers(roles=("account_admin",)),
+    )
+    assert response.status_code == 200, response.text
+    assert response.json()["modules"] == []
+
+
+def test_foreign_organization_bank_is_an_opaque_404(db_client) -> None:  # noqa: ANN001
+    bank_id = _create_sdi_bank()
+    response = db_client.get(
+        f"/api/v1/banks/{bank_id}/sdi/readiness",
+        headers=headers(org_id=ORG_2),
+    )
+    assert response.status_code == 404, response.text
+    assert error_envelope(response)["message"] == "Bank not found."
