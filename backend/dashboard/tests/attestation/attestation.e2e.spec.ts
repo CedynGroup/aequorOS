@@ -690,4 +690,41 @@ test.describe("the filed document", () => {
     expect(download.headers()["content-type"]).toContain("application/pdf");
     expect((await download.body()).length).toBe(latest.size_bytes);
   });
+
+  test("the artifact act answers while the pack detail is still loading", async ({
+    page,
+  }) => {
+    // Regeneration puts the new version on screen from the packages list a
+    // moment before the package detail lands behind it, and the export act
+    // reads only what is keyed by the summary on screen. A rendered button must
+    // therefore run the act even while the detail is still in flight: a guard
+    // on the detail would swallow the click, no export would be requested, and
+    // no download would arrive. Holding the detail and the auto-run checks
+    // response back until the click has produced its download keeps that window
+    // open, so this clicks into it deterministically.
+    let releaseDetail = () => {};
+    const detailHeld = new Promise<void>((resolve) => {
+      releaseDetail = resolve;
+    });
+    await page.route(
+      /\/regulatory-packages\/[^/]+(\/validate)?$/,
+      async (route) => {
+        await detailHeld;
+        await route.continue();
+      },
+    );
+
+    try {
+      await page.goto(GATED_RETURN);
+      await generateCurrentVersion(page);
+      const [download] = await Promise.all([
+        page.waitForEvent("download", { timeout: 30_000 }),
+        page.getByRole("button", { name: /produce and download pdf/i }).click(),
+      ]);
+      expect(download.suggestedFilename()).toMatch(/\.pdf$/i);
+      expect(await download.failure()).toBeNull();
+    } finally {
+      releaseDetail();
+    }
+  });
 });
