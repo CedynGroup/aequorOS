@@ -294,7 +294,9 @@ def token_error(label: str, token: str, section: str, sources: Sources) -> str |
 def link_errors(text: str, headings: list[str], sources: Sources) -> Iterator[str]:
     anchors = {slug(title) for title in headings}
     base = PurePosixPath(MAP_FILE).parent
-    directories = {str(parent) for path in sources.tracked for parent in PurePosixPath(path).parents}
+    directories = {
+        str(parent) for path in sources.tracked for parent in PurePosixPath(path).parents
+    }
     for number, line in enumerate(text.splitlines(), start=1):
         where = f"{MAP_FILE}:{number}"
         for target in re.findall(r"\]\(([^)\s]+)\)", line):
@@ -467,7 +469,9 @@ def real_sources(applications: Mapping[str, Starlette]) -> Sources:
             if name.startswith(source_root + "/")
             and name.endswith(SOURCE_SUFFIXES)
             and not TEST_PATH.search(name)
-            for test_id in literal_test_ids((REPO / name).read_text(encoding="utf-8", errors="replace"))
+            for test_id in literal_test_ids(
+                (REPO / name).read_text(encoding="utf-8", errors="replace")
+            )
         )
     return Sources(
         routes={
