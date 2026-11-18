@@ -1046,6 +1046,22 @@ const rule = {
           }
           return writer.callNode.range[0] < callback.callNode.range[0];
         };
+        /** Whether writer `a` executes after writer `b`: later phase first,
+         * then inner describes (setup phases run outer first, so a deeper
+         * write happens later), then registration position. */
+        const writeExecutesAfter = (a, b) => {
+          const rankA = a.writer ? phaseRank(a.writer.callType) : -1;
+          const rankB = b.writer ? phaseRank(b.writer.callType) : -1;
+          if (rankA !== rankB) {
+            return rankA > rankB;
+          }
+          const depthA = a.writer ? findAllEnclosingDescribes(a.writer.callNode).length : -1;
+          const depthB = b.writer ? findAllEnclosingDescribes(b.writer.callNode).length : -1;
+          if (depthA !== depthB) {
+            return depthA > depthB;
+          }
+          return a.pos > b.pos;
+        };
         /** The callable `name` resolves to at the execution of `site`,
          * through the scope the traversal recorded for it. */
         const resolveHelperAtExecution = (name, site) => {
@@ -1059,12 +1075,20 @@ const rule = {
           }
           const siteFn = nearestFunction(site);
           const callback = siteFn ? callbackInfoOf(siteFn) : null;
-          for (let version = versions.length - 1; version >= 0; version -= 1) {
-            if (writeAppliesTo(versions[version], callback, site)) {
-              return versions[version].fn;
+          // The applicable version that executes LAST wins: two writes from
+          // different setup phases both apply to a test, and the later phase
+          // (by rank, then describe depth, then registration position)
+          // determines the callable the test sees.
+          let best = null;
+          for (const version of versions) {
+            if (!writeAppliesTo(version, callback, site)) {
+              continue;
+            }
+            if (best === null || writeExecutesAfter(version, best)) {
+              best = version;
             }
           }
-          return versions[0].previous;
+          return best ? best.fn : versions[0].previous;
         };
         // Re-resolve every recorded invocation in lifecycle order: a setup
         // hook registered after a test still runs before it, so the callable

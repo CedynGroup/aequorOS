@@ -1369,6 +1369,39 @@ test("a hoisted helper invoked before its declaration keeps its capture", async 
   assertFlagged(result, "weakAwaits");
 });
 
+// An assigned closure's own parameters shadow the enclosing replay locals.
+test("an assigned closure's parameters shadow replay locals", async () => {
+  const result = await runOxlint(["weakAwaits"], `
+    let sleep;
+    function init() {
+      const local = () => new Promise((resolve) => setTimeout(resolve, 10));
+      sleep = (local) => local();
+    }
+    init();
+    it('t', async () => {
+      await sleep(() => fetch('/'));
+    });
+  `);
+  assertClean(result, "weakAwaits");
+});
+
+// An assignment nested in another assignment's right side executes first:
+// the replay applies it.
+test("a nested assignment in a right side replays", async () => {
+  const result = await runOxlint(["weakAwaits"], `
+    let sleep = () => fetch('/');
+    function init() {
+      let copy;
+      copy = (sleep = () => new Promise((resolve) => setTimeout(resolve, 10)));
+    }
+    init();
+    it('t', async () => {
+      await sleep();
+    });
+  `);
+  assertFlagged(result, "weakAwaits");
+});
+
 // A block-local declaration expires with its block: the same-named
 // assignment after the block updates the captured binding.
 test("a block-local shadow does not exclude assignments outside its block", async () => {

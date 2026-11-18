@@ -1411,6 +1411,25 @@ test("a reassignment to a known callable resolves it", async () => {
   assertClean(result, "frozenTime");
 });
 
+// Competing setup-phase writes resolve in lifecycle order: beforeAll runs
+// first, so the beforeEach's freeze is what the test sees.
+test("competing setup-phase writes resolve in lifecycle order", async () => {
+  const result = await runOxlint(["frozenTime"], `
+    let freeze = () => {};
+    beforeEach(() => {
+      freeze = () => vi.useFakeTimers();
+    });
+    beforeAll(() => {
+      freeze = () => {};
+    });
+    it('t', () => {
+      freeze();
+      Date.now();
+    });
+  `);
+  assertClean(result, "frozenTime");
+});
+
 // A read inside an invoked helper's body executes at the invocation site:
 // a freeze invoked first covers it.
 test("a helper-body read is ordered at its invocation site", async () => {

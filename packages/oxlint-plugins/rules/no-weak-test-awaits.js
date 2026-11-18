@@ -941,8 +941,43 @@ const rule = {
       };
       /** Whether a function body calls a replay-local whose kind is a weak
        * helper: a closure assigned inside the helper captures the local's
-       * timer dependency, which boundKind (registry-only) cannot see. */
+       * timer dependency, which boundKind (registry-only) cannot see. The
+       * closure's own parameters and declarations shadow the enclosing
+       * replay locals. */
       const localWeakCallInside = (fnNode) => {
+        const own = new Set();
+        const collectPatternNames = (pattern) => {
+          if (!pattern) return;
+          if (pattern.type === "Identifier") {
+            own.add(pattern.name);
+          } else if (pattern.type === "AssignmentPattern") {
+            collectPatternNames(pattern.left);
+          } else if (pattern.type === "RestElement") {
+            collectPatternNames(pattern.argument);
+          } else if (pattern.type === "ArrayPattern") {
+            for (const element of pattern.elements ?? []) collectPatternNames(element);
+          } else if (pattern.type === "ObjectPattern") {
+            for (const property of pattern.properties ?? []) {
+              collectPatternNames(
+                property.type === "RestElement" ? property.argument : property.value,
+              );
+            }
+          }
+        };
+        for (const parameter of fnNode.params ?? []) {
+          collectPatternNames(parameter);
+        }
+        if (fnNode.body?.type === "BlockStatement") {
+          for (const statement of fnNode.body.body) {
+            if (statement.type === "VariableDeclaration") {
+              for (const declarator of statement.declarations) {
+                collectPatternNames(declarator.id);
+              }
+            } else if (statement.type === "FunctionDeclaration" && statement.id) {
+              own.add(statement.id.name);
+            }
+          }
+        }
         let weak = false;
         const scan = (node) => {
           if (weak || !node || typeof node !== "object" || typeof node.type !== "string") {
@@ -952,6 +987,9 @@ const rule = {
             return;
           }
           if (node.type === "CallExpression" && node.callee.type === "Identifier") {
+            if (own.has(node.callee.name)) {
+              return;
+            }
             const index = lookupLocal(node.callee.name);
             if (index >= 0) {
               const source = localScopes[index].get(node.callee.name);
@@ -1075,6 +1113,12 @@ const rule = {
           node.operator === "=" &&
           node.left.type === "Identifier"
         ) {
+          // The right side evaluates BEFORE the assignment stores: a nested
+          // assignment inside it (an assignment expression as the value)
+          // executes first.
+          if (node.right && !isFunctionNode(node.right)) {
+            walk(node.right);
+          }
           if (isFunctionNode(node.right)) {
             replayEnvironments.set(node.right, captureEnvironment());
           }
