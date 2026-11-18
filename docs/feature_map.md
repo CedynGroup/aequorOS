@@ -17,9 +17,7 @@ Verification recipes use these fields:
 Entries that skip an operation give the reason under **Verification** and list
 the dependencies separately.
 
-An entry that describes work not yet merged is labelled `pending-until-merged`
-at the start of its description. Headings are identifiers: rename one only
-together with every reference to it.
+Headings are identifiers. Rename one only together with every reference to it.
 
 Shared conventions, which the entries do not repeat:
 
@@ -270,11 +268,16 @@ Creates a tenant's organization, bank and first administrator as one saga.
 Reads a tenant's metrics, ingestion, findings and storage, and runs operator
 fixes.
 
-- **Reach**: a signed-in operator, a provisioned tenant and an active inspection session for that tenant (see [Inspector sessions](#inspector-sessions)); without one these reads and fixes refuse `403 inspection_required`.
+- **Reach**: a signed-in operator who opened an active inspection session for
+  the provisioned tenant (see [Inspector sessions](#inspector-sessions)).
+  Without that session, these reads and fixes return `403 inspection_required`.
 - **Control**: `GET /operator/v1/tenants/{org_id}/metrics`, `/ingestion`,
   `/ingestion/{batch_id}`, `/findings`, `/config`, `/storage`, `/users`; fixes
   are `POST /operator/v1/tenants/{org_id}/fix/recompute`, `/fix/official-run`,
-  `/fix/rerun-ingestion`, `/fix/redrive-dedup` and `/fix/config`.
+  `/fix/rerun-ingestion`, `/fix/redrive-dedup` and `/fix/config`. Send a nonempty
+  `note` in every fix's JSON body. Include `bank_id` for recompute and official
+  run in a multi-bank tenant, `batch_id` for rerun and redrive, and `kind`,
+  `target_id` and `value` for config.
 - **Check**: reads return the tenant's own records; a fix answers with its
   outcome (the enqueued job for `recompute` and `official-run`) and writes an
   audit entry.
@@ -293,7 +296,7 @@ Opens a time-boxed, audited, read-only inspection of one tenant.
 - **Control**: `POST /operator/v1/inspector/sessions` (`organization_id`, `bank_id`,
   `reason`, `support_reference`, `mode`, `ttl_minutes`); `POST .../{session_id}/act-token` hands off to the
   dashboard; `POST .../{session_id}/end` closes it.
-- **Check**: `GET /operator/v1/inspector/sessions` lists the session as active;
+- **Check**: `GET /operator/v1/inspector/sessions` lists the session you opened as active;
   the act-token response carries a `dashboard_url` matching the running
   dashboard; ending it moves it out of the active list.
 - **Traps**: the act token and any URL fragment carrying it are credentials; keep
@@ -386,7 +389,9 @@ Summarises the fleet, items needing attention, connections and desk status.
 
 Lists every onboarded institution and opens one for diagnostics.
 
-- **Reach**: signed in; open `/tenants`. The detail page loads its ingestion and live-module figures only while an inspection session for that tenant is active (see [Console inspector](#console-inspector)).
+- **Reach**: signed in; open `/tenants`. The detail page loads its ingestion and
+  live-module figures only while a session you opened for that tenant is active
+  (see [Console inspector](#console-inspector)).
 - **Control**: filter with **All**, **Live**, **Empty** or **Stale**; **Export
   CSV**; open a row for `/tenants/{orgId}`.
 - **Check**: the count line reads "N of M shown"; the detail page shows
