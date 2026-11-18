@@ -44,9 +44,10 @@ Shared conventions, which the entries do not repeat:
 tests" CI job and locally with
 `cd backend && uv run pytest tests/architecture/test_feature_map_references.py`. It
 fails when a name an entry depends on no longer exists, when a link or repository
-path in this file points at nothing, or when a router group or page group is
+path in this file points at nothing, or when a route group or page group is
 neither covered by an entry nor listed under [Not mapped](#not-mapped).
-Operator router groups use the tags on registered routes.
+Tenant groups use route prefixes, with bank-scoped routes grouped by the first
+segment after the bank ID. Operator groups use the tags on registered routes.
 
 A **Depends on** line is a list of clauses separated by semicolons. Each clause
 starts with a label and lists backticked tokens:
@@ -54,11 +55,11 @@ starts with a label and lists backticked tokens:
 - `tenant API` and `operator API`: a route, optionally with a leading HTTP method
   and a trailing `/*` for a subtree. Tenant paths omit the `/api/v1` prefix.
 - `pages`: a path in the app tree of the surface the entry sits under.
-- `test ids`: a `data-testid` string in that surface's component source.
+- `test ids`: a literal `data-testid` declaration in that surface's component source.
 - `files`: a repository path that Git tracks.
 
-`{name}` and `[name]` both stand for a path parameter. The check proves a name
-still exists, not that the recipe around it still works.
+`{name}` and `[name]` both stand for a path parameter. Use the running surface
+to confirm that referenced selectors render and the recipe works.
 
 ## Tenant API
 
