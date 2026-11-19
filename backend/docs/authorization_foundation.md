@@ -1159,6 +1159,16 @@ separation-of-duties compatible by design (one takes finished returns away,
 the other files), so the grant adds no preparation authority and the
 compose-time shortfall message says what the narrow scope would withhold.
 
+Assignment-time separation of duties never refuses the `exporter` bundle:
+the assignment check raises no finding against an exporter grant, so it may
+sit beside either filing role — the Approver as well as the Validator — in
+either grant order, and at any scope, because the compatibility is not
+scope-sensitive. The check is one-sided by design: exporter adds no
+preparation, approval or transmission authority, so it cannot defeat the
+separations the assignment gate enforces, and the Approver and Validator
+pair on one identity stays blocked even when the member also holds the
+exporter.
+
 The permission verbs the older matrix names are reconciled here, not changed:
 ordinary package generation and regeneration remain `RUN`, and a resubmission
 request remains `EDIT`, because that is the later approved filing contract.
