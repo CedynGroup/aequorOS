@@ -1157,6 +1157,43 @@ UNFROZEN_READS = [
     "else:\n"
     "    clock = lambda: 0\n"
     "clock()\n",
+    # An attribute of an object may hold the clock callable: a call through
+    # the attribute reads the wall clock the same way a name call does.
+    "import time\n"
+    "def test_direct_attribute_alias():\n"
+    "    self.stamp = time.time\n"
+    "    self.stamp()\n",
+    # Attributes keep the branch merge too: each branch may store a
+    # different clock callable, and the call may select either one.
+    "from datetime import datetime\n"
+    "import time\n"
+    "def test_self_attribute_alias(flag):\n"
+    "    if flag:\n"
+    "        clock = datetime.now\n"
+    "    else:\n"
+    "        clock = time.time\n"
+    "    self.clock = clock\n"
+    "    self.clock()\n",
+    # A conditional expression stored on another object keeps both
+    # alternatives reachable through the attribute read.
+    "from datetime import datetime\n"
+    "import time\n"
+    "def test_object_attribute_alias(obj, flag):\n"
+    "    alt = datetime.now if flag else time.time\n"
+    "    obj.now = alt\n"
+    "    obj.now()\n",
+    # Reading through an attribute alias into a name keeps the union, so a
+    # later call through the copy is still reported.
+    "from datetime import datetime\n"
+    "import time\n"
+    "def test_attribute_alias_copied_to_name(flag):\n"
+    "    if flag:\n"
+    "        clock = datetime.now\n"
+    "    else:\n"
+    "        clock = time.time\n"
+    "    self.clock = clock\n"
+    "    reader = self.clock\n"
+    "    reader()\n",
 ]
 
 #: The same reads are accepted once the clock is frozen at function, class or
@@ -1439,6 +1476,14 @@ FROZEN_READS = [
     "    else:\n"
     "        clock = SimpleNamespace(time=lambda: 0)\n"
     "    clock.time()\n",
+    # An attribute that holds a clock callable is covered by the test's
+    # freeze like any other read.
+    "import pytest\n"
+    "import time\n"
+    f"@pytest.mark.freeze_time({INSTANT})\n"
+    "def test_frozen_attribute_alias():\n"
+    "    self.stamp = time.time\n"
+    "    self.stamp()\n",
 ]
 
 
@@ -1465,6 +1510,30 @@ def test_the_guard_accepts_frozen_clock_reads(tmp_path: Path, source: str) -> No
     allowlist.write_text("{}")
     assert guard.main(["--root", str(tmp_path), "--allowlist", str(allowlist)]) == 0
     assert guard.main(["--root", str(tmp_path), "--strict"]) == 0
+
+
+def test_an_attribute_alias_to_a_non_clock_callable_stays_accepted() -> None:
+    """Storing and calling a fake through an attribute records no clock read."""
+    source = "def test_fake_attribute_alias():\n    self.clock = lambda: 0\n    self.clock()\n"
+    assert guard.clock_findings(source).reads == []
+
+
+def test_an_untracked_attribute_read_stays_accepted() -> None:
+    """An attribute no assignment in the scope recorded is not a clock read."""
+    source = "def test_unknown_attribute(fake):\n    return fake.now()\n"
+    assert guard.clock_findings(source).reads == []
+
+
+def test_rebinding_the_holder_clears_its_attribute_aliases() -> None:
+    """A new object replaces the attribute the old one held."""
+    source = (
+        "import time\n"
+        "def test_replaced_holder():\n"
+        "    obj.now = time.time\n"
+        "    obj = Fake()\n"
+        "    obj.now()\n"
+    )
+    assert guard.clock_findings(source).reads == []
 
 
 def test_postponed_annotation_scopes_do_not_crash_the_guard() -> None:

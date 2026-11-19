@@ -27,6 +27,12 @@ constructions, and a read it cannot attribute is missed rather than guessed:
   called, but it has no recorded defining owner, so a lambda that closes over a
   local clock alias which is rebound between its definition and its call can be
   missed.
+* An attribute an assignment recorded (``self.clock = clock``) holds what was
+  stored in it, alternatives included, so a call through the attribute is
+  judged like a call through a name. The record is per scope: an alias another
+  method stored (an ``__init__`` or a setup helper) is not visible where a
+  later method reads it, and rebinding the holder object clears what its old
+  attributes held, so both forms are missed rather than guessed.
 * An immediately invoked lambda at module level, such as
   ``STAMP = (lambda: time.time())()``, is not tracked as an import-time call,
   so a module ``pytestmark`` freeze marker can exempt its read.
@@ -113,6 +119,20 @@ AMBIGUOUS = "|"
 
 def _alternatives(value: str) -> list[str]:
     return value.split(AMBIGUOUS) if AMBIGUOUS in value else [value]
+
+
+def _dotted(node: ast.expr) -> str | None:
+    """The dotted path of a plain name-and-attribute chain, or ``None``.
+
+    ``self.clock`` is ``"self.clock"``; anything that is not a chain of names
+    and attributes (a call, a subscript) has no stable path to record.
+    """
+    if isinstance(node, ast.Name):
+        return node.id
+    if isinstance(node, ast.Attribute):
+        base = _dotted(node.value)
+        return None if base is None else f"{base}.{node.attr}"
+    return None
 
 
 def _clock_capable(value: str) -> bool:
@@ -433,11 +453,19 @@ class ClockVisitor(ast.NodeVisitor):
         if isinstance(node, ast.Name):
             return self.aliases.get(node.id, "")
         if isinstance(node, ast.Attribute):
-            # Qualify each conditional alternative separately: appending the
-            # attribute to the merged string would lose the member names.
-            return AMBIGUOUS.join(
-                f"{alternative}.{node.attr}"
-                for alternative in _alternatives(self.qualified(node.value))
+            path = _dotted(node)
+            recorded = self.aliases.get(path) if path is not None else None
+            # An attribute an assignment recorded holds what was stored in it,
+            # alternatives included; otherwise qualify each conditional
+            # alternative separately, because appending the attribute to the
+            # merged string would lose the member names.
+            return (
+                recorded
+                if recorded is not None
+                else AMBIGUOUS.join(
+                    f"{alternative}.{node.attr}"
+                    for alternative in _alternatives(self.qualified(node.value))
+                )
             )
         if isinstance(node, ast.IfExp):
             # A conditional expression selects its callable the same way an if
@@ -465,6 +493,10 @@ class ClockVisitor(ast.NodeVisitor):
         if isinstance(node, ast.Name):
             yield from _alternatives(self.aliases.get(node.id, ""))
         elif isinstance(node, ast.Attribute):
+            path = _dotted(node)
+            if path is not None and path in self.aliases:
+                yield from _alternatives(self.aliases[path])
+                return
             for base in self.possible_names(node.value):
                 yield f"{base}.{node.attr}"
         elif isinstance(node, ast.IfExp):
@@ -577,17 +609,33 @@ class ClockVisitor(ast.NodeVisitor):
             return result
         if isinstance(target, ast.Starred):
             return self.bindings(target.value)
+        if isinstance(target, ast.Attribute):
+            # An attribute assignment records what the attribute holds, so a
+            # call through it resolves the stored callable.
+            path = _dotted(target)
+            if path is not None:
+                captured = self.captured_elements.get(id(value)) if value is not None else None
+                return {path: captured if captured is not None else self.qualified(value)}
+            # A target that is not a plain name-and-attribute chain stays
+            # untracked.
         self.visit(target)
         return {}
 
     def bind(self, target: ast.expr, value: ast.expr | None = None) -> None:
         self.aliases.update(self.bindings(target, value))
+        if isinstance(target, ast.Name):
+            # Rebinding a holder discards the attribute aliases read through
+            # it: the new object does not hold the old one's attributes.
+            for key in [key for key in self.aliases if key.startswith(f"{target.id}.")]:
+                del self.aliases[key]
 
     def visit_Name(self, node: ast.Name) -> None:
         if isinstance(node.ctx, (ast.Store, ast.Del)):
             self.aliases[node.id] = ""
             self.aliases[GENERATOR_KEY + node.id] = ""
             self.aliases[CALLABLE_KEY + node.id] = ""
+            for key in [key for key in self.aliases if key.startswith(f"{node.id}.")]:
+                del self.aliases[key]
             return
         for held in _alternatives(self.aliases.get(CALLABLE_KEY + node.id, "")):
             if held:
