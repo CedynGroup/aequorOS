@@ -2,6 +2,7 @@
 import "@testing-library/jest-dom/vitest";
 import { afterAll, afterEach, beforeAll, expect, it } from "vitest";
 import { cleanup, render, waitFor } from "@testing-library/react";
+import { useEffect } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { SessionProvider } from "next-auth/react";
 import {
@@ -239,7 +240,12 @@ function serveCapabilities(
 let captured: ModuleScope | undefined;
 
 function ScopeCapture() {
-  captured = useBankContext().moduleScope;
+  const { moduleScope } = useBankContext();
+  // The capture runs in an effect, not in render: reading the scope is a side
+  // effect the React rules keep out of the component body.
+  useEffect(() => {
+    captured = moduleScope;
+  }, [moduleScope]);
   return null;
 }
 
