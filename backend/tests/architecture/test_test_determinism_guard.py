@@ -1666,6 +1666,18 @@ def test_a_non_clock_record_keeps_its_attribute_accepted() -> None:
     assert guard.clock_findings(source).reads == []
 
 
+def test_deleting_an_override_restores_the_holder() -> None:
+    """Deleting an attribute override drops the record the override made."""
+    source = (
+        "import time\n"
+        "def test_deleted_override():\n"
+        "    obj.clock = time.time\n"
+        "    del obj.clock\n"
+        "    obj.clock()\n"
+    )
+    assert guard.clock_findings(source).reads == []
+
+
 def test_postponed_annotation_scopes_do_not_crash_the_guard() -> None:
     """A lambda inside a postponed annotation has no symtable scope to find."""
     source = (

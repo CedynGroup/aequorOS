@@ -702,6 +702,17 @@ class ClockVisitor(ast.NodeVisitor):
         for path in _target_paths(target):
             self._discard_holder_records(path)
 
+    def visit_Delete(self, node: ast.Delete) -> None:
+        for target in node.targets:
+            path = _dotted(target)
+            if path is None:
+                self.visit(target)
+                continue
+            # Deleting an attribute restores the holder's underlying member;
+            # the record described only the deleted override.
+            self.aliases.pop(path, None)
+            self._discard_holder_records(path)
+
     def visit_Name(self, node: ast.Name) -> None:
         if isinstance(node.ctx, (ast.Store, ast.Del)):
             self.aliases[node.id] = ""
