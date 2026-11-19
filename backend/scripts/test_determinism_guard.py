@@ -456,12 +456,14 @@ class ClockVisitor(ast.NodeVisitor):
             path = _dotted(node)
             recorded = self.aliases.get(path) if path is not None else None
             # An attribute an assignment recorded holds what was stored in it,
-            # alternatives included; otherwise qualify each conditional
-            # alternative separately, because appending the attribute to the
-            # merged string would lose the member names.
+            # alternatives included, unless every path left it without a clock
+            # value: an empty record is no information, and the read falls
+            # back to the composed member path. Composing otherwise qualifies
+            # each conditional alternative separately, because appending the
+            # attribute to the merged string would lose the member names.
             return (
                 recorded
-                if recorded is not None
+                if recorded
                 else AMBIGUOUS.join(
                     f"{alternative}.{node.attr}"
                     for alternative in _alternatives(self.qualified(node.value))
@@ -494,8 +496,11 @@ class ClockVisitor(ast.NodeVisitor):
             yield from _alternatives(self.aliases.get(node.id, ""))
         elif isinstance(node, ast.Attribute):
             path = _dotted(node)
-            if path is not None and path in self.aliases:
-                yield from _alternatives(self.aliases[path])
+            recorded = self.aliases.get(path) if path is not None else None
+            if recorded:
+                # A record without a clock value is no information; the
+                # composed member path decides below.
+                yield from _alternatives(recorded)
                 return
             for base in self.possible_names(node.value):
                 yield f"{base}.{node.attr}"
@@ -614,8 +619,9 @@ class ClockVisitor(ast.NodeVisitor):
             # call through it resolves the stored callable.
             path = _dotted(target)
             if path is not None:
+                resolved = "" if value is None else self.qualified(value)
                 captured = self.captured_elements.get(id(value)) if value is not None else None
-                return {path: captured if captured is not None else self.qualified(value)}
+                return {path: captured if captured is not None else resolved}
             # A target that is not a plain name-and-attribute chain stays
             # untracked.
         self.visit(target)
@@ -623,10 +629,16 @@ class ClockVisitor(ast.NodeVisitor):
 
     def bind(self, target: ast.expr, value: ast.expr | None = None) -> None:
         self.aliases.update(self.bindings(target, value))
-        if isinstance(target, ast.Name):
-            # Rebinding a holder discards the attribute aliases read through
-            # it: the new object does not hold the old one's attributes.
-            for key in [key for key in self.aliases if key.startswith(f"{target.id}.")]:
+        # Rebinding a holder discards the attribute aliases read through it:
+        # the new object does not hold the old one's attributes. Tuple leaves
+        # rebind their names the same way, and a replaced attribute path
+        # clears the deeper attributes the old object held.
+        for name in _target_names(target):
+            for key in [key for key in self.aliases if key.startswith(f"{name}.")]:
+                del self.aliases[key]
+        path = _dotted(target)
+        if path is not None:
+            for key in [key for key in self.aliases if key.startswith(f"{path}.")]:
                 del self.aliases[key]
 
     def visit_Name(self, node: ast.Name) -> None:

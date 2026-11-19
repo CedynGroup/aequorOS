@@ -1194,6 +1194,14 @@ UNFROZEN_READS = [
     "    self.clock = clock\n"
     "    reader = self.clock\n"
     "    reader()\n",
+    # A branch that replaces a clock member's attribute without covering the
+    # other path leaves the member itself readable: the empty record is no
+    # information, and the composed member path decides.
+    "import time\n"
+    "def test_branch_join_keeps_member_fallback(flag):\n"
+    "    if flag:\n"
+    "        time.time = lambda: 0\n"
+    "    time.time()\n",
 ]
 
 #: The same reads are accepted once the clock is frozen at function, class or
@@ -1532,6 +1540,32 @@ def test_rebinding_the_holder_clears_its_attribute_aliases() -> None:
         "    obj.now = time.time\n"
         "    obj = Fake()\n"
         "    obj.now()\n"
+    )
+    assert guard.clock_findings(source).reads == []
+
+
+def test_unpacking_rebind_clears_holder_attributes() -> None:
+    """A tuple leaf that rebinds the holder clears the attributes it held."""
+    source = (
+        "import time\n"
+        "from types import SimpleNamespace\n"
+        "def test_unpacking_replacement():\n"
+        "    obj.clock = time.time\n"
+        "    obj, = (SimpleNamespace(clock=lambda: 0),)\n"
+        "    obj.clock()\n"
+    )
+    assert guard.clock_findings(source).reads == []
+
+
+def test_replaced_attribute_path_clears_its_descendants() -> None:
+    """Replacing a nested holder clears the deeper attributes it held."""
+    source = (
+        "import time\n"
+        "from types import SimpleNamespace\n"
+        "def test_nested_holder_replacement():\n"
+        "    obj.child.now = time.time\n"
+        "    obj.child = SimpleNamespace(now=lambda: 0)\n"
+        "    obj.child.now()\n"
     )
     assert guard.clock_findings(source).reads == []
 
