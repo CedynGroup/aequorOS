@@ -1202,6 +1202,20 @@ UNFROZEN_READS = [
     "    if flag:\n"
     "        time.time = lambda: 0\n"
     "    time.time()\n",
+    # The same holds when only the skipped branch replaces the member, even
+    # with a non-clock callable: the untouched path still reads the member.
+    "import time\n"
+    "def test_branch_join_keeps_nonclock_record_fallback(flag):\n"
+    "    if flag:\n"
+    "        time.time = time.monotonic\n"
+    "    time.time()\n",
+    # Unpacking binds each leaf in assignment order, so a record a later
+    # leaf assigns survives the holder an earlier leaf replaced.
+    "import time\n"
+    "from types import SimpleNamespace\n"
+    "def test_unpacking_binds_in_assignment_order():\n"
+    "    obj, obj.clock = SimpleNamespace(), time.time\n"
+    "    obj.clock()\n",
 ]
 
 #: The same reads are accepted once the clock is frozen at function, class or
@@ -1566,6 +1580,31 @@ def test_replaced_attribute_path_clears_its_descendants() -> None:
         "    obj.child.now = time.time\n"
         "    obj.child = SimpleNamespace(now=lambda: 0)\n"
         "    obj.child.now()\n"
+    )
+    assert guard.clock_findings(source).reads == []
+
+
+def test_unpacking_an_attribute_leaf_clears_its_descendants() -> None:
+    """An unpacking leaf that is itself an attribute replaces that object."""
+    source = (
+        "import time\n"
+        "from types import SimpleNamespace\n"
+        "def test_unpacking_attribute_leaf():\n"
+        "    obj.child.clock = time.time\n"
+        "    obj.child, = (SimpleNamespace(clock=lambda: 0),)\n"
+        "    obj.child.clock()\n"
+    )
+    assert guard.clock_findings(source).reads == []
+
+
+def test_a_local_shadow_drops_the_holder_inherited_records() -> None:
+    """A parameter shadowing a module holder does not inherit its records."""
+    source = (
+        "import time\n"
+        "from types import SimpleNamespace\n"
+        "obj.clock = time.time\n"
+        "def test_shadowed_holder(obj=SimpleNamespace(clock=lambda: 0)):\n"
+        "    obj.clock()\n"
     )
     assert guard.clock_findings(source).reads == []
 

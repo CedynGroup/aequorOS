@@ -238,6 +238,35 @@ def _target_names(target: ast.expr) -> list[str]:
     return []
 
 
+def _target_paths(target: ast.expr) -> list[str]:
+    """The names and dotted attribute paths an assignment target binds.
+
+    Unpacking leaves may themselves be attributes (``obj.child, = (...)``),
+    and rebinding one replaces the object it names just like a plain name
+    does.
+    """
+    if isinstance(target, ast.Name):
+        return [target.id]
+    if isinstance(target, ast.Attribute):
+        path = _dotted(target)
+        return [path] if path is not None else []
+    if isinstance(target, (ast.Tuple, ast.List)):
+        return [path for element in target.elts for path in _target_paths(element)]
+    if isinstance(target, ast.Starred):
+        return _target_paths(target.value)
+    return []
+
+
+def _attribute_record(key: str) -> bool:
+    """Whether an alias-map key records an object attribute (``obj.clock``).
+
+    A plain identifier never contains a dot, and the generator and callable
+    keys carry a control-character prefix, so any other dotted key is an
+    attribute record.
+    """
+    return "." in key and not key.startswith((GENERATOR_KEY, CALLABLE_KEY))
+
+
 def _aligned(
     targets: Sequence[ast.AST], values: Sequence[ast.expr]
 ) -> list[ast.expr | None] | None:
@@ -628,16 +657,26 @@ class ClockVisitor(ast.NodeVisitor):
         return {}
 
     def bind(self, target: ast.expr, value: ast.expr | None = None) -> None:
+        if isinstance(target, (ast.Tuple, ast.List)):
+            # Unpacking binds each leaf in assignment order, so a holder an
+            # earlier leaf replaces does not keep the attribute records a
+            # later leaf assigns, and the reverse order discards them.
+            aligned = (
+                _aligned(target.elts, value.elts)
+                if isinstance(value, (ast.Tuple, ast.List))
+                else None
+            )
+            for index, item in enumerate(target.elts):
+                self.bind(item, aligned[index] if aligned else None)
+            return
+        if isinstance(target, ast.Starred):
+            self.bind(target.value)
+            return
         self.aliases.update(self.bindings(target, value))
         # Rebinding a holder discards the attribute aliases read through it:
-        # the new object does not hold the old one's attributes. Tuple leaves
-        # rebind their names the same way, and a replaced attribute path
-        # clears the deeper attributes the old object held.
-        for name in _target_names(target):
-            for key in [key for key in self.aliases if key.startswith(f"{name}.")]:
-                del self.aliases[key]
-        path = _dotted(target)
-        if path is not None:
+        # the new object does not hold the old one's attributes. A rebound
+        # attribute path clears the deeper attributes the old object held.
+        for path in _target_paths(target):
             for key in [key for key in self.aliases if key.startswith(f"{path}.")]:
                 del self.aliases[key]
 
@@ -944,6 +983,10 @@ class ClockVisitor(ast.NodeVisitor):
                 else _merge_values
             )([state.get(key, "") for state in states])
             for key in keys
+            # An attribute record is valid only where every reachable path
+            # assigned it: a path without one still resolves the member
+            # through its own binding, so the record must not mask it.
+            if not _attribute_record(key) or all(key in state for state in states)
         }
 
     def _merge_states(self, states: list[dict[str, str]]) -> None:
@@ -2215,6 +2258,23 @@ class ClockVisitor(ast.NodeVisitor):
                 frozen = frozen and recorded_frozen
         return scope, frozen, captured
 
+    def _install_scope_bindings(self, table: symtable.SymbolTable, captured: bool) -> None:
+        """Seed a recorded body's scope with its locals and globals."""
+        for symbol in table.get_symbols():
+            name = symbol.get_name()
+            if symbol.is_local():
+                self.aliases[name] = ""
+                self.aliases[GENERATOR_KEY + name] = ""
+                self.aliases[CALLABLE_KEY + name] = ""
+                for key in [key for key in self.aliases if key.startswith(f"{name}.")]:
+                    # A local shadowing a holder is another object; the
+                    # enclosing holder's attribute records do not carry over.
+                    del self.aliases[key]
+            elif symbol.is_global() and not (captured and name in self.aliases):
+                # A captured scope already holds the module bindings at the
+                # point the body may run.
+                self.aliases[name] = self.module_aliases.get(name, "")
+
     def _scan_function(
         self,
         node: ast.AST,
@@ -2237,16 +2297,7 @@ class ClockVisitor(ast.NodeVisitor):
         # A later scan of the same body replaces the reads of this one.
         outer_reads, self.reads = self.reads, []
         self.aliases = scope.copy()
-        for symbol in table.get_symbols():
-            name = symbol.get_name()
-            if symbol.is_local():
-                self.aliases[name] = ""
-                self.aliases[GENERATOR_KEY + name] = ""
-                self.aliases[CALLABLE_KEY + name] = ""
-            elif symbol.is_global() and not (captured and name in self.aliases):
-                # A captured scope already holds the module bindings at the
-                # point the body may run.
-                self.aliases[name] = self.module_aliases.get(name, "")
+        self._install_scope_bindings(table, captured)
         self.aliases.update(self.default_bindings.get(id(node), {}))
         self.enclosing = self.aliases
         self.return_states = []
