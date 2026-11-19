@@ -233,7 +233,9 @@ jobs:
       # parity tests read them), so a root JavaScript lockfile-only or
       # generated-client-only change no longer costs a Postgres run. The
       # architecture guards also read EVERY workflow and CI script, so any
-      # change under .github/ runs them. The client freshness check needs both.
+      # change under .github/ runs them, and the feature-map reference check
+      # also reads the console and marketing-site pages and components and
+      # docs/feature_map.md. The client freshness check needs both.
       - name: Detect whether this pull request touches the risk service
         id: backend
         env:
@@ -247,7 +249,7 @@ jobs:
           PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
         run: >-
           .github/scripts/changed_area.sh guards
-          '^(backend/|mise\.toml$|\.github/)'
+          '^((backend|console|frontend|docs|packages|deploy|\.agents|\.github)/|mise\.toml$)'
       - name: Detect whether this pull request touches the generated API client
         id: api_client
         env:
