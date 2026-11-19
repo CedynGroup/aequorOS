@@ -267,6 +267,21 @@ def _attribute_record(key: str) -> bool:
     return "." in key and not key.startswith((GENERATOR_KEY, CALLABLE_KEY))
 
 
+def _dotted_fallback(state: dict[str, str], path: str) -> str:
+    """The member a state without a record for ``path`` still resolves.
+
+    Mirrors the composed qualification: each prefix resolves through its own
+    record when the state holds one, otherwise through its binding.
+    """
+    head, _, tail = path.rpartition(".")
+    if not head:
+        return ""
+    base = state.get(head, "")
+    if not base and _attribute_record(head):
+        base = _dotted_fallback(state, head)
+    return AMBIGUOUS.join(f"{alternative}.{tail}" for alternative in _alternatives(base))
+
+
 def _aligned(
     targets: Sequence[ast.AST], values: Sequence[ast.expr]
 ) -> list[ast.expr | None] | None:
@@ -610,15 +625,18 @@ class ClockVisitor(ast.NodeVisitor):
 
     def visit_Import(self, node: ast.Import) -> None:
         for alias in node.names:
-            self.aliases[alias.asname or alias.name.split(".")[0]] = (
-                alias.name if alias.asname else alias.name.split(".")[0]
-            )
+            name = alias.asname or alias.name.split(".")[0]
+            self.aliases[name] = alias.name if alias.asname else alias.name.split(".")[0]
+            # An import binds a fresh module object; the old holder's
+            # attribute records do not carry over.
+            self._discard_holder_records(name)
 
     def visit_ImportFrom(self, node: ast.ImportFrom) -> None:
         for alias in node.names:
             self.aliases[alias.asname or alias.name] = (
                 f"{node.module}.{alias.name}" if node.level == 0 else ""
             )
+            self._discard_holder_records(alias.asname or alias.name)
 
     def bindings(self, target: ast.expr, value: ast.expr | None = None) -> dict[str, str]:
         if isinstance(target, ast.Name):
@@ -656,6 +674,11 @@ class ClockVisitor(ast.NodeVisitor):
         self.visit(target)
         return {}
 
+    def _discard_holder_records(self, name: str) -> None:
+        """Drop the attribute records a rebound holder no longer holds."""
+        for key in [key for key in self.aliases if key.startswith(f"{name}.")]:
+            del self.aliases[key]
+
     def bind(self, target: ast.expr, value: ast.expr | None = None) -> None:
         if isinstance(target, (ast.Tuple, ast.List)):
             # Unpacking binds each leaf in assignment order, so a holder an
@@ -677,16 +700,14 @@ class ClockVisitor(ast.NodeVisitor):
         # the new object does not hold the old one's attributes. A rebound
         # attribute path clears the deeper attributes the old object held.
         for path in _target_paths(target):
-            for key in [key for key in self.aliases if key.startswith(f"{path}.")]:
-                del self.aliases[key]
+            self._discard_holder_records(path)
 
     def visit_Name(self, node: ast.Name) -> None:
         if isinstance(node.ctx, (ast.Store, ast.Del)):
             self.aliases[node.id] = ""
             self.aliases[GENERATOR_KEY + node.id] = ""
             self.aliases[CALLABLE_KEY + node.id] = ""
-            for key in [key for key in self.aliases if key.startswith(f"{node.id}.")]:
-                del self.aliases[key]
+            self._discard_holder_records(node.id)
             return
         for held in _alternatives(self.aliases.get(CALLABLE_KEY + node.id, "")):
             if held:
@@ -745,6 +766,10 @@ class ClockVisitor(ast.NodeVisitor):
         for name in self._foreign_names(callable_id):
             for key in (name, GENERATOR_KEY + name, CALLABLE_KEY + name):
                 current.pop(key, None)
+            for key in [key for key in current if key.startswith(f"{name}.")]:
+                # The caller's attribute records for a foreign holder do not
+                # describe the callee's own binding of that name.
+                del current[key]
         self.callable_scopes[callable_id] = self._merged([known, current] if known else [current])
         # The body runs under the freeze active at the reference, and under a
         # freeze only if every reference was under one.
@@ -907,6 +932,13 @@ class ClockVisitor(ast.NodeVisitor):
             self.bind(target, node.value)
             if isinstance(target, ast.Name):
                 self.aliases[target.id] = name
+            else:
+                # The right-hand side was captured before any earlier target
+                # rebound its names; an attribute target records that value,
+                # not a re-resolution through the rebound alias.
+                path = _dotted(target)
+                if path is not None:
+                    self.aliases[path] = name
             self._hold_generator(target, node.value, held, held_callable)
         self.captured_elements.clear()
         self.captured_generators.clear()
@@ -970,24 +1002,31 @@ class ClockVisitor(ast.NodeVisitor):
         if node.name is not None:
             self.aliases[node.name] = ""
 
-    @staticmethod
-    def _merged(states: list[dict[str, str]]) -> dict[str, str]:
+    def _merged(self, states: list[dict[str, str]]) -> dict[str, str]:
         """The union of the bindings the reachable ``states`` may hold."""
         keys: set[str] = set()
         for state in states:
             keys.update(state)
-        return {
-            key: (
+        merged: dict[str, str] = {}
+        for key in keys:
+            if _attribute_record(key) and any(key not in state for state in states):
+                # A path without the record still resolves the member through
+                # its own binding: merge the record with each missing path's
+                # composed fallback instead of dropping it, so neither the
+                # recorded clock nor the untouched member escapes the guard.
+                merged[key] = _merge_values(
+                    [
+                        state[key] if key in state else _dotted_fallback(state, key)
+                        for state in states
+                    ]
+                )
+                continue
+            merged[key] = (
                 _merge_generators
                 if key.startswith((GENERATOR_KEY, CALLABLE_KEY))
                 else _merge_values
             )([state.get(key, "") for state in states])
-            for key in keys
-            # An attribute record is valid only where every reachable path
-            # assigned it: a path without one still resolves the member
-            # through its own binding, so the record must not mask it.
-            if not _attribute_record(key) or all(key in state for state in states)
-        }
+        return merged
 
     def _merge_states(self, states: list[dict[str, str]]) -> None:
         """Rebuild ``self.aliases`` as the union of the reachable path states.
@@ -2266,10 +2305,9 @@ class ClockVisitor(ast.NodeVisitor):
                 self.aliases[name] = ""
                 self.aliases[GENERATOR_KEY + name] = ""
                 self.aliases[CALLABLE_KEY + name] = ""
-                for key in [key for key in self.aliases if key.startswith(f"{name}.")]:
-                    # A local shadowing a holder is another object; the
-                    # enclosing holder's attribute records do not carry over.
-                    del self.aliases[key]
+                # A local shadowing a holder is another object; the
+                # enclosing holder's attribute records do not carry over.
+                self._discard_holder_records(name)
             elif symbol.is_global() and not (captured and name in self.aliases):
                 # A captured scope already holds the module bindings at the
                 # point the body may run.

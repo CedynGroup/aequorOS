@@ -1216,6 +1216,41 @@ UNFROZEN_READS = [
     "def test_unpacking_binds_in_assignment_order():\n"
     "    obj, obj.clock = SimpleNamespace(), time.time\n"
     "    obj.clock()\n",
+    # A chained assignment captures the right-hand side before any target
+    # rebinds, so an attribute target records that value, not a
+    # re-resolution through the rebound alias.
+    "import time as clock\n"
+    "clock = holder.read = clock.time\n"
+    "def test_chained_target_uses_captured_rhs():\n"
+    "    holder.read()\n",
+    # A record assigned on only one branch merges with the other branch's
+    # composed fallback: the recorded path reads the wall clock and the
+    # untouched member path stays resolvable.
+    "import time\n"
+    "def test_single_branch_record(obj, flag):\n"
+    "    if flag:\n"
+    "        obj.clock = time.time\n"
+    "    obj.clock()\n",
+    # A caller's attribute records for a holder the callee sees as a global
+    # do not describe the callee's binding: the callee resolves the member
+    # through the module.
+    "import time as clock\n"
+    "from time import monotonic as reader\n"
+    "def read():\n"
+    "    return clock.time()\n"
+    "def test_foreign_holder():\n"
+    "    clock = SimpleNamespace()\n"
+    "    clock.time = reader\n"
+    "    read()\n",
+    # An import binds a fresh module object, so the old holder's attribute
+    # records do not mask the member the import exposes.
+    "import time\n"
+    "from types import SimpleNamespace\n"
+    "def test_import_replaces_holder():\n"
+    "    clock = SimpleNamespace()\n"
+    "    clock.time = time.monotonic\n"
+    "    import time as clock\n"
+    "    clock.time()\n",
 ]
 
 #: The same reads are accepted once the clock is frozen at function, class or
