@@ -42,6 +42,8 @@ mise run risk-service:test             # bounded unit-only feedback; CI owns ser
 mise run risk-service:test --lf        # serial cached unit failures only
 mise run risk-service:openapi-client   # regenerate packages/risk-service-api after an API change
 mise run risk-service:api-fresh        # prove the generated client is fresh (also the pre-push hook)
+mise run risk-service:route-authorization         # regenerate backend/tests/fixtures/route_authorization.json after a route change
+mise run risk-service:route-authorization-fresh   # prove the committed route authorization fixture is fresh
 pnpm --filter @aequoros/dashboard typecheck   # also: lint, test, build, e2e
 pnpm --filter @aequoros/console typecheck     # also: lint, test, build
 ```

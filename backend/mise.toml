@@ -115,6 +115,14 @@ echo "TypeScript client generated successfully."
 description = "Run Alembic migrations; credentials: docs/tamper_evident_records.md#required-deployment-follow-up"
 run = "uv run alembic upgrade head"
 
+[tasks."risk-service:route-authorization"]
+description = "Regenerate tests/fixtures/route_authorization.json from the registered routes"
+run = "uv run python -m scripts.route_authorization_dump"
+
+[tasks."risk-service:route-authorization-fresh"]
+description = "Fail when the committed route authorization fixture no longer matches the registered routes"
+run = "uv run python -m scripts.route_authorization_dump --check"
+
 [tasks."risk-service:bootstrap-db"]
 description = "Create local DB roles, run migrations, and grant app privileges"
 run = "./scripts/bootstrap_db.sh"

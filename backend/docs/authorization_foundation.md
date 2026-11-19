@@ -672,7 +672,13 @@ permission-matrix, IDOR, invalidation and behavioral API tests: those own the
 actual allow/deny decisions, bank/assignment constraints and export authority.
 
 When a route changes, inspect its registered dependency tree and actual handler/
-service checks before editing the catalog. Preserve current access unless a
+service checks before regenerating the catalog with
+`mise run risk-service:route-authorization` (the generator in
+`scripts/route_authorization_dump.py`; `mise run
+risk-service:route-authorization-fresh` and the CI freshness check fail when the
+committed copy no longer matches the registered routes). Review the regenerated
+diff line by line and commit it with the route change; never edit the fixture by
+hand. Preserve current access unless a
 separate access decision authorizes a change. An unknown or ambiguous rule is a
 policy decision to escalate, not a reason to add authentication, a public entry
 or a known-gap suppression. Never generate permissive declarations from absent
