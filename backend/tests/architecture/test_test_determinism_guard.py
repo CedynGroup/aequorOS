@@ -1251,6 +1251,15 @@ UNFROZEN_READS = [
     "    clock.time = time.monotonic\n"
     "    import time as clock\n"
     "    clock.time()\n",
+    # A capture pattern binds the matched subject, so the subject replaces
+    # whatever object the name held and its records do not carry over.
+    "import time\n"
+    "from types import SimpleNamespace\n"
+    "holder = SimpleNamespace()\n"
+    "holder.time = time.monotonic\n"
+    "match time:\n"
+    "    case holder:\n"
+    "        holder.time()\n",
 ]
 
 #: The same reads are accepted once the clock is frozen at function, class or
@@ -1640,6 +1649,19 @@ def test_a_local_shadow_drops_the_holder_inherited_records() -> None:
         "obj.clock = time.time\n"
         "def test_shadowed_holder(obj=SimpleNamespace(clock=lambda: 0)):\n"
         "    obj.clock()\n"
+    )
+    assert guard.clock_findings(source).reads == []
+
+
+def test_a_non_clock_record_keeps_its_attribute_accepted() -> None:
+    """An attribute holding a non-clock callable records no clock read."""
+    source = (
+        "import time\n"
+        "from types import SimpleNamespace\n"
+        "def test_monotonic_attribute():\n"
+        "    holder = SimpleNamespace()\n"
+        "    holder.time = time.monotonic\n"
+        "    holder.time()\n"
     )
     assert guard.clock_findings(source).reads == []
 

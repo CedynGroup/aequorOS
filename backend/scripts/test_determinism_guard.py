@@ -997,10 +997,12 @@ class ClockVisitor(ast.NodeVisitor):
             self.visit(node.type)
         if node.name is not None:
             self.aliases[node.name] = ""
+            self._discard_holder_records(node.name)
         for statement in node.body:
             self.visit(statement)
         if node.name is not None:
             self.aliases[node.name] = ""
+            self._discard_holder_records(node.name)
 
     def _merged(self, states: list[dict[str, str]]) -> dict[str, str]:
         """The union of the bindings the reachable ``states`` may hold."""
@@ -1606,8 +1608,11 @@ class ClockVisitor(ast.NodeVisitor):
         if isinstance(pattern, ast.MatchAs):
             if pattern.name is not None:
                 # A capture, bare or with ``as``, holds the subject itself,
-                # including a generator it is.
+                # including a generator it is. The captured subject replaces
+                # whatever object the name held, so its attribute records do
+                # not carry over.
                 self.aliases[pattern.name] = subject_value
+                self._discard_holder_records(pattern.name)
                 self.aliases[GENERATOR_KEY + pattern.name] = (
                     self.captured_generators.get(id(subject), "") if subject is not None else ""
                 )
@@ -1647,6 +1652,7 @@ class ClockVisitor(ast.NodeVisitor):
         for name in names:
             if name is not None:
                 self.aliases[name] = ""
+                self._discard_holder_records(name)
         for item in nested:
             self._bind_pattern_captures(item, "", None)
 
@@ -1809,6 +1815,7 @@ class ClockVisitor(ast.NodeVisitor):
         if _runs_later(node):
             self.deferred_callables.add(id(node))
         self.aliases[node.name] = ""
+        self._discard_holder_records(node.name)
         self.aliases[GENERATOR_KEY + node.name] = ""
         self.aliases[CALLABLE_KEY + node.name] = str(id(node))
 
@@ -1831,6 +1838,7 @@ class ClockVisitor(ast.NodeVisitor):
     def _bind_definition(self, name: str, function: str = "") -> None:
         """A definition replaces whatever binding its name held."""
         self.aliases[name] = ""
+        self._discard_holder_records(name)
         self.aliases[GENERATOR_KEY + name] = ""
         self.aliases[CALLABLE_KEY + name] = function
 
@@ -1887,6 +1895,7 @@ class ClockVisitor(ast.NodeVisitor):
         self.table, self.aliases = previous_table, previous_aliases
         self.frozen, self.deferred_frozen = previous_frozen, previous_deferred
         self.aliases[node.name] = ""
+        self._discard_holder_records(node.name)
 
     def _replay_class_body(self, node: ast.ClassDef) -> None:
         """Run a class body again, silently, whenever its enclosing code reruns.
