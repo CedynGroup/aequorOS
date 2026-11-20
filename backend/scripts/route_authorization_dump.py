@@ -63,8 +63,14 @@ STANDARD_BASIS: Final[dict[str, str]] = {
 }
 
 class _PinnedDependencyGroup(TypedDict, total=False):
-    """A dependency group whose name, basis or membership was hand-curated."""
+    """A dependency group whose name, basis or membership was hand-curated.
 
+    ``dependencies`` records the reviewed dependency set the group's routes
+    registered when the pin was last reviewed; generation fails when a live
+    route drifts from it, so a gate lost on a pinned route is an explicit pin
+    update, never a silent regeneration."""
+
+    dependencies: list[str]
     basis: str
     references: list[str]
     routes: list[PinnedRoute]
@@ -86,8 +92,69 @@ class _PinnedHandlerRule(TypedDict):
 #: ``basis`` pins a hand-written sentence (the standard basis is used when
 #: None); ``references`` pins hand-written references (they are derived from
 #: the dependency list when None).
+#: Reviewed dependency sets, recorded exactly as the committed catalog declares
+#: them. Dependency pins reference these so a live registration that drifts
+#: from the reviewed set fails generation instead of regenerating silently.
+_TENANT_SCOPED_MUTATION_DEPENDENCIES: Final[tuple[str, ...]] = (
+    "app.api.deps:get_current_principal",
+    "app.api.deps:get_scoped_mutation_tenant_context",
+    "app.api.deps:get_tenant_context",
+    "app.api.deps:get_tenant_db_session",
+    "app.api.deps:resolve_tenant_bank",
+    "fastapi.security.http:HTTPBearer",
+)
+_TENANT_SESSION_DEPENDENCIES: Final[tuple[str, ...]] = (
+    "app.api.deps:get_current_principal",
+    "app.api.deps:get_tenant_context",
+    "app.api.deps:get_tenant_db_session",
+    "fastapi.security.http:HTTPBearer",
+)
+_TENANT_CONTEXT_ONLY_DEPENDENCIES: Final[tuple[str, ...]] = (
+    "app.api.deps:get_current_principal",
+    "app.api.deps:get_tenant_context",
+    "fastapi.security.http:HTTPBearer",
+)
+_TENANT_JOBS_DEPENDENCIES: Final[tuple[str, ...]] = (
+    "app.api.deps:get_current_principal",
+    "app.api.deps:get_tenant_context",
+    "app.api.deps:get_tenant_db_session",
+    "app.api.deps:get_tenant_job_visibility",
+    "fastapi.security.http:HTTPBearer",
+)
+_TENANT_NOTIFICATIONS_DEPENDENCIES: Final[tuple[str, ...]] = (
+    "app.api.deps:get_current_principal",
+    "app.api.deps:get_scoped_mutation_tenant_context",
+    "app.api.deps:get_tenant_context",
+    "app.api.deps:get_tenant_db_session",
+    "fastapi.security.http:HTTPBearer",
+)
+_TENANT_MAPPING_CONFIG_DEPENDENCIES: Final[tuple[str, ...]] = (
+    "app.api.deps:get_current_principal",
+    "app.api.deps:get_scoped_mutation_tenant_context",
+    "app.api.deps:get_tenant_context",
+    "app.api.deps:get_tenant_db_session",
+    "app.api.deps:resolve_tenant_bank",
+    "app.data_engine.api.ingest_data:require_configure_access",
+    "fastapi.security.http:HTTPBearer",
+)
+
+
+def _tenant_storage_download_dependencies(permission: str) -> list[str]:
+    """The reviewed dependency set of the storage-backed single-route pins."""
+    return [
+        "app.api.deps:get_current_principal",
+        "app.api.deps:get_tenant_context",
+        "app.api.deps:get_tenant_db_session",
+        f"app.api.deps:{permission}",
+        "app.api.deps:resolve_tenant_bank",
+        "app.storage.deps:get_http_storage",
+        "fastapi.security.http:HTTPBearer",
+    ]
+
+
 PINNED: Final[dict[str, _PinnedDependencyGroup]] = {
     "tenant-dependencies-filing-templates-scoped": {
+        "dependencies": list(_TENANT_SCOPED_MUTATION_DEPENDENCIES),
         "basis": (
             "The filing review-chain template writes require scoped mutation tenancy; "
             "the service layer enforces the complete REG/restricted sentence (configure "
@@ -122,6 +189,7 @@ PINNED: Final[dict[str, _PinnedDependencyGroup]] = {
         ],
     },
     "tenant-dependencies-liq-scoped-configure": {
+        "dependencies": list(_TENANT_SCOPED_MUTATION_DEPENDENCIES),
         "basis": (
             "LIQ and CREDIT configuration writes require scoped mutation tenancy; the "
             "service layer enforces the complete configure binding."
@@ -172,6 +240,7 @@ PINNED: Final[dict[str, _PinnedDependencyGroup]] = {
         ],
     },
     "tenant-taxonomy-authenticated": {
+        "dependencies": list(_TENANT_CONTEXT_ONLY_DEPENDENCIES),
         "basis": (
             "The separately authorized taxonomy authentication change is landed. These "
             "exact static-vocabulary GETs require the existing Tenant authentication "
@@ -199,6 +268,7 @@ PINNED: Final[dict[str, _PinnedDependencyGroup]] = {
         ],
     },
     "tenant-dependencies-ee37d1b6984c": {
+        "dependencies": list(_TENANT_MAPPING_CONFIG_DEPENDENCIES),
         "basis": (
             "Existing tenant authentication boundary and exact registered dependency calls "
             "listed here. The configure gate narrows mapping-config creation further at "
@@ -226,6 +296,7 @@ PINNED: Final[dict[str, _PinnedDependencyGroup]] = {
         ],
     },
     "tenant-dependencies-278ad5b308ca": {
+        "dependencies": _tenant_storage_download_dependencies("require_package_edit"),
         "routes": [
             (
                 "tenant",
@@ -236,6 +307,7 @@ PINNED: Final[dict[str, _PinnedDependencyGroup]] = {
         ],
     },
     "tenant-dependencies-6c6852407fad": {
+        "dependencies": _tenant_storage_download_dependencies("require_icaap_edit"),
         "routes": [
             (
                 "tenant",
@@ -246,6 +318,7 @@ PINNED: Final[dict[str, _PinnedDependencyGroup]] = {
         ],
     },
     "tenant-dependencies-75a23b39c9be": {
+        "dependencies": _tenant_storage_download_dependencies("require_icaap_view"),
         "routes": [
             (
                 "tenant",
@@ -256,6 +329,7 @@ PINNED: Final[dict[str, _PinnedDependencyGroup]] = {
         ],
     },
     "tenant-dependencies-793495930b9a": {
+        "dependencies": list(_TENANT_NOTIFICATIONS_DEPENDENCIES),
         "routes": [
             (
                 "tenant",
@@ -272,12 +346,14 @@ PINNED: Final[dict[str, _PinnedDependencyGroup]] = {
         ],
     },
     "tenant-dependencies-ceca96895d81": {
+        "dependencies": list(_TENANT_JOBS_DEPENDENCIES),
         "routes": [
             ("tenant", "GET", "/api/v1/jobs", "app.features.track_jobs:list_jobs"),
             ("tenant", "GET", "/api/v1/jobs/{job_id}", "app.features.track_jobs:get_job"),
         ],
     },
     "tenant-dependencies-e6bc73594197": {
+        "dependencies": _tenant_storage_download_dependencies("require_icaap_create"),
         "routes": [
             (
                 "tenant",
@@ -288,6 +364,7 @@ PINNED: Final[dict[str, _PinnedDependencyGroup]] = {
         ],
     },
     "tenant-dependencies-7a78c6513911": {
+        "dependencies": _tenant_storage_download_dependencies("require_icaap_view"),
         "routes": [
             (
                 "tenant",
@@ -862,13 +939,24 @@ def _uniform_dependencies(name: str, rows: list[RegisteredEndpoint]) -> list[str
 def _pinned_dependency_rules(
     by_key: dict[RouteKey, RegisteredEndpoint],
 ) -> tuple[dict[str, _Rule], set[RouteKey]]:
-    """Pinned dependency groups: routes, basis and name from the pin, the
-    dependency list from the live registration."""
+    """Pinned dependency groups: routes, basis, name and the reviewed
+    dependency set from the pin, the live registration verified against it."""
     rules: dict[str, _Rule] = {}
     assigned: set[RouteKey] = set()
     for name, spec in PINNED.items():
         rows = _checked_rows(by_key, name, spec)
-        dependencies = _uniform_dependencies(name, rows)
+        reviewed = spec.get("dependencies")
+        if not isinstance(reviewed, list) or not reviewed:
+            raise _PinError(f"Pinned rule {name} declares no reviewed dependency set")
+        for row in rows:
+            if row.dependencies != tuple(sorted(reviewed)):
+                raise _PinError(
+                    f"Pinned rule {name} route {row.key} registers dependencies "
+                    f"{list(row.dependencies)}, but the pin records {sorted(reviewed)}. "
+                    "Review the change and update the pin's dependency set "
+                    "deliberately."
+                )
+        dependencies = sorted(reviewed)
         applications = {key[0] for key in _pinned_route_keys(name, spec)}
         if len(applications) != 1:
             raise _PinError(f"Pinned rule {name} spans applications {sorted(applications)}")

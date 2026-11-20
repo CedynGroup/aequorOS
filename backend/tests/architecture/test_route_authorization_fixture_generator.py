@@ -138,15 +138,20 @@ def test_freshness_check_reports_a_moved_route(tmp_path: Path) -> None:
     assert b"risk-service:route-authorization" in completed.stderr
 
 
-_PINNED_DEPS = ("app.api.deps:get_current_principal", "app.api.deps:require_scoped_mutation_tenant")
+
+
+def _pin_dependencies(name: str) -> tuple[str, ...]:
+    dependencies = PINNED[name].get("dependencies")
+    assert isinstance(dependencies, list) and dependencies
+    return tuple(sorted(dependencies))
 
 
 def _pinned_rows() -> tuple[
     dict[tuple[str, str, str], RegisteredEndpoint], list[tuple[str, str, str, str]]
 ]:
     """Synthetic registrations that satisfy every pinned dependency group, so
-    individual pins can be drifted in isolation. Every route of a group shares
-    one dependency set, as the committed catalog requires."""
+    individual pins can be drifted in isolation. Every route registers exactly
+    its pin's reviewed dependency set."""
     by_key: dict[tuple[str, str, str], RegisteredEndpoint] = {}
     target_routes: list[tuple[str, str, str, str]] = []
     for name, spec in PINNED.items():
@@ -158,7 +163,7 @@ def _pinned_rows() -> tuple[
             by_key[key] = RegisteredEndpoint(
                 key=key,
                 endpoint=route[3],
-                dependencies=_PINNED_DEPS,
+                dependencies=_pin_dependencies(name),
                 authentication=frozenset({route[0]}),
             )
         if name == "tenant-dependencies-liq-scoped-configure":
@@ -167,12 +172,12 @@ def _pinned_rows() -> tuple[
 
 
 def test_pinned_dependency_rules_accept_matching_registrations() -> None:
-    by_key, routes = _pinned_rows()
+    by_key, _routes = _pinned_rows()
     rules, assigned = _pinned_dependency_rules(by_key)
     name = "tenant-dependencies-liq-scoped-configure"
     assert set(rules) == set(PINNED)
     assert assigned == set(by_key)
-    assert rules[name].dependencies == list(_PINNED_DEPS)
+    assert rules[name].dependencies == list(_pin_dependencies(name))
 
 
 def test_pinned_dependency_rules_reject_a_changed_handler() -> None:
@@ -213,7 +218,29 @@ def test_pinned_dependency_rules_reject_a_drifted_dependency_set() -> None:
         dependencies=("app.api.deps:get_current_principal", "app.api.deps:new_dependency"),
         authentication=drifted.authentication,
     )
-    with pytest.raises(_PinError, match="different registered dependency sets"):
+    with pytest.raises(_PinError, match="but the pin records"):
+        _pinned_dependency_rules(by_key)
+
+
+def test_pinned_dependency_rules_reject_drift_on_a_single_route_pin() -> None:
+    """A singleton pin has no sibling route to compare against, so its own
+    reviewed dependency set is the only guard: a lost configure gate on the
+    pinned mapping-config route must fail generation, not regenerate."""
+    by_key, _routes = _pinned_rows()
+    key = next(key for key in by_key if key[2] == "/api/v1/banks/{bank_id}/mapping-configs")
+    drifted = by_key[key]
+    reduced = tuple(
+        dependency
+        for dependency in drifted.dependencies
+        if dependency != "app.data_engine.api.ingest_data:require_configure_access"
+    )
+    by_key[key] = RegisteredEndpoint(
+        key=drifted.key,
+        endpoint=drifted.endpoint,
+        dependencies=reduced,
+        authentication=drifted.authentication,
+    )
+    with pytest.raises(_PinError, match="but the pin records"):
         _pinned_dependency_rules(by_key)
 
 
