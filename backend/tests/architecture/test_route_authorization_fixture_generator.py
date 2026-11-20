@@ -10,7 +10,6 @@ registrations.
 
 from __future__ import annotations
 
-import importlib
 import json
 import os
 import subprocess
@@ -19,16 +18,17 @@ from pathlib import Path
 
 import pytest
 
-import scripts.route_authorization_dump
 from scripts.route_authorization_dump import (
     FIXTURE_PATH,
     PINNED,
+    _check_unique_keys,
     _default_rules,
     _dependency_group_name,
     _PinError,
     _pinned_dependency_rules,
     _public_rules,
     _Rule,
+    _unused_public_reviews,
 )
 from tests.fixtures.public_routes import REVIEWED_PUBLIC_ROUTES
 from tests.support.route_authorization import RegisteredEndpoint
@@ -38,16 +38,13 @@ BACKEND_ROOT = Path(__file__).parents[2]
 
 
 def _run_cli(
-    *arguments: str, extra_env: dict[str, str] | None = None
+    *arguments: str, env: dict[str, str] | None = None
 ) -> subprocess.CompletedProcess[bytes]:
-    env = dict(os.environ)
-    if extra_env is not None:
-        env.update(extra_env)
     return subprocess.run(
         [sys.executable, "-m", "scripts.route_authorization_dump", *arguments],
         capture_output=True,
         cwd=BACKEND_ROOT,
-        env=env,
+        env=dict(os.environ) if env is None else env,
         check=False,
     )
 
@@ -78,7 +75,7 @@ def test_generator_runs_without_database_environment(tmp_path: Path) -> None:
         for key, value in os.environ.items()
         if key not in {"DATABASE_URL", "TEST_DATABASE_URL"}
     }
-    completed = _run_cli("--output", str(output), extra_env=env)
+    completed = _run_cli("--output", str(output), env=env)
     assert completed.returncode == 0, completed.stderr.decode()
     assert output.read_bytes() == COMMITTED
 
@@ -89,15 +86,30 @@ def test_freshness_check_accepts_the_committed_fixture() -> None:
     assert b"matches the registered routes" in completed.stdout
 
 
+def _rule_routes(rule: dict[str, object]) -> list[object]:
+    routes = rule.get("routes")
+    assert isinstance(routes, list)
+    return routes
+
+
+def _populated_rule(catalog: dict[str, object]) -> dict[str, object]:
+    """Any rule with two routes, so one can be removed or moved regardless of
+    which pins the catalog carries as it evolves."""
+    rules = catalog["rules"]
+    assert isinstance(rules, list)
+    for item in rules:
+        if isinstance(item, dict) and len(_rule_routes(item)) >= 2:
+            return item
+    raise AssertionError("the catalog has no rule with two routes")
+
+
 def test_freshness_check_reports_a_removed_route(tmp_path: Path) -> None:
     stale = tmp_path / "route_authorization.json"
     catalog = json.loads(COMMITTED)
-    rule = next(
-        item
-        for item in catalog["rules"]
-        if item["name"] == "tenant-dependencies-filing-templates-scoped"
-    )
-    rule["routes"] = rule["routes"][1:]
+    rule = _populated_rule(catalog)
+    rule_routes = _rule_routes(rule)
+    assert len(rule_routes) >= 2
+    del rule_routes[1:]
     stale.write_bytes((json.dumps(catalog, indent=2) + "\n").encode())
 
     completed = _run_cli("--check", "--fixture", str(stale))
@@ -108,19 +120,17 @@ def test_freshness_check_reports_a_removed_route(tmp_path: Path) -> None:
 def test_freshness_check_reports_a_moved_route(tmp_path: Path) -> None:
     stale = tmp_path / "route_authorization.json"
     catalog = json.loads(COMMITTED)
-    source = next(
-        item
-        for item in catalog["rules"]
-        if item["name"] == "tenant-dependencies-filing-templates-scoped"
-    )
-    moved = source["routes"][0]
-    source["routes"] = source["routes"][1:]
-    target = next(
-        item
-        for item in catalog["rules"]
-        if item["name"] == "tenant-dependencies-85a162b4fc51"
-    )
-    target["routes"].append(moved)
+    source = _populated_rule(catalog)
+    moved = _rule_routes(source).pop(0)
+    rules = catalog["rules"]
+    assert isinstance(rules, list)
+    target: dict[str, object] | None = None
+    for item in rules:
+        if isinstance(item, dict) and item is not source and len(_rule_routes(item)) >= 1:
+            target = item
+            break
+    assert target is not None
+    _rule_routes(target).append(moved)
     stale.write_bytes((json.dumps(catalog, indent=2) + "\n").encode())
 
     completed = _run_cli("--check", "--fixture", str(stale))
@@ -231,6 +241,72 @@ def test_public_rules_reject_a_handler_outside_its_review() -> None:
     assert f"public-{review.endpoint.replace(':', '-')}" in rules
 
 
+def test_public_rules_reject_a_registered_authenticator() -> None:
+    key = ("tenant", "GET", "/openapi.json")
+    review = REVIEWED_PUBLIC_ROUTES[key]
+    wired = RegisteredEndpoint(
+        key=key,
+        endpoint=review.endpoint,
+        dependencies=(),
+        authentication=frozenset({"tenant"}),
+    )
+    with pytest.raises(_PinError, match="cannot conceal authentication wiring"):
+        _public_rules([wired])
+
+
+def test_public_rules_reject_a_merged_dependency_profile() -> None:
+    """Two reviewed routes that share a handler must not inherit each other's
+    dependencies through a union."""
+    schema = REVIEWED_PUBLIC_ROUTES[("tenant", "GET", "/openapi.json")]
+    rows = [
+        RegisteredEndpoint(
+            key=("tenant", "GET", "/openapi.json"),
+            endpoint=schema.endpoint,
+            dependencies=("fastapi.applications:FastAPI.setup.<locals>.openapi",),
+            authentication=frozenset(),
+        ),
+        RegisteredEndpoint(
+            key=("tenant", "HEAD", "/openapi.json"),
+            endpoint=schema.endpoint,
+            dependencies=(),
+            authentication=frozenset(),
+        ),
+    ]
+    with pytest.raises(_PinError, match="different registered dependency sets"):
+        _public_rules(rows)
+
+
+def _public_rows() -> list[RegisteredEndpoint]:
+    return [
+        RegisteredEndpoint(
+            key=key,
+            endpoint=review.endpoint,
+            dependencies=(),
+            authentication=frozenset(),
+        )
+        for key, review in REVIEWED_PUBLIC_ROUTES.items()
+    ]
+
+
+def test_default_rules_reject_an_ambiguous_authenticator_set() -> None:
+    """Grouping must not depend on frozenset iteration order."""
+    ambiguous = RegisteredEndpoint(
+        key=("tenant", "GET", "/api/v1/example"),
+        endpoint="app.example.api:list_example",
+        dependencies=("app.api.deps:get_current_principal",),
+        authentication=frozenset({"tenant", "operator"}),
+    )
+    with pytest.raises(_PinError, match="expected exactly one"):
+        _default_rules([ambiguous], set(), {})
+
+
+def test_unused_public_reviews_are_rejected() -> None:
+    assert _unused_public_reviews(_public_rows()) == []
+    first_key = next(iter(REVIEWED_PUBLIC_ROUTES))
+    missing = _unused_public_reviews(_public_rows()[1:])
+    assert missing == [first_key]
+
+
 def test_default_rules_refuse_to_reuse_a_pinned_dependency_group_name() -> None:
     """A new route with the pinned mapping-config dependency profile cannot
     silently join the pinned rule; generation fails until the pin is updated."""
@@ -263,11 +339,45 @@ def test_default_rules_refuse_to_reuse_a_pinned_dependency_group_name() -> None:
         _default_rules([intruder], set(), {"tenant-dependencies-ee37d1b6984c": pinned_rule})
 
 
+def test_duplicate_route_keys_are_rejected() -> None:
+    """A duplicated registration must stop generation instead of silently
+    collapsing into one row while both rows reach the grouping."""
+    row = RegisteredEndpoint(
+        key=("tenant", "GET", "/api/v1/example"),
+        endpoint="app.example.api:list_example",
+        dependencies=("app.api.deps:get_current_principal",),
+        authentication=frozenset({"tenant"}),
+    )
+    with pytest.raises(_PinError, match="appear more than once"):
+        _check_unique_keys([row, row])
+    _check_unique_keys([row])
+
+
 def test_importing_the_generator_does_not_mutate_the_environment() -> None:
-    """The environment guards belong to the run, not to the import."""
-    for name in ("RUN_INPROCESS_WORKER", "OPERATOR_DATABASE_URL", "OPERATOR_DEV_AUTH_ENABLED"):
-        os.environ.pop(name, None)
-    importlib.reload(scripts.route_authorization_dump)
-    assert "RUN_INPROCESS_WORKER" not in os.environ
-    assert "OPERATOR_DATABASE_URL" not in os.environ
-    assert "OPERATOR_DEV_AUTH_ENABLED" not in os.environ
+    """The environment guards belong to the run, not to the import. The check
+    runs in a child process with the guard keys cleared there, so neither the
+    pytest process environment nor the module bindings of the other tests are
+    touched."""
+    guards = ("RUN_INPROCESS_WORKER", "OPERATOR_DATABASE_URL", "OPERATOR_DEV_AUTH_ENABLED")
+    code = "\n".join(
+        [
+            "import os, sys",
+            "for name in ('RUN_INPROCESS_WORKER', 'OPERATOR_DATABASE_URL',",
+            "             'OPERATOR_DEV_AUTH_ENABLED'):",
+            "    os.environ.pop(name, None)",
+            "import scripts.route_authorization_dump",
+            "leaked = [name for name in ('RUN_INPROCESS_WORKER',",
+            "         'OPERATOR_DATABASE_URL', 'OPERATOR_DEV_AUTH_ENABLED')",
+            "         if name in os.environ]",
+            "assert leaked == [], leaked",
+        ]
+    )
+    env = {key: value for key, value in os.environ.items() if key not in guards}
+    completed = subprocess.run(
+        [sys.executable, "-c", code],
+        capture_output=True,
+        cwd=BACKEND_ROOT,
+        env=env,
+        check=False,
+    )
+    assert completed.returncode == 0, completed.stderr.decode()

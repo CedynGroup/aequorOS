@@ -27,7 +27,7 @@ import json
 import os
 import sys
 import tempfile
-from collections import defaultdict
+from collections import Counter, defaultdict
 from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Final, TypedDict
@@ -694,11 +694,17 @@ RULE_ORDER_PIN: Final[list[str]] = [
 
 def _pin_environment() -> None:
     """Exporting the declarations must not start background jobs or operator
-    dev wiring, and must not depend on a developer's .env (same isolation as
-    the coverage test). Called inside ``_registered`` right before the
-    application imports, so importing this module never mutates the
-    environment of the surrounding process."""
+    dev wiring, and must not depend on a developer's .env: the same guard set
+    the test session pins at import time (a hardened .env - a remote database
+    URL, TLS enforcement - must not break regeneration or the freshness
+    check). Called inside ``_registered`` right before the application
+    imports, so importing this module never mutates the environment of the
+    surrounding process."""
     os.environ["RUN_INPROCESS_WORKER"] = "0"
+    os.environ["TLS_ALLOW_PLAINTEXT"] = "1"
+    os.environ["DATABASE_URL"] = ""
+    os.environ["MIGRATION_DATABASE_URL"] = ""
+    os.environ["WORKER_DATABASE_URL"] = ""
     os.environ["OPERATOR_DATABASE_URL"] = ""
     os.environ["OPERATOR_DEV_AUTH_ENABLED"] = "0"
 
@@ -846,7 +852,7 @@ def _uniform_dependencies(name: str, rows: list[RegisteredEndpoint]) -> list[str
     drifted = [row.key for row in rows if row.dependencies != expected]
     if drifted:
         raise _PinError(
-            f"Pinned rule {name} groups routes with different registered "
+            f"Rule {name} groups routes with different registered "
             f"dependency sets (expected {list(expected)}): {drifted}. Review the "
             "registration change and update or split the pin deliberately."
         )
@@ -899,6 +905,14 @@ def _pinned_handler_rules(
     for name, spec in PINNED_HANDLER_RULES.items():
         rows = _checked_rows(by_key, name, spec)
         dependencies = _uniform_dependencies(name, rows)
+        for row in rows:
+            if row.authentication:
+                raise _PinError(
+                    f"Pinned rule {name} route {row.key} registers authenticators "
+                    f"{sorted(row.authentication)}; a handler or rejection "
+                    "declaration cannot conceal authentication wiring. Review the "
+                    "change and update the pin in this script deliberately."
+                )
         rules[name] = _Rule(
             name=name,
             kind=spec["kind"],
@@ -910,6 +924,12 @@ def _pinned_handler_rules(
         )
         assigned.update(row.key for row in rows)
     return rules, assigned
+
+
+def _unused_public_reviews(observed: list[RegisteredEndpoint]) -> list[RouteKey]:
+    """Reviewed public routes that are no longer registered."""
+    live = {row.key for row in observed}
+    return sorted(REVIEWED_PUBLIC_ROUTES.keys() - live)
 
 
 def _public_rules(observed: list[RegisteredEndpoint]) -> dict[str, _Rule]:
@@ -926,13 +946,21 @@ def _public_rules(observed: list[RegisteredEndpoint]) -> dict[str, _Rule]:
                 "review the change and update tests/fixtures/public_routes.py "
                 "deliberately."
             )
+        if row.authentication:
+            raise _PinError(
+                f"Reviewed public route {row.key} registers authenticators "
+                f"{sorted(row.authentication)}; a public declaration cannot "
+                "conceal authentication wiring. Review the change and update "
+                "tests/fixtures/public_routes.py deliberately."
+            )
         by_endpoint[review.endpoint].append(row)
     rules: dict[str, _Rule] = {}
     for endpoint, rows in by_endpoint.items():
+        name = f"public-{endpoint.replace(':', '-')}"
         review = REVIEWED_PUBLIC_ROUTES[rows[0].key]
-        dependencies = sorted({dependency for row in rows for dependency in row.dependencies})
-        rules[f"public-{endpoint.replace(':', '-')}"] = _Rule(
-            name=f"public-{endpoint.replace(':', '-')}",
+        dependencies = _uniform_dependencies(name, rows)
+        rules[name] = _Rule(
+            name=name,
             kind="public",
             basis=review.basis,
             references=[PUBLIC_ROUTES_REFERENCE, review.reference],
@@ -958,6 +986,13 @@ def _default_rules(
             raise _PinError(
                 f"Unauthenticated route {row.key} ({row.endpoint}) is neither reviewed "
                 "public nor a pinned handler/rejection rule; classify it deliberately."
+            )
+        if len(row.authentication) != 1:
+            raise _PinError(
+                f"Route {row.key} registers authenticators "
+                f"{sorted(row.authentication)}; expected exactly one. Grouping "
+                "would otherwise depend on set iteration order. Classify it "
+                "deliberately."
             )
         by_profile[(next(iter(row.authentication)), row.dependencies)].append(row)
         grouped.add(row.key)
@@ -1021,8 +1056,27 @@ def _emit_rules(rules: dict[str, _Rule]) -> list[dict[str, object]]:
     return emitted
 
 
+def _check_unique_keys(observed: list[RegisteredEndpoint]) -> None:
+    """A duplicated registration must stop generation, not silently collapse
+    into one ``by_key`` entry while both rows reach the grouping."""
+    counts = Counter(row.key for row in observed)
+    duplicates = sorted(key for key, count in counts.items() if count > 1)
+    if duplicates:
+        raise _PinError(
+            f"Registered route keys appear more than once: {duplicates}. "
+            "Review the duplicate registration deliberately."
+        )
+
+
 def build_rules(fixture: Path) -> dict[str, object]:
     observed = _registered()
+    _check_unique_keys(observed)
+    unused_reviews = _unused_public_reviews(observed)
+    if unused_reviews:
+        raise _PinError(
+            f"Reviewed public routes are no longer registered: {unused_reviews}. "
+            "Remove their reviews in tests/fixtures/public_routes.py deliberately."
+        )
     by_key = {row.key: row for row in observed}
     rules, assigned = _pinned_dependency_rules(by_key)
     handler_rules, handler_keys = _pinned_handler_rules(by_key)
