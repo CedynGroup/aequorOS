@@ -1157,6 +1157,109 @@ UNFROZEN_READS = [
     "else:\n"
     "    clock = lambda: 0\n"
     "clock()\n",
+    # An attribute of an object may hold the clock callable: a call through
+    # the attribute reads the wall clock the same way a name call does.
+    "import time\n"
+    "def test_direct_attribute_alias():\n"
+    "    self.stamp = time.time\n"
+    "    self.stamp()\n",
+    # Attributes keep the branch merge too: each branch may store a
+    # different clock callable, and the call may select either one.
+    "from datetime import datetime\n"
+    "import time\n"
+    "def test_self_attribute_alias(flag):\n"
+    "    if flag:\n"
+    "        clock = datetime.now\n"
+    "    else:\n"
+    "        clock = time.time\n"
+    "    self.clock = clock\n"
+    "    self.clock()\n",
+    # A conditional expression stored on another object keeps both
+    # alternatives reachable through the attribute read.
+    "from datetime import datetime\n"
+    "import time\n"
+    "def test_object_attribute_alias(obj, flag):\n"
+    "    alt = datetime.now if flag else time.time\n"
+    "    obj.now = alt\n"
+    "    obj.now()\n",
+    # Reading through an attribute alias into a name keeps the union, so a
+    # later call through the copy is still reported.
+    "from datetime import datetime\n"
+    "import time\n"
+    "def test_attribute_alias_copied_to_name(flag):\n"
+    "    if flag:\n"
+    "        clock = datetime.now\n"
+    "    else:\n"
+    "        clock = time.time\n"
+    "    self.clock = clock\n"
+    "    reader = self.clock\n"
+    "    reader()\n",
+    # A branch that replaces a clock member's attribute without covering the
+    # other path leaves the member itself readable: the empty record is no
+    # information, and the composed member path decides.
+    "import time\n"
+    "def test_branch_join_keeps_member_fallback(flag):\n"
+    "    if flag:\n"
+    "        time.time = lambda: 0\n"
+    "    time.time()\n",
+    # The same holds when only the skipped branch replaces the member, even
+    # with a non-clock callable: the untouched path still reads the member.
+    "import time\n"
+    "def test_branch_join_keeps_nonclock_record_fallback(flag):\n"
+    "    if flag:\n"
+    "        time.time = time.monotonic\n"
+    "    time.time()\n",
+    # Unpacking binds each leaf in assignment order, so a record a later
+    # leaf assigns survives the holder an earlier leaf replaced.
+    "import time\n"
+    "from types import SimpleNamespace\n"
+    "def test_unpacking_binds_in_assignment_order():\n"
+    "    obj, obj.clock = SimpleNamespace(), time.time\n"
+    "    obj.clock()\n",
+    # A chained assignment captures the right-hand side before any target
+    # rebinds, so an attribute target records that value, not a
+    # re-resolution through the rebound alias.
+    "import time as clock\n"
+    "clock = holder.read = clock.time\n"
+    "def test_chained_target_uses_captured_rhs():\n"
+    "    holder.read()\n",
+    # A record assigned on only one branch merges with the other branch's
+    # composed fallback: the recorded path reads the wall clock and the
+    # untouched member path stays resolvable.
+    "import time\n"
+    "def test_single_branch_record(obj, flag):\n"
+    "    if flag:\n"
+    "        obj.clock = time.time\n"
+    "    obj.clock()\n",
+    # A caller's attribute records for a holder the callee sees as a global
+    # do not describe the callee's binding: the callee resolves the member
+    # through the module.
+    "import time as clock\n"
+    "from time import monotonic as reader\n"
+    "def read():\n"
+    "    return clock.time()\n"
+    "def test_foreign_holder():\n"
+    "    clock = SimpleNamespace()\n"
+    "    clock.time = reader\n"
+    "    read()\n",
+    # An import binds a fresh module object, so the old holder's attribute
+    # records do not mask the member the import exposes.
+    "import time\n"
+    "from types import SimpleNamespace\n"
+    "def test_import_replaces_holder():\n"
+    "    clock = SimpleNamespace()\n"
+    "    clock.time = time.monotonic\n"
+    "    import time as clock\n"
+    "    clock.time()\n",
+    # A capture pattern binds the matched subject, so the subject replaces
+    # whatever object the name held and its records do not carry over.
+    "import time\n"
+    "from types import SimpleNamespace\n"
+    "holder = SimpleNamespace()\n"
+    "holder.time = time.monotonic\n"
+    "match time:\n"
+    "    case holder:\n"
+    "        holder.time()\n",
 ]
 
 #: The same reads are accepted once the clock is frozen at function, class or
@@ -1439,6 +1542,14 @@ FROZEN_READS = [
     "    else:\n"
     "        clock = SimpleNamespace(time=lambda: 0)\n"
     "    clock.time()\n",
+    # An attribute that holds a clock callable is covered by the test's
+    # freeze like any other read.
+    "import pytest\n"
+    "import time\n"
+    f"@pytest.mark.freeze_time({INSTANT})\n"
+    "def test_frozen_attribute_alias():\n"
+    "    self.stamp = time.time\n"
+    "    self.stamp()\n",
 ]
 
 
@@ -1465,6 +1576,106 @@ def test_the_guard_accepts_frozen_clock_reads(tmp_path: Path, source: str) -> No
     allowlist.write_text("{}")
     assert guard.main(["--root", str(tmp_path), "--allowlist", str(allowlist)]) == 0
     assert guard.main(["--root", str(tmp_path), "--strict"]) == 0
+
+
+def test_an_attribute_alias_to_a_non_clock_callable_stays_accepted() -> None:
+    """Storing and calling a fake through an attribute records no clock read."""
+    source = "def test_fake_attribute_alias():\n    self.clock = lambda: 0\n    self.clock()\n"
+    assert guard.clock_findings(source).reads == []
+
+
+def test_an_untracked_attribute_read_stays_accepted() -> None:
+    """An attribute no assignment in the scope recorded is not a clock read."""
+    source = "def test_unknown_attribute(fake):\n    return fake.now()\n"
+    assert guard.clock_findings(source).reads == []
+
+
+def test_rebinding_the_holder_clears_its_attribute_aliases() -> None:
+    """A new object replaces the attribute the old one held."""
+    source = (
+        "import time\n"
+        "def test_replaced_holder():\n"
+        "    obj.now = time.time\n"
+        "    obj = Fake()\n"
+        "    obj.now()\n"
+    )
+    assert guard.clock_findings(source).reads == []
+
+
+def test_unpacking_rebind_clears_holder_attributes() -> None:
+    """A tuple leaf that rebinds the holder clears the attributes it held."""
+    source = (
+        "import time\n"
+        "from types import SimpleNamespace\n"
+        "def test_unpacking_replacement():\n"
+        "    obj.clock = time.time\n"
+        "    obj, = (SimpleNamespace(clock=lambda: 0),)\n"
+        "    obj.clock()\n"
+    )
+    assert guard.clock_findings(source).reads == []
+
+
+def test_replaced_attribute_path_clears_its_descendants() -> None:
+    """Replacing a nested holder clears the deeper attributes it held."""
+    source = (
+        "import time\n"
+        "from types import SimpleNamespace\n"
+        "def test_nested_holder_replacement():\n"
+        "    obj.child.now = time.time\n"
+        "    obj.child = SimpleNamespace(now=lambda: 0)\n"
+        "    obj.child.now()\n"
+    )
+    assert guard.clock_findings(source).reads == []
+
+
+def test_unpacking_an_attribute_leaf_clears_its_descendants() -> None:
+    """An unpacking leaf that is itself an attribute replaces that object."""
+    source = (
+        "import time\n"
+        "from types import SimpleNamespace\n"
+        "def test_unpacking_attribute_leaf():\n"
+        "    obj.child.clock = time.time\n"
+        "    obj.child, = (SimpleNamespace(clock=lambda: 0),)\n"
+        "    obj.child.clock()\n"
+    )
+    assert guard.clock_findings(source).reads == []
+
+
+def test_a_local_shadow_drops_the_holder_inherited_records() -> None:
+    """A parameter shadowing a module holder does not inherit its records."""
+    source = (
+        "import time\n"
+        "from types import SimpleNamespace\n"
+        "obj.clock = time.time\n"
+        "def test_shadowed_holder(obj=SimpleNamespace(clock=lambda: 0)):\n"
+        "    obj.clock()\n"
+    )
+    assert guard.clock_findings(source).reads == []
+
+
+def test_a_non_clock_record_keeps_its_attribute_accepted() -> None:
+    """An attribute holding a non-clock callable records no clock read."""
+    source = (
+        "import time\n"
+        "from types import SimpleNamespace\n"
+        "def test_monotonic_attribute():\n"
+        "    holder = SimpleNamespace()\n"
+        "    holder.time = time.monotonic\n"
+        "    holder.time()\n"
+    )
+    assert guard.clock_findings(source).reads == []
+
+
+def test_deleting_an_override_restores_the_holder() -> None:
+    """Deleting an attribute override drops the record the override made."""
+    source = (
+        "import time\n"
+        "def test_deleted_override():\n"
+        "    obj.clock = time.time\n"
+        "    del obj.clock\n"
+        "    obj.clock()\n"
+    )
+    assert guard.clock_findings(source).reads == []
 
 
 def test_postponed_annotation_scopes_do_not_crash_the_guard() -> None:

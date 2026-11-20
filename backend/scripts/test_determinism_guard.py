@@ -27,6 +27,12 @@ constructions, and a read it cannot attribute is missed rather than guessed:
   called, but it has no recorded defining owner, so a lambda that closes over a
   local clock alias which is rebound between its definition and its call can be
   missed.
+* An attribute an assignment recorded (``self.clock = clock``) holds what was
+  stored in it, alternatives included, so a call through the attribute is
+  judged like a call through a name. The record is per scope: an alias another
+  method stored (an ``__init__`` or a setup helper) is not visible where a
+  later method reads it, and rebinding the holder object clears what its old
+  attributes held, so both forms are missed rather than guessed.
 * An immediately invoked lambda at module level, such as
   ``STAMP = (lambda: time.time())()``, is not tracked as an import-time call,
   so a module ``pytestmark`` freeze marker can exempt its read.
@@ -113,6 +119,20 @@ AMBIGUOUS = "|"
 
 def _alternatives(value: str) -> list[str]:
     return value.split(AMBIGUOUS) if AMBIGUOUS in value else [value]
+
+
+def _dotted(node: ast.expr) -> str | None:
+    """The dotted path of a plain name-and-attribute chain, or ``None``.
+
+    ``self.clock`` is ``"self.clock"``; anything that is not a chain of names
+    and attributes (a call, a subscript) has no stable path to record.
+    """
+    if isinstance(node, ast.Name):
+        return node.id
+    if isinstance(node, ast.Attribute):
+        base = _dotted(node.value)
+        return None if base is None else f"{base}.{node.attr}"
+    return None
 
 
 def _clock_capable(value: str) -> bool:
@@ -216,6 +236,50 @@ def _target_names(target: ast.expr) -> list[str]:
     if isinstance(target, ast.Starred):
         return _target_names(target.value)
     return []
+
+
+def _target_paths(target: ast.expr) -> list[str]:
+    """The names and dotted attribute paths an assignment target binds.
+
+    Unpacking leaves may themselves be attributes (``obj.child, = (...)``),
+    and rebinding one replaces the object it names just like a plain name
+    does.
+    """
+    if isinstance(target, ast.Name):
+        return [target.id]
+    if isinstance(target, ast.Attribute):
+        path = _dotted(target)
+        return [path] if path is not None else []
+    if isinstance(target, (ast.Tuple, ast.List)):
+        return [path for element in target.elts for path in _target_paths(element)]
+    if isinstance(target, ast.Starred):
+        return _target_paths(target.value)
+    return []
+
+
+def _attribute_record(key: str) -> bool:
+    """Whether an alias-map key records an object attribute (``obj.clock``).
+
+    A plain identifier never contains a dot, and the generator and callable
+    keys carry a control-character prefix, so any other dotted key is an
+    attribute record.
+    """
+    return "." in key and not key.startswith((GENERATOR_KEY, CALLABLE_KEY))
+
+
+def _dotted_fallback(state: dict[str, str], path: str) -> str:
+    """The member a state without a record for ``path`` still resolves.
+
+    Mirrors the composed qualification: each prefix resolves through its own
+    record when the state holds one, otherwise through its binding.
+    """
+    head, _, tail = path.rpartition(".")
+    if not head:
+        return ""
+    base = state.get(head, "")
+    if not base and _attribute_record(head):
+        base = _dotted_fallback(state, head)
+    return AMBIGUOUS.join(f"{alternative}.{tail}" for alternative in _alternatives(base))
 
 
 def _aligned(
@@ -433,11 +497,21 @@ class ClockVisitor(ast.NodeVisitor):
         if isinstance(node, ast.Name):
             return self.aliases.get(node.id, "")
         if isinstance(node, ast.Attribute):
-            # Qualify each conditional alternative separately: appending the
+            path = _dotted(node)
+            recorded = self.aliases.get(path) if path is not None else None
+            # An attribute an assignment recorded holds what was stored in it,
+            # alternatives included, unless every path left it without a clock
+            # value: an empty record is no information, and the read falls
+            # back to the composed member path. Composing otherwise qualifies
+            # each conditional alternative separately, because appending the
             # attribute to the merged string would lose the member names.
-            return AMBIGUOUS.join(
-                f"{alternative}.{node.attr}"
-                for alternative in _alternatives(self.qualified(node.value))
+            return (
+                recorded
+                if recorded
+                else AMBIGUOUS.join(
+                    f"{alternative}.{node.attr}"
+                    for alternative in _alternatives(self.qualified(node.value))
+                )
             )
         if isinstance(node, ast.IfExp):
             # A conditional expression selects its callable the same way an if
@@ -465,6 +539,13 @@ class ClockVisitor(ast.NodeVisitor):
         if isinstance(node, ast.Name):
             yield from _alternatives(self.aliases.get(node.id, ""))
         elif isinstance(node, ast.Attribute):
+            path = _dotted(node)
+            recorded = self.aliases.get(path) if path is not None else None
+            if recorded:
+                # A record without a clock value is no information; the
+                # composed member path decides below.
+                yield from _alternatives(recorded)
+                return
             for base in self.possible_names(node.value):
                 yield f"{base}.{node.attr}"
         elif isinstance(node, ast.IfExp):
@@ -544,15 +625,18 @@ class ClockVisitor(ast.NodeVisitor):
 
     def visit_Import(self, node: ast.Import) -> None:
         for alias in node.names:
-            self.aliases[alias.asname or alias.name.split(".")[0]] = (
-                alias.name if alias.asname else alias.name.split(".")[0]
-            )
+            name = alias.asname or alias.name.split(".")[0]
+            self.aliases[name] = alias.name if alias.asname else alias.name.split(".")[0]
+            # An import binds a fresh module object; the old holder's
+            # attribute records do not carry over.
+            self._discard_holder_records(name)
 
     def visit_ImportFrom(self, node: ast.ImportFrom) -> None:
         for alias in node.names:
             self.aliases[alias.asname or alias.name] = (
                 f"{node.module}.{alias.name}" if node.level == 0 else ""
             )
+            self._discard_holder_records(alias.asname or alias.name)
 
     def bindings(self, target: ast.expr, value: ast.expr | None = None) -> dict[str, str]:
         if isinstance(target, ast.Name):
@@ -577,17 +661,64 @@ class ClockVisitor(ast.NodeVisitor):
             return result
         if isinstance(target, ast.Starred):
             return self.bindings(target.value)
+        if isinstance(target, ast.Attribute):
+            # An attribute assignment records what the attribute holds, so a
+            # call through it resolves the stored callable.
+            path = _dotted(target)
+            if path is not None:
+                resolved = "" if value is None else self.qualified(value)
+                captured = self.captured_elements.get(id(value)) if value is not None else None
+                return {path: captured if captured is not None else resolved}
+            # A target that is not a plain name-and-attribute chain stays
+            # untracked.
         self.visit(target)
         return {}
 
+    def _discard_holder_records(self, name: str) -> None:
+        """Drop the attribute records a rebound holder no longer holds."""
+        for key in [key for key in self.aliases if key.startswith(f"{name}.")]:
+            del self.aliases[key]
+
     def bind(self, target: ast.expr, value: ast.expr | None = None) -> None:
+        if isinstance(target, (ast.Tuple, ast.List)):
+            # Unpacking binds each leaf in assignment order, so a holder an
+            # earlier leaf replaces does not keep the attribute records a
+            # later leaf assigns, and the reverse order discards them.
+            aligned = (
+                _aligned(target.elts, value.elts)
+                if isinstance(value, (ast.Tuple, ast.List))
+                else None
+            )
+            for index, item in enumerate(target.elts):
+                self.bind(item, aligned[index] if aligned else None)
+            return
+        if isinstance(target, ast.Starred):
+            self.bind(target.value)
+            return
         self.aliases.update(self.bindings(target, value))
+        # Rebinding a holder discards the attribute aliases read through it:
+        # the new object does not hold the old one's attributes. A rebound
+        # attribute path clears the deeper attributes the old object held.
+        for path in _target_paths(target):
+            self._discard_holder_records(path)
+
+    def visit_Delete(self, node: ast.Delete) -> None:
+        for target in node.targets:
+            path = _dotted(target)
+            if path is None:
+                self.visit(target)
+                continue
+            # Deleting an attribute restores the holder's underlying member;
+            # the record described only the deleted override.
+            self.aliases.pop(path, None)
+            self._discard_holder_records(path)
 
     def visit_Name(self, node: ast.Name) -> None:
         if isinstance(node.ctx, (ast.Store, ast.Del)):
             self.aliases[node.id] = ""
             self.aliases[GENERATOR_KEY + node.id] = ""
             self.aliases[CALLABLE_KEY + node.id] = ""
+            self._discard_holder_records(node.id)
             return
         for held in _alternatives(self.aliases.get(CALLABLE_KEY + node.id, "")):
             if held:
@@ -646,6 +777,10 @@ class ClockVisitor(ast.NodeVisitor):
         for name in self._foreign_names(callable_id):
             for key in (name, GENERATOR_KEY + name, CALLABLE_KEY + name):
                 current.pop(key, None)
+            for key in [key for key in current if key.startswith(f"{name}.")]:
+                # The caller's attribute records for a foreign holder do not
+                # describe the callee's own binding of that name.
+                del current[key]
         self.callable_scopes[callable_id] = self._merged([known, current] if known else [current])
         # The body runs under the freeze active at the reference, and under a
         # freeze only if every reference was under one.
@@ -808,6 +943,13 @@ class ClockVisitor(ast.NodeVisitor):
             self.bind(target, node.value)
             if isinstance(target, ast.Name):
                 self.aliases[target.id] = name
+            else:
+                # The right-hand side was captured before any earlier target
+                # rebound its names; an attribute target records that value,
+                # not a re-resolution through the rebound alias.
+                path = _dotted(target)
+                if path is not None:
+                    self.aliases[path] = name
             self._hold_generator(target, node.value, held, held_callable)
         self.captured_elements.clear()
         self.captured_generators.clear()
@@ -866,25 +1008,38 @@ class ClockVisitor(ast.NodeVisitor):
             self.visit(node.type)
         if node.name is not None:
             self.aliases[node.name] = ""
+            self._discard_holder_records(node.name)
         for statement in node.body:
             self.visit(statement)
         if node.name is not None:
             self.aliases[node.name] = ""
+            self._discard_holder_records(node.name)
 
-    @staticmethod
-    def _merged(states: list[dict[str, str]]) -> dict[str, str]:
+    def _merged(self, states: list[dict[str, str]]) -> dict[str, str]:
         """The union of the bindings the reachable ``states`` may hold."""
         keys: set[str] = set()
         for state in states:
             keys.update(state)
-        return {
-            key: (
+        merged: dict[str, str] = {}
+        for key in keys:
+            if _attribute_record(key) and any(key not in state for state in states):
+                # A path without the record still resolves the member through
+                # its own binding: merge the record with each missing path's
+                # composed fallback instead of dropping it, so neither the
+                # recorded clock nor the untouched member escapes the guard.
+                merged[key] = _merge_values(
+                    [
+                        state[key] if key in state else _dotted_fallback(state, key)
+                        for state in states
+                    ]
+                )
+                continue
+            merged[key] = (
                 _merge_generators
                 if key.startswith((GENERATOR_KEY, CALLABLE_KEY))
                 else _merge_values
             )([state.get(key, "") for state in states])
-            for key in keys
-        }
+        return merged
 
     def _merge_states(self, states: list[dict[str, str]]) -> None:
         """Rebuild ``self.aliases`` as the union of the reachable path states.
@@ -1464,8 +1619,11 @@ class ClockVisitor(ast.NodeVisitor):
         if isinstance(pattern, ast.MatchAs):
             if pattern.name is not None:
                 # A capture, bare or with ``as``, holds the subject itself,
-                # including a generator it is.
+                # including a generator it is. The captured subject replaces
+                # whatever object the name held, so its attribute records do
+                # not carry over.
                 self.aliases[pattern.name] = subject_value
+                self._discard_holder_records(pattern.name)
                 self.aliases[GENERATOR_KEY + pattern.name] = (
                     self.captured_generators.get(id(subject), "") if subject is not None else ""
                 )
@@ -1505,6 +1663,7 @@ class ClockVisitor(ast.NodeVisitor):
         for name in names:
             if name is not None:
                 self.aliases[name] = ""
+                self._discard_holder_records(name)
         for item in nested:
             self._bind_pattern_captures(item, "", None)
 
@@ -1667,6 +1826,7 @@ class ClockVisitor(ast.NodeVisitor):
         if _runs_later(node):
             self.deferred_callables.add(id(node))
         self.aliases[node.name] = ""
+        self._discard_holder_records(node.name)
         self.aliases[GENERATOR_KEY + node.name] = ""
         self.aliases[CALLABLE_KEY + node.name] = str(id(node))
 
@@ -1689,6 +1849,7 @@ class ClockVisitor(ast.NodeVisitor):
     def _bind_definition(self, name: str, function: str = "") -> None:
         """A definition replaces whatever binding its name held."""
         self.aliases[name] = ""
+        self._discard_holder_records(name)
         self.aliases[GENERATOR_KEY + name] = ""
         self.aliases[CALLABLE_KEY + name] = function
 
@@ -1745,6 +1906,7 @@ class ClockVisitor(ast.NodeVisitor):
         self.table, self.aliases = previous_table, previous_aliases
         self.frozen, self.deferred_frozen = previous_frozen, previous_deferred
         self.aliases[node.name] = ""
+        self._discard_holder_records(node.name)
 
     def _replay_class_body(self, node: ast.ClassDef) -> None:
         """Run a class body again, silently, whenever its enclosing code reruns.
@@ -2155,6 +2317,22 @@ class ClockVisitor(ast.NodeVisitor):
                 frozen = frozen and recorded_frozen
         return scope, frozen, captured
 
+    def _install_scope_bindings(self, table: symtable.SymbolTable, captured: bool) -> None:
+        """Seed a recorded body's scope with its locals and globals."""
+        for symbol in table.get_symbols():
+            name = symbol.get_name()
+            if symbol.is_local():
+                self.aliases[name] = ""
+                self.aliases[GENERATOR_KEY + name] = ""
+                self.aliases[CALLABLE_KEY + name] = ""
+                # A local shadowing a holder is another object; the
+                # enclosing holder's attribute records do not carry over.
+                self._discard_holder_records(name)
+            elif symbol.is_global() and not (captured and name in self.aliases):
+                # A captured scope already holds the module bindings at the
+                # point the body may run.
+                self.aliases[name] = self.module_aliases.get(name, "")
+
     def _scan_function(
         self,
         node: ast.AST,
@@ -2177,16 +2355,7 @@ class ClockVisitor(ast.NodeVisitor):
         # A later scan of the same body replaces the reads of this one.
         outer_reads, self.reads = self.reads, []
         self.aliases = scope.copy()
-        for symbol in table.get_symbols():
-            name = symbol.get_name()
-            if symbol.is_local():
-                self.aliases[name] = ""
-                self.aliases[GENERATOR_KEY + name] = ""
-                self.aliases[CALLABLE_KEY + name] = ""
-            elif symbol.is_global() and not (captured and name in self.aliases):
-                # A captured scope already holds the module bindings at the
-                # point the body may run.
-                self.aliases[name] = self.module_aliases.get(name, "")
+        self._install_scope_bindings(table, captured)
         self.aliases.update(self.default_bindings.get(id(node), {}))
         self.enclosing = self.aliases
         self.return_states = []
