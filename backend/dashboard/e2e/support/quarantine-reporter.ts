@@ -8,9 +8,9 @@ import type {
   TestCase,
   TestResult,
 } from "@playwright/test/reporter";
-import { QUARANTINED_JOURNEYS } from "./quarantine";
+import { QUARANTINED_JOURNEYS, quarantineProblems } from "./quarantine";
 
-const QUARANTINED_SET = new Set<string>(QUARANTINED_JOURNEYS);
+const QUARANTINED = new Map(QUARANTINED_JOURNEYS.map((entry) => [entry.name, entry]));
 
 function journeyName(testCase: TestCase): string {
   const fileName = path.basename(testCase.location.file);
@@ -50,7 +50,11 @@ export default class QuarantineReporter implements Reporter {
       tests.map((testCase) => [journeyName(testCase), testCase]),
     );
 
-    for (const journey of QUARANTINED_SET) {
+    for (const error of quarantineProblems(QUARANTINED_JOURNEYS)) {
+      this.errors.push(error);
+    }
+
+    for (const [journey] of QUARANTINED) {
       const testCase = discovered.get(journey);
       if (!testCase) {
         this.errors.push(
@@ -65,7 +69,7 @@ export default class QuarantineReporter implements Reporter {
 
     for (const testCase of tests) {
       const journey = journeyName(testCase);
-      if (isExpectedFailure(testCase) && !QUARANTINED_SET.has(journey)) {
+      if (isExpectedFailure(testCase) && !QUARANTINED.has(journey)) {
         this.errors.push(
           `test.fail journey is missing from the quarantine list: ${journey}`,
         );
@@ -100,7 +104,7 @@ export default class QuarantineReporter implements Reporter {
       .map((journey) => journey.name);
     const quarantinedExecuted = journeys.filter(
       (journey) =>
-        journey.status !== "skipped" && QUARANTINED_SET.has(journey.name),
+        journey.status !== "skipped" && QUARANTINED.has(journey.name),
     ).length;
     if (journeys.length !== this.discovered) {
       this.errors.push(
@@ -136,6 +140,7 @@ export default class QuarantineReporter implements Reporter {
             journeys,
             quarantinedExecuted,
             quarantineSize: QUARANTINED_JOURNEYS.length,
+            quarantine: QUARANTINED_JOURNEYS,
             integrityErrors: this.errors,
           },
           null,

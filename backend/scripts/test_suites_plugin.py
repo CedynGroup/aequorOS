@@ -127,6 +127,12 @@ def pytest_addoption(parser: pytest.Parser) -> None:
         "--collection-output",
         help="Write complete, unfiltered collection evidence for CI aggregation",
     )
+    parser.addoption(
+        "--quarantine-only",
+        action="store_true",
+        help="Run only quarantined tests (the non-blocking quarantine owner); "
+        "without it every quarantined test is deselected",
+    )
 
 
 @pytest.hookimpl(optionalhook=True)
@@ -143,6 +149,13 @@ def pytest_load_initial_conftests(early_config: pytest.Config, args: list[str]) 
         early_config.known_args_namespace, "collectonly", False
     ):
         raise pytest.UsageError("--collection-output requires --collect-only")
+    if getattr(early_config.known_args_namespace, "collection_output", None) and getattr(
+        early_config.known_args_namespace, "quarantine_only", False
+    ):
+        raise pytest.UsageError(
+            "--quarantine-only cannot write full-tree collection evidence: "
+            "a quarantined run is not the complete tree"
+        )
     if cast(object, early_config.known_args_namespace.markexpr) == "unit" or getattr(
         early_config.known_args_namespace, "collection_output", None
     ):
@@ -157,6 +170,11 @@ def pytest_load_initial_conftests(early_config: pytest.Config, args: list[str]) 
 
 def pytest_configure(config: pytest.Config) -> None:
     config.addinivalue_line("markers", "database_contract: a protected PostgreSQL guarantee")
+    config.addinivalue_line(
+        "markers",
+        "quarantine(issue, reason): deselected from blocking runs and executed only by the "
+        "non-blocking quarantine owner; issue must be a positive int and reason non-empty",
+    )
     config.addinivalue_line("markers", "unit: database-free test; database connections are refused")
     config.addinivalue_line("markers", "integration: test requiring a database or external service")
     config.addinivalue_line("markers", "e2e: backend contract requiring Playwright")
@@ -213,6 +231,76 @@ def _check_module_inventory(
         raise pytest.UsageError("CI must collect every module in its filename suite")
 
 
+def quarantine_problem(
+    issue: object, reason: object, suite: str, *, protected: bool = False
+) -> str | None:
+    """Return why a quarantine marker is unusable, or None when it may deselect a run.
+
+    A quarantine exists only while a linked repair is in flight, so it must name the
+    issue that carries the flake evidence and state the failure mode. Backend e2e
+    contracts have no non-blocking runner here; the dashboard's Playwright quarantine
+    (``e2e/support/quarantine.ts``) owns browser journeys instead. Protected database
+    contracts (``database_contracts.json`` and the ``database_contract`` marker) are
+    the platform's identity and storage guarantees: the blocking validators require
+    them in every collection, so they cannot be quarantined — the underlying defect
+    is fixed instead.
+    """
+    if suite == "e2e":
+        return (
+            "backend e2e tests cannot be quarantined; "
+            "park the dashboard journey in e2e/support/quarantine.ts instead"
+        )
+    if protected:
+        return (
+            "protected database contracts must execute and cannot be quarantined; "
+            "fix the contract instead (CODEBASE_CONVENTIONS.md §6)"
+        )
+    if isinstance(issue, bool) or not isinstance(issue, int) or issue <= 0:
+        return "quarantine requires a positive int issue"
+    if not isinstance(reason, str) or not reason.strip():
+        return "quarantine requires a non-empty reason"
+    return None
+
+
+def _marker_arguments(mark: pytest.Mark) -> tuple[object, object]:
+    # Mark arguments are untyped by design; the validator below rejects anything
+    # that is not a positive int issue and a non-empty string reason.
+    issue = cast(object, mark.kwargs.get("issue", mark.args[0] if mark.args else None))
+    reason = cast(object, mark.kwargs.get("reason", mark.args[1] if len(mark.args) > 1 else None))
+    return issue, reason
+
+
+def _select_quarantine(
+    config: pytest.Config,
+    items: list[pytest.Item],
+    classified: dict[str, str],
+    quarantined_nodes: set[str],
+) -> None:
+    """Deselect quarantined tests, or everything else under --quarantine-only.
+
+    Quarantine is an explicit, temporary, issue-backed exclusion (see
+    CODEBASE_CONVENTIONS.md §6). Blocking owners deselect it before suite
+    evidence is written, so the gate's cross-owner verification never expects a
+    quarantined test to execute; --quarantine-only inverts the selection for the
+    non-blocking quarantine owner.
+    """
+    quarantine_only = bool(config.getoption("quarantine_only"))
+    if quarantine_only:
+        deselected = [item for item in items if item.nodeid not in quarantined_nodes]
+        items[:] = [item for item in items if item.nodeid in quarantined_nodes]
+        for nodeid in [item.nodeid for item in deselected]:
+            del classified[nodeid]
+    elif quarantined_nodes:
+        deselected = [item for item in items if item.nodeid in quarantined_nodes]
+        items[:] = [item for item in items if item.nodeid not in quarantined_nodes]
+        for nodeid in quarantined_nodes:
+            del classified[nodeid]
+    else:
+        deselected = []
+    if deselected:
+        config.hook.pytest_deselected(items=deselected)
+
+
 @pytest.hookimpl(tryfirst=True)
 def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item]) -> None:
     nodeids = [item.nodeid for item in items]
@@ -221,6 +309,7 @@ def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item
         duplicates = sorted(nodeid for nodeid, count in counts.items() if count > 1)
         raise pytest.UsageError("Duplicate test collection: " + ", ".join(duplicates[:10]))
     classified: dict[str, str] = {}
+    quarantined_nodes: set[str] = set()
     for item in items:
         suite = owner(item.nodeid)
         markers = [
@@ -240,6 +329,22 @@ def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item
         except ValueError as error:
             raise pytest.UsageError(str(error)) from error
         classified[item.nodeid] = suite
+        quarantine_mark = item.get_closest_marker("quarantine")
+        if quarantine_mark is not None:
+            issue, reason = _marker_arguments(quarantine_mark)
+            problem = quarantine_problem(
+                issue,
+                reason,
+                suite,
+                protected=database_contracts.is_protected(
+                    item.nodeid,
+                    marked=item.get_closest_marker("database_contract") is not None,
+                ),
+            )
+            if problem:
+                raise pytest.UsageError(f"{item.nodeid}: {problem}")
+            quarantined_nodes.add(item.nodeid)
+    _select_quarantine(config, items, classified, quarantined_nodes)
     if config.getoption("collection_output"):
         _check_module_inventory(config, nodeids, ("unit", "integration", "e2e"))
         try:
