@@ -485,7 +485,7 @@ in again restores the draft, including after a self-revocation ends the session.
 Successful submission or cancellation clears the saved draft.
 
 The Members composer offers Viewer, Auditor, Analyst, Configurator, Signer,
-Approver, Validator, or Account Admin. The additional API-only audit officer
+Approver, Validator, Exporter, or Account Admin. The additional API-only audit officer
 grants and their staged UI delivery are governed by
 [the bank audit contract](tamper_evident_records.md#bank-audit-read-api). Org
 Owner, Member, and Integration Writer are not tenant-grantable; Account Admin is valid
@@ -498,8 +498,11 @@ assignment direction. An Org Owner without delegated Account Admin authority
 may receive an operational grant with a warning recording the accepted
 exception; the grant still requires a reason and is audited. An overlapping Analyst
 and Approver pair is warned because per-object maker-checker remains a runtime
-condition that no additional binding may bypass. An Approver and Validator pair
-is BLOCKED, scope-independently, because no such runtime condition exists yet
+condition that no additional binding may bypass. An Approver and Validator
+pairing is BLOCKED, scope-independently and in both assignment directions:
+granting the Validator to a member who already holds the Approver bundle is
+refused, and granting the Approver to a member who already holds the Validator
+bundle is refused the same way, because no such runtime condition exists yet
 for approve-then-file. Relax it to a warning only when the stage engine enforces
 that per-object condition at action time — never to make an assignment pass.
 
@@ -1155,6 +1158,16 @@ REG/restricted row beside the validator bundle; the two bundles are
 separation-of-duties compatible by design (one takes finished returns away,
 the other files), so the grant adds no preparation authority and the
 compose-time shortfall message says what the narrow scope would withhold.
+
+Assignment-time separation of duties never refuses the `exporter` bundle:
+the assignment check raises no finding against an exporter grant, so it may
+sit beside either filing role — the Approver as well as the Validator — in
+either grant order, and at any scope, because the compatibility is not
+scope-sensitive. The check is one-sided by design: exporter adds no
+preparation, approval or transmission authority, so it cannot defeat the
+separations the assignment gate enforces, and the Approver and Validator
+pair on one identity stays blocked even when the member also holds the
+exporter.
 
 The permission verbs the older matrix names are reconciled here, not changed:
 ordinary package generation and regeneration remain `RUN`, and a resubmission

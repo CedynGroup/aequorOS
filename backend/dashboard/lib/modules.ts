@@ -314,6 +314,162 @@ export type ModuleScope = {
 };
 
 /**
+ * The ModuleScope permission flags: every optional boolean on ModuleScope
+ * EXCEPT the two deployment flags `biEnabled`/`nlqEnabled`, which are read
+ * from `GET /feature-flags`, are not permissions, and stay outside the table.
+ */
+export type PermissionFlag = Exclude<
+  {
+    [K in keyof ModuleScope]-?: [ModuleScope[K]] extends [boolean | undefined]
+      ? undefined extends ModuleScope[K]
+        ? K
+        : never
+      : never;
+  }[keyof ModuleScope],
+  "biEnabled" | "nlqEnabled"
+>;
+
+/** Which capability list a flag reads against. */
+export type PermissionFlagSource =
+  | "institution"
+  | "wholeInstitution"
+  | "organization";
+
+/**
+ * How a flag reads:
+ * - `effective` drops capabilities the evaluator projects with
+ *   `requires_contextual_authorization` — the honest read for navigation and
+ *   anything that claims authority.
+ * - `structural` keeps them: an OFFER of a control whose outcome the server
+ *   re-decides against the record in hand (maker-checker approvals).
+ */
+export type PermissionFlagCheck = "effective" | "structural";
+
+/**
+ * One row of the permission-flag table: the exact scoped binding the flag
+ * mirrors, which capability list it reads, and how it reads.
+ */
+export type PermissionFlagSpec = readonly [
+  module: EffectiveCapabilityRead["module"],
+  sensitivity: EffectiveCapabilityRead["sensitivity"],
+  permission: EffectiveCapabilityRead["permission"],
+  source: PermissionFlagSource,
+  check: PermissionFlagCheck,
+];
+
+/**
+ * The single table behind every ModuleScope permission flag. `satisfies` pins
+ * the key set to the ModuleScope permission flags, so a flag added to the type
+ * without a row (or a row without a flag) fails to compile, and each row is
+ * checked against the generated capability model.
+ */
+const PERMISSION_FLAGS = {
+  // Liquidity.
+  liquidityAggregatedView: ["liq", "aggregated", "view", "institution", "effective"],
+  liquidityConfidentialView: ["liq", "confidential", "view", "institution", "effective"],
+  liquidityRun: ["liq", "confidential", "run", "institution", "effective"],
+  // Risk (command center views).
+  riskConfidentialView: ["risk", "confidential", "view", "institution", "effective"],
+  // Capital / ICAAP.
+  capitalAggregatedView: ["cap", "aggregated", "view", "institution", "effective"],
+  capitalConfidentialView: ["cap", "confidential", "view", "institution", "effective"],
+  capitalRestrictedView: ["cap", "restricted", "view", "institution", "effective"],
+  capitalRun: ["cap", "confidential", "run", "institution", "effective"],
+  capitalCreate: ["cap", "confidential", "create", "institution", "effective"],
+  capitalEdit: ["cap", "confidential", "edit", "institution", "effective"],
+  capitalExport: ["cap", "confidential", "export", "institution", "effective"],
+  // The checker half of the ICAAP Pillar 2 maker-checker, read STRUCTURALLY:
+  // `approve` is projected with `requires_contextual_authorization` — the
+  // evaluator cannot answer "may this officer approve THIS revision" without
+  // the revision. An offer, not authority: the service re-decides and refuses
+  // an approver who authored the revision.
+  capitalApprove: ["cap", "confidential", "approve", "institution", "structural"],
+  // Credit's own sentences. Credit flags read whole-institution capabilities,
+  // so a branch-scoped credit binding never opens a credit surface; the
+  // service mirrors the rule. Capital authority never becomes Credit.
+  creditAggregatedView: ["credit", "aggregated", "view", "wholeInstitution", "effective"],
+  creditRestrictedView: ["credit", "restricted", "view", "wholeInstitution", "effective"],
+  creditRun: ["credit", "confidential", "run", "wholeInstitution", "effective"],
+  // IRRBB.
+  irrbbAggregatedView: ["irrbb", "aggregated", "view", "institution", "effective"],
+  irrbbConfidentialView: ["irrbb", "confidential", "view", "institution", "effective"],
+  irrbbRun: ["irrbb", "confidential", "run", "institution", "effective"],
+  // FX.
+  fxAggregatedView: ["fx", "aggregated", "view", "institution", "effective"],
+  fxConfidentialView: ["fx", "confidential", "view", "institution", "effective"],
+  fxRun: ["fx", "confidential", "run", "institution", "effective"],
+  // FTP.
+  ftpAggregatedView: ["ftp", "aggregated", "view", "institution", "effective"],
+  ftpConfidentialView: ["ftp", "confidential", "view", "institution", "effective"],
+  ftpRun: ["ftp", "confidential", "run", "institution", "effective"],
+  // Forecasting.
+  forecastingAggregatedView: ["fcst", "aggregated", "view", "institution", "effective"],
+  forecastingConfidentialView: ["fcst", "confidential", "view", "institution", "effective"],
+  forecastingRun: ["fcst", "confidential", "run", "institution", "effective"],
+  forecastingEdit: ["fcst", "confidential", "edit", "institution", "effective"],
+  // The checker half of the assumption maker-checker, read STRUCTURALLY for
+  // the same reason as capitalApprove; the service refuses its author or
+  // submitter.
+  forecastingApprove: ["fcst", "confidential", "approve", "institution", "structural"],
+  // Behavioural.
+  behavioralAggregatedView: ["beh", "aggregated", "view", "institution", "effective"],
+  behavioralRestrictedView: ["beh", "restricted", "view", "institution", "effective"],
+  behavioralRun: ["beh", "confidential", "run", "institution", "effective"],
+  // Markets: vendor and desk data is `published`, material derived from the
+  // bank's own book is `confidential`, credential-bearing connection metadata
+  // is `restricted`; the live engine's read grain is `aggregated`.
+  marketsPublishedView: ["markets", "published", "view", "institution", "effective"],
+  marketsConfidentialView: ["markets", "confidential", "view", "institution", "effective"],
+  marketsRestrictedView: ["markets", "restricted", "view", "institution", "effective"],
+  marketsAggregatedView: ["markets", "aggregated", "view", "institution", "effective"],
+  marketsUpload: ["markets", "published", "create", "institution", "effective"],
+  marketsOverlayCreate: ["markets", "confidential", "create", "institution", "effective"],
+  marketsOverlayEdit: ["markets", "confidential", "edit", "institution", "effective"],
+  marketsRun: ["markets", "confidential", "run", "institution", "effective"],
+  // Data Engine: enqueueing a live-tier recompute is a mutation of the derived
+  // plane, not a read.
+  dataRun: ["data", "confidential", "run", "institution", "effective"],
+  // ORGANIZATION-scoped on purpose: internal audit's authority is over the
+  // organization, not granted institution by institution. It only offers the
+  // "Record independent review" control; the service decides independence.
+  auditCreate: ["audit", "confidential", "create", "organization", "effective"],
+} as const satisfies Record<PermissionFlag, PermissionFlagSpec>;
+
+/** The capability lists a flag's source can name, in the order the caller has them. */
+export type PermissionFlagSources = {
+  institution: readonly EffectiveCapabilityRead[];
+  wholeInstitution: readonly EffectiveCapabilityRead[];
+  organization: readonly EffectiveCapabilityRead[];
+};
+
+/**
+ * Compute every ModuleScope permission flag from the table, so the shell's
+ * flags can never drift from the bindings they mirror.
+ */
+export function permissionFlagValues(
+  sources: PermissionFlagSources,
+): Record<PermissionFlag, boolean> {
+  // The table's key set is pinned to PermissionFlag, so this starts as the
+  // exact shape it returns and the loop fills every field.
+  const values = {} as Record<PermissionFlag, boolean>;
+  for (const flag of Object.keys(PERMISSION_FLAGS) as PermissionFlag[]) {
+    const [module, sensitivity, permission, source, check] =
+      PERMISSION_FLAGS[flag];
+    const capabilities =
+      source === "organization"
+        ? sources.organization
+        : source === "wholeInstitution"
+          ? sources.wholeInstitution
+          : sources.institution;
+    values[flag] =
+      check === "structural"
+        ? hasStructuralCapability(capabilities, module, sensitivity, permission)
+        : hasEffectiveCapability(capabilities, module, sensitivity, permission);
+  }
+  return values;
+}
+
+/**
  * Whether THIS DEPLOYMENT evaluates alerts and sends subscriptions.
  *
  * Three-valued, and the middle value carries the design: `undefined` means the
