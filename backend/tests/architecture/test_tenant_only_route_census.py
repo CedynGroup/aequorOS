@@ -372,18 +372,32 @@ CENSUS: dict[tuple[str, str], CensusEntry] = {
         "The regulator return-template registry; the optional bank filter is"
         " coverage-checked in app.reporting.service.packages.list_return_templates.",
     ),
+    ("GET", "/api/v1/banks/{bank_id}/regulatory-reporting/channel-configs/{channel}"): (
+        CensusEntry(
+            "scoped_in_service",
+            "app.reporting.service.channel_config.get_channel_config"
+            " (require_resolved_bank_permission)",
+        )
+    ),
+    ("GET", "/api/v1/banks/{bank_id}/regulatory-reporting/settings"): CensusEntry(
+        "scoped_in_service",
+        "app.reporting.service.reporting_settings.get_reporting_settings"
+        " (require_resolved_bank_permission)",
+    ),
+    ("GET", "/api/v1/attestation/signature-placements"): CensusEntry(
+        "scoped_in_service",
+        "app.attestation.service.api.list_placement_templates"
+        " (require_organization_permission)",
+    ),
+    ("GET", "/api/v1/attestation/signing-policies"): CensusEntry(
+        "scoped_in_service",
+        "app.attestation.service.api.list_policies (require_organization_permission)",
+    ),
 }
 
 #: Gaps still open on origin/main, each naming the pull request that closes it.
 #: Entries only ever leave this set — a closed gap becomes a CENSUS entry.
-KNOWN_GAPS: dict[tuple[str, str], str] = {
-    ("GET", "/api/v1/banks/{bank_id}/regulatory-reporting/channel-configs/{channel}"): (
-        "open; fix in PR #910"
-    ),
-    ("GET", "/api/v1/banks/{bank_id}/regulatory-reporting/settings"): "open; fix in PR #910",
-    ("GET", "/api/v1/attestation/signature-placements"): "open; fix in PR #910",
-    ("GET", "/api/v1/attestation/signing-policies"): "open; fix in PR #910",
-}
+KNOWN_GAPS: dict[tuple[str, str], str] = {}
 
 
 def _registered_tenant_routes(
