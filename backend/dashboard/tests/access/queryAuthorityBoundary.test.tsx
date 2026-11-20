@@ -20,13 +20,90 @@ const CONVERGENCE_TIMEOUT_MS = Number(
 );
 
 async function waitFor(check: () => boolean, message: string): Promise<void> {
-  const deadline = Date.now() + CONVERGENCE_TIMEOUT_MS;
-  while (!check()) {
-    if (Date.now() >= deadline) {
-      throw new Error(`${message} (after ${CONVERGENCE_TIMEOUT_MS}ms)`);
-    }
-    await new Promise((resolve) => setTimeout(resolve, 2));
-  }
+  if (check()) return;
+  // Poll the condition on a monotonic deadline: the await resolves when the
+  // check passes, never after a fixed sleep. (Same shape as
+  // queryPolicy.test.ts, which shares this convergence contract.)
+  await new Promise<void>((resolve, reject) => {
+    const deadline = performance.now() + CONVERGENCE_TIMEOUT_MS;
+    const poll = (): void => {
+      if (check()) {
+        resolve();
+        return;
+      }
+      if (performance.now() >= deadline) {
+        reject(new Error(`${message} (after ${CONVERGENCE_TIMEOUT_MS}ms)`));
+        return;
+      }
+      setTimeout(poll, 2);
+    };
+    poll();
+  });
+}
+
+/**
+ * Wait until the counted fetches stop moving: the read stays unchanged across
+ * a stability horizon measured on the monotonic clock. Used before capturing
+ * exact baselines, so a count that is still settling (the harness caps the
+ * app's own timers at 30ms, so a queued fetch can land late) is never
+ * mistaken for a phase boundary.
+ */
+async function waitForSettled(
+  read: () => (number | undefined)[],
+  message: string,
+  horizonMs = 20,
+): Promise<void> {
+  await new Promise<void>((resolve, reject) => {
+    const deadline = performance.now() + CONVERGENCE_TIMEOUT_MS;
+    let previous: (number | undefined)[] | null = null;
+    let stableSince: number | null = null;
+    const poll = (): void => {
+      const current = read();
+      const stable =
+        previous !== null &&
+        previous.every((value, index) => value === current[index]);
+      stableSince = stable ? (stableSince ?? performance.now()) : null;
+      previous = current;
+      if (stable && stableSince !== null && performance.now() - stableSince >= horizonMs) {
+        resolve();
+        return;
+      }
+      if (performance.now() >= deadline) {
+        reject(new Error(`${message} (after ${CONVERGENCE_TIMEOUT_MS}ms)`));
+        return;
+      }
+      setTimeout(poll, 2);
+    };
+    poll();
+  });
+}
+
+/**
+ * Assert that nothing is fetched across a real idle window. Absence cannot be
+ * awaited as a positive condition, so the window is bounded by the monotonic
+ * clock and the poll rejects the moment a stray fetch appears — it is never a
+ * fixed sleep-and-hope check.
+ */
+async function assertIdleWindow(
+  isUnstable: () => boolean,
+  windowMs: number,
+  message: string,
+): Promise<void> {
+  await new Promise<void>((resolve, reject) => {
+    const deadline = performance.now() + windowMs;
+    const poll = (): void => {
+      if (isUnstable()) {
+        reject(new Error(`${message} (within the ${windowMs}ms idle window)`));
+        return;
+      }
+      if (performance.now() >= deadline) {
+        resolve();
+        return;
+      }
+      setTimeout(poll, 2);
+    };
+    poll();
+  });
 }
 
 async function main(): Promise<void> {
@@ -86,7 +163,9 @@ async function main(): Promise<void> {
     act_operator: "operator@aequoros.example",
     session_id: "inspection-session",
     roles: ["examiner"],
+    // oxlint-disable-next-line acts/require-frozen-time -- a minted inspection token's iat/exp is wall-clock data, not a timing source (#905)
     iat: Math.floor(Date.now() / 1_000),
+    // oxlint-disable-next-line acts/require-frozen-time -- a minted inspection token's iat/exp is wall-clock data, not a timing source (#905)
     exp: Math.floor(Date.now() / 1_000) + 900,
   };
   const impersonationToken = [
@@ -244,7 +323,8 @@ async function main(): Promise<void> {
     <T,>(name: string, value: T) =>
     async () => {
       counts.set(name, (counts.get(name) ?? 0) + 1);
-      await new Promise((resolve) => setTimeout(resolve, 1));
+      // The async boundary alone keeps the fetch observable as in-flight; the
+      // 1ms timer sleep it used to carry coupled every resource to the clock.
       return value;
     };
   let generation = 7;
@@ -681,7 +761,16 @@ async function main(): Promise<void> {
   await act(async () => {
     releaseCurrentDetail!();
   });
-  await new Promise((resolve) => setTimeout(resolve, 20));
+  await waitForSettled(
+    () => [
+      counts.get(`liq-dashboard:${UPDATED_PERIOD_ID}`),
+      counts.get(`cap-dashboard:${UPDATED_PERIOD_ID}`),
+      counts.get("liq-dashboard"),
+      counts.get("cap-dashboard"),
+    ],
+    "the released current-detail fetches never settled",
+    40,
+  );
   assert.equal(counts.get(`liq-dashboard:${UPDATED_PERIOD_ID}`), 1);
   assert.equal(counts.get(`cap-dashboard:${UPDATED_PERIOD_ID}`), 1);
   assert.equal(effectiveLiquidityPeriod, UPDATED_PERIOD_ID);
@@ -690,7 +779,13 @@ async function main(): Promise<void> {
   const beforeIdleLiquidity = counts.get("liq-dashboard") ?? 0;
   const beforeIdleCapital = counts.get("cap-dashboard") ?? 0;
   await act(async () => {
-    await new Promise((resolve) => setTimeout(resolve, 70));
+    await assertIdleWindow(
+      () =>
+        counts.get("liq-dashboard") !== beforeIdleLiquidity ||
+        counts.get("cap-dashboard") !== beforeIdleCapital,
+      70,
+      "an idle window refetched the dashboards",
+    );
   });
   assert.equal(counts.get("liq-dashboard"), beforeIdleLiquidity);
   assert.equal(counts.get("cap-dashboard"), beforeIdleCapital);
@@ -746,7 +841,11 @@ async function main(): Promise<void> {
     () => counts.get("liq-dashboard") === beforePipelineRefresh + 1,
     "pipeline generation did not invalidate detail",
   );
-  await new Promise((resolve) => setTimeout(resolve, 20));
+  await assertIdleWindow(
+    () => counts.get("liq-dashboard") !== beforePipelineRefresh + 1,
+    40,
+    "pipeline completion fetched generation-owned detail more than once",
+  );
   assert.equal(
     counts.get("liq-dashboard"),
     beforePipelineRefresh + 1,
@@ -775,7 +874,13 @@ async function main(): Promise<void> {
       counts.get("cap-dashboard") === beforeActivationCapital + 1,
     "activation did not refresh detailed dashboards",
   );
-  await new Promise((resolve) => setTimeout(resolve, 20));
+  await assertIdleWindow(
+    () =>
+      counts.get("liq-dashboard") !== beforeActivationLiquidity + 1 ||
+      counts.get("cap-dashboard") !== beforeActivationCapital + 1,
+    40,
+    "activation refreshed a detailed dashboard more than once",
+  );
   assert.equal(counts.get("liq-dashboard"), beforeActivationLiquidity + 1);
   assert.equal(counts.get("cap-dashboard"), beforeActivationCapital + 1);
 
@@ -789,7 +894,16 @@ async function main(): Promise<void> {
       (counts.get(`freshness:${HISTORICAL_PERIOD_ID}`) ?? 0) >= 2,
     "historical dashboards did not reactivate before the official run",
   );
-  await new Promise((resolve) => setTimeout(resolve, 20));
+  await waitForSettled(
+    () => [
+      counts.get("liq-dashboard"),
+      counts.get("cap-dashboard"),
+      counts.get(`liq-dashboard:${HISTORICAL_PERIOD_ID}`),
+      counts.get(`cap-dashboard:${HISTORICAL_PERIOD_ID}`),
+    ],
+    "the reactivation fetches never settled before the official run",
+    40,
+  );
   const beforeOfficialLiquidity = counts.get("liq-dashboard") ?? 0;
   const beforeOfficialCapital = counts.get("cap-dashboard") ?? 0;
   const beforeOfficialHistoricalLiquidity =
@@ -809,7 +923,17 @@ async function main(): Promise<void> {
         beforeOfficialHistoricalCapital + 1,
     "official run did not refresh regulatory detail",
   );
-  await new Promise((resolve) => setTimeout(resolve, 20));
+  await assertIdleWindow(
+    () =>
+      counts.get("liq-dashboard") !== beforeOfficialLiquidity + 1 ||
+      counts.get("cap-dashboard") !== beforeOfficialCapital + 1 ||
+      counts.get(`liq-dashboard:${HISTORICAL_PERIOD_ID}`) !==
+        beforeOfficialHistoricalLiquidity + 1 ||
+      counts.get(`cap-dashboard:${HISTORICAL_PERIOD_ID}`) !==
+        beforeOfficialHistoricalCapital + 1,
+    40,
+    "the official run refreshed a regulatory dashboard more than once",
+  );
   assert.equal(counts.get("liq-dashboard"), beforeOfficialLiquidity + 1);
   assert.equal(counts.get("cap-dashboard"), beforeOfficialCapital + 1);
   assert.equal(
