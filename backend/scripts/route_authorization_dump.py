@@ -774,9 +774,12 @@ def _pin_environment() -> None:
     dev wiring, and must not depend on a developer's .env: the same guard set
     the test session pins at import time (a hardened .env - a remote database
     URL, TLS enforcement - must not break regeneration or the freshness
-    check). Called inside ``_registered`` right before the application
-    imports, so importing this module never mutates the environment of the
-    surrounding process."""
+    check). APP_ENV is pinned to the test value too: a parent shell set to
+    staging or production would make app startup reject the plaintext pin at
+    import, before any route inspection. Called inside ``_registered`` right
+    before the application imports, so importing this module never mutates the
+    environment of the surrounding process."""
+    os.environ["APP_ENV"] = "test"
     os.environ["RUN_INPROCESS_WORKER"] = "0"
     os.environ["TLS_ALLOW_PLAINTEXT"] = "1"
     os.environ["DATABASE_URL"] = ""

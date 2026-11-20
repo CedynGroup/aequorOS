@@ -80,6 +80,28 @@ def test_generator_runs_without_database_environment(tmp_path: Path) -> None:
     assert output.read_bytes() == COMMITTED
 
 
+@pytest.mark.parametrize("parent_env", ["staging", "production"])
+def test_generator_ignores_a_deployed_parent_environment(
+    tmp_path: Path, parent_env: str
+) -> None:
+    """A deployed APP_ENV in the calling shell must not reach the offline
+    generator: TLS_ALLOW_PLAINTEXT is only permitted in local/test and app
+    startup validates service transports at import, so an inherited deployed
+    APP_ENV would abort generation before route inspection."""
+    output = tmp_path / parent_env / "route_authorization.json"
+    output.parent.mkdir(parents=True, exist_ok=True)
+    completed = _run_cli("--output", str(output), env={**os.environ, "APP_ENV": parent_env})
+    assert completed.returncode == 0, completed.stderr.decode()
+    assert output.read_bytes() == COMMITTED
+
+
+@pytest.mark.parametrize("parent_env", ["staging", "production"])
+def test_freshness_check_ignores_a_deployed_parent_environment(parent_env: str) -> None:
+    completed = _run_cli("--check", env={**os.environ, "APP_ENV": parent_env})
+    assert completed.returncode == 0, completed.stderr.decode()
+    assert b"matches the registered routes" in completed.stdout
+
+
 def test_freshness_check_accepts_the_committed_fixture() -> None:
     completed = _run_cli("--check")
     assert completed.returncode == 0, completed.stderr.decode()
