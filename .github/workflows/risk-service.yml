@@ -321,6 +321,13 @@ jobs:
       - name: Regenerate and verify the API client
         if: always() && needs.preflight.outputs.api_client == 'true'
         run: mise run risk-service:api-fresh
+      # Regenerates the route authorization declaration fixture into a temp
+      # path and fails when the committed copy no longer matches the
+      # registered routes. The declarations come from the route tables alone,
+      # so this needs no database or storage service.
+      - name: Verify the route authorization fixture is fresh
+        if: always() && needs.preflight.outputs.backend == 'true'
+        run: mise run risk-service:route-authorization-fresh
 
   architecture:
     name: Unit tests

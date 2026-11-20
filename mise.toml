@@ -145,6 +145,16 @@ run = [
   "test -z \"$(git status --porcelain -- backend/openapi-schema.json packages/risk-service-api)\"",
 ]
 
+[tasks."risk-service:route-authorization"]
+description = "Regenerate backend/tests/fixtures/route_authorization.json from the registered routes"
+dir = "backend"
+run = "mise run risk-service:route-authorization"
+
+[tasks."risk-service:route-authorization-fresh"]
+description = "Fail when the committed route authorization fixture is stale"
+dir = "backend"
+run = "mise run risk-service:route-authorization-fresh"
+
 [tasks."risk-service:migrate"]
 description = "Run risk service Alembic migrations; credentials: backend/docs/tamper_evident_records.md#required-deployment-follow-up"
 dir = "backend"
