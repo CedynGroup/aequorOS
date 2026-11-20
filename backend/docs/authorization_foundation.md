@@ -678,7 +678,13 @@ service checks before regenerating the catalog with
 risk-service:route-authorization-fresh` and the CI freshness check fail when the
 committed copy no longer matches the registered routes). Review the regenerated
 diff line by line and commit it with the route change; never edit the fixture by
-hand. Preserve current access unless a
+hand. Routes whose declaration was fixed by an earlier reviewed change are
+pinned in `scripts/route_authorization_dump.py`: when such a route changes or
+is retired, update or remove its pin in the same change and regenerate. The
+generator refuses to guess — it fails when a pinned route's handler,
+authentication or dependency set drifts from the pin, when a pin loses all its
+routes, and when a new route would collide with a pinned name.
+Preserve current access unless a
 separate access decision authorizes a change. An unknown or ambiguous rule is a
 policy decision to escalate, not a reason to add authentication, a public entry
 or a known-gap suppression. Never generate permissive declarations from absent

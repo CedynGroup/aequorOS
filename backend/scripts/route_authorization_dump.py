@@ -22,17 +22,9 @@ imports.
 
 from __future__ import annotations
 
-import os
-
-# IMPORT-TIME guards, before any ``app.*`` import below: exporting the
-# declarations must not start background jobs or operator dev wiring, and must
-# not depend on a developer's .env (same isolation as the coverage test).
-os.environ["RUN_INPROCESS_WORKER"] = "0"
-os.environ["OPERATOR_DATABASE_URL"] = ""
-os.environ["OPERATOR_DEV_AUTH_ENABLED"] = "0"
-
 import hashlib
 import json
+import os
 import sys
 import tempfile
 from collections import defaultdict
@@ -40,15 +32,10 @@ from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Final, TypedDict
 
-from pydantic import BaseModel, ConfigDict, ValidationError  # noqa: E402
+from pydantic import BaseModel, ConfigDict, ValidationError
 
-from app.api.deps import get_current_principal  # noqa: E402
-from app.core.config import get_operator_settings  # noqa: E402
-from app.main import create_app  # noqa: E402
-from app.operator.deps import get_operator_context  # noqa: E402
-from app.operator.main import create_operator_app  # noqa: E402
-from tests.fixtures.public_routes import REVIEWED_PUBLIC_ROUTES  # noqa: E402
-from tests.support.route_authorization import (  # noqa: E402
+from tests.fixtures.public_routes import REVIEWED_PUBLIC_ROUTES
+from tests.support.route_authorization import (
     AuthorizationCatalog,
     RegisteredEndpoint,
     registered_endpoints,
@@ -705,7 +692,29 @@ RULE_ORDER_PIN: Final[list[str]] = [
 ]
 
 
+def _pin_environment() -> None:
+    """Exporting the declarations must not start background jobs or operator
+    dev wiring, and must not depend on a developer's .env (same isolation as
+    the coverage test). Called inside ``_registered`` right before the
+    application imports, so importing this module never mutates the
+    environment of the surrounding process."""
+    os.environ["RUN_INPROCESS_WORKER"] = "0"
+    os.environ["OPERATOR_DATABASE_URL"] = ""
+    os.environ["OPERATOR_DEV_AUTH_ENABLED"] = "0"
+
+
 def _registered() -> list[RegisteredEndpoint]:
+    _pin_environment()
+    # These imports must stay inside the function, after the environment pin:
+    # importing the applications at module level would move the pin to import
+    # time and mutate the environment of every importer (see the test that
+    # reloads this module).
+    from app.api.deps import get_current_principal  # noqa: PLC0415
+    from app.core.config import get_operator_settings  # noqa: PLC0415
+    from app.main import create_app  # noqa: PLC0415
+    from app.operator.deps import get_operator_context  # noqa: PLC0415
+    from app.operator.main import create_operator_app  # noqa: PLC0415
+
     get_operator_settings.cache_clear()
     try:
         applications = {"tenant": create_app(), "operator": create_operator_app()}
@@ -773,7 +782,7 @@ def _pinned_routes(
     name: str, spec: _PinnedDependencyGroup | _PinnedHandlerRule
 ) -> list[PinnedRoute]:
     routes = spec.get("routes")
-    if not isinstance(routes, list):
+    if not isinstance(routes, list) or not routes:
         raise _PinError(f"Pinned rule {name} declares no routes")
     return routes
 
@@ -799,12 +808,49 @@ def _committed_baseline(fixture: Path) -> str:
 
 
 def _observed_row(
-    by_key: dict[RouteKey, RegisteredEndpoint], key: RouteKey, name: str
+    by_key: dict[RouteKey, RegisteredEndpoint],
+    key: RouteKey,
+    endpoint: str,
+    name: str,
 ) -> RegisteredEndpoint:
     row = by_key.get(key)
     if row is None:
         raise _PinError(f"Pinned rule {name} names unregistered route {key}")
+    if row.endpoint != endpoint:
+        raise _PinError(
+            f"Pinned rule {name} routes {key} to {row.endpoint}, but the pin "
+            f"records {endpoint}. The handler changed: review the change and "
+            "update the pin in this script deliberately."
+        )
     return row
+
+
+def _checked_rows(
+    by_key: dict[RouteKey, RegisteredEndpoint],
+    name: str,
+    spec: _PinnedDependencyGroup | _PinnedHandlerRule,
+) -> list[RegisteredEndpoint]:
+    """The live rows a pin covers, each verified against the pinned handler."""
+    return [
+        _observed_row(by_key, (route[0], route[1], route[2]), route[3], name)
+        for route in _pinned_routes(name, spec)
+    ]
+
+
+def _uniform_dependencies(name: str, rows: list[RegisteredEndpoint]) -> list[str]:
+    """The one dependency set every route of a pinned rule must register.
+
+    The rule declares one dependency list for all its routes; a route that
+    drifts would otherwise inherit the union of the others' dependencies."""
+    expected = rows[0].dependencies
+    drifted = [row.key for row in rows if row.dependencies != expected]
+    if drifted:
+        raise _PinError(
+            f"Pinned rule {name} groups routes with different registered "
+            f"dependency sets (expected {list(expected)}): {drifted}. Review the "
+            "registration change and update or split the pin deliberately."
+        )
+    return list(expected)
 
 
 def _pinned_dependency_rules(
@@ -815,13 +861,20 @@ def _pinned_dependency_rules(
     rules: dict[str, _Rule] = {}
     assigned: set[RouteKey] = set()
     for name, spec in PINNED.items():
-        keys = _pinned_route_keys(name, spec)
-        rows = [_observed_row(by_key, key, name) for key in keys]
-        dependencies = sorted({dependency for row in rows for dependency in row.dependencies})
-        applications = {key[0] for key in keys}
+        rows = _checked_rows(by_key, name, spec)
+        dependencies = _uniform_dependencies(name, rows)
+        applications = {key[0] for key in _pinned_route_keys(name, spec)}
         if len(applications) != 1:
             raise _PinError(f"Pinned rule {name} spans applications {sorted(applications)}")
         application = applications.pop()
+        for row in rows:
+            if application not in row.authentication:
+                raise _PinError(
+                    f"Pinned rule {name} route {row.key} no longer registers the "
+                    f"{application} authenticator (observed "
+                    f"{sorted(row.authentication)}). Review the change and update "
+                    "the pin in this script deliberately."
+                )
         basis = spec.get("basis") or STANDARD_BASIS[application]
         references = spec.get("references") or _derive_references(dependencies)
         rules[name] = _Rule(
@@ -844,8 +897,8 @@ def _pinned_handler_rules(
     rules: dict[str, _Rule] = {}
     assigned: set[RouteKey] = set()
     for name, spec in PINNED_HANDLER_RULES.items():
-        rows = [_observed_row(by_key, key, name) for key in _pinned_route_keys(name, spec)]
-        dependencies = sorted({dependency for row in rows for dependency in row.dependencies})
+        rows = _checked_rows(by_key, name, spec)
+        dependencies = _uniform_dependencies(name, rows)
         rules[name] = _Rule(
             name=name,
             kind=spec["kind"],
@@ -863,8 +916,17 @@ def _public_rules(observed: list[RegisteredEndpoint]) -> dict[str, _Rule]:
     """Public routes: grouped by handler, named and worded by the exact review."""
     by_endpoint: dict[str, list[RegisteredEndpoint]] = defaultdict(list)
     for row in observed:
-        if row.key in REVIEWED_PUBLIC_ROUTES:
-            by_endpoint[row.endpoint].append(row)
+        review = REVIEWED_PUBLIC_ROUTES.get(row.key)
+        if review is None:
+            continue
+        if row.endpoint != review.endpoint:
+            raise _PinError(
+                f"Reviewed public route {row.key} now resolves to {row.endpoint}, "
+                f"but the review records {review.endpoint}. The handler changed: "
+                "review the change and update tests/fixtures/public_routes.py "
+                "deliberately."
+            )
+        by_endpoint[review.endpoint].append(row)
     rules: dict[str, _Rule] = {}
     for endpoint, rows in by_endpoint.items():
         review = REVIEWED_PUBLIC_ROUTES[rows[0].key]
