@@ -22,7 +22,7 @@ import sqlalchemy
 from psycopg import sql
 from psycopg.errors import LockNotAvailable
 from psycopg.rows import dict_row
-from sqlalchemy import Connection, Engine, event, inspect, text
+from sqlalchemy import Connection, Engine, event, func, inspect, select, text
 from sqlalchemy.engine import make_url
 from sqlalchemy.exc import DBAPIError, IntegrityError, ResourceClosedError
 from sqlalchemy.orm import Session
@@ -730,6 +730,53 @@ def test_native_bank_locks_are_schema_scoped_and_probes_are_unchanged(shared: bo
         assert independent.execute(
             "SELECT pg_try_advisory_xact_lock(%(probe_key)s)", {"probe_key": 456}
         ).fetchone() == (True,)
+
+
+@postgres_only
+@pytest.mark.parametrize("shared", [False, True])
+def test_orm_func_built_locks_are_schema_scoped(shared: bool) -> None:
+    """The application's ``select(func.pg_advisory_*_lock(key))`` forms — the
+    scheduler's session purge and the liquidity publication locks — are
+    rewritten to the owning schema exactly like the literal statements."""
+    lock = func.pg_advisory_xact_lock_shared if shared else func.pg_advisory_xact_lock
+    with (
+        isolated_database(os.environ["TEST_DATABASE_URL"]) as first,
+        isolated_database(os.environ["TEST_DATABASE_URL"]) as second,
+        first.session() as holder,
+    ):
+        _ = holder.execute(select(lock(123)))
+        with second.session() as independent:
+            _ = independent.execute(text("SET LOCAL lock_timeout='250ms'"))
+            _ = independent.execute(select(func.pg_advisory_xact_lock(123)))
+        with first.session() as contender:
+            _ = contender.execute(text("SET LOCAL lock_timeout='250ms'"))
+            with pytest.raises(DBAPIError) as error:
+                _ = contender.execute(select(func.pg_advisory_xact_lock(123)))
+            assert isinstance(error.value.orig, LockNotAvailable)
+
+
+@postgres_only
+def test_orm_session_level_lock_and_unlock_pair_is_namespaced() -> None:
+    """The session-level liquidity lock/unlock pair stays paired under namespacing."""
+    with (
+        isolated_database(os.environ["TEST_DATABASE_URL"]) as first,
+        isolated_database(os.environ["TEST_DATABASE_URL"]) as second,
+        first.session() as holder,
+    ):
+        _ = holder.execute(select(func.pg_advisory_lock(456)))
+        with first.session() as contender:
+            _ = contender.execute(text("SET LOCAL lock_timeout='250ms'"))
+            with pytest.raises(DBAPIError) as error:
+                _ = contender.execute(select(func.pg_advisory_lock(456)))
+            assert isinstance(error.value.orig, LockNotAvailable)
+        with second.session() as independent:
+            _ = independent.execute(select(func.pg_advisory_lock(456)))
+            _ = independent.execute(select(func.pg_advisory_unlock(456)))
+        _ = holder.execute(select(func.pg_advisory_unlock(456)))
+        with first.session() as released:
+            _ = released.execute(text("SET LOCAL lock_timeout='250ms'"))
+            _ = released.execute(select(func.pg_advisory_lock(456)))
+            _ = released.execute(select(func.pg_advisory_unlock(456)))
 
 
 def _assert_native_stream_keeps_rows_and_locks(

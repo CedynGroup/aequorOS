@@ -160,21 +160,28 @@ cluster URL must point at a disposable test cluster and all source rows are synt
 `hooks=(install_hook, ...)` on `isolated_database`, `database_connections` or
 `TestDatabaseConnections` installs each engine hook before its first checkout,
 including extra pools, context variants, migration engines and async engines'
-sync facades. Encryption advisory locks receive the owning schema's namespace
-on every managed PostgreSQL engine, including adopted application engines and async
-engines' sync facades, and their native cursors. The transformation runs at native
-cursor execution so raw SQL and ORM work use the same lock identity exactly once.
-Extra pools and role/tenant variants in one schema retain the same lock identity;
-these bank locks do not contend across independently owned schemas.
+sync facades.
+
+Application advisory locks (bank key versions, the scheduler's session purge,
+liquidity finding publication) receive the owning schema's namespace on every
+managed PostgreSQL engine, including adopted application engines and async
+engines' sync facades, and their native cursors. The transformation runs at
+native cursor execution so raw SQL and ORM work use the same lock identity
+exactly once. Extra pools and role/tenant variants in one schema retain the
+same lock identity; these locks do not contend across independently owned
+schemas, which is what keeps parallel pytest workers and processes isolated.
 The hook is installed before checkout and does not depend on a schema prefix
 or URL option ordering.
 
-Namespacing matches only the exact native statements
+Namespacing matches every single-parameter advisory-lock statement whose bind
+name is `key` or a SQLAlchemy-generated `pg_advisory_*_<n>` name: the literal
 `SELECT pg_advisory_xact_lock(%(key)s)` and
-`SELECT pg_advisory_xact_lock_shared(%(key)s)`, including their compiled ORM
-equivalents. Use another bind name, such as `probe_key`, for generic contention
-probes that must retain the original lock identity. Other advisory-lock SQL is
-unchanged.
+`SELECT pg_advisory_xact_lock_shared(%(key)s)` forms and the compiled
+`select(func.pg_advisory_xact_lock/lock/unlock(key))` forms (generated bind
+name plus label alias). Use another bind name, such as `probe_key`, a second
+parameter or a literal key for generic contention probes that must retain the
+original database-global lock identity — the migration-chain locks, for
+example. Other advisory-lock SQL is unchanged.
 
 Run the constructor guard with `uv run python scripts/test_database_guard.py`.
 `--strict` rejects all legacy constructors. The allowlist records counts by path
