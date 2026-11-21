@@ -8,6 +8,11 @@ updates:
     directory: /
     schedule: { interval: weekly }
     open-pull-requests-limit: 5
+    groups:
+      # The tiptap packages pin each other with exact-version peers, so they
+      # only work when every one of them moves together.
+      tiptap:
+        patterns: ["@tiptap/*"]
     ignore:
       # Held on 5.x: TypeScript 7 is unsupported by typescript-eslint and drops
       # the compiler JS API the dashboard tests use. Revisit once
