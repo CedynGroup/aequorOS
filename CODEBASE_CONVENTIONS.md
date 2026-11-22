@@ -584,7 +584,7 @@ test-hygiene rules: the `acts/*` rules from `packages/oxlint-plugins`
 `eslint-plugin-playwright`'s no-wait-for-timeout / no-networkidle /
 no-focused-test. They are enabled only through each package's
 `.oxlintrc.json` overrides on the test globs (`tests/**/*.spec.{ts,tsx}`,
-`tests/**/*.test.ts`, `tests/**/*.e2e.spec.ts`, `e2e/**`); all default oxlint
+`tests/**/*.test.{ts,tsx}`, `tests/**/*.e2e.spec.ts`, `e2e/**`); all default oxlint
 categories are off, so unrelated rules stay ESLint's business. ESLint keeps the
 Next.js rules and the feature-boundary `no-restricted-imports` pattern
 (oxlint's regex support lacks lookahead, which the boundary pattern needs).
