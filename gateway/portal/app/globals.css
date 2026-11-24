@@ -1,0 +1,114 @@
+@import "tailwindcss";
+
+/*
+ * AequorOS Portal — design tokens.
+ * Every value is taken from gateway/design/*.dc.html. The portal is a
+ * light-only regulator tool, as designed.
+ */
+@theme {
+  --font-sans: var(--font-inter), Inter, system-ui, sans-serif;
+  --font-mono: var(--font-plex-mono), "IBM Plex Mono", ui-monospace, monospace;
+
+  /* Page and text */
+  --color-canvas: #f4f6f8;
+  --color-ink: #0e1726;
+  --color-ink-2: #344054;
+  --color-muted: #4b5565;
+  --color-disabled: #6b7482;
+  --color-placeholder: #6b4e16;
+
+  /* Lines and surfaces */
+  --color-line: #dde2e8;
+  --color-hairline: #eef0f3;
+  --color-field: #c9d1db;
+  --color-panel: #f8fafc;
+  --color-selected: #f2f6fe;
+  --color-changed: #fdf8ee;
+
+  /* Actions */
+  --color-action: #1f4fd1;
+  --color-action-hover: #163a9c;
+  --color-action-soft: #e6eefc;
+
+  /* Navigation (navy) */
+  --color-nav: #0f1e36;
+  --color-nav-text: #dce4f0;
+  --color-nav-subtle: #a9b7cc;
+  --color-nav-mark: #6f84a6;
+  --color-nav-badge: #2b4672;
+  --color-nav-active: #24406b;
+  --color-nav-card: #16294a;
+  --color-nav-tile: #1b3358;
+  --color-nav-icon: #9db8e8;
+  --color-nav-copy: #c3cede;
+  --color-concept: #3a2e1a;
+  --color-concept-text: #ffd9a8;
+
+  /* Status chips */
+  --color-ok: #0f6b3e;
+  --color-ok-soft: #e3f4ec;
+  --color-bad: #a12a2a;
+  --color-bad-soft: #fbe7e7;
+  --color-warn: #8a4b00;
+  --color-warn-soft: #fdefd9;
+  --color-query: #5b35c2;
+  --color-query-soft: #efeafe;
+  --color-neutral-soft: #eef0f3;
+
+  /* Compliance heatmap */
+  --color-heat-on-time: #2457c5;
+  --color-heat-late: #e8913a;
+  --color-heat-missing: #9b1c1c;
+  --color-heat-not-due: #e3e7ec;
+
+  /* Amendment note */
+  --color-note: #fdf6ea;
+  --color-note-line: #f1d9ae;
+  --color-note-text: #5c3a00;
+  --color-note-link: #7a4a00;
+
+  /* Calendar events */
+  --color-cal-past: #e8eefb;
+  --color-cal-warn-text: #6e3c00;
+  --color-cal-future: #f1f3f6;
+
+  /* Audit integrity */
+  --color-intact: #eaf5ef;
+  --color-intact-line: #bfe3cf;
+  --color-intact-title: #0b4f2e;
+  --color-intact-text: #1e5a3c;
+}
+
+/* Base rules live in the base layer so Tailwind utilities always win over them. */
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    margin: 0;
+    background: var(--color-canvas);
+    color: var(--color-ink);
+  }
+
+  a {
+    color: var(--color-action);
+  }
+  a:hover {
+    color: var(--color-action-hover);
+  }
+
+  /* A visible focus ring everywhere; light on the navy navigation. */
+  :focus-visible {
+    outline: 2px solid var(--color-action);
+    outline-offset: 2px;
+  }
+  .on-navy :focus-visible {
+    outline-color: var(--color-nav-icon);
+  }
+
+}
+
+.tabular {
+  font-variant-numeric: tabular-nums;
+}

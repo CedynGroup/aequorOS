@@ -1,0 +1,2355 @@
+{
+ "format": "aequoros-gateway-return/1",
+ "code": "BSD13",
+ "name": "Net Open Position",
+ "cadence": "monthly",
+ "basis": "solo",
+ "applies_to": [
+  "universal_bank"
+ ],
+ "version": "2026.2",
+ "first_reporting_date": "2025-01-01",
+ "source": {
+  "system": "AequorOS",
+  "template": "bog-bsd13-official-v1",
+  "fidelity": "CONFIRMED",
+  "workbook": "FORM BSD13 REVISED.xls"
+ },
+ "sections": [
+  {
+   "code": "sheet_forex_open_position",
+   "title": "FOREX OPEN POSITION",
+   "unit": "thousands",
+   "itemised": false,
+   "lines": [
+    {
+     "code": "BSD13.FXP.R19.usd",
+     "label": "Net Assets — usd",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD13.FXP.R19.gbp",
+     "label": "Net Assets — gbp",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD13.FXP.R19.dem",
+     "label": "Net Assets — dem",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD13.FXP.OTHER.R19.other",
+     "label": "Net Assets",
+     "kind": "value"
+    },
+    {
+     "code": "BSD13.FXP.R21.usd",
+     "label": "Liabilities on — usd",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD13.FXP.R21.gbp",
+     "label": "Liabilities on — gbp",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD13.FXP.R21.dem",
+     "label": "Liabilities on — dem",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD13.FXP.OTHER.R21.other",
+     "label": "Liabilities on",
+     "kind": "value"
+    },
+    {
+     "code": "BSD13.FXP.R24.usd",
+     "label": "Net Trading — usd",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD13.FXP.R24.gbp",
+     "label": "Net Trading — gbp",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD13.FXP.R24.dem",
+     "label": "Net Trading — dem",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD13.FXP.OTHER.R24.other",
+     "label": "Net Trading",
+     "kind": "value"
+    },
+    {
+     "code": "BSD13.FXP.R29.usd",
+     "label": "POSITION(NOP) — usd",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD13.FXP.R29.gbp",
+     "label": "POSITION(NOP) — gbp",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD13.FXP.R29.dem",
+     "label": "POSITION(NOP) — dem",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD13.FXP.OTHER.R29.other",
+     "label": "POSITION(NOP)",
+     "kind": "value"
+    },
+    {
+     "code": "BSD13.FXP.R32.usd",
+     "label": "Cedi equivalent (in ' 000) — usd",
+     "kind": "value"
+    },
+    {
+     "code": "BSD13.FXP.R32.gbp",
+     "label": "Cedi equivalent (in ' 000) — gbp",
+     "kind": "value"
+    },
+    {
+     "code": "BSD13.FXP.R32.dem",
+     "label": "Cedi equivalent (in ' 000) — dem",
+     "kind": "value"
+    },
+    {
+     "code": "BSD13.FXP.OTHER.R32.other",
+     "label": "Cedi equivalent (in ' 000)",
+     "kind": "value"
+    },
+    {
+     "code": "BSD13.FXP.R35.usd",
+     "label": "Management Limit, if any, — usd",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD13.FXP.R35.gbp",
+     "label": "Management Limit, if any, — gbp",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD13.FXP.R35.dem",
+     "label": "Management Limit, if any, — dem",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD13.FXP.OTHER.R35.other",
+     "label": "Management Limit, if any,",
+     "kind": "value"
+    },
+    {
+     "code": "BSD13.AFOP.R44.nop",
+     "label": "US DOLLAR",
+     "kind": "value"
+    },
+    {
+     "code": "BSD13.AFOP.R45.nop",
+     "label": "GB POUND",
+     "kind": "value"
+    },
+    {
+     "code": "BSD13.AFOP.R46.nop",
+     "label": "DEM",
+     "kind": "value"
+    },
+    {
+     "code": "BSD13.AFOP.R47.nop",
+     "label": "Other Currencies",
+     "kind": "value"
+    },
+    {
+     "code": "BSD13.AFOP.R50.nop",
+     "label": "AGGREGATE FOREX **",
+     "kind": "value"
+    },
+    {
+     "code": "BSD13.AFOP.R52.nop",
+     "label": "Net own funds (NOF) ***",
+     "kind": "value"
+    },
+    {
+     "code": "BSD13.AFOP.R53.nop",
+     "label": "AFOP as % of NOF",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD13.AFOP.R55.nop",
+     "label": "Regulatory(ie BoG) limit,",
+     "kind": "value",
+     "unit": "units"
+    }
+   ]
+  },
+  {
+   "code": "sheet_forex_open_position_schedule_a",
+   "title": "FOREX OPEN POSITION-SCHEDULE-A",
+   "unit": "millions",
+   "itemised": false,
+   "lines": [
+    {
+     "code": "BSD13.SCHA.R8.usd",
+     "label": "Cash on Hand — usd",
+     "kind": "number",
+     "unit": "units"
+    },
+    {
+     "code": "BSD13.SCHA.R8.gbp",
+     "label": "Cash on Hand — gbp",
+     "kind": "number",
+     "unit": "units"
+    },
+    {
+     "code": "BSD13.SCHA.R8.dem",
+     "label": "Cash on Hand — dem",
+     "kind": "number",
+     "unit": "units"
+    },
+    {
+     "code": "BSD13.SCHA.OTHER.R8.other",
+     "label": "Cash on Hand",
+     "kind": "number"
+    },
+    {
+     "code": "FOREX OPEN POSITION-SCHEDULE-A!C9",
+     "label": "2.",
+     "kind": "number",
+     "total": true,
+     "unit": "units"
+    },
+    {
+     "code": "FOREX OPEN POSITION-SCHEDULE-A!D9",
+     "label": "2.",
+     "kind": "number",
+     "total": true,
+     "unit": "units"
+    },
+    {
+     "code": "FOREX OPEN POSITION-SCHEDULE-A!E9",
+     "label": "2.",
+     "kind": "number",
+     "total": true,
+     "unit": "units"
+    },
+    {
+     "code": "FOREX OPEN POSITION-SCHEDULE-A!F9",
+     "label": "2.",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD13.SCHA.R10.usd",
+     "label": "a. In overseas banks — usd",
+     "kind": "number",
+     "unit": "units"
+    },
+    {
+     "code": "BSD13.SCHA.R10.gbp",
+     "label": "a. In overseas banks — gbp",
+     "kind": "number",
+     "unit": "units"
+    },
+    {
+     "code": "BSD13.SCHA.R10.dem",
+     "label": "a. In overseas banks — dem",
+     "kind": "number",
+     "unit": "units"
+    },
+    {
+     "code": "BSD13.SCHA.OTHER.R10.other",
+     "label": "a. In overseas banks",
+     "kind": "number"
+    },
+    {
+     "code": "BSD13.SCHA.R11.usd",
+     "label": "b. In BoG — usd",
+     "kind": "number",
+     "unit": "units"
+    },
+    {
+     "code": "BSD13.SCHA.R11.gbp",
+     "label": "b. In BoG — gbp",
+     "kind": "number",
+     "unit": "units"
+    },
+    {
+     "code": "BSD13.SCHA.R11.dem",
+     "label": "b. In BoG — dem",
+     "kind": "number",
+     "unit": "units"
+    },
+    {
+     "code": "BSD13.SCHA.OTHER.R11.other",
+     "label": "b. In BoG",
+     "kind": "number"
+    },
+    {
+     "code": "BSD13.SCHA.R12.usd",
+     "label": "c. In Ghana banks — usd",
+     "kind": "number",
+     "unit": "units"
+    },
+    {
+     "code": "BSD13.SCHA.R12.gbp",
+     "label": "c. In Ghana banks — gbp",
+     "kind": "number",
+     "unit": "units"
+    },
+    {
+     "code": "BSD13.SCHA.R12.dem",
+     "label": "c. In Ghana banks — dem",
+     "kind": "number",
+     "unit": "units"
+    },
+    {
+     "code": "BSD13.SCHA.OTHER.R12.other",
+     "label": "c. In Ghana banks",
+     "kind": "number"
+    },
+    {
+     "code": "FOREX OPEN POSITION-SCHEDULE-A!C14",
+     "label": "3.",
+     "kind": "number",
+     "total": true,
+     "unit": "units"
+    },
+    {
+     "code": "FOREX OPEN POSITION-SCHEDULE-A!D14",
+     "label": "3.",
+     "kind": "number",
+     "total": true,
+     "unit": "units"
+    },
+    {
+     "code": "FOREX OPEN POSITION-SCHEDULE-A!E14",
+     "label": "3.",
+     "kind": "number",
+     "total": true,
+     "unit": "units"
+    },
+    {
+     "code": "FOREX OPEN POSITION-SCHEDULE-A!F14",
+     "label": "3.",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD13.SCHA.R15.usd",
+     "label": "a. At Ghana Banks — usd",
+     "kind": "number",
+     "unit": "units"
+    },
+    {
+     "code": "BSD13.SCHA.R15.gbp",
+     "label": "a. At Ghana Banks — gbp",
+     "kind": "number",
+     "unit": "units"
+    },
+    {
+     "code": "BSD13.SCHA.R15.dem",
+     "label": "a. At Ghana Banks — dem",
+     "kind": "number",
+     "unit": "units"
+    },
+    {
+     "code": "BSD13.SCHA.OTHER.R15.other",
+     "label": "a. At Ghana Banks",
+     "kind": "number"
+    },
+    {
+     "code": "BSD13.SCHA.R16.usd",
+     "label": "b. at overseas banks — usd",
+     "kind": "number",
+     "unit": "units"
+    },
+    {
+     "code": "BSD13.SCHA.R16.gbp",
+     "label": "b. at overseas banks — gbp",
+     "kind": "number",
+     "unit": "units"
+    },
+    {
+     "code": "BSD13.SCHA.R16.dem",
+     "label": "b. at overseas banks — dem",
+     "kind": "number",
+     "unit": "units"
+    },
+    {
+     "code": "BSD13.SCHA.OTHER.R16.other",
+     "label": "b. at overseas banks",
+     "kind": "number"
+    },
+    {
+     "code": "BSD13.SCHA.R17.usd",
+     "label": "A. Placements at overseas banks — usd",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD13.SCHA.R17.gbp",
+     "label": "A. Placements at overseas banks — gbp",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD13.SCHA.R17.dem",
+     "label": "A. Placements at overseas banks — dem",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD13.SCHA.OTHER.R17.other",
+     "label": "A. Placements at overseas banks",
+     "kind": "value"
+    },
+    {
+     "code": "BSD13.SCHA.R19.usd",
+     "label": "Securities Investments — usd",
+     "kind": "number",
+     "unit": "units"
+    },
+    {
+     "code": "BSD13.SCHA.R19.gbp",
+     "label": "Securities Investments — gbp",
+     "kind": "number",
+     "unit": "units"
+    },
+    {
+     "code": "BSD13.SCHA.R19.dem",
+     "label": "Securities Investments — dem",
+     "kind": "number",
+     "unit": "units"
+    },
+    {
+     "code": "BSD13.SCHA.OTHER.R19.other",
+     "label": "Securities Investments",
+     "kind": "number"
+    },
+    {
+     "code": "BSD13.SCHA.R20.usd",
+     "label": "Loans & advances (net) — usd",
+     "kind": "number",
+     "unit": "units"
+    },
+    {
+     "code": "BSD13.SCHA.R20.gbp",
+     "label": "Loans & advances (net) — gbp",
+     "kind": "number",
+     "unit": "units"
+    },
+    {
+     "code": "BSD13.SCHA.R20.dem",
+     "label": "Loans & advances (net) — dem",
+     "kind": "number",
+     "unit": "units"
+    },
+    {
+     "code": "BSD13.SCHA.OTHER.R20.other",
+     "label": "Loans & advances (net)",
+     "kind": "number"
+    },
+    {
+     "code": "BSD13.SCHA.R21.usd",
+     "label": "Other assets / receivables — usd",
+     "kind": "number",
+     "unit": "units"
+    },
+    {
+     "code": "BSD13.SCHA.R21.gbp",
+     "label": "Other assets / receivables — gbp",
+     "kind": "number",
+     "unit": "units"
+    },
+    {
+     "code": "BSD13.SCHA.R21.dem",
+     "label": "Other assets / receivables — dem",
+     "kind": "number",
+     "unit": "units"
+    },
+    {
+     "code": "BSD13.SCHA.OTHER.R21.other",
+     "label": "Other assets / receivables",
+     "kind": "number"
+    },
+    {
+     "code": "FOREX OPEN POSITION-SCHEDULE-A!C23",
+     "label": "TOTAL ASSETS (TA)",
+     "kind": "number",
+     "total": true,
+     "unit": "units"
+    },
+    {
+     "code": "FOREX OPEN POSITION-SCHEDULE-A!D23",
+     "label": "TOTAL ASSETS (TA)",
+     "kind": "number",
+     "total": true,
+     "unit": "units"
+    },
+    {
+     "code": "FOREX OPEN POSITION-SCHEDULE-A!E23",
+     "label": "TOTAL ASSETS (TA)",
+     "kind": "number",
+     "total": true,
+     "unit": "units"
+    },
+    {
+     "code": "FOREX OPEN POSITION-SCHEDULE-A!F23",
+     "label": "TOTAL ASSETS (TA)",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "FOREX OPEN POSITION-SCHEDULE-A!C27",
+     "label": "7.",
+     "kind": "number",
+     "total": true,
+     "unit": "units"
+    },
+    {
+     "code": "FOREX OPEN POSITION-SCHEDULE-A!D27",
+     "label": "7.",
+     "kind": "number",
+     "total": true,
+     "unit": "units"
+    },
+    {
+     "code": "FOREX OPEN POSITION-SCHEDULE-A!E27",
+     "label": "7.",
+     "kind": "number",
+     "total": true,
+     "unit": "units"
+    },
+    {
+     "code": "FOREX OPEN POSITION-SCHEDULE-A!F27",
+     "label": "7.",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD13.SCHA.R28.usd",
+     "label": "a. Non-residents — usd",
+     "kind": "number",
+     "unit": "units"
+    },
+    {
+     "code": "BSD13.SCHA.R28.gbp",
+     "label": "a. Non-residents — gbp",
+     "kind": "number",
+     "unit": "units"
+    },
+    {
+     "code": "BSD13.SCHA.R28.dem",
+     "label": "a. Non-residents — dem",
+     "kind": "number",
+     "unit": "units"
+    },
+    {
+     "code": "BSD13.SCHA.OTHER.R28.other",
+     "label": "a. Non-residents",
+     "kind": "number"
+    },
+    {
+     "code": "FOREX OPEN POSITION-SCHEDULE-A!C29",
+     "label": "b. Residents",
+     "kind": "number",
+     "total": true,
+     "unit": "units"
+    },
+    {
+     "code": "FOREX OPEN POSITION-SCHEDULE-A!D29",
+     "label": "b. Residents",
+     "kind": "number",
+     "total": true,
+     "unit": "units"
+    },
+    {
+     "code": "FOREX OPEN POSITION-SCHEDULE-A!E29",
+     "label": "b. Residents",
+     "kind": "number",
+     "total": true,
+     "unit": "units"
+    },
+    {
+     "code": "FOREX OPEN POSITION-SCHEDULE-A!F29",
+     "label": "b. Residents",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD13.SCHA.R30.usd",
+     "label": "i) foreign exchange a/cs (external) — usd",
+     "kind": "number",
+     "unit": "units"
+    },
+    {
+     "code": "BSD13.SCHA.R30.gbp",
+     "label": "i) foreign exchange a/cs (external) — gbp",
+     "kind": "number",
+     "unit": "units"
+    },
+    {
+     "code": "BSD13.SCHA.R30.dem",
+     "label": "i) foreign exchange a/cs (external) — dem",
+     "kind": "number",
+     "unit": "units"
+    },
+    {
+     "code": "BSD13.SCHA.OTHER.R30.other",
+     "label": "i) foreign exchange a/cs (external)",
+     "kind": "number"
+    },
+    {
+     "code": "BSD13.SCHA.R31.usd",
+     "label": "ii) foreign exchange a/cs (internal) — usd",
+     "kind": "number",
+     "unit": "units"
+    },
+    {
+     "code": "BSD13.SCHA.R31.gbp",
+     "label": "ii) foreign exchange a/cs (internal) — gbp",
+     "kind": "number",
+     "unit": "units"
+    },
+    {
+     "code": "BSD13.SCHA.R31.dem",
+     "label": "ii) foreign exchange a/cs (internal) — dem",
+     "kind": "number",
+     "unit": "units"
+    },
+    {
+     "code": "BSD13.SCHA.OTHER.R31.other",
+     "label": "ii) foreign exchange a/cs (internal)",
+     "kind": "number"
+    },
+    {
+     "code": "BSD13.SCHA.R33.usd",
+     "label": "Borrowings in inter-bank market — usd",
+     "kind": "number",
+     "unit": "units"
+    },
+    {
+     "code": "BSD13.SCHA.R33.gbp",
+     "label": "Borrowings in inter-bank market — gbp",
+     "kind": "number",
+     "unit": "units"
+    },
+    {
+     "code": "BSD13.SCHA.R33.dem",
+     "label": "Borrowings in inter-bank market — dem",
+     "kind": "number",
+     "unit": "units"
+    },
+    {
+     "code": "BSD13.SCHA.OTHER.R33.other",
+     "label": "Borrowings in inter-bank market",
+     "kind": "number"
+    },
+    {
+     "code": "BSD13.SCHA.R34.usd",
+     "label": "Other borrowings — usd",
+     "kind": "number",
+     "unit": "units"
+    },
+    {
+     "code": "BSD13.SCHA.R34.gbp",
+     "label": "Other borrowings — gbp",
+     "kind": "number",
+     "unit": "units"
+    },
+    {
+     "code": "BSD13.SCHA.R34.dem",
+     "label": "Other borrowings — dem",
+     "kind": "number",
+     "unit": "units"
+    },
+    {
+     "code": "BSD13.SCHA.OTHER.R34.other",
+     "label": "Other borrowings",
+     "kind": "number"
+    },
+    {
+     "code": "BSD13.SCHA.R35.usd",
+     "label": "Other liabilities / payables — usd",
+     "kind": "number",
+     "unit": "units"
+    },
+    {
+     "code": "BSD13.SCHA.R35.gbp",
+     "label": "Other liabilities / payables — gbp",
+     "kind": "number",
+     "unit": "units"
+    },
+    {
+     "code": "BSD13.SCHA.R35.dem",
+     "label": "Other liabilities / payables — dem",
+     "kind": "number",
+     "unit": "units"
+    },
+    {
+     "code": "BSD13.SCHA.OTHER.R35.other",
+     "label": "Other liabilities / payables",
+     "kind": "number"
+    },
+    {
+     "code": "FOREX OPEN POSITION-SCHEDULE-A!C37",
+     "label": "TOTAL LIABILITIES (TL)",
+     "kind": "number",
+     "total": true,
+     "unit": "units"
+    },
+    {
+     "code": "FOREX OPEN POSITION-SCHEDULE-A!D37",
+     "label": "TOTAL LIABILITIES (TL)",
+     "kind": "number",
+     "total": true,
+     "unit": "units"
+    },
+    {
+     "code": "FOREX OPEN POSITION-SCHEDULE-A!E37",
+     "label": "TOTAL LIABILITIES (TL)",
+     "kind": "number",
+     "total": true,
+     "unit": "units"
+    },
+    {
+     "code": "FOREX OPEN POSITION-SCHEDULE-A!F37",
+     "label": "TOTAL LIABILITIES (TL)",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "FOREX OPEN POSITION-SCHEDULE-A!C39",
+     "label": "NET ASSETS(A-B)",
+     "kind": "number",
+     "total": true,
+     "unit": "units"
+    },
+    {
+     "code": "FOREX OPEN POSITION-SCHEDULE-A!D39",
+     "label": "NET ASSETS(A-B)",
+     "kind": "number",
+     "total": true,
+     "unit": "units"
+    },
+    {
+     "code": "FOREX OPEN POSITION-SCHEDULE-A!E39",
+     "label": "NET ASSETS(A-B)",
+     "kind": "number",
+     "total": true,
+     "unit": "units"
+    },
+    {
+     "code": "FOREX OPEN POSITION-SCHEDULE-A!F39",
+     "label": "NET ASSETS(A-B)",
+     "kind": "number",
+     "total": true
+    }
+   ]
+  },
+  {
+   "code": "sheet_forex_open_position_schedule_b",
+   "title": "FOREX OPEN POSITION-SCHEDULE-B",
+   "unit": "millions",
+   "itemised": false,
+   "lines": [
+    {
+     "code": "BSD13.SCHB.R9.usd",
+     "label": "Letters of Credit — usd",
+     "kind": "number"
+    },
+    {
+     "code": "BSD13.SCHB.R9.gbp",
+     "label": "Letters of Credit — gbp",
+     "kind": "number"
+    },
+    {
+     "code": "BSD13.SCHB.R9.dem",
+     "label": "Letters of Credit — dem",
+     "kind": "number"
+    },
+    {
+     "code": "BSD13.SCHB.R9.other",
+     "label": "Letters of Credit — other",
+     "kind": "number"
+    },
+    {
+     "code": "BSD13.SCHB.R11.usd",
+     "label": "Guarantees — usd",
+     "kind": "number"
+    },
+    {
+     "code": "BSD13.SCHB.R11.gbp",
+     "label": "Guarantees — gbp",
+     "kind": "number"
+    },
+    {
+     "code": "BSD13.SCHB.R11.dem",
+     "label": "Guarantees — dem",
+     "kind": "number"
+    },
+    {
+     "code": "BSD13.SCHB.R11.other",
+     "label": "Guarantees — other",
+     "kind": "number"
+    },
+    {
+     "code": "BSD13.SCHB.R13.usd",
+     "label": "Other Commitments — usd",
+     "kind": "number"
+    },
+    {
+     "code": "BSD13.SCHB.R13.gbp",
+     "label": "Other Commitments — gbp",
+     "kind": "number"
+    },
+    {
+     "code": "BSD13.SCHB.R13.dem",
+     "label": "Other Commitments — dem",
+     "kind": "number"
+    },
+    {
+     "code": "BSD13.SCHB.R13.other",
+     "label": "Other Commitments — other",
+     "kind": "number"
+    },
+    {
+     "code": "FOREX OPEN POSITION-SCHEDULE-B!C15",
+     "label": "TOTAL",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "FOREX OPEN POSITION-SCHEDULE-B!D15",
+     "label": "TOTAL",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "FOREX OPEN POSITION-SCHEDULE-B!E15",
+     "label": "TOTAL",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "FOREX OPEN POSITION-SCHEDULE-B!F15",
+     "label": "TOTAL",
+     "kind": "number",
+     "total": true
+    }
+   ]
+  },
+  {
+   "code": "sheet_forex_open_position_schedule_c",
+   "title": "FOREX OPEN POSITION-SCHEDULE-C",
+   "unit": "millions",
+   "itemised": false,
+   "lines": [
+    {
+     "code": "BSD13.SCHC.R9.usd",
+     "label": "Spot Purchase — usd",
+     "kind": "number",
+     "unit": "units"
+    },
+    {
+     "code": "BSD13.SCHC.R9.gbp",
+     "label": "Spot Purchase — gbp",
+     "kind": "number",
+     "unit": "units"
+    },
+    {
+     "code": "BSD13.SCHC.R9.dem",
+     "label": "Spot Purchase — dem",
+     "kind": "number",
+     "unit": "units"
+    },
+    {
+     "code": "BSD13.SCHC.OTHER.R9.other",
+     "label": "Spot Purchase",
+     "kind": "number"
+    },
+    {
+     "code": "BSD13.SCHC.R11.usd",
+     "label": "Spot Sale — usd",
+     "kind": "number",
+     "unit": "units"
+    },
+    {
+     "code": "BSD13.SCHC.R11.gbp",
+     "label": "Spot Sale — gbp",
+     "kind": "number",
+     "unit": "units"
+    },
+    {
+     "code": "BSD13.SCHC.R11.dem",
+     "label": "Spot Sale — dem",
+     "kind": "number",
+     "unit": "units"
+    },
+    {
+     "code": "BSD13.SCHC.OTHER.R11.other",
+     "label": "Spot Sale",
+     "kind": "number"
+    },
+    {
+     "code": "FOREX OPEN POSITION-SCHEDULE-C!C13",
+     "label": "a.",
+     "kind": "number",
+     "total": true,
+     "unit": "units"
+    },
+    {
+     "code": "FOREX OPEN POSITION-SCHEDULE-C!D13",
+     "label": "a.",
+     "kind": "number",
+     "total": true,
+     "unit": "units"
+    },
+    {
+     "code": "FOREX OPEN POSITION-SCHEDULE-C!E13",
+     "label": "a.",
+     "kind": "number",
+     "total": true,
+     "unit": "units"
+    },
+    {
+     "code": "FOREX OPEN POSITION-SCHEDULE-C!F13",
+     "label": "a.",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD13.SCHC.R16.usd",
+     "label": "Forward Purchase * — usd",
+     "kind": "number",
+     "unit": "units"
+    },
+    {
+     "code": "BSD13.SCHC.R16.gbp",
+     "label": "Forward Purchase * — gbp",
+     "kind": "number",
+     "unit": "units"
+    },
+    {
+     "code": "BSD13.SCHC.R16.dem",
+     "label": "Forward Purchase * — dem",
+     "kind": "number",
+     "unit": "units"
+    },
+    {
+     "code": "BSD13.SCHC.OTHER.R16.other",
+     "label": "Forward Purchase *",
+     "kind": "number"
+    },
+    {
+     "code": "BSD13.SCHC.R18.usd",
+     "label": "Forward sale * — usd",
+     "kind": "number",
+     "unit": "units"
+    },
+    {
+     "code": "BSD13.SCHC.R18.gbp",
+     "label": "Forward sale * — gbp",
+     "kind": "number",
+     "unit": "units"
+    },
+    {
+     "code": "BSD13.SCHC.R18.dem",
+     "label": "Forward sale * — dem",
+     "kind": "number",
+     "unit": "units"
+    },
+    {
+     "code": "BSD13.SCHC.OTHER.R18.other",
+     "label": "Forward sale *",
+     "kind": "number"
+    },
+    {
+     "code": "FOREX OPEN POSITION-SCHEDULE-C!C20",
+     "label": "b.",
+     "kind": "number",
+     "total": true,
+     "unit": "units"
+    },
+    {
+     "code": "FOREX OPEN POSITION-SCHEDULE-C!D20",
+     "label": "b.",
+     "kind": "number",
+     "total": true,
+     "unit": "units"
+    },
+    {
+     "code": "FOREX OPEN POSITION-SCHEDULE-C!E20",
+     "label": "b.",
+     "kind": "number",
+     "total": true,
+     "unit": "units"
+    },
+    {
+     "code": "FOREX OPEN POSITION-SCHEDULE-C!F20",
+     "label": "b.",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "FOREX OPEN POSITION-SCHEDULE-C!C23",
+     "label": "NET TRADING POSITION",
+     "kind": "number",
+     "total": true,
+     "unit": "units"
+    },
+    {
+     "code": "FOREX OPEN POSITION-SCHEDULE-C!D23",
+     "label": "NET TRADING POSITION",
+     "kind": "number",
+     "total": true,
+     "unit": "units"
+    },
+    {
+     "code": "FOREX OPEN POSITION-SCHEDULE-C!E23",
+     "label": "NET TRADING POSITION",
+     "kind": "number",
+     "total": true,
+     "unit": "units"
+    },
+    {
+     "code": "FOREX OPEN POSITION-SCHEDULE-C!F23",
+     "label": "NET TRADING POSITION",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD13.SCHC.ANNEX.PURCHASE.SI.R35.serial",
+     "label": "row 35",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD13.SCHC.ANNEX.PURCHASE.R35.date",
+     "label": "row 35 — date",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD13.SCHC.ANNEX.PURCHASE.R35.counterparty",
+     "label": "row 35 — counterparty",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD13.SCHC.ANNEX.PURCHASE.R35.currency",
+     "label": "row 35 — currency",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD13.SCHC.ANNEX.PURCHASE.AMOUNT.R35.amount",
+     "label": "row 35",
+     "kind": "value"
+    },
+    {
+     "code": "BSD13.SCHC.ANNEX.PURCHASE.R35.period",
+     "label": "row 35 — period",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD13.SCHC.ANNEX.PURCHASE.R35.rate",
+     "label": "row 35 — rate",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD13.SCHC.ANNEX.PURCHASE.R35.points",
+     "label": "row 35 — points",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD13.SCHC.ANNEX.PURCHASE.R35.delivery",
+     "label": "row 35 — delivery",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD13.SCHC.ANNEX.PURCHASE.SI.R36.serial",
+     "label": "row 36",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD13.SCHC.ANNEX.PURCHASE.R36.date",
+     "label": "row 36 — date",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD13.SCHC.ANNEX.PURCHASE.R36.counterparty",
+     "label": "row 36 — counterparty",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD13.SCHC.ANNEX.PURCHASE.R36.currency",
+     "label": "row 36 — currency",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD13.SCHC.ANNEX.PURCHASE.AMOUNT.R36.amount",
+     "label": "row 36",
+     "kind": "value"
+    },
+    {
+     "code": "BSD13.SCHC.ANNEX.PURCHASE.R36.period",
+     "label": "row 36 — period",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD13.SCHC.ANNEX.PURCHASE.R36.rate",
+     "label": "row 36 — rate",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD13.SCHC.ANNEX.PURCHASE.R36.points",
+     "label": "row 36 — points",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD13.SCHC.ANNEX.PURCHASE.R36.delivery",
+     "label": "row 36 — delivery",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD13.SCHC.ANNEX.PURCHASE.SI.R37.serial",
+     "label": "row 37",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD13.SCHC.ANNEX.PURCHASE.R37.date",
+     "label": "row 37 — date",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD13.SCHC.ANNEX.PURCHASE.R37.counterparty",
+     "label": "row 37 — counterparty",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD13.SCHC.ANNEX.PURCHASE.R37.currency",
+     "label": "row 37 — currency",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD13.SCHC.ANNEX.PURCHASE.AMOUNT.R37.amount",
+     "label": "row 37",
+     "kind": "value"
+    },
+    {
+     "code": "BSD13.SCHC.ANNEX.PURCHASE.R37.period",
+     "label": "row 37 — period",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD13.SCHC.ANNEX.PURCHASE.R37.rate",
+     "label": "row 37 — rate",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD13.SCHC.ANNEX.PURCHASE.R37.points",
+     "label": "row 37 — points",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD13.SCHC.ANNEX.PURCHASE.R37.delivery",
+     "label": "row 37 — delivery",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD13.SCHC.ANNEX.PURCHASE.SI.R38.serial",
+     "label": "row 38",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD13.SCHC.ANNEX.PURCHASE.R38.date",
+     "label": "row 38 — date",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD13.SCHC.ANNEX.PURCHASE.R38.counterparty",
+     "label": "row 38 — counterparty",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD13.SCHC.ANNEX.PURCHASE.R38.currency",
+     "label": "row 38 — currency",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD13.SCHC.ANNEX.PURCHASE.AMOUNT.R38.amount",
+     "label": "row 38",
+     "kind": "value"
+    },
+    {
+     "code": "BSD13.SCHC.ANNEX.PURCHASE.R38.period",
+     "label": "row 38 — period",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD13.SCHC.ANNEX.PURCHASE.R38.rate",
+     "label": "row 38 — rate",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD13.SCHC.ANNEX.PURCHASE.R38.points",
+     "label": "row 38 — points",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD13.SCHC.ANNEX.PURCHASE.R38.delivery",
+     "label": "row 38 — delivery",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD13.SCHC.ANNEX.PURCHASE.SI.R39.serial",
+     "label": "row 39",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD13.SCHC.ANNEX.PURCHASE.R39.date",
+     "label": "row 39 — date",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD13.SCHC.ANNEX.PURCHASE.R39.counterparty",
+     "label": "row 39 — counterparty",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD13.SCHC.ANNEX.PURCHASE.R39.currency",
+     "label": "row 39 — currency",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD13.SCHC.ANNEX.PURCHASE.AMOUNT.R39.amount",
+     "label": "row 39",
+     "kind": "value"
+    },
+    {
+     "code": "BSD13.SCHC.ANNEX.PURCHASE.R39.period",
+     "label": "row 39 — period",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD13.SCHC.ANNEX.PURCHASE.R39.rate",
+     "label": "row 39 — rate",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD13.SCHC.ANNEX.PURCHASE.R39.points",
+     "label": "row 39 — points",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD13.SCHC.ANNEX.PURCHASE.R39.delivery",
+     "label": "row 39 — delivery",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD13.SCHC.ANNEX.PURCHASE.SI.R40.serial",
+     "label": "row 40",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD13.SCHC.ANNEX.PURCHASE.R40.date",
+     "label": "row 40 — date",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD13.SCHC.ANNEX.PURCHASE.R40.counterparty",
+     "label": "row 40 — counterparty",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD13.SCHC.ANNEX.PURCHASE.R40.currency",
+     "label": "row 40 — currency",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD13.SCHC.ANNEX.PURCHASE.AMOUNT.R40.amount",
+     "label": "row 40",
+     "kind": "value"
+    },
+    {
+     "code": "BSD13.SCHC.ANNEX.PURCHASE.R40.period",
+     "label": "row 40 — period",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD13.SCHC.ANNEX.PURCHASE.R40.rate",
+     "label": "row 40 — rate",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD13.SCHC.ANNEX.PURCHASE.R40.points",
+     "label": "row 40 — points",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD13.SCHC.ANNEX.PURCHASE.R40.delivery",
+     "label": "row 40 — delivery",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD13.SCHC.ANNEX.PURCHASE.SI.R41.serial",
+     "label": "row 41",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD13.SCHC.ANNEX.PURCHASE.R41.date",
+     "label": "row 41 — date",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD13.SCHC.ANNEX.PURCHASE.R41.counterparty",
+     "label": "row 41 — counterparty",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD13.SCHC.ANNEX.PURCHASE.R41.currency",
+     "label": "row 41 — currency",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD13.SCHC.ANNEX.PURCHASE.AMOUNT.R41.amount",
+     "label": "row 41",
+     "kind": "value"
+    },
+    {
+     "code": "BSD13.SCHC.ANNEX.PURCHASE.R41.period",
+     "label": "row 41 — period",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD13.SCHC.ANNEX.PURCHASE.R41.rate",
+     "label": "row 41 — rate",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD13.SCHC.ANNEX.PURCHASE.R41.points",
+     "label": "row 41 — points",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD13.SCHC.ANNEX.PURCHASE.R41.delivery",
+     "label": "row 41 — delivery",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD13.SCHC.ANNEX.SALE.SI.R48.serial",
+     "label": "row 48",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD13.SCHC.ANNEX.SALE.R48.date",
+     "label": "row 48 — date",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD13.SCHC.ANNEX.SALE.R48.counterparty",
+     "label": "row 48 — counterparty",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD13.SCHC.ANNEX.SALE.R48.currency",
+     "label": "row 48 — currency",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD13.SCHC.ANNEX.SALE.AMOUNT.R48.amount",
+     "label": "row 48",
+     "kind": "value"
+    },
+    {
+     "code": "BSD13.SCHC.ANNEX.SALE.R48.period",
+     "label": "row 48 — period",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD13.SCHC.ANNEX.SALE.R48.rate",
+     "label": "row 48 — rate",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD13.SCHC.ANNEX.SALE.R48.points",
+     "label": "row 48 — points",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD13.SCHC.ANNEX.SALE.R48.delivery",
+     "label": "row 48 — delivery",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD13.SCHC.ANNEX.SALE.SI.R49.serial",
+     "label": "row 49",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD13.SCHC.ANNEX.SALE.R49.date",
+     "label": "row 49 — date",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD13.SCHC.ANNEX.SALE.R49.counterparty",
+     "label": "row 49 — counterparty",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD13.SCHC.ANNEX.SALE.R49.currency",
+     "label": "row 49 — currency",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD13.SCHC.ANNEX.SALE.AMOUNT.R49.amount",
+     "label": "row 49",
+     "kind": "value"
+    },
+    {
+     "code": "BSD13.SCHC.ANNEX.SALE.R49.period",
+     "label": "row 49 — period",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD13.SCHC.ANNEX.SALE.R49.rate",
+     "label": "row 49 — rate",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD13.SCHC.ANNEX.SALE.R49.points",
+     "label": "row 49 — points",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD13.SCHC.ANNEX.SALE.R49.delivery",
+     "label": "row 49 — delivery",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD13.SCHC.ANNEX.SALE.SI.R50.serial",
+     "label": "row 50",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD13.SCHC.ANNEX.SALE.R50.date",
+     "label": "row 50 — date",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD13.SCHC.ANNEX.SALE.R50.counterparty",
+     "label": "row 50 — counterparty",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD13.SCHC.ANNEX.SALE.R50.currency",
+     "label": "row 50 — currency",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD13.SCHC.ANNEX.SALE.AMOUNT.R50.amount",
+     "label": "row 50",
+     "kind": "value"
+    },
+    {
+     "code": "BSD13.SCHC.ANNEX.SALE.R50.period",
+     "label": "row 50 — period",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD13.SCHC.ANNEX.SALE.R50.rate",
+     "label": "row 50 — rate",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD13.SCHC.ANNEX.SALE.R50.points",
+     "label": "row 50 — points",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD13.SCHC.ANNEX.SALE.R50.delivery",
+     "label": "row 50 — delivery",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD13.SCHC.ANNEX.SALE.SI.R51.serial",
+     "label": "row 51",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD13.SCHC.ANNEX.SALE.R51.date",
+     "label": "row 51 — date",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD13.SCHC.ANNEX.SALE.R51.counterparty",
+     "label": "row 51 — counterparty",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD13.SCHC.ANNEX.SALE.R51.currency",
+     "label": "row 51 — currency",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD13.SCHC.ANNEX.SALE.AMOUNT.R51.amount",
+     "label": "row 51",
+     "kind": "value"
+    },
+    {
+     "code": "BSD13.SCHC.ANNEX.SALE.R51.period",
+     "label": "row 51 — period",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD13.SCHC.ANNEX.SALE.R51.rate",
+     "label": "row 51 — rate",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD13.SCHC.ANNEX.SALE.R51.points",
+     "label": "row 51 — points",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD13.SCHC.ANNEX.SALE.R51.delivery",
+     "label": "row 51 — delivery",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD13.SCHC.ANNEX.SALE.SI.R52.serial",
+     "label": "row 52",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD13.SCHC.ANNEX.SALE.R52.date",
+     "label": "row 52 — date",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD13.SCHC.ANNEX.SALE.R52.counterparty",
+     "label": "row 52 — counterparty",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD13.SCHC.ANNEX.SALE.R52.currency",
+     "label": "row 52 — currency",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD13.SCHC.ANNEX.SALE.AMOUNT.R52.amount",
+     "label": "row 52",
+     "kind": "value"
+    },
+    {
+     "code": "BSD13.SCHC.ANNEX.SALE.R52.period",
+     "label": "row 52 — period",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD13.SCHC.ANNEX.SALE.R52.rate",
+     "label": "row 52 — rate",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD13.SCHC.ANNEX.SALE.R52.points",
+     "label": "row 52 — points",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD13.SCHC.ANNEX.SALE.R52.delivery",
+     "label": "row 52 — delivery",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD13.SCHC.ANNEX.SALE.SI.R53.serial",
+     "label": "row 53",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD13.SCHC.ANNEX.SALE.R53.date",
+     "label": "row 53 — date",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD13.SCHC.ANNEX.SALE.R53.counterparty",
+     "label": "row 53 — counterparty",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD13.SCHC.ANNEX.SALE.R53.currency",
+     "label": "row 53 — currency",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD13.SCHC.ANNEX.SALE.AMOUNT.R53.amount",
+     "label": "row 53",
+     "kind": "value"
+    },
+    {
+     "code": "BSD13.SCHC.ANNEX.SALE.R53.period",
+     "label": "row 53 — period",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD13.SCHC.ANNEX.SALE.R53.rate",
+     "label": "row 53 — rate",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD13.SCHC.ANNEX.SALE.R53.points",
+     "label": "row 53 — points",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD13.SCHC.ANNEX.SALE.R53.delivery",
+     "label": "row 53 — delivery",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD13.SCHC.ANNEX.SALE.SI.R54.serial",
+     "label": "row 54",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD13.SCHC.ANNEX.SALE.R54.date",
+     "label": "row 54 — date",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD13.SCHC.ANNEX.SALE.R54.counterparty",
+     "label": "row 54 — counterparty",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD13.SCHC.ANNEX.SALE.R54.currency",
+     "label": "row 54 — currency",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD13.SCHC.ANNEX.SALE.AMOUNT.R54.amount",
+     "label": "row 54",
+     "kind": "value"
+    },
+    {
+     "code": "BSD13.SCHC.ANNEX.SALE.R54.period",
+     "label": "row 54 — period",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD13.SCHC.ANNEX.SALE.R54.rate",
+     "label": "row 54 — rate",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD13.SCHC.ANNEX.SALE.R54.points",
+     "label": "row 54 — points",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD13.SCHC.ANNEX.SALE.R54.delivery",
+     "label": "row 54 — delivery",
+     "kind": "value",
+     "unit": "units"
+    }
+   ]
+  }
+ ],
+ "rules": [
+  {
+   "id": "BSD13-ARI-0001",
+   "severity": "error",
+   "kind": "sum",
+   "target": "FOREX OPEN POSITION-SCHEDULE-A!C9",
+   "terms": [
+    "BSD13.SCHA.R10.usd",
+    "BSD13.SCHA.R11.usd",
+    "BSD13.SCHA.R12.usd"
+   ],
+   "tolerance": "0.02",
+   "description": "FOREX OPEN POSITION-SCHEDULE-A!C9 follows the template formula =SUM(C10:C12)"
+  },
+  {
+   "id": "BSD13-ARI-0002",
+   "severity": "error",
+   "kind": "sum",
+   "target": "FOREX OPEN POSITION-SCHEDULE-A!D9",
+   "terms": [
+    "BSD13.SCHA.R10.gbp",
+    "BSD13.SCHA.R11.gbp",
+    "BSD13.SCHA.R12.gbp"
+   ],
+   "tolerance": "0.02",
+   "description": "FOREX OPEN POSITION-SCHEDULE-A!D9 follows the template formula =SUM(D10:D12)"
+  },
+  {
+   "id": "BSD13-ARI-0003",
+   "severity": "error",
+   "kind": "sum",
+   "target": "FOREX OPEN POSITION-SCHEDULE-A!E9",
+   "terms": [
+    "BSD13.SCHA.R10.dem",
+    "BSD13.SCHA.R11.dem",
+    "BSD13.SCHA.R12.dem"
+   ],
+   "tolerance": "0.02",
+   "description": "FOREX OPEN POSITION-SCHEDULE-A!E9 follows the template formula =SUM(E10:E12)"
+  },
+  {
+   "id": "BSD13-ARI-0004",
+   "severity": "error",
+   "kind": "sum",
+   "target": "FOREX OPEN POSITION-SCHEDULE-A!F9",
+   "terms": [
+    "BSD13.SCHA.OTHER.R10.other",
+    "BSD13.SCHA.OTHER.R11.other",
+    "BSD13.SCHA.OTHER.R12.other"
+   ],
+   "tolerance": "0.02",
+   "description": "FOREX OPEN POSITION-SCHEDULE-A!F9 follows the template formula =SUM(F10:F12)"
+  },
+  {
+   "id": "BSD13-ARI-0005",
+   "severity": "error",
+   "kind": "sum",
+   "target": "FOREX OPEN POSITION-SCHEDULE-A!C14",
+   "terms": [
+    "BSD13.SCHA.R15.usd",
+    "BSD13.SCHA.R16.usd"
+   ],
+   "tolerance": "0.015",
+   "description": "FOREX OPEN POSITION-SCHEDULE-A!C14 follows the template formula =SUM(C15:C16)"
+  },
+  {
+   "id": "BSD13-ARI-0006",
+   "severity": "error",
+   "kind": "sum",
+   "target": "FOREX OPEN POSITION-SCHEDULE-A!D14",
+   "terms": [
+    "BSD13.SCHA.R15.gbp",
+    "BSD13.SCHA.R16.gbp"
+   ],
+   "tolerance": "0.015",
+   "description": "FOREX OPEN POSITION-SCHEDULE-A!D14 follows the template formula =SUM(D15:D16)"
+  },
+  {
+   "id": "BSD13-ARI-0007",
+   "severity": "error",
+   "kind": "sum",
+   "target": "FOREX OPEN POSITION-SCHEDULE-A!E14",
+   "terms": [
+    "BSD13.SCHA.R15.dem",
+    "BSD13.SCHA.R16.dem"
+   ],
+   "tolerance": "0.015",
+   "description": "FOREX OPEN POSITION-SCHEDULE-A!E14 follows the template formula =SUM(E15:E16)"
+  },
+  {
+   "id": "BSD13-ARI-0008",
+   "severity": "error",
+   "kind": "sum",
+   "target": "FOREX OPEN POSITION-SCHEDULE-A!F14",
+   "terms": [
+    "BSD13.SCHA.OTHER.R15.other",
+    "BSD13.SCHA.OTHER.R16.other"
+   ],
+   "tolerance": "0.015",
+   "description": "FOREX OPEN POSITION-SCHEDULE-A!F14 follows the template formula =SUM(F15:F16)"
+  },
+  {
+   "id": "BSD13-ARI-0009",
+   "severity": "error",
+   "kind": "sum",
+   "target": "FOREX OPEN POSITION-SCHEDULE-A!C23",
+   "terms": [
+    "BSD13.SCHA.R8.usd",
+    "FOREX OPEN POSITION-SCHEDULE-A!C9",
+    "FOREX OPEN POSITION-SCHEDULE-A!C14",
+    "BSD13.SCHA.R19.usd",
+    "BSD13.SCHA.R20.usd",
+    "BSD13.SCHA.R21.usd"
+   ],
+   "tolerance": "0.035",
+   "description": "FOREX OPEN POSITION-SCHEDULE-A!C23 follows the template formula =C8+C9+C14+C19+C20+C21"
+  },
+  {
+   "id": "BSD13-ARI-0010",
+   "severity": "error",
+   "kind": "sum",
+   "target": "FOREX OPEN POSITION-SCHEDULE-A!D23",
+   "terms": [
+    "BSD13.SCHA.R8.gbp",
+    "FOREX OPEN POSITION-SCHEDULE-A!D9",
+    "FOREX OPEN POSITION-SCHEDULE-A!D14",
+    "BSD13.SCHA.R19.gbp",
+    "BSD13.SCHA.R20.gbp",
+    "BSD13.SCHA.R21.gbp"
+   ],
+   "tolerance": "0.035",
+   "description": "FOREX OPEN POSITION-SCHEDULE-A!D23 follows the template formula =D8+D9+D14+D19+D20+D21"
+  },
+  {
+   "id": "BSD13-ARI-0011",
+   "severity": "error",
+   "kind": "sum",
+   "target": "FOREX OPEN POSITION-SCHEDULE-A!E23",
+   "terms": [
+    "BSD13.SCHA.R8.dem",
+    "FOREX OPEN POSITION-SCHEDULE-A!E9",
+    "FOREX OPEN POSITION-SCHEDULE-A!E14",
+    "BSD13.SCHA.R19.dem",
+    "BSD13.SCHA.R20.dem",
+    "BSD13.SCHA.R21.dem"
+   ],
+   "tolerance": "0.035",
+   "description": "FOREX OPEN POSITION-SCHEDULE-A!E23 follows the template formula =E8+E9+E14+E19+E20+E21"
+  },
+  {
+   "id": "BSD13-ARI-0012",
+   "severity": "error",
+   "kind": "sum",
+   "target": "FOREX OPEN POSITION-SCHEDULE-A!F23",
+   "terms": [
+    "BSD13.SCHA.OTHER.R8.other",
+    "FOREX OPEN POSITION-SCHEDULE-A!F9",
+    "FOREX OPEN POSITION-SCHEDULE-A!F14",
+    "BSD13.SCHA.OTHER.R19.other",
+    "BSD13.SCHA.OTHER.R20.other",
+    "BSD13.SCHA.OTHER.R21.other"
+   ],
+   "tolerance": "0.035",
+   "description": "FOREX OPEN POSITION-SCHEDULE-A!F23 follows the template formula =F8+F9+F14+F19+F20+F21"
+  },
+  {
+   "id": "BSD13-ARI-0013",
+   "severity": "error",
+   "kind": "sum",
+   "target": "FOREX OPEN POSITION-SCHEDULE-A!C27",
+   "terms": [
+    "BSD13.SCHA.R28.usd",
+    "FOREX OPEN POSITION-SCHEDULE-A!C29"
+   ],
+   "tolerance": "0.015",
+   "description": "FOREX OPEN POSITION-SCHEDULE-A!C27 follows the template formula =SUM(C28:C29)"
+  },
+  {
+   "id": "BSD13-ARI-0014",
+   "severity": "error",
+   "kind": "sum",
+   "target": "FOREX OPEN POSITION-SCHEDULE-A!D27",
+   "terms": [
+    "BSD13.SCHA.R28.gbp",
+    "FOREX OPEN POSITION-SCHEDULE-A!D29"
+   ],
+   "tolerance": "0.015",
+   "description": "FOREX OPEN POSITION-SCHEDULE-A!D27 follows the template formula =SUM(D28:D29)"
+  },
+  {
+   "id": "BSD13-ARI-0015",
+   "severity": "error",
+   "kind": "sum",
+   "target": "FOREX OPEN POSITION-SCHEDULE-A!E27",
+   "terms": [
+    "BSD13.SCHA.R28.dem",
+    "FOREX OPEN POSITION-SCHEDULE-A!E29"
+   ],
+   "tolerance": "0.015",
+   "description": "FOREX OPEN POSITION-SCHEDULE-A!E27 follows the template formula =SUM(E28:E29)"
+  },
+  {
+   "id": "BSD13-ARI-0016",
+   "severity": "error",
+   "kind": "sum",
+   "target": "FOREX OPEN POSITION-SCHEDULE-A!F27",
+   "terms": [
+    "BSD13.SCHA.OTHER.R28.other",
+    "FOREX OPEN POSITION-SCHEDULE-A!F29"
+   ],
+   "tolerance": "0.015",
+   "description": "FOREX OPEN POSITION-SCHEDULE-A!F27 follows the template formula =SUM(F28:F29)"
+  },
+  {
+   "id": "BSD13-ARI-0017",
+   "severity": "error",
+   "kind": "sum",
+   "target": "FOREX OPEN POSITION-SCHEDULE-A!C29",
+   "terms": [
+    "BSD13.SCHA.R30.usd",
+    "BSD13.SCHA.R31.usd"
+   ],
+   "tolerance": "0.015",
+   "description": "FOREX OPEN POSITION-SCHEDULE-A!C29 follows the template formula =SUM(C30:C31)"
+  },
+  {
+   "id": "BSD13-ARI-0018",
+   "severity": "error",
+   "kind": "sum",
+   "target": "FOREX OPEN POSITION-SCHEDULE-A!D29",
+   "terms": [
+    "BSD13.SCHA.R30.gbp",
+    "BSD13.SCHA.R31.gbp"
+   ],
+   "tolerance": "0.015",
+   "description": "FOREX OPEN POSITION-SCHEDULE-A!D29 follows the template formula =SUM(D30:D31)"
+  },
+  {
+   "id": "BSD13-ARI-0019",
+   "severity": "error",
+   "kind": "sum",
+   "target": "FOREX OPEN POSITION-SCHEDULE-A!E29",
+   "terms": [
+    "BSD13.SCHA.R30.dem",
+    "BSD13.SCHA.R31.dem"
+   ],
+   "tolerance": "0.015",
+   "description": "FOREX OPEN POSITION-SCHEDULE-A!E29 follows the template formula =SUM(E30:E31)"
+  },
+  {
+   "id": "BSD13-ARI-0020",
+   "severity": "error",
+   "kind": "sum",
+   "target": "FOREX OPEN POSITION-SCHEDULE-A!F29",
+   "terms": [
+    "BSD13.SCHA.OTHER.R30.other",
+    "BSD13.SCHA.OTHER.R31.other"
+   ],
+   "tolerance": "0.015",
+   "description": "FOREX OPEN POSITION-SCHEDULE-A!F29 follows the template formula =SUM(F30:F31)"
+  },
+  {
+   "id": "BSD13-ARI-0021",
+   "severity": "error",
+   "kind": "sum",
+   "target": "FOREX OPEN POSITION-SCHEDULE-A!C37",
+   "terms": [
+    "FOREX OPEN POSITION-SCHEDULE-A!C27",
+    "BSD13.SCHA.R33.usd",
+    "BSD13.SCHA.R34.usd",
+    "BSD13.SCHA.R35.usd"
+   ],
+   "tolerance": "0.025",
+   "description": "FOREX OPEN POSITION-SCHEDULE-A!C37 follows the template formula =C27+C33+C34+C35"
+  },
+  {
+   "id": "BSD13-ARI-0022",
+   "severity": "error",
+   "kind": "sum",
+   "target": "FOREX OPEN POSITION-SCHEDULE-A!D37",
+   "terms": [
+    "FOREX OPEN POSITION-SCHEDULE-A!D27",
+    "BSD13.SCHA.R33.gbp",
+    "BSD13.SCHA.R34.gbp",
+    "BSD13.SCHA.R35.gbp"
+   ],
+   "tolerance": "0.025",
+   "description": "FOREX OPEN POSITION-SCHEDULE-A!D37 follows the template formula =D27+D33+D34+D35"
+  },
+  {
+   "id": "BSD13-ARI-0023",
+   "severity": "error",
+   "kind": "sum",
+   "target": "FOREX OPEN POSITION-SCHEDULE-A!E37",
+   "terms": [
+    "FOREX OPEN POSITION-SCHEDULE-A!E27",
+    "BSD13.SCHA.R33.dem",
+    "BSD13.SCHA.R34.dem",
+    "BSD13.SCHA.R35.dem"
+   ],
+   "tolerance": "0.025",
+   "description": "FOREX OPEN POSITION-SCHEDULE-A!E37 follows the template formula =E27+E33+E34+E35"
+  },
+  {
+   "id": "BSD13-ARI-0024",
+   "severity": "error",
+   "kind": "sum",
+   "target": "FOREX OPEN POSITION-SCHEDULE-A!F37",
+   "terms": [
+    "FOREX OPEN POSITION-SCHEDULE-A!F27",
+    "BSD13.SCHA.OTHER.R33.other",
+    "BSD13.SCHA.OTHER.R34.other",
+    "BSD13.SCHA.OTHER.R35.other"
+   ],
+   "tolerance": "0.025",
+   "description": "FOREX OPEN POSITION-SCHEDULE-A!F37 follows the template formula =F27+F33+F34+F35"
+  },
+  {
+   "id": "BSD13-ARI-0025",
+   "severity": "error",
+   "kind": "sum",
+   "target": "FOREX OPEN POSITION-SCHEDULE-A!C39",
+   "terms": [
+    "FOREX OPEN POSITION-SCHEDULE-A!C23"
+   ],
+   "tolerance": "0.015",
+   "description": "FOREX OPEN POSITION-SCHEDULE-A!C39 follows the template formula =C23-C37",
+   "subtract": [
+    "FOREX OPEN POSITION-SCHEDULE-A!C37"
+   ]
+  },
+  {
+   "id": "BSD13-ARI-0026",
+   "severity": "error",
+   "kind": "sum",
+   "target": "FOREX OPEN POSITION-SCHEDULE-A!D39",
+   "terms": [
+    "FOREX OPEN POSITION-SCHEDULE-A!D23"
+   ],
+   "tolerance": "0.015",
+   "description": "FOREX OPEN POSITION-SCHEDULE-A!D39 follows the template formula =D23-D37",
+   "subtract": [
+    "FOREX OPEN POSITION-SCHEDULE-A!D37"
+   ]
+  },
+  {
+   "id": "BSD13-ARI-0027",
+   "severity": "error",
+   "kind": "sum",
+   "target": "FOREX OPEN POSITION-SCHEDULE-A!E39",
+   "terms": [
+    "FOREX OPEN POSITION-SCHEDULE-A!E23"
+   ],
+   "tolerance": "0.015",
+   "description": "FOREX OPEN POSITION-SCHEDULE-A!E39 follows the template formula =E23-E37",
+   "subtract": [
+    "FOREX OPEN POSITION-SCHEDULE-A!E37"
+   ]
+  },
+  {
+   "id": "BSD13-ARI-0028",
+   "severity": "error",
+   "kind": "sum",
+   "target": "FOREX OPEN POSITION-SCHEDULE-A!F39",
+   "terms": [
+    "FOREX OPEN POSITION-SCHEDULE-A!F23"
+   ],
+   "tolerance": "0.015",
+   "description": "FOREX OPEN POSITION-SCHEDULE-A!F39 follows the template formula =F23-F37",
+   "subtract": [
+    "FOREX OPEN POSITION-SCHEDULE-A!F37"
+   ]
+  },
+  {
+   "id": "BSD13-ARI-0029",
+   "severity": "error",
+   "kind": "sum",
+   "target": "FOREX OPEN POSITION-SCHEDULE-B!C15",
+   "terms": [
+    "BSD13.SCHB.R9.usd",
+    "BSD13.SCHB.R11.usd",
+    "BSD13.SCHB.R13.usd"
+   ],
+   "tolerance": "0.02",
+   "description": "FOREX OPEN POSITION-SCHEDULE-B!C15 follows the template formula =C9+C11+C13"
+  },
+  {
+   "id": "BSD13-ARI-0030",
+   "severity": "error",
+   "kind": "sum",
+   "target": "FOREX OPEN POSITION-SCHEDULE-B!D15",
+   "terms": [
+    "BSD13.SCHB.R9.gbp",
+    "BSD13.SCHB.R11.gbp",
+    "BSD13.SCHB.R13.gbp"
+   ],
+   "tolerance": "0.02",
+   "description": "FOREX OPEN POSITION-SCHEDULE-B!D15 follows the template formula =D9+D11+D13"
+  },
+  {
+   "id": "BSD13-ARI-0031",
+   "severity": "error",
+   "kind": "sum",
+   "target": "FOREX OPEN POSITION-SCHEDULE-B!E15",
+   "terms": [
+    "BSD13.SCHB.R9.dem",
+    "BSD13.SCHB.R11.dem",
+    "BSD13.SCHB.R13.dem"
+   ],
+   "tolerance": "0.02",
+   "description": "FOREX OPEN POSITION-SCHEDULE-B!E15 follows the template formula =E9+E11+E13"
+  },
+  {
+   "id": "BSD13-ARI-0032",
+   "severity": "error",
+   "kind": "sum",
+   "target": "FOREX OPEN POSITION-SCHEDULE-B!F15",
+   "terms": [
+    "BSD13.SCHB.R9.other",
+    "BSD13.SCHB.R11.other",
+    "BSD13.SCHB.R13.other"
+   ],
+   "tolerance": "0.02",
+   "description": "FOREX OPEN POSITION-SCHEDULE-B!F15 follows the template formula =F9+F11+F13"
+  },
+  {
+   "id": "BSD13-ARI-0033",
+   "severity": "error",
+   "kind": "sum",
+   "target": "FOREX OPEN POSITION-SCHEDULE-C!C13",
+   "terms": [
+    "BSD13.SCHC.R9.usd",
+    "BSD13.SCHC.R11.usd"
+   ],
+   "tolerance": "0.015",
+   "description": "FOREX OPEN POSITION-SCHEDULE-C!C13 follows the template formula =C9+C11"
+  },
+  {
+   "id": "BSD13-ARI-0034",
+   "severity": "error",
+   "kind": "sum",
+   "target": "FOREX OPEN POSITION-SCHEDULE-C!D13",
+   "terms": [
+    "BSD13.SCHC.R9.gbp",
+    "BSD13.SCHC.R11.gbp"
+   ],
+   "tolerance": "0.015",
+   "description": "FOREX OPEN POSITION-SCHEDULE-C!D13 follows the template formula =D9+D11"
+  },
+  {
+   "id": "BSD13-ARI-0035",
+   "severity": "error",
+   "kind": "sum",
+   "target": "FOREX OPEN POSITION-SCHEDULE-C!E13",
+   "terms": [
+    "BSD13.SCHC.R9.dem",
+    "BSD13.SCHC.R11.dem"
+   ],
+   "tolerance": "0.015",
+   "description": "FOREX OPEN POSITION-SCHEDULE-C!E13 follows the template formula =E9+E11"
+  },
+  {
+   "id": "BSD13-ARI-0036",
+   "severity": "error",
+   "kind": "sum",
+   "target": "FOREX OPEN POSITION-SCHEDULE-C!F13",
+   "terms": [
+    "BSD13.SCHC.OTHER.R9.other",
+    "BSD13.SCHC.OTHER.R11.other"
+   ],
+   "tolerance": "0.015",
+   "description": "FOREX OPEN POSITION-SCHEDULE-C!F13 follows the template formula =F9+F11"
+  },
+  {
+   "id": "BSD13-ARI-0037",
+   "severity": "error",
+   "kind": "sum",
+   "target": "FOREX OPEN POSITION-SCHEDULE-C!C20",
+   "terms": [
+    "BSD13.SCHC.R16.usd",
+    "BSD13.SCHC.R18.usd"
+   ],
+   "tolerance": "0.015",
+   "description": "FOREX OPEN POSITION-SCHEDULE-C!C20 follows the template formula =C16+C18"
+  },
+  {
+   "id": "BSD13-ARI-0038",
+   "severity": "error",
+   "kind": "sum",
+   "target": "FOREX OPEN POSITION-SCHEDULE-C!D20",
+   "terms": [
+    "BSD13.SCHC.R16.gbp",
+    "BSD13.SCHC.R18.gbp"
+   ],
+   "tolerance": "0.015",
+   "description": "FOREX OPEN POSITION-SCHEDULE-C!D20 follows the template formula =D16+D18"
+  },
+  {
+   "id": "BSD13-ARI-0039",
+   "severity": "error",
+   "kind": "sum",
+   "target": "FOREX OPEN POSITION-SCHEDULE-C!E20",
+   "terms": [
+    "BSD13.SCHC.R16.dem",
+    "BSD13.SCHC.R18.dem"
+   ],
+   "tolerance": "0.015",
+   "description": "FOREX OPEN POSITION-SCHEDULE-C!E20 follows the template formula =E16+E18"
+  },
+  {
+   "id": "BSD13-ARI-0040",
+   "severity": "error",
+   "kind": "sum",
+   "target": "FOREX OPEN POSITION-SCHEDULE-C!F20",
+   "terms": [
+    "BSD13.SCHC.OTHER.R16.other",
+    "BSD13.SCHC.OTHER.R18.other"
+   ],
+   "tolerance": "0.015",
+   "description": "FOREX OPEN POSITION-SCHEDULE-C!F20 follows the template formula =F16+F18"
+  },
+  {
+   "id": "BSD13-ARI-0041",
+   "severity": "error",
+   "kind": "sum",
+   "target": "FOREX OPEN POSITION-SCHEDULE-C!C23",
+   "terms": [
+    "FOREX OPEN POSITION-SCHEDULE-C!C13",
+    "FOREX OPEN POSITION-SCHEDULE-C!C20"
+   ],
+   "tolerance": "0.015",
+   "description": "FOREX OPEN POSITION-SCHEDULE-C!C23 follows the template formula =C13+C20"
+  },
+  {
+   "id": "BSD13-ARI-0042",
+   "severity": "error",
+   "kind": "sum",
+   "target": "FOREX OPEN POSITION-SCHEDULE-C!D23",
+   "terms": [
+    "FOREX OPEN POSITION-SCHEDULE-C!D13",
+    "FOREX OPEN POSITION-SCHEDULE-C!D20"
+   ],
+   "tolerance": "0.015",
+   "description": "FOREX OPEN POSITION-SCHEDULE-C!D23 follows the template formula =D13+D20"
+  },
+  {
+   "id": "BSD13-ARI-0043",
+   "severity": "error",
+   "kind": "sum",
+   "target": "FOREX OPEN POSITION-SCHEDULE-C!E23",
+   "terms": [
+    "FOREX OPEN POSITION-SCHEDULE-C!E13",
+    "FOREX OPEN POSITION-SCHEDULE-C!E20"
+   ],
+   "tolerance": "0.015",
+   "description": "FOREX OPEN POSITION-SCHEDULE-C!E23 follows the template formula =E13+E20"
+  },
+  {
+   "id": "BSD13-ARI-0044",
+   "severity": "error",
+   "kind": "sum",
+   "target": "FOREX OPEN POSITION-SCHEDULE-C!F23",
+   "terms": [
+    "FOREX OPEN POSITION-SCHEDULE-C!F13",
+    "FOREX OPEN POSITION-SCHEDULE-C!F20"
+   ],
+   "tolerance": "0.015",
+   "description": "FOREX OPEN POSITION-SCHEDULE-C!F23 follows the template formula =F13+F20"
+  }
+ ]
+}

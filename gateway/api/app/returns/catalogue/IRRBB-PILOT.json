@@ -1,0 +1,163 @@
+{
+ "format": "aequoros-gateway-return/1",
+ "code": "IRRBB-PILOT",
+ "name": "IRRBB Pilot Return (Repricing Gap, ΔEVE & ΔNII by Shock)",
+ "cadence": "quarterly",
+ "basis": "solo",
+ "applies_to": [
+  "universal_bank"
+ ],
+ "version": "2026.2",
+ "first_reporting_date": "2025-01-01",
+ "source": {
+  "system": "AequorOS",
+  "template": "bog-irrbb-pilot-v1",
+  "fidelity": "REPRESENTATIVE",
+  "workbook": null
+ },
+ "sections": [
+  {
+   "code": "repricing_gap",
+   "title": "Repricing Gap by Bucket",
+   "unit": "units",
+   "itemised": true,
+   "columns": [
+    {
+     "key": "rsa_ghs",
+     "label": "Rate-Sensitive Assets (GHS '000)",
+     "kind": "number",
+     "unit": "units"
+    },
+    {
+     "key": "rsl_ghs",
+     "label": "Rate-Sensitive Liabilities (GHS '000)",
+     "kind": "number",
+     "unit": "units"
+    },
+    {
+     "key": "value",
+     "label": "Gap (GHS '000)",
+     "kind": "number",
+     "unit": "units"
+    },
+    {
+     "key": "cumulative_gap_ghs",
+     "label": "Cumulative Gap (GHS '000)",
+     "kind": "number",
+     "unit": "units"
+    },
+    {
+     "key": "within_12m",
+     "label": "Within 12 Months",
+     "kind": "text",
+     "unit": "units"
+    }
+   ]
+  },
+  {
+   "code": "eve_scenarios",
+   "title": "ΔEVE by Supervisory Shock",
+   "unit": "units",
+   "itemised": true,
+   "columns": [
+    {
+     "key": "eve_ghs",
+     "label": "EVE (GHS '000)",
+     "kind": "number",
+     "unit": "units"
+    },
+    {
+     "key": "value",
+     "label": "ΔEVE (GHS '000)",
+     "kind": "number",
+     "unit": "units"
+    },
+    {
+     "key": "delta_eve_pct_tier1",
+     "label": "ΔEVE / Tier 1 (%)",
+     "kind": "number",
+     "unit": "percent"
+    },
+    {
+     "key": "breach",
+     "label": "Outlier (>15% Tier 1)",
+     "kind": "text",
+     "unit": "units"
+    }
+   ]
+  },
+  {
+   "code": "earnings_at_risk",
+   "title": "ΔNII / Earnings at Risk",
+   "unit": "units",
+   "itemised": true,
+   "columns": [
+    {
+     "key": "value",
+     "label": "Amount (GHS '000)",
+     "kind": "number",
+     "unit": "units"
+    }
+   ]
+  },
+  {
+   "code": "summary",
+   "title": "IRRBB Summary",
+   "unit": "units",
+   "itemised": true,
+   "columns": [
+    {
+     "key": "value",
+     "label": "Value (GHS '000 / % / yrs)",
+     "kind": "number",
+     "unit": "units"
+    }
+   ]
+  },
+  {
+   "code": "totals",
+   "title": "Headline totals",
+   "unit": "units",
+   "itemised": true,
+   "optional": true,
+   "columns": [
+    {
+     "key": "value",
+     "label": "Value",
+     "kind": "value",
+     "unit": "units"
+    }
+   ]
+  }
+ ],
+ "rules": [
+  {
+   "id": "IRRBB-PILOT-STR-001",
+   "severity": "error",
+   "kind": "present",
+   "section": "repricing_gap",
+   "description": "Repricing Gap by Bucket is reported"
+  },
+  {
+   "id": "IRRBB-PILOT-STR-002",
+   "severity": "error",
+   "kind": "present",
+   "section": "eve_scenarios",
+   "description": "ΔEVE by Supervisory Shock is reported"
+  },
+  {
+   "id": "IRRBB-PILOT-STR-003",
+   "severity": "error",
+   "kind": "present",
+   "section": "earnings_at_risk",
+   "description": "ΔNII / Earnings at Risk is reported"
+  },
+  {
+   "id": "IRRBB-PILOT-STR-004",
+   "severity": "error",
+   "kind": "present",
+   "section": "summary",
+   "description": "IRRBB Summary is reported"
+  }
+ ]
+}

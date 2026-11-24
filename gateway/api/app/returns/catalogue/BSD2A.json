@@ -1,0 +1,4313 @@
+{
+ "format": "aequoros-gateway-return/1",
+ "code": "BSD2A",
+ "name": "Report on Foreign Currency Exposures",
+ "cadence": "monthly",
+ "basis": "solo",
+ "applies_to": [
+  "universal_bank"
+ ],
+ "version": "2026.2",
+ "first_reporting_date": "2025-01-01",
+ "source": {
+  "system": "AequorOS",
+  "template": "bog-bsd2a-official-v1",
+  "fidelity": "CONFIRMED",
+  "workbook": "FORM BSD2A REVISED.xls"
+ },
+ "sections": [
+  {
+   "code": "sheet_foreign_currency_exposures",
+   "title": "FOREIGN CURRENCY EXPOSURES",
+   "unit": "millions",
+   "itemised": false,
+   "lines": [
+    {
+     "code": "BSD2A.cedi.R13.cedi_equivalent",
+     "label": "(a) Foreign currency notes and coins",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.networth.R13.net_worth_of_bank",
+     "label": "(a) Foreign currency notes and coins",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.pct.R13.pct_of_net_worth",
+     "label": "(a) Foreign currency notes and coins",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD2A.provision.R13.provision",
+     "label": "(a) Foreign currency notes and coins",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R14.name",
+     "label": "row 14 — name",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R14.type_of_exposure",
+     "label": "row 14 — type of exposure",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R14.currency",
+     "label": "row 14 — currency",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R14.fcy_amount",
+     "label": "row 14 — foreign currency amount",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R14.cedi_equivalent",
+     "label": "row 14 — cedi equivalent",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R14.exchange_rate",
+     "label": "row 14 — exchange rate",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R14.net_worth_of_bank",
+     "label": "row 14 — net worth of bank",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R14.pct_of_net_worth",
+     "label": "row 14 — % of net worth",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R14.maturity_date",
+     "label": "row 14 — maturity date",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R14.interest_rate",
+     "label": "row 14 — interest rate",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R14.counterparty_rating",
+     "label": "row 14 — counterparty rating",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R14.counterparty_net_worth",
+     "label": "row 14 — counterparty net worth",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R14.audit_report_date",
+     "label": "row 14 — audit report date",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R14.provision",
+     "label": "row 14 — provision",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.cedi.R15.cedi_equivalent",
+     "label": "(b) Correspondent acc. in non-res. financial inst.",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.networth.R15.net_worth_of_bank",
+     "label": "(b) Correspondent acc. in non-res. financial inst.",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.pct.R15.pct_of_net_worth",
+     "label": "(b) Correspondent acc. in non-res. financial inst.",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD2A.provision.R15.provision",
+     "label": "(b) Correspondent acc. in non-res. financial inst.",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R16.name",
+     "label": "row 16 — name",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R16.type_of_exposure",
+     "label": "row 16 — type of exposure",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R16.currency",
+     "label": "row 16 — currency",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R16.fcy_amount",
+     "label": "row 16 — foreign currency amount",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R16.cedi_equivalent",
+     "label": "row 16 — cedi equivalent",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R16.exchange_rate",
+     "label": "row 16 — exchange rate",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R16.net_worth_of_bank",
+     "label": "row 16 — net worth of bank",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R16.pct_of_net_worth",
+     "label": "row 16 — % of net worth",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R16.maturity_date",
+     "label": "row 16 — maturity date",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R16.interest_rate",
+     "label": "row 16 — interest rate",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R16.counterparty_rating",
+     "label": "row 16 — counterparty rating",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R16.counterparty_net_worth",
+     "label": "row 16 — counterparty net worth",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R16.audit_report_date",
+     "label": "row 16 — audit report date",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R16.provision",
+     "label": "row 16 — provision",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.cedi.R17.cedi_equivalent",
+     "label": "(c) Other claims on non-residents",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.networth.R17.net_worth_of_bank",
+     "label": "(c) Other claims on non-residents",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.pct.R17.pct_of_net_worth",
+     "label": "(c) Other claims on non-residents",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD2A.provision.R17.provision",
+     "label": "(c) Other claims on non-residents",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R18.name",
+     "label": "row 18 — name",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R18.type_of_exposure",
+     "label": "row 18 — type of exposure",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R18.currency",
+     "label": "row 18 — currency",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R18.fcy_amount",
+     "label": "row 18 — foreign currency amount",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R18.cedi_equivalent",
+     "label": "row 18 — cedi equivalent",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R18.exchange_rate",
+     "label": "row 18 — exchange rate",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R18.net_worth_of_bank",
+     "label": "row 18 — net worth of bank",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R18.pct_of_net_worth",
+     "label": "row 18 — % of net worth",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R18.maturity_date",
+     "label": "row 18 — maturity date",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R18.interest_rate",
+     "label": "row 18 — interest rate",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R18.counterparty_rating",
+     "label": "row 18 — counterparty rating",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R18.counterparty_net_worth",
+     "label": "row 18 — counterparty net worth",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R18.audit_report_date",
+     "label": "row 18 — audit report date",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R18.provision",
+     "label": "row 18 — provision",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.cedi.R22.cedi_equivalent",
+     "label": "Bank of Ghana",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.networth.R22.net_worth_of_bank",
+     "label": "Bank of Ghana",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.pct.R22.pct_of_net_worth",
+     "label": "Bank of Ghana",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD2A.provision.R22.provision",
+     "label": "Bank of Ghana",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R23.name",
+     "label": "row 23 — name",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R23.type_of_exposure",
+     "label": "row 23 — type of exposure",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R23.currency",
+     "label": "row 23 — currency",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R23.fcy_amount",
+     "label": "row 23 — foreign currency amount",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R23.cedi_equivalent",
+     "label": "row 23 — cedi equivalent",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R23.exchange_rate",
+     "label": "row 23 — exchange rate",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R23.net_worth_of_bank",
+     "label": "row 23 — net worth of bank",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R23.pct_of_net_worth",
+     "label": "row 23 — % of net worth",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R23.maturity_date",
+     "label": "row 23 — maturity date",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R23.interest_rate",
+     "label": "row 23 — interest rate",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R23.counterparty_rating",
+     "label": "row 23 — counterparty rating",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R23.counterparty_net_worth",
+     "label": "row 23 — counterparty net worth",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R23.audit_report_date",
+     "label": "row 23 — audit report date",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R23.provision",
+     "label": "row 23 — provision",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.cedi.R24.cedi_equivalent",
+     "label": "(b). Claims on Other Banks",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.networth.R24.net_worth_of_bank",
+     "label": "(b). Claims on Other Banks",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.pct.R24.pct_of_net_worth",
+     "label": "(b). Claims on Other Banks",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD2A.provision.R24.provision",
+     "label": "(b). Claims on Other Banks",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R25.name",
+     "label": "row 25 — name",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R25.type_of_exposure",
+     "label": "row 25 — type of exposure",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R25.currency",
+     "label": "row 25 — currency",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R25.fcy_amount",
+     "label": "row 25 — foreign currency amount",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R25.cedi_equivalent",
+     "label": "row 25 — cedi equivalent",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R25.exchange_rate",
+     "label": "row 25 — exchange rate",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R25.net_worth_of_bank",
+     "label": "row 25 — net worth of bank",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R25.pct_of_net_worth",
+     "label": "row 25 — % of net worth",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R25.maturity_date",
+     "label": "row 25 — maturity date",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R25.interest_rate",
+     "label": "row 25 — interest rate",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R25.counterparty_rating",
+     "label": "row 25 — counterparty rating",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R25.counterparty_net_worth",
+     "label": "row 25 — counterparty net worth",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R25.audit_report_date",
+     "label": "row 25 — audit report date",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R25.provision",
+     "label": "row 25 — provision",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R26.name",
+     "label": "row 26 — name",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R26.type_of_exposure",
+     "label": "row 26 — type of exposure",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R26.currency",
+     "label": "row 26 — currency",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R26.fcy_amount",
+     "label": "row 26 — foreign currency amount",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R26.cedi_equivalent",
+     "label": "row 26 — cedi equivalent",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R26.exchange_rate",
+     "label": "row 26 — exchange rate",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R26.net_worth_of_bank",
+     "label": "row 26 — net worth of bank",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R26.pct_of_net_worth",
+     "label": "row 26 — % of net worth",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R26.maturity_date",
+     "label": "row 26 — maturity date",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R26.interest_rate",
+     "label": "row 26 — interest rate",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R26.counterparty_rating",
+     "label": "row 26 — counterparty rating",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R26.counterparty_net_worth",
+     "label": "row 26 — counterparty net worth",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R26.audit_report_date",
+     "label": "row 26 — audit report date",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R26.provision",
+     "label": "row 26 — provision",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.cedi.R27.cedi_equivalent",
+     "label": "(c) Loans, Overdrafts and Other Advances",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.networth.R27.net_worth_of_bank",
+     "label": "(c) Loans, Overdrafts and Other Advances",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.pct.R27.pct_of_net_worth",
+     "label": "(c) Loans, Overdrafts and Other Advances",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD2A.provision.R27.provision",
+     "label": "(c) Loans, Overdrafts and Other Advances",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R28.name",
+     "label": "row 28 — name",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R28.type_of_exposure",
+     "label": "row 28 — type of exposure",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R28.currency",
+     "label": "row 28 — currency",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R28.fcy_amount",
+     "label": "row 28 — foreign currency amount",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R28.cedi_equivalent",
+     "label": "row 28 — cedi equivalent",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R28.exchange_rate",
+     "label": "row 28 — exchange rate",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R28.net_worth_of_bank",
+     "label": "row 28 — net worth of bank",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R28.pct_of_net_worth",
+     "label": "row 28 — % of net worth",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R28.maturity_date",
+     "label": "row 28 — maturity date",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R28.interest_rate",
+     "label": "row 28 — interest rate",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R28.counterparty_rating",
+     "label": "row 28 — counterparty rating",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R28.counterparty_net_worth",
+     "label": "row 28 — counterparty net worth",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R28.audit_report_date",
+     "label": "row 28 — audit report date",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R28.provision",
+     "label": "row 28 — provision",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R29.name",
+     "label": "row 29 — name",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R29.type_of_exposure",
+     "label": "row 29 — type of exposure",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R29.currency",
+     "label": "row 29 — currency",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R29.fcy_amount",
+     "label": "row 29 — foreign currency amount",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R29.cedi_equivalent",
+     "label": "row 29 — cedi equivalent",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R29.exchange_rate",
+     "label": "row 29 — exchange rate",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R29.net_worth_of_bank",
+     "label": "row 29 — net worth of bank",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R29.pct_of_net_worth",
+     "label": "row 29 — % of net worth",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R29.maturity_date",
+     "label": "row 29 — maturity date",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R29.interest_rate",
+     "label": "row 29 — interest rate",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R29.counterparty_rating",
+     "label": "row 29 — counterparty rating",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R29.counterparty_net_worth",
+     "label": "row 29 — counterparty net worth",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R29.audit_report_date",
+     "label": "row 29 — audit report date",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R29.provision",
+     "label": "row 29 — provision",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.cedi.R30.cedi_equivalent",
+     "label": "(d) Securities",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.networth.R30.net_worth_of_bank",
+     "label": "(d) Securities",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.pct.R30.pct_of_net_worth",
+     "label": "(d) Securities",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD2A.provision.R30.provision",
+     "label": "(d) Securities",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R31.name",
+     "label": "row 31 — name",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R31.type_of_exposure",
+     "label": "row 31 — type of exposure",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R31.currency",
+     "label": "row 31 — currency",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R31.fcy_amount",
+     "label": "row 31 — foreign currency amount",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R31.cedi_equivalent",
+     "label": "row 31 — cedi equivalent",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R31.exchange_rate",
+     "label": "row 31 — exchange rate",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R31.net_worth_of_bank",
+     "label": "row 31 — net worth of bank",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R31.pct_of_net_worth",
+     "label": "row 31 — % of net worth",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R31.maturity_date",
+     "label": "row 31 — maturity date",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R31.interest_rate",
+     "label": "row 31 — interest rate",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R31.counterparty_rating",
+     "label": "row 31 — counterparty rating",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R31.counterparty_net_worth",
+     "label": "row 31 — counterparty net worth",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R31.audit_report_date",
+     "label": "row 31 — audit report date",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R31.provision",
+     "label": "row 31 — provision",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R32.name",
+     "label": "row 32 — name",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R32.type_of_exposure",
+     "label": "row 32 — type of exposure",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R32.currency",
+     "label": "row 32 — currency",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R32.fcy_amount",
+     "label": "row 32 — foreign currency amount",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R32.cedi_equivalent",
+     "label": "row 32 — cedi equivalent",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R32.exchange_rate",
+     "label": "row 32 — exchange rate",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R32.net_worth_of_bank",
+     "label": "row 32 — net worth of bank",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R32.pct_of_net_worth",
+     "label": "row 32 — % of net worth",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R32.maturity_date",
+     "label": "row 32 — maturity date",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R32.interest_rate",
+     "label": "row 32 — interest rate",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R32.counterparty_rating",
+     "label": "row 32 — counterparty rating",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R32.counterparty_net_worth",
+     "label": "row 32 — counterparty net worth",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R32.audit_report_date",
+     "label": "row 32 — audit report date",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R32.provision",
+     "label": "row 32 — provision",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R33.name",
+     "label": "row 33 — name",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R33.type_of_exposure",
+     "label": "row 33 — type of exposure",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R33.currency",
+     "label": "row 33 — currency",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R33.fcy_amount",
+     "label": "row 33 — foreign currency amount",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R33.cedi_equivalent",
+     "label": "row 33 — cedi equivalent",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R33.exchange_rate",
+     "label": "row 33 — exchange rate",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R33.net_worth_of_bank",
+     "label": "row 33 — net worth of bank",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R33.pct_of_net_worth",
+     "label": "row 33 — % of net worth",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R33.maturity_date",
+     "label": "row 33 — maturity date",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R33.interest_rate",
+     "label": "row 33 — interest rate",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R33.counterparty_rating",
+     "label": "row 33 — counterparty rating",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R33.counterparty_net_worth",
+     "label": "row 33 — counterparty net worth",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R33.audit_report_date",
+     "label": "row 33 — audit report date",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R33.provision",
+     "label": "row 33 — provision",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R34.name",
+     "label": "row 34 — name",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R34.type_of_exposure",
+     "label": "row 34 — type of exposure",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R34.currency",
+     "label": "row 34 — currency",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R34.fcy_amount",
+     "label": "row 34 — foreign currency amount",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R34.cedi_equivalent",
+     "label": "row 34 — cedi equivalent",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R34.exchange_rate",
+     "label": "row 34 — exchange rate",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R34.net_worth_of_bank",
+     "label": "row 34 — net worth of bank",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R34.pct_of_net_worth",
+     "label": "row 34 — % of net worth",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R34.maturity_date",
+     "label": "row 34 — maturity date",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R34.interest_rate",
+     "label": "row 34 — interest rate",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R34.counterparty_rating",
+     "label": "row 34 — counterparty rating",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R34.counterparty_net_worth",
+     "label": "row 34 — counterparty net worth",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R34.audit_report_date",
+     "label": "row 34 — audit report date",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R34.provision",
+     "label": "row 34 — provision",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R35.name",
+     "label": "row 35 — name",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R35.type_of_exposure",
+     "label": "row 35 — type of exposure",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R35.currency",
+     "label": "row 35 — currency",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R35.fcy_amount",
+     "label": "row 35 — foreign currency amount",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R35.cedi_equivalent",
+     "label": "row 35 — cedi equivalent",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R35.exchange_rate",
+     "label": "row 35 — exchange rate",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R35.net_worth_of_bank",
+     "label": "row 35 — net worth of bank",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R35.pct_of_net_worth",
+     "label": "row 35 — % of net worth",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R35.maturity_date",
+     "label": "row 35 — maturity date",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R35.interest_rate",
+     "label": "row 35 — interest rate",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R35.counterparty_rating",
+     "label": "row 35 — counterparty rating",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R35.counterparty_net_worth",
+     "label": "row 35 — counterparty net worth",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R35.audit_report_date",
+     "label": "row 35 — audit report date",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R35.provision",
+     "label": "row 35 — provision",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R36.name",
+     "label": "row 36 — name",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R36.type_of_exposure",
+     "label": "row 36 — type of exposure",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R36.currency",
+     "label": "row 36 — currency",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R36.fcy_amount",
+     "label": "row 36 — foreign currency amount",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R36.cedi_equivalent",
+     "label": "row 36 — cedi equivalent",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R36.exchange_rate",
+     "label": "row 36 — exchange rate",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R36.net_worth_of_bank",
+     "label": "row 36 — net worth of bank",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R36.pct_of_net_worth",
+     "label": "row 36 — % of net worth",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R36.maturity_date",
+     "label": "row 36 — maturity date",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R36.interest_rate",
+     "label": "row 36 — interest rate",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R36.counterparty_rating",
+     "label": "row 36 — counterparty rating",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R36.counterparty_net_worth",
+     "label": "row 36 — counterparty net worth",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R36.audit_report_date",
+     "label": "row 36 — audit report date",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R36.provision",
+     "label": "row 36 — provision",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R37.name",
+     "label": "row 37 — name",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R37.type_of_exposure",
+     "label": "row 37 — type of exposure",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R37.currency",
+     "label": "row 37 — currency",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R37.fcy_amount",
+     "label": "row 37 — foreign currency amount",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R37.cedi_equivalent",
+     "label": "row 37 — cedi equivalent",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R37.exchange_rate",
+     "label": "row 37 — exchange rate",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R37.net_worth_of_bank",
+     "label": "row 37 — net worth of bank",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R37.pct_of_net_worth",
+     "label": "row 37 — % of net worth",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R37.maturity_date",
+     "label": "row 37 — maturity date",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R37.interest_rate",
+     "label": "row 37 — interest rate",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R37.counterparty_rating",
+     "label": "row 37 — counterparty rating",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R37.counterparty_net_worth",
+     "label": "row 37 — counterparty net worth",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R37.audit_report_date",
+     "label": "row 37 — audit report date",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R37.provision",
+     "label": "row 37 — provision",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R38.name",
+     "label": "row 38 — name",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R38.type_of_exposure",
+     "label": "row 38 — type of exposure",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R38.currency",
+     "label": "row 38 — currency",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R38.fcy_amount",
+     "label": "row 38 — foreign currency amount",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R38.cedi_equivalent",
+     "label": "row 38 — cedi equivalent",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R38.exchange_rate",
+     "label": "row 38 — exchange rate",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R38.net_worth_of_bank",
+     "label": "row 38 — net worth of bank",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R38.pct_of_net_worth",
+     "label": "row 38 — % of net worth",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R38.maturity_date",
+     "label": "row 38 — maturity date",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R38.interest_rate",
+     "label": "row 38 — interest rate",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R38.counterparty_rating",
+     "label": "row 38 — counterparty rating",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R38.counterparty_net_worth",
+     "label": "row 38 — counterparty net worth",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R38.audit_report_date",
+     "label": "row 38 — audit report date",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R38.provision",
+     "label": "row 38 — provision",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.cedi.R39.cedi_equivalent",
+     "label": "(e) Other Assets",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.networth.R39.net_worth_of_bank",
+     "label": "(e) Other Assets",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.pct.R39.pct_of_net_worth",
+     "label": "(e) Other Assets",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD2A.provision.R39.provision",
+     "label": "(e) Other Assets",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R40.name",
+     "label": "row 40 — name",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R40.type_of_exposure",
+     "label": "row 40 — type of exposure",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R40.currency",
+     "label": "row 40 — currency",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R40.fcy_amount",
+     "label": "row 40 — foreign currency amount",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R40.cedi_equivalent",
+     "label": "row 40 — cedi equivalent",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R40.exchange_rate",
+     "label": "row 40 — exchange rate",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R40.net_worth_of_bank",
+     "label": "row 40 — net worth of bank",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R40.pct_of_net_worth",
+     "label": "row 40 — % of net worth",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R40.maturity_date",
+     "label": "row 40 — maturity date",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R40.interest_rate",
+     "label": "row 40 — interest rate",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R40.counterparty_rating",
+     "label": "row 40 — counterparty rating",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R40.counterparty_net_worth",
+     "label": "row 40 — counterparty net worth",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R40.audit_report_date",
+     "label": "row 40 — audit report date",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R40.provision",
+     "label": "row 40 — provision",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R41.name",
+     "label": "row 41 — name",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R41.type_of_exposure",
+     "label": "row 41 — type of exposure",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R41.currency",
+     "label": "row 41 — currency",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R41.fcy_amount",
+     "label": "row 41 — foreign currency amount",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R41.cedi_equivalent",
+     "label": "row 41 — cedi equivalent",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R41.exchange_rate",
+     "label": "row 41 — exchange rate",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R41.net_worth_of_bank",
+     "label": "row 41 — net worth of bank",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R41.pct_of_net_worth",
+     "label": "row 41 — % of net worth",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R41.maturity_date",
+     "label": "row 41 — maturity date",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R41.interest_rate",
+     "label": "row 41 — interest rate",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R41.counterparty_rating",
+     "label": "row 41 — counterparty rating",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R41.counterparty_net_worth",
+     "label": "row 41 — counterparty net worth",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R41.audit_report_date",
+     "label": "row 41 — audit report date",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R41.provision",
+     "label": "row 41 — provision",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.cedi.R44.cedi_equivalent",
+     "label": "(a) Short-Term Borrowings",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.networth.R44.net_worth_of_bank",
+     "label": "(a) Short-Term Borrowings",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.pct.R44.pct_of_net_worth",
+     "label": "(a) Short-Term Borrowings",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD2A.provision.R44.provision",
+     "label": "(a) Short-Term Borrowings",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R45.name",
+     "label": "row 45 — name",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R45.type_of_exposure",
+     "label": "row 45 — type of exposure",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R45.currency",
+     "label": "row 45 — currency",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R45.fcy_amount",
+     "label": "row 45 — foreign currency amount",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R45.cedi_equivalent",
+     "label": "row 45 — cedi equivalent",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R45.exchange_rate",
+     "label": "row 45 — exchange rate",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R45.net_worth_of_bank",
+     "label": "row 45 — net worth of bank",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R45.pct_of_net_worth",
+     "label": "row 45 — % of net worth",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R45.maturity_date",
+     "label": "row 45 — maturity date",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R45.interest_rate",
+     "label": "row 45 — interest rate",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R45.counterparty_rating",
+     "label": "row 45 — counterparty rating",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R45.counterparty_net_worth",
+     "label": "row 45 — counterparty net worth",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R45.audit_report_date",
+     "label": "row 45 — audit report date",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R45.provision",
+     "label": "row 45 — provision",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R46.name",
+     "label": "row 46 — name",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R46.type_of_exposure",
+     "label": "row 46 — type of exposure",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R46.currency",
+     "label": "row 46 — currency",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R46.fcy_amount",
+     "label": "row 46 — foreign currency amount",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R46.cedi_equivalent",
+     "label": "row 46 — cedi equivalent",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R46.exchange_rate",
+     "label": "row 46 — exchange rate",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R46.net_worth_of_bank",
+     "label": "row 46 — net worth of bank",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R46.pct_of_net_worth",
+     "label": "row 46 — % of net worth",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R46.maturity_date",
+     "label": "row 46 — maturity date",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R46.interest_rate",
+     "label": "row 46 — interest rate",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R46.counterparty_rating",
+     "label": "row 46 — counterparty rating",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R46.counterparty_net_worth",
+     "label": "row 46 — counterparty net worth",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R46.audit_report_date",
+     "label": "row 46 — audit report date",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R46.provision",
+     "label": "row 46 — provision",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.cedi.R47.cedi_equivalent",
+     "label": "(b) Long-term borrowing",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.networth.R47.net_worth_of_bank",
+     "label": "(b) Long-term borrowing",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.pct.R47.pct_of_net_worth",
+     "label": "(b) Long-term borrowing",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD2A.provision.R47.provision",
+     "label": "(b) Long-term borrowing",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R48.name",
+     "label": "row 48 — name",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R48.type_of_exposure",
+     "label": "row 48 — type of exposure",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R48.currency",
+     "label": "row 48 — currency",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R48.fcy_amount",
+     "label": "row 48 — foreign currency amount",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R48.cedi_equivalent",
+     "label": "row 48 — cedi equivalent",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R48.exchange_rate",
+     "label": "row 48 — exchange rate",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R48.net_worth_of_bank",
+     "label": "row 48 — net worth of bank",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R48.pct_of_net_worth",
+     "label": "row 48 — % of net worth",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R48.maturity_date",
+     "label": "row 48 — maturity date",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R48.interest_rate",
+     "label": "row 48 — interest rate",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R48.counterparty_rating",
+     "label": "row 48 — counterparty rating",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R48.counterparty_net_worth",
+     "label": "row 48 — counterparty net worth",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R48.audit_report_date",
+     "label": "row 48 — audit report date",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R48.provision",
+     "label": "row 48 — provision",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.cedi.R49.cedi_equivalent",
+     "label": "(c) Deposits of non-residents",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.networth.R49.net_worth_of_bank",
+     "label": "(c) Deposits of non-residents",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.pct.R49.pct_of_net_worth",
+     "label": "(c) Deposits of non-residents",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD2A.provision.R49.provision",
+     "label": "(c) Deposits of non-residents",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R50.name",
+     "label": "row 50 — name",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R50.type_of_exposure",
+     "label": "row 50 — type of exposure",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R50.currency",
+     "label": "row 50 — currency",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R50.fcy_amount",
+     "label": "row 50 — foreign currency amount",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R50.cedi_equivalent",
+     "label": "row 50 — cedi equivalent",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R50.exchange_rate",
+     "label": "row 50 — exchange rate",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R50.net_worth_of_bank",
+     "label": "row 50 — net worth of bank",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R50.pct_of_net_worth",
+     "label": "row 50 — % of net worth",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R50.maturity_date",
+     "label": "row 50 — maturity date",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R50.interest_rate",
+     "label": "row 50 — interest rate",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R50.counterparty_rating",
+     "label": "row 50 — counterparty rating",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R50.counterparty_net_worth",
+     "label": "row 50 — counterparty net worth",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R50.audit_report_date",
+     "label": "row 50 — audit report date",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R50.provision",
+     "label": "row 50 — provision",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R51.name",
+     "label": "row 51 — name",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R51.type_of_exposure",
+     "label": "row 51 — type of exposure",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R51.currency",
+     "label": "row 51 — currency",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R51.fcy_amount",
+     "label": "row 51 — foreign currency amount",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R51.cedi_equivalent",
+     "label": "row 51 — cedi equivalent",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R51.exchange_rate",
+     "label": "row 51 — exchange rate",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R51.net_worth_of_bank",
+     "label": "row 51 — net worth of bank",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R51.pct_of_net_worth",
+     "label": "row 51 — % of net worth",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R51.maturity_date",
+     "label": "row 51 — maturity date",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R51.interest_rate",
+     "label": "row 51 — interest rate",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R51.counterparty_rating",
+     "label": "row 51 — counterparty rating",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R51.counterparty_net_worth",
+     "label": "row 51 — counterparty net worth",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R51.audit_report_date",
+     "label": "row 51 — audit report date",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R51.provision",
+     "label": "row 51 — provision",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.cedi.R54.cedi_equivalent",
+     "label": "(a) Long-term Borrowings",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.networth.R54.net_worth_of_bank",
+     "label": "(a) Long-term Borrowings",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.pct.R54.pct_of_net_worth",
+     "label": "(a) Long-term Borrowings",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD2A.provision.R54.provision",
+     "label": "(a) Long-term Borrowings",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R55.name",
+     "label": "row 55 — name",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R55.type_of_exposure",
+     "label": "row 55 — type of exposure",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R55.currency",
+     "label": "row 55 — currency",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R55.fcy_amount",
+     "label": "row 55 — foreign currency amount",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R55.cedi_equivalent",
+     "label": "row 55 — cedi equivalent",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R55.exchange_rate",
+     "label": "row 55 — exchange rate",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R55.net_worth_of_bank",
+     "label": "row 55 — net worth of bank",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R55.pct_of_net_worth",
+     "label": "row 55 — % of net worth",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R55.maturity_date",
+     "label": "row 55 — maturity date",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R55.interest_rate",
+     "label": "row 55 — interest rate",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R55.counterparty_rating",
+     "label": "row 55 — counterparty rating",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R55.counterparty_net_worth",
+     "label": "row 55 — counterparty net worth",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R55.audit_report_date",
+     "label": "row 55 — audit report date",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R55.provision",
+     "label": "row 55 — provision",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.cedi.R56.cedi_equivalent",
+     "label": "(b) Short-term borrowing",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.networth.R56.net_worth_of_bank",
+     "label": "(b) Short-term borrowing",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.pct.R56.pct_of_net_worth",
+     "label": "(b) Short-term borrowing",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD2A.provision.R56.provision",
+     "label": "(b) Short-term borrowing",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R57.name",
+     "label": "row 57 — name",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R57.type_of_exposure",
+     "label": "row 57 — type of exposure",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R57.currency",
+     "label": "row 57 — currency",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R57.fcy_amount",
+     "label": "row 57 — foreign currency amount",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R57.cedi_equivalent",
+     "label": "row 57 — cedi equivalent",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R57.exchange_rate",
+     "label": "row 57 — exchange rate",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R57.net_worth_of_bank",
+     "label": "row 57 — net worth of bank",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R57.pct_of_net_worth",
+     "label": "row 57 — % of net worth",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R57.maturity_date",
+     "label": "row 57 — maturity date",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R57.interest_rate",
+     "label": "row 57 — interest rate",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R57.counterparty_rating",
+     "label": "row 57 — counterparty rating",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R57.counterparty_net_worth",
+     "label": "row 57 — counterparty net worth",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R57.audit_report_date",
+     "label": "row 57 — audit report date",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R57.provision",
+     "label": "row 57 — provision",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.cedi.R58.cedi_equivalent",
+     "label": "(c) Cheques for clearing",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.networth.R58.net_worth_of_bank",
+     "label": "(c) Cheques for clearing",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.pct.R58.pct_of_net_worth",
+     "label": "(c) Cheques for clearing",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD2A.provision.R58.provision",
+     "label": "(c) Cheques for clearing",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R59.name",
+     "label": "row 59 — name",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R59.type_of_exposure",
+     "label": "row 59 — type of exposure",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R59.currency",
+     "label": "row 59 — currency",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R59.fcy_amount",
+     "label": "row 59 — foreign currency amount",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R59.cedi_equivalent",
+     "label": "row 59 — cedi equivalent",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R59.exchange_rate",
+     "label": "row 59 — exchange rate",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R59.net_worth_of_bank",
+     "label": "row 59 — net worth of bank",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R59.pct_of_net_worth",
+     "label": "row 59 — % of net worth",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R59.maturity_date",
+     "label": "row 59 — maturity date",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R59.interest_rate",
+     "label": "row 59 — interest rate",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R59.counterparty_rating",
+     "label": "row 59 — counterparty rating",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R59.counterparty_net_worth",
+     "label": "row 59 — counterparty net worth",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R59.audit_report_date",
+     "label": "row 59 — audit report date",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R59.provision",
+     "label": "row 59 — provision",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.cedi.R60.cedi_equivalent",
+     "label": "(d) Deposits of financial institutions",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.networth.R60.net_worth_of_bank",
+     "label": "(d) Deposits of financial institutions",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.pct.R60.pct_of_net_worth",
+     "label": "(d) Deposits of financial institutions",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD2A.provision.R60.provision",
+     "label": "(d) Deposits of financial institutions",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R61.name",
+     "label": "row 61 — name",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R61.type_of_exposure",
+     "label": "row 61 — type of exposure",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R61.currency",
+     "label": "row 61 — currency",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R61.fcy_amount",
+     "label": "row 61 — foreign currency amount",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R61.cedi_equivalent",
+     "label": "row 61 — cedi equivalent",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R61.exchange_rate",
+     "label": "row 61 — exchange rate",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R61.net_worth_of_bank",
+     "label": "row 61 — net worth of bank",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R61.pct_of_net_worth",
+     "label": "row 61 — % of net worth",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R61.maturity_date",
+     "label": "row 61 — maturity date",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R61.interest_rate",
+     "label": "row 61 — interest rate",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R61.counterparty_rating",
+     "label": "row 61 — counterparty rating",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R61.counterparty_net_worth",
+     "label": "row 61 — counterparty net worth",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R61.audit_report_date",
+     "label": "row 61 — audit report date",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R61.provision",
+     "label": "row 61 — provision",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.cedi.R66.cedi_equivalent",
+     "label": "(i). Individuals & others",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.networth.R66.net_worth_of_bank",
+     "label": "(i). Individuals & others",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.pct.R66.pct_of_net_worth",
+     "label": "(i). Individuals & others",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD2A.provision.R66.provision",
+     "label": "(i). Individuals & others",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R67.name",
+     "label": "row 67 — name",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R67.type_of_exposure",
+     "label": "row 67 — type of exposure",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R67.currency",
+     "label": "row 67 — currency",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R67.fcy_amount",
+     "label": "row 67 — foreign currency amount",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R67.cedi_equivalent",
+     "label": "row 67 — cedi equivalent",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R67.exchange_rate",
+     "label": "row 67 — exchange rate",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R67.net_worth_of_bank",
+     "label": "row 67 — net worth of bank",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R67.pct_of_net_worth",
+     "label": "row 67 — % of net worth",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R67.maturity_date",
+     "label": "row 67 — maturity date",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R67.interest_rate",
+     "label": "row 67 — interest rate",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R67.counterparty_rating",
+     "label": "row 67 — counterparty rating",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R67.counterparty_net_worth",
+     "label": "row 67 — counterparty net worth",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R67.audit_report_date",
+     "label": "row 67 — audit report date",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R67.provision",
+     "label": "row 67 — provision",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R68.name",
+     "label": "row 68 — name",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R68.type_of_exposure",
+     "label": "row 68 — type of exposure",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R68.currency",
+     "label": "row 68 — currency",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R68.fcy_amount",
+     "label": "row 68 — foreign currency amount",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R68.cedi_equivalent",
+     "label": "row 68 — cedi equivalent",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R68.exchange_rate",
+     "label": "row 68 — exchange rate",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R68.net_worth_of_bank",
+     "label": "row 68 — net worth of bank",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R68.pct_of_net_worth",
+     "label": "row 68 — % of net worth",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R68.maturity_date",
+     "label": "row 68 — maturity date",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R68.interest_rate",
+     "label": "row 68 — interest rate",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R68.counterparty_rating",
+     "label": "row 68 — counterparty rating",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R68.counterparty_net_worth",
+     "label": "row 68 — counterparty net worth",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R68.audit_report_date",
+     "label": "row 68 — audit report date",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R68.provision",
+     "label": "row 68 — provision",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R69.name",
+     "label": "row 69 — name",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R69.type_of_exposure",
+     "label": "row 69 — type of exposure",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R69.currency",
+     "label": "row 69 — currency",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R69.fcy_amount",
+     "label": "row 69 — foreign currency amount",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R69.cedi_equivalent",
+     "label": "row 69 — cedi equivalent",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R69.exchange_rate",
+     "label": "row 69 — exchange rate",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R69.net_worth_of_bank",
+     "label": "row 69 — net worth of bank",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R69.pct_of_net_worth",
+     "label": "row 69 — % of net worth",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R69.maturity_date",
+     "label": "row 69 — maturity date",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R69.interest_rate",
+     "label": "row 69 — interest rate",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R69.counterparty_rating",
+     "label": "row 69 — counterparty rating",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R69.counterparty_net_worth",
+     "label": "row 69 — counterparty net worth",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R69.audit_report_date",
+     "label": "row 69 — audit report date",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R69.provision",
+     "label": "row 69 — provision",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R70.name",
+     "label": "row 70 — name",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R70.type_of_exposure",
+     "label": "row 70 — type of exposure",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R70.currency",
+     "label": "row 70 — currency",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R70.fcy_amount",
+     "label": "row 70 — foreign currency amount",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R70.cedi_equivalent",
+     "label": "row 70 — cedi equivalent",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R70.exchange_rate",
+     "label": "row 70 — exchange rate",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R70.net_worth_of_bank",
+     "label": "row 70 — net worth of bank",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R70.pct_of_net_worth",
+     "label": "row 70 — % of net worth",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R70.maturity_date",
+     "label": "row 70 — maturity date",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R70.interest_rate",
+     "label": "row 70 — interest rate",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R70.counterparty_rating",
+     "label": "row 70 — counterparty rating",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R70.counterparty_net_worth",
+     "label": "row 70 — counterparty net worth",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R70.audit_report_date",
+     "label": "row 70 — audit report date",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R70.provision",
+     "label": "row 70 — provision",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.cedi.R71.cedi_equivalent",
+     "label": "(ii). Inoperative",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.networth.R71.net_worth_of_bank",
+     "label": "(ii). Inoperative",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.pct.R71.pct_of_net_worth",
+     "label": "(ii). Inoperative",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD2A.provision.R71.provision",
+     "label": "(ii). Inoperative",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R72.name",
+     "label": "row 72 — name",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R72.type_of_exposure",
+     "label": "row 72 — type of exposure",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R72.currency",
+     "label": "row 72 — currency",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R72.fcy_amount",
+     "label": "row 72 — foreign currency amount",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R72.cedi_equivalent",
+     "label": "row 72 — cedi equivalent",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R72.exchange_rate",
+     "label": "row 72 — exchange rate",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R72.net_worth_of_bank",
+     "label": "row 72 — net worth of bank",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R72.pct_of_net_worth",
+     "label": "row 72 — % of net worth",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R72.maturity_date",
+     "label": "row 72 — maturity date",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R72.interest_rate",
+     "label": "row 72 — interest rate",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R72.counterparty_rating",
+     "label": "row 72 — counterparty rating",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R72.counterparty_net_worth",
+     "label": "row 72 — counterparty net worth",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R72.audit_report_date",
+     "label": "row 72 — audit report date",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R72.provision",
+     "label": "row 72 — provision",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R73.name",
+     "label": "row 73 — name",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R73.type_of_exposure",
+     "label": "row 73 — type of exposure",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R73.currency",
+     "label": "row 73 — currency",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R73.fcy_amount",
+     "label": "row 73 — foreign currency amount",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R73.cedi_equivalent",
+     "label": "row 73 — cedi equivalent",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R73.exchange_rate",
+     "label": "row 73 — exchange rate",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R73.net_worth_of_bank",
+     "label": "row 73 — net worth of bank",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R73.pct_of_net_worth",
+     "label": "row 73 — % of net worth",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R73.maturity_date",
+     "label": "row 73 — maturity date",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R73.interest_rate",
+     "label": "row 73 — interest rate",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R73.counterparty_rating",
+     "label": "row 73 — counterparty rating",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R73.counterparty_net_worth",
+     "label": "row 73 — counterparty net worth",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R73.audit_report_date",
+     "label": "row 73 — audit report date",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R73.provision",
+     "label": "row 73 — provision",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R74.name",
+     "label": "row 74 — name",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R74.type_of_exposure",
+     "label": "row 74 — type of exposure",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R74.currency",
+     "label": "row 74 — currency",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R74.fcy_amount",
+     "label": "row 74 — foreign currency amount",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R74.cedi_equivalent",
+     "label": "row 74 — cedi equivalent",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R74.exchange_rate",
+     "label": "row 74 — exchange rate",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R74.net_worth_of_bank",
+     "label": "row 74 — net worth of bank",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R74.pct_of_net_worth",
+     "label": "row 74 — % of net worth",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R74.maturity_date",
+     "label": "row 74 — maturity date",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R74.interest_rate",
+     "label": "row 74 — interest rate",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R74.counterparty_rating",
+     "label": "row 74 — counterparty rating",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R74.counterparty_net_worth",
+     "label": "row 74 — counterparty net worth",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R74.audit_report_date",
+     "label": "row 74 — audit report date",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R74.provision",
+     "label": "row 74 — provision",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R75.name",
+     "label": "row 75 — name",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R75.type_of_exposure",
+     "label": "row 75 — type of exposure",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R75.currency",
+     "label": "row 75 — currency",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R75.fcy_amount",
+     "label": "row 75 — foreign currency amount",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R75.cedi_equivalent",
+     "label": "row 75 — cedi equivalent",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R75.exchange_rate",
+     "label": "row 75 — exchange rate",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R75.net_worth_of_bank",
+     "label": "row 75 — net worth of bank",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R75.pct_of_net_worth",
+     "label": "row 75 — % of net worth",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R75.maturity_date",
+     "label": "row 75 — maturity date",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R75.interest_rate",
+     "label": "row 75 — interest rate",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R75.counterparty_rating",
+     "label": "row 75 — counterparty rating",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R75.counterparty_net_worth",
+     "label": "row 75 — counterparty net worth",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R75.audit_report_date",
+     "label": "row 75 — audit report date",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R75.provision",
+     "label": "row 75 — provision",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.cedi.R77.cedi_equivalent",
+     "label": "Individual",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.networth.R77.net_worth_of_bank",
+     "label": "Individual",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.pct.R77.pct_of_net_worth",
+     "label": "Individual",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD2A.provision.R77.provision",
+     "label": "Individual",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R78.name",
+     "label": "row 78 — name",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R78.type_of_exposure",
+     "label": "row 78 — type of exposure",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R78.currency",
+     "label": "row 78 — currency",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R78.fcy_amount",
+     "label": "row 78 — foreign currency amount",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R78.cedi_equivalent",
+     "label": "row 78 — cedi equivalent",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R78.exchange_rate",
+     "label": "row 78 — exchange rate",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R78.net_worth_of_bank",
+     "label": "row 78 — net worth of bank",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R78.pct_of_net_worth",
+     "label": "row 78 — % of net worth",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R78.maturity_date",
+     "label": "row 78 — maturity date",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R78.interest_rate",
+     "label": "row 78 — interest rate",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R78.counterparty_rating",
+     "label": "row 78 — counterparty rating",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R78.counterparty_net_worth",
+     "label": "row 78 — counterparty net worth",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R78.audit_report_date",
+     "label": "row 78 — audit report date",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R78.provision",
+     "label": "row 78 — provision",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.cedi.R80.cedi_equivalent",
+     "label": "Individual",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.networth.R80.net_worth_of_bank",
+     "label": "Individual",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.pct.R80.pct_of_net_worth",
+     "label": "Individual",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD2A.provision.R80.provision",
+     "label": "Individual",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R81.name",
+     "label": "row 81 — name",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R81.type_of_exposure",
+     "label": "row 81 — type of exposure",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R81.currency",
+     "label": "row 81 — currency",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R81.fcy_amount",
+     "label": "row 81 — foreign currency amount",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R81.cedi_equivalent",
+     "label": "row 81 — cedi equivalent",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R81.exchange_rate",
+     "label": "row 81 — exchange rate",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R81.net_worth_of_bank",
+     "label": "row 81 — net worth of bank",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R81.pct_of_net_worth",
+     "label": "row 81 — % of net worth",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R81.maturity_date",
+     "label": "row 81 — maturity date",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R81.interest_rate",
+     "label": "row 81 — interest rate",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R81.counterparty_rating",
+     "label": "row 81 — counterparty rating",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R81.counterparty_net_worth",
+     "label": "row 81 — counterparty net worth",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R81.audit_report_date",
+     "label": "row 81 — audit report date",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R81.provision",
+     "label": "row 81 — provision",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.cedi.R82.cedi_equivalent",
+     "label": "(f). Special deposits",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.networth.R82.net_worth_of_bank",
+     "label": "(f). Special deposits",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.pct.R82.pct_of_net_worth",
+     "label": "(f). Special deposits",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD2A.provision.R82.provision",
+     "label": "(f). Special deposits",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R83.name",
+     "label": "row 83 — name",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R83.type_of_exposure",
+     "label": "row 83 — type of exposure",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R83.currency",
+     "label": "row 83 — currency",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R83.fcy_amount",
+     "label": "row 83 — foreign currency amount",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R83.cedi_equivalent",
+     "label": "row 83 — cedi equivalent",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R83.exchange_rate",
+     "label": "row 83 — exchange rate",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R83.net_worth_of_bank",
+     "label": "row 83 — net worth of bank",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R83.pct_of_net_worth",
+     "label": "row 83 — % of net worth",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R83.maturity_date",
+     "label": "row 83 — maturity date",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R83.interest_rate",
+     "label": "row 83 — interest rate",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R83.counterparty_rating",
+     "label": "row 83 — counterparty rating",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R83.counterparty_net_worth",
+     "label": "row 83 — counterparty net worth",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R83.audit_report_date",
+     "label": "row 83 — audit report date",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R83.provision",
+     "label": "row 83 — provision",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.cedi.R84.cedi_equivalent",
+     "label": "(g) Margins against Contingent Liab.",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.networth.R84.net_worth_of_bank",
+     "label": "(g) Margins against Contingent Liab.",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.pct.R84.pct_of_net_worth",
+     "label": "(g) Margins against Contingent Liab.",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD2A.provision.R84.provision",
+     "label": "(g) Margins against Contingent Liab.",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R85.name",
+     "label": "row 85 — name",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R85.type_of_exposure",
+     "label": "row 85 — type of exposure",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R85.currency",
+     "label": "row 85 — currency",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R85.fcy_amount",
+     "label": "row 85 — foreign currency amount",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R85.cedi_equivalent",
+     "label": "row 85 — cedi equivalent",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R85.exchange_rate",
+     "label": "row 85 — exchange rate",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R85.net_worth_of_bank",
+     "label": "row 85 — net worth of bank",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R85.pct_of_net_worth",
+     "label": "row 85 — % of net worth",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R85.maturity_date",
+     "label": "row 85 — maturity date",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R85.interest_rate",
+     "label": "row 85 — interest rate",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R85.counterparty_rating",
+     "label": "row 85 — counterparty rating",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R85.counterparty_net_worth",
+     "label": "row 85 — counterparty net worth",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R85.audit_report_date",
+     "label": "row 85 — audit report date",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R85.provision",
+     "label": "row 85 — provision",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R86.name",
+     "label": "row 86 — name",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R86.type_of_exposure",
+     "label": "row 86 — type of exposure",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R86.currency",
+     "label": "row 86 — currency",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R86.fcy_amount",
+     "label": "row 86 — foreign currency amount",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R86.cedi_equivalent",
+     "label": "row 86 — cedi equivalent",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R86.exchange_rate",
+     "label": "row 86 — exchange rate",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R86.net_worth_of_bank",
+     "label": "row 86 — net worth of bank",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R86.pct_of_net_worth",
+     "label": "row 86 — % of net worth",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R86.maturity_date",
+     "label": "row 86 — maturity date",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R86.interest_rate",
+     "label": "row 86 — interest rate",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R86.counterparty_rating",
+     "label": "row 86 — counterparty rating",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R86.counterparty_net_worth",
+     "label": "row 86 — counterparty net worth",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R86.audit_report_date",
+     "label": "row 86 — audit report date",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R86.provision",
+     "label": "row 86 — provision",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R87.name",
+     "label": "row 87 — name",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R87.type_of_exposure",
+     "label": "row 87 — type of exposure",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R87.currency",
+     "label": "row 87 — currency",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R87.fcy_amount",
+     "label": "row 87 — foreign currency amount",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R87.cedi_equivalent",
+     "label": "row 87 — cedi equivalent",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R87.exchange_rate",
+     "label": "row 87 — exchange rate",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R87.net_worth_of_bank",
+     "label": "row 87 — net worth of bank",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R87.pct_of_net_worth",
+     "label": "row 87 — % of net worth",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R87.maturity_date",
+     "label": "row 87 — maturity date",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R87.interest_rate",
+     "label": "row 87 — interest rate",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R87.counterparty_rating",
+     "label": "row 87 — counterparty rating",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R87.counterparty_net_worth",
+     "label": "row 87 — counterparty net worth",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R87.audit_report_date",
+     "label": "row 87 — audit report date",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R87.provision",
+     "label": "row 87 — provision",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R88.name",
+     "label": "row 88 — name",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R88.type_of_exposure",
+     "label": "row 88 — type of exposure",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R88.currency",
+     "label": "row 88 — currency",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R88.fcy_amount",
+     "label": "row 88 — foreign currency amount",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R88.cedi_equivalent",
+     "label": "row 88 — cedi equivalent",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R88.exchange_rate",
+     "label": "row 88 — exchange rate",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R88.net_worth_of_bank",
+     "label": "row 88 — net worth of bank",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R88.pct_of_net_worth",
+     "label": "row 88 — % of net worth",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R88.maturity_date",
+     "label": "row 88 — maturity date",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R88.interest_rate",
+     "label": "row 88 — interest rate",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R88.counterparty_rating",
+     "label": "row 88 — counterparty rating",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R88.counterparty_net_worth",
+     "label": "row 88 — counterparty net worth",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R88.audit_report_date",
+     "label": "row 88 — audit report date",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R88.provision",
+     "label": "row 88 — provision",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R89.name",
+     "label": "row 89 — name",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R89.type_of_exposure",
+     "label": "row 89 — type of exposure",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R89.currency",
+     "label": "row 89 — currency",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R89.fcy_amount",
+     "label": "row 89 — foreign currency amount",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R89.cedi_equivalent",
+     "label": "row 89 — cedi equivalent",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R89.exchange_rate",
+     "label": "row 89 — exchange rate",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R89.net_worth_of_bank",
+     "label": "row 89 — net worth of bank",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R89.pct_of_net_worth",
+     "label": "row 89 — % of net worth",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R89.maturity_date",
+     "label": "row 89 — maturity date",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R89.interest_rate",
+     "label": "row 89 — interest rate",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R89.counterparty_rating",
+     "label": "row 89 — counterparty rating",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R89.counterparty_net_worth",
+     "label": "row 89 — counterparty net worth",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R89.audit_report_date",
+     "label": "row 89 — audit report date",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R89.provision",
+     "label": "row 89 — provision",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.cedi.R90.cedi_equivalent",
+     "label": "(h) Other Liabilities",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.networth.R90.net_worth_of_bank",
+     "label": "(h) Other Liabilities",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.pct.R90.pct_of_net_worth",
+     "label": "(h) Other Liabilities",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD2A.provision.R90.provision",
+     "label": "(h) Other Liabilities",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R91.name",
+     "label": "row 91 — name",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R91.type_of_exposure",
+     "label": "row 91 — type of exposure",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R91.currency",
+     "label": "row 91 — currency",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R91.fcy_amount",
+     "label": "row 91 — foreign currency amount",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R91.cedi_equivalent",
+     "label": "row 91 — cedi equivalent",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R91.exchange_rate",
+     "label": "row 91 — exchange rate",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R91.net_worth_of_bank",
+     "label": "row 91 — net worth of bank",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R91.pct_of_net_worth",
+     "label": "row 91 — % of net worth",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R91.maturity_date",
+     "label": "row 91 — maturity date",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R91.interest_rate",
+     "label": "row 91 — interest rate",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R91.counterparty_rating",
+     "label": "row 91 — counterparty rating",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R91.counterparty_net_worth",
+     "label": "row 91 — counterparty net worth",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R91.audit_report_date",
+     "label": "row 91 — audit report date",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R91.provision",
+     "label": "row 91 — provision",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R92.name",
+     "label": "row 92 — name",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R92.type_of_exposure",
+     "label": "row 92 — type of exposure",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R92.currency",
+     "label": "row 92 — currency",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R92.fcy_amount",
+     "label": "row 92 — foreign currency amount",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R92.cedi_equivalent",
+     "label": "row 92 — cedi equivalent",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R92.exchange_rate",
+     "label": "row 92 — exchange rate",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R92.net_worth_of_bank",
+     "label": "row 92 — net worth of bank",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R92.pct_of_net_worth",
+     "label": "row 92 — % of net worth",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R92.maturity_date",
+     "label": "row 92 — maturity date",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R92.interest_rate",
+     "label": "row 92 — interest rate",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R92.counterparty_rating",
+     "label": "row 92 — counterparty rating",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R92.counterparty_net_worth",
+     "label": "row 92 — counterparty net worth",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R92.audit_report_date",
+     "label": "row 92 — audit report date",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R92.provision",
+     "label": "row 92 — provision",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R93.name",
+     "label": "row 93 — name",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R93.type_of_exposure",
+     "label": "row 93 — type of exposure",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R93.currency",
+     "label": "row 93 — currency",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R93.fcy_amount",
+     "label": "row 93 — foreign currency amount",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R93.cedi_equivalent",
+     "label": "row 93 — cedi equivalent",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R93.exchange_rate",
+     "label": "row 93 — exchange rate",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R93.net_worth_of_bank",
+     "label": "row 93 — net worth of bank",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R93.pct_of_net_worth",
+     "label": "row 93 — % of net worth",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R93.maturity_date",
+     "label": "row 93 — maturity date",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R93.interest_rate",
+     "label": "row 93 — interest rate",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R93.counterparty_rating",
+     "label": "row 93 — counterparty rating",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R93.counterparty_net_worth",
+     "label": "row 93 — counterparty net worth",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R93.audit_report_date",
+     "label": "row 93 — audit report date",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R93.provision",
+     "label": "row 93 — provision",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R94.name",
+     "label": "row 94 — name",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R94.type_of_exposure",
+     "label": "row 94 — type of exposure",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R94.currency",
+     "label": "row 94 — currency",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R94.fcy_amount",
+     "label": "row 94 — foreign currency amount",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R94.cedi_equivalent",
+     "label": "row 94 — cedi equivalent",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R94.exchange_rate",
+     "label": "row 94 — exchange rate",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R94.net_worth_of_bank",
+     "label": "row 94 — net worth of bank",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R94.pct_of_net_worth",
+     "label": "row 94 — % of net worth",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R94.maturity_date",
+     "label": "row 94 — maturity date",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R94.interest_rate",
+     "label": "row 94 — interest rate",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R94.counterparty_rating",
+     "label": "row 94 — counterparty rating",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R94.counterparty_net_worth",
+     "label": "row 94 — counterparty net worth",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R94.audit_report_date",
+     "label": "row 94 — audit report date",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R94.provision",
+     "label": "row 94 — provision",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R95.name",
+     "label": "row 95 — name",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R95.type_of_exposure",
+     "label": "row 95 — type of exposure",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R95.currency",
+     "label": "row 95 — currency",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R95.fcy_amount",
+     "label": "row 95 — foreign currency amount",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R95.cedi_equivalent",
+     "label": "row 95 — cedi equivalent",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R95.exchange_rate",
+     "label": "row 95 — exchange rate",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R95.net_worth_of_bank",
+     "label": "row 95 — net worth of bank",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R95.pct_of_net_worth",
+     "label": "row 95 — % of net worth",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R95.maturity_date",
+     "label": "row 95 — maturity date",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R95.interest_rate",
+     "label": "row 95 — interest rate",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R95.counterparty_rating",
+     "label": "row 95 — counterparty rating",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R95.counterparty_net_worth",
+     "label": "row 95 — counterparty net worth",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R95.audit_report_date",
+     "label": "row 95 — audit report date",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R95.provision",
+     "label": "row 95 — provision",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R96.name",
+     "label": "row 96 — name",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R96.type_of_exposure",
+     "label": "row 96 — type of exposure",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R96.currency",
+     "label": "row 96 — currency",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R96.fcy_amount",
+     "label": "row 96 — foreign currency amount",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R96.cedi_equivalent",
+     "label": "row 96 — cedi equivalent",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R96.exchange_rate",
+     "label": "row 96 — exchange rate",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R96.net_worth_of_bank",
+     "label": "row 96 — net worth of bank",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R96.pct_of_net_worth",
+     "label": "row 96 — % of net worth",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R96.maturity_date",
+     "label": "row 96 — maturity date",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R96.interest_rate",
+     "label": "row 96 — interest rate",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R96.counterparty_rating",
+     "label": "row 96 — counterparty rating",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R96.counterparty_net_worth",
+     "label": "row 96 — counterparty net worth",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R96.audit_report_date",
+     "label": "row 96 — audit report date",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R96.provision",
+     "label": "row 96 — provision",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.cedi.R99.cedi_equivalent",
+     "label": "Customers Liabilities",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.networth.R99.net_worth_of_bank",
+     "label": "Customers Liabilities",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.pct.R99.pct_of_net_worth",
+     "label": "Customers Liabilities",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD2A.provision.R99.provision",
+     "label": "Customers Liabilities",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R100.name",
+     "label": "row 100 — name",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R100.type_of_exposure",
+     "label": "row 100 — type of exposure",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R100.currency",
+     "label": "row 100 — currency",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R100.fcy_amount",
+     "label": "row 100 — foreign currency amount",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R100.cedi_equivalent",
+     "label": "row 100 — cedi equivalent",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R100.exchange_rate",
+     "label": "row 100 — exchange rate",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R100.net_worth_of_bank",
+     "label": "row 100 — net worth of bank",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R100.pct_of_net_worth",
+     "label": "row 100 — % of net worth",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R100.maturity_date",
+     "label": "row 100 — maturity date",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R100.interest_rate",
+     "label": "row 100 — interest rate",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R100.counterparty_rating",
+     "label": "row 100 — counterparty rating",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R100.counterparty_net_worth",
+     "label": "row 100 — counterparty net worth",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R100.audit_report_date",
+     "label": "row 100 — audit report date",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R100.provision",
+     "label": "row 100 — provision",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R101.name",
+     "label": "row 101 — name",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R101.type_of_exposure",
+     "label": "row 101 — type of exposure",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R101.currency",
+     "label": "row 101 — currency",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R101.fcy_amount",
+     "label": "row 101 — foreign currency amount",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R101.cedi_equivalent",
+     "label": "row 101 — cedi equivalent",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R101.exchange_rate",
+     "label": "row 101 — exchange rate",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R101.net_worth_of_bank",
+     "label": "row 101 — net worth of bank",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R101.pct_of_net_worth",
+     "label": "row 101 — % of net worth",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R101.maturity_date",
+     "label": "row 101 — maturity date",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R101.interest_rate",
+     "label": "row 101 — interest rate",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R101.counterparty_rating",
+     "label": "row 101 — counterparty rating",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R101.counterparty_net_worth",
+     "label": "row 101 — counterparty net worth",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R101.audit_report_date",
+     "label": "row 101 — audit report date",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R101.provision",
+     "label": "row 101 — provision",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R102.name",
+     "label": "row 102 — name",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R102.type_of_exposure",
+     "label": "row 102 — type of exposure",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R102.currency",
+     "label": "row 102 — currency",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R102.fcy_amount",
+     "label": "row 102 — foreign currency amount",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R102.cedi_equivalent",
+     "label": "row 102 — cedi equivalent",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R102.exchange_rate",
+     "label": "row 102 — exchange rate",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R102.net_worth_of_bank",
+     "label": "row 102 — net worth of bank",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R102.pct_of_net_worth",
+     "label": "row 102 — % of net worth",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R102.maturity_date",
+     "label": "row 102 — maturity date",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R102.interest_rate",
+     "label": "row 102 — interest rate",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R102.counterparty_rating",
+     "label": "row 102 — counterparty rating",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R102.counterparty_net_worth",
+     "label": "row 102 — counterparty net worth",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R102.audit_report_date",
+     "label": "row 102 — audit report date",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R102.provision",
+     "label": "row 102 — provision",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.cedi.R103.cedi_equivalent",
+     "label": "Bonds & Guarantee",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.networth.R103.net_worth_of_bank",
+     "label": "Bonds & Guarantee",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.pct.R103.pct_of_net_worth",
+     "label": "Bonds & Guarantee",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD2A.provision.R103.provision",
+     "label": "Bonds & Guarantee",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R104.name",
+     "label": "row 104 — name",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R104.type_of_exposure",
+     "label": "row 104 — type of exposure",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R104.currency",
+     "label": "row 104 — currency",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R104.fcy_amount",
+     "label": "row 104 — foreign currency amount",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R104.cedi_equivalent",
+     "label": "row 104 — cedi equivalent",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R104.exchange_rate",
+     "label": "row 104 — exchange rate",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R104.net_worth_of_bank",
+     "label": "row 104 — net worth of bank",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R104.pct_of_net_worth",
+     "label": "row 104 — % of net worth",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R104.maturity_date",
+     "label": "row 104 — maturity date",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R104.interest_rate",
+     "label": "row 104 — interest rate",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R104.counterparty_rating",
+     "label": "row 104 — counterparty rating",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R104.counterparty_net_worth",
+     "label": "row 104 — counterparty net worth",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R104.audit_report_date",
+     "label": "row 104 — audit report date",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R104.provision",
+     "label": "row 104 — provision",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R105.name",
+     "label": "row 105 — name",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R105.type_of_exposure",
+     "label": "row 105 — type of exposure",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R105.currency",
+     "label": "row 105 — currency",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R105.fcy_amount",
+     "label": "row 105 — foreign currency amount",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R105.cedi_equivalent",
+     "label": "row 105 — cedi equivalent",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R105.exchange_rate",
+     "label": "row 105 — exchange rate",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R105.net_worth_of_bank",
+     "label": "row 105 — net worth of bank",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R105.pct_of_net_worth",
+     "label": "row 105 — % of net worth",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R105.maturity_date",
+     "label": "row 105 — maturity date",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R105.interest_rate",
+     "label": "row 105 — interest rate",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R105.counterparty_rating",
+     "label": "row 105 — counterparty rating",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R105.counterparty_net_worth",
+     "label": "row 105 — counterparty net worth",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R105.audit_report_date",
+     "label": "row 105 — audit report date",
+     "kind": "value"
+    },
+    {
+     "code": "BSD2A.detail.R105.provision",
+     "label": "row 105 — provision",
+     "kind": "value"
+    }
+   ]
+  }
+ ],
+ "rules": []
+}

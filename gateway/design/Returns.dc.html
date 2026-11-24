@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Return definitions</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=IBM+Plex+Mono:wght@400;500&amp;display=swap">
+<style>
+body{margin:0;background:#F4F6F8}
+a{color:#1F4FD1}a:hover{color:#163A9C}
+</style>
+</helmet>
+<div style="box-sizing: border-box; min-height: 100vh; display: flex; flex-wrap: wrap; background: #F4F6F8; color: #0E1726; font-family: Inter, system-ui, sans-serif">
+<div style="flex: 1 1 248px; max-width: 100%; background: #0F1E36; display: flex">
+<dc-import name="Sidebar" active="returns" hint-size="100%,1000px"></dc-import>
+</div>
+<main style="flex: 999 1 560px; min-width: 0; box-sizing: border-box; display: flex; flex-direction: column; gap: 20px; padding: 28px 32px 48px">
+<header style="display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 16px">
+<div style="display: flex; flex-direction: column; gap: 6px">
+<span style="font-size: 13px; color: #4B5565">Configuration / Return definitions</span>
+<h1 style="margin: 0; font-size: 28px; font-weight: 600; letter-spacing: -0.01em">Return definitions</h1>
+<span style="font-size: 14px; color: #4B5565">The returns institutions must file, their schemas, validation rules and due dates. Every change needs two approvers.</span>
+</div>
+<button type="button" style="height: 44px; padding: 0 18px; border: 0; border-radius: 8px; background: #1F4FD1; color: #FFFFFF; font: inherit; font-size: 14px; font-weight: 600">Draft a new version</button>
+</header>
+
+<div style="display: flex; flex-wrap: wrap; gap: 20px; align-items: flex-start">
+<section aria-label="Definitions" style="flex: 3 1 640px; min-width: 0; background: #FFFFFF; border: 1px solid #DDE2E8; border-radius: 10px; display: flex; flex-direction: column">
+<div style="display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; padding: 16px 18px; border-bottom: 1px solid #EEF0F3">
+<div style="display: flex; flex-direction: column; gap: 6px; flex: 2 1 220px">
+<label for="def-search" style="font-size: 12px; font-weight: 600; color: #344054">Search</label>
+<input id="def-search" type="search" placeholder="Code or name" style="box-sizing: border-box; height: 44px; border: 1px solid #C9D1DB; border-radius: 8px; padding: 0 12px; font: inherit; font-size: 14px">
+</div>
+<div style="display: flex; flex-direction: column; gap: 6px; flex: 1 1 160px">
+<label for="def-cadence" style="font-size: 12px; font-weight: 600; color: #344054">Cadence</label>
+<select id="def-cadence" style="box-sizing: border-box; height: 44px; border: 1px solid #C9D1DB; border-radius: 8px; padding: 0 10px; font: inherit; font-size: 14px; background: #FFFFFF"><option>All cadences</option><option>Daily</option><option>Weekly</option><option>Monthly</option><option>Quarterly</option><option>Annual</option></select>
+</div>
+<div style="display: flex; flex-direction: column; gap: 6px; flex: 1 1 160px">
+<label for="def-status" style="font-size: 12px; font-weight: 600; color: #344054">Status</label>
+<select id="def-status" style="box-sizing: border-box; height: 44px; border: 1px solid #C9D1DB; border-radius: 8px; padding: 0 10px; font: inherit; font-size: 14px; background: #FFFFFF"><option>All</option><option>Published</option><option>Draft pending approval</option></select>
+</div>
+</div>
+<div style="overflow-x: auto">
+<table style="width: 100%; min-width: 860px; border-collapse: collapse; font-size: 14px">
+<thead>
+<tr style="text-align: left; color: #4B5565; font-size: 12px">
+<th scope="col" style="font-weight: 600; padding: 10px 12px 10px 18px; border-bottom: 1px solid #DDE2E8">Code</th>
+<th scope="col" style="font-weight: 600; padding: 10px 12px; border-bottom: 1px solid #DDE2E8">Name</th>
+<th scope="col" style="font-weight: 600; padding: 10px 12px; border-bottom: 1px solid #DDE2E8">Cadence</th>
+<th scope="col" style="font-weight: 600; padding: 10px 12px; border-bottom: 1px solid #DDE2E8">Version</th>
+<th scope="col" style="font-weight: 600; padding: 10px 12px; border-bottom: 1px solid #DDE2E8">Due date rule</th>
+<th scope="col" style="font-weight: 600; padding: 10px 12px; border-bottom: 1px solid #DDE2E8">Rules</th>
+<th scope="col" style="font-weight: 600; padding: 10px 18px 10px 12px; border-bottom: 1px solid #DDE2E8">Status</th>
+</tr>
+</thead>
+<tbody>
+<sc-for list="{{definitions}}" as="def" hint-placeholder-count="14">
+<tr style="{{def.rowStyle}}">
+<td style="padding: 12px 12px 12px 18px; border-bottom: 1px solid #EEF0F3; font-family: 'IBM Plex Mono', monospace; font-size: 13px; font-weight: 500; white-space: nowrap"><a href="Returns.dc.html" style="color: #0E1726; text-decoration: none">{{def.code}}</a></td>
+<td style="padding: 12px; border-bottom: 1px solid #EEF0F3">{{def.name}}</td>
+<td style="padding: 12px; border-bottom: 1px solid #EEF0F3; color: #344054">{{def.cadence}}</td>
+<td style="padding: 12px; border-bottom: 1px solid #EEF0F3; font-family: 'IBM Plex Mono', monospace; font-size: 13px">{{def.version}}</td>
+<td style="padding: 12px; border-bottom: 1px solid #EEF0F3; color: #6B4E16; font-size: 13px; white-space: nowrap">[BoG due-date rule]</td>
+<td style="padding: 12px; border-bottom: 1px solid #EEF0F3; color: #344054; font-variant-numeric: tabular-nums">{{def.rules}}</td>
+<td style="padding: 12px 18px 12px 12px; border-bottom: 1px solid #EEF0F3"><span style="{{def.chip}}">{{def.status}}</span></td>
+</tr>
+</sc-for>
+</tbody>
+</table>
+</div>
+</section>
+
+<aside aria-labelledby="draft-title" style="flex: 2 1 380px; min-width: 0; display: flex; flex-direction: column; gap: 20px">
+<section style="background: #FFFFFF; border: 1px solid #DDE2E8; border-radius: 10px; padding: 20px 22px; display: flex; flex-direction: column; gap: 14px">
+<div style="display: flex; flex-direction: column; gap: 6px">
+<span style="font-family: 'IBM Plex Mono', monospace; font-size: 13px; color: #4B5565">BSD5A</span>
+<h2 id="draft-title" style="margin: 0; font-size: 19px; font-weight: 600">Capital Adequacy Return — draft 2026.2</h2>
+<span style="display: inline-flex; align-self: flex-start; font-size: 12px; font-weight: 600; border-radius: 999px; padding: 3px 10px; background: #FDEFD9; color: #8A4B00">Awaiting second approval</span>
+</div>
+<dl style="margin: 0; display: flex; flex-direction: column; gap: 10px; font-size: 14px">
+<div style="display: flex; justify-content: space-between; gap: 12px"><dt style="color: #4B5565">Change</dt><dd style="margin: 0; font-weight: 500; text-align: right">Adds line 4.7, operational risk RWA</dd></div>
+<div style="display: flex; justify-content: space-between; gap: 12px"><dt style="color: #4B5565">First reporting date</dt><dd style="margin: 0; font-weight: 500; text-align: right">31 Jan 2027</dd></div>
+<div style="display: flex; justify-content: space-between; gap: 12px"><dt style="color: #4B5565">Notice to institutions</dt><dd style="margin: 0; font-weight: 500; text-align: right">60 days, from approval</dd></div>
+<div style="display: flex; justify-content: space-between; gap: 12px"><dt style="color: #4B5565">Sandbox testing</dt><dd style="margin: 0; font-weight: 500; text-align: right">Opens on approval</dd></div>
+<div style="display: flex; justify-content: space-between; gap: 12px"><dt style="color: #4B5565">Breaking for API v1</dt><dd style="margin: 0; font-weight: 500; text-align: right">No, additive field</dd></div>
+</dl>
+<div style="display: flex; flex-direction: column; gap: 8px">
+<span style="font-size: 13px; font-weight: 600; color: #344054">Approvals</span>
+<ol style="list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px">
+<li style="display: flex; justify-content: space-between; gap: 10px; padding: 10px 12px; border-radius: 8px; background: #F4F6F8; font-size: 14px"><span>Drafted by <strong style="font-weight: 600">E. Asante</strong></span><span style="color: #0F6B3E; font-weight: 600">18 Nov</span></li>
+<li style="display: flex; justify-content: space-between; gap: 10px; padding: 10px 12px; border-radius: 8px; background: #F4F6F8; font-size: 14px"><span>Approved by <strong style="font-weight: 600">M. Adjei</strong>, Policy</span><span style="color: #0F6B3E; font-weight: 600">19 Nov</span></li>
+<li style="display: flex; justify-content: space-between; gap: 10px; padding: 10px 12px; border-radius: 8px; border: 1px dashed #C9D1DB; font-size: 14px"><span>Second approver, Supervision</span><span style="color: #8A4B00; font-weight: 600">Pending</span></li>
+</ol>
+</div>
+<div style="display: flex; flex-wrap: wrap; gap: 8px">
+<button type="button" style="height: 44px; padding: 0 14px; border: 1px solid #C9D1DB; border-radius: 8px; background: #FFFFFF; font: inherit; font-size: 14px; font-weight: 500; color: #0E1726">Compare with 2026.1</button>
+<button type="button" style="height: 44px; padding: 0 14px; border: 1px solid #C9D1DB; border-radius: 8px; background: #FFFFFF; font: inherit; font-size: 14px; font-weight: 500; color: #0E1726">Return to drafter</button>
+<button type="button" style="height: 44px; padding: 0 16px; border: 0; border-radius: 8px; background: #1F4FD1; color: #FFFFFF; font: inherit; font-size: 14px; font-weight: 600">Approve and publish</button>
+</div>
+</section>
+
+<section style="background: #FFFFFF; border: 1px solid #DDE2E8; border-radius: 10px; padding: 20px 22px; display: flex; flex-direction: column; gap: 10px">
+<h2 style="margin: 0; font-size: 17px; font-weight: 600">What publishing does</h2>
+<ol style="margin: 0; padding-left: 20px; font-size: 14px; line-height: 1.6; color: #344054">
+<li>Adds version 2026.2 to the API (<span style="font-family: 'IBM Plex Mono', monospace; font-size: 13px">GET /v1/returns/BSD5A</span>) and the documentation site.</li>
+<li>Sends the 60-day notice to every institution that files BSD5A.</li>
+<li>Keeps 2026.1 valid for reporting dates before 31 Jan 2027.</li>
+<li>Records both approvals and the schema digest in the audit log.</li>
+</ol>
+</section>
+</aside>
+</div>
+</main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1160}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const chipBase = 'display: inline-flex; font-size: 12px; font-weight: 600; border-radius: 999px; padding: 3px 10px; white-space: nowrap; ';
+    const published = chipBase + 'background: #E3F4EC; color: #0F6B3E';
+    const draft = chipBase + 'background: #FDEFD9; color: #8A4B00';
+    const definitions = [
+      ['DBK-DAILY', 'Daily Bank Return', 'Daily', '2026.1', '12', 'Published'],
+      ['BSD1', 'Liquidity Reserve Return', 'Weekly', '2026.1', '16', 'Published'],
+      ['BSD2', 'Statement of Assets and Liabilities', 'Monthly', '2026.1', '58', 'Published'],
+      ['BSD3A', 'Large Exposures — Advances and Deposits', 'Monthly', '2026.1', '20', 'Published'],
+      ['BSD5A', 'Capital Adequacy Return', 'Monthly', '2026.1 → 2026.2', '44', 'Draft pending'],
+      ['BSD6', 'Maturity Analysis of Assets and Liabilities', 'Monthly', '2026.1', '40', 'Published'],
+      ['BSD7A', 'Current Year Results', 'Monthly', '2026.1', '26', 'Published'],
+      ['BSD8', 'Advances Subject to Adverse Classification', 'Monthly', '2026.1', '24', 'Published'],
+      ['BSD13', 'Net Open Position', 'Monthly', '2026.1', '18', 'Published'],
+      ['CAR-RWA', 'Capital Adequacy (CAR & RWA)', 'Monthly', '2026.1', '62', 'Published'],
+      ['LMT', 'Liquidity Monitoring Tools', 'Monthly', '2026.1', '71', 'Published'],
+      ['LE-MONTHLY', 'Large Exposures', 'Monthly', '2026.1', '33', 'Published'],
+      ['NPL-MONTHLY', 'Monthly Non-Performing Loans', 'Monthly', '2026.1', '31', 'Published'],
+      ['IRRBB-PILOT', 'IRRBB Pilot Return', 'Quarterly', '2026.1', '27', 'Published'],
+      ['ICAAP-REPORT', 'ICAAP Report', 'Annual', '2026.1', '9', 'Published']
+    ].map(([code, name, cadence, version, rules, status]) => ({
+      code, name, cadence, version, rules, status,
+      chip: status === 'Published' ? published : draft,
+      rowStyle: code === 'BSD5A' ? 'background: #F2F6FE' : 'background: #FFFFFF'
+    }));
+    return { definitions };
+  }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,836 @@
+{
+ "format": "aequoros-gateway-return/1",
+ "code": "BSD5B",
+ "name": "Consolidated Capital Adequacy Return",
+ "cadence": "quarterly",
+ "basis": "consolidated",
+ "applies_to": [
+  "universal_bank"
+ ],
+ "version": "2026.2",
+ "first_reporting_date": "2025-01-01",
+ "source": {
+  "system": "AequorOS",
+  "template": "bog-bsd5b-official-v1",
+  "fidelity": "CONFIRMED",
+  "workbook": "FORM BSD5B REVISED.xls"
+ },
+ "sections": [
+  {
+   "code": "sheet_car_format_group",
+   "title": "CAR FORMAT-GROUP",
+   "unit": "millions",
+   "itemised": false,
+   "lines": [
+    {
+     "code": "BSD5B.GROUP.NO.R8.no",
+     "label": "Paid-up Ordinary Share Capital",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD5B.GROUP.BLANK.R8.amount",
+     "label": "Paid-up Ordinary Share Capital",
+     "kind": "number"
+    },
+    {
+     "code": "BSD5B.GROUP.NO.R9.no",
+     "label": "Disclosed Reserves",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD5B.GROUP.R9.amount",
+     "label": "Disclosed Reserves",
+     "kind": "number"
+    },
+    {
+     "code": "BSD5B.GROUP.NO.R10.no",
+     "label": "Minority Interests",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD5B.GROUP.R10.amount",
+     "label": "Minority Interests",
+     "kind": "number"
+    },
+    {
+     "code": "BSD5B.GROUP.NO.R11.no",
+     "label": "Paid-up Permanent Non-Cumulative Preference Shares",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD5B.GROUP.R11.amount",
+     "label": "Paid-up Permanent Non-Cumulative Preference Shares",
+     "kind": "number"
+    },
+    {
+     "code": "BSD5B.GROUP.NO.R12.no",
+     "label": "Tier 1 Capital (1+2+3+4)",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "CAR FORMAT-GROUP!D12",
+     "label": "Tier 1 Capital (1+2+3+4)",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD5B.GROUP.NO.R14.no",
+     "label": "Goodwill/Intangibles",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD5B.GROUP.R14.amount",
+     "label": "Goodwill/Intangibles",
+     "kind": "number"
+    },
+    {
+     "code": "BSD5B.GROUP.NO.R15.no",
+     "label": "Losses not Provided For",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD5B.GROUP.R15.amount",
+     "label": "Losses not Provided For",
+     "kind": "number"
+    },
+    {
+     "code": "BSD5B.GROUP.STRAY.R15.stray",
+     "label": "Losses not Provided For",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD5B.GROUP.NO.R16.no",
+     "label": "Investments in Subsidiaries",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD5B.GROUP.R16.amount",
+     "label": "Investments in Subsidiaries",
+     "kind": "number"
+    },
+    {
+     "code": "BSD5B.GROUP.NO.R17.no",
+     "label": "Invest in the Capital of Other Banks & Fin. Institutions",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD5B.GROUP.R17.amount",
+     "label": "Invest in the Capital of Other Banks & Fin. Institutions",
+     "kind": "number"
+    },
+    {
+     "code": "BSD5B.GROUP.NO.R18.no",
+     "label": "Capitalised Revaluation Reserves",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD5B.GROUP.R18.amount",
+     "label": "Capitalised Revaluation Reserves",
+     "kind": "number"
+    },
+    {
+     "code": "BSD5B.GROUP.NO.R19.no",
+     "label": "Connected Lending of Long Term Nature",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD5B.GROUP.R19.amount",
+     "label": "Connected Lending of Long Term Nature",
+     "kind": "number"
+    },
+    {
+     "code": "BSD5B.GROUP.NO.R20.no",
+     "label": "Net Tier 1 Capital (5-6-7-8-9-10-11)",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "CAR FORMAT-GROUP!D20",
+     "label": "Net Tier 1 Capital (5-6-7-8-9-10-11)",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD5B.GROUP.NO.R21.no",
+     "label": "Capitalised Revaluation Reserves",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD5B.GROUP.R21.amount",
+     "label": "Capitalised Revaluation Reserves",
+     "kind": "number"
+    },
+    {
+     "code": "BSD5B.GROUP.NO.R22.no",
+     "label": "Revaluation Reserves",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD5B.GROUP.R22.amount",
+     "label": "Revaluation Reserves",
+     "kind": "number"
+    },
+    {
+     "code": "BSD5B.GROUP.NO.R23.no",
+     "label": "Latent Revaluation Reserves",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD5B.GROUP.R23.amount",
+     "label": "Latent Revaluation Reserves",
+     "kind": "number"
+    },
+    {
+     "code": "BSD5B.GROUP.NO.R24.no",
+     "label": "Undisclosed Reserves",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD5B.GROUP.BLANK.R24.amount",
+     "label": "Undisclosed Reserves",
+     "kind": "number"
+    },
+    {
+     "code": "BSD5B.GROUP.NO.R25.no",
+     "label": "Cumulative Preference Shares",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD5B.GROUP.R25.amount",
+     "label": "Cumulative Preference Shares",
+     "kind": "number"
+    },
+    {
+     "code": "BSD5B.GROUP.NO.R26.no",
+     "label": "Minority Interests in Tier 2 Prefered Shares",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD5B.GROUP.R26.amount",
+     "label": "Minority Interests in Tier 2 Prefered Shares",
+     "kind": "number"
+    },
+    {
+     "code": "BSD5B.GROUP.NO.R27.no",
+     "label": "Hybrid Capital",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD5B.GROUP.R27.amount",
+     "label": "Hybrid Capital",
+     "kind": "number"
+    },
+    {
+     "code": "BSD5B.GROUP.NO.R28.no",
+     "label": "Subordinated Term Debt (Limited to 50% of 5)",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD5B.GROUP.R28.amount",
+     "label": "Subordinated Term Debt (Limited to 50% of 5)",
+     "kind": "number"
+    },
+    {
+     "code": "BSD5B.GROUP.NO.R29.no",
+     "label": "Tier 2 Capital (13+14+15+16+17+18+19)(Limited to 100% of 5)",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "CAR FORMAT-GROUP!D29",
+     "label": "Tier 2 Capital (13+14+15+16+17+18+19)(Limited to 100% of 5)",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD5B.GROUP.NO.R30.no",
+     "label": "ADJUSTED CAPITAL BASE (12+20)",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "CAR FORMAT-GROUP!D30",
+     "label": "ADJUSTED CAPITAL BASE (12+20)",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD5B.GROUP.NO.R32.no",
+     "label": "TOTAL ASSETS (less Contra Items)",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD5B.GROUP.R32.amount",
+     "label": "TOTAL ASSETS (less Contra Items)",
+     "kind": "number"
+    },
+    {
+     "code": "BSD5B.GROUP.NO.R34.no",
+     "label": "Cash on Hand (Cedis)",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD5B.GROUP.R34.amount",
+     "label": "Cash on Hand (Cedis)",
+     "kind": "number"
+    },
+    {
+     "code": "BSD5B.GROUP.NO.R35.no",
+     "label": "Cash on Hand (Forex)",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD5B.GROUP.R35.amount",
+     "label": "Cash on Hand (Forex)",
+     "kind": "number"
+    },
+    {
+     "code": "BSD5B.GROUP.NO.R36.no",
+     "label": "Claims on Bank of Ghana:",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD5B.GROUP.R37.amount",
+     "label": "i. Cedi Clearing Account Balance",
+     "kind": "number"
+    },
+    {
+     "code": "BSD5B.GROUP.R38.amount",
+     "label": "ii. Forex Account Balance",
+     "kind": "number"
+    },
+    {
+     "code": "BSD5B.GROUP.R39.amount",
+     "label": "iii. Funds under SWAPS",
+     "kind": "number"
+    },
+    {
+     "code": "BSD5B.GROUP.R40.amount",
+     "label": "iv. Bills and Bonds",
+     "kind": "number"
+    },
+    {
+     "code": "BSD5B.GROUP.NO.R42.no",
+     "label": "Claims on Government:",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD5B.GROUP.R43.amount",
+     "label": "i) Treasury Securities (Bills and Bonds)",
+     "kind": "number"
+    },
+    {
+     "code": "BSD5B.GROUP.R44.amount",
+     "label": "ii) Stocks",
+     "kind": "number"
+    },
+    {
+     "code": "BSD5B.GROUP.NO.R45.no",
+     "label": "80% of Cheques drawn on other banks",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD5B.GROUP.R45.amount",
+     "label": "80% of Cheques drawn on other banks",
+     "kind": "number"
+    },
+    {
+     "code": "BSD5B.GROUP.NO.R46.no",
+     "label": "Goodwill / Intangibles",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "CAR FORMAT-GROUP!D46",
+     "label": "Goodwill / Intangibles",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD5B.GROUP.NO.R47.no",
+     "label": "Investments in Subsidiaries",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "CAR FORMAT-GROUP!D47",
+     "label": "Investments in Subsidiaries",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD5B.GROUP.NO.R48.no",
+     "label": "Invest in the Capital of Other Banks & Fin. Institutions",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "CAR FORMAT-GROUP!D48",
+     "label": "Invest in the Capital of Other Banks & Fin. Institutions",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD5B.GROUP.NO.R49.no",
+     "label": "Connected Lending of Long Term Nature",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "CAR FORMAT-GROUP!D49",
+     "label": "Connected Lending of Long Term Nature",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD5B.GROUP.NO.R50.no",
+     "label": "80% of claims on Discount Houses (Cedis / Forex)",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "CAR FORMAT-GROUP!D50",
+     "label": "80% of claims on Discount Houses (Cedis / Forex)",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD5B.GROUP.NO.R51.no",
+     "label": "80% of claims on Other Banks (Cedis / Forex)",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD5B.GROUP.R51.amount",
+     "label": "80% of claims on Other Banks (Cedis / Forex)",
+     "kind": "number"
+    },
+    {
+     "code": "BSD5B.GROUP.NO.R52.no",
+     "label": "50% of Residential Mortgage Loans",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD5B.GROUP.R52.amount",
+     "label": "50% of Residential Mortgage Loans",
+     "kind": "number"
+    },
+    {
+     "code": "BSD5B.GROUP.NO.R53.no",
+     "label": "50% of Export Financing Loans",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD5B.GROUP.R53.amount",
+     "label": "50% of Export Financing Loans",
+     "kind": "number"
+    },
+    {
+     "code": "BSD5B.GROUP.NO.R54.no",
+     "label": "80% of loans guaranteed by multilateral banks",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD5B.GROUP.R54.amount",
+     "label": "80% of loans guaranteed by multilateral banks",
+     "kind": "number"
+    },
+    {
+     "code": "BSD5B.GROUP.NO.R55.no",
+     "label": "ADJUSTED TOTAL ASSETS (17-18-19-,……..,-31)",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "CAR FORMAT-GROUP!D55",
+     "label": "ADJUSTED TOTAL ASSETS (17-18-19-,……..,-31)",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD5B.GROUP.NO.R58.no",
+     "label": "Commercial Letters of Credit Outstanding",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD5B.GROUP.R58.amount",
+     "label": "Commercial Letters of Credit Outstanding",
+     "kind": "number"
+    },
+    {
+     "code": "BSD5B.GROUP.NO.R59.no",
+     "label": "Guarantees / Indemnities",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD5B.GROUP.R59.amount",
+     "label": "Guarantees / Indemnities",
+     "kind": "number"
+    },
+    {
+     "code": "BSD5B.GROUP.NO.R60.no",
+     "label": "Acceptances",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD5B.GROUP.R60.amount",
+     "label": "Acceptances",
+     "kind": "number"
+    },
+    {
+     "code": "BSD5B.GROUP.NO.R61.no",
+     "label": "Endorsements",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD5B.GROUP.R61.amount",
+     "label": "Endorsements",
+     "kind": "number"
+    },
+    {
+     "code": "BSD5B.GROUP.NO.R62.no",
+     "label": "Revolving Underwriting Facilities",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD5B.GROUP.R62.amount",
+     "label": "Revolving Underwriting Facilities",
+     "kind": "number"
+    },
+    {
+     "code": "BSD5B.GROUP.NO.R63.no",
+     "label": "Note Issuance Facilities",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD5B.GROUP.R63.amount",
+     "label": "Note Issuance Facilities",
+     "kind": "number"
+    },
+    {
+     "code": "BSD5B.GROUP.NO.R64.no",
+     "label": "Standby Letters of Credit to Other Banks",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD5B.GROUP.R64.amount",
+     "label": "Standby Letters of Credit to Other Banks",
+     "kind": "number"
+    },
+    {
+     "code": "BSD5B.GROUP.NO.R65.no",
+     "label": "TOTAL OFF-BAL SHEET ITEMS (38+39+40+....+45)",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "CAR FORMAT-GROUP!D65",
+     "label": "TOTAL OFF-BAL SHEET ITEMS (38+39+40+....+45)",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD5B.GROUP.NO.R67.no",
+     "label": "50% of class 1 risk weighted off-balance sheet items",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD5B.GROUP.R67.amount",
+     "label": "50% of class 1 risk weighted off-balance sheet items",
+     "kind": "number"
+    },
+    {
+     "code": "BSD5B.GROUP.NO.R68.no",
+     "label": "80% of class 2 risk weighted off-balance sheet items",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD5B.GROUP.R68.amount",
+     "label": "80% of class 2 risk weighted off-balance sheet items",
+     "kind": "number"
+    },
+    {
+     "code": "BSD5B.GROUP.NO.R69.no",
+     "label": "Net Contingent Liabs. ()",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD5B.GROUP.NO.R71.no",
+     "label": "50% of NOP",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD5B.GROUP.BLANK.R71.amount",
+     "label": "50% of NOP",
+     "kind": "value"
+    },
+    {
+     "code": "BSD5B.GROUP.NO.R72.no",
+     "label": "100% of 3yrs Average Annual Gross Income",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD5B.GROUP.BLANK.R72.amount",
+     "label": "100% of 3yrs Average Annual Gross Income",
+     "kind": "value"
+    },
+    {
+     "code": "BSD5B.GROUP.NO.R73.no",
+     "label": "ADJUSTED ASSET BASE (32+40-41-42)",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "CAR FORMAT-GROUP!D73",
+     "label": "ADJUSTED ASSET BASE (32+40-41-42)",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD5B.GROUP.NO.R74.no",
+     "label": "Adjusted Capital Base as percentage of Adjusted Asset Base: (16/43 X 100)",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD5B.GROUP.NO.R75.no",
+     "label": "CAPITAL SURPLUS/DEFICIT {16 – (10% of 43)}",
+     "kind": "value",
+     "unit": "units"
+    }
+   ]
+  },
+  {
+   "code": "sheet_sheet2",
+   "title": "Sheet2",
+   "unit": "millions",
+   "itemised": false,
+   "lines": []
+  }
+ ],
+ "rules": [
+  {
+   "id": "BSD5B-ARI-0001",
+   "severity": "error",
+   "kind": "sum",
+   "target": "CAR FORMAT-GROUP!D12",
+   "terms": [
+    "BSD5B.GROUP.BLANK.R8.amount",
+    "BSD5B.GROUP.R9.amount",
+    "BSD5B.GROUP.R10.amount",
+    "BSD5B.GROUP.R11.amount"
+   ],
+   "tolerance": "0.025",
+   "description": "CAR FORMAT-GROUP!D12 follows the template formula =SUM(D8:D11)"
+  },
+  {
+   "id": "BSD5B-ARI-0002",
+   "severity": "error",
+   "kind": "sum",
+   "target": "CAR FORMAT-GROUP!D20",
+   "terms": [
+    "CAR FORMAT-GROUP!D12"
+   ],
+   "tolerance": "0.04",
+   "description": "CAR FORMAT-GROUP!D20 follows the template formula =D12-SUM(D14:D19)",
+   "subtract": [
+    "BSD5B.GROUP.R14.amount",
+    "BSD5B.GROUP.R15.amount",
+    "BSD5B.GROUP.R16.amount",
+    "BSD5B.GROUP.R17.amount",
+    "BSD5B.GROUP.R18.amount",
+    "BSD5B.GROUP.R19.amount"
+   ]
+  },
+  {
+   "id": "BSD5B-ARI-0003",
+   "severity": "error",
+   "kind": "sum",
+   "target": "CAR FORMAT-GROUP!D29",
+   "terms": [
+    "BSD5B.GROUP.R21.amount",
+    "BSD5B.GROUP.R22.amount",
+    "BSD5B.GROUP.R23.amount",
+    "BSD5B.GROUP.BLANK.R24.amount",
+    "BSD5B.GROUP.R25.amount",
+    "BSD5B.GROUP.R26.amount",
+    "BSD5B.GROUP.R27.amount",
+    "BSD5B.GROUP.R28.amount"
+   ],
+   "tolerance": "0.045",
+   "description": "CAR FORMAT-GROUP!D29 follows the template formula =SUM(D21:D28)"
+  },
+  {
+   "id": "BSD5B-ARI-0004",
+   "severity": "error",
+   "kind": "sum",
+   "target": "CAR FORMAT-GROUP!D30",
+   "terms": [
+    "CAR FORMAT-GROUP!D20",
+    "CAR FORMAT-GROUP!D29"
+   ],
+   "tolerance": "0.015",
+   "description": "CAR FORMAT-GROUP!D30 follows the template formula =D20+D29"
+  },
+  {
+   "id": "BSD5B-ARI-0005",
+   "severity": "error",
+   "kind": "sum",
+   "target": "CAR FORMAT-GROUP!D46",
+   "terms": [
+    "BSD5B.GROUP.R14.amount"
+   ],
+   "tolerance": "0.01",
+   "description": "CAR FORMAT-GROUP!D46 follows the template formula =D14"
+  },
+  {
+   "id": "BSD5B-ARI-0006",
+   "severity": "error",
+   "kind": "sum",
+   "target": "CAR FORMAT-GROUP!D47",
+   "terms": [
+    "BSD5B.GROUP.R16.amount"
+   ],
+   "tolerance": "0.01",
+   "description": "CAR FORMAT-GROUP!D47 follows the template formula =D16"
+  },
+  {
+   "id": "BSD5B-ARI-0007",
+   "severity": "error",
+   "kind": "sum",
+   "target": "CAR FORMAT-GROUP!D48",
+   "terms": [
+    "BSD5B.GROUP.R17.amount"
+   ],
+   "tolerance": "0.01",
+   "description": "CAR FORMAT-GROUP!D48 follows the template formula =D17"
+  },
+  {
+   "id": "BSD5B-ARI-0008",
+   "severity": "error",
+   "kind": "sum",
+   "target": "CAR FORMAT-GROUP!D49",
+   "terms": [
+    "BSD5B.GROUP.R19.amount"
+   ],
+   "tolerance": "0.01",
+   "description": "CAR FORMAT-GROUP!D49 follows the template formula =D19"
+  },
+  {
+   "id": "BSD5B-ARI-0009",
+   "severity": "error",
+   "kind": "sum",
+   "target": "CAR FORMAT-GROUP!D50",
+   "terms": [
+    "CAR FORMAT-GROUP!D20"
+   ],
+   "tolerance": "0.01",
+   "description": "CAR FORMAT-GROUP!D50 follows the template formula =D20"
+  },
+  {
+   "id": "BSD5B-ARI-0010",
+   "severity": "error",
+   "kind": "sum",
+   "target": "CAR FORMAT-GROUP!D55",
+   "terms": [
+    "BSD5B.GROUP.R32.amount"
+   ],
+   "tolerance": "0.1",
+   "description": "CAR FORMAT-GROUP!D55 follows the template formula =D32-SUM(D34:D54)",
+   "subtract": [
+    "BSD5B.GROUP.R34.amount",
+    "BSD5B.GROUP.R35.amount",
+    "BSD5B.GROUP.R37.amount",
+    "BSD5B.GROUP.R38.amount",
+    "BSD5B.GROUP.R39.amount",
+    "BSD5B.GROUP.R40.amount",
+    "BSD5B.GROUP.R43.amount",
+    "BSD5B.GROUP.R44.amount",
+    "BSD5B.GROUP.R45.amount",
+    "CAR FORMAT-GROUP!D46",
+    "CAR FORMAT-GROUP!D47",
+    "CAR FORMAT-GROUP!D48",
+    "CAR FORMAT-GROUP!D49",
+    "CAR FORMAT-GROUP!D50",
+    "BSD5B.GROUP.R51.amount",
+    "BSD5B.GROUP.R52.amount",
+    "BSD5B.GROUP.R53.amount",
+    "BSD5B.GROUP.R54.amount"
+   ]
+  },
+  {
+   "id": "BSD5B-ARI-0011",
+   "severity": "error",
+   "kind": "sum",
+   "target": "CAR FORMAT-GROUP!D65",
+   "terms": [
+    "BSD5B.GROUP.R58.amount",
+    "BSD5B.GROUP.R59.amount",
+    "BSD5B.GROUP.R60.amount",
+    "BSD5B.GROUP.R61.amount",
+    "BSD5B.GROUP.R62.amount",
+    "BSD5B.GROUP.R63.amount",
+    "BSD5B.GROUP.R64.amount"
+   ],
+   "tolerance": "0.04",
+   "description": "CAR FORMAT-GROUP!D65 follows the template formula =SUM(D58:D64)"
+  },
+  {
+   "id": "BSD5B-ARI-0012",
+   "severity": "error",
+   "kind": "sum",
+   "target": "CAR FORMAT-GROUP!D73",
+   "terms": [
+    "CAR FORMAT-GROUP!D55",
+    "CAR FORMAT-GROUP!D65"
+   ],
+   "tolerance": "0.025",
+   "description": "CAR FORMAT-GROUP!D73 follows the template formula =D55+D65-D67-D68",
+   "subtract": [
+    "BSD5B.GROUP.R67.amount",
+    "BSD5B.GROUP.R68.amount"
+   ]
+  }
+ ]
+}

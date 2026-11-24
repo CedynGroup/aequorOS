@@ -1,0 +1,1556 @@
+{
+ "format": "aequoros-gateway-return/1",
+ "code": "BSD9",
+ "name": "Consolidated Balance Sheet",
+ "cadence": "quarterly",
+ "basis": "consolidated",
+ "applies_to": [
+  "universal_bank"
+ ],
+ "version": "2026.2",
+ "first_reporting_date": "2025-01-01",
+ "source": {
+  "system": "AequorOS",
+  "template": "bog-bsd9-official-v1",
+  "fidelity": "CONFIRMED",
+  "workbook": "FORM BSD9 REVISED.xls"
+ },
+ "sections": [
+  {
+   "code": "sheet_bsd9",
+   "title": "BSD9",
+   "unit": "millions",
+   "itemised": false,
+   "lines": [
+    {
+     "code": "BSD9.R8.domestic",
+     "label": "1. Foreign currency notes and coins — domestic",
+     "kind": "number"
+    },
+    {
+     "code": "BSD9.R8.foreign",
+     "label": "1. Foreign currency notes and coins — foreign",
+     "kind": "number"
+    },
+    {
+     "code": "BSD9!D8",
+     "label": "1. Foreign currency notes and coins",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD9.R9.domestic",
+     "label": "2. Correspondent acc. in non-res. financial inst. — domestic",
+     "kind": "number"
+    },
+    {
+     "code": "BSD9.R9.foreign",
+     "label": "2. Correspondent acc. in non-res. financial inst. — foreign",
+     "kind": "number"
+    },
+    {
+     "code": "BSD9!D9",
+     "label": "2. Correspondent acc. in non-res. financial inst.",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD9.R10.domestic",
+     "label": "3. Other claims on non-residents — domestic",
+     "kind": "number"
+    },
+    {
+     "code": "BSD9.R10.foreign",
+     "label": "3. Other claims on non-residents — foreign",
+     "kind": "number"
+    },
+    {
+     "code": "BSD9!D10",
+     "label": "3. Other claims on non-residents",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD9.R11.domestic",
+     "label": "4. Loans and advances to non-resident — domestic",
+     "kind": "number"
+    },
+    {
+     "code": "BSD9.R11.foreign",
+     "label": "4. Loans and advances to non-resident — foreign",
+     "kind": "number"
+    },
+    {
+     "code": "BSD9!D11",
+     "label": "4. Loans and advances to non-resident",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD9.R12.domestic",
+     "label": "5. Equity and Other non-liquid investments abroad — domestic",
+     "kind": "number"
+    },
+    {
+     "code": "BSD9.R12.foreign",
+     "label": "5. Equity and Other non-liquid investments abroad — foreign",
+     "kind": "number"
+    },
+    {
+     "code": "BSD9!D12",
+     "label": "5. Equity and Other non-liquid investments abroad",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD9.R14.domestic",
+     "label": "6. Cash and balances with Bank of Ghana — domestic",
+     "kind": "number"
+    },
+    {
+     "code": "BSD9.R14.foreign",
+     "label": "6. Cash and balances with Bank of Ghana — foreign",
+     "kind": "number"
+    },
+    {
+     "code": "BSD9!D14",
+     "label": "6. Cash and balances with Bank of Ghana",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD9.R15.domestic",
+     "label": "7. Balances due from banks and other financial institutions — domestic",
+     "kind": "number"
+    },
+    {
+     "code": "BSD9.R15.foreign",
+     "label": "7. Balances due from banks and other financial institutions — foreign",
+     "kind": "number"
+    },
+    {
+     "code": "BSD9!D15",
+     "label": "7. Balances due from banks and other financial institutions",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD9.R16.domestic",
+     "label": "8. Bills — domestic",
+     "kind": "number"
+    },
+    {
+     "code": "BSD9.R16.foreign",
+     "label": "8. Bills — foreign",
+     "kind": "number"
+    },
+    {
+     "code": "BSD9!D16",
+     "label": "8. Bills",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD9!B17",
+     "label": "9. Loans, Overdrafts and Other Adv. (net)",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD9!C17",
+     "label": "9. Loans, Overdrafts and Other Adv. (net)",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD9!D17",
+     "label": "9. Loans, Overdrafts and Other Adv. (net)",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD9.R18.domestic",
+     "label": "- Gross — domestic",
+     "kind": "number"
+    },
+    {
+     "code": "BSD9.R18.foreign",
+     "label": "- Gross — foreign",
+     "kind": "number"
+    },
+    {
+     "code": "BSD9!D18",
+     "label": "- Gross",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD9.R19.domestic",
+     "label": "- Provisions — domestic",
+     "kind": "number"
+    },
+    {
+     "code": "BSD9.R19.foreign",
+     "label": "- Provisions — foreign",
+     "kind": "number"
+    },
+    {
+     "code": "BSD9!D19",
+     "label": "- Provisions",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD9.R20.domestic",
+     "label": "- Interest suspense — domestic",
+     "kind": "number"
+    },
+    {
+     "code": "BSD9.R20.foreign",
+     "label": "- Interest suspense — foreign",
+     "kind": "number"
+    },
+    {
+     "code": "BSD9!D20",
+     "label": "- Interest suspense",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD9.R21.domestic",
+     "label": "10. Securities (Long term investment) — domestic",
+     "kind": "number"
+    },
+    {
+     "code": "BSD9.R21.foreign",
+     "label": "10. Securities (Long term investment) — foreign",
+     "kind": "number"
+    },
+    {
+     "code": "BSD9!D21",
+     "label": "10. Securities (Long term investment)",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD9.R22.domestic",
+     "label": "11. Shares and other equities(Net) — domestic",
+     "kind": "number"
+    },
+    {
+     "code": "BSD9.R22.foreign",
+     "label": "11. Shares and other equities(Net) — foreign",
+     "kind": "number"
+    },
+    {
+     "code": "BSD9!D22",
+     "label": "11. Shares and other equities(Net)",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD9.R23.domestic",
+     "label": "12. Other Assets — domestic",
+     "kind": "number"
+    },
+    {
+     "code": "BSD9.R23.foreign",
+     "label": "12. Other Assets — foreign",
+     "kind": "number"
+    },
+    {
+     "code": "BSD9!D23",
+     "label": "12. Other Assets",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD9.R24.domestic",
+     "label": "13. Property, Plant & Equipment (Net) — domestic",
+     "kind": "number"
+    },
+    {
+     "code": "BSD9.R24.foreign",
+     "label": "13. Property, Plant & Equipment (Net) — foreign",
+     "kind": "number"
+    },
+    {
+     "code": "BSD9!D24",
+     "label": "13. Property, Plant & Equipment (Net)",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD9!B25",
+     "label": "7. Total Assets (1+2+3+…+13)",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD9!C25",
+     "label": "7. Total Assets (1+2+3+…+13)",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD9!D25",
+     "label": "7. Total Assets (1+2+3+…+13)",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD9.R27.domestic",
+     "label": "8. Paid-Up Capital — domestic",
+     "kind": "number"
+    },
+    {
+     "code": "BSD9.R27.foreign",
+     "label": "8. Paid-Up Capital — foreign",
+     "kind": "number"
+    },
+    {
+     "code": "BSD9!D27",
+     "label": "8. Paid-Up Capital",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD9.R28.domestic",
+     "label": "9. Reserves — domestic",
+     "kind": "number"
+    },
+    {
+     "code": "BSD9.R28.foreign",
+     "label": "9. Reserves — foreign",
+     "kind": "number"
+    },
+    {
+     "code": "BSD9!D28",
+     "label": "9. Reserves",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD9!B29",
+     "label": "Shareholders' funds",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD9!C29",
+     "label": "Shareholders' funds",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD9!D29",
+     "label": "Shareholders' funds",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD9.R30.domestic",
+     "label": "10. Minority interests — domestic",
+     "kind": "number"
+    },
+    {
+     "code": "BSD9.R30.foreign",
+     "label": "10. Minority interests — foreign",
+     "kind": "number"
+    },
+    {
+     "code": "BSD9!D30",
+     "label": "10. Minority interests",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD9.R31.domestic",
+     "label": "11. Other Amounts allowed as Capital — domestic",
+     "kind": "number"
+    },
+    {
+     "code": "BSD9.R31.foreign",
+     "label": "11. Other Amounts allowed as Capital — foreign",
+     "kind": "number"
+    },
+    {
+     "code": "BSD9!D31",
+     "label": "11. Other Amounts allowed as Capital",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD9.R32.domestic",
+     "label": "12. Long term Borrowings — domestic",
+     "kind": "number"
+    },
+    {
+     "code": "BSD9.R32.foreign",
+     "label": "12. Long term Borrowings — foreign",
+     "kind": "number"
+    },
+    {
+     "code": "BSD9!D32",
+     "label": "12. Long term Borrowings",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD9.R33.domestic",
+     "label": "13. Cheques for Clearing — domestic",
+     "kind": "number"
+    },
+    {
+     "code": "BSD9.R33.foreign",
+     "label": "13. Cheques for Clearing — foreign",
+     "kind": "number"
+    },
+    {
+     "code": "BSD9!D33",
+     "label": "13. Cheques for Clearing",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD9.R34.domestic",
+     "label": "14. Short term borrowings — domestic",
+     "kind": "number"
+    },
+    {
+     "code": "BSD9.R34.foreign",
+     "label": "14. Short term borrowings — foreign",
+     "kind": "number"
+    },
+    {
+     "code": "BSD9!D34",
+     "label": "14. Short term borrowings",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD9.R35.domestic",
+     "label": "15. Deposits of Fin. Institution — domestic",
+     "kind": "number"
+    },
+    {
+     "code": "BSD9.R35.foreign",
+     "label": "15. Deposits of Fin. Institution — foreign",
+     "kind": "number"
+    },
+    {
+     "code": "BSD9!D35",
+     "label": "15. Deposits of Fin. Institution",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD9.R36.domestic",
+     "label": "16. Dep of Non-Fin. Inst. the Pub. & Govt — domestic",
+     "kind": "number"
+    },
+    {
+     "code": "BSD9.R36.foreign",
+     "label": "16. Dep of Non-Fin. Inst. the Pub. & Govt — foreign",
+     "kind": "number"
+    },
+    {
+     "code": "BSD9!D36",
+     "label": "16. Dep of Non-Fin. Inst. the Pub. & Govt",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD9.R37.domestic",
+     "label": "17. Other deposits — domestic",
+     "kind": "number"
+    },
+    {
+     "code": "BSD9.R37.foreign",
+     "label": "17. Other deposits — foreign",
+     "kind": "number"
+    },
+    {
+     "code": "BSD9!D37",
+     "label": "17. Other deposits",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD9.R38.domestic",
+     "label": "17. Special deposits — domestic",
+     "kind": "number"
+    },
+    {
+     "code": "BSD9.R38.foreign",
+     "label": "17. Special deposits — foreign",
+     "kind": "number"
+    },
+    {
+     "code": "BSD9!D38",
+     "label": "17. Special deposits",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD9.R39.domestic",
+     "label": "18. Margins against Contingent Liab. — domestic",
+     "kind": "number"
+    },
+    {
+     "code": "BSD9.R39.foreign",
+     "label": "18. Margins against Contingent Liab. — foreign",
+     "kind": "number"
+    },
+    {
+     "code": "BSD9!D39",
+     "label": "18. Margins against Contingent Liab.",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD9.R40.domestic",
+     "label": "19. Bonds issued — domestic",
+     "kind": "number"
+    },
+    {
+     "code": "BSD9.R40.foreign",
+     "label": "19. Bonds issued — foreign",
+     "kind": "number"
+    },
+    {
+     "code": "BSD9!D40",
+     "label": "19. Bonds issued",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD9.R41.domestic",
+     "label": "20. Other Liabilities excl. cont. Liab. — domestic",
+     "kind": "number"
+    },
+    {
+     "code": "BSD9.R41.foreign",
+     "label": "20. Other Liabilities excl. cont. Liab. — foreign",
+     "kind": "number"
+    },
+    {
+     "code": "BSD9!D41",
+     "label": "20. Other Liabilities excl. cont. Liab.",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD9!B42",
+     "label": "21. Total Liabilities(8+9+10+11+...+20)",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD9!C42",
+     "label": "21. Total Liabilities(8+9+10+11+...+20)",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD9!D42",
+     "label": "21. Total Liabilities(8+9+10+11+...+20)",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD9.R43.domestic",
+     "label": "22. Total Contingent Liabilities — domestic",
+     "kind": "number"
+    },
+    {
+     "code": "BSD9.R43.foreign",
+     "label": "22. Total Contingent Liabilities — foreign",
+     "kind": "number"
+    },
+    {
+     "code": "BSD9!D43",
+     "label": "22. Total Contingent Liabilities",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD9.R44.domestic",
+     "label": "23. Managed Funds — domestic",
+     "kind": "number"
+    },
+    {
+     "code": "BSD9.R44.foreign",
+     "label": "23. Managed Funds — foreign",
+     "kind": "number"
+    },
+    {
+     "code": "BSD9!D44",
+     "label": "23. Managed Funds",
+     "kind": "number",
+     "total": true
+    }
+   ]
+  },
+  {
+   "code": "sheet_annexure",
+   "title": "Annexure",
+   "unit": "millions",
+   "itemised": false,
+   "lines": [
+    {
+     "code": "BSD9.ANNEX.receivable.date.R11.date",
+     "label": "row 11",
+     "kind": "value"
+    },
+    {
+     "code": "BSD9.ANNEX.receivable.type.R11.type",
+     "label": "row 11",
+     "kind": "value"
+    },
+    {
+     "code": "BSD9.ANNEX.receivable.subsidiary.R11.subsidiary",
+     "label": "row 11",
+     "kind": "value"
+    },
+    {
+     "code": "BSD9.ANNEX.receivable.amount.R11.amount",
+     "label": "row 11",
+     "kind": "value"
+    },
+    {
+     "code": "BSD9.ANNEX.receivable.date.R12.date",
+     "label": "row 12",
+     "kind": "value"
+    },
+    {
+     "code": "BSD9.ANNEX.receivable.type.R12.type",
+     "label": "row 12",
+     "kind": "value"
+    },
+    {
+     "code": "BSD9.ANNEX.receivable.subsidiary.R12.subsidiary",
+     "label": "row 12",
+     "kind": "value"
+    },
+    {
+     "code": "BSD9.ANNEX.receivable.amount.R12.amount",
+     "label": "row 12",
+     "kind": "value"
+    },
+    {
+     "code": "BSD9.ANNEX.receivable.date.R13.date",
+     "label": "row 13",
+     "kind": "value"
+    },
+    {
+     "code": "BSD9.ANNEX.receivable.type.R13.type",
+     "label": "row 13",
+     "kind": "value"
+    },
+    {
+     "code": "BSD9.ANNEX.receivable.subsidiary.R13.subsidiary",
+     "label": "row 13",
+     "kind": "value"
+    },
+    {
+     "code": "BSD9.ANNEX.receivable.amount.R13.amount",
+     "label": "row 13",
+     "kind": "value"
+    },
+    {
+     "code": "BSD9.ANNEX.receivable.date.R14.date",
+     "label": "row 14",
+     "kind": "value"
+    },
+    {
+     "code": "BSD9.ANNEX.receivable.type.R14.type",
+     "label": "row 14",
+     "kind": "value"
+    },
+    {
+     "code": "BSD9.ANNEX.receivable.subsidiary.R14.subsidiary",
+     "label": "row 14",
+     "kind": "value"
+    },
+    {
+     "code": "BSD9.ANNEX.receivable.amount.R14.amount",
+     "label": "row 14",
+     "kind": "value"
+    },
+    {
+     "code": "BSD9.ANNEX.receivable.date.R15.date",
+     "label": "row 15",
+     "kind": "value"
+    },
+    {
+     "code": "BSD9.ANNEX.receivable.type.R15.type",
+     "label": "row 15",
+     "kind": "value"
+    },
+    {
+     "code": "BSD9.ANNEX.receivable.subsidiary.R15.subsidiary",
+     "label": "row 15",
+     "kind": "value"
+    },
+    {
+     "code": "BSD9.ANNEX.receivable.amount.R15.amount",
+     "label": "row 15",
+     "kind": "value"
+    },
+    {
+     "code": "BSD9.ANNEX.receivable.date.R16.date",
+     "label": "row 16",
+     "kind": "value"
+    },
+    {
+     "code": "BSD9.ANNEX.receivable.type.R16.type",
+     "label": "row 16",
+     "kind": "value"
+    },
+    {
+     "code": "BSD9.ANNEX.receivable.subsidiary.R16.subsidiary",
+     "label": "row 16",
+     "kind": "value"
+    },
+    {
+     "code": "BSD9.ANNEX.receivable.amount.R16.amount",
+     "label": "row 16",
+     "kind": "value"
+    },
+    {
+     "code": "BSD9.ANNEX.receivable.date.R17.date",
+     "label": "row 17",
+     "kind": "value"
+    },
+    {
+     "code": "BSD9.ANNEX.receivable.type.R17.type",
+     "label": "row 17",
+     "kind": "value"
+    },
+    {
+     "code": "BSD9.ANNEX.receivable.subsidiary.R17.subsidiary",
+     "label": "row 17",
+     "kind": "value"
+    },
+    {
+     "code": "BSD9.ANNEX.receivable.amount.R17.amount",
+     "label": "row 17",
+     "kind": "value"
+    },
+    {
+     "code": "BSD9.ANNEX.receivable.date.R18.date",
+     "label": "row 18",
+     "kind": "value"
+    },
+    {
+     "code": "BSD9.ANNEX.receivable.type.R18.type",
+     "label": "row 18",
+     "kind": "value"
+    },
+    {
+     "code": "BSD9.ANNEX.receivable.subsidiary.R18.subsidiary",
+     "label": "row 18",
+     "kind": "value"
+    },
+    {
+     "code": "BSD9.ANNEX.receivable.amount.R18.amount",
+     "label": "row 18",
+     "kind": "value"
+    },
+    {
+     "code": "BSD9.ANNEX.receivable.date.R19.date",
+     "label": "row 19",
+     "kind": "value"
+    },
+    {
+     "code": "BSD9.ANNEX.receivable.type.R19.type",
+     "label": "row 19",
+     "kind": "value"
+    },
+    {
+     "code": "BSD9.ANNEX.receivable.subsidiary.R19.subsidiary",
+     "label": "row 19",
+     "kind": "value"
+    },
+    {
+     "code": "BSD9.ANNEX.receivable.amount.R19.amount",
+     "label": "row 19",
+     "kind": "value"
+    },
+    {
+     "code": "BSD9.ANNEX.payable.date.R20.date",
+     "label": "row 20",
+     "kind": "value"
+    },
+    {
+     "code": "BSD9.ANNEX.payable.type.R20.type",
+     "label": "row 20",
+     "kind": "value"
+    },
+    {
+     "code": "BSD9.ANNEX.payable.subsidiary.R20.subsidiary",
+     "label": "row 20",
+     "kind": "value"
+    },
+    {
+     "code": "BSD9.ANNEX.payable.amount.R20.amount",
+     "label": "row 20",
+     "kind": "value"
+    },
+    {
+     "code": "BSD9.ANNEX.payable.date.R21.date",
+     "label": "row 21",
+     "kind": "value"
+    },
+    {
+     "code": "BSD9.ANNEX.payable.type.R21.type",
+     "label": "row 21",
+     "kind": "value"
+    },
+    {
+     "code": "BSD9.ANNEX.payable.subsidiary.R21.subsidiary",
+     "label": "row 21",
+     "kind": "value"
+    },
+    {
+     "code": "BSD9.ANNEX.payable.amount.R21.amount",
+     "label": "row 21",
+     "kind": "value"
+    },
+    {
+     "code": "BSD9.ANNEX.payable.date.R22.date",
+     "label": "row 22",
+     "kind": "value"
+    },
+    {
+     "code": "BSD9.ANNEX.payable.type.R22.type",
+     "label": "row 22",
+     "kind": "value"
+    },
+    {
+     "code": "BSD9.ANNEX.payable.subsidiary.R22.subsidiary",
+     "label": "row 22",
+     "kind": "value"
+    },
+    {
+     "code": "BSD9.ANNEX.payable.amount.R22.amount",
+     "label": "row 22",
+     "kind": "value"
+    },
+    {
+     "code": "BSD9.ANNEX.payable.date.R23.date",
+     "label": "row 23",
+     "kind": "value"
+    },
+    {
+     "code": "BSD9.ANNEX.payable.type.R23.type",
+     "label": "row 23",
+     "kind": "value"
+    },
+    {
+     "code": "BSD9.ANNEX.payable.subsidiary.R23.subsidiary",
+     "label": "row 23",
+     "kind": "value"
+    },
+    {
+     "code": "BSD9.ANNEX.payable.amount.R23.amount",
+     "label": "row 23",
+     "kind": "value"
+    },
+    {
+     "code": "BSD9.ANNEX.payable.date.R24.date",
+     "label": "row 24",
+     "kind": "value"
+    },
+    {
+     "code": "BSD9.ANNEX.payable.type.R24.type",
+     "label": "row 24",
+     "kind": "value"
+    },
+    {
+     "code": "BSD9.ANNEX.payable.subsidiary.R24.subsidiary",
+     "label": "row 24",
+     "kind": "value"
+    },
+    {
+     "code": "BSD9.ANNEX.payable.amount.R24.amount",
+     "label": "row 24",
+     "kind": "value"
+    },
+    {
+     "code": "BSD9.ANNEX.payable.date.R25.date",
+     "label": "row 25",
+     "kind": "value"
+    },
+    {
+     "code": "BSD9.ANNEX.payable.type.R25.type",
+     "label": "row 25",
+     "kind": "value"
+    },
+    {
+     "code": "BSD9.ANNEX.payable.subsidiary.R25.subsidiary",
+     "label": "row 25",
+     "kind": "value"
+    },
+    {
+     "code": "BSD9.ANNEX.payable.amount.R25.amount",
+     "label": "row 25",
+     "kind": "value"
+    },
+    {
+     "code": "BSD9.ANNEX.payable.date.R26.date",
+     "label": "row 26",
+     "kind": "value"
+    },
+    {
+     "code": "BSD9.ANNEX.payable.type.R26.type",
+     "label": "row 26",
+     "kind": "value"
+    },
+    {
+     "code": "BSD9.ANNEX.payable.subsidiary.R26.subsidiary",
+     "label": "row 26",
+     "kind": "value"
+    },
+    {
+     "code": "BSD9.ANNEX.payable.amount.R26.amount",
+     "label": "row 26",
+     "kind": "value"
+    },
+    {
+     "code": "BSD9.ANNEX.payable.date.R27.date",
+     "label": "row 27",
+     "kind": "value"
+    },
+    {
+     "code": "BSD9.ANNEX.payable.type.R27.type",
+     "label": "row 27",
+     "kind": "value"
+    },
+    {
+     "code": "BSD9.ANNEX.payable.subsidiary.R27.subsidiary",
+     "label": "row 27",
+     "kind": "value"
+    },
+    {
+     "code": "BSD9.ANNEX.payable.amount.R27.amount",
+     "label": "row 27",
+     "kind": "value"
+    },
+    {
+     "code": "BSD9.ANNEX.payable.date.R28.date",
+     "label": "row 28",
+     "kind": "value"
+    },
+    {
+     "code": "BSD9.ANNEX.payable.type.R28.type",
+     "label": "row 28",
+     "kind": "value"
+    },
+    {
+     "code": "BSD9.ANNEX.payable.subsidiary.R28.subsidiary",
+     "label": "row 28",
+     "kind": "value"
+    },
+    {
+     "code": "BSD9.ANNEX.payable.amount.R28.amount",
+     "label": "row 28",
+     "kind": "value"
+    }
+   ]
+  },
+  {
+   "code": "sheet_sheet3",
+   "title": "Sheet3",
+   "unit": "millions",
+   "itemised": false,
+   "lines": []
+  }
+ ],
+ "rules": [
+  {
+   "id": "BSD9-ARI-0001",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD9!D8",
+   "terms": [
+    "BSD9.R8.domestic",
+    "BSD9.R8.foreign"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD9!D8 follows the template formula =B8+C8"
+  },
+  {
+   "id": "BSD9-ARI-0002",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD9!D9",
+   "terms": [
+    "BSD9.R9.domestic",
+    "BSD9.R9.foreign"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD9!D9 follows the template formula =B9+C9"
+  },
+  {
+   "id": "BSD9-ARI-0003",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD9!D10",
+   "terms": [
+    "BSD9.R10.domestic",
+    "BSD9.R10.foreign"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD9!D10 follows the template formula =B10+C10"
+  },
+  {
+   "id": "BSD9-ARI-0004",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD9!D11",
+   "terms": [
+    "BSD9.R11.domestic",
+    "BSD9.R11.foreign"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD9!D11 follows the template formula =B11+C11"
+  },
+  {
+   "id": "BSD9-ARI-0005",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD9!D12",
+   "terms": [
+    "BSD9.R12.domestic",
+    "BSD9.R12.foreign"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD9!D12 follows the template formula =B12+C12"
+  },
+  {
+   "id": "BSD9-ARI-0006",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD9!D14",
+   "terms": [
+    "BSD9.R14.domestic",
+    "BSD9.R14.foreign"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD9!D14 follows the template formula =B14+C14"
+  },
+  {
+   "id": "BSD9-ARI-0007",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD9!D15",
+   "terms": [
+    "BSD9.R15.domestic",
+    "BSD9.R15.foreign"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD9!D15 follows the template formula =B15+C15"
+  },
+  {
+   "id": "BSD9-ARI-0008",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD9!D16",
+   "terms": [
+    "BSD9.R16.domestic",
+    "BSD9.R16.foreign"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD9!D16 follows the template formula =B16+C16"
+  },
+  {
+   "id": "BSD9-ARI-0009",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD9!B17",
+   "terms": [
+    "BSD9.R18.domestic"
+   ],
+   "tolerance": "0.02",
+   "description": "BSD9!B17 follows the template formula =B18-B19-B20",
+   "subtract": [
+    "BSD9.R19.domestic",
+    "BSD9.R20.domestic"
+   ]
+  },
+  {
+   "id": "BSD9-ARI-0010",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD9!C17",
+   "terms": [
+    "BSD9.R18.foreign"
+   ],
+   "tolerance": "0.02",
+   "description": "BSD9!C17 follows the template formula =C18-C19-C20",
+   "subtract": [
+    "BSD9.R19.foreign",
+    "BSD9.R20.foreign"
+   ]
+  },
+  {
+   "id": "BSD9-ARI-0011",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD9!D17",
+   "terms": [
+    "BSD9!D18"
+   ],
+   "tolerance": "0.02",
+   "description": "BSD9!D17 follows the template formula =D18-D19-D20",
+   "subtract": [
+    "BSD9!D19",
+    "BSD9!D20"
+   ]
+  },
+  {
+   "id": "BSD9-ARI-0012",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD9!D18",
+   "terms": [
+    "BSD9.R18.domestic",
+    "BSD9.R18.foreign"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD9!D18 follows the template formula =B18+C18"
+  },
+  {
+   "id": "BSD9-ARI-0013",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD9!D19",
+   "terms": [
+    "BSD9.R19.domestic",
+    "BSD9.R19.foreign"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD9!D19 follows the template formula =B19+C19"
+  },
+  {
+   "id": "BSD9-ARI-0014",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD9!D20",
+   "terms": [
+    "BSD9.R20.domestic",
+    "BSD9.R20.foreign"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD9!D20 follows the template formula =B20+C20"
+  },
+  {
+   "id": "BSD9-ARI-0015",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD9!D21",
+   "terms": [
+    "BSD9.R21.domestic",
+    "BSD9.R21.foreign"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD9!D21 follows the template formula =B21+C21"
+  },
+  {
+   "id": "BSD9-ARI-0016",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD9!D22",
+   "terms": [
+    "BSD9.R22.domestic",
+    "BSD9.R22.foreign"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD9!D22 follows the template formula =B22+C22"
+  },
+  {
+   "id": "BSD9-ARI-0017",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD9!D23",
+   "terms": [
+    "BSD9.R23.domestic",
+    "BSD9.R23.foreign"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD9!D23 follows the template formula =B23+C23"
+  },
+  {
+   "id": "BSD9-ARI-0018",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD9!D24",
+   "terms": [
+    "BSD9.R24.domestic",
+    "BSD9.R24.foreign"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD9!D24 follows the template formula =B24+C24"
+  },
+  {
+   "id": "BSD9-ARI-0019",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD9!B25",
+   "terms": [
+    "BSD9.R8.domestic",
+    "BSD9.R9.domestic",
+    "BSD9.R10.domestic",
+    "BSD9.R11.domestic",
+    "BSD9.R12.domestic",
+    "BSD9.R14.domestic",
+    "BSD9.R15.domestic",
+    "BSD9.R16.domestic",
+    "BSD9!B17",
+    "BSD9.R21.domestic",
+    "BSD9.R22.domestic",
+    "BSD9.R23.domestic",
+    "BSD9.R24.domestic"
+   ],
+   "tolerance": "0.07",
+   "description": "BSD9!B25 follows the template formula =SUM(B8:B12,B14:B17,B21:B24)"
+  },
+  {
+   "id": "BSD9-ARI-0020",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD9!C25",
+   "terms": [
+    "BSD9.R8.foreign",
+    "BSD9.R9.foreign",
+    "BSD9.R10.foreign",
+    "BSD9.R11.foreign",
+    "BSD9.R12.foreign",
+    "BSD9.R14.foreign",
+    "BSD9.R15.foreign",
+    "BSD9.R16.foreign",
+    "BSD9!C17",
+    "BSD9.R21.foreign",
+    "BSD9.R22.foreign",
+    "BSD9.R23.foreign",
+    "BSD9.R24.foreign"
+   ],
+   "tolerance": "0.07",
+   "description": "BSD9!C25 follows the template formula =SUM(C8:C12,C14:C17,C21:C24)"
+  },
+  {
+   "id": "BSD9-ARI-0021",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD9!D25",
+   "terms": [
+    "BSD9!C25",
+    "BSD9!B25"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD9!D25 follows the template formula =+C25+B25"
+  },
+  {
+   "id": "BSD9-ARI-0022",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD9!D27",
+   "terms": [
+    "BSD9.R27.domestic",
+    "BSD9.R27.foreign"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD9!D27 follows the template formula =B27+C27"
+  },
+  {
+   "id": "BSD9-ARI-0023",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD9!D28",
+   "terms": [
+    "BSD9.R28.domestic",
+    "BSD9.R28.foreign"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD9!D28 follows the template formula =B28+C28"
+  },
+  {
+   "id": "BSD9-ARI-0024",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD9!B29",
+   "terms": [
+    "BSD9.R27.domestic",
+    "BSD9.R28.domestic"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD9!B29 follows the template formula =B27+B28"
+  },
+  {
+   "id": "BSD9-ARI-0025",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD9!C29",
+   "terms": [
+    "BSD9.R27.foreign",
+    "BSD9.R28.foreign"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD9!C29 follows the template formula =C27+C28"
+  },
+  {
+   "id": "BSD9-ARI-0026",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD9!D29",
+   "terms": [
+    "BSD9!D27",
+    "BSD9!D28"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD9!D29 follows the template formula =D27+D28"
+  },
+  {
+   "id": "BSD9-ARI-0027",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD9!D30",
+   "terms": [
+    "BSD9.R30.domestic",
+    "BSD9.R30.foreign"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD9!D30 follows the template formula =B30+C30"
+  },
+  {
+   "id": "BSD9-ARI-0028",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD9!D31",
+   "terms": [
+    "BSD9.R31.domestic",
+    "BSD9.R31.foreign"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD9!D31 follows the template formula =B31+C31"
+  },
+  {
+   "id": "BSD9-ARI-0029",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD9!D32",
+   "terms": [
+    "BSD9.R32.domestic",
+    "BSD9.R32.foreign"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD9!D32 follows the template formula =B32+C32"
+  },
+  {
+   "id": "BSD9-ARI-0030",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD9!D33",
+   "terms": [
+    "BSD9.R33.domestic",
+    "BSD9.R33.foreign"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD9!D33 follows the template formula =B33+C33"
+  },
+  {
+   "id": "BSD9-ARI-0031",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD9!D34",
+   "terms": [
+    "BSD9.R34.domestic",
+    "BSD9.R34.foreign"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD9!D34 follows the template formula =B34+C34"
+  },
+  {
+   "id": "BSD9-ARI-0032",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD9!D35",
+   "terms": [
+    "BSD9.R35.domestic",
+    "BSD9.R35.foreign"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD9!D35 follows the template formula =B35+C35"
+  },
+  {
+   "id": "BSD9-ARI-0033",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD9!D36",
+   "terms": [
+    "BSD9.R36.domestic",
+    "BSD9.R36.foreign"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD9!D36 follows the template formula =B36+C36"
+  },
+  {
+   "id": "BSD9-ARI-0034",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD9!D37",
+   "terms": [
+    "BSD9.R37.domestic",
+    "BSD9.R37.foreign"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD9!D37 follows the template formula =B37+C37"
+  },
+  {
+   "id": "BSD9-ARI-0035",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD9!D38",
+   "terms": [
+    "BSD9.R38.domestic",
+    "BSD9.R38.foreign"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD9!D38 follows the template formula =B38+C38"
+  },
+  {
+   "id": "BSD9-ARI-0036",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD9!D39",
+   "terms": [
+    "BSD9.R39.domestic",
+    "BSD9.R39.foreign"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD9!D39 follows the template formula =B39+C39"
+  },
+  {
+   "id": "BSD9-ARI-0037",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD9!D40",
+   "terms": [
+    "BSD9.R40.domestic",
+    "BSD9.R40.foreign"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD9!D40 follows the template formula =B40+C40"
+  },
+  {
+   "id": "BSD9-ARI-0038",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD9!D41",
+   "terms": [
+    "BSD9.R41.domestic",
+    "BSD9.R41.foreign"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD9!D41 follows the template formula =B41+C41"
+  },
+  {
+   "id": "BSD9-ARI-0039",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD9!B42",
+   "terms": [
+    "BSD9.R27.domestic",
+    "BSD9.R28.domestic",
+    "BSD9.R30.domestic",
+    "BSD9.R31.domestic",
+    "BSD9.R32.domestic",
+    "BSD9.R33.domestic",
+    "BSD9.R34.domestic",
+    "BSD9.R35.domestic",
+    "BSD9.R36.domestic",
+    "BSD9.R37.domestic",
+    "BSD9.R38.domestic",
+    "BSD9.R39.domestic",
+    "BSD9.R40.domestic",
+    "BSD9.R41.domestic"
+   ],
+   "tolerance": "0.075",
+   "description": "BSD9!B42 follows the template formula =B27+B28+B30+B31+B32+B33+B34+B35+B36+B37+B38+B39+B40+B41"
+  },
+  {
+   "id": "BSD9-ARI-0040",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD9!C42",
+   "terms": [
+    "BSD9.R27.foreign",
+    "BSD9.R28.foreign",
+    "BSD9.R30.foreign",
+    "BSD9.R31.foreign",
+    "BSD9.R32.foreign",
+    "BSD9.R33.foreign",
+    "BSD9.R34.foreign",
+    "BSD9.R35.foreign",
+    "BSD9.R36.foreign",
+    "BSD9.R37.foreign",
+    "BSD9.R38.foreign",
+    "BSD9.R39.foreign",
+    "BSD9.R40.foreign",
+    "BSD9.R41.foreign"
+   ],
+   "tolerance": "0.075",
+   "description": "BSD9!C42 follows the template formula =C27+C28+C30+C31+C32+C33+C34+C35+C36+C37+C38+C39+C40+C41"
+  },
+  {
+   "id": "BSD9-ARI-0041",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD9!D42",
+   "terms": [
+    "BSD9!D27",
+    "BSD9!D28",
+    "BSD9!D30",
+    "BSD9!D31",
+    "BSD9!D32",
+    "BSD9!D33",
+    "BSD9!D34",
+    "BSD9!D35",
+    "BSD9!D36",
+    "BSD9!D37",
+    "BSD9!D38",
+    "BSD9!D39",
+    "BSD9!D40",
+    "BSD9!D41"
+   ],
+   "tolerance": "0.075",
+   "description": "BSD9!D42 follows the template formula =D27+D28+D30+D31+D32+D33+D34+D35+D36+D37+D38+D39+D40+D41"
+  },
+  {
+   "id": "BSD9-ARI-0042",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD9!D43",
+   "terms": [
+    "BSD9.R43.domestic",
+    "BSD9.R43.foreign"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD9!D43 follows the template formula =B43+C43"
+  },
+  {
+   "id": "BSD9-ARI-0043",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD9!D44",
+   "terms": [
+    "BSD9.R44.domestic",
+    "BSD9.R44.foreign"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD9!D44 follows the template formula =B44+C44"
+  }
+ ]
+}

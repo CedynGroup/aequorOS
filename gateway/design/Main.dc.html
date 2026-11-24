@@ -1,0 +1,255 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Overview — filing compliance</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=IBM+Plex+Mono:wght@400;500&amp;display=swap">
+<style>
+body{margin:0;background:#F4F6F8}
+a{color:#1F4FD1}a:hover{color:#163A9C}
+</style>
+</helmet>
+<div style="box-sizing: border-box; min-height: 100vh; display: flex; flex-wrap: wrap; background: #F4F6F8; color: #0E1726; font-family: Inter, system-ui, sans-serif">
+<div style="flex: 1 1 248px; max-width: 100%; background: #0F1E36; display: flex">
+<dc-import name="Sidebar" active="overview" hint-size="100%,1000px"></dc-import>
+</div>
+<main style="flex: 999 1 560px; min-width: 0; box-sizing: border-box; display: flex; flex-direction: column; gap: 24px; padding: 28px 32px 48px">
+<header style="display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 16px">
+<div style="display: flex; flex-direction: column; gap: 6px">
+<span style="font-size: 13px; color: #4B5565">Supervision / Overview</span>
+<h1 style="margin: 0; font-size: 28px; font-weight: 600; letter-spacing: -0.01em">Filing compliance</h1>
+<span style="font-size: 14px; color: #4B5565">October 2026 reporting cycle · updated 21 Nov 2026, 16:40 GMT</span>
+</div>
+<div style="display: flex; flex-wrap: wrap; align-items: center; gap: 10px">
+<label for="overview-search" style="position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap">Search</label>
+<input id="overview-search" type="search" placeholder="Search institution, return or receipt" style="box-sizing: border-box; width: 300px; max-width: 100%; height: 44px; border: 1px solid #C9D1DB; border-radius: 8px; padding: 0 14px; font: inherit; font-size: 14px; background: #FFFFFF; color: #0E1726">
+<button type="button" style="height: 44px; padding: 0 16px; border: 1px solid #C9D1DB; border-radius: 8px; background: #FFFFFF; color: #0E1726; font: inherit; font-size: 14px; font-weight: 500">Cycle: October 2026</button>
+<button type="button" style="height: 44px; padding: 0 18px; border: 0; border-radius: 8px; background: #1F4FD1; color: #FFFFFF; font: inherit; font-size: 14px; font-weight: 600">Export cycle report</button>
+</div>
+</header>
+
+<section aria-label="Cycle totals" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 14px">
+<sc-for list="{{kpis}}" as="kpi" hint-placeholder-count="6">
+<div style="background: #FFFFFF; border: 1px solid #DDE2E8; border-radius: 10px; padding: 16px 18px; display: flex; flex-direction: column; gap: 6px">
+<span style="font-size: 13px; color: #4B5565; font-weight: 500">{{kpi.label}}</span>
+<span style="{{kpi.valueStyle}}">{{kpi.value}}</span>
+<span style="font-size: 12px; color: #4B5565">{{kpi.note}}</span>
+</div>
+</sc-for>
+</section>
+
+<div style="display: flex; flex-wrap: wrap; gap: 20px; align-items: flex-start">
+<section aria-labelledby="heatmap-title" style="flex: 2 1 620px; min-width: 0; background: #FFFFFF; border: 1px solid #DDE2E8; border-radius: 10px; padding: 20px 22px; display: flex; flex-direction: column; gap: 16px">
+<div style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-start; gap: 12px">
+<div style="display: flex; flex-direction: column; gap: 4px">
+<h2 id="heatmap-title" style="margin: 0; font-size: 17px; font-weight: 600">Compliance by institution</h2>
+<span style="font-size: 13px; color: #4B5565">48 institutions · the 12 with the most outstanding filings first · select a cell to open the filing</span>
+</div>
+<div style="display: flex; flex-wrap: wrap; gap: 14px; font-size: 12px; color: #344054">
+<sc-for list="{{legend}}" as="key" hint-placeholder-count="4">
+<span style="display: inline-flex; align-items: center; gap: 6px"><span aria-hidden="true" style="{{key.swatch}}">{{key.glyph}}</span>{{key.label}}</span>
+</sc-for>
+</div>
+</div>
+<div style="overflow-x: auto">
+<table style="border-collapse: separate; border-spacing: 4px; font-size: 13px; min-width: 640px; width: 100%">
+<thead>
+<tr>
+<th scope="col" style="text-align: left; font-weight: 600; color: #4B5565; font-size: 12px; padding: 0 8px 6px 0">Institution</th>
+<sc-for list="{{returnCodes}}" as="code" hint-placeholder-count="10">
+<th scope="col" style="font-family: 'IBM Plex Mono', monospace; font-weight: 500; color: #4B5565; font-size: 11px; padding-bottom: 6px; white-space: nowrap">{{code}}</th>
+</sc-for>
+<th scope="col" style="text-align: right; font-weight: 600; color: #4B5565; font-size: 12px; padding: 0 0 6px 8px">Received</th>
+</tr>
+</thead>
+<tbody>
+<sc-for list="{{heatRows}}" as="row" hint-placeholder-count="12">
+<tr>
+<th scope="row" style="text-align: left; font-weight: 500; padding-right: 8px; white-space: nowrap"><a href="Institution.dc.html" style="color: #0E1726; text-decoration: none">{{row.name}}</a></th>
+<sc-for list="{{row.cells}}" as="cell" hint-placeholder-count="10">
+<td style="padding: 0"><a href="Submission.dc.html" aria-label="{{cell.aria}}" style="{{cell.style}}">{{cell.glyph}}</a></td>
+</sc-for>
+<td style="text-align: right; padding-left: 8px; font-variant-numeric: tabular-nums; color: #344054">{{row.rate}}</td>
+</tr>
+</sc-for>
+</tbody>
+</table>
+</div>
+</section>
+
+<div style="flex: 1 1 320px; min-width: 0; display: flex; flex-direction: column; gap: 20px">
+<section aria-labelledby="attention-title" style="background: #FFFFFF; border: 1px solid #DDE2E8; border-radius: 10px; padding: 20px 22px; display: flex; flex-direction: column; gap: 14px">
+<div style="display: flex; justify-content: space-between; align-items: baseline">
+<h2 id="attention-title" style="margin: 0; font-size: 17px; font-weight: 600">Needs attention</h2>
+<a href="Inbox.dc.html" style="font-size: 13px; font-weight: 500">View all</a>
+</div>
+<ul style="list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column">
+<sc-for list="{{attention}}" as="item" hint-placeholder-count="6">
+<li style="display: flex; flex-direction: column; gap: 6px; padding: 12px 0; border-top: 1px solid #EEF0F3">
+<div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap">
+<span style="{{item.chip}}">{{item.kind}}</span>
+<span style="font-size: 12px; color: #4B5565">{{item.when}}</span>
+</div>
+<a href="{{item.href}}" style="font-size: 14px; font-weight: 500; color: #0E1726; text-decoration: none; line-height: 1.4">{{item.title}}</a>
+<span style="font-size: 13px; color: #4B5565; line-height: 1.4">{{item.detail}}</span>
+</li>
+</sc-for>
+</ul>
+</section>
+
+<section aria-labelledby="channel-title" style="background: #FFFFFF; border: 1px solid #DDE2E8; border-radius: 10px; padding: 20px 22px; display: flex; flex-direction: column; gap: 12px">
+<h2 id="channel-title" style="margin: 0; font-size: 17px; font-weight: 600">Channel status</h2>
+<dl style="margin: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px">
+<sc-for list="{{channel}}" as="stat" hint-placeholder-count="4">
+<div style="display: flex; flex-direction: column; gap: 4px">
+<dt style="font-size: 12px; color: #4B5565">{{stat.label}}</dt>
+<dd style="margin: 0; font-size: 18px; font-weight: 600; font-variant-numeric: tabular-nums">{{stat.value}}</dd>
+</div>
+</sc-for>
+</dl>
+<span style="font-size: 12px; color: #4B5565">Every filing is received through the published API v1, whichever system produced it.</span>
+</section>
+</div>
+</div>
+
+<section aria-labelledby="latest-title" style="background: #FFFFFF; border: 1px solid #DDE2E8; border-radius: 10px; padding: 20px 22px; display: flex; flex-direction: column; gap: 14px">
+<div style="display: flex; justify-content: space-between; align-items: baseline; flex-wrap: wrap; gap: 8px">
+<h2 id="latest-title" style="margin: 0; font-size: 17px; font-weight: 600">Latest submissions</h2>
+<a href="Inbox.dc.html" style="font-size: 13px; font-weight: 500">Open inbox</a>
+</div>
+<div style="overflow-x: auto">
+<table style="width: 100%; min-width: 900px; border-collapse: collapse; font-size: 14px">
+<thead>
+<tr style="text-align: left; color: #4B5565; font-size: 12px">
+<th scope="col" style="font-weight: 600; padding: 8px 12px 8px 0; border-bottom: 1px solid #DDE2E8">Received</th>
+<th scope="col" style="font-weight: 600; padding: 8px 12px; border-bottom: 1px solid #DDE2E8">Institution</th>
+<th scope="col" style="font-weight: 600; padding: 8px 12px; border-bottom: 1px solid #DDE2E8">Return</th>
+<th scope="col" style="font-weight: 600; padding: 8px 12px; border-bottom: 1px solid #DDE2E8">Reporting date</th>
+<th scope="col" style="font-weight: 600; padding: 8px 12px; border-bottom: 1px solid #DDE2E8">Version</th>
+<th scope="col" style="font-weight: 600; padding: 8px 12px; border-bottom: 1px solid #DDE2E8">Channel · software</th>
+<th scope="col" style="font-weight: 600; padding: 8px 12px; border-bottom: 1px solid #DDE2E8">Status</th>
+<th scope="col" style="font-weight: 600; padding: 8px 0 8px 12px; border-bottom: 1px solid #DDE2E8">Receipt</th>
+</tr>
+</thead>
+<tbody>
+<sc-for list="{{latest}}" as="row" hint-placeholder-count="8">
+<tr>
+<td style="padding: 12px 12px 12px 0; border-bottom: 1px solid #EEF0F3; color: #344054; white-space: nowrap; font-variant-numeric: tabular-nums">{{row.time}}</td>
+<td style="padding: 12px; border-bottom: 1px solid #EEF0F3; font-weight: 500">{{row.institution}}</td>
+<td style="padding: 12px; border-bottom: 1px solid #EEF0F3; font-family: 'IBM Plex Mono', monospace; font-size: 13px">{{row.ret}}</td>
+<td style="padding: 12px; border-bottom: 1px solid #EEF0F3; color: #344054; white-space: nowrap">{{row.period}}</td>
+<td style="padding: 12px; border-bottom: 1px solid #EEF0F3; color: #344054">{{row.version}}</td>
+<td style="padding: 12px; border-bottom: 1px solid #EEF0F3; color: #344054; white-space: nowrap"><div style="display: flex; flex-direction: column; gap: 2px"><span>{{row.channel}}</span><span style="font-size: 12px; color: #4B5565">{{row.software}}</span></div></td>
+<td style="padding: 12px; border-bottom: 1px solid #EEF0F3"><span style="{{row.chip}}">{{row.status}}</span></td>
+<td style="padding: 12px 0 12px 12px; border-bottom: 1px solid #EEF0F3"><a href="Submission.dc.html" style="font-family: 'IBM Plex Mono', monospace; font-size: 13px">{{row.receipt}}</a></td>
+</tr>
+</sc-for>
+</tbody>
+</table>
+</div>
+</section>
+</main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1340}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const chipBase = 'display: inline-flex; align-items: center; font-size: 12px; font-weight: 600; border-radius: 999px; padding: 3px 10px; white-space: nowrap; ';
+    const chips = {
+      Accepted: 'background: #E3F4EC; color: #0F6B3E',
+      Validating: 'background: #E6EEFC; color: #1F4FD1',
+      'In review': 'background: #EEF0F3; color: #344054',
+      Rejected: 'background: #FBE7E7; color: #A12A2A',
+      Queried: 'background: #EFEAFE; color: #5B35C2',
+      Late: 'background: #FDEFD9; color: #8A4B00',
+      Outstanding: 'background: #FBE7E7; color: #A12A2A',
+      Credential: 'background: #EEF0F3; color: #344054'
+    };
+    const chip = (status) => chipBase + (chips[status] || chips['In review']);
+    const route = (raw) => ({
+      'API · AequorOS': { channel: 'API', software: 'AequorOS · declared' },
+      'API · in-house': { channel: 'API', software: 'In-house system · declared' },
+      'Web upload': { channel: 'Portal upload', software: 'No software declared' }
+    })[raw] || { channel: raw, software: '' };
+    const cellBase = 'display: flex; align-items: center; justify-content: center; width: 100%; min-width: 34px; height: 30px; border-radius: 5px; text-decoration: none; font-size: 13px; font-weight: 700; color: #FFFFFF; ';
+    const states = {
+      O: { label: 'Received on time', css: 'background: #2457C5', glyph: '' },
+      L: { label: 'Received late', css: 'background: #E8913A', glyph: '' },
+      X: { label: 'Outstanding or rejected', css: 'background: #9B1C1C', glyph: '!' },
+      N: { label: 'Not yet due', css: 'background: #E3E7EC', glyph: '' }
+    };
+    const returnCodes = ['BSD2', 'BSD3A', 'BSD5A', 'BSD6', 'BSD7A', 'BSD8', 'BSD13', 'CAR-RWA', 'LMT', 'NPL-MONTHLY'];
+    const rows = [
+      ['Northgate Savings & Loans', 'OXXLOXOOLX'],
+      ['Harbourline Bank', 'OOXOOOLOXO'],
+      ['Riverbend Rural Bank', 'OLOOXOOOOL'],
+      ['Kestrel Bank', 'OOOOOLOXOO'],
+      ['Palmgrove Bank', 'LOOOOOOOXO'],
+      ['Savanna Union Bank', 'OOOLOOOOOX'],
+      ['Cedarwood Bank', 'OOOOOOLOOO'],
+      ['Meridian Coast Bank', 'OOOOOOOOOL'],
+      ['Ridgeway Commercial Bank', 'OOOOOOOOOO'],
+      ['Lakeside Trust Bank', 'OOLOOOOOOO'],
+      ['Goldfield Commercial Bank', 'OOOOOOOOOO'],
+      ['Summit Mutual Bank', 'OOOOONOOON']
+    ];
+    const heatRows = rows.map(([name, pattern]) => {
+      const marks = pattern.split('');
+      const due = marks.filter((m) => m !== 'N').length;
+      const received = marks.filter((m) => m === 'O' || m === 'L').length;
+      return {
+        name,
+        rate: received + ' / ' + due,
+        cells: marks.map((m, i) => ({
+          style: cellBase + states[m].css,
+          glyph: states[m].glyph,
+          aria: name + ', ' + returnCodes[i] + ': ' + states[m].label
+        }))
+      };
+    });
+    const swatch = 'display: inline-flex; align-items: center; justify-content: center; width: 16px; height: 16px; border-radius: 4px; font-size: 11px; font-weight: 700; color: #FFFFFF; ';
+    const legend = ['O', 'L', 'X', 'N'].map((k) => ({ label: states[k].label, glyph: states[k].glyph, swatch: swatch + states[k].css }));
+    const valueBase = 'font-size: 28px; font-weight: 600; letter-spacing: -0.01em; font-variant-numeric: tabular-nums; ';
+    const kpis = [
+      { label: 'Due to date', value: '612', note: '48 institutions · 14 monthly returns', tone: '#0E1726' },
+      { label: 'Received', value: '571', note: '93.3% of due', tone: '#0E1726' },
+      { label: 'Accepted', value: '538', note: '94.2% of received', tone: '#0F6B3E' },
+      { label: 'Outstanding past due', value: '41', note: '9 more than 5 days late', tone: '#A12A2A' },
+      { label: 'Filed late', value: '24', note: 'received after the due date', tone: '#8A4B00' },
+      { label: 'Open queries', value: '7', note: '2 awaiting a bank reply over 5 days', tone: '#5B35C2' }
+    ].map((k) => ({ ...k, valueStyle: valueBase + 'color: ' + k.tone }));
+    const attention = [
+      { kind: 'Outstanding', when: '8 days past due', title: 'Northgate Savings & Loans — BSD5A Capital Adequacy', detail: 'Not received for 31 Oct 2026. Three other returns also outstanding.', href: 'Institution.dc.html' },
+      { kind: 'Rejected', when: 'Today, 14:12', title: 'Harbourline Bank — LMT failed 3 validation rules', detail: 'Totals in Table 4 do not reconcile to Table 1. Refile requested automatically.', href: 'Submission.dc.html' },
+      { kind: 'Queried', when: 'Reply due 24 Nov', title: 'Riverbend Rural Bank — BSD8 classification query', detail: 'Supervisor asked for the basis of two upgraded facilities.', href: 'Queries.dc.html' },
+      { kind: 'Late', when: 'Today, 09:05', title: 'Savanna Union Bank — BSD13 filed 3 days late', detail: 'Accepted. Lateness recorded against the institution.', href: 'Submission.dc.html' },
+      { kind: 'Queried', when: 'Reply received 20 Nov', title: 'Summit Mutual Bank — reply on the large exposure query', detail: 'Answered with a corrected LE-MONTHLY; awaiting your review.', href: 'Queries.dc.html' }
+    ].map((a) => ({ ...a, chip: chip(a.kind) }));
+    const channel = [
+      { label: 'API availability, 30 days', value: '99.97%' },
+      { label: 'Median time to receipt', value: '1.8 s' },
+      { label: 'Filings received today', value: '214' },
+      { label: 'Certificates expiring ≤ 30 days', value: '3' }
+    ];
+    const latest = [
+      { time: '16:38', institution: 'Meridian Coast Bank', ret: 'BSD2', period: '31 Oct 2026', version: 'v1', channel: 'API · AequorOS', status: 'Validating', receipt: 'SRG-26-0114822' },
+      { time: '16:21', institution: 'Ridgeway Commercial Bank', ret: 'CAR-RWA', period: '31 Oct 2026', version: 'v1', channel: 'API · in-house', status: 'Accepted', receipt: 'SRG-26-0114819' },
+      { time: '15:57', institution: 'Palmgrove Bank', ret: 'BSD2', period: '31 Oct 2026', version: 'v2', channel: 'API · AequorOS', status: 'In review', receipt: 'SRG-26-0114806' },
+      { time: '14:12', institution: 'Harbourline Bank', ret: 'LMT', period: '31 Oct 2026', version: 'v1', channel: 'API · in-house', status: 'Rejected', receipt: 'SRG-26-0114771' },
+      { time: '13:40', institution: 'Lakeside Trust Bank', ret: 'BSD6', period: '31 Oct 2026', version: 'v1', channel: 'Web upload', status: 'Accepted', receipt: 'SRG-26-0114760' },
+      { time: '11:02', institution: 'Riverbend Rural Bank', ret: 'BSD8', period: '31 Oct 2026', version: 'v1', channel: 'Web upload', status: 'Queried', receipt: 'SRG-26-0114702' },
+      { time: '09:05', institution: 'Savanna Union Bank', ret: 'BSD13', period: '31 Oct 2026', version: 'v1', channel: 'API · AequorOS', status: 'Accepted', receipt: 'SRG-26-0114655' },
+      { time: '08:47', institution: 'Goldfield Commercial Bank', ret: 'DBK-DAILY', period: '20 Nov 2026', version: 'v1', channel: 'API · in-house', status: 'Accepted', receipt: 'SRG-26-0114649' }
+    ].map((r) => ({ ...r, ...route(r.channel), chip: chip(r.status) }));
+    return { kpis, legend, returnCodes, heatRows, attention, channel, latest };
+  }
+}
+</script>
+</body>
+</html>

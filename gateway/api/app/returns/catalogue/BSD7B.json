@@ -1,0 +1,1086 @@
+{
+ "format": "aequoros-gateway-return/1",
+ "code": "BSD7B",
+ "name": "Current Year Consolidated Results",
+ "cadence": "quarterly",
+ "basis": "consolidated",
+ "applies_to": [
+  "universal_bank"
+ ],
+ "version": "2026.2",
+ "first_reporting_date": "2025-01-01",
+ "source": {
+  "system": "AequorOS",
+  "template": "bog-bsd7b-official-v1",
+  "fidelity": "CONFIRMED",
+  "workbook": "FORM BSD7B REVISED.xls"
+ },
+ "sections": [
+  {
+   "code": "sheet_bsd7b",
+   "title": "BSD7B",
+   "unit": "millions",
+   "itemised": false,
+   "lines": [
+    {
+     "code": "BSD7B.ITEM.R7.item",
+     "label": "Interest received and receivable",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD7B!C7",
+     "label": "Interest received and receivable",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD7B!D7",
+     "label": "Interest received and receivable",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD7B.R8.quarter",
+     "label": "(a) Overdrafts, Loans & Other Advances — quarter",
+     "kind": "number"
+    },
+    {
+     "code": "BSD7B.R8.ptd",
+     "label": "(a) Overdrafts, Loans & Other Advances — ptd",
+     "kind": "number"
+    },
+    {
+     "code": "BSD7B.R9.quarter",
+     "label": "(b) Bills (including discounts) — quarter",
+     "kind": "number"
+    },
+    {
+     "code": "BSD7B.R9.ptd",
+     "label": "(b) Bills (including discounts) — ptd",
+     "kind": "number"
+    },
+    {
+     "code": "BSD7B.R10.quarter",
+     "label": "(c) Investments (including discounts) — quarter",
+     "kind": "number"
+    },
+    {
+     "code": "BSD7B.R10.ptd",
+     "label": "(c) Investments (including discounts) — ptd",
+     "kind": "number"
+    },
+    {
+     "code": "BSD7B.ITEM.R11.item",
+     "label": "Interest Paid and Payable",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD7B!C11",
+     "label": "Interest Paid and Payable",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD7B!D11",
+     "label": "Interest Paid and Payable",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD7B!C12",
+     "label": "(a) Interest on deposits",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD7B!D12",
+     "label": "(a) Interest on deposits",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD7B.R13.quarter",
+     "label": "-Savings — quarter",
+     "kind": "number"
+    },
+    {
+     "code": "BSD7B.R13.ptd",
+     "label": "-Savings — ptd",
+     "kind": "number"
+    },
+    {
+     "code": "BSD7B.R14.quarter",
+     "label": "-Current — quarter",
+     "kind": "number"
+    },
+    {
+     "code": "BSD7B.R14.ptd",
+     "label": "-Current — ptd",
+     "kind": "number"
+    },
+    {
+     "code": "BSD7B.R15.quarter",
+     "label": "-Time — quarter",
+     "kind": "number"
+    },
+    {
+     "code": "BSD7B.R15.ptd",
+     "label": "-Time — ptd",
+     "kind": "number"
+    },
+    {
+     "code": "BSD7B.R16.quarter",
+     "label": "-Borrowings — quarter",
+     "kind": "number"
+    },
+    {
+     "code": "BSD7B.R16.ptd",
+     "label": "-Borrowings — ptd",
+     "kind": "number"
+    },
+    {
+     "code": "BSD7B.R17.quarter",
+     "label": "(b) Other Interest paymants — quarter",
+     "kind": "number"
+    },
+    {
+     "code": "BSD7B.R17.ptd",
+     "label": "(b) Other Interest paymants — ptd",
+     "kind": "number"
+    },
+    {
+     "code": "BSD7B.ITEM.R18.item",
+     "label": "Net Interest Income (1-2)",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD7B!C18",
+     "label": "Net Interest Income (1-2)",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD7B!D18",
+     "label": "Net Interest Income (1-2)",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD7B.ITEM.R19.item",
+     "label": "Profit/Loss on foreign exchange dealings",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD7B.R19.quarter",
+     "label": "Profit/Loss on foreign exchange dealings — quarter",
+     "kind": "number"
+    },
+    {
+     "code": "BSD7B.R19.ptd",
+     "label": "Profit/Loss on foreign exchange dealings — ptd",
+     "kind": "number"
+    },
+    {
+     "code": "BSD7B.ITEM.R20.item",
+     "label": "Income from Fees and Commissions",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD7B.R20.quarter",
+     "label": "Income from Fees and Commissions — quarter",
+     "kind": "number"
+    },
+    {
+     "code": "BSD7B.R20.ptd",
+     "label": "Income from Fees and Commissions — ptd",
+     "kind": "number"
+    },
+    {
+     "code": "BSD7B.ITEM.R21.item",
+     "label": "Dividends received",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD7B.R21.quarter",
+     "label": "Dividends received — quarter",
+     "kind": "number"
+    },
+    {
+     "code": "BSD7B.R21.ptd",
+     "label": "Dividends received — ptd",
+     "kind": "number"
+    },
+    {
+     "code": "BSD7B.ITEM.R22.item",
+     "label": "Profit/Loss on sale of Property, Plant and Equipment",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD7B.R22.quarter",
+     "label": "Profit/Loss on sale of Property, Plant and Equipment — quarter",
+     "kind": "number"
+    },
+    {
+     "code": "BSD7B.R22.ptd",
+     "label": "Profit/Loss on sale of Property, Plant and Equipment — ptd",
+     "kind": "number"
+    },
+    {
+     "code": "BSD7B.ITEM.R23.item",
+     "label": "Rent Reveivable",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD7B.R23.quarter",
+     "label": "Rent Reveivable — quarter",
+     "kind": "number"
+    },
+    {
+     "code": "BSD7B.R23.ptd",
+     "label": "Rent Reveivable — ptd",
+     "kind": "number"
+    },
+    {
+     "code": "BSD7B.ITEM.R24.item",
+     "label": "Gain on dealing assets",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD7B.R24.quarter",
+     "label": "Gain on dealing assets — quarter",
+     "kind": "number"
+    },
+    {
+     "code": "BSD7B.R24.ptd",
+     "label": "Gain on dealing assets — ptd",
+     "kind": "number"
+    },
+    {
+     "code": "BSD7B.ITEM.R25.item",
+     "label": "Other Income",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD7B.R25.quarter",
+     "label": "Other Income — quarter",
+     "kind": "number"
+    },
+    {
+     "code": "BSD7B.R25.ptd",
+     "label": "Other Income — ptd",
+     "kind": "number"
+    },
+    {
+     "code": "BSD7B.ITEM.R26.item",
+     "label": "Net Income (3+4+5+6+7+…….+10)",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD7B!C26",
+     "label": "Net Income (3+4+5+6+7+…….+10)",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD7B!D26",
+     "label": "Net Income (3+4+5+6+7+…….+10)",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD7B.ITEM.R27.item",
+     "label": "Operating Expense - Staff",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD7B.R27.quarter",
+     "label": "Operating Expense - Staff — quarter",
+     "kind": "number"
+    },
+    {
+     "code": "BSD7B.R27.ptd",
+     "label": "Operating Expense - Staff — ptd",
+     "kind": "number"
+    },
+    {
+     "code": "BSD7B.ITEM.R28.item",
+     "label": "-Training",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD7B.R28.quarter",
+     "label": "-Training — quarter",
+     "kind": "number"
+    },
+    {
+     "code": "BSD7B.R28.ptd",
+     "label": "-Training — ptd",
+     "kind": "number"
+    },
+    {
+     "code": "BSD7B.ITEM.R29.item",
+     "label": "-Emoluments",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD7B.R29.quarter",
+     "label": "-Emoluments — quarter",
+     "kind": "number"
+    },
+    {
+     "code": "BSD7B.R29.ptd",
+     "label": "-Emoluments — ptd",
+     "kind": "number"
+    },
+    {
+     "code": "BSD7B.ITEM.R30.item",
+     "label": "-Others",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD7B.R30.quarter",
+     "label": "-Others — quarter",
+     "kind": "number"
+    },
+    {
+     "code": "BSD7B.R30.ptd",
+     "label": "-Others — ptd",
+     "kind": "number"
+    },
+    {
+     "code": "BSD7B.ITEM.R31.item",
+     "label": "- Occupancy",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD7B.R31.quarter",
+     "label": "- Occupancy — quarter",
+     "kind": "number"
+    },
+    {
+     "code": "BSD7B.R31.ptd",
+     "label": "- Occupancy — ptd",
+     "kind": "number"
+    },
+    {
+     "code": "BSD7B.ITEM.R32.item",
+     "label": "- Travel",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD7B.R32.quarter",
+     "label": "- Travel — quarter",
+     "kind": "number"
+    },
+    {
+     "code": "BSD7B.R32.ptd",
+     "label": "- Travel — ptd",
+     "kind": "number"
+    },
+    {
+     "code": "BSD7B.ITEM.R33.item",
+     "label": "- Admin. & Other",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD7B.R33.quarter",
+     "label": "- Admin. & Other — quarter",
+     "kind": "number"
+    },
+    {
+     "code": "BSD7B.R33.ptd",
+     "label": "- Admin. & Other — ptd",
+     "kind": "number"
+    },
+    {
+     "code": "BSD7B.ITEM.R34.item",
+     "label": "Total Operating Expenses (12+13+14+………+18)",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD7B!C34",
+     "label": "Total Operating Expenses (12+13+14+………+18)",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD7B!D34",
+     "label": "Total Operating Expenses (12+13+14+………+18)",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD7B.ITEM.R35.item",
+     "label": "Provisions - Depreciation",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD7B.R35.quarter",
+     "label": "Provisions - Depreciation — quarter",
+     "kind": "number"
+    },
+    {
+     "code": "BSD7B.R35.ptd",
+     "label": "Provisions - Depreciation — ptd",
+     "kind": "number"
+    },
+    {
+     "code": "BSD7B.ITEM.R36.item",
+     "label": "- Bad Debts",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD7B.R36.quarter",
+     "label": "- Bad Debts — quarter",
+     "kind": "number"
+    },
+    {
+     "code": "BSD7B.R36.ptd",
+     "label": "- Bad Debts — ptd",
+     "kind": "number"
+    },
+    {
+     "code": "BSD7B.ITEM.R37.item",
+     "label": "- Other",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD7B.R37.quarter",
+     "label": "- Other — quarter",
+     "kind": "number"
+    },
+    {
+     "code": "BSD7B.R37.ptd",
+     "label": "- Other — ptd",
+     "kind": "number"
+    },
+    {
+     "code": "BSD7B.ITEM.R38.item",
+     "label": "Total Provisions (20+21+22)",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD7B!C38",
+     "label": "Total Provisions (20+21+22)",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD7B!D38",
+     "label": "Total Provisions (20+21+22)",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD7B.ITEM.R39.item",
+     "label": "Loses on sale of Investment",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD7B.R39.quarter",
+     "label": "Loses on sale of Investment — quarter",
+     "kind": "number"
+    },
+    {
+     "code": "BSD7B.R39.ptd",
+     "label": "Loses on sale of Investment — ptd",
+     "kind": "number"
+    },
+    {
+     "code": "BSD7B.ITEM.R40.item",
+     "label": "Loses on dealing assets",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD7B.R40.quarter",
+     "label": "Loses on dealing assets — quarter",
+     "kind": "number"
+    },
+    {
+     "code": "BSD7B.R40.ptd",
+     "label": "Loses on dealing assets — ptd",
+     "kind": "number"
+    },
+    {
+     "code": "BSD7B.ITEM.R41.item",
+     "label": "Exchange losses",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD7B.R41.quarter",
+     "label": "Exchange losses — quarter",
+     "kind": "number"
+    },
+    {
+     "code": "BSD7B.R41.ptd",
+     "label": "Exchange losses — ptd",
+     "kind": "number"
+    },
+    {
+     "code": "BSD7B.ITEM.R42.item",
+     "label": "Net Profit (11-19-23-24-25-26",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD7B!C42",
+     "label": "Net Profit (11-19-23-24-25-26",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD7B!D42",
+     "label": "Net Profit (11-19-23-24-25-26",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD7B.ITEM.R43.item",
+     "label": "Provision for Taxation",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD7B.R43.quarter",
+     "label": "Provision for Taxation — quarter",
+     "kind": "number"
+    },
+    {
+     "code": "BSD7B.R43.ptd",
+     "label": "Provision for Taxation — ptd",
+     "kind": "number"
+    },
+    {
+     "code": "BSD7B.ITEM.R44.item",
+     "label": "Net Profit after Taxation (27-28)",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD7B!C44",
+     "label": "Net Profit after Taxation (27-28)",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD7B!D44",
+     "label": "Net Profit after Taxation (27-28)",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD7B.ITEM.R45.item",
+     "label": "Extraordinary Items",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD7B.R45.quarter",
+     "label": "Extraordinary Items — quarter",
+     "kind": "number"
+    },
+    {
+     "code": "BSD7B.R45.ptd",
+     "label": "Extraordinary Items — ptd",
+     "kind": "number"
+    },
+    {
+     "code": "BSD7B.ITEM.R46.item",
+     "label": "Net Profit after Tax & Ext. items (29-30)",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD7B!C46",
+     "label": "Net Profit after Tax & Ext. items (29-30)",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD7B!D46",
+     "label": "Net Profit after Tax & Ext. items (29-30)",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD7B.ITEM.R47.item",
+     "label": "Dividends Paid and Payable",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD7B.R47.quarter",
+     "label": "Dividends Paid and Payable — quarter",
+     "kind": "number"
+    },
+    {
+     "code": "BSD7B.R47.ptd",
+     "label": "Dividends Paid and Payable — ptd",
+     "kind": "number"
+    },
+    {
+     "code": "BSD7B.ITEM.R48.item",
+     "label": "Retained Profit/Loss (31-32)",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD7B!C48",
+     "label": "Retained Profit/Loss (31-32)",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD7B!D48",
+     "label": "Retained Profit/Loss (31-32)",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD7B.ITEM.R49.item",
+     "label": "Statutory Reserves",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD7B.R49.quarter",
+     "label": "Statutory Reserves — quarter",
+     "kind": "number"
+    },
+    {
+     "code": "BSD7B.R49.ptd",
+     "label": "Statutory Reserves — ptd",
+     "kind": "number"
+    },
+    {
+     "code": "BSD7B.ITEM.R50.item",
+     "label": "Other reserves",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD7B.R50.quarter",
+     "label": "Other reserves — quarter",
+     "kind": "number"
+    },
+    {
+     "code": "BSD7B.R50.ptd",
+     "label": "Other reserves — ptd",
+     "kind": "number"
+    },
+    {
+     "code": "BSD7B.ITEM.R51.item",
+     "label": "Income Surplus",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD7B.R51.quarter",
+     "label": "Income Surplus — quarter",
+     "kind": "number"
+    },
+    {
+     "code": "BSD7B.R51.ptd",
+     "label": "Income Surplus — ptd",
+     "kind": "number"
+    },
+    {
+     "code": "BSD7B.ITEM.R52.item",
+     "label": "TOTAL RESERVES",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD7B!C52",
+     "label": "TOTAL RESERVES",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD7B!D52",
+     "label": "TOTAL RESERVES",
+     "kind": "number",
+     "total": true
+    }
+   ]
+  }
+ ],
+ "rules": [
+  {
+   "id": "BSD7B-ARI-0001",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD7B!C7",
+   "terms": [
+    "BSD7B.R8.quarter",
+    "BSD7B.R9.quarter",
+    "BSD7B.R10.quarter"
+   ],
+   "tolerance": "0.02",
+   "description": "BSD7B!C7 follows the template formula =SUM(C8:C10)"
+  },
+  {
+   "id": "BSD7B-ARI-0002",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD7B!D7",
+   "terms": [
+    "BSD7B.R8.ptd",
+    "BSD7B.R9.ptd",
+    "BSD7B.R10.ptd"
+   ],
+   "tolerance": "0.02",
+   "description": "BSD7B!D7 follows the template formula =SUM(D8:D10)"
+  },
+  {
+   "id": "BSD7B-ARI-0003",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD7B!C11",
+   "terms": [
+    "BSD7B!C12",
+    "BSD7B.R17.quarter"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD7B!C11 follows the template formula =C12+C17"
+  },
+  {
+   "id": "BSD7B-ARI-0004",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD7B!D11",
+   "terms": [
+    "BSD7B!D12",
+    "BSD7B.R17.ptd"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD7B!D11 follows the template formula =D12+D17"
+  },
+  {
+   "id": "BSD7B-ARI-0005",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD7B!C12",
+   "terms": [
+    "BSD7B.R13.quarter",
+    "BSD7B.R14.quarter",
+    "BSD7B.R15.quarter",
+    "BSD7B.R16.quarter"
+   ],
+   "tolerance": "0.025",
+   "description": "BSD7B!C12 follows the template formula =SUM(C13:C16)"
+  },
+  {
+   "id": "BSD7B-ARI-0006",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD7B!D12",
+   "terms": [
+    "BSD7B.R13.ptd",
+    "BSD7B.R14.ptd",
+    "BSD7B.R15.ptd",
+    "BSD7B.R16.ptd"
+   ],
+   "tolerance": "0.025",
+   "description": "BSD7B!D12 follows the template formula =SUM(D13:D16)"
+  },
+  {
+   "id": "BSD7B-ARI-0007",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD7B!C18",
+   "terms": [
+    "BSD7B!C7"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD7B!C18 follows the template formula =C7-C11",
+   "subtract": [
+    "BSD7B!C11"
+   ]
+  },
+  {
+   "id": "BSD7B-ARI-0008",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD7B!D18",
+   "terms": [
+    "BSD7B!D7"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD7B!D18 follows the template formula =D7-D11",
+   "subtract": [
+    "BSD7B!D11"
+   ]
+  },
+  {
+   "id": "BSD7B-ARI-0009",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD7B!C26",
+   "terms": [
+    "BSD7B!C18",
+    "BSD7B.R19.quarter",
+    "BSD7B.R20.quarter",
+    "BSD7B.R21.quarter",
+    "BSD7B.R22.quarter",
+    "BSD7B.R23.quarter",
+    "BSD7B.R24.quarter",
+    "BSD7B.R25.quarter"
+   ],
+   "tolerance": "0.045",
+   "description": "BSD7B!C26 follows the template formula =SUM(C18:C25)"
+  },
+  {
+   "id": "BSD7B-ARI-0010",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD7B!D26",
+   "terms": [
+    "BSD7B!D18",
+    "BSD7B.R19.ptd",
+    "BSD7B.R20.ptd",
+    "BSD7B.R21.ptd",
+    "BSD7B.R22.ptd",
+    "BSD7B.R23.ptd",
+    "BSD7B.R24.ptd",
+    "BSD7B.R25.ptd"
+   ],
+   "tolerance": "0.045",
+   "description": "BSD7B!D26 follows the template formula =SUM(D18:D25)"
+  },
+  {
+   "id": "BSD7B-ARI-0011",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD7B!C34",
+   "terms": [
+    "BSD7B.R27.quarter",
+    "BSD7B.R28.quarter",
+    "BSD7B.R29.quarter",
+    "BSD7B.R30.quarter",
+    "BSD7B.R31.quarter",
+    "BSD7B.R32.quarter",
+    "BSD7B.R33.quarter"
+   ],
+   "tolerance": "0.04",
+   "description": "BSD7B!C34 follows the template formula =SUM(C27:C33)"
+  },
+  {
+   "id": "BSD7B-ARI-0012",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD7B!D34",
+   "terms": [
+    "BSD7B.R27.ptd",
+    "BSD7B.R28.ptd",
+    "BSD7B.R29.ptd",
+    "BSD7B.R30.ptd",
+    "BSD7B.R31.ptd",
+    "BSD7B.R32.ptd",
+    "BSD7B.R33.ptd"
+   ],
+   "tolerance": "0.04",
+   "description": "BSD7B!D34 follows the template formula =SUM(D27:D33)"
+  },
+  {
+   "id": "BSD7B-ARI-0013",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD7B!C38",
+   "terms": [
+    "BSD7B.R35.quarter",
+    "BSD7B.R36.quarter",
+    "BSD7B.R37.quarter"
+   ],
+   "tolerance": "0.02",
+   "description": "BSD7B!C38 follows the template formula =SUM(C35:C37)"
+  },
+  {
+   "id": "BSD7B-ARI-0014",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD7B!D38",
+   "terms": [
+    "BSD7B.R35.ptd",
+    "BSD7B.R36.ptd",
+    "BSD7B.R37.ptd"
+   ],
+   "tolerance": "0.02",
+   "description": "BSD7B!D38 follows the template formula =SUM(D35:D37)"
+  },
+  {
+   "id": "BSD7B-ARI-0015",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD7B!C42",
+   "terms": [
+    "BSD7B!C26"
+   ],
+   "tolerance": "0.035",
+   "description": "BSD7B!C42 follows the template formula =C26-C34-C38-C39-C40-C41",
+   "subtract": [
+    "BSD7B!C34",
+    "BSD7B!C38",
+    "BSD7B.R39.quarter",
+    "BSD7B.R40.quarter",
+    "BSD7B.R41.quarter"
+   ]
+  },
+  {
+   "id": "BSD7B-ARI-0016",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD7B!D42",
+   "terms": [
+    "BSD7B!D26"
+   ],
+   "tolerance": "0.035",
+   "description": "BSD7B!D42 follows the template formula =D26-D34-D38-D39-D40-D41",
+   "subtract": [
+    "BSD7B!D34",
+    "BSD7B!D38",
+    "BSD7B.R39.ptd",
+    "BSD7B.R40.ptd",
+    "BSD7B.R41.ptd"
+   ]
+  },
+  {
+   "id": "BSD7B-ARI-0017",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD7B!C44",
+   "terms": [
+    "BSD7B!C42"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD7B!C44 follows the template formula =C42-C43",
+   "subtract": [
+    "BSD7B.R43.quarter"
+   ]
+  },
+  {
+   "id": "BSD7B-ARI-0018",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD7B!D44",
+   "terms": [
+    "BSD7B!D42"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD7B!D44 follows the template formula =D42-D43",
+   "subtract": [
+    "BSD7B.R43.ptd"
+   ]
+  },
+  {
+   "id": "BSD7B-ARI-0019",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD7B!C46",
+   "terms": [
+    "BSD7B!C44"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD7B!C46 follows the template formula =C44-C45",
+   "subtract": [
+    "BSD7B.R45.quarter"
+   ]
+  },
+  {
+   "id": "BSD7B-ARI-0020",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD7B!D46",
+   "terms": [
+    "BSD7B!D44"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD7B!D46 follows the template formula =D44-D45",
+   "subtract": [
+    "BSD7B.R45.ptd"
+   ]
+  },
+  {
+   "id": "BSD7B-ARI-0021",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD7B!C48",
+   "terms": [
+    "BSD7B!C46"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD7B!C48 follows the template formula =C46-C47",
+   "subtract": [
+    "BSD7B.R47.quarter"
+   ]
+  },
+  {
+   "id": "BSD7B-ARI-0022",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD7B!D48",
+   "terms": [
+    "BSD7B!D46"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD7B!D48 follows the template formula =D46-D47",
+   "subtract": [
+    "BSD7B.R47.ptd"
+   ]
+  },
+  {
+   "id": "BSD7B-ARI-0023",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD7B!C52",
+   "terms": [
+    "BSD7B!C48",
+    "BSD7B.R49.quarter",
+    "BSD7B.R50.quarter",
+    "BSD7B.R51.quarter"
+   ],
+   "tolerance": "0.025",
+   "description": "BSD7B!C52 follows the template formula =SUM(C48:C51)"
+  },
+  {
+   "id": "BSD7B-ARI-0024",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD7B!D52",
+   "terms": [
+    "BSD7B!D48",
+    "BSD7B.R49.ptd",
+    "BSD7B.R50.ptd",
+    "BSD7B.R51.ptd"
+   ],
+   "tolerance": "0.025",
+   "description": "BSD7B!D52 follows the template formula =SUM(D48:D51)"
+  }
+ ]
+}

@@ -1,0 +1,10 @@
+# The gateway's own workspace. It is deliberately separate from the AequorOS
+# root workspace so gateway/ can move to its own repository unchanged.
+packages:
+  - "portal"
+  - "packages/*"
+
+allowBuilds:
+  unrs-resolver: true
+
+engineStrict: true

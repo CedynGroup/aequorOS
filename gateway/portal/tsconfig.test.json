@@ -1,0 +1,15 @@
+{
+  "//": "Node-runnable build of the portal's tests under tests/. The app itself is type-checked by tsconfig.json (noEmit); this config emits the pure modules the tests exercise (no 'server-only' imports) to .test-out/, which the `test` script deletes.",
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": false,
+    "incremental": false,
+    "module": "commonjs",
+    "moduleResolution": "node",
+    "jsx": "react-jsx",
+    "rootDir": ".",
+    "outDir": ".test-out",
+    "types": ["node"]
+  },
+  "include": ["tests/**/*.test.ts"]
+}

@@ -1,0 +1,12 @@
+# deps / build output
+node_modules
+.next
+*.tsbuildinfo
+next-env.d.ts
+# Transient emit for the node:test suites (`pnpm test` deletes it, but a
+# failing run leaves it behind).
+/.test-out/
+
+# local env (.env.example documents the variables)
+.env*
+!.env.example

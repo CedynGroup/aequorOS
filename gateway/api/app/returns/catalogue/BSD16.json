@@ -1,0 +1,2370 @@
+{
+ "format": "aequoros-gateway-return/1",
+ "code": "BSD16",
+ "name": "Automated Teller Machine Operations",
+ "cadence": "monthly",
+ "basis": "solo",
+ "applies_to": [
+  "universal_bank"
+ ],
+ "version": "2026.2",
+ "first_reporting_date": "2025-01-01",
+ "source": {
+  "system": "AequorOS",
+  "template": "bog-bsd16-official-v1",
+  "fidelity": "CONFIRMED",
+  "workbook": "FORM BSD16 REVISED.xls"
+ },
+ "sections": [
+  {
+   "code": "sheet_monthly_atm_operations",
+   "title": "MONTHLY ATM OPERATIONS",
+   "unit": "millions",
+   "itemised": false,
+   "lines": [
+    {
+     "code": "BSD16.serial.R7.serial",
+     "label": "row 7",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD16.station.R7.station",
+     "label": "row 7",
+     "kind": "value"
+    },
+    {
+     "code": "BSD16.cards.R7.cards_issued",
+     "label": "row 7",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD16.min.R7.min_withdrawal",
+     "label": "row 7",
+     "kind": "number"
+    },
+    {
+     "code": "BSD16.max.R7.max_withdrawal",
+     "label": "row 7",
+     "kind": "number"
+    },
+    {
+     "code": "MONTHLY ATM OPERATIONS!F7",
+     "label": "Cell F7",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD16.serial.R8.serial",
+     "label": "row 8",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD16.station.R8.station",
+     "label": "row 8",
+     "kind": "value"
+    },
+    {
+     "code": "BSD16.cards.R8.cards_issued",
+     "label": "row 8",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD16.min.R8.min_withdrawal",
+     "label": "row 8",
+     "kind": "number"
+    },
+    {
+     "code": "BSD16.max.R8.max_withdrawal",
+     "label": "row 8",
+     "kind": "number"
+    },
+    {
+     "code": "MONTHLY ATM OPERATIONS!F8",
+     "label": "Cell F8",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD16.serial.R9.serial",
+     "label": "row 9",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD16.station.R9.station",
+     "label": "row 9",
+     "kind": "value"
+    },
+    {
+     "code": "BSD16.cards.R9.cards_issued",
+     "label": "row 9",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD16.min.R9.min_withdrawal",
+     "label": "row 9",
+     "kind": "number"
+    },
+    {
+     "code": "BSD16.max.R9.max_withdrawal",
+     "label": "row 9",
+     "kind": "number"
+    },
+    {
+     "code": "MONTHLY ATM OPERATIONS!F9",
+     "label": "Cell F9",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD16.serial.R10.serial",
+     "label": "row 10",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD16.station.R10.station",
+     "label": "row 10",
+     "kind": "value"
+    },
+    {
+     "code": "BSD16.cards.R10.cards_issued",
+     "label": "row 10",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD16.min.R10.min_withdrawal",
+     "label": "row 10",
+     "kind": "number"
+    },
+    {
+     "code": "BSD16.max.R10.max_withdrawal",
+     "label": "row 10",
+     "kind": "number"
+    },
+    {
+     "code": "MONTHLY ATM OPERATIONS!F10",
+     "label": "Cell F10",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD16.serial.R11.serial",
+     "label": "row 11",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD16.station.R11.station",
+     "label": "row 11",
+     "kind": "value"
+    },
+    {
+     "code": "BSD16.cards.R11.cards_issued",
+     "label": "row 11",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD16.min.R11.min_withdrawal",
+     "label": "row 11",
+     "kind": "number"
+    },
+    {
+     "code": "BSD16.max.R11.max_withdrawal",
+     "label": "row 11",
+     "kind": "number"
+    },
+    {
+     "code": "MONTHLY ATM OPERATIONS!F11",
+     "label": "Cell F11",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD16.serial.R12.serial",
+     "label": "row 12",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD16.station.R12.station",
+     "label": "row 12",
+     "kind": "value"
+    },
+    {
+     "code": "BSD16.cards.R12.cards_issued",
+     "label": "row 12",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD16.min.R12.min_withdrawal",
+     "label": "row 12",
+     "kind": "number"
+    },
+    {
+     "code": "BSD16.max.R12.max_withdrawal",
+     "label": "row 12",
+     "kind": "number"
+    },
+    {
+     "code": "MONTHLY ATM OPERATIONS!F12",
+     "label": "Cell F12",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD16.serial.R13.serial",
+     "label": "row 13",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD16.station.R13.station",
+     "label": "row 13",
+     "kind": "value"
+    },
+    {
+     "code": "BSD16.cards.R13.cards_issued",
+     "label": "row 13",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD16.min.R13.min_withdrawal",
+     "label": "row 13",
+     "kind": "number"
+    },
+    {
+     "code": "BSD16.max.R13.max_withdrawal",
+     "label": "row 13",
+     "kind": "number"
+    },
+    {
+     "code": "MONTHLY ATM OPERATIONS!F13",
+     "label": "Cell F13",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD16.serial.R14.serial",
+     "label": "row 14",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD16.station.R14.station",
+     "label": "row 14",
+     "kind": "value"
+    },
+    {
+     "code": "BSD16.cards.R14.cards_issued",
+     "label": "row 14",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD16.min.R14.min_withdrawal",
+     "label": "row 14",
+     "kind": "number"
+    },
+    {
+     "code": "BSD16.max.R14.max_withdrawal",
+     "label": "row 14",
+     "kind": "number"
+    },
+    {
+     "code": "MONTHLY ATM OPERATIONS!F14",
+     "label": "Cell F14",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD16.serial.R15.serial",
+     "label": "row 15",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD16.station.R15.station",
+     "label": "row 15",
+     "kind": "value"
+    },
+    {
+     "code": "BSD16.cards.R15.cards_issued",
+     "label": "row 15",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD16.min.R15.min_withdrawal",
+     "label": "row 15",
+     "kind": "number"
+    },
+    {
+     "code": "BSD16.max.R15.max_withdrawal",
+     "label": "row 15",
+     "kind": "number"
+    },
+    {
+     "code": "MONTHLY ATM OPERATIONS!F15",
+     "label": "Cell F15",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD16.serial.R16.serial",
+     "label": "row 16",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD16.station.R16.station",
+     "label": "row 16",
+     "kind": "value"
+    },
+    {
+     "code": "BSD16.cards.R16.cards_issued",
+     "label": "row 16",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD16.min.R16.min_withdrawal",
+     "label": "row 16",
+     "kind": "number"
+    },
+    {
+     "code": "BSD16.max.R16.max_withdrawal",
+     "label": "row 16",
+     "kind": "number"
+    },
+    {
+     "code": "MONTHLY ATM OPERATIONS!F16",
+     "label": "Cell F16",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD16.serial.R17.serial",
+     "label": "row 17",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD16.station.R17.station",
+     "label": "row 17",
+     "kind": "value"
+    },
+    {
+     "code": "BSD16.cards.R17.cards_issued",
+     "label": "row 17",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD16.min.R17.min_withdrawal",
+     "label": "row 17",
+     "kind": "number"
+    },
+    {
+     "code": "BSD16.max.R17.max_withdrawal",
+     "label": "row 17",
+     "kind": "number"
+    },
+    {
+     "code": "MONTHLY ATM OPERATIONS!F17",
+     "label": "Cell F17",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD16.serial.R18.serial",
+     "label": "row 18",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD16.station.R18.station",
+     "label": "row 18",
+     "kind": "value"
+    },
+    {
+     "code": "BSD16.cards.R18.cards_issued",
+     "label": "row 18",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD16.min.R18.min_withdrawal",
+     "label": "row 18",
+     "kind": "number"
+    },
+    {
+     "code": "BSD16.max.R18.max_withdrawal",
+     "label": "row 18",
+     "kind": "number"
+    },
+    {
+     "code": "MONTHLY ATM OPERATIONS!F18",
+     "label": "Cell F18",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD16.serial.R19.serial",
+     "label": "row 19",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD16.station.R19.station",
+     "label": "row 19",
+     "kind": "value"
+    },
+    {
+     "code": "BSD16.cards.R19.cards_issued",
+     "label": "row 19",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD16.min.R19.min_withdrawal",
+     "label": "row 19",
+     "kind": "number"
+    },
+    {
+     "code": "BSD16.max.R19.max_withdrawal",
+     "label": "row 19",
+     "kind": "number"
+    },
+    {
+     "code": "MONTHLY ATM OPERATIONS!F19",
+     "label": "Cell F19",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD16.serial.R20.serial",
+     "label": "row 20",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD16.station.R20.station",
+     "label": "row 20",
+     "kind": "value"
+    },
+    {
+     "code": "BSD16.cards.R20.cards_issued",
+     "label": "row 20",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD16.min.R20.min_withdrawal",
+     "label": "row 20",
+     "kind": "number"
+    },
+    {
+     "code": "BSD16.max.R20.max_withdrawal",
+     "label": "row 20",
+     "kind": "number"
+    },
+    {
+     "code": "MONTHLY ATM OPERATIONS!F20",
+     "label": "Cell F20",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD16.serial.R21.serial",
+     "label": "row 21",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD16.station.R21.station",
+     "label": "row 21",
+     "kind": "value"
+    },
+    {
+     "code": "BSD16.cards.R21.cards_issued",
+     "label": "row 21",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD16.min.R21.min_withdrawal",
+     "label": "row 21",
+     "kind": "number"
+    },
+    {
+     "code": "BSD16.max.R21.max_withdrawal",
+     "label": "row 21",
+     "kind": "number"
+    },
+    {
+     "code": "MONTHLY ATM OPERATIONS!F21",
+     "label": "Cell F21",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD16.serial.R22.serial",
+     "label": "row 22",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD16.station.R22.station",
+     "label": "row 22",
+     "kind": "value"
+    },
+    {
+     "code": "BSD16.cards.R22.cards_issued",
+     "label": "row 22",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD16.min.R22.min_withdrawal",
+     "label": "row 22",
+     "kind": "number"
+    },
+    {
+     "code": "BSD16.max.R22.max_withdrawal",
+     "label": "row 22",
+     "kind": "number"
+    },
+    {
+     "code": "MONTHLY ATM OPERATIONS!F22",
+     "label": "Cell F22",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD16.serial.R23.serial",
+     "label": "row 23",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD16.station.R23.station",
+     "label": "row 23",
+     "kind": "value"
+    },
+    {
+     "code": "BSD16.cards.R23.cards_issued",
+     "label": "row 23",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD16.min.R23.min_withdrawal",
+     "label": "row 23",
+     "kind": "number"
+    },
+    {
+     "code": "BSD16.max.R23.max_withdrawal",
+     "label": "row 23",
+     "kind": "number"
+    },
+    {
+     "code": "MONTHLY ATM OPERATIONS!F23",
+     "label": "Cell F23",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD16.serial.R24.serial",
+     "label": "row 24",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD16.station.R24.station",
+     "label": "row 24",
+     "kind": "value"
+    },
+    {
+     "code": "BSD16.cards.R24.cards_issued",
+     "label": "row 24",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD16.min.R24.min_withdrawal",
+     "label": "row 24",
+     "kind": "number"
+    },
+    {
+     "code": "BSD16.max.R24.max_withdrawal",
+     "label": "row 24",
+     "kind": "number"
+    },
+    {
+     "code": "MONTHLY ATM OPERATIONS!F24",
+     "label": "Cell F24",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD16.serial.R25.serial",
+     "label": "row 25",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD16.station.R25.station",
+     "label": "row 25",
+     "kind": "value"
+    },
+    {
+     "code": "BSD16.cards.R25.cards_issued",
+     "label": "row 25",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD16.min.R25.min_withdrawal",
+     "label": "row 25",
+     "kind": "number"
+    },
+    {
+     "code": "BSD16.max.R25.max_withdrawal",
+     "label": "row 25",
+     "kind": "number"
+    },
+    {
+     "code": "MONTHLY ATM OPERATIONS!F25",
+     "label": "Cell F25",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD16.serial.R26.serial",
+     "label": "row 26",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD16.station.R26.station",
+     "label": "row 26",
+     "kind": "value"
+    },
+    {
+     "code": "BSD16.cards.R26.cards_issued",
+     "label": "row 26",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD16.min.R26.min_withdrawal",
+     "label": "row 26",
+     "kind": "number"
+    },
+    {
+     "code": "BSD16.max.R26.max_withdrawal",
+     "label": "row 26",
+     "kind": "number"
+    },
+    {
+     "code": "MONTHLY ATM OPERATIONS!F26",
+     "label": "Cell F26",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD16.serial.R27.serial",
+     "label": "row 27",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD16.station.R27.station",
+     "label": "row 27",
+     "kind": "value"
+    },
+    {
+     "code": "BSD16.cards.R27.cards_issued",
+     "label": "row 27",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD16.min.R27.min_withdrawal",
+     "label": "row 27",
+     "kind": "number"
+    },
+    {
+     "code": "BSD16.max.R27.max_withdrawal",
+     "label": "row 27",
+     "kind": "number"
+    },
+    {
+     "code": "MONTHLY ATM OPERATIONS!F27",
+     "label": "Cell F27",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD16.serial.R28.serial",
+     "label": "row 28",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD16.station.R28.station",
+     "label": "row 28",
+     "kind": "value"
+    },
+    {
+     "code": "BSD16.cards.R28.cards_issued",
+     "label": "row 28",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD16.min.R28.min_withdrawal",
+     "label": "row 28",
+     "kind": "number"
+    },
+    {
+     "code": "BSD16.max.R28.max_withdrawal",
+     "label": "row 28",
+     "kind": "number"
+    },
+    {
+     "code": "MONTHLY ATM OPERATIONS!F28",
+     "label": "Cell F28",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD16.serial.R29.serial",
+     "label": "row 29",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD16.station.R29.station",
+     "label": "row 29",
+     "kind": "value"
+    },
+    {
+     "code": "BSD16.cards.R29.cards_issued",
+     "label": "row 29",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD16.min.R29.min_withdrawal",
+     "label": "row 29",
+     "kind": "number"
+    },
+    {
+     "code": "BSD16.max.R29.max_withdrawal",
+     "label": "row 29",
+     "kind": "number"
+    },
+    {
+     "code": "MONTHLY ATM OPERATIONS!F29",
+     "label": "Cell F29",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD16.serial.R30.serial",
+     "label": "row 30",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD16.station.R30.station",
+     "label": "row 30",
+     "kind": "value"
+    },
+    {
+     "code": "BSD16.cards.R30.cards_issued",
+     "label": "row 30",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD16.min.R30.min_withdrawal",
+     "label": "row 30",
+     "kind": "number"
+    },
+    {
+     "code": "BSD16.max.R30.max_withdrawal",
+     "label": "row 30",
+     "kind": "number"
+    },
+    {
+     "code": "MONTHLY ATM OPERATIONS!F30",
+     "label": "Cell F30",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD16.serial.R31.serial",
+     "label": "row 31",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD16.station.R31.station",
+     "label": "row 31",
+     "kind": "value"
+    },
+    {
+     "code": "BSD16.cards.R31.cards_issued",
+     "label": "row 31",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD16.min.R31.min_withdrawal",
+     "label": "row 31",
+     "kind": "number"
+    },
+    {
+     "code": "BSD16.max.R31.max_withdrawal",
+     "label": "row 31",
+     "kind": "number"
+    },
+    {
+     "code": "MONTHLY ATM OPERATIONS!F31",
+     "label": "Cell F31",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD16.serial.R32.serial",
+     "label": "row 32",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD16.station.R32.station",
+     "label": "row 32",
+     "kind": "value"
+    },
+    {
+     "code": "BSD16.cards.R32.cards_issued",
+     "label": "row 32",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD16.min.R32.min_withdrawal",
+     "label": "row 32",
+     "kind": "number"
+    },
+    {
+     "code": "BSD16.max.R32.max_withdrawal",
+     "label": "row 32",
+     "kind": "number"
+    },
+    {
+     "code": "MONTHLY ATM OPERATIONS!F32",
+     "label": "Cell F32",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD16.serial.R33.serial",
+     "label": "row 33",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD16.station.R33.station",
+     "label": "row 33",
+     "kind": "value"
+    },
+    {
+     "code": "BSD16.cards.R33.cards_issued",
+     "label": "row 33",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD16.min.R33.min_withdrawal",
+     "label": "row 33",
+     "kind": "number"
+    },
+    {
+     "code": "BSD16.max.R33.max_withdrawal",
+     "label": "row 33",
+     "kind": "number"
+    },
+    {
+     "code": "MONTHLY ATM OPERATIONS!F33",
+     "label": "Cell F33",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD16.serial.R34.serial",
+     "label": "row 34",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD16.station.R34.station",
+     "label": "row 34",
+     "kind": "value"
+    },
+    {
+     "code": "BSD16.cards.R34.cards_issued",
+     "label": "row 34",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD16.min.R34.min_withdrawal",
+     "label": "row 34",
+     "kind": "number"
+    },
+    {
+     "code": "BSD16.max.R34.max_withdrawal",
+     "label": "row 34",
+     "kind": "number"
+    },
+    {
+     "code": "MONTHLY ATM OPERATIONS!F34",
+     "label": "Cell F34",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD16.serial.R35.serial",
+     "label": "row 35",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD16.station.R35.station",
+     "label": "row 35",
+     "kind": "value"
+    },
+    {
+     "code": "BSD16.cards.R35.cards_issued",
+     "label": "row 35",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD16.min.R35.min_withdrawal",
+     "label": "row 35",
+     "kind": "number"
+    },
+    {
+     "code": "BSD16.max.R35.max_withdrawal",
+     "label": "row 35",
+     "kind": "number"
+    },
+    {
+     "code": "MONTHLY ATM OPERATIONS!F35",
+     "label": "Cell F35",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD16.serial.R36.serial",
+     "label": "row 36",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD16.station.R36.station",
+     "label": "row 36",
+     "kind": "value"
+    },
+    {
+     "code": "BSD16.cards.R36.cards_issued",
+     "label": "row 36",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD16.min.R36.min_withdrawal",
+     "label": "row 36",
+     "kind": "number"
+    },
+    {
+     "code": "BSD16.max.R36.max_withdrawal",
+     "label": "row 36",
+     "kind": "number"
+    },
+    {
+     "code": "MONTHLY ATM OPERATIONS!F36",
+     "label": "Cell F36",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD16.serial.R37.serial",
+     "label": "row 37",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD16.station.R37.station",
+     "label": "row 37",
+     "kind": "value"
+    },
+    {
+     "code": "BSD16.cards.R37.cards_issued",
+     "label": "row 37",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD16.min.R37.min_withdrawal",
+     "label": "row 37",
+     "kind": "number"
+    },
+    {
+     "code": "BSD16.max.R37.max_withdrawal",
+     "label": "row 37",
+     "kind": "number"
+    },
+    {
+     "code": "MONTHLY ATM OPERATIONS!F37",
+     "label": "Cell F37",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD16.serial.R38.serial",
+     "label": "row 38",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD16.station.R38.station",
+     "label": "row 38",
+     "kind": "value"
+    },
+    {
+     "code": "BSD16.cards.R38.cards_issued",
+     "label": "row 38",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD16.min.R38.min_withdrawal",
+     "label": "row 38",
+     "kind": "number"
+    },
+    {
+     "code": "BSD16.max.R38.max_withdrawal",
+     "label": "row 38",
+     "kind": "number"
+    },
+    {
+     "code": "MONTHLY ATM OPERATIONS!F38",
+     "label": "Cell F38",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD16.serial.R39.serial",
+     "label": "row 39",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD16.station.R39.station",
+     "label": "row 39",
+     "kind": "value"
+    },
+    {
+     "code": "BSD16.cards.R39.cards_issued",
+     "label": "row 39",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD16.min.R39.min_withdrawal",
+     "label": "row 39",
+     "kind": "number"
+    },
+    {
+     "code": "BSD16.max.R39.max_withdrawal",
+     "label": "row 39",
+     "kind": "number"
+    },
+    {
+     "code": "MONTHLY ATM OPERATIONS!F39",
+     "label": "Cell F39",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD16.serial.R40.serial",
+     "label": "row 40",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD16.station.R40.station",
+     "label": "row 40",
+     "kind": "value"
+    },
+    {
+     "code": "BSD16.cards.R40.cards_issued",
+     "label": "row 40",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD16.min.R40.min_withdrawal",
+     "label": "row 40",
+     "kind": "number"
+    },
+    {
+     "code": "BSD16.max.R40.max_withdrawal",
+     "label": "row 40",
+     "kind": "number"
+    },
+    {
+     "code": "MONTHLY ATM OPERATIONS!F40",
+     "label": "Cell F40",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD16.serial.R41.serial",
+     "label": "row 41",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD16.station.R41.station",
+     "label": "row 41",
+     "kind": "value"
+    },
+    {
+     "code": "BSD16.cards.R41.cards_issued",
+     "label": "row 41",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD16.min.R41.min_withdrawal",
+     "label": "row 41",
+     "kind": "number"
+    },
+    {
+     "code": "BSD16.max.R41.max_withdrawal",
+     "label": "row 41",
+     "kind": "number"
+    },
+    {
+     "code": "MONTHLY ATM OPERATIONS!F41",
+     "label": "Cell F41",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD16.serial.R42.serial",
+     "label": "row 42",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD16.station.R42.station",
+     "label": "row 42",
+     "kind": "value"
+    },
+    {
+     "code": "BSD16.cards.R42.cards_issued",
+     "label": "row 42",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD16.min.R42.min_withdrawal",
+     "label": "row 42",
+     "kind": "number"
+    },
+    {
+     "code": "BSD16.max.R42.max_withdrawal",
+     "label": "row 42",
+     "kind": "number"
+    },
+    {
+     "code": "MONTHLY ATM OPERATIONS!F42",
+     "label": "Cell F42",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD16.serial.R43.serial",
+     "label": "row 43",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD16.station.R43.station",
+     "label": "row 43",
+     "kind": "value"
+    },
+    {
+     "code": "BSD16.cards.R43.cards_issued",
+     "label": "row 43",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD16.min.R43.min_withdrawal",
+     "label": "row 43",
+     "kind": "number"
+    },
+    {
+     "code": "BSD16.max.R43.max_withdrawal",
+     "label": "row 43",
+     "kind": "number"
+    },
+    {
+     "code": "MONTHLY ATM OPERATIONS!F43",
+     "label": "Cell F43",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD16.serial.R44.serial",
+     "label": "row 44",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD16.station.R44.station",
+     "label": "row 44",
+     "kind": "value"
+    },
+    {
+     "code": "BSD16.cards.R44.cards_issued",
+     "label": "row 44",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD16.min.R44.min_withdrawal",
+     "label": "row 44",
+     "kind": "number"
+    },
+    {
+     "code": "BSD16.max.R44.max_withdrawal",
+     "label": "row 44",
+     "kind": "number"
+    },
+    {
+     "code": "MONTHLY ATM OPERATIONS!F44",
+     "label": "Cell F44",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD16.serial.R45.serial",
+     "label": "row 45",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD16.station.R45.station",
+     "label": "row 45",
+     "kind": "value"
+    },
+    {
+     "code": "BSD16.cards.R45.cards_issued",
+     "label": "row 45",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD16.min.R45.min_withdrawal",
+     "label": "row 45",
+     "kind": "number"
+    },
+    {
+     "code": "BSD16.max.R45.max_withdrawal",
+     "label": "row 45",
+     "kind": "number"
+    },
+    {
+     "code": "MONTHLY ATM OPERATIONS!F45",
+     "label": "Cell F45",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD16.serial.R46.serial",
+     "label": "row 46",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD16.station.R46.station",
+     "label": "row 46",
+     "kind": "value"
+    },
+    {
+     "code": "BSD16.cards.R46.cards_issued",
+     "label": "row 46",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD16.min.R46.min_withdrawal",
+     "label": "row 46",
+     "kind": "number"
+    },
+    {
+     "code": "BSD16.max.R46.max_withdrawal",
+     "label": "row 46",
+     "kind": "number"
+    },
+    {
+     "code": "MONTHLY ATM OPERATIONS!F46",
+     "label": "Cell F46",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD16.serial.R47.serial",
+     "label": "row 47",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD16.station.R47.station",
+     "label": "row 47",
+     "kind": "value"
+    },
+    {
+     "code": "BSD16.cards.R47.cards_issued",
+     "label": "row 47",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD16.min.R47.min_withdrawal",
+     "label": "row 47",
+     "kind": "number"
+    },
+    {
+     "code": "BSD16.max.R47.max_withdrawal",
+     "label": "row 47",
+     "kind": "number"
+    },
+    {
+     "code": "MONTHLY ATM OPERATIONS!F47",
+     "label": "Cell F47",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD16.serial.R48.serial",
+     "label": "row 48",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD16.station.R48.station",
+     "label": "row 48",
+     "kind": "value"
+    },
+    {
+     "code": "BSD16.cards.R48.cards_issued",
+     "label": "row 48",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD16.min.R48.min_withdrawal",
+     "label": "row 48",
+     "kind": "number"
+    },
+    {
+     "code": "BSD16.max.R48.max_withdrawal",
+     "label": "row 48",
+     "kind": "number"
+    },
+    {
+     "code": "MONTHLY ATM OPERATIONS!F48",
+     "label": "Cell F48",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD16.serial.R49.serial",
+     "label": "row 49",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD16.station.R49.station",
+     "label": "row 49",
+     "kind": "value"
+    },
+    {
+     "code": "BSD16.cards.R49.cards_issued",
+     "label": "row 49",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD16.min.R49.min_withdrawal",
+     "label": "row 49",
+     "kind": "number"
+    },
+    {
+     "code": "BSD16.max.R49.max_withdrawal",
+     "label": "row 49",
+     "kind": "number"
+    },
+    {
+     "code": "MONTHLY ATM OPERATIONS!F49",
+     "label": "Cell F49",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD16.serial.R50.serial",
+     "label": "row 50",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD16.station.R50.station",
+     "label": "row 50",
+     "kind": "value"
+    },
+    {
+     "code": "BSD16.cards.R50.cards_issued",
+     "label": "row 50",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD16.min.R50.min_withdrawal",
+     "label": "row 50",
+     "kind": "number"
+    },
+    {
+     "code": "BSD16.max.R50.max_withdrawal",
+     "label": "row 50",
+     "kind": "number"
+    },
+    {
+     "code": "MONTHLY ATM OPERATIONS!F50",
+     "label": "Cell F50",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD16.serial.R51.serial",
+     "label": "row 51",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD16.station.R51.station",
+     "label": "row 51",
+     "kind": "value"
+    },
+    {
+     "code": "BSD16.cards.R51.cards_issued",
+     "label": "row 51",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD16.min.R51.min_withdrawal",
+     "label": "row 51",
+     "kind": "number"
+    },
+    {
+     "code": "BSD16.max.R51.max_withdrawal",
+     "label": "row 51",
+     "kind": "number"
+    },
+    {
+     "code": "MONTHLY ATM OPERATIONS!F51",
+     "label": "Cell F51",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD16.serial.R52.serial",
+     "label": "row 52",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD16.station.R52.station",
+     "label": "row 52",
+     "kind": "value"
+    },
+    {
+     "code": "BSD16.cards.R52.cards_issued",
+     "label": "row 52",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD16.min.R52.min_withdrawal",
+     "label": "row 52",
+     "kind": "number"
+    },
+    {
+     "code": "BSD16.max.R52.max_withdrawal",
+     "label": "row 52",
+     "kind": "number"
+    },
+    {
+     "code": "MONTHLY ATM OPERATIONS!F52",
+     "label": "Cell F52",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD16.serial.R53.serial",
+     "label": "row 53",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD16.station.R53.station",
+     "label": "row 53",
+     "kind": "value"
+    },
+    {
+     "code": "BSD16.cards.R53.cards_issued",
+     "label": "row 53",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD16.min.R53.min_withdrawal",
+     "label": "row 53",
+     "kind": "number"
+    },
+    {
+     "code": "BSD16.max.R53.max_withdrawal",
+     "label": "row 53",
+     "kind": "number"
+    },
+    {
+     "code": "MONTHLY ATM OPERATIONS!F53",
+     "label": "Cell F53",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD16.serial.R54.serial",
+     "label": "row 54",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD16.station.R54.station",
+     "label": "row 54",
+     "kind": "value"
+    },
+    {
+     "code": "BSD16.cards.R54.cards_issued",
+     "label": "row 54",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD16.min.R54.min_withdrawal",
+     "label": "row 54",
+     "kind": "number"
+    },
+    {
+     "code": "BSD16.max.R54.max_withdrawal",
+     "label": "row 54",
+     "kind": "number"
+    },
+    {
+     "code": "MONTHLY ATM OPERATIONS!F54",
+     "label": "Cell F54",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD16.serial.R55.serial",
+     "label": "row 55",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD16.station.R55.station",
+     "label": "row 55",
+     "kind": "value"
+    },
+    {
+     "code": "BSD16.cards.R55.cards_issued",
+     "label": "row 55",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD16.min.R55.min_withdrawal",
+     "label": "row 55",
+     "kind": "number"
+    },
+    {
+     "code": "BSD16.max.R55.max_withdrawal",
+     "label": "row 55",
+     "kind": "number"
+    },
+    {
+     "code": "MONTHLY ATM OPERATIONS!F55",
+     "label": "Cell F55",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD16.serial.R56.serial",
+     "label": "row 56",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD16.station.R56.station",
+     "label": "row 56",
+     "kind": "value"
+    },
+    {
+     "code": "BSD16.cards.R56.cards_issued",
+     "label": "row 56",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD16.min.R56.min_withdrawal",
+     "label": "row 56",
+     "kind": "number"
+    },
+    {
+     "code": "BSD16.max.R56.max_withdrawal",
+     "label": "row 56",
+     "kind": "number"
+    },
+    {
+     "code": "MONTHLY ATM OPERATIONS!F56",
+     "label": "Cell F56",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD16.total.min.R57.min_withdrawal",
+     "label": "TOTAL",
+     "kind": "value"
+    },
+    {
+     "code": "BSD16.total.max.R57.max_withdrawal",
+     "label": "TOTAL",
+     "kind": "value"
+    },
+    {
+     "code": "MONTHLY ATM OPERATIONS!F57",
+     "label": "TOTAL",
+     "kind": "number",
+     "total": true
+    }
+   ]
+  },
+  {
+   "code": "sheet_sheet2",
+   "title": "Sheet2",
+   "unit": "millions",
+   "itemised": false,
+   "lines": []
+  },
+  {
+   "code": "sheet_sheet3",
+   "title": "Sheet3",
+   "unit": "millions",
+   "itemised": false,
+   "lines": []
+  }
+ ],
+ "rules": [
+  {
+   "id": "BSD16-ARI-0001",
+   "severity": "error",
+   "kind": "sum",
+   "target": "MONTHLY ATM OPERATIONS!F7",
+   "terms": [
+    "BSD16.min.R7.min_withdrawal",
+    "BSD16.max.R7.max_withdrawal"
+   ],
+   "tolerance": "0.015",
+   "description": "MONTHLY ATM OPERATIONS!F7 follows the template formula =D7+E7"
+  },
+  {
+   "id": "BSD16-ARI-0002",
+   "severity": "error",
+   "kind": "sum",
+   "target": "MONTHLY ATM OPERATIONS!F8",
+   "terms": [
+    "BSD16.min.R8.min_withdrawal",
+    "BSD16.max.R8.max_withdrawal"
+   ],
+   "tolerance": "0.015",
+   "description": "MONTHLY ATM OPERATIONS!F8 follows the template formula =D8+E8"
+  },
+  {
+   "id": "BSD16-ARI-0003",
+   "severity": "error",
+   "kind": "sum",
+   "target": "MONTHLY ATM OPERATIONS!F9",
+   "terms": [
+    "BSD16.min.R9.min_withdrawal",
+    "BSD16.max.R9.max_withdrawal"
+   ],
+   "tolerance": "0.015",
+   "description": "MONTHLY ATM OPERATIONS!F9 follows the template formula =D9+E9"
+  },
+  {
+   "id": "BSD16-ARI-0004",
+   "severity": "error",
+   "kind": "sum",
+   "target": "MONTHLY ATM OPERATIONS!F10",
+   "terms": [
+    "BSD16.min.R10.min_withdrawal",
+    "BSD16.max.R10.max_withdrawal"
+   ],
+   "tolerance": "0.015",
+   "description": "MONTHLY ATM OPERATIONS!F10 follows the template formula =D10+E10"
+  },
+  {
+   "id": "BSD16-ARI-0005",
+   "severity": "error",
+   "kind": "sum",
+   "target": "MONTHLY ATM OPERATIONS!F11",
+   "terms": [
+    "BSD16.min.R11.min_withdrawal",
+    "BSD16.max.R11.max_withdrawal"
+   ],
+   "tolerance": "0.015",
+   "description": "MONTHLY ATM OPERATIONS!F11 follows the template formula =D11+E11"
+  },
+  {
+   "id": "BSD16-ARI-0006",
+   "severity": "error",
+   "kind": "sum",
+   "target": "MONTHLY ATM OPERATIONS!F12",
+   "terms": [
+    "BSD16.min.R12.min_withdrawal",
+    "BSD16.max.R12.max_withdrawal"
+   ],
+   "tolerance": "0.015",
+   "description": "MONTHLY ATM OPERATIONS!F12 follows the template formula =D12+E12"
+  },
+  {
+   "id": "BSD16-ARI-0007",
+   "severity": "error",
+   "kind": "sum",
+   "target": "MONTHLY ATM OPERATIONS!F13",
+   "terms": [
+    "BSD16.min.R13.min_withdrawal",
+    "BSD16.max.R13.max_withdrawal"
+   ],
+   "tolerance": "0.015",
+   "description": "MONTHLY ATM OPERATIONS!F13 follows the template formula =D13+E13"
+  },
+  {
+   "id": "BSD16-ARI-0008",
+   "severity": "error",
+   "kind": "sum",
+   "target": "MONTHLY ATM OPERATIONS!F14",
+   "terms": [
+    "BSD16.min.R14.min_withdrawal",
+    "BSD16.max.R14.max_withdrawal"
+   ],
+   "tolerance": "0.015",
+   "description": "MONTHLY ATM OPERATIONS!F14 follows the template formula =D14+E14"
+  },
+  {
+   "id": "BSD16-ARI-0009",
+   "severity": "error",
+   "kind": "sum",
+   "target": "MONTHLY ATM OPERATIONS!F15",
+   "terms": [
+    "BSD16.min.R15.min_withdrawal",
+    "BSD16.max.R15.max_withdrawal"
+   ],
+   "tolerance": "0.015",
+   "description": "MONTHLY ATM OPERATIONS!F15 follows the template formula =D15+E15"
+  },
+  {
+   "id": "BSD16-ARI-0010",
+   "severity": "error",
+   "kind": "sum",
+   "target": "MONTHLY ATM OPERATIONS!F16",
+   "terms": [
+    "BSD16.min.R16.min_withdrawal",
+    "BSD16.max.R16.max_withdrawal"
+   ],
+   "tolerance": "0.015",
+   "description": "MONTHLY ATM OPERATIONS!F16 follows the template formula =D16+E16"
+  },
+  {
+   "id": "BSD16-ARI-0011",
+   "severity": "error",
+   "kind": "sum",
+   "target": "MONTHLY ATM OPERATIONS!F17",
+   "terms": [
+    "BSD16.min.R17.min_withdrawal",
+    "BSD16.max.R17.max_withdrawal"
+   ],
+   "tolerance": "0.015",
+   "description": "MONTHLY ATM OPERATIONS!F17 follows the template formula =D17+E17"
+  },
+  {
+   "id": "BSD16-ARI-0012",
+   "severity": "error",
+   "kind": "sum",
+   "target": "MONTHLY ATM OPERATIONS!F18",
+   "terms": [
+    "BSD16.min.R18.min_withdrawal",
+    "BSD16.max.R18.max_withdrawal"
+   ],
+   "tolerance": "0.015",
+   "description": "MONTHLY ATM OPERATIONS!F18 follows the template formula =D18+E18"
+  },
+  {
+   "id": "BSD16-ARI-0013",
+   "severity": "error",
+   "kind": "sum",
+   "target": "MONTHLY ATM OPERATIONS!F19",
+   "terms": [
+    "BSD16.min.R19.min_withdrawal",
+    "BSD16.max.R19.max_withdrawal"
+   ],
+   "tolerance": "0.015",
+   "description": "MONTHLY ATM OPERATIONS!F19 follows the template formula =D19+E19"
+  },
+  {
+   "id": "BSD16-ARI-0014",
+   "severity": "error",
+   "kind": "sum",
+   "target": "MONTHLY ATM OPERATIONS!F20",
+   "terms": [
+    "BSD16.min.R20.min_withdrawal",
+    "BSD16.max.R20.max_withdrawal"
+   ],
+   "tolerance": "0.015",
+   "description": "MONTHLY ATM OPERATIONS!F20 follows the template formula =D20+E20"
+  },
+  {
+   "id": "BSD16-ARI-0015",
+   "severity": "error",
+   "kind": "sum",
+   "target": "MONTHLY ATM OPERATIONS!F21",
+   "terms": [
+    "BSD16.min.R21.min_withdrawal",
+    "BSD16.max.R21.max_withdrawal"
+   ],
+   "tolerance": "0.015",
+   "description": "MONTHLY ATM OPERATIONS!F21 follows the template formula =D21+E21"
+  },
+  {
+   "id": "BSD16-ARI-0016",
+   "severity": "error",
+   "kind": "sum",
+   "target": "MONTHLY ATM OPERATIONS!F22",
+   "terms": [
+    "BSD16.min.R22.min_withdrawal",
+    "BSD16.max.R22.max_withdrawal"
+   ],
+   "tolerance": "0.015",
+   "description": "MONTHLY ATM OPERATIONS!F22 follows the template formula =D22+E22"
+  },
+  {
+   "id": "BSD16-ARI-0017",
+   "severity": "error",
+   "kind": "sum",
+   "target": "MONTHLY ATM OPERATIONS!F23",
+   "terms": [
+    "BSD16.min.R23.min_withdrawal",
+    "BSD16.max.R23.max_withdrawal"
+   ],
+   "tolerance": "0.015",
+   "description": "MONTHLY ATM OPERATIONS!F23 follows the template formula =D23+E23"
+  },
+  {
+   "id": "BSD16-ARI-0018",
+   "severity": "error",
+   "kind": "sum",
+   "target": "MONTHLY ATM OPERATIONS!F24",
+   "terms": [
+    "BSD16.min.R24.min_withdrawal",
+    "BSD16.max.R24.max_withdrawal"
+   ],
+   "tolerance": "0.015",
+   "description": "MONTHLY ATM OPERATIONS!F24 follows the template formula =D24+E24"
+  },
+  {
+   "id": "BSD16-ARI-0019",
+   "severity": "error",
+   "kind": "sum",
+   "target": "MONTHLY ATM OPERATIONS!F25",
+   "terms": [
+    "BSD16.min.R25.min_withdrawal",
+    "BSD16.max.R25.max_withdrawal"
+   ],
+   "tolerance": "0.015",
+   "description": "MONTHLY ATM OPERATIONS!F25 follows the template formula =D25+E25"
+  },
+  {
+   "id": "BSD16-ARI-0020",
+   "severity": "error",
+   "kind": "sum",
+   "target": "MONTHLY ATM OPERATIONS!F26",
+   "terms": [
+    "BSD16.min.R26.min_withdrawal",
+    "BSD16.max.R26.max_withdrawal"
+   ],
+   "tolerance": "0.015",
+   "description": "MONTHLY ATM OPERATIONS!F26 follows the template formula =D26+E26"
+  },
+  {
+   "id": "BSD16-ARI-0021",
+   "severity": "error",
+   "kind": "sum",
+   "target": "MONTHLY ATM OPERATIONS!F27",
+   "terms": [
+    "BSD16.min.R27.min_withdrawal",
+    "BSD16.max.R27.max_withdrawal"
+   ],
+   "tolerance": "0.015",
+   "description": "MONTHLY ATM OPERATIONS!F27 follows the template formula =D27+E27"
+  },
+  {
+   "id": "BSD16-ARI-0022",
+   "severity": "error",
+   "kind": "sum",
+   "target": "MONTHLY ATM OPERATIONS!F28",
+   "terms": [
+    "BSD16.min.R28.min_withdrawal",
+    "BSD16.max.R28.max_withdrawal"
+   ],
+   "tolerance": "0.015",
+   "description": "MONTHLY ATM OPERATIONS!F28 follows the template formula =D28+E28"
+  },
+  {
+   "id": "BSD16-ARI-0023",
+   "severity": "error",
+   "kind": "sum",
+   "target": "MONTHLY ATM OPERATIONS!F29",
+   "terms": [
+    "BSD16.min.R29.min_withdrawal",
+    "BSD16.max.R29.max_withdrawal"
+   ],
+   "tolerance": "0.015",
+   "description": "MONTHLY ATM OPERATIONS!F29 follows the template formula =D29+E29"
+  },
+  {
+   "id": "BSD16-ARI-0024",
+   "severity": "error",
+   "kind": "sum",
+   "target": "MONTHLY ATM OPERATIONS!F30",
+   "terms": [
+    "BSD16.min.R30.min_withdrawal",
+    "BSD16.max.R30.max_withdrawal"
+   ],
+   "tolerance": "0.015",
+   "description": "MONTHLY ATM OPERATIONS!F30 follows the template formula =D30+E30"
+  },
+  {
+   "id": "BSD16-ARI-0025",
+   "severity": "error",
+   "kind": "sum",
+   "target": "MONTHLY ATM OPERATIONS!F31",
+   "terms": [
+    "BSD16.min.R31.min_withdrawal",
+    "BSD16.max.R31.max_withdrawal"
+   ],
+   "tolerance": "0.015",
+   "description": "MONTHLY ATM OPERATIONS!F31 follows the template formula =D31+E31"
+  },
+  {
+   "id": "BSD16-ARI-0026",
+   "severity": "error",
+   "kind": "sum",
+   "target": "MONTHLY ATM OPERATIONS!F32",
+   "terms": [
+    "BSD16.min.R32.min_withdrawal",
+    "BSD16.max.R32.max_withdrawal"
+   ],
+   "tolerance": "0.015",
+   "description": "MONTHLY ATM OPERATIONS!F32 follows the template formula =D32+E32"
+  },
+  {
+   "id": "BSD16-ARI-0027",
+   "severity": "error",
+   "kind": "sum",
+   "target": "MONTHLY ATM OPERATIONS!F33",
+   "terms": [
+    "BSD16.min.R33.min_withdrawal",
+    "BSD16.max.R33.max_withdrawal"
+   ],
+   "tolerance": "0.015",
+   "description": "MONTHLY ATM OPERATIONS!F33 follows the template formula =D33+E33"
+  },
+  {
+   "id": "BSD16-ARI-0028",
+   "severity": "error",
+   "kind": "sum",
+   "target": "MONTHLY ATM OPERATIONS!F34",
+   "terms": [
+    "BSD16.min.R34.min_withdrawal",
+    "BSD16.max.R34.max_withdrawal"
+   ],
+   "tolerance": "0.015",
+   "description": "MONTHLY ATM OPERATIONS!F34 follows the template formula =D34+E34"
+  },
+  {
+   "id": "BSD16-ARI-0029",
+   "severity": "error",
+   "kind": "sum",
+   "target": "MONTHLY ATM OPERATIONS!F35",
+   "terms": [
+    "BSD16.min.R35.min_withdrawal",
+    "BSD16.max.R35.max_withdrawal"
+   ],
+   "tolerance": "0.015",
+   "description": "MONTHLY ATM OPERATIONS!F35 follows the template formula =D35+E35"
+  },
+  {
+   "id": "BSD16-ARI-0030",
+   "severity": "error",
+   "kind": "sum",
+   "target": "MONTHLY ATM OPERATIONS!F36",
+   "terms": [
+    "BSD16.min.R36.min_withdrawal",
+    "BSD16.max.R36.max_withdrawal"
+   ],
+   "tolerance": "0.015",
+   "description": "MONTHLY ATM OPERATIONS!F36 follows the template formula =D36+E36"
+  },
+  {
+   "id": "BSD16-ARI-0031",
+   "severity": "error",
+   "kind": "sum",
+   "target": "MONTHLY ATM OPERATIONS!F37",
+   "terms": [
+    "BSD16.min.R37.min_withdrawal",
+    "BSD16.max.R37.max_withdrawal"
+   ],
+   "tolerance": "0.015",
+   "description": "MONTHLY ATM OPERATIONS!F37 follows the template formula =D37+E37"
+  },
+  {
+   "id": "BSD16-ARI-0032",
+   "severity": "error",
+   "kind": "sum",
+   "target": "MONTHLY ATM OPERATIONS!F38",
+   "terms": [
+    "BSD16.min.R38.min_withdrawal",
+    "BSD16.max.R38.max_withdrawal"
+   ],
+   "tolerance": "0.015",
+   "description": "MONTHLY ATM OPERATIONS!F38 follows the template formula =D38+E38"
+  },
+  {
+   "id": "BSD16-ARI-0033",
+   "severity": "error",
+   "kind": "sum",
+   "target": "MONTHLY ATM OPERATIONS!F39",
+   "terms": [
+    "BSD16.min.R39.min_withdrawal",
+    "BSD16.max.R39.max_withdrawal"
+   ],
+   "tolerance": "0.015",
+   "description": "MONTHLY ATM OPERATIONS!F39 follows the template formula =D39+E39"
+  },
+  {
+   "id": "BSD16-ARI-0034",
+   "severity": "error",
+   "kind": "sum",
+   "target": "MONTHLY ATM OPERATIONS!F40",
+   "terms": [
+    "BSD16.min.R40.min_withdrawal",
+    "BSD16.max.R40.max_withdrawal"
+   ],
+   "tolerance": "0.015",
+   "description": "MONTHLY ATM OPERATIONS!F40 follows the template formula =D40+E40"
+  },
+  {
+   "id": "BSD16-ARI-0035",
+   "severity": "error",
+   "kind": "sum",
+   "target": "MONTHLY ATM OPERATIONS!F41",
+   "terms": [
+    "BSD16.min.R41.min_withdrawal",
+    "BSD16.max.R41.max_withdrawal"
+   ],
+   "tolerance": "0.015",
+   "description": "MONTHLY ATM OPERATIONS!F41 follows the template formula =D41+E41"
+  },
+  {
+   "id": "BSD16-ARI-0036",
+   "severity": "error",
+   "kind": "sum",
+   "target": "MONTHLY ATM OPERATIONS!F42",
+   "terms": [
+    "BSD16.min.R42.min_withdrawal",
+    "BSD16.max.R42.max_withdrawal"
+   ],
+   "tolerance": "0.015",
+   "description": "MONTHLY ATM OPERATIONS!F42 follows the template formula =D42+E42"
+  },
+  {
+   "id": "BSD16-ARI-0037",
+   "severity": "error",
+   "kind": "sum",
+   "target": "MONTHLY ATM OPERATIONS!F43",
+   "terms": [
+    "BSD16.min.R43.min_withdrawal",
+    "BSD16.max.R43.max_withdrawal"
+   ],
+   "tolerance": "0.015",
+   "description": "MONTHLY ATM OPERATIONS!F43 follows the template formula =D43+E43"
+  },
+  {
+   "id": "BSD16-ARI-0038",
+   "severity": "error",
+   "kind": "sum",
+   "target": "MONTHLY ATM OPERATIONS!F44",
+   "terms": [
+    "BSD16.min.R44.min_withdrawal",
+    "BSD16.max.R44.max_withdrawal"
+   ],
+   "tolerance": "0.015",
+   "description": "MONTHLY ATM OPERATIONS!F44 follows the template formula =D44+E44"
+  },
+  {
+   "id": "BSD16-ARI-0039",
+   "severity": "error",
+   "kind": "sum",
+   "target": "MONTHLY ATM OPERATIONS!F45",
+   "terms": [
+    "BSD16.min.R45.min_withdrawal",
+    "BSD16.max.R45.max_withdrawal"
+   ],
+   "tolerance": "0.015",
+   "description": "MONTHLY ATM OPERATIONS!F45 follows the template formula =D45+E45"
+  },
+  {
+   "id": "BSD16-ARI-0040",
+   "severity": "error",
+   "kind": "sum",
+   "target": "MONTHLY ATM OPERATIONS!F46",
+   "terms": [
+    "BSD16.min.R46.min_withdrawal",
+    "BSD16.max.R46.max_withdrawal"
+   ],
+   "tolerance": "0.015",
+   "description": "MONTHLY ATM OPERATIONS!F46 follows the template formula =D46+E46"
+  },
+  {
+   "id": "BSD16-ARI-0041",
+   "severity": "error",
+   "kind": "sum",
+   "target": "MONTHLY ATM OPERATIONS!F47",
+   "terms": [
+    "BSD16.min.R47.min_withdrawal",
+    "BSD16.max.R47.max_withdrawal"
+   ],
+   "tolerance": "0.015",
+   "description": "MONTHLY ATM OPERATIONS!F47 follows the template formula =D47+E47"
+  },
+  {
+   "id": "BSD16-ARI-0042",
+   "severity": "error",
+   "kind": "sum",
+   "target": "MONTHLY ATM OPERATIONS!F48",
+   "terms": [
+    "BSD16.min.R48.min_withdrawal",
+    "BSD16.max.R48.max_withdrawal"
+   ],
+   "tolerance": "0.015",
+   "description": "MONTHLY ATM OPERATIONS!F48 follows the template formula =D48+E48"
+  },
+  {
+   "id": "BSD16-ARI-0043",
+   "severity": "error",
+   "kind": "sum",
+   "target": "MONTHLY ATM OPERATIONS!F49",
+   "terms": [
+    "BSD16.min.R49.min_withdrawal",
+    "BSD16.max.R49.max_withdrawal"
+   ],
+   "tolerance": "0.015",
+   "description": "MONTHLY ATM OPERATIONS!F49 follows the template formula =D49+E49"
+  },
+  {
+   "id": "BSD16-ARI-0044",
+   "severity": "error",
+   "kind": "sum",
+   "target": "MONTHLY ATM OPERATIONS!F50",
+   "terms": [
+    "BSD16.min.R50.min_withdrawal",
+    "BSD16.max.R50.max_withdrawal"
+   ],
+   "tolerance": "0.015",
+   "description": "MONTHLY ATM OPERATIONS!F50 follows the template formula =D50+E50"
+  },
+  {
+   "id": "BSD16-ARI-0045",
+   "severity": "error",
+   "kind": "sum",
+   "target": "MONTHLY ATM OPERATIONS!F51",
+   "terms": [
+    "BSD16.min.R51.min_withdrawal",
+    "BSD16.max.R51.max_withdrawal"
+   ],
+   "tolerance": "0.015",
+   "description": "MONTHLY ATM OPERATIONS!F51 follows the template formula =D51+E51"
+  },
+  {
+   "id": "BSD16-ARI-0046",
+   "severity": "error",
+   "kind": "sum",
+   "target": "MONTHLY ATM OPERATIONS!F52",
+   "terms": [
+    "BSD16.min.R52.min_withdrawal",
+    "BSD16.max.R52.max_withdrawal"
+   ],
+   "tolerance": "0.015",
+   "description": "MONTHLY ATM OPERATIONS!F52 follows the template formula =D52+E52"
+  },
+  {
+   "id": "BSD16-ARI-0047",
+   "severity": "error",
+   "kind": "sum",
+   "target": "MONTHLY ATM OPERATIONS!F53",
+   "terms": [
+    "BSD16.min.R53.min_withdrawal",
+    "BSD16.max.R53.max_withdrawal"
+   ],
+   "tolerance": "0.015",
+   "description": "MONTHLY ATM OPERATIONS!F53 follows the template formula =D53+E53"
+  },
+  {
+   "id": "BSD16-ARI-0048",
+   "severity": "error",
+   "kind": "sum",
+   "target": "MONTHLY ATM OPERATIONS!F54",
+   "terms": [
+    "BSD16.min.R54.min_withdrawal",
+    "BSD16.max.R54.max_withdrawal"
+   ],
+   "tolerance": "0.015",
+   "description": "MONTHLY ATM OPERATIONS!F54 follows the template formula =D54+E54"
+  },
+  {
+   "id": "BSD16-ARI-0049",
+   "severity": "error",
+   "kind": "sum",
+   "target": "MONTHLY ATM OPERATIONS!F55",
+   "terms": [
+    "BSD16.min.R55.min_withdrawal",
+    "BSD16.max.R55.max_withdrawal"
+   ],
+   "tolerance": "0.015",
+   "description": "MONTHLY ATM OPERATIONS!F55 follows the template formula =D55+E55"
+  },
+  {
+   "id": "BSD16-ARI-0050",
+   "severity": "error",
+   "kind": "sum",
+   "target": "MONTHLY ATM OPERATIONS!F56",
+   "terms": [
+    "BSD16.min.R56.min_withdrawal",
+    "BSD16.max.R56.max_withdrawal"
+   ],
+   "tolerance": "0.015",
+   "description": "MONTHLY ATM OPERATIONS!F56 follows the template formula =D56+E56"
+  },
+  {
+   "id": "BSD16-ARI-0051",
+   "severity": "error",
+   "kind": "sum",
+   "target": "MONTHLY ATM OPERATIONS!F57",
+   "terms": [
+    "MONTHLY ATM OPERATIONS!F7",
+    "MONTHLY ATM OPERATIONS!F8",
+    "MONTHLY ATM OPERATIONS!F9",
+    "MONTHLY ATM OPERATIONS!F10",
+    "MONTHLY ATM OPERATIONS!F11",
+    "MONTHLY ATM OPERATIONS!F12",
+    "MONTHLY ATM OPERATIONS!F13",
+    "MONTHLY ATM OPERATIONS!F14",
+    "MONTHLY ATM OPERATIONS!F15",
+    "MONTHLY ATM OPERATIONS!F16",
+    "MONTHLY ATM OPERATIONS!F17",
+    "MONTHLY ATM OPERATIONS!F18",
+    "MONTHLY ATM OPERATIONS!F19",
+    "MONTHLY ATM OPERATIONS!F20",
+    "MONTHLY ATM OPERATIONS!F21",
+    "MONTHLY ATM OPERATIONS!F22",
+    "MONTHLY ATM OPERATIONS!F23",
+    "MONTHLY ATM OPERATIONS!F24",
+    "MONTHLY ATM OPERATIONS!F25",
+    "MONTHLY ATM OPERATIONS!F26",
+    "MONTHLY ATM OPERATIONS!F27",
+    "MONTHLY ATM OPERATIONS!F28",
+    "MONTHLY ATM OPERATIONS!F29",
+    "MONTHLY ATM OPERATIONS!F30",
+    "MONTHLY ATM OPERATIONS!F31",
+    "MONTHLY ATM OPERATIONS!F32",
+    "MONTHLY ATM OPERATIONS!F33",
+    "MONTHLY ATM OPERATIONS!F34",
+    "MONTHLY ATM OPERATIONS!F35",
+    "MONTHLY ATM OPERATIONS!F36",
+    "MONTHLY ATM OPERATIONS!F37",
+    "MONTHLY ATM OPERATIONS!F38",
+    "MONTHLY ATM OPERATIONS!F39",
+    "MONTHLY ATM OPERATIONS!F40",
+    "MONTHLY ATM OPERATIONS!F41",
+    "MONTHLY ATM OPERATIONS!F42",
+    "MONTHLY ATM OPERATIONS!F43",
+    "MONTHLY ATM OPERATIONS!F44",
+    "MONTHLY ATM OPERATIONS!F45",
+    "MONTHLY ATM OPERATIONS!F46",
+    "MONTHLY ATM OPERATIONS!F47",
+    "MONTHLY ATM OPERATIONS!F48",
+    "MONTHLY ATM OPERATIONS!F49",
+    "MONTHLY ATM OPERATIONS!F50",
+    "MONTHLY ATM OPERATIONS!F51",
+    "MONTHLY ATM OPERATIONS!F52",
+    "MONTHLY ATM OPERATIONS!F53",
+    "MONTHLY ATM OPERATIONS!F54",
+    "MONTHLY ATM OPERATIONS!F55",
+    "MONTHLY ATM OPERATIONS!F56"
+   ],
+   "tolerance": "0.255",
+   "description": "MONTHLY ATM OPERATIONS!F57 follows the template formula =SUM(F7:F56)"
+  }
+ ]
+}

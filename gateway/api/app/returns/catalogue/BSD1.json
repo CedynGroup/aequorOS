@@ -1,0 +1,6481 @@
+{
+ "format": "aequoros-gateway-return/1",
+ "code": "BSD1",
+ "name": "Liquidity Reserve Return",
+ "cadence": "weekly",
+ "basis": "solo",
+ "applies_to": [
+  "universal_bank"
+ ],
+ "version": "2026.2",
+ "first_reporting_date": "2025-01-01",
+ "source": {
+  "system": "AequorOS",
+  "template": "bog-bsd1-official-v1",
+  "fidelity": "CONFIRMED",
+  "workbook": "FORM BSD1 REVISED.xls"
+ },
+ "sections": [
+  {
+   "code": "sheet_bsd1",
+   "title": "BSD1 ",
+   "unit": "millions",
+   "itemised": false,
+   "lines": [
+    {
+     "code": "BSD1.R10.thu",
+     "label": "1. Demand — Thursday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R10.fri",
+     "label": "1. Demand — Friday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R10.sat",
+     "label": "1. Demand — Saturday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R10.sun",
+     "label": "1. Demand — Sunday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R10.mon",
+     "label": "1. Demand — Monday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R10.tue",
+     "label": "1. Demand — Tuesday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R10.wed",
+     "label": "1. Demand — Wednesday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1 !I10",
+     "label": "1. Demand",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD1.R11.thu",
+     "label": "2. Time — Thursday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R11.fri",
+     "label": "2. Time — Friday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R11.sat",
+     "label": "2. Time — Saturday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R11.sun",
+     "label": "2. Time — Sunday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R11.mon",
+     "label": "2. Time — Monday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R11.tue",
+     "label": "2. Time — Tuesday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R11.wed",
+     "label": "2. Time — Wednesday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1 !I11",
+     "label": "2. Time",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD1.R12.thu",
+     "label": "3. Savings — Thursday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R12.fri",
+     "label": "3. Savings — Friday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R12.sat",
+     "label": "3. Savings — Saturday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R12.sun",
+     "label": "3. Savings — Sunday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R12.mon",
+     "label": "3. Savings — Monday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R12.tue",
+     "label": "3. Savings — Tuesday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R12.wed",
+     "label": "3. Savings — Wednesday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1 !I12",
+     "label": "3. Savings",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD1.R13.thu",
+     "label": "4. Certificate of Deposits — Thursday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R13.fri",
+     "label": "4. Certificate of Deposits — Friday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R13.sat",
+     "label": "4. Certificate of Deposits — Saturday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R13.sun",
+     "label": "4. Certificate of Deposits — Sunday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R13.mon",
+     "label": "4. Certificate of Deposits — Monday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R13.tue",
+     "label": "4. Certificate of Deposits — Tuesday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R13.wed",
+     "label": "4. Certificate of Deposits — Wednesday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1 !I13",
+     "label": "4. Certificate of Deposits",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD1.R14.thu",
+     "label": "5. Special Deposits — Thursday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R14.fri",
+     "label": "5. Special Deposits — Friday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R14.sat",
+     "label": "5. Special Deposits — Saturday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R14.sun",
+     "label": "5. Special Deposits — Sunday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R14.mon",
+     "label": "5. Special Deposits — Monday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R14.tue",
+     "label": "5. Special Deposits — Tuesday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R14.wed",
+     "label": "5. Special Deposits — Wednesday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1 !I14",
+     "label": "5. Special Deposits",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD1.R15.thu",
+     "label": "6. Margins against contingent liabilities — Thursday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R15.fri",
+     "label": "6. Margins against contingent liabilities — Friday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R15.sat",
+     "label": "6. Margins against contingent liabilities — Saturday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R15.sun",
+     "label": "6. Margins against contingent liabilities — Sunday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R15.mon",
+     "label": "6. Margins against contingent liabilities — Monday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R15.tue",
+     "label": "6. Margins against contingent liabilities — Tuesday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R15.wed",
+     "label": "6. Margins against contingent liabilities — Wednesday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1 !I15",
+     "label": "6. Margins against contingent liabilities",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD1 !B16",
+     "label": "7. Sub-Total Domestic Currency Deposits(1+2+3+4+5+6)",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD1 !C16",
+     "label": "7. Sub-Total Domestic Currency Deposits(1+2+3+4+5+6)",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD1 !D16",
+     "label": "7. Sub-Total Domestic Currency Deposits(1+2+3+4+5+6)",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD1 !E16",
+     "label": "7. Sub-Total Domestic Currency Deposits(1+2+3+4+5+6)",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD1 !F16",
+     "label": "7. Sub-Total Domestic Currency Deposits(1+2+3+4+5+6)",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD1 !G16",
+     "label": "7. Sub-Total Domestic Currency Deposits(1+2+3+4+5+6)",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD1 !H16",
+     "label": "7. Sub-Total Domestic Currency Deposits(1+2+3+4+5+6)",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD1 !I16",
+     "label": "7. Sub-Total Domestic Currency Deposits(1+2+3+4+5+6)",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD1.R18.thu",
+     "label": "8. Foreign Currency Deposits — Thursday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R18.fri",
+     "label": "8. Foreign Currency Deposits — Friday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R18.sat",
+     "label": "8. Foreign Currency Deposits — Saturday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R18.sun",
+     "label": "8. Foreign Currency Deposits — Sunday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R18.mon",
+     "label": "8. Foreign Currency Deposits — Monday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R18.tue",
+     "label": "8. Foreign Currency Deposits — Tuesday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R18.wed",
+     "label": "8. Foreign Currency Deposits — Wednesday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1 !I18",
+     "label": "8. Foreign Currency Deposits",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD1.R19.thu",
+     "label": "9. Special Deposits — Thursday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R19.fri",
+     "label": "9. Special Deposits — Friday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R19.sat",
+     "label": "9. Special Deposits — Saturday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R19.sun",
+     "label": "9. Special Deposits — Sunday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R19.mon",
+     "label": "9. Special Deposits — Monday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R19.tue",
+     "label": "9. Special Deposits — Tuesday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R19.wed",
+     "label": "9. Special Deposits — Wednesday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1 !I19",
+     "label": "9. Special Deposits",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD1.R20.thu",
+     "label": "10. Margins against contingent liabilities — Thursday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R20.fri",
+     "label": "10. Margins against contingent liabilities — Friday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R20.sat",
+     "label": "10. Margins against contingent liabilities — Saturday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R20.sun",
+     "label": "10. Margins against contingent liabilities — Sunday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R20.mon",
+     "label": "10. Margins against contingent liabilities — Monday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R20.tue",
+     "label": "10. Margins against contingent liabilities — Tuesday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R20.wed",
+     "label": "10. Margins against contingent liabilities — Wednesday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1 !I20",
+     "label": "10. Margins against contingent liabilities",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD1 !B21",
+     "label": "11. Sub-Total Foreign Currency Deposits (8+9+10)",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD1 !C21",
+     "label": "11. Sub-Total Foreign Currency Deposits (8+9+10)",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD1 !D21",
+     "label": "11. Sub-Total Foreign Currency Deposits (8+9+10)",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD1 !E21",
+     "label": "11. Sub-Total Foreign Currency Deposits (8+9+10)",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD1 !F21",
+     "label": "11. Sub-Total Foreign Currency Deposits (8+9+10)",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD1 !G21",
+     "label": "11. Sub-Total Foreign Currency Deposits (8+9+10)",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD1 !H21",
+     "label": "11. Sub-Total Foreign Currency Deposits (8+9+10)",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD1 !I21",
+     "label": "11. Sub-Total Foreign Currency Deposits (8+9+10)",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD1 !B22",
+     "label": "12. Total (Domestic + Foreign) Deposit Liabilities (7+11)",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD1 !C22",
+     "label": "12. Total (Domestic + Foreign) Deposit Liabilities (7+11)",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD1 !D22",
+     "label": "12. Total (Domestic + Foreign) Deposit Liabilities (7+11)",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD1 !E22",
+     "label": "12. Total (Domestic + Foreign) Deposit Liabilities (7+11)",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD1 !F22",
+     "label": "12. Total (Domestic + Foreign) Deposit Liabilities (7+11)",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD1 !G22",
+     "label": "12. Total (Domestic + Foreign) Deposit Liabilities (7+11)",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD1 !H22",
+     "label": "12. Total (Domestic + Foreign) Deposit Liabilities (7+11)",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD1 !I22",
+     "label": "12. Total (Domestic + Foreign) Deposit Liabilities (7+11)",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD1.R23.thu",
+     "label": "13. Interest Accrued(Domestic Currency Deposits) — Thursday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R23.fri",
+     "label": "13. Interest Accrued(Domestic Currency Deposits) — Friday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R23.sat",
+     "label": "13. Interest Accrued(Domestic Currency Deposits) — Saturday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R23.sun",
+     "label": "13. Interest Accrued(Domestic Currency Deposits) — Sunday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R23.mon",
+     "label": "13. Interest Accrued(Domestic Currency Deposits) — Monday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R23.tue",
+     "label": "13. Interest Accrued(Domestic Currency Deposits) — Tuesday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R23.wed",
+     "label": "13. Interest Accrued(Domestic Currency Deposits) — Wednesday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1 !I23",
+     "label": "13. Interest Accrued(Domestic Currency Deposits)",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD1.R24.thu",
+     "label": "14. Interest Accrued(Foreign Currency Deposits) — Thursday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R24.fri",
+     "label": "14. Interest Accrued(Foreign Currency Deposits) — Friday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R24.sat",
+     "label": "14. Interest Accrued(Foreign Currency Deposits) — Saturday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R24.sun",
+     "label": "14. Interest Accrued(Foreign Currency Deposits) — Sunday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R24.mon",
+     "label": "14. Interest Accrued(Foreign Currency Deposits) — Monday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R24.tue",
+     "label": "14. Interest Accrued(Foreign Currency Deposits) — Tuesday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R24.wed",
+     "label": "14. Interest Accrued(Foreign Currency Deposits) — Wednesday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1 !I24",
+     "label": "14. Interest Accrued(Foreign Currency Deposits)",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD1 !B25",
+     "label": "15. Total Accrued Interest(13+14)",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD1 !C25",
+     "label": "15. Total Accrued Interest(13+14)",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD1 !D25",
+     "label": "15. Total Accrued Interest(13+14)",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD1 !E25",
+     "label": "15. Total Accrued Interest(13+14)",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD1 !F25",
+     "label": "15. Total Accrued Interest(13+14)",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD1 !G25",
+     "label": "15. Total Accrued Interest(13+14)",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD1 !H25",
+     "label": "15. Total Accrued Interest(13+14)",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD1 !I25",
+     "label": "15. Total Accrued Interest(13+14)",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD1 !K25",
+     "label": "15. Total Accrued Interest(13+14)",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD1 !B26",
+     "label": "16. Grand Total (12+15)",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD1 !C26",
+     "label": "16. Grand Total (12+15)",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD1 !D26",
+     "label": "16. Grand Total (12+15)",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD1 !E26",
+     "label": "16. Grand Total (12+15)",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD1 !F26",
+     "label": "16. Grand Total (12+15)",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD1 !G26",
+     "label": "16. Grand Total (12+15)",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD1 !H26",
+     "label": "16. Grand Total (12+15)",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD1 !I26",
+     "label": "16. Grand Total (12+15)",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD1.R32.thu",
+     "label": "17. Cash on hand — Thursday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R32.fri",
+     "label": "17. Cash on hand — Friday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R32.sat",
+     "label": "17. Cash on hand — Saturday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R32.sun",
+     "label": "17. Cash on hand — Sunday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R32.mon",
+     "label": "17. Cash on hand — Monday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R32.tue",
+     "label": "17. Cash on hand — Tuesday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R32.wed",
+     "label": "17. Cash on hand — Wednesday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1 !I32",
+     "label": "17. Cash on hand",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD1.R33.thu",
+     "label": "18. Current A/C (domestic) - Bank of Ghana — Thursday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R33.fri",
+     "label": "18. Current A/C (domestic) - Bank of Ghana — Friday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R33.sat",
+     "label": "18. Current A/C (domestic) - Bank of Ghana — Saturday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R33.sun",
+     "label": "18. Current A/C (domestic) - Bank of Ghana — Sunday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R33.mon",
+     "label": "18. Current A/C (domestic) - Bank of Ghana — Monday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R33.tue",
+     "label": "18. Current A/C (domestic) - Bank of Ghana — Tuesday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R33.wed",
+     "label": "18. Current A/C (domestic) - Bank of Ghana — Wednesday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1 !I33",
+     "label": "18. Current A/C (domestic) - Bank of Ghana",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD1.R34.thu",
+     "label": "19. Current A/C (foreign) - Bank of Ghana — Thursday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R34.fri",
+     "label": "19. Current A/C (foreign) - Bank of Ghana — Friday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R34.sat",
+     "label": "19. Current A/C (foreign) - Bank of Ghana — Saturday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R34.sun",
+     "label": "19. Current A/C (foreign) - Bank of Ghana — Sunday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R34.mon",
+     "label": "19. Current A/C (foreign) - Bank of Ghana — Monday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R34.tue",
+     "label": "19. Current A/C (foreign) - Bank of Ghana — Tuesday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R34.wed",
+     "label": "19. Current A/C (foreign) - Bank of Ghana — Wednesday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1 !I34",
+     "label": "19. Current A/C (foreign) - Bank of Ghana",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD1 !B35",
+     "label": "20. Total Current A/C-Bank of Ghana (18+19)",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD1 !C35",
+     "label": "20. Total Current A/C-Bank of Ghana (18+19)",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD1 !D35",
+     "label": "20. Total Current A/C-Bank of Ghana (18+19)",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD1 !E35",
+     "label": "20. Total Current A/C-Bank of Ghana (18+19)",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD1 !F35",
+     "label": "20. Total Current A/C-Bank of Ghana (18+19)",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD1 !G35",
+     "label": "20. Total Current A/C-Bank of Ghana (18+19)",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD1 !H35",
+     "label": "20. Total Current A/C-Bank of Ghana (18+19)",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD1 !I35",
+     "label": "20. Total Current A/C-Bank of Ghana (18+19)",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD1 !B36",
+     "label": "21. Sub-total (17+20)",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD1 !C36",
+     "label": "21. Sub-total (17+20)",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD1 !D36",
+     "label": "21. Sub-total (17+20)",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD1 !E36",
+     "label": "21. Sub-total (17+20)",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD1 !F36",
+     "label": "21. Sub-total (17+20)",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD1 !G36",
+     "label": "21. Sub-total (17+20)",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD1 !H36",
+     "label": "21. Sub-total (17+20)",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD1 !I36",
+     "label": "21. Sub-total (17+20)",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD1.R39.thu",
+     "label": "22. Call money with Discount Houses — Thursday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R39.fri",
+     "label": "22. Call money with Discount Houses — Friday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R39.sat",
+     "label": "22. Call money with Discount Houses — Saturday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R39.sun",
+     "label": "22. Call money with Discount Houses — Sunday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R39.mon",
+     "label": "22. Call money with Discount Houses — Monday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R39.tue",
+     "label": "22. Call money with Discount Houses — Tuesday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R39.wed",
+     "label": "22. Call money with Discount Houses — Wednesday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1 !I39",
+     "label": "22. Call money with Discount Houses",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD1 !B40",
+     "label": "23. Commodity Bills",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD1 !C40",
+     "label": "23. Commodity Bills",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD1 !D40",
+     "label": "23. Commodity Bills",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD1 !E40",
+     "label": "23. Commodity Bills",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD1 !F40",
+     "label": "23. Commodity Bills",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD1 !G40",
+     "label": "23. Commodity Bills",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD1 !H40",
+     "label": "23. Commodity Bills",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD1 !I40",
+     "label": "23. Commodity Bills",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD1.R41.thu",
+     "label": "-Cocoa — Thursday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R41.fri",
+     "label": "-Cocoa — Friday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R41.sat",
+     "label": "-Cocoa — Saturday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R41.sun",
+     "label": "-Cocoa — Sunday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R41.mon",
+     "label": "-Cocoa — Monday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R41.tue",
+     "label": "-Cocoa — Tuesday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R41.wed",
+     "label": "-Cocoa — Wednesday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1 !I41",
+     "label": "-Cocoa",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD1.R42.thu",
+     "label": "-Cotton — Thursday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R42.fri",
+     "label": "-Cotton — Friday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R42.sat",
+     "label": "-Cotton — Saturday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R42.sun",
+     "label": "-Cotton — Sunday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R42.mon",
+     "label": "-Cotton — Monday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R42.tue",
+     "label": "-Cotton — Tuesday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R42.wed",
+     "label": "-Cotton — Wednesday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1 !I42",
+     "label": "-Cotton",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD1.R43.thu",
+     "label": "-Grain — Thursday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R43.fri",
+     "label": "-Grain — Friday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R43.sat",
+     "label": "-Grain — Saturday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R43.sun",
+     "label": "-Grain — Sunday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R43.mon",
+     "label": "-Grain — Monday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R43.tue",
+     "label": "-Grain — Tuesday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R43.wed",
+     "label": "-Grain — Wednesday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1 !I43",
+     "label": "-Grain",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD1 !B44",
+     "label": "24. Bank of Ghana Bills/Bonds",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD1 !C44",
+     "label": "24. Bank of Ghana Bills/Bonds",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD1 !D44",
+     "label": "24. Bank of Ghana Bills/Bonds",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD1 !E44",
+     "label": "24. Bank of Ghana Bills/Bonds",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD1 !F44",
+     "label": "24. Bank of Ghana Bills/Bonds",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD1 !G44",
+     "label": "24. Bank of Ghana Bills/Bonds",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD1 !H44",
+     "label": "24. Bank of Ghana Bills/Bonds",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD1 !I44",
+     "label": "24. Bank of Ghana Bills/Bonds",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD1.R45.thu",
+     "label": "-28-day — Thursday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R45.fri",
+     "label": "-28-day — Friday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R45.sat",
+     "label": "-28-day — Saturday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R45.sun",
+     "label": "-28-day — Sunday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R45.mon",
+     "label": "-28-day — Monday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R45.tue",
+     "label": "-28-day — Tuesday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R45.wed",
+     "label": "-28-day — Wednesday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1 !I45",
+     "label": "-28-day",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD1.R46.thu",
+     "label": "-30-day — Thursday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R46.fri",
+     "label": "-30-day — Friday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R46.sat",
+     "label": "-30-day — Saturday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R46.sun",
+     "label": "-30-day — Sunday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R46.mon",
+     "label": "-30-day — Monday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R46.tue",
+     "label": "-30-day — Tuesday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R46.wed",
+     "label": "-30-day — Wednesday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1 !I46",
+     "label": "-30-day",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD1.R47.thu",
+     "label": "-56-day — Thursday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R47.fri",
+     "label": "-56-day — Friday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R47.sat",
+     "label": "-56-day — Saturday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R47.sun",
+     "label": "-56-day — Sunday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R47.mon",
+     "label": "-56-day — Monday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R47.tue",
+     "label": "-56-day — Tuesday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R47.wed",
+     "label": "-56-day — Wednesday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1 !I47",
+     "label": "-56-day",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD1.R48.thu",
+     "label": "-91-day — Thursday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R48.fri",
+     "label": "-91-day — Friday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R48.sat",
+     "label": "-91-day — Saturday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R48.sun",
+     "label": "-91-day — Sunday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R48.mon",
+     "label": "-91-day — Monday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R48.tue",
+     "label": "-91-day — Tuesday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R48.wed",
+     "label": "-91-day — Wednesday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1 !I48",
+     "label": "-91-day",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD1.R49.thu",
+     "label": "-182-day — Thursday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R49.fri",
+     "label": "-182-day — Friday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R49.sat",
+     "label": "-182-day — Saturday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R49.sun",
+     "label": "-182-day — Sunday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R49.mon",
+     "label": "-182-day — Monday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R49.tue",
+     "label": "-182-day — Tuesday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R49.wed",
+     "label": "-182-day — Wednesday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1 !I49",
+     "label": "-182-day",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD1.R50.thu",
+     "label": "-1-Year — Thursday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R50.fri",
+     "label": "-1-Year — Friday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R50.sat",
+     "label": "-1-Year — Saturday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R50.sun",
+     "label": "-1-Year — Sunday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R50.mon",
+     "label": "-1-Year — Monday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R50.tue",
+     "label": "-1-Year — Tuesday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R50.wed",
+     "label": "-1-Year — Wednesday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1 !I50",
+     "label": "-1-Year",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD1 !B51",
+     "label": "25. Ghana Government Bills/Bonds/Stocks",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD1 !C51",
+     "label": "25. Ghana Government Bills/Bonds/Stocks",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD1 !D51",
+     "label": "25. Ghana Government Bills/Bonds/Stocks",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD1 !E51",
+     "label": "25. Ghana Government Bills/Bonds/Stocks",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD1 !F51",
+     "label": "25. Ghana Government Bills/Bonds/Stocks",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD1 !G51",
+     "label": "25. Ghana Government Bills/Bonds/Stocks",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD1 !H51",
+     "label": "25. Ghana Government Bills/Bonds/Stocks",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD1 !I51",
+     "label": "25. Ghana Government Bills/Bonds/Stocks",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD1 !B52",
+     "label": "(a) Short Term Securities",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD1 !C52",
+     "label": "(a) Short Term Securities",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD1 !D52",
+     "label": "(a) Short Term Securities",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD1 !E52",
+     "label": "(a) Short Term Securities",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD1 !F52",
+     "label": "(a) Short Term Securities",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD1 !G52",
+     "label": "(a) Short Term Securities",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD1 !H52",
+     "label": "(a) Short Term Securities",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD1 !I52",
+     "label": "(a) Short Term Securities",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD1.R53.thu",
+     "label": "-91 day — Thursday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R53.fri",
+     "label": "-91 day — Friday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R53.sat",
+     "label": "-91 day — Saturday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R53.sun",
+     "label": "-91 day — Sunday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R53.mon",
+     "label": "-91 day — Monday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R53.tue",
+     "label": "-91 day — Tuesday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R53.wed",
+     "label": "-91 day — Wednesday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1 !I53",
+     "label": "-91 day",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD1.R54.thu",
+     "label": "-182 day — Thursday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R54.fri",
+     "label": "-182 day — Friday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R54.sat",
+     "label": "-182 day — Saturday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R54.sun",
+     "label": "-182 day — Sunday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R54.mon",
+     "label": "-182 day — Monday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R54.tue",
+     "label": "-182 day — Tuesday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R54.wed",
+     "label": "-182 day — Wednesday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1 !I54",
+     "label": "-182 day",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD1.R55.thu",
+     "label": "-1 year Treasury Note — Thursday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R55.fri",
+     "label": "-1 year Treasury Note — Friday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R55.sat",
+     "label": "-1 year Treasury Note — Saturday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R55.sun",
+     "label": "-1 year Treasury Note — Sunday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R55.mon",
+     "label": "-1 year Treasury Note — Monday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R55.tue",
+     "label": "-1 year Treasury Note — Tuesday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R55.wed",
+     "label": "-1 year Treasury Note — Wednesday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1 !I55",
+     "label": "-1 year Treasury Note",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD1 !B56",
+     "label": "(b) Long Term Securities",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD1 !C56",
+     "label": "(b) Long Term Securities",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD1 !D56",
+     "label": "(b) Long Term Securities",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD1 !E56",
+     "label": "(b) Long Term Securities",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD1 !F56",
+     "label": "(b) Long Term Securities",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD1 !G56",
+     "label": "(b) Long Term Securities",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD1 !H56",
+     "label": "(b) Long Term Securities",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD1 !I56",
+     "label": "(b) Long Term Securities",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD1.R57.thu",
+     "label": "-2 year Floating Rate Note — Thursday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R57.fri",
+     "label": "-2 year Floating Rate Note — Friday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R57.sat",
+     "label": "-2 year Floating Rate Note — Saturday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R57.sun",
+     "label": "-2 year Floating Rate Note — Sunday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R57.mon",
+     "label": "-2 year Floating Rate Note — Monday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R57.tue",
+     "label": "-2 year Floating Rate Note — Tuesday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R57.wed",
+     "label": "-2 year Floating Rate Note — Wednesday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1 !I57",
+     "label": "-2 year Floating Rate Note",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD1.R58.thu",
+     "label": "-3 year Floating Rate Note — Thursday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R58.fri",
+     "label": "-3 year Floating Rate Note — Friday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R58.sat",
+     "label": "-3 year Floating Rate Note — Saturday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R58.sun",
+     "label": "-3 year Floating Rate Note — Sunday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R58.mon",
+     "label": "-3 year Floating Rate Note — Monday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R58.tue",
+     "label": "-3 year Floating Rate Note — Tuesday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R58.wed",
+     "label": "-3 year Floating Rate Note — Wednesday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1 !I58",
+     "label": "-3 year Floating Rate Note",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD1.R59.thu",
+     "label": "-2 year Fixed Rate Note — Thursday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R59.fri",
+     "label": "-2 year Fixed Rate Note — Friday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R59.sat",
+     "label": "-2 year Fixed Rate Note — Saturday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R59.sun",
+     "label": "-2 year Fixed Rate Note — Sunday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R59.mon",
+     "label": "-2 year Fixed Rate Note — Monday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R59.tue",
+     "label": "-2 year Fixed Rate Note — Tuesday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R59.wed",
+     "label": "-2 year Fixed Rate Note — Wednesday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1 !I59",
+     "label": "-2 year Fixed Rate Note",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD1.R60.thu",
+     "label": "-3 year Fixed Rate Note — Thursday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R60.fri",
+     "label": "-3 year Fixed Rate Note — Friday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R60.sat",
+     "label": "-3 year Fixed Rate Note — Saturday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R60.sun",
+     "label": "-3 year Fixed Rate Note — Sunday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R60.mon",
+     "label": "-3 year Fixed Rate Note — Monday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R60.tue",
+     "label": "-3 year Fixed Rate Note — Tuesday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R60.wed",
+     "label": "-3 year Fixed Rate Note — Wednesday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1 !I60",
+     "label": "-3 year Fixed Rate Note",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD1.R61.thu",
+     "label": "- GGILBS — Thursday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R61.fri",
+     "label": "- GGILBS — Friday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R61.sat",
+     "label": "- GGILBS — Saturday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R61.sun",
+     "label": "- GGILBS — Sunday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R61.mon",
+     "label": "- GGILBS — Monday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R61.tue",
+     "label": "- GGILBS — Tuesday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R61.wed",
+     "label": "- GGILBS — Wednesday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1 !I61",
+     "label": "- GGILBS",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD1.R62.thu",
+     "label": "- TOR Bonds — Thursday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R62.fri",
+     "label": "- TOR Bonds — Friday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R62.sat",
+     "label": "- TOR Bonds — Saturday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R62.sun",
+     "label": "- TOR Bonds — Sunday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R62.mon",
+     "label": "- TOR Bonds — Monday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R62.tue",
+     "label": "- TOR Bonds — Tuesday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R62.wed",
+     "label": "- TOR Bonds — Wednesday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1 !I62",
+     "label": "- TOR Bonds",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD1.R63.thu",
+     "label": "- Stocks — Thursday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R63.fri",
+     "label": "- Stocks — Friday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R63.sat",
+     "label": "- Stocks — Saturday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R63.sun",
+     "label": "- Stocks — Sunday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R63.mon",
+     "label": "- Stocks — Monday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R63.tue",
+     "label": "- Stocks — Tuesday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R63.wed",
+     "label": "- Stocks — Wednesday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1 !I63",
+     "label": "- Stocks",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD1.R64.thu",
+     "label": "26. SSNIT Loan Educational Bill/Bond — Thursday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R64.fri",
+     "label": "26. SSNIT Loan Educational Bill/Bond — Friday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R64.sat",
+     "label": "26. SSNIT Loan Educational Bill/Bond — Saturday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R64.sun",
+     "label": "26. SSNIT Loan Educational Bill/Bond — Sunday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R64.mon",
+     "label": "26. SSNIT Loan Educational Bill/Bond — Monday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R64.tue",
+     "label": "26. SSNIT Loan Educational Bill/Bond — Tuesday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R64.wed",
+     "label": "26. SSNIT Loan Educational Bill/Bond — Wednesday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1 !I64",
+     "label": "26. SSNIT Loan Educational Bill/Bond",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD1 !B65",
+     "label": "27. Sub total (22+23+24+25+26)",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD1 !C65",
+     "label": "27. Sub total (22+23+24+25+26)",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD1 !D65",
+     "label": "27. Sub total (22+23+24+25+26)",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD1 !E65",
+     "label": "27. Sub total (22+23+24+25+26)",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD1 !F65",
+     "label": "27. Sub total (22+23+24+25+26)",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD1 !G65",
+     "label": "27. Sub total (22+23+24+25+26)",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD1 !H65",
+     "label": "27. Sub total (22+23+24+25+26)",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD1 !I65",
+     "label": "27. Sub total (22+23+24+25+26)",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD1 !B66",
+     "label": "28. Total Liquid Assets (20+29)",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD1 !C66",
+     "label": "28. Total Liquid Assets (20+29)",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD1 !D66",
+     "label": "28. Total Liquid Assets (20+29)",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD1 !E66",
+     "label": "28. Total Liquid Assets (20+29)",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD1 !F66",
+     "label": "28. Total Liquid Assets (20+29)",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD1 !G66",
+     "label": "28. Total Liquid Assets (20+29)",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD1 !H66",
+     "label": "28. Total Liquid Assets (20+29)",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD1 !I66",
+     "label": "28. Total Liquid Assets (20+29)",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD1 !B88",
+     "label": "(i). Finsap Bonds",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD1 !C88",
+     "label": "(i). Finsap Bonds",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD1 !D88",
+     "label": "(i). Finsap Bonds",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD1 !E88",
+     "label": "(i). Finsap Bonds",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD1 !F88",
+     "label": "(i). Finsap Bonds",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD1 !G88",
+     "label": "(i). Finsap Bonds",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD1 !H88",
+     "label": "(i). Finsap Bonds",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD1 !I88",
+     "label": "(i). Finsap Bonds",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD1.R89.thu",
+     "label": "- SOE's — Thursday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R89.fri",
+     "label": "- SOE's — Friday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R89.sat",
+     "label": "- SOE's — Saturday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R89.sun",
+     "label": "- SOE's — Sunday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R89.mon",
+     "label": "- SOE's — Monday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R89.tue",
+     "label": "- SOE's — Tuesday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R89.wed",
+     "label": "- SOE's — Wednesday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1 !I89",
+     "label": "- SOE's",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD1.R90.thu",
+     "label": "- Private Sector — Thursday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R90.fri",
+     "label": "- Private Sector — Friday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R90.sat",
+     "label": "- Private Sector — Saturday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R90.sun",
+     "label": "- Private Sector — Sunday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R90.mon",
+     "label": "- Private Sector — Monday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R90.tue",
+     "label": "- Private Sector — Tuesday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R90.wed",
+     "label": "- Private Sector — Wednesday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1 !I90",
+     "label": "- Private Sector",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD1.R91.thu",
+     "label": "(ii) Outstanding Loans & Advances - DOMESTIC — Thursday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R91.fri",
+     "label": "(ii) Outstanding Loans & Advances - DOMESTIC — Friday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R91.sat",
+     "label": "(ii) Outstanding Loans & Advances - DOMESTIC — Saturday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R91.sun",
+     "label": "(ii) Outstanding Loans & Advances - DOMESTIC — Sunday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R91.mon",
+     "label": "(ii) Outstanding Loans & Advances - DOMESTIC — Monday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R91.tue",
+     "label": "(ii) Outstanding Loans & Advances - DOMESTIC — Tuesday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R91.wed",
+     "label": "(ii) Outstanding Loans & Advances - DOMESTIC — Wednesday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1 !I91",
+     "label": "(ii) Outstanding Loans & Advances - DOMESTIC",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD1.R92.thu",
+     "label": "- FOREIGN — Thursday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R92.fri",
+     "label": "- FOREIGN — Friday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R92.sat",
+     "label": "- FOREIGN — Saturday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R92.sun",
+     "label": "- FOREIGN — Sunday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R92.mon",
+     "label": "- FOREIGN — Monday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R92.tue",
+     "label": "- FOREIGN — Tuesday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R92.wed",
+     "label": "- FOREIGN — Wednesday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1 !I92",
+     "label": "- FOREIGN",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD1 !B93",
+     "label": "-TOTAL (DOMESTIC + FOREIGN)",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD1 !C93",
+     "label": "-TOTAL (DOMESTIC + FOREIGN)",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD1 !D93",
+     "label": "-TOTAL (DOMESTIC + FOREIGN)",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD1 !E93",
+     "label": "-TOTAL (DOMESTIC + FOREIGN)",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD1 !F93",
+     "label": "-TOTAL (DOMESTIC + FOREIGN)",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD1 !G93",
+     "label": "-TOTAL (DOMESTIC + FOREIGN)",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD1 !H93",
+     "label": "-TOTAL (DOMESTIC + FOREIGN)",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD1 !I93",
+     "label": "-TOTAL (DOMESTIC + FOREIGN)",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD1.R94.thu",
+     "label": "(iii) Current Week's Deposits — Thursday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R94.fri",
+     "label": "(iii) Current Week's Deposits — Friday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R94.sat",
+     "label": "(iii) Current Week's Deposits — Saturday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R94.sun",
+     "label": "(iii) Current Week's Deposits — Sunday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R94.mon",
+     "label": "(iii) Current Week's Deposits — Monday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R94.tue",
+     "label": "(iii) Current Week's Deposits — Tuesday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R94.wed",
+     "label": "(iii) Current Week's Deposits — Wednesday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1 !I94",
+     "label": "(iii) Current Week's Deposits",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD1.R95.thu",
+     "label": "(iv) Government Deposits — Thursday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R95.fri",
+     "label": "(iv) Government Deposits — Friday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R95.sat",
+     "label": "(iv) Government Deposits — Saturday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R95.sun",
+     "label": "(iv) Government Deposits — Sunday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R95.mon",
+     "label": "(iv) Government Deposits — Monday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R95.tue",
+     "label": "(iv) Government Deposits — Tuesday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.R95.wed",
+     "label": "(iv) Government Deposits — Wednesday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1 !I95",
+     "label": "(iv) Government Deposits",
+     "kind": "number",
+     "total": true
+    }
+   ]
+  },
+  {
+   "code": "sheet_bsd1_annex1",
+   "title": "BSD1-Annex1",
+   "unit": "millions",
+   "itemised": false,
+   "lines": [
+    {
+     "code": "BSD1.Annex1.R10.thu",
+     "label": "1. US Dollar — Thursday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.Annex1.R10.fri",
+     "label": "1. US Dollar — Friday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.Annex1.R10.sat",
+     "label": "1. US Dollar — Saturday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.Annex1.R10.sun",
+     "label": "1. US Dollar — Sunday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.Annex1.R10.mon",
+     "label": "1. US Dollar — Monday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.Annex1.R10.tue",
+     "label": "1. US Dollar — Tuesday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.Annex1.R10.wed",
+     "label": "1. US Dollar — Wednesday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1-Annex1!I10",
+     "label": "1. US Dollar",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD1.Annex1.R11.thu",
+     "label": "2. Euros — Thursday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.Annex1.R11.fri",
+     "label": "2. Euros — Friday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.Annex1.R11.sat",
+     "label": "2. Euros — Saturday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.Annex1.R11.sun",
+     "label": "2. Euros — Sunday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.Annex1.R11.mon",
+     "label": "2. Euros — Monday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.Annex1.R11.tue",
+     "label": "2. Euros — Tuesday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.Annex1.R11.wed",
+     "label": "2. Euros — Wednesday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1-Annex1!I11",
+     "label": "2. Euros",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD1.Annex1.R12.thu",
+     "label": "3. UK Pound Sterling — Thursday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.Annex1.R12.fri",
+     "label": "3. UK Pound Sterling — Friday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.Annex1.R12.sat",
+     "label": "3. UK Pound Sterling — Saturday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.Annex1.R12.sun",
+     "label": "3. UK Pound Sterling — Sunday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.Annex1.R12.mon",
+     "label": "3. UK Pound Sterling — Monday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.Annex1.R12.tue",
+     "label": "3. UK Pound Sterling — Tuesday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.Annex1.R12.wed",
+     "label": "3. UK Pound Sterling — Wednesday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1-Annex1!I12",
+     "label": "3. UK Pound Sterling",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD1.Annex1.R13.thu",
+     "label": "4. Other(s) — Thursday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.Annex1.R13.fri",
+     "label": "4. Other(s) — Friday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.Annex1.R13.sat",
+     "label": "4. Other(s) — Saturday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.Annex1.R13.sun",
+     "label": "4. Other(s) — Sunday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.Annex1.R13.mon",
+     "label": "4. Other(s) — Monday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.Annex1.R13.tue",
+     "label": "4. Other(s) — Tuesday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.Annex1.R13.wed",
+     "label": "4. Other(s) — Wednesday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1-Annex1!I13",
+     "label": "4. Other(s)",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD1.Annex1.R19.thu",
+     "label": "1. US Dollar — Thursday",
+     "kind": "number",
+     "unit": "units"
+    },
+    {
+     "code": "BSD1.Annex1.R19.fri",
+     "label": "1. US Dollar — Friday",
+     "kind": "number",
+     "unit": "units"
+    },
+    {
+     "code": "BSD1.Annex1.R19.sat",
+     "label": "1. US Dollar — Saturday",
+     "kind": "number",
+     "unit": "units"
+    },
+    {
+     "code": "BSD1.Annex1.R19.sun",
+     "label": "1. US Dollar — Sunday",
+     "kind": "number",
+     "unit": "units"
+    },
+    {
+     "code": "BSD1.Annex1.R19.mon",
+     "label": "1. US Dollar — Monday",
+     "kind": "number",
+     "unit": "units"
+    },
+    {
+     "code": "BSD1.Annex1.R19.tue",
+     "label": "1. US Dollar — Tuesday",
+     "kind": "number",
+     "unit": "units"
+    },
+    {
+     "code": "BSD1.Annex1.R19.wed",
+     "label": "1. US Dollar — Wednesday",
+     "kind": "number",
+     "unit": "units"
+    },
+    {
+     "code": "BSD1-Annex1!I19",
+     "label": "1. US Dollar",
+     "kind": "number",
+     "total": true,
+     "unit": "units"
+    },
+    {
+     "code": "BSD1.Annex1.R20.thu",
+     "label": "2. Euros — Thursday",
+     "kind": "number",
+     "unit": "units"
+    },
+    {
+     "code": "BSD1.Annex1.R20.fri",
+     "label": "2. Euros — Friday",
+     "kind": "number",
+     "unit": "units"
+    },
+    {
+     "code": "BSD1.Annex1.R20.sat",
+     "label": "2. Euros — Saturday",
+     "kind": "number",
+     "unit": "units"
+    },
+    {
+     "code": "BSD1.Annex1.R20.sun",
+     "label": "2. Euros — Sunday",
+     "kind": "number",
+     "unit": "units"
+    },
+    {
+     "code": "BSD1.Annex1.R20.mon",
+     "label": "2. Euros — Monday",
+     "kind": "number",
+     "unit": "units"
+    },
+    {
+     "code": "BSD1.Annex1.R20.tue",
+     "label": "2. Euros — Tuesday",
+     "kind": "number",
+     "unit": "units"
+    },
+    {
+     "code": "BSD1.Annex1.R20.wed",
+     "label": "2. Euros — Wednesday",
+     "kind": "number",
+     "unit": "units"
+    },
+    {
+     "code": "BSD1-Annex1!I20",
+     "label": "2. Euros",
+     "kind": "number",
+     "total": true,
+     "unit": "units"
+    },
+    {
+     "code": "BSD1.Annex1.R21.thu",
+     "label": "3. UK Pound Sterling — Thursday",
+     "kind": "number",
+     "unit": "units"
+    },
+    {
+     "code": "BSD1.Annex1.R21.fri",
+     "label": "3. UK Pound Sterling — Friday",
+     "kind": "number",
+     "unit": "units"
+    },
+    {
+     "code": "BSD1.Annex1.R21.sat",
+     "label": "3. UK Pound Sterling — Saturday",
+     "kind": "number",
+     "unit": "units"
+    },
+    {
+     "code": "BSD1.Annex1.R21.sun",
+     "label": "3. UK Pound Sterling — Sunday",
+     "kind": "number",
+     "unit": "units"
+    },
+    {
+     "code": "BSD1.Annex1.R21.mon",
+     "label": "3. UK Pound Sterling — Monday",
+     "kind": "number",
+     "unit": "units"
+    },
+    {
+     "code": "BSD1.Annex1.R21.tue",
+     "label": "3. UK Pound Sterling — Tuesday",
+     "kind": "number",
+     "unit": "units"
+    },
+    {
+     "code": "BSD1.Annex1.R21.wed",
+     "label": "3. UK Pound Sterling — Wednesday",
+     "kind": "number",
+     "unit": "units"
+    },
+    {
+     "code": "BSD1-Annex1!I21",
+     "label": "3. UK Pound Sterling",
+     "kind": "number",
+     "total": true,
+     "unit": "units"
+    },
+    {
+     "code": "BSD1.Annex1.R22.thu",
+     "label": "4. Other(s) (denominated in US$) — Thursday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.Annex1.R22.fri",
+     "label": "4. Other(s) (denominated in US$) — Friday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.Annex1.R22.sat",
+     "label": "4. Other(s) (denominated in US$) — Saturday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.Annex1.R22.sun",
+     "label": "4. Other(s) (denominated in US$) — Sunday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.Annex1.R22.mon",
+     "label": "4. Other(s) (denominated in US$) — Monday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.Annex1.R22.tue",
+     "label": "4. Other(s) (denominated in US$) — Tuesday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.Annex1.R22.wed",
+     "label": "4. Other(s) (denominated in US$) — Wednesday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1-Annex1!I22",
+     "label": "4. Other(s) (denominated in US$)",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD1.Annex1.R27.thu",
+     "label": "US dollars — Thursday",
+     "kind": "number",
+     "unit": "units"
+    },
+    {
+     "code": "BSD1.Annex1.R27.fri",
+     "label": "US dollars — Friday",
+     "kind": "number",
+     "unit": "units"
+    },
+    {
+     "code": "BSD1.Annex1.R27.sat",
+     "label": "US dollars — Saturday",
+     "kind": "number",
+     "unit": "units"
+    },
+    {
+     "code": "BSD1.Annex1.R27.sun",
+     "label": "US dollars — Sunday",
+     "kind": "number",
+     "unit": "units"
+    },
+    {
+     "code": "BSD1.Annex1.R27.mon",
+     "label": "US dollars — Monday",
+     "kind": "number",
+     "unit": "units"
+    },
+    {
+     "code": "BSD1.Annex1.R27.tue",
+     "label": "US dollars — Tuesday",
+     "kind": "number",
+     "unit": "units"
+    },
+    {
+     "code": "BSD1.Annex1.R27.wed",
+     "label": "US dollars — Wednesday",
+     "kind": "number",
+     "unit": "units"
+    },
+    {
+     "code": "BSD1-Annex1!I27",
+     "label": "US dollars",
+     "kind": "number",
+     "total": true,
+     "unit": "units"
+    },
+    {
+     "code": "BSD1.Annex1.R28.thu",
+     "label": "Euros — Thursday",
+     "kind": "number",
+     "unit": "units"
+    },
+    {
+     "code": "BSD1.Annex1.R28.fri",
+     "label": "Euros — Friday",
+     "kind": "number",
+     "unit": "units"
+    },
+    {
+     "code": "BSD1.Annex1.R28.sat",
+     "label": "Euros — Saturday",
+     "kind": "number",
+     "unit": "units"
+    },
+    {
+     "code": "BSD1.Annex1.R28.sun",
+     "label": "Euros — Sunday",
+     "kind": "number",
+     "unit": "units"
+    },
+    {
+     "code": "BSD1.Annex1.R28.mon",
+     "label": "Euros — Monday",
+     "kind": "number",
+     "unit": "units"
+    },
+    {
+     "code": "BSD1.Annex1.R28.tue",
+     "label": "Euros — Tuesday",
+     "kind": "number",
+     "unit": "units"
+    },
+    {
+     "code": "BSD1.Annex1.R28.wed",
+     "label": "Euros — Wednesday",
+     "kind": "number",
+     "unit": "units"
+    },
+    {
+     "code": "BSD1-Annex1!I28",
+     "label": "Euros",
+     "kind": "number",
+     "total": true,
+     "unit": "units"
+    },
+    {
+     "code": "BSD1.Annex1.R29.thu",
+     "label": "UK Pound Sterling — Thursday",
+     "kind": "number",
+     "unit": "units"
+    },
+    {
+     "code": "BSD1.Annex1.R29.fri",
+     "label": "UK Pound Sterling — Friday",
+     "kind": "number",
+     "unit": "units"
+    },
+    {
+     "code": "BSD1.Annex1.R29.sat",
+     "label": "UK Pound Sterling — Saturday",
+     "kind": "number",
+     "unit": "units"
+    },
+    {
+     "code": "BSD1.Annex1.R29.sun",
+     "label": "UK Pound Sterling — Sunday",
+     "kind": "number",
+     "unit": "units"
+    },
+    {
+     "code": "BSD1.Annex1.R29.mon",
+     "label": "UK Pound Sterling — Monday",
+     "kind": "number",
+     "unit": "units"
+    },
+    {
+     "code": "BSD1.Annex1.R29.tue",
+     "label": "UK Pound Sterling — Tuesday",
+     "kind": "number",
+     "unit": "units"
+    },
+    {
+     "code": "BSD1.Annex1.R29.wed",
+     "label": "UK Pound Sterling — Wednesday",
+     "kind": "number",
+     "unit": "units"
+    },
+    {
+     "code": "BSD1-Annex1!I29",
+     "label": "UK Pound Sterling",
+     "kind": "number",
+     "total": true,
+     "unit": "units"
+    },
+    {
+     "code": "BSD1.Annex1.R30.thu",
+     "label": "Other(s) — Thursday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.Annex1.R30.fri",
+     "label": "Other(s) — Friday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.Annex1.R30.sat",
+     "label": "Other(s) — Saturday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.Annex1.R30.sun",
+     "label": "Other(s) — Sunday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.Annex1.R30.mon",
+     "label": "Other(s) — Monday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.Annex1.R30.tue",
+     "label": "Other(s) — Tuesday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.Annex1.R30.wed",
+     "label": "Other(s) — Wednesday",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1-Annex1!I30",
+     "label": "Other(s)",
+     "kind": "number",
+     "total": true
+    }
+   ]
+  },
+  {
+   "code": "sheet_bsd1_annex2",
+   "title": "BSD1-Annex2",
+   "unit": "millions",
+   "itemised": false,
+   "lines": [
+    {
+     "code": "BSD1.Annex2.R8.thu",
+     "label": "Cash — Thursday",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1.Annex2.R8.fri",
+     "label": "Cash — Friday",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1.Annex2.R8.sat",
+     "label": "Cash — Saturday",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1.Annex2.R8.sun",
+     "label": "Cash — Sunday",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1.Annex2.R8.mon",
+     "label": "Cash — Monday",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1.Annex2.R8.tue",
+     "label": "Cash — Tuesday",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1.Annex2.R8.wed",
+     "label": "Cash — Wednesday",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1.Annex2.R9.thu",
+     "label": "Deposits — Thursday",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1.Annex2.R9.fri",
+     "label": "Deposits — Friday",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1.Annex2.R9.sat",
+     "label": "Deposits — Saturday",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1.Annex2.R9.sun",
+     "label": "Deposits — Sunday",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1.Annex2.R9.mon",
+     "label": "Deposits — Monday",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1.Annex2.R9.tue",
+     "label": "Deposits — Tuesday",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1.Annex2.R9.wed",
+     "label": "Deposits — Wednesday",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1.Annex2.R11.thu",
+     "label": "Cash — Thursday",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1.Annex2.R11.fri",
+     "label": "Cash — Friday",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1.Annex2.R11.sat",
+     "label": "Cash — Saturday",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1.Annex2.R11.sun",
+     "label": "Cash — Sunday",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1.Annex2.R11.mon",
+     "label": "Cash — Monday",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1.Annex2.R11.tue",
+     "label": "Cash — Tuesday",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1.Annex2.R11.wed",
+     "label": "Cash — Wednesday",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1.Annex2.R12.thu",
+     "label": "Deposits — Thursday",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1.Annex2.R12.fri",
+     "label": "Deposits — Friday",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1.Annex2.R12.sat",
+     "label": "Deposits — Saturday",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1.Annex2.R12.sun",
+     "label": "Deposits — Sunday",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1.Annex2.R12.mon",
+     "label": "Deposits — Monday",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1.Annex2.R12.tue",
+     "label": "Deposits — Tuesday",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1.Annex2.R12.wed",
+     "label": "Deposits — Wednesday",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1.Annex2.R14.thu",
+     "label": "Cash — Thursday",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1.Annex2.R14.fri",
+     "label": "Cash — Friday",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1.Annex2.R14.sat",
+     "label": "Cash — Saturday",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1.Annex2.R14.sun",
+     "label": "Cash — Sunday",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1.Annex2.R14.mon",
+     "label": "Cash — Monday",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1.Annex2.R14.tue",
+     "label": "Cash — Tuesday",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1.Annex2.R14.wed",
+     "label": "Cash — Wednesday",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1.Annex2.R15.thu",
+     "label": "Deposits — Thursday",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1.Annex2.R15.fri",
+     "label": "Deposits — Friday",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1.Annex2.R15.sat",
+     "label": "Deposits — Saturday",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1.Annex2.R15.sun",
+     "label": "Deposits — Sunday",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1.Annex2.R15.mon",
+     "label": "Deposits — Monday",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1.Annex2.R15.tue",
+     "label": "Deposits — Tuesday",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1.Annex2.R15.wed",
+     "label": "Deposits — Wednesday",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1.Annex2.R17.thu",
+     "label": "Cash — Thursday",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1.Annex2.R17.fri",
+     "label": "Cash — Friday",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1.Annex2.R17.sat",
+     "label": "Cash — Saturday",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1.Annex2.R17.sun",
+     "label": "Cash — Sunday",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1.Annex2.R17.mon",
+     "label": "Cash — Monday",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1.Annex2.R17.tue",
+     "label": "Cash — Tuesday",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1.Annex2.R17.wed",
+     "label": "Cash — Wednesday",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1.Annex2.R18.thu",
+     "label": "Deposits — Thursday",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1.Annex2.R18.fri",
+     "label": "Deposits — Friday",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1.Annex2.R18.sat",
+     "label": "Deposits — Saturday",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1.Annex2.R18.sun",
+     "label": "Deposits — Sunday",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1.Annex2.R18.mon",
+     "label": "Deposits — Monday",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1.Annex2.R18.tue",
+     "label": "Deposits — Tuesday",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1.Annex2.R18.wed",
+     "label": "Deposits — Wednesday",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1.Annex2.R20.thu",
+     "label": "Cash — Thursday",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1.Annex2.R20.fri",
+     "label": "Cash — Friday",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1.Annex2.R20.sat",
+     "label": "Cash — Saturday",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1.Annex2.R20.sun",
+     "label": "Cash — Sunday",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1.Annex2.R20.mon",
+     "label": "Cash — Monday",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1.Annex2.R20.tue",
+     "label": "Cash — Tuesday",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1.Annex2.R20.wed",
+     "label": "Cash — Wednesday",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1.Annex2.R21.thu",
+     "label": "Deposits — Thursday",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1.Annex2.R21.fri",
+     "label": "Deposits — Friday",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1.Annex2.R21.sat",
+     "label": "Deposits — Saturday",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1.Annex2.R21.sun",
+     "label": "Deposits — Sunday",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1.Annex2.R21.mon",
+     "label": "Deposits — Monday",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1.Annex2.R21.tue",
+     "label": "Deposits — Tuesday",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1.Annex2.R21.wed",
+     "label": "Deposits — Wednesday",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1.Annex2.R23.thu",
+     "label": "Cash — Thursday",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1.Annex2.R23.fri",
+     "label": "Cash — Friday",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1.Annex2.R23.sat",
+     "label": "Cash — Saturday",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1.Annex2.R23.sun",
+     "label": "Cash — Sunday",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1.Annex2.R23.mon",
+     "label": "Cash — Monday",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1.Annex2.R23.tue",
+     "label": "Cash — Tuesday",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1.Annex2.R23.wed",
+     "label": "Cash — Wednesday",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1.Annex2.R24.thu",
+     "label": "Deposits — Thursday",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1.Annex2.R24.fri",
+     "label": "Deposits — Friday",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1.Annex2.R24.sat",
+     "label": "Deposits — Saturday",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1.Annex2.R24.sun",
+     "label": "Deposits — Sunday",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1.Annex2.R24.mon",
+     "label": "Deposits — Monday",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1.Annex2.R24.tue",
+     "label": "Deposits — Tuesday",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1.Annex2.R24.wed",
+     "label": "Deposits — Wednesday",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1.Annex2.R25.thu",
+     "label": "Total Cash Deposits — Thursday",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1.Annex2.R25.fri",
+     "label": "Total Cash Deposits — Friday",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1.Annex2.R25.sat",
+     "label": "Total Cash Deposits — Saturday",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1.Annex2.R25.sun",
+     "label": "Total Cash Deposits — Sunday",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1.Annex2.R25.mon",
+     "label": "Total Cash Deposits — Monday",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1.Annex2.R25.tue",
+     "label": "Total Cash Deposits — Tuesday",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1.Annex2.R25.wed",
+     "label": "Total Cash Deposits — Wednesday",
+     "kind": "value"
+    }
+   ]
+  },
+  {
+   "code": "sheet_bsd1_annex3",
+   "title": "BSD1-Annex3",
+   "unit": "millions",
+   "itemised": false,
+   "lines": [
+    {
+     "code": "BSD1.Annex3.R8.amount",
+     "label": "INCREASE / DECREASE IN DEPOSITS - GHC",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1.Annex3.R13.amount",
+     "label": "DECREASE / INCREASE IN LOANS AND OVERDRAFTS == LOCAL",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.Annex3.R15.amount",
+     "label": "INCREASE / DECREASE IN LOANS AND OVERDRAFTS == FOREIGN",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1-Annex3!G16",
+     "label": "Cell G16",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD1.Annex3.name.R22.name",
+     "label": "(i)",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1.Annex3.amount.R22.amount",
+     "label": "(i)",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.Annex3.name.R23.name",
+     "label": "(ii)",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1.Annex3.amount.R23.amount",
+     "label": "(ii)",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.Annex3.name.R24.name",
+     "label": "(iii)",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1.Annex3.amount.R24.amount",
+     "label": "(iii)",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.Annex3.name.R25.name",
+     "label": "(iv)",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1.Annex3.amount.R25.amount",
+     "label": "(iv)",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.Annex3.name.R26.name",
+     "label": "(v)",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1.Annex3.amount.R26.amount",
+     "label": "(v)",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.Annex3.name.R27.name",
+     "label": "(vi)",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1.Annex3.amount.R27.amount",
+     "label": "(vi)",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.Annex3.name.R28.name",
+     "label": "(vii)",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1.Annex3.amount.R28.amount",
+     "label": "(vii)",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.Annex3.name.R29.name",
+     "label": "(viii)",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1.Annex3.amount.R29.amount",
+     "label": "(viii)",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1-Annex3!G30",
+     "label": "Cell G30",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD1.Annex3.name.R37.name",
+     "label": "(i)",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1.Annex3.amount.R37.amount",
+     "label": "(i)",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.Annex3.name.R38.name",
+     "label": "(ii)",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1.Annex3.amount.R38.amount",
+     "label": "(ii)",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.Annex3.name.R39.name",
+     "label": "(iii)",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1.Annex3.amount.R39.amount",
+     "label": "(iii)",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.Annex3.name.R40.name",
+     "label": "(iv)",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1.Annex3.amount.R40.amount",
+     "label": "(iv)",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.Annex3.name.R41.name",
+     "label": "(v)",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1.Annex3.amount.R41.amount",
+     "label": "(v)",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.Annex3.name.R42.name",
+     "label": "(vi)",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1.Annex3.amount.R42.amount",
+     "label": "(vi)",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.Annex3.name.R43.name",
+     "label": "(vii)",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1.Annex3.amount.R43.amount",
+     "label": "(vii)",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.Annex3.name.R44.name",
+     "label": "(viii)",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1.Annex3.amount.R44.amount",
+     "label": "(viii)",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1-Annex3!G45",
+     "label": "Cell G45",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD1.Annex3.name.R51.name",
+     "label": "(i)",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1.Annex3.amount.R51.amount",
+     "label": "(i)",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.Annex3.name.R52.name",
+     "label": "(ii)",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1.Annex3.amount.R52.amount",
+     "label": "(ii)",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.Annex3.name.R53.name",
+     "label": "(iii)",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1.Annex3.amount.R53.amount",
+     "label": "(iii)",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.Annex3.name.R54.name",
+     "label": "(iv)",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1.Annex3.amount.R54.amount",
+     "label": "(iv)",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.Annex3.name.R55.name",
+     "label": "(v)",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1.Annex3.amount.R55.amount",
+     "label": "(v)",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.Annex3.name.R56.name",
+     "label": "(vi)",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1.Annex3.amount.R56.amount",
+     "label": "(vi)",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.Annex3.name.R57.name",
+     "label": "(vii)",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1.Annex3.amount.R57.amount",
+     "label": "(vii)",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1.Annex3.name.R58.name",
+     "label": "(viii)",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1.Annex3.amount.R58.amount",
+     "label": "(viii)",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1-Annex3!G59",
+     "label": "Cell G59",
+     "kind": "number",
+     "total": true
+    }
+   ]
+  }
+ ],
+ "rules": [
+  {
+   "id": "BSD1-ARI-0001",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD1 !I10",
+   "terms": [
+    "BSD1.R10.thu",
+    "BSD1.R10.fri",
+    "BSD1.R10.sat",
+    "BSD1.R10.sun",
+    "BSD1.R10.mon",
+    "BSD1.R10.tue",
+    "BSD1.R10.wed"
+   ],
+   "tolerance": "0.04",
+   "description": "BSD1 !I10 follows the template formula =B10+C10+D10+E10+F10+G10+H10"
+  },
+  {
+   "id": "BSD1-ARI-0002",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD1 !I11",
+   "terms": [
+    "BSD1.R11.thu",
+    "BSD1.R11.fri",
+    "BSD1.R11.sat",
+    "BSD1.R11.sun",
+    "BSD1.R11.mon",
+    "BSD1.R11.tue",
+    "BSD1.R11.wed"
+   ],
+   "tolerance": "0.04",
+   "description": "BSD1 !I11 follows the template formula =B11+C11+D11+E11+F11+G11+H11"
+  },
+  {
+   "id": "BSD1-ARI-0003",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD1 !I12",
+   "terms": [
+    "BSD1.R12.thu",
+    "BSD1.R12.fri",
+    "BSD1.R12.sat",
+    "BSD1.R12.sun",
+    "BSD1.R12.mon",
+    "BSD1.R12.tue",
+    "BSD1.R12.wed"
+   ],
+   "tolerance": "0.04",
+   "description": "BSD1 !I12 follows the template formula =B12+C12+D12+E12+F12+G12+H12"
+  },
+  {
+   "id": "BSD1-ARI-0004",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD1 !I13",
+   "terms": [
+    "BSD1.R13.thu",
+    "BSD1.R13.fri",
+    "BSD1.R13.sat",
+    "BSD1.R13.sun",
+    "BSD1.R13.mon",
+    "BSD1.R13.tue",
+    "BSD1.R13.wed"
+   ],
+   "tolerance": "0.04",
+   "description": "BSD1 !I13 follows the template formula =B13+C13+D13+E13+F13+G13+H13"
+  },
+  {
+   "id": "BSD1-ARI-0005",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD1 !I14",
+   "terms": [
+    "BSD1.R14.thu",
+    "BSD1.R14.fri",
+    "BSD1.R14.sat",
+    "BSD1.R14.sun",
+    "BSD1.R14.mon",
+    "BSD1.R14.tue",
+    "BSD1.R14.wed"
+   ],
+   "tolerance": "0.04",
+   "description": "BSD1 !I14 follows the template formula =B14+C14+D14+E14+F14+G14+H14"
+  },
+  {
+   "id": "BSD1-ARI-0006",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD1 !I15",
+   "terms": [
+    "BSD1.R15.thu",
+    "BSD1.R15.fri",
+    "BSD1.R15.sat",
+    "BSD1.R15.sun",
+    "BSD1.R15.mon",
+    "BSD1.R15.tue",
+    "BSD1.R15.wed"
+   ],
+   "tolerance": "0.04",
+   "description": "BSD1 !I15 follows the template formula =B15+C15+D15+E15+F15+G15+H15"
+  },
+  {
+   "id": "BSD1-ARI-0007",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD1 !B16",
+   "terms": [
+    "BSD1.R10.thu",
+    "BSD1.R11.thu",
+    "BSD1.R12.thu",
+    "BSD1.R13.thu",
+    "BSD1.R14.thu",
+    "BSD1.R15.thu"
+   ],
+   "tolerance": "0.035",
+   "description": "BSD1 !B16 follows the template formula =SUM(B10:B15)"
+  },
+  {
+   "id": "BSD1-ARI-0008",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD1 !C16",
+   "terms": [
+    "BSD1.R10.fri",
+    "BSD1.R11.fri",
+    "BSD1.R12.fri",
+    "BSD1.R13.fri",
+    "BSD1.R14.fri",
+    "BSD1.R15.fri"
+   ],
+   "tolerance": "0.035",
+   "description": "BSD1 !C16 follows the template formula =SUM(C10:C15)"
+  },
+  {
+   "id": "BSD1-ARI-0009",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD1 !D16",
+   "terms": [
+    "BSD1.R10.sat",
+    "BSD1.R11.sat",
+    "BSD1.R12.sat",
+    "BSD1.R13.sat",
+    "BSD1.R14.sat",
+    "BSD1.R15.sat"
+   ],
+   "tolerance": "0.035",
+   "description": "BSD1 !D16 follows the template formula =SUM(D10:D15)"
+  },
+  {
+   "id": "BSD1-ARI-0010",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD1 !E16",
+   "terms": [
+    "BSD1.R10.sun",
+    "BSD1.R11.sun",
+    "BSD1.R12.sun",
+    "BSD1.R13.sun",
+    "BSD1.R14.sun",
+    "BSD1.R15.sun"
+   ],
+   "tolerance": "0.035",
+   "description": "BSD1 !E16 follows the template formula =SUM(E10:E15)"
+  },
+  {
+   "id": "BSD1-ARI-0011",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD1 !F16",
+   "terms": [
+    "BSD1.R10.mon",
+    "BSD1.R11.mon",
+    "BSD1.R12.mon",
+    "BSD1.R13.mon",
+    "BSD1.R14.mon",
+    "BSD1.R15.mon"
+   ],
+   "tolerance": "0.035",
+   "description": "BSD1 !F16 follows the template formula =SUM(F10:F15)"
+  },
+  {
+   "id": "BSD1-ARI-0012",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD1 !G16",
+   "terms": [
+    "BSD1.R10.tue",
+    "BSD1.R11.tue",
+    "BSD1.R12.tue",
+    "BSD1.R13.tue",
+    "BSD1.R14.tue",
+    "BSD1.R15.tue"
+   ],
+   "tolerance": "0.035",
+   "description": "BSD1 !G16 follows the template formula =SUM(G10:G15)"
+  },
+  {
+   "id": "BSD1-ARI-0013",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD1 !H16",
+   "terms": [
+    "BSD1.R10.wed",
+    "BSD1.R11.wed",
+    "BSD1.R12.wed",
+    "BSD1.R13.wed",
+    "BSD1.R14.wed",
+    "BSD1.R15.wed"
+   ],
+   "tolerance": "0.035",
+   "description": "BSD1 !H16 follows the template formula =SUM(H10:H15)"
+  },
+  {
+   "id": "BSD1-ARI-0014",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD1 !I16",
+   "terms": [
+    "BSD1 !I10",
+    "BSD1 !I11",
+    "BSD1 !I12",
+    "BSD1 !I13",
+    "BSD1 !I14",
+    "BSD1 !I15"
+   ],
+   "tolerance": "0.035",
+   "description": "BSD1 !I16 follows the template formula =SUM(I10:I15)"
+  },
+  {
+   "id": "BSD1-ARI-0015",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD1 !I18",
+   "terms": [
+    "BSD1.R18.thu",
+    "BSD1.R18.fri",
+    "BSD1.R18.sat",
+    "BSD1.R18.sun",
+    "BSD1.R18.mon",
+    "BSD1.R18.tue",
+    "BSD1.R18.wed"
+   ],
+   "tolerance": "0.04",
+   "description": "BSD1 !I18 follows the template formula =B18+C18+D18+E18+F18+G18+H18"
+  },
+  {
+   "id": "BSD1-ARI-0016",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD1 !I19",
+   "terms": [
+    "BSD1.R19.thu",
+    "BSD1.R19.fri",
+    "BSD1.R19.sat",
+    "BSD1.R19.sun",
+    "BSD1.R19.mon",
+    "BSD1.R19.tue",
+    "BSD1.R19.wed"
+   ],
+   "tolerance": "0.04",
+   "description": "BSD1 !I19 follows the template formula =B19+C19+D19+E19+F19+G19+H19"
+  },
+  {
+   "id": "BSD1-ARI-0017",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD1 !I20",
+   "terms": [
+    "BSD1.R20.thu",
+    "BSD1.R20.fri",
+    "BSD1.R20.sat",
+    "BSD1.R20.sun",
+    "BSD1.R20.mon",
+    "BSD1.R20.tue",
+    "BSD1.R20.wed"
+   ],
+   "tolerance": "0.04",
+   "description": "BSD1 !I20 follows the template formula =B20+C20+D20+E20+F20+G20+H20"
+  },
+  {
+   "id": "BSD1-ARI-0018",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD1 !B21",
+   "terms": [
+    "BSD1.R18.thu",
+    "BSD1.R19.thu",
+    "BSD1.R20.thu"
+   ],
+   "tolerance": "0.02",
+   "description": "BSD1 !B21 follows the template formula =B18+B19+B20"
+  },
+  {
+   "id": "BSD1-ARI-0019",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD1 !C21",
+   "terms": [
+    "BSD1.R18.fri",
+    "BSD1.R19.fri",
+    "BSD1.R20.fri"
+   ],
+   "tolerance": "0.02",
+   "description": "BSD1 !C21 follows the template formula =C18+C19+C20"
+  },
+  {
+   "id": "BSD1-ARI-0020",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD1 !D21",
+   "terms": [
+    "BSD1.R18.sat",
+    "BSD1.R19.sat",
+    "BSD1.R20.sat"
+   ],
+   "tolerance": "0.02",
+   "description": "BSD1 !D21 follows the template formula =D18+D19+D20"
+  },
+  {
+   "id": "BSD1-ARI-0021",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD1 !E21",
+   "terms": [
+    "BSD1.R18.sun",
+    "BSD1.R19.sun",
+    "BSD1.R20.sun"
+   ],
+   "tolerance": "0.02",
+   "description": "BSD1 !E21 follows the template formula =E18+E19+E20"
+  },
+  {
+   "id": "BSD1-ARI-0022",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD1 !F21",
+   "terms": [
+    "BSD1.R18.mon",
+    "BSD1.R19.mon",
+    "BSD1.R20.mon"
+   ],
+   "tolerance": "0.02",
+   "description": "BSD1 !F21 follows the template formula =F18+F19+F20"
+  },
+  {
+   "id": "BSD1-ARI-0023",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD1 !G21",
+   "terms": [
+    "BSD1.R18.tue",
+    "BSD1.R19.tue",
+    "BSD1.R20.tue"
+   ],
+   "tolerance": "0.02",
+   "description": "BSD1 !G21 follows the template formula =G18+G19+G20"
+  },
+  {
+   "id": "BSD1-ARI-0024",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD1 !H21",
+   "terms": [
+    "BSD1.R18.wed",
+    "BSD1.R19.wed",
+    "BSD1.R20.wed"
+   ],
+   "tolerance": "0.02",
+   "description": "BSD1 !H21 follows the template formula =H18+H19+H20"
+  },
+  {
+   "id": "BSD1-ARI-0025",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD1 !I21",
+   "terms": [
+    "BSD1 !B21",
+    "BSD1 !C21",
+    "BSD1 !D21",
+    "BSD1 !E21",
+    "BSD1 !F21",
+    "BSD1 !G21",
+    "BSD1 !H21"
+   ],
+   "tolerance": "0.04",
+   "description": "BSD1 !I21 follows the template formula =B21+C21+D21+E21+F21+G21+H21"
+  },
+  {
+   "id": "BSD1-ARI-0026",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD1 !B22",
+   "terms": [
+    "BSD1 !B16",
+    "BSD1 !B21"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD1 !B22 follows the template formula =B16+B21"
+  },
+  {
+   "id": "BSD1-ARI-0027",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD1 !C22",
+   "terms": [
+    "BSD1 !C16",
+    "BSD1 !C21"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD1 !C22 follows the template formula =C16+C21"
+  },
+  {
+   "id": "BSD1-ARI-0028",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD1 !D22",
+   "terms": [
+    "BSD1 !D16",
+    "BSD1 !D21"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD1 !D22 follows the template formula =D16+D21"
+  },
+  {
+   "id": "BSD1-ARI-0029",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD1 !E22",
+   "terms": [
+    "BSD1 !E16",
+    "BSD1 !E21"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD1 !E22 follows the template formula =E16+E21"
+  },
+  {
+   "id": "BSD1-ARI-0030",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD1 !F22",
+   "terms": [
+    "BSD1 !F16",
+    "BSD1 !F21"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD1 !F22 follows the template formula =F16+F21"
+  },
+  {
+   "id": "BSD1-ARI-0031",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD1 !G22",
+   "terms": [
+    "BSD1 !G16",
+    "BSD1 !G21"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD1 !G22 follows the template formula =G16+G21"
+  },
+  {
+   "id": "BSD1-ARI-0032",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD1 !H22",
+   "terms": [
+    "BSD1 !H16",
+    "BSD1 !H21"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD1 !H22 follows the template formula =H16+H21"
+  },
+  {
+   "id": "BSD1-ARI-0033",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD1 !I22",
+   "terms": [
+    "BSD1 !B22",
+    "BSD1 !C22",
+    "BSD1 !D22",
+    "BSD1 !E22",
+    "BSD1 !F22",
+    "BSD1 !G22",
+    "BSD1 !H22"
+   ],
+   "tolerance": "0.04",
+   "description": "BSD1 !I22 follows the template formula =B22+C22+D22+E22+F22+G22+H22"
+  },
+  {
+   "id": "BSD1-ARI-0034",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD1 !I23",
+   "terms": [
+    "BSD1.R23.thu",
+    "BSD1.R23.fri",
+    "BSD1.R23.sat",
+    "BSD1.R23.sun",
+    "BSD1.R23.mon",
+    "BSD1.R23.tue",
+    "BSD1.R23.wed"
+   ],
+   "tolerance": "0.04",
+   "description": "BSD1 !I23 follows the template formula =B23+C23+D23+E23+F23+G23+H23"
+  },
+  {
+   "id": "BSD1-ARI-0035",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD1 !I24",
+   "terms": [
+    "BSD1.R24.thu",
+    "BSD1.R24.fri",
+    "BSD1.R24.sat",
+    "BSD1.R24.sun",
+    "BSD1.R24.mon",
+    "BSD1.R24.tue",
+    "BSD1.R24.wed"
+   ],
+   "tolerance": "0.04",
+   "description": "BSD1 !I24 follows the template formula =B24+C24+D24+E24+F24+G24+H24"
+  },
+  {
+   "id": "BSD1-ARI-0036",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD1 !B25",
+   "terms": [
+    "BSD1.R23.thu",
+    "BSD1.R24.thu"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD1 !B25 follows the template formula =B23+B24"
+  },
+  {
+   "id": "BSD1-ARI-0037",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD1 !C25",
+   "terms": [
+    "BSD1.R23.fri",
+    "BSD1.R24.fri"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD1 !C25 follows the template formula =C23+C24"
+  },
+  {
+   "id": "BSD1-ARI-0038",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD1 !D25",
+   "terms": [
+    "BSD1.R23.sat",
+    "BSD1.R24.sat"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD1 !D25 follows the template formula =D23+D24"
+  },
+  {
+   "id": "BSD1-ARI-0039",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD1 !E25",
+   "terms": [
+    "BSD1.R23.sun",
+    "BSD1.R24.sun"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD1 !E25 follows the template formula =E23+E24"
+  },
+  {
+   "id": "BSD1-ARI-0040",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD1 !F25",
+   "terms": [
+    "BSD1.R23.mon",
+    "BSD1.R24.mon"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD1 !F25 follows the template formula =F23+F24"
+  },
+  {
+   "id": "BSD1-ARI-0041",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD1 !G25",
+   "terms": [
+    "BSD1.R23.tue",
+    "BSD1.R24.tue"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD1 !G25 follows the template formula =G23+G24"
+  },
+  {
+   "id": "BSD1-ARI-0042",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD1 !H25",
+   "terms": [
+    "BSD1.R23.wed",
+    "BSD1.R24.wed"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD1 !H25 follows the template formula =H23+H24"
+  },
+  {
+   "id": "BSD1-ARI-0043",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD1 !I25",
+   "terms": [
+    "BSD1 !I23",
+    "BSD1 !I24"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD1 !I25 follows the template formula =I23+I24"
+  },
+  {
+   "id": "BSD1-ARI-0044",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD1 !K25",
+   "terms": [
+    "BSD1 !B25",
+    "BSD1 !C25",
+    "BSD1 !D25",
+    "BSD1 !E25",
+    "BSD1 !F25",
+    "BSD1 !G25",
+    "BSD1 !H25"
+   ],
+   "tolerance": "0.04",
+   "description": "BSD1 !K25 follows the template formula =SUM(B25:H25)"
+  },
+  {
+   "id": "BSD1-ARI-0045",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD1 !B26",
+   "terms": [
+    "BSD1 !B22",
+    "BSD1 !B25"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD1 !B26 follows the template formula =B22+B25"
+  },
+  {
+   "id": "BSD1-ARI-0046",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD1 !C26",
+   "terms": [
+    "BSD1 !C22",
+    "BSD1 !C25"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD1 !C26 follows the template formula =C22+C25"
+  },
+  {
+   "id": "BSD1-ARI-0047",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD1 !D26",
+   "terms": [
+    "BSD1 !D22",
+    "BSD1 !D25"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD1 !D26 follows the template formula =D22+D25"
+  },
+  {
+   "id": "BSD1-ARI-0048",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD1 !E26",
+   "terms": [
+    "BSD1 !E22",
+    "BSD1 !E25"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD1 !E26 follows the template formula =E22+E25"
+  },
+  {
+   "id": "BSD1-ARI-0049",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD1 !F26",
+   "terms": [
+    "BSD1 !F22",
+    "BSD1 !F25"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD1 !F26 follows the template formula =F22+F25"
+  },
+  {
+   "id": "BSD1-ARI-0050",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD1 !G26",
+   "terms": [
+    "BSD1 !G22",
+    "BSD1 !G25"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD1 !G26 follows the template formula =G22+G25"
+  },
+  {
+   "id": "BSD1-ARI-0051",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD1 !H26",
+   "terms": [
+    "BSD1 !H22",
+    "BSD1 !H25"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD1 !H26 follows the template formula =H22+H25"
+  },
+  {
+   "id": "BSD1-ARI-0052",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD1 !I26",
+   "terms": [
+    "BSD1 !B26",
+    "BSD1 !C26",
+    "BSD1 !D26",
+    "BSD1 !E26",
+    "BSD1 !F26",
+    "BSD1 !G26",
+    "BSD1 !H26"
+   ],
+   "tolerance": "0.04",
+   "description": "BSD1 !I26 follows the template formula =B26+C26+D26+E26+F26+G26+H26"
+  },
+  {
+   "id": "BSD1-ARI-0053",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD1 !I32",
+   "terms": [
+    "BSD1.R32.thu",
+    "BSD1.R32.fri",
+    "BSD1.R32.sat",
+    "BSD1.R32.sun",
+    "BSD1.R32.mon",
+    "BSD1.R32.tue",
+    "BSD1.R32.wed"
+   ],
+   "tolerance": "0.04",
+   "description": "BSD1 !I32 follows the template formula =B32+C32+D32+E32+F32+G32+H32"
+  },
+  {
+   "id": "BSD1-ARI-0054",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD1 !I33",
+   "terms": [
+    "BSD1.R33.thu",
+    "BSD1.R33.fri",
+    "BSD1.R33.sat",
+    "BSD1.R33.sun",
+    "BSD1.R33.mon",
+    "BSD1.R33.tue",
+    "BSD1.R33.wed"
+   ],
+   "tolerance": "0.04",
+   "description": "BSD1 !I33 follows the template formula =B33+C33+D33+E33+F33+G33+H33"
+  },
+  {
+   "id": "BSD1-ARI-0055",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD1 !I34",
+   "terms": [
+    "BSD1.R34.thu",
+    "BSD1.R34.fri",
+    "BSD1.R34.sat",
+    "BSD1.R34.sun",
+    "BSD1.R34.mon",
+    "BSD1.R34.tue",
+    "BSD1.R34.wed"
+   ],
+   "tolerance": "0.04",
+   "description": "BSD1 !I34 follows the template formula =B34+C34+D34+E34+F34+G34+H34"
+  },
+  {
+   "id": "BSD1-ARI-0056",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD1 !B35",
+   "terms": [
+    "BSD1.R33.thu",
+    "BSD1.R34.thu"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD1 !B35 follows the template formula =B33+B34"
+  },
+  {
+   "id": "BSD1-ARI-0057",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD1 !C35",
+   "terms": [
+    "BSD1.R33.fri",
+    "BSD1.R34.fri"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD1 !C35 follows the template formula =C33+C34"
+  },
+  {
+   "id": "BSD1-ARI-0058",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD1 !D35",
+   "terms": [
+    "BSD1.R33.sat",
+    "BSD1.R34.sat"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD1 !D35 follows the template formula =D33+D34"
+  },
+  {
+   "id": "BSD1-ARI-0059",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD1 !E35",
+   "terms": [
+    "BSD1.R33.sun",
+    "BSD1.R34.sun"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD1 !E35 follows the template formula =E33+E34"
+  },
+  {
+   "id": "BSD1-ARI-0060",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD1 !F35",
+   "terms": [
+    "BSD1.R33.mon",
+    "BSD1.R34.mon"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD1 !F35 follows the template formula =F33+F34"
+  },
+  {
+   "id": "BSD1-ARI-0061",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD1 !G35",
+   "terms": [
+    "BSD1.R33.tue",
+    "BSD1.R34.tue"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD1 !G35 follows the template formula =G33+G34"
+  },
+  {
+   "id": "BSD1-ARI-0062",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD1 !H35",
+   "terms": [
+    "BSD1.R33.wed",
+    "BSD1.R34.wed"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD1 !H35 follows the template formula =H33+H34"
+  },
+  {
+   "id": "BSD1-ARI-0063",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD1 !I35",
+   "terms": [
+    "BSD1 !I33",
+    "BSD1 !I34"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD1 !I35 follows the template formula =I33+I34"
+  },
+  {
+   "id": "BSD1-ARI-0064",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD1 !B36",
+   "terms": [
+    "BSD1.R32.thu",
+    "BSD1 !B35"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD1 !B36 follows the template formula =B32+B35"
+  },
+  {
+   "id": "BSD1-ARI-0065",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD1 !C36",
+   "terms": [
+    "BSD1.R32.fri",
+    "BSD1 !C35"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD1 !C36 follows the template formula =C32+C35"
+  },
+  {
+   "id": "BSD1-ARI-0066",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD1 !D36",
+   "terms": [
+    "BSD1.R32.sat",
+    "BSD1 !D35"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD1 !D36 follows the template formula =D32+D35"
+  },
+  {
+   "id": "BSD1-ARI-0067",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD1 !E36",
+   "terms": [
+    "BSD1.R32.sun",
+    "BSD1 !E35"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD1 !E36 follows the template formula =E32+E35"
+  },
+  {
+   "id": "BSD1-ARI-0068",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD1 !F36",
+   "terms": [
+    "BSD1.R32.mon",
+    "BSD1 !F35"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD1 !F36 follows the template formula =F32+F35"
+  },
+  {
+   "id": "BSD1-ARI-0069",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD1 !G36",
+   "terms": [
+    "BSD1.R32.tue",
+    "BSD1 !G35"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD1 !G36 follows the template formula =G32+G35"
+  },
+  {
+   "id": "BSD1-ARI-0070",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD1 !H36",
+   "terms": [
+    "BSD1.R32.wed",
+    "BSD1 !H35"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD1 !H36 follows the template formula =H32+H35"
+  },
+  {
+   "id": "BSD1-ARI-0071",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD1 !I36",
+   "terms": [
+    "BSD1 !I32",
+    "BSD1 !I35"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD1 !I36 follows the template formula =I32+I35"
+  },
+  {
+   "id": "BSD1-ARI-0072",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD1 !I39",
+   "terms": [
+    "BSD1.R39.thu",
+    "BSD1.R39.fri",
+    "BSD1.R39.sat",
+    "BSD1.R39.sun",
+    "BSD1.R39.mon",
+    "BSD1.R39.tue",
+    "BSD1.R39.wed"
+   ],
+   "tolerance": "0.04",
+   "description": "BSD1 !I39 follows the template formula =B39+C39+D39+E39+F39+G39+H39"
+  },
+  {
+   "id": "BSD1-ARI-0073",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD1 !B40",
+   "terms": [
+    "BSD1.R41.thu",
+    "BSD1.R42.thu",
+    "BSD1.R43.thu"
+   ],
+   "tolerance": "0.02",
+   "description": "BSD1 !B40 follows the template formula =B41+B42+B43"
+  },
+  {
+   "id": "BSD1-ARI-0074",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD1 !C40",
+   "terms": [
+    "BSD1.R41.fri",
+    "BSD1.R42.fri",
+    "BSD1.R43.fri"
+   ],
+   "tolerance": "0.02",
+   "description": "BSD1 !C40 follows the template formula =C41+C42+C43"
+  },
+  {
+   "id": "BSD1-ARI-0075",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD1 !D40",
+   "terms": [
+    "BSD1.R41.sat",
+    "BSD1.R42.sat",
+    "BSD1.R43.sat"
+   ],
+   "tolerance": "0.02",
+   "description": "BSD1 !D40 follows the template formula =D41+D42+D43"
+  },
+  {
+   "id": "BSD1-ARI-0076",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD1 !E40",
+   "terms": [
+    "BSD1.R41.sun",
+    "BSD1.R42.sun",
+    "BSD1.R43.sun"
+   ],
+   "tolerance": "0.02",
+   "description": "BSD1 !E40 follows the template formula =E41+E42+E43"
+  },
+  {
+   "id": "BSD1-ARI-0077",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD1 !F40",
+   "terms": [
+    "BSD1.R41.mon",
+    "BSD1.R42.mon",
+    "BSD1.R43.mon"
+   ],
+   "tolerance": "0.02",
+   "description": "BSD1 !F40 follows the template formula =F41+F42+F43"
+  },
+  {
+   "id": "BSD1-ARI-0078",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD1 !G40",
+   "terms": [
+    "BSD1.R41.tue",
+    "BSD1.R42.tue",
+    "BSD1.R43.tue"
+   ],
+   "tolerance": "0.02",
+   "description": "BSD1 !G40 follows the template formula =G41+G42+G43"
+  },
+  {
+   "id": "BSD1-ARI-0079",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD1 !H40",
+   "terms": [
+    "BSD1.R41.wed",
+    "BSD1.R42.wed",
+    "BSD1.R43.wed"
+   ],
+   "tolerance": "0.02",
+   "description": "BSD1 !H40 follows the template formula =H41+H42+H43"
+  },
+  {
+   "id": "BSD1-ARI-0080",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD1 !I40",
+   "terms": [
+    "BSD1 !I41",
+    "BSD1 !I42",
+    "BSD1 !I43"
+   ],
+   "tolerance": "0.02",
+   "description": "BSD1 !I40 follows the template formula =I41+I42+I43"
+  },
+  {
+   "id": "BSD1-ARI-0081",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD1 !I41",
+   "terms": [
+    "BSD1.R41.thu",
+    "BSD1.R41.fri",
+    "BSD1.R41.sat",
+    "BSD1.R41.sun",
+    "BSD1.R41.mon",
+    "BSD1.R41.tue",
+    "BSD1.R41.wed"
+   ],
+   "tolerance": "0.04",
+   "description": "BSD1 !I41 follows the template formula =B41+C41+D41+E41+F41+G41+H41"
+  },
+  {
+   "id": "BSD1-ARI-0082",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD1 !I42",
+   "terms": [
+    "BSD1.R42.thu",
+    "BSD1.R42.fri",
+    "BSD1.R42.sat",
+    "BSD1.R42.sun",
+    "BSD1.R42.mon",
+    "BSD1.R42.tue",
+    "BSD1.R42.wed"
+   ],
+   "tolerance": "0.04",
+   "description": "BSD1 !I42 follows the template formula =B42+C42+D42+E42+F42+G42+H42"
+  },
+  {
+   "id": "BSD1-ARI-0083",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD1 !I43",
+   "terms": [
+    "BSD1.R43.thu",
+    "BSD1.R43.fri",
+    "BSD1.R43.sat",
+    "BSD1.R43.sun",
+    "BSD1.R43.mon",
+    "BSD1.R43.tue",
+    "BSD1.R43.wed"
+   ],
+   "tolerance": "0.04",
+   "description": "BSD1 !I43 follows the template formula =B43+C43+D43+E43+F43+G43+H43"
+  },
+  {
+   "id": "BSD1-ARI-0084",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD1 !B44",
+   "terms": [
+    "BSD1.R45.thu",
+    "BSD1.R46.thu",
+    "BSD1.R47.thu",
+    "BSD1.R48.thu",
+    "BSD1.R49.thu",
+    "BSD1.R50.thu"
+   ],
+   "tolerance": "0.035",
+   "description": "BSD1 !B44 follows the template formula =SUM(B45:B50)"
+  },
+  {
+   "id": "BSD1-ARI-0085",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD1 !C44",
+   "terms": [
+    "BSD1.R45.fri",
+    "BSD1.R46.fri",
+    "BSD1.R47.fri",
+    "BSD1.R48.fri",
+    "BSD1.R49.fri",
+    "BSD1.R50.fri"
+   ],
+   "tolerance": "0.035",
+   "description": "BSD1 !C44 follows the template formula =SUM(C45:C50)"
+  },
+  {
+   "id": "BSD1-ARI-0086",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD1 !D44",
+   "terms": [
+    "BSD1.R45.sat",
+    "BSD1.R46.sat",
+    "BSD1.R47.sat",
+    "BSD1.R48.sat",
+    "BSD1.R49.sat",
+    "BSD1.R50.sat"
+   ],
+   "tolerance": "0.035",
+   "description": "BSD1 !D44 follows the template formula =SUM(D45:D50)"
+  },
+  {
+   "id": "BSD1-ARI-0087",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD1 !E44",
+   "terms": [
+    "BSD1.R45.sun",
+    "BSD1.R46.sun",
+    "BSD1.R47.sun",
+    "BSD1.R48.sun",
+    "BSD1.R49.sun",
+    "BSD1.R50.sun"
+   ],
+   "tolerance": "0.035",
+   "description": "BSD1 !E44 follows the template formula =SUM(E45:E50)"
+  },
+  {
+   "id": "BSD1-ARI-0088",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD1 !F44",
+   "terms": [
+    "BSD1.R45.mon",
+    "BSD1.R46.mon",
+    "BSD1.R47.mon",
+    "BSD1.R48.mon",
+    "BSD1.R49.mon",
+    "BSD1.R50.mon"
+   ],
+   "tolerance": "0.035",
+   "description": "BSD1 !F44 follows the template formula =SUM(F45:F50)"
+  },
+  {
+   "id": "BSD1-ARI-0089",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD1 !G44",
+   "terms": [
+    "BSD1.R45.tue",
+    "BSD1.R46.tue",
+    "BSD1.R47.tue",
+    "BSD1.R48.tue",
+    "BSD1.R49.tue",
+    "BSD1.R50.tue"
+   ],
+   "tolerance": "0.035",
+   "description": "BSD1 !G44 follows the template formula =SUM(G45:G50)"
+  },
+  {
+   "id": "BSD1-ARI-0090",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD1 !H44",
+   "terms": [
+    "BSD1.R45.wed",
+    "BSD1.R46.wed",
+    "BSD1.R47.wed",
+    "BSD1.R48.wed",
+    "BSD1.R49.wed",
+    "BSD1.R50.wed"
+   ],
+   "tolerance": "0.035",
+   "description": "BSD1 !H44 follows the template formula =SUM(H45:H50)"
+  },
+  {
+   "id": "BSD1-ARI-0091",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD1 !I44",
+   "terms": [
+    "BSD1 !I45",
+    "BSD1 !I46",
+    "BSD1 !I47",
+    "BSD1 !I48",
+    "BSD1 !I49",
+    "BSD1 !I50"
+   ],
+   "tolerance": "0.035",
+   "description": "BSD1 !I44 follows the template formula =SUM(I45:I50)"
+  },
+  {
+   "id": "BSD1-ARI-0092",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD1 !I45",
+   "terms": [
+    "BSD1.R45.thu",
+    "BSD1.R45.fri",
+    "BSD1.R45.sat",
+    "BSD1.R45.sun",
+    "BSD1.R45.mon",
+    "BSD1.R45.tue",
+    "BSD1.R45.wed"
+   ],
+   "tolerance": "0.04",
+   "description": "BSD1 !I45 follows the template formula =B45+C45+D45+E45+F45+G45+H45"
+  },
+  {
+   "id": "BSD1-ARI-0093",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD1 !I46",
+   "terms": [
+    "BSD1.R46.thu",
+    "BSD1.R46.fri",
+    "BSD1.R46.sat",
+    "BSD1.R46.sun",
+    "BSD1.R46.mon",
+    "BSD1.R46.tue",
+    "BSD1.R46.wed"
+   ],
+   "tolerance": "0.04",
+   "description": "BSD1 !I46 follows the template formula =B46+C46+D46+E46+F46+G46+H46"
+  },
+  {
+   "id": "BSD1-ARI-0094",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD1 !I47",
+   "terms": [
+    "BSD1.R47.thu",
+    "BSD1.R47.fri",
+    "BSD1.R47.sat",
+    "BSD1.R47.sun",
+    "BSD1.R47.mon",
+    "BSD1.R47.tue",
+    "BSD1.R47.wed"
+   ],
+   "tolerance": "0.04",
+   "description": "BSD1 !I47 follows the template formula =B47+C47+D47+E47+F47+G47+H47"
+  },
+  {
+   "id": "BSD1-ARI-0095",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD1 !I48",
+   "terms": [
+    "BSD1.R48.thu",
+    "BSD1.R48.fri",
+    "BSD1.R48.sat",
+    "BSD1.R48.sun",
+    "BSD1.R48.mon",
+    "BSD1.R48.tue",
+    "BSD1.R48.wed"
+   ],
+   "tolerance": "0.04",
+   "description": "BSD1 !I48 follows the template formula =B48+C48+D48+E48+F48+G48+H48"
+  },
+  {
+   "id": "BSD1-ARI-0096",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD1 !I49",
+   "terms": [
+    "BSD1.R49.thu",
+    "BSD1.R49.fri",
+    "BSD1.R49.sat",
+    "BSD1.R49.sun",
+    "BSD1.R49.mon",
+    "BSD1.R49.tue",
+    "BSD1.R49.wed"
+   ],
+   "tolerance": "0.04",
+   "description": "BSD1 !I49 follows the template formula =B49+C49+D49+E49+F49+G49+H49"
+  },
+  {
+   "id": "BSD1-ARI-0097",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD1 !I50",
+   "terms": [
+    "BSD1.R50.thu",
+    "BSD1.R50.fri",
+    "BSD1.R50.sat",
+    "BSD1.R50.sun",
+    "BSD1.R50.mon",
+    "BSD1.R50.tue",
+    "BSD1.R50.wed"
+   ],
+   "tolerance": "0.04",
+   "description": "BSD1 !I50 follows the template formula =B50+C50+D50+E50+F50+G50+H50"
+  },
+  {
+   "id": "BSD1-ARI-0098",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD1 !B51",
+   "terms": [
+    "BSD1 !B52",
+    "BSD1 !B56"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD1 !B51 follows the template formula =B52+B56"
+  },
+  {
+   "id": "BSD1-ARI-0099",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD1 !C51",
+   "terms": [
+    "BSD1 !C52",
+    "BSD1 !C56"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD1 !C51 follows the template formula =C52+C56"
+  },
+  {
+   "id": "BSD1-ARI-0100",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD1 !D51",
+   "terms": [
+    "BSD1 !D52",
+    "BSD1 !D56"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD1 !D51 follows the template formula =D52+D56"
+  },
+  {
+   "id": "BSD1-ARI-0101",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD1 !E51",
+   "terms": [
+    "BSD1 !E52",
+    "BSD1 !E56"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD1 !E51 follows the template formula =E52+E56"
+  },
+  {
+   "id": "BSD1-ARI-0102",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD1 !F51",
+   "terms": [
+    "BSD1 !F52",
+    "BSD1 !F56"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD1 !F51 follows the template formula =F52+F56"
+  },
+  {
+   "id": "BSD1-ARI-0103",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD1 !G51",
+   "terms": [
+    "BSD1 !G52",
+    "BSD1 !G56"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD1 !G51 follows the template formula =G52+G56"
+  },
+  {
+   "id": "BSD1-ARI-0104",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD1 !H51",
+   "terms": [
+    "BSD1 !H52",
+    "BSD1 !H56"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD1 !H51 follows the template formula =H52+H56"
+  },
+  {
+   "id": "BSD1-ARI-0105",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD1 !I51",
+   "terms": [
+    "BSD1 !I52",
+    "BSD1 !I56"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD1 !I51 follows the template formula =I52+I56"
+  },
+  {
+   "id": "BSD1-ARI-0106",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD1 !B52",
+   "terms": [
+    "BSD1.R53.thu",
+    "BSD1.R54.thu",
+    "BSD1.R55.thu"
+   ],
+   "tolerance": "0.02",
+   "description": "BSD1 !B52 follows the template formula =SUM(B53:B55)"
+  },
+  {
+   "id": "BSD1-ARI-0107",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD1 !C52",
+   "terms": [
+    "BSD1.R53.fri",
+    "BSD1.R54.fri",
+    "BSD1.R55.fri"
+   ],
+   "tolerance": "0.02",
+   "description": "BSD1 !C52 follows the template formula =SUM(C53:C55)"
+  },
+  {
+   "id": "BSD1-ARI-0108",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD1 !D52",
+   "terms": [
+    "BSD1.R53.sat",
+    "BSD1.R54.sat",
+    "BSD1.R55.sat"
+   ],
+   "tolerance": "0.02",
+   "description": "BSD1 !D52 follows the template formula =SUM(D53:D55)"
+  },
+  {
+   "id": "BSD1-ARI-0109",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD1 !E52",
+   "terms": [
+    "BSD1.R53.sun",
+    "BSD1.R54.sun",
+    "BSD1.R55.sun"
+   ],
+   "tolerance": "0.02",
+   "description": "BSD1 !E52 follows the template formula =SUM(E53:E55)"
+  },
+  {
+   "id": "BSD1-ARI-0110",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD1 !F52",
+   "terms": [
+    "BSD1.R53.mon",
+    "BSD1.R54.mon",
+    "BSD1.R55.mon"
+   ],
+   "tolerance": "0.02",
+   "description": "BSD1 !F52 follows the template formula =SUM(F53:F55)"
+  },
+  {
+   "id": "BSD1-ARI-0111",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD1 !G52",
+   "terms": [
+    "BSD1.R53.tue",
+    "BSD1.R54.tue",
+    "BSD1.R55.tue"
+   ],
+   "tolerance": "0.02",
+   "description": "BSD1 !G52 follows the template formula =SUM(G53:G55)"
+  },
+  {
+   "id": "BSD1-ARI-0112",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD1 !H52",
+   "terms": [
+    "BSD1.R53.wed",
+    "BSD1.R54.wed",
+    "BSD1.R55.wed"
+   ],
+   "tolerance": "0.02",
+   "description": "BSD1 !H52 follows the template formula =SUM(H53:H55)"
+  },
+  {
+   "id": "BSD1-ARI-0113",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD1 !I52",
+   "terms": [
+    "BSD1 !I53",
+    "BSD1 !I54",
+    "BSD1 !I55"
+   ],
+   "tolerance": "0.02",
+   "description": "BSD1 !I52 follows the template formula =SUM(I53:I55)"
+  },
+  {
+   "id": "BSD1-ARI-0114",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD1 !I53",
+   "terms": [
+    "BSD1.R53.thu",
+    "BSD1.R53.fri",
+    "BSD1.R53.sat",
+    "BSD1.R53.sun",
+    "BSD1.R53.mon",
+    "BSD1.R53.tue",
+    "BSD1.R53.wed"
+   ],
+   "tolerance": "0.04",
+   "description": "BSD1 !I53 follows the template formula =B53+C53+D53+E53+F53+G53+H53"
+  },
+  {
+   "id": "BSD1-ARI-0115",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD1 !I54",
+   "terms": [
+    "BSD1.R54.thu",
+    "BSD1.R54.fri",
+    "BSD1.R54.sat",
+    "BSD1.R54.sun",
+    "BSD1.R54.mon",
+    "BSD1.R54.tue",
+    "BSD1.R54.wed"
+   ],
+   "tolerance": "0.04",
+   "description": "BSD1 !I54 follows the template formula =B54+C54+D54+E54+F54+G54+H54"
+  },
+  {
+   "id": "BSD1-ARI-0116",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD1 !I55",
+   "terms": [
+    "BSD1.R55.thu",
+    "BSD1.R55.fri",
+    "BSD1.R55.sat",
+    "BSD1.R55.sun",
+    "BSD1.R55.mon",
+    "BSD1.R55.tue",
+    "BSD1.R55.wed"
+   ],
+   "tolerance": "0.04",
+   "description": "BSD1 !I55 follows the template formula =B55+C55+D55+E55+F55+G55+H55"
+  },
+  {
+   "id": "BSD1-ARI-0117",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD1 !B56",
+   "terms": [
+    "BSD1.R57.thu",
+    "BSD1.R58.thu",
+    "BSD1.R59.thu",
+    "BSD1.R60.thu",
+    "BSD1.R61.thu",
+    "BSD1.R62.thu",
+    "BSD1.R63.thu"
+   ],
+   "tolerance": "0.04",
+   "description": "BSD1 !B56 follows the template formula =SUM(B57:B63)"
+  },
+  {
+   "id": "BSD1-ARI-0118",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD1 !C56",
+   "terms": [
+    "BSD1.R57.fri",
+    "BSD1.R58.fri",
+    "BSD1.R59.fri",
+    "BSD1.R60.fri",
+    "BSD1.R61.fri",
+    "BSD1.R62.fri",
+    "BSD1.R63.fri"
+   ],
+   "tolerance": "0.04",
+   "description": "BSD1 !C56 follows the template formula =SUM(C57:C63)"
+  },
+  {
+   "id": "BSD1-ARI-0119",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD1 !D56",
+   "terms": [
+    "BSD1.R57.sat",
+    "BSD1.R58.sat",
+    "BSD1.R59.sat",
+    "BSD1.R60.sat",
+    "BSD1.R61.sat",
+    "BSD1.R62.sat",
+    "BSD1.R63.sat"
+   ],
+   "tolerance": "0.04",
+   "description": "BSD1 !D56 follows the template formula =SUM(D57:D63)"
+  },
+  {
+   "id": "BSD1-ARI-0120",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD1 !E56",
+   "terms": [
+    "BSD1.R57.sun",
+    "BSD1.R58.sun",
+    "BSD1.R59.sun",
+    "BSD1.R60.sun",
+    "BSD1.R61.sun",
+    "BSD1.R62.sun",
+    "BSD1.R63.sun"
+   ],
+   "tolerance": "0.04",
+   "description": "BSD1 !E56 follows the template formula =SUM(E57:E63)"
+  },
+  {
+   "id": "BSD1-ARI-0121",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD1 !F56",
+   "terms": [
+    "BSD1.R57.mon",
+    "BSD1.R58.mon",
+    "BSD1.R59.mon",
+    "BSD1.R60.mon",
+    "BSD1.R61.mon",
+    "BSD1.R62.mon",
+    "BSD1.R63.mon"
+   ],
+   "tolerance": "0.04",
+   "description": "BSD1 !F56 follows the template formula =SUM(F57:F63)"
+  },
+  {
+   "id": "BSD1-ARI-0122",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD1 !G56",
+   "terms": [
+    "BSD1.R57.tue",
+    "BSD1.R58.tue",
+    "BSD1.R59.tue",
+    "BSD1.R60.tue",
+    "BSD1.R61.tue",
+    "BSD1.R62.tue",
+    "BSD1.R63.tue"
+   ],
+   "tolerance": "0.04",
+   "description": "BSD1 !G56 follows the template formula =SUM(G57:G63)"
+  },
+  {
+   "id": "BSD1-ARI-0123",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD1 !H56",
+   "terms": [
+    "BSD1.R57.wed",
+    "BSD1.R58.wed",
+    "BSD1.R59.wed",
+    "BSD1.R60.wed",
+    "BSD1.R61.wed",
+    "BSD1.R62.wed",
+    "BSD1.R63.wed"
+   ],
+   "tolerance": "0.04",
+   "description": "BSD1 !H56 follows the template formula =SUM(H57:H63)"
+  },
+  {
+   "id": "BSD1-ARI-0124",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD1 !I56",
+   "terms": [
+    "BSD1 !I57",
+    "BSD1 !I58",
+    "BSD1 !I59",
+    "BSD1 !I60",
+    "BSD1 !I61",
+    "BSD1 !I62",
+    "BSD1 !I63"
+   ],
+   "tolerance": "0.04",
+   "description": "BSD1 !I56 follows the template formula =SUM(I57:I63)"
+  },
+  {
+   "id": "BSD1-ARI-0125",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD1 !I57",
+   "terms": [
+    "BSD1.R57.thu",
+    "BSD1.R57.fri",
+    "BSD1.R57.sat",
+    "BSD1.R57.sun",
+    "BSD1.R57.mon",
+    "BSD1.R57.tue",
+    "BSD1.R57.wed"
+   ],
+   "tolerance": "0.04",
+   "description": "BSD1 !I57 follows the template formula =B57+C57+D57+E57+F57+G57+H57"
+  },
+  {
+   "id": "BSD1-ARI-0126",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD1 !I58",
+   "terms": [
+    "BSD1.R58.thu",
+    "BSD1.R58.fri",
+    "BSD1.R58.sat",
+    "BSD1.R58.sun",
+    "BSD1.R58.mon",
+    "BSD1.R58.tue",
+    "BSD1.R58.wed"
+   ],
+   "tolerance": "0.04",
+   "description": "BSD1 !I58 follows the template formula =B58+C58+D58+E58+F58+G58+H58"
+  },
+  {
+   "id": "BSD1-ARI-0127",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD1 !I59",
+   "terms": [
+    "BSD1.R59.thu",
+    "BSD1.R59.fri",
+    "BSD1.R59.sat",
+    "BSD1.R59.sun",
+    "BSD1.R59.mon",
+    "BSD1.R59.tue",
+    "BSD1.R59.wed"
+   ],
+   "tolerance": "0.04",
+   "description": "BSD1 !I59 follows the template formula =B59+C59+D59+E59+F59+G59+H59"
+  },
+  {
+   "id": "BSD1-ARI-0128",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD1 !I60",
+   "terms": [
+    "BSD1.R60.thu",
+    "BSD1.R60.fri",
+    "BSD1.R60.sat",
+    "BSD1.R60.sun",
+    "BSD1.R60.mon",
+    "BSD1.R60.tue",
+    "BSD1.R60.wed"
+   ],
+   "tolerance": "0.04",
+   "description": "BSD1 !I60 follows the template formula =B60+C60+D60+E60+F60+G60+H60"
+  },
+  {
+   "id": "BSD1-ARI-0129",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD1 !I61",
+   "terms": [
+    "BSD1.R61.thu",
+    "BSD1.R61.fri",
+    "BSD1.R61.sat",
+    "BSD1.R61.sun",
+    "BSD1.R61.mon",
+    "BSD1.R61.tue",
+    "BSD1.R61.wed"
+   ],
+   "tolerance": "0.04",
+   "description": "BSD1 !I61 follows the template formula =B61+C61+D61+E61+F61+G61+H61"
+  },
+  {
+   "id": "BSD1-ARI-0130",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD1 !I62",
+   "terms": [
+    "BSD1.R62.thu",
+    "BSD1.R62.fri",
+    "BSD1.R62.sat",
+    "BSD1.R62.sun",
+    "BSD1.R62.mon",
+    "BSD1.R62.tue",
+    "BSD1.R62.wed"
+   ],
+   "tolerance": "0.04",
+   "description": "BSD1 !I62 follows the template formula =B62+C62+D62+E62+F62+G62+H62"
+  },
+  {
+   "id": "BSD1-ARI-0131",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD1 !I63",
+   "terms": [
+    "BSD1.R63.thu",
+    "BSD1.R63.fri",
+    "BSD1.R63.sat",
+    "BSD1.R63.sun",
+    "BSD1.R63.mon",
+    "BSD1.R63.tue",
+    "BSD1.R63.wed"
+   ],
+   "tolerance": "0.04",
+   "description": "BSD1 !I63 follows the template formula =B63+C63+D63+E63+F63+G63+H63"
+  },
+  {
+   "id": "BSD1-ARI-0132",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD1 !I64",
+   "terms": [
+    "BSD1.R64.thu",
+    "BSD1.R64.fri",
+    "BSD1.R64.sat",
+    "BSD1.R64.sun",
+    "BSD1.R64.mon",
+    "BSD1.R64.tue",
+    "BSD1.R64.wed"
+   ],
+   "tolerance": "0.04",
+   "description": "BSD1 !I64 follows the template formula =B64+C64+D64+E64+F64+G64+H64"
+  },
+  {
+   "id": "BSD1-ARI-0133",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD1 !B65",
+   "terms": [
+    "BSD1.R39.thu",
+    "BSD1 !B40",
+    "BSD1 !B44",
+    "BSD1 !B51",
+    "BSD1.R64.thu"
+   ],
+   "tolerance": "0.03",
+   "description": "BSD1 !B65 follows the template formula =B39+B40+B44+B51+B64"
+  },
+  {
+   "id": "BSD1-ARI-0134",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD1 !C65",
+   "terms": [
+    "BSD1.R39.fri",
+    "BSD1 !C40",
+    "BSD1 !C44",
+    "BSD1 !C51",
+    "BSD1.R64.fri"
+   ],
+   "tolerance": "0.03",
+   "description": "BSD1 !C65 follows the template formula =C39+C40+C44+C51+C64"
+  },
+  {
+   "id": "BSD1-ARI-0135",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD1 !D65",
+   "terms": [
+    "BSD1.R39.sat",
+    "BSD1 !D40",
+    "BSD1 !D44",
+    "BSD1 !D51",
+    "BSD1.R64.sat"
+   ],
+   "tolerance": "0.03",
+   "description": "BSD1 !D65 follows the template formula =D39+D40+D44+D51+D64"
+  },
+  {
+   "id": "BSD1-ARI-0136",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD1 !E65",
+   "terms": [
+    "BSD1.R39.sun",
+    "BSD1 !E40",
+    "BSD1 !E44",
+    "BSD1 !E51",
+    "BSD1.R64.sun"
+   ],
+   "tolerance": "0.03",
+   "description": "BSD1 !E65 follows the template formula =E39+E40+E44+E51+E64"
+  },
+  {
+   "id": "BSD1-ARI-0137",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD1 !F65",
+   "terms": [
+    "BSD1.R39.mon",
+    "BSD1 !F40",
+    "BSD1 !F44",
+    "BSD1 !F51",
+    "BSD1.R64.mon"
+   ],
+   "tolerance": "0.03",
+   "description": "BSD1 !F65 follows the template formula =F39+F40+F44+F51+F64"
+  },
+  {
+   "id": "BSD1-ARI-0138",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD1 !G65",
+   "terms": [
+    "BSD1.R39.tue",
+    "BSD1 !G40",
+    "BSD1 !G44",
+    "BSD1 !G51",
+    "BSD1.R64.tue"
+   ],
+   "tolerance": "0.03",
+   "description": "BSD1 !G65 follows the template formula =G39+G40+G44+G51+G64"
+  },
+  {
+   "id": "BSD1-ARI-0139",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD1 !H65",
+   "terms": [
+    "BSD1.R39.wed",
+    "BSD1 !H40",
+    "BSD1 !H44",
+    "BSD1 !H51",
+    "BSD1.R64.wed"
+   ],
+   "tolerance": "0.03",
+   "description": "BSD1 !H65 follows the template formula =H39+H40+H44+H51+H64"
+  },
+  {
+   "id": "BSD1-ARI-0140",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD1 !I65",
+   "terms": [
+    "BSD1 !B65",
+    "BSD1 !C65",
+    "BSD1 !D65",
+    "BSD1 !E65",
+    "BSD1 !F65",
+    "BSD1 !G65",
+    "BSD1 !H65"
+   ],
+   "tolerance": "0.04",
+   "description": "BSD1 !I65 follows the template formula =B65+C65+D65+E65+F65+G65+H65"
+  },
+  {
+   "id": "BSD1-ARI-0141",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD1 !B66",
+   "terms": [
+    "BSD1 !B35",
+    "BSD1 !B65"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD1 !B66 follows the template formula =B35+B65"
+  },
+  {
+   "id": "BSD1-ARI-0142",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD1 !C66",
+   "terms": [
+    "BSD1 !C35",
+    "BSD1 !C65"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD1 !C66 follows the template formula =C35+C65"
+  },
+  {
+   "id": "BSD1-ARI-0143",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD1 !D66",
+   "terms": [
+    "BSD1 !D35",
+    "BSD1 !D65"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD1 !D66 follows the template formula =D35+D65"
+  },
+  {
+   "id": "BSD1-ARI-0144",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD1 !E66",
+   "terms": [
+    "BSD1 !E35",
+    "BSD1 !E65"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD1 !E66 follows the template formula =E35+E65"
+  },
+  {
+   "id": "BSD1-ARI-0145",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD1 !F66",
+   "terms": [
+    "BSD1 !F35",
+    "BSD1 !F65"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD1 !F66 follows the template formula =F35+F65"
+  },
+  {
+   "id": "BSD1-ARI-0146",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD1 !G66",
+   "terms": [
+    "BSD1 !G35",
+    "BSD1 !G65"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD1 !G66 follows the template formula =G35+G65"
+  },
+  {
+   "id": "BSD1-ARI-0147",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD1 !H66",
+   "terms": [
+    "BSD1 !H35",
+    "BSD1 !H65"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD1 !H66 follows the template formula =H35+H65"
+  },
+  {
+   "id": "BSD1-ARI-0148",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD1 !I66",
+   "terms": [
+    "BSD1 !B66",
+    "BSD1 !C66",
+    "BSD1 !D66",
+    "BSD1 !E66",
+    "BSD1 !F66",
+    "BSD1 !G66",
+    "BSD1 !H66"
+   ],
+   "tolerance": "0.04",
+   "description": "BSD1 !I66 follows the template formula =B66+C66+D66+E66+F66+G66+H66"
+  },
+  {
+   "id": "BSD1-ARI-0149",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD1 !B88",
+   "terms": [
+    "BSD1.R89.thu",
+    "BSD1.R90.thu"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD1 !B88 follows the template formula =SUM(B89:B90)"
+  },
+  {
+   "id": "BSD1-ARI-0150",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD1 !C88",
+   "terms": [
+    "BSD1.R89.fri",
+    "BSD1.R90.fri"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD1 !C88 follows the template formula =SUM(C89:C90)"
+  },
+  {
+   "id": "BSD1-ARI-0151",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD1 !D88",
+   "terms": [
+    "BSD1.R89.sat",
+    "BSD1.R90.sat"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD1 !D88 follows the template formula =SUM(D89:D90)"
+  },
+  {
+   "id": "BSD1-ARI-0152",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD1 !E88",
+   "terms": [
+    "BSD1.R89.sun",
+    "BSD1.R90.sun"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD1 !E88 follows the template formula =SUM(E89:E90)"
+  },
+  {
+   "id": "BSD1-ARI-0153",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD1 !F88",
+   "terms": [
+    "BSD1.R89.mon",
+    "BSD1.R90.mon"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD1 !F88 follows the template formula =SUM(F89:F90)"
+  },
+  {
+   "id": "BSD1-ARI-0154",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD1 !G88",
+   "terms": [
+    "BSD1.R89.tue",
+    "BSD1.R90.tue"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD1 !G88 follows the template formula =SUM(G89:G90)"
+  },
+  {
+   "id": "BSD1-ARI-0155",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD1 !H88",
+   "terms": [
+    "BSD1.R89.wed",
+    "BSD1.R90.wed"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD1 !H88 follows the template formula =SUM(H89:H90)"
+  },
+  {
+   "id": "BSD1-ARI-0156",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD1 !I88",
+   "terms": [
+    "BSD1 !B88",
+    "BSD1 !C88",
+    "BSD1 !D88",
+    "BSD1 !E88",
+    "BSD1 !F88",
+    "BSD1 !G88",
+    "BSD1 !H88"
+   ],
+   "tolerance": "0.04",
+   "description": "BSD1 !I88 follows the template formula =B88+C88+D88+E88+F88+G88+H88"
+  },
+  {
+   "id": "BSD1-ARI-0157",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD1 !I89",
+   "terms": [
+    "BSD1.R89.thu",
+    "BSD1.R89.fri",
+    "BSD1.R89.sat",
+    "BSD1.R89.sun",
+    "BSD1.R89.mon",
+    "BSD1.R89.tue",
+    "BSD1.R89.wed"
+   ],
+   "tolerance": "0.04",
+   "description": "BSD1 !I89 follows the template formula =B89+C89+D89+E89+F89+G89+H89"
+  },
+  {
+   "id": "BSD1-ARI-0158",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD1 !I90",
+   "terms": [
+    "BSD1.R90.thu",
+    "BSD1.R90.fri",
+    "BSD1.R90.sat",
+    "BSD1.R90.sun",
+    "BSD1.R90.mon",
+    "BSD1.R90.tue",
+    "BSD1.R90.wed"
+   ],
+   "tolerance": "0.04",
+   "description": "BSD1 !I90 follows the template formula =B90+C90+D90+E90+F90+G90+H90"
+  },
+  {
+   "id": "BSD1-ARI-0159",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD1 !I91",
+   "terms": [
+    "BSD1.R91.thu",
+    "BSD1.R91.fri",
+    "BSD1.R91.sat",
+    "BSD1.R91.sun",
+    "BSD1.R91.mon",
+    "BSD1.R91.tue",
+    "BSD1.R91.wed"
+   ],
+   "tolerance": "0.04",
+   "description": "BSD1 !I91 follows the template formula =B91+C91+D91+E91+F91+G91+H91"
+  },
+  {
+   "id": "BSD1-ARI-0160",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD1 !I92",
+   "terms": [
+    "BSD1.R92.thu",
+    "BSD1.R92.fri",
+    "BSD1.R92.sat",
+    "BSD1.R92.sun",
+    "BSD1.R92.mon",
+    "BSD1.R92.tue",
+    "BSD1.R92.wed"
+   ],
+   "tolerance": "0.04",
+   "description": "BSD1 !I92 follows the template formula =B92+C92+D92+E92+F92+G92+H92"
+  },
+  {
+   "id": "BSD1-ARI-0161",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD1 !B93",
+   "terms": [
+    "BSD1.R91.thu",
+    "BSD1.R92.thu"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD1 !B93 follows the template formula =B91+B92"
+  },
+  {
+   "id": "BSD1-ARI-0162",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD1 !C93",
+   "terms": [
+    "BSD1.R91.fri",
+    "BSD1.R92.fri"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD1 !C93 follows the template formula =C91+C92"
+  },
+  {
+   "id": "BSD1-ARI-0163",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD1 !D93",
+   "terms": [
+    "BSD1.R91.sat",
+    "BSD1.R92.sat"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD1 !D93 follows the template formula =D91+D92"
+  },
+  {
+   "id": "BSD1-ARI-0164",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD1 !E93",
+   "terms": [
+    "BSD1.R91.sun",
+    "BSD1.R92.sun"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD1 !E93 follows the template formula =E91+E92"
+  },
+  {
+   "id": "BSD1-ARI-0165",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD1 !F93",
+   "terms": [
+    "BSD1.R91.mon",
+    "BSD1.R92.mon"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD1 !F93 follows the template formula =F91+F92"
+  },
+  {
+   "id": "BSD1-ARI-0166",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD1 !G93",
+   "terms": [
+    "BSD1.R91.tue",
+    "BSD1.R92.tue"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD1 !G93 follows the template formula =G91+G92"
+  },
+  {
+   "id": "BSD1-ARI-0167",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD1 !H93",
+   "terms": [
+    "BSD1.R91.wed",
+    "BSD1.R92.wed"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD1 !H93 follows the template formula =H91+H92"
+  },
+  {
+   "id": "BSD1-ARI-0168",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD1 !I93",
+   "terms": [
+    "BSD1 !I91",
+    "BSD1 !I92"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD1 !I93 follows the template formula =I91+I92"
+  },
+  {
+   "id": "BSD1-ARI-0169",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD1 !I94",
+   "terms": [
+    "BSD1.R94.thu",
+    "BSD1.R94.fri",
+    "BSD1.R94.sat",
+    "BSD1.R94.sun",
+    "BSD1.R94.mon",
+    "BSD1.R94.tue",
+    "BSD1.R94.wed"
+   ],
+   "tolerance": "0.04",
+   "description": "BSD1 !I94 follows the template formula =B94+C94+D94+E94+F94+G94+H94"
+  },
+  {
+   "id": "BSD1-ARI-0170",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD1 !I95",
+   "terms": [
+    "BSD1.R95.thu",
+    "BSD1.R95.fri",
+    "BSD1.R95.sat",
+    "BSD1.R95.sun",
+    "BSD1.R95.mon",
+    "BSD1.R95.tue",
+    "BSD1.R95.wed"
+   ],
+   "tolerance": "0.04",
+   "description": "BSD1 !I95 follows the template formula =B95+C95+D95+E95+F95+G95+H95"
+  },
+  {
+   "id": "BSD1-ARI-0171",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD1-Annex1!I10",
+   "terms": [
+    "BSD1.Annex1.R10.thu",
+    "BSD1.Annex1.R10.fri",
+    "BSD1.Annex1.R10.sat",
+    "BSD1.Annex1.R10.sun",
+    "BSD1.Annex1.R10.mon",
+    "BSD1.Annex1.R10.tue",
+    "BSD1.Annex1.R10.wed"
+   ],
+   "tolerance": "0.04",
+   "description": "BSD1-Annex1!I10 follows the template formula =B10+C10+D10+E10+F10+G10+H10"
+  },
+  {
+   "id": "BSD1-ARI-0172",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD1-Annex1!I11",
+   "terms": [
+    "BSD1.Annex1.R11.thu",
+    "BSD1.Annex1.R11.fri",
+    "BSD1.Annex1.R11.sat",
+    "BSD1.Annex1.R11.sun",
+    "BSD1.Annex1.R11.mon",
+    "BSD1.Annex1.R11.tue",
+    "BSD1.Annex1.R11.wed"
+   ],
+   "tolerance": "0.04",
+   "description": "BSD1-Annex1!I11 follows the template formula =B11+C11+D11+E11+F11+G11+H11"
+  },
+  {
+   "id": "BSD1-ARI-0173",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD1-Annex1!I12",
+   "terms": [
+    "BSD1.Annex1.R12.thu",
+    "BSD1.Annex1.R12.fri",
+    "BSD1.Annex1.R12.sat",
+    "BSD1.Annex1.R12.sun",
+    "BSD1.Annex1.R12.mon",
+    "BSD1.Annex1.R12.tue",
+    "BSD1.Annex1.R12.wed"
+   ],
+   "tolerance": "0.04",
+   "description": "BSD1-Annex1!I12 follows the template formula =B12+C12+D12+E12+F12+G12+H12"
+  },
+  {
+   "id": "BSD1-ARI-0174",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD1-Annex1!I13",
+   "terms": [
+    "BSD1.Annex1.R13.thu",
+    "BSD1.Annex1.R13.fri",
+    "BSD1.Annex1.R13.sat",
+    "BSD1.Annex1.R13.sun",
+    "BSD1.Annex1.R13.mon",
+    "BSD1.Annex1.R13.tue",
+    "BSD1.Annex1.R13.wed"
+   ],
+   "tolerance": "0.04",
+   "description": "BSD1-Annex1!I13 follows the template formula =B13+C13+D13+E13+F13+G13+H13"
+  },
+  {
+   "id": "BSD1-ARI-0175",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD1-Annex1!I19",
+   "terms": [
+    "BSD1.Annex1.R19.thu",
+    "BSD1.Annex1.R19.fri",
+    "BSD1.Annex1.R19.sat",
+    "BSD1.Annex1.R19.sun",
+    "BSD1.Annex1.R19.mon",
+    "BSD1.Annex1.R19.tue",
+    "BSD1.Annex1.R19.wed"
+   ],
+   "tolerance": "0.04",
+   "description": "BSD1-Annex1!I19 follows the template formula =B19+C19+D19+E19+F19+G19+H19"
+  },
+  {
+   "id": "BSD1-ARI-0176",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD1-Annex1!I20",
+   "terms": [
+    "BSD1.Annex1.R20.thu",
+    "BSD1.Annex1.R20.fri",
+    "BSD1.Annex1.R20.sat",
+    "BSD1.Annex1.R20.sun",
+    "BSD1.Annex1.R20.mon",
+    "BSD1.Annex1.R20.tue",
+    "BSD1.Annex1.R20.wed"
+   ],
+   "tolerance": "0.04",
+   "description": "BSD1-Annex1!I20 follows the template formula =B20+C20+D20+E20+F20+G20+H20"
+  },
+  {
+   "id": "BSD1-ARI-0177",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD1-Annex1!I21",
+   "terms": [
+    "BSD1.Annex1.R21.thu",
+    "BSD1.Annex1.R21.fri",
+    "BSD1.Annex1.R21.sat",
+    "BSD1.Annex1.R21.sun",
+    "BSD1.Annex1.R21.mon",
+    "BSD1.Annex1.R21.tue",
+    "BSD1.Annex1.R21.wed"
+   ],
+   "tolerance": "0.04",
+   "description": "BSD1-Annex1!I21 follows the template formula =B21+C21+D21+E21+F21+G21+H21"
+  },
+  {
+   "id": "BSD1-ARI-0178",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD1-Annex1!I22",
+   "terms": [
+    "BSD1.Annex1.R22.thu",
+    "BSD1.Annex1.R22.fri",
+    "BSD1.Annex1.R22.sat",
+    "BSD1.Annex1.R22.sun",
+    "BSD1.Annex1.R22.mon",
+    "BSD1.Annex1.R22.tue",
+    "BSD1.Annex1.R22.wed"
+   ],
+   "tolerance": "0.04",
+   "description": "BSD1-Annex1!I22 follows the template formula =B22+C22+D22+E22+F22+G22+H22"
+  },
+  {
+   "id": "BSD1-ARI-0179",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD1-Annex1!I27",
+   "terms": [
+    "BSD1.Annex1.R27.thu",
+    "BSD1.Annex1.R27.fri",
+    "BSD1.Annex1.R27.sat",
+    "BSD1.Annex1.R27.sun",
+    "BSD1.Annex1.R27.mon",
+    "BSD1.Annex1.R27.tue",
+    "BSD1.Annex1.R27.wed"
+   ],
+   "tolerance": "0.04",
+   "description": "BSD1-Annex1!I27 follows the template formula =B27+C27+D27+E27+F27+G27+H27"
+  },
+  {
+   "id": "BSD1-ARI-0180",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD1-Annex1!I28",
+   "terms": [
+    "BSD1.Annex1.R28.thu",
+    "BSD1.Annex1.R28.fri",
+    "BSD1.Annex1.R28.sat",
+    "BSD1.Annex1.R28.sun",
+    "BSD1.Annex1.R28.mon",
+    "BSD1.Annex1.R28.tue",
+    "BSD1.Annex1.R28.wed"
+   ],
+   "tolerance": "0.04",
+   "description": "BSD1-Annex1!I28 follows the template formula =B28+C28+D28+E28+F28+G28+H28"
+  },
+  {
+   "id": "BSD1-ARI-0181",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD1-Annex1!I29",
+   "terms": [
+    "BSD1.Annex1.R29.thu",
+    "BSD1.Annex1.R29.fri",
+    "BSD1.Annex1.R29.sat",
+    "BSD1.Annex1.R29.sun",
+    "BSD1.Annex1.R29.mon",
+    "BSD1.Annex1.R29.tue",
+    "BSD1.Annex1.R29.wed"
+   ],
+   "tolerance": "0.04",
+   "description": "BSD1-Annex1!I29 follows the template formula =B29+C29+D29+E29+F29+G29+H29"
+  },
+  {
+   "id": "BSD1-ARI-0182",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD1-Annex1!I30",
+   "terms": [
+    "BSD1.Annex1.R30.thu",
+    "BSD1.Annex1.R30.fri",
+    "BSD1.Annex1.R30.sat",
+    "BSD1.Annex1.R30.sun",
+    "BSD1.Annex1.R30.mon",
+    "BSD1.Annex1.R30.tue",
+    "BSD1.Annex1.R30.wed"
+   ],
+   "tolerance": "0.04",
+   "description": "BSD1-Annex1!I30 follows the template formula =B30+C30+D30+E30+F30+G30+H30"
+  },
+  {
+   "id": "BSD1-ARI-0183",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD1-Annex3!G16",
+   "terms": [
+    "BSD1.Annex3.R13.amount",
+    "BSD1.Annex3.R15.amount"
+   ],
+   "tolerance": "0.015",
+   "description": "BSD1-Annex3!G16 follows the template formula =G13+G15"
+  },
+  {
+   "id": "BSD1-ARI-0184",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD1-Annex3!G30",
+   "terms": [
+    "BSD1.Annex3.amount.R22.amount",
+    "BSD1.Annex3.amount.R23.amount",
+    "BSD1.Annex3.amount.R24.amount",
+    "BSD1.Annex3.amount.R25.amount",
+    "BSD1.Annex3.amount.R26.amount",
+    "BSD1.Annex3.amount.R27.amount",
+    "BSD1.Annex3.amount.R28.amount",
+    "BSD1.Annex3.amount.R29.amount"
+   ],
+   "tolerance": "0.045",
+   "description": "BSD1-Annex3!G30 follows the template formula =SUM(G22:G29)"
+  },
+  {
+   "id": "BSD1-ARI-0185",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD1-Annex3!G45",
+   "terms": [
+    "BSD1.Annex3.amount.R37.amount",
+    "BSD1.Annex3.amount.R38.amount",
+    "BSD1.Annex3.amount.R39.amount",
+    "BSD1.Annex3.amount.R40.amount",
+    "BSD1.Annex3.amount.R41.amount",
+    "BSD1.Annex3.amount.R42.amount",
+    "BSD1.Annex3.amount.R43.amount",
+    "BSD1.Annex3.amount.R44.amount"
+   ],
+   "tolerance": "0.045",
+   "description": "BSD1-Annex3!G45 follows the template formula =SUM(G37:G44)"
+  },
+  {
+   "id": "BSD1-ARI-0186",
+   "severity": "error",
+   "kind": "sum",
+   "target": "BSD1-Annex3!G59",
+   "terms": [
+    "BSD1.Annex3.amount.R51.amount",
+    "BSD1.Annex3.amount.R52.amount",
+    "BSD1.Annex3.amount.R53.amount",
+    "BSD1.Annex3.amount.R54.amount",
+    "BSD1.Annex3.amount.R55.amount",
+    "BSD1.Annex3.amount.R56.amount",
+    "BSD1.Annex3.amount.R57.amount",
+    "BSD1.Annex3.amount.R58.amount"
+   ],
+   "tolerance": "0.045",
+   "description": "BSD1-Annex3!G59 follows the template formula =SUM(G51:G58)"
+  }
+ ]
+}

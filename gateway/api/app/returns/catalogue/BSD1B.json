@@ -1,0 +1,574 @@
+{
+ "format": "aequoros-gateway-return/1",
+ "code": "BSD1B",
+ "name": "Daily Net Open Position (weekly return)",
+ "cadence": "weekly",
+ "basis": "solo",
+ "applies_to": [
+  "universal_bank"
+ ],
+ "version": "2026.2",
+ "first_reporting_date": "2025-01-01",
+ "source": {
+  "system": "AequorOS",
+  "template": "bog-bsd1b-official-v1",
+  "fidelity": "CONFIRMED",
+  "workbook": "FORM BSD1B.XLS"
+ },
+ "sections": [
+  {
+   "code": "sheet_form_fxp",
+   "title": "FORM FXP",
+   "unit": "millions",
+   "itemised": false,
+   "lines": [
+    {
+     "code": "BSD1B.FXP.R14.usd",
+     "label": "Net Assets — usd",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD1B.FXP.R14.usd_nature",
+     "label": "Net Assets — usd nature",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD1B.FXP.R14.gbp",
+     "label": "Net Assets — gbp",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD1B.FXP.R14.gbp_nature",
+     "label": "Net Assets — gbp nature",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD1B.FXP.R14.eur",
+     "label": "Net Assets — eur",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD1B.FXP.R14.eur_nature",
+     "label": "Net Assets — eur nature",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD1B.FXP.R14.other",
+     "label": "Net Assets — other",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD1B.FXP.R14.other_nature",
+     "label": "Net Assets — other nature",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD1B.FXP.R16.usd",
+     "label": "Liabilities on contingent credits — usd",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1B.FXP.R16.usd_nature",
+     "label": "Liabilities on contingent credits — usd nature",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1B.FXP.R16.gbp",
+     "label": "Liabilities on contingent credits — gbp",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1B.FXP.R16.gbp_nature",
+     "label": "Liabilities on contingent credits — gbp nature",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1B.FXP.R16.eur",
+     "label": "Liabilities on contingent credits — eur",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1B.FXP.R16.eur_nature",
+     "label": "Liabilities on contingent credits — eur nature",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1B.FXP.R16.other",
+     "label": "Liabilities on contingent credits — other",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1B.FXP.R16.other_nature",
+     "label": "Liabilities on contingent credits — other nature",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1B.FXP.R18.usd",
+     "label": "Net Trading Position (under contracts outstanding) — usd",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD1B.FXP.R18.usd_nature",
+     "label": "Net Trading Position (under contracts outstanding) — usd nature",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD1B.FXP.R18.gbp",
+     "label": "Net Trading Position (under contracts outstanding) — gbp",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD1B.FXP.R18.gbp_nature",
+     "label": "Net Trading Position (under contracts outstanding) — gbp nature",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD1B.FXP.R18.eur",
+     "label": "Net Trading Position (under contracts outstanding) — eur",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD1B.FXP.R18.eur_nature",
+     "label": "Net Trading Position (under contracts outstanding) — eur nature",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD1B.FXP.R18.other",
+     "label": "Net Trading Position (under contracts outstanding) — other",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD1B.FXP.R18.other_nature",
+     "label": "Net Trading Position (under contracts outstanding) — other nature",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD1B.FXP.R19.usd",
+     "label": "NET OPEN POSITION (NOP) (I+ii+iii) — usd",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD1B.FXP.R19.usd_nature",
+     "label": "NET OPEN POSITION (NOP) (I+ii+iii) — usd nature",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD1B.FXP.R19.gbp",
+     "label": "NET OPEN POSITION (NOP) (I+ii+iii) — gbp",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD1B.FXP.R19.gbp_nature",
+     "label": "NET OPEN POSITION (NOP) (I+ii+iii) — gbp nature",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD1B.FXP.R19.eur",
+     "label": "NET OPEN POSITION (NOP) (I+ii+iii) — eur",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD1B.FXP.R19.eur_nature",
+     "label": "NET OPEN POSITION (NOP) (I+ii+iii) — eur nature",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD1B.FXP.R19.other",
+     "label": "NET OPEN POSITION (NOP) (I+ii+iii) — other",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD1B.FXP.R19.other_nature",
+     "label": "NET OPEN POSITION (NOP) (I+ii+iii) — other nature",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD1B.FXP.R22.usd",
+     "label": "Cedi equivalent (in 000) (of NOP in currency) — usd",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD1B.FXP.R22.gbp",
+     "label": "Cedi equivalent (in 000) (of NOP in currency) — gbp",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD1B.FXP.R22.eur",
+     "label": "Cedi equivalent (in 000) (of NOP in currency) — eur",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD1B.FXP.R22.other",
+     "label": "Cedi equivalent (in 000) (of NOP in currency) — other",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD1B.FXP.R24.usd",
+     "label": "Single curr. Open Position — usd",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1B.FXP.R24.gbp",
+     "label": "Single curr. Open Position — gbp",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1B.FXP.R24.eur",
+     "label": "Single curr. Open Position — eur",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1B.FXP.R24.other",
+     "label": "Single curr. Open Position — other",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1B.FXP.R26.usd",
+     "label": "Management limit, if any, on NOP in currency — usd",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1B.FXP.R26.gbp",
+     "label": "Management limit, if any, on NOP in currency — gbp",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1B.FXP.R26.eur",
+     "label": "Management limit, if any, on NOP in currency — eur",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1B.FXP.R26.other",
+     "label": "Management limit, if any, on NOP in currency — other",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1B.FXP.R27.usd",
+     "label": "Revaluation Rates — usd",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD1B.FXP.R27.gbp",
+     "label": "Revaluation Rates — gbp",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD1B.FXP.R27.eur",
+     "label": "Revaluation Rates — eur",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD1B.FXP.R27.other",
+     "label": "Revaluation Rates — other",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD1B.FXP.R31.nop",
+     "label": "US Dollar — nop",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1B.FXP.R31.nature",
+     "label": "US Dollar — nature",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1B.FXP.R32.nop",
+     "label": "GB Pound — nop",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1B.FXP.R32.nature",
+     "label": "GB Pound — nature",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1B.FXP.R33.nop",
+     "label": "EURO — nop",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1B.FXP.R33.nature",
+     "label": "EURO — nature",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1B.FXP.R34.nop",
+     "label": "Other Currencies — nop",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1B.FXP.R34.nature",
+     "label": "Other Currencies — nature",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1B.FXP.R36.value",
+     "label": "a. AGGREGATE FOREX OPEN POSITION (AFOP)",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1B.FXP.R37.value",
+     "label": "b. Net own funds (NOF)[Networth]",
+     "kind": "value"
+    }
+   ]
+  },
+  {
+   "code": "sheet_afop",
+   "title": "AFOP",
+   "unit": "units",
+   "itemised": false,
+   "lines": [
+    {
+     "code": "BSD1B.AFOP.R8.nop",
+     "label": "US Dollar — nop",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1B.AFOP.R8.nature",
+     "label": "US Dollar — nature",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1B.AFOP.R9.nop",
+     "label": "GB Pound — nop",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1B.AFOP.R9.nature",
+     "label": "GB Pound — nature",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1B.AFOP.R10.nop",
+     "label": "EURO — nop",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1B.AFOP.R10.nature",
+     "label": "EURO — nature",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1B.AFOP.R11.nop",
+     "label": "Other Currencies — nop",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1B.AFOP.R11.nature",
+     "label": "Other Currencies — nature",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1B.AFOP.R13.value",
+     "label": "a. AGGREGATE FOREX OPEN POSITION (AFOP)",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1B.AFOP.R14.value",
+     "label": "b. Net own funds (NOF)[Networth]",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1B.AFOP.R17.value",
+     "label": "Regulatory (ie BoG)limit, if any, on AFOP.",
+     "kind": "value"
+    }
+   ]
+  },
+  {
+   "code": "sheet_schedule_b",
+   "title": "SCHEDULE B",
+   "unit": "millions",
+   "itemised": false,
+   "lines": [
+    {
+     "code": "BSD1B.SCHB.R6.usd",
+     "label": "a. Letters of Credit — usd",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1B.SCHB.R6.gbp",
+     "label": "a. Letters of Credit — gbp",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1B.SCHB.R6.dem",
+     "label": "a. Letters of Credit — dem",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1B.SCHB.eur.R6.eur",
+     "label": "a. Letters of Credit",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1B.SCHB.R6.other_cedi_million",
+     "label": "a. Letters of Credit — other cedi million",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1B.SCHB.R7.usd",
+     "label": "b. Guarantees — usd",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1B.SCHB.R7.gbp",
+     "label": "b. Guarantees — gbp",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1B.SCHB.R7.dem",
+     "label": "b. Guarantees — dem",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1B.SCHB.eur.R7.eur",
+     "label": "b. Guarantees",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1B.SCHB.R7.other_cedi_million",
+     "label": "b. Guarantees — other cedi million",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1B.SCHB.R8.usd",
+     "label": "c. Other Commitments — usd",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1B.SCHB.R8.gbp",
+     "label": "c. Other Commitments — gbp",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1B.SCHB.R8.dem",
+     "label": "c. Other Commitments — dem",
+     "kind": "number"
+    },
+    {
+     "code": "BSD1B.SCHB.eur.R8.eur",
+     "label": "c. Other Commitments",
+     "kind": "value"
+    },
+    {
+     "code": "BSD1B.SCHB.R8.other_cedi_million",
+     "label": "c. Other Commitments — other cedi million",
+     "kind": "number"
+    },
+    {
+     "code": "SCHEDULE B!B10",
+     "label": "Total",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "SCHEDULE B!C10",
+     "label": "Total",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "SCHEDULE B!D10",
+     "label": "Total",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "SCHEDULE B!F10",
+     "label": "Total",
+     "kind": "number",
+     "total": true
+    }
+   ]
+  }
+ ],
+ "rules": [
+  {
+   "id": "BSD1B-ARI-0001",
+   "severity": "error",
+   "kind": "sum",
+   "target": "SCHEDULE B!B10",
+   "terms": [
+    "BSD1B.SCHB.R6.usd",
+    "BSD1B.SCHB.R7.usd",
+    "BSD1B.SCHB.R8.usd"
+   ],
+   "tolerance": "0.02",
+   "description": "SCHEDULE B!B10 follows the template formula =SUM(B6:B8)"
+  },
+  {
+   "id": "BSD1B-ARI-0002",
+   "severity": "error",
+   "kind": "sum",
+   "target": "SCHEDULE B!C10",
+   "terms": [
+    "BSD1B.SCHB.R6.gbp",
+    "BSD1B.SCHB.R7.gbp",
+    "BSD1B.SCHB.R8.gbp"
+   ],
+   "tolerance": "0.02",
+   "description": "SCHEDULE B!C10 follows the template formula =SUM(C6:C8)"
+  },
+  {
+   "id": "BSD1B-ARI-0003",
+   "severity": "error",
+   "kind": "sum",
+   "target": "SCHEDULE B!D10",
+   "terms": [
+    "BSD1B.SCHB.R6.dem",
+    "BSD1B.SCHB.R7.dem",
+    "BSD1B.SCHB.R8.dem"
+   ],
+   "tolerance": "0.02",
+   "description": "SCHEDULE B!D10 follows the template formula =SUM(D6:D8)"
+  },
+  {
+   "id": "BSD1B-ARI-0004",
+   "severity": "error",
+   "kind": "sum",
+   "target": "SCHEDULE B!F10",
+   "terms": [
+    "BSD1B.SCHB.R6.other_cedi_million",
+    "BSD1B.SCHB.R7.other_cedi_million",
+    "BSD1B.SCHB.R8.other_cedi_million"
+   ],
+   "tolerance": "0.02",
+   "description": "SCHEDULE B!F10 follows the template formula =SUM(F6:F8)"
+  }
+ ]
+}

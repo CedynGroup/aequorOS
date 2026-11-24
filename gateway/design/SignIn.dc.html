@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Sign in</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=IBM+Plex+Mono:wght@400;500&amp;display=swap">
+<style>
+body{margin:0;background:#F4F6F8}
+a{color:#1F4FD1}a:hover{color:#163A9C}
+</style>
+</helmet>
+<div style="box-sizing: border-box; min-height: 100vh; display: flex; flex-wrap: wrap; font-family: Inter, system-ui, sans-serif; color: #0E1726; background: #F4F6F8">
+<section aria-label="About this system" style="flex: 1 1 480px; box-sizing: border-box; background: #0F1E36; color: #DCE4F0; padding: 48px 56px; display: flex; flex-direction: column; gap: 40px">
+<div style="display: flex; align-items: center; gap: 14px">
+<div role="img" aria-label="Regulator mark placeholder" style="width: 48px; height: 48px; border-radius: 10px; border: 1.5px dashed #6F84A6; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 600; letter-spacing: 0.06em; color: #A9B7CC">MARK</div>
+<div style="display: flex; flex-direction: column; gap: 2px">
+<span style="font-size: 16px; font-weight: 600; color: #FFFFFF">AequorOS Reporting Gateway</span>
+<span style="font-size: 13px; color: #A9B7CC">Banking Supervision</span>
+</div>
+</div>
+<div style="display: flex; flex-direction: column; gap: 16px; max-width: 520px; margin-top: auto">
+<h1 style="margin: 0; font-size: 36px; line-height: 1.15; font-weight: 600; color: #FFFFFF; letter-spacing: -0.015em">Every regulatory return, received, verified and on record.</h1>
+<p style="margin: 0; font-size: 16px; line-height: 1.55; color: #C3CEDE">Licensed institutions file here through one published API. Supervisors review, query and accept filings with a complete evidence trail.</p>
+</div>
+<ul style="list-style: none; margin: 0 0 auto; padding: 0; display: flex; flex-direction: column; gap: 18px; max-width: 520px">
+<sc-for list="{{points}}" as="point" hint-placeholder-count="3">
+<li style="display: flex; gap: 14px; align-items: flex-start">
+<span aria-hidden="true" style="flex: 0 0 auto; width: 32px; height: 32px; border-radius: 8px; background: #1B3358; display: flex; align-items: center; justify-content: center"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#9DB8E8" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="{{point.icon}}"></path></svg></span>
+<span style="display: flex; flex-direction: column; gap: 4px">
+<span style="font-size: 15px; font-weight: 600; color: #FFFFFF">{{point.title}}</span>
+<span style="font-size: 14px; line-height: 1.5; color: #C3CEDE">{{point.text}}</span>
+</span>
+</li>
+</sc-for>
+</ul>
+<span style="font-size: 12px; color: #A9B7CC">Concept design · synthetic data · operated for the regulator under its controls</span>
+</section>
+
+<section aria-labelledby="signin-title" style="flex: 1 1 480px; box-sizing: border-box; padding: 48px 32px; display: flex; align-items: center; justify-content: center">
+<div style="width: 100%; max-width: 420px; background: #FFFFFF; border: 1px solid #DDE2E8; border-radius: 14px; padding: 36px 32px; display: flex; flex-direction: column; gap: 22px">
+<div style="display: flex; flex-direction: column; gap: 8px">
+<h2 id="signin-title" style="margin: 0; font-size: 24px; font-weight: 600">Sign in</h2>
+<p style="margin: 0; font-size: 14px; line-height: 1.5; color: #4B5565">Use your Bank of Ghana staff account. You will be sent to the Bank’s own sign-in page, where multi-factor authentication is required.</p>
+</div>
+<a href="Main.dc.html" style="display: flex; align-items: center; justify-content: center; gap: 10px; min-height: 48px; border-radius: 8px; background: #1F4FD1; color: #FFFFFF; font-size: 15px; font-weight: 600; text-decoration: none">
+<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 11V8a6 6 0 0 1 12 0v3 M5 11h14v10H5z M12 15v2"></path></svg>
+Continue with BoG single sign-on
+</a>
+<div style="display: flex; flex-direction: column; gap: 10px; padding: 14px 16px; background: #F4F6F8; border-radius: 8px; font-size: 13px; line-height: 1.5; color: #344054">
+<span><strong style="font-weight: 600">No password is held here.</strong> Your account, groups and MFA policy are managed by the Bank’s identity provider; your role in this system follows your group.</span>
+</div>
+<div style="height: 1px; background: #EEF0F3"></div>
+<div style="display: flex; flex-direction: column; gap: 6px; font-size: 13px; line-height: 1.5; color: #4B5565">
+<span style="font-weight: 600; color: #0E1726">Filing for an institution?</span>
+<span>Institutions file through their reporting software or the institution portal. Contact the channel operator to enrol an institution.</span>
+</div>
+<span style="font-size: 12px; line-height: 1.5; color: #4B5565">Restricted system. Every sign-in and action is recorded in a tamper-evident audit log.</span>
+</div>
+</section>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":900}}'>
+class Component extends DCLogic {
+  renderVals() {
+    return {
+      points: [
+        { title: 'The Bank controls who signs in', text: 'Staff accounts, groups and MFA come from the Bank’s identity provider. Removing a user there removes access here.', icon: 'M12 3l7 3v5c0 4.5-3 8-7 10-4-2-7-5.5-7-10V6z M9 12l2 2 4-4' },
+        { title: 'Filings are signed and receipted', text: 'Each return carries the institution’s signature and receives a signed, timestamped receipt that cannot be altered.', icon: 'M7 4h7l4 4v12H7z M14 4v4h4 M9.5 14l2 2 3.5-4' },
+        { title: 'Data stays under the Bank’s keys', text: 'Stored filings are encrypted under a key the Bank holds. Operator access needs the Bank’s time-boxed approval.', icon: 'M15 4a5 5 0 1 0 0 10 5 5 0 0 0 0-10z M11.5 12.5L4 20 M7 17l2 2' }
+      ]
+    };
+  }
+}
+</script>
+</body>
+</html>

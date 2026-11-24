@@ -1,0 +1,1547 @@
+{
+ "format": "aequoros-gateway-return/1",
+ "code": "BSD5A",
+ "name": "Capital Adequacy Return",
+ "cadence": "monthly",
+ "basis": "solo",
+ "applies_to": [
+  "universal_bank"
+ ],
+ "version": "2026.2",
+ "first_reporting_date": "2025-01-01",
+ "source": {
+  "system": "AequorOS",
+  "template": "bog-bsd5a-official-v1",
+  "fidelity": "CONFIRMED",
+  "workbook": "FORM BSD5A REVISED.xls"
+ },
+ "sections": [
+  {
+   "code": "sheet_car_format",
+   "title": "CAR FORMAT",
+   "unit": "millions",
+   "itemised": false,
+   "lines": [
+    {
+     "code": "BSD5A.CAR.NO.R7.no",
+     "label": "Paid-up Capital",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD5A.CAR.R7.amount",
+     "label": "Paid-up Capital",
+     "kind": "number"
+    },
+    {
+     "code": "BSD5A.CAR.NO.R8.no",
+     "label": "Disclosed Reserves",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD5A.CAR.R8.amount",
+     "label": "Disclosed Reserves",
+     "kind": "number"
+    },
+    {
+     "code": "BSD5A.CAR.NO.R9.no",
+     "label": "Permanent Preference Shares",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD5A.CAR.R9.amount",
+     "label": "Permanent Preference Shares",
+     "kind": "number"
+    },
+    {
+     "code": "BSD5A.CAR.NO.R10.no",
+     "label": "Tier 1 Capital (1+2+3)",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "CAR FORMAT!E10",
+     "label": "Tier 1 Capital (1+2+3)",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD5A.CAR.NO.R12.no",
+     "label": "Goodwill/Intangibles",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD5A.CAR.R12.amount",
+     "label": "Goodwill/Intangibles",
+     "kind": "number"
+    },
+    {
+     "code": "BSD5A.CAR.NO.R13.no",
+     "label": "Losses not Provided For",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD5A.CAR.R13.amount",
+     "label": "Losses not Provided For",
+     "kind": "number"
+    },
+    {
+     "code": "BSD5A.CAR.NO.R14.no",
+     "label": "Investments in Unconsolidated Subsidiaries",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD5A.CAR.R14.amount",
+     "label": "Investments in Unconsolidated Subsidiaries",
+     "kind": "number"
+    },
+    {
+     "code": "BSD5A.CAR.NO.R15.no",
+     "label": "Invests in the capital of Other Banks & Fin Insts.",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD5A.CAR.R15.amount",
+     "label": "Invests in the capital of Other Banks & Fin Insts.",
+     "kind": "number"
+    },
+    {
+     "code": "BSD5A.CAR.NO.R16.no",
+     "label": "Connected Lending of Long Term Nature",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD5A.CAR.R16.amount",
+     "label": "Connected Lending of Long Term Nature",
+     "kind": "number"
+    },
+    {
+     "code": "BSD5A.CAR.NO.R17.no",
+     "label": "Net Tier 1 Capital (4-5-6-7-8-9-10)",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "CAR FORMAT!E17",
+     "label": "Net Tier 1 Capital (4-5-6-7-8-9-10)",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD5A.CAR.NO.R18.no",
+     "label": "Capitalised Revaluation Reserves",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD5A.CAR.NO.R19.no",
+     "label": "Latent Revaluation Reserves",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD5A.CAR.NO.R20.no",
+     "label": "Undisclosed Reserves",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD5A.CAR.R20.amount",
+     "label": "Undisclosed Reserves",
+     "kind": "number"
+    },
+    {
+     "code": "BSD5A.CAR.NO.R21.no",
+     "label": "Revaluation Reserves",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD5A.CAR.R21.amount",
+     "label": "Revaluation Reserves",
+     "kind": "number"
+    },
+    {
+     "code": "BSD5A.CAR.NO.R22.no",
+     "label": "Subordinated Term Debt (Limited to 50% of 4)",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD5A.CAR.R22.amount",
+     "label": "Subordinated Term Debt (Limited to 50% of 4)",
+     "kind": "number"
+    },
+    {
+     "code": "BSD5A.CAR.NO.R23.no",
+     "label": "Hybrid Capital",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD5A.CAR.R23.amount",
+     "label": "Hybrid Capital",
+     "kind": "number"
+    },
+    {
+     "code": "BSD5A.CAR.NO.R24.no",
+     "label": "Tier 2 Capital (12+13+14+15+16)(Limited to 100% of 4)",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "CAR FORMAT!E24",
+     "label": "Tier 2 Capital (12+13+14+15+16)(Limited to 100% of 4)",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD5A.CAR.NO.R25.no",
+     "label": "ADJUSTED CAPITAL BASE (11+16)",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "CAR FORMAT!E25",
+     "label": "ADJUSTED CAPITAL BASE (11+16)",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD5A.CAR.NO.R27.no",
+     "label": "TOTAL ASSETS (less Contra Items)",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD5A.CAR.R27.amount",
+     "label": "TOTAL ASSETS (less Contra Items)",
+     "kind": "number"
+    },
+    {
+     "code": "BSD5A.CAR.NO.R29.no",
+     "label": "Cash on Hand (Cedis)",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD5A.CAR.R29.amount",
+     "label": "Cash on Hand (Cedis)",
+     "kind": "number"
+    },
+    {
+     "code": "BSD5A.CAR.NO.R30.no",
+     "label": "Cash on Hand (Forex)",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD5A.CAR.R30.amount",
+     "label": "Cash on Hand (Forex)",
+     "kind": "number"
+    },
+    {
+     "code": "BSD5A.CAR.NO.R31.no",
+     "label": "Claims on Bank of Ghana:",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "CAR FORMAT!E31",
+     "label": "Claims on Bank of Ghana:",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD5A.CAR.R32.amount",
+     "label": "i. Cedi Clearing Account Balance",
+     "kind": "number"
+    },
+    {
+     "code": "BSD5A.CAR.R33.amount",
+     "label": "ii. Forex Account Balance",
+     "kind": "number"
+    },
+    {
+     "code": "BSD5A.CAR.R34.amount",
+     "label": "iii. Funds under SWAPS",
+     "kind": "number"
+    },
+    {
+     "code": "BSD5A.CAR.R35.amount",
+     "label": "iv. Bills and Bonds",
+     "kind": "number"
+    },
+    {
+     "code": "BSD5A.CAR.R36.amount",
+     "label": "v. Repos",
+     "kind": "number"
+    },
+    {
+     "code": "BSD5A.CAR.NO.R38.no",
+     "label": "Claims on Government:",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "CAR FORMAT!E38",
+     "label": "Claims on Government:",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD5A.CAR.R39.amount",
+     "label": "i) Treasury Securities (Bills and Bonds)",
+     "kind": "number"
+    },
+    {
+     "code": "BSD5A.CAR.R40.amount",
+     "label": "ii) Stocks",
+     "kind": "number"
+    },
+    {
+     "code": "BSD5A.CAR.NO.R41.no",
+     "label": "80% of Cheques drawn on other banks",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD5A.CAR.R41.amount",
+     "label": "80% of Cheques drawn on other banks",
+     "kind": "number"
+    },
+    {
+     "code": "BSD5A.CAR.NO.R42.no",
+     "label": "Goodwill / Intangibles",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD5A.CAR.R42.amount",
+     "label": "Goodwill / Intangibles",
+     "kind": "number"
+    },
+    {
+     "code": "BSD5A.CAR.NO.R43.no",
+     "label": "Investments in Unconsolidated Subsidiaries",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD5A.CAR.R43.amount",
+     "label": "Investments in Unconsolidated Subsidiaries",
+     "kind": "number"
+    },
+    {
+     "code": "BSD5A.CAR.NO.R44.no",
+     "label": "Invests in the Capital of Other Banks & Fin Institutions",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD5A.CAR.R44.amount",
+     "label": "Invests in the Capital of Other Banks & Fin Institutions",
+     "kind": "number"
+    },
+    {
+     "code": "BSD5A.CAR.NO.R45.no",
+     "label": "Connected Lending of Long Term Nature",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD5A.CAR.R45.amount",
+     "label": "Connected Lending of Long Term Nature",
+     "kind": "number"
+    },
+    {
+     "code": "BSD5A.CAR.NO.R46.no",
+     "label": "80% of claims on Discount Houses in Cedis / Forex",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD5A.CAR.R46.amount",
+     "label": "80% of claims on Discount Houses in Cedis / Forex",
+     "kind": "number"
+    },
+    {
+     "code": "BSD5A.CAR.NO.R47.no",
+     "label": "80% of claims on Other Banks (Cedis/Forex)",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD5A.CAR.R47.amount",
+     "label": "80% of claims on Other Banks (Cedis/Forex)",
+     "kind": "number"
+    },
+    {
+     "code": "BSD5A.CAR.NO.R48.no",
+     "label": "50% of claims on Other Fin Insts. (Public Sector) (Cedi/Forex)",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD5A.CAR.R48.amount",
+     "label": "50% of claims on Other Fin Insts. (Public Sector) (Cedi/Forex)",
+     "kind": "number"
+    },
+    {
+     "code": "BSD5A.CAR.NO.R49.no",
+     "label": "80% of loans guaranteed by government",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD5A.CAR.R49.amount",
+     "label": "80% of loans guaranteed by government",
+     "kind": "number"
+    },
+    {
+     "code": "BSD5A.CAR.NO.R50.no",
+     "label": "80% of loans guaranteed by multilateral banks",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD5A.CAR.R50.amount",
+     "label": "80% of loans guaranteed by multilateral banks",
+     "kind": "number"
+    },
+    {
+     "code": "BSD5A.CAR.NO.R51.no",
+     "label": "50% of Residential Mortgage Loans",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD5A.CAR.R51.amount",
+     "label": "50% of Residential Mortgage Loans",
+     "kind": "number"
+    },
+    {
+     "code": "BSD5A.CAR.NO.R52.no",
+     "label": "50% of Export Financing Loans",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD5A.CAR.R52.amount",
+     "label": "50% of Export Financing Loans",
+     "kind": "number"
+    },
+    {
+     "code": "BSD5A.CAR.NO.R53.no",
+     "label": "Adjusted Total Assets (18-19-20-21-,……..,-35)",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "CAR FORMAT!E53",
+     "label": "Adjusted Total Assets (18-19-20-21-,……..,-35)",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "CAR FORMAT!E54",
+     "label": "Add: Contingent Liabs",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD5A.CAR.NO.R55.no",
+     "label": "Commercial Letters of Credit Outstanding",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD5A.CAR.R55.amount",
+     "label": "Commercial Letters of Credit Outstanding",
+     "kind": "number"
+    },
+    {
+     "code": "BSD5A.CAR.NO.R56.no",
+     "label": "Guarantees / Indemnities",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD5A.CAR.R56.amount",
+     "label": "Guarantees / Indemnities",
+     "kind": "number"
+    },
+    {
+     "code": "BSD5A.CAR.NO.R57.no",
+     "label": "Acceptances",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD5A.CAR.R57.amount",
+     "label": "Acceptances",
+     "kind": "number"
+    },
+    {
+     "code": "BSD5A.CAR.NO.R58.no",
+     "label": "Endorsements",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD5A.CAR.R58.amount",
+     "label": "Endorsements",
+     "kind": "number"
+    },
+    {
+     "code": "BSD5A.CAR.NO.R59.no",
+     "label": "Revolving Underwriting Facilities",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD5A.CAR.R59.amount",
+     "label": "Revolving Underwriting Facilities",
+     "kind": "number"
+    },
+    {
+     "code": "BSD5A.CAR.NO.R60.no",
+     "label": "Note Issuance Facilities",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD5A.CAR.R60.amount",
+     "label": "Note Issuance Facilities",
+     "kind": "number"
+    },
+    {
+     "code": "BSD5A.CAR.NO.R61.no",
+     "label": "Standby Letters of Credit to Other Banks",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD5A.CAR.R61.amount",
+     "label": "Standby Letters of Credit to Other Banks",
+     "kind": "number"
+    },
+    {
+     "code": "BSD5A.CAR.NO.R63.no",
+     "label": "50% of class 1 risk weighted off-bal. sheet items",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD5A.CAR.R63.amount",
+     "label": "50% of class 1 risk weighted off-bal. sheet items",
+     "kind": "number"
+    },
+    {
+     "code": "BSD5A.CAR.NO.R64.no",
+     "label": "80% of class 2 risk weighted off-bal. sheet items",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD5A.CAR.R64.amount",
+     "label": "80% of class 2 risk weighted off-bal. sheet items",
+     "kind": "number"
+    },
+    {
+     "code": "BSD5A.CAR.NO.R65.no",
+     "label": "Net Contingent Liabs. (37+38+....+43-44-45)",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "CAR FORMAT!E65",
+     "label": "Net Contingent Liabs. (37+38+....+43-44-45)",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD5A.CAR.NO.R67.no",
+     "label": "50% of NOP",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD5A.CAR.R67.amount",
+     "label": "50% of NOP",
+     "kind": "number"
+    },
+    {
+     "code": "BSD5A.CAR.NO.R68.no",
+     "label": "100% of 3yrs Average Annual Gross Income",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD5A.CAR.R68.amount",
+     "label": "100% of 3yrs Average Annual Gross Income",
+     "kind": "number"
+    },
+    {
+     "code": "BSD5A.CAR.NO.R69.no",
+     "label": "ADJUSTED ASSET BASE (36+46+47+48)",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "CAR FORMAT!E69",
+     "label": "ADJUSTED ASSET BASE (36+46+47+48)",
+     "kind": "number",
+     "total": true
+    },
+    {
+     "code": "BSD5A.CAR.NO.R70.no",
+     "label": "Adjusted Capital Base as percentage of Adjusted Asset Base: (17/49 X 100)",
+     "kind": "value",
+     "unit": "units"
+    },
+    {
+     "code": "BSD5A.CAR.NO.R71.no",
+     "label": "CAPITAL SURPLUS/DEFICIT {17 – (10% of 49)}",
+     "kind": "value",
+     "unit": "units"
+    }
+   ]
+  },
+  {
+   "code": "sheet_new_risk_weights",
+   "title": "NEW RISK WEIGHTS",
+   "unit": "percent",
+   "itemised": false,
+   "lines": [
+    {
+     "code": "BSD5A.RW.NO.R6.no",
+     "label": "Cash on Hand (Cedi)",
+     "kind": "value"
+    },
+    {
+     "code": "BSD5A.RW.BASLE.R6.basle",
+     "label": "Cash on Hand (Cedi)",
+     "kind": "value"
+    },
+    {
+     "code": "BSD5A.RW.PROPOSED.R6.proposed",
+     "label": "Cash on Hand (Cedi)",
+     "kind": "value"
+    },
+    {
+     "code": "BSD5A.RW.EXISTING.R6.existing",
+     "label": "Cash on Hand (Cedi)",
+     "kind": "value"
+    },
+    {
+     "code": "BSD5A.RW.NO.R7.no",
+     "label": "Cash on Hand (Forex)",
+     "kind": "value"
+    },
+    {
+     "code": "BSD5A.RW.BASLE.R7.basle",
+     "label": "Cash on Hand (Forex)",
+     "kind": "value"
+    },
+    {
+     "code": "BSD5A.RW.PROPOSED.R7.proposed",
+     "label": "Cash on Hand (Forex)",
+     "kind": "value"
+    },
+    {
+     "code": "BSD5A.RW.EXISTING.R7.existing",
+     "label": "Cash on Hand (Forex)",
+     "kind": "value"
+    },
+    {
+     "code": "BSD5A.RW.NO.R8.no",
+     "label": "Claims on Bank of Ghana (Cedi)",
+     "kind": "value"
+    },
+    {
+     "code": "BSD5A.RW.BASLE.R8.basle",
+     "label": "Claims on Bank of Ghana (Cedi)",
+     "kind": "value"
+    },
+    {
+     "code": "BSD5A.RW.PROPOSED.R8.proposed",
+     "label": "Claims on Bank of Ghana (Cedi)",
+     "kind": "value"
+    },
+    {
+     "code": "BSD5A.RW.EXISTING.R8.existing",
+     "label": "Claims on Bank of Ghana (Cedi)",
+     "kind": "value"
+    },
+    {
+     "code": "BSD5A.RW.NO.R9.no",
+     "label": "Claims on Bank of Ghana (Forex)",
+     "kind": "value"
+    },
+    {
+     "code": "BSD5A.RW.BASLE.R9.basle",
+     "label": "Claims on Bank of Ghana (Forex)",
+     "kind": "value"
+    },
+    {
+     "code": "BSD5A.RW.PROPOSED.R9.proposed",
+     "label": "Claims on Bank of Ghana (Forex)",
+     "kind": "value"
+    },
+    {
+     "code": "BSD5A.RW.EXISTING.R9.existing",
+     "label": "Claims on Bank of Ghana (Forex)",
+     "kind": "value"
+    },
+    {
+     "code": "BSD5A.RW.NO.R10.no",
+     "label": "Claims on Other Banks (Cedi)",
+     "kind": "value"
+    },
+    {
+     "code": "BSD5A.RW.BASLE.R10.basle",
+     "label": "Claims on Other Banks (Cedi)",
+     "kind": "value"
+    },
+    {
+     "code": "BSD5A.RW.PROPOSED.R10.proposed",
+     "label": "Claims on Other Banks (Cedi)",
+     "kind": "value"
+    },
+    {
+     "code": "BSD5A.RW.EXISTING.R10.existing",
+     "label": "Claims on Other Banks (Cedi)",
+     "kind": "value"
+    },
+    {
+     "code": "BSD5A.RW.NO.R11.no",
+     "label": "Claims on Other Banks (Forex)",
+     "kind": "value"
+    },
+    {
+     "code": "BSD5A.RW.BASLE.R11.basle",
+     "label": "Claims on Other Banks (Forex)",
+     "kind": "value"
+    },
+    {
+     "code": "BSD5A.RW.PROPOSED.R11.proposed",
+     "label": "Claims on Other Banks (Forex)",
+     "kind": "value"
+    },
+    {
+     "code": "BSD5A.RW.EXISTING.R11.existing",
+     "label": "Claims on Other Banks (Forex)",
+     "kind": "value"
+    },
+    {
+     "code": "BSD5A.RW.NO.R12.no",
+     "label": "Claims on Discount Houses (Cedi)",
+     "kind": "value"
+    },
+    {
+     "code": "BSD5A.RW.BASLE.R12.basle",
+     "label": "Claims on Discount Houses (Cedi)",
+     "kind": "value"
+    },
+    {
+     "code": "BSD5A.RW.PROPOSED.R12.proposed",
+     "label": "Claims on Discount Houses (Cedi)",
+     "kind": "value"
+    },
+    {
+     "code": "BSD5A.RW.EXISTING.R12.existing",
+     "label": "Claims on Discount Houses (Cedi)",
+     "kind": "value"
+    },
+    {
+     "code": "BSD5A.RW.NO.R13.no",
+     "label": "Claims on Discount Houses (Forex)",
+     "kind": "value"
+    },
+    {
+     "code": "BSD5A.RW.BASLE.R13.basle",
+     "label": "Claims on Discount Houses (Forex)",
+     "kind": "value"
+    },
+    {
+     "code": "BSD5A.RW.PROPOSED.R13.proposed",
+     "label": "Claims on Discount Houses (Forex)",
+     "kind": "value"
+    },
+    {
+     "code": "BSD5A.RW.EXISTING.R13.existing",
+     "label": "Claims on Discount Houses (Forex)",
+     "kind": "value"
+    },
+    {
+     "code": "BSD5A.RW.NO.R14.no",
+     "label": "Cash items in process of collection",
+     "kind": "value"
+    },
+    {
+     "code": "BSD5A.RW.BASLE.R14.basle",
+     "label": "Cash items in process of collection",
+     "kind": "value"
+    },
+    {
+     "code": "BSD5A.RW.PROPOSED.R14.proposed",
+     "label": "Cash items in process of collection",
+     "kind": "value"
+    },
+    {
+     "code": "BSD5A.RW.EXISTING.R14.existing",
+     "label": "Cash items in process of collection",
+     "kind": "value"
+    },
+    {
+     "code": "BSD5A.RW.NO.R15.no",
+     "label": "Claims on other Fin Inst. (Private sector)",
+     "kind": "value"
+    },
+    {
+     "code": "BSD5A.RW.BASLE.R15.basle",
+     "label": "Claims on other Fin Inst. (Private sector)",
+     "kind": "value"
+    },
+    {
+     "code": "BSD5A.RW.PROPOSED.R15.proposed",
+     "label": "Claims on other Fin Inst. (Private sector)",
+     "kind": "value"
+    },
+    {
+     "code": "BSD5A.RW.EXISTING.R15.existing",
+     "label": "Claims on other Fin Inst. (Private sector)",
+     "kind": "value"
+    },
+    {
+     "code": "BSD5A.RW.NO.R16.no",
+     "label": "Claims on other Fin Inst. (Public sector)",
+     "kind": "value"
+    },
+    {
+     "code": "BSD5A.RW.BASLE.R16.basle",
+     "label": "Claims on other Fin Inst. (Public sector)",
+     "kind": "value"
+    },
+    {
+     "code": "BSD5A.RW.PROPOSED.R16.proposed",
+     "label": "Claims on other Fin Inst. (Public sector)",
+     "kind": "value"
+    },
+    {
+     "code": "BSD5A.RW.EXISTING.R16.existing",
+     "label": "Claims on other Fin Inst. (Public sector)",
+     "kind": "value"
+    },
+    {
+     "code": "BSD5A.RW.NO.R19.no",
+     "label": "Government",
+     "kind": "value"
+    },
+    {
+     "code": "BSD5A.RW.BASLE.R19.basle",
+     "label": "Government",
+     "kind": "value"
+    },
+    {
+     "code": "BSD5A.RW.PROPOSED.R19.proposed",
+     "label": "Government",
+     "kind": "value"
+    },
+    {
+     "code": "BSD5A.RW.EXISTING.R19.existing",
+     "label": "Government",
+     "kind": "value"
+    },
+    {
+     "code": "BSD5A.RW.NO.R20.no",
+     "label": "Bank of Ghana",
+     "kind": "value"
+    },
+    {
+     "code": "BSD5A.RW.BASLE.R20.basle",
+     "label": "Bank of Ghana",
+     "kind": "value"
+    },
+    {
+     "code": "BSD5A.RW.PROPOSED.R20.proposed",
+     "label": "Bank of Ghana",
+     "kind": "value"
+    },
+    {
+     "code": "BSD5A.RW.EXISTING.R20.existing",
+     "label": "Bank of Ghana",
+     "kind": "value"
+    },
+    {
+     "code": "BSD5A.RW.NO.R21.no",
+     "label": "Public Enterprises & Institutions",
+     "kind": "value"
+    },
+    {
+     "code": "BSD5A.RW.BASLE.R21.basle",
+     "label": "Public Enterprises & Institutions",
+     "kind": "value"
+    },
+    {
+     "code": "BSD5A.RW.PROPOSED.R21.proposed",
+     "label": "Public Enterprises & Institutions",
+     "kind": "value"
+    },
+    {
+     "code": "BSD5A.RW.EXISTING.R21.existing",
+     "label": "Public Enterprises & Institutions",
+     "kind": "value"
+    },
+    {
+     "code": "BSD5A.RW.NO.R22.no",
+     "label": "Gov't & Bank of Ghana guaranteed",
+     "kind": "value"
+    },
+    {
+     "code": "BSD5A.RW.BASLE.R22.basle",
+     "label": "Gov't & Bank of Ghana guaranteed",
+     "kind": "value"
+    },
+    {
+     "code": "BSD5A.RW.PROPOSED.R22.proposed",
+     "label": "Gov't & Bank of Ghana guaranteed",
+     "kind": "value"
+    },
+    {
+     "code": "BSD5A.RW.EXISTING.R22.existing",
+     "label": "Gov't & Bank of Ghana guaranteed",
+     "kind": "value"
+    },
+    {
+     "code": "BSD5A.RW.NO.R25.no",
+     "label": "Government guaranteed",
+     "kind": "value"
+    },
+    {
+     "code": "BSD5A.RW.BASLE.R25.basle",
+     "label": "Government guaranteed",
+     "kind": "value"
+    },
+    {
+     "code": "BSD5A.RW.PROPOSED.R25.proposed",
+     "label": "Government guaranteed",
+     "kind": "value"
+    },
+    {
+     "code": "BSD5A.RW.EXISTING.R25.existing",
+     "label": "Government guaranteed",
+     "kind": "value"
+    },
+    {
+     "code": "BSD5A.RW.NO.R26.no",
+     "label": "Guaranteed by multilateral banks",
+     "kind": "value"
+    },
+    {
+     "code": "BSD5A.RW.BASLE.R26.basle",
+     "label": "Guaranteed by multilateral banks",
+     "kind": "value"
+    },
+    {
+     "code": "BSD5A.RW.PROPOSED.R26.proposed",
+     "label": "Guaranteed by multilateral banks",
+     "kind": "value"
+    },
+    {
+     "code": "BSD5A.RW.EXISTING.R26.existing",
+     "label": "Guaranteed by multilateral banks",
+     "kind": "value"
+    },
+    {
+     "code": "BSD5A.RW.NO.R27.no",
+     "label": "Public Enterprises",
+     "kind": "value"
+    },
+    {
+     "code": "BSD5A.RW.BASLE.R27.basle",
+     "label": "Public Enterprises",
+     "kind": "value"
+    },
+    {
+     "code": "BSD5A.RW.PROPOSED.R27.proposed",
+     "label": "Public Enterprises",
+     "kind": "value"
+    },
+    {
+     "code": "BSD5A.RW.EXISTING.R27.existing",
+     "label": "Public Enterprises",
+     "kind": "value"
+    },
+    {
+     "code": "BSD5A.RW.NO.R28.no",
+     "label": "Public Institutions",
+     "kind": "value"
+    },
+    {
+     "code": "BSD5A.RW.BASLE.R28.basle",
+     "label": "Public Institutions",
+     "kind": "value"
+    },
+    {
+     "code": "BSD5A.RW.PROPOSED.R28.proposed",
+     "label": "Public Institutions",
+     "kind": "value"
+    },
+    {
+     "code": "BSD5A.RW.EXISTING.R28.existing",
+     "label": "Public Institutions",
+     "kind": "value"
+    },
+    {
+     "code": "BSD5A.RW.NO.R29.no",
+     "label": "Private Enterprises",
+     "kind": "value"
+    },
+    {
+     "code": "BSD5A.RW.BASLE.R29.basle",
+     "label": "Private Enterprises",
+     "kind": "value"
+    },
+    {
+     "code": "BSD5A.RW.PROPOSED.R29.proposed",
+     "label": "Private Enterprises",
+     "kind": "value"
+    },
+    {
+     "code": "BSD5A.RW.EXISTING.R29.existing",
+     "label": "Private Enterprises",
+     "kind": "value"
+    },
+    {
+     "code": "BSD5A.RW.NO.R30.no",
+     "label": "Individuals",
+     "kind": "value"
+    },
+    {
+     "code": "BSD5A.RW.BASLE.R30.basle",
+     "label": "Individuals",
+     "kind": "value"
+    },
+    {
+     "code": "BSD5A.RW.PROPOSED.R30.proposed",
+     "label": "Individuals",
+     "kind": "value"
+    },
+    {
+     "code": "BSD5A.RW.EXISTING.R30.existing",
+     "label": "Individuals",
+     "kind": "value"
+    },
+    {
+     "code": "BSD5A.RW.NO.R31.no",
+     "label": "Home Mortgage",
+     "kind": "value"
+    },
+    {
+     "code": "BSD5A.RW.BASLE.R31.basle",
+     "label": "Home Mortgage",
+     "kind": "value"
+    },
+    {
+     "code": "BSD5A.RW.PROPOSED.R31.proposed",
+     "label": "Home Mortgage",
+     "kind": "value"
+    },
+    {
+     "code": "BSD5A.RW.EXISTING.R31.existing",
+     "label": "Home Mortgage",
+     "kind": "value"
+    },
+    {
+     "code": "BSD5A.RW.NO.R32.no",
+     "label": "Export Sector",
+     "kind": "value"
+    },
+    {
+     "code": "BSD5A.RW.BASLE.R32.basle",
+     "label": "Export Sector",
+     "kind": "value"
+    },
+    {
+     "code": "BSD5A.RW.PROPOSED.R32.proposed",
+     "label": "Export Sector",
+     "kind": "value"
+    },
+    {
+     "code": "BSD5A.RW.EXISTING.R32.existing",
+     "label": "Export Sector",
+     "kind": "value"
+    },
+    {
+     "code": "BSD5A.RW.NO.R35.no",
+     "label": "Government",
+     "kind": "value"
+    },
+    {
+     "code": "BSD5A.RW.BASLE.R35.basle",
+     "label": "Government",
+     "kind": "value"
+    },
+    {
+     "code": "BSD5A.RW.PROPOSED.R35.proposed",
+     "label": "Government",
+     "kind": "value"
+    },
+    {
+     "code": "BSD5A.RW.EXISTING.R35.existing",
+     "label": "Government",
+     "kind": "value"
+    },
+    {
+     "code": "BSD5A.RW.NO.R36.no",
+     "label": "Bank of Ghana",
+     "kind": "value"
+    },
+    {
+     "code": "BSD5A.RW.BASLE.R36.basle",
+     "label": "Bank of Ghana",
+     "kind": "value"
+    },
+    {
+     "code": "BSD5A.RW.PROPOSED.R36.proposed",
+     "label": "Bank of Ghana",
+     "kind": "value"
+    },
+    {
+     "code": "BSD5A.RW.EXISTING.R36.existing",
+     "label": "Bank of Ghana",
+     "kind": "value"
+    },
+    {
+     "code": "BSD5A.RW.NO.R37.no",
+     "label": "Commercial Banks",
+     "kind": "value"
+    },
+    {
+     "code": "BSD5A.RW.BASLE.R37.basle",
+     "label": "Commercial Banks",
+     "kind": "value"
+    },
+    {
+     "code": "BSD5A.RW.PROPOSED.R37.proposed",
+     "label": "Commercial Banks",
+     "kind": "value"
+    },
+    {
+     "code": "BSD5A.RW.EXISTING.R37.existing",
+     "label": "Commercial Banks",
+     "kind": "value"
+    },
+    {
+     "code": "BSD5A.RW.NO.R38.no",
+     "label": "Other Financial Institutions",
+     "kind": "value"
+    },
+    {
+     "code": "BSD5A.RW.BASLE.R38.basle",
+     "label": "Other Financial Institutions",
+     "kind": "value"
+    },
+    {
+     "code": "BSD5A.RW.PROPOSED.R38.proposed",
+     "label": "Other Financial Institutions",
+     "kind": "value"
+    },
+    {
+     "code": "BSD5A.RW.EXISTING.R38.existing",
+     "label": "Other Financial Institutions",
+     "kind": "value"
+    },
+    {
+     "code": "BSD5A.RW.NO.R39.no",
+     "label": "Public Enterprises & Institutions",
+     "kind": "value"
+    },
+    {
+     "code": "BSD5A.RW.BASLE.R39.basle",
+     "label": "Public Enterprises & Institutions",
+     "kind": "value"
+    },
+    {
+     "code": "BSD5A.RW.PROPOSED.R39.proposed",
+     "label": "Public Enterprises & Institutions",
+     "kind": "value"
+    },
+    {
+     "code": "BSD5A.RW.EXISTING.R39.existing",
+     "label": "Public Enterprises & Institutions",
+     "kind": "value"
+    },
+    {
+     "code": "BSD5A.RW.NO.R40.no",
+     "label": "Private Enterprises",
+     "kind": "value"
+    },
+    {
+     "code": "BSD5A.RW.BASLE.R40.basle",
+     "label": "Private Enterprises",
+     "kind": "value"
+    },
+    {
+     "code": "BSD5A.RW.PROPOSED.R40.proposed",
+     "label": "Private Enterprises",
+     "kind": "value"
+    },
+    {
+     "code": "BSD5A.RW.EXISTING.R40.existing",
+     "label": "Private Enterprises",
+     "kind": "value"
+    },
+    {
+     "code": "BSD5A.RW.NO.R41.no",
+     "label": "Gov't & Bank of Ghana guaranteed",
+     "kind": "value"
+    },
+    {
+     "code": "BSD5A.RW.BASLE.R41.basle",
+     "label": "Gov't & Bank of Ghana guaranteed",
+     "kind": "value"
+    },
+    {
+     "code": "BSD5A.RW.PROPOSED.R41.proposed",
+     "label": "Gov't & Bank of Ghana guaranteed",
+     "kind": "value"
+    },
+    {
+     "code": "BSD5A.RW.EXISTING.R41.existing",
+     "label": "Gov't & Bank of Ghana guaranteed",
+     "kind": "value"
+    },
+    {
+     "code": "BSD5A.RW.NO.R43.no",
+     "label": "Other Assets",
+     "kind": "value"
+    },
+    {
+     "code": "BSD5A.RW.BASLE.R43.basle",
+     "label": "Other Assets",
+     "kind": "value"
+    },
+    {
+     "code": "BSD5A.RW.PROPOSED.R43.proposed",
+     "label": "Other Assets",
+     "kind": "value"
+    },
+    {
+     "code": "BSD5A.RW.EXISTING.R43.existing",
+     "label": "Other Assets",
+     "kind": "value"
+    },
+    {
+     "code": "BSD5A.RW.NO.R44.no",
+     "label": "Fixed Assets",
+     "kind": "value"
+    },
+    {
+     "code": "BSD5A.RW.BASLE.R44.basle",
+     "label": "Fixed Assets",
+     "kind": "value"
+    },
+    {
+     "code": "BSD5A.RW.PROPOSED.R44.proposed",
+     "label": "Fixed Assets",
+     "kind": "value"
+    },
+    {
+     "code": "BSD5A.RW.NO.R45.no",
+     "label": "Contingent Liabilities",
+     "kind": "value"
+    },
+    {
+     "code": "BSD5A.RW.BASLE.R45.basle",
+     "label": "Contingent Liabilities",
+     "kind": "value"
+    },
+    {
+     "code": "BSD5A.RW.PROPOSED.R45.proposed",
+     "label": "Contingent Liabilities",
+     "kind": "value"
+    },
+    {
+     "code": "BSD5A.RW.EXISTING.R45.existing",
+     "label": "Contingent Liabilities",
+     "kind": "value"
+    },
+    {
+     "code": "BSD5A.RW.NO.R46.no",
+     "label": "Bonds (Performance, Bid, Warranties, etc. ) (Class 1 risk weighted assets)",
+     "kind": "value"
+    },
+    {
+     "code": "BSD5A.RW.BASLE.R46.basle",
+     "label": "Bonds (Performance, Bid, Warranties, etc. ) (Class 1 risk weighted assets)",
+     "kind": "value"
+    },
+    {
+     "code": "BSD5A.RW.PROPOSED.R46.proposed",
+     "label": "Bonds (Performance, Bid, Warranties, etc. ) (Class 1 risk weighted assets)",
+     "kind": "value"
+    },
+    {
+     "code": "BSD5A.RW.EXISTING.R46.existing",
+     "label": "Bonds (Performance, Bid, Warranties, etc. ) (Class 1 risk weighted assets)",
+     "kind": "value"
+    },
+    {
+     "code": "BSD5A.RW.NO.R47.no",
+     "label": "Short-term Self Liquidating L/Cs (Class 2 risk weighted assets)",
+     "kind": "value"
+    },
+    {
+     "code": "BSD5A.RW.BASLE.R47.basle",
+     "label": "Short-term Self Liquidating L/Cs (Class 2 risk weighted assets)",
+     "kind": "value"
+    },
+    {
+     "code": "BSD5A.RW.PROPOSED.R47.proposed",
+     "label": "Short-term Self Liquidating L/Cs (Class 2 risk weighted assets)",
+     "kind": "value"
+    },
+    {
+     "code": "BSD5A.RW.EXISTING.R47.existing",
+     "label": "Short-term Self Liquidating L/Cs (Class 2 risk weighted assets)",
+     "kind": "value"
+    }
+   ]
+  },
+  {
+   "code": "sheet_provision",
+   "title": "PROVISION",
+   "unit": "percent",
+   "itemised": false,
+   "lines": [
+    {
+     "code": "BSD5A.PROV.NO.R9.no",
+     "label": "Current",
+     "kind": "value"
+    },
+    {
+     "code": "BSD5A.PROV.R9.pct_provision",
+     "label": "Current",
+     "kind": "value"
+    },
+    {
+     "code": "BSD5A.PROV.NO.R10.no",
+     "label": "Olem",
+     "kind": "value"
+    },
+    {
+     "code": "BSD5A.PROV.R10.pct_provision",
+     "label": "Olem",
+     "kind": "value"
+    },
+    {
+     "code": "BSD5A.PROV.NO.R11.no",
+     "label": "Substandard",
+     "kind": "value"
+    },
+    {
+     "code": "BSD5A.PROV.R11.pct_provision",
+     "label": "Substandard",
+     "kind": "value"
+    },
+    {
+     "code": "BSD5A.PROV.NO.R12.no",
+     "label": "Doubtful",
+     "kind": "value"
+    },
+    {
+     "code": "BSD5A.PROV.R12.pct_provision",
+     "label": "Doubtful",
+     "kind": "value"
+    },
+    {
+     "code": "BSD5A.PROV.NO.R13.no",
+     "label": "Loss",
+     "kind": "value"
+    },
+    {
+     "code": "BSD5A.PROV.R13.pct_provision",
+     "label": "Loss",
+     "kind": "value"
+    }
+   ]
+  }
+ ],
+ "rules": [
+  {
+   "id": "BSD5A-ARI-0001",
+   "severity": "error",
+   "kind": "sum",
+   "target": "CAR FORMAT!E10",
+   "terms": [
+    "BSD5A.CAR.R7.amount",
+    "BSD5A.CAR.R8.amount",
+    "BSD5A.CAR.R9.amount"
+   ],
+   "tolerance": "0.02",
+   "description": "CAR FORMAT!E10 follows the template formula =SUM(E7:E9)"
+  },
+  {
+   "id": "BSD5A-ARI-0002",
+   "severity": "error",
+   "kind": "sum",
+   "target": "CAR FORMAT!E17",
+   "terms": [
+    "CAR FORMAT!E10"
+   ],
+   "tolerance": "0.035",
+   "description": "CAR FORMAT!E17 follows the template formula =E10-SUM(E12:E16)",
+   "subtract": [
+    "BSD5A.CAR.R12.amount",
+    "BSD5A.CAR.R13.amount",
+    "BSD5A.CAR.R14.amount",
+    "BSD5A.CAR.R15.amount",
+    "BSD5A.CAR.R16.amount"
+   ]
+  },
+  {
+   "id": "BSD5A-ARI-0003",
+   "severity": "error",
+   "kind": "sum",
+   "target": "CAR FORMAT!E24",
+   "terms": [
+    "BSD5A.CAR.R20.amount",
+    "BSD5A.CAR.R21.amount",
+    "BSD5A.CAR.R22.amount",
+    "BSD5A.CAR.R23.amount"
+   ],
+   "tolerance": "0.025",
+   "description": "CAR FORMAT!E24 follows the template formula =SUM(E20:E23)"
+  },
+  {
+   "id": "BSD5A-ARI-0004",
+   "severity": "error",
+   "kind": "sum",
+   "target": "CAR FORMAT!E25",
+   "terms": [
+    "CAR FORMAT!E17",
+    "CAR FORMAT!E24"
+   ],
+   "tolerance": "0.015",
+   "description": "CAR FORMAT!E25 follows the template formula =E17+E24"
+  },
+  {
+   "id": "BSD5A-ARI-0005",
+   "severity": "error",
+   "kind": "sum",
+   "target": "CAR FORMAT!E31",
+   "terms": [
+    "BSD5A.CAR.R32.amount",
+    "BSD5A.CAR.R33.amount",
+    "BSD5A.CAR.R34.amount",
+    "BSD5A.CAR.R35.amount",
+    "BSD5A.CAR.R36.amount"
+   ],
+   "tolerance": "0.03",
+   "description": "CAR FORMAT!E31 follows the template formula =SUM(E32:E36)"
+  },
+  {
+   "id": "BSD5A-ARI-0006",
+   "severity": "error",
+   "kind": "sum",
+   "target": "CAR FORMAT!E38",
+   "terms": [
+    "BSD5A.CAR.R39.amount",
+    "BSD5A.CAR.R40.amount"
+   ],
+   "tolerance": "0.015",
+   "description": "CAR FORMAT!E38 follows the template formula =E39+E40"
+  },
+  {
+   "id": "BSD5A-ARI-0007",
+   "severity": "error",
+   "kind": "sum",
+   "target": "CAR FORMAT!E53",
+   "terms": [
+    "BSD5A.CAR.R27.amount"
+   ],
+   "tolerance": "0.09",
+   "description": "CAR FORMAT!E53 follows the template formula =E27-E29-E30-E31-E38-SUM(E41:E52)",
+   "subtract": [
+    "BSD5A.CAR.R29.amount",
+    "BSD5A.CAR.R30.amount",
+    "CAR FORMAT!E31",
+    "CAR FORMAT!E38",
+    "BSD5A.CAR.R41.amount",
+    "BSD5A.CAR.R42.amount",
+    "BSD5A.CAR.R43.amount",
+    "BSD5A.CAR.R44.amount",
+    "BSD5A.CAR.R45.amount",
+    "BSD5A.CAR.R46.amount",
+    "BSD5A.CAR.R47.amount",
+    "BSD5A.CAR.R48.amount",
+    "BSD5A.CAR.R49.amount",
+    "BSD5A.CAR.R50.amount",
+    "BSD5A.CAR.R51.amount",
+    "BSD5A.CAR.R52.amount"
+   ]
+  },
+  {
+   "id": "BSD5A-ARI-0008",
+   "severity": "error",
+   "kind": "sum",
+   "target": "CAR FORMAT!E54",
+   "terms": [
+    "BSD5A.CAR.R55.amount",
+    "BSD5A.CAR.R56.amount",
+    "BSD5A.CAR.R57.amount",
+    "BSD5A.CAR.R58.amount",
+    "BSD5A.CAR.R59.amount",
+    "BSD5A.CAR.R60.amount",
+    "BSD5A.CAR.R61.amount"
+   ],
+   "tolerance": "0.04",
+   "description": "CAR FORMAT!E54 follows the template formula =SUM(E55:E61)"
+  },
+  {
+   "id": "BSD5A-ARI-0009",
+   "severity": "error",
+   "kind": "sum",
+   "target": "CAR FORMAT!E65",
+   "terms": [
+    "BSD5A.CAR.R55.amount",
+    "BSD5A.CAR.R56.amount",
+    "BSD5A.CAR.R57.amount",
+    "BSD5A.CAR.R58.amount",
+    "BSD5A.CAR.R59.amount",
+    "BSD5A.CAR.R60.amount",
+    "BSD5A.CAR.R61.amount"
+   ],
+   "tolerance": "0.05",
+   "description": "CAR FORMAT!E65 follows the template formula =SUM(E55:E61)-E63-E64",
+   "subtract": [
+    "BSD5A.CAR.R63.amount",
+    "BSD5A.CAR.R64.amount"
+   ]
+  },
+  {
+   "id": "BSD5A-ARI-0010",
+   "severity": "error",
+   "kind": "sum",
+   "target": "CAR FORMAT!E69",
+   "terms": [
+    "CAR FORMAT!E53",
+    "CAR FORMAT!E65",
+    "BSD5A.CAR.R67.amount",
+    "BSD5A.CAR.R68.amount"
+   ],
+   "tolerance": "0.025",
+   "description": "CAR FORMAT!E69 follows the template formula =E53+E65+E67+E68"
+  }
+ ]
+}

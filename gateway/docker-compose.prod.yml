@@ -1,0 +1,103 @@
+# =============================================================================
+# AequorOS Reporting Gateway — PRODUCTION compose (Coolify Docker Compose app:
+# Base Directory /gateway, Docker Compose Location /docker-compose.prod.yml).
+#
+# Rules (the repository's deploy/README.md, "Coolify compose rules"):
+#   · NO variable interpolation anywhere in this file, comments included. Every
+#     service loads env_file .env, which Coolify writes from its Environment
+#     Variables UI; missing configuration stops the service at its own settings
+#     validation. Literal values under environment: are allowed, and are used
+#     below to keep each secret out of the services that do not need it (Coolify
+#     gives the whole application ONE env file).
+#   · NO bind mount of a repository file. NO bundled database: the managed
+#     Postgres is named by GATEWAY_DATABASE_URL.
+#
+# Domains: attach the portal's public host to srg-gateway-portal (port 3100). Give
+# srg-gateway-api NO domain in Coolify: its public host is routed by the Traefik
+# dynamic configuration in deploy/traefik-gateway.yml, which adds the mutual-TLS
+# client-certificate check the institution and operator APIs need.
+#
+# Setup order, the first-run commands, key custody and backups: deploy/README.md.
+# =============================================================================
+
+services:
+  # One-shot: bring the gateway schema to head as the schema owner
+  # (GATEWAY_MIGRATION_DATABASE_URL), granting GATEWAY_DB_APP_ROLE only what the
+  # API needs. Nothing else in this file sees the owner's credentials.
+  srg-gateway-migrate:
+    build:
+      context: ./api
+    command: ["alembic", "upgrade", "head"]
+    restart: "no"
+    env_file:
+      - .env
+    environment:
+      GATEWAY_PORTAL_SESSION_SECRET: ""
+      NEXT_SERVER_ACTIONS_ENCRYPTION_KEY: ""
+
+  srg-gateway-api:
+    build:
+      context: ./api
+    restart: unless-stopped
+    depends_on:
+      srg-gateway-migrate:
+        condition: service_completed_successfully
+    expose:
+      - "8200"
+    env_file:
+      - .env
+    environment:
+      GATEWAY_KEYS_DIR: "/var/lib/gateway/keys"
+      GATEWAY_MIGRATION_DATABASE_URL: ""
+      GATEWAY_PORTAL_SESSION_SECRET: ""
+      NEXT_SERVER_ACTIONS_ENCRYPTION_KEY: ""
+    # The receipt key, the audit key and the client-certificate CA. Losing this
+    # volume makes every receipt unverifiable and every issued certificate
+    # worthless: back it up (deploy/README.md, "Backups").
+    volumes:
+      - gateway-keys:/var/lib/gateway/keys
+    # /health/ready checks the database, the schema version and both keys.
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          'python -c "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen(''http://127.0.0.1:8200/health/ready'', timeout=8).status==200 else 1)"',
+        ]
+      interval: 30s
+      timeout: 12s
+      retries: 5
+      start_period: 30s
+    stop_grace_period: 30s
+
+  srg-gateway-portal:
+    build:
+      context: .
+      dockerfile: portal/Dockerfile
+    restart: unless-stopped
+    depends_on:
+      srg-gateway-api:
+        condition: service_healthy
+    expose:
+      - "3100"
+    env_file:
+      - .env
+    environment:
+      NODE_ENV: "production"
+      # The API over the application's private network, never the public host.
+      GATEWAY_API_URL: "http://srg-gateway-api:8200"
+      GATEWAY_DATABASE_URL: ""
+      GATEWAY_MIGRATION_DATABASE_URL: ""
+      GATEWAY_OPERATOR_CLIENTS: ""
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          'node -e "fetch(''http://127.0.0.1:3100/sign-in'',{redirect:''manual''}).then(r=>process.exit(r.status===200?0:1)).catch(()=>process.exit(1))"',
+        ]
+      interval: 30s
+      timeout: 6s
+      retries: 3
+      start_period: 20s
+
+volumes:
+  gateway-keys:

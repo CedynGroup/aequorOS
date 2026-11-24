@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Channel register</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=IBM+Plex+Mono:wght@400;500&amp;display=swap">
+<style>
+body{margin:0;background:#F4F6F8}
+a{color:#1F4FD1}a:hover{color:#163A9C}
+</style>
+</helmet>
+<div style="box-sizing: border-box; min-height: 100vh; display: flex; flex-wrap: wrap; background: #F4F6F8; color: #0E1726; font-family: Inter, system-ui, sans-serif">
+<div style="flex: 1 1 248px; max-width: 100%; background: #0F1E36; display: flex">
+<dc-import name="Sidebar" active="onboarding" hint-size="100%,1000px"></dc-import>
+</div>
+<main style="flex: 999 1 560px; min-width: 0; box-sizing: border-box; display: flex; flex-direction: column; gap: 20px; padding: 28px 32px 48px">
+<header style="display: flex; flex-direction: column; gap: 6px">
+<span style="font-size: 13px; color: #4B5565">Configuration / Channel register</span>
+<h1 style="margin: 0; font-size: 28px; font-weight: 600; letter-spacing: -0.01em">Channel register</h1>
+<span style="font-size: 14px; color: #4B5565">Every institution enrolled on the reporting channel. Institutions are enrolled and suspended by the channel operator.</span>
+</header>
+
+<section aria-label="Totals" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px">
+<sc-for list="{{totals}}" as="t" hint-placeholder-count="3">
+<div style="background: #FFFFFF; border: 1px solid #DDE2E8; border-radius: 10px; padding: 14px 16px; display: flex; flex-direction: column; gap: 4px">
+<span style="font-size: 13px; font-weight: 500; color: #4B5565">{{t.label}}</span>
+<span style="font-size: 26px; font-weight: 600; font-variant-numeric: tabular-nums">{{t.count}}</span>
+<span style="font-size: 12px; color: #4B5565">{{t.note}}</span>
+</div>
+</sc-for>
+</section>
+
+<div style="display: flex; flex-wrap: wrap; gap: 20px; align-items: flex-start">
+<section aria-labelledby="register-title" style="flex: 3 1 640px; min-width: 0; background: #FFFFFF; border: 1px solid #DDE2E8; border-radius: 10px; display: flex; flex-direction: column">
+<div style="display: flex; flex-wrap: wrap; justify-content: space-between; gap: 10px; align-items: flex-end; padding: 16px 18px; border-bottom: 1px solid #EEF0F3">
+<h2 id="register-title" style="margin: 0; font-size: 17px; font-weight: 600">Institutions</h2>
+<div style="display: flex; flex-direction: column; gap: 6px; flex: 0 1 280px">
+<label for="register-search" style="font-size: 12px; font-weight: 600; color: #344054">Search</label>
+<input id="register-search" type="search" placeholder="Institution name or code" style="box-sizing: border-box; height: 44px; border: 1px solid #C9D1DB; border-radius: 8px; padding: 0 12px; font: inherit; font-size: 14px">
+</div>
+</div>
+<div style="overflow-x: auto">
+<table style="width: 100%; min-width: 820px; border-collapse: collapse; font-size: 14px">
+<thead>
+<tr style="text-align: left; color: #4B5565; font-size: 12px">
+<th scope="col" style="font-weight: 600; padding: 10px 12px 10px 18px; border-bottom: 1px solid #DDE2E8">Institution</th>
+<th scope="col" style="font-weight: 600; padding: 10px 12px; border-bottom: 1px solid #DDE2E8">Files by</th>
+<th scope="col" style="font-weight: 600; padding: 10px 12px; border-bottom: 1px solid #DDE2E8">Enrolled</th>
+<th scope="col" style="font-weight: 600; padding: 10px 12px; border-bottom: 1px solid #DDE2E8">Connection renews</th>
+<th scope="col" style="font-weight: 600; padding: 10px 18px 10px 12px; border-bottom: 1px solid #DDE2E8">Status</th>
+</tr>
+</thead>
+<tbody>
+<sc-for list="{{register}}" as="inst" hint-placeholder-count="9">
+<tr style="{{inst.rowStyle}}">
+<td style="padding: 12px 12px 12px 18px; border-bottom: 1px solid #EEF0F3">
+<div style="display: flex; flex-direction: column; gap: 2px">
+<a href="Institution.dc.html" style="font-weight: 500; color: #0E1726; text-decoration: none">{{inst.name}}</a>
+<span style="font-size: 12px; color: #4B5565">{{inst.type}} · code {{inst.code}}</span>
+</div>
+</td>
+<td style="padding: 12px; border-bottom: 1px solid #EEF0F3; color: #344054; white-space: nowrap"><div style="display: flex; flex-direction: column; gap: 2px"><span>{{inst.channel}}</span><span style="font-size: 12px; color: #4B5565">{{inst.software}}</span></div></td>
+<td style="padding: 12px; border-bottom: 1px solid #EEF0F3; color: #344054; white-space: nowrap">{{inst.enrolled}}</td>
+<td style="padding: 12px; border-bottom: 1px solid #EEF0F3; color: #344054; white-space: nowrap">{{inst.renews}}</td>
+<td style="padding: 12px 18px 12px 12px; border-bottom: 1px solid #EEF0F3"><span style="{{inst.chip}}">{{inst.status}}</span></td>
+</tr>
+</sc-for>
+</tbody>
+</table>
+</div>
+</section>
+
+<aside aria-labelledby="detail-title" style="flex: 2 1 320px; min-width: 0; background: #FFFFFF; border: 1px solid #DDE2E8; border-radius: 10px; padding: 20px 22px; display: flex; flex-direction: column; gap: 14px">
+<div style="display: flex; flex-direction: column; gap: 6px">
+<span style="font-size: 13px; color: #4B5565">Selected institution</span>
+<h2 id="detail-title" style="margin: 0; font-size: 19px; font-weight: 600">Meridian Coast Bank</h2>
+<span style="display: inline-flex; align-self: flex-start; font-size: 12px; font-weight: 600; border-radius: 999px; padding: 3px 10px; background: #E3F4EC; color: #0F6B3E">Live</span>
+</div>
+<dl style="margin: 0; display: flex; flex-direction: column; gap: 12px">
+<sc-for list="{{detail}}" as="fact" hint-placeholder-count="6">
+<div style="display: flex; flex-direction: column; gap: 3px">
+<dt style="font-size: 12px; color: #4B5565">{{fact.label}}</dt>
+<dd style="{{fact.style}}">{{fact.value}}</dd>
+</div>
+</sc-for>
+</dl>
+<a href="Institution.dc.html" style="font-size: 14px; font-weight: 500">Open the institution’s filing record</a>
+<span style="font-size: 12px; line-height: 1.5; color: #4B5565">Enrolment, suspension and connection renewals are carried out by the channel operator and recorded in the audit log.</span>
+</aside>
+</div>
+</main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1080}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const totals = [
+      { label: 'Live', count: '48', note: 'filing on the channel' },
+      { label: 'Enrolled', count: '3', note: 'not yet filing' },
+      { label: 'Suspended', count: '0', note: 'cannot file' }
+    ];
+    const chipBase = 'display: inline-flex; font-size: 12px; font-weight: 600; border-radius: 999px; padding: 3px 10px; white-space: nowrap; ';
+    const chips = { Live: 'background: #E3F4EC; color: #0F6B3E', Enrolled: 'background: #E6EEFC; color: #1F4FD1', Suspended: 'background: #FBE7E7; color: #A12A2A' };
+    const register = [
+      ['Meridian Coast Bank', 'Universal bank', '0142', 'API', 'AequorOS · declared', '3 Feb 2026', '14 Jun 2027', 'Live'],
+      ['Ridgeway Commercial Bank', 'Universal bank', '0108', 'API', 'In-house system · declared', '9 Feb 2026', '2 Sep 2027', 'Live'],
+      ['Kestrel Bank', 'Universal bank', '0121', 'API', 'AequorOS · declared', '3 Feb 2026', '30 Nov 2026', 'Live'],
+      ['Harbourline Bank', 'Universal bank', '0115', 'API', 'In-house system · declared', '12 Feb 2026', '19 Jan 2027', 'Live'],
+      ['Palmgrove Bank', 'Universal bank', '0117', 'API', 'AequorOS · declared', '2 Feb 2026', '14 Mar 2027', 'Live'],
+      ['Riverbend Rural Bank', 'Rural bank', '0306', 'Portal upload', 'No software declared', '20 Feb 2026', '—', 'Live'],
+      ['Northgate Savings & Loans', 'Savings and loans', '0231', 'Portal upload', 'No software declared', '20 Feb 2026', '—', 'Live'],
+      ['Equinox Microfinance', 'Microfinance', '0412', 'API', 'In-house system · declared', '18 Nov 2026', '18 Nov 2027', 'Enrolled'],
+      ['Crestview Savings & Loans', 'Savings and loans', '0240', 'API', 'AequorOS · declared', '19 Nov 2026', '19 Nov 2027', 'Enrolled']
+    ].map(([name, type, code, channel, software, enrolled, renews, status]) => ({
+      name, type, code, channel, software, enrolled, renews, status,
+      chip: chipBase + chips[status],
+      rowStyle: name === 'Meridian Coast Bank' ? 'background: #F2F6FE' : 'background: #FFFFFF'
+    }));
+    const plain = 'margin: 0; font-size: 14px; color: #0E1726; font-weight: 500; line-height: 1.45';
+    const mono = 'margin: 0; font-family: \'IBM Plex Mono\', monospace; font-size: 13px; color: #0E1726';
+    const detail = [
+      { label: 'Institution code', value: '0142', style: mono },
+      { label: 'Enrolled', value: '3 Feb 2026 by the channel operator', style: plain },
+      { label: 'Files by', value: 'API · AequorOS 2026.11 (declared)', style: plain },
+      { label: 'Signing key', value: 'mcb-sign-2026-01 · active', style: plain },
+      { label: 'Connection', value: 'Renews 14 Jun 2027 · automatic', style: plain },
+      { label: 'First filing', value: '14 Feb 2026', style: plain }
+    ];
+    return { totals, register, detail };
+  }
+}
+</script>
+</body>
+</html>

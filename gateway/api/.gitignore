@@ -1,0 +1,9 @@
+.venv/
+.keys/
+__pycache__/
+*.pyc
+*.db
+*.db-journal
+.pytest_cache/
+.ruff_cache/
+/var/

@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Filing calendar</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=IBM+Plex+Mono:wght@400;500&amp;display=swap">
+<style>
+body{margin:0;background:#F4F6F8}
+a{color:#1F4FD1}a:hover{color:#163A9C}
+</style>
+</helmet>
+<div style="box-sizing: border-box; min-height: 100vh; display: flex; flex-wrap: wrap; background: #F4F6F8; color: #0E1726; font-family: Inter, system-ui, sans-serif">
+<div style="flex: 1 1 248px; max-width: 100%; background: #0F1E36; display: flex">
+<dc-import name="Sidebar" active="calendar" hint-size="100%,1000px"></dc-import>
+</div>
+<main style="flex: 999 1 560px; min-width: 0; box-sizing: border-box; display: flex; flex-direction: column; gap: 20px; padding: 28px 32px 48px">
+<header style="display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 16px">
+<div style="display: flex; flex-direction: column; gap: 6px">
+<span style="font-size: 13px; color: #4B5565">Supervision / Filing calendar</span>
+<h1 style="margin: 0; font-size: 28px; font-weight: 600; letter-spacing: -0.01em">Filing calendar</h1>
+<span style="font-size: 14px; color: #4B5565">Due dates come from the published return definitions; institutions see the same calendar</span>
+</div>
+<div style="display: flex; flex-wrap: wrap; gap: 10px; align-items: center">
+<button type="button" aria-label="Previous month" style="width: 44px; height: 44px; border: 1px solid #C9D1DB; border-radius: 8px; background: #FFFFFF; font: inherit; font-size: 18px; color: #0E1726">‹</button>
+<span style="font-size: 16px; font-weight: 600; min-width: 140px; text-align: center">November 2026</span>
+<button type="button" aria-label="Next month" style="width: 44px; height: 44px; border: 1px solid #C9D1DB; border-radius: 8px; background: #FFFFFF; font: inherit; font-size: 18px; color: #0E1726">›</button>
+<div role="group" aria-label="View" style="display: inline-flex; border: 1px solid #C9D1DB; border-radius: 8px; overflow: hidden; margin-left: 6px">
+<button type="button" aria-pressed="true" style="height: 42px; padding: 0 14px; border: 0; background: #E6EEFC; font: inherit; font-size: 13px; font-weight: 600; color: #1F4FD1">Month</button>
+<button type="button" aria-pressed="false" style="height: 42px; padding: 0 14px; border: 0; border-left: 1px solid #C9D1DB; background: #FFFFFF; font: inherit; font-size: 13px; color: #344054">List</button>
+</div>
+</div>
+</header>
+
+<div style="display: flex; flex-wrap: wrap; gap: 20px; align-items: flex-start">
+<section aria-label="November 2026" style="flex: 3 1 640px; min-width: 0; background: #FFFFFF; border: 1px solid #DDE2E8; border-radius: 10px; padding: 14px; overflow-x: auto">
+<div style="min-width: 700px; display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px">
+<sc-for list="{{weekdays}}" as="day" hint-placeholder-count="7">
+<span style="font-size: 12px; font-weight: 600; color: #4B5565; padding: 4px 8px">{{day}}</span>
+</sc-for>
+<sc-for list="{{cells}}" as="cell" hint-placeholder-count="42">
+<div style="{{cell.style}}">
+<span style="{{cell.numberStyle}}">{{cell.label}}</span>
+<sc-for list="{{cell.events}}" as="event" hint-placeholder-count="1">
+<a href="Inbox.dc.html" style="{{event.style}}">
+<span style="font-weight: 600">{{event.title}}</span>
+<span>{{event.detail}}</span>
+</a>
+</sc-for>
+</div>
+</sc-for>
+</div>
+</section>
+
+<div style="flex: 1 1 280px; min-width: 0; display: flex; flex-direction: column; gap: 20px">
+<section aria-labelledby="week-title" style="background: #FFFFFF; border: 1px solid #DDE2E8; border-radius: 10px; padding: 20px 22px; display: flex; flex-direction: column; gap: 10px">
+<h2 id="week-title" style="margin: 0; font-size: 17px; font-weight: 600">Due in the next 10 days</h2>
+<ul style="list-style: none; margin: 0; padding: 0">
+<sc-for list="{{upcoming}}" as="item" hint-placeholder-count="4">
+<li style="display: flex; flex-direction: column; gap: 3px; padding: 10px 0; border-top: 1px solid #EEF0F3">
+<span style="display: flex; justify-content: space-between; gap: 10px"><span style="font-size: 14px; font-weight: 600">{{item.date}}</span><span style="font-size: 13px; color: #4B5565">{{item.count}}</span></span>
+<span style="font-size: 13px; color: #344054; line-height: 1.4">{{item.what}}</span>
+</li>
+</sc-for>
+</ul>
+</section>
+
+<fieldset style="margin: 0; background: #FFFFFF; border: 1px solid #DDE2E8; border-radius: 10px; padding: 16px 22px 18px; display: flex; flex-direction: column; gap: 4px">
+<legend style="font-size: 15px; font-weight: 600; padding: 0 4px">Cadence</legend>
+<sc-for list="{{cadences}}" as="cad" hint-placeholder-count="6">
+<label style="display: flex; align-items: center; gap: 10px; min-height: 40px; font-size: 14px; color: #344054"><input type="checkbox" checked="{{cad.on}}" style="width: 18px; height: 18px"><span style="flex: 1 1 auto">{{cad.label}}</span><span style="font-size: 12px; color: #4B5565">{{cad.count}}</span></label>
+</sc-for>
+</fieldset>
+
+<section style="background: #F8FAFC; border: 1px solid #DDE2E8; border-radius: 10px; padding: 16px 18px; font-size: 13px; line-height: 1.55; color: #344054">
+Daily returns (DBK-DAILY) fall due every business day and are summarised on the overview. Extensions granted to an institution move only that institution’s due date and are recorded with the approver.
+</section>
+</div>
+</div>
+</main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1120}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const weekdays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+    const days = [];
+    for (let d = 26; d <= 31; d++) days.push({ day: d, month: 'Oct' });
+    for (let d = 1; d <= 30; d++) days.push({ day: d, month: 'Nov' });
+    for (let d = 1; d <= 6; d++) days.push({ day: d, month: 'Dec' });
+    const evBase = 'display: flex; flex-direction: column; gap: 1px; border-radius: 6px; padding: 6px 8px; font-size: 12px; line-height: 1.35; text-decoration: none; ';
+    const past = evBase + 'background: #E8EEFB; color: #163A9C';
+    const warn = evBase + 'background: #FDEFD9; color: #6E3C00';
+    const future = evBase + 'background: #F1F3F6; color: #344054';
+    const events = {
+      'Nov-2': [{ title: 'Weekly returns', detail: '6 returns · 288 / 288', style: past }],
+      'Nov-9': [{ title: 'Weekly returns', detail: '6 returns · 286 / 288', style: past }],
+      'Nov-10': [{ title: 'Quarterly · 30 Sep', detail: '5 returns · 236 / 240', style: past }],
+      'Nov-13': [{ title: 'Monthly · 31 Oct', detail: '14 returns · 571 / 612', style: warn }],
+      'Nov-16': [{ title: 'Weekly returns', detail: '6 returns · 281 / 288', style: warn }, { title: 'NPL-MONTHLY', detail: '31 Oct · 45 / 48', style: warn }],
+      'Nov-23': [{ title: 'Weekly returns', detail: '6 returns · due', style: future }],
+      'Nov-30': [{ title: 'Weekly returns', detail: '6 returns · due', style: future }, { title: 'IRRBB-PILOT', detail: '30 Sep · pilot banks', style: future }]
+    };
+    const cells = days.map(({ day, month }) => {
+      const inMonth = month === 'Nov';
+      const today = inMonth && day === 21;
+      return {
+        label: day === 1 || (month === 'Oct' && day === 26) ? month + ' ' + day : String(day),
+        events: events[month + '-' + day] || [],
+        style: 'box-sizing: border-box; min-height: 118px; border-radius: 8px; padding: 8px; display: flex; flex-direction: column; gap: 6px; ' + (today ? 'border: 2px solid #1F4FD1; background: #FFFFFF' : (inMonth ? 'border: 1px solid #EEF0F3; background: #FFFFFF' : 'border: 1px solid #EEF0F3; background: #F8FAFC')),
+        numberStyle: 'font-size: 13px; font-variant-numeric: tabular-nums; ' + (today ? 'font-weight: 700; color: #1F4FD1' : (inMonth ? 'font-weight: 500; color: #0E1726' : 'font-weight: 400; color: #6B7482'))
+      };
+    });
+    const upcoming = [
+      { date: 'Mon 23 Nov', count: '288 filings', what: 'Weekly: BSD1, BSD1A, BSD1B, BSD14, BSD15A, BSD15B' },
+      { date: 'Tue 24 Nov', count: '1 query', what: 'Riverbend Rural Bank reply on BSD8' },
+      { date: 'Mon 30 Nov', count: '298 filings', what: 'Weekly returns, and IRRBB-PILOT for 10 pilot banks' },
+      { date: 'Every business day', count: '48 filings', what: 'DBK-DAILY by the published cut-off' }
+    ];
+    const cadences = [
+      { label: 'Daily', count: '1 return', on: true },
+      { label: 'Weekly', count: '6 returns', on: true },
+      { label: 'Monthly', count: '15 returns', on: true },
+      { label: 'Quarterly', count: '5 returns', on: true },
+      { label: 'Semi-annual', count: '2 returns', on: false },
+      { label: 'Annual', count: '9 returns', on: false }
+    ];
+    return { weekdays, cells, upcoming, cadences };
+  }
+}
+</script>
+</body>
+</html>

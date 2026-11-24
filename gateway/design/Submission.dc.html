@@ -1,0 +1,241 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Submission detail</title>
+<script src="./support.js"></script>
+</head>
+<body>
+<x-dc>
+<helmet>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&amp;family=IBM+Plex+Mono:wght@400;500&amp;display=swap">
+<style>
+body{margin:0;background:#F4F6F8}
+a{color:#1F4FD1}a:hover{color:#163A9C}
+</style>
+</helmet>
+<div style="box-sizing: border-box; min-height: 100vh; display: flex; flex-wrap: wrap; background: #F4F6F8; color: #0E1726; font-family: Inter, system-ui, sans-serif">
+<div style="flex: 1 1 248px; max-width: 100%; background: #0F1E36; display: flex">
+<dc-import name="Sidebar" active="inbox" hint-size="100%,1000px"></dc-import>
+</div>
+<main style="flex: 999 1 560px; min-width: 0; box-sizing: border-box; display: flex; flex-direction: column; gap: 20px; padding: 28px 32px 48px">
+<header style="display: flex; flex-direction: column; gap: 14px">
+<span style="font-size: 13px; color: #4B5565"><a href="Inbox.dc.html" style="color: #4B5565">Submissions</a> / <span style="font-family: 'IBM Plex Mono', monospace">SRG-26-0114806</span></span>
+<div style="display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-start; gap: 16px">
+<div style="display: flex; flex-direction: column; gap: 8px; min-width: 0">
+<div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap">
+<h1 style="margin: 0; font-size: 26px; font-weight: 600; letter-spacing: -0.01em">Palmgrove Bank — BSD2 Statement of Assets and Liabilities</h1>
+<span style="display: inline-flex; font-size: 12px; font-weight: 600; border-radius: 999px; padding: 3px 10px; background: #EEF0F3; color: #344054">In review</span>
+</div>
+<div style="display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 14px; color: #344054">
+<span>Reporting date <strong style="font-weight: 600; color: #0E1726">31 Oct 2026</strong></span>
+<span>Version <strong style="font-weight: 600; color: #0E1726">2</strong> (supersedes v1)</span>
+<span>Received <strong style="font-weight: 600; color: #0E1726">21 Nov 2026, 15:57:12 GMT</strong></span>
+<span>Channel <strong style="font-weight: 600; color: #0E1726">API</strong></span>
+<span>Software <strong style="font-weight: 600; color: #0E1726">AequorOS 2026.11</strong> (declared)</span>
+<span>Reviewer <strong style="font-weight: 600; color: #0E1726">A. Boateng</strong></span>
+</div>
+</div>
+<div style="display: flex; flex-wrap: wrap; gap: 10px">
+<a href="Queries.dc.html" style="display: inline-flex; align-items: center; height: 44px; padding: 0 16px; border: 1px solid #C9D1DB; border-radius: 8px; background: #FFFFFF; color: #0E1726; font-size: 14px; font-weight: 500; text-decoration: none">Raise query</a>
+<button type="button" style="height: 44px; padding: 0 16px; border: 1px solid #C9D1DB; border-radius: 8px; background: #FFFFFF; color: #0E1726; font: inherit; font-size: 14px; font-weight: 500">Request resubmission</button>
+<button type="button" style="height: 44px; padding: 0 18px; border: 0; border-radius: 8px; background: #1F4FD1; color: #FFFFFF; font: inherit; font-size: 14px; font-weight: 600">Accept filing</button>
+</div>
+</div>
+</header>
+
+<div role="note" style="display: flex; flex-wrap: wrap; gap: 12px; align-items: center; justify-content: space-between; background: #FDF6EA; border: 1px solid #F1D9AE; border-radius: 10px; padding: 14px 18px">
+<div style="display: flex; flex-direction: column; gap: 4px; font-size: 14px; line-height: 1.5">
+<span style="font-weight: 600; color: #5C3A00">Amendment: version 2 replaces version 1 (SRG-26-0114590, filed 20 Nov 2026, 17:55)</span>
+<span style="color: #5C3A00">Institution’s reason: “Reclassified GHS 4.2m of placements from Due from banks to Investments after year-to-date review.” Version 1 stays on record, marked superseded.</span>
+</div>
+<a href="#return-content" style="font-size: 14px; font-weight: 600; color: #7A4A00">Show what changed</a>
+</div>
+
+<div style="display: flex; flex-wrap: wrap; gap: 20px; align-items: flex-start">
+<div style="flex: 2 1 600px; min-width: 0; display: flex; flex-direction: column; gap: 20px">
+
+<section aria-labelledby="validation-title" style="background: #FFFFFF; border: 1px solid #DDE2E8; border-radius: 10px; padding: 20px 22px; display: flex; flex-direction: column; gap: 16px">
+<div style="display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; align-items: baseline">
+<h2 id="validation-title" style="margin: 0; font-size: 17px; font-weight: 600">Validation</h2>
+<span style="font-size: 13px; color: #4B5565">Rule set <span style="font-family: 'IBM Plex Mono', monospace">BSD2 · 2026.1</span> · run at receipt in 2.9 s</span>
+</div>
+<div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 12px">
+<sc-for list="{{ruleGroups}}" as="group" hint-placeholder-count="4">
+<div style="border: 1px solid #EEF0F3; border-radius: 8px; padding: 12px 14px; display: flex; flex-direction: column; gap: 4px">
+<span style="font-size: 13px; color: #4B5565">{{group.label}}</span>
+<span style="font-size: 18px; font-weight: 600; color: #0F6B3E; font-variant-numeric: tabular-nums">{{group.result}}</span>
+<span style="font-size: 12px; color: #4B5565">{{group.note}}</span>
+</div>
+</sc-for>
+</div>
+<div style="display: flex; gap: 12px; align-items: flex-start; background: #F8FAFC; border-radius: 8px; padding: 12px 14px">
+<span style="flex: 0 0 auto; display: inline-flex; font-size: 12px; font-weight: 600; border-radius: 999px; padding: 3px 10px; background: #FDEFD9; color: #8A4B00">Warning</span>
+<span style="font-size: 14px; line-height: 1.5; color: #344054">Line 1.3 Investments differs from version 1 by GHS 4,200k. Not blocking; the institution’s explanation is attached to the amendment.</span>
+</div>
+</section>
+
+<section id="return-content" aria-labelledby="content-title" style="background: #FFFFFF; border: 1px solid #DDE2E8; border-radius: 10px; padding: 20px 22px; display: flex; flex-direction: column; gap: 14px">
+<div style="display: flex; flex-wrap: wrap; justify-content: space-between; gap: 10px; align-items: center">
+<h2 id="content-title" style="margin: 0; font-size: 17px; font-weight: 600">Return content</h2>
+<div role="group" aria-label="View" style="display: inline-flex; border: 1px solid #C9D1DB; border-radius: 8px; overflow: hidden">
+<button type="button" aria-pressed="false" style="height: 36px; padding: 0 14px; border: 0; background: #FFFFFF; font: inherit; font-size: 13px; color: #344054">Summary</button>
+<button type="button" aria-pressed="true" style="height: 36px; padding: 0 14px; border: 0; border-left: 1px solid #C9D1DB; background: #E6EEFC; font: inherit; font-size: 13px; font-weight: 600; color: #1F4FD1">Changes from v1</button>
+<button type="button" aria-pressed="false" style="height: 36px; padding: 0 14px; border: 0; border-left: 1px solid #C9D1DB; background: #FFFFFF; font: inherit; font-size: 13px; color: #344054">Full return</button>
+</div>
+</div>
+<div style="overflow-x: auto">
+<table style="width: 100%; min-width: 720px; border-collapse: collapse; font-size: 14px; font-variant-numeric: tabular-nums">
+<caption style="text-align: left; font-size: 12px; color: #4B5565; padding-bottom: 8px">Amounts in GHS thousands · synthetic figures</caption>
+<thead>
+<tr style="color: #4B5565; font-size: 12px">
+<th scope="col" style="text-align: left; font-weight: 600; padding: 8px 12px 8px 0; border-bottom: 1px solid #DDE2E8">Line</th>
+<th scope="col" style="text-align: left; font-weight: 600; padding: 8px 12px; border-bottom: 1px solid #DDE2E8">Item</th>
+<th scope="col" style="text-align: right; font-weight: 600; padding: 8px 12px; border-bottom: 1px solid #DDE2E8">31 Oct 2026 · v2</th>
+<th scope="col" style="text-align: right; font-weight: 600; padding: 8px 12px; border-bottom: 1px solid #DDE2E8">v1</th>
+<th scope="col" style="text-align: right; font-weight: 600; padding: 8px 0 8px 12px; border-bottom: 1px solid #DDE2E8">30 Sep 2026</th>
+</tr>
+</thead>
+<tbody>
+<sc-for list="{{lines}}" as="line" hint-placeholder-count="11">
+<tr style="{{line.rowStyle}}">
+<td style="padding: 10px 12px 10px 0; border-bottom: 1px solid #EEF0F3; font-family: 'IBM Plex Mono', monospace; font-size: 13px; color: #344054">{{line.code}}</td>
+<td style="{{line.itemStyle}}">{{line.item}}<sc-if value="{{line.changed}}" hint-placeholder-val="{{false}}"><span style="margin-left: 8px; font-size: 11px; font-weight: 600; color: #8A4B00; background: #FDEFD9; border-radius: 999px; padding: 2px 8px">Changed</span></sc-if></td>
+<td style="{{line.valueStyle}}">{{line.v2}}</td>
+<td style="padding: 10px 12px; border-bottom: 1px solid #EEF0F3; text-align: right; color: #4B5565">{{line.v1}}</td>
+<td style="padding: 10px 0 10px 12px; border-bottom: 1px solid #EEF0F3; text-align: right; color: #4B5565">{{line.prior}}</td>
+</tr>
+</sc-for>
+</tbody>
+</table>
+</div>
+</section>
+
+<section aria-labelledby="activity-title" style="background: #FFFFFF; border: 1px solid #DDE2E8; border-radius: 10px; padding: 20px 22px; display: flex; flex-direction: column; gap: 14px">
+<h2 id="activity-title" style="margin: 0; font-size: 17px; font-weight: 600">Activity</h2>
+<ol style="list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column">
+<sc-for list="{{activity}}" as="event" hint-placeholder-count="7">
+<li style="display: flex; gap: 14px; padding: 10px 0; border-top: 1px solid #EEF0F3">
+<span style="flex: 0 0 76px; font-size: 13px; color: #4B5565; font-variant-numeric: tabular-nums">{{event.time}}</span>
+<span style="display: flex; flex-direction: column; gap: 2px">
+<span style="font-size: 14px; font-weight: 500">{{event.title}}</span>
+<span style="font-size: 13px; color: #4B5565">{{event.detail}}</span>
+</span>
+</li>
+</sc-for>
+</ol>
+</section>
+</div>
+
+<aside style="flex: 1 1 320px; min-width: 0; display: flex; flex-direction: column; gap: 20px">
+<section aria-labelledby="receipt-title" style="background: #FFFFFF; border: 1px solid #DDE2E8; border-radius: 10px; padding: 20px 22px; display: flex; flex-direction: column; gap: 14px">
+<div style="display: flex; justify-content: space-between; align-items: baseline; gap: 8px">
+<h2 id="receipt-title" style="margin: 0; font-size: 17px; font-weight: 600">Receipt and evidence</h2>
+<span style="display: inline-flex; font-size: 12px; font-weight: 600; border-radius: 999px; padding: 3px 10px; background: #E3F4EC; color: #0F6B3E">Verified</span>
+</div>
+<dl style="margin: 0; display: flex; flex-direction: column; gap: 12px">
+<sc-for list="{{evidence}}" as="fact" hint-placeholder-count="7">
+<div style="display: flex; flex-direction: column; gap: 3px">
+<dt style="font-size: 12px; color: #4B5565">{{fact.label}}</dt>
+<dd style="{{fact.style}}">{{fact.value}}</dd>
+</div>
+</sc-for>
+</dl>
+<div style="display: flex; flex-wrap: wrap; gap: 8px">
+<button type="button" style="height: 40px; padding: 0 14px; border: 1px solid #C9D1DB; border-radius: 8px; background: #FFFFFF; font: inherit; font-size: 13px; font-weight: 500; color: #0E1726">Download receipt</button>
+<button type="button" style="height: 40px; padding: 0 14px; border: 1px solid #C9D1DB; border-radius: 8px; background: #FFFFFF; font: inherit; font-size: 13px; font-weight: 500; color: #0E1726">Download filed package</button>
+</div>
+<span style="font-size: 12px; line-height: 1.5; color: #4B5565">Anyone holding the receipt can verify both signatures against the published keys, without access to this system.</span>
+</section>
+
+<section aria-labelledby="prepared-title" style="background: #FFFFFF; border: 1px solid #DDE2E8; border-radius: 10px; padding: 20px 22px; display: flex; flex-direction: column; gap: 12px">
+<h2 id="prepared-title" style="margin: 0; font-size: 17px; font-weight: 600">Declared by the institution</h2>
+<dl style="margin: 0; display: flex; flex-direction: column; gap: 10px; font-size: 14px">
+<div style="display: flex; justify-content: space-between; gap: 12px"><dt style="color: #4B5565">Prepared by</dt><dd style="margin: 0; font-weight: 500; text-align: right">Head of Financial Reporting</dd></div>
+<div style="display: flex; justify-content: space-between; gap: 12px"><dt style="color: #4B5565">Approved by</dt><dd style="margin: 0; font-weight: 500; text-align: right">Chief Finance Officer</dd></div>
+<div style="display: flex; justify-content: space-between; gap: 12px"><dt style="color: #4B5565">Approved at</dt><dd style="margin: 0; font-weight: 500; text-align: right">21 Nov 2026, 15:51</dd></div>
+<div style="display: flex; justify-content: space-between; gap: 12px"><dt style="color: #4B5565">Basis</dt><dd style="margin: 0; font-weight: 500; text-align: right">Solo</dd></div>
+<div style="display: flex; justify-content: space-between; gap: 12px"><dt style="color: #4B5565">Software</dt><dd style="margin: 0; font-weight: 500; text-align: right">AequorOS 2026.11</dd></div>
+</dl>
+</section>
+
+<section aria-labelledby="inst-title" style="background: #FFFFFF; border: 1px solid #DDE2E8; border-radius: 10px; padding: 20px 22px; display: flex; flex-direction: column; gap: 12px">
+<div style="display: flex; justify-content: space-between; align-items: baseline; gap: 8px">
+<h2 id="inst-title" style="margin: 0; font-size: 17px; font-weight: 600">Palmgrove Bank</h2>
+<a href="Institution.dc.html" style="font-size: 13px; font-weight: 500">Profile</a>
+</div>
+<span style="font-size: 13px; color: #4B5565">Universal bank · institution code 0117 · supervisor A. Boateng</span>
+<div style="display: flex; flex-direction: column; gap: 6px">
+<div style="display: flex; justify-content: space-between; font-size: 13px"><span style="color: #344054">October cycle received</span><span style="font-weight: 600; font-variant-numeric: tabular-nums">9 of 10</span></div>
+<div role="img" aria-label="9 of 10 returns received" style="height: 8px; border-radius: 999px; background: #EEF0F3; display: flex; overflow: hidden"><span style="width: 90%; background: #2457C5"></span></div>
+<span style="font-size: 12px; color: #4B5565">Outstanding: LMT, due 13 Nov 2026</span>
+</div>
+</section>
+
+<section aria-labelledby="versions-title" style="background: #FFFFFF; border: 1px solid #DDE2E8; border-radius: 10px; padding: 20px 22px; display: flex; flex-direction: column; gap: 10px">
+<h2 id="versions-title" style="margin: 0; font-size: 17px; font-weight: 600">Versions</h2>
+<ol style="list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px">
+<li style="display: flex; justify-content: space-between; gap: 10px; align-items: center; padding: 10px 12px; border-radius: 8px; background: #F2F6FE"><span style="display: flex; flex-direction: column; gap: 2px"><span style="font-size: 14px; font-weight: 600">v2 · this filing</span><span style="font-size: 12px; color: #4B5565; font-family: 'IBM Plex Mono', monospace">SRG-26-0114806</span></span><span style="font-size: 12px; font-weight: 600; border-radius: 999px; padding: 3px 10px; background: #EEF0F3; color: #344054">In review</span></li>
+<li style="display: flex; justify-content: space-between; gap: 10px; align-items: center; padding: 10px 12px; border-radius: 8px"><span style="display: flex; flex-direction: column; gap: 2px"><a href="Submission.dc.html" style="font-size: 14px; font-weight: 600">v1 · 20 Nov, 17:55</a><span style="font-size: 12px; color: #4B5565; font-family: 'IBM Plex Mono', monospace">SRG-26-0114590</span></span><span style="font-size: 12px; font-weight: 600; border-radius: 999px; padding: 3px 10px; background: #F4F6F8; color: #4B5565">Superseded</span></li>
+</ol>
+</section>
+</aside>
+</div>
+</main>
+</div>
+</x-dc>
+<script type="text/x-dc" data-dc-script data-props='{"$preview":{"width":1440,"height":1560}}'>
+class Component extends DCLogic {
+  renderVals() {
+    const ruleGroups = [
+      { label: 'Structure', result: '12 / 12', note: 'Schema, codes, units' },
+      { label: 'Arithmetic', result: '22 / 22', note: 'Totals and subtotals' },
+      { label: 'Cross-return', result: '14 / 14', note: 'Against BSD5A and BSD6' },
+      { label: 'Period', result: '10 / 10', note: 'Reporting date and continuity' }
+    ];
+    const cell = 'padding: 10px 12px; border-bottom: 1px solid #EEF0F3; text-align: right; ';
+    const lines = [
+      ['1.1', 'Cash and balances with the central bank', '412,350', '412,350', '398,120', false, false],
+      ['1.2', 'Due from banks', '286,400', '290,600', '301,200', true, false],
+      ['1.3', 'Investments', '1,184,900', '1,180,700', '1,121,400', true, false],
+      ['1.4', 'Loans and advances (net)', '2,031,770', '2,031,770', '1,998,240', false, false],
+      ['1.5', 'Other assets', '143,210', '143,210', '139,880', false, false],
+      ['1', 'Total assets', '4,058,630', '4,058,630', '3,958,840', false, true],
+      ['2.1', 'Deposits', '3,112,480', '3,112,480', '3,031,900', false, false],
+      ['2.2', 'Borrowings', '214,900', '214,900', '220,400', false, false],
+      ['2.3', 'Other liabilities', '186,050', '186,050', '168,140', false, false],
+      ['2.4', 'Shareholders’ funds', '545,200', '545,200', '538,400', false, false],
+      ['2', 'Total liabilities and equity', '4,058,630', '4,058,630', '3,958,840', false, true]
+    ].map(([code, item, v2, v1, prior, changed, total]) => ({
+      code, item, v2, v1, prior, changed,
+      rowStyle: changed ? 'background: #FDF8EE' : (total ? 'background: #F8FAFC' : 'background: #FFFFFF'),
+      itemStyle: 'padding: 10px 12px; border-bottom: 1px solid #EEF0F3; ' + (total ? 'font-weight: 600' : 'font-weight: 400'),
+      valueStyle: cell + (changed || total ? 'font-weight: 600; color: #0E1726' : 'color: #0E1726')
+    }));
+    const mono = 'margin: 0; font-family: \'IBM Plex Mono\', monospace; font-size: 13px; color: #0E1726; word-break: break-all; line-height: 1.5';
+    const plain = 'margin: 0; font-size: 14px; color: #0E1726; font-weight: 500; line-height: 1.4';
+    const evidence = [
+      { label: 'Receipt', value: 'SRG-26-0114806', style: mono },
+      { label: 'Payload digest (SHA-256)', value: '9f2c41ab77e0d5c3 18be6a904f2d7c11 a3e95b0c6d42f8e7 205b9ad17c3e6f04', style: mono },
+      { label: 'Institution signature', value: 'Valid · ES256 · key pgb-sign-2026-01', style: plain },
+      { label: 'Signing key', value: 'Registered for the institution at enrolment, 2 Feb 2026', style: plain },
+      { label: 'Client certificate', value: 'Valid · mTLS · expires 14 Mar 2027', style: plain },
+      { label: 'Gateway receipt signature', value: 'Valid · gateway key 2026-Q4', style: plain },
+      { label: 'Trusted timestamp', value: '2026-11-21T15:57:12.418Z', style: mono },
+      { label: 'Evidence ledger', value: 'Entry 1,148,206 · chain intact', style: plain }
+    ];
+    const activity = [
+      { time: '16:10', title: 'Opened by A. Boateng', detail: 'Changes-from-v1 view' },
+      { time: '16:02', title: 'Assigned to A. Boateng', detail: 'Rule: relationship supervisor for Palmgrove Bank' },
+      { time: '15:57:15', title: 'Validation passed with 1 warning', detail: '58 of 58 rules · rule set BSD2 2026.1' },
+      { time: '15:57:12', title: 'Receipt issued', detail: 'Signed receipt returned to the institution in 1.6 s' },
+      { time: '15:57:12', title: 'Signature and certificate verified', detail: 'Institution key pgb-sign-2026-01 · registered 2 Feb 2026' },
+      { time: '15:57:12', title: 'Amendment received', detail: 'Supersedes SRG-26-0114590 with stated reason' }
+    ];
+    return { ruleGroups, lines, evidence, activity };
+  }
+}
+</script>
+</body>
+</html>

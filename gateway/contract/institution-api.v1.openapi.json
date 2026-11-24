@@ -1,0 +1,2908 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "AequorOS Reporting Gateway — Institution API v1",
+    "version": "0.1.0",
+    "description": "The public filing API (SPEC.md Part 1): POST /oauth/token and /v1. Every call needs the client certificate (mutual TLS) and a certificate-bound access token."
+  },
+  "paths": {
+    "/oauth/token": {
+      "post": {
+        "tags": [
+          "Authentication"
+        ],
+        "summary": "Obtain an access token (client credentials with private_key_jwt)",
+        "operationId": "token_oauth_token_post",
+        "requestBody": {
+          "content": {
+            "application/x-www-form-urlencoded": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_token_oauth_token_post"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TokenResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/.well-known/jwks.json": {
+      "get": {
+        "tags": [
+          "Keys"
+        ],
+        "summary": "Gateway receipt-key public keys",
+        "description": "Public, no authentication. Verifies receipts and access tokens offline.",
+        "operationId": "gateway_jwks_v1__well_known_jwks_json_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Jwks"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/returns": {
+      "get": {
+        "tags": [
+          "Institution API v1"
+        ],
+        "summary": "Published return definitions",
+        "operationId": "list_returns_v1_returns_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReturnList"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "certificate_required, certificate_mismatch or unauthenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "insufficient_scope or forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "rate_limited",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "AccessToken": []
+          }
+        ]
+      }
+    },
+    "/v1/returns/{code}": {
+      "get": {
+        "tags": [
+          "Institution API v1"
+        ],
+        "summary": "Get Return",
+        "operationId": "get_return_v1_returns__code__get",
+        "security": [
+          {
+            "AccessToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "code",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Code"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReturnDetail"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "certificate_required, certificate_mismatch or unauthenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "insufficient_scope or forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "rate_limited",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/returns/{code}/versions/{version}/schema": {
+      "get": {
+        "tags": [
+          "Institution API v1"
+        ],
+        "summary": "The version's JSON Schema (2020-12) and validation rules",
+        "operationId": "get_schema_v1_returns__code__versions__version__schema_get",
+        "security": [
+          {
+            "AccessToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "code",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Code"
+            }
+          },
+          {
+            "name": "version",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Version"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SchemaAndRules"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "certificate_required, certificate_mismatch or unauthenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "insufficient_scope or forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "rate_limited",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/obligations": {
+      "get": {
+        "tags": [
+          "Institution API v1"
+        ],
+        "summary": "List Obligations",
+        "description": "Obligations of the calling institution with a reporting date in ``[from, to]``.",
+        "operationId": "list_obligations_v1_obligations_get",
+        "security": [
+          {
+            "AccessToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "from",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date",
+              "title": "From"
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date",
+              "title": "To"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ObligationList"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "certificate_required, certificate_mismatch or unauthenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "insufficient_scope or forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "rate_limited",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/submissions": {
+      "post": {
+        "tags": [
+          "Institution API v1"
+        ],
+        "summary": "File a first version of a return",
+        "operationId": "file_submission_v1_submissions_post",
+        "security": [
+          {
+            "AccessToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FilingRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Receipted; validation follows",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReceiptEnvelope"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "invalid_request or idempotency_key_required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "certificate_required, certificate_mismatch or unauthenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "insufficient_scope or forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "rate_limited",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "idempotency_conflict, duplicate_submission or supersedes_not_current",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "signature, digest, return, version or schema refusals (no receipt)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "Institution API v1"
+        ],
+        "summary": "List Submissions",
+        "operationId": "list_submissions_v1_submissions_get",
+        "security": [
+          {
+            "AccessToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "reporting_date",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Reporting Date"
+            }
+          },
+          {
+            "name": "return_code",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Return Code"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 200,
+              "minimum": 1,
+              "default": 50,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/app__filing__router__SubmissionList"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "certificate_required, certificate_mismatch or unauthenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "insufficient_scope or forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "rate_limited",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/submissions/{receipt_id}/amendments": {
+      "post": {
+        "tags": [
+          "Institution API v1"
+        ],
+        "summary": "File an amendment (a new version)",
+        "operationId": "file_amendment_v1_submissions__receipt_id__amendments_post",
+        "security": [
+          {
+            "AccessToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "receipt_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Receipt Id"
+            }
+          },
+          {
+            "name": "Idempotency-Key",
+            "in": "header",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Idempotency-Key"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FilingRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Receipted; validation follows",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReceiptEnvelope"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "invalid_request or idempotency_key_required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "certificate_required, certificate_mismatch or unauthenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "insufficient_scope or forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "rate_limited",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "idempotency_conflict, duplicate_submission or supersedes_not_current",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "signature, digest, return, version or schema refusals (no receipt)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Not Found"
+          }
+        }
+      }
+    },
+    "/v1/submissions/{receipt_id}": {
+      "get": {
+        "tags": [
+          "Institution API v1"
+        ],
+        "summary": "Get Submission",
+        "operationId": "get_submission_v1_submissions__receipt_id__get",
+        "security": [
+          {
+            "AccessToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "receipt_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Receipt Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SubmissionStatus"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "certificate_required, certificate_mismatch or unauthenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "insufficient_scope or forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "rate_limited",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/submissions/{receipt_id}/receipt": {
+      "get": {
+        "tags": [
+          "Institution API v1"
+        ],
+        "summary": "Get Receipt",
+        "operationId": "get_receipt_v1_submissions__receipt_id__receipt_get",
+        "security": [
+          {
+            "AccessToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "receipt_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Receipt Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReceiptEnvelope"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "certificate_required, certificate_mismatch or unauthenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "insufficient_scope or forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "rate_limited",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/queries": {
+      "get": {
+        "tags": [
+          "Institution API v1"
+        ],
+        "summary": "List Queries",
+        "operationId": "list_queries_v1_queries_get",
+        "security": [
+          {
+            "AccessToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "enum": [
+                "open",
+                "all"
+              ],
+              "type": "string",
+              "default": "open",
+              "title": "Status"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 200,
+              "minimum": 1,
+              "default": 50,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QueryList"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "certificate_required, certificate_mismatch or unauthenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "insufficient_scope or forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "rate_limited",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/queries/{number}/acknowledgements": {
+      "post": {
+        "tags": [
+          "Institution API v1"
+        ],
+        "summary": "Acknowledge Query",
+        "operationId": "acknowledge_query_v1_queries__number__acknowledgements_post",
+        "security": [
+          {
+            "AccessToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "number",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Number"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "401": {
+            "description": "certificate_required, certificate_mismatch or unauthenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "insufficient_scope or forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "rate_limited",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/queries/{number}/responses": {
+      "post": {
+        "tags": [
+          "Institution API v1"
+        ],
+        "summary": "Respond To Query",
+        "operationId": "respond_to_query_v1_queries__number__responses_post",
+        "security": [
+          {
+            "AccessToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "number",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Number"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResponseIn"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/QueryMessageOut"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "certificate_required, certificate_mismatch or unauthenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "insufficient_scope or forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "rate_limited",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            }
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Not Found"
+          },
+          "409": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Problem"
+                }
+              }
+            },
+            "description": "Conflict"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Body_token_oauth_token_post": {
+        "properties": {
+          "grant_type": {
+            "type": "string",
+            "title": "Grant Type"
+          },
+          "client_assertion_type": {
+            "type": "string",
+            "title": "Client Assertion Type"
+          },
+          "client_assertion": {
+            "type": "string",
+            "title": "Client Assertion"
+          },
+          "scope": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Scope"
+          }
+        },
+        "type": "object",
+        "required": [
+          "grant_type",
+          "client_assertion_type",
+          "client_assertion"
+        ],
+        "title": "Body_token_oauth_token_post"
+      },
+      "CompareRule": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "severity": {
+            "type": "string",
+            "enum": [
+              "error",
+              "warning"
+            ],
+            "title": "Severity"
+          },
+          "kind": {
+            "type": "string",
+            "const": "compare",
+            "title": "Kind"
+          },
+          "left": {
+            "type": "string",
+            "title": "Left"
+          },
+          "op": {
+            "type": "string",
+            "enum": [
+              ">=",
+              "<=",
+              "=="
+            ],
+            "title": "Op"
+          },
+          "right": {
+            "type": "string",
+            "title": "Right",
+            "description": "A line code"
+          },
+          "description": {
+            "type": "string",
+            "title": "Description"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "severity",
+          "kind",
+          "left",
+          "op",
+          "right",
+          "description"
+        ],
+        "title": "CompareRule"
+      },
+      "CrossEqualRule": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "severity": {
+            "type": "string",
+            "enum": [
+              "error",
+              "warning"
+            ],
+            "title": "Severity"
+          },
+          "kind": {
+            "type": "string",
+            "const": "cross_equal",
+            "title": "Kind"
+          },
+          "line": {
+            "type": "string",
+            "title": "Line"
+          },
+          "other_return": {
+            "type": "string",
+            "title": "Other Return"
+          },
+          "other_line": {
+            "type": "string",
+            "title": "Other Line"
+          },
+          "tolerance": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "title": "Tolerance",
+            "default": 0
+          },
+          "description": {
+            "type": "string",
+            "title": "Description"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "severity",
+          "kind",
+          "line",
+          "other_return",
+          "other_line",
+          "description"
+        ],
+        "title": "CrossEqualRule"
+      },
+      "Declaration": {
+        "properties": {
+          "prepared_by_role": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Prepared By Role"
+          },
+          "approved_by_role": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Approved By Role"
+          },
+          "approved_at": {
+            "type": "string",
+            "title": "Approved At"
+          },
+          "amendment_reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Amendment Reason"
+          },
+          "software": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/Software"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "prepared_by_role",
+          "approved_by_role",
+          "approved_at",
+          "amendment_reason",
+          "software"
+        ],
+        "title": "Declaration"
+      },
+      "DocumentRef": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._ ()-]{0,199}$",
+            "title": "Name"
+          },
+          "media_type": {
+            "type": "string",
+            "title": "Media Type"
+          },
+          "sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Sha256"
+          },
+          "bytes": {
+            "type": "integer",
+            "maximum": 26214400.0,
+            "minimum": 1.0,
+            "title": "Bytes"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "name",
+          "media_type",
+          "sha256",
+          "bytes"
+        ],
+        "title": "DocumentRef",
+        "description": "One filed document as the signed manifest names it."
+      },
+      "DocumentUpload": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9._ ()-]{0,199}$",
+            "title": "Name"
+          },
+          "media_type": {
+            "type": "string",
+            "title": "Media Type"
+          },
+          "content_base64": {
+            "type": "string",
+            "title": "Content Base64"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "name",
+          "media_type",
+          "content_base64"
+        ],
+        "title": "DocumentUpload",
+        "description": "One filed document's content, matched to the manifest by name."
+      },
+      "FilingRequest": {
+        "properties": {
+          "manifest": {
+            "$ref": "#/components/schemas/Manifest"
+          },
+          "payload": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/JsonValue"
+            },
+            "type": "object",
+            "title": "Payload"
+          },
+          "declaration": {
+            "$ref": "#/components/schemas/Declaration"
+          },
+          "signature": {
+            "type": "string",
+            "title": "Signature",
+            "description": "Compact JWS (ES256) over JCS(manifest), typ srg-manifest+jws"
+          },
+          "documents": {
+            "items": {
+              "$ref": "#/components/schemas/DocumentUpload"
+            },
+            "type": "array",
+            "maxItems": 8,
+            "title": "Documents"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "manifest",
+          "payload",
+          "declaration",
+          "signature"
+        ],
+        "title": "FilingRequest"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "InstitutionQuery": {
+        "properties": {
+          "number": {
+            "type": "string",
+            "title": "Number"
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "query",
+              "resubmission"
+            ],
+            "title": "Kind"
+          },
+          "subject": {
+            "type": "string",
+            "title": "Subject"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "awaiting_institution",
+              "awaiting_supervisor",
+              "closed"
+            ],
+            "title": "Status"
+          },
+          "receipt_id": {
+            "type": "string",
+            "title": "Receipt Id"
+          },
+          "due_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Due At"
+          },
+          "opened_at": {
+            "type": "string",
+            "title": "Opened At"
+          },
+          "acknowledged_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Acknowledged At"
+          },
+          "messages": {
+            "items": {
+              "$ref": "#/components/schemas/QueryMessageOut"
+            },
+            "type": "array",
+            "title": "Messages"
+          }
+        },
+        "type": "object",
+        "required": [
+          "number",
+          "kind",
+          "subject",
+          "status",
+          "receipt_id",
+          "due_at",
+          "opened_at",
+          "acknowledged_at",
+          "messages"
+        ],
+        "title": "InstitutionQuery"
+      },
+      "Issue": {
+        "properties": {
+          "rule_id": {
+            "type": "string",
+            "title": "Rule Id"
+          },
+          "severity": {
+            "type": "string",
+            "enum": [
+              "error",
+              "warning"
+            ],
+            "title": "Severity"
+          },
+          "pointer": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pointer"
+          },
+          "message": {
+            "type": "string",
+            "title": "Message"
+          }
+        },
+        "type": "object",
+        "required": [
+          "rule_id",
+          "severity",
+          "pointer",
+          "message"
+        ],
+        "title": "Issue"
+      },
+      "JsonValue": {},
+      "Jwks": {
+        "properties": {
+          "keys": {
+            "items": {
+              "$ref": "#/components/schemas/PublicJwk"
+            },
+            "type": "array",
+            "title": "Keys"
+          }
+        },
+        "type": "object",
+        "required": [
+          "keys"
+        ],
+        "title": "Jwks"
+      },
+      "Manifest": {
+        "properties": {
+          "institution_code": {
+            "type": "string",
+            "title": "Institution Code"
+          },
+          "return_code": {
+            "type": "string",
+            "title": "Return Code"
+          },
+          "return_version": {
+            "type": "string",
+            "title": "Return Version"
+          },
+          "reporting_date": {
+            "type": "string",
+            "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+            "title": "Reporting Date"
+          },
+          "basis": {
+            "type": "string",
+            "enum": [
+              "solo",
+              "consolidated"
+            ],
+            "title": "Basis"
+          },
+          "payload_sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Payload Sha256"
+          },
+          "declaration_sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Declaration Sha256"
+          },
+          "supersedes_receipt_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Supersedes Receipt Id"
+          },
+          "created_at": {
+            "type": "string",
+            "title": "Created At"
+          },
+          "documents": {
+            "items": {
+              "$ref": "#/components/schemas/DocumentRef"
+            },
+            "type": "array",
+            "maxItems": 8,
+            "title": "Documents"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "institution_code",
+          "return_code",
+          "return_version",
+          "reporting_date",
+          "basis",
+          "payload_sha256",
+          "declaration_sha256",
+          "supersedes_receipt_id",
+          "created_at"
+        ],
+        "title": "Manifest"
+      },
+      "NonNegativeRule": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "severity": {
+            "type": "string",
+            "enum": [
+              "error",
+              "warning"
+            ],
+            "title": "Severity"
+          },
+          "kind": {
+            "type": "string",
+            "const": "non_negative",
+            "title": "Kind"
+          },
+          "lines": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "minItems": 1,
+            "title": "Lines"
+          },
+          "description": {
+            "type": "string",
+            "title": "Description"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "severity",
+          "kind",
+          "lines",
+          "description"
+        ],
+        "title": "NonNegativeRule"
+      },
+      "ObligationList": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ObligationOut"
+            },
+            "type": "array",
+            "title": "Items"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items"
+        ],
+        "title": "ObligationList"
+      },
+      "ObligationOut": {
+        "properties": {
+          "return_code": {
+            "type": "string",
+            "title": "Return Code"
+          },
+          "return_version": {
+            "type": "string",
+            "title": "Return Version"
+          },
+          "reporting_date": {
+            "type": "string",
+            "title": "Reporting Date"
+          },
+          "basis": {
+            "type": "string",
+            "enum": [
+              "solo",
+              "consolidated"
+            ],
+            "title": "Basis"
+          },
+          "due_at": {
+            "type": "string",
+            "title": "Due At"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "not_due",
+              "due",
+              "filed",
+              "filed_late",
+              "overdue"
+            ],
+            "title": "Status"
+          },
+          "receipt_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Receipt Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "return_code",
+          "return_version",
+          "reporting_date",
+          "basis",
+          "due_at",
+          "status",
+          "receipt_id"
+        ],
+        "title": "ObligationOut"
+      },
+      "PresentRule": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "severity": {
+            "type": "string",
+            "enum": [
+              "error",
+              "warning"
+            ],
+            "title": "Severity"
+          },
+          "kind": {
+            "type": "string",
+            "const": "present",
+            "title": "Kind"
+          },
+          "section": {
+            "type": "string",
+            "title": "Section"
+          },
+          "description": {
+            "type": "string",
+            "title": "Description"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "severity",
+          "kind",
+          "section",
+          "description"
+        ],
+        "title": "PresentRule",
+        "description": "An itemised section carries at least one row (lines coded ``<section>:<row>``)."
+      },
+      "Problem": {
+        "properties": {
+          "type": {
+            "type": "string",
+            "title": "Type"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title"
+          },
+          "status": {
+            "type": "integer",
+            "title": "Status"
+          },
+          "code": {
+            "type": "string",
+            "enum": [
+              "invalid_request",
+              "unauthenticated",
+              "certificate_required",
+              "certificate_mismatch",
+              "invalid_client_assertion",
+              "insufficient_scope",
+              "idempotency_key_required",
+              "idempotency_conflict",
+              "signing_key_unknown",
+              "signing_key_revoked",
+              "signature_invalid",
+              "manifest_mismatch",
+              "payload_digest_mismatch",
+              "declaration_digest_mismatch",
+              "document_invalid",
+              "document_digest_mismatch",
+              "institution_mismatch",
+              "return_unknown",
+              "return_version_not_applicable",
+              "schema_invalid",
+              "duplicate_submission",
+              "supersedes_not_current",
+              "amendment_reason_required",
+              "not_found",
+              "forbidden",
+              "rate_limited",
+              "conflict"
+            ],
+            "title": "Code"
+          },
+          "detail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detail"
+          },
+          "instance": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Instance"
+          },
+          "issues": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/Issue"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Issues"
+          }
+        },
+        "type": "object",
+        "required": [
+          "type",
+          "title",
+          "status",
+          "code"
+        ],
+        "title": "Problem"
+      },
+      "PublicJwk": {
+        "properties": {
+          "kty": {
+            "type": "string",
+            "const": "EC",
+            "title": "Kty"
+          },
+          "crv": {
+            "type": "string",
+            "const": "P-256",
+            "title": "Crv"
+          },
+          "x": {
+            "type": "string",
+            "title": "X"
+          },
+          "y": {
+            "type": "string",
+            "title": "Y"
+          },
+          "kid": {
+            "type": "string",
+            "title": "Kid"
+          },
+          "use": {
+            "type": "string",
+            "const": "sig",
+            "title": "Use"
+          },
+          "alg": {
+            "type": "string",
+            "const": "ES256",
+            "title": "Alg"
+          }
+        },
+        "type": "object",
+        "required": [
+          "kty",
+          "crv",
+          "x",
+          "y",
+          "kid",
+          "use",
+          "alg"
+        ],
+        "title": "PublicJwk"
+      },
+      "QueryList": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/InstitutionQuery"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items",
+          "next_cursor"
+        ],
+        "title": "QueryList"
+      },
+      "QueryMessageOut": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "author": {
+            "type": "string",
+            "enum": [
+              "supervisor",
+              "institution",
+              "system"
+            ],
+            "title": "Author"
+          },
+          "author_label": {
+            "type": "string",
+            "title": "Author Label"
+          },
+          "body": {
+            "type": "string",
+            "title": "Body"
+          },
+          "created_at": {
+            "type": "string",
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "author",
+          "author_label",
+          "body",
+          "created_at"
+        ],
+        "title": "QueryMessageOut"
+      },
+      "ReceiptBody": {
+        "properties": {
+          "receipt_id": {
+            "type": "string",
+            "title": "Receipt Id"
+          },
+          "submission_id": {
+            "type": "string",
+            "title": "Submission Id"
+          },
+          "institution_code": {
+            "type": "string",
+            "title": "Institution Code"
+          },
+          "return_code": {
+            "type": "string",
+            "title": "Return Code"
+          },
+          "return_version": {
+            "type": "string",
+            "title": "Return Version"
+          },
+          "reporting_date": {
+            "type": "string",
+            "title": "Reporting Date"
+          },
+          "basis": {
+            "type": "string",
+            "enum": [
+              "solo",
+              "consolidated"
+            ],
+            "title": "Basis"
+          },
+          "version": {
+            "type": "integer",
+            "title": "Version"
+          },
+          "supersedes_receipt_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Supersedes Receipt Id"
+          },
+          "payload_sha256": {
+            "type": "string",
+            "title": "Payload Sha256"
+          },
+          "manifest_sha256": {
+            "type": "string",
+            "title": "Manifest Sha256"
+          },
+          "signing_kid": {
+            "type": "string",
+            "title": "Signing Kid"
+          },
+          "received_at": {
+            "type": "string",
+            "title": "Received At"
+          },
+          "ledger_seq": {
+            "type": "integer",
+            "title": "Ledger Seq"
+          }
+        },
+        "type": "object",
+        "required": [
+          "receipt_id",
+          "submission_id",
+          "institution_code",
+          "return_code",
+          "return_version",
+          "reporting_date",
+          "basis",
+          "version",
+          "supersedes_receipt_id",
+          "payload_sha256",
+          "manifest_sha256",
+          "signing_kid",
+          "received_at",
+          "ledger_seq"
+        ],
+        "title": "ReceiptBody"
+      },
+      "ReceiptEnvelope": {
+        "properties": {
+          "receipt": {
+            "$ref": "#/components/schemas/ReceiptBody"
+          },
+          "receipt_jws": {
+            "type": "string",
+            "title": "Receipt Jws"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "received",
+              "validating",
+              "rejected",
+              "in_review",
+              "accepted",
+              "queried",
+              "superseded"
+            ],
+            "title": "Status"
+          }
+        },
+        "type": "object",
+        "required": [
+          "receipt",
+          "receipt_jws",
+          "status"
+        ],
+        "title": "ReceiptEnvelope"
+      },
+      "ResponseIn": {
+        "properties": {
+          "body": {
+            "type": "string",
+            "maxLength": 20000,
+            "minLength": 1,
+            "title": "Body"
+          },
+          "resubmission_receipt_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resubmission Receipt Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "body"
+        ],
+        "title": "ResponseIn"
+      },
+      "ReturnDetail": {
+        "properties": {
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "cadence": {
+            "type": "string",
+            "enum": [
+              "daily",
+              "weekly",
+              "monthly",
+              "quarterly",
+              "semiannual",
+              "annual"
+            ],
+            "title": "Cadence"
+          },
+          "current_version": {
+            "type": "string",
+            "title": "Current Version"
+          },
+          "applies_to": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Applies To"
+          },
+          "versions": {
+            "items": {
+              "$ref": "#/components/schemas/ReturnVersionOut"
+            },
+            "type": "array",
+            "title": "Versions"
+          }
+        },
+        "type": "object",
+        "required": [
+          "code",
+          "name",
+          "cadence",
+          "current_version",
+          "applies_to",
+          "versions"
+        ],
+        "title": "ReturnDetail"
+      },
+      "ReturnList": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ReturnSummary"
+            },
+            "type": "array",
+            "title": "Items"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items"
+        ],
+        "title": "ReturnList"
+      },
+      "ReturnSummary": {
+        "properties": {
+          "code": {
+            "type": "string",
+            "title": "Code"
+          },
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "cadence": {
+            "type": "string",
+            "enum": [
+              "daily",
+              "weekly",
+              "monthly",
+              "quarterly",
+              "semiannual",
+              "annual"
+            ],
+            "title": "Cadence"
+          },
+          "current_version": {
+            "type": "string",
+            "title": "Current Version"
+          },
+          "applies_to": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Applies To"
+          }
+        },
+        "type": "object",
+        "required": [
+          "code",
+          "name",
+          "cadence",
+          "current_version",
+          "applies_to"
+        ],
+        "title": "ReturnSummary"
+      },
+      "ReturnVersionOut": {
+        "properties": {
+          "version": {
+            "type": "string",
+            "title": "Version"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "draft",
+              "published",
+              "retired"
+            ],
+            "title": "Status"
+          },
+          "first_reporting_date": {
+            "type": "string",
+            "title": "First Reporting Date"
+          },
+          "last_reporting_date": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Reporting Date"
+          },
+          "schema_sha256": {
+            "type": "string",
+            "title": "Schema Sha256"
+          },
+          "rule_count": {
+            "type": "integer",
+            "title": "Rule Count"
+          },
+          "published_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Published At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "version",
+          "status",
+          "first_reporting_date",
+          "last_reporting_date",
+          "schema_sha256",
+          "rule_count",
+          "published_at"
+        ],
+        "title": "ReturnVersionOut"
+      },
+      "SchemaAndRules": {
+        "properties": {
+          "schema": {
+            "additionalProperties": {
+              "$ref": "#/components/schemas/JsonValue"
+            },
+            "type": "object",
+            "title": "Schema"
+          },
+          "rules": {
+            "items": {
+              "oneOf": [
+                {
+                  "$ref": "#/components/schemas/SumRule"
+                },
+                {
+                  "$ref": "#/components/schemas/NonNegativeRule"
+                },
+                {
+                  "$ref": "#/components/schemas/CompareRule"
+                },
+                {
+                  "$ref": "#/components/schemas/CrossEqualRule"
+                },
+                {
+                  "$ref": "#/components/schemas/VarianceRule"
+                },
+                {
+                  "$ref": "#/components/schemas/PresentRule"
+                }
+              ],
+              "discriminator": {
+                "propertyName": "kind",
+                "mapping": {
+                  "compare": "#/components/schemas/CompareRule",
+                  "cross_equal": "#/components/schemas/CrossEqualRule",
+                  "non_negative": "#/components/schemas/NonNegativeRule",
+                  "present": "#/components/schemas/PresentRule",
+                  "sum": "#/components/schemas/SumRule",
+                  "variance": "#/components/schemas/VarianceRule"
+                }
+              }
+            },
+            "type": "array",
+            "title": "Rules"
+          }
+        },
+        "type": "object",
+        "required": [
+          "schema",
+          "rules"
+        ],
+        "title": "SchemaAndRules"
+      },
+      "Software": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "maxLength": 80,
+            "minLength": 1,
+            "title": "Name"
+          },
+          "version": {
+            "type": "string",
+            "maxLength": 40,
+            "minLength": 1,
+            "title": "Version"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "name",
+          "version"
+        ],
+        "title": "Software"
+      },
+      "SubmissionStatus": {
+        "properties": {
+          "receipt_id": {
+            "type": "string",
+            "title": "Receipt Id"
+          },
+          "return_code": {
+            "type": "string",
+            "title": "Return Code"
+          },
+          "return_version": {
+            "type": "string",
+            "title": "Return Version"
+          },
+          "reporting_date": {
+            "type": "string",
+            "title": "Reporting Date"
+          },
+          "basis": {
+            "type": "string",
+            "enum": [
+              "solo",
+              "consolidated"
+            ],
+            "title": "Basis"
+          },
+          "version": {
+            "type": "integer",
+            "title": "Version"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "received",
+              "validating",
+              "rejected",
+              "in_review",
+              "accepted",
+              "queried",
+              "superseded"
+            ],
+            "title": "Status"
+          },
+          "received_at": {
+            "type": "string",
+            "title": "Received At"
+          },
+          "validation": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/ValidationSummary"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "decided_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Decided At"
+          },
+          "superseded_by": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Superseded By"
+          }
+        },
+        "type": "object",
+        "required": [
+          "receipt_id",
+          "return_code",
+          "return_version",
+          "reporting_date",
+          "basis",
+          "version",
+          "status",
+          "received_at",
+          "validation",
+          "decided_at",
+          "superseded_by"
+        ],
+        "title": "SubmissionStatus"
+      },
+      "SumRule": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "severity": {
+            "type": "string",
+            "enum": [
+              "error",
+              "warning"
+            ],
+            "title": "Severity"
+          },
+          "kind": {
+            "type": "string",
+            "const": "sum",
+            "title": "Kind"
+          },
+          "target": {
+            "type": "string",
+            "title": "Target"
+          },
+          "terms": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Terms"
+          },
+          "subtract": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Subtract"
+          },
+          "tolerance": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "number"
+              },
+              {
+                "type": "string"
+              }
+            ],
+            "title": "Tolerance",
+            "default": 0
+          },
+          "description": {
+            "type": "string",
+            "title": "Description"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "severity",
+          "kind",
+          "target",
+          "description"
+        ],
+        "title": "SumRule",
+        "description": "``target`` equals the sum of ``terms`` less the sum of ``subtract``."
+      },
+      "TokenResponse": {
+        "properties": {
+          "access_token": {
+            "type": "string",
+            "title": "Access Token"
+          },
+          "token_type": {
+            "type": "string",
+            "const": "Bearer",
+            "title": "Token Type"
+          },
+          "expires_in": {
+            "type": "integer",
+            "title": "Expires In"
+          },
+          "scope": {
+            "type": "string",
+            "title": "Scope"
+          }
+        },
+        "type": "object",
+        "required": [
+          "access_token",
+          "token_type",
+          "expires_in",
+          "scope"
+        ],
+        "title": "TokenResponse"
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "ctx": {
+            "type": "object",
+            "title": "Context"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      },
+      "ValidationSummary": {
+        "properties": {
+          "rule_set": {
+            "type": "string",
+            "title": "Rule Set"
+          },
+          "passed": {
+            "type": "integer",
+            "title": "Passed"
+          },
+          "failed": {
+            "type": "integer",
+            "title": "Failed"
+          },
+          "warnings": {
+            "type": "integer",
+            "title": "Warnings"
+          },
+          "issues": {
+            "items": {
+              "$ref": "#/components/schemas/Issue"
+            },
+            "type": "array",
+            "title": "Issues"
+          }
+        },
+        "type": "object",
+        "required": [
+          "rule_set",
+          "passed",
+          "failed",
+          "warnings",
+          "issues"
+        ],
+        "title": "ValidationSummary"
+      },
+      "VarianceRule": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "severity": {
+            "type": "string",
+            "const": "warning",
+            "title": "Severity"
+          },
+          "kind": {
+            "type": "string",
+            "const": "variance",
+            "title": "Kind"
+          },
+          "line": {
+            "type": "string",
+            "title": "Line"
+          },
+          "max_change_pct": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "number"
+              }
+            ],
+            "title": "Max Change Pct",
+            "gt": 0
+          },
+          "description": {
+            "type": "string",
+            "title": "Description"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "severity",
+          "kind",
+          "line",
+          "max_change_pct",
+          "description"
+        ],
+        "title": "VarianceRule"
+      },
+      "app__filing__router__SubmissionList": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/SubmissionStatus"
+            },
+            "type": "array",
+            "title": "Items"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          }
+        },
+        "type": "object",
+        "required": [
+          "items",
+          "next_cursor"
+        ],
+        "title": "SubmissionList"
+      }
+    },
+    "securitySchemes": {
+      "AccessToken": {
+        "type": "http",
+        "description": "Gateway access token from POST /oauth/token, bound to the client certificate presented with every call (mutual TLS).",
+        "scheme": "bearer"
+      }
+    }
+  }
+}
